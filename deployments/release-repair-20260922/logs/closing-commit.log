@@ -1,0 +1,9 @@
+[detached HEAD 41798239] Qualify the release tip with the burn 6 repairs
+ 19 files changed, 201 insertions(+), 61 deletions(-)
+ create mode 100644 deployments/release-repair-20260922/logs/evidence-commit.stderr
+ create mode 100644 deployments/release-repair-20260922/logs/evidence-commit.stdout
+ create mode 100644 deployments/release-repair-20260922/logs/evidence-push.stderr
+ create mode 100644 deployments/release-repair-20260922/logs/evidence-push.stdout
+ create mode 100644 deployments/release-repair-20260922/logs/final-publication-driver.log
+ create mode 100644 deployments/release-repair-20260922/logs/final-publication-retry.log
+ create mode 100644 deployments/release-repair-20260922/receipts/public-secret-scan-results-publication.json

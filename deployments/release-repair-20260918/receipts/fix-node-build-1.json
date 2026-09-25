@@ -1,0 +1,39 @@
+{
+  "name": "fix-node-build-1",
+  "command": [
+    "cargo",
+    "build",
+    "--release",
+    "--locked",
+    "-p",
+    "postfiat-node",
+    "--bin",
+    "postfiat-node"
+  ],
+  "cwd": "/home/postfiatchad/.cache/qualify-fix-20260918/source-1",
+  "started_at": "2026-09-18T12:39:44.521450+00:00",
+  "status": "PASS",
+  "stdout": "logs/fix-node-build-1.stdout",
+  "stderr": "logs/fix-node-build-1.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/qualify-fix-20260918/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "SOURCE_DATE_EPOCH": "1789514690",
+    "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER": "/usr/bin/gcc",
+    "RUSTFLAGS": "--remap-path-prefix=/home/postfiatchad/.cache/qualify-fix-20260918/source-1=/src/postfiatl1v2 --remap-path-prefix=/home/postfiatchad/.cache/qualify-fix-20260918/source-2=/src/postfiatl1v2 --remap-path-prefix=/home/postfiatchad/.cache/qualify-fix-20260918/target-1=/target --remap-path-prefix=/home/postfiatchad/.cache/qualify-fix-20260918/target-2=/target",
+    "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/qualify-fix-20260918/target-1"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "pid": 3003965,
+  "exit_code": 0,
+  "completed_at": "2026-09-18T12:46:36.693582+00:00",
+  "elapsed_seconds": 412.2,
+  "minimum_available_memory_observed_bytes": 22488641536
+}

@@ -58,6 +58,9 @@ EXPECTED = {
     "docs/evidence/pfusdc-fast-ingress-20260719/live-roundtrip/proof-calldata.bin": "8b43d6dba21c5af9f03b0cd4fafb5936b7c5e2730e4adf62f49e3d1ceb4fb8d0",
     "docs/evidence/pfusdc-fast-ingress-20260719/live-roundtrip/proof.bin": "437960382c86500c847aa5495213757176f9e95da9024a923028e89cb07f1947",
     "docs/evidence/pfusdc-fast-ingress-20260719/live-roundtrip/public-values.bin": "0c2409a2c4955fafbc7b6c6a2e3bdd893c7cee40957c5bd97a4934a618ab2df8",
+    # Frozen source recovery and review assets from the integrated September 5 record.
+    "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/repair-source.tar.gz": "e1634aeea994e65d14871fb3ca45400d28c78da1c21699a145f3d8b71e5cee81",
+    "docs/status/shielded-funding-hardening-implementation-20260905/review-interface.png": "f63cb742d5181af943481961c0cfa10efb2b7750c9f78c39e9e3b7c62d7c0305",
     # Hash-pinned documentation assets.
     "docs/assets/cobalt-governance-observatory-mobile.png": "c9c934573bd66afccee87af9fa5711d7d4b62ce44ee9d31a9cb7e00e31169959",
     "docs/assets/cobalt-governance-observatory.png": "bd11877e8201648804e366d11dff71765aca536ba973329fdd59954ec0ae3902",

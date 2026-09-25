@@ -1,0 +1,19 @@
+{
+  "egress_vkey": "0x00140f09ca6f1b917e3999a806df5ef4ac4468bd65b85e8580cbc16f832dfe47",
+  "ingress_vkey": "0x000dd724902a8a24abde9f3fda01477e0d454ac506fbb6a0613fd4486ad4953c",
+  "manifest": "manifest.json",
+  "manifest_sha256": "a36cdf91023b15fe3055f683d8f847cee236bf4eee3c67d8f4fd2c48d723164c",
+  "ok": true,
+  "pftl_bootstrap": "pftl-bootstrap-report.json",
+  "pftl_checkpoint_gate": "pftl-checkpoint-gate.json",
+  "predicted_addresses": {
+    "vault": "0x40187922Ab0761C11E50Bb971cc5a8c77164BEc4",
+    "verifier": "0xBCF1Aab56BA21edbc5b77124a7cE8b4C68B535ca"
+  },
+  "review_gate": "external-review.json",
+  "route_activation_instructions": "route-activation-instructions.json",
+  "route_binding": "865d0eae0e8f354e3f3adc9a3373b861f8724df0c2826f7ff656cc2409fb3c48",
+  "route_profile_hash": "d0befbd8e77440464b98c3f2c5f1ffedcd99802206349727f18f9b4d54d53b0e715eb2a9e230a64ca396acca3fb63394",
+  "status": "generated-not-reviewed-not-deployed",
+  "vault_runtime_code_hash": "0x2453f23d0ca464f4599f0c2526a7f82867a1058fec3f62751bdae2a0b8a9cd81"
+}

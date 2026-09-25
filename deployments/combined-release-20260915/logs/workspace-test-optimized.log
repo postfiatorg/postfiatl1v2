@@ -1,0 +1,878 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling syn v2.0.117
+   Compiling getrandom v0.2.17
+   Compiling rand_core v0.6.4
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling serde_derive v1.0.228
+   Compiling version_check v0.9.5
+   Compiling subtle v2.6.1
+   Compiling zeroize_derive v1.4.3
+   Compiling zeroize v1.8.2
+   Compiling typenum v1.20.0
+   Compiling generic-array v0.14.7
+   Compiling crypto-common v0.1.7
+   Compiling memchr v2.8.0
+   Compiling const-oid v0.9.6
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling cpufeatures v0.2.17
+   Compiling sha2 v0.10.9
+   Compiling itoa v1.0.18
+   Compiling autocfg v1.5.0
+   Compiling num-traits v0.2.19
+   Compiling zmij v1.0.21
+   Compiling serde_json v1.0.149
+   Compiling hybrid-array v0.4.11
+   Compiling pin-project-lite v0.2.17
+   Compiling once_cell v1.21.4
+   Compiling crypto-common v0.2.1
+   Compiling block-buffer v0.12.0
+   Compiling const-oid v0.10.2
+   Compiling digest v0.11.3
+   Compiling keccak v0.2.0
+   Compiling sha3 v0.11.0
+   Compiling zerocopy v0.8.48
+   Compiling either v1.15.0
+   Compiling tracing-core v0.1.36
+   Compiling tracing-attributes v0.1.31
+   Compiling crossbeam-utils v0.8.21
+   Compiling ppv-lite86 v0.2.21
+   Compiling tracing v0.1.44
+   Compiling keccak v0.1.6
+   Compiling rand_chacha v0.3.1
+   Compiling sha3 v0.10.9
+   Compiling rand v0.8.6
+   Compiling crossbeam-epoch v0.9.20
+   Compiling num-integer v0.1.46
+   Compiling crossbeam-deque v0.8.6
+   Compiling rayon-core v1.13.0
+   Compiling num-bigint v0.4.6
+   Compiling rayon v1.12.0
+   Compiling half v1.8.3
+   Compiling fips204 v0.4.6 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/third_party/fips204)
+   Compiling serde_cbor v0.11.2
+   Compiling postfiat-types v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/types)
+   Compiling postfiat-crypto-provider v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/crypto_provider)
+   Compiling itertools v0.12.1
+   Compiling p3-util v0.4.3-succinct
+   Compiling p3-field v0.4.3-succinct
+   Compiling arrayvec v0.7.6
+   Compiling p3-maybe-rayon v0.4.3-succinct
+   Compiling futures-core v0.3.32
+   Compiling futures-sink v0.3.32
+   Compiling bytes v1.12.1
+   Compiling futures-channel v0.3.32
+   Compiling p3-matrix v0.4.3-succinct
+   Compiling num-bigint v0.3.3
+   Compiling futures-macro v0.3.32
+   Compiling syn v1.0.109
+   Compiling futures-io v0.3.32
+   Compiling futures-task v0.3.32
+   Compiling slab v0.4.12
+   Compiling futures-util v0.3.32
+   Compiling radium v0.7.0
+   Compiling byteorder v1.5.0
+   Compiling tap v1.0.1
+   Compiling wyz v0.5.1
+   Compiling addchain v0.2.1
+   Compiling p3-symmetric v0.4.3-succinct
+   Compiling funty v2.0.0
+   Compiling bitvec v1.0.1
+   Compiling ff_derive v0.13.1
+   Compiling spin v0.9.9
+   Compiling lazy_static v1.5.0
+   Compiling ff v0.13.1
+   Compiling semver v1.0.28
+   Compiling rustc_version v0.4.1
+   Compiling smallvec v1.15.2
+   Compiling socket2 v0.6.5
+   Compiling mio v1.2.2
+   Compiling tokio v1.52.3
+   Compiling thiserror v1.0.69
+   Compiling p3-dft v0.4.3-succinct
+   Compiling thiserror-impl v1.0.69
+   Compiling p3-challenger v0.4.3-succinct
+   Compiling itertools v0.14.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling cc v1.2.64
+   Compiling slop-algebra v6.3.1
+   Compiling futures-executor v0.3.32
+   Compiling p3-mds v0.4.3-succinct
+   Compiling futures v0.3.32
+   Compiling log v0.4.32
+   Compiling gcd v2.3.0
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayref v0.3.9
+   Compiling p3-poseidon2 v0.4.3-succinct
+   Compiling p3-commit v0.4.3-succinct
+   Compiling hex v0.4.3
+   Compiling slop-symmetric v6.3.1
+   Compiling slop-challenger v6.3.1
+   Compiling crossbeam-queue v0.3.12
+   Compiling crossbeam-channel v0.5.15
+   Compiling pin-project-internal v1.1.13
+   Compiling crossbeam v0.8.4
+   Compiling slop-poseidon2 v6.3.1
+   Compiling slop-alloc v6.3.1
+   Compiling regex-syntax v0.8.11
+   Compiling pin-project v1.1.13
+   Compiling strength_reduce v0.2.4
+   Compiling static_assertions v1.1.0
+   Compiling heck v0.5.0
+   Compiling transpose v0.2.3
+   Compiling slop-futures v6.3.1
+   Compiling regex-automata v0.4.14
+   Compiling p3-koala-bear v0.4.3-succinct
+   Compiling p3-baby-bear v0.4.3-succinct
+   Compiling slop-matrix v6.3.1
+   Compiling derive-where v1.6.1
+   Compiling slop-tensor v6.3.1
+   Compiling matchers v0.2.0
+   Compiling tracing-log v0.2.0
+   Compiling sharded-slab v0.1.7
+   Compiling thread_local v1.1.9
+   Compiling nu-ansi-term v0.50.3
+   Compiling tracing-subscriber v0.3.23
+   Compiling slop-commit v6.3.1
+   Compiling p3-bn254-fr v0.4.3-succinct
+   Compiling ansi_term v0.12.1
+   Compiling tracing-forest v0.1.6
+   Compiling slop-bn254 v6.3.1
+   Compiling slop-baby-bear v6.3.1
+   Compiling slop-koala-bear v6.3.1
+   Compiling num_cpus v1.17.0
+   Compiling crunchy v0.2.4
+   Compiling slop-multilinear v6.3.1
+   Compiling slop-utils v6.3.1
+   Compiling p3-merkle-tree v0.4.3-succinct
+   Compiling slop-primitives v6.3.1
+   Compiling p3-interpolation v0.4.3-succinct
+   Compiling p3-fri v0.4.3-succinct
+   Compiling slop-merkle-tree v6.3.1
+   Compiling thiserror v2.0.18
+   Compiling slop-basefold v6.3.1
+   Compiling slop-fri v6.3.1
+   Compiling slop-dft v6.3.1
+   Compiling ahash v0.8.12
+   Compiling thiserror-impl v2.0.18
+   Compiling slop-basefold-prover v6.3.1
+   Compiling blake3 v1.8.5
+   Compiling p3-air v0.4.3-succinct
+   Compiling slop-stacked v6.3.1
+   Compiling slop-sumcheck v6.3.1
+   Compiling object v0.37.3
+   Compiling simd-adler32 v0.3.10
+   Compiling allocator-api2 v0.2.21
+   Compiling adler2 v2.0.1
+   Compiling cpufeatures v0.3.0
+   Compiling miniz_oxide v0.8.9
+   Compiling hashbrown v0.14.5
+   Compiling slop-jagged v6.3.1
+   Compiling p3-uni-stark v0.4.3-succinct
+   Compiling strum_macros v0.27.2
+   Compiling bincode v1.3.3
+   Compiling deepsize_derive2 v0.1.0
+   Compiling struct-reflection-derive v0.1.0
+   Compiling gimli v0.32.3
+   Compiling range-set-blaze v0.1.16
+   Compiling elf v0.7.4
+   Compiling sp1-primitives v6.3.1
+   Compiling addr2line v0.25.1
+   Compiling struct-reflection v0.1.0
+   Compiling strum v0.27.2
+   Compiling deepsize2 v0.1.0
+   Compiling slop-whir v6.3.1
+   Compiling slop-uni-stark v6.3.1
+   Compiling slop-air v6.3.1
+   Compiling sp1-derive v6.3.1
+   Compiling rayon-scan v0.1.1
+   Compiling gen_ops v0.4.0
+   Compiling thousands v0.2.0
+   Compiling rustc-demangle v0.1.27
+   Compiling backtrace v0.3.76
+   Compiling sp1-hypercube v6.3.1
+   Compiling postfiat-mempool-dag v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/mempool_dag)
+   Compiling slop-maybe-rayon v6.3.1
+   Compiling bytemuck_derive v1.10.2
+   Compiling bytemuck v1.25.0
+   Compiling sp1-recursion-executor v6.3.1
+   Compiling rustc-hex v2.1.0
+   Compiling substrate-bn-succinct-rs v0.6.0
+   Compiling sp1-recursion-machine v6.3.1
+   Compiling postfiat-bridge v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/bridge)
+   Compiling postfiat-nav-reserve-protocol v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/nav_reserve_protocol)
+   Compiling sp1-verifier v6.3.1
+   Compiling postfiat-execution v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/execution)
+   Compiling base64 v0.22.1
+   Compiling postfiat-consensus-cobalt v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/consensus_cobalt)
+   Compiling memuse v0.2.2
+   Compiling crc32fast v1.5.0
+   Compiling group v0.13.0
+   Compiling proc-macro-error-attr2 v2.0.0
+   Compiling proc-macro-error2 v2.0.1
+   Compiling flate2 v1.1.9
+   Compiling blake2b_simd v1.0.4
+   Compiling inout v0.1.4
+   Compiling cipher v0.4.4
+   Compiling postfiat-rpc-sdk v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/rpc_sdk)
+   Compiling pasta_curves v0.5.1
+   Compiling postfiat-ordering-fast v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/ordering_fast)
+   Compiling redb v4.2.0
+   Compiling indexmap v1.9.3
+   Compiling signature v2.2.0
+   Compiling universal-hash v0.5.1
+   Compiling libm v0.2.16
+   Compiling hashbrown v0.12.3
+   Compiling opaque-debug v0.3.1
+   Compiling poly1305 v0.8.0
+   Compiling chacha20 v0.9.1
+   Compiling bls12_381 v0.8.0
+   Compiling maybe-rayon v0.1.1
+   Compiling aead v0.5.2
+   Compiling halo2_legacy_pdqsort v0.1.0
+   Compiling halo2_proofs v0.3.2 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/third_party/halo2_proofs)
+   Compiling chacha20poly1305 v0.10.1
+   Compiling jubjub v0.10.0
+   Compiling postfiat-storage v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/storage)
+   Compiling halo2_poseidon v0.1.0
+   Compiling sinsemilla v0.1.0
+   Compiling cbc v0.1.2
+   Compiling zcash_spec v0.2.1
+   Compiling uint v0.9.5
+   Compiling postfiat-proofs v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/proofs)
+   Compiling der v0.7.10
+   Compiling bech32 v0.11.1
+   Compiling zip32 v0.2.1
+   Compiling halo2_gadgets v0.5.0
+   Compiling fpe v0.6.1
+   Compiling reddsa v0.5.1
+   Compiling zcash_note_encryption v0.4.1
+   Compiling aes v0.8.4
+   Compiling getset v0.1.6
+   Compiling incrementalmerkletree v0.8.2
+   Compiling visibility v0.1.1
+   Compiling nonempty v0.11.0
+   Compiling corez v0.1.1
+   Compiling orchard v0.14.0
+   Compiling spki v0.7.3
+   Compiling postfiat-pfusdc-proofs v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/pfusdc_proofs)
+   Compiling base16ct v0.2.0
+   Compiling sec1 v0.7.3
+   Compiling pkcs8 v0.10.2
+   Compiling postfiat-privacy v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/privacy)
+   Compiling hmac v0.12.1
+   Compiling crypto-bigint v0.5.5
+   Compiling elliptic-curve v0.13.8
+   Compiling rfc6979 v0.4.0
+   Compiling postfiat-privacy-orchard v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/privacy_orchard)
+   Compiling ecdsa v0.16.9
+   Compiling postfiat-pftl-uniswap-proofs v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/pftl_uniswap_proofs)
+   Compiling postfiat-network v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/network)
+   Compiling postfiat-node v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/node)
+   Compiling k256 v0.13.4
+   Compiling synstructure v0.13.2
+   Compiling zerofrom-derive v0.1.7
+   Compiling syn v3.0.4
+   Compiling zerofrom v0.1.8
+   Compiling yoke-derive v0.8.2
+   Compiling stable_deref_trait v1.2.1
+   Compiling yoke v0.8.3
+   Compiling zerovec-derive v0.11.6
+   Compiling zerovec v0.11.8
+   Compiling displaydoc v0.2.7
+   Compiling tinystr v0.8.4
+   Compiling litemap v0.8.3
+   Compiling writeable v0.6.4
+   Compiling paste v1.0.15
+   Compiling icu_locale_core v2.3.0
+   Compiling zerotrie v0.2.5
+   Compiling potential_utf v0.1.6
+   Compiling ring v0.17.14
+   Compiling wasm-bindgen-shared v0.2.126
+   Compiling icu_properties_data v2.3.0
+   Compiling utf8_iter v1.0.4
+   Compiling icu_normalizer_data v2.3.0
+   Compiling icu_collections v2.3.0
+   Compiling icu_provider v2.3.1
+   Compiling http v1.5.0
+   Compiling percent-encoding v2.3.2
+   Compiling http-body v1.1.0
+   Compiling rustls-pki-types v1.15.1
+   Compiling alloy-rlp-derive v0.3.16
+   Compiling httparse v1.10.1
+   Compiling untrusted v0.9.0
+   Compiling unicode-segmentation v1.13.3
+   Compiling convert_case v0.10.0
+   Compiling alloy-rlp v0.3.12
+   Compiling icu_normalizer v2.3.0
+   Compiling icu_properties v2.3.0
+   Compiling tower-service v0.3.3
+   Compiling rustversion v1.0.22
+   Compiling unicode-xid v0.2.6
+   Compiling ruint-macro v1.2.1
+   Compiling try-lock v0.2.5
+   Compiling rustls v0.23.45
+   Compiling want v0.3.1
+   Compiling ruint v1.20.0
+   Compiling const-hex v1.19.1
+   Compiling derive_more-impl v2.1.1
+   Compiling idna_adapter v1.2.2
+   Compiling rustls-webpki v0.103.15
+   Compiling form_urlencoded v1.2.2
+   Compiling syn-solidity v1.7.1
+   Compiling macro-string v0.1.4
+   Compiling foldhash v0.2.0
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling dunce v1.0.5
+   Compiling atomic-waker v1.1.2
+   Compiling hyper v1.11.1
+   Compiling alloy-sol-macro-input v1.5.7
+   Compiling indexmap v2.14.0
+   Compiling hashbrown v0.16.1
+   Compiling idna v1.1.0
+   Compiling derive_more v2.1.1
+   Compiling curve25519-dalek v4.1.3
+   Compiling sync_wrapper v1.0.2
+   Compiling bumpalo v3.20.3
+   Compiling tower-layer v0.3.3
+   Compiling rustc-hash v2.1.3
+   Compiling ipnet v2.12.1
+   Compiling hyper-util v0.1.20
+   Compiling alloy-primitives v1.5.7
+   Compiling tower v0.5.3
+   Compiling wasm-bindgen-macro-support v0.2.126
+   Compiling wasm-bindgen v0.2.126
+   Compiling url v2.5.8
+   Compiling tokio-rustls v0.26.4
+   Compiling alloy-sol-macro-expander v1.5.7
+   Compiling webpki-roots v1.0.9
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling ryu v1.0.23
+   Compiling bitflags v2.13.1
+   Compiling tower-http v0.6.11
+   Compiling serde_urlencoded v0.7.1
+   Compiling hyper-rustls v0.27.9
+   Compiling alloy-sol-macro v1.5.7
+   Compiling wasm-bindgen-macro v0.2.126
+   Compiling nybbles v0.4.8
+   Compiling http-body-util v0.1.5
+   Compiling ed25519 v2.2.3
+   Compiling winnow v0.7.15
+   Compiling alloy-sol-type-parser v1.5.7
+   Compiling ed25519-dalek v2.2.0
+   Compiling reqwest v0.12.28
+   Compiling alloy-trie v0.9.5
+   Compiling alloy-sol-types v1.5.7
+   Compiling js-sys v0.3.103
+   Compiling serde-wasm-bindgen v0.6.5
+   Compiling arc-conformance v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/arc-conformance)
+   Compiling postfiat-fastpay-prototype v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/fastpay-prototype)
+   Compiling fips204 v0.4.6
+   Compiling postfiat-cobalt-decision-oracle v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/cobalt_decision_oracle)
+   Compiling postfiat-cobalt-adversarial-oracle v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/cobalt_adversarial_oracle)
+   Compiling postfiat-bench v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/bench_harness)
+   Compiling postfiat-fastswap-model v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/fastswap_model)
+   Compiling postfiat-wallet-wasm v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/wallet_wasm)
+   Compiling postfiat-cobalt-e1-harness v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/cobalt_e1_harness)
+   Compiling postfiat-cobalt-e3-harness v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/cobalt_e3_harness)
+   Compiling postfiat-cobalt-e2-harness v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/cobalt_e2_harness)
+   Compiling postfiat-fuzz v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/fuzz_harness)
+    Finished `test` profile [optimized + debuginfo] target(s) in 23m 37s
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/arc_conformance-1cf441a75e0f6a9c)
+
+running 4 tests
+test receipts::tests::receipt_inclusion_conformance ... ok
+test tests::binding_and_quorum_fail_closed ... ok
+test tests::golden_commit ... ok
+test tests::every_preimage_byte_is_authenticated ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/bin/capture.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/capture-143ec7f41c0903f6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/capture_receipts.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/capture_receipts-3f56afbbb7d26750)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_bench-42b9e8e009f72323)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/postfiat_storage_corpus_batches.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_storage_corpus_batches-57dc2a6849a6f81b)
+
+running 2 tests
+test tests::options_require_exact_supported_flags ... ok
+test tests::batch_filenames_sort_in_round_order ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_bridge-0b7fd0cf8ee1acba)
+
+running 38 tests
+test ethereum_checkpoint::tests::rejects_partitioned_alternate_checkpoint_and_unvoted_reorg ... ok
+test ethereum_receipt::tests::binds_cancel_event_to_exact_controller_packet_and_deadline ... ok
+test ethereum_receipt::tests::binds_dynamic_return_burn_event_and_rejects_noncanonical_tail ... ok
+test ethereum_receipt::tests::decodes_compact_primary_market_v2_packet_consumed_event ... ok
+test ethereum_receipt::tests::decodes_compact_primary_market_v2_return_burned_event ... ok
+test ethereum_receipt::tests::rejects_wrong_root_key_value_status_log_index_and_noncanonical_rlp ... ok
+test ethereum_receipt::tests::verifies_real_receipt_trie_leaf_and_decodes_success_log ... ok
+test ethereum_checkpoint::tests::verifies_distinct_exact_committee_quorum_and_field_binding ... ok
+test pftl_uniswap_tests::applies_bridge_transfers_and_rejects_replay ... ok
+test pftl_uniswap_tests::pftl_uniswap_bridge_ledger_exports_refunds_and_preserves_invariant ... ok
+test pftl_uniswap_tests::pftl_uniswap_bridge_ledger_rejects_export_from_wrong_native_wallet ... ok
+test pftl_uniswap_tests::pftl_uniswap_bridge_ledger_rejects_stale_nav_wrong_route_and_caps ... ok
+test pftl_uniswap_tests::pftl_uniswap_bridge_ledger_round_trips_twice_without_manual_edits ... ok
+test pftl_uniswap_tests::pftl_uniswap_fork_rehearsal_evidence_requires_tradeability_and_supply_invariant ... ok
+test pftl_uniswap_tests::pftl_uniswap_launch_config_binds_route_seed_and_official_deployments ... ok
+test pftl_uniswap_tests::pftl_uniswap_packet_binds_config_and_caps ... ok
+test pftl_uniswap_tests::pftl_uniswap_packet_binds_launch_pricing_epoch_and_reserve_packet ... ok
+test pftl_uniswap_tests::pftl_uniswap_packet_fails_closed_when_route_disabled ... ok
+test pftl_uniswap_tests::pftl_uniswap_packet_requires_source_packet_hash ... ok
+test pftl_uniswap_tests::pftl_uniswap_packet_requires_source_receipt_binding ... ok
+test pftl_uniswap_tests::pftl_uniswap_primary_subscription_mints_fractional_supply_from_pre_inflow_nav ... ok
+test pftl_uniswap_tests::pftl_uniswap_primary_subscription_rejects_secondary_inventory_route ... ok
+test pftl_uniswap_tests::pftl_uniswap_refund_receipt_commits_non_consumption_proof ... ok
+test pftl_uniswap_tests::pftl_uniswap_return_burn_id_matches_solidity_abi_vector ... ok
+test pftl_uniswap_tests::pftl_uniswap_return_path_rejects_replay_wrong_token_and_low_finality ... ok
+test pftl_uniswap_tests::pftl_uniswap_route_config_digest_is_stable_and_validated ... ok
+test pftl_uniswap_tests::pftl_uniswap_route_rejects_trustless_copy_without_verifier ... ok
+test pftl_uniswap_tests::pftl_uniswap_status_reports_expose_route_packet_claims_and_supply ... ok
+test pftl_uniswap_tests::pftl_uniswap_supply_status_bounds_native_balance_rows ... ok
+test pftl_uniswap_tests::enforces_caps_and_pause ... ok
+test pftl_uniswap_tests::primary_subscription_quote_uses_floor_and_reports_dust ... ok
+test pftl_uniswap_tests::primary_subscription_receipt_binds_requested_accepted_refund_and_rounding ... ok
+test pftl_uniswap_tests::pftl_uniswap_transition_receipts_commit_ordered_root_and_mutations ... ok
+test pftl_uniswap_tests::rejects_malformed_bridge_text_fields ... ok
+test pftl_uniswap_tests::rejects_malformed_witness_chain_domain ... ok
+test pftl_uniswap_tests::rejects_missing_or_tampered_witness_attestation ... ok
+test pftl_uniswap_tests::witness_attestation_commits_to_chain_domain ... ok
+test pftl_uniswap_tests::pruned_replay_cache_does_not_reopen_historical_witness_replay ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_cobalt_adversarial_oracle-e1a998a53160b207)
+
+running 3 tests
+test tests::partition_is_not_fully_linked ... ok
+test tests::valid_and_invalid_boundary_cases_are_distinguished ... ok
+test tests::corpus_is_deterministic_and_covers_the_gate ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s
+
+     Running unittests src/main.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_cobalt_adversarial_oracle-e3079baced637096)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_cobalt_decision_oracle-a0e77d4cee9be156)
+
+running 3 tests
+test tests::local_unl_split_exposes_material_delta ... ok
+test tests::compatible_shared_subset_decides ... ok
+test tests::missing_shared_subset_halts ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_cobalt_decision_oracle-8cc57456150cfe0a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_cobalt_e1_harness-9d89d47b5c766d92)
+
+running 1 test
+test tests::production_domain_fixture_builds_and_analyzes_a_graph ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_cobalt_e2_harness-3016446be6a57446)
+
+running 4 tests
+test tests::live_fault_bound_and_search_envelope_are_valid ... ok
+test tests::incompatible_graph_has_unsafe_pairs ... ok
+test tests::schedule_search_is_deterministic_and_covers_every_dimension ... ok
+test tests::signed_equivocation_is_verified_against_committee_keys ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests src/main.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_cobalt_e3_harness-b716fb3ab9973e39)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_consensus_cobalt-9ffafaf845f05034)
+
+running 74 tests
+test tests::abba_validation_rejects_bad_round_and_tampered_id ... ok
+test tests::builds_nonuniform_trust_graph_and_linkage_report ... ok
+test tests::canonical_unl_trust_graph_g0_reproduces_canonical_validator_set ... ok
+test tests::certificate_tracks_sorted_unique_votes ... ok
+test tests::certifies_validator_registry_update_and_rejects_tampering ... ok
+test tests::abba_messages_have_round_state_and_signed_payloads ... ok
+test tests::cobalt_cover_extractor_completes_before_unsafe_intersection_rejection ... ok
+test tests::cobalt_committee_builds_from_registry_entries ... ok
+test tests::cobalt_cover_extractor_dedupes_shared_subset_rows ... ok
+test tests::cobalt_cover_extractor_derives_complete_cover_and_hash ... ok
+test tests::cobalt_cover_extractor_detects_witness_cover_omission ... ok
+test tests::cobalt_cover_extractor_fails_closed_on_inactive_subset ... ok
+test tests::cobalt_cover_extractor_rejects_budget_above_weakest_subset ... ok
+test tests::cobalt_cover_extractor_rejects_oversized_profile_limit ... ok
+test tests::cobalt_quorum_overlap_property_matches_minimum_possible_quorum_intersection ... ok
+test tests::cobalt_safety_witness_accepts_bounded_single_rotation ... ok
+test tests::cobalt_safety_witness_rejects_ab_to_hijkl_unsafe_transition ... ok
+test tests::cobalt_safety_witness_rejects_budget_above_weakest_subset ... ok
+test tests::cobalt_safety_witness_rejects_missing_challenge_clearance ... ok
+test tests::cobalt_safety_witness_rejects_oversized_cover ... ok
+test tests::cobalt_safety_witness_rejects_rotation_without_honest_quorum_overlap ... ok
+test tests::cobalt_safety_witness_rejects_stale_parent_root ... ok
+test tests::dabc_lineage_anchor_extends_across_registry_and_trust_graph_roots ... ok
+test tests::dabc_ratifies_first_nonidentical_trust_graph_g1 ... ok
+test tests::dabc_ratifies_validator_lifecycle_payloads ... ok
+test tests::dabc_replay_bundle_verifies_order_and_activation_heights ... ok
+test tests::detects_abba_byzantine_equivocation_without_divergent_decision ... ok
+test tests::deterministic_abba_test_crs_is_simulation_only ... ok
+test tests::detects_conflicting_rbc_accepts_from_linked_validators ... ok
+test tests::domain_changes_cobalt_ids ... ok
+test tests::evaluates_abba_support_and_finish_consistency_against_local_view ... ok
+test tests::evaluates_strong_and_weak_support_against_local_view ... ok
+test tests::example_report_path_rejects_escape_and_absolute_without_override ... ok
+test tests::example_report_path_uses_configured_root_for_relative_reports ... ok
+test tests::fastswap_bootstrap_governance_kind_is_exact_hash_bound ... ok
+test tests::evaluates_rbc_echo_and_ready_support_against_local_view ... ok
+test tests::governance_accepts_only_canonical_vault_bridge_route_authority_kinds ... ok
+test tests::governance_amendment_lifecycle_metadata_is_bound ... ok
+test tests::linked_views_cannot_have_disjoint_strong_support_outside_fault_bound ... ok
+test tests::mvba_valid_input_selection_is_deterministic_across_linked_views ... ok
+test tests::mvba_valid_input_set_rejects_candidate_flood_before_dedup ... ok
+test tests::nonuniform_mode_rejects_canonical_governance_amendments ... ok
+test tests::nonuniform_support_ignores_authenticated_messages_outside_local_view ... ok
+test tests::ratifies_atomic_swap_activation_and_boolean_pause_values ... ok
+test tests::ratifies_crypto_policy_and_bridge_witness_epoch ... ok
+test tests::full_knowledge_checkpoint_candidate_binding_property_gates_dabc_activation ... ok
+test tests::ratifies_with_full_essential_subset_support ... ok
+test tests::ratifies_dabc_amendments_as_linear_parent_hash_chain ... ok
+test tests::rbc_messages_have_canonical_ids_and_signed_payloads ... ok
+test tests::rbc_nonidentical_trust_views_accept_one_payload ... ok
+test tests::rbc_signed_support_dedupes_signers_and_rejects_non_committee ... ok
+test tests::rbc_validation_rejects_tampered_bindings ... ok
+test tests::registry_update_binds_trust_graph_transition ... ok
+test tests::rejects_insufficient_support ... ok
+test tests::rejects_malformed_cobalt_domain ... ok
+test tests::rejects_malformed_essential_subset_config ... ok
+test tests::rbc_signed_validation_rejects_empty_forged_and_non_committee_signatures ... ok
+test tests::rejects_nonuniform_certificate_for_wrong_local_view ... ok
+test tests::reports_unsafe_nonuniform_graph_with_counterexample_pair ... ok
+test tests::transaction_network_membership_binds_cobalt_block_metadata ... ok
+test tests::rejects_nonuniform_certificate_with_inactive_or_stale_graph_evidence ... ok
+test tests::transaction_network_transition_rejects_old_set_after_activation ... ok
+test tests::transaction_network_replacement_drill_ratifies_new_network_after_ordering_failure ... ok
+test tests::trust_graph_lifecycle_updates_reject_unsafe_graphs_before_activation ... ok
+test tests::validates_essential_subset_math_from_cobalt_paper ... ok
+test tests::validates_registry_update_lifecycle_shapes ... ok
+test tests::validator_admission_policy_admits_clean_independent_candidate ... ok
+test tests::validator_admission_policy_fails_closed_on_unknown_model_field ... ok
+test tests::validator_admission_policy_holds_contradictory_release_and_funding_evidence ... ok
+test tests::validator_admission_policy_holds_missing_domain_proof ... ok
+test tests::validator_admission_policy_rejects_shared_control_groups ... ok
+test tests::verifies_certificate_backed_amendment_and_rejects_tampering ... ok
+test tests::trust_graph_rollback_restores_authority_graph_after_bad_activation ... ok
+test tests::verifies_nonuniform_governance_certificate_against_local_views ... ok
+
+test result: ok. 74 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+
+     Running tests/genesis_registry_checker.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/genesis_registry_checker-39417925d3ca33cf)
+
+running 9 tests
+test announced_hash_mismatch_rejected ... ok
+test every_mutation_fixture_rejected_with_named_reason ... ok
+test derived_g0_t0_pairs_accepted_across_n_s_12_to_20 ... ok
+test registry_root_swap_rejected_by_trust_graph_root_binding ... ok
+test registry_size_outside_launch_profile_rejected ... ok
+test golden_g0_t0_pairs_accepted_by_pinned_cobalt_checker ... ok
+test tampered_template_thresholds_rejected_across_n_s_12_to_20 ... ok
+test wrong_ordering_rejected_by_cobalt_validation ... ok
+test t_s_is_the_exact_safety_linkage_bound_across_n_s_12_to_20 ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_crypto_provider-c4fa266ecc764c00)
+
+running 5 tests
+test tests::accelerated_verify_matches_fips204_0_4_6_on_valid_and_negative_cases ... ok
+test tests::hex_round_trip ... ok
+test tests::ml_dsa_65_seeded_keygen_is_reproducible ... ok
+test tests::ml_dsa_65_signs_and_verifies ... ok
+test tests::accelerated_verify_matches_reference_under_deterministic_mutation_fuzz ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_execution-7755466a24a97d97)
+
+running 202 tests
+test fastlane_primary::tests::canonical_primary_deposit_is_accepted_once_with_exact_code ... ok
+test fastlane_primary::tests::ordered_fastpay_recovery_cancels_and_permanently_fences_a_late_certificate ... ok
+test fastlane_primary::tests::signed_owned_deposit_failure_matrix_never_mutates ... ok
+test fastlane_primary::tests::signed_owned_deposit_is_atomic_conserving_and_replay_safe ... ok
+test fastlane_primary::tests::ordered_fastpay_recovery_reveal_confirms_exactly_once_with_conservation ... ok
+test fastswap::tests::authorization_required_asset_accepts_only_exact_live_holder_permit ... ok
+test fastswap::tests::conservation_property_holds_across_ten_thousand_amount_splits ... ok
+test fastswap::tests::one_reserved_input_rejects_the_complete_swap_without_mutation ... ok
+test fastlane_primary::tests::signed_owned_deposit_rejects_the_declared_object_cap_without_mutation ... ok
+test fastswap::tests::quote_ratio_and_expiry_fail_closed ... ok
+test fastswap::tests::second_leg_signature_substitution_fails_before_effects ... ok
+test fastswap::tests::valid_dual_auth_swap_produces_deterministic_conserved_effects ... ok
+test fastswap_bridge::tests::exit_loses_cleanly_to_an_existing_swap_reservation ... ok
+test fastswap_bridge::tests::issued_deposit_debits_trustline_credits_reserve_and_imports_once ... ok
+test fastswap_bridge::tests::rejected_or_invalid_deposit_never_mutates_ledger_or_fast_state ... ok
+test fastswap_bridge::tests::certified_exit_redeems_exactly_once_and_preserves_solvency ... ok
+test fastswap_checkpoint::tests::checkpoint_is_deterministic_and_quorum_verified ... ok
+test fastswap_control::tests::governance_bootstrap_binds_payload_and_installs_epoch_one_atomically ... ok
+test fastswap_decision::tests::cancellation_uses_primary_height_not_wall_clock ... ok
+test fastswap_control::tests::control_requires_distinct_quorum_signatures_and_applies_atomically ... ok
+test fastswap_decision::tests::new_round_qc_authorizes_objective_cancel_and_rejects_status_tampering ... ok
+test fastswap_decision::tests::quorum_certificate_verification_is_all_or_nothing ... ok
+test fastswap_decision::tests::conflicting_signed_votes_produce_verifiable_equivocation_evidence ... ok
+test fastswap_decision::tests::recovery_leader_is_deterministic ... ok
+test fastswap_decision::tests::stale_lock_qc_is_rejected_after_higher_round_vote ... ok
+test market_policy::tests::adversarial_deterministic_replay_same_inputs_same_metrics ... ok
+test market_policy::tests::adversarial_operator_non_funding_drives_reserve_cap_to_zero ... ok
+test market_policy::tests::adversarial_oracle_manipulation_thin_move_does_not_unlock_material_caps ... ok
+test market_policy::tests::adversarial_sustained_discount_increases_cap_only_within_policy_bounds ... ok
+test market_policy::tests::arithmetic_errors_fail_closed ... ok
+test market_policy::tests::evm_venue_evidence_bundle_replays_expected_market_metrics ... ok
+test market_policy::tests::evm_venue_replay_excludes_unreplayable_observation_from_caps ... ok
+test market_policy::tests::evm_venue_replay_rejects_wrong_evidence_root ... ok
+test market_policy::tests::nominal_example_reproduces_bootstrap_caps ... ok
+test market_policy::tests::venue_observations_reproduce_bootstrap_responses ... ok
+test owned_transfer_recovery_tests::abandoned_lock_cancels_at_boundary_and_delayed_certificate_is_fenced ... ok
+test fastswap_decision::tests::terminal_decision_cannot_change ... ok
+test owned_transfer_recovery_tests::complete_certificate_reveal_confirms_after_expiry_and_conserves ... ok
+test owned_transfer_recovery_tests::conflicting_recovery_certificates_halt_without_mutation ... ok
+test owned_transfer_recovery_tests::governed_committee_rotation_preserves_old_recovery_and_fences_overlap ... ok
+test owned_transfer_recovery_tests::v3_certificate_applies_only_inside_window_with_exact_derived_lock ... ok
+test owned_transfer_recovery_tests::v3_certificate_digest_is_vote_order_independent_and_duplicate_fail_closed ... ok
+test owned_transfer_recovery_tests::v3_tampered_lock_duplicate_vote_and_foreign_epoch_do_not_mutate ... ok
+test owned_transfer_tests::applies_conserving_transfer ... ok
+test owned_transfer_recovery_tests::v3_direct_apply_is_identical_across_honest_validator_tip_heights ... ok
+test owned_transfer_tests::certified_apply_verifies_owner_auth_and_quorum ... ok
+test owned_transfer_tests::certified_unwrap_combines_fragmented_inputs ... ok
+test owned_transfer_tests::certified_unwrap_credits_amount_and_mints_change ... ok
+test owned_transfer_tests::certified_unwrap_rejects_non_native_asset_and_overflow_without_mutation ... ok
+test owned_transfer_tests::duplicate_owned_input_is_rejected_without_mutation ... ok
+test owned_transfer_tests::certified_unwrap_rejects_bad_owner_auth_and_low_quorum ... ok
+test owned_transfer_tests::duplicate_validator_vote_is_rejected_in_transfer_and_unwrap_certificates ... ok
+test owned_transfer_tests::foreign_domain_certificate_is_rejected_without_state_mutation ... ok
+test owned_transfer_tests::owned_object_capacity_allows_retirement_but_rejects_growth_at_the_cap ... ok
+test owned_transfer_tests::owned_object_capacity_property_rejects_growth_across_the_limit ... ok
+test owned_transfer_tests::rejects_non_conserving_wrong_owner_and_version ... ok
+test owned_transfer_tests::rejects_oversized_transfer_resource_limit ... ok
+test owned_transfer_tests::rejects_replay_of_consumed_input ... ok
+test owned_transfer_tests::unwrap_overflow_rejects_without_consuming_input ... ok
+test owned_transfer_tests::unwrap_rejects_non_native_asset_without_mutation ... ok
+test owned_transfer_tests::wrap_and_unwrap_bridge_is_value_conserving ... ok
+test owned_transfer_tests::wrap_rejects_duplicate_object_id_without_mutation ... ok
+test owned_transfer_tests::wrap_rejects_insufficient_balance_and_unwrap_rejects_non_owner ... ok
+test owned_transfer_tests::wrap_rejects_non_native_asset_without_mutation ... ok
+test owned_transfer_tests::zero_value_and_existing_output_id_are_rejected_without_mutation ... ok
+test pftl_uniswap_ethereum_verification::tests::packet_schema_tracks_route_generation ... ok
+test pftl_uniswap_ethereum_verification::tests::v2_source_packet_commitment_matches_mainnet_event ... ok
+test tests::a666_nav_overlay_counts_only_vault_backed_primary_market_reserve ... ok
+test owned_transfer_tests::fastpay_safety_chaos_gate ... ok
+test tests::ar02_production_route_config_cap_order_inequalities_hold_at_runtime ... ok
+test tests::ar01_pfusdc_reserve_account_identity_and_balance_matches_production_fixture ... ok
+test tests::ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed ... ok
+test tests::ar06_duplicate_submission_returns_typed_admission_or_finalized_rejection ... ok
+test tests::ar07_stale_proof_fails_closed ... ok
+test tests::ar07_replay_fails_closed ... ok
+test tests::ar07_wrong_overlay_fails_closed ... ok
+test tests::ar07_wrong_nav_fails_closed ... ok
+test tests::ar07_wrong_packet_fails_closed ... ok
+test tests::ar07_wrong_supply_fails_closed ... ok
+test tests::ar11_issued_asset_supply_counts_non_nav_spread_custody ... ok
+test tests::ar07_wrong_profile_fails_closed ... ok
+test tests::asset_clawback_requires_issuer_policy_and_rejects_native_pft ... ok
+test tests::asset_transaction_property_conserves_supply_and_trustline_limits ... ok
+test tests::asset_transactions_create_trust_pay_burn_and_reject_frozen_lines ... ok
+test tests::atomic_swap_accepts_pf_usdc_a651_with_price_nav_in_either_canonical_leg ... ok
+test tests::atomic_swap_applies_both_legs_fees_sequences_and_receipt_once ... ok
+test tests::atomic_swap_both_parties_sign_the_identical_whole_trade_preimage ... ok
+test tests::atomic_swap_classifies_price_nav_once_per_leg_not_per_envelope_row ... ok
+test tests::atomic_swap_fee_accounts_for_implicit_recipient_balance_row ... ok
+test tests::atomic_swap_never_auto_creates_a_missing_sender_balance_row ... ok
+test tests::atomic_swap_public_entrypoint_without_activation_context_fails_closed ... ok
+test tests::atomic_swap_rejects_domain_activation_expiry_and_issuer_endpoints_without_mutation ... ok
+test tests::atomic_swap_rejects_each_owner_auth_sequence_fee_and_line_failure_atomically ... ok
+test tests::atomic_swap_rejects_sequence_and_balance_overflow_without_mutation ... ok
+test tests::atomic_swap_rejects_zero_or_two_price_nav_legs_without_mutation ... ok
+test tests::atomic_swap_requires_current_exact_price_nav_envelope_without_mutation ... ok
+test tests::atomic_swap_tx_id_covers_every_envelope_and_authorization_field ... ok
+test tests::atomic_swap_tx_id_golden_vector_and_domain_separation ... ok
+test tests::bridge_verification_activation_gates_deposit_observation_requirement ... ok
+test tests::bridge_verification_activation_gates_out_of_lane_issuer_payment ... ok
+test tests::bridge_verification_activation_gates_withdrawal_execution_observation ... ok
+test tests::bridge_verification_activation_rejects_zero_confirmation_asset_profile ... ok
+test tests::escrow_transactions_lock_finish_cancel_and_reject_replay ... ok
+test tests::ethereum_backed_claim_grows_cap_and_converges_across_six_replicas ... ok
+test tests::ethereum_ingress_consensus_binding_rejects_route_manifest_and_domain_mutations ... ok
+test tests::fastswap_prefunded_effects_match_w6_asset_deltas_for_the_same_trade ... ok
+test tests::arc_ingress_real_groth16_fixture_verifies_and_rejects_mutations ... ok
+test tests::first_spend_binds_funded_account_public_key ... ok
+test tests::fx_fix_register_rejects_public_capacity_that_disagrees_with_ratio ... ok
+test tests::fx_fix_reservation_enforces_atom_capacity_independently_of_fill_slots ... ok
+test tests::fx_fix_reservation_id_matches_cross_language_demo_vector ... ok
+test tests::fx_fix_reservation_rejects_expired_packet_without_effect ... ok
+test tests::fx_fix_register_reserve_release_is_bounded_and_replay_safe ... ok
+test tests::genesis_hash_has_stable_canonical_test_vector ... ok
+test tests::fx_fix_reservation_rejects_wallet_intent_replay_before_new_action ... ok
+test tests::h94_fabricated_block_admission_stage2_must_flip ... ok
+test tests::issued_mint_counts_fastlane_reserve_against_supply_cap ... ok
+test tests::issued_payment_auto_expands_implicit_recipient_balance_record ... ok
+test tests::issued_asset_escrow_locks_finishes_cancels_and_counts_locked_supply ... ok
+test tests::legacy_nav_profile_register_block_3_receipt_id_matches_committed ... ok
+test tests::lane_c_ethereum_finality_claim_credits_spendable_directly_and_skips_bonded_escrow ... ok
+test tests::market_ops_finalize_records_policy_replayed_envelope ... ok
+test tests::market_ops_finalize_rejects_unregistered_policy_and_bad_evidence ... ok
+test tests::market_ops_policy_register_allows_later_finalize ... ok
+test tests::nav_bonded_challenge_resolves_refund_and_forfeit_paths ... ok
+test tests::nav_asset_lifecycle_finalizes_mints_redeems_and_halts ... ok
+test tests::nav_multi_fetch_quorum_gates_finalize_on_attestations ... ok
+test tests::nav_profile_ledger_transparent_gates_enforce_window_staleness_and_deadman ... ok
+test tests::nav_redeem_settlement_deadline_blocks_mint_until_settled ... ok
+test tests::nav_subscription_can_consume_issued_vault_bridge_supply_for_primary_mint ... ok
+test tests::nav_subscription_settlement_converts_usd_1e8_nav_to_usdc_atoms ... ok
+test tests::nav_subscription_vault_bridge_consumes_counted_receipt_allocation_once ... ok
+test tests::nft_transaction_enforces_collection_policy_flags ... ok
+test tests::nft_transaction_enforces_issuer_transfer_fee ... ok
+test tests::nft_transaction_mint_transfer_burn_and_reject_replay ... ok
+test tests::nft_transaction_rejects_duplicate_unauthorized_and_nontransferable_paths ... ok
+test tests::offer_create_fully_crosses_best_maker_and_emits_fill_receipt ... ok
+test tests::offer_create_partial_cross_leaves_residual_offer ... ok
+test tests::offer_create_rejection_does_not_lock_partial_reserve ... ok
+test tests::offer_create_rejects_issued_buy_capacity_over_limit ... ok
+test tests::offer_transaction_tx_id_is_domain_separated ... ok
+test tests::offer_transactions_conserve_native_and_issued_assets_through_partial_fill_cancel_and_reject ... ok
+test tests::offer_transactions_create_cancel_and_lock_pft ... ok
+test tests::offer_transactions_lock_and_refund_issued_sell_side_without_supply_drift ... ok
+test tests::payment_v2_applies_once_with_memo_and_sequence ... ok
+test tests::payment_v2_fee_policy_counts_memo_weight_and_state_expansion ... ok
+test tests::payment_v2_tx_id_is_domain_separated_from_legacy_transfer ... ok
+test tests::pfeth_ethereum_ingress_selects_only_the_weth_route ... ok
+test tests::pftl_source_settlement_roundtrip_preserves_source_and_pooled_custody ... ok
+test tests::nav_sp1_groth16_submit_rejects_missing_proof_and_accepts_known_good_fixture ... ok
+test tests::pftl_uniswap_v2_fixed_point_spreads_round_against_the_protocol ... ok
+test tests::pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09 ... ok
+test tests::pftl_uniswap_v2_state_binds_directional_trust_capacity_and_non_nav_spread ... ok
+test tests::rotated_route_uses_pinned_profile_for_in_flight_deposit_challenge ... ok
+test tests::rotated_route_uses_pinned_profile_for_in_flight_redemption_settlement ... ok
+test tests::transfer_applies_once_with_sequence ... ok
+test tests::transfer_charges_state_expansion_fee_only_for_new_recipient_accounts ... ok
+test tests::transfer_rejects_exhausted_sequence_without_panicking_or_mutating ... ok
+test tests::transfer_rejects_missing_fee ... ok
+test tests::transfer_rejects_sender_or_recipient_below_reserve ... ok
+test tests::transfer_rejects_wrong_signed_domain_fields ... ok
+test tests::transfer_to_fee_collector_keeps_amount_and_burns_fee ... ok
+test tests::vault_bridge_cap_leads_supply_only_for_finalized_unclaimed_sp1_backing ... ok
+test tests::vault_bridge_challenged_bridge_deposit_cannot_be_counted ... ok
+test tests::pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances ... ok
+test tests::vault_bridge_redeem_settle_reduces_queue_and_counted_value ... ok
+test tests::vault_bridge_sp1_bridge_deposit_requires_source_proof_commitments ... ok
+test tests::vault_bridge_stage1_deposit_id_replay_rejected ... ok
+test tests::vault_bridge_stage1_evidence_policy_mismatch_rejected ... ok
+test tests::vault_bridge_stage1_finality_ref_chain_id_mismatch_rejected ... ok
+test tests::vault_bridge_stage1_issuer_payment_direct_mint_rejected ... ok
+test tests::vault_bridge_stage1_nav_mint_at_nav_rejected_for_bridge_asset ... ok
+test tests::vault_bridge_stage1_zero_amount_rejected ... ok
+test tests::vault_bridge_stage2_deposit_confirmation_depth_enforced ... ok
+test tests::vault_bridge_stage2_deposit_duplicate_observer_rejected ... ok
+test tests::vault_bridge_stage2_deposit_observation_mismatch_rejected ... ok
+test tests::vault_bridge_stage2_deposit_observation_quorum_finalizes ... ok
+test tests::vault_bridge_stage2_deposit_unregistered_observer_rejected ... ok
+test tests::vault_bridge_stage2_redeem_settle_requires_observed_withdrawal_execution ... ok
+test tests::vault_bridge_stage2_redeem_settle_without_observation_rejected ... ok
+test tests::vault_bridge_deposit_claim_mints_swappable_erc20_bridge_to_recipient ... ok
+test tests::yolo_consensus_state_limits_are_exact ... ok
+test tests::vault_bridge_wraps_counted_source_erc20_receipt_on_pftl ... ok
+test tests::yolo_malformed_and_changed_proof_public_bytes_reject ... ok
+test tests::yolo_registration_conflicts_are_scoped_to_registrant_and_unknown_runs_reject ... ok
+test tests::yolo_real_groth16_verifier_binds_every_redundant_field_and_registered_expectation ... ok
+test tests::yolo_signed_lifecycle_activation_replay_persistence_and_no_asset_authority ... ok
+test unit_tests::decode_fixture_public_values_totals ... ok
+test unit_tests::decode_public_values_includes_cash_in_verified_net_assets ... ok
+test unit_tests::nav_reserve_context_accepts_fully_bound_values ... ok
+test unit_tests::a666_successor_shadow_real_proof_verifies_in_consensus ... ok
+test unit_tests::nav_reserve_context_rejects_substitution_and_replay ... ok
+test unit_tests::nav_reserve_context_rejects_time_roots_totals_and_controlled_value ... ok
+test unit_tests::nav_sp1_known_good_fixture_verifies_and_binds ... ok
+test unit_tests::nav_reserve_v1_chain_bound_real_proof_verifies_in_consensus ... ok
+test unit_tests::nav_sp1_rejects_mismatched_verified_net_assets ... ok
+test unit_tests::nav_sp1_legacy_cash_omitted_match_is_optioned ... ok
+test unit_tests::nav_sp1_rejects_tampered_proof ... ok
+test unit_tests::nav_sp1_rejects_policy_hash_mismatch ... ok
+test yolo_collection_verifier_tests::collection_context_binds_every_public_value ... ok
+test yolo_collection_verifier_tests::collection_verifier_has_no_reserve_or_value_fields ... ok
+test unit_tests::nav_sp1_rejects_wrong_vkey ... ok
+
+test result: ok. 202 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.90s
+
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_fastpay_prototype-05430a2874d43ac1)
+
+running 21 tests
+test cancellation_model::tests::crash_after_certificate_persist_recovers_without_an_unsafe_unlock ... ok
+test cancellation_model::tests::conflicting_honest_votes_and_conflicting_full_certificates_halt ... ok
+test cancellation_model::tests::delayed_votes_and_certificates_cannot_cross_expiry ... ok
+test cancellation_model::tests::duplicate_under_quorum_and_foreign_domain_certificates_fail_closed ... ok
+test cancellation_model::tests::full_certificate_confirms_and_product_finality_requires_distinct_quorum_acks ... ok
+test cancellation_model::tests::full_certificate_revealed_after_expiry_confirms_at_recovery_boundary ... ok
+test cancellation_model::tests::exhaustive_n4_and_n6_byzantine_assignments_never_form_two_full_certificates ... ok
+test cancellation_model::tests::n4_and_n6_normal_quorums_have_honest_intersection ... ok
+test cancellation_model::tests::partial_locks_cancel_and_delayed_old_certificate_is_version_fenced ... ok
+test cancellation_model::tests::restart_partition_and_committee_rotation_preserve_the_version_fence ... ok
+test cancellation_model::tests::validity_and_recovery_windows_are_bounded ... ok
+test cancellation_model::tests::withheld_broker_certificate_is_not_product_final_and_cancels_safely ... ok
+test state::tests::duplicate_input_cannot_inflate_prototype_owned_value ... ok
+test state::tests::genesis_fixture_rejects_zero_and_duplicate_objects_without_mutation ... ok
+test state::tests::applies_valid_transfer_and_enforces_conservation ... ok
+test state::tests::rejects_double_spend_of_consumed_input ... ok
+test state::tests::rejects_non_conserving_transfer ... ok
+test tests::duplicate_validator_vote_never_inflates_prototype_certificate_count ... ok
+test tests::fast_path_signs_aggregates_and_verifies ... ok
+test state::tests::rejects_version_mismatch_and_wrong_owner ... ok
+test tests::rejects_tampered_order_and_unauthorized_owner ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running unittests src/flow.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/fastpay_flow-41d2ce13f2af68a9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/fastpay_m1_bench-06073d2f4867990a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_fastswap_model-a950b86242f2705c)
+
+running 3 tests
+test tests::n6_safety_model_is_counterexample_free ... ok
+test tests::n4_safety_model_is_counterexample_free ... ok

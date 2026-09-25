@@ -1,0 +1,38 @@
+{
+  "schema": "postfiat.pfusdc.arc_validator_transition_event.v1",
+  "arc_chain_id": 5042002,
+  "arc_node_commit": "66ad2d5aa6d9b41e8f689812004be4c7233a9e16",
+  "validator_registry": "0x3600000000000000000000000000000000000002",
+  "registry_proxy_code_hash": "0x4df0ba7cf2eea00b109c6e96a21da38b43b7c9d107a94ff017a24e3409c78c2f",
+  "registry_implementation": "0xfcc314dd5ad756c6bba725617438c0d25450a0de",
+  "registry_implementation_code_hash": "0xb04771f96d0e33612a9ebb87eb7eb5ae07adbf4a7e6b5e44f362e5a9d5c67313",
+  "transition": {
+    "block_height": 57807484,
+    "block_hash": "0x05d3209963bd62a26ec4e33b581473c239313034fd887e8788f63baf8c77092e",
+    "transaction_hash": "0x1f46f8a7bc12354b7e645cd95e7d00ace3a4c0fd20e523791e4ac40a88d352ea",
+    "log_index": 14,
+    "event": "ValidatorVotingPowerUpdated(uint256,uint64,uint64)",
+    "registration_id": 18,
+    "old_voting_power": 1000,
+    "new_voting_power": 0,
+    "signing_effective_height": 57807485
+  },
+  "source_semantics": {
+    "registry_query_height_for_signing_height_h": "H-1",
+    "zero_power_active_entries_are_excluded_from_the_signing_set": true
+  },
+  "public_rpc_eth_getProof": {
+    "supported": false,
+    "error_code": -32601,
+    "error_message": "method not supported"
+  },
+  "authenticated_live_state_fixture": {
+    "path": "arc-validator-state-59374844.json",
+    "block_height": 59374844,
+    "block_hash": "0x4984bdccd18d238bd640ce6e0c0a1bd93e04707af6b399f8e1a609263173f34b",
+    "state_root": "0x9afe6f9c0c5b72740d787af46a5f12bd4099bc557911ca344a1d9b4fcb91d421",
+    "validator_set_changed": false,
+    "sha256": "c3e84e2ef9a040fe3035416b04cf317d861d43cde7a89da0a288e44577b69c6f"
+  },
+  "positive_transition_proof_status": "The historical change is source- and event-evidenced, but its historical eth_getProof fixture has not been captured; the live authenticated fixture proves the same registry layout and zero-power filtering at a no-change height."
+}

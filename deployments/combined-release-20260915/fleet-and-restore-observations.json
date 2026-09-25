@@ -1,0 +1,139 @@
+{
+  "scope": "read_only_fleet_observations_and_local_restore_status",
+  "live_mutations": false,
+  "full_replay_verified": false,
+  "rows": [
+    {
+      "validator": "validator-0",
+      "observed_at": "2026-09-15T23:06:56Z",
+      "active_services": 2,
+      "live": {
+        "height": 1020,
+        "tip": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+        "pending": 0,
+        "build": "707e006f",
+        "storage_integrity": "verification_stale_or_missing",
+        "last_full_verification_height": 927
+      },
+      "rollback_restored_status": {
+        "height": 1020,
+        "tip": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+        "build": "707e006f"
+      },
+      "abi": "x86_64\nglibc 2.39",
+      "raw_status_log_sha256": "9c26f65b57822ddf9069c181bc252224909257571a3ac54472f98898a9ae6ef1"
+    },
+    {
+      "validator": "validator-1",
+      "observed_at": "2026-09-15T23:08:47Z",
+      "active_services": 2,
+      "live": {
+        "height": 1020,
+        "tip": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+        "pending": 0,
+        "build": "707e006f",
+        "storage_integrity": "verification_stale_or_missing",
+        "last_full_verification_height": 927
+      },
+      "rollback_restored_status": {
+        "height": 1020,
+        "tip": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+        "build": "707e006f"
+      },
+      "abi": "x86_64\nglibc 2.39",
+      "raw_status_log_sha256": "c63996b20eff3bd5a25bb9f64618a8e2ec46bb4c7aa5625255606ca02e8b1b6f"
+    },
+    {
+      "validator": "validator-2",
+      "observed_at": "2026-09-15T23:08:50Z",
+      "active_services": 2,
+      "live": {
+        "height": 1020,
+        "tip": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+        "pending": 0,
+        "build": "707e006f",
+        "storage_integrity": "verification_stale_or_missing",
+        "last_full_verification_height": 927
+      },
+      "rollback_restored_status": {
+        "height": 1020,
+        "tip": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+        "build": "707e006f"
+      },
+      "abi": "x86_64\nglibc 2.39",
+      "raw_status_log_sha256": "9413d74872a623f3787e9c1a30497be11ea76c443aca3206c767c74db54cf443"
+    },
+    {
+      "validator": "validator-3",
+      "observed_at": "2026-09-15T23:08:48Z",
+      "active_services": 2,
+      "live": {
+        "height": 1020,
+        "tip": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+        "pending": 0,
+        "build": "707e006f",
+        "storage_integrity": "verification_stale_or_missing",
+        "last_full_verification_height": 927
+      },
+      "rollback_restored_status": {
+        "height": 1020,
+        "tip": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+        "build": "707e006f"
+      },
+      "abi": "x86_64\nglibc 2.39",
+      "raw_status_log_sha256": "25699193980f749f8432c80f3ac635595d43069af2a811b72a7c60eb34b1a5fe"
+    },
+    {
+      "validator": "validator-4",
+      "observed_at": "2026-09-15T23:08:47Z",
+      "active_services": 2,
+      "live": {
+        "height": 1020,
+        "tip": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+        "pending": 0,
+        "build": "707e006f",
+        "storage_integrity": "verification_stale_or_missing",
+        "last_full_verification_height": 927
+      },
+      "rollback_restored_status": {
+        "height": 1020,
+        "tip": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+        "build": "707e006f"
+      },
+      "abi": "x86_64\nglibc 2.39",
+      "raw_status_log_sha256": "a0214e023a134f4dae4e4ae5a07f1e4044a3e5c6a457ad42cb9b032bf9997ca8"
+    },
+    {
+      "validator": "validator-5",
+      "observed_at": "2026-09-15T23:08:49Z",
+      "active_services": 2,
+      "live": {
+        "height": 1020,
+        "tip": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+        "pending": 0,
+        "build": "707e006f",
+        "storage_integrity": "verification_stale_or_missing",
+        "last_full_verification_height": 927
+      },
+      "rollback_restored_status": {
+        "height": 1020,
+        "tip": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+        "build": "707e006f"
+      },
+      "abi": "x86_64\nglibc 2.39",
+      "raw_status_log_sha256": "661a99398fa450efb9c48c5bd7c8c2d3bdfbdf667664c0023b4af71247eee9b2"
+    }
+  ]
+}

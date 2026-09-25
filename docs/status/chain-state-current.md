@@ -144,6 +144,20 @@ Status: **canonical operational-state reference**
     binary `57b0f4d1…634eec83`. No corrective action or fleet/chain write was
     performed.
 
+!!! success "2026-09-06: RPC status cache repair deployed and verified at height 992"
+
+    All six validators run release `rpc-status-cache-20260906`, binary
+    `740d2610…4b46`. The status report now expires after one second and
+    refreshes from authoritative state even when legacy JSON files are
+    unchanged. All twelve transport/RPC process hashes matched; all 18 served
+    status samples across cache expiration agreed with the same block 992,
+    tip `066ae1e8…dac111d`, state root `beb33019…f52a8e8`.
+    Transactional storage remains active. No new blocks or wallet transactions
+    were created by the repair. See the
+    [repair handoff](../handoffs/2026-09-06___codex__rpc_status_cache_fix.md)
+    and `deployments/rpc-status-cache-20260906/deploy-receipt.json`.
+    The August observations below describe earlier releases and checkpoints.
+
 !!! success "2026-08-31: transactional storage DEPLOYED AND ACTIVE at height 931"
 
     Release `storage-lease-af9b83c3` (writer lease `f0013c29` + storage

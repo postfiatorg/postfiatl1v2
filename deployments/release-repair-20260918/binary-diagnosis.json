@@ -1,0 +1,52 @@
+{
+  "first_difference_one_based": 8703,
+  "section": ".dynstr",
+  "section_offset_hex": "0x19c4",
+  "section_size_hex": "0x93a",
+  "dynamic_tag": "DT_RUNPATH",
+  "differences": [
+    {
+      "byte_one_based": 8703,
+      "build_1": "1",
+      "build_2": "2"
+    },
+    {
+      "byte_one_based": 8723,
+      "build_1": "E",
+      "build_2": "1"
+    },
+    {
+      "byte_one_based": 8724,
+      "build_1": "j",
+      "build_2": "y"
+    },
+    {
+      "byte_one_based": 8725,
+      "build_1": "t",
+      "build_2": "K"
+    },
+    {
+      "byte_one_based": 8726,
+      "build_1": "t",
+      "build_2": "2"
+    },
+    {
+      "byte_one_based": 8727,
+      "build_1": "P",
+      "build_2": "Z"
+    },
+    {
+      "byte_one_based": 8728,
+      "build_1": "N",
+      "build_2": "e"
+    },
+    {
+      "byte_one_based": 8804,
+      "build_1": "1",
+      "build_2": "2"
+    }
+  ],
+  "all_differences_within_section": true,
+  "cause": "The Rust linker was not pinned to /usr/bin/gcc. Ambient cc resolves to a Zig wrapper that emits -L directories in RUNPATH, including target-specific paths and randomized rustc raw-dylibs directories. Rust --remap-path-prefix does not remap these linker-created dynamic strings.",
+  "prior_method": "deployments/combined-release-20260915/build-provenance.md, reused by deployments/release-repair-20260916/verification-commands.md"
+}

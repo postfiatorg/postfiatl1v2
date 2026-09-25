@@ -26,6 +26,7 @@ BASE = (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--proof-dir", type=Path, required=True)
+    parser.add_argument("--withdrawal-sender", type=Path, help="Retained audited sender; defaults to the repository or contract artifact root")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--deployment-manifest", type=Path, required=True)
     parser.add_argument("--expected-manifest-sha256", required=True)
@@ -297,11 +298,16 @@ def main() -> None:
         raise RuntimeError(f"StakeHub agent module is missing: {stakehub_package}")
     sys.path.insert(0, str(args.stakehub_repo))
 
+    sender_path = args.withdrawal_sender or BASE
+    if args.withdrawal_sender is None and not sender_path.is_file():
+        sender_path = args.contract_artifact_root / BASE.relative_to(REPO)
+    if not sender_path.is_file():
+        raise RuntimeError(f"Audited withdrawal sender is missing: {sender_path}")
     spec = importlib.util.spec_from_file_location(
-        "audited_pfusdc_mainnet_withdrawal_sender", BASE
+        "audited_pfusdc_mainnet_withdrawal_sender", sender_path
     )
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load audited withdrawal sender: {BASE}")
+        raise RuntimeError(f"cannot load audited withdrawal sender: {sender_path}")
     sender = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = sender
     spec.loader.exec_module(sender)

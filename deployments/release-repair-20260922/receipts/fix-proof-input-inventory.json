@@ -1,0 +1,44 @@
+{
+  "name": "fix-proof-input-inventory",
+  "command": [
+    "scripts/test-proof-public-input-inventory"
+  ],
+  "cwd": "/tmp/qualify-fix-20260922",
+  "started_at": "2026-09-22T10:39:01.294375+00:00",
+  "status": "PASS",
+  "stdout": "logs/fix-proof-input-inventory.stdout",
+  "stderr": "logs/fix-proof-input-inventory.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/qualify-fix-20260922/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "source_commit": "85eee16656231f31976e71b7be49534fffc6567f",
+  "pid": 3393087,
+  "exit_code": 0,
+  "completed_at": "2026-09-22T10:39:02.301236+00:00",
+  "elapsed_seconds": 1.0,
+  "minimum_available_memory_observed_bytes": 26834595840,
+  "validated_commit": "85eee16656231f31976e71b7be49534fffc6567f",
+  "reviewed_change_commit": "043b9d69ffed1b71f0fc7a486a86ecea70cf47a4",
+  "inventory_pins": 94,
+  "changed_source_hashes": [
+    {
+      "path": "crates/execution/src/nav_vault_asset_execution.rs",
+      "before": "5179fd74f2f0f0890be63ff263d2902f04496c70c5abac73434a0a2bd3629897",
+      "after": "66b4e4ef1de43d6249a95cc77f4a49810ea74c9007fcfe4186bcbf68c51016e6"
+    }
+  ],
+  "other_source_hashes_unchanged": 93,
+  "proof_system_metadata_unchanged": true,
+  "frozen_proof_artifacts_unchanged": true,
+  "method": "SHA-256 over exact source bytes; reviewed repinning as documented in docs/review/proof-input-review-20260907.md. The checker has no update mode; old pin matched 043b9d69 parent bytes, new pin matched 043b9d69 bytes."
+}

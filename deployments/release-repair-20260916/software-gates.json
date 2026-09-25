@@ -1,0 +1,184 @@
+{
+  "source_commit": "1c435f4fb482ea7830bee5c7018d370a10a34bfd",
+  "status": "passed",
+  "driver_pid": 2478141,
+  "started_at": "2026-09-16T02:58:15.102264+00:00",
+  "stages": [
+    {
+      "name": "format",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "status": "passed",
+      "started_at": "2026-09-16T02:58:33.111074+00:00",
+      "log": "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/format.log",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2"
+      },
+      "elapsed_seconds": 4.0,
+      "exit_code": 0,
+      "completed_at": "2026-09-16T02:58:37.117118+00:00"
+    },
+    {
+      "name": "proof-input-inventory",
+      "command": [
+        "scripts/test-proof-public-input-inventory"
+      ],
+      "status": "passed",
+      "started_at": "2026-09-16T02:58:37.122419+00:00",
+      "log": "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/proof-input-inventory.log",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2"
+      },
+      "elapsed_seconds": 2.0,
+      "exit_code": 0,
+      "completed_at": "2026-09-16T02:58:39.126649+00:00"
+    },
+    {
+      "name": "workspace-tests",
+      "command": [
+        "cargo",
+        "test",
+        "--workspace",
+        "--locked",
+        "--no-fail-fast",
+        "--",
+        "--test-threads=2"
+      ],
+      "status": "passed",
+      "started_at": "2026-09-16T02:58:39.132038+00:00",
+      "log": "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/workspace-tests.log",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target",
+        "CARGO_PROFILE_TEST_OPT_LEVEL": "2",
+        "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS": "true",
+        "CARGO_PROFILE_TEST_OVERFLOW_CHECKS": "true"
+      },
+      "elapsed_seconds": 1438.7,
+      "exit_code": 0,
+      "completed_at": "2026-09-16T03:22:37.822097+00:00"
+    },
+    {
+      "name": "warm-latency",
+      "command": [
+        "/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_node-042d4d648d739c00",
+        "fastswap_service::tests::persistent_wallet_driver_meets_isolated_warm_latency_gate",
+        "--ignored",
+        "--exact",
+        "--nocapture"
+      ],
+      "status": "passed",
+      "started_at": "2026-09-16T03:24:58.347338+00:00",
+      "log": "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/warm-latency.log",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target",
+        "CARGO_PROFILE_TEST_OPT_LEVEL": "2",
+        "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS": "true",
+        "CARGO_PROFILE_TEST_OVERFLOW_CHECKS": "true"
+      },
+      "elapsed_seconds": 2.0,
+      "exit_code": 0,
+      "completed_at": "2026-09-16T03:25:00.351160+00:00"
+    },
+    {
+      "name": "workspace-check",
+      "command": [
+        "cargo",
+        "check",
+        "--workspace",
+        "--all-targets",
+        "--locked"
+      ],
+      "status": "passed",
+      "started_at": "2026-09-16T03:25:00.356046+00:00",
+      "log": "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/workspace-check.log",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target"
+      },
+      "elapsed_seconds": 52.0,
+      "exit_code": 0,
+      "completed_at": "2026-09-16T03:25:52.385090+00:00"
+    },
+    {
+      "name": "workspace-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "status": "passed",
+      "started_at": "2026-09-16T03:25:52.390775+00:00",
+      "log": "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/workspace-clippy.log",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target"
+      },
+      "elapsed_seconds": 52.0,
+      "exit_code": 0,
+      "completed_at": "2026-09-16T03:26:44.422554+00:00"
+    }
+  ],
+  "resumed_at": "2026-09-16T03:24:58.342964+00:00",
+  "interrupted_attempt": {
+    "stage": "warm-latency",
+    "reason": "Stopped redundant Cargo compilation before tests began; reuse the passing workspace test executable",
+    "status_report": "status-interrupted-redundant-build.json",
+    "log": "warm-latency-build-interrupted.log"
+  },
+  "updated_at": "2026-09-16T03:26:44.423035+00:00",
+  "completed_at": "2026-09-16T03:26:44.423027+00:00"
+}

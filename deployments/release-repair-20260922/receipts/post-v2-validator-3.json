@@ -1,0 +1,43 @@
+{
+  "name": "post-v2-validator-3",
+  "command": [
+    "/home/postfiatchad/.cache/release-repair-20260922/binaries/candidate-1",
+    "verify-state",
+    "--data-dir",
+    "/home/postfiatchad/.cache/release-repair-20260922/post-v2/validator-3"
+  ],
+  "cwd": "/tmp/qualify-20260922",
+  "started_at": "2026-09-22T08:33:23.209110+00:00",
+  "status": "PASS",
+  "stdout": "logs/post-v2-validator-3.stdout",
+  "stderr": "logs/post-v2-validator-3.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260922/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 3332060,
+  "exit_code": 0,
+  "completed_at": "2026-09-22T08:36:36.295395+00:00",
+  "elapsed_seconds": 193.1,
+  "minimum_available_memory_observed_bytes": 26703970304,
+  "verified": true,
+  "observed": {
+    "block_height": 1021,
+    "block_tip_hash": "5323a2a5243f7be4a1c47ec5e308361898d1662ef20df0dc8fa4349843ffeba45908f4d8050a9dca334133bf0b68804e",
+    "state_root": "d19264ca4419df8826c7b1746b5042639b0d0dd493a0f34f8902b75811ede397ee1b241d59dacba42e69192a6aecca92"
+  },
+  "expected": {
+    "block_height": 1021,
+    "block_tip_hash": "5323a2a5243f7be4a1c47ec5e308361898d1662ef20df0dc8fa4349843ffeba45908f4d8050a9dca334133bf0b68804e",
+    "state_root": "d19264ca4419df8826c7b1746b5042639b0d0dd493a0f34f8902b75811ede397ee1b241d59dacba42e69192a6aecca92"
+  }
+}

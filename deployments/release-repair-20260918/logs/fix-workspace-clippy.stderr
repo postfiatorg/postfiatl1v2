@@ -1,0 +1,6 @@
+   Compiling postfiat-node v0.1.0 (/tmp/qualify-fix-20260918/crates/node)
+   Compiling postfiat-bench v0.1.0 (/tmp/qualify-fix-20260918/crates/bench_harness)
+    Checking postfiat-cobalt-e2-harness v0.1.0 (/tmp/qualify-fix-20260918/crates/cobalt_e2_harness)
+    Checking postfiat-fuzz v0.1.0 (/tmp/qualify-fix-20260918/crates/fuzz_harness)
+    Checking postfiat-cobalt-e3-harness v0.1.0 (/tmp/qualify-fix-20260918/crates/cobalt_e3_harness)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 39.58s

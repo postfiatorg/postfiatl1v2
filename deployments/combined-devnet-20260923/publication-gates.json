@@ -1,0 +1,46 @@
+{
+  "schema": "postfiat.deployment_preparation_gates.v1",
+  "result": "PASS",
+  "observed_at": "2026-09-23T09:51:35Z",
+  "worktree": "~/.cache/deploy-prep-20260923-wt",
+  "base_tip": "7f64c12a5b983210246e5d7c53f92257a479a5e2",
+  "qualified_source_tip": "d75356f6cf1a1686cd129805ae9e3b1414341000",
+  "staged_packet_included_in_secret_scan": true,
+  "commands": [
+    {
+      "command": ".venv-docs/bin/mkdocs build --strict",
+      "exit_code": 0,
+      "output": "INFO    -  Documentation built in 4.40 seconds",
+      "stdout": "~/.cache/deploy-prep-20260923/mkdocs.stdout",
+      "stderr": "~/.cache/deploy-prep-20260923/mkdocs.stderr"
+    },
+    {
+      "command": "scripts/public-doc-links",
+      "environment": "PATH prepends .venv-docs/bin",
+      "exit_code": 0,
+      "output": "public_documentation_links=ok files=471",
+      "stdout": "~/.cache/deploy-prep-20260923/public-doc-links.stdout",
+      "stderr": "~/.cache/deploy-prep-20260923/public-doc-links.stderr"
+    },
+    {
+      "command": "scripts/public-secret-scan",
+      "exit_code": 0,
+      "output": "public secret scan passed mode=tracked-tree",
+      "stdout": "~/.cache/deploy-prep-20260923/public-secret-scan.stdout",
+      "stderr": "~/.cache/deploy-prep-20260923/public-secret-scan.stderr"
+    }
+  ],
+  "additional_local_checks": {
+    "qualified_executable_hash": "PASS: four retained copies hash to e7bb1afa...; not rebuilt",
+    "generated_inputs_vs_20260921": "PASS: 33 files byte-identical after release-ID substitution",
+    "offline_preflight": "PASS_LOCAL_INPUTS_ONLY; manifest gate BLOCKED_MISSING_SIGNED_MANIFEST on all six",
+    "canonical_regeneration_in_second_cache_directory": "PASS via prepare-stage.py (target-2 executable), same preflight result",
+    "wrong_executable_refused": "PASS: prepare-stage.py rejects the 20260921 executable",
+    "python_helpers": "PASS: AST parse of four wrappers; observe-fleet.py and sign-manifest.py --help",
+    "rollback_shell_syntax": "PASS: bash -n; differs from 20260921 only in anchor paths",
+    "validator_0_read_only_recheck": "MATCH: ten release files and four unit definitions equal the 2026-09-21 observation",
+    "packet_markdown_links_and_anchors": "PASS: checked with the public-doc-links renderer (deployments/ is outside its default scope)",
+    "git_diff_check": "PASS"
+  },
+  "scope": "No signing, key generation, fleet preflight, backup export, fleet mutation, rebuild, full workspace tests, or qualification rerun. CI green at d75356f6 and 7f64c12a closes the qualification's node-fastpay and full-workspace-test CI rows (supplied fact, not re-derived)."
+}

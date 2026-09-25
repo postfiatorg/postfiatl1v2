@@ -1,0 +1,18 @@
+
+running 13 tests
+test cobalt_handoff::tests::authority_modes_are_exclusive_and_cobalt_scope_is_validator_trust_only ... ok
+test cobalt_handoff::tests::burn5_cobalt_authority_bounds_shared_check_expansion ... ok
+test cobalt_handoff::tests::burn5_rehearsal_finalizes_valid_update_with_mixed_scope_evidence ... ok
+test cobalt_handoff::tests::burn5_cobalt_authority_rejects_replayed_full_knowledge_checkpoint ... ok
+test cobalt_handoff::tests::cobalt_update_replay_parent_is_rejected_after_first_apply ... ok
+test cobalt_handoff::tests::cobalt_authority_rejects_quorum_only_and_tampered_protocol_decisions ... ok
+test cobalt_handoff::tests::handoff_requires_distinct_mldsa65_quorum_approvals ... ok
+test cobalt_handoff::tests::handoff_uses_the_consensus_ordered_governance_batch_and_committed_state_path ... ok
+test cobalt_handoff::tests::cobalt_validator_update_fits_and_verifies_through_the_live_governance_batch_path ... ok
+test cobalt_handoff::tests::production_operator_lifecycle_emits_an_applicable_cobalt_handoff_batch ... ok
+test cobalt_handoff::tests::transition_replay_and_non_forward_rollback_are_rejected ... ok
+test cobalt_handoff::tests::subsequent_cobalt_decision_round_is_independent_of_activation_height_gap ... ok
+test cobalt_handoff::tests::twenty_validator_post_quantum_decision_certificate_fits_consensus_batch ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 375 filtered out; finished in 4.75s
+

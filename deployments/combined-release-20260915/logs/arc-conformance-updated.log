@@ -1,0 +1,92 @@
+   Compiling generic-array v0.14.7
+   Compiling zerofrom v0.1.8
+   Compiling smallvec v1.15.2
+   Compiling yoke v0.8.3
+   Compiling zerovec v0.11.8
+   Compiling tinystr v0.8.4
+   Compiling zeroize v1.8.2
+   Compiling potential_utf v0.1.6
+   Compiling icu_locale_core v2.3.0
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling zerotrie v0.2.5
+   Compiling futures-sink v0.3.32
+   Compiling icu_collections v2.3.0
+   Compiling icu_provider v2.3.1
+   Compiling digest v0.10.7
+   Compiling rustls-pki-types v1.15.1
+   Compiling getrandom v0.2.17
+   Compiling subtle v2.6.1
+   Compiling serde_core v1.0.228
+   Compiling arrayvec v0.7.6
+   Compiling futures-util v0.3.32
+   Compiling ring v0.17.14
+   Compiling alloy-rlp v0.3.12
+   Compiling icu_normalizer v2.3.0
+   Compiling icu_properties v2.3.0
+   Compiling tracing-core v0.1.36
+   Compiling rustls v0.23.45
+   Compiling ruint v1.20.0
+   Compiling tracing v0.1.44
+   Compiling idna_adapter v1.2.2
+   Compiling rustls-webpki v0.103.15
+   Compiling futures-channel v0.3.32
+   Compiling serde v1.0.228
+   Compiling alloy-sol-macro-input v1.5.7
+   Compiling hyper v1.11.1
+   Compiling sha3 v0.10.9
+   Compiling idna v1.1.0
+   Compiling derive_more v2.1.1
+   Compiling hyper-util v0.1.20
+   Compiling tokio-rustls v0.26.4
+   Compiling alloy-primitives v1.5.7
+   Compiling tower v0.5.3
+   Compiling url v2.5.8
+   Compiling alloy-sol-macro-expander v1.5.7
+   Compiling webpki-roots v1.0.9
+   Compiling signature v2.2.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling ed25519 v2.2.3
+   Compiling tower-http v0.6.11
+   Compiling thiserror v2.0.18
+   Compiling curve25519-dalek v4.1.3
+   Compiling alloy-sol-macro v1.5.7
+   Compiling hyper-rustls v0.27.9
+   Compiling serde_json v1.0.149
+   Compiling nybbles v0.4.8
+   Compiling sha2 v0.10.9
+   Compiling log v0.4.32
+   Compiling reqwest v0.12.28
+   Compiling ed25519-dalek v2.2.0
+   Compiling alloy-trie v0.9.5
+   Compiling alloy-sol-types v1.5.7
+   Compiling arc-conformance v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/arc-conformance)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 20.82s
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/arc_conformance-4be0b2a650ac72dd)
+
+running 4 tests
+test receipts::tests::receipt_inclusion_conformance ... ok
+test tests::binding_and_quorum_fail_closed ... ok
+test tests::golden_commit ... ok
+test tests::every_preimage_byte_is_authenticated ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s
+
+     Running unittests src/bin/capture.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/capture-0fd13f86639bb0f0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/capture_receipts.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/capture_receipts-5d334d5227566537)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests arc_conformance
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

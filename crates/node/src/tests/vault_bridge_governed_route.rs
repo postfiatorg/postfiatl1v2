@@ -211,6 +211,7 @@ fn route_ledger(route: &VaultBridgeRouteProfileV1) -> LedgerState {
     let receipt_proven = matches!(
         route.verifier_kind.as_str(),
         NAV_PROFILE_VERIFIER_SP1_GROTH16 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+            | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
     );
     let profile = NavProofProfile::new_with_bridge_observer_min_confirmations(
         "issuer",
@@ -277,7 +278,8 @@ fn activate_route(
             route.route_epoch,
             route.activation_height,
         ),
-        tier4_finality_bootstrap: None,
+            tier4_finality_bootstrap: None,
+            arc_finality_bootstrap: None,
     };
     let batch = GovernanceActionBatch::with_vault_bridge_route_profile_activation(
         format!("route-activation-{}", route.route_epoch),
@@ -301,6 +303,7 @@ fn route_profile_may_commit_late_but_never_before_scheduled_activation() {
             profile.activation_height,
         ),
         tier4_finality_bootstrap: None,
+        arc_finality_bootstrap: None,
     };
     let batch = GovernanceActionBatch::with_vault_bridge_route_profile_activation(
         "late-route-activation",
@@ -425,6 +428,7 @@ fn archived_governance_identity_accepts_only_the_pre_age_release_schema() {
         profile: profile.clone(),
         amendment,
         tier4_finality_bootstrap: Some(tier4_state(&profile, &"44".repeat(32))),
+        arc_finality_bootstrap: None,
     };
     let mut batch =
         GovernanceActionBatch::with_vault_bridge_route_profile_activation("", activation);
@@ -467,6 +471,7 @@ fn governed_fast_ingress_verifier_update_preserves_route_and_finality() {
             profile.activation_height,
         ),
         tier4_finality_bootstrap: Some(initial_state.clone()),
+        arc_finality_bootstrap: None,
     };
     let initial_batch = GovernanceActionBatch::with_vault_bridge_route_profile_activation(
         "initial-tier4-route",
@@ -489,6 +494,7 @@ fn governed_fast_ingress_verifier_update_preserves_route_and_finality() {
         profile: profile.clone(),
         amendment: replacement_amendment,
         tier4_finality_bootstrap: Some(replacement),
+        arc_finality_bootstrap: None,
     };
     let update_batch = GovernanceActionBatch::with_vault_bridge_route_profile_activation(
         "update-tier4-verifier",
@@ -536,6 +542,7 @@ fn governed_age_release_enablement_preserves_existing_escrow_and_cap() {
             profile.activation_height,
         ),
         tier4_finality_bootstrap: Some(initial_state.clone()),
+        arc_finality_bootstrap: None,
     };
     let initial_batch = GovernanceActionBatch::with_vault_bridge_route_profile_activation(
         "initial-tier4-route-age",
@@ -599,6 +606,7 @@ fn governed_age_release_enablement_preserves_existing_escrow_and_cap() {
         profile,
         amendment: replacement_amendment,
         tier4_finality_bootstrap: Some(replacement),
+        arc_finality_bootstrap: None,
     };
     let receipt = execute_governance_batch(
         &mut governance,
@@ -938,6 +946,7 @@ fn route_profile_record_commits_every_field_and_is_order_independent() {
             first.activation_height,
         ),
         tier4_finality_bootstrap: None,
+        arc_finality_bootstrap: None,
     };
     let record =
         postfiat_types::VaultBridgeRouteProfileRecordV1::new(&activation, 2).expect("route record");
@@ -1030,6 +1039,7 @@ fn route_profile_record_commits_every_field_and_is_order_independent() {
             second.activation_height,
         ),
         tier4_finality_bootstrap: None,
+        arc_finality_bootstrap: None,
     };
     let second_record = postfiat_types::VaultBridgeRouteProfileRecordV1::new(&second_activation, 3)
         .expect("second route record");
@@ -1662,6 +1672,90 @@ fn route_discovery_promotes_verifier_without_changing_api_or_accounting() {
         "verifier promotion changed transaction accounting"
     );
     let _ = fs::remove_dir_all(data_dir);
+}
+
+#[test]
+fn arc_bootstrap_authorization_rejects_substitution_without_ledger_mutation() {
+    let root = unique_test_dir("postfiat-arc-bootstrap-authorization");
+    let data_dir = root.join("node");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-arc-bootstrap-test".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 1,
+    }).expect("initialize Arc authorization fixture");
+    let profile: VaultBridgeRouteProfileV1 = serde_json::from_str(include_str!(
+        "../../../../docs/evidence/arc-mvp-20260828/route-profile.corrected.json"
+    )).unwrap();
+    let bootstrap: postfiat_types::PfUsdcArcFinalityStateV1 = serde_json::from_str(include_str!(
+        "../../../../docs/evidence/arc-mvp-20260828/arc-finality-bootstrap.json"
+    )).unwrap();
+    let profile_file = root.join("profile.json");
+    let bootstrap_file = root.join("bootstrap.json");
+    let amendment_file = root.join("amendment.json");
+    fs::write(&profile_file, serde_json::to_vec(&profile).unwrap()).unwrap();
+    fs::write(&bootstrap_file, serde_json::to_vec(&bootstrap).unwrap()).unwrap();
+    create_vault_bridge_route_profile_governance(VaultBridgeRouteProfileGovernanceOptions {
+        data_dir: data_dir.clone(),
+        profile_file: profile_file.clone(),
+        tier4_finality_bootstrap_file: Some(bootstrap_file.clone()),
+        validators: vec!["validator-0".to_string()],
+        support: vec!["validator-0".to_string()],
+        veto_until_height: 0,
+        amendment_file: amendment_file.clone(),
+        batch_file: root.join("unsigned.json"),
+    }).expect("create bootstrap-bound amendment");
+    let signed_file = sign_single_validator_amendment(&data_dir, &amendment_file, 1, "arc");
+    let batch = assemble_signed_vault_bridge_route_profile_governance(
+        SignedVaultBridgeRouteProfileGovernanceOptions {
+            data_dir: data_dir.clone(),
+            profile_file,
+            tier4_finality_bootstrap_file: Some(bootstrap_file),
+            signed_amendment_file: signed_file,
+            proposal_slot: 1,
+            batch_file: root.join("signed.json"),
+        },
+    ).expect("assemble signed Arc activation");
+    let store = NodeStore::new(&data_dir);
+    let genesis = store.read_genesis().unwrap();
+    let registry = read_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE)).unwrap();
+    let signing_governance = store.read_governance().unwrap();
+    let mut governance = GovernanceState::new(1);
+    governance.apply(amendment(GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT, 1, 0));
+    let ledger = route_ledger(&profile);
+    let mut accepted_ledger = ledger.clone();
+    let mut accepted_governance = governance.clone();
+    let receipts = execute_governance_batch(&mut accepted_governance, Some(&mut accepted_ledger), &batch, profile.activation_height);
+    assert!(receipts[0].accepted, "{:?}", receipts[0]);
+    assert_eq!(accepted_ledger.arc_finality_states, vec![bootstrap]);
+    accepted_governance.active_vault_bridge_route_policy_hash(&profile.asset_id, profile.activation_height)
+        .expect("installed v2 route remains active");
+
+    for field in ["validator_set_commitment", "latest_block_hash", "latest_block_height"] {
+        let mut changed = batch.clone();
+        let activation = &mut changed.vault_bridge_route_profile_activations[0];
+        let state = activation.arc_finality_bootstrap.as_mut().unwrap();
+        match field {
+            "validator_set_commitment" => state.validator_set_commitment = "ab".repeat(32),
+            "latest_block_hash" => state.latest_block_hash = "cd".repeat(32),
+            _ => state.latest_block_height += 1,
+        }
+        state.validate().unwrap();
+        assert!(verify_live_signed_governance_batch(&genesis, &signing_governance, &registry, &changed, 1).is_err(), "{field}");
+        let mut rejected_ledger = ledger.clone();
+        let mut rejected_governance = governance.clone();
+        let receipts = execute_governance_batch(&mut rejected_governance, Some(&mut rejected_ledger), &changed, profile.activation_height);
+        assert!(!receipts[0].accepted, "{field}");
+        assert_eq!(rejected_ledger, ledger, "{field}");
+        assert_eq!(rejected_governance, governance, "{field}");
+        let activation = &mut changed.vault_bridge_route_profile_activations[0];
+        activation.amendment.kind = postfiat_types::vault_bridge_arc_route_amendment_kind_v2(
+            &profile, activation.arc_finality_bootstrap.as_ref().unwrap(),
+        ).unwrap();
+        activation.validate().unwrap();
+        assert!(verify_live_signed_governance_batch(&genesis, &signing_governance, &registry, &changed, 1).is_err(), "recomputed digest invalidates original signatures: {field}");
+    }
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -3273,4 +3367,59 @@ fn mint_settlement_real_anvil_release_matches_accepted_pftl_backing() {
     }
 
     std::fs::remove_dir_all(root).expect("remove isolated mint-settlement state");
+}
+
+#[test]
+fn burn_bundle_uses_governed_source_series_balance() {
+    let data_dir = unique_test_dir("postfiat-burn-source-series-builder");
+    let store = NodeStore::new(&data_dir);
+    let mut genesis = Genesis::new("postfiat-local");
+    genesis.pfusdc_source_series_activation_height = Some(1);
+    let profile = route(1, 1, "22");
+    let mut ledger = route_ledger(&profile);
+    ledger.nav_assets[0].finalized_epoch = 1;
+    ledger.nav_assets[0].finalized_reserve_packet_hash = "91".repeat(48);
+    let mut bucket = postfiat_types::VaultBridgeBucketState::new(
+        profile.asset_id.clone(), profile.source_domain(), profile.profile_hash().unwrap(), 1,
+    ).unwrap();
+    bucket.outstanding_vault_bridge_atoms = 5_000_000;
+    let mut source = AssetDefinition::new(&genesis.chain_id, "issuer", "TEST", 1, 9).unwrap();
+    source.asset_id = "bb".repeat(48);
+    source.asset_family_id = profile.asset_id.clone();
+    source.source_series_id = source.asset_id.clone();
+    source.source_bucket_id = bucket.bucket_id.clone();
+    let mut line = TrustLine::new("holder", "issuer", source.asset_id.clone(), 5_000_000, 10).unwrap();
+    line.balance = 5_000_000;
+    ledger.asset_definitions.push(source);
+    ledger.trustlines.push(line);
+    ledger.vault_bridge_bucket_states.push(bucket);
+    let governance = GovernanceState::new(1);
+    store.write_genesis(&genesis).unwrap();
+    persist_governed_bridge_state(&store, &governance, &ledger, 1, 0);
+    let options = VaultBridgeBurnToRedeemBundleOptions {
+        data_dir: data_dir.clone(), owner: "holder".into(), issuer: Some("issuer".into()),
+        asset_id: profile.asset_id.clone(), bucket_id: None, amount_atoms: 5_000_000,
+        epoch: Some(1), reserve_packet_hash: None,
+        destination_ref: format!("evm-erc20:1:{}", "0x11".to_string() + &"11".repeat(19)),
+        bundle_dir: data_dir.join("bundle"), overwrite: false,
+    };
+    let report = vault_bridge_burn_to_redeem_bundle(options.clone()).expect("source balance suffices without a base trustline");
+    assert_eq!(report.asset_id, profile.asset_id);
+    assert_eq!(report.amount_atoms, 5_000_000);
+    // A base-family balance cannot cover a missing balance in this source.
+    let mut base = TrustLine::new("holder", "issuer", profile.asset_id, 5_000_000, 10).unwrap();
+    base.balance = 5_000_000;
+    ledger.trustlines.push(base);
+    ledger.trustlines[0].balance = 0;
+    store.write_ledger(&ledger).unwrap();
+    assert!(vault_bridge_burn_to_redeem_bundle(options.clone()).unwrap_err().to_string().contains("source balance"));
+    // Nor may another source series for the same bucket be silently selected.
+    ledger.trustlines[0].balance = 5_000_000;
+    let mut duplicate = ledger.asset_definitions[0].clone();
+    duplicate.asset_id = "cc".repeat(48);
+    duplicate.source_series_id = duplicate.asset_id.clone();
+    ledger.asset_definitions.push(duplicate);
+    store.write_ledger(&ledger).unwrap();
+    assert!(vault_bridge_burn_to_redeem_bundle(options).unwrap_err().to_string().contains("duplicate source-series"));
+    let _ = fs::remove_dir_all(data_dir);
 }

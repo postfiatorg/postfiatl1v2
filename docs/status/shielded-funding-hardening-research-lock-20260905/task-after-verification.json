@@ -1,0 +1,228 @@
+{
+  "ok": true,
+  "task": {
+    "id": "task_aaeebe5",
+    "fullId": "task_aaeebe5e21ba7286e29503a3696d80c4",
+    "taskId": "task_aaeebe5e21ba7286e29503a3696d80c4",
+    "title": "Run Full-Gate Scoring and Lock the Funding Spec",
+    "kind": "Personal",
+    "originalKind": "Personal",
+    "taskClass": "",
+    "isNetworkTask": false,
+    "status": "Awaiting review",
+    "statusKey": "verification_response_submitted",
+    "statusTone": "review",
+    "statusColor": "#5b4b8a",
+    "statusTab": "verification",
+    "lifecycle": {
+      "key": "verification_response_submitted",
+      "label": "Awaiting review",
+      "tab": "verification",
+      "tone": "review",
+      "color": "#5b4b8a",
+      "canCancel": true,
+      "canStop": true,
+      "requiresRefresh": true,
+      "reviewLoop": true,
+      "stopAction": "cancel",
+      "stopLabel": "Cancel task",
+      "stopTransition": "cancelled"
+    },
+    "due": "No deadline",
+    "fullDue": "No deadline",
+    "dueLabel": "Deadline",
+    "dueAt": null,
+    "acceptBy": null,
+    "deadlineAt": null,
+    "ago": "just now",
+    "pft": 3,
+    "description": "Run the postfiatl1v2 text-improvement harness full gate (gpt-6-astra, anthropic/claude-fable-5.1, z-ai/glm-5.3; five independent runs per lane) on docs/specs/shielded-perp-venue-funding-privacy-hardening-20260905.md revision 3 and lock it on the first compliant full average of at least 86/100. If the average is below 86, rewrite only through a direct OpenRouter call to openai/gpt-5.6-sol-pro using the harness critiques, preserving the no-CEX self-custody objective, the section 3.3 operator-funded cover lifecycle, and both privacy claims, then repeat the full gate. The deliverable is the locked spec file plus honest per-run score evidence, and this research-lock phase must not claim the product is implemented or private in production. Preserve the dirty working tree with no commits, pushes, deployments, or fund movement.",
+    "steps": [
+      "Open docs/specs/shielded-perp-venue-funding-privacy-hardening-20260905.md, confirm revision 3 and the section 3.3 operator-funded cover requirements, and record its unscored, unlocked state.",
+      "Run the harness full gate with gpt-6-astra, anthropic/claude-fable-5.1, and z-ai/glm-5.3, five independent runs per lane, capturing every per-run score.",
+      "If the full average is below 86/100, pass the harness critiques through a direct OpenRouter call to openai/gpt-5.6-sol-pro to rewrite the spec while preserving the no-CEX objective, cover lifecycle, and two privacy claims, then repeat the full gate until the first pass.",
+      "On the first compliant full average of 86/100 or higher, lock the spec immediately with a lock marker and revision note and stop all rewriting and rescoring.",
+      "Verify the locked spec still contains section 3.3, the cover lifecycle, both privacy claims, and no production-implementation claims, then package the score table and lock declaration."
+    ],
+    "verification": {
+      "title": "Submit Mixed",
+      "body": "Submit the locked spec file (or its lock header plus a section 3.3 excerpt) together with a full-gate score table listing all 15 per-run scores across gpt-6-astra, anthropic/claude-fable-5.1, and z-ai/glm-5.3 with a full average at or above 86/100. Include the rewrite log for any below-86 OpenRouter/gpt-5.6-sol-pro round. Evidence must show a single lock on first pass and no commits, pushes, deployments, or claims of production privacy.",
+      "policy": {
+        "mode": "standard_followup",
+        "followup_required": true,
+        "verification_type": "mixed"
+      }
+    },
+    "submissionRequirement": {
+      "type": "mixed",
+      "criteria": "Submit the locked spec file (or its lock header plus a section 3.3 excerpt) together with a full-gate score table listing all 15 per-run scores across gpt-6-astra, anthropic/claude-fable-5.1, and z-ai/glm-5.3 with a full average at or above 86/100. Include the rewrite log for any below-86 OpenRouter/gpt-5.6-sol-pro round. Evidence must show a single lock on first pass and no commits, pushes, deployments, or claims of production privacy."
+    },
+    "verificationPolicy": {
+      "mode": "standard_followup",
+      "followup_required": true,
+      "verification_type": "mixed"
+    },
+    "submissionType": "mixed",
+    "requestBundleCid": "postgres:req_348f1cd6-e1cc-411e-a23c-61b580001be1",
+    "contextCid": "",
+    "txHash": "offchain:task_evt_b9a7bcfc-7d8b-458e-9dcd-1de643e6a9c5",
+    "source": "direct_write",
+    "updatedAt": "2026-09-05T13:14:17.433Z",
+    "updatedAtDisplay": "Sep 5, 1:14 PM UTC",
+    "lastEventAt": "2026-09-05T13:14:16.326Z",
+    "lastEventAtDisplay": "Sep 5, 1:14 PM UTC",
+    "metadata": {
+      "requestId": "req_348f1cd6-e1cc-411e-a23c-61b580001be1",
+      "eventCount": 5,
+      "model": "zai/glm-5.3"
+    }
+  },
+  "wallets": {
+    "user": "rfr5GiCyCbMYJtHbrZwBKBKhc3pL3qwBdJ",
+    "authority": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+    "allocation": ""
+  },
+  "actions": {
+    "canAccept": false,
+    "canRefuse": false,
+    "canCancel": true,
+    "canStop": true,
+    "stopAction": "cancel",
+    "stopLabel": "Cancel task",
+    "stopTransition": "cancelled",
+    "canSubmitInitialEvidence": false,
+    "canSubmitVerificationEvidence": false,
+    "browserSubmissionEnabled": false,
+    "browserTaskUpdateEnabled": true,
+    "submissionReason": "Evidence is encrypted locally, pinned to IPFS, and published as a signed PFTL task pointer."
+  },
+  "submission": {
+    "summaries": [],
+    "generatedTask": {
+      "chain": "pftl-testnet",
+      "steps": [
+        "Open docs/specs/shielded-perp-venue-funding-privacy-hardening-20260905.md, confirm revision 3 and the section 3.3 operator-funded cover requirements, and record its unscored, unlocked state.",
+        "Run the harness full gate with gpt-6-astra, anthropic/claude-fable-5.1, and z-ai/glm-5.3, five independent runs per lane, capturing every per-run score.",
+        "If the full average is below 86/100, pass the harness critiques through a direct OpenRouter call to openai/gpt-5.6-sol-pro to rewrite the spec while preserving the no-CEX objective, cover lifecycle, and two privacy claims, then repeat the full gate until the first pass.",
+        "On the first compliant full average of 86/100 or higher, lock the spec immediately with a lock marker and revision note and stop all rewriting and rescoring.",
+        "Verify the locked spec still contains section 3.3, the cover lifecycle, both privacy claims, and no production-implementation claims, then package the score table and lock declaration."
+      ],
+      "title": "Run Full-Gate Scoring and Lock the Funding Spec",
+      "schema": "pf.task.offer.v1",
+      "status": "proposed",
+      "task_id": "task_aaeebe5e21ba7286e29503a3696d80c4",
+      "event_id": "evt_d314cf2bb114a1049064a381",
+      "protocol": "tasknode.pftl",
+      "accept_by": null,
+      "task_kind": "personal",
+      "created_at": "2026-09-05T13:07:05.414Z",
+      "generation": {
+        "model": "zai/glm-5.3",
+        "provider": "vercel",
+        "latency_ms": 46075,
+        "prompt_path": "task_engine/taskgen_personal_v1.md",
+        "parse_status": "ok",
+        "output_digest": "d7d1c043529238dd1062023c62b20eba0609c882d7dc8f0aeb5c6e4495960a29",
+        "prompt_digest": "11a1f315e421a48d37db1627bd0f4942f0e3a8ce9a7095bb1324655439e250dd",
+        "prompt_version": "taskgen_personal_v1",
+        "request_bundle_cid": "postgres:req_348f1cd6-e1cc-411e-a23c-61b580001be1",
+        "input_packet_digest": "6c4801935bfed87884b6527919388b987e814d712edf3252a4885afe093dba75",
+        "validation_attempts": 1,
+        "provider_response_id": "gen_01M1RTTMRPKYQCQCCVKNAGTTYX",
+        "request_bundle_digest": "sha256:2fd6b5a8052c3e88a93c6db11eb7c827f527d4a3799981cdf6205b8b7f9f8f16"
+      },
+      "request_id": "req_348f1cd6-e1cc-411e-a23c-61b580001be1",
+      "task_class": "",
+      "deadline_at": null,
+      "description": "Run the postfiatl1v2 text-improvement harness full gate (gpt-6-astra, anthropic/claude-fable-5.1, z-ai/glm-5.3; five independent runs per lane) on docs/specs/shielded-perp-venue-funding-privacy-hardening-20260905.md revision 3 and lock it on the first compliant full average of at least 86/100. If the average is below 86, rewrite only through a direct OpenRouter call to openai/gpt-5.6-sol-pro using the harness critiques, preserving the no-CEX self-custody objective, the section 3.3 operator-funded cover lifecycle, and both privacy claims, then repeat the full gate. The deliverable is the locked spec file plus honest per-run score evidence, and this research-lock phase must not claim the product is implemented or private in production. Preserve the dirty working tree with no commits, pushes, deployments, or fund movement.",
+      "proposed_at": "2026-09-05T13:07:05.414Z",
+      "actor_wallet": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "context_refs": [],
+      "network_task": null,
+      "reward_offer": {
+        "amount_estimate_pft": "3.00"
+      },
+      "subject_wallet": "rfr5GiCyCbMYJtHbrZwBKBKhc3pL3qwBdJ",
+      "authority_wallet": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "allocation_wallet": "",
+      "network_project_id": "",
+      "verification_policy": {
+        "mode": "standard_followup",
+        "followup_required": true,
+        "verification_type": "mixed"
+      },
+      "network_project_type": "",
+      "network_allocation_id": "",
+      "routing_profile_digest": "",
+      "submission_requirement": {
+        "type": "mixed",
+        "criteria": "Submit the locked spec file (or its lock header plus a section 3.3 excerpt) together with a full-gate score table listing all 15 per-run scores across gpt-6-astra, anthropic/claude-fable-5.1, and z-ai/glm-5.3 with a full average at or above 86/100. Include the rewrite log for any below-86 OpenRouter/gpt-5.6-sol-pro round. Evidence must show a single lock on first pass and no commits, pushes, deployments, or claims of production privacy."
+      }
+    },
+    "verificationPolicy": {
+      "mode": "standard_followup",
+      "followup_required": true,
+      "verification_type": "mixed"
+    }
+  },
+  "currentVerificationRequest": {},
+  "rewardOutcome": null,
+  "forensics": {
+    "source": "direct_write",
+    "eventCount": 5,
+    "requestBundleCid": "postgres:req_348f1cd6-e1cc-411e-a23c-61b580001be1",
+    "contextCid": "",
+    "lastEventTxHash": "offchain:task_evt_b9a7bcfc-7d8b-458e-9dcd-1de643e6a9c5",
+    "lastEventCid": "postgres:task_evt_b9a7bcfc-7d8b-458e-9dcd-1de643e6a9c5",
+    "cids": [],
+    "transactions": [],
+    "timeline": [],
+    "pointerEvents": [],
+    "reducerEvents": [],
+    "reviewState": null,
+    "integrity": {
+      "expectedEventCount": 5,
+      "pointerEventCount": 0,
+      "reducerEventCount": 0,
+      "renderedEventCount": 0,
+      "terminalLightweight": true,
+      "projectionLastEvent": {
+        "txHash": "offchain:task_evt_b9a7bcfc-7d8b-458e-9dcd-1de643e6a9c5",
+        "cid": "postgres:task_evt_b9a7bcfc-7d8b-458e-9dcd-1de643e6a9c5",
+        "status": "verification_response_submitted",
+        "eventCount": 5
+      }
+    }
+  },
+  "sync": {
+    "updatedAt": "2026-09-05T13:14:17.433Z",
+    "lastEventAt": "2026-09-05T13:14:16.326Z",
+    "requiresRefresh": false,
+    "nextPollMs": null,
+    "refreshReason": "",
+    "activeRequestCount": 0,
+    "refreshTaskIds": []
+  },
+  "terminal": {
+    "briefText": "Task for Codex\n\nTitle: Run Full-Gate Scoring and Lock the Funding Spec\nTask ID: task_aaeebe5e21ba7286e29503a3696d80c4\nRequest ID: req_348f1cd6-e1cc-411e-a23c-61b580001be1\nKind: Personal\nStatus: Awaiting review\nReward: 3 PFT\nDeadline: No deadline\n\nObjective\nRun the postfiatl1v2 text-improvement harness full gate (gpt-6-astra, anthropic/claude-fable-5.1, z-ai/glm-5.3; five independent runs per lane) on docs/specs/shielded-perp-venue-funding-privacy-hardening-20260905.md revision 3 and lock it on the first compliant full average of at least 86/100. If the average is below 86, rewrite only through a direct OpenRouter call to openai/gpt-5.6-sol-pro using the harness critiques, preserving the no-CEX self-custody objective, the section 3.3 operator-funded cover lifecycle, and both privacy claims, then repeat the full gate. The deliverable is the locked spec file plus honest per-run score evidence, and this research-lock phase must not claim the product is implemented or private in production. Preserve the dirty working tree with no commits, pushes, deployments, or fund movement.\n\nSteps\n1. Open docs/specs/shielded-perp-venue-funding-privacy-hardening-20260905.md, confirm revision 3 and the section 3.3 operator-funded cover requirements, and record its unscored, unlocked state.\n2. Run the harness full gate with gpt-6-astra, anthropic/claude-fable-5.1, and z-ai/glm-5.3, five independent runs per lane, capturing every per-run score.\n3. If the full average is below 86/100, pass the harness critiques through a direct OpenRouter call to openai/gpt-5.6-sol-pro to rewrite the spec while preserving the no-CEX objective, cover lifecycle, and two privacy claims, then repeat the full gate until the first pass.\n4. On the first compliant full average of 86/100 or higher, lock the spec immediately with a lock marker and revision note and stop all rewriting and rescoring.\n5. Verify the locked spec still contains section 3.3, the cover lifecycle, both privacy claims, and no production-implementation claims, then package the score table and lock declaration.\n\nVerification Requirements\nSubmit the locked spec file (or its lock header plus a section 3.3 excerpt) together with a full-gate score table listing all 15 per-run scores across gpt-6-astra, anthropic/claude-fable-5.1, and z-ai/glm-5.3 with a full average at or above 86/100. Include the rewrite log for any below-86 OpenRouter/gpt-5.6-sol-pro round. Evidence must show a single lock on first pass and no commits, pushes, deployments, or claims of production privacy.\n\nRequested Output\nComplete the task and return the evidence needed for the verification requirement. Include changed files, commands run, test results, links, screenshots, or concise proof artifacts when relevant.",
+    "evidencePrompt": {
+      "mode": "initial_submission",
+      "title": "Submit evidence for Run Full-Gate Scoring and Lock the Funding Spec",
+      "body": "Submit the locked spec file (or its lock header plus a section 3.3 excerpt) together with a full-gate score table listing all 15 per-run scores across gpt-6-astra, anthropic/claude-fable-5.1, and z-ai/glm-5.3 with a full average at or above 86/100. Include the rewrite log for any below-86 OpenRouter/gpt-5.6-sol-pro round. Evidence must show a single lock on first pass and no commits, pushes, deployments, or claims of production privacy.",
+      "acceptedTypes": [
+        "text",
+        "url",
+        "github_pr",
+        "git_commit"
+      ],
+      "examples": [
+        "PR URL",
+        "commit URL",
+        "terminal output summary",
+        "test command and result",
+        "concise proof text"
+      ],
+      "maxArtifacts": 2
+    }
+  }
+}

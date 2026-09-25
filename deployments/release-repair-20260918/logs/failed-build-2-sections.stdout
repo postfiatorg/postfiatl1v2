@@ -1,0 +1,39 @@
+$ readelf -SW /home/postfiatchad/.cache/release-repair-20260918/binaries/candidate-2
+There are 29 section headers, starting at offset 0x332a448:
+
+Section Headers:
+  [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            0000000000000000 000000 000000 00      0   0  0
+  [ 1] .interp           PROGBITS        00000000000002e0 0002e0 00001c 00   A  0   0  1
+  [ 2] .note.ABI-tag     NOTE            00000000000002fc 0002fc 000020 00   A  0   0  4
+  [ 3] .dynsym           DYNSYM          0000000000000320 000320 000eb8 18   A  8   1  8
+  [ 4] .gnu.version      VERSYM          00000000000011d8 0011d8 00013a 02   A  3   0  2
+  [ 5] .gnu.version_r    VERNEED         0000000000001314 001314 0001a0 00   A  8   3  4
+  [ 6] .gnu.hash         GNU_HASH        00000000000014b8 0014b8 00001c 00   A  3   0  8
+  [ 7] .hash             HASH            00000000000014d4 0014d4 0004f0 04   A  3   0  4
+  [ 8] .dynstr           STRTAB          00000000000019c4 0019c4 00093a 00   A  0   0  1
+  [ 9] .rela.dyn         RELA            0000000000002300 002300 08a0f0 18   A  3   0  8
+  [10] .rela.plt         RELA            000000000008c3f0 08c3f0 000150 18  AI  3  23  8
+  [11] .gcc_except_table PROGBITS        000000000008c540 08c540 1728d0 00   A  0   0  4
+  [12] .rodata           PROGBITS        00000000001fee40 1fee40 949404 00 AMS  0   0 64
+  [13] .eh_frame_hdr     PROGBITS        0000000000b48244 b48244 052eb4 00   A  0   0  4
+  [14] .eh_frame         PROGBITS        0000000000b9b0f8 b9b0f8 2a8184 00   A  0   0  8
+  [15] .text             PROGBITS        0000000000e44280 e43280 247cc0a 00  AX  0   0 64
+  [16] .plt              PROGBITS        00000000032c0e90 32bfe90 0000f0 00  AX  0   0 16
+  [17] .tdata            PROGBITS        00000000032c1f80 32bff80 000028 00 WAT  0   0  8
+  [18] .tbss             NOBITS          00000000032c1fa8 32bffa8 0001b0 00 WAT  0   0  8
+  [19] .data.rel.ro      PROGBITS        00000000032c1fa8 32bffa8 05f440 00  WA  0   0  8
+  [20] .init_array       INIT_ARRAY      00000000033213e8 331f3e8 000008 00 WAo  0   0  8
+  [21] .dynamic          DYNAMIC         00000000033213f0 331f3f0 0001b0 10  WA  8   0  8
+  [22] .got              PROGBITS        00000000033215a0 331f5a0 008350 00  WA  0   0  8
+  [23] .got.plt          PROGBITS        00000000033298f0 33278f0 000088 00  WA  0   0  8
+  [24] .relro_padding    NOBITS          0000000003329978 3327978 000688 00  WA  0   0  1
+  [25] .data             PROGBITS        000000000332a978 3327978 002968 00  WA  0   0  8
+  [26] .bss              NOBITS          000000000332d2e0 332a2e0 000c60 00  WA  0   0 16
+  [27] .comment          PROGBITS        0000000000000000 332a2e0 000055 01  MS  0   0  1
+  [28] .shstrtab         STRTAB          0000000000000000 332a335 00010e 00      0   0  1
+Key to Flags:
+  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
+  L (link order), O (extra OS processing required), G (group), T (TLS),
+  C (compressed), x (unknown), o (OS specific), E (exclude),
+  D (mbind), l (large), p (processor specific)

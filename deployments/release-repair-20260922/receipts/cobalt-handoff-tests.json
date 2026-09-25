@@ -1,0 +1,42 @@
+{
+  "name": "cobalt-handoff-tests",
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "postfiat-node",
+    "--lib",
+    "--locked",
+    "cobalt_handoff::tests",
+    "--",
+    "--test-threads=2"
+  ],
+  "cwd": "/tmp/qualify-20260922",
+  "started_at": "2026-09-22T09:24:59.328284+00:00",
+  "status": "PASS",
+  "stdout": "logs/cobalt-handoff-tests.stdout",
+  "stderr": "logs/cobalt-handoff-tests.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260922/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/release-repair-20260918/test-target",
+    "CARGO_PROFILE_TEST_OPT_LEVEL": "2",
+    "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS": "true",
+    "CARGO_PROFILE_TEST_OVERFLOW_CHECKS": "true"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 3353178,
+  "exit_code": 0,
+  "completed_at": "2026-09-22T09:29:02.431982+00:00",
+  "elapsed_seconds": 243.1,
+  "minimum_available_memory_observed_bytes": 23469142016,
+  "tests_passed": 13
+}

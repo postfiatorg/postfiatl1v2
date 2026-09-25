@@ -1,0 +1,287 @@
+No files changed, compilation skipped
+
+Ran 5 tests for test/PolicyRegistry.t.sol:PolicyRegistryTest
+[PASS] testDeactivationStopsFutureAcceptance() (gas: 401026)
+[PASS] testPreventsSilentParameterChangesAndDuplicateRegistration() (gas: 353556)
+[PASS] testRegisterPolicyVerifyLookupAndEnvelopeAcceptance() (gas: 378727)
+[PASS] testRegisterPolicyWithInitialDeactivation() (gas: 292155)
+[PASS] testRejectsInvalidRegistrationEpochsAndZeroFields() (gas: 56153)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 1.08ms (471.68µs CPU time)
+
+Ran 3 tests for test/A651ToA666MigrationV1.t.sol:A651ToA666MigrationV1Test
+[PASS] testDustCannotBeBurnedForZeroSuccessor() (gas: 107888)
+[PASS] testMigrationBurnsLegacyBeforeReleasingFixedRatioSuccessor() (gas: 174155)
+[PASS] testMigrationFailsAtomicallyWhenSuccessorReserveIsInsufficient() (gas: 175430)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 1.44ms (593.22µs CPU time)
+
+Ran 9 tests for test/ERC20BridgeVaultL1.t.sol:ERC20BridgeVaultL1Test
+[PASS] testConstructorReadbackPinsTokenVerifierCodehashOwner() (gas: 42189)
+[PASS] testConstructorRejectsTokenCodehashMismatch() (gas: 176337)
+[PASS] testDepositRejectsAmountOutsideGuestU64Domain() (gas: 146900)
+[PASS] testDepositReplayReverts() (gas: 334920)
+[PASS] testDepositStorageMatchesFrozenGuestDecode() (gas: 271254)
+[PASS] testDepositTransfersExactAtomsAndEmitsEvidence() (gas: 290608)
+[PASS] testProofNativeWithdrawalPaysDifferentRecipientExactly() (gas: 398968)
+[PASS] testRuntimeCodeHashReadbackIsNonzero() (gas: 4967)
+[PASS] testWithdrawalReplayRevertsNegativeTest() (gas: 424831)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 3.88ms (2.76ms CPU time)
+
+Ran 2 tests for test/ArcUsdcPullProbe.t.sol:ArcUsdcPullProbeTest
+[PASS] testApproveAndVaultStylePullOneUsdc() (gas: 122610)
+[PASS] testPullRejectsWithoutAllowance() (gas: 38739)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 4.53ms (317.83µs CPU time)
+
+Ran 4 tests for test/ArcConformanceProbe.t.sol:ArcConformanceProbeTest
+[PASS] testBn254AddAndMulKnownVector() (gas: 21983)
+[PASS] testBn254EmptyPairingProductIsOne() (gas: 51582)
+[PASS] testRejectsMalformedPairingInput() (gas: 5635)
+[PASS] testSha256KnownVector() (gas: 7175)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 4.77ms (393.26µs CPU time)
+
+Ran 3 tests for test/HyperCoreReserveReader.t.sol:HyperCoreReserveReaderTest
+[PASS] testRejectsDuplicateOrUnsortedPerpSetBeforeReadingPrecompiles() (gas: 30663)
+[PASS] testRejectsDuplicateOrUnsortedSpotSetBeforeReadingPrecompiles() (gas: 32752)
+[PASS] testRejectsZeroAccountBeforeReadingPrecompiles() (gas: 29068)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 910.99µs (366.18µs CPU time)
+
+Ran 6 tests for test/WETHBridgeVaultL1.t.sol:WETHBridgeVaultL1Test
+[PASS] testConstructorPinsScaleAndBindings() (gas: 37802)
+[PASS] testDepositRejectsTotalPfethSupplyOverflow() (gas: 405621)
+[PASS] testDepositReplayAndWithdrawalReplayReject() (gas: 479221)
+[PASS] testMultipleNotesCanExceedOldWeiU64Ceiling() (gas: 278710)
+[PASS] testOneEthDepositStoresOneBillionPfethAtoms() (gas: 289300)
+[PASS] testOneEthWithdrawalTransfersOneEthWeth() (gas: 400125)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 5.97ms (5.13ms CPU time)
+
+Ran 6 tests for test/PFTLBridgeAdapter.t.sol:PFTLBridgeAdapterTest
+[PASS] testChallengedEnvelopeFreezesAfterDelayAndCapsZero() (gas: 926395)
+[PASS] testEquivocationPausesAdapter() (gas: 908167)
+[PASS] testStaleDataWindowRejected() (gas: 53381)
+[PASS] testTimingViolationsRejected() (gas: 137886)
+[PASS] testValidEnvelopeFinalizesAccepted() (gas: 1022978)
+[PASS] testWrongPolicyAndBindingsRejected() (gas: 101954)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 3.46ms (2.43ms CPU time)
+
+Ran 4 tests for test/PFTLReceiptFinalityVerifierV1.t.sol:PFTLReceiptFinalityVerifierV1Test
+[PASS] testCheckpointProofAdvancesTheAnchorForLaterReceiptProof() (gas: 244089)
+[PASS] testProofAcceptsExactReceiptAndRejectsNullifierReplay() (gas: 212350)
+[PASS] testTrailingPublicValuesFailCanonicalEncoding() (gas: 55754)
+[PASS] testWrongRouteIdentityFailsBeforeSP1() (gas: 53633)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 5.72ms (1.08ms CPU time)
+
+Ran 9 tests for test/PFTLUniswapPrimaryMarketV2.t.sol:PFTLUniswapPrimaryMarketV2Test
+[PASS] testConstructorRejectsNonCanonicalA666Caps() (gas: 268234)
+[PASS] testExpiredPacketCancellationRequiresFinalizedSourceReceipt() (gas: 180926)
+[PASS] testExpiredPacketCancellationSharesTheMintReplayFence() (gas: 1032496)
+[PASS] testGovernancePauseBlocksMintButNotReturnBurn() (gas: 549865)
+[PASS] testLaunchControllerHasNoMintAndSwapEntryPoint() (gas: 28714)
+[PASS] testPacketDigestMatchesRustVectorAndExcludesReceiptFields() (gas: 114712)
+[PASS] testPermissionlessMintConsumesProofOnce() (gas: 469544)
+[PASS] testProofValidatedPolicyEpochCanRotateWithoutControllerRedeploy() (gas: 338036)
+[PASS] testUnprovenAndOversizedPacketsFailClosed() (gas: 246811)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 16.30ms (14.71ms CPU time)
+
+Ran 4 tests for test/MarketOpsVault.t.sol:MarketOpsVaultTest
+[PASS] testVaultBurnsAcquiredUnits() (gas: 1334380)
+[PASS] testVaultBuysBelowPriceLimit() (gas: 1325031)
+[PASS] testVaultRespectsEnvelopeCap() (gas: 1398790)
+[PASS] testVaultRevertsAbovePriceLimit() (gas: 1392703)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 18.08ms (16.44ms CPU time)
+
+Ran 3 tests for test/NAVGuardHook.t.sol:NAVGuardHookTest
+[PASS] testLiquidityChangeProducesDepthCheckpoint() (gas: 580748)
+[PASS] testStaleStateRejectionWorks() (gas: 73546)
+[PASS] testSwapProducesObservation() (gas: 421349)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 1.15ms (713.42µs CPU time)
+
+Ran 6 tests for test/PFTLWithdrawalVerifier.t.sol:PFTLWithdrawalVerifierTest
+[PASS] testAcceptedProofExpires() (gas: 253766)
+[PASS] testBadSignatureSetsRejected() (gas: 124714)
+[PASS] testChallengedProofFreezesAndNeverAuthorizes() (gas: 266645)
+[PASS] testThresholdProofFinalizesAccepted() (gas: 291673)
+[PASS] testUnauthorizedChallengeCannotFreezeValidProof() (gas: 275496)
+[PASS] testWithdrawalPlanIdsMatchPFTLVector() (gas: 11860)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 6.20ms (5.09ms CPU time)
+
+Ran 10 tests for test/MarketOpsAdversarial.t.sol:MarketOpsAdversarialTest
+[PASS] testBridgeChallengeWrongPacketCannotExecute() (gas: 913666)
+[PASS] testFrontRunDownwardVaultBuysDiscountedUnitsWithinCap() (gas: 1318336)
+[PASS] testFrontRunUpwardVaultRevertsAbovePriceLimit() (gas: 1385413)
+[PASS] testOperatorNonFundingKeepsExecutionAtZero() (gas: 1067119)
+[PASS] testPFTLEquivocationPausesAdapterAndZerosCaps() (gas: 881648)
+[PASS] testPFTLHaltPausesEnvelopeOperations() (gas: 1375317)
+[PASS] testPostMintBackingReconcilesAfterSettlement() (gas: 1550445)
+[PASS] testPremiumMintEscrowCannotLeaveWithoutSettlement() (gas: 1309563)
+[PASS] testSelfReserveAccountingBurnsTreasuryA651ToZeroSupply() (gas: 1335422)
+[PASS] testStalePacketExpiredEnvelopeRejectedByExecution() (gas: 1299976)
+Suite result: ok. 10 passed; 0 failed; 0 skipped; finished in 25.83ms (17.50ms CPU time)
+
+Ran 13 tests for test/ExitExecutorV1.t.sol:ExitExecutorV1Test
+[PASS] test_delegation_attached() (gas: 20391)
+[PASS] test_digest_fixture() (gas: 20176)
+[PASS] test_execute_self_from_eoa() (gas: 100879)
+[PASS] test_execute_self_requires_self() (gas: 44453)
+[PASS] test_expired_rejected() (gas: 62247)
+[PASS] test_failed_call_reverts_whole_batch_with_reason() (gas: 238984)
+[PASS] test_high_s_rejected() (gas: 87423)
+[PASS] test_nonce_storage_is_namespaced() (gas: 141665)
+[PASS] test_replay_rejected() (gas: 173340)
+[PASS] test_signature_bound_to_chain_and_account() (gas: 107288)
+[PASS] test_sponsored_unwrap_and_deposit_from_zero_gas_eoa() (gas: 155901)
+[PASS] test_tampered_batch_rejected() (gas: 90938)
+[PASS] test_wrong_signer_rejected() (gas: 91767)
+Suite result: ok. 13 passed; 0 failed; 0 skipped; finished in 70.23ms (19.63ms CPU time)
+
+Ran 13 tests for test/ERC20BridgeVault.t.sol:ERC20BridgeVaultTest
+[PASS] testAcceptedWithdrawalCanBeClaimedAfterExecutionWindow() (gas: 1209416)
+[PASS] testBadPacketRejected() (gas: 299462)
+[PASS] testBurnTxReplayRejected() (gas: 1020173)
+[PASS] testChallengedWithdrawalFreezesAndCannotPay() (gas: 1189758)
+[PASS] testDepositV2TransfersTokenAndCommitsRecipientAndRoute() (gas: 272662)
+[PASS] testInsufficientVaultLiquidityFailsClosedUntilFunded() (gas: 1253510)
+[PASS] testLegacyAndUnboundDepositsFailBeforeTokenMutation() (gas: 190312)
+[PASS] testUnauthorizedChallengeCannotFreezeValidWithdrawal() (gas: 1228703)
+[PASS] testUnverifiedWithdrawalRejectedBeforePending() (gas: 134456)
+[PASS] testWithdrawalCannotReplayAcrossVaults() (gas: 4158559)
+[PASS] testWithdrawalFinalizesAndPaysRecipientDirectly() (gas: 1321060)
+[PASS] testWithdrawalPacketDigestMatchesPFTLVector() (gas: 15859)
+[PASS] testWithdrawalPlanVectorMatchesVaultPendingId() (gas: 31647)
+Suite result: ok. 13 passed; 0 failed; 0 skipped; finished in 91.18ms (41.29ms CPU time)
+
+Ran 5 tests for test/ThresholdMintSettlementVerifier.t.sol:ThresholdMintSettlementVerifierTest
+[PASS] testCertificateCannotReplayAcrossVerifierOrControllerDomain() (gas: 442060)
+[PASS] testConstructorRejectsThresholdLooseningAndUnsortedCommittee() (gas: 24272)
+[PASS] testExactBftSettlementCertificateReleasesBoundEscrowOnce() (gas: 833993)
+[PASS] testFuzzValidCertificateForWrongAmountCannotReleaseEscrow(uint96,uint96) (runs: 256, μ: 667852, ~: 667815)
+[PASS] testUnderQuorumDuplicateRejectedReceiptAndTamperingCannotRelease() (gas: 715702)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 90.00ms (97.74ms CPU time)
+
+Ran 11 tests for test/MintController.t.sol:MintControllerTest
+[PASS] testCallerCannotAlterVerifierAuthorizedSettlementValue() (gas: 1446962)
+[PASS] testFabricatedBeneficiarySettlementIsRejectedWithoutVerifierRecord() (gas: 1294974)
+[PASS] testPostMintBackingEnforced() (gas: 1706960)
+[PASS] testReleaseMintOnLockedLiquidity() (gas: 1524953)
+[PASS] testReleaseMintOnSettlement() (gas: 1580235)
+[PASS] testReleaseMintRevertsWithoutSettlement() (gas: 1311622)
+[PASS] testRequestMintMintsIntoEscrow() (gas: 1233760)
+[PASS] testRequestMintRespectsCap() (gas: 1024149)
+[PASS] testSettlementRecordIsBoundToEscrowAndConsumedOnce() (gas: 1922810)
+[PASS] testSettlementVerifierCannotBeReplacedWithoutTimelockAndDrain() (gas: 246872)
+[PASS] testVerifierRotationRequiresExactCodeHashTimelockAndNoUnresolvedEscrow() (gas: 1979712)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 120.23ms (27.69ms CPU time)
+
+Ran 3 tests for test/ThresholdPFTLReceiptVerifier.t.sol:ThresholdPFTLReceiptVerifierTest
+[PASS] testConstructorRejectsThresholdLooseningAndUnsortedCommittee() (gas: 19799)
+[PASS] testExactBftCertificateAcceptsReceiptOnce() (gas: 172655)
+[PASS] testUnderQuorumDuplicateWrongCodeAndTamperingFailClosed() (gas: 235369)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 141.41ms (13.50ms CPU time)
+
+Ran 36 tests for test/PFTLUniswapHandoffController.t.sol:PFTLUniswapHandoffControllerTest
+[PASS] testAdapterPathMismatchDoesNotConsumePacket() (gas: 5579187)
+[PASS] testBadSwapPathHashFailsBeforeConsume() (gas: 219318)
+[PASS] testConfigMismatchAndCapsFailClosed() (gas: 734381)
+[PASS] testConsumeMintAndSwapMintsAndSwapsAtomically() (gas: 478151)
+[PASS] testConsumeMintAndSwapThroughBoundAdapter() (gas: 5651430)
+[PASS] testConsumeMintOnlyMintsWrappedTokenAndRejectsReplay() (gas: 507125)
+[PASS] testDeadlineExpiredFailsClosed() (gas: 259712)
+[PASS] testDisabledRouteAndUnauthorizedExecutorFailClosed() (gas: 4161130)
+[PASS] testExpiredCancellationAndConsumeAreMutuallyExclusive() (gas: 1133351)
+[PASS] testGate1SidecarExportVectorConsumesMintOnly() (gas: 5760305)
+[PASS] testModifiedRecipientFailsVerifierBinding() (gas: 290416)
+[PASS] testOptimisticReceiptFinalizesAndAllowsMintOnly() (gas: 6552228)
+[PASS] testOptimisticResolverGovernanceRotatesResolver() (gas: 6545308)
+[PASS] testOptimisticSourceReceiptReuseCannotPostSecondAcceptedClaim() (gas: 6585499)
+[PASS] testOptimisticUnderbondedAndLateChallengeRejected() (gas: 6424504)
+[PASS] testOptimisticUnresolvedChallengeFailsClosedAfterResolutionDeadline() (gas: 6501276)
+[PASS] testOptimisticValidChallengeRejectsBeforeSettlementAndPaysBonds() (gas: 6498081)
+[PASS] testPauseBlocksInboundConsumesButAllowsReturnBurn() (gas: 957167)
+[PASS] testPricingEpochAndReservePacketMismatchFailClosed() (gas: 539594)
+[PASS] testReentrancyAttemptIsRejectedAndOuterSwapSettlesOnce() (gas: 6502381)
+[PASS] testReplayRegistrySurvivesControllerRedeploy() (gas: 4882803)
+[PASS] testRouteSupplyCapTracksNetOutstandingAfterReturnBurn() (gas: 1427780)
+[PASS] testRouteTrustClassIsMachineReadableAndEmittedOnConsume() (gas: 422604)
+[PASS] testRouterPoolMismatchFailsConstructor() (gas: 684473)
+[PASS] testRouterReturnValueCannotOverstateAdapterSettlement() (gas: 5746135)
+[PASS] testRouterReturnValueCannotOverstateDirectSwapSettlement() (gas: 503847)
+[PASS] testSetPausedIsOwnerOnlyAndEmits() (gas: 125812)
+[PASS] testSourcePacketHashRejectsMutatedReplay() (gas: 599522)
+[PASS] testSourceReceiptHashRejectsAcceptedMutatedReplay() (gas: 625775)
+[PASS] testSwapFailureDoesNotConsumePacket() (gas: 459371)
+[PASS] testThresholdPftlFinalityCertificateDrivesControllerMint() (gas: 5782883)
+[PASS] testUnacceptedReceiptFailsClosed() (gas: 289621)
+[PASS] testVerifierTrustClassMismatchFailsConstructor() (gas: 255313)
+[PASS] testWrappedTokenRejectsDirectMintAndBurnsForReturn() (gas: 705290)
+[PASS] testWrappedTokenZeroTransfersAndControllerLockDecision() (gas: 518691)
+[PASS] testWrongChainBridgeAndWrappedTokenFailClosed() (gas: 711311)
+Suite result: ok. 36 passed; 0 failed; 0 skipped; finished in 142.98ms (61.48ms CPU time)
+
+Ran 22 tests for test/PFUSDCTier4.t.sol:PFUSDCTier4Test
+[PASS] invariantFrozenTier4BindingsRemainPinned() (runs: 256, calls: 128000, reverts: 88804)
+
+╭------------------------+-------------------+-------+---------+----------╮
+| Contract               | Selector          | Calls | Reverts | Discards |
++=========================================================================+
+| ERC20BridgeVaultV2     | depositV2         | 14221 | 14221   | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| ERC20BridgeVaultV2     | setPaused         | 14189 | 14188   | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| ERC20BridgeVaultV2     | transferOwnership | 14196 | 14196   | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| ERC20BridgeVaultV2     | withdrawWithProof | 14234 | 14234   | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| PFTLFinalityVerifierV1 | advanceCheckpoint | 7202  | 7202    | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| PFTLFinalityVerifierV1 | verifyAndConsume  | 7117  | 7117    | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| Tier4MockArbSys        | sendTxToL1        | 7108  | 3480    | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| Tier4MockArbSys        | setReject         | 7145  | 0       | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| Tier4MockIngressAnchor | recordDepositV1   | 7101  | 0       | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| Tier4MockSP1Verifier   | setReject         | 7032  | 0       | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| Tier4MockToken         | approve           | 7113  | 0       | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| Tier4MockToken         | mint              | 6956  | 3       | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| Tier4MockToken         | transfer          | 7220  | 7037    | 0        |
+|------------------------+-------------------+-------+---------+----------|
+| Tier4MockToken         | transferFrom      | 7166  | 7126    | 0        |
+╰------------------------+-------------------+-------+---------+----------╯
+
+[PASS] testArcDirectIngressPinsVaultAndRevertsAtomicallyOnWrongRoute() (gas: 5137478)
+[PASS] testCheckpointOnlyProofKeepsFinalityWindowLive() (gas: 910863)
+[PASS] testCheckpointOnlyProofRejectsWrongCommitteeAndInvalidProof() (gas: 276131)
+[PASS] testDepositEmitsCanonicalTier4SendAndRevertsAtomicallyWhenSendFails() (gas: 727416)
+[PASS] testFuzzExactDepositDeltaAndReplay(uint64,bytes32,bytes32) (runs: 256, μ: 591720, ~: 591913)
+[PASS] testFuzzMalformedPublicValuesCannotMutate(bytes,bytes) (runs: 256, μ: 95614, ~: 95533)
+[PASS] testFuzzRejectedSP1ProofCannotMutate(bytes) (runs: 256, μ: 464245, ~: 464149)
+[PASS] testGatewayBoundVerifierRejectsForgedProofUnderRegisteredSelector() (gas: 5082989)
+[PASS] testGatewayOwnerCanAdmitUnprovenWithdrawalViaForeignSelectorPoC() (gas: 5620439)
+[PASS] testGatewayOwnerCanFreezeTheRouteAndHaltEgress() (gas: 5103337)
+[PASS] testGatewayOwnerCannotReplaceTheRegisteredGroth16Route() (gas: 4949393)
+[PASS] testNonExactTokenDeltasRevertIngressAndEgressAtomically() (gas: 3646293)
+[PASS] testPauseBlocksNewWorkWithoutRewritingConsumedClaims() (gas: 1177971)
+[PASS] testProductionIngressAnchorPinsOutboxSenderRouteAndReplay() (gas: 1433196)
+[PASS] testProductionIngressAnchorRuntimeHashDoesNotDependOnRouteBinding() (gas: 1706976)
+[PASS] testProofNativeWithdrawalPaysExactlyAndConsumesReplayKeys() (gas: 689237)
+[PASS] testProvedCommitteeChangeMustStartAtStoredCommitteeRoot() (gas: 882531)
+[PASS] testRejectedReceiptCodeCannotReachSP1OrMoveMoney() (gas: 365479)
+[PASS] testUnprovedCommitteeChangeFailsBeforeMutation() (gas: 373477)
+[PASS] testWrongProofProgramVersionFailsBeforeSP1AndMutation() (gas: 371674)
+[PASS] testWrongVaultAndInvalidSP1ProofFailBeforeMutation() (gas: 769000)
+Suite result: ok. 22 passed; 0 failed; 0 skipped; finished in 3.44s (3.68s CPU time)
+
+Ran 1 test for test/ThresholdMintSettlementVerifier.t.sol:ThresholdMintSettlementVerifierInvariantTest
+[PASS] invariantOnlyTheExactCertifiedTupleReturnsSettlementValue() (runs: 256, calls: 128000, reverts: 128000)
+
+╭---------------------------------+-----------------------------+--------+---------+----------╮
+| Contract                        | Selector                    | Calls  | Reverts | Discards |
++=============================================================================================+
+| ThresholdMintSettlementVerifier | submitSettlementCertificate | 128000 | 128000  | 0        |
+╰---------------------------------+-----------------------------+--------+---------+----------╯
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 7.89s (7.88s CPU time)
+
+Ran 22 test suites in 7.89s (12.08s CPU time): 178 tests passed, 0 failed, 0 skipped (178 total tests)

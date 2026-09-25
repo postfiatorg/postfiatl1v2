@@ -1,0 +1,10 @@
+{
+  "validator": 0,
+  "elapsed_seconds": 369.1388492807746,
+  "report": {
+    "verified": true,
+    "block_count": 972,
+    "tip_hash": "1ecacd536cba2ae2bc98eea11ab5e46293e094318900c19c5aff5de9aace8386ece25b52afbf281cce67415edb149ca5",
+    "state_root": "3debf11e7ba94ee95cb68e8fdad181ec7b50c56a658addf8fcddcee2e86dca1803c96b79c82949805b98bd1ecb144455"
+  }
+}

@@ -16,6 +16,11 @@ pub const WITNESS_SCHEMA: &str = "postfiat.pfusdc.ethereum_ingress_witness.v1";
 pub const POLICY_SCHEMA: &str = "postfiat.pfusdc.ethereum_ingress_policy.v1";
 pub const PUBLIC_VALUES_SCHEMA: &str = "postfiat.pfusdc.ethereum_ingress_public_values.v1";
 pub const ROUTE_ID: &str = "ethereum-mainnet-usdc-v1";
+pub const PFETH_WITNESS_SCHEMA: &str = "postfiat.pfeth.ethereum_ingress_witness.v1";
+pub const PFETH_POLICY_SCHEMA: &str = "postfiat.pfeth.ethereum_ingress_policy.v1";
+pub const PFETH_PUBLIC_VALUES_SCHEMA: &str = "postfiat.pfeth.ethereum_ingress_public_values.v1";
+pub const PFETH_ROUTE_ID: &str = "ethereum-mainnet-weth-v1";
+pub const WETH_WEI_PER_PFETH_ATOM: u64 = 1_000_000_000;
 pub const MAINNET_CHAIN_ID: u64 = 1;
 pub const MAINNET_GENESIS_VALIDATORS_ROOT: B256 = B256::new([
     0x4b, 0x36, 0x3d, 0xb9, 0x4e, 0x28, 0x61, 0x20, 0xd7, 0x6e, 0xb9, 0x05, 0x34, 0x0f, 0xdd, 0x4e,
@@ -81,13 +86,74 @@ pub struct EthIngressPublicValuesV1 {
     pub vault_token_balance_atoms: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IngressRoute {
+    PfUsdc,
+    PfEth,
+}
+
+impl IngressRoute {
+    fn witness_schema(self) -> &'static str {
+        match self {
+            Self::PfUsdc => WITNESS_SCHEMA,
+            Self::PfEth => PFETH_WITNESS_SCHEMA,
+        }
+    }
+
+    fn policy_schema(self) -> &'static str {
+        match self {
+            Self::PfUsdc => POLICY_SCHEMA,
+            Self::PfEth => PFETH_POLICY_SCHEMA,
+        }
+    }
+
+    fn public_values_schema(self) -> &'static str {
+        match self {
+            Self::PfUsdc => PUBLIC_VALUES_SCHEMA,
+            Self::PfEth => PFETH_PUBLIC_VALUES_SCHEMA,
+        }
+    }
+
+    fn route_id(self) -> &'static str {
+        match self {
+            Self::PfUsdc => ROUTE_ID,
+            Self::PfEth => PFETH_ROUTE_ID,
+        }
+    }
+
+    fn source_atoms_per_asset_atom(self) -> u64 {
+        match self {
+            Self::PfUsdc => 1,
+            Self::PfEth => WETH_WEI_PER_PFETH_ATOM,
+        }
+    }
+
+    fn nullifier_domain(self) -> &'static [u8] {
+        match self {
+            Self::PfUsdc => b"postfiat.pfusdc.ethereum_ingress_nullifier.v1\0",
+            Self::PfEth => b"postfiat.pfeth.ethereum_ingress_nullifier.v1\0",
+        }
+    }
+}
+
 pub fn verify_witness(w: &EthIngressWitnessV1) -> Result<EthIngressPublicValuesV1, String> {
+    verify_witness_for_route(w, IngressRoute::PfUsdc)
+}
+
+pub fn verify_weth_witness(w: &EthIngressWitnessV1) -> Result<EthIngressPublicValuesV1, String> {
+    verify_witness_for_route(w, IngressRoute::PfEth)
+}
+
+fn verify_witness_for_route(
+    w: &EthIngressWitnessV1,
+    route: IngressRoute,
+) -> Result<EthIngressPublicValuesV1, String> {
     validate_bounds(w)?;
-    if w.schema != WITNESS_SCHEMA || w.policy.schema != POLICY_SCHEMA {
+    if w.schema != route.witness_schema() || w.policy.schema != route.policy_schema() {
         return Err("Ethereum ingress witness/policy schema mismatch".into());
     }
     let p = &w.policy;
-    if p.route_id != ROUTE_ID
+    if p.route_id != route.route_id()
         || p.source_chain_id != MAINNET_CHAIN_ID
         || p.genesis_validators_root != MAINNET_GENESIS_VALIDATORS_ROOT
         || p.manifest_hash == B256::ZERO
@@ -95,6 +161,9 @@ pub fn verify_witness(w: &EthIngressWitnessV1) -> Result<EthIngressPublicValuesV
         || p.token_runtime_code_hash == B256::ZERO
     {
         return Err("Ethereum ingress policy is not the allowlisted Ethereum mainnet route".into());
+    }
+    if route == IngressRoute::PfEth {
+        validate_weth_policy(p)?;
     }
     w.evidence.validate()?;
     if w.evidence.source_chain_id != p.source_chain_id
@@ -157,6 +226,10 @@ pub fn verify_witness(w: &EthIngressWitnessV1) -> Result<EthIngressPublicValuesV
     let route_binding = B256::from(w.vault_storage.storage_slots[3].value.to_be_bytes::<32>());
     let nonce = B256::from(w.vault_storage.storage_slots[4].value.to_be_bytes::<32>());
     let token_balance = w.token_storage.storage_slots[0].value;
+    let source_scale = U256::from(route.source_atoms_per_asset_atom());
+    let source_obligations = obligations
+        .checked_mul(source_scale)
+        .ok_or_else(|| "Ethereum ingress source backing scale overflow".to_string())?;
 
     if address_text(proved_depositor) != w.evidence.depositor
         || proved_amount != U256::from(w.evidence.amount_atoms)
@@ -164,7 +237,7 @@ pub fn verify_witness(w: &EthIngressWitnessV1) -> Result<EthIngressPublicValuesV
         || hex32(route_binding) != w.evidence.route_binding
         || hex32(nonce) != w.evidence.nonce
         || obligations < U256::from(w.evidence.amount_atoms)
-        || token_balance < obligations
+        || token_balance < source_obligations
     {
         return Err(
             "Ethereum ingress state does not reproduce the deposit evidence/backing".into(),
@@ -184,13 +257,13 @@ pub fn verify_witness(w: &EthIngressWitnessV1) -> Result<EthIngressPublicValuesV
     }
 
     let evidence_root = vault_bridge_deposit_evidence_root(&w.evidence)?;
-    let mut nullifier_preimage = b"postfiat.pfusdc.ethereum_ingress_nullifier.v1\0".to_vec();
+    let mut nullifier_preimage = route.nullifier_domain().to_vec();
     nullifier_preimage.extend_from_slice(p.manifest_hash.as_slice());
     nullifier_preimage.extend_from_slice(deposit_id.as_slice());
     let nullifier = keccak256(nullifier_preimage);
 
     Ok(EthIngressPublicValuesV1 {
-        schema: PUBLIC_VALUES_SCHEMA.into(),
+        schema: route.public_values_schema().into(),
         route_id: p.route_id.clone(),
         source_chain_id: p.source_chain_id,
         prior_finalized_beacon_root: hex32(finality.prior_root),
@@ -215,7 +288,7 @@ pub fn verify_witness(w: &EthIngressWitnessV1) -> Result<EthIngressPublicValuesV
         manifest_hash: hex32(p.manifest_hash),
         deposit_nullifier: hex32(nullifier),
         total_obligations_atoms: obligations.to_string(),
-        vault_token_balance_atoms: token_balance.to_string(),
+        vault_token_balance_atoms: (token_balance / source_scale).to_string(),
     })
 }
 
@@ -313,6 +386,35 @@ fn verify_contract(
     }
     verify_storage_slot_proofs(root, storage)
         .map_err(|e| format!("invalid {label} account/storage proof: {e}"))
+}
+
+fn validate_weth_policy(p: &EthIngressPolicyV1) -> Result<(), String> {
+    const WETH9: Address = Address::new([
+        0xc0, 0x2a, 0xaa, 0x39, 0xb2, 0x23, 0xfe, 0x8d, 0x0a, 0x0e, 0x5c, 0x4f, 0x27, 0xea, 0xd9,
+        0x08, 0x3c, 0x75, 0x6c, 0xc2,
+    ]);
+    const WETH9_RUNTIME_CODE_HASH: B256 = B256::new([
+        0xd0, 0xa0, 0x6b, 0x12, 0xac, 0x47, 0x86, 0x3b, 0x5c, 0x7b, 0xe4, 0x18, 0x5c, 0x2d, 0xea,
+        0xad, 0x1c, 0x61, 0x55, 0x70, 0x33, 0xf5, 0x6c, 0x7d, 0x4e, 0xa7, 0x44, 0x29, 0xcb, 0xb2,
+        0x5e, 0x23,
+    ]);
+    if p.token_address != WETH9
+        || p.token_runtime_code_hash != WETH9_RUNTIME_CODE_HASH
+        || p.token_balance_storage_key != address_mapping_slot(p.vault_address, 3)
+    {
+        return Err(
+            "pfETH ingress policy must pin mainnet WETH9, its runtime code hash, and balanceOf(vault) slot 3"
+                .into(),
+        );
+    }
+    Ok(())
+}
+
+fn address_mapping_slot(key: Address, slot: u64) -> B256 {
+    let mut preimage = [0u8; 64];
+    preimage[12..32].copy_from_slice(key.as_slice());
+    preimage[56..].copy_from_slice(&slot.to_be_bytes());
+    keccak256(preimage)
 }
 
 fn mapping_base(key: B256, slot: u64) -> B256 {
@@ -473,6 +575,43 @@ mod tests {
                 .parse()
                 .expect("sepolia root hex");
         assert_ne!(MAINNET_GENESIS_VALIDATORS_ROOT, sepolia_root);
+    }
+
+    #[test]
+    fn pfeth_route_pins_weth_and_gwei_scale() {
+        let vault: Address = "0x1111111111111111111111111111111111111111"
+            .parse()
+            .expect("vault address");
+        let mut policy = EthIngressPolicyV1 {
+            schema: PFETH_POLICY_SCHEMA.to_string(),
+            route_id: PFETH_ROUTE_ID.to_string(),
+            source_chain_id: MAINNET_CHAIN_ID,
+            genesis_validators_root: MAINNET_GENESIS_VALIDATORS_ROOT,
+            vault_address: vault,
+            vault_runtime_code_hash: B256::repeat_byte(0x11),
+            token_address: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+                .parse()
+                .expect("WETH address"),
+            token_runtime_code_hash:
+                "0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23"
+                    .parse()
+                    .expect("WETH code hash"),
+            token_balance_storage_key: address_mapping_slot(vault, 3),
+            manifest_hash: B256::repeat_byte(0x22),
+        };
+        assert!(validate_weth_policy(&policy).is_ok());
+        assert_eq!(
+            IngressRoute::PfEth.source_atoms_per_asset_atom(),
+            1_000_000_000
+        );
+
+        policy.token_balance_storage_key = address_mapping_slot(vault, 2);
+        assert!(validate_weth_policy(&policy).is_err());
+        policy.token_balance_storage_key = address_mapping_slot(vault, 3);
+        policy.token_address = "0x2222222222222222222222222222222222222222"
+            .parse()
+            .expect("other token");
+        assert!(validate_weth_policy(&policy).is_err());
     }
 
     #[test]

@@ -1,0 +1,30 @@
+Compiling 26 files with Solc 0.8.24
+Solc 0.8.24 finished in 5.15s
+Compiler run successful!
+
+Ran 6 tests for test/WETHBridgeVaultL1.t.sol:WETHBridgeVaultL1Test
+[PASS] testConstructorPinsScaleAndBindings() (gas: 17802)
+[PASS] testDepositRejectsTotalPfethSupplyOverflow() (gas: 251197)
+[PASS] testDepositReplayAndWithdrawalReplayReject() (gas: 317635)
+[PASS] testMultipleNotesCanExceedOldWeiU64Ceiling() (gas: 194983)
+[PASS] testOneEthDepositStoresOneBillionPfethAtoms() (gas: 198562)
+[PASS] testOneEthWithdrawalTransfersOneEthWeth() (gas: 279824)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 15.11ms (5.13ms CPU time)
+
+Ran 13 tests for test/ExitExecutorV1.t.sol:ExitExecutorV1Test
+[PASS] test_delegation_attached() (gas: 13391)
+[PASS] test_digest_fixture() (gas: 18176)
+[PASS] test_execute_self_from_eoa() (gas: 67711)
+[PASS] test_execute_self_requires_self() (gas: 20285)
+[PASS] test_expired_rejected() (gas: 29355)
+[PASS] test_failed_call_reverts_whole_batch_with_reason() (gas: 145810)
+[PASS] test_high_s_rejected() (gas: 54519)
+[PASS] test_nonce_storage_is_namespaced() (gas: 108761)
+[PASS] test_replay_rejected() (gas: 112532)
+[PASS] test_signature_bound_to_chain_and_account() (gas: 67384)
+[PASS] test_sponsored_unwrap_and_deposit_from_zero_gas_eoa() (gas: 106297)
+[PASS] test_tampered_batch_rejected() (gas: 58250)
+[PASS] test_wrong_signer_rejected() (gas: 58863)
+Suite result: ok. 13 passed; 0 failed; 0 skipped; finished in 22.17ms (31.89ms CPU time)
+
+Ran 2 test suites in 38.25ms (37.28ms CPU time): 19 tests passed, 0 failed, 0 skipped (19 total tests)

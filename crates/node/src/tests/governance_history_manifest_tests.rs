@@ -2854,6 +2854,14 @@
         assert_eq!(report.bundle_hash, bundle.bundle_hash);
         assert_eq!(report.validator_count, 3);
         assert!(report.operator_manifests_verified);
+        let (snapshot_report, snapshot_manifests) =
+            verify_governance_genesis_bundle_snapshot(GovernanceGenesisVerifyOptions {
+                data_dir: data_dir.clone(),
+                bundle_file: bundle_file.clone(),
+            })
+            .expect("verify governance genesis bundle snapshot");
+        assert_eq!(snapshot_report, report);
+        assert_eq!(snapshot_manifests, bundle.operator_manifests);
 
         let replacement = signed_test_operator_manifest(
             "postfiat-local",
@@ -3379,7 +3387,7 @@
             .expect("bootstrap validator keys");
         let validators = local_validator_ids(4).expect("bootstrap validators");
         let activation_height = 10;
-        let committee = postfiat_types::FastPayRecoveryCommitteeV1::from_public_keys(
+        let mut committee = postfiat_types::FastPayRecoveryCommitteeV1::from_public_keys(
             genesis.chain_id.clone(),
             genesis_hash(&genesis),
             genesis.protocol_version,
@@ -3393,6 +3401,9 @@
                 .collect(),
         )
         .expect("FastPay recovery committee");
+        // Replay the historical encoding, then rotate to V2 below through governance.
+        committee.schema = postfiat_types::FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V1.to_string();
+        committee.registry_root = committee.computed_root().expect("historical committee root");
         let payload = postfiat_types::FastPayRecoveryGovernancePayloadV1 {
             policy: postfiat_types::FastPayRecoveryPolicyV1 {
                 schema: postfiat_types::FASTPAY_RECOVERY_POLICY_SCHEMA_V1.to_string(),

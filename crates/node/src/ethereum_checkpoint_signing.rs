@@ -740,12 +740,7 @@ pub(crate) fn ethereum_rpc_call_with_limit(
         ));
     }
     let body = &response[header_end..];
-    if let Some(expected_length) = headers.lines().find_map(|line| {
-        let (name, value) = line.split_once(':')?;
-        name.eq_ignore_ascii_case("content-length")
-            .then(|| value.trim().parse::<usize>().ok())
-            .flatten()
-    }) {
+    if let Some(expected_length) = strict_http_content_length(headers)? {
         if body.len() != expected_length {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -774,6 +769,37 @@ pub(crate) fn ethereum_rpc_call_with_limit(
             format!("Ethereum RPC {method} response has no result"),
         )
     })
+}
+
+/// Parses every `Content-Length` header strictly; malformed, duplicate or
+/// conflicting framing is rejected instead of being treated as absent.
+fn strict_http_content_length(headers: &str) -> io::Result<Option<usize>> {
+    let mut length = None;
+    for line in headers.lines() {
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        if !name.trim().eq_ignore_ascii_case("content-length") {
+            continue;
+        }
+        let value = value.trim();
+        let parsed = (!value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()))
+            .then(|| value.parse::<usize>().ok())
+            .flatten()
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Ethereum RPC Content-Length is malformed",
+                )
+            })?;
+        if length.replace(parsed).is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Ethereum RPC response has duplicate Content-Length headers",
+            ));
+        }
+    }
+    Ok(length)
 }
 
 fn rpc_hex_u64(endpoint: &EthereumRpcEndpoint, method: &str, params: Value) -> io::Result<u64> {
@@ -895,6 +921,31 @@ mod tests {
         build_ethereum_receipt_proof, EthereumReceiptProofBuildOptions, ValidatorKeyFile,
         ValidatorKeyRecord,
     };
+
+    #[test]
+    fn rpc_content_length_framing_is_strict() {
+        let parse = |headers: &str| strict_http_content_length(headers).map_err(|e| e.kind());
+        assert_eq!(parse("HTTP/1.1 200 OK\r\n\r\n"), Ok(None));
+        assert_eq!(
+            parse("HTTP/1.1 200 OK\r\nContent-Length: 17\r\n\r\n"),
+            Ok(Some(17))
+        );
+        for headers in [
+            "HTTP/1.1 200 OK\r\nContent-Length: nope\r\n\r\n",
+            "HTTP/1.1 200 OK\r\nContent-Length: +17\r\n\r\n",
+            "HTTP/1.1 200 OK\r\nContent-Length: \r\n\r\n",
+            "HTTP/1.1 200 OK\r\nContent-Length: 17, 17\r\n\r\n",
+            "HTTP/1.1 200 OK\r\nContent-Length: 17\r\ncontent-length: 17\r\n\r\n",
+            "HTTP/1.1 200 OK\r\nContent-Length: 17\r\nContent-Length: 18\r\n\r\n",
+            "HTTP/1.1 200 OK\r\nContent-Length: bad\r\nContent-Length: 17\r\n\r\n",
+        ] {
+            assert_eq!(
+                parse(headers),
+                Err(io::ErrorKind::InvalidData),
+                "{headers:?}"
+            );
+        }
+    }
 
     #[test]
     fn isolated_checkpoint_votes_require_live_route_and_assemble_exact_quorum() {

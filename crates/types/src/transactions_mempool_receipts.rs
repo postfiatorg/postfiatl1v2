@@ -1499,6 +1499,7 @@ impl VaultBridgeDepositProposeOperation {
             NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
                 | SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
+                | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
         );
         if proof_native && (self.source_proof_bytes.is_empty() || self.source_public_values.is_empty())
         {
@@ -2742,6 +2743,8 @@ impl PftlUniswapRouteInitV2Operation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapOrderReserveOperation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settlement_source_asset_id: Option<String>,
     pub subscriber: String,
     pub route_id: String,
     pub reservation_id: String,
@@ -2756,6 +2759,9 @@ pub struct PftlUniswapOrderReserveOperation {
 
 impl PftlUniswapOrderReserveOperation {
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(asset) = &self.settlement_source_asset_id {
+            validate_lower_hex_len("settlement_source_asset_id", asset, VAULT_BRIDGE_HEX_HASH_LEN)?;
+        }
         validate_text_field("pftl_uniswap_order_reserve.subscriber", &self.subscriber)?;
         validate_text_field("pftl_uniswap_order_reserve.route_id", &self.route_id)?;
         validate_lower_hex_len(
@@ -2787,7 +2793,7 @@ impl PftlUniswapOrderReserveOperation {
     }
 
     fn signing_bytes(&self) -> Vec<u8> {
-        format!(
+        let mut bytes = format!(
             "subscriber={}\nroute_id={}\nreservation_id={}\nethereum_recipient={}\nroute_epoch={}\npolicy_epoch={}\npolicy_hash={}\nmint_amount_atoms={}\nmax_settlement_value_atoms={}\nexpires_at_height={}\n",
             self.subscriber,
             self.route_id,
@@ -2800,7 +2806,11 @@ impl PftlUniswapOrderReserveOperation {
             self.max_settlement_value_atoms,
             self.expires_at_height,
         )
-        .into_bytes()
+        .into_bytes();
+        if let Some(asset) = &self.settlement_source_asset_id {
+            bytes.extend_from_slice(format!("settlement_source_asset_id={asset}\n").as_bytes());
+        }
+        bytes
     }
 }
 
@@ -2942,6 +2952,8 @@ impl PftlUniswapRedemptionFundOperation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapPrimaryRedeemOperation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settlement_source_asset_id: Option<String>,
     pub owner: String,
     pub settlement_recipient: String,
     pub route_id: String,
@@ -2958,6 +2970,9 @@ pub struct PftlUniswapPrimaryRedeemOperation {
 
 impl PftlUniswapPrimaryRedeemOperation {
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(asset) = &self.settlement_source_asset_id {
+            validate_lower_hex_len("settlement_source_asset_id", asset, VAULT_BRIDGE_HEX_HASH_LEN)?;
+        }
         validate_text_field("pftl_uniswap_primary_redeem.owner", &self.owner)?;
         validate_text_field(
             "pftl_uniswap_primary_redeem.settlement_recipient",
@@ -2995,7 +3010,7 @@ impl PftlUniswapPrimaryRedeemOperation {
     }
 
     fn signing_bytes(&self) -> Vec<u8> {
-        format!(
+        let mut bytes = format!(
             "owner={}\nsettlement_recipient={}\nroute_id={}\nredemption_nonce={}\nnav_amount_atoms={}\nmin_settlement_value_atoms={}\nroute_epoch={}\npolicy_epoch={}\npolicy_hash={}\npricing_nav_epoch={}\npricing_reserve_packet_hash={}\nexpires_at_height={}\n",
             self.owner,
             self.settlement_recipient,
@@ -3010,12 +3025,18 @@ impl PftlUniswapPrimaryRedeemOperation {
             self.pricing_reserve_packet_hash,
             self.expires_at_height,
         )
-        .into_bytes()
+        .into_bytes();
+        if let Some(asset) = &self.settlement_source_asset_id {
+            bytes.extend_from_slice(format!("settlement_source_asset_id={asset}\n").as_bytes());
+        }
+        bytes
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapRouteEpochAdvanceOperation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settlement_source_asset_ids: Option<Vec<String>>,
     pub operator: String,
     pub route_id: String,
     pub prior_route_epoch: u64,
@@ -3027,6 +3048,14 @@ pub struct PftlUniswapRouteEpochAdvanceOperation {
 
 impl PftlUniswapRouteEpochAdvanceOperation {
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(assets) = &self.settlement_source_asset_ids {
+            if assets.len() > MAX_PFTL_UNISWAP_ROUTE_ENTRIES { return Err("too many settlement sources".to_string()); }
+            let mut unique = std::collections::BTreeSet::new();
+            for asset in assets {
+                validate_lower_hex_len("settlement_source_asset_id", asset, VAULT_BRIDGE_HEX_HASH_LEN)?;
+                if !unique.insert(asset) { return Err("duplicate settlement source".to_string()); }
+            }
+        }
         validate_text_field(
             "pftl_uniswap_route_epoch_advance.operator",
             &self.operator,
@@ -3053,7 +3082,7 @@ impl PftlUniswapRouteEpochAdvanceOperation {
     }
 
     fn signing_bytes(&self) -> Vec<u8> {
-        format!(
+        let mut bytes = format!(
             "operator={}\nroute_id={}\nprior_route_epoch={}\nnext_route_epoch={}\nnext_route_config_digest={}\nlive_value_enabled={}\nnext_primary_market_policy_hash={}\n",
             self.operator,
             self.route_id,
@@ -3063,7 +3092,12 @@ impl PftlUniswapRouteEpochAdvanceOperation {
             self.live_value_enabled,
             self.next_primary_market_policy.policy_hash,
         )
-        .into_bytes()
+        .into_bytes();
+        if let Some(assets) = &self.settlement_source_asset_ids {
+            bytes.extend_from_slice(format!("settlement_source_asset_count={}\n", assets.len()).as_bytes());
+            for asset in assets { bytes.extend_from_slice(format!("settlement_source_asset_id={asset}\n").as_bytes()); }
+        }
+        bytes
     }
 }
 

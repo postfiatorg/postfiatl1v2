@@ -1,0 +1,50 @@
+{
+  "topology_id": "a2a80ef023102ac2eb04448d33d1f3127131720f33f31df7c7d6dd943b304047beaaafeb8c7d45cdad7e384536a323a1",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "peers": [
+    {
+      "node_id": "validator-0",
+      "host": "10.77.0.1",
+      "p2p_port": 26650,
+      "rpc_port": 27650,
+      "p2p_address": "/ip4/10.77.0.1/tcp/26650"
+    },
+    {
+      "node_id": "validator-1",
+      "host": "10.77.0.2",
+      "p2p_port": 26652,
+      "rpc_port": 27651,
+      "p2p_address": "/ip4/10.77.0.2/tcp/26652"
+    },
+    {
+      "node_id": "validator-2",
+      "host": "10.77.0.3",
+      "p2p_port": 26654,
+      "rpc_port": 27652,
+      "p2p_address": "/ip4/10.77.0.3/tcp/26654"
+    },
+    {
+      "node_id": "validator-3",
+      "host": "10.77.0.4",
+      "p2p_port": 26656,
+      "rpc_port": 27653,
+      "p2p_address": "/ip4/10.77.0.4/tcp/26656"
+    },
+    {
+      "node_id": "validator-4",
+      "host": "10.77.0.5",
+      "p2p_port": 26658,
+      "rpc_port": 27654,
+      "p2p_address": "/ip4/10.77.0.5/tcp/26658"
+    },
+    {
+      "node_id": "validator-5",
+      "host": "10.77.0.6",
+      "p2p_port": 26660,
+      "rpc_port": 27655,
+      "p2p_address": "/ip4/10.77.0.6/tcp/26660"
+    }
+  ]
+}

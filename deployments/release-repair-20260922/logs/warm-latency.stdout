@@ -1,0 +1,6 @@
+
+running 1 test
+test fastswap_service::tests::persistent_wallet_driver_meets_isolated_warm_latency_gate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 175 filtered out; finished in 0.22s
+

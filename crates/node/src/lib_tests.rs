@@ -7,9 +7,11 @@ mod tests {
     include!("tests/yolo_target_receipt_tests.rs");
     include!("tests/nav_reserve_proof_status_tests.rs");
     mod a666_recovery_regression_tests;
+    mod archive_bridge_supply;
     mod consensus_history;
     mod atomic_swap_consensus;
     mod fastpay_payment_safety;
+    mod fastpay_commitment_versions;
     mod orchard_transfer_escrow;
     mod replicated_state_activation;
     mod lifecycle_checkpoint_tests;

@@ -1,0 +1,19 @@
+{
+  "original_mac_verified": true,
+  "changed_field": "database_directory",
+  "logical_state_changed": false,
+  "before": {
+    "schema": "postfiat-transactional-generation-pointer-v1",
+    "generation": "generation-00000001",
+    "database_directory": "/home/postfiatchad/.cache/release-repair-20260916/working/validator-4/transactional-generation-927",
+    "database_file": "postfiat-state-v1.redb",
+    "migration_packet_root": "8aa42f0d6014be2b34efbd2aff90782e1c21856646cbc5d9ede405215ced0401f7b805a86d5b7279205493c806ae8f8e"
+  },
+  "after": {
+    "schema": "postfiat-transactional-generation-pointer-v1",
+    "generation": "generation-00000001",
+    "database_directory": "/home/postfiatchad/.cache/release-repair-20260922/post-v2/validator-4/transactional-generation-927",
+    "database_file": "postfiat-state-v1.redb",
+    "migration_packet_root": "8aa42f0d6014be2b34efbd2aff90782e1c21856646cbc5d9ede405215ced0401f7b805a86d5b7279205493c806ae8f8e"
+  }
+}

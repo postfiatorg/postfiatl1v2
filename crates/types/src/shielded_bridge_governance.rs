@@ -28,6 +28,8 @@ pub const GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT: &str =
 pub const GOVERNANCE_VAULT_BRIDGE_ROUTE_KIND_PREFIX_V1: &str = "vault_bridge_route_v1";
 pub const VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1: &str =
     "postfiat.vault_bridge.route_profile_activation.v1";
+pub const VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2: &str =
+    "postfiat.vault_bridge.route_profile_activation.v2";
 pub const VAULT_BRIDGE_ROUTE_PROFILE_RECORD_SCHEMA_V1: &str =
     "postfiat.vault_bridge.route_profile_record.v1";
 pub const GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT: &str =
@@ -807,11 +809,25 @@ pub struct VaultBridgeRouteProfileActivationV1 {
     pub amendment: GovernanceAmendment,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tier4_finality_bootstrap: Option<EthereumArbitrumFinalityStateV2>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arc_finality_bootstrap: Option<PfUsdcArcFinalityStateV1>,
 }
 
 impl VaultBridgeRouteProfileActivationV1 {
     pub fn validate(&self) -> Result<(), String> {
-        if self.schema != VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1 {
+        if self.profile.verifier_kind == NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
+            && self.schema != VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2
+        {
+            return Err("Arc route activation requires bootstrap-bound authorization v2".to_string());
+        }
+        self.validate_for_replay()
+    }
+
+    /// Historical V1 is replay-only; live admission must call `validate`.
+    pub fn validate_for_replay(&self) -> Result<(), String> {
+        if self.schema != VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1
+            && self.schema != VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2
+        {
             return Err("vault bridge route profile activation schema mismatch".to_string());
         }
         self.profile.validate()?;
@@ -819,11 +835,13 @@ impl VaultBridgeRouteProfileActivationV1 {
         match (
             self.profile.verifier_kind.as_str(),
             self.tier4_finality_bootstrap.as_ref(),
+            self.arc_finality_bootstrap.as_ref(),
         ) {
             (
                 NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
                 Some(state),
+                None,
             ) => {
                 state.validate()?;
                 if state.route_profile_hash != profile_hash
@@ -842,16 +860,48 @@ impl VaultBridgeRouteProfileActivationV1 {
                 NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
                 None,
+                None,
             ) => {
                 return Err("Tier-4 route activation requires a finality bootstrap".to_string());
             }
-            (_, Some(_)) => {
+            (NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1, None, Some(state)) => {
+                state.validate()?;
+                let expected_route_binding =
+                    vault_bridge_route_binding(&profile_hash, self.profile.route_epoch)?;
+                if state.route_profile_hash != profile_hash
+                    || state.route_epoch != u64::from(self.profile.route_epoch)
+                    || state.arc_chain_id != self.profile.source_chain_id
+                    || state.vault_address != self.profile.vault_address
+                    || state.vault_runtime_code_hash != self.profile.vault_runtime_code_hash
+                    || state.token_address != self.profile.token_address
+                    || state.token_runtime_code_hash != self.profile.token_runtime_code_hash
+                    || state.route_binding != expected_route_binding
+                {
+                    return Err(
+                        "Arc Tier-4 route finality bootstrap does not match route profile"
+                            .to_string(),
+                    );
+                }
+            }
+            (NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1, None, None) => {
+                return Err("Arc Tier-4 route activation requires a finality bootstrap".to_string());
+            }
+            (_, Some(_), _) | (_, _, Some(_)) => {
                 return Err("non-Tier-4 route activation cannot carry a finality bootstrap"
                     .to_string());
             }
-            (_, None) => {}
+            (_, None, None) => {}
         }
-        let expected_kind = vault_bridge_route_amendment_kind(&self.profile)?;
+        let expected_kind = if self.schema == VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2 {
+            vault_bridge_arc_route_amendment_kind_v2(
+                &self.profile,
+                self.arc_finality_bootstrap.as_ref().ok_or_else(|| {
+                    "route activation v2 requires an Arc bootstrap".to_string()
+                })?,
+            )?
+        } else {
+            vault_bridge_route_amendment_kind(&self.profile)?
+        };
         if self.amendment.kind != expected_kind
             || self.amendment.value != self.profile.route_epoch
             || self.amendment.activation_height != self.profile.activation_height
@@ -872,6 +922,8 @@ pub struct VaultBridgeRouteProfileRecordV1 {
     pub profile: VaultBridgeRouteProfileV1,
     pub governance_amendment_id: String,
     pub authorized_height: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arc_bootstrap_hash: Option<String>,
 }
 
 impl VaultBridgeRouteProfileRecordV1 {
@@ -880,6 +932,15 @@ impl VaultBridgeRouteProfileRecordV1 {
         authorized_height: u64,
     ) -> Result<Self, String> {
         activation.validate()?;
+        Self::new_for_replay(activation, authorized_height)
+    }
+
+    /// Construct only after archived governance identity and signatures are checked.
+    pub fn new_for_replay(
+        activation: &VaultBridgeRouteProfileActivationV1,
+        authorized_height: u64,
+    ) -> Result<Self, String> {
+        activation.validate_for_replay()?;
         if authorized_height < activation.profile.activation_height {
             return Err(
                 "vault bridge route profile cannot be recorded before its activation height"
@@ -892,6 +953,11 @@ impl VaultBridgeRouteProfileRecordV1 {
             profile: activation.profile.clone(),
             governance_amendment_id: activation.amendment.amendment_id.clone(),
             authorized_height,
+            arc_bootstrap_hash: if activation.schema == VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2 {
+                activation.arc_finality_bootstrap.as_ref().map(arc_bootstrap_hash_v2).transpose()?
+            } else {
+                None
+            },
         })
     }
 
@@ -900,6 +966,12 @@ impl VaultBridgeRouteProfileRecordV1 {
             return Err("vault bridge route profile record schema mismatch".to_string());
         }
         self.profile.validate()?;
+        if let Some(hash) = &self.arc_bootstrap_hash {
+            validate_lower_hex_len("route_record.arc_bootstrap_hash", hash, 96)?;
+            if self.profile.verifier_kind != NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 {
+                return Err("only Arc route records can bind an Arc bootstrap".to_string());
+            }
+        }
         if self.profile_hash != self.profile.profile_hash()? {
             return Err("vault bridge route profile record hash mismatch".to_string());
         }
@@ -909,6 +981,14 @@ impl VaultBridgeRouteProfileRecordV1 {
             return Err("vault bridge route profile record authorization mismatch".to_string());
         }
         Ok(())
+    }
+
+    fn amendment_kind(&self) -> Result<String, String> {
+        let legacy = vault_bridge_route_amendment_kind(&self.profile)?;
+        Ok(match &self.arc_bootstrap_hash {
+            Some(hash) => format!("{legacy}:arc-bootstrap-v2:{hash}"),
+            None => legacy,
+        })
     }
 }
 
@@ -1323,7 +1403,7 @@ impl GovernanceState {
             .ok_or_else(|| {
                 "vault bridge route profile authorization amendment is missing".to_string()
             })?;
-        if amendment.kind != vault_bridge_route_amendment_kind(&record.profile)?
+        if amendment.kind != record.amendment_kind()?
             || amendment.value != record.profile.route_epoch
             || amendment.activation_height != record.profile.activation_height
             || amendment.paused
@@ -1361,7 +1441,7 @@ impl GovernanceState {
             .ok_or_else(|| {
                 "vault bridge route profile authorization amendment is missing".to_string()
             })?;
-        if amendment.kind != vault_bridge_route_amendment_kind(&record.profile)?
+        if amendment.kind != record.amendment_kind()?
             || amendment.value != record.profile.route_epoch
             || amendment.activation_height != record.profile.activation_height
             || amendment.paused
@@ -1496,6 +1576,28 @@ pub fn vault_bridge_route_amendment_kind(
         "{}{}",
         vault_bridge_route_amendment_prefix(&profile.asset_id),
         profile.profile_hash()?
+    ))
+}
+
+fn arc_bootstrap_hash_v2(state: &PfUsdcArcFinalityStateV1) -> Result<String, String> {
+    Ok(hash_hex_domain(
+        "postfiat.vault_bridge.arc_bootstrap.authorization.v2",
+        &state.state_commitment_bytes()?,
+    ))
+}
+
+/// V1 amendment kinds remain unchanged for historical replay and other routes.
+pub fn vault_bridge_arc_route_amendment_kind_v2(
+    profile: &VaultBridgeRouteProfileV1,
+    bootstrap: &PfUsdcArcFinalityStateV1,
+) -> Result<String, String> {
+    if profile.verifier_kind != NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 {
+        return Err("Arc bootstrap authorization requires an Arc route".to_string());
+    }
+    Ok(format!(
+        "{}:arc-bootstrap-v2:{}",
+        vault_bridge_route_amendment_kind(profile)?,
+        arc_bootstrap_hash_v2(bootstrap)?,
     ))
 }
 
@@ -2035,6 +2137,7 @@ mod shielded_bridge_governance_tests {
             profile: profile.clone(),
             amendment: amendment.clone(),
             tier4_finality_bootstrap: None,
+            arc_finality_bootstrap: None,
         };
         let record = VaultBridgeRouteProfileRecordV1::new(&activation, profile.activation_height)
             .expect("route profile record");

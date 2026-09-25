@@ -1,17 +1,20 @@
 # QA defect inventory — 2026-09-10
 
-Status: burn 2 inventory reconciled; burn 3–5 findings appended; P3 sweep recorded.
-The inventory has 126 rows: 26 P1, 68 P2 and 32 P3. The burn 2
+Status: burn 2 inventory reconciled; burn 3–6 findings appended; P3 sweep recorded.
+The inventory has 141 rows: 26 P1, 77 P2 and 38 P3. The burn 2
 Text Improvement Harness result is in the [2026-09-10 campaign log](qa-campaign-20260910.md);
 the burn 3 gate is in the [2026-09-11 campaign log](qa-campaign-20260911.md);
 the burn 4 gate is in the [2026-09-15 campaign log](qa-campaign-20260915.md);
-the burn 5 gate is recorded in the [2026-09-16 campaign log](qa-campaign-20260916.md).
+the burn 5 gate is in the [2026-09-16 campaign log](qa-campaign-20260916.md);
+the burn 6 gate is recorded in the [2026-09-21 campaign log](qa-campaign-20260921.md#scores).
+That gate predates the four A5/NOD- additions; this extension was not rescored.
 
 This inventory separates demonstrated failures from missing evidence, operating
 assumptions, and capabilities that have not been built or activated. A
 **reproduced defect** has an observed failing case. A **code-observed defect**
 has a concrete failure scenario established by source review without an executed
-reproduction; this distinguishes burn 5's seven recorded P3 findings. An **evidence gap** means the
+reproduction; this includes burn 5's seven and burn 6's six recorded P3 findings.
+An **evidence gap** means the
 available record cannot establish the claim. An **economic assumption** is a
 load or incentive premise rather than a code result. A **proposed capability**
 must not be described as shipped or authoritative.
@@ -128,6 +131,38 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 | SWP-04 | Code-observed defect | P3 | Recorded, not fixed | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): timing retries counted already recorded stages against capacity again, rejecting an identical-stage replay at the 64-stage bound. |
 | SWP-05 | Code-observed defect | P3 | Recorded, not fixed | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): attestation timestamp validation checked shape and digits but accepted impossible calendar and time values; external trust and freshness remain consumer responsibilities. |
 
+## Burn 6 campaign findings
+
+These 15 findings are from the [burn 6 campaign](qa-campaign-20260921.md):
+nine repaired P2s and six P3s recorded without repair. No repair was blocked
+by the release candidate. All four repair commits retain a full Rust suite
+verdict pending. NAV-03 and SWX-01 are consensus-affecting: release-tip
+re-qualification is required before deployment; neither was deployed.
+The focused A5 review contributes four rows; its unreviewed ranges remain explicit.
+
+| ID | Classification | Severity | Status | Source and reproduction |
+| --- | --- | --- | --- | --- |
+| PFV-01 | Code-observed defect | P3 | Recorded, not fixed | [Portfolio review](portfolio-verification-review-20260921.md#findings): collection binding regression mutates only the attestation digest, leaving eight other digest mismatches and the count mismatch untested. Production compares all ten; no invalid-proof acceptance was established. |
+| NAV-01 | Reproduced defect | P2 | Fixed — `e9ccdeda`; not consensus-affecting | [NAV review](nav-reserve-verification-review-20260921.md#findings): duplicate bucket/allocation rows inflated the unsigned builder's reserve overlay; duplicate receipt IDs silently overwrote entries. All three identity sets now reject duplicates before summing. |
+| NAV-02 | Reproduced defect | P2 | Fixed — `e9ccdeda`; not consensus-affecting | [NAV review](nav-reserve-verification-review-20260921.md#findings): a packet-supplied operation tag replaced the builder's reserve-submit tag. Optional tags are now validated and the fixed tag assigned last. |
+| NAV-03 | Reproduced defect | P2 | Fixed — `e9ccdeda`; consensus-affecting: release-tip re-qualification required before deployment | [NAV review](nav-reserve-verification-review-20260921.md#findings): invalid receipt history rejected a local bridge transition after persisting reserve changes; appends could exceed readable history limits. Prepublication validation now preserves both files on rejection. The brief's state-transition-result classification covers rejected local persistence; cross-file crash/I/O atomicity remains unqualified. |
+| SWX-01 | Reproduced defect | P2 | Fixed — `043b9d69`; consensus-affecting: release-tip re-qualification required before deployment | [Swap execution review](swap-settlement-execution-review-20260921.md#findings): public redemption enforced the general NAV window but omitted the policy's shorter age limit. Policy-stale redemptions previously accepted now reject before pricing or mutation. |
+| BRW-01 | Reproduced defect | P2 | Fixed — `10bb5655`; not consensus-affecting | [Bridge review](bridge-workflows-review-20260921.md#findings): conservation verification trusted cached success despite altered balance/claim components. It now recomputes checked sums and vault identity; report authenticity remains unproven. |
+| BRW-02 | Reproduced defect | P2 | Fixed — `10bb5655`; not consensus-affecting | [Bridge review](bridge-workflows-review-20260921.md#findings): receipt validation accepted explicit failures, missing RPC status, contradictory log coordinates and removed logs into unsigned success plans. These inputs now reject; legacy supplied receipts without status remain unproven input. |
+| BRW-03 | Reproduced defect | P2 | Fixed — `10bb5655`; not consensus-affecting | [Bridge review](bridge-workflows-review-20260921.md#findings): sequential latest-block reads could double-count moving funds or mix withdrawal state. Reads now pin one finalized height per chain and reject hash drift; RPC honesty and cross-chain/PFTL atomicity remain limits. |
+| BRW-04 | Code-observed defect | P3 | Recorded, not fixed | [Bridge review](bridge-workflows-review-20260921.md#findings): file and child-output limits follow unbounded collection; lineage files lack a byte cap and stalled children lack deadlines. Oversized or growing inputs can exhaust operator resources. |
+| BRW-05 | Code-observed defect | P3 | Recorded, not fixed | [Bridge review](bridge-workflows-review-20260921.md#findings): checkpoint RPC parsing treats malformed Content-Length as absent and checks only the first parsable length. Ambiguous framing can pass; no wrong checkpoint signature was demonstrated. |
+| BRW-06 | Code-observed defect | P3 | Recorded, not fixed | [Bridge review](bridge-workflows-review-20260921.md#findings): the V2 recipient decoder accepts offset 192 inside its 224-byte head because it uses the V1 bound. Later identity checks still apply; no receipt-proof bypass was established. |
+
+### A5 addition after the inventory gate
+
+| ID | Classification | Severity | Status | Source and reproduction |
+| --- | --- | --- | --- | --- |
+| NOD-01 | Reproduced defect | P2 | Fixed — `87c992c3`; not consensus-affecting | [Remaining node review](node-remaining-review-20260921.md#findings): duplicate delivery reported every block receipt as accepted without reading outcomes. Stored outcomes now determine counts; missing/conflicting evidence and inconsistent count totals reject. |
+| NOD-02 | Reproduced defect | P2 | Fixed — `87c992c3`; not consensus-affecting | [Remaining node review](node-remaining-review-20260921.md#findings): key generation or restore could overwrite its backup with the key file. Resolved destination aliases now reject before writing; concurrent filesystem replacement remains outside the interlock. |
+| NOD-03 | Code-observed defect | P3 | Recorded, not fixed | [Remaining node review](node-remaining-review-20260921.md#findings): transport JSON readers collect local files without a byte cap; payload reads enforce only a prior metadata limit, permitting growth between check and read. |
+| NOD-04 | Code-observed defect | P3 | Recorded, not fixed | [Remaining node review](node-remaining-review-20260921.md#findings): manifest reporting reopens the bundle after verification, so concurrent replacement can mix verified hash/count metadata with different manifest bytes. |
+
 ## Storage, Cobalt, and Task Node review
 
 The source is the historical [2026-09-06 review](https://github.com/postfiatorg/postfiatl1v2/blob/cfdeccd6897bfc8a80bfa2a95a6fb04f603c1cee/docs/review/storage-cobalt-tasknode-handoff-review-20260906.md).
@@ -209,26 +244,27 @@ and its frozen [qualification receipt](https://github.com/postfiatorg/postfiatl1
 
 ## Final disposition
 
-The inventory contains 126 unique rows, including 28 burn 3 findings (6 P1,
-14 P2, 8 P3), 15 burn 4 findings (0 P1, 10 P2, 5 P3), and 22 burn 5 findings
-(1 P1, 14 P2, 7 P3). Classification and severity describe what the cited evidence
+The inventory contains 141 unique rows, including 28 burn 3 findings (6 P1,
+14 P2, 8 P3), 15 burn 4 findings (0 P1, 10 P2, 5 P3), 22 burn 5 findings
+(1 P1, 14 P2, 7 P3), and 15 burn 6 findings (0 P1, 9 P2, 6 P3).
+Classification and severity describe what the cited evidence
 establishes; status describes the bounded disposition in that row, not a
 broader production claim.
 
 | Measure | Count |
 | --- | ---: |
-| Reproduced defects | 92 |
-| Code-observed defects (burn 5 P3) | 7 |
+| Reproduced defects | 101 |
+| Code-observed defects (burn 5–6 P3) | 13 |
 | Evidence gaps | 22 |
 | Economic assumptions | 1 |
 | Proposed capabilities | 4 |
 | P1 | 26 |
-| P2 | 68 |
-| P3 | 32 |
-| Fixed | 84 |
+| P2 | 77 |
+| P3 | 38 |
+| Fixed | 93 |
 | Dispositioned | 16 |
 | Reproduced and retained (prior campaigns) | 5 |
-| Recorded, not fixed (burn 3–5 P3) | 8 |
+| Recorded, not fixed (burn 3–6 P3) | 14 |
 | Recorded, repair blocked by A4 scope (SMG-07) | 1 |
 | Needs live environment | 6 |
 | Needs operator decision | 6 |
@@ -269,6 +305,16 @@ have a full Rust suite verdict pending. SMG-07 requires the shared retention-pat
 resolver outside A4; the append fix does not qualify the blocked prune path.
 No burn 5 finding is documented as blocked specifically by the release candidate.
 
+Burn 6 added nine repaired P2s and six code-observed P3s recorded without
+repair: PFV-01, BRW-04/05/06 and NOD-03/04. The consensus-affecting repairs are NAV-03
+(`e9ccdeda`, rejected local-transition persistence) and SWX-01 (`043b9d69`,
+policy-stale public redemption rejection). The release tip requires
+re-qualification before deployment. Both commits and the bridge repairs
+(`10bb5655`) and node repairs (`87c992c3`) retain a full Rust suite verdict pending; focused tests do not
+establish deployment qualification. No burn 6 repair is blocked by the release
+candidate. A5 is a focused review with explicit unreviewed ranges; its two
+repairs are not consensus-affecting. The retained inventory score predates A5.
+
 “Fixed” remains scoped by the row. In particular, the RPC supervisor repair is
 not deployed, StakeHub fixes are local and unpublished, the Arc controller
 migration remains operational work, V2 remains `SHADOW_ONLY`, and the fleet
@@ -301,7 +347,12 @@ or StakeHub write.
 | Burn 5 Cobalt handoff and authority (CHO-) | 6 |
 | Burn 5 storage migration, activation and certified-send index (SMG-) | 7 |
 | Burn 5 swap and recovery services (SWP-) | 5 |
-| **Total** | **126** |
+| Burn 6 portfolio verification (PFV-) | 1 |
+| Burn 6 NAV and reserve verification (NAV-) | 3 |
+| Burn 6 swap and settlement execution (SWX-) | 1 |
+| Burn 6 bridge workflows (BRW-) | 6 |
+| Burn 6 remaining node files (NOD-) | 4 |
+| **Total** | **141** |
 
 Campaign review and repair commits are recorded in the
 [campaign log](qa-campaign-20260910.md). The inventory preserves open design,

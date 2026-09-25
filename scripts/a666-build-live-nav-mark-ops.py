@@ -66,6 +66,15 @@ def build_overlay(
     settlement_unit = vault["valuation_unit"]
     precision = 6
 
+    for collection, identity in (
+        ("buckets", "bucket_id"),
+        ("receipts", "receipt_id"),
+        ("allocations", "allocation_id"),
+    ):
+        identities = [row[identity] for row in vault[collection]]
+        if len(identities) != len(set(identities)):
+            raise RuntimeError(f"vault status contains duplicate {identity}")
+
     buckets = {bucket["bucket_id"]: bucket for bucket in vault["buckets"]}
     receipts = {receipt["receipt_id"]: receipt for receipt in vault["receipts"]}
     allocation_rows: list[dict[str, Any]] = []
@@ -247,6 +256,8 @@ def active_profile(status: dict[str, Any]) -> dict[str, Any]:
 
 
 def validate_packet(packet: dict[str, Any], profile: dict[str, Any]) -> None:
+    if packet.get("operation", "nav_reserve_submit") != "nav_reserve_submit":
+        raise RuntimeError("packet operation must be nav_reserve_submit")
     required = {
         "issuer": ISSUER,
         "submitter": RESERVE_OPERATOR,
@@ -412,7 +423,7 @@ def main() -> None:
         packet, overlay_evidence = derive_packet_operation(args, profile, args.output_dir)
     validate_packet(packet, profile)
     epoch = packet["epoch"]
-    reserve_body = {"operation": "nav_reserve_submit", **packet}
+    reserve_body = {**packet, "operation": "nav_reserve_submit"}
     finalize_body = {
         "operation": "nav_epoch_finalize",
         "issuer": ISSUER,

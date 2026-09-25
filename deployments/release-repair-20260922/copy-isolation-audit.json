@@ -1,0 +1,118 @@
+{
+  "result": "PASS",
+  "checked_at": "2026-09-22T09:09:31.799713+00:00",
+  "active_database_pointers": 18,
+  "symlinks": 0,
+  "all_active_databases_resolve_inside_disposable_root": true,
+  "disposable_root": "/home/postfiatchad/.cache/release-repair-20260922",
+  "checks": [
+    {
+      "group": "working",
+      "validator": 0,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/working/validator-0/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "working",
+      "validator": 1,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/working/validator-1/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "working",
+      "validator": 2,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/working/validator-2/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "working",
+      "validator": 3,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/working/validator-3/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "working",
+      "validator": 4,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/working/validator-4/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "working",
+      "validator": 5,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/working/validator-5/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "rollback",
+      "validator": 0,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/rollback/validator-0/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "rollback",
+      "validator": 1,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/rollback/validator-1/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "rollback",
+      "validator": 2,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/rollback/validator-2/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "rollback",
+      "validator": 3,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/rollback/validator-3/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "rollback",
+      "validator": 4,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/rollback/validator-4/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "rollback",
+      "validator": 5,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/rollback/validator-5/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "post-v2",
+      "validator": 0,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/post-v2/validator-0/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "post-v2",
+      "validator": 1,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/post-v2/validator-1/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "post-v2",
+      "validator": 2,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/post-v2/validator-2/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "post-v2",
+      "validator": 3,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/post-v2/validator-3/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "post-v2",
+      "validator": 4,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/post-v2/validator-4/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    },
+    {
+      "group": "post-v2",
+      "validator": 5,
+      "active_database": "/home/postfiatchad/.cache/release-repair-20260922/post-v2/validator-5/transactional-generation-927/postfiat-state-v1.redb",
+      "authenticated": true
+    }
+  ]
+}

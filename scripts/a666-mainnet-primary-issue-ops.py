@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--holder-key-file", type=Path, required=True)
     parser.add_argument("--node-bin", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--settlement-source-asset-id", help="Exact source-series pfUSDC custody; omit for legacy pooled settlement")
     amount = parser.add_mutually_exclusive_group(required=True)
     amount.add_argument("--mint-amount-atoms", type=int)
     amount.add_argument(
@@ -164,6 +165,9 @@ def ops(label: str, key_file: Path, operation: dict[str, object]) -> dict[str, o
 
 def main() -> None:
     args = parse_args()
+    source = args.settlement_source_asset_id
+    if source is not None and (len(source) != 96 or any(c not in "0123456789abcdef" for c in source)):
+        raise RuntimeError("settlement source must be a canonical 48-byte asset id")
     if args.output_dir.exists():
         raise RuntimeError(f"refusing to overwrite operation packet: {args.output_dir}")
     if not args.holder_key_file.is_file():
@@ -233,6 +237,8 @@ def main() -> None:
         "max_settlement_value_atoms": settlement,
         "expires_at_height": args.reservation_expires_at_height,
     }
+    if source is not None:
+        reserve_operation["settlement_source_asset_id"] = source
     subscribe_operation = {
         "operation": "pftl_uniswap_primary_subscribe_v2",
         "subscriber": JOE_PFTL,
@@ -345,6 +351,8 @@ def main() -> None:
             "export": str(export_file),
         },
     }
+    if source is not None:
+        manifest["settlement_source_asset_id"] = source
     write_json(args.output_dir / "manifest.json", manifest)
     print(json.dumps(manifest, indent=2, sort_keys=True))
 

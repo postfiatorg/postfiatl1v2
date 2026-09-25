@@ -733,6 +733,52 @@ pub fn vault_bridge_deposit_plan(
             ));
         }
         (computed_proof_hash, computed_public_values_hash)
+    } else if source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 {
+        if source_proof_bytes.is_empty() || source_public_values.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "proof-native Arc route requires --source-proof-file and --source-public-values-file",
+            ));
+        }
+        let computed_proof_hash = postfiat_types::pfusdc_ingress_proof_hash_v1(&source_proof_bytes);
+        let computed_public_values_hash =
+            postfiat_types::pfusdc_ingress_public_values_hash_v1(&source_public_values);
+        if !provided_source_proof_hash.is_empty()
+            && provided_source_proof_hash != computed_proof_hash
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--source-proof-hash does not match --source-proof-file",
+            ));
+        }
+        if !provided_source_public_values_hash.is_empty()
+            && provided_source_public_values_hash != computed_public_values_hash
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--source-public-values-hash does not match --source-public-values-file",
+            ));
+        }
+        let public_values = postfiat_types::PfUsdcArcIngressPublicValuesV1::from_canonical_bytes(
+            &source_public_values,
+        )
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        if public_values.arc_chain_id != evidence.source_chain_id
+            || public_values.vault_address != evidence.vault_address
+            || public_values.token_address != evidence.token_address
+            || public_values.route_id != evidence.route_binding
+            || public_values.deposit_id != evidence.deposit_id
+            || public_values.amount_atoms != evidence.amount_atoms
+            || public_values.pftl_recipient_hash != evidence.pftl_recipient_hash
+            || public_values.deposit_nonce != evidence.nonce
+            || public_values.arc_block_hash != evidence.block_hash
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "proof-native Arc public values do not match the canonical vault deposit receipt",
+            ));
+        }
+        (computed_proof_hash, computed_public_values_hash)
     } else {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -862,19 +908,157 @@ fn read_optional_bounded_bridge_proof_file(
             format!("{label} must be a regular file no larger than {max_bytes} bytes"),
         ));
     }
-    let bytes = std::fs::read(path).map_err(|error| {
-        io::Error::new(
-            error.kind(),
-            format!("failed to read {label} `{}`: {error}", path.display()),
-        )
-    })?;
-    if bytes.len() as u64 > max_bytes || bytes.len() as u64 != metadata.len() {
+    let bytes = vault_bridge_read_bounded_file(path, max_bytes, label)?;
+    if bytes.len() as u64 != metadata.len() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("{label} changed while being read or exceeded its size limit"),
         ));
     }
     Ok(bytes)
+}
+
+/// Reads a regular file through one handle without buffering more than
+/// `max_bytes + 1`, so growth after inspection cannot bypass the cap.
+pub(crate) fn vault_bridge_read_bounded_file(
+    path: &Path,
+    max_bytes: u64,
+    label: &str,
+) -> io::Result<Vec<u8>> {
+    use std::io::Read as _;
+    let read_error = |error: io::Error| {
+        io::Error::new(
+            error.kind(),
+            format!("failed to read {label} `{}`: {error}", path.display()),
+        )
+    };
+    if !std::fs::metadata(path).map_err(read_error)?.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{label} `{}` must be a regular file", path.display()),
+        ));
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .map_err(read_error)?
+        .take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(read_error)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{label} changed while being read or exceeded its size limit"),
+        ));
+    }
+    Ok(bytes)
+}
+
+/// Wall-clock bound for one `cast` subprocess.
+pub(crate) const VAULT_BRIDGE_CAST_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(120);
+/// Diagnostic stderr retained from one `cast` subprocess.
+pub(crate) const VAULT_BRIDGE_CAST_MAX_STDERR_BYTES: u64 = 64 * 1024;
+
+/// Runs a child with bounded stdout/stderr collection and a deadline. The
+/// child is killed and reaped when either pipe overflows or time runs out.
+pub(crate) fn vault_bridge_bounded_command_output(
+    command: &mut Command,
+    max_stdout_bytes: u64,
+    timeout: std::time::Duration,
+    description: &str,
+) -> io::Result<std::process::Output> {
+    fn spawn_reader<R: std::io::Read + Send + 'static>(
+        pipe: Option<R>,
+        limit: u64,
+        index: usize,
+        sender: std::sync::mpsc::Sender<(usize, io::Result<Vec<u8>>)>,
+    ) {
+        std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            let result = match pipe {
+                Some(pipe) => pipe
+                    .take(limit.saturating_add(1))
+                    .read_to_end(&mut bytes)
+                    .map(|_| bytes),
+                None => Ok(bytes),
+            };
+            let _ = sender.send((index, result));
+        });
+    }
+    use std::io::Read as _;
+
+    let deadline = std::time::Instant::now() + timeout;
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| {
+            io::Error::new(
+                error.kind(),
+                format!("{description} failed to start: {error}"),
+            )
+        })?;
+    let limits = [max_stdout_bytes, VAULT_BRIDGE_CAST_MAX_STDERR_BYTES];
+    let (sender, receiver) = std::sync::mpsc::channel();
+    spawn_reader(child.stdout.take(), limits[0], 0, sender.clone());
+    spawn_reader(child.stderr.take(), limits[1], 1, sender);
+    let mut pipes: [Option<Vec<u8>>; 2] = [None, None];
+    let mut failure = None;
+    while failure.is_none() && pipes.iter().any(Option::is_none) {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        match receiver.recv_timeout(remaining) {
+            Ok((index, Ok(bytes))) if bytes.len() as u64 > limits[index] => {
+                failure = Some(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "{description} {} exceeded {} bytes",
+                        ["stdout", "stderr"][index],
+                        limits[index]
+                    ),
+                ));
+            }
+            Ok((index, Ok(bytes))) => pipes[index] = Some(bytes),
+            Ok((_, Err(error))) => failure = Some(error),
+            Err(_) => {
+                failure = Some(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("{description} exceeded {} s", timeout.as_secs()),
+                ));
+            }
+        }
+    }
+    let status = loop {
+        if failure.is_some() {
+            break None;
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if std::time::Instant::now() >= deadline => {
+                failure = Some(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("{description} exceeded {} s", timeout.as_secs()),
+                ));
+            }
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            Err(error) => failure = Some(error),
+        }
+    };
+    match (status, failure) {
+        (Some(status), None) => {
+            let [stdout, stderr] = pipes;
+            Ok(std::process::Output {
+                status,
+                stdout: stdout.unwrap_or_default(),
+                stderr: stderr.unwrap_or_default(),
+            })
+        }
+        (_, failure) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err(failure.unwrap_or_else(|| io::Error::other(format!("{description} failed"))))
+        }
+    }
 }
 
 pub fn vault_bridge_withdrawal_plan(
@@ -1460,14 +1644,51 @@ pub fn vault_bridge_burn_to_redeem_bundle(
         ));
     }
 
+    let bucket = vault_bridge_select_burn_bucket(
+        &ledger,
+        &options.asset_id,
+        options.bucket_id.as_deref(),
+        options.amount_atoms,
+    )?;
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let next_height = store
+        .read_chain_tip()?
+        .height
+        .checked_add(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "chain height overflow"))?;
+    let compatibility =
+        asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance);
+    let movement_asset = if compatibility.pfusdc_source_series_active(next_height) {
+        let mut series = ledger.asset_definitions.iter().filter(|asset| {
+            asset.asset_family_id == options.asset_id
+                && asset.source_bucket_id == bucket.bucket_id
+                && asset.asset_id == asset.source_series_id
+        });
+        let selected = series.next().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "source-series asset missing for burn bucket",
+            )
+        })?;
+        if series.next().is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "duplicate source-series assets for burn bucket",
+            ));
+        }
+        &selected.asset_id
+    } else {
+        &options.asset_id
+    };
     let owner_line = ledger
-        .trustline_for_account_asset(&options.owner, &options.asset_id)
+        .trustline_for_account_asset(&options.owner, movement_asset)
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
                 format!(
-                    "owner `{}` has no trustline for vault bridge asset `{}`",
-                    options.owner, options.asset_id
+                    "owner `{}` has no trustline for burn movement asset `{movement_asset}`",
+                    options.owner
                 ),
             )
         })?;
@@ -1475,18 +1696,12 @@ pub fn vault_bridge_burn_to_redeem_bundle(
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             format!(
-                "owner balance {} is below burn amount {}",
+                "owner source balance {} is below burn amount {}",
                 owner_line.balance, options.amount_atoms
             ),
         ));
     }
 
-    let bucket = vault_bridge_select_burn_bucket(
-        &ledger,
-        &options.asset_id,
-        options.bucket_id.as_deref(),
-        options.amount_atoms,
-    )?;
     let issuer = options
         .issuer
         .clone()
@@ -1687,20 +1902,17 @@ fn vault_bridge_fetch_cast_receipt(
     source_rpc_url: &str,
     tx_hash: &str,
 ) -> io::Result<serde_json::Value> {
-    let output = Command::new(cast_binary)
-        .arg("receipt")
-        .arg("--rpc-url")
-        .arg(source_rpc_url)
-        .arg("--json")
-        .arg(vault_bridge_0x_hex(tx_hash))
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("cast receipt failed to start: {error}"),
-            )
-        })?;
+    let output = vault_bridge_bounded_command_output(
+        Command::new(cast_binary)
+            .arg("receipt")
+            .arg("--rpc-url")
+            .arg(source_rpc_url)
+            .arg("--json")
+            .arg(vault_bridge_0x_hex(tx_hash)),
+        MAX_VAULT_BRIDGE_RPC_RECEIPT_JSON_BYTES as u64,
+        VAULT_BRIDGE_CAST_TIMEOUT,
+        "cast receipt",
+    )?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(io::Error::new(
@@ -1737,20 +1949,17 @@ fn vault_bridge_fetch_cast_block(
     source_rpc_url: &str,
     block_hash: &str,
 ) -> io::Result<serde_json::Value> {
-    let output = Command::new(cast_binary)
-        .arg("block")
-        .arg("--rpc-url")
-        .arg(source_rpc_url)
-        .arg(vault_bridge_0x_hex(block_hash))
-        .arg("--json")
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("cast block failed to start: {error}"),
-            )
-        })?;
+    let output = vault_bridge_bounded_command_output(
+        Command::new(cast_binary)
+            .arg("block")
+            .arg("--rpc-url")
+            .arg(source_rpc_url)
+            .arg(vault_bridge_0x_hex(block_hash))
+            .arg("--json"),
+        MAX_VAULT_BRIDGE_RPC_RECEIPT_JSON_BYTES as u64,
+        VAULT_BRIDGE_CAST_TIMEOUT,
+        "cast block",
+    )?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(io::Error::new(
@@ -1785,18 +1994,15 @@ fn vault_bridge_fetch_cast_block_number(
     cast_binary: &str,
     source_rpc_url: &str,
 ) -> io::Result<u64> {
-    let output = Command::new(cast_binary)
-        .arg("block-number")
-        .arg("--rpc-url")
-        .arg(source_rpc_url)
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("cast block-number failed to start: {error}"),
-            )
-        })?;
+    let output = vault_bridge_bounded_command_output(
+        Command::new(cast_binary)
+            .arg("block-number")
+            .arg("--rpc-url")
+            .arg(source_rpc_url),
+        256,
+        VAULT_BRIDGE_CAST_TIMEOUT,
+        "cast block-number",
+    )?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(io::Error::new(
@@ -1866,7 +2072,10 @@ fn vault_bridge_parse_u64_text(field: &str, value: &str) -> Result<u64, String> 
 
 fn vault_bridge_validate_receipt_success(receipt: &serde_json::Value) -> io::Result<()> {
     let Some(status) = receipt.get("status") else {
-        return Ok(());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "source receipt is missing its success status",
+        ));
     };
     let success = match status {
         serde_json::Value::Bool(value) => *value,
@@ -2278,6 +2487,11 @@ fn select_vault_bridge_deposit_log_from_receipt(
     vault_address: Option<&str>,
     token_address: Option<&str>,
 ) -> Result<serde_json::Value, String> {
+    // Legacy manually supplied receipts may omit status; RPC receipts are
+    // required to pass the strict success helper before reaching this selector.
+    if receipt.get("status").is_some() {
+        vault_bridge_validate_receipt_success(receipt).map_err(|error| error.to_string())?;
+    }
     let expected_vault = vault_address
         .map(|address| vault_bridge_normalized_evm_address_text("--vault-address", address))
         .transpose()?;
@@ -2288,10 +2502,10 @@ fn select_vault_bridge_deposit_log_from_receipt(
         .get("logs")
         .and_then(serde_json::Value::as_array)
         .ok_or_else(|| "vault bridge asset receipt missing logs array".to_string())?;
-    let receipt_block_hash =
-        vault_bridge_optional_log_string(receipt, &["blockHash", "block_hash"]);
-    let receipt_tx_hash =
-        vault_bridge_optional_log_string(receipt, &["transactionHash", "txHash", "tx_hash"]);
+    let block_fields = ["blockHash", "block_hash"];
+    let tx_fields = ["transactionHash", "txHash", "tx_hash"];
+    let receipt_block_hash = vault_bridge_optional_consistent_hash(receipt, &block_fields)?;
+    let receipt_tx_hash = vault_bridge_optional_consistent_hash(receipt, &tx_fields)?;
 
     let mut selected: Option<serde_json::Value> = None;
     for log in logs {
@@ -2319,21 +2533,17 @@ fn select_vault_bridge_deposit_log_from_receipt(
         }
 
         let mut candidate = log.clone();
-        if let Some(candidate_object) = candidate.as_object_mut() {
-            if !candidate_object.contains_key("blockHash") {
-                if let Some(block_hash) = receipt_block_hash {
-                    candidate_object.insert(
-                        "blockHash".to_string(),
-                        serde_json::Value::String(block_hash.to_string()),
-                    );
+        for (fields, parent) in [
+            (block_fields.as_slice(), receipt_block_hash.as_ref()),
+            (tx_fields.as_slice(), receipt_tx_hash.as_ref()),
+        ] {
+            let child = vault_bridge_optional_consistent_hash(&candidate, fields)?;
+            if let Some(parent) = parent {
+                if child.as_ref().is_some_and(|child| child != parent) {
+                    return Err(format!("deposit log {} contradicts its receipt", fields[0]));
                 }
-            }
-            if !candidate_object.contains_key("transactionHash") {
-                if let Some(tx_hash) = receipt_tx_hash {
-                    candidate_object.insert(
-                        "transactionHash".to_string(),
-                        serde_json::Value::String(tx_hash.to_string()),
-                    );
+                if child.is_none() {
+                    candidate[fields[0]] = serde_json::Value::String(vault_bridge_0x_hex(parent));
                 }
             }
         }
@@ -2356,9 +2566,34 @@ fn select_vault_bridge_deposit_log_from_receipt(
     })
 }
 
+fn vault_bridge_optional_consistent_hash(
+    value: &serde_json::Value,
+    fields: &[&str],
+) -> Result<Option<String>, String> {
+    let mut selected = None;
+    for field in fields {
+        if let Some(value) = value.get(*field) {
+            let hash = vault_bridge_normalized_hex_json(field, value, EVM_ABI_WORD_BYTES)?;
+            if selected.as_ref().is_some_and(|previous| previous != &hash) {
+                return Err(format!("conflicting {} aliases", fields[0]));
+            }
+            selected = Some(hash);
+        }
+    }
+    Ok(selected)
+}
+
 fn parse_vault_bridge_vault_deposit_log(
     log: &serde_json::Value,
 ) -> Result<VaultBridgeDepositEvidence, String> {
+    if log
+        .get("removed")
+        .is_some_and(|value| value.as_bool() != Some(false))
+    {
+        return Err(
+            "vault bridge deposit log is removed or has an invalid removed flag".to_string(),
+        );
+    }
     let topics = vault_bridge_log_array(log, "topics")?;
     if topics.len() != 4 {
         return Err("vault bridge asset vault deposit log must have exactly 4 topics".to_string());
@@ -2391,8 +2626,12 @@ fn parse_vault_bridge_vault_deposit_log(
     }
 
     let recipient_offset = vault_bridge_abi_word_u64(&data, 0, "data.pftl_recipient_offset")?;
-    let pftl_recipient =
-        vault_bridge_abi_dynamic_string(&data, recipient_offset, "data.pftl_recipient")?;
+    let pftl_recipient = vault_bridge_abi_dynamic_string(
+        &data,
+        recipient_offset,
+        minimum_head,
+        "data.pftl_recipient",
+    )?;
     let amount_atoms = vault_bridge_abi_word_u64(&data, 1, "data.amount")?;
     let nonce = vault_bridge_abi_word_hex(&data, 2, "data.nonce")?;
     let route_binding = if is_v2 {
@@ -2641,14 +2880,14 @@ fn vault_bridge_abi_word_address(data: &[u8], index: usize, field: &str) -> Resu
 fn vault_bridge_abi_dynamic_string(
     data: &[u8],
     offset: u64,
+    head_bytes: usize,
     field: &str,
 ) -> Result<String, String> {
     let offset = usize::try_from(offset).map_err(|_| format!("{field} offset too large"))?;
     if !offset.is_multiple_of(EVM_ABI_WORD_BYTES) {
         return Err(format!("{field} offset is not word-aligned"));
     }
-    let minimum_head = VAULT_BRIDGE_VAULT_DEPOSIT_ABI_HEAD_WORDS * EVM_ABI_WORD_BYTES;
-    if offset < minimum_head {
+    if offset < head_bytes {
         return Err(format!("{field} offset points into ABI head"));
     }
     let length_index = offset
@@ -3751,6 +3990,160 @@ mod tests {
             proposer: None,
             expires_at_height: Some(1776),
             bundle_dir: None,
+        }
+    }
+
+    fn burn6_deposit_receipt() -> serde_json::Value {
+        let intent = vault_bridge_deposit_intent(fire_intent_options()).expect("intent");
+        let mut data = abi_word_u64(7 * 32);
+        data.push_str(&abi_word_u64(intent.amount_atoms));
+        data.push_str(&abi_word_hex(&intent.nonce));
+        data.push_str(&abi_word_hex(&intent.route_binding));
+        data.push_str(&abi_word_u64(intent.source_chain_id));
+        data.push_str(&abi_word_address(&intent.vault_address));
+        data.push_str(&abi_word_address(&intent.token_address));
+        data.push_str(&abi_word_u64(FIRE_RECIPIENT.len() as u64));
+        let recipient = bytes_to_hex(FIRE_RECIPIENT.as_bytes());
+        data.push_str(&recipient);
+        data.push_str(&"0".repeat((64 - recipient.len() % 64) % 64));
+        serde_json::json!({
+            "status": "0x1",
+            "blockHash": format!("0x{}", "22".repeat(32)),
+            "transactionHash": format!("0x{}", "33".repeat(32)),
+            "logs": [{
+                "address": intent.vault_address,
+                "topics": [
+                    format!("0x{VAULT_BRIDGE_VAULT_DEPOSIT_V2_EVENT_TOPIC}"),
+                    intent.expected_deposit_id,
+                    format!("0x{}", abi_word_address(&intent.depositor)),
+                    format!("0x{}", intent.pftl_recipient_hash),
+                ],
+                "data": format!("0x{data}"),
+                "blockHash": format!("0x{}", "22".repeat(32)),
+                "transactionHash": format!("0x{}", "33".repeat(32)),
+                "logIndex": "0x0",
+                "removed": false,
+            }]
+        })
+    }
+
+    #[test]
+    fn burn6_deposit_receipt_rejects_failed_removed_and_mixed_identity() {
+        let receipt = burn6_deposit_receipt();
+        select_vault_bridge_deposit_log_from_receipt(&receipt, None, None).expect("valid receipt");
+        for (field, value) in [
+            (
+                "blockHash",
+                serde_json::json!(format!("0x{}", "44".repeat(32))),
+            ),
+            (
+                "transactionHash",
+                serde_json::json!(format!("0x{}", "55".repeat(32))),
+            ),
+            ("removed", serde_json::json!(true)),
+            ("removed", serde_json::json!("false")),
+        ] {
+            let mut altered = receipt.clone();
+            altered["logs"][0][field] = value;
+            assert!(
+                select_vault_bridge_deposit_log_from_receipt(&altered, None, None).is_err(),
+                "accepted altered {field}"
+            );
+        }
+        let mut failed = receipt.clone();
+        failed["status"] = serde_json::json!("0x0");
+        assert!(select_vault_bridge_deposit_log_from_receipt(&failed, None, None).is_err());
+        let mut missing_status = receipt.clone();
+        missing_status.as_object_mut().unwrap().remove("status");
+        assert!(vault_bridge_validate_receipt_success(&missing_status).is_err());
+        select_vault_bridge_deposit_log_from_receipt(&missing_status, None, None)
+            .expect("legacy supplied receipt without status remains supported");
+
+        let mut inherited = receipt.clone();
+        inherited["logs"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("blockHash");
+        inherited["logs"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("transactionHash");
+        let selected = select_vault_bridge_deposit_log_from_receipt(&inherited, None, None)
+            .expect("inherit receipt coordinates");
+        assert_eq!(selected["blockHash"], receipt["blockHash"]);
+        assert_eq!(selected["transactionHash"], receipt["transactionHash"]);
+        let mut raw = selected;
+        raw["removed"] = serde_json::json!(true);
+        assert!(parse_vault_bridge_vault_deposit_log(&raw).is_err());
+    }
+
+    #[test]
+    fn bounded_file_reads_cap_the_open_handle() {
+        let dir = std::env::temp_dir().join(format!(
+            "postfiat-vault-bridge-bounded-read-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("test clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).expect("create test dir");
+        let file = dir.join("proof.bin");
+        std::fs::write(&file, [7_u8; 16]).expect("write proof");
+        assert_eq!(
+            vault_bridge_read_bounded_file(&file, 16, "proof").expect("at cap"),
+            vec![7_u8; 16]
+        );
+        let error = vault_bridge_read_bounded_file(&file, 15, "proof").expect_err("over cap");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(vault_bridge_read_bounded_file(&dir, 16, "proof").is_err());
+        std::fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn bounded_cast_output_caps_pipes_and_duration() {
+        let run = |script: &str, max_stdout: u64, timeout_ms: u64| {
+            vault_bridge_bounded_command_output(
+                Command::new("sh").arg("-c").arg(script),
+                max_stdout,
+                std::time::Duration::from_millis(timeout_ms),
+                "test child",
+            )
+        };
+        let output = run("printf ok; printf warn >&2", 2, 10_000).expect("bounded success");
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"ok");
+        assert_eq!(output.stderr, b"warn");
+        let stdout = run("head -c 4096 /dev/zero", 1024, 10_000).expect_err("stdout cap");
+        assert!(stdout.to_string().contains("stdout exceeded"), "{stdout}");
+        let stderr = run(
+            &format!(
+                "head -c {} /dev/zero >&2",
+                VAULT_BRIDGE_CAST_MAX_STDERR_BYTES + 1
+            ),
+            1024,
+            10_000,
+        )
+        .expect_err("stderr cap");
+        assert!(stderr.to_string().contains("stderr exceeded"), "{stderr}");
+        let started = std::time::Instant::now();
+        let stalled = run("sleep 30", 1024, 200).expect_err("deadline");
+        assert_eq!(stalled.kind(), io::ErrorKind::TimedOut);
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    }
+
+    #[test]
+    fn v2_deposit_log_recipient_offset_uses_v2_head() {
+        let receipt = burn6_deposit_receipt();
+        let log = &receipt["logs"][0];
+        parse_vault_bridge_vault_deposit_log(log).expect("canonical V2 log");
+        let data = log["data"].as_str().unwrap();
+        for offset in [0, 6 * 32] {
+            let mut altered = log.clone();
+            altered["data"] =
+                serde_json::json!(format!("0x{}{}", abi_word_u64(offset), &data[66..]));
+            let error = parse_vault_bridge_vault_deposit_log(&altered).unwrap_err();
+            assert!(error.contains("points into ABI head"), "{offset}: {error}");
         }
     }
 

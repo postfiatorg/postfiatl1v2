@@ -1,0 +1,195 @@
+{
+  "schema": "postfiat.release-repair-qualification.v1",
+  "source_commit": "1a0989ad6c35b7ea3eb6418f864958563233945a",
+  "source_tree": "01f147c13501ee5f24546548bb5d6d0f1145464c",
+  "inventory_fix_commit": "85eee16656231f31976e71b7be49534fffc6567f",
+  "clippy_fix_commit": "1a0989ad6c35b7ea3eb6418f864958563233945a",
+  "started_at": "2026-09-22T10:34:31+00:00",
+  "updated_at": "2026-09-22T10:55:52.040121+00:00",
+  "timebox_minutes": 40,
+  "scope": "Close inventory drift and needless borrow; two local disposable builds; publication gates. Prior history, rotation and rollback evidence remains scoped to 048d23df.",
+  "result": "PASS_SCOPED_REPAIR",
+  "live_mutations": false,
+  "task_node_actions": false,
+  "source_modified": true,
+  "node_reproducibility": "PASS",
+  "candidate_binary_sha256": [
+    "e7bb1afa17b4c6322ac8eadabdab570595ad778a5173a5516c09ba966ed9e4b1",
+    "e7bb1afa17b4c6322ac8eadabdab570595ad778a5173a5516c09ba966ed9e4b1"
+  ],
+  "software_gates": {
+    "proof-input-inventory": "PASS",
+    "workspace-clippy": "PASS",
+    "navcoin-bridge": "PASS",
+    "format": "PASS"
+  },
+  "publication_gates": {
+    "strict-docs": "PASS",
+    "public-doc-links": "PASS",
+    "public-secret-scan": "PASS"
+  },
+  "history_evidence_source_commit": "048d23df95929b1d544c8c13825e59844eb70e26",
+  "history_rerun": false,
+  "rotation_rerun": false,
+  "rollback_rerun": false,
+  "frozen_proof_artifacts_modified": false,
+  "workspace_tests": "LEFT_TO_CI; navcoin_bridge filter run locally",
+  "deployment_blockers": [
+    "Fresh required CI verdicts for the pushed release tip, including workspace tests and deferred node-fastpay coverage",
+    "Update deployment preparation to the new executable and obtain the existing trusted deployment publisher signature; deployment-day signed backup remains separate"
+  ],
+  "ci_workspace_test_job": {
+    "result": "NOT_CONFIRMED",
+    "source_commit": null,
+    "url": null,
+    "observed_at": null,
+    "local_execution": false
+  },
+  "resource_policy": {
+    "max_cargo_builds": 1,
+    "build_and_test_workers": 2,
+    "address_space_limit_bytes": 21474836480,
+    "minimum_available_memory_at_start_bytes": 8589934592,
+    "stop_if_available_memory_below_bytes": 4294967296,
+    "temporary_directory": "/home/postfiatchad/.cache/qualify-fix-20260922/tmp"
+  },
+  "prior_qualification": {
+    "schema": "postfiat.release-repair-qualification.v1",
+    "source_commit": "048d23df95929b1d544c8c13825e59844eb70e26",
+    "source_tree": "57a2f563559c67f4d50dd98fcb2afe39066907b9",
+    "started_at": "2026-09-22T07:47:09+00:00",
+    "updated_at": "2026-09-22T09:38:37.072052+00:00",
+    "timebox_minutes": 110,
+    "checkpoint_minutes": 80,
+    "scope": "burn 6 release tip qualification; disposable local copies only",
+    "live_mutations": false,
+    "task_node_actions": true,
+    "source_modified": false,
+    "result": "FAIL",
+    "node_reproducibility": "PASS",
+    "candidate_binary_sha256": [
+      "3bffb105c9d5d9c3487b2b0e0758bd2ffdf557be5118b583d760d58006f5ffd1",
+      "3bffb105c9d5d9c3487b2b0e0758bd2ffdf557be5118b583d760d58006f5ffd1"
+    ],
+    "history": [
+      {
+        "validator": 0,
+        "original": "PASS",
+        "post_v2": "PASS",
+        "fresh_v2": "PASS"
+      },
+      {
+        "validator": 1,
+        "original": "PASS",
+        "post_v2": "PASS",
+        "fresh_v2": "PASS"
+      },
+      {
+        "validator": 2,
+        "original": "PASS",
+        "post_v2": "PASS",
+        "fresh_v2": "PASS"
+      },
+      {
+        "validator": 3,
+        "original": "PASS",
+        "post_v2": "PASS",
+        "fresh_v2": "PASS"
+      },
+      {
+        "validator": 4,
+        "original": "PASS",
+        "post_v2": "PASS",
+        "fresh_v2": "PASS"
+      },
+      {
+        "validator": 5,
+        "original": "PASS",
+        "post_v2": "PASS",
+        "fresh_v2": "PASS"
+      }
+    ],
+    "governed_v2_continuation_and_restart": "PASS",
+    "pre_activation_rollback": "PASS",
+    "software_gates": {
+      "format": "PASS",
+      "proof-input-inventory": "FAIL",
+      "workspace-check": "PASS",
+      "fastpay-types": "PASS",
+      "fastpay-execution": "PASS",
+      "node-fastpay": "DEFERRED_TO_CI",
+      "live-replay-supply": "PASS",
+      "warm-latency": "PASS",
+      "workspace-clippy": "FAIL",
+      "cobalt-handoff-tests": "PASS"
+    },
+    "publication_gates": {
+      "strict-docs": "PASS",
+      "public-doc-links": "PASS",
+      "public-secret-scan": "TIMEOUT"
+    },
+    "workspace_tests": "LEFT_TO_CI: full workspace test suite was not run locally",
+    "resource_policy": {
+      "max_cargo_builds": 1,
+      "build_and_test_workers": 2,
+      "history_copies_in_parallel": 1,
+      "verifier_address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_at_replay_start_bytes": 8589934592,
+      "stop_if_available_memory_below_bytes": 4294967296,
+      "temporary_directory": "/home/postfiatchad/.cache/release-repair-20260922/tmp"
+    },
+    "failures": [
+      {
+        "check": "proof-input-inventory",
+        "status": "FAIL",
+        "log": "logs/proof-input-inventory.stdout",
+        "stderr": "logs/proof-input-inventory.stderr"
+      },
+      {
+        "check": "public-secret-scan",
+        "status": "TIMEOUT",
+        "log": "logs/public-secret-scan.stdout",
+        "stderr": "logs/public-secret-scan.stderr"
+      },
+      {
+        "check": "workspace-clippy",
+        "status": "FAIL",
+        "log": "logs/workspace-clippy.stdout",
+        "stderr": "logs/workspace-clippy.stderr"
+      }
+    ],
+    "task_node": {
+      "request_id": "req_f387d09cb179491ded4223f6da9d19b7b2dcb99a9e515731a015776b1eddf51a",
+      "task_id": "task_5aa885411809aacca14a5ae2b2f47840",
+      "status": "Rewarded",
+      "skipped": false,
+      "scope": "One personal task covering the September 22 local qualification and publication",
+      "proposal_review": "Complete generated task inspected; objective, constraints, steps, 3.5 PFT offer, time box and verification requirements matched the user request",
+      "requested_at": "2026-09-22T07:47:59.871Z",
+      "completion_confirmed": true,
+      "initial_evidence_event": "task_evt_a530cd72-76d9-46b2-b0ac-3e7c5f9c45b1",
+      "verification_event": "task_evt_b5534aa1-b9d4-4d67-afea-3a9e0e3e8e56",
+      "reward_outcome": null,
+      "evidence_commit": "8c2f926e7ea8790c16431cd1e6cdd94e8cddd758",
+      "updated_at": "2026-09-22T09:36:07.220085+00:00",
+      "backend_rejections": [
+        {
+          "error": "request_body_field_too_long",
+          "field": "body.summary",
+          "recovered": true,
+          "remedy": "shortened initial evidence; accepted retry"
+        }
+      ]
+    },
+    "elapsed_minutes": 111.47,
+    "checkpoint_commit": "a2b37ebc492579754cfcd611a5eafb1f86dc9cc4",
+    "checkpoint_push_completed_at": "2026-09-22T09:07:49.488301+00:00",
+    "ci_workspace_test_job": {
+      "result": "NOT_CONFIRMED",
+      "source_commit": null,
+      "url": null,
+      "observed_at": null,
+      "local_execution": false
+    }
+  }
+}

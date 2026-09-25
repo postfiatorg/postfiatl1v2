@@ -185,11 +185,61 @@ mod yolo_collection_verifier_tests {
             Ok(())
         );
 
+        type Field = fn(&mut YoloCollectionPublicValuesV1) -> &mut String;
+        let cases: [(Field, YoloCollectionVerifyError); 9] = [
+            (
+                |v| &mut v.program_sha256,
+                YoloCollectionVerifyError::ProgramMismatch,
+            ),
+            (
+                |v| &mut v.epoch_sha256,
+                YoloCollectionVerifyError::EpochMismatch,
+            ),
+            (
+                |v| &mut v.methodology_sha256,
+                YoloCollectionVerifyError::MethodologyMismatch,
+            ),
+            (
+                |v| &mut v.collector_code_sha256,
+                YoloCollectionVerifyError::CollectorMismatch,
+            ),
+            (
+                |v| &mut v.source_id_sha256,
+                YoloCollectionVerifyError::SourceMismatch,
+            ),
+            (
+                |v| &mut v.account_application_identity_sha256,
+                YoloCollectionVerifyError::AccountApplicationMismatch,
+            ),
+            (
+                |v| &mut v.commitments_sha256,
+                YoloCollectionVerifyError::CommitmentsMismatch,
+            ),
+            (
+                |v| &mut v.attested_collection_sha256,
+                YoloCollectionVerifyError::AttestationMismatch,
+            ),
+            (
+                |v| &mut v.normalized_input_root_sha256,
+                YoloCollectionVerifyError::NormalizedInputMismatch,
+            ),
+        ];
+        for (field, error) in cases {
+            let mut altered = values.clone();
+            *field(&mut altered) = "0a".repeat(32);
+            assert_eq!(altered.validate(), Ok(()), "mismatch must stay well formed");
+            assert_eq!(
+                validate_yolo_collection_public_values_context(&altered, &context(&values)),
+                Err(error)
+            );
+        }
+
         let mut altered = values.clone();
-        altered.attested_collection_sha256 = "0a".repeat(32);
+        altered.snapshot_count = values.snapshot_count + 1;
+        assert_eq!(altered.validate(), Ok(()), "count must stay in range");
         assert_eq!(
             validate_yolo_collection_public_values_context(&altered, &context(&values)),
-            Err(YoloCollectionVerifyError::AttestationMismatch)
+            Err(YoloCollectionVerifyError::SnapshotCountMismatch)
         );
     }
 

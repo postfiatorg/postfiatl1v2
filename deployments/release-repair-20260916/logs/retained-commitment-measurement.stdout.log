@@ -1,0 +1,26 @@
+{
+  "captured_checkpoint_height": 1020,
+  "max_fences": 65536,
+  "max_reveals": 4096,
+  "max_validators": 128,
+  "measurements": [
+    {
+      "fence_commitment_bytes": 26988,
+      "iterations": 100,
+      "mean_encoding_microseconds": 45.7,
+      "reveal_commitment_bytes": 0,
+      "version": "v1"
+    },
+    {
+      "fence_commitment_bytes": 1973558,
+      "iterations": 100,
+      "mean_encoding_microseconds": 718.05,
+      "reveal_commitment_bytes": 0,
+      "version": "v2"
+    }
+  ],
+  "retained_fences": 39,
+  "retained_reveals": 0,
+  "scope": "Affected retained reveal/fence encodings only; excludes other ledger fields and installed committee",
+  "source_commit": "1c435f4fb482ea7830bee5c7018d370a10a34bfd"
+}

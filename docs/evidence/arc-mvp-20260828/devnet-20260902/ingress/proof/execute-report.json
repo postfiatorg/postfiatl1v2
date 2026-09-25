@@ -1,0 +1,7 @@
+{
+  "elapsed_ms": 1333,
+  "instruction_count": 13784989,
+  "public_values_bytes": 314,
+  "schema": "postfiat.pfusdc.arc_ingress_execute_report.v1",
+  "witness": "/workspace/witness.v2.json"
+}

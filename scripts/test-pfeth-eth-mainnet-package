@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""Deterministic offline checks for the pfETH deployment package."""
+
+from __future__ import annotations
+
+import copy
+import importlib.util
+import tempfile
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def load(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+package = load(ROOT / "scripts/pfeth-eth-mainnet-package.py", "pfeth_package")
+deploy = load(ROOT / "scripts/pfeth-eth-mainnet-deploy.py", "pfeth_deploy")
+
+
+def main() -> None:
+    source = package.read_json(package.DEFAULT_INPUT)
+    with tempfile.TemporaryDirectory(prefix="pfeth-package-test-") as first_dir:
+        with tempfile.TemporaryDirectory(prefix="pfeth-package-test-") as second_dir:
+            first = package.generate(source, Path(first_dir))
+            second = package.generate(source, Path(second_dir))
+            assert first["manifest_sha256"] == second["manifest_sha256"]
+            assert first["route_profile_hash"] == second["route_profile_hash"]
+            assert first["route_binding"] == second["route_binding"]
+            assert first["predicted_addresses"] == second["predicted_addresses"]
+            assert (
+                package.read_json(Path(first_dir) / "governance-route-profile.json")
+                == package.read_json(Path(first_dir) / "route-profile.json")["route_profile"]
+            )
+            review_path = Path(first_dir) / "external-review.json"
+            review = package.read_json(review_path)
+            try:
+                deploy.validate_review(review, first["manifest_sha256"])
+            except deploy.DeploymentError as error:
+                assert "not PASS" in str(error)
+            else:
+                raise AssertionError("pending external review passed")
+
+            reviewed = {
+                **review,
+                "status": "PASS",
+                "reviewed_contracts": sorted(deploy.REQUIRED_CONTRACTS),
+                "reviewed_programs": sorted(deploy.REQUIRED_PROGRAMS),
+                "reviewer": "independent-reviewer",
+                "reviewed_at": "2026-09-04T00:00:00Z",
+                "signature_or_report": "sha256:review-report",
+            }
+            package.write(review_path, reviewed)
+            package.generate(source, Path(first_dir))
+            assert package.read_json(review_path)["status"] == "PASS"
+
+            checkpoint_path = Path(first_dir) / "pftl-checkpoint-gate.json"
+            checkpoint = package.read_json(checkpoint_path)
+            try:
+                deploy.validate_checkpoint_gate(
+                    checkpoint,
+                    package.read_json(Path(first_dir) / "manifest.json"),
+                    first["manifest_sha256"],
+                )
+            except deploy.DeploymentError as error:
+                assert "not PASS" in str(error)
+            else:
+                raise AssertionError("pending PFTL checkpoint gate passed")
+
+            observed_at = datetime(2026, 9, 4, 12, 0, tzinfo=timezone.utc)
+            checked = {
+                **checkpoint,
+                "status": "PASS",
+                "observed_at": observed_at.isoformat().replace("+00:00", "Z"),
+                "source_receipt": "sha256:authenticated-active-fleet-readback",
+            }
+            package.write(checkpoint_path, checked)
+            deploy.validate_checkpoint_gate(
+                checked,
+                package.read_json(Path(first_dir) / "manifest.json"),
+                first["manifest_sha256"],
+                now=observed_at + timedelta(seconds=60),
+            )
+            try:
+                deploy.validate_checkpoint_gate(
+                    checked,
+                    package.read_json(Path(first_dir) / "manifest.json"),
+                    first["manifest_sha256"],
+                    now=observed_at
+                    + timedelta(seconds=deploy.CHECKPOINT_MAX_AGE_SECONDS + 1),
+                )
+            except deploy.DeploymentError as error:
+                assert "stale" in str(error)
+            else:
+                raise AssertionError("stale PFTL checkpoint gate passed")
+            package.generate(source, Path(first_dir))
+            assert package.read_json(checkpoint_path)["status"] == "PASS"
+
+            drifted = copy.deepcopy(source)
+            drifted["deployer_nonce"] += 2
+            package.generate(drifted, Path(first_dir))
+            assert package.read_json(review_path)["status"] == "PENDING"
+            assert package.read_json(checkpoint_path)["status"] == "PENDING"
+
+    with tempfile.TemporaryDirectory(prefix="pfeth-preflight-test-") as preflight_dir:
+        preflight_path = Path(preflight_dir)
+        package.generate(source, preflight_path)
+        manifest_path = preflight_path / "manifest.json"
+        manifest = package.read_json(manifest_path)
+        fake_code = b"\x60"
+        fake_hash = deploy.k256(fake_code)
+        manifest["sp1_verifier"]["runtime_code_hash"] = fake_hash
+        manifest["ingress_policy"]["token_runtime_code_hash"] = fake_hash
+        package.write(manifest_path, manifest)
+
+        original_rpc = deploy.rpc_call
+
+        def fake_rpc(_url, method, params):
+            if method == "eth_chainId":
+                return "0x1"
+            if method == "eth_getTransactionCount":
+                return hex(int(manifest["deployer_nonce"]))
+            if method == "eth_getCode":
+                address = str(params[0]).lower()
+                predicted = {
+                    str(item).lower() for item in manifest["predicted_addresses"].values()
+                }
+                return "0x" if address in predicted else "0x" + fake_code.hex()
+            raise AssertionError(f"unexpected RPC method {method}")
+
+        deploy.rpc_call = fake_rpc
+        try:
+            assert deploy.preflight(preflight_path, "unused")["ok"] is True
+            bootstrap_artifact = (
+                preflight_path / "pftl-bootstrap" / "profile-register.operation.json"
+            )
+            original_bootstrap = bootstrap_artifact.read_bytes()
+            bootstrap_artifact.write_bytes(original_bootstrap + b" ")
+            try:
+                deploy.preflight(preflight_path, "unused")
+            except deploy.DeploymentError as error:
+                assert "bootstrap artifact mismatch" in str(error)
+            else:
+                raise AssertionError("tampered PFTL bootstrap artifact passed preflight")
+            bootstrap_artifact.write_bytes(original_bootstrap)
+            verifier_init = preflight_path / "verifier-init-code.hex"
+            verifier_init.write_text(verifier_init.read_text().strip() + "00\n")
+            try:
+                deploy.preflight(preflight_path, "unused")
+            except deploy.DeploymentError as error:
+                assert "init code" in str(error)
+            else:
+                raise AssertionError("tampered init code passed preflight")
+        finally:
+            deploy.rpc_call = original_rpc
+
+    invalid = copy.deepcopy(source)
+    invalid["ingress_program_elf_sha256"] = "00" * 32
+    try:
+        with tempfile.TemporaryDirectory(prefix="pfeth-bad-elf-test-") as output_dir:
+            package.generate(invalid, Path(output_dir))
+    except package.PackageError as error:
+        assert "ELF hash mismatch" in str(error)
+    else:
+        raise AssertionError("stale ingress ELF/vkey input passed")
+
+    invalid = copy.deepcopy(source)
+    invalid["route_epoch"] = 0
+    try:
+        package.validate_input(invalid)
+    except package.PackageError as error:
+        assert "route_epoch" in str(error)
+    else:
+        raise AssertionError("zero route epoch accepted")
+
+    invalid = copy.deepcopy(source)
+    invalid["weth_runtime_code_hash"] = "0x12"
+    try:
+        package.validate_input(invalid)
+    except package.PackageError as error:
+        assert "32 bytes" in str(error)
+    else:
+        raise AssertionError("short WETH runtime hash accepted")
+
+    print(
+        "pfeth_deployment_package=ok "
+        "deterministic=true review_gate=fail_closed live_transactions=0"
+    )
+
+
+if __name__ == "__main__":
+    main()

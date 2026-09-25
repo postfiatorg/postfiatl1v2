@@ -1,0 +1,82 @@
+{
+  "schema": "postfiat-state-verification-v1",
+  "verified": true,
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "block_log": {
+    "verified": true,
+    "block_count": 1021,
+    "tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+    "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+  },
+  "governance": {
+    "verified": true,
+    "cobalt_mode": "canonical",
+    "active_validator_count": 6,
+    "active_validators": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+    ],
+    "crypto_policy_version": 1,
+    "bridge_witness_epoch": 1,
+    "authority_mode": 1,
+    "amendment_count": 24,
+    "latest_amendment_id": "2518fc20c2ade83579c5b83fa5dfdad16c6ebfcd4ebf367c9303b31c047553cbafddd96c2ba360fcc3f26721b7e8882e",
+    "amendment_activation_record_count": 24,
+    "latest_amendment_activation_record_id": "8a54c15174bbcc631952dfb81fcc9cb75c28778541adbd6bda8603cd13f6689da602cf456da881515e78a6b3d86f8266",
+    "amendment_supersession_record_count": 3,
+    "latest_amendment_supersession_record_id": "c8d96de072354586a40ca3ecf8e6761a1b5994e89c2e78e419f0872096271763f88c9e7efeadc5c01415b85147fe254e",
+    "amendment_rollback_record_count": 1,
+    "latest_amendment_rollback_record_id": "d964fbe24bff9005fbdf580b5a7a5efb94f428c2dbc1c009297ccaa9eee1f404f779d54494f25753ac2927076333c113",
+    "validator_registry_update_count": 2,
+    "latest_validator_registry_update_id": "a6b806eb304ffc5d4c329fc179fa628745a2e609724cd67d654805ebfc4cc12bc4338ed5fa1f3bf301384ca8aaf8f18a",
+    "governance_agent_dry_run_count": 0,
+    "latest_governance_agent_dry_run_id": ""
+  },
+  "bridge": {
+    "verified": true,
+    "domain_count": 0,
+    "transfer_count": 0,
+    "attestation_count": 0,
+    "replay_cache_count": 0,
+    "inbound_used": 0,
+    "outbound_used": 0,
+    "latest_transfer_id": ""
+  },
+  "shielded": {
+    "verified": true,
+    "note_count": 0,
+    "nullifier_count": 0,
+    "turnstile_event_count": 0,
+    "orchard_pool_id": "asset-orchard-v1",
+    "orchard_nullifier_count": 163,
+    "orchard_output_count": 175,
+    "orchard_anchor_count": 41,
+    "orchard_root_count": 135,
+    "orchard_latest_root": "5673998dc8d62a69ded5a6b8ef77f3d791a31dfcdd6fed2198db45cc08a02018",
+    "orchard_value_balance_total": 0,
+    "orchard_turnstile_deposit_total": 0,
+    "orchard_fee_burn_total": 0,
+    "orchard_withdraw_total": 0,
+    "tree_root": "0b26079b0af7030cf6712534bd9d007e1f71fad51f6eb5245572f0a296df4bc94daf8b4f3af593095aee6cd41f2a5e97",
+    "bootstrap_deposit_total": 0,
+    "migration_total": 0,
+    "orchard_deposit_total": 0,
+    "spent_note_count": 0,
+    "live_note_count": 0,
+    "latest_turnstile_event_id": ""
+  },
+  "mempool": {
+    "verified": true,
+    "pending_count": 0,
+    "sender_count": 0,
+    "total_amount": 0,
+    "total_fee": 0,
+    "latest_tx_id": ""
+  }
+}

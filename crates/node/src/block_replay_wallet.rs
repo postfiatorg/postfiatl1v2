@@ -1262,7 +1262,12 @@ pub(super) fn update_governance_for_certificate_replay(
         return Ok(());
     }
     let batch: GovernanceActionBatch = parse_archived_payload(block, archive_entry)?;
-    let _ = execute_governance_batch(governance, None, &batch, block.header.height);
+    let _ = crate::execution_actions::execute_archived_governance_batch(
+        governance,
+        None,
+        &batch,
+        block.header.height,
+    );
     Ok(())
 }
 
@@ -2677,12 +2682,12 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
         nfts: _,
         offers,
         nav_assets: _,
-        nav_reserve_packets: _,
+        nav_reserve_packets,
         nav_redemptions: _,
         nav_proof_profiles: _,
         yolo_target_registrations: _,
         yolo_target_receipts: _,
-        nav_attestors: _,
+        nav_attestors,
         market_ops_policies: _,
         market_ops_envelopes: _,
         fx_fix_states: _,
@@ -2691,7 +2696,8 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
         vault_bridge_bucket_states: _,
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
-        vault_bridge_deposits: _,
+        vault_bridge_deposits,
+        pftl_uniswap_source_custody: _, // issued pfUSDC custody, never native PFT
         pftl_uniswap_routes: _,
         pftl_uniswap_receipts: _,
         owned_objects,
@@ -2711,6 +2717,7 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
         fastswap_activation_height: _,
         ethereum_arbitrum_finality_states: _,
         fast_ingress_campaigns: _,
+        arc_finality_states: _,
     } = ledger;
     let ShieldedState {
         next_note_position: _,
@@ -2733,6 +2740,35 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
             return Err(duplicate("account", &account.address));
         }
         add(&mut total, u128::from(account.balance), "account balances")?;
+    }
+    let mut attestor_ids = std::collections::BTreeSet::new();
+    for attestor in nav_attestors {
+        if !attestor_ids.insert(attestor.address.as_str()) {
+            return Err(duplicate("NAV attestor", &attestor.address));
+        }
+        add(&mut total, u128::from(attestor.bond), "NAV attestor bonds")?;
+    }
+    let mut packet_ids = std::collections::BTreeSet::new();
+    for packet in nav_reserve_packets {
+        if !packet_ids.insert(packet.packet_id.as_str()) {
+            return Err(duplicate("NAV reserve packet", &packet.packet_id));
+        }
+        add(
+            &mut total,
+            u128::from(packet.challenge_bond),
+            "NAV challenge bonds",
+        )?;
+    }
+    let mut deposit_ids = std::collections::BTreeSet::new();
+    for deposit in vault_bridge_deposits {
+        if !deposit_ids.insert((deposit.asset_id.as_str(), deposit.evidence_root.as_str())) {
+            return Err(duplicate("vault deposit", &deposit.evidence_root));
+        }
+        add(
+            &mut total,
+            u128::from(deposit.challenge_bond),
+            "vault deposit challenge bonds",
+        )?;
     }
     let mut escrow_ids = std::collections::BTreeSet::new();
     for escrow in escrows {
@@ -2977,7 +3013,7 @@ pub(super) fn replay_archived_payload(
                     block.header.height,
                 )?;
             }
-            Ok(execute_governance_batch(
+            Ok(crate::execution_actions::execute_archived_governance_batch(
                 state.governance,
                 Some(state.ledger),
                 &batch,
@@ -3033,6 +3069,49 @@ pub fn faucet_key(options: NodeOptions) -> io::Result<DevKeyFile> {
     read_key_file(&options.data_dir.join(FAUCET_KEY_FILE))
 }
 
+fn ensure_wallet_output_paths_distinct(key_file: &Path, backup_file: &Path) -> io::Result<()> {
+    // Resolve existing ancestors too, so new output files reached through a
+    // symlinked directory compare equal. Do not create anything during preflight.
+    fn resolve(path: &Path) -> io::Result<PathBuf> {
+        let absolute = std::path::absolute(path)?;
+        let mut ancestor = absolute.as_path();
+        let mut missing = Vec::new();
+        loop {
+            match std::fs::canonicalize(ancestor) {
+                Ok(mut resolved) => {
+                    for component in missing.into_iter().rev() {
+                        resolved.push(component);
+                    }
+                    return Ok(resolved);
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    let name = ancestor.file_name().ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "unresolvable wallet output path",
+                        )
+                    })?;
+                    missing.push(name.to_os_string());
+                    ancestor = ancestor.parent().ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "wallet output path has no parent",
+                        )
+                    })?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+    if resolve(key_file)? == resolve(backup_file)? {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "wallet key and backup paths must be distinct",
+        ));
+    }
+    Ok(())
+}
+
 pub fn wallet_keygen(options: WalletKeygenOptions) -> io::Result<WalletKeyReport> {
     if options.chain_id.trim().is_empty() {
         return Err(io::Error::new(
@@ -3040,6 +3119,7 @@ pub fn wallet_keygen(options: WalletKeygenOptions) -> io::Result<WalletKeyReport
             "wallet chain id must not be empty",
         ));
     }
+    ensure_wallet_output_paths_distinct(&options.key_file, &options.backup_file)?;
     ensure_output_can_be_written(&options.key_file, options.overwrite, "wallet key file")?;
     ensure_output_can_be_written(
         &options.backup_file,
@@ -3072,6 +3152,7 @@ pub fn wallet_keygen(options: WalletKeygenOptions) -> io::Result<WalletKeyReport
 }
 
 pub fn wallet_restore(options: WalletRestoreOptions) -> io::Result<WalletKeyReport> {
+    ensure_wallet_output_paths_distinct(&options.key_file, &options.backup_file)?;
     ensure_output_can_be_written(&options.key_file, options.overwrite, "wallet key file")?;
     let backup = read_wallet_backup_file(&options.backup_file)?;
     let key_file = derive_wallet_dev_key_file(&backup)?;
@@ -3478,4 +3559,152 @@ pub fn wallet_test_vector(options: WalletTestVectorOptions) -> io::Result<Wallet
         signature_verified,
         private_key_material_redacted: true,
     })
+}
+
+#[cfg(test)]
+mod burn6_wallet_tests {
+    use super::*;
+
+    fn root(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "postfiat-burn6-wallet-{label}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
+    fn options(key_file: PathBuf, backup_file: PathBuf) -> WalletKeygenOptions {
+        WalletKeygenOptions {
+            chain_id: "postfiat-local".to_string(),
+            master_seed_hex: "03".repeat(32),
+            account_index: 0,
+            key_file,
+            backup_file,
+            overwrite: false,
+        }
+    }
+
+    #[test]
+    fn burn6_nod_wallet_keygen_rejects_aliased_outputs_before_writing() {
+        let root = root("keygen");
+        let path = root.join("nested/wallet.json");
+        let result = wallet_keygen(options(path.clone(), path.clone()));
+        assert!(
+            result.is_err(),
+            "key generation must not replace its backup"
+        );
+        assert!(!path.exists());
+        std::fs::create_dir_all(root.join("nested")).unwrap();
+        let alias = root.join("nested/../nested/./wallet.json");
+        assert!(wallet_keygen(options(path.clone(), alias)).is_err());
+        assert!(!path.exists());
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(root.join("nested"), root.join("alias")).unwrap();
+            assert!(wallet_keygen(options(path.clone(), root.join("alias/wallet.json"))).is_err());
+            assert!(!path.exists());
+        }
+        wallet_keygen(options(
+            root.join("new/key.json"),
+            root.join("new/backup.json"),
+        ))
+        .expect("distinct outputs under a new directory remain supported");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn burn6_nod_wallet_restore_preserves_backup_on_output_alias() {
+        let root = root("restore");
+        let backup = root.join("backup.json");
+        wallet_keygen(options(root.join("key.json"), backup.clone())).unwrap();
+        let before = std::fs::read(&backup).unwrap();
+        let result = wallet_restore(WalletRestoreOptions {
+            backup_file: backup.clone(),
+            key_file: root.join("./backup.json"),
+            overwrite: true,
+        });
+        assert!(
+            result.is_err(),
+            "restore must not overwrite its recovery input"
+        );
+        assert_eq!(std::fs::read(&backup).unwrap(), before);
+        wallet_restore(WalletRestoreOptions {
+            backup_file: backup,
+            key_file: root.join("restored.json"),
+            overwrite: false,
+        })
+        .expect("distinct restore destination");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod native_bond_custody_tests {
+    use super::*;
+
+    #[test]
+    fn native_bond_custody_is_conserved_and_duplicate_custody_rejected() {
+        let shielded = ShieldedState::empty();
+        let mut ledger = LedgerState::new(vec![Account::new("pfbondowner", 100, None)]);
+        let before = native_pft_live_total(&ledger, &shielded).unwrap();
+        ledger.accounts[0].balance -= 7;
+        ledger.nav_attestors.push(postfiat_types::NavAttestor {
+            address: "pfbondowner".to_string(),
+            domain: "test".to_string(),
+            bond: 7,
+            registered_at_height: 1,
+        });
+        assert_eq!(native_pft_live_total(&ledger, &shielded).unwrap(), before);
+        let mut packet: postfiat_types::NavReservePacket = serde_json::from_str(include_str!(
+            "../testdata/pfeth-reserve-replay/reserve-packet.json"
+        ))
+        .unwrap();
+        packet.challenge_bond = 11;
+        ledger.accounts[0].balance -= 11;
+        ledger.nav_reserve_packets.push(packet);
+        assert_eq!(native_pft_live_total(&ledger, &shielded).unwrap(), before);
+        let mut deposit: postfiat_types::VaultBridgeDepositRecord = serde_json::from_str(
+            include_str!("../testdata/pfeth-reserve-replay/deposit.json"),
+        )
+        .unwrap();
+        deposit.challenge_bond = 13;
+        ledger.accounts[0].balance -= 13;
+        ledger.vault_bridge_deposits.push(deposit);
+        assert_eq!(native_pft_live_total(&ledger, &shielded).unwrap(), before);
+        for lane in ["attestor", "packet", "deposit"] {
+            let mut duplicate = ledger.clone();
+            match lane {
+                "attestor" => duplicate
+                    .nav_attestors
+                    .push(ledger.nav_attestors[0].clone()),
+                "packet" => duplicate
+                    .nav_reserve_packets
+                    .push(ledger.nav_reserve_packets[0].clone()),
+                "deposit" => duplicate
+                    .vault_bridge_deposits
+                    .push(ledger.vault_bridge_deposits[0].clone()),
+                _ => unreachable!(),
+            }
+            assert!(native_pft_live_total(&duplicate, &shielded)
+                .unwrap_err()
+                .to_string()
+                .contains("duplicate native custody"));
+        }
+        // Payouts clear the outstanding bond. Counting it after payout would inflate supply.
+        ledger.accounts[0].balance += 24;
+        ledger.nav_reserve_packets[0].challenge_bond = 0;
+        ledger.vault_bridge_deposits[0].challenge_bond = 0;
+        assert_eq!(native_pft_live_total(&ledger, &shielded).unwrap(), before);
+        ledger.accounts[0].balance -= 1;
+        assert!(verify_native_pft_transition(
+            963,
+            before,
+            native_pft_live_total(&ledger, &shielded).unwrap(),
+            &[]
+        )
+        .is_err());
+    }
 }

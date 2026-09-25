@@ -1,0 +1,144 @@
+{
+  "schema": "postfiat-rpc-status-cache-deploy-receipt-v1",
+  "status": "DEPLOYED_AND_VERIFIED",
+  "observed_at": "2026-09-06T20:04:03.087166+00:00",
+  "release": "rpc-status-cache-20260906",
+  "binary_sha256": "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+  "previous_release": "pfeth-replay-v4-20260905",
+  "previous_binary_sha256": "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2",
+  "base_commit": "707e006fe2460048b1c7df0d4dc0a04d487f8542",
+  "source_patch_sha256": "88732a4a3cb0536d6457ee18f966041d98ec42eac94c4a13f0f70fa3a66e695d",
+  "p1_patch_sha256": "81f59617ceae69783c2de9af6c0695df203dd28d7c6670a33d02d3319a83e95f",
+  "rollout_order": [
+    1,
+    0,
+    5,
+    2,
+    3,
+    4
+  ],
+  "checkpoint_unchanged": true,
+  "blocks_created": 0,
+  "wallet_transactions_submitted": 0,
+  "status_cache_max_age_ms": 1000,
+  "tests": {
+    "main_rpc_tests_passed": 25,
+    "release_rpc_tests_passed": 25,
+    "regression_failed_before_fix": true,
+    "transactional_commit_with_unchanged_legacy_metadata": true,
+    "failed_refresh_does_not_renew_old_report": true
+  },
+  "validators": [
+    {
+      "validator_id": "validator-0",
+      "status": "active",
+      "checkpoint": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "block_height": 992,
+        "block_tip_hash": "066ae1e8ebc99d53b41b15bcb45ba33f623e0de807c19547d01a95fe15429f693ee211d2de8e275e287877da7dac111d",
+        "state_root": "beb33019f81dd0be0b529debcd75fc14efc66b4e96bf0222521fd964cdf9b0af52cfbe16d75c9a6c027d044b6f52a8e8"
+      },
+      "backup_dir": "/var/backups/postfiat/rpc-status-cache-20260906-validator-0-1788724699",
+      "backup_sha256": "e89a1cdae4b4412e5e7048e252316bacd5a4834dd6e73a75c8023cbbba2da7d5",
+      "running_process_sha256": [
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46"
+      ],
+      "manifest_verified": true
+    },
+    {
+      "validator_id": "validator-1",
+      "status": "active",
+      "checkpoint": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "block_height": 992,
+        "block_tip_hash": "066ae1e8ebc99d53b41b15bcb45ba33f623e0de807c19547d01a95fe15429f693ee211d2de8e275e287877da7dac111d",
+        "state_root": "beb33019f81dd0be0b529debcd75fc14efc66b4e96bf0222521fd964cdf9b0af52cfbe16d75c9a6c027d044b6f52a8e8"
+      },
+      "backup_dir": "/var/backups/postfiat/rpc-status-cache-20260906-validator-1-1788724534",
+      "backup_sha256": "39e323361514a9ecb2b764289705326d17b3c8dfc2c24f23c6b568744cfe3eeb",
+      "running_process_sha256": [
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46"
+      ],
+      "manifest_verified": true
+    },
+    {
+      "validator_id": "validator-2",
+      "status": "active",
+      "checkpoint": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "block_height": 992,
+        "block_tip_hash": "066ae1e8ebc99d53b41b15bcb45ba33f623e0de807c19547d01a95fe15429f693ee211d2de8e275e287877da7dac111d",
+        "state_root": "beb33019f81dd0be0b529debcd75fc14efc66b4e96bf0222521fd964cdf9b0af52cfbe16d75c9a6c027d044b6f52a8e8"
+      },
+      "backup_dir": "/var/backups/postfiat/rpc-status-cache-20260906-validator-2-1788724849",
+      "backup_sha256": "7093176500c5c32226a09a062a93b368c2dee0b00d1303d39a940f550c0ce244",
+      "running_process_sha256": [
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46"
+      ],
+      "manifest_verified": true
+    },
+    {
+      "validator_id": "validator-3",
+      "status": "active",
+      "checkpoint": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "block_height": 992,
+        "block_tip_hash": "066ae1e8ebc99d53b41b15bcb45ba33f623e0de807c19547d01a95fe15429f693ee211d2de8e275e287877da7dac111d",
+        "state_root": "beb33019f81dd0be0b529debcd75fc14efc66b4e96bf0222521fd964cdf9b0af52cfbe16d75c9a6c027d044b6f52a8e8"
+      },
+      "backup_dir": "/var/backups/postfiat/rpc-status-cache-20260906-validator-3-1788724905",
+      "backup_sha256": "6253a9012299f675019f7966afd271fb8199ebf6310ad261651c7879d91a79d7",
+      "running_process_sha256": [
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46"
+      ],
+      "manifest_verified": true
+    },
+    {
+      "validator_id": "validator-4",
+      "status": "active",
+      "checkpoint": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "block_height": 992,
+        "block_tip_hash": "066ae1e8ebc99d53b41b15bcb45ba33f623e0de807c19547d01a95fe15429f693ee211d2de8e275e287877da7dac111d",
+        "state_root": "beb33019f81dd0be0b529debcd75fc14efc66b4e96bf0222521fd964cdf9b0af52cfbe16d75c9a6c027d044b6f52a8e8"
+      },
+      "backup_dir": "/var/backups/postfiat/rpc-status-cache-20260906-validator-4-1788724953",
+      "backup_sha256": "9a6593486b76def4d9acebc7569572a2f3d33fae254b290b2882e86d130e6e4f",
+      "running_process_sha256": [
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46"
+      ],
+      "manifest_verified": true
+    },
+    {
+      "validator_id": "validator-5",
+      "status": "active",
+      "checkpoint": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "block_height": 992,
+        "block_tip_hash": "066ae1e8ebc99d53b41b15bcb45ba33f623e0de807c19547d01a95fe15429f693ee211d2de8e275e287877da7dac111d",
+        "state_root": "beb33019f81dd0be0b529debcd75fc14efc66b4e96bf0222521fd964cdf9b0af52cfbe16d75c9a6c027d044b6f52a8e8"
+      },
+      "backup_dir": "/var/backups/postfiat/rpc-status-cache-20260906-validator-5-1788724806",
+      "backup_sha256": "73936fcbd0712bb7811ad5cbfb45f4b655808fd0d11056e5da44bde19f6389f0",
+      "running_process_sha256": [
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46"
+      ],
+      "manifest_verified": true
+    }
+  ],
+  "verification": "fleet-after.json",
+  "source_manifest": "source-manifest.json",
+  "committed": false
+}

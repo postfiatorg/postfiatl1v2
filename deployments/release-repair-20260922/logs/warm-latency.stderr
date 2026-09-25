@@ -1,0 +1,3 @@
+   Compiling postfiat-node v0.1.0 (/tmp/qualify-20260922/crates/node)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4m 58s
+     Running unittests src/main.rs (/home/postfiatchad/.cache/release-repair-20260918/test-target/debug/deps/postfiat_node-462e48431d675017)

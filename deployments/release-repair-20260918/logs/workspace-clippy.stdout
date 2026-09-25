@@ -1,0 +1,40 @@
+    Checking postfiat-types v0.1.0 (/tmp/qualify-20260918/crates/types)
+    Checking postfiat-crypto-provider v0.1.0 (/tmp/qualify-20260918/crates/crypto_provider)
+    Checking postfiat-proofs v0.1.0 (/tmp/qualify-20260918/crates/proofs)
+    Checking postfiat-privacy-orchard v0.1.0 (/tmp/qualify-20260918/crates/privacy_orchard)
+   Compiling postfiat-node v0.1.0 (/tmp/qualify-20260918/crates/node)
+    Checking postfiat-network v0.1.0 (/tmp/qualify-20260918/crates/network)
+   Compiling postfiat-bench v0.1.0 (/tmp/qualify-20260918/crates/bench_harness)
+    Checking arc-conformance v0.1.0 (/tmp/qualify-20260918/crates/arc-conformance)
+    Checking postfiat-cobalt-adversarial-oracle v0.1.0 (/tmp/qualify-20260918/crates/cobalt_adversarial_oracle)
+    Checking postfiat-cobalt-decision-oracle v0.1.0 (/tmp/qualify-20260918/crates/cobalt_decision_oracle)
+    Checking fips204 v0.4.6
+    Checking postfiat-fastswap-model v0.1.0 (/tmp/qualify-20260918/crates/fastswap_model)
+    Checking postfiat-bridge v0.1.0 (/tmp/qualify-20260918/crates/bridge)
+    Checking postfiat-nav-reserve-protocol v0.1.0 (/tmp/qualify-20260918/crates/nav_reserve_protocol)
+    Checking postfiat-execution v0.1.0 (/tmp/qualify-20260918/crates/execution)
+    Checking postfiat-mempool-dag v0.1.0 (/tmp/qualify-20260918/crates/mempool_dag)
+    Checking postfiat-consensus-cobalt v0.1.0 (/tmp/qualify-20260918/crates/consensus_cobalt)
+    Checking postfiat-rpc-sdk v0.1.0 (/tmp/qualify-20260918/crates/rpc_sdk)
+    Checking postfiat-ordering-fast v0.1.0 (/tmp/qualify-20260918/crates/ordering_fast)
+    Checking postfiat-storage v0.1.0 (/tmp/qualify-20260918/crates/storage)
+    Checking postfiat-privacy v0.1.0 (/tmp/qualify-20260918/crates/privacy)
+    Checking postfiat-pfusdc-proofs v0.1.0 (/tmp/qualify-20260918/crates/pfusdc_proofs)
+    Checking postfiat-pftl-uniswap-proofs v0.1.0 (/tmp/qualify-20260918/crates/pftl_uniswap_proofs)
+    Checking postfiat-fastpay-prototype v0.1.0 (/tmp/qualify-20260918/crates/fastpay-prototype)
+error: called `.err().expect()` on a `Result` value
+    --> crates/node/src/cobalt_handoff.rs:1466:14
+     |
+1466 |               .err()
+     |  ______________^
+1467 | |             .expect("expanded data must be bounded before checkpoint cloning");
+     | |___________________^ help: try: `expect_err`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#err_expect
+     = note: `-D clippy::err-expect` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::err_expect)]`
+
+    Checking postfiat-cobalt-e3-harness v0.1.0 (/tmp/qualify-20260918/crates/cobalt_e3_harness)
+    Checking postfiat-fuzz v0.1.0 (/tmp/qualify-20260918/crates/fuzz_harness)
+error: could not compile `postfiat-node` (lib test) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

@@ -1,0 +1,1 @@
+proof inventory source drift: crates/execution/src/nav_vault_asset_execution.rs expected=5179fd74f2f0f0890be63ff263d2902f04496c70c5abac73434a0a2bd3629897 actual=66b4e4ef1de43d6249a95cc77f4a49810ea74c9007fcfe4186bcbf68c51016e6

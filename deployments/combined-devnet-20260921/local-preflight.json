@@ -1,0 +1,62 @@
+{
+  "checked_at": "2026-09-21T09:57:01.557766+00:00",
+  "result": "PASS_LOCAL_INPUTS_ONLY",
+  "network_calls": 0,
+  "rollout_state_created": false,
+  "binary_sha256": "051ad12ce22c33f2370388259d754a9c1016a8edc1b52db7d2852fe78f6fbc7d",
+  "canonical_generated_files": 33,
+  "circuit_artifacts_matched": 4,
+  "inventory_parse": "PASS_HISTORICAL_IDENTITIES_ONLY",
+  "canary_order": [
+    "validator-1",
+    "validator-0",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ],
+  "validators": [
+    {
+      "validator_id": "validator-0",
+      "inputs": "PASS",
+      "allowlisted_present_files": 10,
+      "manifest_gate": "BLOCKED_MISSING_SIGNED_MANIFEST",
+      "manifest_gate_error": "required staged file is missing: /home/postfiatchad/.cache/deploy-prep-20260921/validator-stage/rootfs/etc/postfiat/releases/combined-devnet-20260921/deployment-manifest.json"
+    },
+    {
+      "validator_id": "validator-1",
+      "inputs": "PASS",
+      "allowlisted_present_files": 10,
+      "manifest_gate": "BLOCKED_MISSING_SIGNED_MANIFEST",
+      "manifest_gate_error": "required staged file is missing: /home/postfiatchad/.cache/deploy-prep-20260921/validator-stage/rootfs/etc/postfiat/releases/combined-devnet-20260921/deployment-manifest.json"
+    },
+    {
+      "validator_id": "validator-2",
+      "inputs": "PASS",
+      "allowlisted_present_files": 10,
+      "manifest_gate": "BLOCKED_MISSING_SIGNED_MANIFEST",
+      "manifest_gate_error": "required staged file is missing: /home/postfiatchad/.cache/deploy-prep-20260921/validator-stage/rootfs/etc/postfiat/releases/combined-devnet-20260921/deployment-manifest.json"
+    },
+    {
+      "validator_id": "validator-3",
+      "inputs": "PASS",
+      "allowlisted_present_files": 10,
+      "manifest_gate": "BLOCKED_MISSING_SIGNED_MANIFEST",
+      "manifest_gate_error": "required staged file is missing: /home/postfiatchad/.cache/deploy-prep-20260921/validator-stage/rootfs/etc/postfiat/releases/combined-devnet-20260921/deployment-manifest.json"
+    },
+    {
+      "validator_id": "validator-4",
+      "inputs": "PASS",
+      "allowlisted_present_files": 10,
+      "manifest_gate": "BLOCKED_MISSING_SIGNED_MANIFEST",
+      "manifest_gate_error": "required staged file is missing: /home/postfiatchad/.cache/deploy-prep-20260921/validator-stage/rootfs/etc/postfiat/releases/combined-devnet-20260921/deployment-manifest.json"
+    },
+    {
+      "validator_id": "validator-5",
+      "inputs": "PASS",
+      "allowlisted_present_files": 10,
+      "manifest_gate": "BLOCKED_MISSING_SIGNED_MANIFEST",
+      "manifest_gate_error": "required staged file is missing: /home/postfiatchad/.cache/deploy-prep-20260921/validator-stage/rootfs/etc/postfiat/releases/combined-devnet-20260921/deployment-manifest.json"
+    }
+  ]
+}

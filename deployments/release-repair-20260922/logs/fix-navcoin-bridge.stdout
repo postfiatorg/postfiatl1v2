@@ -1,0 +1,19 @@
+
+running 14 tests
+test market_bridge::burn6_tests::navcoin_bridge_invalid_history_rejects_without_persisting_subscription ... ok
+test market_bridge::burn6_tests::navcoin_bridge_prospective_history_enforces_row_limit_before_encoding ... ok
+test tests::navcoin_bridge_launch_config_template_writes_digest_bound_config ... ok
+test tests::navcoin_bridge_operator_mutations_persist_ledger_and_receipts ... ok
+test tests::navcoin_bridge_packet_preflight_enforces_launch_bound_pricing ... ok
+test tests::navcoin_bridge_packet_preflight_rejects_any_launch_handoff_mismatch ... ok
+test tests::navcoin_bridge_receipt_replay_accepts_clean_empty_route ... ok
+test tests::navcoin_bridge_records_launch_config_and_fork_rehearsal_evidence ... ok
+test tests::navcoin_bridge_refund_source_persists_receipt_and_replays ... ok
+test tests::navcoin_bridge_return_burn_request_derives_canonical_burn_id ... ok
+test tests::navcoin_bridge_status_reads_consensus_pftl_uniswap_routes ... ok
+test tests::navcoin_bridge_status_reads_persisted_pftl_uniswap_ledgers ... ok
+test tests::navcoin_bridge_status_rejects_duplicate_persisted_route_ids ... ok
+test market_bridge::burn6_tests::navcoin_bridge_history_capacity_accepts_last_slot_then_rejects_without_mutation ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 374 filtered out; finished in 20.17s
+

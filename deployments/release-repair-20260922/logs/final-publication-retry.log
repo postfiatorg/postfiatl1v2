@@ -1,0 +1,9 @@
+{"packet": "/tmp/qualify-20260922/deployments/release-repair-20260922", "result": "FAIL", "files": 296, "updated_at": "2026-09-22T09:36:53.880948+00:00"}
+2026-09-22T09:36:53.923522+00:00 START strict-docs
+2026-09-22T09:36:58.934236+00:00 PASS strict-docs (5.0s)
+2026-09-22T09:36:58.935241+00:00 START public-doc-links
+2026-09-22T09:37:03.942807+00:00 PASS public-doc-links (5.0s)
+2026-09-22T09:37:03.943236+00:00 START public-secret-scan
+2026-09-22T09:37:09.952876+00:00 TIMEOUT public-secret-scan (6.0s)
+{"packet": "/tmp/qualify-20260922/deployments/release-repair-20260922", "result": "FAIL", "files": 296, "updated_at": "2026-09-22T09:37:10.021669+00:00"}
+secret scan failed: packet is retained locally, unsafe publication stopped

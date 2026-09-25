@@ -1,0 +1,24 @@
+{
+  "observed_at": "2026-09-21T09:41:02.187202+00:00",
+  "host": "64.176.220.75",
+  "release": "a666-source-route-20260907",
+  "scope": "validator-0 allowed ls/cat/systemctl cat only; no fleet health claim",
+  "release_file_sha256": {
+    "deployment-manifest.json": "9965d8c5d09992414116853cd1fbda9a603c7755d1f01a13bbde6e35a2b63871",
+    "deployment.public.json": "66304dfca0b5893b156eb78e10d65a7b788c262043e85f26eadc82ea86a0314a",
+    "postfiat-validator-0-rpc.service": "b4e49bb2129afb58eaf5f032a2e6cf7251d3ff1772e40dc63adc175ede3f8c46",
+    "postfiat-validator-0.service": "e2dc4827e9407b35e3f1239a0328238086a598ed0dbc5b8ac9f547a05b258321",
+    "private-egress.metadata.json": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+    "swap.metadata.json": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+    "topology.json": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+    "validator-0.bindings.json": "1fdf1f7a1ee6a64338de2974d565d68cb25d9bf9ad1e714cab9287adfec42ed2",
+    "validator-0.rpc.env": "365b90fa8905b300c22296c7259a3e4ea908cc0da05475f7009f14cfe41b0b81",
+    "validator-0.transport.env": "054f9bd1e169154bd36a2bcc8d5c689ae5465367b7c1bc0743abfa20616db94c"
+  },
+  "rpc_generator_delta": "Restart=on-failure -> Restart=always",
+  "auxiliary_services": {
+    "postfiat-cobalt-shadow.service": "/opt/postfiat/releases/cobalt-shadow-e5-8cc7d15e/postfiat-cobalt-shadow",
+    "navcoin-ethereum-archive-rpc-20260907.service": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py"
+  },
+  "auxiliary_policy": "Observed references only; outside safe-rollout target allowlist."
+}

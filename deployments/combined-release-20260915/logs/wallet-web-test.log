@@ -1,0 +1,1582 @@
+
+> postfiat-web-wallet@0.1.2 test
+> node --test src/lib/*.test.js
+
+TAP version 13
+# Subtest: wallet status uses the existing bearer session
+ok 1 - wallet status uses the existing bearer session
+  ---
+  duration_ms: 2.806277
+  type: 'test'
+  ...
+# Subtest: wallet start constructs the fixed action without pasted JSON
+ok 2 - wallet start constructs the fixed action without pasted JSON
+  ---
+  duration_ms: 0.861471
+  type: 'test'
+  ...
+# Subtest: wallet fails closed on missing auth and route identity mismatch
+ok 3 - wallet fails closed on missing auth and route identity mismatch
+  ---
+  duration_ms: 1.034032
+  type: 'test'
+  ...
+# Subtest: findAtomicWalletCreateLeg returns the wallet-owned left leg
+ok 4 - findAtomicWalletCreateLeg returns the wallet-owned left leg
+  ---
+  duration_ms: 1.56895
+  type: 'test'
+  ...
+# Subtest: findAtomicWalletCreateLeg returns the wallet-owned right leg
+ok 5 - findAtomicWalletCreateLeg returns the wallet-owned right leg
+  ---
+  duration_ms: 0.226863
+  type: 'test'
+  ...
+# Subtest: findAtomicWalletCreateLeg returns null when wallet is not a participant
+ok 6 - findAtomicWalletCreateLeg returns null when wallet is not a participant
+  ---
+  duration_ms: 0.113812
+  type: 'test'
+  ...
+# Subtest: findAtomicWalletCreateLeg rejects mismatched owner metadata
+ok 7 - findAtomicWalletCreateLeg rejects mismatched owner metadata
+  ---
+  duration_ms: 0.420165
+  type: 'test'
+  ...
+# Subtest: findAtomicWalletCreateLeg rejects non-create wallet-owned legs
+ok 8 - findAtomicWalletCreateLeg rejects non-create wallet-owned legs
+  ---
+  duration_ms: 0.283397
+  type: 'test'
+  ...
+# Subtest: findAtomicWalletFinishLeg builds the incoming escrow finish operation
+ok 9 - findAtomicWalletFinishLeg builds the incoming escrow finish operation
+  ---
+  duration_ms: 1.274324
+  type: 'test'
+  ...
+# Subtest: findAtomicWalletCancelLeg builds the wallet-owned cancel operation
+ok 10 - findAtomicWalletCancelLeg builds the wallet-owned cancel operation
+  ---
+  duration_ms: 0.295797
+  type: 'test'
+  ...
+# Subtest: vault relay carries the session proxy token outside the request body
+ok 11 - vault relay carries the session proxy token outside the request body
+  ---
+  duration_ms: 48.228537
+  type: 'test'
+  ...
+# Subtest: vault relay retries transient post-deposit job creation
+ok 12 - vault relay retries transient post-deposit job creation
+  ---
+  duration_ms: 8.201785
+  type: 'test'
+  ...
+# Subtest: bridge job discovery is recipient-scoped and authenticated
+ok 13 - bridge job discovery is recipient-scoped and authenticated
+  ---
+  duration_ms: 2.07326
+  type: 'test'
+  ...
+# Subtest: bridge readiness is loaded from the Ethereum mainnet route
+ok 14 - bridge readiness is loaded from the Ethereum mainnet route
+  ---
+  duration_ms: 2.572734
+  type: 'test'
+  ...
+# Subtest: bridge readiness must match every governed route identity
+ok 15 - bridge readiness must match every governed route identity
+  ---
+  duration_ms: 0.583001
+  type: 'test'
+  ...
+# Subtest: bridge readiness retries transient warming but never retries identity mismatch
+ok 16 - bridge readiness retries transient warming but never retries identity mismatch
+  ---
+  duration_ms: 15.955334
+  type: 'test'
+  ...
+# Subtest: accepts the complete active chain-authenticated route profile
+ok 17 - accepts the complete active chain-authenticated route profile
+  ---
+  duration_ms: 22.697805
+  type: 'test'
+  ...
+# Subtest: fails closed on route substitution, stale route, downgrade, and retired vault
+ok 18 - fails closed on route substitution, stale route, downgrade, and retired vault
+  ---
+  duration_ms: 38.87888
+  type: 'test'
+  ...
+# Subtest: same route API accepts a hash-bound receipt-proven verifier profile
+ok 19 - same route API accepts a hash-bound receipt-proven verifier profile
+  ---
+  duration_ms: 5.297921
+  type: 'test'
+  ...
+# Subtest: receipt-proven route fails closed on an incomplete verifier contract
+ok 20 - receipt-proven route fails closed on an incomplete verifier contract
+  ---
+  duration_ms: 12.744025
+  type: 'test'
+  ...
+# Subtest: fails closed on wrong chain, genesis, source network, token, and asset
+ok 21 - fails closed on wrong chain, genesis, source network, token, and asset
+  ---
+  duration_ms: 13.806208
+  type: 'test'
+  ...
+# Subtest: custody boundary rejects secret fields recursively and inside JSON strings
+ok 22 - custody boundary rejects secret fields recursively and inside JSON strings
+  ---
+  duration_ms: 10.301596
+  type: 'test'
+  ...
+# Subtest: custody boundary rejects an active seed hidden under an innocuous key
+ok 23 - custody boundary rejects an active seed hidden under an innocuous key
+  ---
+  duration_ms: 0.424902
+  type: 'test'
+  ...
+# Subtest: custody boundary permits public keys, signatures, and signed envelopes
+ok 24 - custody boundary permits public keys, signatures, and signed envelopes
+  ---
+  duration_ms: 0.524512
+  type: 'test'
+  ...
+# Subtest: custody registry clears all active secret sentinels on wallet lock
+ok 25 - custody registry clears all active secret sentinels on wallet lock
+  ---
+  duration_ms: 0.382658
+  type: 'test'
+  ...
+# Subtest: bridge deposit calldata uses route-bound depositV2 selector
+ok 26 - bridge deposit calldata uses route-bound depositV2 selector
+  ---
+  duration_ms: 2.277129
+  type: 'test'
+  ...
+# Subtest: bridge deposit calldata ABI-encodes amount, string recipient, and nonce
+ok 27 - bridge deposit calldata ABI-encodes amount, string recipient, and nonce
+  ---
+  duration_ms: 0.912578
+  type: 'test'
+  ...
+# Subtest: governed route binding commits the exact SHA3-384 profile hash and u32 epoch
+ok 28 - governed route binding commits the exact SHA3-384 profile hash and u32 epoch
+  ---
+  duration_ms: 3.987732
+  type: 'test'
+  ...
+# Subtest: browser SHA3-384 domain hash matches the platform implementation
+ok 29 - browser SHA3-384 domain hash matches the platform implementation
+  ---
+  duration_ms: 1.249597
+  type: 'test'
+  ...
+# Subtest: generateNonce returns a 32-byte hex nonce
+ok 30 - generateNonce returns a 32-byte hex nonce
+  ---
+  duration_ms: 0.554437
+  type: 'test'
+  ...
+# Subtest: USDC conversion helpers use six decimals
+ok 31 - USDC conversion helpers use six decimals
+  ---
+  duration_ms: 0.232811
+  type: 'test'
+  ...
+# Subtest: Ethereum mainnet helpers switch chains and bind approval to canonical USDC
+ok 32 - Ethereum mainnet helpers switch chains and bind approval to canonical USDC
+  ---
+  duration_ms: 0.627958
+  type: 'test'
+  ...
+# Subtest: Ethereum allowance and fee preflight use MetaMask on canonical USDC
+ok 33 - Ethereum allowance and fee preflight use MetaMask on canonical USDC
+  ---
+  duration_ms: 0.535778
+  type: 'test'
+  ...
+# Subtest: bridge contract preflight binds exact deployed bytecode hash
+ok 34 - bridge contract preflight binds exact deployed bytecode hash
+  ---
+  duration_ms: 1.758735
+  type: 'test'
+  ...
+# Subtest: FastPay recovery store is wallet-scoped, durable, and removable
+ok 35 - FastPay recovery store is wallet-scoped, durable, and removable
+  ---
+  duration_ms: 5.063826
+  type: 'test'
+  ...
+# Subtest: FastPay recovery store refuses a record owned by another wallet
+ok 36 - FastPay recovery store refuses a record owned by another wallet
+  ---
+  duration_ms: 0.481147
+  type: 'test'
+  ...
+# Subtest: looksLikePublicKeyHex accepts long even hex public keys
+ok 37 - looksLikePublicKeyHex accepts long even hex public keys
+  ---
+  duration_ms: 1.543119
+  type: 'test'
+  ...
+# Subtest: looksLikePublicKeyHex rejects account addresses
+ok 38 - looksLikePublicKeyHex rejects account addresses
+  ---
+  duration_ms: 0.141614
+  type: 'test'
+  ...
+# Subtest: resolveFastpayRecipientPublicKey accepts a pasted public key
+ok 39 - resolveFastpayRecipientPublicKey accepts a pasted public key
+  ---
+  duration_ms: 0.268195
+  type: 'test'
+  ...
+# Subtest: resolveFastpayRecipientPublicKey maps the wallet address to its local public key
+ok 40 - resolveFastpayRecipientPublicKey maps the wallet address to its local public key
+  ---
+  duration_ms: 0.199211
+  type: 'test'
+  ...
+# Subtest: resolveFastpayRecipientPublicKey reads a published public key from account RPC
+ok 41 - resolveFastpayRecipientPublicKey reads a published public key from account RPC
+  ---
+  duration_ms: 0.294645
+  type: 'test'
+  ...
+# Subtest: resolveFastpayRecipientPublicKey rejects unpublished account public keys
+ok 42 - resolveFastpayRecipientPublicKey rejects unpublished account public keys
+  ---
+  duration_ms: 0.552444
+  type: 'test'
+  ...
+# Subtest: JS FastSwap encoder matches the frozen Rust conformance vector
+ok 43 - JS FastSwap encoder matches the frozen Rust conformance vector
+  ---
+  duration_ms: 3.371241
+  type: 'test'
+  ...
+# Subtest: JS FastSwap encoder fails closed on malleable party and object order
+ok 44 - JS FastSwap encoder fails closed on malleable party and object order
+  ---
+  duration_ms: 1.044397
+  type: 'test'
+  ...
+# Subtest: export activity discovery is recipient-scoped and authenticated
+ok 45 - export activity discovery is recipient-scoped and authenticated
+  ---
+  duration_ms: 54.098701
+  type: 'test'
+  ...
+# Subtest: NAVCoin export is route-scoped, authenticated, idempotent, and carries no custody material
+ok 46 - NAVCoin export is route-scoped, authenticated, idempotent, and carries no custody material
+  ---
+  duration_ms: 505.812309
+  type: 'test'
+  ...
+# Subtest: governed NAVCoin markets are derived from bounded chain registry rows
+ok 47 - governed NAVCoin markets are derived from bounded chain registry rows
+  ---
+  duration_ms: 2.225862
+  type: 'test'
+  ...
+# Subtest: governed NAVCoin markets consume only route_live registry rows
+ok 48 - governed NAVCoin markets consume only route_live registry rows
+  ---
+  duration_ms: 0.310309
+  type: 'test'
+  ...
+# Subtest: governed NAVCoin markets reject duplicate live route identities
+ok 49 - governed NAVCoin markets reject duplicate live route identities
+  ---
+  duration_ms: 0.505683
+  type: 'test'
+  ...
+# Subtest: governed NAVCoin markets fail closed on missing or non-boolean route_live
+ok 50 - governed NAVCoin markets fail closed on missing or non-boolean route_live
+  ---
+  duration_ms: 0.22534
+  type: 'test'
+  ...
+# Subtest: route_live filter regression vector is structurally retained
+ok 51 - route_live filter regression vector is structurally retained
+  ---
+  duration_ms: 0.682621
+  type: 'test'
+  ...
+# Subtest: governed NAVCoin registry rejects malformed and duplicate identities
+ok 52 - governed NAVCoin registry rejects malformed and duplicate identities
+  ---
+  duration_ms: 0.644153
+  type: 'test'
+  ...
+# Subtest: live v1 route identity is hydrated from verified asset_info responses
+ok 53 - live v1 route identity is hydrated from verified asset_info responses
+  ---
+  duration_ms: 0.520445
+  type: 'test'
+  ...
+# Subtest: live v1 route hydration fails closed when asset metadata is unavailable
+ok 54 - live v1 route hydration fails closed when asset metadata is unavailable
+  ---
+  duration_ms: 0.511872
+  type: 'test'
+  ...
+# Subtest: parses, formats, and prices registered-precision NAVCoin amounts without floating point
+ok 55 - parses, formats, and prices registered-precision NAVCoin amounts without floating point
+  ---
+  duration_ms: 53.779871
+  type: 'test'
+  ...
+# Subtest: prices different registered native and settlement precisions exactly
+ok 56 - prices different registered native and settlement precisions exactly
+  ---
+  duration_ms: 0.238971
+  type: 'test'
+  ...
+# Subtest: resident market readiness binds registered route, live NAV, and balances
+ok 57 - resident market readiness binds registered route, live NAV, and balances
+  ---
+  duration_ms: 1.206102
+  type: 'test'
+  ...
+# Subtest: builds the exact resident issue and redeem operation sequence
+ok 58 - builds the exact resident issue and redeem operation sequence
+  ---
+  duration_ms: 1.540345
+  type: 'test'
+  ...
+# Subtest: return activity discovery is recipient-scoped and authenticated
+ok 59 - return activity discovery is recipient-scoped and authenticated
+  ---
+  duration_ms: 45.829786
+  type: 'test'
+  ...
+# Subtest: return burn calldata exactly matches the deployed Solidity ABI
+ok 60 - return burn calldata exactly matches the deployed Solidity ABI
+  ---
+  duration_ms: 0.589751
+  type: 'test'
+  ...
+# Subtest: return relay request is authenticated and carries no custody material
+ok 61 - return relay request is authenticated and carries no custody material
+  ---
+  duration_ms: 1.743183
+  type: 'test'
+  ...
+# Subtest: secondary market data binds the live Ethereum pool to the governed NAV route
+ok 62 - secondary market data binds the live Ethereum pool to the governed NAV route
+  ---
+  duration_ms: 1.777063
+  type: 'test'
+  ...
+# Subtest: secondary market data fails closed on route or token substitution
+ok 63 - secondary market data fails closed on route or token substitution
+  ---
+  duration_ms: 0.484242
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction accepts wallet-owned NAV subscription allocation
+ok 64 - verifyNavswapPreparedAssetAction accepts wallet-owned NAV subscription allocation
+  ---
+  duration_ms: 4.149726
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects NAV subscription without primary mint economics
+ok 65 - verifyNavswapPreparedAssetAction rejects NAV subscription without primary mint economics
+  ---
+  duration_ms: 0.601168
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects NAV subscription that claims Uniswap creates supply
+ok 66 - verifyNavswapPreparedAssetAction rejects NAV subscription that claims Uniswap creates supply
+  ---
+  duration_ms: 0.234694
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects trustless label without finality verifier evidence
+ok 67 - verifyNavswapPreparedAssetAction rejects trustless label without finality verifier evidence
+  ---
+  duration_ms: 0.230018
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction accepts bridge-aware composite handoff when not legacy a651
+ok 68 - verifyNavswapPreparedAssetAction accepts bridge-aware composite handoff when not legacy a651
+  ---
+  duration_ms: 0.464711
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects legacy a651 Uniswap route as bridge handoff
+ok 69 - verifyNavswapPreparedAssetAction rejects legacy a651 Uniswap route as bridge handoff
+  ---
+  duration_ms: 0.194234
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction accepts native a651 in bridge-aware composite handoff
+ok 70 - verifyNavswapPreparedAssetAction accepts native a651 in bridge-aware composite handoff
+  ---
+  duration_ms: 0.299153
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects legacy Ethereum a651 token in composite handoff
+ok 71 - verifyNavswapPreparedAssetAction rejects legacy Ethereum a651 token in composite handoff
+  ---
+  duration_ms: 0.267175
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects legacy a651 pool in composite handoff
+ok 72 - verifyNavswapPreparedAssetAction rejects legacy a651 pool in composite handoff
+  ---
+  duration_ms: 0.499264
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction accepts controlled PFTL-Uniswap beta composite handoff
+ok 73 - verifyNavswapPreparedAssetAction accepts controlled PFTL-Uniswap beta composite handoff
+  ---
+  duration_ms: 0.687809
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction accepts PFTL-Uniswap primary subscribe source action
+ok 74 - verifyNavswapPreparedAssetAction accepts PFTL-Uniswap primary subscribe source action
+  ---
+  duration_ms: 0.582009
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction accepts PFTL-Uniswap export debit source action
+ok 75 - verifyNavswapPreparedAssetAction accepts PFTL-Uniswap export debit source action
+  ---
+  duration_ms: 0.399272
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects PFTL-Uniswap export amount mutation
+ok 76 - verifyNavswapPreparedAssetAction rejects PFTL-Uniswap export amount mutation
+  ---
+  duration_ms: 0.301044
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects PFTL-Uniswap route digest missing
+ok 77 - verifyNavswapPreparedAssetAction rejects PFTL-Uniswap route digest missing
+  ---
+  duration_ms: 1.647428
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction accepts optimistic PFTL-Uniswap public beta composite handoff
+ok 78 - verifyNavswapPreparedAssetAction accepts optimistic PFTL-Uniswap public beta composite handoff
+  ---
+  duration_ms: 0.479534
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects beta handoff without supported trust label
+ok 79 - verifyNavswapPreparedAssetAction rejects beta handoff without supported trust label
+  ---
+  duration_ms: 0.269016
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects optimistic handoff missing Gate 6 public-beta terms
+ok 80 - verifyNavswapPreparedAssetAction rejects optimistic handoff missing Gate 6 public-beta terms
+  ---
+  duration_ms: 0.20644
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects optimistic handoff with misleading visible trust copy
+ok 81 - verifyNavswapPreparedAssetAction rejects optimistic handoff with misleading visible trust copy
+  ---
+  duration_ms: 0.183476
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects arbitrated optimistic handoff without arbitrated copy
+ok 82 - verifyNavswapPreparedAssetAction rejects arbitrated optimistic handoff without arbitrated copy
+  ---
+  duration_ms: 0.193483
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects paused beta handoff
+ok 83 - verifyNavswapPreparedAssetAction rejects paused beta handoff
+  ---
+  duration_ms: 0.150078
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects beta handoff that exceeds packet cap
+ok 84 - verifyNavswapPreparedAssetAction rejects beta handoff that exceeds packet cap
+  ---
+  duration_ms: 0.14563
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects non-composite beta handoff
+ok 85 - verifyNavswapPreparedAssetAction rejects non-composite beta handoff
+  ---
+  duration_ms: 0.196267
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects beta redeem actions
+ok 86 - verifyNavswapPreparedAssetAction rejects beta redeem actions
+  ---
+  duration_ms: 0.240954
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction accepts fresh quote metadata
+ok 87 - verifyNavswapPreparedAssetAction accepts fresh quote metadata
+  ---
+  duration_ms: 0.259051
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects stale quote metadata
+ok 88 - verifyNavswapPreparedAssetAction rejects stale quote metadata
+  ---
+  duration_ms: 0.343779
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects expired quote metadata
+ok 89 - verifyNavswapPreparedAssetAction rejects expired quote metadata
+  ---
+  duration_ms: 0.197088
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects source substitution
+ok 90 - verifyNavswapPreparedAssetAction rejects source substitution
+  ---
+  duration_ms: 0.164088
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects amount expansion after approval
+ok 91 - verifyNavswapPreparedAssetAction rejects amount expansion after approval
+  ---
+  duration_ms: 0.201474
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects NAV allocation operator mutation
+ok 92 - verifyNavswapPreparedAssetAction rejects NAV allocation operator mutation
+  ---
+  duration_ms: 0.168566
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects NAV subscription id mutation
+ok 93 - verifyNavswapPreparedAssetAction rejects NAV subscription id mutation
+  ---
+  duration_ms: 0.190857
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects issuer-owned mint actions
+ok 94 - verifyNavswapPreparedAssetAction rejects issuer-owned mint actions
+  ---
+  duration_ms: 0.222826
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction accepts wallet-owned NAV redeem
+ok 95 - verifyNavswapPreparedAssetAction accepts wallet-owned NAV redeem
+  ---
+  duration_ms: 0.282846
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects trust_set actions
+ok 96 - verifyNavswapPreparedAssetAction rejects trust_set actions
+  ---
+  duration_ms: 0.220382
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects trust_set before issuer checks
+ok 97 - verifyNavswapPreparedAssetAction rejects trust_set before issuer checks
+  ---
+  duration_ms: 0.202966
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects NAV reserve packet mutation
+ok 98 - verifyNavswapPreparedAssetAction rejects NAV reserve packet mutation
+  ---
+  duration_ms: 0.237909
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects NAV redeem issuer mutation
+ok 99 - verifyNavswapPreparedAssetAction rejects NAV redeem issuer mutation
+  ---
+  duration_ms: 0.197969
+  type: 'test'
+  ...
+# Subtest: verifyNavswapPreparedAssetAction rejects custody key material in request payload
+ok 100 - verifyNavswapPreparedAssetAction rejects custody key material in request payload
+  ---
+  duration_ms: 0.160672
+  type: 'test'
+  ...
+# Subtest: submitNavswapPreparedAssetAction verifies and submits exact reviewed operation
+ok 101 - submitNavswapPreparedAssetAction verifies and submits exact reviewed operation
+  ---
+  duration_ms: 0.385842
+  type: 'test'
+  ...
+# Subtest: submitNavswapPreparedAssetAction rejects expired quote before signing
+ok 102 - submitNavswapPreparedAssetAction rejects expired quote before signing
+  ---
+  duration_ms: 0.502259
+  type: 'test'
+  ...
+# Subtest: submitNavswapPreparedAssetActions verifies all actions before sequential signing
+ok 103 - submitNavswapPreparedAssetActions verifies all actions before sequential signing
+  ---
+  duration_ms: 0.74868
+  type: 'test'
+  ...
+# Subtest: submitNavswapPreparedAssetActions rejects invalid batch before signing anything
+ok 104 - submitNavswapPreparedAssetActions rejects invalid batch before signing anything
+  ---
+  duration_ms: 0.313522
+  type: 'test'
+  ...
+# Subtest: submitNavswapPreparedAssetActions exposes partial results when a submit fails
+ok 105 - submitNavswapPreparedAssetActions exposes partial results when a submit fails
+  ---
+  duration_ms: 0.375877
+  type: 'test'
+  ...
+# Subtest: submitNavswapPreparedAssetActions preserves string signer failures
+ok 106 - submitNavswapPreparedAssetActions preserves string signer failures
+  ---
+  duration_ms: 0.287034
+  type: 'test'
+  ...
+# Subtest: builds the exact bounded intent and signs only inside WASM
+ok 107 - builds the exact bounded intent and signs only inside WASM
+  ---
+  duration_ms: 1.919068
+  type: 'test'
+  ...
+# Subtest: authenticated quote request is exact and bounded
+ok 108 - authenticated quote request is exact and bounded
+  ---
+  duration_ms: 1.596352
+  type: 'test'
+  ...
+# Subtest: pending execution polls, then same-intent replays committed output reference
+ok 109 - pending execution polls, then same-intent replays committed output reference
+  ---
+  duration_ms: 5.331751
+  type: 'test'
+  ...
+# Subtest: NAVCoin display amounts convert exactly to governed bounded atoms
+ok 110 - NAVCoin display amounts convert exactly to governed bounded atoms
+  ---
+  duration_ms: 0.620177
+  type: 'test'
+  ...
+# Subtest: browser recovery persists only whitelisted public signed lineage
+ok 111 - browser recovery persists only whitelisted public signed lineage
+  ---
+  duration_ms: 0.850344
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapBetaRoute accepts controlled capped explicit beta route
+ok 112 - evaluatePftlUniswapBetaRoute accepts controlled capped explicit beta route
+  ---
+  duration_ms: 4.535358
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapBetaRoute accepts native a651 with bridge-aware wrapped token and pool
+ok 113 - evaluatePftlUniswapBetaRoute accepts native a651 with bridge-aware wrapped token and pool
+  ---
+  duration_ms: 0.372582
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapBetaRoute rejects missing explicit beta state
+ok 114 - evaluatePftlUniswapBetaRoute rejects missing explicit beta state
+  ---
+  duration_ms: 0.360244
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapBetaRoute rejects non-controlled trust labels
+ok 115 - evaluatePftlUniswapBetaRoute rejects non-controlled trust labels
+  ---
+  duration_ms: 0.214904
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapBetaRoute rejects public routing labels for beta
+ok 116 - evaluatePftlUniswapBetaRoute rejects public routing labels for beta
+  ---
+  duration_ms: 0.288546
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapBetaRoute rejects missing caps
+ok 117 - evaluatePftlUniswapBetaRoute rejects missing caps
+  ---
+  duration_ms: 0.202476
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapBetaRoute rejects paused routes
+ok 118 - evaluatePftlUniswapBetaRoute rejects paused routes
+  ---
+  duration_ms: 0.259193
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapBetaRoute rejects packet cap excess
+ok 119 - evaluatePftlUniswapBetaRoute rejects packet cap excess
+  ---
+  duration_ms: 0.179001
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapBetaRoute rejects route cap excess
+ok 120 - evaluatePftlUniswapBetaRoute rejects route cap excess
+  ---
+  duration_ms: 0.479825
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapBetaRoute rejects legacy fallback route and flags
+ok 121 - evaluatePftlUniswapBetaRoute rejects legacy fallback route and flags
+  ---
+  duration_ms: 0.551483
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapBetaRoute rejects legacy Ethereum a651 token and pool fields
+ok 122 - evaluatePftlUniswapBetaRoute rejects legacy Ethereum a651 token and pool fields
+  ---
+  duration_ms: 1.194333
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapOptimisticRoute accepts capped public beta with visible challenge terms
+ok 123 - evaluatePftlUniswapOptimisticRoute accepts capped public beta with visible challenge terms
+  ---
+  duration_ms: 2.079601
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapOptimisticRoute rejects trustless copy on optimistic route
+ok 124 - evaluatePftlUniswapOptimisticRoute rejects trustless copy on optimistic route
+  ---
+  duration_ms: 0.39138
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapOptimisticRoute rejects missing challenge terms and watcher SLO
+ok 125 - evaluatePftlUniswapOptimisticRoute rejects missing challenge terms and watcher SLO
+  ---
+  duration_ms: 0.312281
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapOptimisticRoute rejects missing Gate 6 pre-sign display fields
+ok 126 - evaluatePftlUniswapOptimisticRoute rejects missing Gate 6 pre-sign display fields
+  ---
+  duration_ms: 0.242546
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapOptimisticRoute rejects uncapped or over-cap public beta
+ok 127 - evaluatePftlUniswapOptimisticRoute rejects uncapped or over-cap public beta
+  ---
+  duration_ms: 0.393465
+  type: 'test'
+  ...
+# Subtest: evaluatePftlUniswapOptimisticRoute rejects disabled public routing and legacy fallback
+ok 128 - evaluatePftlUniswapOptimisticRoute rejects disabled public routing and legacy fallback
+  ---
+  duration_ms: 0.30498
+  type: 'test'
+  ...
+# Subtest: prepares an exact mainnet pfUSDC withdrawal from the unique governed bucket
+ok 129 - prepares an exact mainnet pfUSDC withdrawal from the unique governed bucket
+  ---
+  duration_ms: 5.002013
+  type: 'test'
+  ...
+# Subtest: fails closed when no unique active deployment-bound reserve bucket exists
+ok 130 - fails closed when no unique active deployment-bound reserve bucket exists
+  ---
+  duration_ms: 0.541769
+  type: 'test'
+  ...
+# Subtest: fails before signing when the active route cannot cover the requested amount
+ok 131 - fails before signing when the active route cannot cover the requested amount
+  ---
+  duration_ms: 0.198279
+  type: 'test'
+  ...
+# Subtest: recovers only an unregistered pending burn bound to the current governed bucket
+ok 132 - recovers only an unregistered pending burn bound to the current governed bucket
+  ---
+  duration_ms: 4.710774
+  type: 'test'
+  ...
+# Subtest: formats asset atoms without floating point
+ok 133 - formats asset atoms without floating point
+  ---
+  duration_ms: 1.495759
+  type: 'test'
+  ...
+# Subtest: verifies the exact active pNOK demo FIX and quote
+ok 134 - verifies the exact active pNOK demo FIX and quote
+  ---
+  duration_ms: 0.409809
+  type: 'test'
+  ...
+# Subtest: fails closed when the backend quote differs by one atom
+ok 135 - fails closed when the backend quote differs by one atom
+  ---
+  duration_ms: 0.457681
+  type: 'test'
+  ...
+# Subtest: fails closed when max_fills exceeds aggregate atom capacity
+ok 136 - fails closed when max_fills exceeds aggregate atom capacity
+  ---
+  duration_ms: 0.223307
+  type: 'test'
+  ...
+# Subtest: generates bounded durable request IDs
+ok 137 - generates bounded durable request IDs
+  ---
+  duration_ms: 0.225961
+  type: 'test'
+  ...
+# Subtest: parseAccountResult accepts flat account responses
+ok 138 - parseAccountResult accepts flat account responses
+  ---
+  duration_ms: 1.805556
+  type: 'test'
+  ...
+# Subtest: parseAccountResult accepts nested account responses
+ok 139 - parseAccountResult accepts nested account responses
+  ---
+  duration_ms: 0.235345
+  type: 'test'
+  ...
+# Subtest: parseAccountResult preserves genuine zero balances
+ok 140 - parseAccountResult preserves genuine zero balances
+  ---
+  duration_ms: 0.129736
+  type: 'test'
+  ...
+# Subtest: parseAccountResult rejects RPC errors instead of returning zero
+ok 141 - parseAccountResult rejects RPC errors instead of returning zero
+  ---
+  duration_ms: 0.451833
+  type: 'test'
+  ...
+# Subtest: parseAccountResult rejects missing balance instead of returning zero
+ok 142 - parseAccountResult rejects missing balance instead of returning zero
+  ---
+  duration_ms: 0.201384
+  type: 'test'
+  ...
+# Subtest: parseOwnedObjectsResult preserves total_value and objects
+ok 143 - parseOwnedObjectsResult preserves total_value and objects
+  ---
+  duration_ms: 0.209647
+  type: 'test'
+  ...
+# Subtest: parseOwnedObjectsResult computes total from objects when total_value is absent
+ok 144 - parseOwnedObjectsResult computes total from objects when total_value is absent
+  ---
+  duration_ms: 0.247515
+  type: 'test'
+  ...
+# Subtest: humanRpcErrorMessage translates owned-object transport failures
+ok 145 - humanRpcErrorMessage translates owned-object transport failures
+  ---
+  duration_ms: 0.195936
+  type: 'test'
+  ...
+# Subtest: humanRpcErrorMessage translates finality submit failures
+ok 146 - humanRpcErrorMessage translates finality submit failures
+  ---
+  duration_ms: 0.367785
+  type: 'test'
+  ...
+# Subtest: RpcClient attaches the session-only proxy token to mutation requests
+ok 147 - RpcClient attaches the session-only proxy token to mutation requests
+  ---
+  duration_ms: 41.99165
+  type: 'test'
+  ...
+# Subtest: RpcClient does not close a healthy shared socket when one RPC times out
+ok 148 - RpcClient does not close a healthy shared socket when one RPC times out
+  ---
+  duration_ms: 314.502473
+  type: 'test'
+  ...
+# Subtest: RpcClient rejects registered custody material before opening a socket
+ok 149 - RpcClient rejects registered custody material before opening a socket
+  ---
+  duration_ms: 2.131589
+  type: 'test'
+  ...
+# Subtest: RpcClient exposes no unsigned account-to-owned mutation
+ok 150 - RpcClient exposes no unsigned account-to-owned mutation
+  ---
+  duration_ms: 0.268356
+  type: 'test'
+  ...
+# Subtest: RpcClient discovers governed NAVCoin routes and reads exact route/NAV state
+ok 151 - RpcClient discovers governed NAVCoin routes and reads exact route/NAV state
+  ---
+  duration_ms: 3.108604
+  type: 'test'
+  ...
+# Subtest: RpcClient binds private FIX discovery and exact atom quotes to public RPC methods
+ok 152 - RpcClient binds private FIX discovery and exact atom quotes to public RPC methods
+  ---
+  duration_ms: 0.945508
+  type: 'test'
+  ...
+# Subtest: RpcClient binds FastPay v3 mutations and recovery reads to exact RPC methods
+ok 153 - RpcClient binds FastPay v3 mutations and recovery reads to exact RPC methods
+  ---
+  duration_ms: 0.810465
+  type: 'test'
+  ...
+# Subtest: serverCapabilities fails closed when the FastPay owned lane is not advertised
+ok 154 - serverCapabilities fails closed when the FastPay owned lane is not advertised
+  ---
+  duration_ms: 0.738144
+  type: 'test'
+  ...
+# Subtest: submitSignedAssetTransaction uses canonical RPC parameter name
+ok 155 - submitSignedAssetTransaction uses canonical RPC parameter name
+  ---
+  duration_ms: 0.677954
+  type: 'test'
+  ...
+# Subtest: submitSignedAssetTransactionFinality uses certified asset finality RPC method
+ok 156 - submitSignedAssetTransactionFinality uses certified asset finality RPC method
+  ---
+  duration_ms: 0.432513
+  type: 'test'
+  ...
+# Subtest: submitSignedEscrowTransactionFinality uses certified escrow finality RPC method
+ok 157 - submitSignedEscrowTransactionFinality uses certified escrow finality RPC method
+  ---
+  duration_ms: 0.426874
+  type: 'test'
+  ...
+# Subtest: pollOwnedObjectsTotal polls until the requested total is visible
+ok 158 - pollOwnedObjectsTotal polls until the requested total is visible
+  ---
+  duration_ms: 9.334146
+  type: 'test'
+  ...
+# Subtest: pollOwnedObjectsTotal returns a timeout result when the total never catches up
+ok 159 - pollOwnedObjectsTotal returns a timeout result when the total never catches up
+  ---
+  duration_ms: 5.406234
+  type: 'test'
+  ...
+# Subtest: shielded request guard rejects private wallet material
+ok 160 - shielded request guard rejects private wallet material
+  ---
+  duration_ms: 10.924617
+  type: 'test'
+  ...
+# Subtest: shielded capability normalization stays blocked without quote config
+ok 161 - shielded capability normalization stays blocked without quote config
+  ---
+  duration_ms: 1.683092
+  type: 'test'
+  ...
+# Subtest: shielded capability normalization allows Step 7 private swap submit
+ok 162 - shielded capability normalization allows Step 7 private swap submit
+  ---
+  duration_ms: 0.336148
+  type: 'test'
+  ...
+# Subtest: shielded capability normalization exposes explicit Step 9 public exit
+ok 163 - shielded capability normalization exposes explicit Step 9 public exit
+  ---
+  duration_ms: 0.334145
+  type: 'test'
+  ...
+# Subtest: shielded capability normalization allows Step 6 quote preview but not run
+ok 164 - shielded capability normalization allows Step 6 quote preview but not run
+  ---
+  duration_ms: 0.3977
+  type: 'test'
+  ...
+# Subtest: shielded quote normalization requires live commitment and non-expired expiry
+ok 165 - shielded quote normalization requires live commitment and non-expired expiry
+  ---
+  duration_ms: 0.295115
+  type: 'test'
+  ...
+# Subtest: private egress disclosure hash is stable and public-field bound
+ok 166 - private egress disclosure hash is stable and public-field bound
+  ---
+  duration_ms: 8.727369
+  type: 'test'
+  ...
+# Subtest: private egress verifier permits public proof fields and rejects note openings
+ok 167 - private egress verifier permits public proof fields and rejects note openings
+  ---
+  duration_ms: 1.003926
+  type: 'test'
+  ...
+# Subtest: local prover readiness requires local-only K=15 hashes
+ok 168 - local prover readiness requires local-only K=15 hashes
+  ---
+  duration_ms: 0.490552
+  type: 'test'
+  ...
+# Subtest: shielded note vault encryption recovers spendable state without selecting nullified notes
+ok 169 - shielded note vault encryption recovers spendable state without selecting nullified notes
+  ---
+  duration_ms: 25.981954
+  type: 'test'
+  ...
+# Subtest: Asset-Orchard action verification rejects cleartext assets and note openings
+ok 170 - Asset-Orchard action verification rejects cleartext assets and note openings
+  ---
+  duration_ms: 1.943686
+  type: 'test'
+  ...
+# Subtest: local Asset-Orchard prover client is loopback-only and verifies returned actions
+ok 171 - local Asset-Orchard prover client is loopback-only and verifies returned actions
+  ---
+  duration_ms: 1.101783
+  type: 'test'
+  ...
+# Subtest: Asset-Orchard ingress helpers build public payload without spend material
+ok 172 - Asset-Orchard ingress helpers build public payload without spend material
+  ---
+  duration_ms: 0.494737
+  type: 'test'
+  ...
+# Subtest: defaultSwapServerUrl uses wallet proxy for local Vite dev server
+ok 173 - defaultSwapServerUrl uses wallet proxy for local Vite dev server
+  ---
+  duration_ms: 1.738765
+  type: 'test'
+  ...
+# Subtest: defaultSwapServerUrl uses same-origin adapter on HTTPS Vite dev server
+ok 174 - defaultSwapServerUrl uses same-origin adapter on HTTPS Vite dev server
+  ---
+  duration_ms: 0.244219
+  type: 'test'
+  ...
+# Subtest: normalizeSwapServerUrl migrates stale loopback adapter on public HTTPS wallet
+ok 175 - normalizeSwapServerUrl migrates stale loopback adapter on public HTTPS wallet
+  ---
+  duration_ms: 0.227143
+  type: 'test'
+  ...
+# Subtest: SwapServer calls navswap capabilities endpoint
+ok 176 - SwapServer calls navswap capabilities endpoint
+  ---
+  duration_ms: 0.473876
+  type: 'test'
+  ...
+# Subtest: SwapServer calls the certified private-swap workflow endpoint
+ok 177 - SwapServer calls the certified private-swap workflow endpoint
+  ---
+  duration_ms: 1.345901
+  type: 'test'
+  ...
+# Subtest: SwapServer rejects active wallet seed material on every HTTP route
+ok 178 - SwapServer rejects active wallet seed material on every HTTP route
+  ---
+  duration_ms: 4.760758
+  type: 'test'
+  ...
+# Subtest: SwapServer exposes disabled navswap route errors with response payload
+ok 179 - SwapServer exposes disabled navswap route errors with response payload
+  ---
+  duration_ms: 0.614697
+  type: 'test'
+  ...
+# Subtest: SwapServer calls navswap run status endpoints
+ok 180 - SwapServer calls navswap run status endpoints
+  ---
+  duration_ms: 1.448707
+  type: 'test'
+  ...
+# Subtest: SwapServer calls navswap run list endpoint
+ok 181 - SwapServer calls navswap run list endpoint
+  ---
+  duration_ms: 0.993561
+  type: 'test'
+  ...
+# Subtest: SwapServer exposes navswap run stream URL
+ok 182 - SwapServer exposes navswap run stream URL
+  ---
+  duration_ms: 0.473585
+  type: 'test'
+  ...
+# Subtest: SwapServer calls navswap action prepare endpoint
+ok 183 - SwapServer calls navswap action prepare endpoint
+  ---
+  duration_ms: 0.727719
+  type: 'test'
+  ...
+# Subtest: SwapServer calls navswap action batch prepare endpoint
+ok 184 - SwapServer calls navswap action batch prepare endpoint
+  ---
+  duration_ms: 0.467707
+  type: 'test'
+  ...
+# Subtest: SwapServer calls navswap planner inputs endpoint
+ok 185 - SwapServer calls navswap planner inputs endpoint
+  ---
+  duration_ms: 0.475339
+  type: 'test'
+  ...
+# Subtest: SwapServer calls navswap readiness endpoint
+ok 186 - SwapServer calls navswap readiness endpoint
+  ---
+  duration_ms: 0.297418
+  type: 'test'
+  ...
+# Subtest: SwapServer calls navswap devnet pfUSDC funding endpoint
+ok 187 - SwapServer calls navswap devnet pfUSDC funding endpoint
+  ---
+  duration_ms: 0.39764
+  type: 'test'
+  ...
+# Subtest: SwapServer adds idempotency key to navswap run requests
+ok 188 - SwapServer adds idempotency key to navswap run requests
+  ---
+  duration_ms: 0.400886
+  type: 'test'
+  ...
+# Subtest: SwapServer calls navswap atomic template endpoint
+ok 189 - SwapServer calls navswap atomic template endpoint
+  ---
+  duration_ms: 0.433705
+  type: 'test'
+  ...
+# Subtest: SwapServer attaches the session-only bearer to mutation requests
+ok 190 - SwapServer attaches the session-only bearer to mutation requests
+  ---
+  duration_ms: 0.310228
+  type: 'test'
+  ...
+# Subtest: SwapServer exposes shielded NAVSwap read-only and preflight endpoints
+ok 191 - SwapServer exposes shielded NAVSwap read-only and preflight endpoints
+  ---
+  duration_ms: 3.313704
+  type: 'test'
+  ...
+# Subtest: SwapServer rejects shielded private material before endpoint submission
+ok 192 - SwapServer rejects shielded private material before endpoint submission
+  ---
+  duration_ms: 0.916184
+  type: 'test'
+  ...
+# Subtest: SwapServer blocks shielded NAVSwap quote, run, and prepared action paths
+ok 193 - SwapServer blocks shielded NAVSwap quote, run, and prepared action paths
+  ---
+  duration_ms: 0.434747
+  type: 'test'
+  ...
+# owned_sign failed for validator-4: vote unavailable
+# owned_sign failed for validator-5: vote unavailable
+# owned_sign refused for validator-0: owned-sign refused: input locked-object v1 is locked by a different order
+# owned_sign refused for validator-1: owned-sign refused: input locked-object v1 is locked by a different order
+# owned_sign refused for validator-2: owned-sign refused: input locked-object v1 is locked by a different order
+# owned_sign refused for validator-3: owned-sign refused: input locked-object v1 is locked by a different order
+# owned_sign refused for validator-4: owned-sign refused: input locked-object v1 is locked by a different order
+# owned_sign refused for validator-5: owned-sign refused: input locked-object v1 is locked by a different order
+# Subtest: sendTransfer without memos uses the existing v1 transfer path
+ok 194 - sendTransfer without memos uses the existing v1 transfer path
+  ---
+  duration_ms: 3.674178
+  type: 'test'
+  ...
+# Subtest: sendTransfer rejects an RPC quote that substitutes the reviewed intent
+ok 195 - sendTransfer rejects an RPC quote that substitutes the reviewed intent
+  ---
+  duration_ms: 0.5896
+  type: 'test'
+  ...
+# Subtest: depositToFastPay signs locally and requires the exact accepted receipt code
+ok 196 - depositToFastPay signs locally and requires the exact accepted receipt code
+  ---
+  duration_ms: 7.694849
+  type: 'test'
+  ...
+# Subtest: depositToFastPay never treats rejected or unknown receipt code as success
+ok 197 - depositToFastPay never treats rejected or unknown receipt code as success
+  ---
+  duration_ms: 2.159031
+  type: 'test'
+  ...
+# Subtest: sendTransfer returns inline finality receipt without polling
+ok 198 - sendTransfer returns inline finality receipt without polling
+  ---
+  duration_ms: 0.484091
+  type: 'test'
+  ...
+# Subtest: sendTransfer can reuse reviewed quote without a second quote RPC
+ok 199 - sendTransfer can reuse reviewed quote without a second quote RPC
+  ---
+  duration_ms: 0.338652
+  type: 'test'
+  ...
+# Subtest: sendTransfer with any memo uses payment v2 signing and finality submit
+ok 200 - sendTransfer with any memo uses payment v2 signing and finality submit
+  ---
+  duration_ms: 0.712256
+  type: 'test'
+  ...
+# Subtest: sendTransfer with memo returns inline payment v2 finality receipt without polling
+ok 201 - sendTransfer with memo returns inline payment v2 finality receipt without polling
+  ---
+  duration_ms: 0.338872
+  type: 'test'
+  ...
+# Subtest: sendTransfer with memo can reuse reviewed quote without a second quote RPC
+ok 202 - sendTransfer with memo can reuse reviewed quote without a second quote RPC
+  ---
+  duration_ms: 0.638335
+  type: 'test'
+  ...
+# Subtest: sendAssetTransfer signs reviewed asset operation and submits with finality
+ok 203 - sendAssetTransfer signs reviewed asset operation and submits with finality
+  ---
+  duration_ms: 1.131638
+  type: 'test'
+  ...
+# Subtest: signAssetTransaction signs a reviewed asset operation without submitting
+ok 204 - signAssetTransaction signs a reviewed asset operation without submitting
+  ---
+  duration_ms: 0.493725
+  type: 'test'
+  ...
+# Subtest: sendAssetTransfer accepts quoted numeric operation fields returned as strings
+ok 205 - sendAssetTransfer accepts quoted numeric operation fields returned as strings
+  ---
+  duration_ms: 0.504122
+  type: 'test'
+  ...
+# Subtest: sendAssetTransfer rejects source substitution before signing
+ok 206 - sendAssetTransfer rejects source substitution before signing
+  ---
+  duration_ms: 0.266142
+  type: 'test'
+  ...
+# Subtest: sendAssetTransfer rejects operation substitution before signing
+ok 207 - sendAssetTransfer rejects operation substitution before signing
+  ---
+  duration_ms: 0.302226
+  type: 'test'
+  ...
+# Subtest: sendEscrowTransaction signs reviewed escrow operation and submits
+ok 208 - sendEscrowTransaction signs reviewed escrow operation and submits
+  ---
+  duration_ms: 0.522329
+  type: 'test'
+  ...
+# Subtest: sendEscrowTransaction prefers certified escrow finality submit
+ok 209 - sendEscrowTransaction prefers certified escrow finality submit
+  ---
+  duration_ms: 0.405253
+  type: 'test'
+  ...
+# Subtest: sendEscrowTransaction rejects insufficient fee reserve before signing
+ok 210 - sendEscrowTransaction rejects insufficient fee reserve before signing
+  ---
+  duration_ms: 0.242706
+  type: 'test'
+  ...
+# Subtest: sendEscrowTransaction rejects operation substitution before signing
+ok 211 - sendEscrowTransaction rejects operation substitution before signing
+  ---
+  duration_ms: 0.315517
+  type: 'test'
+  ...
+# Subtest: sendEscrowTransaction rejects sequence substitution before signing
+ok 212 - sendEscrowTransaction rejects sequence substitution before signing
+  ---
+  duration_ms: 0.287865
+  type: 'test'
+  ...
+# Subtest: sendOwnedTransfer refuses missing certificate domain before signing or mutation
+ok 213 - sendOwnedTransfer refuses missing certificate domain before signing or mutation
+  ---
+  duration_ms: 0.679086
+  type: 'test'
+  ...
+# Subtest: sendOwnedTransfer v3 requires a cryptographic quorum of durable apply acknowledgements
+ok 214 - sendOwnedTransfer v3 requires a cryptographic quorum of durable apply acknowledgements
+  ---
+  duration_ms: 1.7343
+  type: 'test'
+  ...
+# Subtest: sendOwnedTransfer v3 reports recovery pending instead of success below authenticated apply quorum
+ok 215 - sendOwnedTransfer v3 reports recovery pending instead of success below authenticated apply quorum
+  ---
+  duration_ms: 0.968112
+  type: 'test'
+  ...
+# Subtest: recoverFastPay reveals a retained quorum certificate and gates on its accepted receipt code
+ok 216 - recoverFastPay reveals a retained quorum certificate and gates on its accepted receipt code
+  ---
+  duration_ms: 0.740037
+  type: 'test'
+  ...
+# Subtest: recoverFastPay orders bounded cancellation for a partial lock and never accepts an unknown receipt
+ok 217 - recoverFastPay orders bounded cancellation for a partial lock and never accepts an unknown receipt
+  ---
+  duration_ms: 0.487787
+  type: 'test'
+  ...
+# Subtest: sendOwnedTransfer collects FastPay quorum without waiting for slow validator
+ok 218 - sendOwnedTransfer collects FastPay quorum without waiting for slow validator
+  ---
+  duration_ms: 1.189055
+  type: 'test'
+  ...
+# Subtest: sendOwnedTransfer rejects fewer than FastPay quorum votes
+ok 219 - sendOwnedTransfer rejects fewer than FastPay quorum votes
+  ---
+  duration_ms: 1.979459
+  type: 'test'
+  ...
+# Subtest: sendOwnedTransfer retries another owned object when validators refuse a stale lock
+ok 220 - sendOwnedTransfer retries another owned object when validators refuse a stale lock
+  ---
+  duration_ms: 2.444392
+  type: 'test'
+  ...
+# Subtest: sendOwnedTransfer signs locally and never sends the wallet backup to the proxy
+ok 221 - sendOwnedTransfer signs locally and never sends the wallet backup to the proxy
+  ---
+  duration_ms: 0.521197
+  type: 'test'
+  ...
+# Subtest: unwrapOwnedTransfer signs amount-based unwrap and applies quorum certificate
+ok 222 - unwrapOwnedTransfer signs amount-based unwrap and applies quorum certificate
+  ---
+  duration_ms: 1.393043
+  type: 'test'
+  ...
+# Subtest: unwrapOwnedTransfer signs locally and never sends the wallet backup to the proxy
+ok 223 - unwrapOwnedTransfer signs locally and never sends the wallet backup to the proxy
+  ---
+  duration_ms: 0.580737
+  type: 'test'
+  ...
+# Subtest: unwrapOwnedTransfer combines fragmented FastPay objects for standard unwrap
+ok 224 - unwrapOwnedTransfer combines fragmented FastPay objects for standard unwrap
+  ---
+  duration_ms: 1.360394
+  type: 'test'
+  ...
+# Subtest: unwrapOwnedTransfer v3 combines objects and requires authenticated apply quorum
+ok 225 - unwrapOwnedTransfer v3 combines objects and requires authenticated apply quorum
+  ---
+  duration_ms: 0.956635
+  type: 'test'
+  ...
+# Subtest: publishPublicKey signs a 1-atom self-transfer through the Account-lane finality path
+ok 226 - publishPublicKey signs a 1-atom self-transfer through the Account-lane finality path
+  ---
+  duration_ms: 0.3846
+  type: 'test'
+  ...
+# Subtest: publishPublicKey rejects when the wallet is not unlocked
+ok 227 - publishPublicKey rejects when the wallet is not unlocked
+  ---
+  duration_ms: 0.226593
+  type: 'test'
+  ...
+# Subtest: publishPublicKey fails closed unless the final receipt has the explicit accepted code
+ok 228 - publishPublicKey fails closed unless the final receipt has the explicit accepted code
+  ---
+  duration_ms: 0.333294
+  type: 'test'
+  ...
+# Subtest: ensurePublicKeyPublished is a no-op when the key is already published
+ok 229 - ensurePublicKeyPublished is a no-op when the key is already published
+  ---
+  duration_ms: 0.214584
+  type: 'test'
+  ...
+# Subtest: ensurePublicKeyPublished publishes (1-atom self-transfer) when not yet published
+ok 230 - ensurePublicKeyPublished publishes (1-atom self-transfer) when not yet published
+  ---
+  duration_ms: 0.321255
+  type: 'test'
+  ...
+# Subtest: ensurePublicKeyPublished throws if the publish self-transfer is rejected
+ok 231 - ensurePublicKeyPublished throws if the publish self-transfer is rejected
+  ---
+  duration_ms: 0.284139
+  type: 'test'
+  ...
+# Subtest: buildTrustSetOperation returns the exact holder trust_set JSON
+ok 232 - buildTrustSetOperation returns the exact holder trust_set JSON
+  ---
+  duration_ms: 0.263177
+  type: 'test'
+  ...
+# Subtest: buildTrustSetOperation serializes zero custody fields
+ok 233 - buildTrustSetOperation serializes zero custody fields
+  ---
+  duration_ms: 0.35055
+  type: 'test'
+  ...
+# Subtest: buildTrustSetOperation rejects malformed and uppercase asset ids
+ok 234 - buildTrustSetOperation rejects malformed and uppercase asset ids
+  ---
+  duration_ms: 0.289216
+  type: 'test'
+  ...
+# Subtest: buildTrustSetOperation rejects missing or equal account and issuer
+ok 235 - buildTrustSetOperation rejects missing or equal account and issuer
+  ---
+  duration_ms: 0.329077
+  type: 'test'
+  ...
+# Subtest: buildTrustSetOperation rejects zero, negative, unsafe, and fractional limits
+ok 236 - buildTrustSetOperation rejects zero, negative, unsafe, and fractional limits
+  ---
+  duration_ms: 0.293323
+  type: 'test'
+  ...
+# Subtest: public wallet defaults are bound to the live WAN devnet domain
+ok 237 - public wallet defaults are bound to the live WAN devnet domain
+  ---
+  duration_ms: 2.369217
+  type: 'test'
+  ...
+# Subtest: defaultRpcEndpoint uses wallet proxy for local Vite dev server
+ok 238 - defaultRpcEndpoint uses wallet proxy for local Vite dev server
+  ---
+  duration_ms: 1.580827
+  type: 'test'
+  ...
+# Subtest: defaultRpcEndpoint keeps remote host when Vite serves over a public address
+ok 239 - defaultRpcEndpoint keeps remote host when Vite serves over a public address
+  ---
+  duration_ms: 0.237078
+  type: 'test'
+  ...
+# Subtest: defaultRpcEndpoint tunnels rpc through Vite over HTTPS on 5173
+ok 240 - defaultRpcEndpoint tunnels rpc through Vite over HTTPS on 5173
+  ---
+  duration_ms: 0.179531
+  type: 'test'
+  ...
+# Subtest: defaultRpcEndpoint uses same-origin rpc outside Vite dev mode
+ok 241 - defaultRpcEndpoint uses same-origin rpc outside Vite dev mode
+  ---
+  duration_ms: 0.186461
+  type: 'test'
+  ...
+# Subtest: normalizeRpcEndpoint migrates stale loopback endpoints on public HTTPS wallet
+ok 242 - normalizeRpcEndpoint migrates stale loopback endpoints on public HTTPS wallet
+  ---
+  duration_ms: 0.232851
+  type: 'test'
+  ...
+# Subtest: normalizeRpcEndpoint self-heals stale local settings on the controlled wallet port
+ok 243 - normalizeRpcEndpoint self-heals stale local settings on the controlled wallet port
+  ---
+  duration_ms: 0.177689
+  type: 'test'
+  ...
+# Subtest: encryptVault rejects clearly when crypto.subtle is unavailable (insecure origin)
+ok 244 - encryptVault rejects clearly when crypto.subtle is unavailable (insecure origin)
+  ---
+  duration_ms: 5.05898
+  type: 'test'
+  ...
+# Subtest: active money operation prevents idle auto-lock until its lease is released
+ok 245 - active money operation prevents idle auto-lock until its lease is released
+  ---
+  duration_ms: 162.542016
+  type: 'test'
+  ...
+# Subtest: money operation cancels an already scheduled idle timer and restarts a full window
+ok 246 - money operation cancels an already scheduled idle timer and restarts a full window
+  ---
+  duration_ms: 193.0341
+  type: 'test'
+  ...
+# Subtest: wallet development and preview servers are loopback-only by default
+ok 247 - wallet development and preview servers are loopback-only by default
+  ---
+  duration_ms: 1.389478
+  type: 'test'
+  ...
+# Subtest: production CSP rejects insecure arbitrary websocket origins
+ok 248 - production CSP rejects insecure arbitrary websocket origins
+  ---
+  duration_ms: 0.2987
+  type: 'test'
+  ...
+# Subtest: production CSP permits secure websocket transport for runtime host aliases
+ok 249 - production CSP permits secure websocket transport for runtime host aliases
+  ---
+  duration_ms: 0.190457
+  type: 'test'
+  ...
+# Subtest: wallet settings cannot redirect the bridge money destination
+ok 250 - wallet settings cannot redirect the bridge money destination
+  ---
+  duration_ms: 0.298249
+  type: 'test'
+  ...
+# Subtest: bridge destination is chain-discovered and both contracts are verified before money moves
+ok 251 - bridge destination is chain-discovered and both contracts are verified before money moves
+  ---
+  duration_ms: 0.566645
+  type: 'test'
+  ...
+# Subtest: mounted wallet navigation presents user goals in order and hides operator tools
+ok 252 - mounted wallet navigation presents user goals in order and hides operator tools
+  ---
+  duration_ms: 7.162646
+  type: 'test'
+  ...
+# Subtest: empty-wallet onboarding can restore an encrypted wallet backup
+ok 253 - empty-wallet onboarding can restore an encrypted wallet backup
+  ---
+  duration_ms: 1.344491
+  type: 'test'
+  ...
+# Subtest: unlocked wallet can rotate its browser passphrase without changing custody identity
+ok 254 - unlocked wallet can rotate its browser passphrase without changing custody identity
+  ---
+  duration_ms: 1.428927
+  type: 'test'
+  ...
+# Subtest: bridge-in is Ethereum mainnet USDC and never executes a retired route
+ok 255 - bridge-in is Ethereum mainnet USDC and never executes a retired route
+  ---
+  duration_ms: 2.602941
+  type: 'test'
+  ...
+# Subtest: bridge-out is locally signed, exact, durable, and recoverable without pasted payloads
+ok 256 - bridge-out is locally signed, exact, durable, and recoverable without pasted payloads
+  ---
+  duration_ms: 1.891537
+  type: 'test'
+  ...
+# Subtest: consumer Send keeps the experimental FastPay lane unmounted
+ok 257 - consumer Send keeps the experimental FastPay lane unmounted
+  ---
+  duration_ms: 1.035434
+  type: 'test'
+  ...
+# Subtest: NAVCoin market UI is registry-driven and has no hard-coded asset identity
+ok 258 - NAVCoin market UI is registry-driven and has no hard-coded asset identity
+  ---
+  duration_ms: 1.654299
+  type: 'test'
+  ...
+# Subtest: visible asset surfaces contain no executable a651/a652 assumptions or fake verification
+ok 259 - visible asset surfaces contain no executable a651/a652 assumptions or fake verification
+  ---
+  duration_ms: 2.733758
+  type: 'test'
+  ...
+# Subtest: retired browser workflow modules and proxy are absent
+ok 260 - retired browser workflow modules and proxy are absent
+  ---
+  duration_ms: 1.281885
+  type: 'test'
+  ...
+1..260
+# tests 260
+# suites 0
+# pass 260
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 30434.970824

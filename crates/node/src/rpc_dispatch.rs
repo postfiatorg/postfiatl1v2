@@ -2725,19 +2725,14 @@ fn rpc_manifests_alias(data_dir: PathBuf) -> Result<serde_json::Value, String> {
             "manifests": []
         }));
     }
-    let verification = verify_governance_genesis_bundle(GovernanceGenesisVerifyOptions {
-        data_dir,
-        bundle_file: bundle_file.clone(),
-    })
-    .map_err(|error| format!("rpc manifests governance genesis verification failed: {error}"))?;
-    let raw = std::fs::read_to_string(&bundle_file)
-        .map_err(|error| format!("rpc manifests bundle read failed: {error}"))?;
-    let bundle: serde_json::Value = serde_json::from_str(&raw)
-        .map_err(|error| format!("rpc manifests bundle parse failed: {error}"))?;
-    let manifests = bundle
-        .get("operator_manifests")
-        .and_then(serde_json::Value::as_array)
-        .ok_or_else(|| "rpc manifests bundle missing operator_manifests array".to_string())?;
+    let (verification, manifests) =
+        verify_governance_genesis_bundle_snapshot(GovernanceGenesisVerifyOptions {
+            data_dir,
+            bundle_file,
+        })
+        .map_err(|error| {
+            format!("rpc manifests governance genesis verification failed: {error}")
+        })?;
     Ok(serde_json::json!({
         "schema": "postfiat-manifests-v1",
         "chain_id": verification.chain_id,

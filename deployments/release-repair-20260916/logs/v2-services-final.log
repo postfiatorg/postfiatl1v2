@@ -1,0 +1,5 @@
+START PASS: six services agree at height 1020
+INFO peer certified batch round shielded verifier prewarm start requested=false
+INFO peer certified batch round shielded verifier prewarm complete requested=false total_ms=0.030
+FINALITY PASS: all six accepted V2 rotation at height 1021
+RESTART PASS: all six retain the certified height 1021

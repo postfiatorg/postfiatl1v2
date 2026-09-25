@@ -1,0 +1,35 @@
+{
+  "schema": "postfiat-proof-identity-qualification-observation-v1",
+  "candidate_ci_run": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35036506542",
+  "candidate_source": "dd276d70e0974fa17e7dfa3ad0b4e6cbd00349f3",
+  "outcome": "FAIL",
+  "ingress": {
+    "sha256": "7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc",
+    "clean_builds": 2,
+    "match_pinned_manifest": true
+  },
+  "egress": {
+    "clean_builds": 2,
+    "byte_identical": true,
+    "rebuilt_sha256": "8be32c2a8d5ce39776c3095126a39c3f910b42e349431cb33adcd8d316c5344d",
+    "rebuilt_program_vkey": "0x0022a1dbadef8dc7e14a9ea793f1d76cc901854c03e80043695449806538c7b6",
+    "expected_manifest_sha256": "8b0f266a035a432ef3c0e4233672d8a15b913cefd4c85ff07f91f008601bb744",
+    "expected_program_vkey": "0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852",
+    "retained_elf_sha256": "0ea4dbabc8a36b44824c861cf2e1ae90454df2a6e4bb8a357f9d3a8672696d83",
+    "match_pinned_manifest": false,
+    "match_retained_elf": false
+  },
+  "pr39_prior_failure": {
+    "job": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/34091980005/job/101647214497",
+    "date": "2026-09-07",
+    "rebuilt_egress_sha256": "0af263d3282303898211d707cd3a8b68a24edcf2dc2f93d524c7724a0bcd8d25",
+    "same_expected_manifest": true,
+    "retained_elf_unchanged_in_merge": true
+  },
+  "interpretation": "The identity gate was already failing on PR39; combining dependent type changes yields a further distinct guest build. Reproducibility within each source tree does not establish compatibility with pinned verification identities.",
+  "changes_to_expected_identity": "none",
+  "evidence": [
+    "logs/ci-arc-proof-identities.log",
+    "logs/pr39-arc-proof-identities.log"
+  ]
+}
