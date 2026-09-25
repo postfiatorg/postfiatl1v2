@@ -1,0 +1,24 @@
+{
+  "schema": "postfiat.deployment_gate.v1",
+  "gate": "step 6: local full workspace test run finished, no failure outside the known flaky family",
+  "log": "~/.cache/release-repair-20260925/logs/full-workspace-tests.log",
+  "command": "timeout 5400 cargo test --workspace --locked -j 2 --no-fail-fast (started about 12:05Z in ~/.cache/release-repair-20260925/source-1, target-1)",
+  "wait": "reached 12:20Z; checked every two minutes until 13:05Z (45 minutes)",
+  "checked_at": "2026-09-25T13:05:44.253410+00:00",
+  "result": "NOT_FINISHED_STOP",
+  "finished": false,
+  "test_binaries_completed": 26,
+  "tests_ok": 793,
+  "tests_failed": 0,
+  "current_binary": "postfiat_node lib unittests (397 tests)",
+  "still_running": [
+    "tests::wan_devnet_invalid_asset_orchard_swap_proof_is_rejected_and_valid_swap_still_applies"
+  ],
+  "log_tail": [
+    "test vote_locks::tests::stray_legacy_lock_after_eager_marker_is_not_migrated ... ok",
+    "test vote_locks::tests::truncated_lock_file_fails_closed ... ok",
+    "test vote_locks::tests::vote_lock_work_is_bounded_with_large_history ... ok"
+  ],
+  "applies_run": 0,
+  "current_binary_completed": 396
+}

@@ -1,0 +1,59 @@
+{
+ "observed_at": "2026-09-25T13:05:32.848976+00:00",
+ "validators": [
+  {
+   "node_id": "validator-0",
+   "block_height": 1044,
+   "block_tip_hash": "136985cafe2e0951850644a3dceaa9acaf4883cb4f1a27c7b448d01d78a6e52a8bde6c9327cca714e820709b0bcffed0",
+   "state_root": "8f22d40fc85a895216bf86e6dc26a9323204adf4d39fdc0b29ae480fb767335f3d6b989fea68a2fdf8f8d71a6da303e9",
+   "mempool_pending": 0,
+   "build_git_revision": "943c4ca7",
+   "deployment_manifest_sha256": "a05cfa358b30c5bf2140eab9e4364cf1ffd91663c32f694c739c54958b82a218"
+  },
+  {
+   "node_id": "validator-1",
+   "block_height": 1044,
+   "block_tip_hash": "136985cafe2e0951850644a3dceaa9acaf4883cb4f1a27c7b448d01d78a6e52a8bde6c9327cca714e820709b0bcffed0",
+   "state_root": "8f22d40fc85a895216bf86e6dc26a9323204adf4d39fdc0b29ae480fb767335f3d6b989fea68a2fdf8f8d71a6da303e9",
+   "mempool_pending": 0,
+   "build_git_revision": "943c4ca7",
+   "deployment_manifest_sha256": "a05cfa358b30c5bf2140eab9e4364cf1ffd91663c32f694c739c54958b82a218"
+  },
+  {
+   "node_id": "validator-2",
+   "block_height": 1044,
+   "block_tip_hash": "136985cafe2e0951850644a3dceaa9acaf4883cb4f1a27c7b448d01d78a6e52a8bde6c9327cca714e820709b0bcffed0",
+   "state_root": "8f22d40fc85a895216bf86e6dc26a9323204adf4d39fdc0b29ae480fb767335f3d6b989fea68a2fdf8f8d71a6da303e9",
+   "mempool_pending": 0,
+   "build_git_revision": "943c4ca7",
+   "deployment_manifest_sha256": "a05cfa358b30c5bf2140eab9e4364cf1ffd91663c32f694c739c54958b82a218"
+  },
+  {
+   "node_id": "validator-3",
+   "block_height": 1044,
+   "block_tip_hash": "136985cafe2e0951850644a3dceaa9acaf4883cb4f1a27c7b448d01d78a6e52a8bde6c9327cca714e820709b0bcffed0",
+   "state_root": "8f22d40fc85a895216bf86e6dc26a9323204adf4d39fdc0b29ae480fb767335f3d6b989fea68a2fdf8f8d71a6da303e9",
+   "mempool_pending": 0,
+   "build_git_revision": "943c4ca7",
+   "deployment_manifest_sha256": "a05cfa358b30c5bf2140eab9e4364cf1ffd91663c32f694c739c54958b82a218"
+  },
+  {
+   "node_id": "validator-4",
+   "block_height": 1044,
+   "block_tip_hash": "136985cafe2e0951850644a3dceaa9acaf4883cb4f1a27c7b448d01d78a6e52a8bde6c9327cca714e820709b0bcffed0",
+   "state_root": "8f22d40fc85a895216bf86e6dc26a9323204adf4d39fdc0b29ae480fb767335f3d6b989fea68a2fdf8f8d71a6da303e9",
+   "mempool_pending": 0,
+   "build_git_revision": "943c4ca7",
+   "deployment_manifest_sha256": "a05cfa358b30c5bf2140eab9e4364cf1ffd91663c32f694c739c54958b82a218"
+  },
+  {
+   "node_id": "validator-5",
+   "block_height": 1044,
+   "block_tip_hash": "136985cafe2e0951850644a3dceaa9acaf4883cb4f1a27c7b448d01d78a6e52a8bde6c9327cca714e820709b0bcffed0",
+   "state_root": "8f22d40fc85a895216bf86e6dc26a9323204adf4d39fdc0b29ae480fb767335f3d6b989fea68a2fdf8f8d71a6da303e9",
+   "mempool_pending": 0,
+   "build_git_revision": "943c4ca7",
+   "deployment_manifest_sha256": "a05cfa358b30c5bf2140eab9e4364cf1ffd91663c32f694c739c54958b82a218"
+  }
+ ]
+}

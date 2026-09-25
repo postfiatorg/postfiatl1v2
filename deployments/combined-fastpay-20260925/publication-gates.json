@@ -1,0 +1,14 @@
+{
+  "results": {
+    "strict-docs": "PASS",
+    "public-doc-links": "PASS",
+    "public-secret-scan": "PASS"
+  },
+  "completed_at": "2026-09-25T13:10:52.809660+00:00",
+  "scope": "tracked tree with the packet staged",
+  "commands": [
+    "~/repos/postfiatl1v2/.venv-docs/bin/mkdocs build --strict",
+    "scripts/public-doc-links",
+    "scripts/public-secret-scan"
+  ]
+}
