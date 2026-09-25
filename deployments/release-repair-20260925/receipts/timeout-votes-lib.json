@@ -1,0 +1,47 @@
+{
+  "name": "timeout-votes-lib",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "postfiat-node",
+    "--lib",
+    "timeout_votes_reconstruct_hotstuff_timeout_certificate",
+    "--",
+    "--test-threads=2"
+  ],
+  "cwd": "/home/postfiatchad/.cache/qualify-20260925",
+  "started_at": "2026-09-25T10:50:23.367794+00:00",
+  "status": "PASS",
+  "stdout": "logs/timeout-votes-lib.stdout",
+  "stderr": "logs/timeout-votes-lib.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260925/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/release-repair-20260918/test-target",
+    "CARGO_PROFILE_TEST_OPT_LEVEL": "2",
+    "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS": "true",
+    "CARGO_PROFILE_TEST_OVERFLOW_CHECKS": "true"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 3929046,
+  "exit_code": 0,
+  "completed_at": "2026-09-25T10:54:27.467348+00:00",
+  "elapsed_seconds": 244.1,
+  "minimum_available_memory_observed_bytes": 20191924224,
+  "purpose": "merge behaviour (a): timeout votes reconstruct a HotStuff timeout certificate",
+  "tests_passed": 1,
+  "tests_ignored": 0,
+  "tests_run": [
+    "tests::consensus_history::timeout_votes_reconstruct_hotstuff_timeout_certificate"
+  ]
+}

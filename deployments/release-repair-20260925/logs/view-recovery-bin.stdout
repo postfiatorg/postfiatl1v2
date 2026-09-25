@@ -1,0 +1,9 @@
+
+running 4 tests
+test finality_view_recovery_tests::timeout_vote_chunk_envelope_round_trips_and_rejects_truncation ... ok
+test rpc_serve_request_tests::consensus_v2_timeout_vote_rpc_is_finality_gated_and_durably_signed ... ok
+test transport_batch_payload_tests::activated_consensus_v2_transport_survives_failed_view_zero_proposer_n4 ... ok
+test transport_batch_payload_tests::activated_consensus_v2_transport_survives_failed_view_zero_proposer_n6 ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 173 filtered out; finished in 13.91s
+

@@ -1,0 +1,23 @@
+   Compiling fips204 v0.4.6 (/home/postfiatchad/.cache/qualify-20260925/third_party/fips204)
+   Compiling postfiat-types v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/types)
+   Compiling postfiat-crypto-provider v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/crypto_provider)
+   Compiling halo2_proofs v0.3.2 (/home/postfiatchad/.cache/qualify-20260925/third_party/halo2_proofs)
+   Compiling postfiat-mempool-dag v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/mempool_dag)
+   Compiling halo2_gadgets v0.5.0
+   Compiling postfiat-ordering-fast v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/ordering_fast)
+   Compiling postfiat-bridge v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/bridge)
+   Compiling postfiat-nav-reserve-protocol v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/nav_reserve_protocol)
+   Compiling postfiat-consensus-cobalt v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/consensus_cobalt)
+   Compiling orchard v0.14.0
+   Compiling postfiat-pfusdc-proofs v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/pfusdc_proofs)
+   Compiling postfiat-execution v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/execution)
+   Compiling postfiat-proofs v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/proofs)
+   Compiling postfiat-rpc-sdk v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/rpc_sdk)
+   Compiling postfiat-node v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/node)
+   Compiling postfiat-privacy v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/privacy)
+   Compiling postfiat-storage v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/storage)
+   Compiling postfiat-pftl-uniswap-proofs v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/pftl_uniswap_proofs)
+   Compiling postfiat-privacy-orchard v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/privacy_orchard)
+   Compiling postfiat-network v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/network)
+    Finished `test` profile [optimized + debuginfo] target(s) in 7m 55s
+     Running unittests src/main.rs (/home/postfiatchad/.cache/release-repair-20260918/test-target/debug/deps/postfiat_node-462e48431d675017)

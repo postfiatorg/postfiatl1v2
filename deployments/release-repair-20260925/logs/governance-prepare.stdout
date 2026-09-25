@@ -1,0 +1,19 @@
+2026-09-25T11:16:47.000065+00:00 START governance-create
+2026-09-25T11:16:48.005359+00:00 PASS governance-create (1.0s)
+2026-09-25T11:16:48.006206+00:00 START governance-sign-0
+2026-09-25T11:16:49.012062+00:00 PASS governance-sign-0 (1.0s)
+2026-09-25T11:16:49.012923+00:00 START governance-sign-1
+2026-09-25T11:16:50.018084+00:00 PASS governance-sign-1 (1.0s)
+2026-09-25T11:16:50.018663+00:00 START governance-sign-2
+2026-09-25T11:16:51.024238+00:00 PASS governance-sign-2 (1.0s)
+2026-09-25T11:16:51.025078+00:00 START governance-sign-3
+2026-09-25T11:16:52.031348+00:00 PASS governance-sign-3 (1.0s)
+2026-09-25T11:16:52.032332+00:00 START governance-sign-4
+2026-09-25T11:16:53.039541+00:00 PASS governance-sign-4 (1.0s)
+2026-09-25T11:16:53.040388+00:00 START governance-sign-5
+2026-09-25T11:16:54.045602+00:00 PASS governance-sign-5 (1.0s)
+2026-09-25T11:16:54.046085+00:00 START governance-assemble
+2026-09-25T11:16:55.050146+00:00 PASS governance-assemble (1.0s)
+2026-09-25T11:16:55.051319+00:00 START governance-batch
+2026-09-25T11:16:56.056689+00:00 PASS governance-batch (1.0s)
+Prepared six-authorized V2 rotation for disposable height 1021.

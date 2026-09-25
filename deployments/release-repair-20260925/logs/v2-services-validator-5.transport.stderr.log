@@ -1,0 +1,4 @@
+INFO transport validator service shielded verifier prewarm start requested=true
+INFO transport validator service shielded verifier prewarm complete requested=true total_ms=669.964 swap_warm=true private_egress_warm=true
+INFO transport validator service shielded verifier prewarm start requested=true
+INFO transport validator service shielded verifier prewarm complete requested=true total_ms=681.506 swap_warm=true private_egress_warm=true

@@ -1,0 +1,30 @@
+{
+  "name": "governance-prepare",
+  "command": [
+    "python3",
+    "/home/postfiatchad/.cache/release-repair-20260925/tools/governance_prepare.py"
+  ],
+  "cwd": "/home/postfiatchad/.cache/qualify-20260925",
+  "started_at": "2026-09-25T11:16:46.933646+00:00",
+  "status": "PASS",
+  "stdout": "logs/governance-prepare.stdout",
+  "stderr": "logs/governance-prepare.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260925/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 3936796,
+  "exit_code": 0,
+  "completed_at": "2026-09-25T11:16:56.942033+00:00",
+  "elapsed_seconds": 10.0,
+  "minimum_available_memory_observed_bytes": 21560725504
+}

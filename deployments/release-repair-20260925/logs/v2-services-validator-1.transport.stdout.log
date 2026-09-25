@@ -1,0 +1,132 @@
+{
+  "schema": "postfiat-transport-validator-serve-v1",
+  "node_id": "validator-1",
+  "topology_id": "443bb57f32f0843b0bfebd377fa86dbd45c9ef6908c69d7d6c7851ca672298530839b19df49fe2174247e584c71d709e",
+  "bind_address": "127.0.0.1:31002",
+  "event_log": "/home/postfiatchad/.cache/release-repair-20260925/v2-services/logs/validator-1.transport.ndjson",
+  "require_signed_proposal": true,
+  "shielded_verifier_prewarm": {
+    "schema": "postfiat-transport-shielded-verifier-prewarm-v1",
+    "requested": true,
+    "total_ms": 660.860172,
+    "asset_orchard_swap_verifier_warm": true,
+    "asset_orchard_swap_verifier_ms": 638.024189,
+    "asset_orchard_private_egress_verifier_warm": true,
+    "asset_orchard_private_egress_verifier_ms": 22.80041,
+    "asset_orchard_private_egress_verifier_breakdown": {
+      "schema": "postfiat.asset_orchard_private_egress.timings.v1",
+      "action_builds": [],
+      "vk_builds": [
+        {
+          "schema": "postfiat.asset_orchard_private_egress.vk_build_timing.v1",
+          "artifact_mode": "embedded",
+          "total_ms": 22.796494,
+          "params_new_ms": 1.329368,
+          "full_shape_ms": 0.0,
+          "artifact_read_ms": 0.0,
+          "artifact_decode_ms": 6.145440000000001,
+          "artifact_vk_reconstruct_ms": 13.190337999999999,
+          "keygen_vk_ms": 0.0,
+          "metadata_ms": 1.50305,
+          "release_pin_validation_ms": 0.000701,
+          "artifact_write_ms": 0.0,
+          "result": "ok"
+        }
+      ],
+      "vk_cached_calls": [
+        {
+          "schema": "postfiat.asset_orchard_private_egress.vk_cached_timing.v1",
+          "total_ms": 22.799208,
+          "cache_was_populated": false,
+          "build_triggered": true,
+          "result": "ok"
+        }
+      ],
+      "proof_verifications": [],
+      "action_verifications": []
+    }
+  },
+  "connection_count": 0,
+  "max_in_flight": 16,
+  "max_requests_per_connection": 4096,
+  "retained_summary_limit": 1024,
+  "retained_summary_count": 0,
+  "summaries_truncated": false,
+  "accepted_batch_count": 0,
+  "accepted_block_vote_count": 0,
+  "accepted_block_proposal_count": 0,
+  "accepted_health_count": 0,
+  "rejected_count": 0,
+  "batch_acks": [],
+  "block_vote_responses": [],
+  "block_proposal_responses": [],
+  "health_responses": [],
+  "rejected": [],
+  "verified": true
+}
+{
+  "schema": "postfiat-transport-validator-serve-v1",
+  "node_id": "validator-1",
+  "topology_id": "443bb57f32f0843b0bfebd377fa86dbd45c9ef6908c69d7d6c7851ca672298530839b19df49fe2174247e584c71d709e",
+  "bind_address": "127.0.0.1:31002",
+  "event_log": "/home/postfiatchad/.cache/release-repair-20260925/v2-services/logs/validator-1.transport.ndjson",
+  "require_signed_proposal": true,
+  "shielded_verifier_prewarm": {
+    "schema": "postfiat-transport-shielded-verifier-prewarm-v1",
+    "requested": true,
+    "total_ms": 670.740373,
+    "asset_orchard_swap_verifier_warm": true,
+    "asset_orchard_swap_verifier_ms": 635.695774,
+    "asset_orchard_private_egress_verifier_warm": true,
+    "asset_orchard_private_egress_verifier_ms": 35.017248,
+    "asset_orchard_private_egress_verifier_breakdown": {
+      "schema": "postfiat.asset_orchard_private_egress.timings.v1",
+      "action_builds": [],
+      "vk_builds": [
+        {
+          "schema": "postfiat.asset_orchard_private_egress.vk_build_timing.v1",
+          "artifact_mode": "embedded",
+          "total_ms": 35.012972000000005,
+          "params_new_ms": 1.2521,
+          "full_shape_ms": 0.0,
+          "artifact_read_ms": 0.0,
+          "artifact_decode_ms": 9.879228,
+          "artifact_vk_reconstruct_ms": 20.609491000000002,
+          "keygen_vk_ms": 0.0,
+          "metadata_ms": 2.6393459999999997,
+          "release_pin_validation_ms": 0.0012619999999999999,
+          "artifact_write_ms": 0.0,
+          "result": "ok"
+        }
+      ],
+      "vk_cached_calls": [
+        {
+          "schema": "postfiat.asset_orchard_private_egress.vk_cached_timing.v1",
+          "total_ms": 35.016067,
+          "cache_was_populated": false,
+          "build_triggered": true,
+          "result": "ok"
+        }
+      ],
+      "proof_verifications": [],
+      "action_verifications": []
+    }
+  },
+  "connection_count": 0,
+  "max_in_flight": 16,
+  "max_requests_per_connection": 4096,
+  "retained_summary_limit": 1024,
+  "retained_summary_count": 0,
+  "summaries_truncated": false,
+  "accepted_batch_count": 0,
+  "accepted_block_vote_count": 0,
+  "accepted_block_proposal_count": 0,
+  "accepted_health_count": 0,
+  "rejected_count": 0,
+  "batch_acks": [],
+  "block_vote_responses": [],
+  "block_proposal_responses": [],
+  "health_responses": [],
+  "rejected": [],
+  "verified": true
+}

@@ -1,0 +1,34 @@
+{
+  "name": "r4-full-replay-probe-validator-0",
+  "command": [
+    "/home/postfiatchad/.cache/release-repair-20260925/binaries/rollback",
+    "verify-state",
+    "--data-dir",
+    "/home/postfiatchad/.cache/release-repair-20260925/r4-replay-probe/validator-0"
+  ],
+  "cwd": "/home/postfiatchad/.cache/qualify-20260925",
+  "started_at": "2026-09-25T10:54:04.967069+00:00",
+  "status": "FAIL",
+  "stdout": "logs/r4-full-replay-probe-validator-0.stdout",
+  "stderr": "logs/r4-full-replay-probe-validator-0.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260925/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 3930128,
+  "exit_code": 1,
+  "completed_at": "2026-09-25T10:57:17.046339+00:00",
+  "elapsed_seconds": 192.1,
+  "minimum_available_memory_observed_bytes": 19923619840,
+  "expectation": "deployed r4 executable is expected to reject full-history replay at block 1011",
+  "observed_error": "-id ASSET]\n  postfiat-node bridge-batch-pause [--data-dir PATH] [--domain-id ID] --batch-file PATH\n  postfiat-node bridge-batch-resume [--data-dir PATH] [--domain-id ID] --batch-file PATH\n  postfiat-node apply-bridge-batch [--data-dir PATH] --batch-file PATH [--certificate-file PATH]\n  postfiat-node snapshot-export [--data-dir PATH] --snapshot-dir PATH\n  postfiat-node snapshot-export-finalized-checkpoint [--data-dir PATH] --snapshot-dir PATH\n  postfiat-node snapshot-import [--data-dir PATH] --snapshot-dir PATH [--node-id ID]\n  postfiat-node snapshot-import-finalized-checkpoint [--data-dir PATH] --snapshot-dir PATH [--node-id ID]\n  postfiat-node snapshot-publisher-key-export --publisher-key-file PATH --public-key-file PATH\n  postfiat-node snapshot-export-signed [--data-dir PATH] --snapshot-dir PATH --publisher-key-file PATH\n  postfiat-node snapshot-export-signed-finalized-checkpoint [--data-dir PATH] --snapshot-dir PATH --publisher-key-file PATH\n  postfiat-node snapshot-import-signed [--data-dir PATH] --snapshot-dir PATH --trusted-publisher-key-file PATH [--node-id ID]\n  postfiat-node snapshot-import-signed-finalized-checkpoint [--data-dir PATH] --snapshot-dir PATH --trusted-publisher-key-file PATH [--node-id ID]\n  postfiat-node verify-finalized-checkpoint [--data-dir PATH]\n  postfiat-node storage-activation-template [--data-dir PATH] --activation-height N --record-file PATH\n  postfiat-node storage-activation-ratify [--data-dir PATH] --record-file PATH --validators CSV [--support CSV] --amendment-file PATH\n  postfiat-node storage-activation-batch [--data-dir PATH] --record-file PATH --authorization-amendment-file PATH --batch-file PATH\n  postfiat-node storage-cancellation-template [--data-dir PATH] --activation-id HASH --reason TEXT --record-file PATH\n  postfiat-node storage-cancellation-ratify [--data-dir PATH] --record-file PATH --validators CSV [--support CSV] --amendment-file PATH\n  postfiat-node storage-cancellation-batch [--data-dir PATH] --record-file PATH --authorization-amendment-file PATH --batch-file PATH\n  postfiat-node storage-backend-configure [--data-dir PATH] --mode transactional|bounded-jsonl|legacy-jsonl --offline-confirmed [--unsafe-comparison-mode]\n  postfiat-node ordered-history-index-rebuild [--data-dir PATH] --offline-confirmed\n  postfiat-node storage-rebuild-transactional [--data-dir PATH] --output-dir PATH --expected-tip HASH --expected-state-root HASH [--verify-only] --offline-confirmed\n  postfiat-node storage-integrity-migrate-legacy [--data-dir PATH] --offline-confirmed\n  postfiat-node deployment-publisher-key-create --publisher-key-file PATH\n  postfiat-node deployment-publisher-key-export --publisher-key-file PATH --public-key-file PATH\n  postfiat-node deployment-validator-units-stage --release-id ID --topology-file PATH --binary-file PATH --swap-circuit-metadata-file PATH --private-egress-circuit-metadata-file PATH --output-dir PATH\n  postfiat-node deployment-manifest-create --deployment-id ID --valid-from-unix N --valid-until-unix N --chain-id ID --genesis-hash HASH --git-revision REV --binary-file PATH --build-profile PROFILE --build-features CSV --protocol-version N --rpc-schema SCHEMA --service-unit-file PATH --environment-file PATH --validator-bindings-file PATH --topology-file PATH --swap-circuit-metadata-file PATH --private-egress-circuit-metadata-file PATH --publisher-key-file PATH --manifest-file PATH\n  postfiat-node deployment-manifest-verify --manifest-file PATH --trusted-publisher-key-file PATH [--now-unix N] [--validator-id ID --validator-bindings-file PATH] [--runtime-binary-file PATH --runtime-topology-file PATH --runtime-swap-circuit-metadata-file PATH --runtime-private-egress-circuit-metadata-file PATH]\n  postfiat-node rpc --method METHOD [--id ID] [--data-dir PATH] [method flags]\n  postfiat-node rpc --request-file PATH [--data-dir PATH]\n\nDirect state mutation commands require POSTFIAT_ALLOW_DIRECT_STATE=1 and are debug-only; ordered batch and mempool commands are the normal path.\n"
+}

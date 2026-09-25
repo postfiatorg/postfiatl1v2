@@ -1,0 +1,46 @@
+{
+  "name": "live-replay-supply",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "postfiat-node",
+    "--lib",
+    "archive_bridge_claim_matches_live_orchard_supply_at_activation",
+    "--",
+    "--test-threads=2"
+  ],
+  "cwd": "/home/postfiatchad/.cache/qualify-20260925",
+  "started_at": "2026-09-25T11:06:32.850963+00:00",
+  "status": "PASS",
+  "stdout": "logs/live-replay-supply.stdout",
+  "stderr": "logs/live-replay-supply.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260925/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/release-repair-20260918/test-target",
+    "CARGO_PROFILE_TEST_OPT_LEVEL": "2",
+    "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS": "true",
+    "CARGO_PROFILE_TEST_OVERFLOW_CHECKS": "true"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 3934273,
+  "exit_code": 0,
+  "completed_at": "2026-09-25T11:10:35.951352+00:00",
+  "elapsed_seconds": 243.1,
+  "minimum_available_memory_observed_bytes": 19895513088,
+  "tests_passed": 1,
+  "tests_ignored": 0,
+  "tests_run": [
+    "tests::archive_bridge_supply::archive_bridge_claim_matches_live_orchard_supply_at_activation"
+  ]
+}

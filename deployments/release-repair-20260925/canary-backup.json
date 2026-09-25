@@ -1,0 +1,27 @@
+{
+  "name": "canary-backup",
+  "status": "SKIPPED",
+  "recorded_at": "2026-09-25T10:30:38.329539+00:00",
+  "reason": "The authorized exception covers only the safe-rollout backup step. That step cannot run on its own here, so no backup was taken and no fleet write was made.",
+  "blockers": [
+    "scripts/postfiat-safe-rollout backup refuses the r4 rollout state: all six validators are applied (state.applied) and a verified backup is already recorded (state.backup.verified). A fresh preflight state would be needed.",
+    "The backup destination comes from the stage release id. validator-1 already has /var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-1-finalized-checkpoint (read-only probe: logs/canary-backup-readonly-probe.stdout), and the backup script requires that path to be absent. A new staged release id would be needed.",
+    "A fresh preflight also needs a Vultr API key file, and validator-1 has 3.5 GB free on its root disk (96% used). An extra snapshot export would add to that."
+  ],
+  "r4_state_file": "/home/postfiatchad/.postfiat/deployments/fastpay-committee-20260925-r4/evidence/rollout-state.json",
+  "r4_state_applied": [
+    "validator-1",
+    "validator-0",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ],
+  "r4_state_backup_verified": true,
+  "r4_state_backup_height": 1036,
+  "r4_state_release_id": "fastpay-committee-20260925-r4",
+  "fleet_actions": [
+    "one read-only SSH listing of /var/lib/postfiat/pre-rollout-snapshots on validator-1 and df of its root filesystem"
+  ],
+  "fallback": "Saved 1020 original and 1021 V2 copies only, as the task instructs; the current chain (past 1044) was not replayed"
+}

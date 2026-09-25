@@ -1,0 +1,26 @@
+
+running 21 tests
+test fastpay_recovery_node::burn5_recovery_tests::burn5_multi_input_rollback_restores_ledger_order ... ok
+test tests::fastpay_payment_safety::concurrent_conflicting_owned_sign_calls_emit_at_most_one_vote ... ok
+test tests::fastpay_payment_safety::certified_owned_unwrap_cannot_convert_issued_asset_to_native_balance ... ok
+test tests::fastpay_payment_safety::concurrent_unsigned_wrap_requests_all_reject_without_mutation ... ok
+test tests::fastpay_payment_safety::fastpay_active_storage_minority_omission_then_unwrap_at_later_height ... ok
+test tests::fastpay_payment_safety::fastpay_replay_schedules_same_block_object_dependencies_before_lock_id_order ... ok
+test tests::fastpay_payment_safety::fastpay_rotated_sixth_validator_converges_through_certified_anchor ... ok
+test tests::fastpay_payment_safety::fastpay_v3_real_store_persists_certificate_effect_fence_before_signed_ack ... ok
+test tests::fastpay_payment_safety::fastpay_v3_rotated_registry_preserves_five_signers_without_unauthorized_mutation ... ok
+test tests::fastpay_payment_safety::fastpay_active_storage_transfer_restart_and_six_validator_anchor ... ok
+test tests::fastpay_payment_safety::owned_apply_uses_public_registry_with_isolated_local_signer ... ok
+test tests::fastpay_payment_safety::owned_lock_wal_ignores_only_an_uncommitted_torn_tail ... ok
+test tests::fastpay_payment_safety::owned_safe_unlock_is_structurally_disabled_and_preserves_old_locks ... ok
+test tests::fastpay_payment_safety::owned_sign_rejects_unauthorized_and_invalid_admission_without_locking ... ok
+test tests::fastpay_payment_safety::persisted_lock_survives_signer_restart_window_and_refuses_conflict ... ok
+test tests::fastpay_payment_safety::ordered_fastpay_recovery_cancels_partial_and_withheld_certificates_and_replays ... ok
+test tests::fastpay_payment_safety::signed_account_deposit_enters_fastpay_through_ordered_batch_and_replays ... ok
+test tests::fastpay_payment_safety::signed_account_deposit_wrong_chain_domain_rejects_without_mempool_or_ledger_mutation ... ok
+test tests::fastpay_payment_safety::unsigned_wrap_owned_rejects_every_asset_without_mutation ... ok
+test tests::snapshot_deployment::finalized_checkpoint_snapshot_restores_transactional_storage_without_legacy_replay ... ok
+test tests::fastpay_payment_safety::six_validators_certify_anchor_and_catch_up_one_missing_fastpay_effect ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 376 filtered out; finished in 10.62s
+

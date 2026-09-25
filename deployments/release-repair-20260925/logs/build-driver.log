@@ -1,0 +1,10 @@
+2026-09-25T10:26:42.351448+00:00 WAIT node-build-1: another cargo process is running
+2026-09-25T10:31:01.616698+00:00 START node-build-1
+2026-09-25T10:34:25.706898+00:00 PASS node-build-1 (204.1s)
+Preparing worktree (detached HEAD f60e9639)
+HEAD is now at f60e9639 Restore the two FastPay wallet tests from main
+2026-09-25T10:34:28.792622+00:00 START node-build-2
+2026-09-25T10:41:33.963702+00:00 PASS node-build-2 (425.2s)
+2026-09-25T10:41:34.086033+00:00 START node-reproducibility
+2026-09-25T10:41:35.092768+00:00 PASS node-reproducibility (1.0s)
+{"result": "PASS", "hashes": ["d66cecc36426ce05ced8730b2439a27285c6b404688acd13dc23594b884eabd6", "d66cecc36426ce05ced8730b2439a27285c6b404688acd13dc23594b884eabd6"]}

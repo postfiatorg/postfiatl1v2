@@ -1,0 +1,14 @@
+{
+  "source_commit": "f60e9639f83649769f29276a9de14f5f16271877",
+  "completed_at": "2026-09-25T10:27:49.749261+00:00",
+  "scope": "new disposable disk-backed clones; authenticated local database-pointer relocation only",
+  "groups": {
+    "working": "/home/postfiatchad/.cache/combined-release-20260915/raw",
+    "post-v2": "/home/postfiatchad/.cache/release-repair-20260916/working",
+    "rollback": "/home/postfiatchad/.cache/combined-release-20260915/raw"
+  },
+  "old_binary_source": "/home/postfiatchad/.local/lib/postfiat/releases/fastpay-committee-20260925-r4/postfiat-node",
+  "old_binary_sha256": "44b6794f2f8eab577713dffb6e59880f8ee8c811863e99ed96ed1b0f4ec66bab",
+  "topology_sha256": "f222915addedcc6322cb935816727b3b597807880e57df24a3e6a2d34f69e8eb",
+  "live_mutations": false
+}

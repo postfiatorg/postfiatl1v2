@@ -1,0 +1,33 @@
+{
+  "name": "format",
+  "command": [
+    "cargo",
+    "fmt",
+    "--all",
+    "--",
+    "--check"
+  ],
+  "cwd": "/home/postfiatchad/.cache/qualify-20260925",
+  "started_at": "2026-09-25T10:41:35.105668+00:00",
+  "status": "PASS",
+  "stdout": "logs/format.stdout",
+  "stderr": "logs/format.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260925/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 3925365,
+  "exit_code": 0,
+  "completed_at": "2026-09-25T10:41:37.109520+00:00",
+  "elapsed_seconds": 2.0,
+  "minimum_available_memory_observed_bytes": 24124727296
+}

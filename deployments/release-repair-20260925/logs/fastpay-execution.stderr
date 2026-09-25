@@ -1,0 +1,8 @@
+   Compiling fips204 v0.4.6 (/home/postfiatchad/.cache/qualify-20260925/third_party/fips204)
+   Compiling postfiat-types v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/types)
+   Compiling postfiat-crypto-provider v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/crypto_provider)
+   Compiling postfiat-nav-reserve-protocol v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/nav_reserve_protocol)
+   Compiling postfiat-bridge v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/bridge)
+   Compiling postfiat-execution v0.1.0 (/home/postfiatchad/.cache/qualify-20260925/crates/execution)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 21s
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/release-repair-20260918/test-target/debug/deps/postfiat_execution-692f2f1b5abcf979)
