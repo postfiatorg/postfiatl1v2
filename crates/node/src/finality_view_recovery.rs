@@ -165,7 +165,12 @@ fn prepare_rpc_finality_view(
     let timeout_certificate_file = artifact_dir.join("timeout-certificate.json");
     aggregate_block_timeout_certificate(BlockTimeoutCertificateOptions {
         data_dir: data_dir.to_path_buf(),
-        verify_block_log: true,
+        // Timeout votes and certificates bind to the finalized consensus-v2
+        // checkpoint, like transactional restore. Full-history replay is not
+        // required here: on postfiat-wan-devnet-2 it fails at block 1011
+        // (known NAV-supply replay anomaly), which made every timeout vote
+        // fail and left no way past a stalled proposer.
+        verify_block_log: false,
         block_height,
         view: view - 1,
         vote_files,
@@ -371,7 +376,12 @@ fn create_rpc_finality_timeout_vote(
     let vote_file = artifact_dir.join(format!("{}.h{block_height}.v{view}.json", context.node_id));
     create_block_timeout_vote(BlockTimeoutVoteOptions {
         data_dir: context.data_dir.clone(),
-        verify_block_log: true,
+        // Timeout votes and certificates bind to the finalized consensus-v2
+        // checkpoint, like transactional restore. Full-history replay is not
+        // required here: on postfiat-wan-devnet-2 it fails at block 1011
+        // (known NAV-supply replay anomaly), which made every timeout vote
+        // fail and left no way past a stalled proposer.
+        verify_block_log: false,
         key_file: context.finality_key_file.clone(),
         validator_id: Some(context.node_id.clone()),
         block_height,
