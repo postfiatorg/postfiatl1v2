@@ -16,7 +16,7 @@ SHA-256: `759ca8e44816b44e3737cb8cf7635b8d77d24273b4d1d6eac4e23809b8ab8a2f`.
 - [x] Build minimal repair from the archived deployed source (`03e1138e`,
   base `707e006f` plus all 26 archived source-file hashes); qualify isolated
   current-state snapshots and preserve signed deployment/rollback bindings.
-- [ ] Roll all six hosts and verify capabilities, Python CLI payment, wallet UI
+- [x] Roll all six hosts and verify capabilities, Python CLI payment, wallet UI
   result and certified convergence; publish exact evidence and operator guidance.
 
 Task Node's skill/integration is unavailable in this session. No generated task,
@@ -74,7 +74,7 @@ Fable 80.20, GLM 88.40; mean **86.93**, locked immediately.
 - [x] Reconstruct pending effects for execution/query views; keep canonical
   checkpoint/history/database state separate. Audit proposal omission and restart.
 - [x] Preserve verified output fields in the SDK and test the real v3 response.
-- [ ] Qualify activated-storage fixtures and retained live certificate; sign a
+- [x] Qualify activated-storage fixtures and retained live certificate; sign a
   replacement, verify its backup and roll all six before resuming the same payment.
 
 Implementation detail discovered after the gate: `fence.decided_at_height` is
@@ -92,3 +92,18 @@ and forged evidence, future/wrong tip metadata, single legacy-journal recovery,
 signed acknowledgement idempotence, fresh-process/snapshot restore, six-validator
 certified anchoring, minority omission and unwrap at a later application height.
 Canonical ledger and checkpoint roots remain unchanged before anchoring.
+
+Release qualification: source `943c4ca7`, node SHA-256
+`a82684e2462b43fd91e6806c322b8f3af2636a7f5fea0662b447c564292746aa`.
+The original live certificate verifies five votes and five acknowledgements.
+Unsigned checkpoint import and signed round-trip import expose the same exact
+1000-atom output and spent input across repeated fresh processes at height 1033;
+the canonical checkpoint/root remains unchanged. Tampered retained votes reject
+business reads while canonical checkpoint verification still passes.
+Release checks also passed: 20 owned-transfer execution tests, Rust SDK quorum/
+output verification, 2 checkpoint tests, 14 storage tests, 67 Python wallet tests
+and 4 FastPay proxy scripts. All-six preflight and the mandatory signed backup
+passed before sequential rollout; live CLI/UI and anchor verification also passed.
+
+Completed: accepted CLI/UI payment and exact all-six certified output at height 1034.
+See [the repair handoff](../../handoffs/2026-09-25_fastpay_restored.md).

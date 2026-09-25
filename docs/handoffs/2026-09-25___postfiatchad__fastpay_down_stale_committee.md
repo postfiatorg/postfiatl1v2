@@ -1,5 +1,8 @@
 # FastPay is down: the FastPay committee still lists validator-5's old key
 
+**Resolved:** see [the deployed repair and verification evidence](2026-09-25_fastpay_restored.md).
+The diagnosis below is retained as the original incident record.
+
 **Date:** 2026-09-25 UTC · **Network:** `postfiat-wan-devnet-2`, height about 1031,
 release `a666-source-route-20260907` on all six validators · **Source checked:**
 `postfiatl1v2` `328d7d36`

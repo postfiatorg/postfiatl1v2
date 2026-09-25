@@ -1,0 +1,98 @@
+{
+  "schema": "postfiat-fastpay-incident-repair-evidence-v1",
+  "captured_utc": "2026-09-25T03:51:34.131977+00:00",
+  "core_source_commit": "d8f65885",
+  "release_source_commit": "943c4ca7b6de28d840d4ca5075a4cbff55a74eee",
+  "release_id": "fastpay-committee-20260925-r3",
+  "node_binary_sha256": "a82684e2462b43fd91e6806c322b8f3af2636a7f5fea0662b447c564292746aa",
+  "rpc_sdk_sha256": "b2f132158f300c3b8da4597251102539c5a440b5661e6efa42f1251903c80ddd",
+  "tests": {
+    "main_fastpay": 22,
+    "release_fastpay": 21,
+    "release_owned_transfer": 20,
+    "release_rpc_sdk_crypto": 1,
+    "release_checkpoint": 2,
+    "release_storage": 14,
+    "python_wallet": 67,
+    "proxy_scripts": 4,
+    "old_read_path_negative_control_failed_as_expected": true
+  },
+  "snapshot": {
+    "verified": true,
+    "verification_basis": "consensus-v2-finalized-checkpoint",
+    "height": 1033,
+    "state_root": "dd007bfbb289fe1c88cb2602a7523eedbcc818d44396e13d3a481e256e7f32cd316662067d9807d08432d1d0e49c1e23",
+    "signed_manifest_sha256": "c56a4c39a010f5b9eef8306a9c1e40f282d79fe4204262dc43d52a4d9a9e8aeb",
+    "finalized_checkpoint_verification_sha256": "0afb96679aaad603205e50850a6828a0821bf7b70416620cbbf4722c6bde4995"
+  },
+  "retained_payment_restore": {
+    "binary_sha256": "a82684e2462b43fd91e6806c322b8f3af2636a7f5fea0662b447c564292746aa",
+    "signed_manifest_sha256": "e24a55f7eaf0cd87cbe8e8f86de602128bb3e20011e94880574885ef1617a42a",
+    "tampered_journal_rejected": true,
+    "rows": [
+      {
+        "restore": "r3-retained-import",
+        "height": 1033,
+        "state_root": "dd007bfbb289fe1c88cb2602a7523eedbcc818d44396e13d3a481e256e7f32cd316662067d9807d08432d1d0e49c1e23",
+        "recipient_object_id": "b2d04da3124dc94c5b9e4bd80a7bc7ec846e3a16e54f1fd7e52230168c1c087c",
+        "recipient_value": 1000,
+        "input_absent": true,
+        "repeated_fresh_process_queries": 2,
+        "canonical_checkpoint_verified": true
+      },
+      {
+        "restore": "r3-retained-verified",
+        "height": 1033,
+        "state_root": "dd007bfbb289fe1c88cb2602a7523eedbcc818d44396e13d3a481e256e7f32cd316662067d9807d08432d1d0e49c1e23",
+        "recipient_object_id": "b2d04da3124dc94c5b9e4bd80a7bc7ec846e3a16e54f1fd7e52230168c1c087c",
+        "recipient_value": 1000,
+        "input_absent": true,
+        "repeated_fresh_process_queries": 2,
+        "canonical_checkpoint_verified": true
+      }
+    ]
+  },
+  "live": {
+    "validator_count": 6,
+    "all_twelve_service_process_hashes_verified": true,
+    "height": 1034,
+    "state_root": "509b0a0db83ebe5ba53b39d7b7052604df30d3c0753bbbae637d1bb1d35e4632c6ce8ecdcf68b6d3046a1220f25c572e",
+    "mempool_pending": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "payment": {
+    "operation_id": "fastpay-committee-repair-20260925",
+    "amount_atoms": 1000,
+    "flow_state": "accepted",
+    "certificate_votes_verified": 5,
+    "acknowledgements_verified": 5,
+    "acknowledgement_validators": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4"
+    ],
+    "recipient_object_id": "b2d04da3124dc94c5b9e4bd80a7bc7ec846e3a16e54f1fd7e52230168c1c087c",
+    "all_six_exact_output_and_input_consumption_verified": true,
+    "anchor_transaction_id": "835a03d77da06f44e016935c406082b742d011bd8a4c54d8fb050608213cd59d0a063324603d8182ba4f9a27a34092c5",
+    "unused_test_funds_returned_atoms": 18956
+  },
+  "wallet_ui": {
+    "operation_visible_and_accepted": true,
+    "javascript_errors": [],
+    "screenshot_sha256": "f6a824d6f99850aab36ccec4e614464968bcb467ab33148da8c895fa9dd95964"
+  },
+  "limits": [
+    "Five eligible signers for quorum five; no additional signer outage tolerance.",
+    "Original external wallet operation was not accessed or claimed recovered.",
+    "Backup verifies certified current state; historical block 1011 full replay anomaly remains.",
+    "Task Node integration was unavailable; no task acceptance or reward claimed."
+  ]
+}
