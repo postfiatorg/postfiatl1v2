@@ -223,3 +223,7 @@ The publisher-key item (first asked 2026-09-21) is closed by his new key.
 [custody]: https://github.com/postfiatorg/StakeHub/blob/master/docs/review/custody-and-archive-decision-proposal-20260923.md
 [sh-pay]: https://github.com/postfiatorg/StakeHub/tree/wallet/pay-transfer-fastpay-20260925
 [sh-registry]: https://github.com/postfiatorg/StakeHub/tree/wallet/pft-registry-20260924
+
+## End of session (13:30 UTC)
+
+The local full workspace test run that gated the first apply finished at 13:26Z after the rollout had been stopped: 84 test-result groups, 1,486 passed, 0 failed, 39 ignored (summary recorded on the release branch in `deployments/release-repair-20260925/logs/full-workspace-tests.summary.txt`, commit noted in the release README). The step-6 gate is therefore met. The fleet is unchanged (r4 at height 1044). The rollout can resume by the "to resume" rule in `deployments/combined-fastpay-20260925/DEPLOY-SHEET.md`: recreate the worktree `~/repos/postfiatl1v2-combined-fastpay-deploy` from `release/combined-fastpay-20260925`, then `apply-next` with the existing rollout state if the chain is still at 1044, otherwise a fresh before reading, preflight and signed backup first; one devnet transaction is needed for the canary to certify a new block. Either lane may run it; this lane plans it as the first step of 2026-09-26.
