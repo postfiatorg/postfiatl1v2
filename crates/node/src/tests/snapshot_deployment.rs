@@ -1758,6 +1758,15 @@ fn snapshot_import_rejects_nonempty_destination_before_any_mutation() {
 #[test]
 fn finalized_checkpoint_snapshot_accepts_certified_legacy_governance_anomaly_and_rejects_tampering()
 {
+    finalized_checkpoint_snapshot_fixture(false);
+}
+
+#[test]
+fn finalized_checkpoint_snapshot_restores_transactional_storage_without_legacy_replay() {
+    finalized_checkpoint_snapshot_fixture(true);
+}
+
+fn finalized_checkpoint_snapshot_fixture(transactional: bool) {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -1772,7 +1781,7 @@ fn finalized_checkpoint_snapshot_accepts_certified_legacy_governance_anomaly_and
         node_id: "validator-0".to_string(),
         validator_count: 1,
         activation_height: 1,
-        storage_activation_height: None,
+        storage_activation_height: transactional.then_some(1),
     })
     .expect("init activated source");
 
@@ -1798,6 +1807,54 @@ fn finalized_checkpoint_snapshot_accepts_certified_legacy_governance_anomaly_and
     store
         .write_governance(&governance)
         .expect("persist legacy anomaly before finality");
+    if transactional {
+        // Activation executes from the initialized transactional generation.
+        // Put the historical fixture in that generation before it is certified.
+        let fixture_dir = data_dir.join("historical-fixture-generation");
+        let target = store.open_transactional_store_at(&fixture_dir).unwrap();
+        let initial = store.transactional_store().unwrap();
+        let tip = store.read_chain_tip().unwrap();
+        let commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
+            &genesis.chain_id,
+            &genesis_hash(&genesis),
+            genesis.protocol_version,
+        )
+        .unwrap();
+        let ledger = store.read_ledger().unwrap();
+        let shielded = store.read_shielded().unwrap();
+        let bridge = store.read_bridge().unwrap();
+        let node_state = store.read_node_state().unwrap();
+        let registry = initial
+            .current_state_raw("validator_registry")
+            .unwrap()
+            .unwrap();
+        drop(initial);
+        let additional = [postfiat_storage::transactional::NamedStateValue {
+            domain: "validator_registry".to_owned(),
+            canonical_bytes: registry,
+        }];
+        target
+            .initialize_with_activation(
+                &tip,
+                &commitment,
+                postfiat_storage::CurrentStateUpdate {
+                    ledger: Some(&ledger),
+                    governance: Some(&governance),
+                    shielded: Some(&shielded),
+                    bridge: Some(&bridge),
+                    node_state: Some(&node_state),
+                    additional: &additional,
+                },
+                Some(1),
+            )
+            .unwrap();
+        let packet = hash_hex("postfiat.test.historical-fixture", b"checkpoint");
+        target.verify_and_bind_migration(&packet).unwrap();
+        drop(target);
+        store
+            .publish_transactional_generation(&fixture_dir, &packet)
+            .unwrap();
+    }
 
     let batch_file = root.join("batch.json");
     create_transfer_batch(BatchTransferOptions {
@@ -1950,6 +2007,14 @@ fn finalized_checkpoint_snapshot_accepts_certified_legacy_governance_anomaly_and
         .expect("parse compact checkpoint artifact");
         assert_eq!(value["files"], serde_json::json!([]));
     }
+    if transactional {
+        import_snapshot(SnapshotImportOptions {
+            data_dir: root.join("full-history-must-reject"),
+            snapshot_dir: snapshot_dir.clone(),
+            node_id: None,
+        })
+        .expect_err("ordinary import still requires full history replay");
+    }
     let restored_dir = root.join("checkpoint-restored");
     let restored = import_snapshot_from_finalized_checkpoint(SnapshotImportOptions {
         data_dir: restored_dir.clone(),
@@ -1974,6 +2039,82 @@ fn finalized_checkpoint_snapshot_accepts_certified_legacy_governance_anomaly_and
             .count(),
         0
     );
+
+    if transactional {
+        // Recompute the unsigned manifest hashes: certificate/state verification,
+        // rather than a file checksum, must reject these otherwise valid imports.
+        for attack in [
+            "state",
+            "certificate",
+            "missing-certificate",
+            "registry",
+            "tip",
+            "root",
+        ] {
+            let attacked = root.join(format!("snapshot-{attack}"));
+            std::fs::create_dir(&attacked).unwrap();
+            for entry in std::fs::read_dir(&snapshot_dir).unwrap() {
+                let entry = entry.unwrap();
+                std::fs::copy(entry.path(), attacked.join(entry.file_name())).unwrap();
+            }
+            let mut manifest =
+                read_snapshot_manifest(&attacked.join(SNAPSHOT_MANIFEST_FILE)).unwrap();
+            let filename = match attack {
+                "state" => Some(LEDGER_FILE),
+                "certificate" | "missing-certificate" => Some(BLOCKS_FILE),
+                "registry" => Some(VALIDATOR_REGISTRY_FILE),
+                "tip" => {
+                    manifest.block_tip_hash = "00".repeat(48);
+                    None
+                }
+                _ => {
+                    manifest.state_root = "00".repeat(48);
+                    None
+                }
+            };
+            if let Some(filename) = filename {
+                let path = attacked.join(filename);
+                let mut value: serde_json::Value =
+                    serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+                match attack {
+                    "state" => {
+                        let balance = value["accounts"][0]["balance"].as_u64().unwrap();
+                        value["accounts"][0]["balance"] = (balance + 1).into();
+                    }
+                    "certificate" => {
+                        value["blocks"][0]["header"]["consensus_v2_commit"]["proposal"]["block"]
+                            ["state_root"] = "00".repeat(48).into();
+                    }
+                    "missing-certificate" => {
+                        value["blocks"][0]["header"]["consensus_v2_commit"] =
+                            serde_json::Value::Null;
+                    }
+                    _ => {
+                        value["validators"][0]["public_key_hex"] =
+                            bytes_to_hex(&ml_dsa_65_keygen_from_seed(&[94; 32]).public_key).into();
+                    }
+                }
+                let bytes = serde_json::to_vec(&value).unwrap();
+                atomic_write(&path, &bytes).unwrap();
+                let file = manifest
+                    .files
+                    .iter_mut()
+                    .find(|file| file.name == filename)
+                    .unwrap();
+                file.bytes = bytes.len() as u64;
+                file.hash_hex = hash_hex("postfiat.snapshot.file.v1", &bytes);
+            }
+            write_snapshot_manifest(&attacked.join(SNAPSHOT_MANIFEST_FILE), &manifest).unwrap();
+            import_snapshot_from_finalized_checkpoint(SnapshotImportOptions {
+                data_dir: root.join(format!("reject-{attack}")),
+                snapshot_dir: attacked,
+                node_id: None,
+            })
+            .expect_err("checkpoint verification must reject tampered state or certification");
+        }
+        std::fs::remove_dir_all(root).expect("cleanup transactional checkpoint test");
+        return;
+    }
 
     let mut undersized_tip = legacy_retry_tip.clone();
     undersized_tip.receipt_count = 0;

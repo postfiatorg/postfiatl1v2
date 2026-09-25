@@ -26,7 +26,25 @@ continues, with the lifecycle gap recorded here rather than invented receipts.
 Operational limit: five eligible FastPay signers remain; one further signer outage
 prevents new FastPay certificates until a governed committee rotation.
 
+Restore prerequisite: [checkpoint specification](../../specs/fastpay-checkpoint-restore-prerequisite-20260925.md).
+First full TIH mean 83.53; direct OpenRouter `openai/gpt-5.6-sol-pro` rewrite,
+then `round-20260925T020822Z`: five each, GPT 91.60, Fable 84.80, GLM 89.80,
+combined **88.73**. Locked SHA-256
+`9c2af1e7689be5a8becc8afa1ce45d107a8166080e54425608fee6e5752c9b33`.
+
+- [x] Reproduce live snapshot import failure at block 1011; services unchanged.
+- [x] Preserve checkpoint verification during transactional snapshot restore in
+  `batch_snapshot.rs` and `storage_migration.rs`, with a sealed fresh-import
+  capability. Standalone full-history verification retains its existing ordering.
+- [ ] Test activated storage, ordinary replay rejection, and tampering with updated
+  unsigned manifests; verify the signed backup before any restart.
+
 Validation: 20 node FastPay tests, 3 execution FastPay tests, 67 Python wallet
 tests plus 8 subtests, and 4 wallet-proxy test scripts passed. The first negative-key
 fixture was corrected to inject invalid bytes directly because the normal key
 writer correctly rejects mismatched key pairs. No production relaxation was needed.
+
+Checkpoint validation: 16 snapshot/deployment and 14 storage-activation tests
+passed. The activated-storage regression fails on the unpatched code at historical
+replay, then passes with the restore repair. Six tampered snapshots with updated
+unsigned file hashes are rejected. Full-history import still rejects the anomaly.
