@@ -3301,9 +3301,10 @@ class FastPayFlowTests(unittest.TestCase):
             self.assertEqual(signed["order"]["recovery"]["lock_id"], lock_id)
             return {"validator_id": validator_id, "signature_hex": f"vote-{validator_id}"}
 
-        created_objects = [{"id": "recipient-output", "owner_pubkey_hex": "recipient_pk", "value": 50, "asset": "PFT"}]
+        verified_effects = {"consumed_count": 1, "credited": 6, "credited_to": "pf-owner"}
         apply_result = {
-            "created_objects": [],
+            "credited": 999,
+            "credited_to": "forged-proxy-address",
             "authenticated_acknowledgements": [{"validator_id": "unverified-response-value"}],
             "validators": [
                 {
@@ -3480,10 +3481,9 @@ class FastPayFlowTests(unittest.TestCase):
             self.assertEqual(signed["order"]["recovery"]["lock_id"], lock_id)
             return {"validator_id": validator_id, "signature_hex": f"vote-{validator_id}"}
 
-        verified_effects = {"consumed_count": 1, "credited": 6, "credited_to": "pf-owner"}
+        created_objects = [{"id": "recipient-output", "owner_pubkey_hex": "recipient_pk", "value": 50, "asset": "PFT"}]
         apply_result = {
-            "credited": 999,
-            "credited_to": "forged-proxy-address",
+            "created_objects": [],
             "authenticated_acknowledgements": [{"validator_id": "unverified-response-value"}],
             "validators": [
                 {
