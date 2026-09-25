@@ -49,10 +49,10 @@ the same remap arguments and `SOURCE_DATE_EPOCH=1789514690`. Neither has RPATH o
 | Validator copy | Original, 1020 | Saved V2, 1021 | Fresh V2, 1021 | r4 checkpoint |
 |---|---|---|---|---|
 | validator-0 | PASS | PASS | PASS | PENDING |
-| validator-1 | PASS | PASS | IN PROGRESS | PENDING |
-| validator-2 | PASS | PASS | PENDING | PENDING |
-| validator-3 | PASS | PASS | PENDING | PENDING |
-| validator-4 | PASS | PASS | PENDING | PENDING |
+| validator-1 | PASS | PASS | PASS | PENDING |
+| validator-2 | PASS | PASS | PASS | PENDING |
+| validator-3 | PASS | PASS | PASS | PENDING |
+| validator-4 | PASS | PASS | IN PROGRESS | PENDING |
 | validator-5 | PASS | PASS | PENDING | PENDING |
 
 Per-node verifier stdout and stderr are in `history/`. Commands, timings, memory limits and
