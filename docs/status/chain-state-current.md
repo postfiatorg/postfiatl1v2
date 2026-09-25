@@ -1,8 +1,38 @@
 # PostFiat L1 Current State
 
-Updated: `2026-09-23T09:15:00Z` (restart cause and manual-restart setting); latest fleet observation `2026-09-14T11:32:29Z`
+Updated: `2026-09-25T14:18:53Z` (combined-fastpay-20260925 deployed); latest fleet observation `2026-09-25T14:18:53Z`
 
 Status: **canonical operational-state reference**
+
+!!! success "2026-09-25: merged combined and FastPay release deployed to all six validators"
+
+    Release `combined-fastpay-20260925` runs on all six validators: source
+    `f60e9639` on branch `release/combined-fastpay-20260925` (the merge of
+    the deployed FastPay line r4 into the qualified combined line), executable
+    `d66cecc36426ce05ced8730b2439a27285c6b404688acd13dc23594b884eabd6`, signed
+    manifest `7a682ffe…` (publisher `pfc531e0…`). It replaced
+    `fastpay-committee-20260925-r4` (`44b6794f…`) with
+    `scripts/postfiat-safe-rollout apply-next`, one validator at a time
+    (validator-1 canary, then 0, 2, 3, 4, 5), 13:37–14:14Z.
+
+    Before: six on r4 at height 1044, tip `136985ca…`, root `8f22d40f…`.
+    After (`14:18:53Z`): six on the new release, all 12 validator and RPC
+    processes on `d66cecc3…`, manifest verified on every host, height 1050,
+    tip `03a24230…`, root `13d9e652…`, no divergence at any step.
+
+    The chain makes blocks only for transactions, so each check used one
+    devnet faucet grant of 1 PFT from the faucet account to the `testing`
+    wallet (StakeHub `pft faucet`): heights 1045–1050, one per applied
+    validator, 6 PFT plus 192 atoms of fees in total. Nothing else moved.
+
+    Rollback: the r4 executable and r4 units stay on every host; the
+    per-validator path is `rollback-one.sh` (data in place, verified by r4
+    first), and the signed validator-1 backup at 1044 is the fallback. It was
+    not needed. The FastPay stall trigger is unchanged: validator-5 holds no
+    FastPay effects, so a FastPay payment followed by validator-5's turn to
+    propose still needs a view change. StakeHub's config still names the r4
+    executable for its CLI calls. Records:
+    [deployment README](https://github.com/postfiatorg/postfiatl1v2/blob/release/combined-fastpay-20260925/deployments/combined-fastpay-20260925/README.md).
 
 !!! note "2026-09-23: the September 11 fleet-wide service restart was Ubuntu's unattended security upgrade"
 
