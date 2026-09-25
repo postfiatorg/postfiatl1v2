@@ -1512,6 +1512,65 @@ fn write_verified_fastpay_apply_v3(flags: &[String]) -> Result<(), String> {
             format!("FastPay apply response read failed at {apply_response_file}: {error}")
         })?)
         .map_err(|error| format!("FastPay apply response parse failed: {error}"))?;
+    let validator_pks = validator_keys
+        .iter()
+        .map(|(validator_id, public_key_hex)| (validator_id.clone(), public_key_hex.clone()))
+        .collect::<Vec<_>>();
+    let verified_votes = match operation {
+        "transfer" => {
+            let certificate = serde_json::from_slice::<postfiat_types::OwnedTransferCertificateV3>(
+                &certificate_raw,
+            )
+            .map_err(|error| format!("FastPay transfer certificate parse failed: {error}"))?;
+            postfiat_execution::verify_owned_transfer_certificate_v3(
+                &certificate,
+                &validator_pks,
+                &capabilities.domain,
+                capabilities.committee_epoch,
+                &capabilities.policy,
+                capabilities.current_height,
+                capabilities.quorum,
+            )
+        }
+        "unwrap" => {
+            let certificate = serde_json::from_slice::<postfiat_types::OwnedUnwrapCertificateV3>(
+                &certificate_raw,
+            )
+            .map_err(|error| format!("FastPay unwrap certificate parse failed: {error}"))?;
+            postfiat_execution::verify_owned_unwrap_certificate_v3(
+                &certificate,
+                &validator_pks,
+                &capabilities.domain,
+                capabilities.committee_epoch,
+                &capabilities.policy,
+                capabilities.current_height,
+                capabilities.quorum,
+            )
+        }
+        _ => unreachable!("operation checked while parsing the certificate"),
+    }
+    .map_err(|error| format!("compact FastPay certificate verification failed: {error:?}"))?;
+    let verified_effects = match operation {
+        "transfer" => {
+            let certificate: postfiat_types::OwnedTransferCertificateV3 =
+                serde_json::from_slice(&certificate_raw).map_err(|error| error.to_string())?;
+            serde_json::json!({
+                "created_objects": postfiat_execution::owned_transfer_output_objects(
+                    &certificate.owner_pubkey_hex, certificate.order.nonce, &certificate.order.outputs,
+                ),
+            })
+        }
+        "unwrap" => {
+            let certificate: postfiat_types::OwnedUnwrapCertificateV3 =
+                serde_json::from_slice(&certificate_raw).map_err(|error| error.to_string())?;
+            serde_json::json!({
+                "consumed_count": certificate.order.inputs.len(),
+                "credited": certificate.order.amount,
+                "credited_to": certificate.order.to_address,
+            })
+        }
+        _ => unreachable!("operation already verified"),
+    };
     if apply_response
         .get("schema")
         .and_then(serde_json::Value::as_str)
@@ -1536,45 +1595,6 @@ fn write_verified_fastpay_apply_v3(flags: &[String]) -> Result<(), String> {
         {
             return Err("compact FastPay response method does not match the operation".to_string());
         }
-        let validator_pks = validator_keys
-            .iter()
-            .map(|(validator_id, public_key_hex)| (validator_id.clone(), public_key_hex.clone()))
-            .collect::<Vec<_>>();
-        let verified_votes = match operation {
-            "transfer" => {
-                let certificate = serde_json::from_slice::<
-                    postfiat_types::OwnedTransferCertificateV3,
-                >(&certificate_raw)
-                .map_err(|error| format!("FastPay transfer certificate parse failed: {error}"))?;
-                postfiat_execution::verify_owned_transfer_certificate_v3(
-                    &certificate,
-                    &validator_pks,
-                    &capabilities.domain,
-                    capabilities.committee_epoch,
-                    &capabilities.policy,
-                    capabilities.current_height,
-                    capabilities.quorum,
-                )
-            }
-            "unwrap" => {
-                let certificate =
-                    serde_json::from_slice::<postfiat_types::OwnedUnwrapCertificateV3>(
-                        &certificate_raw,
-                    )
-                    .map_err(|error| format!("FastPay unwrap certificate parse failed: {error}"))?;
-                postfiat_execution::verify_owned_unwrap_certificate_v3(
-                    &certificate,
-                    &validator_pks,
-                    &capabilities.domain,
-                    capabilities.committee_epoch,
-                    &capabilities.policy,
-                    capabilities.current_height,
-                    capabilities.quorum,
-                )
-            }
-            _ => unreachable!("operation checked while parsing the certificate"),
-        }
-        .map_err(|error| format!("compact FastPay certificate verification failed: {error:?}"))?;
         let response_quorum = apply_response
             .get("certificate_quorum")
             .and_then(serde_json::Value::as_u64)
@@ -1651,6 +1671,7 @@ fn write_verified_fastpay_apply_v3(flags: &[String]) -> Result<(), String> {
                 "quorum": capabilities.quorum,
                 "certificate_votes_verified": verified_votes,
                 "authenticated_acknowledgements": acknowledgements,
+                "verified_effects": verified_effects,
             }),
         );
     }
@@ -1719,6 +1740,8 @@ fn write_verified_fastpay_apply_v3(flags: &[String]) -> Result<(), String> {
             "certificate_digest": certificate_digest,
             "quorum": capabilities.quorum,
             "authenticated_acknowledgements": accepted,
+            "certificate_votes_verified": verified_votes,
+            "verified_effects": verified_effects,
         }),
     )
 }
@@ -2915,6 +2938,15 @@ mod atomic_swap_cli_tests {
         )
         .expect("parse FastPay apply verification");
         assert_eq!(verification["quorum"], 3);
+        let expected_outputs = postfiat_execution::owned_transfer_output_objects(
+            &certificate.owner_pubkey_hex,
+            certificate.order.nonce,
+            &certificate.order.outputs,
+        );
+        assert_eq!(
+            verification["verified_effects"]["created_objects"],
+            serde_json::to_value(&expected_outputs).unwrap()
+        );
         assert_eq!(
             verification["authenticated_acknowledgements"]
                 .as_array()
@@ -2949,12 +2981,35 @@ mod atomic_swap_cli_tests {
         .expect("parse compact FastPay verification");
         assert_eq!(compact_verification["certificate_votes_verified"], 3);
         assert_eq!(
+            compact_verification["verified_effects"],
+            verification["verified_effects"]
+        );
+        assert_eq!(
             compact_verification["authenticated_acknowledgements"]
                 .as_array()
                 .expect("compact authenticated acknowledgements")
                 .len(),
             3
         );
+
+        for duplicate in [false, true] {
+            let mut forged = certificate.clone();
+            if duplicate {
+                forged.votes[2] = forged.votes[0].clone();
+            } else {
+                forged.votes[0].signature_hex = "00".into();
+            }
+            write_json_output(certificate_path.to_str().unwrap(), &forged).unwrap();
+            if verification_path.exists() {
+                fs::remove_file(&verification_path).unwrap();
+            }
+            assert!(write_verified_fastpay_apply_v3(&verification_flags).is_err());
+            assert!(
+                !verification_path.exists(),
+                "failed verification must not publish expected outputs"
+            );
+        }
+        write_json_output(certificate_path.to_str().unwrap(), &certificate).unwrap();
 
         write_json_output(
             apply_path.to_str().expect("missing ack apply path"),

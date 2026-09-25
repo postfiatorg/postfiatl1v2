@@ -395,7 +395,7 @@ pub fn conformance_shielded_batch(
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
     let governance = store.read_governance()?;
-    let mut ledger = store.read_ledger()?;
+    let mut ledger = read_fastpay_ledger(&store)?;
     let mut shielded = store.read_shielded()?;
     let bridge = store.read_bridge()?;
     let mut ordered_batches = store.read_ordered_batches()?;
@@ -1363,7 +1363,7 @@ pub fn apply_shielded_batch_with_replay(
     let batch = read_shielded_action_batch_file(&options.batch_file)?;
     verify_shielded_action_batch_id(&genesis, &batch)?;
 
-    let mut ledger = store.read_ledger()?;
+    let mut ledger = read_fastpay_ledger(&store)?;
     let bridge = store.read_bridge()?;
     let chain_tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
     let block_height = chain_tip

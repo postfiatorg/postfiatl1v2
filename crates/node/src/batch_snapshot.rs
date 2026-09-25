@@ -533,7 +533,7 @@ fn apply_batch_with_timings_inner(
 
     let stage_start = std::time::Instant::now();
     let genesis = store.read_genesis()?;
-    let mut ledger = store.read_ledger()?;
+    let mut ledger = read_fastpay_ledger(&store)?;
     let mut governance = store.read_governance()?;
     let read_core_state_ms = apply_batch_elapsed_ms(stage_start);
 
@@ -984,7 +984,7 @@ pub fn apply_bridge_batch_with_replay(
     let batch = read_bridge_action_batch_file(&options.batch_file)?;
     verify_bridge_action_batch_id(&genesis, &batch)?;
 
-    let mut ledger = store.read_ledger()?;
+    let mut ledger = read_fastpay_ledger(&store)?;
     let shielded = store.read_shielded()?;
     let chain_tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
     let block_height = chain_tip
@@ -3399,6 +3399,18 @@ pub(super) fn prospective_absolute_import_target(target: &Path) -> io::Result<Pa
     Ok(std::fs::canonicalize(parent)?.join(target_name))
 }
 
+// A sealed capability for the fresh destination created by snapshot import.
+// Other modules can consume it, but cannot construct one for a live directory.
+pub(super) struct FreshCheckpointImport {
+    data_dir: PathBuf,
+}
+
+impl FreshCheckpointImport {
+    pub(super) fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+}
+
 fn import_snapshot_with_basis(
     options: SnapshotImportOptions,
     basis: SnapshotVerificationBasis,
@@ -3546,13 +3558,24 @@ fn import_snapshot_into_staging(
         .is_some_and(|height| imported_tip.height >= height)
     {
         let transactional_generation = data_dir.join("transactional-snapshot-generation-v1");
-        rebuild_transactional_storage(StorageMigrationOptions {
+        let migration = StorageMigrationOptions {
             data_dir: data_dir.to_path_buf(),
             output_dir: transactional_generation,
             expected_tip: imported_tip.block_hash,
             expected_state_root: imported_tip.state_root,
             verify_only: false,
-        })?;
+        };
+        match basis {
+            SnapshotVerificationBasis::FullHistory => rebuild_transactional_storage(migration)?,
+            SnapshotVerificationBasis::FinalizedCheckpoint => {
+                super::storage_migration::restore_transactional_checkpoint(
+                    migration,
+                    FreshCheckpointImport {
+                        data_dir: data_dir.to_path_buf(),
+                    },
+                )?
+            }
+        };
     }
 
     let restored = status(NodeOptions {

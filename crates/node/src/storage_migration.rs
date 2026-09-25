@@ -69,6 +69,35 @@ pub struct StorageMigrationReportV1 {
 pub fn rebuild_transactional_storage(
     options: StorageMigrationOptions,
 ) -> io::Result<StorageMigrationReportV1> {
+    rebuild_transactional_storage_with_basis(options, MigrationVerification::FullHistory)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MigrationVerification {
+    FullHistory,
+    FinalizedCheckpoint,
+}
+
+// The authorization can only be constructed by snapshot import after it creates
+// a fresh destination and verifies the portable files. There is no CLI bypass
+// for migrating an existing live store without historical execution replay.
+pub(super) fn restore_transactional_checkpoint(
+    options: StorageMigrationOptions,
+    authorization: super::batch_snapshot::FreshCheckpointImport,
+) -> io::Result<StorageMigrationReportV1> {
+    if options.verify_only || options.data_dir != authorization.data_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "checkpoint storage restore requires its fresh snapshot import directory",
+        ));
+    }
+    rebuild_transactional_storage_with_basis(options, MigrationVerification::FinalizedCheckpoint)
+}
+
+fn rebuild_transactional_storage_with_basis(
+    options: StorageMigrationOptions,
+    basis: MigrationVerification,
+) -> io::Result<StorageMigrationReportV1> {
     validate_expected_digest("expected tip", &options.expected_tip)?;
     validate_expected_digest("expected state root", &options.expected_state_root)?;
     let source = if options.verify_only {
@@ -106,14 +135,17 @@ pub fn rebuild_transactional_storage(
         ));
     }
 
-    // This authenticates every legacy history object and independently replays
-    // execution, receipts, state roots, certificates, and the certified tip.
-    if options.verify_only {
-        verify_blocks_read_only(&source)?;
-    } else {
-        verify_blocks(NodeOptions {
-            data_dir: options.data_dir.clone(),
-        })?;
+    // Full-history paths replay execution before reconstruction, as before.
+    // Checkpoint restore needs the reconstructed index to verify the v2 root;
+    // its mandatory certified-state verification runs below before acceptance.
+    if basis == MigrationVerification::FullHistory {
+        if options.verify_only {
+            verify_blocks_read_only(&source)?;
+        } else {
+            verify_blocks(NodeOptions {
+                data_dir: options.data_dir.clone(),
+            })?;
+        }
     }
     let history_checkpoint = read_history_checkpoint_state_optional(&source)?;
     let mut source_tip = reconstruct_chain_tip_for_genesis(&source, &genesis)?;
@@ -435,6 +467,13 @@ pub fn rebuild_transactional_storage(
 
     let pointer = source
         .publish_transactional_generation(&options.output_dir, &manifest.migration_packet_root)?;
+    if basis == MigrationVerification::FinalizedCheckpoint {
+        // This pointer is inside the fresh offline import directory. Publishing
+        // the import (and reporting success) still requires the certified root.
+        verify_finalized_checkpoint(NodeOptions {
+            data_dir: options.data_dir.clone(),
+        })?;
+    }
     Ok(StorageMigrationReportV1 {
         schema: STORAGE_MIGRATION_REPORT_SCHEMA_V1.to_owned(),
         verify_only: false,
