@@ -30,3 +30,5 @@ for script in \
   scripts/testnet-wallet-minimum-smoke; do
   bash -n "$script"
 done
+
+python3 scripts/test-node-script-invocations.py
