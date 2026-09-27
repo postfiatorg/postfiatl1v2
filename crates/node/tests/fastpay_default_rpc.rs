@@ -148,3 +148,43 @@ fn signed_fastpay_rpc_is_enabled_by_default_and_explicitly_disableable() {
 
     fs::remove_dir_all(root).expect("remove RPC test directory");
 }
+
+#[test]
+fn rpc_default_spool_works_with_relative_and_absolute_data_directories() {
+    let root = unique_root();
+    let data_dir = root.join("node");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-relative-data-dir-test".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 1,
+    })
+    .expect("initialize RPC test node");
+
+    for argument in [Path::new("node"), data_dir.as_path()] {
+        let port = free_port();
+        let ready = data_dir.join("readiness/rpc.ready.json");
+        let mut child = Command::new(node_bin())
+            .current_dir(&root)
+            .args(["rpc-serve", "--unsafe-devnet-json-storage", "--data-dir"])
+            .arg(argument)
+            .args(["--port", &port.to_string(), "--max-requests", "1"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn RPC server");
+        wait_for_file(&ready);
+        // server_info runs in a worker whose cwd is the data directory.
+        let response = rpc_call(port, &server_info_request("relative-data-dir"));
+        let status = child.wait().expect("wait for RPC server");
+        assert!(status.success(), "RPC server failed with {status}");
+        assert!(response.ok, "{}: {:?}", argument.display(), response.error);
+        assert_eq!(
+            response.result.expect("server_info result")["chain_id"],
+            "postfiat-relative-data-dir-test"
+        );
+        fs::remove_file(ready).expect("remove readiness file between runs");
+    }
+
+    fs::remove_dir_all(root).expect("remove RPC test directory");
+}
