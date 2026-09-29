@@ -3,5 +3,4 @@ set -euo pipefail
 
 DATA_DIR="${DATA_DIR:-.postfiat/node0}"
 
-cargo run -p postfiat-node -- faucet --data-dir "$DATA_DIR"
-
+cargo run -p postfiat-node --bin postfiat-node -- faucet --data-dir "$DATA_DIR"

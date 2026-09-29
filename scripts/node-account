@@ -4,7 +4,6 @@ set -euo pipefail
 DATA_DIR="${DATA_DIR:-.postfiat/node0}"
 ADDRESS="${ADDRESS:-pfrecipient000000000000000000000000000000}"
 
-cargo run -p postfiat-node -- account \
+cargo run -p postfiat-node --bin postfiat-node -- account \
   --data-dir "$DATA_DIR" \
   --address "$ADDRESS"
-

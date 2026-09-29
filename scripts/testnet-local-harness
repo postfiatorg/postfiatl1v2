@@ -161,6 +161,7 @@ for ((i = 0; i < VALIDATORS; i++)); do
   write_node_state "$node_dir/node_state.json" "$node_id"
 
   "$POSTFIAT_NODE_BIN" run \
+    --unsafe-devnet-json-storage \
     --data-dir "$node_dir" >"$node_log_dir/run.json"
   "$POSTFIAT_NODE_BIN" status \
     --data-dir "$node_dir" >"$node_log_dir/status.json"
