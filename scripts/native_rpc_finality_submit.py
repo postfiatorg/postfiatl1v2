@@ -43,6 +43,8 @@ def _request(sock: socket.socket, payload: dict, timeout_seconds: float) -> dict
         raise StopError("RPC response was not valid JSON") from exc
     if not isinstance(response, dict):
         raise StopError("RPC response must be an object")
+    if response.get("id") != payload.get("id"):
+        raise StopError("RPC response id did not match request")
     return response
 
 
