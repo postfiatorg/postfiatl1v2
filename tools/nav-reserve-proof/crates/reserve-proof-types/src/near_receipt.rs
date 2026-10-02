@@ -47,6 +47,12 @@ pub struct NearReceiptPolicyV1 {
     pub snapshot_version: String,
     pub snapshot_event: String,
     pub owner_public_key: Vec<u8>,
+    /// Maximum age of the snapshot receipt below the certified head, in
+    /// nanoseconds of NEAR block time.
+    pub max_receipt_age_ns: u64,
+    /// Maximum height distance between the receipt block and the certified
+    /// head.
+    pub max_receipt_age_blocks: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -408,6 +414,8 @@ pub enum NearReceiptLegError {
     BoundsExceeded,
     #[error("policy binding mismatch")]
     PolicyMismatch,
+    #[error("snapshot receipt is older than the policy bound or after the certified head")]
+    StaleReceipt,
     #[error("checkpoint binding or certificate mismatch")]
     CheckpointMismatch,
     #[error("reserve owner authorization failed")]
@@ -430,7 +438,10 @@ impl NearReceiptPolicyV1 {
         validate_text(&self.snapshot_standard, 128)?;
         validate_text(&self.snapshot_version, 64)?;
         validate_text(&self.snapshot_event, 128)?;
-        if self.owner_public_key.len() != 32 {
+        if self.owner_public_key.len() != 32
+            || self.max_receipt_age_ns == 0
+            || self.max_receipt_age_blocks == 0
+        {
             return Err(NearReceiptLegError::PolicyMismatch);
         }
         VerifyingKey::from_bytes(
@@ -457,6 +468,8 @@ impl NearReceiptPolicyV1 {
         append_bytes(&mut out, self.snapshot_version.as_bytes())?;
         append_bytes(&mut out, self.snapshot_event.as_bytes())?;
         append_bytes(&mut out, &self.owner_public_key)?;
+        out.extend_from_slice(&self.max_receipt_age_ns.to_be_bytes());
+        out.extend_from_slice(&self.max_receipt_age_blocks.to_be_bytes());
         append_hex(&mut out, committee_root, 48)?;
         Ok(hash48(POLICY_COMMITMENT_DOMAIN, &[&out]))
     }
@@ -592,6 +605,7 @@ pub fn verify_near_receipt_quantity_proof_v1(
     if event.block_timestamp != payload.block_timestamp {
         return Err(NearReceiptLegError::BadSnapshotEvent);
     }
+    verify_receipt_age(witness, payload.block_timestamp)?;
     let salt: [u8; 32] = witness
         .salt
         .as_slice()
@@ -646,6 +660,32 @@ pub fn verify_near_receipt_quantity_proof_v1(
         evidence_commitment,
         metadata_hash,
     })
+}
+
+/// The block Merkle root admits every ancestor of the certified head, so the
+/// receipt must also be recent relative to that head.
+fn verify_receipt_age(
+    witness: &NearReceiptQuantityProofV1,
+    receipt_timestamp_ns: u64,
+) -> Result<(), NearReceiptLegError> {
+    let age_ns = witness
+        .head
+        .header
+        .timestamp
+        .checked_sub(receipt_timestamp_ns)
+        .ok_or(NearReceiptLegError::StaleReceipt)?;
+    let age_blocks = witness
+        .head
+        .header
+        .height
+        .checked_sub(witness.proof.block_header_lite.inner_lite.height)
+        .ok_or(NearReceiptLegError::StaleReceipt)?;
+    if age_ns > witness.policy.max_receipt_age_ns
+        || age_blocks > witness.policy.max_receipt_age_blocks
+    {
+        return Err(NearReceiptLegError::StaleReceipt);
+    }
+    Ok(())
 }
 
 pub fn near_block_hash_from_lite(
@@ -1751,7 +1791,19 @@ mod tests {
         out
     }
 
+    const FIXTURE_MAX_RECEIPT_AGE_NS: u64 = 1_800_000_000_000;
+    const FIXTURE_MAX_RECEIPT_AGE_BLOCKS: u64 = 3_000;
+
     fn fixture() -> (NearReceiptQuantityProofV1, OwnedContext) {
+        fixture_with_receipt_age(None)
+    }
+
+    /// `receipt_age` places the snapshot receipt `(nanoseconds, blocks)`
+    /// below the certified head and re-signs everything that binds it.
+    fn fixture_with_receipt_age(
+        receipt_age: Option<(u64, u64)>,
+    ) -> (NearReceiptQuantityProofV1, OwnedContext) {
+        let (mut proof, mut head) = historical_proof_and_head();
         let owner_key = SigningKey::from_bytes(&[0x2a; 32]);
         let owner_public_key = owner_key.verifying_key().to_bytes();
         let account_id = hex::encode(owner_public_key);
@@ -1768,9 +1820,15 @@ mod tests {
             snapshot_version: "1.0.0".to_string(),
             snapshot_event: "NearStakeSnapshot".to_string(),
             owner_public_key: owner_public_key.to_vec(),
+            max_receipt_age_ns: FIXTURE_MAX_RECEIPT_AGE_NS,
+            max_receipt_age_blocks: FIXTURE_MAX_RECEIPT_AGE_BLOCKS,
         };
         let salt = [0x42; 32];
-        let timestamp = 1_785_437_354_895_501_665;
+        let mut timestamp = 1_785_437_354_895_501_665;
+        if let Some((age_ns, age_blocks)) = receipt_age {
+            timestamp = head.header.timestamp - age_ns;
+            proof.block_header_lite.inner_lite.height = head.header.height - age_blocks;
+        }
         let payload = encode_payload(
             &account_id,
             &pool_id,
@@ -1780,7 +1838,6 @@ mod tests {
             salt,
         );
         let commitment = to_base58(&sha256(&payload));
-        let (mut proof, mut head) = historical_proof_and_head();
         proof.outcome_proof.outcome.executor_id = policy.reader_account_id.clone();
         proof.outcome_proof.outcome.status = NearExecutionStatus::SuccessValue(payload.clone());
         proof.outcome_proof.outcome.logs = vec![format!(
@@ -1901,6 +1958,78 @@ mod tests {
             context.expected_evidence_commitment
         );
         assert_ne!(verified.metadata_hash, B256::ZERO);
+    }
+
+    #[test]
+    fn rejects_receipt_older_than_policy_bound() {
+        // The review's N1 reproduction: a snapshot 90 days and 7,776,000
+        // blocks below a freshly certified head, with the checkpoint and
+        // owner statement re-signed. It verified before the age bound.
+        let (witness, context) =
+            fixture_with_receipt_age(Some((90 * 86_400 * 1_000_000_000, 7_776_000)));
+        assert_eq!(
+            verify_near_receipt_quantity_proof_v1(&witness, &context.borrow()).unwrap_err(),
+            NearReceiptLegError::StaleReceipt
+        );
+
+        // One block or one nanosecond beyond either bound is rejected.
+        let (witness, context) =
+            fixture_with_receipt_age(Some((1_000_000_000, FIXTURE_MAX_RECEIPT_AGE_BLOCKS + 1)));
+        assert_eq!(
+            verify_near_receipt_quantity_proof_v1(&witness, &context.borrow()).unwrap_err(),
+            NearReceiptLegError::StaleReceipt
+        );
+        let (witness, context) =
+            fixture_with_receipt_age(Some((FIXTURE_MAX_RECEIPT_AGE_NS + 1, 10)));
+        assert_eq!(
+            verify_near_receipt_quantity_proof_v1(&witness, &context.borrow()).unwrap_err(),
+            NearReceiptLegError::StaleReceipt
+        );
+
+        // Exactly at both bounds still verifies.
+        let (witness, context) = fixture_with_receipt_age(Some((
+            FIXTURE_MAX_RECEIPT_AGE_NS,
+            FIXTURE_MAX_RECEIPT_AGE_BLOCKS,
+        )));
+        verify_near_receipt_quantity_proof_v1(&witness, &context.borrow()).unwrap();
+    }
+
+    #[test]
+    fn rejects_receipt_timestamp_after_certified_head() {
+        let (mut witness, context) = fixture_with_receipt_age(Some((0, 0)));
+        let head_timestamp = witness.head.header.timestamp;
+        assert_eq!(verify_receipt_age(&witness, head_timestamp), Ok(()));
+        assert_eq!(
+            verify_receipt_age(&witness, head_timestamp + 1),
+            Err(NearReceiptLegError::StaleReceipt)
+        );
+        witness.proof.block_header_lite.inner_lite.height = witness.head.header.height + 1;
+        assert_eq!(
+            verify_receipt_age(&witness, head_timestamp),
+            Err(NearReceiptLegError::StaleReceipt)
+        );
+        verify_near_receipt_quantity_proof_v1(&fixture().0, &fixture().1.borrow()).unwrap();
+        let _ = context;
+    }
+
+    #[test]
+    fn policy_rejects_zero_receipt_age_bounds() {
+        let (witness, _) = fixture();
+        let mut zero_ns = witness.policy.clone();
+        zero_ns.max_receipt_age_ns = 0;
+        assert_eq!(zero_ns.validate(), Err(NearReceiptLegError::PolicyMismatch));
+        let mut zero_blocks = witness.policy.clone();
+        zero_blocks.max_receipt_age_blocks = 0;
+        assert_eq!(
+            zero_blocks.validate(),
+            Err(NearReceiptLegError::PolicyMismatch)
+        );
+        let mut wider = witness.policy.clone();
+        wider.max_receipt_age_blocks += 1;
+        assert_ne!(
+            wider.commitment(&"00".repeat(48)).unwrap(),
+            witness.policy.commitment(&"00".repeat(48)).unwrap()
+        );
     }
 
     #[test]
