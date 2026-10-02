@@ -452,6 +452,8 @@ use state_commitment::{
     LegacyJsonGovernanceState, LegacyJsonLedgerState, LegacyJsonShieldedState,
 };
 mod execution_actions;
+#[cfg(test)]
+use execution_actions::execute_transparent_batch;
 #[allow(unused_imports)]
 use execution_actions::{
     apply_archived_wan_devnet2_pre_pricing_swap, apply_governance_amendment_with_lifecycle_records,
@@ -489,10 +491,6 @@ use execution_actions::{
     verify_governance_amendment_supersession_record_for_domain,
     verify_governance_amendment_supersession_records, ArchivedAssetOrchardSwapReplayAction,
     ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT,
-};
-#[cfg(test)]
-use execution_actions::{
-    execute_transparent_batch, validate_asset_orchard_swap_pricing_against_ledger,
 };
 mod storage_commit;
 pub use storage_commit::*;

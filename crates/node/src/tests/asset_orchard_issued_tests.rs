@@ -1269,12 +1269,12 @@
             &pricing_domain,
         )
         .expect("verify pricing-bound action");
-        validate_asset_orchard_swap_pricing_against_ledger(&pricing_ledger, &verified_pricing, 1)
+        asset_orchard_swap_pricing_plan(&pricing_ledger, &verified_pricing, 1)
             .expect("at-NAV pricing must pass");
         let mut stale_epoch = pricing_ledger.clone();
         stale_epoch.nav_assets[0].finalized_epoch += 1;
         assert_eq!(
-            validate_asset_orchard_swap_pricing_against_ledger(&stale_epoch, &verified_pricing, 1)
+            asset_orchard_swap_pricing_plan(&stale_epoch, &verified_pricing, 1)
                 .expect_err("stale pricing epoch must fail")
                 .code(),
             "asset_orchard_pricing_epoch_mismatch"
@@ -1282,7 +1282,7 @@
         let mut wrong_packet = pricing_ledger.clone();
         wrong_packet.nav_assets[0].finalized_reserve_packet_hash = "cd".repeat(48);
         assert_eq!(
-            validate_asset_orchard_swap_pricing_against_ledger(&wrong_packet, &verified_pricing, 1)
+            asset_orchard_swap_pricing_plan(&wrong_packet, &verified_pricing, 1)
                 .expect_err("wrong reserve packet must fail")
                 .code(),
             "asset_orchard_pricing_packet_mismatch"
@@ -1290,7 +1290,7 @@
         let mut off_band = pricing_ledger.clone();
         off_band.nav_assets[0].nav_per_unit += 1;
         assert_eq!(
-            validate_asset_orchard_swap_pricing_against_ledger(&off_band, &verified_pricing, 1)
+            asset_orchard_swap_pricing_plan(&off_band, &verified_pricing, 1)
                 .expect_err("off-band private amounts must fail")
                 .code(),
             "asset_orchard_pricing_off_band"

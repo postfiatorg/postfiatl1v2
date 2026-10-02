@@ -4071,15 +4071,6 @@ pub(super) fn asset_orchard_nav_ratio_denominator(block_height: u64) -> u64 {
     }
 }
 
-#[cfg(test)]
-pub(super) fn validate_asset_orchard_swap_pricing_against_ledger(
-    ledger: &LedgerState,
-    verified: &postfiat_privacy_orchard::VerifiedAssetOrchardSwap,
-    block_height: u64,
-) -> Result<(), postfiat_privacy_orchard::OrchardVerificationError> {
-    asset_orchard_swap_pricing_plan(ledger, verified, block_height).map(|_| ())
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct FxFixSwapPlan {
     state_index: usize,
