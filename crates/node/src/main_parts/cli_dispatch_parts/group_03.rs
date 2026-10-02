@@ -286,8 +286,11 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
         }
         "rpc-serve" => {
             require_transactional_or_unsafe_devnet_json_storage(flags, "rpc service")?;
-            let data_dir =
-                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            // RPC workers change directory, so derived request spool paths must be absolute.
+            let data_dir = std::path::absolute(
+                flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR),
+            )
+            .map_err(|error| format!("rpc serve data dir resolution failed: {error}"))?;
             let spool_dir = flag_value(flags, "--spool-dir")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("runtime/rpc-spool"));
