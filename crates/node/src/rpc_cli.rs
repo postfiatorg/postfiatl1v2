@@ -3606,6 +3606,12 @@ fn run_rpc_child_command(
             data_dir.display()
         )
     })?;
+    let child_request_file = std::fs::canonicalize(request_file).map_err(|error| {
+        format!(
+            "rpc serve child request file canonicalization failed for `{}`: {error}",
+            request_file.display()
+        )
+    })?;
     let child = Command::new(exe)
         .env_clear()
         .current_dir(&child_data_dir)
@@ -3614,7 +3620,7 @@ fn run_rpc_child_command(
         .stderr(Stdio::piped())
         .arg("rpc")
         .arg("--request-file")
-        .arg(request_file)
+        .arg(&child_request_file)
         .arg("--data-dir")
         .arg(&child_data_dir)
         .spawn()
