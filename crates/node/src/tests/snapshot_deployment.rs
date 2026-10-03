@@ -818,7 +818,8 @@ fn init_then_run_once() {
         limit: Some(1),
     })
     .expect("recipient account tx history");
-    assert!(recipient_history.truncated);
+    // The recipient's only row fits the limit, so nothing was omitted.
+    assert!(!recipient_history.truncated);
     assert_eq!(recipient_history.row_count, 1);
     assert_eq!(recipient_history.rows[0].tx_id, mempool_receipts[1].tx_id);
 
