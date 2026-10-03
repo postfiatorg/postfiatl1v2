@@ -7,6 +7,7 @@ mod tests {
     include!("tests/yolo_target_receipt_tests.rs");
     include!("tests/nav_reserve_proof_status_tests.rs");
     mod a666_recovery_regression_tests;
+    mod account_tx_truncation;
     mod archive_bridge_supply;
     mod consensus_history;
     mod atomic_swap_consensus;

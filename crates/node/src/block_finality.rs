@@ -585,7 +585,7 @@ fn account_tx_scan(
 
     let mut rows = Vec::new();
     let mut archive_lookup_count = 0_u64;
-    for block_index in &block_indexes {
+    'blocks: for block_index in &block_indexes {
         let block = &block_log.blocks[*block_index];
         if block.header.batch_kind != "transparent" {
             continue;
@@ -595,14 +595,11 @@ fn account_tx_scan(
             if row.from_address != options.address && row.to_address != options.address {
                 continue;
             }
-            rows.push(row);
-            if rows.len() >= scan_limit {
+            if rows.len() == scan_limit {
                 truncated = true;
-                break;
+                break 'blocks;
             }
-        }
-        if rows.len() >= scan_limit {
-            break;
+            rows.push(row);
         }
     }
 
@@ -655,7 +652,7 @@ fn account_tx_from_rows(
                     .is_none_or(|to_height| row.block_height <= to_height)
         })
         .collect::<Vec<_>>();
-    let truncated = rows_for_account.len() >= scan_limit;
+    let truncated = rows_for_account.len() > scan_limit;
     let rows = if rows_for_account.len() > scan_limit {
         if options.from_height.is_some() {
             rows_for_account[..scan_limit].to_vec()
