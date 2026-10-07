@@ -703,6 +703,27 @@ mod tests {
 
     use super::*;
 
+    // The tracked A666 policies are the registered identity's inputs. The
+    // successor types reject them until governance sets the new fields
+    // (values proposed in docs/review/nav-reserve-proof-successor-proposal-20260924.md).
+    const SUCCESSOR_AAVE_USER_CONFIG_SLOT_INDEX: u64 = 53;
+    const SUCCESSOR_NEAR_MAX_RECEIPT_AGE_NS: u64 = 1_800_000_000_000;
+    const SUCCESSOR_NEAR_MAX_RECEIPT_AGE_BLOCKS: u64 = 3_000;
+
+    fn tracked_policy_for_successor<T: serde::de::DeserializeOwned>(
+        path: &std::path::Path,
+        new_fields: serde_json::Value,
+    ) -> T {
+        let bytes = std::fs::read(path).unwrap();
+        let missing = serde_json::from_slice::<T>(&bytes).err().unwrap();
+        assert!(missing.to_string().contains("missing field"), "{missing}");
+        let mut value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        for (field, field_value) in new_fields.as_object().unwrap() {
+            value[field] = field_value.clone();
+        }
+        serde_json::from_value(value).unwrap()
+    }
+
     fn committee() -> BftCheckpointCommitteeV1 {
         let key = ml_dsa_65_keygen_from_seed(&[7; 32]);
         BftCheckpointCommitteeV1 {
@@ -859,10 +880,12 @@ mod tests {
         )
         .unwrap();
         let root = committee_root(&committee).unwrap();
-        let aave: AaveV3PolicyV1 = serde_json::from_slice(
-            &std::fs::read(manifest_dir.join("aave-arbitrum-policy.json")).unwrap(),
-        )
-        .unwrap();
+        let aave: AaveV3PolicyV1 = tracked_policy_for_successor(
+            &manifest_dir.join("aave-arbitrum-policy.json"),
+            serde_json::json!({
+                "user_config_mapping_slot_index": SUCCESSOR_AAVE_USER_CONFIG_SLOT_INDEX
+            }),
+        );
         let spot: EvmSpotPolicyV1 = serde_json::from_slice(
             &std::fs::read(manifest_dir.join("evm-spot-policy.json")).unwrap(),
         )
@@ -1003,7 +1026,8 @@ mod tests {
             commitments["checkpoint_committee_root"].as_str(),
             Some(root.as_str())
         );
-        assert_eq!(
+        // The debt-completeness field changes the registered commitment.
+        assert_ne!(
             commitments["policies"][0]["quantity_and_valuation_verifier_commitment"].as_str(),
             Some(aave_commitment.as_str())
         );
@@ -1173,10 +1197,13 @@ mod tests {
             &std::fs::read(manifest_dir.join("hyperliquid-policy.json")).unwrap(),
         )
         .unwrap();
-        let near: NearReceiptPolicyV1 = serde_json::from_slice(
-            &std::fs::read(manifest_dir.join("near-receipt-policy.json")).unwrap(),
-        )
-        .unwrap();
+        let near: NearReceiptPolicyV1 = tracked_policy_for_successor(
+            &manifest_dir.join("near-receipt-policy.json"),
+            serde_json::json!({
+                "max_receipt_age_ns": SUCCESSOR_NEAR_MAX_RECEIPT_AGE_NS,
+                "max_receipt_age_blocks": SUCCESSOR_NEAR_MAX_RECEIPT_AGE_BLOCKS
+            }),
+        );
         let solana: SolanaStakeReaderPolicyV1 = serde_json::from_slice(
             &std::fs::read(manifest_dir.join("solana-stake-reader-policy.json")).unwrap(),
         )
@@ -1200,7 +1227,12 @@ mod tests {
             } else {
                 "quantity_verifier_commitment"
             };
-            assert_eq!(commitment[field].as_str(), Some(derived.as_str()));
+            if source_id == "near-stake" {
+                // The receipt-age bounds change the registered commitment.
+                assert_ne!(commitment[field].as_str(), Some(derived.as_str()));
+            } else {
+                assert_eq!(commitment[field].as_str(), Some(derived.as_str()));
+            }
         }
     }
 }
