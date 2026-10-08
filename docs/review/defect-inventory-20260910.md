@@ -117,7 +117,7 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 | CHO-03 | Reproduced defect | P2 | Fixed — `21cf30f8`; not consensus-affecting | [Cobalt handoff review](cobalt-handoff-review-20260916.md#findings): malformed-request or ordinary-response write failures escaped the connection and terminated the shadow listener; in-memory regressions verify later probes remain serviceable. |
 | CHO-04 | Reproduced defect | P2 | Fixed — `21cf30f8`; not consensus-affecting | [Cobalt handoff review](cobalt-handoff-review-20260916.md#findings): valid update rehearsal finalization panicked when unrelated governance correctly selected Foundation authority; the rehearsal now checks mixed-batch rejection and returns ordinary errors. |
 | CHO-05 | Code-observed defect | P3 | Recorded, not fixed | [Cobalt handoff review](cobalt-handoff-review-20260916.md#findings): negative rehearsal probes discarded signed approvals, so a missing-quorum rejection could be reported as independent stale-height or replay evidence. |
-| CHO-06 | Code-observed defect | P3 | Recorded, not fixed | [Cobalt handoff review](cobalt-handoff-review-20260916.md#findings): rehearsal manifest digest checks accepted lowercase letters outside hexadecimal, carrying malformed anchors into prepared evidence without establishing a live admission bypass. |
+| CHO-06 | Code-observed defect | P3 | Fixed — `de3731b3` | [Cobalt handoff review](cobalt-handoff-review-20260916.md#findings): rehearsal manifest digest checks accepted lowercase letters outside hexadecimal, carrying malformed anchors into prepared evidence without establishing a live admission bypass. |
 | SMG-01 | Reproduced defect | P2 | Fixed — `401fa055`; not consensus-affecting | [Storage migration review](storage-migration-review-20260916.md#findings): check-then-replace output could overwrite a competing activation/cancellation artifact or dangling symlink; publication now uses an atomic no-replace hard link and directory sync. |
 | SMG-02 | Reproduced defect | P2 | Fixed — `401fa055`; not consensus-affecting; append recovery only | [Storage migration review](storage-migration-review-20260916.md#findings): append recovery skipped move-directory sync when an earlier rename was already visible, then published its index and cleared the intent. Both append barriers now retry; prune durability remains unqualified behind SMG-07. |
 | SMG-03 | Reproduced defect | P2 | Fixed — `401fa055`; not consensus-affecting | [Storage migration review](storage-migration-review-20260916.md#findings): pending-intent recovery could stamp unrelated completed-directory additions or omissions as consistent; bounded membership checks now preserve the old index and intent on refusal. |
@@ -129,7 +129,7 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 | SWP-02 | Reproduced defect | P2 | Fixed — `d679f8e8`; not consensus-affecting | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): forward PFTL journal transitions could substitute the prepared or published batch hash, making recovery identity ambiguous; publication and resolution now reject substitution while permitting prepublication reproof. |
 | SWP-03 | Reproduced defect | P2 | Fixed — `d679f8e8`; not consensus-affecting | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): the journal writer could persist valid histories exceeding the reader's 32 MiB limit; serialized bytes including the newline are now bounded before replacing the readable file. |
 | SWP-04 | Code-observed defect | P3 | Recorded, not fixed | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): timing retries counted already recorded stages against capacity again, rejecting an identical-stage replay at the 64-stage bound. |
-| SWP-05 | Code-observed defect | P3 | Recorded, not fixed | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): attestation timestamp validation checked shape and digits but accepted impossible calendar and time values; external trust and freshness remain consumer responsibilities. |
+| SWP-05 | Code-observed defect | P3 | Fixed — `de3731b3` | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): attestation timestamp validation checked shape and digits but accepted impossible calendar and time values; external trust and freshness remain consumer responsibilities. |
 
 ## Burn 6 campaign findings
 
@@ -287,10 +287,10 @@ broader production claim.
 | P1 | 26 |
 | P2 | 77 |
 | P3 | 38 |
-| Fixed | 93 |
+| Fixed | 95 |
 | Dispositioned | 16 |
 | Reproduced and retained (prior campaigns) | 5 |
-| Recorded, not fixed (burn 3–6 P3) | 14 |
+| Recorded, not fixed (burn 3–6 P3) | 12 |
 | Recorded, repair blocked by A4 scope (SMG-07) | 1 |
 | Closed 2026-10-02 on postfiat-wan-devnet-2 | 4 |
 | Narrowed 2026-10-02 (PI-18, not a live-environment need) | 1 |

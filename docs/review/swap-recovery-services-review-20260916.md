@@ -40,7 +40,7 @@ With 64 recorded stages, retrying even one identical existing stage returns `Sto
 
 **Source:** `crates/node/src/operator_attestations.rs:234-250`.
 
-The timestamp validator checks length, punctuation and decimal digits only. A signer can produce an otherwise valid attestation with `2026-99-99T99:99:99Z`, and this check accepts it despite promising a UTC RFC3339 timestamp. Downstream chronology or display consumers cannot rely on that promise. Minimal future repair: validate calendar and time ranges while retaining the existing second-resolution UTC encoding, with invalid-date and leap-year cases. No freshness or external identity authorization is inferred from this standalone signature verifier. Recorded without repair as required.
+The timestamp validator checks length, punctuation and decimal digits only. A signer can produce an otherwise valid attestation with `2026-99-99T99:99:99Z`, and this check accepts it despite promising a UTC RFC3339 timestamp. Downstream chronology or display consumers cannot rely on that promise. Minimal future repair: validate calendar and time ranges while retaining the existing second-resolution UTC encoding, with invalid-date and leap-year cases. No freshness or external identity authorization is inferred from this standalone signature verifier. Recorded without repair as required. **Repaired 2026-10-08 in `de3731b3`:** `is_utc_rfc3339_second_timestamp` checks month, day-of-month (Gregorian leap years), hour, minute and second ranges in the unchanged `YYYY-MM-DDTHH:MM:SSZ` encoding; regressions cover impossible values, leap and non-leap 29 February, and shape.
 
 ## Areas with no findings
 

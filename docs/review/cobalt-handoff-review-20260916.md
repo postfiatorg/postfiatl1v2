@@ -52,7 +52,7 @@ A future minimal repair would retain a verified positive signed fixture, vary on
 
 The predicate accepts every lowercase ASCII letter, so a 96-character `g` string passes the claimed lowercase-hex check for the block/state anchor, trust root, or Cobalt lock. The genesis identity is independently recomputed, but a malformed block/state anchor can still be carried into prepared rehearsal evidence without rejection. Later production transition checks reject malformed lock/root digests; no live admission bypass is claimed.
 
-A future minimal repair would require lowercase hexadecimal digits for every declared digest and test non-hex lowercase input. This is recorded without repair as required.
+A future minimal repair would require lowercase hexadecimal digits for every declared digest and test non-hex lowercase input. This is recorded without repair as required. **Repaired 2026-10-08 in `de3731b3`:** one `is_lowercase_hex_digest` predicate (96 digits from `0-9a-f`) serves both sites, with a regression over non-hex lowercase, uppercase and wrong-length input.
 
 ## Areas with no findings
 

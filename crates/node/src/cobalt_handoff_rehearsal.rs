@@ -143,11 +143,7 @@ fn validate_manifest(manifest: &CloneManifest) -> io::Result<()> {
         ("anchor block hash", &manifest.anchor_block_hash),
         ("anchor state root", &manifest.anchor_state_root),
     ] {
-        if value.len() != 96
-            || !value
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || byte.is_ascii_lowercase())
-        {
+        if !is_lowercase_hex_digest(value) {
             return Err(invalid(format!(
                 "{label} is not a 96-character lowercase hex digest"
             )));
@@ -175,17 +171,23 @@ fn validate_manifest(manifest: &CloneManifest) -> io::Result<()> {
         } else {
             &manifest.cobalt_lock_hash
         };
-        if value.len() != 96
-            || !value
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || byte.is_ascii_lowercase())
-        {
+        if !is_lowercase_hex_digest(value) {
             return Err(invalid(format!(
                 "{label} is not a 96-character lowercase hex digest"
             )));
         }
     }
     Ok(())
+}
+
+/// A declared SHA-384 digest: exactly 96 lowercase hexadecimal digits.
+/// (CHO-06: the earlier predicate accepted every lowercase ASCII letter, so a
+/// 96-character run of `g` passed as a digest.)
+fn is_lowercase_hex_digest(value: &str) -> bool {
+    value.len() == 96
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 impl CloneManifest {
@@ -1310,6 +1312,22 @@ mod tests {
             registry_binding,
             protocol_transcript,
         }
+    }
+
+    #[test]
+    fn rehearsal_digest_predicate_requires_lowercase_hexadecimal() {
+        // CHO-06: lowercase letters outside a-f, uppercase hex and wrong
+        // lengths are not digests, whatever the error message promised.
+        assert!(is_lowercase_hex_digest(&"0123456789abcdef".repeat(6)));
+        assert!(is_lowercase_hex_digest(&"a".repeat(96)));
+        assert!(!is_lowercase_hex_digest(&"g".repeat(96)));
+        assert!(!is_lowercase_hex_digest(&"z".repeat(96)));
+        assert!(!is_lowercase_hex_digest(&"A".repeat(96)));
+        assert!(!is_lowercase_hex_digest(&format!("{}G", "a".repeat(95))));
+        assert!(!is_lowercase_hex_digest(&"a".repeat(95)));
+        assert!(!is_lowercase_hex_digest(&"a".repeat(97)));
+        assert!(!is_lowercase_hex_digest(""));
+        assert!(!is_lowercase_hex_digest(&"é".repeat(48)));
     }
 
     #[test]

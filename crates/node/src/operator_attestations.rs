@@ -232,18 +232,7 @@ fn validate_attestation_for_signing(attestation: &OperatorControlAttestation) ->
     )?;
     validate_manifest_text_field("operator attestation operator", &attestation.operator)?;
     validate_manifest_text_field("operator attestation observed at", &attestation.observed_at)?;
-    let observed = attestation.observed_at.as_bytes();
-    if observed.len() != 20
-        || observed[4] != b'-'
-        || observed[7] != b'-'
-        || observed[10] != b'T'
-        || observed[13] != b':'
-        || observed[16] != b':'
-        || observed[19] != b'Z'
-        || observed.iter().enumerate().any(|(index, byte)| {
-            !matches!(index, 4 | 7 | 10 | 13 | 16 | 19) && !byte.is_ascii_digit()
-        })
-    {
+    if !is_utc_rfc3339_second_timestamp(&attestation.observed_at) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "operator attestation observed_at must be a UTC RFC3339 second timestamp",
@@ -254,6 +243,55 @@ fn validate_attestation_for_signing(attestation: &OperatorControlAttestation) ->
         &attestation.manifest_signing_key_hex,
     )?;
     validate_attestation_body(&attestation.body)
+}
+
+/// Whether `value` is a UTC RFC 3339 timestamp at second resolution in the
+/// exact form `YYYY-MM-DDTHH:MM:SSZ`, with a real calendar date and a real
+/// time of day. (SWP-05: the earlier check verified shape and digits only, so
+/// `2026-99-99T99:99:99Z` was accepted.) Leap seconds are not accepted: the
+/// encoding promises second resolution on a 00-59 scale.
+fn is_utc_rfc3339_second_timestamp(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 20
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes[10] != b'T'
+        || bytes[13] != b':'
+        || bytes[16] != b':'
+        || bytes[19] != b'Z'
+    {
+        return false;
+    }
+    let field = |start: usize, len: usize| -> Option<u32> {
+        let digits = &bytes[start..start + len];
+        if !digits.iter().all(u8::is_ascii_digit) {
+            return None;
+        }
+        digits.iter().try_fold(0u32, |acc, byte| {
+            acc.checked_mul(10)?.checked_add(u32::from(byte - b'0'))
+        })
+    };
+    let (Some(year), Some(month), Some(day), Some(hour), Some(minute), Some(second)) = (
+        field(0, 4),
+        field(5, 2),
+        field(8, 2),
+        field(11, 2),
+        field(14, 2),
+        field(17, 2),
+    ) else {
+        return false;
+    };
+    if !(1..=12).contains(&month) || hour > 23 || minute > 59 || second > 59 {
+        return false;
+    }
+    let leap_year = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let days_in_month = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap_year => 29,
+        _ => 28,
+    };
+    (1..=days_in_month).contains(&day)
 }
 
 fn reject_attestation_private_material(raw: &str) -> io::Result<()> {
@@ -381,4 +419,59 @@ pub fn create_operator_control_attestation(
     reject_attestation_private_material(&json)?;
     atomic_write(&options.output_file, format!("{json}\n"))?;
     Ok(attestation)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_utc_rfc3339_second_timestamp;
+
+    #[test]
+    fn observed_at_accepts_real_utc_second_timestamps() {
+        for value in [
+            "2026-10-08T20:52:37Z",
+            "2024-02-29T00:00:00Z", // leap year
+            "2000-02-29T23:59:59Z", // divisible by 400: leap year
+            "1999-12-31T23:59:59Z",
+            "2026-01-31T00:00:00Z",
+            "2026-04-30T12:30:00Z",
+        ] {
+            assert!(is_utc_rfc3339_second_timestamp(value), "{value}");
+        }
+    }
+
+    #[test]
+    fn observed_at_rejects_impossible_calendar_and_time_values() {
+        // SWP-05: shape and digits were the only checks before.
+        for value in [
+            "2026-99-99T99:99:99Z",
+            "2026-00-10T00:00:00Z", // month 0
+            "2026-13-10T00:00:00Z", // month 13
+            "2026-10-00T00:00:00Z", // day 0
+            "2026-10-32T00:00:00Z", // day 32
+            "2026-04-31T00:00:00Z", // April has 30 days
+            "2026-02-29T00:00:00Z", // not a leap year
+            "2100-02-29T00:00:00Z", // divisible by 100, not 400: not a leap year
+            "2026-10-08T24:00:00Z", // hour 24
+            "2026-10-08T00:60:00Z", // minute 60
+            "2026-10-08T00:00:60Z", // second 60 (no leap seconds)
+        ] {
+            assert!(!is_utc_rfc3339_second_timestamp(value), "{value}");
+        }
+    }
+
+    #[test]
+    fn observed_at_rejects_wrong_shape() {
+        for value in [
+            "",
+            "2026-10-08T20:52:37",      // no Z
+            "2026-10-08T20:52:37.000Z", // fractional seconds
+            "2026-10-08 20:52:37Z",     // space separator
+            "2026-10-08T20:52:37+00:00",
+            "2026-1-08T20:52:37Z",
+            "２026-10-08T20:52:37Z", // non-ASCII digit
+            "2026-10-08T20:52:3xZ",
+        ] {
+            assert!(!is_utc_rfc3339_second_timestamp(value), "{value}");
+        }
+    }
 }
