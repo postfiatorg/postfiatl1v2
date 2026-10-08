@@ -1214,7 +1214,14 @@ pub fn record_pftl_swap_stage_timings(
         recorded_at_unix_ms: 0,
         stages_ns: BTreeMap::new(),
     });
-    if timing.stages_ns.len().saturating_add(stages_ns.len()) > PFTL_SWAP_MAX_TIMING_STAGES {
+    // SWP-04: only stages not yet recorded consume capacity, so replaying an
+    // already recorded stage at the bound stays idempotent; a different value
+    // for a recorded stage is still rejected below.
+    let new_stage_count = stages_ns
+        .keys()
+        .filter(|stage| !timing.stages_ns.contains_key(*stage))
+        .count();
+    if timing.stages_ns.len().saturating_add(new_stage_count) > PFTL_SWAP_MAX_TIMING_STAGES {
         return Err(io::Error::new(
             io::ErrorKind::StorageFull,
             "PFTL swap timing history has reached its bounded capacity",
@@ -1823,6 +1830,79 @@ mod tests {
                 .last()
                 .and_then(|transition| transition.reason.as_deref()),
             Some("superseded by a newly signed intent")
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn timing_replay_at_capacity_is_idempotent_and_new_stages_are_refused() {
+        // SWP-04: the capacity check used to add the incoming stage count
+        // before considering overlap, so replaying one already recorded
+        // stage at the 64-stage bound returned StorageFull.
+        let root = swap_test_dir("pftl-swap-journal-timing-capacity");
+        let path = root.join("swap-journal.json");
+        let quote = quote_fixture();
+        let mut signed = signed_fixture("capacity-intent");
+        signed.intent.quote_id = quote.quote_id.clone();
+        let keypair = ml_dsa_65_keygen_from_seed(&[7_u8; 32]);
+        signed.signature_hex = bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &keypair.private_key,
+                &signed
+                    .intent
+                    .signing_bytes()
+                    .expect("capacity signing bytes"),
+                PFTL_SWAP_INTENT_SIGNATURE_CONTEXT_V1,
+            )
+            .expect("sign capacity intent"),
+        );
+        journal_pftl_swap_intent(&path, &quote, &signed).expect("journal capacity intent");
+        let full: BTreeMap<String, u64> = (0..PFTL_SWAP_MAX_TIMING_STAGES)
+            .map(|index| (format!("stage_{index:02}"), index as u64 + 1))
+            .collect();
+        let recorded = record_pftl_swap_stage_timings(&path, "capacity-intent", &full)
+            .expect("record every stage");
+        assert_eq!(
+            recorded.timing.as_ref().expect("timing").stages_ns.len(),
+            PFTL_SWAP_MAX_TIMING_STAGES
+        );
+
+        // Identical replay of one, several and all recorded stages: no new
+        // capacity is consumed, the entry is returned unchanged.
+        let one = BTreeMap::from([("stage_00".to_string(), 1_u64)]);
+        let replay_one = record_pftl_swap_stage_timings(&path, "capacity-intent", &one)
+            .expect("identical single-stage replay at capacity");
+        assert_eq!(replay_one.timing, recorded.timing);
+        let replay_all = record_pftl_swap_stage_timings(&path, "capacity-intent", &full)
+            .expect("identical full replay at capacity");
+        assert_eq!(replay_all.timing, recorded.timing);
+
+        // A conflicting value for a recorded stage is still a conflict, not
+        // a capacity error.
+        let conflict = BTreeMap::from([("stage_00".to_string(), 2_u64)]);
+        assert_eq!(
+            record_pftl_swap_stage_timings(&path, "capacity-intent", &conflict)
+                .expect_err("conflicting replay must fail")
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
+
+        // One genuinely new stage at the bound is refused, even when mixed
+        // with an identical replay.
+        let overflow = BTreeMap::from([
+            ("stage_00".to_string(), 1_u64),
+            ("stage_64".to_string(), 65_u64),
+        ]);
+        assert_eq!(
+            record_pftl_swap_stage_timings(&path, "capacity-intent", &overflow)
+                .expect_err("new stage past capacity must fail")
+                .kind(),
+            io::ErrorKind::StorageFull
+        );
+        let journal = load_pftl_swap_journal(&path).expect("reload journal");
+        assert_eq!(
+            journal.entries["capacity-intent"].timing, recorded.timing,
+            "refused updates leave the recorded timing unchanged"
         );
         let _ = fs::remove_dir_all(root);
     }

@@ -18,7 +18,7 @@ The minimal repair is to use the existing `mempool_pending_count_for_sender`, wh
 
 For a pool containing an atomic swap and a FastLane primary transaction, with no escrow, NFT or offer entries, `mempool_latest_tx_id` reports the atomic swap. Both verification and batch selection process FastLane after atomic swaps. An operator using the report's latest ID as the final transaction in the module's family order therefore receives the wrong entry. The field also cannot establish wall-clock admission recency across families because entries retain no common arrival order here. This is a reporting issue; it does not change execution order.
 
-A minimal future repair for execution-order reporting is to check the FastLane tail before the atomic-swap tail and state the field's meaning clearly. A true admission-recency field would require separately designed metadata. This P3 is recorded without repair under the brief.
+A minimal future repair for execution-order reporting is to check the FastLane tail before the atomic-swap tail and state the field's meaning clearly. A true admission-recency field would require separately designed metadata. This P3 is recorded without repair under the brief. **Repaired 2026-10-08 in `5f093fc5`:** `latest_tx_id_in_execution_order` consults the FastLane tail before the atomic-swap tail, and `mempool_latest_tx_id` documents the field as a position in execution order, not admission recency; a unit regression covers the two-family case and the full precedence.
 
 ## Areas with no findings
 

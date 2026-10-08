@@ -34,7 +34,7 @@ Minimal repair: check the actual serialized journal byte length, including its t
 
 **Source:** `crates/node/src/pftl_swap_service.rs:1199-1222`.
 
-With 64 recorded stages, retrying even one identical existing stage returns `StorageFull`: the capacity check adds the incoming map length before checking overlap. An otherwise idempotent timing retry can therefore fail near the bound. Minimal future repair: count only new keys before applying the existing conflict checks, and test exact replay at capacity. Recorded without repair as required.
+With 64 recorded stages, retrying even one identical existing stage returns `StorageFull`: the capacity check adds the incoming map length before checking overlap. An otherwise idempotent timing retry can therefore fail near the bound. Minimal future repair: count only new keys before applying the existing conflict checks, and test exact replay at capacity. Recorded without repair as required. **Repaired 2026-10-08 in `5f093fc5`:** only stages absent from the recorded timing count against the 64-stage bound; the regression records 64 stages, replays one and all of them identically, rejects a conflicting value as `AlreadyExists`, and refuses one genuinely new stage as `StorageFull` with the recorded timing unchanged.
 
 ### SWP-05 — P3 — attestation timestamp validation accepts impossible dates
 

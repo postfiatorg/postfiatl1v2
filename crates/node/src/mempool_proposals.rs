@@ -2257,49 +2257,78 @@ pub(super) fn enforce_mempool_state_limits(mempool: &MempoolState) -> io::Result
     Ok(())
 }
 
+/// The id of the pending transaction that verification and batch selection
+/// process last: the tail entry of the last non-empty family in execution
+/// order (transfers, payments_v2, asset, atomic swap, FastLane primary,
+/// escrow, NFT, offer). It is a position in that order, not a wall-clock
+/// admission time: families keep no common arrival order.
 fn mempool_latest_tx_id(mempool: &MempoolState) -> String {
-    mempool
-        .pending_offer_transactions
-        .last()
-        .map(|entry| entry.tx_id.clone())
-        .or_else(|| {
-            mempool
-                .pending_nft_transactions
-                .last()
-                .map(|entry| entry.tx_id.clone())
-        })
-        .or_else(|| {
-            mempool
-                .pending_escrow_transactions
-                .last()
-                .map(|entry| entry.tx_id.clone())
-        })
-        .or_else(|| {
-            mempool
-                .pending_atomic_swaps
-                .last()
-                .map(|entry| entry.tx_id.clone())
-        })
-        .or_else(|| {
-            mempool
-                .pending_fastlane_primary
-                .last()
-                .map(|entry| entry.tx_id.clone())
-        })
-        .or_else(|| {
-            mempool
-                .pending_asset_transactions
-                .last()
-                .map(|entry| entry.tx_id.clone())
-        })
-        .or_else(|| {
-            mempool
-                .pending_payment_v2
-                .last()
-                .map(|entry| entry.tx_id.clone())
-        })
-        .or_else(|| mempool.pending.last().map(|entry| entry.tx_id.clone()))
-        .unwrap_or_default()
+    latest_tx_id_in_execution_order(MempoolFamilyTails {
+        transfers: mempool.pending.last().map(|entry| entry.tx_id.as_str()),
+        payments_v2: mempool
+            .pending_payment_v2
+            .last()
+            .map(|entry| entry.tx_id.as_str()),
+        asset: mempool
+            .pending_asset_transactions
+            .last()
+            .map(|entry| entry.tx_id.as_str()),
+        atomic_swap: mempool
+            .pending_atomic_swaps
+            .last()
+            .map(|entry| entry.tx_id.as_str()),
+        fastlane_primary: mempool
+            .pending_fastlane_primary
+            .last()
+            .map(|entry| entry.tx_id.as_str()),
+        escrow: mempool
+            .pending_escrow_transactions
+            .last()
+            .map(|entry| entry.tx_id.as_str()),
+        nft: mempool
+            .pending_nft_transactions
+            .last()
+            .map(|entry| entry.tx_id.as_str()),
+        offer: mempool
+            .pending_offer_transactions
+            .last()
+            .map(|entry| entry.tx_id.as_str()),
+    })
+    .map(str::to_string)
+    .unwrap_or_default()
+}
+
+/// Tail transaction ids per pending family, named by family.
+#[derive(Default)]
+struct MempoolFamilyTails<'a> {
+    transfers: Option<&'a str>,
+    payments_v2: Option<&'a str>,
+    asset: Option<&'a str>,
+    atomic_swap: Option<&'a str>,
+    fastlane_primary: Option<&'a str>,
+    escrow: Option<&'a str>,
+    nft: Option<&'a str>,
+    offer: Option<&'a str>,
+}
+
+/// The last tail in execution order. (MPL-02: atomic swaps were consulted
+/// after FastLane primary transactions although verification and selection
+/// process FastLane after atomic swaps, so a pool holding one of each
+/// reported the swap.)
+fn latest_tx_id_in_execution_order(tails: MempoolFamilyTails<'_>) -> Option<&str> {
+    [
+        tails.offer,
+        tails.nft,
+        tails.escrow,
+        tails.fastlane_primary,
+        tails.atomic_swap,
+        tails.asset,
+        tails.payments_v2,
+        tails.transfers,
+    ]
+    .into_iter()
+    .flatten()
+    .next()
 }
 
 fn asset_transaction_amount(transaction: &SignedAssetTransaction) -> u64 {
@@ -3294,6 +3323,51 @@ fn build_bridge_batch_proposal(
 #[cfg(test)]
 mod burn5_tests {
     use super::*;
+
+    #[test]
+    fn latest_tx_id_follows_execution_order() {
+        // MPL-02: FastLane primary is processed after atomic swaps, so with
+        // both present the FastLane tail is the latest.
+        let both = MempoolFamilyTails {
+            atomic_swap: Some("swap-9"),
+            fastlane_primary: Some("fastlane-3"),
+            ..MempoolFamilyTails::default()
+        };
+        assert_eq!(latest_tx_id_in_execution_order(both), Some("fastlane-3"));
+        let swap_only = MempoolFamilyTails {
+            atomic_swap: Some("swap-9"),
+            ..MempoolFamilyTails::default()
+        };
+        assert_eq!(latest_tx_id_in_execution_order(swap_only), Some("swap-9"));
+        // Later families still win over both.
+        let with_escrow = MempoolFamilyTails {
+            transfers: Some("transfer-1"),
+            atomic_swap: Some("swap-9"),
+            fastlane_primary: Some("fastlane-3"),
+            escrow: Some("escrow-2"),
+            ..MempoolFamilyTails::default()
+        };
+        assert_eq!(
+            latest_tx_id_in_execution_order(with_escrow),
+            Some("escrow-2")
+        );
+        // Full precedence, last family first.
+        let all = MempoolFamilyTails {
+            transfers: Some("t"),
+            payments_v2: Some("p"),
+            asset: Some("a"),
+            atomic_swap: Some("s"),
+            fastlane_primary: Some("f"),
+            escrow: Some("e"),
+            nft: Some("n"),
+            offer: Some("o"),
+        };
+        assert_eq!(latest_tx_id_in_execution_order(all), Some("o"));
+        assert_eq!(
+            latest_tx_id_in_execution_order(MempoolFamilyTails::default()),
+            None
+        );
+    }
 
     // Quota guards inspect only sender identities, so these fixtures do not
     // carry signatures and are never submitted to an execution path.

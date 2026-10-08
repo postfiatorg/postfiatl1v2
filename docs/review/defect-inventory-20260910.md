@@ -109,7 +109,7 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 | ID | Classification | Severity | Status | Source and reproduction |
 | --- | --- | --- | --- | --- |
 | MPL-01 | Reproduced defect | P2 | Fixed — `1c9f44f1`; not consensus-affecting | [Mempool proposals review](mempool-proposals-review-20260916.md#findings): sender admission omitted pending offers from its quota, admitting a pool that later state-limit verification rejected. |
-| MPL-02 | Code-observed defect | P3 | Recorded, not fixed | [Mempool proposals review](mempool-proposals-review-20260916.md#findings): latest-ID reporting preferred an atomic swap although verification and batch selection process FastLane later; no common arrival order establishes wall-clock recency. |
+| MPL-02 | Code-observed defect | P3 | Fixed — `5f093fc5` | [Mempool proposals review](mempool-proposals-review-20260916.md#findings): latest-ID reporting preferred an atomic swap although verification and batch selection process FastLane later; no common arrival order establishes wall-clock recency. |
 | VLK-01 | Reproduced defect | P1 | Fixed — `090bd17e`; consensus-affecting, conservatively, because this tightens signer-safety persistence; source-only; not activated or deployed | [Vote locks review](vote-locks-review-20260916.md#findings): lock reservation could succeed without syncing the published canonical directory entry, including identical retries. Injected sync failures and store reopen reproduced the missing interlock; physical power loss was not tested. |
 | VLK-02 | Reproduced defect | P2 | Fixed — `090bd17e`; consensus-affecting, conservatively, because this tightens signer admission on ambiguous restored state; source-only; not activated or deployed | [Vote locks review](vote-locks-review-20260916.md#findings): migration silently skipped non-regular JSON lock entries before marking completion, allowing a new reservation despite unresolved restored lock evidence. |
 | CHO-01 | Reproduced defect | P2 | Fixed — `21cf30f8`; consensus-affecting, because authority-certificate admission is tightened; source-only; not activated or deployed | [Cobalt handoff review](cobalt-handoff-review-20260916.md#findings): a newer authority decision accepted valid older full-knowledge checkpoints without binding their interval, coverage or signed pending pair to the current ratification. |
@@ -128,7 +128,7 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 | SWP-01 | Reproduced defect | P2 | Fixed — `d679f8e8`; consensus-affecting, because recovery reconciliation results change; source-only; not activated or deployed | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): FastPay rollback zipped ledger-position inverse records with certificate-ordered inputs and rejected valid differing orders. Exact identity/version sets and unique ascending positions now restore the original ledger; the fixture does not establish quorum admission or historical replay. |
 | SWP-02 | Reproduced defect | P2 | Fixed — `d679f8e8`; not consensus-affecting | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): forward PFTL journal transitions could substitute the prepared or published batch hash, making recovery identity ambiguous; publication and resolution now reject substitution while permitting prepublication reproof. |
 | SWP-03 | Reproduced defect | P2 | Fixed — `d679f8e8`; not consensus-affecting | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): the journal writer could persist valid histories exceeding the reader's 32 MiB limit; serialized bytes including the newline are now bounded before replacing the readable file. |
-| SWP-04 | Code-observed defect | P3 | Recorded, not fixed | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): timing retries counted already recorded stages against capacity again, rejecting an identical-stage replay at the 64-stage bound. |
+| SWP-04 | Code-observed defect | P3 | Fixed — `5f093fc5` | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): timing retries counted already recorded stages against capacity again, rejecting an identical-stage replay at the 64-stage bound. |
 | SWP-05 | Code-observed defect | P3 | Recorded, not fixed | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): attestation timestamp validation checked shape and digits but accepted impossible calendar and time values; external trust and freshness remain consumer responsibilities. |
 
 ## Burn 6 campaign findings
@@ -287,10 +287,10 @@ broader production claim.
 | P1 | 26 |
 | P2 | 77 |
 | P3 | 38 |
-| Fixed | 93 |
+| Fixed | 95 |
 | Dispositioned | 16 |
 | Reproduced and retained (prior campaigns) | 5 |
-| Recorded, not fixed (burn 3–6 P3) | 14 |
+| Recorded, not fixed (burn 3–6 P3) | 12 |
 | Recorded, repair blocked by A4 scope (SMG-07) | 1 |
 | Closed 2026-10-02 on postfiat-wan-devnet-2 | 4 |
 | Narrowed 2026-10-02 (PI-18, not a live-environment need) | 1 |
