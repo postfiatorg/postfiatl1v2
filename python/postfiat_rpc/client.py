@@ -1871,6 +1871,9 @@ class PostFiatRpcClient:
         offer_transactions = payload.get("offer_transactions", [])
         if not isinstance(offer_transactions, list):
             offer_transactions = []
+        atomic_swap_transactions = payload.get("atomic_swap_transactions", [])
+        if not isinstance(atomic_swap_transactions, list):
+            atomic_swap_transactions = []
         receipt_ids = block.get("receipt_ids", [])
         if not isinstance(receipt_ids, list):
             receipt_ids = []
@@ -2077,6 +2080,73 @@ class PostFiatRpcClient:
                 )
             )
         offset += len(asset_transactions)
+        # Atomic swaps sit between asset and escrow transactions in the batch,
+        # so they occupy receipt ids here and shift every later kind's
+        # transaction_index. The archive scan emits one row per leg the
+        # account owns or receives, tagged with the leg as tx_role.
+        for swap_index, transaction in enumerate(atomic_swap_transactions):
+            if not isinstance(transaction, dict):
+                continue
+            unsigned = transaction.get("unsigned", {})
+            if not isinstance(unsigned, dict):
+                continue
+            index = offset + swap_index
+            tx_id = receipt_ids[index] if index < len(receipt_ids) else None
+            receipt: dict[str, Any] | None = None
+            for role in ("leg_0", "leg_1"):
+                leg = unsigned.get(role)
+                if not isinstance(leg, dict):
+                    continue
+                sender = leg.get("owner")
+                recipient = leg.get("recipient")
+                if sender != address and recipient != address:
+                    continue
+                if receipt is None:
+                    receipt = self._receipt_for_tx_id(tx_id)
+                rows.append(
+                    AccountTxRow(
+                        tx_id=tx_id,
+                        block_height=height,
+                        batch_kind=batch_kind,
+                        batch_id=batch_id,
+                        transaction_index=index,
+                        transaction_kind="atomic_swap",
+                        sender=sender if isinstance(sender, str) else None,
+                        recipient=recipient if isinstance(recipient, str) else None,
+                        amount=leg.get("amount") if isinstance(leg.get("amount"), int) else None,
+                        fee=leg.get("fee") if isinstance(leg.get("fee"), int) else None,
+                        sequence=(
+                            leg.get("sequence") if isinstance(leg.get("sequence"), int) else None
+                        ),
+                        memo_hash=None,
+                        memo_count=None,
+                        memo_bytes=None,
+                        asset_id=(
+                            leg.get("asset_id") if isinstance(leg.get("asset_id"), str) else None
+                        ),
+                        issuer=leg.get("issuer") if isinstance(leg.get("issuer"), str) else None,
+                        trustline_authorized=None,
+                        trustline_frozen=None,
+                        nft_id=None,
+                        nft_issuer_transfer_fee=None,
+                        nft_collection_flags=None,
+                        escrow_id=None,
+                        offer_id=None,
+                        tx_role=role,
+                        counterparty_offer_id=None,
+                        fill_index=None,
+                        condition_hash=None,
+                        accepted=(
+                            receipt.get("accepted")
+                            if isinstance(receipt.get("accepted"), bool)
+                            else None
+                        ),
+                        receipt_code=(
+                            receipt.get("code") if isinstance(receipt.get("code"), str) else None
+                        ),
+                    )
+                )
+        offset += len(atomic_swap_transactions)
         for escrow_index, transaction in enumerate(escrow_transactions):
             if not isinstance(transaction, dict):
                 continue

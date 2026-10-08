@@ -38,9 +38,11 @@ The disk index and the archive scan build their rows with the same function
 (`account_tx_rows_for_transparent_block`) and list a row for an account when it
 is the row's `from` or `to`, so they return the same rows: transfers,
 `payment_v2`, asset, atomic swap, escrow, NFT and offer operations, including
-offer fills. The Python fallback reads the same kinds except atomic swaps, and
-in a block that holds an atomic swap its escrow, NFT and offer rows carry a
-`transaction_index` (and `tx_id`) shifted by the number of swaps.
+offer fills. The Python fallback (`_account_tx_client_side_scan`) reads the
+same kinds, including atomic swaps (one row per leg the account owns or
+receives, `tx_role` `leg_0` or `leg_1`), and numbers escrow, NFT and offer rows
+after the block's swaps so `transaction_index` and `tx_id` match the index and
+the archive scan (`python/tests/test_account_tx_fallback.py`).
 
 `truncated` is `true` when a matching row was omitted. The archive scan (used
 when no index is usable; `index_used: false`) and the Python fallback read at
