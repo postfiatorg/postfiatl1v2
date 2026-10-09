@@ -3036,6 +3036,37 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
     std::fs::remove_dir_all(root).expect("cleanup deployment manifest test");
 }
 
+/// The RPC accept budget and restart gap the release generator renders
+/// (`batch_snapshot.rs`, RPC unit template). The operator-facing example unit
+/// must carry the same values; `example_rpc_unit_matches_generator_accept_budget`
+/// fails when either side drifts (the 2026-10-05 release raised the budget from
+/// 10000 to 100000 and the gap from 5 s to 1 s, and the example lagged behind).
+const RPC_ACCEPT_BUDGET_ARGUMENT: &str = "--max-requests 100000 ";
+const RPC_RESTART_SEC_LINE: &str = "\nRestartSec=1\n";
+
+#[test]
+fn example_rpc_unit_matches_generator_accept_budget() {
+    let example = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../systemd/postfiat-rpc.service.example");
+    let unit = std::fs::read_to_string(&example)
+        .unwrap_or_else(|error| panic!("read {}: {error}", example.display()));
+    assert!(
+        unit.contains(RPC_ACCEPT_BUDGET_ARGUMENT),
+        "systemd/postfiat-rpc.service.example must pass {RPC_ACCEPT_BUDGET_ARGUMENT:?} like the generator"
+    );
+    assert_eq!(
+        unit.matches("--max-requests ").count(),
+        1,
+        "the example unit passes --max-requests exactly once"
+    );
+    assert!(unit.contains("\nRestart=always\n"));
+    assert!(
+        unit.contains(RPC_RESTART_SEC_LINE),
+        "systemd/postfiat-rpc.service.example must set RestartSec=1 like the generator"
+    );
+    assert!(!unit.contains("RestartSec=5"));
+}
+
 #[test]
 fn deployment_validator_unit_stage_is_canonical_and_non_overwriting() {
     let root = unique_test_dir("postfiat-deployment-unit-stage");
@@ -3154,9 +3185,9 @@ fn deployment_validator_unit_stage_is_canonical_and_non_overwriting() {
         assert!(rpc_unit.contains("--spool-dir"));
         assert!(rpc_unit.contains("--ready-file"));
         assert!(rpc_unit.contains("--bind-host 127.0.0.1"));
-        assert!(rpc_unit.contains("--max-requests 100000 "));
+        assert!(rpc_unit.contains(RPC_ACCEPT_BUDGET_ARGUMENT));
         assert!(rpc_unit.contains("Restart=always"));
-        assert!(rpc_unit.contains("\nRestartSec=1\n"));
+        assert!(rpc_unit.contains(RPC_RESTART_SEC_LINE));
         assert!(!rpc_unit.contains("RestartSec=5"));
         assert!(!rpc_unit.contains("Restart=on-failure"));
         assert!(rpc_unit.contains("--unsafe-devnet-json-storage"));
