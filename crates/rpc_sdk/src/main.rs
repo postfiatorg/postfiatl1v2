@@ -8,24 +8,24 @@ use zeroize::Zeroizing;
 
 use postfiat_rpc_sdk::{
     account_escrows_request, account_nfts_request, account_offers_request, account_request,
-    account_tx_request, apply_batch_request, apply_bridge_batch_request,
-    apply_shield_batch_request, archive_window_request, atomic_settlement_template_request,
-    atomic_swap_fee_quote_request, atomic_swap_transaction_tx_id, batch_archive_request,
-    blocks_request_from_height, book_offers_request, bridge_batch_domain_request,
-    bridge_batch_pause_request, bridge_batch_resume_request, bridge_batch_transfer_request,
-    bridge_status_request, decode_atomic_swap_fee_quote_summary,
-    decode_atomic_swap_finality_summary, decode_atomic_swap_mempool_submit_entry,
-    decode_transfer_fee_quote_summary, escrow_fee_quote_request, escrow_info_request,
-    fastlane_asset_control_apply_request, fastlane_asset_control_catch_up_request,
-    fastlane_asset_control_prepare_request, fastlane_asset_control_preview_request,
-    fastlane_exit_request, fastswap_apply_request, fastswap_cancel_apply_request,
-    fastswap_capabilities_request, fastswap_catch_up_request, fastswap_checkpoint_status_request,
-    fastswap_commit_request, fastswap_commit_round_request, fastswap_effects_request,
-    fastswap_new_round_vote_request, fastswap_objects_request, fastswap_policy_by_hash_request,
-    fastswap_policy_by_pair_request, fastswap_precommit_request, fastswap_prepare_request,
-    fastswap_preview_request, fastswap_propose_round_request, fastswap_status_request,
-    fastswap_votes_request, fee_request, issuer_nfts_request, ledger_request, manifests_request,
-    mempool_batch_request, mempool_status_request,
+    account_tx_index_status_request, account_tx_request, apply_batch_request,
+    apply_bridge_batch_request, apply_shield_batch_request, archive_window_request,
+    atomic_settlement_template_request, atomic_swap_fee_quote_request,
+    atomic_swap_transaction_tx_id, batch_archive_request, blocks_request_from_height,
+    book_offers_request, bridge_batch_domain_request, bridge_batch_pause_request,
+    bridge_batch_resume_request, bridge_batch_transfer_request, bridge_status_request,
+    decode_atomic_swap_fee_quote_summary, decode_atomic_swap_finality_summary,
+    decode_atomic_swap_mempool_submit_entry, decode_transfer_fee_quote_summary,
+    escrow_fee_quote_request, escrow_info_request, fastlane_asset_control_apply_request,
+    fastlane_asset_control_catch_up_request, fastlane_asset_control_prepare_request,
+    fastlane_asset_control_preview_request, fastlane_exit_request, fastswap_apply_request,
+    fastswap_cancel_apply_request, fastswap_capabilities_request, fastswap_catch_up_request,
+    fastswap_checkpoint_status_request, fastswap_commit_request, fastswap_commit_round_request,
+    fastswap_effects_request, fastswap_new_round_vote_request, fastswap_objects_request,
+    fastswap_policy_by_hash_request, fastswap_policy_by_pair_request, fastswap_precommit_request,
+    fastswap_prepare_request, fastswap_preview_request, fastswap_propose_round_request,
+    fastswap_status_request, fastswap_votes_request, fee_request, issuer_nfts_request,
+    ledger_request, manifests_request, mempool_batch_request, mempool_status_request,
     mempool_submit_fastlane_primary_finality_request, mempool_submit_fastlane_primary_request,
     mempool_submit_signed_atomic_swap_transaction_finality_request,
     mempool_submit_signed_atomic_swap_transaction_json_request,
@@ -61,21 +61,21 @@ use postfiat_rpc_sdk::{
     NavcoinBridgeReceiptReplayParams, NavcoinBridgeSupplyStatusParams, RpcRequest, RpcRequestKind,
     RpcResponseKind, WalletBackupFile, WalletSignPaymentV2Fields, METHOD_ACCOUNT,
     METHOD_ACCOUNT_ESCROWS, METHOD_ACCOUNT_NFTS, METHOD_ACCOUNT_OFFERS, METHOD_ACCOUNT_TX,
-    METHOD_APPLY_BATCH, METHOD_APPLY_BRIDGE_BATCH, METHOD_APPLY_SHIELD_BATCH,
-    METHOD_ARCHIVE_WINDOW, METHOD_ATOMIC_SETTLEMENT_TEMPLATE, METHOD_ATOMIC_SWAP_FEE_QUOTE,
-    METHOD_BATCH_ARCHIVE, METHOD_BLOCKS, METHOD_BOOK_OFFERS, METHOD_BRIDGE_BATCH_DOMAIN,
-    METHOD_BRIDGE_BATCH_PAUSE, METHOD_BRIDGE_BATCH_RESUME, METHOD_BRIDGE_BATCH_TRANSFER,
-    METHOD_BRIDGE_STATUS, METHOD_ESCROW_FEE_QUOTE, METHOD_ESCROW_INFO,
-    METHOD_FASTLANE_ASSET_CONTROL_APPLY, METHOD_FASTLANE_ASSET_CONTROL_CATCH_UP,
-    METHOD_FASTLANE_ASSET_CONTROL_PREPARE, METHOD_FASTLANE_ASSET_CONTROL_PREVIEW,
-    METHOD_FASTLANE_EXIT, METHOD_FASTSWAP_APPLY, METHOD_FASTSWAP_CANCEL_APPLY,
-    METHOD_FASTSWAP_CAPABILITIES, METHOD_FASTSWAP_CATCH_UP, METHOD_FASTSWAP_CHECKPOINT_STATUS,
-    METHOD_FASTSWAP_COMMIT, METHOD_FASTSWAP_COMMIT_ROUND, METHOD_FASTSWAP_EFFECTS,
-    METHOD_FASTSWAP_NEW_ROUND_VOTE, METHOD_FASTSWAP_OBJECTS, METHOD_FASTSWAP_POLICY,
-    METHOD_FASTSWAP_PRECOMMIT, METHOD_FASTSWAP_PREPARE, METHOD_FASTSWAP_PREVIEW,
-    METHOD_FASTSWAP_PROPOSE_ROUND, METHOD_FASTSWAP_STATUS, METHOD_FASTSWAP_VOTES, METHOD_FEE,
-    METHOD_ISSUER_NFTS, METHOD_LEDGER, METHOD_MANIFESTS, METHOD_MEMPOOL_BATCH,
-    METHOD_MEMPOOL_STATUS, METHOD_MEMPOOL_SUBMIT_FASTLANE_PRIMARY,
+    METHOD_ACCOUNT_TX_INDEX_STATUS, METHOD_APPLY_BATCH, METHOD_APPLY_BRIDGE_BATCH,
+    METHOD_APPLY_SHIELD_BATCH, METHOD_ARCHIVE_WINDOW, METHOD_ATOMIC_SETTLEMENT_TEMPLATE,
+    METHOD_ATOMIC_SWAP_FEE_QUOTE, METHOD_BATCH_ARCHIVE, METHOD_BLOCKS, METHOD_BOOK_OFFERS,
+    METHOD_BRIDGE_BATCH_DOMAIN, METHOD_BRIDGE_BATCH_PAUSE, METHOD_BRIDGE_BATCH_RESUME,
+    METHOD_BRIDGE_BATCH_TRANSFER, METHOD_BRIDGE_STATUS, METHOD_ESCROW_FEE_QUOTE,
+    METHOD_ESCROW_INFO, METHOD_FASTLANE_ASSET_CONTROL_APPLY,
+    METHOD_FASTLANE_ASSET_CONTROL_CATCH_UP, METHOD_FASTLANE_ASSET_CONTROL_PREPARE,
+    METHOD_FASTLANE_ASSET_CONTROL_PREVIEW, METHOD_FASTLANE_EXIT, METHOD_FASTSWAP_APPLY,
+    METHOD_FASTSWAP_CANCEL_APPLY, METHOD_FASTSWAP_CAPABILITIES, METHOD_FASTSWAP_CATCH_UP,
+    METHOD_FASTSWAP_CHECKPOINT_STATUS, METHOD_FASTSWAP_COMMIT, METHOD_FASTSWAP_COMMIT_ROUND,
+    METHOD_FASTSWAP_EFFECTS, METHOD_FASTSWAP_NEW_ROUND_VOTE, METHOD_FASTSWAP_OBJECTS,
+    METHOD_FASTSWAP_POLICY, METHOD_FASTSWAP_PRECOMMIT, METHOD_FASTSWAP_PREPARE,
+    METHOD_FASTSWAP_PREVIEW, METHOD_FASTSWAP_PROPOSE_ROUND, METHOD_FASTSWAP_STATUS,
+    METHOD_FASTSWAP_VOTES, METHOD_FEE, METHOD_ISSUER_NFTS, METHOD_LEDGER, METHOD_MANIFESTS,
+    METHOD_MEMPOOL_BATCH, METHOD_MEMPOOL_STATUS, METHOD_MEMPOOL_SUBMIT_FASTLANE_PRIMARY,
     METHOD_MEMPOOL_SUBMIT_FASTLANE_PRIMARY_FINALITY,
     METHOD_MEMPOOL_SUBMIT_SIGNED_ATOMIC_SWAP_TRANSACTION,
     METHOD_MEMPOOL_SUBMIT_SIGNED_ATOMIC_SWAP_TRANSACTION_FINALITY,
@@ -160,6 +160,7 @@ fn write_request(flags: &[String]) -> Result<(), String> {
             let address = flag_value(flags, "--address").ok_or("missing --address")?;
             account_request(id, address)
         }
+        METHOD_ACCOUNT_TX_INDEX_STATUS => account_tx_index_status_request(id),
         METHOD_ACCOUNT_TX => {
             let address = flag_value(flags, "--address").ok_or("missing --address")?;
             account_tx_request(
@@ -1851,6 +1852,7 @@ fn request_kind(flags: &[String]) -> Result<Option<RpcRequestKind>, String> {
         }
         METHOD_ACCOUNT => Ok(Some(RpcRequestKind::Account)),
         METHOD_ACCOUNT_TX => Ok(Some(RpcRequestKind::AccountTx)),
+        METHOD_ACCOUNT_TX_INDEX_STATUS => Ok(Some(RpcRequestKind::AccountTxIndexStatus)),
         METHOD_FEE => Ok(Some(RpcRequestKind::Fee)),
         METHOD_TRANSFER_FEE_QUOTE => Ok(Some(RpcRequestKind::TransferFeeQuote)),
         METHOD_ATOMIC_SWAP_FEE_QUOTE => Ok(Some(RpcRequestKind::AtomicSwapFeeQuote)),
@@ -1961,7 +1963,7 @@ fn request_kind(flags: &[String]) -> Result<Option<RpcRequestKind>, String> {
             Ok(Some(RpcRequestKind::FastLaneAssetControlCatchUp))
         }
         other => Err(format!(
-            "unsupported request kind `{other}`; supported: {METHOD_STATUS}, {METHOD_SERVER_INFO}, {METHOD_METRICS}, {METHOD_LEDGER}, {METHOD_VERIFY_STATE}, {METHOD_VALIDATE_LOCAL_KEYS}, {METHOD_ACCOUNT}, {METHOD_ACCOUNT_TX}, {METHOD_FEE}, {METHOD_TRANSFER_FEE_QUOTE}, {METHOD_ESCROW_INFO}, {METHOD_ACCOUNT_ESCROWS}, {METHOD_NFT_INFO}, {METHOD_ACCOUNT_NFTS}, {METHOD_ISSUER_NFTS}, {METHOD_RECEIPTS}, {METHOD_TX}, {METHOD_BLOCKS}, {METHOD_VALIDATORS}, {METHOD_MANIFESTS}, {METHOD_BATCH_ARCHIVE}, {METHOD_ARCHIVE_WINDOW}, {METHOD_MEMPOOL_SUBMIT_TRANSFER}, {METHOD_MEMPOOL_SUBMIT_SIGNED_TRANSFER}, {METHOD_MEMPOOL_STATUS}, {METHOD_MEMPOOL_BATCH}, {METHOD_APPLY_BATCH}, {METHOD_SHIELD_BATCH_MINT}, {METHOD_SHIELD_BATCH_SPEND}, {METHOD_SHIELD_BATCH_MIGRATE}, {METHOD_SHIELD_BATCH_ORCHARD}, {METHOD_SHIELD_BATCH_ORCHARD_DEPOSIT}, {METHOD_SHIELD_BATCH_ORCHARD_WITHDRAW}, {METHOD_SHIELD_BATCH_SWAP}, {METHOD_APPLY_SHIELD_BATCH}, {METHOD_SHIELD_SCAN}, {METHOD_SHIELD_DISCLOSE}, {METHOD_SHIELD_TURNSTILE}, {METHOD_BRIDGE_STATUS}, {METHOD_NAVCOIN_BRIDGE_ROUTES}, {METHOD_NAVCOIN_BRIDGE_PACKET}, {METHOD_NAVCOIN_BRIDGE_CLAIMS}, {METHOD_NAVCOIN_BRIDGE_SUPPLY_STATUS}, {METHOD_NAVCOIN_BRIDGE_RECEIPT_REPLAY}, {METHOD_NAVCOIN_BRIDGE_PACKET_PREFLIGHT}, {METHOD_BRIDGE_BATCH_DOMAIN}, {METHOD_BRIDGE_BATCH_TRANSFER}, {METHOD_BRIDGE_BATCH_PAUSE}, {METHOD_BRIDGE_BATCH_RESUME}, {METHOD_APPLY_BRIDGE_BATCH}"
+            "unsupported request kind `{other}`; supported: {METHOD_STATUS}, {METHOD_SERVER_INFO}, {METHOD_METRICS}, {METHOD_LEDGER}, {METHOD_VERIFY_STATE}, {METHOD_VALIDATE_LOCAL_KEYS}, {METHOD_ACCOUNT}, {METHOD_ACCOUNT_TX}, {METHOD_ACCOUNT_TX_INDEX_STATUS}, {METHOD_FEE}, {METHOD_TRANSFER_FEE_QUOTE}, {METHOD_ESCROW_INFO}, {METHOD_ACCOUNT_ESCROWS}, {METHOD_NFT_INFO}, {METHOD_ACCOUNT_NFTS}, {METHOD_ISSUER_NFTS}, {METHOD_RECEIPTS}, {METHOD_TX}, {METHOD_BLOCKS}, {METHOD_VALIDATORS}, {METHOD_MANIFESTS}, {METHOD_BATCH_ARCHIVE}, {METHOD_ARCHIVE_WINDOW}, {METHOD_MEMPOOL_SUBMIT_TRANSFER}, {METHOD_MEMPOOL_SUBMIT_SIGNED_TRANSFER}, {METHOD_MEMPOOL_STATUS}, {METHOD_MEMPOOL_BATCH}, {METHOD_APPLY_BATCH}, {METHOD_SHIELD_BATCH_MINT}, {METHOD_SHIELD_BATCH_SPEND}, {METHOD_SHIELD_BATCH_MIGRATE}, {METHOD_SHIELD_BATCH_ORCHARD}, {METHOD_SHIELD_BATCH_ORCHARD_DEPOSIT}, {METHOD_SHIELD_BATCH_ORCHARD_WITHDRAW}, {METHOD_SHIELD_BATCH_SWAP}, {METHOD_APPLY_SHIELD_BATCH}, {METHOD_SHIELD_SCAN}, {METHOD_SHIELD_DISCLOSE}, {METHOD_SHIELD_TURNSTILE}, {METHOD_BRIDGE_STATUS}, {METHOD_NAVCOIN_BRIDGE_ROUTES}, {METHOD_NAVCOIN_BRIDGE_PACKET}, {METHOD_NAVCOIN_BRIDGE_CLAIMS}, {METHOD_NAVCOIN_BRIDGE_SUPPLY_STATUS}, {METHOD_NAVCOIN_BRIDGE_RECEIPT_REPLAY}, {METHOD_NAVCOIN_BRIDGE_PACKET_PREFLIGHT}, {METHOD_BRIDGE_BATCH_DOMAIN}, {METHOD_BRIDGE_BATCH_TRANSFER}, {METHOD_BRIDGE_BATCH_PAUSE}, {METHOD_BRIDGE_BATCH_RESUME}, {METHOD_APPLY_BRIDGE_BATCH}"
         )),
     }
 }
@@ -1988,6 +1990,7 @@ fn response_kind(flags: &[String]) -> Result<Option<RpcResponseKind>, String> {
         }
         METHOD_ACCOUNT => Ok(Some(RpcResponseKind::Account)),
         METHOD_ACCOUNT_TX => Ok(Some(RpcResponseKind::AccountTx)),
+        METHOD_ACCOUNT_TX_INDEX_STATUS => Ok(Some(RpcResponseKind::AccountTxIndexStatus)),
         METHOD_FEE => Ok(Some(RpcResponseKind::Fee)),
         METHOD_TRANSFER_FEE_QUOTE => Ok(Some(RpcResponseKind::TransferFeeQuote)),
         METHOD_ATOMIC_SWAP_FEE_QUOTE => Ok(Some(RpcResponseKind::AtomicSwapFeeQuote)),
@@ -2092,7 +2095,7 @@ fn response_kind(flags: &[String]) -> Result<Option<RpcResponseKind>, String> {
             Ok(Some(RpcResponseKind::FastLaneAssetControlPreview))
         }
         other => Err(format!(
-            "unsupported response kind `{other}`; supported: {METHOD_STATUS}, {METHOD_SERVER_INFO}, {METHOD_METRICS}, {METHOD_LEDGER}, {METHOD_VERIFY_STATE}, {METHOD_VALIDATE_LOCAL_KEYS}, {METHOD_ACCOUNT}, {METHOD_ACCOUNT_TX}, {METHOD_FEE}, {METHOD_TRANSFER_FEE_QUOTE}, {METHOD_ESCROW_INFO}, {METHOD_ACCOUNT_ESCROWS}, {METHOD_NFT_INFO}, {METHOD_ACCOUNT_NFTS}, {METHOD_ISSUER_NFTS}, {METHOD_RECEIPTS}, {METHOD_TX}, {METHOD_BLOCKS}, {METHOD_VALIDATORS}, {METHOD_MANIFESTS}, {METHOD_BATCH_ARCHIVE}, {METHOD_ARCHIVE_WINDOW}, {METHOD_MEMPOOL_SUBMIT_TRANSFER}, {METHOD_MEMPOOL_SUBMIT_SIGNED_TRANSFER}, {METHOD_MEMPOOL_STATUS}, {METHOD_MEMPOOL_BATCH}, {METHOD_APPLY_BATCH}, {METHOD_SHIELD_BATCH_MINT}, {METHOD_SHIELD_BATCH_SPEND}, {METHOD_SHIELD_BATCH_MIGRATE}, {METHOD_SHIELD_BATCH_ORCHARD}, {METHOD_SHIELD_BATCH_ORCHARD_DEPOSIT}, {METHOD_SHIELD_BATCH_ORCHARD_WITHDRAW}, {METHOD_SHIELD_BATCH_SWAP}, {METHOD_APPLY_SHIELD_BATCH}, {METHOD_SHIELD_SCAN}, {METHOD_SHIELD_DISCLOSE}, {METHOD_SHIELD_TURNSTILE}, {METHOD_BRIDGE_STATUS}, {METHOD_NAVCOIN_BRIDGE_ROUTES}, {METHOD_NAVCOIN_BRIDGE_PACKET}, {METHOD_NAVCOIN_BRIDGE_CLAIMS}, {METHOD_NAVCOIN_BRIDGE_SUPPLY_STATUS}, {METHOD_NAVCOIN_BRIDGE_RECEIPT_REPLAY}, {METHOD_NAVCOIN_BRIDGE_PACKET_PREFLIGHT}, {METHOD_BRIDGE_BATCH_DOMAIN}, {METHOD_BRIDGE_BATCH_TRANSFER}, {METHOD_BRIDGE_BATCH_PAUSE}, {METHOD_BRIDGE_BATCH_RESUME}, {METHOD_APPLY_BRIDGE_BATCH}"
+            "unsupported response kind `{other}`; supported: {METHOD_STATUS}, {METHOD_SERVER_INFO}, {METHOD_METRICS}, {METHOD_LEDGER}, {METHOD_VERIFY_STATE}, {METHOD_VALIDATE_LOCAL_KEYS}, {METHOD_ACCOUNT}, {METHOD_ACCOUNT_TX}, {METHOD_ACCOUNT_TX_INDEX_STATUS}, {METHOD_FEE}, {METHOD_TRANSFER_FEE_QUOTE}, {METHOD_ESCROW_INFO}, {METHOD_ACCOUNT_ESCROWS}, {METHOD_NFT_INFO}, {METHOD_ACCOUNT_NFTS}, {METHOD_ISSUER_NFTS}, {METHOD_RECEIPTS}, {METHOD_TX}, {METHOD_BLOCKS}, {METHOD_VALIDATORS}, {METHOD_MANIFESTS}, {METHOD_BATCH_ARCHIVE}, {METHOD_ARCHIVE_WINDOW}, {METHOD_MEMPOOL_SUBMIT_TRANSFER}, {METHOD_MEMPOOL_SUBMIT_SIGNED_TRANSFER}, {METHOD_MEMPOOL_STATUS}, {METHOD_MEMPOOL_BATCH}, {METHOD_APPLY_BATCH}, {METHOD_SHIELD_BATCH_MINT}, {METHOD_SHIELD_BATCH_SPEND}, {METHOD_SHIELD_BATCH_MIGRATE}, {METHOD_SHIELD_BATCH_ORCHARD}, {METHOD_SHIELD_BATCH_ORCHARD_DEPOSIT}, {METHOD_SHIELD_BATCH_ORCHARD_WITHDRAW}, {METHOD_SHIELD_BATCH_SWAP}, {METHOD_APPLY_SHIELD_BATCH}, {METHOD_SHIELD_SCAN}, {METHOD_SHIELD_DISCLOSE}, {METHOD_SHIELD_TURNSTILE}, {METHOD_BRIDGE_STATUS}, {METHOD_NAVCOIN_BRIDGE_ROUTES}, {METHOD_NAVCOIN_BRIDGE_PACKET}, {METHOD_NAVCOIN_BRIDGE_CLAIMS}, {METHOD_NAVCOIN_BRIDGE_SUPPLY_STATUS}, {METHOD_NAVCOIN_BRIDGE_RECEIPT_REPLAY}, {METHOD_NAVCOIN_BRIDGE_PACKET_PREFLIGHT}, {METHOD_BRIDGE_BATCH_DOMAIN}, {METHOD_BRIDGE_BATCH_TRANSFER}, {METHOD_BRIDGE_BATCH_PAUSE}, {METHOD_BRIDGE_BATCH_RESUME}, {METHOD_APPLY_BRIDGE_BATCH}"
         )),
     }
 }
@@ -2349,7 +2352,7 @@ fn print_usage() {
   postfiat-rpc-sdk wallet-sign-owned-unwrap-v3 --backup-file PATH --order-file PATH --capabilities-file PATH --output PATH
   postfiat-rpc-sdk wallet-verify-fastpay-apply-v3 --operation transfer|unwrap --certificate-file PATH --apply-response-file PATH --capabilities-file PATH --validators-file PATH --output PATH
 
-Supported request methods: status, server_info, metrics, ledger, verify_state, validate_local_keys, account, account_tx, fee, transfer_fee_quote, atomic_swap_fee_quote, escrow_fee_quote, offer_fee_quote, atomic_settlement_template, offer_info, account_offers, book_offers, escrow_info, account_escrows, nft_info, account_nfts, issuer_nfts, receipts, tx, blocks, validators, manifests, batch_archive, archive_window, mempool_submit_transfer, mempool_submit_signed_transfer, mempool_submit_signed_payment_v2, mempool_submit_signed_atomic_swap_transaction, mempool_submit_signed_atomic_swap_transaction_finality, mempool_submit_signed_escrow_transaction, mempool_submit_signed_offer_transaction, mempool_status, mempool_batch, apply_batch, shield_batch_mint, shield_batch_spend, shield_batch_migrate, shield_batch_orchard, shield_batch_orchard_deposit, shield_batch_orchard_withdraw, shield_batch_swap, apply_shield_batch, shield_scan, shield_disclose, shield_turnstile, bridge_status, navcoin_bridge_routes, navcoin_bridge_packet, navcoin_bridge_claims, navcoin_bridge_supply_status, navcoin_bridge_receipt_replay, navcoin_bridge_packet_preflight, bridge_batch_domain, bridge_batch_transfer, bridge_batch_pause, bridge_batch_resume, apply_bridge_batch.
+Supported request methods: status, server_info, metrics, ledger, verify_state, validate_local_keys, account, account_tx, account_tx_index_status, fee, transfer_fee_quote, atomic_swap_fee_quote, escrow_fee_quote, offer_fee_quote, atomic_settlement_template, offer_info, account_offers, book_offers, escrow_info, account_escrows, nft_info, account_nfts, issuer_nfts, receipts, tx, blocks, validators, manifests, batch_archive, archive_window, mempool_submit_transfer, mempool_submit_signed_transfer, mempool_submit_signed_payment_v2, mempool_submit_signed_atomic_swap_transaction, mempool_submit_signed_atomic_swap_transaction_finality, mempool_submit_signed_escrow_transaction, mempool_submit_signed_offer_transaction, mempool_status, mempool_batch, apply_batch, shield_batch_mint, shield_batch_spend, shield_batch_migrate, shield_batch_orchard, shield_batch_orchard_deposit, shield_batch_orchard_withdraw, shield_batch_swap, apply_shield_batch, shield_scan, shield_disclose, shield_turnstile, bridge_status, navcoin_bridge_routes, navcoin_bridge_packet, navcoin_bridge_claims, navcoin_bridge_supply_status, navcoin_bridge_receipt_replay, navcoin_bridge_packet_preflight, bridge_batch_domain, bridge_batch_transfer, bridge_batch_pause, bridge_batch_resume, apply_bridge_batch.
 FastSwap methods: mempool_submit_fastlane_primary, mempool_submit_fastlane_primary_finality, fastswap_capabilities, fastswap_preview, fastswap_prepare, fastswap_commit, fastswap_apply, fastswap_catch_up, fastswap_status, fastswap_effects, fastswap_new_round_vote, fastswap_propose_round, fastswap_precommit, fastswap_commit_round, fastswap_cancel_apply, fastlane_exit, fastswap_checkpoint_status, fastswap_objects, fastswap_policy, fastlane_asset_control_preview, fastlane_asset_control_prepare, fastlane_asset_control_apply, fastlane_asset_control_catch_up.
 FastLane primary submit requires exactly one of --fastlane-primary-json or --fastlane-primary-json-file.
 Account_tx request supports --address, --from-height, --to-height, and --limit.
@@ -2364,7 +2367,7 @@ Escrow_info request supports --escrow-id. Account_escrows request supports --acc
 Nft_info request supports --nft-id. Account_nfts request supports --account, --include-burned, and --limit. Issuer_nfts request supports --issuer, --collection-id, --include-burned, and --limit.
 Blocks request supports --from-height and --limit.
 Tx request supports --audit-block-log for full replay verification.
-Supported response kinds: status, server_info, metrics, ledger, verify_state, validate_local_keys, account, account_tx, fee, transfer_fee_quote, atomic_swap_fee_quote, escrow_fee_quote, offer_fee_quote, atomic_settlement_template, offer_info, account_offers, book_offers, escrow_info, account_escrows, nft_info, account_nfts, issuer_nfts, receipts, tx, blocks, validators, manifests, batch_archive, archive_window, mempool_submit_transfer, mempool_submit_signed_transfer, mempool_submit_signed_payment_v2, mempool_submit_signed_atomic_swap_transaction, mempool_submit_signed_atomic_swap_transaction_finality, mempool_submit_signed_escrow_transaction, mempool_submit_signed_offer_transaction, mempool_status, mempool_batch, apply_batch, shield_batch_mint, shield_batch_spend, shield_batch_migrate, shield_batch_orchard, shield_batch_orchard_deposit, shield_batch_orchard_withdraw, shield_batch_swap, apply_shield_batch, shield_scan, shield_disclose, shield_turnstile, bridge_status, navcoin_bridge_routes, navcoin_bridge_packet, navcoin_bridge_claims, navcoin_bridge_supply_status, navcoin_bridge_receipt_replay, navcoin_bridge_packet_preflight, bridge_batch_domain, bridge_batch_transfer, bridge_batch_pause, bridge_batch_resume, apply_bridge_batch.
+Supported response kinds: status, server_info, metrics, ledger, verify_state, validate_local_keys, account, account_tx, account_tx_index_status, fee, transfer_fee_quote, atomic_swap_fee_quote, escrow_fee_quote, offer_fee_quote, atomic_settlement_template, offer_info, account_offers, book_offers, escrow_info, account_escrows, nft_info, account_nfts, issuer_nfts, receipts, tx, blocks, validators, manifests, batch_archive, archive_window, mempool_submit_transfer, mempool_submit_signed_transfer, mempool_submit_signed_payment_v2, mempool_submit_signed_atomic_swap_transaction, mempool_submit_signed_atomic_swap_transaction_finality, mempool_submit_signed_escrow_transaction, mempool_submit_signed_offer_transaction, mempool_status, mempool_batch, apply_batch, shield_batch_mint, shield_batch_spend, shield_batch_migrate, shield_batch_orchard, shield_batch_orchard_deposit, shield_batch_orchard_withdraw, shield_batch_swap, apply_shield_batch, shield_scan, shield_disclose, shield_turnstile, bridge_status, navcoin_bridge_routes, navcoin_bridge_packet, navcoin_bridge_claims, navcoin_bridge_supply_status, navcoin_bridge_receipt_replay, navcoin_bridge_packet_preflight, bridge_batch_domain, bridge_batch_transfer, bridge_batch_pause, bridge_batch_resume, apply_bridge_batch.
 Batch archive response validation can bind payload hashes with --chain-id, --genesis-hash, and --protocol-version.
 Use --output - to print request, wallet identity, wallet backup, or signed transaction JSON to stdout."#
     );

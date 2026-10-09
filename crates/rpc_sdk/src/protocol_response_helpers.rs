@@ -99,6 +99,7 @@ pub fn validate_response_kind_with_context(
         }
         RpcResponseKind::Account => validate_account_result(result),
         RpcResponseKind::AccountTx => validate_account_tx_result(result),
+        RpcResponseKind::AccountTxIndexStatus => validate_account_tx_index_status_result(result),
         RpcResponseKind::Fee => validate_fee_result(result),
         RpcResponseKind::TransferFeeQuote => validate_transfer_fee_quote_result(result),
         RpcResponseKind::AtomicSwapFeeQuote => validate_atomic_swap_fee_quote_result(result),

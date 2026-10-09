@@ -369,6 +369,139 @@ fn validate_account_result(result: &Value) -> Result<(), RpcResponseValidationEr
     Ok(())
 }
 
+/// `account_tx_index_status` is the operator's index-freshness read. The checks
+/// mirror how the node builds `AccountTxIndexStatusReport` (an absent index file
+/// yields `index_present: false`, zero counts, no heights and an empty
+/// `tip_hash`; `index_usable` is exactly "no reason") and the Python client's
+/// refusal to accept a leaked filesystem path.
+fn validate_account_tx_index_status_result(result: &Value) -> Result<(), RpcResponseValidationError> {
+    expect_string_eq(result, "schema", ACCOUNT_TX_INDEX_STATUS_SCHEMA)?;
+    clean_string_field(result, "chain_id")?;
+    lower_hex_field(result, "genesis_hash", 96)?;
+    nonzero_u32_field(result, "protocol_version")?;
+
+    validate_index_file_name(clean_string_field(result, "index_path")?, "index_path")?;
+    validate_index_file_name(
+        clean_string_field_allow_empty(result, "disk_index_path")?,
+        "disk_index_path",
+    )?;
+
+    let index_present = bool_field(result, "index_present")?;
+    let index_usable = bool_field(result, "index_usable")?;
+    let reason = optional_reason_field(result, "reason")?;
+    if index_usable && !index_present {
+        return Err(invalid_result(
+            "index_usable",
+            "expected an absent index to be unusable",
+        ));
+    }
+    if index_usable == reason.is_some() {
+        return Err(invalid_result(
+            "reason",
+            "expected a reason exactly when the index is unusable",
+        ));
+    }
+
+    let disk_index_present = bool_field(result, "disk_index_present")?;
+    let disk_index_usable = bool_field(result, "disk_index_usable")?;
+    let disk_index_reason = optional_reason_field(result, "disk_index_reason")?;
+    if disk_index_usable && !disk_index_present {
+        return Err(invalid_result(
+            "disk_index_usable",
+            "expected an absent disk index to be unusable",
+        ));
+    }
+    if disk_index_usable == disk_index_reason.is_some() {
+        return Err(invalid_result(
+            "disk_index_reason",
+            "expected a reason exactly when the disk index is unusable",
+        ));
+    }
+
+    let indexed_from_height = optional_u64_field_value(result, "indexed_from_height")?;
+    let indexed_to_height = optional_u64_field_value(result, "indexed_to_height")?;
+    let indexed_block_count = u64_field(result, "indexed_block_count")?;
+    let indexed_row_count = u64_field(result, "indexed_row_count")?;
+    let account_count = u64_field(result, "account_count")?;
+    u64_field(result, "disk_account_shard_count")?;
+    let tip_hash = string_field(result, "tip_hash")?;
+    if index_present {
+        // The node sets both heights per indexed block (`get_or_insert` for the
+        // first, `Some` for the latest) or leaves both unset for an empty index.
+        match (indexed_from_height, indexed_to_height) {
+            (Some(from_height), Some(to_height)) if from_height > to_height => {
+                return Err(invalid_result(
+                    "indexed_to_height",
+                    "expected indexed_to_height to be at least indexed_from_height",
+                ));
+            }
+            (Some(_), None) | (None, Some(_)) => {
+                return Err(invalid_result(
+                    "indexed_to_height",
+                    "expected indexed_from_height and indexed_to_height to be set together",
+                ));
+            }
+            _ => {}
+        }
+        if tip_hash != "genesis" && !is_lower_hex_len(tip_hash, 96) {
+            return Err(invalid_result(
+                "tip_hash",
+                "expected `genesis` or 96 lowercase hex characters",
+            ));
+        }
+    } else {
+        if indexed_from_height.is_some() || indexed_to_height.is_some() {
+            return Err(invalid_result(
+                "indexed_from_height",
+                "expected no indexed heights when the index is absent",
+            ));
+        }
+        if indexed_block_count != 0 || indexed_row_count != 0 || account_count != 0 {
+            return Err(invalid_result(
+                "indexed_block_count",
+                "expected zero index counts when the index is absent",
+            ));
+        }
+        if !tip_hash.is_empty() {
+            return Err(invalid_result(
+                "tip_hash",
+                "expected an empty tip_hash when the index is absent",
+            ));
+        }
+    }
+    let current_tip_hash = string_field(result, "current_tip_hash")?;
+    if current_tip_hash != "genesis" && !is_lower_hex_len(current_tip_hash, 96) {
+        return Err(invalid_result(
+            "current_tip_hash",
+            "expected `genesis` or 96 lowercase hex characters",
+        ));
+    }
+    Ok(())
+}
+
+/// The node reports index files by bare file name; a separator means a
+/// filesystem path leaked into the public read.
+fn validate_index_file_name(value: &str, field: &str) -> Result<(), RpcResponseValidationError> {
+    if value.contains('/') || value.contains('\\') {
+        return Err(invalid_result(field, "expected a bare file name, not a path"));
+    }
+    Ok(())
+}
+
+fn optional_reason_field<'a>(
+    value: &'a Value,
+    path: &str,
+) -> Result<Option<&'a str>, RpcResponseValidationError> {
+    let found = field(value, path)?;
+    if found.is_null() {
+        return Ok(None);
+    }
+    match found.as_str() {
+        Some(reason) if !reason.trim().is_empty() => Ok(Some(reason)),
+        _ => Err(invalid_result(path, "expected null or a non-empty reason")),
+    }
+}
+
 fn validate_account_tx_result(result: &Value) -> Result<(), RpcResponseValidationError> {
     expect_string_eq(result, "schema", "postfiat-account-tx-v1")?;
     clean_string_field(result, "chain_id")?;

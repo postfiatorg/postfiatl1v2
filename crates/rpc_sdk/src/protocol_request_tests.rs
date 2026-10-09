@@ -700,6 +700,11 @@
         assert_eq!(state.method, METHOD_VERIFY_STATE);
         assert_eq!(state.params, json!({}));
 
+        let index_status = account_tx_index_status_request("index-status-1");
+        assert_eq!(index_status.id, "index-status-1");
+        assert_eq!(index_status.method, METHOD_ACCOUNT_TX_INDEX_STATUS);
+        assert_eq!(index_status.params, json!({}));
+
         let keys = validate_local_keys_request("keys-1", 4);
         assert_eq!(keys.method, METHOD_VALIDATE_LOCAL_KEYS);
         assert_eq!(keys.params, json!({"validators": 4}));
@@ -1333,6 +1338,12 @@
             Some(RpcRequestKind::VerifyState),
         )
         .expect("state request");
+        validate_request(
+            &account_tx_index_status_request("index-status-1"),
+            Some("index-status-1"),
+            Some(RpcRequestKind::AccountTxIndexStatus),
+        )
+        .expect("index status request");
         validate_request(
             &validate_local_keys_request("keys-1", 4),
             Some("keys-1"),

@@ -3752,3 +3752,110 @@
             },
         );
     }
+
+    const INDEX_HEX96: &str =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    fn usable_index_status() -> serde_json::Value {
+        json!({
+            "schema": ACCOUNT_TX_INDEX_STATUS_SCHEMA,
+            "chain_id": "postfiat-local",
+            "genesis_hash": INDEX_HEX96,
+            "protocol_version": 1,
+            "index_path": "account_tx_index.json",
+            "disk_index_path": "account_tx_index.db",
+            "index_present": true,
+            "index_usable": true,
+            "reason": null,
+            "disk_index_present": true,
+            "disk_index_usable": true,
+            "disk_index_reason": null,
+            "indexed_from_height": 1,
+            "indexed_to_height": 7,
+            "indexed_block_count": 7,
+            "indexed_row_count": 12,
+            "account_count": 3,
+            "disk_account_shard_count": 2,
+            "tip_hash": INDEX_HEX96,
+            "current_tip_hash": INDEX_HEX96
+        })
+    }
+
+    fn absent_index_status() -> serde_json::Value {
+        json!({
+            "schema": ACCOUNT_TX_INDEX_STATUS_SCHEMA,
+            "chain_id": "postfiat-local",
+            "genesis_hash": INDEX_HEX96,
+            "protocol_version": 1,
+            "index_path": "account_tx_index.json",
+            "disk_index_path": "",
+            "index_present": false,
+            "index_usable": false,
+            "reason": "account_tx index file is absent",
+            "disk_index_present": false,
+            "disk_index_usable": false,
+            "disk_index_reason": "account_tx disk index file is absent",
+            "indexed_from_height": null,
+            "indexed_to_height": null,
+            "indexed_block_count": 0,
+            "indexed_row_count": 0,
+            "account_count": 0,
+            "disk_account_shard_count": 0,
+            "tip_hash": "",
+            "current_tip_hash": "genesis"
+        })
+    }
+
+    #[test]
+    fn account_tx_index_status_accepts_usable_and_absent_index_reports() {
+        for report in [usable_index_status(), absent_index_status()] {
+            let response =
+                success_response("index-status-1", &report, vec![]).expect("report response");
+            validate_health_response(&response, RpcResponseKind::AccountTxIndexStatus)
+                .expect("index status validates");
+        }
+    }
+
+    #[test]
+    fn account_tx_index_status_rejects_leaked_paths_and_inconsistent_reports() {
+        let mut leaked = usable_index_status();
+        leaked["index_path"] = json!("/var/lib/postfiat/account_tx_index.json");
+        let mut leaked_disk = usable_index_status();
+        leaked_disk["disk_index_path"] = json!("C:\\postfiat\\account_tx_index.db");
+        let mut usable_with_reason = usable_index_status();
+        usable_with_reason["reason"] = json!("stale");
+        let mut unusable_without_reason = absent_index_status();
+        unusable_without_reason["reason"] = json!(null);
+        let mut inverted_heights = usable_index_status();
+        inverted_heights["indexed_from_height"] = json!(9);
+        let mut partial_heights = usable_index_status();
+        partial_heights["indexed_to_height"] = json!(null);
+        let mut absent_with_tip = absent_index_status();
+        absent_with_tip["tip_hash"] = json!(INDEX_HEX96);
+        let mut absent_with_counts = absent_index_status();
+        absent_with_counts["indexed_row_count"] = json!(4);
+        let mut bad_current_tip = usable_index_status();
+        bad_current_tip["current_tip_hash"] = json!("");
+
+        for (report, field) in [
+            (leaked, "index_path"),
+            (leaked_disk, "disk_index_path"),
+            (usable_with_reason, "reason"),
+            (unusable_without_reason, "reason"),
+            (inverted_heights, "indexed_to_height"),
+            (partial_heights, "indexed_to_height"),
+            (absent_with_tip, "tip_hash"),
+            (absent_with_counts, "indexed_block_count"),
+            (bad_current_tip, "current_tip_hash"),
+        ] {
+            let response =
+                success_response("index-status-1", &report, vec![]).expect("report response");
+            let error = validate_health_response(&response, RpcResponseKind::AccountTxIndexStatus)
+                .expect_err("inconsistent report is rejected");
+            assert!(
+                error.to_string().contains(field),
+                "expected the error to name `{field}`, got {error}"
+            );
+        }
+    }
+

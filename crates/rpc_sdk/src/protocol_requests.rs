@@ -73,6 +73,7 @@ pub const METHOD_VERIFY_STATE: &str = "verify_state";
 pub const METHOD_VALIDATE_LOCAL_KEYS: &str = "validate_local_keys";
 pub const METHOD_ACCOUNT: &str = "account";
 pub const METHOD_ACCOUNT_TX: &str = "account_tx";
+pub const METHOD_ACCOUNT_TX_INDEX_STATUS: &str = "account_tx_index_status";
 pub const METHOD_FEE: &str = "fee";
 pub const METHOD_TRANSFER_FEE_QUOTE: &str = "transfer_fee_quote";
 pub const METHOD_OWNED_SIGN: &str = "owned_sign";
@@ -164,6 +165,7 @@ pub const METHOD_BRIDGE_BATCH_PAUSE: &str = "bridge_batch_pause";
 pub const METHOD_BRIDGE_BATCH_RESUME: &str = "bridge_batch_resume";
 pub const METHOD_APPLY_BRIDGE_BATCH: &str = "apply_bridge_batch";
 pub const METRICS_SCHEMA: &str = "postfiat-node-metrics-v1";
+pub const ACCOUNT_TX_INDEX_STATUS_SCHEMA: &str = "postfiat-account-tx-index-status-v1";
 pub const SERVER_INFO_SCHEMA: &str = "postfiat-server-info-v1";
 pub const LEDGER_SCHEMA: &str = "postfiat-ledger-v1";
 pub const FEE_SCHEMA: &str = "postfiat-fee-v1";
@@ -363,6 +365,10 @@ pub fn validate_local_keys_request(id: impl Into<String>, validators: u32) -> Rp
 
 pub fn account_request(id: impl Into<String>, address: impl Into<String>) -> RpcRequest {
     RpcRequest::empty(id, METHOD_ACCOUNT).with_param_value("address", string_value(address))
+}
+
+pub fn account_tx_index_status_request(id: impl Into<String>) -> RpcRequest {
+    RpcRequest::empty(id, METHOD_ACCOUNT_TX_INDEX_STATUS)
 }
 
 pub fn account_tx_request(
@@ -1484,6 +1490,7 @@ pub enum RpcRequestKind {
     ValidateLocalKeys { validators: Option<u32> },
     Account,
     AccountTx,
+    AccountTxIndexStatus,
     Fee,
     TransferFeeQuote,
     AtomicSwapFeeQuote,
@@ -1884,6 +1891,7 @@ pub enum RpcResponseKind {
     ValidateLocalKeys { validators: Option<u32> },
     Account,
     AccountTx,
+    AccountTxIndexStatus,
     Fee,
     TransferFeeQuote,
     AtomicSwapFeeQuote,
@@ -2445,6 +2453,7 @@ fn request_kind_method(kind: RpcRequestKind) -> &'static str {
         RpcRequestKind::ValidateLocalKeys { .. } => METHOD_VALIDATE_LOCAL_KEYS,
         RpcRequestKind::Account => METHOD_ACCOUNT,
         RpcRequestKind::AccountTx => METHOD_ACCOUNT_TX,
+        RpcRequestKind::AccountTxIndexStatus => METHOD_ACCOUNT_TX_INDEX_STATUS,
         RpcRequestKind::Fee => METHOD_FEE,
         RpcRequestKind::TransferFeeQuote => METHOD_TRANSFER_FEE_QUOTE,
         RpcRequestKind::AtomicSwapFeeQuote => METHOD_ATOMIC_SWAP_FEE_QUOTE,
@@ -2554,6 +2563,7 @@ fn validate_request_params(
         | RpcRequestKind::ServerInfo
         | RpcRequestKind::Metrics
         | RpcRequestKind::VerifyState
+        | RpcRequestKind::AccountTxIndexStatus
         | RpcRequestKind::Fee
         | RpcRequestKind::Validators
         | RpcRequestKind::Manifests => {
