@@ -77,6 +77,7 @@ pub const METHOD_FEE: &str = "fee";
 pub const METHOD_TRANSFER_FEE_QUOTE: &str = "transfer_fee_quote";
 pub const METHOD_OWNED_SIGN: &str = "owned_sign";
 pub const METHOD_OWNED_UNWRAP_SIGN: &str = "owned_unwrap_sign";
+pub const METHOD_OWNED_RECOVERY_CAPABILITIES: &str = "owned_recovery_capabilities";
 pub const METHOD_FASTSWAP_CAPABILITIES: &str = "fastswap_capabilities";
 pub const METHOD_FASTSWAP_PREVIEW: &str = "fastswap_preview";
 pub const METHOD_FASTSWAP_PREPARE: &str = "fastswap_prepare";
@@ -1095,6 +1096,10 @@ pub struct NavcoinBridgePacketPreflightParams {
     pub packet_file: String,
 }
 
+pub fn owned_recovery_capabilities_request(id: impl Into<String>) -> RpcRequest {
+    RpcRequest::empty(id, METHOD_OWNED_RECOVERY_CAPABILITIES)
+}
+
 pub fn bridge_status_request(id: impl Into<String>) -> RpcRequest {
     RpcRequest::empty(id, METHOD_BRIDGE_STATUS)
 }
@@ -1541,6 +1546,7 @@ pub enum RpcRequestKind {
     NavcoinBridgeSupplyStatus,
     NavcoinBridgeReceiptReplay,
     NavcoinBridgePacketPreflight,
+    OwnedRecoveryCapabilities,
     BridgeBatchDomain,
     BridgeBatchTransfer,
     BridgeBatchPause,
@@ -1941,6 +1947,7 @@ pub enum RpcResponseKind {
     NavcoinBridgeSupplyStatus,
     NavcoinBridgeReceiptReplay,
     NavcoinBridgePacketPreflight,
+    OwnedRecoveryCapabilities,
     BridgeBatchDomain,
     BridgeBatchTransfer,
     BridgeBatchPause,
@@ -2514,6 +2521,7 @@ fn request_kind_method(kind: RpcRequestKind) -> &'static str {
         RpcRequestKind::NavcoinBridgeSupplyStatus => METHOD_NAVCOIN_BRIDGE_SUPPLY_STATUS,
         RpcRequestKind::NavcoinBridgeReceiptReplay => METHOD_NAVCOIN_BRIDGE_RECEIPT_REPLAY,
         RpcRequestKind::NavcoinBridgePacketPreflight => METHOD_NAVCOIN_BRIDGE_PACKET_PREFLIGHT,
+        RpcRequestKind::OwnedRecoveryCapabilities => METHOD_OWNED_RECOVERY_CAPABILITIES,
         RpcRequestKind::BridgeBatchDomain => METHOD_BRIDGE_BATCH_DOMAIN,
         RpcRequestKind::BridgeBatchTransfer => METHOD_BRIDGE_BATCH_TRANSFER,
         RpcRequestKind::BridgeBatchPause => METHOD_BRIDGE_BATCH_PAUSE,
@@ -2690,6 +2698,9 @@ fn validate_request_params(
         RpcRequestKind::NavcoinBridgeClaims => validate_navcoin_bridge_claims_request_params(&request.params),
         RpcRequestKind::NavcoinBridgeSupplyStatus => {
             validate_navcoin_bridge_supply_status_request_params(&request.params)
+        }
+        RpcRequestKind::OwnedRecoveryCapabilities => {
+            validate_owned_recovery_capabilities_request_params(&request.params)
         }
         RpcRequestKind::NavcoinBridgeReceiptReplay => {
             validate_navcoin_bridge_receipt_replay_request_params(&request.params)
@@ -4127,6 +4138,14 @@ fn validate_navcoin_bridge_claims_request_params(
     string_param(params, "route_id")?;
     optional_bounded_nonzero_usize_param(params, "limit", MAX_RPC_READ_QUERY_LIMIT)?;
     optional_bool_param(params, "include_terminal")?;
+    Ok(())
+}
+
+fn validate_owned_recovery_capabilities_request_params(
+    params: &Value,
+) -> Result<(), RpcRequestValidationError> {
+    let params = request_params(params)?;
+    require_only_params(params, &[])?;
     Ok(())
 }
 
