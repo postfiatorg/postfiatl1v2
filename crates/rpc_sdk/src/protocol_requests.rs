@@ -77,6 +77,7 @@ pub const METHOD_FEE: &str = "fee";
 pub const METHOD_TRANSFER_FEE_QUOTE: &str = "transfer_fee_quote";
 pub const METHOD_OWNED_SIGN: &str = "owned_sign";
 pub const METHOD_OWNED_UNWRAP_SIGN: &str = "owned_unwrap_sign";
+pub const METHOD_OWNED_RECOVERY_STATUS: &str = "owned_recovery_status";
 pub const METHOD_FASTSWAP_CAPABILITIES: &str = "fastswap_capabilities";
 pub const METHOD_FASTSWAP_PREVIEW: &str = "fastswap_preview";
 pub const METHOD_FASTSWAP_PREPARE: &str = "fastswap_prepare";
@@ -209,6 +210,9 @@ pub const MAX_RPC_SHIELD_BATCH_JSON_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_RPC_ASSET_ORCHARD_ENCRYPTED_OUTPUT_BYTES: usize = 4096;
 pub const MAX_RPC_ASSET_ORCHARD_PROOF_BYTES: usize = 1_048_576;
 pub const MAX_RPC_READ_QUERY_LIMIT: usize = 512;
+/// Hex length of a FastPay lock id, as the node's `owned_recovery_status_v3`
+/// requires (`validate_hex_string(.., Some(96))`, lowercase only).
+pub const OWNED_RECOVERY_LOCK_ID_HEX_LEN: usize = 96;
 pub const MAX_RPC_BATCH_ARCHIVE_PAYLOAD_BYTES: usize = 8 * 1024 * 1024;
 pub const WALLET_BACKUP_FILE_SCHEMA: &str = "postfiat-wallet-backup-v1";
 pub const WALLET_DERIVATION_DOMAIN: &str = "postfiat.wallet.seed.v1";
@@ -1090,9 +1094,22 @@ pub struct NavcoinBridgeReceiptReplayParams {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnedRecoveryStatusParams {
+    pub lock_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NavcoinBridgePacketPreflightParams {
     pub route_id: String,
     pub packet_file: String,
+}
+
+pub fn owned_recovery_status_request(
+    id: impl Into<String>,
+    params: OwnedRecoveryStatusParams,
+) -> RpcRequest {
+    RpcRequest::empty(id, METHOD_OWNED_RECOVERY_STATUS)
+        .with_param_value("lock_id", string_value(params.lock_id))
 }
 
 pub fn bridge_status_request(id: impl Into<String>) -> RpcRequest {
@@ -1541,6 +1558,7 @@ pub enum RpcRequestKind {
     NavcoinBridgeSupplyStatus,
     NavcoinBridgeReceiptReplay,
     NavcoinBridgePacketPreflight,
+    OwnedRecoveryStatus,
     BridgeBatchDomain,
     BridgeBatchTransfer,
     BridgeBatchPause,
@@ -1941,6 +1959,7 @@ pub enum RpcResponseKind {
     NavcoinBridgeSupplyStatus,
     NavcoinBridgeReceiptReplay,
     NavcoinBridgePacketPreflight,
+    OwnedRecoveryStatus,
     BridgeBatchDomain,
     BridgeBatchTransfer,
     BridgeBatchPause,
@@ -2514,6 +2533,7 @@ fn request_kind_method(kind: RpcRequestKind) -> &'static str {
         RpcRequestKind::NavcoinBridgeSupplyStatus => METHOD_NAVCOIN_BRIDGE_SUPPLY_STATUS,
         RpcRequestKind::NavcoinBridgeReceiptReplay => METHOD_NAVCOIN_BRIDGE_RECEIPT_REPLAY,
         RpcRequestKind::NavcoinBridgePacketPreflight => METHOD_NAVCOIN_BRIDGE_PACKET_PREFLIGHT,
+        RpcRequestKind::OwnedRecoveryStatus => METHOD_OWNED_RECOVERY_STATUS,
         RpcRequestKind::BridgeBatchDomain => METHOD_BRIDGE_BATCH_DOMAIN,
         RpcRequestKind::BridgeBatchTransfer => METHOD_BRIDGE_BATCH_TRANSFER,
         RpcRequestKind::BridgeBatchPause => METHOD_BRIDGE_BATCH_PAUSE,
@@ -2690,6 +2710,9 @@ fn validate_request_params(
         RpcRequestKind::NavcoinBridgeClaims => validate_navcoin_bridge_claims_request_params(&request.params),
         RpcRequestKind::NavcoinBridgeSupplyStatus => {
             validate_navcoin_bridge_supply_status_request_params(&request.params)
+        }
+        RpcRequestKind::OwnedRecoveryStatus => {
+            validate_owned_recovery_status_request_params(&request.params)
         }
         RpcRequestKind::NavcoinBridgeReceiptReplay => {
             validate_navcoin_bridge_receipt_replay_request_params(&request.params)
@@ -4127,6 +4150,15 @@ fn validate_navcoin_bridge_claims_request_params(
     string_param(params, "route_id")?;
     optional_bounded_nonzero_usize_param(params, "limit", MAX_RPC_READ_QUERY_LIMIT)?;
     optional_bool_param(params, "include_terminal")?;
+    Ok(())
+}
+
+fn validate_owned_recovery_status_request_params(
+    params: &Value,
+) -> Result<(), RpcRequestValidationError> {
+    let params = request_params(params)?;
+    require_only_params(params, &["lock_id"])?;
+    lower_hex_param(params, "lock_id", OWNED_RECOVERY_LOCK_ID_HEX_LEN)?;
     Ok(())
 }
 

@@ -5059,3 +5059,70 @@ fn invalid_response_validation(error: RpcResponseValidationError) -> io::Error {
 fn invalid_request_validation(error: RpcRequestValidationError) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, error)
 }
+
+const OWNED_RECOVERY_STATUS_RESULT_SCHEMA: &str = "postfiat-fastpay-recovery-status-v1";
+const OWNED_RECOVERY_STATUS_VALUES: [&str; 4] = [
+    "confirmed",
+    "cancelled",
+    "certificate_revealed",
+    "open_or_unknown",
+];
+
+/// Validates an `owned_recovery_status` report, mirroring the node's
+/// `owned_recovery_status_v3` (crates/node fastpay_recovery_node.rs): the
+/// schema is pinned, `lock_id` is echoed as 96 lowercase hex, `fence` is
+/// either null or a `FastPayVersionFenceV1` record for that lock that
+/// passes the type's own `validate_shape`, and `status` must be exactly what
+/// the node derives: `confirmed` / `cancelled` from the fence decision when
+/// a fence exists, otherwise `certificate_revealed` when `reveal_count > 0`
+/// and `open_or_unknown` when it is zero.
+fn validate_owned_recovery_status_result(
+    result: &Value,
+) -> Result<(), RpcResponseValidationError> {
+    expect_string_eq(result, "schema", OWNED_RECOVERY_STATUS_RESULT_SCHEMA)?;
+    lower_hex_field(result, "lock_id", OWNED_RECOVERY_LOCK_ID_HEX_LEN)?;
+    let lock_id = string_field(result, "lock_id")?;
+    let status = clean_string_field(result, "status")?;
+    if !OWNED_RECOVERY_STATUS_VALUES.contains(&status) {
+        return Err(invalid_result(
+            "status",
+            "expected one of confirmed, cancelled, certificate_revealed, open_or_unknown",
+        ));
+    }
+    let reveal_count = u64_field(result, "reveal_count")?;
+    let fence_value = field(result, "fence")?;
+    let fence = if fence_value.is_null() {
+        None
+    } else {
+        let fence: postfiat_types::FastPayVersionFenceV1 =
+            serde_json::from_value(fence_value.clone()).map_err(|error| {
+                invalid_result(
+                    "fence",
+                    format!("expected a FastPay version fence record: {error}"),
+                )
+            })?;
+        fence
+            .validate_shape()
+            .map_err(|error| invalid_result("fence", error))?;
+        if fence.lock_id != lock_id {
+            return Err(invalid_result(
+                "fence.lock_id",
+                "expected the fence to belong to the requested lock",
+            ));
+        }
+        Some(fence)
+    };
+    let expected_status = match fence.as_ref().map(|fence| &fence.decision) {
+        Some(postfiat_types::FastPayRecoveryDecisionV1::Confirmed { .. }) => "confirmed",
+        Some(postfiat_types::FastPayRecoveryDecisionV1::Cancelled) => "cancelled",
+        None if reveal_count > 0 => "certificate_revealed",
+        None => "open_or_unknown",
+    };
+    if status != expected_status {
+        return Err(invalid_result(
+            "status",
+            format!("expected `{expected_status}` from the fence decision and reveal count"),
+        ));
+    }
+    Ok(())
+}
