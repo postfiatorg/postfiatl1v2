@@ -26,6 +26,9 @@ INVENTORY_LINE = re.compile(
 IDENTIFIER = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
 FLEET_CONVERGENCE_RETRY_ATTEMPTS = 20
 FLEET_CONVERGENCE_RETRY_DELAY_SECONDS = 1.0
+# One Vultr instance object is a few KiB; the API is not under the
+# operator's control, so the preflight read is bounded instead of buffered.
+VULTR_RESPONSE_MAX_BYTES = 1_048_576
 
 
 class SafetyError(RuntimeError):
@@ -319,7 +322,22 @@ def query_vultr_inventory(
                 headers={"Authorization": f"Bearer {api_key}"},
             )
             with urllib.request.urlopen(request, timeout=15) as response:
-                instance = json.load(response)["instance"]
+                raw = response.read(VULTR_RESPONSE_MAX_BYTES + 1)
+            if len(raw) > VULTR_RESPONSE_MAX_BYTES:
+                raise SafetyError(
+                    f"Vultr inventory response for {row.instance_id} exceeded the byte limit"
+                )
+            try:
+                body = json.loads(raw)
+            except ValueError as error:
+                raise SafetyError(
+                    f"Vultr inventory response for {row.instance_id} was not valid JSON"
+                ) from error
+            instance = body.get("instance") if isinstance(body, dict) else None
+            if not isinstance(instance, dict):
+                raise SafetyError(
+                    f"Vultr inventory response for {row.instance_id} did not contain an instance object"
+                )
             observed = {
                 "validator_id": row.validator_id,
                 "instance_id": str(instance.get("id", "")),

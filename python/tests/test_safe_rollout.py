@@ -376,6 +376,33 @@ class SafeRolloutTests(unittest.TestCase):
             self.assertIs(original, __import__("socket").getaddrinfo)
         self.assertEqual("validator-0", verified[0]["validator_id"])
 
+    def test_vultr_inventory_bounds_the_response_and_requires_an_instance_object(self) -> None:
+        row = parse_inventory(self.inventory)[0]
+        api_key = self.root / "api-key"
+        api_key.write_text("test-token", encoding="utf-8")
+        from postfiat_ops import safe_rollout
+
+        def respond(payload: bytes):
+            return patch(
+                "postfiat_ops.safe_rollout.urllib.request.urlopen",
+                return_value=__import__("io").BytesIO(payload),
+            )
+
+        oversized = b"{" + b" " * safe_rollout.VULTR_RESPONSE_MAX_BYTES + b"}"
+        with respond(oversized), patch("postfiat_ops.safe_rollout.json.loads", wraps=json.loads) as loads:
+            with self.assertRaisesRegex(SafetyError, "exceeded the byte limit"):
+                query_vultr_inventory([row], api_key)
+        loads.assert_not_called()
+        with respond(b"[1, 2]"):
+            with self.assertRaisesRegex(SafetyError, "did not contain an instance object"):
+                query_vultr_inventory([row], api_key)
+        with respond(b'{"instance": "not-an-object"}'):
+            with self.assertRaisesRegex(SafetyError, "did not contain an instance object"):
+                query_vultr_inventory([row], api_key)
+        with respond(b"{not json"):
+            with self.assertRaisesRegex(SafetyError, "was not valid JSON"):
+                query_vultr_inventory([row], api_key)
+
     @patch("postfiat_ops.safe_rollout.query_vultr_inventory")
     @patch("postfiat_ops.safe_rollout.fleet_convergence")
     @patch("postfiat_ops.safe_rollout.remote_hashes")
