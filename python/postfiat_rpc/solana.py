@@ -24,6 +24,11 @@ MAINNET_RPC_URL = "https://api.mainnet-beta.solana.com"
 OBSERVATION_DOMAIN = b"postfiat.nav_observation.solana.v1"
 SOURCE_CLASS_MAINNET = "solana"
 LAMPORTS_PER_SOL = 1_000_000_000
+# Upper bound on one JSON-RPC response body. The largest reply this adapter
+# asks for is a jsonParsed stake account (a few KiB); the public RPC is not
+# under the observer's control, so the read is bounded the same way the
+# Hyperliquid adapter bounds its info endpoint (MAX_INFO_RESPONSE_BYTES).
+MAX_RPC_RESPONSE_BYTES = 1_048_576
 
 
 def _rpc(method: str, params: list[Any], rpc_url: str, timeout: float = 15.0) -> Any:
@@ -35,7 +40,12 @@ def _rpc(method: str, params: list[Any], rpc_url: str, timeout: float = 15.0) ->
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
-        body = json.load(response)
+        raw = response.read(MAX_RPC_RESPONSE_BYTES + 1)
+    if len(raw) > MAX_RPC_RESPONSE_BYTES:
+        raise ValueError("solana rpc response exceeded the byte limit")
+    body = json.loads(raw)
+    if not isinstance(body, dict):
+        raise ValueError("solana rpc response must be a JSON object")
     if "error" in body and body["error"]:
         raise RuntimeError(f"solana rpc error: {body['error']}")
     return body.get("result")
