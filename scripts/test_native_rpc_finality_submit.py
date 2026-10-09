@@ -176,6 +176,65 @@ def test_each_finality_gate_stops(tmp_path, response, needle):
         assert persisted[key] == value
 
 
+FOREIGN_IDS = [
+    pytest.param("other-campaign", id="foreign"),
+    pytest.param(None, id="null"),
+    pytest.param(7, id="numeric"),
+    pytest.param(True, id="boolean"),
+    pytest.param("", id="empty"),
+    pytest.param("MISSING", id="missing"),
+]
+
+
+def _with_id(response, value):
+    response = dict(response)
+    if value == "MISSING":
+        response.pop("id", None)
+    else:
+        response["id"] = value
+    return response
+
+
+@pytest.mark.parametrize("value", FOREIGN_IDS)
+def test_uncorrelated_status_response_stops_before_submit(tmp_path, value, capsys):
+    with RpcServer(_with_id(status_response(), value), finality_response()) as rpc:
+        code, output = invoke(tmp_path, rpc)
+    assert code == 2
+    assert not output.exists()
+    assert [request["method"] for request in rpc.requests] == ["status"]
+    captured = capsys.readouterr()
+    assert "status response id did not match the request id" in captured.err
+    assert "campaign 333333333333" not in captured.out
+
+
+@pytest.mark.parametrize("value", FOREIGN_IDS)
+def test_uncorrelated_finality_response_is_not_persisted_or_reported(tmp_path, value, capsys):
+    with RpcServer(status_response(), _with_id(finality_response(), value)) as rpc:
+        code, output = invoke(tmp_path, rpc)
+    assert code == 2
+    assert not output.exists()
+    assert [request["method"] for request in rpc.requests] == ["status", "mempool_submit_signed_asset_transaction_finality"]
+    captured = capsys.readouterr()
+    assert "finality response id did not match the request id" in captured.err
+    assert "campaign 333333333333" not in captured.out
+
+
+def test_uncorrelated_wrong_proposer_envelope_is_not_routed(tmp_path):
+    # A wrong-proposer error that belongs to another request must not steer
+    # routing: it is rejected before `_wrong_proposer` reads it.
+    wrong = {
+        "version": mod.RPC_VERSION,
+        "id": "other-campaign",
+        "ok": False,
+        "error": {"code": "rpc_finality_wrong_proposer", "message": "retry the signed request at `validator-1`"},
+    }
+    with RpcServer(status_response(), wrong) as rpc:
+        code, output = invoke(tmp_path, rpc)
+    assert code == 2
+    assert not output.exists()
+    assert len(rpc.requests) == 2
+
+
 @pytest.mark.parametrize("missing_path", ["tx_id", "height"])
 def test_missing_required_finality_field_persists_response(tmp_path, missing_path):
     finality = finality_response()

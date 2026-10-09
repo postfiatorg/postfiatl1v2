@@ -46,6 +46,21 @@ def _request(sock: socket.socket, payload: dict, timeout_seconds: float) -> dict
     return response
 
 
+def _correlated(response: dict, request_id: str, label: str) -> dict:
+    """Reject a response whose id is not exactly this request's id.
+
+    Checked immediately after parsing, before proposer routing, result
+    handling or persistence, so a status or finality envelope that belongs to
+    another request can neither pin the finality submit nor be reported or
+    persisted as this request's result. The ordinary Python RPC client
+    enforces the same invariant.
+    """
+    response_id = response.get("id")
+    if not isinstance(response_id, str) or response_id != request_id:
+        raise StopError(f"{label} response id did not match the request id")
+    return response
+
+
 def _load_signed_transaction(path: Path) -> tuple[dict, str]:
     try:
         value = json.loads(path.read_text())
@@ -117,9 +132,10 @@ def _persist_response(path: str, response: dict, attempts: list[dict]) -> None:
 def submit(args: argparse.Namespace) -> dict:
     _, signed_json = _load_signed_transaction(Path(args.signed_tx_file))
     timeout_seconds = max(0.001, args.readiness_timeout_ms / 1000.0)
+    status_request_id = f"{args.id}-status"
     status_request = {
         "version": RPC_VERSION,
-        "id": f"{args.id}-status",
+        "id": status_request_id,
         "method": "status",
         "params": {},
     }
@@ -127,7 +143,10 @@ def submit(args: argparse.Namespace) -> dict:
     # see postfiatl1v2 crates/types/src/core_chain.rs:450-480 and the RPC
     # status dispatch in crates/node/src/rpc_cli.rs:1033-1052.
     with socket.create_connection((args.socket_host, args.socket_port), timeout=timeout_seconds) as sock:
-        status = _result(_request(sock, status_request, timeout_seconds), "status")
+        status = _result(
+            _correlated(_request(sock, status_request, timeout_seconds), status_request_id, "status"),
+            "status",
+        )
     required = ("block_height", "block_tip_hash", "state_root")
     missing = [name for name in required if name not in status or status[name] in (None, "")]
     if missing:
@@ -161,6 +180,9 @@ def submit(args: argparse.Namespace) -> dict:
         try:
             with socket.create_connection((args.socket_host, port), timeout=timeout_seconds) as sock:
                 response = _request(sock, finality_request, timeout_seconds)
+            # Correlate before wrong-proposer routing and before any persistence:
+            # an uncorrelated envelope is neither routed on nor written out.
+            _correlated(response, args.id, "finality")
         except OSError as exc:
             attempts.append({"validator": proposer, "port": port, "height": next_height, "view": 0, "outcome": "socket_error"})
             print(f"attempt validator={proposer} port={port} height={next_height} view=0 outcome=socket_error", file=sys.stderr)
