@@ -158,6 +158,7 @@ pub const METHOD_NAVCOIN_BRIDGE_CLAIMS: &str = "navcoin_bridge_claims";
 pub const METHOD_NAVCOIN_BRIDGE_SUPPLY_STATUS: &str = "navcoin_bridge_supply_status";
 pub const METHOD_NAVCOIN_BRIDGE_RECEIPT_REPLAY: &str = "navcoin_bridge_receipt_replay";
 pub const METHOD_NAVCOIN_BRIDGE_PACKET_PREFLIGHT: &str = "navcoin_bridge_packet_preflight";
+pub const METHOD_MARKET_OPS_STATUS: &str = "market_ops_status";
 pub const METHOD_BRIDGE_BATCH_DOMAIN: &str = "bridge_batch_domain";
 pub const METHOD_BRIDGE_BATCH_TRANSFER: &str = "bridge_batch_transfer";
 pub const METHOD_BRIDGE_BATCH_PAUSE: &str = "bridge_batch_pause";
@@ -1090,9 +1091,27 @@ pub struct NavcoinBridgeReceiptReplayParams {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarketOpsStatusParams {
+    pub asset_id: String,
+    pub epoch: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NavcoinBridgePacketPreflightParams {
     pub route_id: String,
     pub packet_file: String,
+}
+
+pub fn market_ops_status_request(
+    id: impl Into<String>,
+    params: MarketOpsStatusParams,
+) -> RpcRequest {
+    let mut request = RpcRequest::empty(id, METHOD_MARKET_OPS_STATUS)
+        .with_param_value("asset_id", string_value(params.asset_id));
+    if let Some(epoch) = params.epoch {
+        request = request.with_param_value("epoch", u64_value(epoch));
+    }
+    request
 }
 
 pub fn bridge_status_request(id: impl Into<String>) -> RpcRequest {
@@ -1541,6 +1560,7 @@ pub enum RpcRequestKind {
     NavcoinBridgeSupplyStatus,
     NavcoinBridgeReceiptReplay,
     NavcoinBridgePacketPreflight,
+    MarketOpsStatus,
     BridgeBatchDomain,
     BridgeBatchTransfer,
     BridgeBatchPause,
@@ -1941,6 +1961,7 @@ pub enum RpcResponseKind {
     NavcoinBridgeSupplyStatus,
     NavcoinBridgeReceiptReplay,
     NavcoinBridgePacketPreflight,
+    MarketOpsStatus,
     BridgeBatchDomain,
     BridgeBatchTransfer,
     BridgeBatchPause,
@@ -2514,6 +2535,7 @@ fn request_kind_method(kind: RpcRequestKind) -> &'static str {
         RpcRequestKind::NavcoinBridgeSupplyStatus => METHOD_NAVCOIN_BRIDGE_SUPPLY_STATUS,
         RpcRequestKind::NavcoinBridgeReceiptReplay => METHOD_NAVCOIN_BRIDGE_RECEIPT_REPLAY,
         RpcRequestKind::NavcoinBridgePacketPreflight => METHOD_NAVCOIN_BRIDGE_PACKET_PREFLIGHT,
+        RpcRequestKind::MarketOpsStatus => METHOD_MARKET_OPS_STATUS,
         RpcRequestKind::BridgeBatchDomain => METHOD_BRIDGE_BATCH_DOMAIN,
         RpcRequestKind::BridgeBatchTransfer => METHOD_BRIDGE_BATCH_TRANSFER,
         RpcRequestKind::BridgeBatchPause => METHOD_BRIDGE_BATCH_PAUSE,
@@ -2690,6 +2712,9 @@ fn validate_request_params(
         RpcRequestKind::NavcoinBridgeClaims => validate_navcoin_bridge_claims_request_params(&request.params),
         RpcRequestKind::NavcoinBridgeSupplyStatus => {
             validate_navcoin_bridge_supply_status_request_params(&request.params)
+        }
+        RpcRequestKind::MarketOpsStatus => {
+            validate_market_ops_status_request_params(&request.params)
         }
         RpcRequestKind::NavcoinBridgeReceiptReplay => {
             validate_navcoin_bridge_receipt_replay_request_params(&request.params)
@@ -4127,6 +4152,16 @@ fn validate_navcoin_bridge_claims_request_params(
     string_param(params, "route_id")?;
     optional_bounded_nonzero_usize_param(params, "limit", MAX_RPC_READ_QUERY_LIMIT)?;
     optional_bool_param(params, "include_terminal")?;
+    Ok(())
+}
+
+fn validate_market_ops_status_request_params(
+    params: &Value,
+) -> Result<(), RpcRequestValidationError> {
+    let params = request_params(params)?;
+    require_only_params(params, &["asset_id", "epoch"])?;
+    lower_hex_param(params, "asset_id", ISSUED_ASSET_ID_HEX_LEN)?;
+    optional_nonzero_u64_param(params, "epoch")?;
     Ok(())
 }
 

@@ -5059,3 +5059,103 @@ fn invalid_response_validation(error: RpcResponseValidationError) -> io::Error {
 fn invalid_request_validation(error: RpcRequestValidationError) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, error)
 }
+
+/// Reads a field the node declares as `u128`.
+///
+/// The node builds every RPC response through `serde_json::to_value`, which
+/// (without the `arbitrary_precision` feature, not enabled in this
+/// workspace) only accepts a `u128` that fits in a `u64`; a larger value
+/// makes the node's own serialization fail instead of reaching the wire.
+/// On the SDK side the same serde_json parses an integer literal above
+/// `u64::MAX` into a lossy `f64`, so an exact comparison is impossible.
+/// This helper is therefore exact for every value the node can emit and
+/// fails closed, with a distinct message, for an integer literal beyond
+/// `u64::MAX` rather than accepting a rounded value.
+fn u128_field(value: &Value, path: &str) -> Result<u128, RpcResponseValidationError> {
+    let number = field(value, path)?;
+    if let Some(exact) = number.as_u64() {
+        return Ok(u128::from(exact));
+    }
+    if number
+        .as_f64()
+        .is_some_and(|wide| wide.is_finite() && wide >= 0.0 && wide.fract() == 0.0)
+    {
+        return Err(invalid_result(
+            path,
+            "integer exceeds u64::MAX; the node cannot serialize such a value and the SDK cannot represent it exactly",
+        ));
+    }
+    Err(invalid_result(path, "expected unsigned integer value"))
+}
+
+fn nonzero_u128_field(value: &Value, path: &str) -> Result<u128, RpcResponseValidationError> {
+    let parsed = u128_field(value, path)?;
+    if parsed == 0 {
+        return Err(invalid_result(path, "expected nonzero unsigned integer value"));
+    }
+    Ok(parsed)
+}
+
+const MARKET_OPS_STATUS_RESULT_SCHEMA: &str = "postfiat-market-ops-public-status-v1";
+const MARKET_OPS_STATUS_RESULT_DISCLOSURE: &str = "The protocol proves NAV and may execute bounded market operations under public caps. Holders do not have a standing right to redeem at NAV, and market operations can pause.";
+const MARKET_OPS_STATUS_ACTIVE_VALUE: &str = "active";
+const MARKET_OPS_STATUS_VALUES: [&str; 6] = [
+    MARKET_OPS_STATUS_ACTIVE_VALUE,
+    "expired",
+    "missing_source_packet",
+    "paused",
+    "stale",
+    "underfunded",
+];
+
+/// Validates a `market_ops_status` report (`MarketOpsPublicStatus` in the
+/// node), mirroring `MarketOpsPublicStatus::validate` and the cap rule in
+/// `build_market_ops_public_status`: schema and disclosure pinned, hex
+/// identifiers sized, the NAV floor / verified net assets / valid supply and
+/// envelope epoch nonzero, the status drawn from the six published values,
+/// and both current caps zero unless the status is `active`.
+///
+/// The node declares the USD-e8 and atoms figures as `u128`; see
+/// `u128_field` for how values beyond `u64::MAX` are handled.
+fn validate_market_ops_status_result(result: &Value) -> Result<(), RpcResponseValidationError> {
+    expect_string_eq(result, "schema", MARKET_OPS_STATUS_RESULT_SCHEMA)?;
+    lower_hex_field(result, "asset_id", ISSUED_ASSET_ID_HEX_LEN)?;
+    nonzero_u128_field(result, "nav_floor_usd_e8")?;
+    nonzero_u128_field(result, "verified_net_assets_usd_e8")?;
+    nonzero_u128_field(result, "valid_global_supply_atoms")?;
+    bool_field(result, "reserve_packet_fresh")?;
+    bool_field(result, "supply_packet_fresh")?;
+    u64_field(result, "reserve_packet_age_blocks")?;
+    u64_field(result, "supply_packet_age_blocks")?;
+    u128_field(result, "funded_alignment_reserve_usd_e8")?;
+    u128_field(result, "required_alignment_reserve_usd_e8")?;
+    let current_reserve_deploy_cap_usd_e8 = u128_field(result, "current_reserve_deploy_cap_usd_e8")?;
+    let current_mint_cap_atoms = u128_field(result, "current_mint_cap_atoms")?;
+    let market_operations_status = clean_string_field(result, "market_operations_status")?;
+    if !MARKET_OPS_STATUS_VALUES.contains(&market_operations_status) {
+        return Err(invalid_result(
+            "market_operations_status",
+            "expected one of active, expired, missing_source_packet, paused, stale, underfunded",
+        ));
+    }
+    if market_operations_status != MARKET_OPS_STATUS_ACTIVE_VALUE {
+        if current_reserve_deploy_cap_usd_e8 != 0 {
+            return Err(invalid_result(
+                "current_reserve_deploy_cap_usd_e8",
+                "expected a zero reserve deploy cap unless market operations are active",
+            ));
+        }
+        if current_mint_cap_atoms != 0 {
+            return Err(invalid_result(
+                "current_mint_cap_atoms",
+                "expected a zero mint cap unless market operations are active",
+            ));
+        }
+    }
+    lower_hex_field(result, "accepted_policy_hash", 64)?;
+    lower_hex_field(result, "envelope_hash", 96)?;
+    nonzero_u64_field(result, "envelope_epoch")?;
+    u64_field(result, "packet_expires_at")?;
+    expect_string_eq(result, "disclosure", MARKET_OPS_STATUS_RESULT_DISCLOSURE)?;
+    Ok(())
+}
