@@ -5059,3 +5059,369 @@ fn invalid_response_validation(error: RpcResponseValidationError) -> io::Error {
 fn invalid_request_validation(error: RpcRequestValidationError) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, error)
 }
+
+const VAULT_BRIDGE_STATUS_RESULT_SCHEMA: &str = "postfiat-vault-bridge-status-v1";
+const VAULT_BRIDGE_STATUS_RESULT_DISCLOSURE: &str = "vault bridge asset is source-bound and bridge-backed on PFTL. Counted vault bridge asset receipts must reference a ERC20BridgeVault deposit event evidence root; withdrawals are PFTL burn packets claimed from the source vault after challenge/finality. No pooled or automatic par redemption is implied.";
+const VAULT_BRIDGE_STATUS_BUCKET_ACTIVE: &str = "active";
+const VAULT_BRIDGE_STATUS_PAR_BPS: u64 = 10_000;
+
+struct VaultBridgeStatusBucketSummary<'a> {
+    bucket_id: &'a str,
+    active: bool,
+    redeemable_at_par: bool,
+    allocated_atoms: u64,
+}
+
+/// Validates a `vault_bridge_status` report (`VaultBridgeStatusReport` in the
+/// node) and the invariants the node computes when assembling it: issued
+/// supply = transparent + Orchard, healthy/impaired allocation sums over the
+/// bucket rows, per-row unallocated/redeemable/remaining arithmetic,
+/// attestation tallies, and `*_count` fields equal to their row counts.
+fn validate_vault_bridge_status_result(result: &Value) -> Result<(), RpcResponseValidationError> {
+    expect_string_eq(result, "schema", VAULT_BRIDGE_STATUS_RESULT_SCHEMA)?;
+    lower_hex_field(result, "asset_id", ISSUED_ASSET_ID_HEX_LEN)?;
+    clean_string_field(result, "issuer")?;
+    clean_string_field(result, "proof_profile")?;
+    clean_string_field(result, "valuation_unit")?;
+    u64_field(result, "finalized_epoch")?;
+    u64_field(result, "nav_per_unit")?;
+    u64_field(result, "circulating_supply")?;
+    string_field(result, "finalized_reserve_packet_hash")?;
+    let issued_supply_atoms = u64_field(result, "issued_supply_atoms")?;
+    let transparent_supply_atoms = u64_field(result, "transparent_supply_atoms")?;
+    let orchard_supply_atoms = u64_field(result, "orchard_supply_atoms")?;
+    if transparent_supply_atoms.checked_add(orchard_supply_atoms) != Some(issued_supply_atoms) {
+        return Err(invalid_result(
+            "issued_supply_atoms",
+            "expected issued supply to equal transparent plus Orchard supply",
+        ));
+    }
+    u64_field(result, "counted_value_atoms")?;
+    let healthy_allocated_atoms = u64_field(result, "healthy_allocated_atoms")?;
+    let impaired_allocated_atoms = u64_field(result, "impaired_allocated_atoms")?;
+    let source_series_enforced = bool_field(result, "source_series_enforced")?;
+    let expected_classification = if source_series_enforced {
+        "mixed_legacy_pooled_and_source_series"
+    } else {
+        "legacy_pooled"
+    };
+    expect_string_eq(
+        result,
+        "display_family_classification",
+        expected_classification,
+    )?;
+    u64_field(result, "unallocated_counted_capacity_atoms")?;
+    clean_string_field(result, "source_root")?;
+
+    let buckets = array_field(result, "buckets")?;
+    let mut active_bucket_ids: Vec<&str> = Vec::new();
+    let mut expected_healthy_atoms = 0_u64;
+    let mut expected_impaired_atoms = 0_u64;
+    for (index, bucket) in buckets.iter().enumerate() {
+        let summary = validate_vault_bridge_status_bucket_row(bucket, index)?;
+        if summary.active {
+            active_bucket_ids.push(summary.bucket_id);
+        }
+        let total = if summary.redeemable_at_par {
+            &mut expected_healthy_atoms
+        } else {
+            &mut expected_impaired_atoms
+        };
+        *total = total
+            .checked_add(summary.allocated_atoms)
+            .ok_or_else(|| {
+                invalid_result(
+                    format!("buckets[{index}]"),
+                    "bucket allocation sum overflowed",
+                )
+            })?;
+    }
+    if healthy_allocated_atoms != expected_healthy_atoms {
+        return Err(invalid_result(
+            "healthy_allocated_atoms",
+            "expected the allocation sum of buckets redeemable at par",
+        ));
+    }
+    if impaired_allocated_atoms != expected_impaired_atoms {
+        return Err(invalid_result(
+            "impaired_allocated_atoms",
+            "expected the allocation sum of buckets not redeemable at par",
+        ));
+    }
+
+    let receipts = array_field(result, "receipts")?;
+    for (index, receipt) in receipts.iter().enumerate() {
+        validate_vault_bridge_status_receipt_row(receipt, index, &active_bucket_ids)?;
+    }
+    let bridge_deposits = array_field(result, "bridge_deposits")?;
+    for (index, deposit) in bridge_deposits.iter().enumerate() {
+        validate_vault_bridge_status_deposit_row(deposit, index)?;
+    }
+    let allocations = array_field(result, "allocations")?;
+    for (index, allocation) in allocations.iter().enumerate() {
+        validate_vault_bridge_status_allocation_row(allocation, index)?;
+    }
+    let redemptions = array_field(result, "redemptions")?;
+    for redemption in redemptions {
+        validate_vault_bridge_status_redemption_row(redemption)?;
+    }
+
+    vault_bridge_status_count_matches(result, "bucket_count", buckets.len())?;
+    vault_bridge_status_count_matches(result, "receipt_count", receipts.len())?;
+    vault_bridge_status_count_matches(result, "bridge_deposit_count", bridge_deposits.len())?;
+    vault_bridge_status_count_matches(result, "allocation_count", allocations.len())?;
+    vault_bridge_status_count_matches(result, "redemption_count", redemptions.len())?;
+    expect_string_eq(result, "disclosure", VAULT_BRIDGE_STATUS_RESULT_DISCLOSURE)?;
+    Ok(())
+}
+
+fn vault_bridge_status_count_matches(
+    result: &Value,
+    path: &str,
+    rows: usize,
+) -> Result<(), RpcResponseValidationError> {
+    let count = u64_field(result, path)?;
+    if count != u64::try_from(rows).unwrap_or(u64::MAX) {
+        return Err(invalid_result(
+            path,
+            format!("expected {path} to equal the {rows} rows returned"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_vault_bridge_status_bucket_row<'a>(
+    row: &'a Value,
+    index: usize,
+) -> Result<VaultBridgeStatusBucketSummary<'a>, RpcResponseValidationError> {
+    let row_path = |field: &str| format!("buckets[{index}].{field}");
+    let bucket_id = clean_string_field(row, "bucket_id")?;
+    clean_string_field(row, "source_series_id")?;
+    clean_string_field(row, "source_domain")?;
+    clean_string_field(row, "policy_hash")?;
+    u64_field(row, "gross_receipt_atoms")?;
+    let counted_value_atoms = u64_field(row, "counted_value_atoms")?;
+    let outstanding = u64_field(row, "outstanding_vault_bridge_atoms")?;
+    let nav_subscription = u64_field(row, "nav_subscription_allocations_atoms")?;
+    let redemption_queue = u64_field(row, "redemption_queue_atoms")?;
+    let other = u64_field(row, "other_allocations_atoms")?;
+    let unallocated = u64_field(row, "unallocated_counted_capacity_atoms")?;
+    let impairment_factor_bps = u64_field(row, "impairment_factor_bps")?;
+    let redeemable_claim_atoms = u64_field(row, "redeemable_claim_atoms")?;
+    let redeemable_at_par = bool_field(row, "redeemable_at_par")?;
+    let status = clean_string_field(row, "status")?;
+    u64_field(row, "last_packet_epoch")?;
+    u64_field(row, "last_updated_height")?;
+
+    let allocated_atoms = outstanding
+        .checked_add(nav_subscription)
+        .and_then(|value| value.checked_add(redemption_queue))
+        .and_then(|value| value.checked_add(other))
+        .ok_or_else(|| {
+            invalid_result(
+                row_path("outstanding_vault_bridge_atoms"),
+                "bucket allocation components overflowed",
+            )
+        })?;
+    let active = status == VAULT_BRIDGE_STATUS_BUCKET_ACTIVE;
+    let expected_unallocated = if active {
+        counted_value_atoms.checked_sub(allocated_atoms).ok_or_else(|| {
+            invalid_result(
+                row_path("unallocated_counted_capacity_atoms"),
+                "active bucket allocated atoms exceed counted value",
+            )
+        })?
+    } else {
+        0
+    };
+    if unallocated != expected_unallocated {
+        return Err(invalid_result(
+            row_path("unallocated_counted_capacity_atoms"),
+            "expected counted value minus allocated atoms for active buckets and zero otherwise",
+        ));
+    }
+    if redeemable_at_par != (active && impairment_factor_bps == VAULT_BRIDGE_STATUS_PAR_BPS) {
+        return Err(invalid_result(
+            row_path("redeemable_at_par"),
+            "expected redeemable_at_par only for active buckets at a 10000 bps impairment factor",
+        ));
+    }
+    let expected_claim = u64::try_from(
+        u128::from(allocated_atoms) * u128::from(impairment_factor_bps)
+            / u128::from(VAULT_BRIDGE_STATUS_PAR_BPS),
+    )
+    .map_err(|_| {
+        invalid_result(
+            row_path("redeemable_claim_atoms"),
+            "redeemable claim overflowed",
+        )
+    })?;
+    if redeemable_claim_atoms != expected_claim {
+        return Err(invalid_result(
+            row_path("redeemable_claim_atoms"),
+            "expected allocated atoms scaled by the impairment factor",
+        ));
+    }
+    Ok(VaultBridgeStatusBucketSummary {
+        bucket_id,
+        active,
+        redeemable_at_par,
+        allocated_atoms,
+    })
+}
+
+fn validate_vault_bridge_status_receipt_row(
+    row: &Value,
+    index: usize,
+    active_bucket_ids: &[&str],
+) -> Result<(), RpcResponseValidationError> {
+    let row_path = |field: &str| format!("receipts[{index}].{field}");
+    clean_string_field(row, "receipt_id")?;
+    let bucket_id = clean_string_field(row, "bucket_id")?;
+    clean_string_field(row, "source_domain")?;
+    clean_string_field(row, "source_asset")?;
+    clean_string_field(row, "claim_type")?;
+    u64_field(row, "amount_atoms")?;
+    u64_field(row, "haircut_bps")?;
+    let counted_value_atoms = u64_field(row, "counted_value_atoms")?;
+    let allocated_value_atoms = u64_field(row, "allocated_value_atoms")?;
+    let unallocated_value_atoms = u64_field(row, "unallocated_value_atoms")?;
+    clean_string_field(row, "status")?;
+    u64_field(row, "created_at_height")?;
+    u64_field(row, "counted_at_height")?;
+    u64_field(row, "expires_at_height")?;
+    clean_string_field_allow_empty(row, "source_tx_or_attestation")?;
+    clean_string_field_allow_empty(row, "finality_ref")?;
+    clean_string_field_allow_empty(row, "vault_id")?;
+    if row
+        .get("bridge_deposit_evidence_root")
+        .is_some_and(|value| !value.is_null())
+    {
+        clean_string_field(row, "bridge_deposit_evidence_root")?;
+    }
+    let available = counted_value_atoms
+        .checked_sub(allocated_value_atoms)
+        .ok_or_else(|| {
+            invalid_result(
+                row_path("allocated_value_atoms"),
+                "receipt allocated value exceeds counted value",
+            )
+        })?;
+    let expected_unallocated = if active_bucket_ids.contains(&bucket_id) {
+        available
+    } else {
+        0
+    };
+    if unallocated_value_atoms != expected_unallocated {
+        return Err(invalid_result(
+            row_path("unallocated_value_atoms"),
+            "expected counted minus allocated value for receipts in active buckets and zero otherwise",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_vault_bridge_status_deposit_row(
+    row: &Value,
+    index: usize,
+) -> Result<(), RpcResponseValidationError> {
+    let row_path = |field: &str| format!("bridge_deposits[{index}].{field}");
+    clean_string_field(row, "evidence_root")?;
+    clean_string_field(row, "policy_hash")?;
+    clean_string_field(row, "source_proof_kind")?;
+    clean_string_field(row, "source_proof_hash")?;
+    clean_string_field(row, "source_public_values_hash")?;
+    u64_field(row, "source_chain_id")?;
+    clean_string_field(row, "vault_address")?;
+    clean_string_field(row, "token_address")?;
+    clean_string_field(row, "depositor")?;
+    clean_string_field(row, "pftl_recipient")?;
+    u64_field(row, "amount_atoms")?;
+    clean_string_field(row, "deposit_id")?;
+    clean_string_field(row, "block_hash")?;
+    clean_string_field(row, "tx_hash")?;
+    u64_field(row, "log_index")?;
+    clean_string_field(row, "proposer")?;
+    clean_string_field(row, "status")?;
+    u64_field(row, "submitted_at_height")?;
+    u64_field(row, "finalized_at_height")?;
+    u64_field(row, "expires_at_height")?;
+    clean_string_field_allow_empty(row, "challenger")?;
+    clean_string_field_allow_empty(row, "challenge_hash")?;
+    u64_field(row, "challenge_bond")?;
+    let pass_attestation_count = u64_field(row, "pass_attestation_count")?;
+    let fail_attestation_count = u64_field(row, "fail_attestation_count")?;
+    let mut passes = 0_u64;
+    let mut fails = 0_u64;
+    for attestation in array_field(row, "attestations")? {
+        clean_string_field(attestation, "attestor")?;
+        let pass = bool_field(attestation, "pass")?;
+        clean_string_field(attestation, "observation_root")?;
+        u64_field(attestation, "attested_at_height")?;
+        if pass {
+            passes += 1;
+        } else {
+            fails += 1;
+        }
+    }
+    if pass_attestation_count != passes {
+        return Err(invalid_result(
+            row_path("pass_attestation_count"),
+            "expected the number of passing attestations",
+        ));
+    }
+    if fail_attestation_count != fails {
+        return Err(invalid_result(
+            row_path("fail_attestation_count"),
+            "expected the number of failing attestations",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_vault_bridge_status_allocation_row(
+    row: &Value,
+    index: usize,
+) -> Result<(), RpcResponseValidationError> {
+    clean_string_field(row, "allocation_id")?;
+    clean_string_field(row, "receipt_id")?;
+    clean_string_field(row, "bucket_id")?;
+    let amount_atoms = u64_field(row, "amount_atoms")?;
+    let released_atoms = u64_field(row, "released_atoms")?;
+    let remaining_atoms = u64_field(row, "remaining_atoms")?;
+    clean_string_field(row, "purpose")?;
+    clean_string_field(row, "consumer_id")?;
+    u64_field(row, "created_at_height")?;
+    u64_field(row, "retired_at_height")?;
+    if amount_atoms.checked_sub(released_atoms) != Some(remaining_atoms) {
+        return Err(invalid_result(
+            format!("allocations[{index}].remaining_atoms"),
+            "expected amount minus released atoms",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_vault_bridge_status_redemption_row(
+    row: &Value,
+) -> Result<(), RpcResponseValidationError> {
+    clean_string_field(row, "redemption_id")?;
+    clean_string_field(row, "owner")?;
+    u64_field(row, "owner_sequence")?;
+    clean_string_field(row, "issuer")?;
+    clean_string_field(row, "bucket_id")?;
+    u64_field(row, "amount_atoms")?;
+    u64_field(row, "epoch")?;
+    clean_string_field_allow_empty(row, "reserve_packet_hash")?;
+    clean_string_field_allow_empty(row, "destination_ref")?;
+    u64_field(row, "settled_atoms")?;
+    clean_string_field(row, "state")?;
+    u64_field(row, "created_at_height")?;
+    clean_string_field_allow_empty(row, "settlement_receipt_hash")?;
+    clean_string_field_allow_empty(row, "burn_tx_id")?;
+    clean_string_field_allow_empty(row, "withdrawal_recipient")?;
+    clean_string_field_allow_empty(row, "withdrawal_evidence_root")?;
+    clean_string_field_allow_empty(row, "withdrawal_packet_hash")?;
+    clean_string_field_allow_empty(row, "withdrawal_packet_evm_digest")?;
+    Ok(())
+}
