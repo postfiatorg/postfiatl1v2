@@ -8,6 +8,11 @@ pub const STORAGE_MIGRATION_MANIFEST_SCHEMA_V2: &str = "postfiat-storage-migrati
 pub const STORAGE_MIGRATION_REPORT_SCHEMA_V1: &str = "postfiat-storage-migration-report-v1";
 pub const STORAGE_MIGRATION_MANIFEST_FILE: &str = "storage-migration-manifest.json";
 pub const STORAGE_MIGRATION_MANIFEST_CHECKSUM_FILE: &str = "storage-migration-manifest.sha3-384";
+/// Upper bound on a migration manifest read (SMG-05). A real manifest is a few
+/// kilobytes; anything near this size is not a manifest.
+const STORAGE_MIGRATION_MANIFEST_MAX_BYTES: u64 = 1024 * 1024;
+/// Upper bound on the manifest checksum file read (SMG-05): one digest line.
+const STORAGE_MIGRATION_MANIFEST_CHECKSUM_MAX_BYTES: u64 = 4096;
 pub const STORAGE_CANONICAL_EXPORT_FILE: &str = "canonical-history.jsonl";
 
 #[derive(Debug, Clone)]
@@ -185,12 +190,12 @@ fn rebuild_transactional_storage_with_basis(
     }
 
     let required_disk_bytes = required_rebuild_disk_bytes(&options.data_dir)?;
-    let available_disk_bytes = available_disk_bytes(
-        options
-            .output_dir
-            .parent()
-            .unwrap_or_else(|| Path::new(".")),
-    )?;
+    // SMG-06: probe from the output path itself. available_disk_bytes walks
+    // up to the nearest existing location, so an existing output mount point
+    // is measured rather than its parent filesystem, and a bare relative
+    // output (whose parent is the empty path) resolves to the working
+    // directory instead of failing with "no existing output ancestor".
+    let available_disk_bytes = available_disk_bytes(&options.output_dir)?;
     if !options.verify_only && available_disk_bytes < required_disk_bytes {
         return Err(io::Error::new(
             io::ErrorKind::StorageFull,
@@ -902,16 +907,53 @@ fn write_migration_manifest(
     )
 }
 
-fn read_migration_manifest(output_dir: &Path) -> io::Result<StorageMigrationManifestV2> {
-    let path = output_dir.join(STORAGE_MIGRATION_MANIFEST_FILE);
-    let raw = fs::read_to_string(&path).map_err(|error| {
+/// Reads at most `max_bytes` of UTF-8 text from the opened handle, rejecting a
+/// file that still has data past the cap, so growth or replacement after the
+/// open cannot bypass the bound (SMG-05). `reasons` is
+/// `(missing, read_failed, too_large)` in the module's `reason: detail` form.
+fn read_bounded_migration_text(
+    path: &Path,
+    max_bytes: u64,
+    reasons: (&str, &str, &str),
+) -> io::Result<String> {
+    use std::io::Read as _;
+    let (missing, failed, too_large) = reasons;
+    let file = fs::File::open(path).map_err(|error| {
         let reason = if error.kind() == io::ErrorKind::NotFound {
-            "storage_migration_manifest_missing"
+            missing
         } else {
-            "storage_migration_manifest_read_failed"
+            failed
         };
         io::Error::new(error.kind(), format!("{reason}: {error}"))
     })?;
+    let mut bytes = Vec::new();
+    file.take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|error| io::Error::new(error.kind(), format!("{failed}: {error}")))?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "{too_large}: `{}` exceeds {max_bytes} bytes",
+                path.display()
+            ),
+        ));
+    }
+    String::from_utf8(bytes)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, format!("{failed}: {error}")))
+}
+
+fn read_migration_manifest(output_dir: &Path) -> io::Result<StorageMigrationManifestV2> {
+    let path = output_dir.join(STORAGE_MIGRATION_MANIFEST_FILE);
+    let raw = read_bounded_migration_text(
+        &path,
+        STORAGE_MIGRATION_MANIFEST_MAX_BYTES,
+        (
+            "storage_migration_manifest_missing",
+            "storage_migration_manifest_read_failed",
+            "storage_migration_manifest_too_large",
+        ),
+    )?;
     let manifest: StorageMigrationManifestV2 = serde_json::from_str(&raw).map_err(|error| {
         io::Error::new(
             io::ErrorKind::InvalidData,
@@ -934,15 +976,15 @@ fn read_migration_manifest(output_dir: &Path) -> io::Result<StorageMigrationMani
             "storage_migration_manifest_invalid: schema, verifier, or packet root mismatch",
         ));
     }
-    let checksum = fs::read_to_string(output_dir.join(STORAGE_MIGRATION_MANIFEST_CHECKSUM_FILE))
-        .map_err(|error| {
-            let reason = if error.kind() == io::ErrorKind::NotFound {
-                "storage_migration_manifest_checksum_missing"
-            } else {
-                "storage_migration_manifest_checksum_read_failed"
-            };
-            io::Error::new(error.kind(), format!("{reason}: {error}"))
-        })?;
+    let checksum = read_bounded_migration_text(
+        &output_dir.join(STORAGE_MIGRATION_MANIFEST_CHECKSUM_FILE),
+        STORAGE_MIGRATION_MANIFEST_CHECKSUM_MAX_BYTES,
+        (
+            "storage_migration_manifest_checksum_missing",
+            "storage_migration_manifest_checksum_read_failed",
+            "storage_migration_manifest_checksum_too_large",
+        ),
+    )?;
     if checksum
         != format!(
             "{}  {}\n",
@@ -1004,11 +1046,26 @@ fn required_rebuild_disk_bytes(data_dir: &Path) -> io::Result<u64> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "required disk overflow"))
 }
 
-fn available_disk_bytes(path: &Path) -> io::Result<u64> {
-    let existing = path
-        .ancestors()
+/// The nearest existing filesystem location at or above `path`, for disk-space
+/// measurement. An empty ancestor (the parent of a bare relative name such as
+/// `generation`) is the working directory, `.`, not a nonexistent path
+/// (SMG-06).
+fn nearest_existing_location(path: &Path) -> io::Result<PathBuf> {
+    path.ancestors()
+        .map(|candidate| {
+            if candidate.as_os_str().is_empty() {
+                Path::new(".")
+            } else {
+                candidate
+            }
+        })
         .find(|candidate| candidate.exists())
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no existing output ancestor"))?;
+        .map(Path::to_path_buf)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no existing output ancestor"))
+}
+
+fn available_disk_bytes(path: &Path) -> io::Result<u64> {
+    let existing = nearest_existing_location(path)?;
     let path = CString::new(existing.as_os_str().as_bytes()).map_err(|_| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -1044,4 +1101,129 @@ fn validate_expected_digest(label: &str, value: &str) -> io::Result<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod storage_migration_tests {
+    use super::*;
+
+    fn temp_root(name: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-storage-migration-{name}-{}-{nanos}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("create temp root");
+        root
+    }
+
+    #[test]
+    fn nearest_existing_location_treats_an_empty_ancestor_as_the_working_directory() {
+        // SMG-06: `generation`.parent() is Some("") which never exists.
+        let bare = Path::new("generation-smg06-does-not-exist");
+        assert!(!bare.exists());
+        assert_eq!(
+            nearest_existing_location(bare).expect("bare relative output"),
+            PathBuf::from(".")
+        );
+        assert_eq!(
+            nearest_existing_location(Path::new("generation-smg06-does-not-exist/nested/deeper"))
+                .expect("nested relative output"),
+            PathBuf::from(".")
+        );
+    }
+
+    #[test]
+    fn nearest_existing_location_walks_up_to_the_first_existing_directory() {
+        let root = temp_root("nearest");
+        let nested = root.join("missing-a").join("missing-b").join("generation");
+        assert_eq!(nearest_existing_location(&nested).expect("nested"), root);
+        // An existing output (for example a dedicated mount point) is measured
+        // itself, not its parent.
+        let existing = root.join("existing-output");
+        fs::create_dir_all(&existing).expect("create existing output");
+        assert_eq!(
+            nearest_existing_location(&existing).expect("existing"),
+            existing
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn available_disk_bytes_accepts_a_bare_relative_output() {
+        // Before SMG-06 this returned "no existing output ancestor".
+        let available = available_disk_bytes(Path::new("generation-smg06-does-not-exist"))
+            .expect("bare relative output must resolve to the working directory");
+        assert!(available > 0);
+    }
+
+    #[test]
+    fn oversized_manifest_is_rejected_before_parsing() {
+        // SMG-05: the manifest read is capped on the opened handle.
+        let root = temp_root("manifest-too-large");
+        let oversized = " ".repeat(STORAGE_MIGRATION_MANIFEST_MAX_BYTES as usize + 1);
+        fs::write(root.join(STORAGE_MIGRATION_MANIFEST_FILE), oversized).expect("write manifest");
+        let error = read_migration_manifest(&root).expect_err("oversized manifest must fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(
+            error
+                .to_string()
+                .starts_with("storage_migration_manifest_too_large: "),
+            "{error}"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn missing_manifest_keeps_its_reason() {
+        let root = temp_root("manifest-missing");
+        let error = read_migration_manifest(&root).expect_err("missing manifest must fail");
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+        assert!(
+            error
+                .to_string()
+                .starts_with("storage_migration_manifest_missing: "),
+            "{error}"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn bounded_text_reader_enforces_the_cap_and_keeps_reasons() {
+        let root = temp_root("bounded-text");
+        let reasons = ("r_missing", "r_failed", "r_too_large");
+        let path = root.join(STORAGE_MIGRATION_MANIFEST_CHECKSUM_FILE);
+        let exact = "a".repeat(STORAGE_MIGRATION_MANIFEST_CHECKSUM_MAX_BYTES as usize);
+        fs::write(&path, &exact).expect("write exact");
+        assert_eq!(
+            read_bounded_migration_text(
+                &path,
+                STORAGE_MIGRATION_MANIFEST_CHECKSUM_MAX_BYTES,
+                reasons
+            )
+            .expect("exactly at the cap is accepted"),
+            exact
+        );
+        fs::write(&path, format!("{exact}b")).expect("write over");
+        let error = read_bounded_migration_text(
+            &path,
+            STORAGE_MIGRATION_MANIFEST_CHECKSUM_MAX_BYTES,
+            reasons,
+        )
+        .expect_err("one byte over the cap must fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().starts_with("r_too_large: "), "{error}");
+        let error = read_bounded_migration_text(&root.join("absent"), 16, reasons)
+            .expect_err("missing file must fail");
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+        assert!(error.to_string().starts_with("r_missing: "), "{error}");
+        fs::write(&path, [0xff_u8, 0xfe]).expect("write invalid utf-8");
+        let error =
+            read_bounded_migration_text(&path, 16, reasons).expect_err("invalid UTF-8 must fail");
+        assert!(error.to_string().starts_with("r_failed: "), "{error}");
+        let _ = fs::remove_dir_all(root);
+    }
 }

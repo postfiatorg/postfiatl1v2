@@ -422,9 +422,32 @@ fn read_bounded_regular_file(path: &Path, max_bytes: u64, label: &str) -> Result
             path.display()
         ));
     }
-    std::fs::read(path)
-        .map(Some)
-        .map_err(|error| format!("certified send {label} read `{}` failed: {error}", path.display()))
+    // SMG-05: read through the opened handle and re-check it, so a local
+    // writer that grows or replaces the file after the metadata check above
+    // cannot deliver more than `max_bytes` (or a non-regular file).
+    use std::io::Read as _;
+    let file = std::fs::File::open(path)
+        .map_err(|error| format!("certified send {label} open `{}` failed: {error}", path.display()))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("certified send {label} metadata `{}` failed: {error}", path.display()))?;
+    if !opened.is_file() {
+        return Err(format!(
+            "certified send {label} `{}` must be a non-symlink regular file",
+            path.display()
+        ));
+    }
+    let mut bytes = Vec::with_capacity(opened.len().min(max_bytes) as usize);
+    file.take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("certified send {label} read `{}` failed: {error}", path.display()))?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(format!(
+            "certified send {label} `{}` exceeds {max_bytes} bytes",
+            path.display()
+        ));
+    }
+    Ok(Some(bytes))
 }
 
 fn read_index(
@@ -1744,6 +1767,40 @@ mod completed_index_tests {
             10,
         )
         .expect("enqueue active test job")
+    }
+
+    #[test]
+    fn bounded_regular_file_read_enforces_the_cap_on_the_opened_handle() {
+        // SMG-05: the previous implementation checked metadata, then did a
+        // separate unbounded read; the bound now holds on the bytes actually
+        // read from the handle.
+        let root = test_root("bounded-read");
+        std::fs::create_dir_all(&root).expect("create root");
+        let path = root.join("probe.json");
+        assert_eq!(
+            read_bounded_regular_file(&path, 16, "probe").expect("missing file"),
+            None
+        );
+        std::fs::write(&path, [b'x'; 16]).expect("write exact");
+        assert_eq!(
+            read_bounded_regular_file(&path, 16, "probe")
+                .expect("exactly at the cap")
+                .map(|bytes| bytes.len()),
+            Some(16)
+        );
+        std::fs::write(&path, [b'x'; 17]).expect("write over");
+        let error = read_bounded_regular_file(&path, 16, "probe").expect_err("over the cap");
+        assert!(error.contains("exceeds 16 bytes"), "{error}");
+        let error = read_bounded_regular_file(&root, 16, "probe").expect_err("directory");
+        assert!(error.contains("must be a non-symlink regular file"), "{error}");
+        #[cfg(unix)]
+        {
+            let link = root.join("probe-link.json");
+            std::os::unix::fs::symlink(&path, &link).expect("create symlink");
+            let error = read_bounded_regular_file(&link, 64, "probe").expect_err("symlink");
+            assert!(error.contains("must be a non-symlink regular file"), "{error}");
+        }
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

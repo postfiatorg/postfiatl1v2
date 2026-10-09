@@ -42,7 +42,7 @@ The minimal repair is to retain the previous mode and restore it when selection 
 
 A supplied migration manifest/checksum can be arbitrarily large before parsing. Index reads check path metadata and then perform a separate unbounded `fs::read`; a non-cooperating local writer can grow or replace the file between those operations. These local inputs can consume memory beyond the intended small control-artifact size. No remote-write path is established by this review.
 
-A future minimal repair would cap manifest/checksum reads and read each index through one checked regular-file handle with a limiting reader, rejecting excess bytes and symlink substitution. This P3 is recorded without repair.
+A future minimal repair would cap manifest/checksum reads and read each index through one checked regular-file handle with a limiting reader, rejecting excess bytes and symlink substitution. This P3 is recorded without repair. **Repaired 2026-10-08 in `8b97667f`:** the manifest (1 MiB) and checksum (4 KiB) reads go through `read_bounded_migration_text` on the opened handle with distinct `_too_large` reasons; `read_bounded_regular_file` keeps the symlink/regular-file rejection, then opens the file, re-checks the handle and reads through a limiting reader that rejects any byte past the cap.
 
 ### 6. SMG-06 — P3 — bare relative migration output fails disk-space preflight
 
@@ -50,7 +50,7 @@ A future minimal repair would cap manifest/checksum reads and read each index th
 
 With a bare relative output such as `generation`, `Path::parent()` produces the empty path. The disk-space helper searches its ancestors without normalizing it to `.` and can return `no existing output ancestor`, preventing an otherwise valid offline rebuild or verification before reaching the target. Existing output mount points can also differ from the parent filesystem used for this estimate.
 
-A future minimal repair would resolve the output's nearest existing filesystem location, treating an empty relative ancestor as `.`, with relative-path and mounted-output coverage. This P3 is recorded without repair.
+A future minimal repair would resolve the output's nearest existing filesystem location, treating an empty relative ancestor as `.`, with relative-path and mounted-output coverage. This P3 is recorded without repair. **Repaired 2026-10-08 in `8b97667f`:** `nearest_existing_location` maps an empty ancestor to `.` and the preflight probes from the output path itself, so an existing output mount point is measured; regressions cover the bare relative name, a nested nonexistent output, an existing output directory and the end-to-end `available_disk_bytes` call.
 
 ### 7. SMG-07 — P2 — recovery rejects the payload path of a job already moved into retention
 
@@ -85,7 +85,7 @@ A4 records **0 P1, 5 P2 and 2 P3**. Findings were pushed as `307214ef`; the SMG-
 - **SMG-03:** recovery compares bounded completed-directory membership with the resulting index before publishing a fresh stamp or clearing the intent. The regression rejects unrelated addition and omission while preserving the prior index and intent. Ordinary maintenance retains its existing bounded work. **Consensus-affecting: no.**
 - **SMG-04:** selection captures the previous backend mode and restores it after a selection/post-validation error; restoration errors include both causes. The regression verifies the failed candidate really was selected, then confirms the previous mode on reopen, followed by a successful selection. **Consensus-affecting: no.**
 - **SMG-07:** unfixed because its shared retention-path resolver is in `crates/node/src/transport_cli.rs`, outside A4. The exploratory prune regression was removed after its observed canonical-path refusal was recorded. Fixing or bypassing that resolver, or claiming a successful prune retry through it, would exceed this review.
-- **SMG-05/06:** P3 findings remain recorded without repair.
+- **SMG-05/06:** repaired 2026-10-08 in `8b97667f` (see each finding).
 
 Only `storage_activation_cli.rs`, `storage_backend_config.rs` and `certified_send_completed_index.rs` changed as source, with four in-file regressions. Each repaired defect reproduced against the prior behavior before its repair. The full module checks then passed:
 

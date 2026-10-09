@@ -122,8 +122,8 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 | SMG-02 | Reproduced defect | P2 | Fixed — `401fa055`; not consensus-affecting; append recovery only | [Storage migration review](storage-migration-review-20260916.md#findings): append recovery skipped move-directory sync when an earlier rename was already visible, then published its index and cleared the intent. Both append barriers now retry; prune durability remains unqualified behind SMG-07. |
 | SMG-03 | Reproduced defect | P2 | Fixed — `401fa055`; not consensus-affecting | [Storage migration review](storage-migration-review-20260916.md#findings): pending-intent recovery could stamp unrelated completed-directory additions or omissions as consistent; bounded membership checks now preserve the old index and intent on refusal. |
 | SMG-04 | Reproduced defect | P2 | Fixed — `401fa055`; not consensus-affecting | [Storage migration review](storage-migration-review-20260916.md#findings): backend selection left the candidate mode published after post-validation failed; returned errors now restore the previous mode and report restoration failure. |
-| SMG-05 | Code-observed defect | P3 | Recorded, not fixed | [Storage migration review](storage-migration-review-20260916.md#findings): migration manifest/checksum reads were unbounded, and index metadata checks preceded a separate unbounded read vulnerable to non-cooperating local replacement or growth. |
-| SMG-06 | Code-observed defect | P3 | Recorded, not fixed | [Storage migration review](storage-migration-review-20260916.md#findings): a bare relative output could fail disk-space preflight on its empty parent path; an existing output mount could also differ from the parent filesystem used for estimation. |
+| SMG-05 | Code-observed defect | P3 | Fixed — `8b97667f` | [Storage migration review](storage-migration-review-20260916.md#findings): migration manifest/checksum reads were unbounded, and index metadata checks preceded a separate unbounded read vulnerable to non-cooperating local replacement or growth. |
+| SMG-06 | Code-observed defect | P3 | Fixed — `8b97667f` | [Storage migration review](storage-migration-review-20260916.md#findings): a bare relative output could fail disk-space preflight on its empty parent path; an existing output mount could also differ from the parent filesystem used for estimation. |
 | SMG-07 | Reproduced defect | P2 | Recorded, repair blocked by A4 scope | [Storage migration review](storage-migration-review-20260916.md#findings): interrupted prune recovery rejected an already moved retention payload as non-canonical. Repair requires the shared resolver in `crates/node/src/transport_cli.rs`, outside A4's four-file list; the record does not establish a release-candidate exclusion. |
 | SWP-01 | Reproduced defect | P2 | Fixed — `d679f8e8`; consensus-affecting, because recovery reconciliation results change; source-only; not activated or deployed | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): FastPay rollback zipped ledger-position inverse records with certificate-ordered inputs and rejected valid differing orders. Exact identity/version sets and unique ascending positions now restore the original ledger; the fixture does not establish quorum admission or historical replay. |
 | SWP-02 | Reproduced defect | P2 | Fixed — `d679f8e8`; not consensus-affecting | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): forward PFTL journal transitions could substitute the prepared or published batch hash, making recovery identity ambiguous; publication and resolution now reject substitution while permitting prepublication reproof. |
@@ -142,7 +142,7 @@ The focused A5 review contributes four rows; its unreviewed ranges remain explic
 
 | ID | Classification | Severity | Status | Source and reproduction |
 | --- | --- | --- | --- | --- |
-| PFV-01 | Code-observed defect | P3 | Recorded, not fixed | [Portfolio review](portfolio-verification-review-20260921.md#findings): collection binding regression mutates only the attestation digest, leaving eight other digest mismatches and the count mismatch untested. Production compares all ten; no invalid-proof acceptance was established. |
+| PFV-01 | Code-observed defect | P3 | Fixed — `0b9c6715` | [Portfolio review](portfolio-verification-review-20260921.md#findings): collection binding regression mutates only the attestation digest, leaving eight other digest mismatches and the count mismatch untested. Production compares all ten; no invalid-proof acceptance was established. |
 | NAV-01 | Reproduced defect | P2 | Fixed — `e9ccdeda`; not consensus-affecting | [NAV review](nav-reserve-verification-review-20260921.md#findings): duplicate bucket/allocation rows inflated the unsigned builder's reserve overlay; duplicate receipt IDs silently overwrote entries. All three identity sets now reject duplicates before summing. |
 | NAV-02 | Reproduced defect | P2 | Fixed — `e9ccdeda`; not consensus-affecting | [NAV review](nav-reserve-verification-review-20260921.md#findings): a packet-supplied operation tag replaced the builder's reserve-submit tag. Optional tags are now validated and the fixed tag assigned last. |
 | NAV-03 | Reproduced defect | P2 | Fixed — `e9ccdeda`; consensus-affecting: release-tip re-qualification required before deployment | [NAV review](nav-reserve-verification-review-20260921.md#findings): invalid receipt history rejected a local bridge transition after persisting reserve changes; appends could exceed readable history limits. Prepublication validation now preserves both files on rejection. The brief's state-transition-result classification covers rejected local persistence; cross-file crash/I/O atomicity remains unqualified. |
@@ -150,9 +150,9 @@ The focused A5 review contributes four rows; its unreviewed ranges remain explic
 | BRW-01 | Reproduced defect | P2 | Fixed — `10bb5655`; not consensus-affecting | [Bridge review](bridge-workflows-review-20260921.md#findings): conservation verification trusted cached success despite altered balance/claim components. It now recomputes checked sums and vault identity; report authenticity remains unproven. |
 | BRW-02 | Reproduced defect | P2 | Fixed — `10bb5655`; not consensus-affecting | [Bridge review](bridge-workflows-review-20260921.md#findings): receipt validation accepted explicit failures, missing RPC status, contradictory log coordinates and removed logs into unsigned success plans. These inputs now reject; legacy supplied receipts without status remain unproven input. |
 | BRW-03 | Reproduced defect | P2 | Fixed — `10bb5655`; not consensus-affecting | [Bridge review](bridge-workflows-review-20260921.md#findings): sequential latest-block reads could double-count moving funds or mix withdrawal state. Reads now pin one finalized height per chain and reject hash drift; RPC honesty and cross-chain/PFTL atomicity remain limits. |
-| BRW-04 | Code-observed defect | P3 | Recorded, not fixed | [Bridge review](bridge-workflows-review-20260921.md#findings): file and child-output limits follow unbounded collection; lineage files lack a byte cap and stalled children lack deadlines. Oversized or growing inputs can exhaust operator resources. |
-| BRW-05 | Code-observed defect | P3 | Recorded, not fixed | [Bridge review](bridge-workflows-review-20260921.md#findings): checkpoint RPC parsing treats malformed Content-Length as absent and checks only the first parsable length. Ambiguous framing can pass; no wrong checkpoint signature was demonstrated. |
-| BRW-06 | Code-observed defect | P3 | Recorded, not fixed | [Bridge review](bridge-workflows-review-20260921.md#findings): the V2 recipient decoder accepts offset 192 inside its 224-byte head because it uses the V1 bound. Later identity checks still apply; no receipt-proof bypass was established. |
+| BRW-04 | Code-observed defect | P3 | Fixed — `0b9c6715` | [Bridge review](bridge-workflows-review-20260921.md#findings): file and child-output limits follow unbounded collection; lineage files lack a byte cap and stalled children lack deadlines. Oversized or growing inputs can exhaust operator resources. |
+| BRW-05 | Code-observed defect | P3 | Fixed — `0b9c6715` | [Bridge review](bridge-workflows-review-20260921.md#findings): checkpoint RPC parsing treats malformed Content-Length as absent and checks only the first parsable length. Ambiguous framing can pass; no wrong checkpoint signature was demonstrated. |
+| BRW-06 | Code-observed defect | P3 | Fixed — `0b9c6715` | [Bridge review](bridge-workflows-review-20260921.md#findings): the V2 recipient decoder accepts offset 192 inside its 224-byte head because it uses the V1 bound. Later identity checks still apply; no receipt-proof bypass was established. |
 
 ### A5 addition after the inventory gate
 
@@ -160,8 +160,8 @@ The focused A5 review contributes four rows; its unreviewed ranges remain explic
 | --- | --- | --- | --- | --- |
 | NOD-01 | Reproduced defect | P2 | Fixed — `87c992c3`; not consensus-affecting | [Remaining node review](node-remaining-review-20260921.md#findings): duplicate delivery reported every block receipt as accepted without reading outcomes. Stored outcomes now determine counts; missing/conflicting evidence and inconsistent count totals reject. |
 | NOD-02 | Reproduced defect | P2 | Fixed — `87c992c3`; not consensus-affecting | [Remaining node review](node-remaining-review-20260921.md#findings): key generation or restore could overwrite its backup with the key file. Resolved destination aliases now reject before writing; concurrent filesystem replacement remains outside the interlock. |
-| NOD-03 | Code-observed defect | P3 | Recorded, not fixed | [Remaining node review](node-remaining-review-20260921.md#findings): transport JSON readers collect local files without a byte cap; payload reads enforce only a prior metadata limit, permitting growth between check and read. |
-| NOD-04 | Code-observed defect | P3 | Recorded, not fixed | [Remaining node review](node-remaining-review-20260921.md#findings): manifest reporting reopens the bundle after verification, so concurrent replacement can mix verified hash/count metadata with different manifest bytes. |
+| NOD-03 | Code-observed defect | P3 | Fixed — `0b9c6715` | [Remaining node review](node-remaining-review-20260921.md#findings): transport JSON readers collect local files without a byte cap; payload reads enforce only a prior metadata limit, permitting growth between check and read. |
+| NOD-04 | Code-observed defect | P3 | Fixed — `0b9c6715` | [Remaining node review](node-remaining-review-20260921.md#findings): manifest reporting reopens the bundle after verification, so concurrent replacement can mix verified hash/count metadata with different manifest bytes. |
 
 ## Storage, Cobalt, and Task Node review
 
@@ -287,10 +287,10 @@ broader production claim.
 | P1 | 26 |
 | P2 | 77 |
 | P3 | 38 |
-| Fixed | 93 |
+| Fixed | 101 |
 | Dispositioned | 16 |
 | Reproduced and retained (prior campaigns) | 5 |
-| Recorded, not fixed (burn 3–6 P3) | 14 |
+| Recorded, not fixed (burn 3–6 P3) | 6 |
 | Recorded, repair blocked by A4 scope (SMG-07) | 1 |
 | Closed 2026-10-02 on postfiat-wan-devnet-2 | 4 |
 | Narrowed 2026-10-02 (PI-18, not a live-environment need) | 1 |
