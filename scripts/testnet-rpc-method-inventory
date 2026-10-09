@@ -321,11 +321,30 @@ def extract_node_dispatch_methods(source: str) -> set[str]:
     return methods
 
 
-def extract_python_client_methods() -> set[str]:
-    if not PY_CLIENT.is_file():
-        return set()
-    source = PY_CLIENT.read_text(encoding="utf-8")
-    return set(re.findall(r'self\._call\("([^"]+)"', source))
+# A wrapper covers a method when it hands the method name, as a string
+# literal, to the transport (`self._call`) or to a typed helper that forwards
+# to it. Helpers are discovered from their signature (`def _name(self, method:
+# str`) rather than listed by hand, so `_object_read`, `_verification_report`
+# and any future forwarding helper are recognised, while a literal handed to a
+# non-forwarding helper (`self._required_text(owner, "owner")`) never becomes
+# a phantom method row. The literal is the first argument and may start on the
+# line after the opening paren, which is how black formats the longer calls.
+PY_CLIENT_HELPER_DEF_RE = re.compile(r"def (_[a-z0-9_]+)\(self, method: str")
+
+
+def python_client_call_pattern(source: str) -> re.Pattern[str]:
+    helpers = {"_call", *PY_CLIENT_HELPER_DEF_RE.findall(source)}
+    names = "|".join(re.escape(name) for name in sorted(helpers))
+    return re.compile(rf'self\.(?:{names})\(\s*"([a-z0-9_]+)"')
+
+
+def extract_python_client_methods(source: str | None = None) -> set[str]:
+    """Method names the Python client wraps; `source` overrides client.py for tests."""
+    if source is None:
+        if not PY_CLIENT.is_file():
+            return set()
+        source = PY_CLIENT.read_text(encoding="utf-8")
+    return set(python_client_call_pattern(source).findall(source))
 
 
 def method_posture(
