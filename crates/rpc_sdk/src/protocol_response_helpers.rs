@@ -113,6 +113,7 @@ pub fn validate_response_kind_with_context(
         RpcResponseKind::AccountOffers => validate_account_offers_result(result),
         RpcResponseKind::BookOffers => validate_book_offers_result(result),
         RpcResponseKind::AssetInfo => validate_asset_info_result(result),
+        RpcResponseKind::VaultBridgeRoute => validate_vault_bridge_route_result(result),
         RpcResponseKind::AccountLines => validate_account_lines_result(result),
         RpcResponseKind::AccountAssets => validate_account_assets_result(result),
         RpcResponseKind::IssuerAssets => validate_issuer_assets_result(result),

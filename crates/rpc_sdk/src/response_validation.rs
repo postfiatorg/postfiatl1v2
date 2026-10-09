@@ -1242,6 +1242,243 @@ fn dex_asset_id_result_field<'a>(
     }
 }
 
+/// `vault_bridge_route` mirrors the node's construction in market_bridge.rs:
+/// the governed route profile active at the tip (so it passes the profile's
+/// own `validate()` rules and `activation_height <= current_height <
+/// expires_at_height`), its authorizing amendment (whose value is the route
+/// epoch and whose activation height is the profile's), the route binding
+/// derived from (profile_hash, route_epoch), the NAV proof profile summary,
+/// and the trust class implied by the evidence tier.
+fn validate_vault_bridge_route_result(result: &Value) -> Result<(), RpcResponseValidationError> {
+    expect_string_eq(result, "schema", VAULT_BRIDGE_ROUTE_REPORT_SCHEMA)?;
+    clean_string_field(result, "chain_id")?;
+    lower_hex_field(result, "genesis_hash", 96)?;
+    let current_height = u64_field(result, "current_height")?;
+
+    let profile = field(result, "profile")?;
+    if !profile.is_object() {
+        return Err(invalid_result("profile", "expected object value"));
+    }
+    let (route_epoch, activation_height, evidence_tier) = validate_vault_bridge_route_profile(profile)?;
+    let expires_at_height = u64_field(profile, "expires_at_height")?;
+    if activation_height > current_height {
+        return Err(invalid_result(
+            "profile.activation_height",
+            "expected the active route to be activated at or before current_height",
+        ));
+    }
+    if expires_at_height <= current_height {
+        return Err(invalid_result(
+            "profile.expires_at_height",
+            "expected the active route to expire after current_height",
+        ));
+    }
+
+    lower_hex_field(result, "profile_hash", postfiat_types::VAULT_BRIDGE_HEX_HASH_LEN)?;
+    let profile_hash = string_field(result, "profile_hash")?;
+    let expected_binding = postfiat_types::vault_bridge_route_binding(profile_hash, route_epoch)
+        .map_err(|error| invalid_result("route_binding", error))?;
+    expect_string_eq(result, "route_binding", &expected_binding)?;
+
+    lower_hex_field(result, "governance_amendment_id", 96)?;
+    let governance_activation_height = u64_field(result, "governance_activation_height")?;
+    if governance_activation_height != activation_height {
+        return Err(invalid_result(
+            "governance_activation_height",
+            "expected the authorizing amendment to activate with the route profile",
+        ));
+    }
+    let governance_route_epoch = u64_field(result, "governance_route_epoch")?;
+    if governance_route_epoch != u64::from(route_epoch) {
+        return Err(invalid_result(
+            "governance_route_epoch",
+            "expected the authorizing amendment value to be the route epoch",
+        ));
+    }
+
+    clean_string_field(result, "nav_profile_id")?;
+    clean_string_field_allow_empty(result, "nav_profile_source_class")?;
+    clean_string_field(result, "nav_profile_verifier_kind")?;
+    let policy_hash = clean_string_field_allow_empty(result, "nav_profile_policy_hash")?;
+    if !policy_hash.is_empty() && !is_lower_hex(policy_hash) {
+        return Err(invalid_result(
+            "nav_profile_policy_hash",
+            "expected empty or lowercase hex characters",
+        ));
+    }
+
+    let expected_trust_class = if evidence_tier == postfiat_types::VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN {
+        postfiat_types::VAULT_BRIDGE_ROUTE_TRUST_CLASS_TRUSTLESS_FINALITY
+    } else {
+        postfiat_types::VAULT_BRIDGE_ROUTE_TRUST_CLASS_CONTROLLED
+    };
+    expect_string_eq(result, "route_trust_class", expected_trust_class)?;
+    bool_field(result, "live_value_enabled")?;
+    expect_bool_eq(result, "active", true)?;
+    Ok(())
+}
+
+/// The profile's own `validate()` rules (crates/types VaultBridgeRouteProfileV1),
+/// re-stated over JSON. Returns (route_epoch, activation_height, evidence_tier).
+fn validate_vault_bridge_route_profile(
+    profile: &Value,
+) -> Result<(u32, u64, String), RpcResponseValidationError> {
+    expect_string_eq(profile, "schema", postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1)?;
+    let route_id = clean_string_field(profile, "route_id")?;
+    if route_id.len() > 64
+        || !route_id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-'))
+    {
+        return Err(invalid_result(
+            "profile.route_id",
+            "expected 1..64 lowercase identifier bytes",
+        ));
+    }
+    lower_hex_field(profile, "asset_id", ISSUED_ASSET_ID_HEX_LEN)?;
+    nonzero_u64_field(profile, "source_chain_id")?;
+    validate_nonzero_evm_address_field(profile, "vault_address")?;
+    validate_nonzero_evm_address_field(profile, "token_address")?;
+    if string_field(profile, "vault_address")? == postfiat_types::RETIRED_VAULT_BRIDGE_ADDRESS {
+        return Err(invalid_result("profile.vault_address", "expected a vault that is not retired"));
+    }
+    validate_prefixed_hash_field(profile, "vault_runtime_code_hash", 64)?;
+    validate_prefixed_hash_field(profile, "token_runtime_code_hash", 64)?;
+    let route_epoch = nonzero_u32_field(profile, "route_epoch")?;
+    let verifier_kind = clean_string_field(profile, "verifier_kind")?;
+    let evidence_tier = clean_string_field(profile, "evidence_tier")?.to_string();
+    let min_attestations = u64_field(profile, "min_attestations")?;
+    let minimum_confirmations = u64_field(profile, "minimum_confirmations")?;
+    let verifier_policy_hash = clean_string_field_allow_empty(profile, "verifier_policy_hash")?;
+    let verifier_program_vkey = clean_string_field_allow_empty(profile, "verifier_program_vkey")?;
+    let verifier_proof_encoding = clean_string_field_allow_empty(profile, "verifier_proof_encoding")?;
+    let max_proof_bytes = u64_field(profile, "max_proof_bytes")?;
+    let max_public_values_bytes = u64_field(profile, "max_public_values_bytes")?;
+    let expected_tier = match verifier_kind {
+        postfiat_types::NAV_PROFILE_VERIFIER_MULTI_FETCH => {
+            if min_attestations == 0 || minimum_confirmations == 0 {
+                return Err(invalid_result(
+                    "profile.min_attestations",
+                    "expected nonzero attestation and confirmation thresholds for an independently observed route",
+                ));
+            }
+            if !verifier_policy_hash.is_empty()
+                || !verifier_program_vkey.is_empty()
+                || !verifier_proof_encoding.is_empty()
+                || max_proof_bytes != 0
+                || max_public_values_bytes != 0
+            {
+                return Err(invalid_result(
+                    "profile.verifier_policy_hash",
+                    "expected no proof-verifier fields on an independently observed route",
+                ));
+            }
+            postfiat_types::VAULT_BRIDGE_EVIDENCE_TIER_INDEPENDENTLY_OBSERVED
+        }
+        postfiat_types::NAV_PROFILE_VERIFIER_SP1_GROTH16
+        | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+        | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 => {
+            if min_attestations != 0 || minimum_confirmations != 0 {
+                return Err(invalid_result(
+                    "profile.min_attestations",
+                    "expected no observer thresholds on a receipt-proven route",
+                ));
+            }
+            if !is_lower_hex_len(verifier_policy_hash, postfiat_types::NAV_SP1_POLICY_HASH_HEX_LEN) {
+                return Err(invalid_result(
+                    "profile.verifier_policy_hash",
+                    "expected a lowercase 32-byte hex policy hash",
+                ));
+            }
+            if verifier_program_vkey.len() != postfiat_types::NAV_SP1_PROGRAM_VKEY_HEX_LEN
+                || !verifier_program_vkey.starts_with("0x")
+                || !verifier_program_vkey[2..].bytes().all(|byte| byte.is_ascii_hexdigit())
+            {
+                return Err(invalid_result(
+                    "profile.verifier_program_vkey",
+                    "expected a 0x-prefixed 32-byte hex program vkey",
+                ));
+            }
+            if verifier_proof_encoding != postfiat_types::NAV_SP1_PROOF_ENCODING_GROTH16 {
+                return Err(invalid_result(
+                    "profile.verifier_proof_encoding",
+                    "expected the groth16 proof encoding",
+                ));
+            }
+            postfiat_types::VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN
+        }
+        _ => {
+            return Err(invalid_result("profile.verifier_kind", "expected a supported verifier kind"));
+        }
+    };
+    if evidence_tier != expected_tier {
+        return Err(invalid_result(
+            "profile.evidence_tier",
+            "expected the evidence tier implied by verifier_kind",
+        ));
+    }
+    nonzero_u64_field(profile, "max_snapshot_age_blocks")?;
+    nonzero_u64_field(profile, "challenge_window_blocks")?;
+    nonzero_u64_field(profile, "max_epoch_gap_blocks")?;
+    nonzero_u64_field(profile, "settle_deadline_blocks")?;
+    u64_field(profile, "min_challenge_bond")?;
+    let activation_height = nonzero_u64_field(profile, "activation_height")?;
+    let expires_at_height = u64_field(profile, "expires_at_height")?;
+    if expires_at_height <= activation_height {
+        return Err(invalid_result(
+            "profile.expires_at_height",
+            "expected expiry to follow the activation height",
+        ));
+    }
+    Ok((route_epoch, activation_height, evidence_tier))
+}
+
+/// The route profile's rule: a lowercase, non-zero EVM address (the generic
+/// `validate_evm_address_field` accepts mixed case and the zero address).
+fn validate_nonzero_evm_address_field(
+    value: &Value,
+    path: &str,
+) -> Result<(), RpcResponseValidationError> {
+    validate_evm_address_field(value, path)?;
+    let address = string_field(value, path)?;
+    let hex = &address[2..];
+    if hex.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        return Err(invalid_result(format!("profile.{path}"), "expected a lowercase EVM address"));
+    }
+    if hex.bytes().all(|byte| byte == b'0') {
+        return Err(invalid_result(format!("profile.{path}"), "expected a non-zero EVM address"));
+    }
+    Ok(())
+}
+
+/// A 0x-prefixed lowercase hash of `hex_len` hex characters that is not all zero.
+fn validate_prefixed_hash_field(
+    value: &Value,
+    path: &str,
+    hex_len: usize,
+) -> Result<(), RpcResponseValidationError> {
+    let hash = string_field(value, path)?;
+    let Some(hex) = hash.strip_prefix("0x") else {
+        return Err(invalid_result(path, "expected a 0x-prefixed lowercase hash"));
+    };
+    if !is_lower_hex_len(hex, hex_len) {
+        return Err(invalid_result(path, "expected a 0x-prefixed lowercase hash"));
+    }
+    if hex.bytes().all(|byte| byte == b'0') {
+        return Err(invalid_result(path, "expected a non-zero hash"));
+    }
+    Ok(())
+}
+
+fn is_lower_hex(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() % 2 == 0
+        && value
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+}
+
 fn validate_asset_info_result(result: &Value) -> Result<(), RpcResponseValidationError> {
     expect_string_eq(result, "schema", ASSET_INFO_SCHEMA)?;
     validate_asset_read_common_fields(result)?;

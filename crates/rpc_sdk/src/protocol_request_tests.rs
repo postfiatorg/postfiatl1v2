@@ -700,6 +700,12 @@
         assert_eq!(state.method, METHOD_VERIFY_STATE);
         assert_eq!(state.params, json!({}));
 
+        let route_hex96 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let route = vault_bridge_route_request("route-1", route_hex96);
+        assert_eq!(route.id, "route-1");
+        assert_eq!(route.method, METHOD_VAULT_BRIDGE_ROUTE);
+        assert_eq!(route.params, json!({"asset_id": route_hex96}));
+
         let keys = validate_local_keys_request("keys-1", 4);
         assert_eq!(keys.method, METHOD_VALIDATE_LOCAL_KEYS);
         assert_eq!(keys.params, json!({"validators": 4}));
@@ -1333,6 +1339,25 @@
             Some(RpcRequestKind::VerifyState),
         )
         .expect("state request");
+        let route_hex96 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        validate_request(
+            &vault_bridge_route_request("route-1", route_hex96),
+            Some("route-1"),
+            Some(RpcRequestKind::VaultBridgeRoute),
+        )
+        .expect("vault bridge route request");
+        validate_request(
+            &vault_bridge_route_request("route-1", "not-an-asset-id"),
+            Some("route-1"),
+            Some(RpcRequestKind::VaultBridgeRoute),
+        )
+        .expect_err("asset_id must be a lowercase 96-hex issued asset id");
+        validate_request(
+            &vault_bridge_route_request("route-1", ""),
+            Some("route-1"),
+            Some(RpcRequestKind::VaultBridgeRoute),
+        )
+        .expect_err("asset_id must not be empty");
         validate_request(
             &validate_local_keys_request("keys-1", 4),
             Some("keys-1"),

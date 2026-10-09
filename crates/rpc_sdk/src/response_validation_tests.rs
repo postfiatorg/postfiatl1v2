@@ -3752,3 +3752,117 @@
             },
         );
     }
+
+    const ROUTE_HEX96: &str =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    const ROUTE_PROFILE_HASH: &str =
+        "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
+    fn vault_route_report() -> serde_json::Value {
+        let route_epoch = 3_u32;
+        let binding = postfiat_types::vault_bridge_route_binding(ROUTE_PROFILE_HASH, route_epoch)
+            .expect("route binding");
+        json!({
+            "schema": VAULT_BRIDGE_ROUTE_REPORT_SCHEMA,
+            "chain_id": "postfiat-local",
+            "genesis_hash": ROUTE_HEX96,
+            "current_height": 500,
+            "profile": {
+                "schema": postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1,
+                "route_id": "arb.usdc-vault.v1",
+                "asset_id": ROUTE_HEX96,
+                "source_chain_id": 42161,
+                "vault_address": "0x1111111111111111111111111111111111111111",
+                "vault_runtime_code_hash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                "token_address": "0x3333333333333333333333333333333333333333",
+                "token_runtime_code_hash": "0x4444444444444444444444444444444444444444444444444444444444444444",
+                "route_epoch": route_epoch,
+                "verifier_kind": postfiat_types::NAV_PROFILE_VERIFIER_MULTI_FETCH,
+                "evidence_tier": postfiat_types::VAULT_BRIDGE_EVIDENCE_TIER_INDEPENDENTLY_OBSERVED,
+                "verifier_policy_hash": "",
+                "verifier_program_vkey": "",
+                "verifier_proof_encoding": "",
+                "max_proof_bytes": 0,
+                "max_public_values_bytes": 0,
+                "max_snapshot_age_blocks": 64,
+                "challenge_window_blocks": 8,
+                "max_epoch_gap_blocks": 256,
+                "settle_deadline_blocks": 128,
+                "min_challenge_bond": 1_000_000,
+                "min_attestations": 2,
+                "minimum_confirmations": 12,
+                "activation_height": 100,
+                "expires_at_height": 1_000
+            },
+            "profile_hash": ROUTE_PROFILE_HASH,
+            "route_binding": binding,
+            "governance_amendment_id": ROUTE_HEX96,
+            "governance_activation_height": 100,
+            "governance_route_epoch": route_epoch,
+            "nav_profile_id": "nav-multi-fetch-v1",
+            "nav_profile_source_class": "hyperliquid-testnet",
+            "nav_profile_verifier_kind": postfiat_types::NAV_PROFILE_VERIFIER_MULTI_FETCH,
+            "nav_profile_policy_hash": "",
+            "route_trust_class": postfiat_types::VAULT_BRIDGE_ROUTE_TRUST_CLASS_CONTROLLED,
+            "live_value_enabled": false,
+            "active": true
+        })
+    }
+
+    #[test]
+    fn vault_bridge_route_accepts_an_active_governed_route() {
+        let response = success_response("route-1", &vault_route_report(), vec![]).expect("report response");
+        validate_health_response(&response, RpcResponseKind::VaultBridgeRoute)
+            .expect("vault bridge route validates");
+    }
+
+    #[test]
+    fn vault_bridge_route_rejects_inactive_or_inconsistent_routes() {
+        let mut expired = vault_route_report();
+        expired["current_height"] = json!(1_000);
+        let mut not_yet_active = vault_route_report();
+        not_yet_active["current_height"] = json!(99);
+        let mut zero_epoch = vault_route_report();
+        zero_epoch["profile"]["route_epoch"] = json!(0);
+        let mut wrong_trust_class = vault_route_report();
+        wrong_trust_class["route_trust_class"] =
+            json!(postfiat_types::VAULT_BRIDGE_ROUTE_TRUST_CLASS_TRUSTLESS_FINALITY);
+        let mut inactive = vault_route_report();
+        inactive["active"] = json!(false);
+        let mut bad_profile_hash = vault_route_report();
+        bad_profile_hash["profile_hash"] = json!("0xnothex");
+        let mut wrong_binding = vault_route_report();
+        wrong_binding["route_binding"] = json!(ROUTE_HEX96);
+        let mut epoch_mismatch = vault_route_report();
+        epoch_mismatch["governance_route_epoch"] = json!(4);
+        let mut activation_mismatch = vault_route_report();
+        activation_mismatch["governance_activation_height"] = json!(101);
+        let mut zero_vault = vault_route_report();
+        zero_vault["profile"]["vault_address"] = json!("0x0000000000000000000000000000000000000000");
+        let mut tier_mismatch = vault_route_report();
+        tier_mismatch["profile"]["evidence_tier"] =
+            json!(postfiat_types::VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN);
+
+        for (report, field) in [
+            (expired, "profile.expires_at_height"),
+            (not_yet_active, "profile.activation_height"),
+            (zero_epoch, "route_epoch"),
+            (wrong_trust_class, "route_trust_class"),
+            (inactive, "active"),
+            (bad_profile_hash, "profile_hash"),
+            (wrong_binding, "route_binding"),
+            (epoch_mismatch, "governance_route_epoch"),
+            (activation_mismatch, "governance_activation_height"),
+            (zero_vault, "profile.vault_address"),
+            (tier_mismatch, "profile.evidence_tier"),
+        ] {
+            let response = success_response("route-1", &report, vec![]).expect("report response");
+            let error = validate_health_response(&response, RpcResponseKind::VaultBridgeRoute)
+                .expect_err("inconsistent route is rejected");
+            assert!(
+                error.to_string().contains(field),
+                "expected the error to name `{field}`, got {error}"
+            );
+        }
+    }
+
