@@ -19,6 +19,9 @@ RPC_VERSION = "postfiat-local-rpc-v1"
 DEFAULT_TIMEOUT_SECONDS = 8.0
 DEFAULT_RESPONSE_BYTE_CAP = 1_048_576
 DEFAULT_READ_LIMIT = 100
+# Mirrors crates/node/src/lifecycle_queries.rs MAX_READ_QUERY_LIMIT: the node
+# refuses an `archive_window` range longer than this many blocks.
+MAX_ARCHIVE_WINDOW_BLOCKS = 512
 MAX_ACCOUNT_TX_SCAN_LIMIT = 512
 ESCROW_ID_DOMAIN = "postfiat.escrow_id.v1"
 ESCROW_CONDITION_HASH_DOMAIN = "postfiat.escrow_condition_hash.v1"
@@ -1444,6 +1447,126 @@ class PostFiatRpcClient:
         if not isinstance(result, list):
             raise RpcProtocolError("batch_archive result must be a list")
         return result
+
+    def archive_window(
+        self,
+        from_height: int,
+        to_height: int,
+        *,
+        archive_uri: str | None = None,
+    ) -> dict[str, Any]:
+        """Build a bounded history handoff bundle for an inclusive height window.
+
+        Mirrors the node's `archive_window` read: both heights are
+        non-negative, `to_height >= from_height`, and the window spans at most
+        `MAX_ARCHIVE_WINDOW_BLOCKS` blocks, checked here so a bad range fails
+        before a request is sent. The bundle is returned as the node encodes
+        it; nothing is published.
+        """
+        for name, value in (("from_height", from_height), ("to_height", to_height)):
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(f"{name} must be an integer")
+            if value < 0:
+                raise ValueError(f"{name} must be non-negative")
+        if to_height < from_height:
+            raise ValueError("to_height must be >= from_height")
+        if to_height - from_height + 1 > MAX_ARCHIVE_WINDOW_BLOCKS:
+            raise ValueError(
+                f"archive window must not exceed {MAX_ARCHIVE_WINDOW_BLOCKS} blocks"
+            )
+        params: dict[str, Any] = {"from_height": from_height, "to_height": to_height}
+        if archive_uri is not None:
+            if not archive_uri:
+                raise ValueError("archive_uri must not be empty")
+            params["archive_uri"] = archive_uri
+        result = self._call("archive_window", params)
+        if not isinstance(result, dict):
+            raise RpcProtocolError("archive_window result must be an object")
+        return result
+
+    def _verification_report(self, method: str) -> dict[str, Any]:
+        result = self._call(method, {})
+        if not isinstance(result, dict):
+            raise RpcProtocolError(f"{method} result must be an object")
+        return result
+
+    def verify_blocks(self) -> dict[str, Any]:
+        """Re-verify the node's local block-log chain and signatures (public read)."""
+        return self._verification_report("verify_blocks")
+
+    def verify_state(self) -> dict[str, Any]:
+        """Re-verify the aggregate local state, including block-log integrity."""
+        return self._verification_report("verify_state")
+
+    def verify_bridge(self) -> dict[str, Any]:
+        """Re-verify local bridge-state invariants."""
+        return self._verification_report("verify_bridge")
+
+    def verify_mempool(self) -> dict[str, Any]:
+        """Re-verify admitted mempool entries against local policy."""
+        return self._verification_report("verify_mempool")
+
+    def verify_shielded(self) -> dict[str, Any]:
+        """Re-verify the local shielded-state commitment and accounting."""
+        return self._verification_report("verify_shielded")
+
+    @staticmethod
+    def _required_text(value: object, field: str) -> str:
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"{field} must be a non-empty string")
+        return value
+
+    def _object_read(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        result = self._call(method, params)
+        if not isinstance(result, dict):
+            raise RpcProtocolError(f"{method} result must be an object")
+        return result
+
+    def shield_scan(self, owner: str) -> list[dict[str, Any]]:
+        """List the shielded notes visible to `owner` (public read, `--owner`)."""
+        result = self._call("shield_scan", {"owner": self._required_text(owner, "owner")})
+        if not isinstance(result, list):
+            raise RpcProtocolError("shield_scan result must be a list")
+        return result
+
+    def shield_disclose(self, note_id: str) -> dict[str, Any]:
+        """Disclose one shielded note by id (public read, `--note-id`)."""
+        return self._object_read(
+            "shield_disclose", {"note_id": self._required_text(note_id, "note_id")}
+        )
+
+    def vault_bridge_route(self, asset_id: str) -> dict[str, Any]:
+        """Verify and report the governed vault bridge route for an asset."""
+        return self._object_read(
+            "vault_bridge_route", {"asset_id": self._required_text(asset_id, "asset_id")}
+        )
+
+    def market_ops_status(self, asset_id: str, *, epoch: int | None = None) -> dict[str, Any]:
+        """Market-operations status for an asset, optionally pinned to an epoch."""
+        params: dict[str, Any] = {"asset_id": self._required_text(asset_id, "asset_id")}
+        if epoch is not None:
+            if isinstance(epoch, bool) or not isinstance(epoch, int) or epoch < 0:
+                raise ValueError("epoch must be a non-negative integer")
+            params["epoch"] = epoch
+        return self._object_read("market_ops_status", params)
+
+    def asset_orchard_action_status(
+        self,
+        nullifiers: tuple[str, str] | list[str],
+        output_commitments: tuple[str, str] | list[str],
+    ) -> dict[str, Any]:
+        """Status of one Asset-Orchard action's two nullifiers and two output commitments.
+
+        The node takes exactly two of each (`--nullifier-1`, `--nullifier-2`,
+        `--output-commitment-1`, `--output-commitment-2`).
+        """
+        params: dict[str, Any] = {}
+        for prefix, values in (("nullifier", nullifiers), ("output_commitment", output_commitments)):
+            if not isinstance(values, (list, tuple)) or len(values) != 2:
+                raise ValueError(f"{prefix}s must hold exactly two values")
+            for index, value in enumerate(values, start=1):
+                params[f"{prefix}_{index}"] = self._required_text(value, f"{prefix}_{index}")
+        return self._object_read("asset_orchard_action_status", params)
 
     def account_tx(
         self,
