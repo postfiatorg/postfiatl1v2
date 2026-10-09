@@ -90,8 +90,10 @@ def method_checks(method: str, result: Any, args: argparse.Namespace) -> dict[st
         )
     elif method == "orchard_pool_report":
         checks["orchard_pool_passed"] = isinstance(result, dict) and result.get("passed") is True
-    elif method in {"blocks", "receipts", "batch_archive"}:
+    elif method in {"blocks", "receipts", "batch_archive", "shield_scan"}:
         checks[f"{method}_is_list"] = isinstance(result, list)
+    elif method in PUBLIC_READ_OBJECT_METHODS:
+        checks[f"{method}_is_object"] = isinstance(result, dict)
     else:
         checks["result_present"] = result is not None
     return checks
@@ -104,6 +106,91 @@ def report_has_sensitive_text(report: dict[str, Any]) -> bool:
     if SENSITIVE_RE.search(text):
         return True
     return False
+
+
+# Documented public reads (docs/rpc/method-coverage.md) whose result is one
+# report object; `shield_scan` is the list-shaped one and is checked above.
+PUBLIC_READ_OBJECT_METHODS = frozenset(
+    {
+        "archive_window",
+        "verify_blocks",
+        "verify_state",
+        "verify_bridge",
+        "verify_mempool",
+        "verify_shielded",
+        "shield_disclose",
+        "vault_bridge_route",
+        "vault_bridge_status",
+        "market_ops_status",
+        "asset_orchard_action_status",
+        "nav_reserve_proof_status",
+        "fx_fix_list",
+        "fx_fix_info",
+        "fx_fix_reservation_info",
+        "fx_fix_quote",
+        "pfusdc_ingress_preflight",
+        "pfusdc_egress_witness",
+        "yolo_target_receipt",
+    }
+)
+
+# Every `--method` value the CLI accepts, in display order. The documented
+# public reads are listed after the long-standing methods.
+CLI_METHODS: tuple[str, ...] = (
+    "status",
+    "server_info",
+    "ledger",
+    "fee",
+    "validators",
+    "manifests",
+    "metrics",
+    "blocks",
+    "receipts",
+    "tx",
+    "account",
+    "atomic_settlement_template",
+    "escrow_info",
+    "account_escrows",
+    "offer_info",
+    "account_offers",
+    "book_offers",
+    "nft_info",
+    "account_nfts",
+    "issuer_nfts",
+    "mempool_status",
+    "bridge_status",
+    "navcoin_bridge_routes",
+    "navcoin_bridge_packet",
+    "navcoin_bridge_claims",
+    "navcoin_bridge_supply_status",
+    "navcoin_bridge_receipt_replay",
+    "shield_turnstile",
+    "orchard_pool_report",
+    "account_tx_index_status",
+    "batch_archive",
+    "account_tx",
+    "account_tx_history",
+    "archive_window",
+    "verify_blocks",
+    "verify_state",
+    "verify_bridge",
+    "verify_mempool",
+    "verify_shielded",
+    "shield_scan",
+    "shield_disclose",
+    "vault_bridge_route",
+    "vault_bridge_status",
+    "market_ops_status",
+    "asset_orchard_action_status",
+    "nav_reserve_proof_status",
+    "fx_fix_list",
+    "fx_fix_info",
+    "fx_fix_reservation_info",
+    "fx_fix_quote",
+    "pfusdc_ingress_preflight",
+    "pfusdc_egress_witness",
+    "yolo_target_receipt",
+)
 
 
 def require_arg(args: argparse.Namespace, name: str, method: str) -> Any:
@@ -241,51 +328,67 @@ def call_method(client: PostFiatRpcClient, args: argparse.Namespace) -> Any:
             max_windows=args.max_windows,
             allow_truncated=args.allow_truncated,
         )
+    if method == "archive_window":
+        return client.archive_window(
+            require_arg(args, "from_height", method),
+            require_arg(args, "to_height", method),
+            archive_uri=args.archive_uri,
+        )
+    if method in {"verify_blocks", "verify_state", "verify_bridge", "verify_mempool", "verify_shielded"}:
+        return getattr(client, method)()
+    if method == "shield_scan":
+        return client.shield_scan(require_arg(args, "owner", method))
+    if method == "shield_disclose":
+        return client.shield_disclose(require_arg(args, "note_id", method))
+    if method in {"vault_bridge_route", "vault_bridge_status", "nav_reserve_proof_status"}:
+        return getattr(client, method)(require_arg(args, "asset_id", method))
+    if method == "market_ops_status":
+        return client.market_ops_status(require_arg(args, "asset_id", method), epoch=args.epoch)
+    if method == "asset_orchard_action_status":
+        return client.asset_orchard_action_status(
+            (require_arg(args, "nullifier_1", method), require_arg(args, "nullifier_2", method)),
+            (
+                require_arg(args, "output_commitment_1", method),
+                require_arg(args, "output_commitment_2", method),
+            ),
+        )
+    if method == "fx_fix_list":
+        return client.fx_fix_list(
+            base_asset_id=args.base_asset_id,
+            quote_asset_id=args.quote_asset_id,
+            active_only=args.active_only,
+            limit=args.limit,
+        )
+    if method == "fx_fix_info":
+        return client.fx_fix_info(require_arg(args, "fix_packet_hash", method))
+    if method == "fx_fix_reservation_info":
+        return client.fx_fix_reservation_info(require_arg(args, "reservation_id", method))
+    if method == "fx_fix_quote":
+        return client.fx_fix_quote(
+            require_arg(args, "fix_packet_hash", method),
+            require_arg(args, "base_atoms", method),
+        )
+    if method == "pfusdc_ingress_preflight":
+        return client.pfusdc_ingress_preflight(
+            require_arg(args, "asset_id", method),
+            recipient=require_arg(args, "recipient", method),
+            depositor=require_arg(args, "depositor", method),
+            amount_atoms=require_arg(args, "amount_atoms", method),
+        )
+    if method == "pfusdc_egress_witness":
+        return client.pfusdc_egress_witness(
+            require_arg(args, "withdrawal_id", method),
+            prior_checkpoint=args.prior_checkpoint,
+        )
+    if method == "yolo_target_receipt":
+        return client.yolo_target_receipt(require_arg(args, "registration_id", method))
     raise SystemExit(f"unsupported method: {method}")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--endpoint", required=True, help="Endpoint as label=host:port")
-    parser.add_argument(
-        "--method",
-        required=True,
-        choices=[
-            "status",
-            "server_info",
-            "ledger",
-            "fee",
-            "validators",
-            "manifests",
-            "metrics",
-            "blocks",
-            "receipts",
-            "tx",
-            "account",
-            "atomic_settlement_template",
-            "escrow_info",
-            "account_escrows",
-            "offer_info",
-            "account_offers",
-            "book_offers",
-            "nft_info",
-            "account_nfts",
-            "issuer_nfts",
-            "mempool_status",
-            "bridge_status",
-            "navcoin_bridge_routes",
-            "navcoin_bridge_packet",
-            "navcoin_bridge_claims",
-            "navcoin_bridge_supply_status",
-            "navcoin_bridge_receipt_replay",
-            "shield_turnstile",
-            "orchard_pool_report",
-            "account_tx_index_status",
-            "batch_archive",
-            "account_tx",
-            "account_tx_history",
-        ],
-    )
+    parser.add_argument("--method", required=True, choices=list(CLI_METHODS))
     parser.add_argument("--address")
     parser.add_argument("--route-id")
     parser.add_argument("--packet-hash")
@@ -325,6 +428,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-truncated", action="store_true")
     parser.add_argument("--require-row", action="store_true")
     parser.add_argument("--audit-block-log", action="store_true")
+    # Documented public reads (docs/rpc/method-coverage.md)
+    parser.add_argument("--archive-uri")
+    parser.add_argument("--owner")
+    parser.add_argument("--note-id")
+    parser.add_argument("--asset-id")
+    parser.add_argument("--epoch", type=int)
+    parser.add_argument("--nullifier-1")
+    parser.add_argument("--nullifier-2")
+    parser.add_argument("--output-commitment-1")
+    parser.add_argument("--output-commitment-2")
+    parser.add_argument("--base-asset-id")
+    parser.add_argument("--quote-asset-id")
+    parser.add_argument("--active-only", action="store_true")
+    parser.add_argument("--fix-packet-hash")
+    parser.add_argument("--reservation-id")
+    parser.add_argument("--base-atoms", type=int)
+    parser.add_argument("--recipient")
+    parser.add_argument("--depositor")
+    parser.add_argument("--amount-atoms", type=int)
+    parser.add_argument("--withdrawal-id")
+    parser.add_argument("--prior-checkpoint")
+    parser.add_argument("--registration-id")
     parser.add_argument("--timeout-seconds", type=float, default=8.0)
     parser.add_argument("--response-byte-cap", type=int, default=1_048_576)
     parser.add_argument(
