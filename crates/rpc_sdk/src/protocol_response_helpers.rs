@@ -94,6 +94,10 @@ pub fn validate_response_kind_with_context(
         RpcResponseKind::Metrics => validate_metrics_result(result),
         RpcResponseKind::Ledger => validate_ledger_result(result),
         RpcResponseKind::VerifyState => validate_state_verification_result(result),
+        RpcResponseKind::VerifyBlocks => validate_block_log_verification_result(result),
+        RpcResponseKind::VerifyBridge => validate_bridge_verification_result(result),
+        RpcResponseKind::VerifyMempool => validate_mempool_verification_result(result),
+        RpcResponseKind::VerifyShielded => validate_shielded_verification_result(result),
         RpcResponseKind::ValidateLocalKeys { validators } => {
             validate_local_key_result(result, validators)
         }

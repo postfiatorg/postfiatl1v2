@@ -3752,3 +3752,104 @@
             },
         );
     }
+
+    const HEX96: &str =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    fn block_log_report() -> serde_json::Value {
+        json!({"verified": true, "block_count": 7, "tip_hash": HEX96, "state_root": HEX96})
+    }
+
+    fn bridge_report() -> serde_json::Value {
+        json!({
+            "verified": true,
+            "domain_count": 1,
+            "transfer_count": 1,
+            "attestation_count": 1,
+            "replay_cache_count": 1,
+            "inbound_used": 10,
+            "outbound_used": 5,
+            "latest_transfer_id": HEX96
+        })
+    }
+
+    fn mempool_report() -> serde_json::Value {
+        json!({
+            "verified": true,
+            "pending_count": 1,
+            "sender_count": 2,
+            "total_amount": 5,
+            "total_fee": 1,
+            "latest_tx_id": HEX96
+        })
+    }
+
+    fn shielded_report() -> serde_json::Value {
+        json!({
+            "verified": true,
+            "note_count": 2,
+            "nullifier_count": 1,
+            "turnstile_event_count": 1,
+            "tree_root": HEX96,
+            "bootstrap_deposit_total": 100,
+            "migration_total": 50,
+            "orchard_deposit_total": 0,
+            "spent_note_count": 1,
+            "live_note_count": 1,
+            "latest_turnstile_event_id": HEX96
+        })
+    }
+
+    #[test]
+    fn standalone_verification_reports_validate_like_their_verify_state_sections() {
+        for (kind, report) in [
+            (RpcResponseKind::VerifyBlocks, block_log_report()),
+            (RpcResponseKind::VerifyBridge, bridge_report()),
+            (RpcResponseKind::VerifyMempool, mempool_report()),
+            (RpcResponseKind::VerifyShielded, shielded_report()),
+        ] {
+            let response = success_response("verify-1", &report, vec![]).expect("report response");
+            validate_health_response(&response, kind).expect("standalone report validates");
+        }
+    }
+
+    #[test]
+    fn standalone_verification_reports_reject_the_same_invariants_as_verify_state() {
+        let mut blocks = block_log_report();
+        blocks["tip_hash"] = json!("not-hex");
+        let mut bridge = bridge_report();
+        bridge["attestation_count"] = json!(2);
+        let mut mempool = mempool_report();
+        mempool["sender_count"] = json!(3);
+        let mut shielded = shielded_report();
+        shielded["live_note_count"] = json!(5);
+        let mut unverified = block_log_report();
+        unverified["verified"] = json!(false);
+
+        for (kind, report, field) in [
+            (RpcResponseKind::VerifyBlocks, blocks, "tip_hash"),
+            (RpcResponseKind::VerifyBridge, bridge, "attestation_count"),
+            (RpcResponseKind::VerifyMempool, mempool, "sender_count"),
+            (RpcResponseKind::VerifyShielded, shielded, "live_note_count"),
+            (RpcResponseKind::VerifyBlocks, unverified, "verified"),
+        ] {
+            let response = success_response("verify-1", &report, vec![]).expect("report response");
+            let error = validate_health_response(&response, kind)
+                .expect_err("invariant violation is rejected");
+            assert!(
+                error.to_string().contains(field),
+                "{kind:?}: expected the error to name `{field}`, got {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn standalone_verification_reports_do_not_require_the_state_schema_or_siblings() {
+        // A standalone report carries no `schema`, `chain_id` or sibling sections;
+        // the state validator must still require them.
+        let response = success_response("verify-1", &block_log_report(), vec![]).expect("report response");
+        validate_health_response(&response, RpcResponseKind::VerifyBlocks).expect("standalone");
+        validate_health_response(&response, RpcResponseKind::VerifyState)
+            .expect_err("a bare block_log report is not a state verification report");
+    }
+

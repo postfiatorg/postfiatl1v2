@@ -700,6 +700,26 @@
         assert_eq!(state.method, METHOD_VERIFY_STATE);
         assert_eq!(state.params, json!({}));
 
+        let verify_blocks = verify_blocks_request("verify-blocks-1");
+        assert_eq!(verify_blocks.id, "verify-blocks-1");
+        assert_eq!(verify_blocks.method, METHOD_VERIFY_BLOCKS);
+        assert_eq!(verify_blocks.params, json!({}));
+
+        let verify_bridge = verify_bridge_request("verify-bridge-1");
+        assert_eq!(verify_bridge.id, "verify-bridge-1");
+        assert_eq!(verify_bridge.method, METHOD_VERIFY_BRIDGE);
+        assert_eq!(verify_bridge.params, json!({}));
+
+        let verify_mempool = verify_mempool_request("verify-mempool-1");
+        assert_eq!(verify_mempool.id, "verify-mempool-1");
+        assert_eq!(verify_mempool.method, METHOD_VERIFY_MEMPOOL);
+        assert_eq!(verify_mempool.params, json!({}));
+
+        let verify_shielded = verify_shielded_request("verify-shielded-1");
+        assert_eq!(verify_shielded.id, "verify-shielded-1");
+        assert_eq!(verify_shielded.method, METHOD_VERIFY_SHIELDED);
+        assert_eq!(verify_shielded.params, json!({}));
+
         let keys = validate_local_keys_request("keys-1", 4);
         assert_eq!(keys.method, METHOD_VALIDATE_LOCAL_KEYS);
         assert_eq!(keys.params, json!({"validators": 4}));
@@ -1333,6 +1353,30 @@
             Some(RpcRequestKind::VerifyState),
         )
         .expect("state request");
+        validate_request(
+            &verify_blocks_request("verify-blocks-1"),
+            Some("verify-blocks-1"),
+            Some(RpcRequestKind::VerifyBlocks),
+        )
+        .expect("verify_blocks request");
+        validate_request(
+            &verify_bridge_request("verify-bridge-1"),
+            Some("verify-bridge-1"),
+            Some(RpcRequestKind::VerifyBridge),
+        )
+        .expect("verify_bridge request");
+        validate_request(
+            &verify_mempool_request("verify-mempool-1"),
+            Some("verify-mempool-1"),
+            Some(RpcRequestKind::VerifyMempool),
+        )
+        .expect("verify_mempool request");
+        validate_request(
+            &verify_shielded_request("verify-shielded-1"),
+            Some("verify-shielded-1"),
+            Some(RpcRequestKind::VerifyShielded),
+        )
+        .expect("verify_shielded request");
         validate_request(
             &validate_local_keys_request("keys-1", 4),
             Some("keys-1"),

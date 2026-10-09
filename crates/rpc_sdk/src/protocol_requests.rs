@@ -70,6 +70,10 @@ pub const METHOD_SERVER_INFO: &str = "server_info";
 pub const METHOD_METRICS: &str = "metrics";
 pub const METHOD_LEDGER: &str = "ledger";
 pub const METHOD_VERIFY_STATE: &str = "verify_state";
+pub const METHOD_VERIFY_BLOCKS: &str = "verify_blocks";
+pub const METHOD_VERIFY_BRIDGE: &str = "verify_bridge";
+pub const METHOD_VERIFY_MEMPOOL: &str = "verify_mempool";
+pub const METHOD_VERIFY_SHIELDED: &str = "verify_shielded";
 pub const METHOD_VALIDATE_LOCAL_KEYS: &str = "validate_local_keys";
 pub const METHOD_ACCOUNT: &str = "account";
 pub const METHOD_ACCOUNT_TX: &str = "account_tx";
@@ -354,6 +358,22 @@ pub fn ledger_request(id: impl Into<String>, limit: Option<usize>) -> RpcRequest
 
 pub fn verify_state_request(id: impl Into<String>) -> RpcRequest {
     RpcRequest::empty(id, METHOD_VERIFY_STATE)
+}
+
+pub fn verify_blocks_request(id: impl Into<String>) -> RpcRequest {
+    RpcRequest::empty(id, METHOD_VERIFY_BLOCKS)
+}
+
+pub fn verify_bridge_request(id: impl Into<String>) -> RpcRequest {
+    RpcRequest::empty(id, METHOD_VERIFY_BRIDGE)
+}
+
+pub fn verify_mempool_request(id: impl Into<String>) -> RpcRequest {
+    RpcRequest::empty(id, METHOD_VERIFY_MEMPOOL)
+}
+
+pub fn verify_shielded_request(id: impl Into<String>) -> RpcRequest {
+    RpcRequest::empty(id, METHOD_VERIFY_SHIELDED)
 }
 
 pub fn validate_local_keys_request(id: impl Into<String>, validators: u32) -> RpcRequest {
@@ -1481,6 +1501,10 @@ pub enum RpcRequestKind {
     Metrics,
     Ledger,
     VerifyState,
+    VerifyBlocks,
+    VerifyBridge,
+    VerifyMempool,
+    VerifyShielded,
     ValidateLocalKeys { validators: Option<u32> },
     Account,
     AccountTx,
@@ -1881,6 +1905,10 @@ pub enum RpcResponseKind {
     Metrics,
     Ledger,
     VerifyState,
+    VerifyBlocks,
+    VerifyBridge,
+    VerifyMempool,
+    VerifyShielded,
     ValidateLocalKeys { validators: Option<u32> },
     Account,
     AccountTx,
@@ -2442,6 +2470,10 @@ fn request_kind_method(kind: RpcRequestKind) -> &'static str {
         RpcRequestKind::Metrics => METHOD_METRICS,
         RpcRequestKind::Ledger => METHOD_LEDGER,
         RpcRequestKind::VerifyState => METHOD_VERIFY_STATE,
+        RpcRequestKind::VerifyBlocks => METHOD_VERIFY_BLOCKS,
+        RpcRequestKind::VerifyBridge => METHOD_VERIFY_BRIDGE,
+        RpcRequestKind::VerifyMempool => METHOD_VERIFY_MEMPOOL,
+        RpcRequestKind::VerifyShielded => METHOD_VERIFY_SHIELDED,
         RpcRequestKind::ValidateLocalKeys { .. } => METHOD_VALIDATE_LOCAL_KEYS,
         RpcRequestKind::Account => METHOD_ACCOUNT,
         RpcRequestKind::AccountTx => METHOD_ACCOUNT_TX,
@@ -2554,6 +2586,10 @@ fn validate_request_params(
         | RpcRequestKind::ServerInfo
         | RpcRequestKind::Metrics
         | RpcRequestKind::VerifyState
+        | RpcRequestKind::VerifyBlocks
+        | RpcRequestKind::VerifyBridge
+        | RpcRequestKind::VerifyMempool
+        | RpcRequestKind::VerifyShielded
         | RpcRequestKind::Fee
         | RpcRequestKind::Validators
         | RpcRequestKind::Manifests => {

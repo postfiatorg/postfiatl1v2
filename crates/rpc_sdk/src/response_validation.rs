@@ -209,14 +209,7 @@ fn validate_state_verification_result(result: &Value) -> Result<(), RpcResponseV
     lower_hex_field(result, "genesis_hash", 96)?;
     nonzero_u32_field(result, "protocol_version")?;
 
-    expect_bool_eq(result, "block_log.verified", true)?;
-    let block_count = u64_field(result, "block_log.block_count")?;
-    validate_block_tip_hash(
-        block_count,
-        string_field(result, "block_log.tip_hash")?,
-        "block_log.tip_hash",
-    )?;
-    lower_hex_field(result, "block_log.state_root", 96)?;
+    validate_block_log_verification_section(result, "block_log")?;
 
     expect_bool_eq(result, "governance.verified", true)?;
     nonzero_u64_field(result, "governance.active_validator_count")?;
@@ -229,74 +222,145 @@ fn validate_state_verification_result(result: &Value) -> Result<(), RpcResponseV
         "governance.latest_amendment_id",
     )?;
 
-    expect_bool_eq(result, "bridge.verified", true)?;
-    u64_field(result, "bridge.domain_count")?;
-    let bridge_transfer_count = u64_field(result, "bridge.transfer_count")?;
-    let bridge_attestation_count = u64_field(result, "bridge.attestation_count")?;
+    validate_bridge_verification_section(result, "bridge")?;
+    validate_shielded_verification_section(result, "shielded")?;
+    validate_mempool_verification_section(result, "mempool")?;
+    Ok(())
+}
+
+/// `verify_blocks` returns the same report `verify_state` nests as `block_log`.
+fn validate_block_log_verification_result(result: &Value) -> Result<(), RpcResponseValidationError> {
+    validate_block_log_verification_section(result, "")
+}
+
+/// `verify_bridge` returns the same report `verify_state` nests as `bridge`.
+fn validate_bridge_verification_result(result: &Value) -> Result<(), RpcResponseValidationError> {
+    validate_bridge_verification_section(result, "")
+}
+
+/// `verify_mempool` returns the same report `verify_state` nests as `mempool`.
+fn validate_mempool_verification_result(result: &Value) -> Result<(), RpcResponseValidationError> {
+    validate_mempool_verification_section(result, "")
+}
+
+/// `verify_shielded` returns the same report `verify_state` nests as `shielded`.
+fn validate_shielded_verification_result(result: &Value) -> Result<(), RpcResponseValidationError> {
+    validate_shielded_verification_section(result, "")
+}
+
+/// Field path of `field` inside the `prefix` section, or `field` itself for a
+/// standalone report (`prefix == ""`).
+fn section_path(prefix: &str, field: &str) -> String {
+    if prefix.is_empty() {
+        field.to_string()
+    } else {
+        format!("{prefix}.{field}")
+    }
+}
+
+fn validate_block_log_verification_section(
+    result: &Value,
+    prefix: &str,
+) -> Result<(), RpcResponseValidationError> {
+    let path = |field: &str| section_path(prefix, field);
+    expect_bool_eq(result, &path("verified"), true)?;
+    let block_count = u64_field(result, &path("block_count"))?;
+    validate_block_tip_hash(
+        block_count,
+        string_field(result, &path("tip_hash"))?,
+        &path("tip_hash"),
+    )?;
+    lower_hex_field(result, &path("state_root"), 96)?;
+    Ok(())
+}
+
+fn validate_bridge_verification_section(
+    result: &Value,
+    prefix: &str,
+) -> Result<(), RpcResponseValidationError> {
+    let path = |field: &str| section_path(prefix, field);
+    expect_bool_eq(result, &path("verified"), true)?;
+    u64_field(result, &path("domain_count"))?;
+    let bridge_transfer_count = u64_field(result, &path("transfer_count"))?;
+    let bridge_attestation_count = u64_field(result, &path("attestation_count"))?;
     if bridge_attestation_count > bridge_transfer_count {
         return Err(invalid_result(
-            "bridge.attestation_count",
+            path("attestation_count"),
             "expected no more attestations than transfers",
         ));
     }
-    let bridge_replay_cache_count = u64_field(result, "bridge.replay_cache_count")?;
+    let bridge_replay_cache_count = u64_field(result, &path("replay_cache_count"))?;
     if bridge_replay_cache_count > bridge_transfer_count {
         return Err(invalid_result(
-            "bridge.replay_cache_count",
+            path("replay_cache_count"),
             "expected no more replay cache entries than transfers",
         ));
     }
-    u64_field(result, "bridge.inbound_used")?;
-    u64_field(result, "bridge.outbound_used")?;
+    u64_field(result, &path("inbound_used"))?;
+    u64_field(result, &path("outbound_used"))?;
     validate_optional_hash_for_count(
         bridge_transfer_count,
-        string_field(result, "bridge.latest_transfer_id")?,
-        "bridge.latest_transfer_id",
+        string_field(result, &path("latest_transfer_id"))?,
+        &path("latest_transfer_id"),
     )?;
+    Ok(())
+}
 
-    expect_bool_eq(result, "shielded.verified", true)?;
-    let note_count = u64_field(result, "shielded.note_count")?;
-    u64_field(result, "shielded.nullifier_count")?;
-    let turnstile_event_count = u64_field(result, "shielded.turnstile_event_count")?;
-    lower_hex_field(result, "shielded.tree_root", 96)?;
-    u64_field(result, "shielded.bootstrap_deposit_total")?;
-    u64_field(result, "shielded.migration_total")?;
-    u64_field(result, "shielded.orchard_deposit_total")?;
-    let spent_note_count = u64_field(result, "shielded.spent_note_count")?;
-    let live_note_count = u64_field(result, "shielded.live_note_count")?;
+fn validate_shielded_verification_section(
+    result: &Value,
+    prefix: &str,
+) -> Result<(), RpcResponseValidationError> {
+    let path = |field: &str| section_path(prefix, field);
+    expect_bool_eq(result, &path("verified"), true)?;
+    let note_count = u64_field(result, &path("note_count"))?;
+    u64_field(result, &path("nullifier_count"))?;
+    let turnstile_event_count = u64_field(result, &path("turnstile_event_count"))?;
+    lower_hex_field(result, &path("tree_root"), 96)?;
+    u64_field(result, &path("bootstrap_deposit_total"))?;
+    u64_field(result, &path("migration_total"))?;
+    u64_field(result, &path("orchard_deposit_total"))?;
+    let spent_note_count = u64_field(result, &path("spent_note_count"))?;
+    let live_note_count = u64_field(result, &path("live_note_count"))?;
     match spent_note_count.checked_add(live_note_count) {
         Some(total) if total == note_count => {}
         _ => {
             return Err(invalid_result(
-                "shielded.live_note_count",
+                path("live_note_count"),
                 "expected spent_note_count plus live_note_count to equal note_count",
             ));
         }
     }
     validate_optional_hash_for_count(
         turnstile_event_count,
-        string_field(result, "shielded.latest_turnstile_event_id")?,
-        "shielded.latest_turnstile_event_id",
+        string_field(result, &path("latest_turnstile_event_id"))?,
+        &path("latest_turnstile_event_id"),
     )?;
+    Ok(())
+}
 
-    expect_bool_eq(result, "mempool.verified", true)?;
-    let pending_count = u64_field(result, "mempool.pending_count")?;
-    let sender_count = u64_field(result, "mempool.sender_count")?;
+fn validate_mempool_verification_section(
+    result: &Value,
+    prefix: &str,
+) -> Result<(), RpcResponseValidationError> {
+    let path = |field: &str| section_path(prefix, field);
+    expect_bool_eq(result, &path("verified"), true)?;
+    let pending_count = u64_field(result, &path("pending_count"))?;
+    let sender_count = u64_field(result, &path("sender_count"))?;
     if pending_count
         .checked_mul(2)
         .is_some_and(|sender_count_limit| sender_count > sender_count_limit)
     {
         return Err(invalid_result(
-            "mempool.sender_count",
+            path("sender_count"),
             "expected no more than two senders per pending transaction",
         ));
     }
-    u64_field(result, "mempool.total_amount")?;
-    u64_field(result, "mempool.total_fee")?;
+    u64_field(result, &path("total_amount"))?;
+    u64_field(result, &path("total_fee"))?;
     validate_optional_hash_for_count(
         pending_count,
-        string_field(result, "mempool.latest_tx_id")?,
-        "mempool.latest_tx_id",
+        string_field(result, &path("latest_tx_id"))?,
+        &path("latest_tx_id"),
     )?;
     Ok(())
 }
