@@ -5059,3 +5059,126 @@ fn invalid_response_validation(error: RpcResponseValidationError) -> io::Error {
 fn invalid_request_validation(error: RpcRequestValidationError) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, error)
 }
+
+const OWNED_OBJECTS_RESULT_SCHEMA: &str = "postfiat-owned-objects-v1";
+/// Hex length of the 32-byte owned object id (`OwnedObject::id`).
+const OWNED_OBJECT_ID_HEX_LEN: usize = 64;
+
+/// Reads a hex string of a fixed length, accepting either case. The node
+/// decodes these identifiers with a case-insensitive hex decoder and echoes
+/// them as stored, so a lowercase-only rule would reject valid reports.
+fn hex_field_any_case<'a>(
+    value: &'a Value,
+    path: &str,
+    expected_len: usize,
+) -> Result<&'a str, RpcResponseValidationError> {
+    let text = string_field(value, path)?;
+    if text.len() != expected_len || !text.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(invalid_result(
+            path,
+            format!("expected {expected_len} hex characters"),
+        ));
+    }
+    Ok(text)
+}
+
+/// Validates an `owned_objects` report (`OwnedObjectsReport` in the node),
+/// mirroring the node builder in crates/node lifecycle_queries.rs: schema
+/// pinned, common chain fields, the owner key echoed, the limit bounded by
+/// `OWNED_OBJECTS_MAX_LIMIT`, `object_count` equal to the row count and at
+/// most the limit, `truncated` only when the page is full, every row owned
+/// by the requested key and (when an asset filter was given) carrying that
+/// asset, rows sorted by (asset, id, version), and `total_value` equal to
+/// the sum of the returned values unless the page was truncated, in which
+/// case the node summed before truncating so it must be at least that sum.
+fn validate_owned_objects_result(result: &Value) -> Result<(), RpcResponseValidationError> {
+    expect_string_eq(result, "schema", OWNED_OBJECTS_RESULT_SCHEMA)?;
+    validate_asset_read_common_fields(result)?;
+    let owner_public_key_hex = hex_field_any_case(
+        result,
+        "owner_public_key_hex",
+        OWNED_OWNER_PUBLIC_KEY_HEX_LEN,
+    )?;
+    let requested_asset = match result.get("asset") {
+        None | Some(Value::Null) => None,
+        Some(_) => Some(clean_string_field(result, "asset")?),
+    };
+    let limit = nonzero_u64_field(result, "limit")?;
+    if limit > OWNED_OBJECTS_MAX_LIMIT as u64 {
+        return Err(invalid_result(
+            "limit",
+            format!("expected limit <= {OWNED_OBJECTS_MAX_LIMIT}"),
+        ));
+    }
+    let truncated = bool_field(result, "truncated")?;
+    let object_count = u64_field(result, "object_count")?;
+    let total_value = u64_field(result, "total_value")?;
+    let objects = array_field(result, "objects")?;
+    if object_count != u64::try_from(objects.len()).unwrap_or(u64::MAX) {
+        return Err(invalid_result(
+            "object_count",
+            "expected object_count to match objects length",
+        ));
+    }
+    if object_count > limit {
+        return Err(invalid_result(
+            "object_count",
+            "expected at most limit objects",
+        ));
+    }
+    if truncated && object_count != limit {
+        return Err(invalid_result(
+            "truncated",
+            "expected a truncated report to hold exactly limit objects",
+        ));
+    }
+
+    let mut returned_value_sum = 0_u64;
+    let mut previous: Option<(&str, &str, u64)> = None;
+    for (index, object) in objects.iter().enumerate() {
+        let id = hex_field_any_case(object, "id", OWNED_OBJECT_ID_HEX_LEN)?;
+        let version = u64_field(object, "version")?;
+        let object_owner = string_field(object, "owner_pubkey_hex")?;
+        let value = u64_field(object, "value")?;
+        let asset = clean_string_field(object, "asset")?;
+        if object_owner != owner_public_key_hex {
+            return Err(invalid_result(
+                format!("objects[{index}].owner_pubkey_hex"),
+                "expected every object to belong to the requested owner",
+            ));
+        }
+        if let Some(requested_asset) = requested_asset {
+            if asset != requested_asset {
+                return Err(invalid_result(
+                    format!("objects[{index}].asset"),
+                    "expected every object to match the requested asset",
+                ));
+            }
+        }
+        let key = (asset, id, version);
+        if previous.is_some_and(|previous| previous > key) {
+            return Err(invalid_result(
+                format!("objects[{index}]"),
+                "expected objects sorted by (asset, id, version)",
+            ));
+        }
+        previous = Some(key);
+        returned_value_sum = returned_value_sum.checked_add(value).ok_or_else(|| {
+            invalid_result("total_value", "returned object values overflowed")
+        })?;
+    }
+    if truncated {
+        if total_value < returned_value_sum {
+            return Err(invalid_result(
+                "total_value",
+                "expected total_value to be at least the sum of the returned object values when truncated",
+            ));
+        }
+    } else if total_value != returned_value_sum {
+        return Err(invalid_result(
+            "total_value",
+            "expected total_value to equal the sum of the returned object values",
+        ));
+    }
+    Ok(())
+}
