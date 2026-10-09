@@ -1242,6 +1242,158 @@ fn dex_asset_id_result_field<'a>(
     }
 }
 
+/// `nav_reserve_proof_status` mirrors the node's construction: the asset's
+/// registered NAV proof profile (when the asset exists and its profile id is
+/// registered) plus that asset's reserve packets, newest first by
+/// (epoch, submitted_at_height, packet_id) and bounded to the latest sixteen.
+fn validate_nav_reserve_proof_status_result(result: &Value) -> Result<(), RpcResponseValidationError> {
+    expect_string_eq(result, "schema", NAV_RESERVE_PROOF_STATUS_SCHEMA)?;
+    clean_string_field(result, "chain_id")?;
+    lower_hex_field(result, "genesis_hash", 96)?;
+    nonzero_u32_field(result, "protocol_version")?;
+    let current_height = u64_field(result, "current_height")?;
+    lower_hex_field(result, "asset_id", ISSUED_ASSET_ID_HEX_LEN)?;
+
+    let found = bool_field(result, "found")?;
+    let active_profile = field(result, "active_profile")?;
+    if !found && !active_profile.is_null() {
+        return Err(invalid_result(
+            "active_profile",
+            "expected no active profile when the asset is not found",
+        ));
+    }
+    // `found` with a null profile is legitimate: the asset's profile id may
+    // not (or no longer) resolve to a registered profile.
+    if !active_profile.is_null() {
+        validate_nav_proof_profile(active_profile)?;
+    }
+
+    let packets = array_field(result, "packets")?;
+    if packets.len() > NAV_RESERVE_PROOF_STATUS_MAX_PACKETS {
+        return Err(invalid_result(
+            "packets",
+            format!("expected at most {NAV_RESERVE_PROOF_STATUS_MAX_PACKETS} packets"),
+        ));
+    }
+    if !found && !packets.is_empty() {
+        return Err(invalid_result(
+            "packets",
+            "expected no packets when the asset is not found",
+        ));
+    }
+    let mut previous: Option<(u64, u64, String)> = None;
+    for packet in packets {
+        let key = validate_nav_reserve_packet_status(packet, current_height)?;
+        if let Some(previous) = &previous {
+            if key >= *previous {
+                return Err(invalid_result(
+                    "packets",
+                    "expected packets newest first by epoch, submitted_at_height and packet_id",
+                ));
+            }
+        }
+        previous = Some(key);
+    }
+    Ok(())
+}
+
+fn validate_nav_proof_profile(profile: &Value) -> Result<(), RpcResponseValidationError> {
+    if !profile.is_object() {
+        return Err(invalid_result("active_profile", "expected object value"));
+    }
+    clean_string_field(profile, "profile_id")?;
+    clean_string_field(profile, "registered_by")?;
+    clean_string_field(profile, "verifier_kind")?;
+    clean_string_field_allow_empty(profile, "source_class")?;
+    u64_field(profile, "max_snapshot_age_blocks")?;
+    u64_field(profile, "challenge_window_blocks")?;
+    u64_field(profile, "max_epoch_gap_blocks")?;
+    u64_field(profile, "settle_deadline_blocks")?;
+    u64_field(profile, "min_challenge_bond")?;
+    Ok(())
+}
+
+/// Validates one packet row and returns its ordering key
+/// (epoch, submitted_at_height, packet_id).
+fn validate_nav_reserve_packet_status(
+    packet: &Value,
+    current_height: u64,
+) -> Result<(u64, u64, String), RpcResponseValidationError> {
+    if !packet.is_object() {
+        return Err(invalid_result("packets", "expected packet object"));
+    }
+    let packet_id = clean_string_field(packet, "packet_id")?.to_string();
+    let epoch = u64_field(packet, "epoch")?;
+    clean_string_field(packet, "state")?;
+    optional_hex96_field(packet, "reserve_packet_hash")?;
+    u64_field(packet, "nav_per_unit")?;
+    u64_field(packet, "circulating_supply")?;
+    u64_field(packet, "verified_net_assets")?;
+    let submitted_at_height = u64_field(packet, "submitted_at_height")?;
+    if submitted_at_height > current_height {
+        return Err(invalid_result(
+            "submitted_at_height",
+            "expected submitted_at_height at most current_height",
+        ));
+    }
+    let not_before = u64_field(packet, "observation_not_before")?;
+    let not_after = u64_field(packet, "observation_not_after")?;
+    if not_before > not_after {
+        return Err(invalid_result(
+            "observation_not_after",
+            "expected observation_not_after at least observation_not_before",
+        ));
+    }
+    u64_field(packet, "proof_verified_net_assets")?;
+    u64_field(packet, "consensus_overlay_value")?;
+    u64_field(packet, "gross_assets")?;
+    u64_field(packet, "total_liabilities")?;
+    u64_field(packet, "cryptographically_verified_value")?;
+    u64_field(packet, "attested_value")?;
+    u64_field(packet, "controlled_value")?;
+    u32_range_field(packet, "source_count")?;
+    validate_nav_reserve_trust_counts(packet, "quantity_trust_counts")?;
+    validate_nav_reserve_trust_counts(packet, "valuation_trust_counts")?;
+    optional_hex96_field(packet, "quantity_trust_root")?;
+    optional_hex96_field(packet, "valuation_trust_root")?;
+    optional_hex96_field(packet, "source_disclosure_root")?;
+    Ok((epoch, submitted_at_height, packet_id))
+}
+
+fn validate_nav_reserve_trust_counts(
+    packet: &Value,
+    path: &str,
+) -> Result<(), RpcResponseValidationError> {
+    let counts = field(packet, path)?;
+    if !counts.is_object() {
+        return Err(invalid_result(path, "expected object value"));
+    }
+    let cryptographic = u32_range_field(counts, "cryptographic")?;
+    let attested = u32_range_field(counts, "attested")?;
+    let controlled = u32_range_field(counts, "controlled")?;
+    if cryptographic
+        .checked_add(attested)
+        .and_then(|total| total.checked_add(controlled))
+        .is_none()
+    {
+        return Err(invalid_result(path, "expected trust counts to fit a u32 total"));
+    }
+    Ok(())
+}
+
+fn u32_range_field(value: &Value, path: &str) -> Result<u32, RpcResponseValidationError> {
+    u32::try_from(u64_field(value, path)?).map_err(|_| invalid_result(path, "expected u32 value"))
+}
+
+/// A hash field the node may leave empty: empty, or 96 lowercase hex characters.
+fn optional_hex96_field(value: &Value, path: &str) -> Result<(), RpcResponseValidationError> {
+    let found = clean_string_field_allow_empty(value, path)?;
+    if !found.is_empty() && !is_lower_hex_len(found, 96) {
+        return Err(invalid_result(path, "expected empty or 96 lowercase hex characters"));
+    }
+    Ok(())
+}
+
 fn validate_asset_info_result(result: &Value) -> Result<(), RpcResponseValidationError> {
     expect_string_eq(result, "schema", ASSET_INFO_SCHEMA)?;
     validate_asset_read_common_fields(result)?;

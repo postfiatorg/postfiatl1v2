@@ -700,6 +700,12 @@
         assert_eq!(state.method, METHOD_VERIFY_STATE);
         assert_eq!(state.params, json!({}));
 
+        let nav_hex96 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let nav_status = nav_reserve_proof_status_request("nav-status-1", nav_hex96);
+        assert_eq!(nav_status.id, "nav-status-1");
+        assert_eq!(nav_status.method, METHOD_NAV_RESERVE_PROOF_STATUS);
+        assert_eq!(nav_status.params, json!({"asset_id": nav_hex96}));
+
         let keys = validate_local_keys_request("keys-1", 4);
         assert_eq!(keys.method, METHOD_VALIDATE_LOCAL_KEYS);
         assert_eq!(keys.params, json!({"validators": 4}));
@@ -1333,6 +1339,25 @@
             Some(RpcRequestKind::VerifyState),
         )
         .expect("state request");
+        let nav_hex96 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        validate_request(
+            &nav_reserve_proof_status_request("nav-status-1", nav_hex96),
+            Some("nav-status-1"),
+            Some(RpcRequestKind::NavReserveProofStatus),
+        )
+        .expect("nav reserve proof status request");
+        validate_request(
+            &nav_reserve_proof_status_request("nav-status-1", "not-an-asset-id"),
+            Some("nav-status-1"),
+            Some(RpcRequestKind::NavReserveProofStatus),
+        )
+        .expect_err("asset_id must be a lowercase 96-hex issued asset id");
+        validate_request(
+            &nav_reserve_proof_status_request("nav-status-1", ""),
+            Some("nav-status-1"),
+            Some(RpcRequestKind::NavReserveProofStatus),
+        )
+        .expect_err("asset_id must not be empty");
         validate_request(
             &validate_local_keys_request("keys-1", 4),
             Some("keys-1"),
