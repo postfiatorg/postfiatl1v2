@@ -1537,6 +1537,107 @@ mod tests {
     }
 
     #[test]
+    fn burn5_negative_rehearsal_probes_reject_for_their_own_reasons_with_approvals_present() {
+        // CHO-05: the probes used to strip every approval, so each case that
+        // reached the approval check could only fail for a missing quorum.
+        let fixture = fixture();
+        let governance = fixture.governance.clone();
+        let lock_hash = "11".repeat(48);
+        let transition = signed_transition(
+            &fixture,
+            &governance,
+            10,
+            1,
+            lock_hash.clone(),
+            fixture.cobalt_binding.trust_graph.trust_graph_root.clone(),
+        );
+        let activated = activate(&fixture);
+        let update = signed_rotate_update(&fixture, &activated, 11);
+        let report = crate::cobalt_handoff_rehearsal::negative_probe_report(
+            &fixture.genesis,
+            &governance,
+            &fixture.registry,
+            &transition,
+            &update,
+            &lock_hash,
+            &fixture.validators[0],
+        )
+        .expect("negative probes with real approvals");
+        assert_eq!(report["all_rejected"], true);
+        assert_eq!(report["durable_state_unchanged"], true);
+        assert_eq!(report["positive_fixture_verified"], true);
+        assert_eq!(
+            report["approval_count"].as_u64().expect("approval count"),
+            transition.approvals.len() as u64
+        );
+        assert!(report["scope"]
+            .as_str()
+            .expect("scope")
+            .contains("in-memory"));
+        let cases = report["cases"].as_object().expect("cases");
+        assert_eq!(cases.len(), 6);
+        for (case, expected) in [
+            ("early", "must be ordered at its exact activation height"),
+            ("stale", "approval binding mismatch"),
+            ("wrong_root", "does not bind the active validator registry"),
+            (
+                "self_authorized",
+                "does not bind the active validator registry",
+            ),
+            ("replayed", "replay rejected"),
+            (
+                "mixed_authority",
+                "Cobalt authority mode has no transition record",
+            ),
+        ] {
+            let error = cases[case].as_str().expect("case error");
+            assert!(error.contains(expected), "{case}: {error}");
+            assert!(
+                !error.contains("outside quorum bounds"),
+                "{case} rejected only for a missing quorum: {error}"
+            );
+            assert!(report["expected_reasons"][case].as_str().is_some());
+        }
+
+        // A fixture without approvals is refused up front instead of being
+        // reported as six independent rejections.
+        let mut stripped = transition.clone();
+        stripped.approvals.clear();
+        let error = crate::cobalt_handoff_rehearsal::negative_probe_report(
+            &fixture.genesis,
+            &governance,
+            &fixture.registry,
+            &stripped,
+            &update,
+            &lock_hash,
+            &fixture.validators[0],
+        )
+        .expect_err("stripped approvals must be refused");
+        assert!(error.to_string().contains("carries none"), "{error}");
+
+        // A fixture whose approvals do not verify is refused as not positive.
+        let mut tampered = transition.clone();
+        tampered.approvals[0].signature_hex = "00".repeat(3309);
+        let error = crate::cobalt_handoff_rehearsal::negative_probe_report(
+            &fixture.genesis,
+            &governance,
+            &fixture.registry,
+            &tampered,
+            &update,
+            &lock_hash,
+            &fixture.validators[0],
+        )
+        .expect_err("tampered positive fixture must be refused");
+        assert!(
+            error
+                .to_string()
+                .contains("require a verifying positive signed fixture"),
+            "{error}"
+        );
+        std::fs::remove_dir_all(&fixture.cobalt_root).expect("cleanup");
+    }
+
+    #[test]
     fn handoff_requires_distinct_mldsa65_quorum_approvals() {
         let fixture = fixture();
         let transition = signed_transition(

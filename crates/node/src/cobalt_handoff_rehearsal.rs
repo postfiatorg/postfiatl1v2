@@ -452,6 +452,199 @@ fn abort_activation(
     )
 }
 
+/// Expected rejection markers for the negative rehearsal probes (CHO-05).
+///
+/// Every probe starts from the verified positive signed fixture and varies one
+/// binding. The command fails if a probe is accepted or rejects for a different
+/// reason, so `all_rejected` can no longer be satisfied by a missing quorum
+/// alone (the previous implementation stripped every approval first, so each
+/// probe that reached the approval check failed only for
+/// "approval set is outside quorum bounds").
+const NEGATIVE_EXPECTED_EARLY: &str =
+    "Cobalt authority transition must be ordered at its exact activation height";
+const NEGATIVE_EXPECTED_STALE: &str = "Cobalt authority transition approval binding mismatch";
+const NEGATIVE_EXPECTED_WRONG_ROOT: &str =
+    "Cobalt authority transition does not bind the active validator registry";
+const NEGATIVE_EXPECTED_SELF_AUTHORIZED: &str =
+    "Cobalt authority transition does not bind the active validator registry";
+const NEGATIVE_EXPECTED_REPLAY: &str = "Cobalt authority transition replay rejected";
+const NEGATIVE_EXPECTED_MIXED_AUTHORITY: &str = "Cobalt authority mode has no transition record";
+const NEGATIVE_QUORUM_ONLY_REASON: &str =
+    "Cobalt authority transition approval set is outside quorum bounds";
+const NEGATIVE_SCOPE: &str = "in-memory verification against the clone's initial governance \
+     only; no durable clone state, consensus batch, or live validator was exercised";
+
+fn expect_rejection(case: &str, expected: &str, outcome: Result<(), String>) -> io::Result<String> {
+    match outcome {
+        Ok(()) => Err(invalid(format!("negative case `{case}` was accepted"))),
+        Err(error) if error.contains(expected) => Ok(error),
+        Err(error) => Err(invalid(format!(
+            "negative case `{case}` rejected for an unexpected reason: {error} (expected `{expected}`)"
+        ))),
+    }
+}
+
+/// Runs the negative probes against a signed transition that carries its real
+/// approvals (CHO-05). The positive fixture must verify first; each probe then
+/// varies exactly one binding of that fixture and must reject for its own
+/// reason. Nothing durable is touched: the report covers only this in-memory
+/// scope.
+pub(super) fn negative_probe_report(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    registry: &ValidatorRegistry,
+    transition: &CobaltGovernanceAuthorityTransitionV1,
+    update: &ValidatorRegistryUpdateRecord,
+    cobalt_lock_hash: &str,
+    authorizing_validator: &str,
+) -> io::Result<Value> {
+    if transition.approvals.is_empty() {
+        return Err(invalid(
+            "negative probes require the signed transition's approvals; the fixture carries none",
+        ));
+    }
+    verify_cobalt_authority_transition(
+        genesis,
+        governance,
+        registry,
+        transition,
+        transition.activation_height,
+    )
+    .map_err(|error| {
+        invalid(format!(
+            "negative probes require a verifying positive signed fixture: {error}"
+        ))
+    })?;
+    let before = state_commitment_hex(governance);
+
+    let verify = |candidate: &CobaltGovernanceAuthorityTransitionV1, proposal_slot: u64| {
+        verify_cobalt_authority_transition(genesis, governance, registry, candidate, proposal_slot)
+            .map_err(|error| error.to_string())
+    };
+
+    // One binding varied per case; the approvals stay exactly as signed.
+    let early_error = expect_rejection(
+        "early",
+        NEGATIVE_EXPECTED_EARLY,
+        verify(transition, transition.activation_height - 1),
+    )?;
+
+    let mut stale = transition.clone();
+    stale.activation_height -= 1;
+    stale.transition_id = cobalt_authority_transition_id(&stale)?;
+    let stale_error = expect_rejection(
+        "stale",
+        NEGATIVE_EXPECTED_STALE,
+        verify(&stale, stale.activation_height),
+    )?;
+
+    let mut wrong_root = transition.clone();
+    wrong_root.old_registry_root = "ff".repeat(48);
+    wrong_root.cobalt_registry_root = wrong_root.old_registry_root.clone();
+    wrong_root.transition_id = cobalt_authority_transition_id(&wrong_root)?;
+    let wrong_root_error = expect_rejection(
+        "wrong_root",
+        NEGATIVE_EXPECTED_WRONG_ROOT,
+        verify(&wrong_root, wrong_root.activation_height),
+    )?;
+
+    let mut self_authorized = transition.clone();
+    self_authorized.validators.pop();
+    self_authorized.approval_quorum = 4;
+    self_authorized.cobalt_registry_root = "ee".repeat(48);
+    self_authorized.transition_id = cobalt_authority_transition_id(&self_authorized)?;
+    let self_authorized_error = expect_rejection(
+        "self_authorized",
+        NEGATIVE_EXPECTED_SELF_AUTHORIZED,
+        verify(&self_authorized, self_authorized.activation_height),
+    )?;
+
+    // Apply the verified signed transition once to a temporary clone, then
+    // prove the replay cannot mutate it.
+    let mut activated = governance.clone();
+    apply_cobalt_authority_transition(&mut activated, transition, transition.activation_height)
+        .map_err(invalid)?;
+    let replay_error = expect_rejection(
+        "replayed",
+        NEGATIVE_EXPECTED_REPLAY,
+        apply_cobalt_authority_transition(&mut activated, transition, transition.activation_height),
+    )?;
+
+    // A structurally valid Cobalt-authorized update is inactive under Foundation authority.
+    let mut update = update.clone();
+    update
+        .cobalt_authorizations
+        .push(SignedCobaltValidatorUpdateAuthorizationV1 {
+            schema: SIGNED_COBALT_VALIDATOR_UPDATE_AUTHORIZATION_SCHEMA_V1.to_string(),
+            validator: authorizing_validator.to_string(),
+            authority_transition_id: transition.transition_id.clone(),
+            parent_cobalt_lock_hash: cobalt_lock_hash.to_string(),
+            amendment_sequence: 2,
+            proposal_slot: update.activation_height,
+            expires_at_height: update.activation_height + 10,
+            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            signature_hex: "00".repeat(3309),
+        });
+    let mixed_authority_error = expect_rejection(
+        "mixed_authority",
+        NEGATIVE_EXPECTED_MIXED_AUTHORITY,
+        verify_cobalt_validator_trust_update(
+            genesis,
+            governance,
+            registry,
+            &update,
+            update.activation_height,
+        )
+        .map_err(|error| error.to_string()),
+    )?;
+
+    let cases = [
+        ("early", NEGATIVE_EXPECTED_EARLY, early_error),
+        ("stale", NEGATIVE_EXPECTED_STALE, stale_error),
+        ("wrong_root", NEGATIVE_EXPECTED_WRONG_ROOT, wrong_root_error),
+        (
+            "self_authorized",
+            NEGATIVE_EXPECTED_SELF_AUTHORIZED,
+            self_authorized_error,
+        ),
+        ("replayed", NEGATIVE_EXPECTED_REPLAY, replay_error),
+        (
+            "mixed_authority",
+            NEGATIVE_EXPECTED_MIXED_AUTHORITY,
+            mixed_authority_error,
+        ),
+    ];
+    if let Some((case, _, error)) = cases
+        .iter()
+        .find(|(_, _, error)| error.contains(NEGATIVE_QUORUM_ONLY_REASON))
+    {
+        return Err(invalid(format!(
+            "negative case `{case}` rejected only for a missing quorum: {error}"
+        )));
+    }
+
+    let after = state_commitment_hex(governance);
+    if before != after {
+        return Err(invalid("negative cases changed durable clone state"));
+    }
+    let mut case_errors = serde_json::Map::new();
+    let mut expected_reasons = serde_json::Map::new();
+    for (case, expected, error) in cases {
+        case_errors.insert(case.to_string(), Value::String(error));
+        expected_reasons.insert(case.to_string(), Value::String(expected.to_string()));
+    }
+    Ok(json!({
+        "schema": "postfiat-cobalt-handoff-negative-result-v1",
+        "all_rejected": true,
+        "durable_state_unchanged": true,
+        "positive_fixture_verified": true,
+        "approval_count": transition.approvals.len(),
+        "scope": NEGATIVE_SCOPE,
+        "cases": Value::Object(case_errors),
+        "expected_reasons": Value::Object(expected_reasons),
+    }))
+}
+
 fn negative_cases(
     manifest_path: &Path,
     transition_path: &Path,
@@ -461,118 +654,22 @@ fn negative_cases(
     let manifest = read_json::<CloneManifest>(manifest_path)?;
     validate_manifest(&manifest)?;
     let governance = manifest.initial_governance();
-    let transition = insert_transition_approvals(load_transition(transition_path)?, Vec::new())?;
-    let before = state_commitment_hex(&governance);
-
-    let early_error = verify_cobalt_authority_transition(
+    // CHO-05: keep the approvals exactly as the signed transition carries them
+    // (deduplicated and sorted by validator); the probes need them.
+    let mut transition = load_transition(transition_path)?;
+    let approvals = std::mem::take(&mut transition.approvals);
+    let transition = insert_transition_approvals(transition, approvals)?;
+    let update: ValidatorRegistryUpdateRecord = read_json(update_path)?;
+    let report = negative_probe_report(
         &manifest.genesis,
         &governance,
         &manifest.registry,
         &transition,
-        transition.activation_height - 1,
-    )
-    .expect_err("early ordering must fail")
-    .to_string();
-
-    let mut stale = transition.clone();
-    stale.activation_height -= 1;
-    stale.transition_id = cobalt_authority_transition_id(&stale)?;
-    let stale_error = verify_cobalt_authority_transition(
-        &manifest.genesis,
-        &governance,
-        &manifest.registry,
-        &stale,
-        stale.activation_height,
-    )
-    .expect_err("stale approval slot must fail")
-    .to_string();
-
-    let mut wrong_root = transition.clone();
-    wrong_root.old_registry_root = "ff".repeat(48);
-    wrong_root.cobalt_registry_root = wrong_root.old_registry_root.clone();
-    wrong_root.transition_id = cobalt_authority_transition_id(&wrong_root)?;
-    let wrong_root_error = verify_cobalt_authority_transition(
-        &manifest.genesis,
-        &governance,
-        &manifest.registry,
-        &wrong_root,
-        wrong_root.activation_height,
-    )
-    .expect_err("wrong registry root must fail")
-    .to_string();
-
-    let mut self_authorized = transition.clone();
-    self_authorized.validators.pop();
-    self_authorized.approval_quorum = 4;
-    self_authorized.cobalt_registry_root = "ee".repeat(48);
-    self_authorized.transition_id = cobalt_authority_transition_id(&self_authorized)?;
-    let self_authorized_error = verify_cobalt_authority_transition(
-        &manifest.genesis,
-        &governance,
-        &manifest.registry,
-        &self_authorized,
-        self_authorized.activation_height,
-    )
-    .expect_err("self-authorized new set must fail")
-    .to_string();
-
-    // Build a valid transition first, then prove replay cannot mutate the clone.
-    let mut activated = governance.clone();
-    apply_cobalt_authority_transition(&mut activated, &transition, transition.activation_height)
-        .map_err(invalid)?;
-    let replay_error = apply_cobalt_authority_transition(
-        &mut activated,
-        &transition,
-        transition.activation_height,
-    )
-    .expect_err("replay must fail")
-    .to_string();
-
-    // A structurally valid Cobalt-authorized update is inactive under Foundation authority.
-    let mut update: ValidatorRegistryUpdateRecord = read_json(update_path)?;
-    update
-        .cobalt_authorizations
-        .push(SignedCobaltValidatorUpdateAuthorizationV1 {
-            schema: SIGNED_COBALT_VALIDATOR_UPDATE_AUTHORIZATION_SCHEMA_V1.to_string(),
-            validator: manifest.validators()[0].clone(),
-            authority_transition_id: transition.transition_id.clone(),
-            parent_cobalt_lock_hash: manifest.cobalt_lock_hash.clone(),
-            amendment_sequence: 2,
-            proposal_slot: update.activation_height,
-            expires_at_height: update.activation_height + 10,
-            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
-            signature_hex: "00".repeat(3309),
-        });
-    let mixed_authority_error = verify_cobalt_validator_trust_update(
-        &manifest.genesis,
-        &governance,
-        &manifest.registry,
         &update,
-        update.activation_height,
-    )
-    .expect_err("Cobalt authorization under Foundation authority must fail")
-    .to_string();
-
-    let after = state_commitment_hex(&governance);
-    if before != after {
-        return Err(invalid("negative cases changed durable clone state"));
-    }
-    write_json(
-        output,
-        &json!({
-            "schema": "postfiat-cobalt-handoff-negative-result-v1",
-            "all_rejected": true,
-            "durable_state_unchanged": true,
-            "cases": {
-                "early": early_error,
-                "stale": stale_error,
-                "wrong_root": wrong_root_error,
-                "self_authorized": self_authorized_error,
-                "replayed": replay_error,
-                "mixed_authority": mixed_authority_error,
-            },
-        }),
-    )
+        &manifest.cobalt_lock_hash,
+        &manifest.validators()[0],
+    )?;
+    write_json(output, &report)
 }
 
 fn prepare_update(

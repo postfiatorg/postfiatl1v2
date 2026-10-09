@@ -668,6 +668,7 @@ def main() -> int:
     must(abort["governance_commitment_before"] == abort["governance_commitment_after"], "abort mutated state")
     must(negative["all_rejected"] is True and negative["durable_state_unchanged"] is True, "negative receipt invalid")
     must(len(negative["cases"]) == 6, "negative case count mismatch")
+    must(negative.get("positive_fixture_verified") is True, "negative probes did not verify the positive fixture")
     must(activation["accepted"] is True, "activation was not accepted")
     must(activation["governance_commitment_before"] != activation["governance_commitment_after"], "activation did not mutate clone")
     must(update_result["accepted"] is True, "validator update was not accepted")

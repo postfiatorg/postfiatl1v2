@@ -44,7 +44,7 @@ The minimal repair is to test the intended Cobalt scope interlock with a mixed v
 
 `negative_cases` replaces all transition approvals with an empty vector before running its probes. The stale-height case can therefore fail only for absent quorum while the report still labels it a stale rejection; the replay setup also applies an approval-free transition directly to a temporary governance value. An operator can read `all_rejected` as evidence of independent signed-input checks that were not exercised.
 
-A future minimal repair would retain a verified positive signed fixture, vary one binding per case, assert the expected rejection reason, and report only the in-memory scope actually exercised. This is recorded without repair as required.
+A future minimal repair would retain a verified positive signed fixture, vary one binding per case, assert the expected rejection reason, and report only the in-memory scope actually exercised. This is recorded without repair as required. **Repaired 2026-10-09 in `f0225b23`:** `negative_probe_report` keeps the signed transition's approvals, verifies the positive fixture first (refusing a stripped or non-verifying fixture up front), varies one binding per case, fails the command when a case is accepted, rejects for a different reason, or rejects only for a missing quorum, and reports `positive_fixture_verified`, `approval_count`, per-case `expected_reasons` and the in-memory `scope`.
 
 ### CHO-06. P3 — rehearsal manifest digest validation admits letters outside hexadecimal
 
@@ -74,7 +74,7 @@ Socket/network drills, live-chain/fleet operations, physical fault testing, full
 
 ## Repair result
 
-CHO-01 through CHO-04 are repaired; CHO-05 and CHO-06 remain recorded without repair. Only the four A3 source files changed.
+CHO-01 through CHO-04 are repaired; CHO-05 was repaired 2026-10-09 in `f0225b23` (see the finding); CHO-06 remains recorded without repair. Only the four A3 source files changed in the original campaign.
 
 - **CHO-01 — consensus-affecting:** checkpoint interval/coverage and every signed check's height and pending pair must bind the current ratification's activation height, amendment slot and candidate. The regression first verifies current evidence, then rejects valid older checkpoints substituted into the newer transcript.
 - **CHO-02 — consensus-affecting:** checked size arithmetic bounds the serialized expanded transcript to 16 MiB before shared-check cloning. The same guard prevents the compressor from producing an over-bound transcript. A correctly encoded compact fixture below 16 MiB that previously expanded beyond 32 MiB now fails at the expansion guard; ordinary and 20-validator certificates still pass. This is a serialized-data bound, not an exact process-memory limit.
