@@ -74,7 +74,11 @@ pass the modified report to `advance_shadow_round`. The real decision for
 `candidate-control` is `HOLD` because its declared control group is saturated,
 but the helper adds it to the hypothetical registry state. This helper has no
 live authority and the campaign rule leaves P3 findings recorded rather than
-fixed.
+fixed. **Repaired 2026-10-09 in `64e15108`:** `advance_shadow_round` now recomputes
+the report root over the report payload, requires the report's
+`frozen_window_root` to be this window's and its recorded registry state to
+equal the state being advanced, each with a stable reason code, before
+applying the addition; the swapped-candidate scenario above is a regression.
 
 ## Areas reviewed without P1/P2 findings
 
@@ -123,7 +127,7 @@ Carol has no co-work. The input root and snapshot hash remain unchanged. The
 CLI golden was regenerated to carry those holds and the hardened presentation.
 The frozen V1 simulation and V2 gate outputs were not regenerated or edited.
 
-Finding 4 remains open as a P3 confined to caller-owned hypothetical state.
+Finding 4 was repaired 2026-10-09 in `64e15108` (report root, window and registry-state binding in `advance_shadow_round`).
 
 ## Post-repair verification
 

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from fractions import Fraction
 from pathlib import Path
 
+from postfiat_rpc.tasknode_unl_schema import TaskNodeUnlError
 from postfiat_rpc.tasknode_unl_v2_evidence import (
     ActiveControlDeclaration,
     ActiveRelation,
@@ -429,6 +430,109 @@ class TestBreachContinuityAndChurn(unittest.TestCase):
         self.assertIn(
             "REGISTRY_ROOT_OUTSIDE_ONE_ROUND_OVERLAP",
             {item.code for item in too_old.decision.reasons},
+        )
+
+    def test_shadow_round_rejects_a_report_whose_candidate_was_swapped(self) -> None:
+        # UNL-04: the review's scenario. candidate-control's real decision is
+        # HOLD (its declared control group is saturated); swapping it into a
+        # candidate-clear PROPOSE_ADD report must not seat it.
+        frozen, state = _scenario()
+        clear = evaluate_admission_round(
+            frozen, state, _candidate("candidate-clear")
+        )
+        control = evaluate_admission_round(
+            frozen, state, _candidate("candidate-control")
+        )
+        self.assertNotEqual(control.decision.action, PROPOSE_ADD)
+        swapped = replace(
+            clear,
+            decision=replace(clear.decision, candidate=control.decision.candidate),
+        )
+        self.assertEqual(swapped.decision.action, PROPOSE_ADD)
+        with self.assertRaises(TaskNodeUnlError) as caught:
+            advance_shadow_round(
+                frozen,
+                state,
+                swapped,
+                new_registry_root=_digest("registry-round-101"),
+            )
+        self.assertEqual(caught.exception.code, "shadow_report_root_mismatch")
+        self.assertEqual(state.round_index, 100)
+        self.assertNotIn(
+            "candidate-control", {seat.account_id for seat in state.seats}
+        )
+
+    def test_shadow_round_rejects_a_tampered_report_root(self) -> None:
+        frozen, state = _scenario()
+        clear = evaluate_admission_round(
+            frozen, state, _candidate("candidate-clear")
+        )
+        tampered = replace(clear, report_root=_digest("not-the-report"))
+        with self.assertRaises(TaskNodeUnlError) as caught:
+            advance_shadow_round(
+                frozen,
+                state,
+                tampered,
+                new_registry_root=_digest("registry-round-101"),
+            )
+        self.assertEqual(caught.exception.code, "shadow_report_root_mismatch")
+
+    def test_shadow_round_rejects_a_report_from_another_frozen_window(self) -> None:
+        frozen, state = _scenario()
+        other_frozen, other_state = _scenario(window_index=8)
+        self.assertNotEqual(
+            frozen.frozen_window_root, other_frozen.frozen_window_root
+        )
+        foreign = evaluate_admission_round(
+            other_frozen, other_state, _candidate("candidate-clear")
+        )
+        self.assertEqual(foreign.decision.action, PROPOSE_ADD)
+        with self.assertRaises(TaskNodeUnlError) as caught:
+            advance_shadow_round(
+                frozen,
+                state,
+                foreign,
+                new_registry_root=_digest("registry-round-101"),
+            )
+        self.assertEqual(caught.exception.code, "shadow_report_window_mismatch")
+
+    def test_shadow_round_rejects_a_report_for_another_registry_state(self) -> None:
+        frozen, state = _scenario()
+        first = evaluate_admission_round(
+            frozen, state, _candidate("candidate-clear")
+        )
+        next_state = advance_shadow_round(
+            frozen,
+            state,
+            first,
+            new_registry_root=_digest("registry-round-101"),
+        )
+        # `first` was evaluated against `state`; advancing `next_state` with
+        # it would seat candidate-clear a second time.
+        with self.assertRaises(TaskNodeUnlError) as caught:
+            advance_shadow_round(
+                frozen,
+                next_state,
+                first,
+                new_registry_root=_digest("registry-round-102"),
+            )
+        self.assertEqual(caught.exception.code, "shadow_report_registry_mismatch")
+
+    def test_shadow_round_still_advances_an_untouched_report(self) -> None:
+        frozen, state = _scenario()
+        first = evaluate_admission_round(
+            frozen, state, _candidate("candidate-clear")
+        )
+        next_state = advance_shadow_round(
+            frozen,
+            state,
+            first,
+            new_registry_root=_digest("registry-round-101"),
+        )
+        self.assertEqual(next_state.round_index, state.round_index + 1)
+        self.assertEqual(next_state.prior_registry_root, state.current_registry_root)
+        self.assertIn(
+            "candidate-clear", {seat.account_id for seat in next_state.seats}
         )
 
     def test_current_seats_are_recounted_after_conceptual_round(self) -> None:

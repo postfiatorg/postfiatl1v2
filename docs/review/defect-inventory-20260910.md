@@ -37,7 +37,7 @@ must not be described as shipped or authoritative.
 | UNL-01 | Reproduced defect | P1 | Fixed — `1c10f828` | [Task Node UNL review](tasknode-unl-review-20260910.md#1-p1-a-complete-score-window-passes-without-a-renewed-vouch-or-post-epoch-co-work): accounts with no bilateral records return `READY` after score-only continuity. |
 | UNL-02 | Reproduced defect | P2 | Fixed — `1c10f828` | [Task Node UNL review](tasknode-unl-review-20260910.md#2-p2-a-stale-score-replay-can-suppress-fresh-score-evidence-by-input-order): stale-first and fresh-first orderings of the same digest produce different continuity decisions. |
 | UNL-03 | Reproduced defect | P2 | Fixed — `1c10f828` | [Task Node UNL review](tasknode-unl-review-20260910.md#3-p2-valid-identifiers-can-inject-markdown-structure-into-the-operator-report): an accepted newline/backtick identifier creates an attacker-chosen heading in the root-valid human report. |
-| UNL-04 | Reproduced defect | P3 | Reproduced — P3 recorded only | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): an in-memory report candidate replacement still bypasses a saturated-group hold in caller-owned hypothetical state. |
+| UNL-04 | Reproduced defect | P3 | Reproduced — fixed `64e15108` | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): an in-memory report candidate replacement still bypasses a saturated-group hold in caller-owned hypothetical state. |
 
 ## Burn 3 campaign findings
 
@@ -287,7 +287,7 @@ broader production claim.
 | P1 | 26 |
 | P2 | 77 |
 | P3 | 38 |
-| Fixed | 93 |
+| Fixed | 94 |
 | Dispositioned | 16 |
 | Reproduced and retained (prior campaigns) | 5 |
 | Recorded, not fixed (burn 3–6 P3) | 14 |
