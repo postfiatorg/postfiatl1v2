@@ -19,6 +19,9 @@ RPC_VERSION = "postfiat-local-rpc-v1"
 DEFAULT_TIMEOUT_SECONDS = 8.0
 DEFAULT_RESPONSE_BYTE_CAP = 1_048_576
 DEFAULT_READ_LIMIT = 100
+# Mirrors crates/node/src/lifecycle_queries.rs MAX_READ_QUERY_LIMIT: the node
+# refuses an `archive_window` range longer than this many blocks.
+MAX_ARCHIVE_WINDOW_BLOCKS = 512
 MAX_ACCOUNT_TX_SCAN_LIMIT = 512
 ESCROW_ID_DOMAIN = "postfiat.escrow_id.v1"
 ESCROW_CONDITION_HASH_DOMAIN = "postfiat.escrow_condition_hash.v1"
@@ -1444,6 +1447,68 @@ class PostFiatRpcClient:
         if not isinstance(result, list):
             raise RpcProtocolError("batch_archive result must be a list")
         return result
+
+    def archive_window(
+        self,
+        from_height: int,
+        to_height: int,
+        *,
+        archive_uri: str | None = None,
+    ) -> dict[str, Any]:
+        """Build a bounded history handoff bundle for an inclusive height window.
+
+        Mirrors the node's `archive_window` read: both heights are
+        non-negative, `to_height >= from_height`, and the window spans at most
+        `MAX_ARCHIVE_WINDOW_BLOCKS` blocks, checked here so a bad range fails
+        before a request is sent. The bundle is returned as the node encodes
+        it; nothing is published.
+        """
+        for name, value in (("from_height", from_height), ("to_height", to_height)):
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(f"{name} must be an integer")
+            if value < 0:
+                raise ValueError(f"{name} must be non-negative")
+        if to_height < from_height:
+            raise ValueError("to_height must be >= from_height")
+        if to_height - from_height + 1 > MAX_ARCHIVE_WINDOW_BLOCKS:
+            raise ValueError(
+                f"archive window must not exceed {MAX_ARCHIVE_WINDOW_BLOCKS} blocks"
+            )
+        params: dict[str, Any] = {"from_height": from_height, "to_height": to_height}
+        if archive_uri is not None:
+            if not archive_uri:
+                raise ValueError("archive_uri must not be empty")
+            params["archive_uri"] = archive_uri
+        result = self._call("archive_window", params)
+        if not isinstance(result, dict):
+            raise RpcProtocolError("archive_window result must be an object")
+        return result
+
+    def _verification_report(self, method: str) -> dict[str, Any]:
+        result = self._call(method, {})
+        if not isinstance(result, dict):
+            raise RpcProtocolError(f"{method} result must be an object")
+        return result
+
+    def verify_blocks(self) -> dict[str, Any]:
+        """Re-verify the node's local block-log chain and signatures (public read)."""
+        return self._verification_report("verify_blocks")
+
+    def verify_state(self) -> dict[str, Any]:
+        """Re-verify the aggregate local state, including block-log integrity."""
+        return self._verification_report("verify_state")
+
+    def verify_bridge(self) -> dict[str, Any]:
+        """Re-verify local bridge-state invariants."""
+        return self._verification_report("verify_bridge")
+
+    def verify_mempool(self) -> dict[str, Any]:
+        """Re-verify admitted mempool entries against local policy."""
+        return self._verification_report("verify_mempool")
+
+    def verify_shielded(self) -> dict[str, Any]:
+        """Re-verify the local shielded-state commitment and accounting."""
+        return self._verification_report("verify_shielded")
 
     def account_tx(
         self,

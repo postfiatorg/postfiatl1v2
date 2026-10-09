@@ -102,6 +102,13 @@ report, and fails closed when method-specific checks fail.
 - `orchard_pool_report()`
 - `account_tx_index_status()`
 - `batch_archive(batch_kind=None, batch_id=None, limit=None)`
+- `archive_window(from_height, to_height, archive_uri=None)` -- inclusive
+  height window of at most 512 blocks (the node's `MAX_READ_QUERY_LIMIT`),
+  validated client-side before the request is sent; returns the history
+  handoff bundle and publishes nothing
+- `verify_blocks()`, `verify_state()`, `verify_bridge()`, `verify_mempool()`,
+  `verify_shielded()` -- the public-read verifiers; each returns the node's
+  report object unchanged
 - `account_tx(address, from_height=None, to_height=None, limit=None)`
 - `account_tx_history(address, from_height=0, to_height=None,
   window_size=100, limit_per_window=512, max_windows=1000)`
