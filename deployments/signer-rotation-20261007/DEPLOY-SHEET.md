@@ -7,11 +7,10 @@ The release-day sequence (2026-10-09 at the earliest), run from the signing work
 and the [release-day procedure](../../docs/review/signer-committee-rotation-dry-run-20261005.md#live-procedure-for-release-day).
 Keys are used by path only; no key material is printed, copied to a host or committed.
 
-**Status: cut, not deployed.** Nothing below has run. Every step marked
-**GO** needs the operator's go on the day. Start only after the other lane's
-objection window closes (2026-10-08 evening UTC). TOKEN2049 Singapore runs
-7–8 October 2026: nothing touches the six validator hosts, the chain or StakeHub
-`master` on those days. The name keeps its date suffix; it is not the rollout day.
+**Status: §0–§5 and the §6 after state done on 2026-10-09** (deployed at height 1121,
+[rollout record](observed/rollout-record.json)); `demo-preflight.py`, §7 and §8 not yet run. Every
+step marked **GO** needs the operator's go on the day. The name keeps its date
+suffix; it is not the rollout day.
 
 ```bash
 D=~/.postfiat/deployments/signer-rotation-20261007   # local, not in Git; stage prepared 2026-10-06
@@ -83,9 +82,11 @@ Record the backup manifest hash in `RELEASE-ID.txt`.
 ## 5. One validator at a time
 
 Order: validator-1 (canary), then 0, 2, 3, 4, 5. Before the first grant, point
-StakeHub's `~/.pft/config.toml` `runtime_binary`, `topology_file` and
-`local_node_binary` at this release (2026-09-28 note in the
-[previous README](../combined-fastpay-20260928/README.md#notes)).
+StakeHub's `~/.pft/config.toml` `local_node_binary` at this release. Point
+`runtime_binary` and `topology_file` at it only after all six are applied: the
+faucet runs `runtime_binary status` on all six hosts, and the new path exists
+only on applied hosts (2026-09-28 note in the
+[previous README](../combined-fastpay-20260928/README.md#notes); done this way on 2026-10-09).
 
 For each validator, only after the previous check passed:
 

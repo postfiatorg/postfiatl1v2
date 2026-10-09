@@ -12,14 +12,14 @@ Rollback release: `combined-fastpay-20260928` (`1f8b332d…`). Identities:
 
 ## Status
 
-**Cut, not deployed.** Every check that runs on the work server passed on
-2026-10-06 ([qualification packet](qualification/README.md)). The host-facing
-steps and the activation run on 2026-10-09 at the earliest, after TOKEN2049
-Singapore (7–8 October) and the objection window (until 2026-10-08 evening UTC),
-with the operator's go at each step ([DEPLOY-SHEET.md](DEPLOY-SHEET.md)). The
-release name keeps its date suffix; it is a name, not the rollout day.
+**Deployed** (`status=DEPLOYED`, 2026-10-09 12:32:09Z). All six validators run
+`decaa411…` with the signed manifest `fa4649aa…`, at height 1121 after one
+certified faucet grant per validator (1116–1121). Before state, signed canary
+backup, applies, grants and after state: [observed/](observed/)
+([rollout record](observed/rollout-record.json)). The local qualification
+passed on 2026-10-06 ([qualification packet](qualification/README.md)).
 
-Not done today: canary backup, fleet before-state, rollout, store conversion, activation.
+Not done yet: the FastSwap store conversion (§7) and the signer-group activation (§8).
 
 ## Scope since `c93b2137`
 
