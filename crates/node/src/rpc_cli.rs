@@ -1481,13 +1481,22 @@ fn handle_rpc_serve_connection(
             ),
         }
     } else if method == "owned_certificate" {
-        let selector = request
-            .params
-            .get("lock_id")
-            .or_else(|| request.params.get("certificate_digest"))
+        // The selectors are mutually exclusive: answering a request that
+        // carries both from the lock_id lookup would silently ignore the
+        // digest the client asked for.
+        let lock_id = request.params.get("lock_id");
+        let certificate_digest = request.params.get("certificate_digest");
+        let selector = lock_id
+            .or(certificate_digest)
             .and_then(|value| value.as_str())
             .unwrap_or("");
-        if selector.is_empty() {
+        if lock_id.is_some() && certificate_digest.is_some() {
+            rpc_serve_error_response(
+                &id,
+                "rpc_protocol_error",
+                "owned_certificate takes exactly one of lock_id or certificate_digest",
+            )
+        } else if selector.is_empty() {
             rpc_serve_error_response(
                 &id,
                 "rpc_protocol_error",
