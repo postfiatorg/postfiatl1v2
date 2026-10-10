@@ -188,6 +188,7 @@ pub fn validate_response_kind_with_context(
         RpcResponseKind::NavcoinBridgeSupplyStatus => {
             validate_navcoin_bridge_supply_status_result(result)
         }
+        RpcResponseKind::OwnedCertificate => validate_owned_certificate_result(result),
         RpcResponseKind::NavcoinBridgeReceiptReplay => {
             validate_navcoin_bridge_receipt_replay_result(result)
         }
@@ -701,4 +702,69 @@ fn validated_summary_result(
         .result
         .as_ref()
         .ok_or_else(|| invalid_result("result", "missing successful response result"))
+}
+
+/// Validates an `owned_certificate` response against the request that
+/// produced it. The shape checks come from `validate_owned_certificate_result`
+/// (reachable through `validate_response_kind` with
+/// `RpcResponseKind::OwnedCertificate`); this function adds the selector
+/// binding the node guarantees, which needs the request: when the request
+/// selected by `lock_id` the certificate's recovery lock id must equal it
+/// (fences and reveals both pin `certificate.recovery().lock_id` to their
+/// `lock_id`), and when it selected by `certificate_digest` the certificate's
+/// own digest, recomputed with the SDK's existing digest helpers, must equal
+/// it. Like the atomic-swap request-bound decoders, the response id is first
+/// required to equal the request id. The CLI threads the request in through
+/// `--request-file`, the same way the atomic-swap response validations bind
+/// to their requests.
+pub fn validate_owned_certificate_response(
+    response: &RpcResponse,
+    request: &RpcRequest,
+) -> Result<(), RpcResponseValidationError> {
+    validate_response(response, Some(&request.id), true)?;
+    validate_response_kind(response, RpcResponseKind::OwnedCertificate)?;
+    if request.method != METHOD_OWNED_CERTIFICATE {
+        return Err(invalid_result(
+            "request.method",
+            format!("expected an {METHOD_OWNED_CERTIFICATE} request for selector binding"),
+        ));
+    }
+    let selector = owned_certificate_selector_from_params(&request.params)
+        .map_err(|error| invalid_result("request.params", error.to_string()))?;
+    let result = response
+        .result
+        .as_ref()
+        .ok_or_else(|| invalid_result("result", "missing successful response result"))?;
+    let certificate: postfiat_types::FastPayCertificateV1 = serde_json::from_value(result.clone())
+        .map_err(|error| {
+            invalid_result("result", format!("expected a FastPay certificate: {error}"))
+        })?;
+    match selector {
+        OwnedCertificateSelector::LockId(lock_id) => {
+            if certificate.recovery().lock_id != lock_id {
+                return Err(invalid_result(
+                    "certificate.order.recovery.lock_id",
+                    "expected the certificate for the requested lock",
+                ));
+            }
+        }
+        OwnedCertificateSelector::CertificateDigest(certificate_digest) => {
+            let digest = match &certificate {
+                postfiat_types::FastPayCertificateV1::Transfer(certificate) => {
+                    wallet_fastpay_transfer_certificate_digest_v3(certificate)
+                }
+                postfiat_types::FastPayCertificateV1::Unwrap(certificate) => {
+                    wallet_fastpay_unwrap_certificate_digest_v3(certificate)
+                }
+            }
+            .map_err(|error| invalid_result("certificate", error.to_string()))?;
+            if digest != certificate_digest {
+                return Err(invalid_result(
+                    "certificate_digest",
+                    "expected the certificate whose digest was requested",
+                ));
+            }
+        }
+    }
+    Ok(())
 }
