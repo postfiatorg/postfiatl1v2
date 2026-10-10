@@ -51,6 +51,7 @@ fn run_serialized_rpc_mempool_submit(
             &context.data_dir,
             &context.spool_dir,
             request_index,
+            &request.id,
             raw_request,
             context.child_timeout_ms,
         ) {

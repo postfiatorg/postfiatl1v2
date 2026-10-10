@@ -1241,6 +1241,48 @@ mod rpc_serve_request_tests {
     }
 
     #[test]
+    fn rpc_serve_absolute_path_resolves_relative_against_cwd_without_existing() {
+        let cwd = env::current_dir().expect("cwd");
+        let relative = Path::new(".postfiat-issue-27-does-not-exist/runtime/rpc-spool");
+        let resolved = rpc_serve_absolute_path(relative, "--spool-dir").expect("resolve");
+        assert!(resolved.is_absolute(), "{}", resolved.display());
+        assert!(resolved.starts_with(&cwd), "{}", resolved.display());
+        assert!(resolved.ends_with(relative), "{}", resolved.display());
+
+        let absolute = cwd.join("already-absolute");
+        let unchanged = rpc_serve_absolute_path(&absolute, "--data-dir").expect("resolve");
+        assert_eq!(unchanged, absolute);
+    }
+
+    #[test]
+    fn rpc_serve_child_response_restores_request_id_on_mismatch() {
+        // A worker that cannot read its spooled request answers with the CLI
+        // default id; the parent must put the real request id on the wire.
+        let fallback = error_response(
+            "local-1",
+            "rpc_error",
+            "rpc request read failed",
+            vec![],
+        );
+        let restored = rpc_serve_child_response_with_request_id(fallback, "py-00000001");
+        assert_eq!(restored.id, "py-00000001");
+        assert!(!restored.ok);
+        assert_eq!(
+            restored.error.as_ref().map(|error| error.code.as_str()),
+            Some("rpc_error")
+        );
+        assert!(
+            restored.events.iter().any(|event| event.subject == "rpc_child_id_mismatch"),
+            "{:?}",
+            restored.events
+        );
+
+        let matching = error_response("py-00000002", "rpc_error", "unchanged", vec![]);
+        let untouched = rpc_serve_child_response_with_request_id(matching.clone(), "py-00000002");
+        assert_eq!(untouched, matching);
+    }
+
+    #[test]
     fn rpc_serve_spool_root_rejects_non_directory() {
         let path = env::temp_dir().join(format!("postfiat-rpc-spool-file-{}", process::id()));
         std::fs::write(&path, b"not a directory").expect("write spool root file");

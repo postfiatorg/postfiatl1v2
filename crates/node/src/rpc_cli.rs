@@ -914,7 +914,7 @@ fn handle_rpc_serve_connection(
                     } else if method == "atomic_swap_fee_quote" {
                         run_rpc_serve_atomic_swap_fee_quote(&request, context)
                     } else {
-                        match run_rpc_request_via_child_limited(context, request_index, &line) {
+                        match run_rpc_request_via_child_limited(context, request_index, &id, &line) {
                             Ok(response) => response,
                             Err(error) => rpc_serve_child_error_response(&id, &error),
                         }
@@ -1004,7 +1004,7 @@ fn handle_rpc_serve_connection(
                     if let Some(counts) = orchard_batch_create_counts.as_mut() {
                         counts.active_count = active_count;
                     }
-                    match run_rpc_request_via_child_limited(context, request_index, &line) {
+                    match run_rpc_request_via_child_limited(context, request_index, &id, &line) {
                         Ok(response) => response,
                         Err(error) => rpc_serve_child_error_response(&id, &error),
                     }
@@ -1648,7 +1648,7 @@ fn handle_rpc_serve_connection(
             }
         }
     } else if method == "server_info" {
-        match run_rpc_request_via_child_limited(context, request_index, &line) {
+        match run_rpc_request_via_child_limited(context, request_index, &id, &line) {
             Ok(mut response) => {
                 if response.ok {
                     if let Some(result) = response.result.as_mut() {
@@ -1669,7 +1669,7 @@ fn handle_rpc_serve_connection(
             Err(error) => rpc_serve_child_error_response(&id, &error),
         }
     } else {
-        match run_rpc_request_via_child_limited(context, request_index, &line) {
+        match run_rpc_request_via_child_limited(context, request_index, &id, &line) {
             Ok(response) => response,
             Err(error) => rpc_serve_child_error_response(&id, &error),
         }
@@ -2000,6 +2000,7 @@ fn try_acquire_rpc_serve_child_dispatch(
 fn run_rpc_request_via_child_limited(
     context: &RpcServeConnectionContext,
     request_index: u64,
+    request_id: &str,
     request_json: &str,
 ) -> Result<RpcResponse, String> {
     let _dispatch_guard = try_acquire_rpc_serve_child_dispatch(context)?;
@@ -2007,6 +2008,7 @@ fn run_rpc_request_via_child_limited(
         &context.data_dir,
         &context.spool_dir,
         request_index,
+        request_id,
         request_json,
         context.child_timeout_ms,
     )
@@ -3414,10 +3416,47 @@ fn validate_rpc_serve_request_line(line: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Resolve `path` against the current working directory without requiring
+/// it to exist. `rpc-serve` spawns one worker per request with its working
+/// directory moved to the data directory, so relative paths captured at
+/// startup must be made absolute before they are handed to a worker.
+fn rpc_serve_absolute_path(path: impl AsRef<Path>, label: &str) -> Result<PathBuf, String> {
+    let path = path.as_ref();
+    std::path::absolute(path).map_err(|error| {
+        format!(
+            "rpc serve {label} resolution failed for `{}`: {error}",
+            path.display()
+        )
+    })
+}
+
+/// The parent already knows the request id it spooled for the worker. A
+/// worker that could not read its request file answers with the CLI default
+/// id (`local-1`), which breaks client-side correlation; the parent restores
+/// the real id so the client sees the worker's error under the right request.
+fn rpc_serve_child_response_with_request_id(
+    mut response: RpcResponse,
+    request_id: &str,
+) -> RpcResponse {
+    if response.id != request_id {
+        response.events.push(RpcEvent::new(
+            "rpc_serve",
+            "rpc_child_id_mismatch",
+            format!(
+                "worker response id `{}` replaced with request id",
+                response.id
+            ),
+        ));
+        response.id = request_id.to_string();
+    }
+    response
+}
+
 fn run_rpc_request_via_child(
     data_dir: &Path,
     spool_root: &Path,
     request_index: u64,
+    request_id: &str,
     request_json: &str,
     child_timeout_ms: u64,
 ) -> Result<RpcResponse, String> {
@@ -3457,7 +3496,7 @@ fn run_rpc_request_via_child(
     response
         .validate_protocol()
         .map_err(|error| format!("rpc serve child response protocol failed: {error}"))?;
-    Ok(response)
+    Ok(rpc_serve_child_response_with_request_id(response, request_id))
 }
 
 fn validate_rpc_serve_bind_host(host: &str) -> Result<(), String> {
@@ -3606,6 +3645,10 @@ fn run_rpc_child_command(
             data_dir.display()
         )
     })?;
+    // The child changes its working directory before reading the request
+    // file, so a relative spool path must be resolved against the parent's
+    // working directory here, not left for the child to misresolve.
+    let child_request_file = rpc_serve_absolute_path(request_file, "request file")?;
     let child = Command::new(exe)
         .env_clear()
         .current_dir(&child_data_dir)
@@ -3614,7 +3657,7 @@ fn run_rpc_child_command(
         .stderr(Stdio::piped())
         .arg("rpc")
         .arg("--request-file")
-        .arg(request_file)
+        .arg(&child_request_file)
         .arg("--data-dir")
         .arg(&child_data_dir)
         .spawn()

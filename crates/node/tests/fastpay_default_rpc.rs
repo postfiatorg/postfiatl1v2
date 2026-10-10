@@ -148,3 +148,65 @@ fn signed_fastpay_rpc_is_enabled_by_default_and_explicitly_disableable() {
 
     fs::remove_dir_all(root).expect("remove RPC test directory");
 }
+
+/// Regression for issue #27: `rpc-serve` workers change their working
+/// directory to the data directory, so a relative `--data-dir` (and a
+/// relative explicit `--spool-dir`) used to make every child-dispatched
+/// method fail with "No such file or directory" and answer under the CLI
+/// fallback id `local-1` instead of the request id.
+#[test]
+fn rpc_child_dispatch_works_with_relative_data_and_spool_directories() {
+    let root = unique_root();
+    let data_dir = root.join("node");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-relative-data-dir-test".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 1,
+    })
+    .expect("initialize RPC test node");
+
+    let absolute_data_dir = data_dir.to_str().expect("data directory UTF-8");
+    let cases: [(&str, &str, Option<&str>); 3] = [
+        ("relative data dir, default spool", "node", None),
+        ("relative data dir, relative spool", "node", Some("spool")),
+        ("absolute data dir, default spool", absolute_data_dir, None),
+    ];
+    for (label, data_dir_arg, spool_dir_arg) in cases {
+        let port = free_port();
+        let ready = data_dir.join("readiness/rpc.ready.json");
+        let mut command = Command::new(node_bin());
+        command
+            .current_dir(&root)
+            .args(["rpc-serve", "--unsafe-devnet-json-storage", "--data-dir"])
+            .arg(data_dir_arg);
+        if let Some(spool_dir_arg) = spool_dir_arg {
+            command.args(["--spool-dir", spool_dir_arg]);
+        }
+        let mut child = command
+            .args(["--port", &port.to_string(), "--max-requests", "1"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn RPC server");
+        wait_for_file(&ready);
+        // server_info is answered by an isolated worker, not in-process.
+        let request_id = "relative-data-dir-probe";
+        let response = rpc_call(port, &server_info_request(request_id));
+        let status = child.wait().expect("wait for RPC server");
+        assert!(status.success(), "{label}: RPC server failed with {status}");
+        assert_eq!(
+            response.id, request_id,
+            "{label}: response id must echo the request id"
+        );
+        assert!(response.ok, "{label}: {:?}", response.error);
+        assert_eq!(
+            response.result.expect("server_info result")["chain_id"],
+            "postfiat-relative-data-dir-test",
+            "{label}"
+        );
+        fs::remove_file(&ready).expect("remove readiness file between runs");
+    }
+
+    fs::remove_dir_all(root).expect("remove RPC test directory");
+}

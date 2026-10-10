@@ -286,11 +286,17 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
         }
         "rpc-serve" => {
             require_transactional_or_unsafe_devnet_json_storage(flags, "rpc service")?;
-            let data_dir =
-                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
-            let spool_dir = flag_value(flags, "--spool-dir")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| data_dir.join("runtime/rpc-spool"));
+            // RPC workers run with their working directory moved to the data
+            // directory, so every path derived here must be absolute or the
+            // child resolves it against the wrong base (issue #27).
+            let data_dir = rpc_serve_absolute_path(
+                flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR),
+                "--data-dir",
+            )?;
+            let spool_dir = match flag_value(flags, "--spool-dir") {
+                Some(spool_dir) => rpc_serve_absolute_path(spool_dir, "--spool-dir")?,
+                None => data_dir.join("runtime/rpc-spool"),
+            };
             let ready_file = flag_value(flags, "--ready-file")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("readiness/rpc.ready.json"));
