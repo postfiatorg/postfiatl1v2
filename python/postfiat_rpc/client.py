@@ -1141,6 +1141,38 @@ class PostFiatRpcClient:
         """Read the governed FastPay v3 domain, committee, and recovery window."""
         return self._call("owned_recovery_capabilities")
 
+    def owned_recovery_status(self, lock_id: str) -> dict[str, Any]:
+        """Read the FastPay v3 recovery fence and reveal status for a lock."""
+        if not lock_id:
+            raise ValueError("lock_id is required")
+        return self._call("owned_recovery_status", {"lock_id": lock_id})
+
+    def owned_certificate(
+        self,
+        *,
+        lock_id: str | None = None,
+        certificate_digest: str | None = None,
+    ) -> dict[str, Any]:
+        """Read a retained FastPay certificate by exactly one selector.
+
+        The node treats ``lock_id`` and ``certificate_digest`` as alternatives;
+        sending both is rejected client-side so the request can never be
+        answered from the wrong selector.
+        """
+        if (lock_id is None) == (certificate_digest is None):
+            raise ValueError(
+                "owned_certificate takes exactly one of lock_id or certificate_digest"
+            )
+        if lock_id is not None:
+            if not lock_id:
+                raise ValueError("lock_id must not be empty")
+            return self._call("owned_certificate", {"lock_id": lock_id})
+        if not certificate_digest:
+            raise ValueError("certificate_digest must not be empty")
+        return self._call(
+            "owned_certificate", {"certificate_digest": certificate_digest}
+        )
+
     def owned_sign_v3(
         self,
         order_json: str,

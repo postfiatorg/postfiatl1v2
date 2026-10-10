@@ -2898,6 +2898,40 @@ class FastPayClientMethodTests(unittest.TestCase):
         self.assertEqual(result, apply_result)
         mock_call.assert_called_once_with("owned_apply", {"cert_json": cert_json})
 
+    def test_owned_recovery_read_rpc_contract(self) -> None:
+        """owned_recovery_status and owned_certificate follow the node's selector contract."""
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        lock_id = "ab" * 48
+        certificate_digest = "cd" * 48
+        with mock.patch.object(client, "_call", return_value={"ok": True}) as call:
+            client.owned_recovery_status(lock_id)
+            client.owned_certificate(lock_id=lock_id)
+            client.owned_certificate(certificate_digest=certificate_digest)
+
+        self.assertEqual(
+            call.call_args_list,
+            [
+                mock.call("owned_recovery_status", {"lock_id": lock_id}),
+                mock.call("owned_certificate", {"lock_id": lock_id}),
+                mock.call("owned_certificate", {"certificate_digest": certificate_digest}),
+            ],
+        )
+
+        with mock.patch.object(client, "_call") as call:
+            with self.assertRaisesRegex(ValueError, "exactly one of"):
+                client.owned_certificate()
+            with self.assertRaisesRegex(ValueError, "exactly one of"):
+                client.owned_certificate(
+                    lock_id=lock_id, certificate_digest=certificate_digest
+                )
+            with self.assertRaisesRegex(ValueError, "must not be empty"):
+                client.owned_certificate(lock_id="")
+            with self.assertRaisesRegex(ValueError, "must not be empty"):
+                client.owned_certificate(certificate_digest="")
+            with self.assertRaisesRegex(ValueError, "lock_id is required"):
+                client.owned_recovery_status("")
+            call.assert_not_called()
+
     def test_recovery_safe_fastpay_v3_rpc_contract(self) -> None:
         """The WAN client must expose every recovery-safe v3 payment boundary."""
         client = PostFiatRpcClient("127.0.0.1:1234")
