@@ -26,29 +26,60 @@ class RpcProbeResult:
     round_trip_ms: int
 
 
+def _connect_first_reachable(endpoint: Endpoint, deadline: float) -> socket.socket:
+    """Connect to the first resolved address that accepts, in resolver order.
+
+    A host name can resolve to several addresses (for example ``::1`` and
+    ``127.0.0.1`` for ``localhost``). Each is tried once within the shared
+    deadline; a failed socket is closed before the next attempt. The returned
+    socket is connected and still has the remaining budget as its timeout.
+    Raises ``RpcProbeError`` with the last attempt's outcome when none
+    accepts, and lets ``ValueError``/``OverflowError`` from an invalid timeout
+    propagate after closing the socket.
+    """
+    try:
+        candidates = socket.getaddrinfo(endpoint.host, endpoint.port, type=socket.SOCK_STREAM)
+    except OSError as error:
+        raise RpcProbeError(f"connect refused: address resolution failed: {error}") from error
+    if not candidates:
+        raise RpcProbeError("connect refused: address resolution failed: no addresses")
+    last_error: OSError | None = None
+    for family, socktype, proto, _, address in candidates:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RpcProbeError("connect timeout")
+        stream = socket.socket(family, socktype, proto)
+        try:
+            stream.settimeout(remaining)
+            stream.connect(address)
+        except socket.timeout as error:
+            stream.close()
+            last_error = error
+        except OSError as error:
+            stream.close()
+            last_error = error
+        except BaseException:
+            stream.close()
+            raise
+        else:
+            return stream
+    if isinstance(last_error, socket.timeout):
+        raise RpcProbeError("connect timeout") from last_error
+    raise RpcProbeError(f"connect refused: {last_error}") from last_error
+
+
 def rpc_probe(endpoint: Endpoint, timeout_seconds: float = 5.0) -> RpcProbeResult:
-    """Send one status request over one TCP connection, with no retry."""
+    """Send one status request over one TCP connection, with no retry.
+
+    Every address the endpoint's host resolves to may be tried for the
+    connection, but exactly one status request is sent, on the first
+    connection that succeeds.
+    """
     if timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be positive")
     started = time.monotonic()
     deadline = started + timeout_seconds
-    try:
-        family, socktype, proto, _, address = socket.getaddrinfo(
-            endpoint.host, endpoint.port, type=socket.SOCK_STREAM
-        )[0]
-    except (OSError, IndexError) as error:
-        raise RpcProbeError(f"connect refused: address resolution failed: {error}") from error
-    remaining = deadline - time.monotonic()
-    if remaining <= 0:
-        raise RpcProbeError("connect timeout")
-    with socket.socket(family, socktype, proto) as stream:
-        stream.settimeout(remaining)
-        try:
-            stream.connect(address)
-        except socket.timeout as error:
-            raise RpcProbeError("connect timeout") from error
-        except OSError as error:
-            raise RpcProbeError(f"connect refused: {error}") from error
+    with _connect_first_reachable(endpoint, deadline) as stream:
         request = {"version": RPC_VERSION, "id": "rpc-probe", "method": "status", "params": {}}
         wire = json.dumps(request, separators=(",", ":")).encode() + b"\n"
         try:
