@@ -1209,19 +1209,17 @@ fn handle_rpc_serve_connection(
                             .and_then(|value| postfiat_crypto_provider::hex_to_bytes(value)
                                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("FastSwap owner pubkey hex invalid: {error}"))));
                         owner.and_then(|owner| {
-                            let asset = request.params.get("asset_id")
-                                .and_then(serde_json::Value::as_str)
+                            let asset = fastswap_objects_optional_str(&request.params, "asset_id")?
                                 .map(crate::fastswap_service::parse_asset_id_hex)
                                 .transpose()?;
-                            let cursor_id = request.params.get("cursor_object_id").and_then(serde_json::Value::as_str);
-                            let cursor_version = request.params.get("cursor_version").and_then(serde_json::Value::as_u64);
+                            let cursor_id = fastswap_objects_optional_str(&request.params, "cursor_object_id")?;
+                            let cursor_version = fastswap_objects_optional_u64(&request.params, "cursor_version")?;
                             let cursor = match (cursor_id, cursor_version) {
                                 (None, None) => None,
                                 (Some(id), Some(version)) => Some(crate::fastswap_service::parse_object_key(id, version)?),
                                 _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "FastSwap cursor id/version must be supplied together")),
                             };
-                            let limit = request.params.get("limit").and_then(serde_json::Value::as_u64).unwrap_or(50);
-                            let limit: usize = limit.try_into().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "FastSwap object limit overflow"))?;
+                            let limit = fastswap_objects_limit(&request.params)?;
                             service.objects(&owner, asset, cursor, limit)
                                 .and_then(|response| serde_json::to_value(response)
                                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error)))
@@ -4765,6 +4763,132 @@ fn rpc_serve_error_class(method: &str, response: &RpcResponse) -> Option<String>
         };
     }
     Some(error.code.clone())
+}
+
+/// Reads an optional string parameter of `fastswap_objects` strictly: a key
+/// that is present must carry a JSON string. Previously a present key of the
+/// wrong type was silently treated as absent, so `"asset_id": 5` queried every
+/// asset and `"cursor_object_id": 7` dropped the cursor.
+fn fastswap_objects_optional_str<'a>(
+    params: &'a serde_json::Value,
+    key: &str,
+) -> std::io::Result<Option<&'a str>> {
+    match params.get(key) {
+        None => Ok(None),
+        Some(value) => value.as_str().map(Some).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("fastswap_objects {key} must be a string"),
+            )
+        }),
+    }
+}
+
+/// Reads an optional unsigned-integer parameter of `fastswap_objects`
+/// strictly; see `fastswap_objects_optional_str`.
+fn fastswap_objects_optional_u64(
+    params: &serde_json::Value,
+    key: &str,
+) -> std::io::Result<Option<u64>> {
+    match params.get(key) {
+        None => Ok(None),
+        Some(value) => value.as_u64().map(Some).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("fastswap_objects {key} must be an unsigned integer"),
+            )
+        }),
+    }
+}
+
+/// The `fastswap_objects` page size: absent means the default of 50; a
+/// present value must be an unsigned integer. Range (1..=100) is enforced by
+/// `FastSwapService::objects`. Previously `"limit": "10"` or `"limit": -1`
+/// silently became 50.
+fn fastswap_objects_limit(params: &serde_json::Value) -> std::io::Result<usize> {
+    let limit = fastswap_objects_optional_u64(params, "limit")?.unwrap_or(50);
+    limit.try_into().map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "FastSwap object limit overflow",
+        )
+    })
+}
+
+#[cfg(test)]
+mod fastswap_objects_param_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn absent_optional_params_stay_absent_and_limit_defaults() {
+        let params = json!({ "owner_pubkey": "aa" });
+        assert_eq!(
+            fastswap_objects_optional_str(&params, "asset_id").expect("absent asset"),
+            None
+        );
+        assert_eq!(
+            fastswap_objects_optional_u64(&params, "cursor_version").expect("absent cursor"),
+            None
+        );
+        assert_eq!(fastswap_objects_limit(&params).expect("default limit"), 50);
+    }
+
+    #[test]
+    fn well_typed_params_are_read() {
+        let params = json!({
+            "asset_id": "ab",
+            "cursor_object_id": "cd",
+            "cursor_version": 3,
+            "limit": 7
+        });
+        assert_eq!(
+            fastswap_objects_optional_str(&params, "asset_id").expect("asset"),
+            Some("ab")
+        );
+        assert_eq!(
+            fastswap_objects_optional_str(&params, "cursor_object_id").expect("cursor id"),
+            Some("cd")
+        );
+        assert_eq!(
+            fastswap_objects_optional_u64(&params, "cursor_version").expect("cursor version"),
+            Some(3)
+        );
+        assert_eq!(fastswap_objects_limit(&params).expect("limit"), 7);
+    }
+
+    #[test]
+    fn wrong_typed_limit_is_rejected_not_defaulted() {
+        for bad in [json!("10"), json!(-1), json!(1.5), json!(true), json!(null), json!([10])] {
+            let params = json!({ "limit": bad });
+            let error = fastswap_objects_limit(&params).expect_err("wrong-typed limit");
+            assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+            assert_eq!(
+                error.to_string(),
+                "fastswap_objects limit must be an unsigned integer"
+            );
+        }
+    }
+
+    #[test]
+    fn wrong_typed_selectors_are_rejected_not_dropped() {
+        let params = json!({ "asset_id": 5, "cursor_object_id": 7, "cursor_version": "3" });
+        let error = fastswap_objects_optional_str(&params, "asset_id").expect_err("asset");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+        assert_eq!(error.to_string(), "fastswap_objects asset_id must be a string");
+        let error =
+            fastswap_objects_optional_str(&params, "cursor_object_id").expect_err("cursor id");
+        assert_eq!(
+            error.to_string(),
+            "fastswap_objects cursor_object_id must be a string"
+        );
+        let error =
+            fastswap_objects_optional_u64(&params, "cursor_version").expect_err("cursor version");
+        assert_eq!(
+            error.to_string(),
+            "fastswap_objects cursor_version must be an unsigned integer"
+        );
+    }
 }
 
 #[cfg(test)]
