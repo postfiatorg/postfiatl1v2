@@ -1018,9 +1018,49 @@ fn validate_request(flags: &[String]) -> Result<(), String> {
 
 fn validate_response(flags: &[String]) -> Result<(), String> {
     let input = flag_value(flags, "--input").ok_or("missing --input")?;
-    let expected_id = flag_value(flags, "--expect-id");
     let require_ok = has_flag(flags, "--require-ok");
-    let expected_kind = response_kind(flags)?;
+    // A supplied --request-file binds every response kind to its request: the
+    // response id must equal the request id, an explicit --expect-id must agree
+    // with it, and the expected kind is taken from (or checked against) the
+    // request method. The request-bound branches below add their payload-level
+    // binding on top of this.
+    let bound_request = match flag_value(flags, "--request-file") {
+        Some(request_file) => Some(
+            read_request_file(request_file)
+                .map_err(|error| format!("request read failed at {request_file}: {error}"))?,
+        ),
+        None => None,
+    };
+    let expected_id = match (flag_value(flags, "--expect-id"), bound_request.as_ref()) {
+        (Some(expected), Some(request)) if expected != request.id => {
+            return Err(format!(
+                "--expect-id `{expected}` conflicts with request id `{}` in --request-file",
+                request.id
+            ));
+        }
+        (expected, request) => expected.or(request.map(|request| request.id.as_str())),
+    };
+    let expected_kind = match (response_kind(flags)?, bound_request.as_ref()) {
+        (Some(expected_kind), Some(request)) => {
+            let request_kind =
+                response_kind_for_method(&request.method, flags).map_err(|error| {
+                    format!("request method in --request-file is not a response kind: {error}")
+                })?;
+            if request_kind != Some(expected_kind) {
+                return Err(format!(
+                    "--expect-kind does not match request method `{}` in --request-file",
+                    request.method
+                ));
+            }
+            Some(expected_kind)
+        }
+        (None, Some(request)) => {
+            response_kind_for_method(&request.method, flags).map_err(|error| {
+                format!("request method in --request-file is not a response kind: {error}")
+            })?
+        }
+        (expected_kind, None) => expected_kind,
+    };
     let domain_context = response_domain_context(flags)?;
     let archive_context = batch_archive_context(expected_kind, domain_context.as_ref())?;
     let response = validate_response_file(input, expected_id, require_ok)
@@ -1970,6 +2010,15 @@ fn response_kind(flags: &[String]) -> Result<Option<RpcResponseKind>, String> {
     let Some(kind) = flag_value(flags, "--expect-kind") else {
         return Ok(None);
     };
+    response_kind_for_method(kind, flags)
+}
+
+/// Maps a request method name to the response kind that validates its
+/// result; shared by `--expect-kind` and by `--request-file` binding.
+fn response_kind_for_method(
+    kind: &str,
+    flags: &[String],
+) -> Result<Option<RpcResponseKind>, String> {
     match kind {
         METHOD_STATUS => Ok(Some(RpcResponseKind::Status)),
         METHOD_SERVER_INFO => Ok(Some(RpcResponseKind::ServerInfo)),
@@ -2359,6 +2408,7 @@ Atomic_settlement_template request supports --left-owner, --left-recipient, --le
 Atomic_swap_fee_quote supports --rfq-hash, --market-envelope-hash, --nav-epoch, --expires-at-height, --swap-nonce, and --leg-N-owner/recipient/issuer/asset-id/amount for N=0,1.
 Atomic swap submit supports exactly one of --signed-atomic-swap-transaction-json or --signed-atomic-swap-transaction-json-file. Finality submit additionally requires --proxy-required-current-height, --proxy-required-state-root, and --proxy-required-parent-hash, with optional --proxy-readiness-timeout-ms.
 Validating atomic swap quote, raw-submit, or finality responses requires --request-file so the response is bound to the exact request and signed body; --chain-id, --genesis-hash, and --protocol-version may be supplied together to assert its chain domain.
+Any validate-response call given --request-file is bound to that request: the response id must equal the request id, --expect-id must agree with it if also given, and --expect-kind defaults to (and is checked against) the request method.
 Offer_info request supports --offer-id. Account_offers request supports --account, --state, and --limit. Book_offers request supports --taker-gets-asset-id, --taker-pays-asset-id, and --limit.
 Escrow_info request supports --escrow-id. Account_escrows request supports --account, --role, --state, and --limit.
 Nft_info request supports --nft-id. Account_nfts request supports --account, --include-burned, and --limit. Issuer_nfts request supports --issuer, --collection-id, --include-burned, and --limit.
