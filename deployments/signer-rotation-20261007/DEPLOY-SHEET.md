@@ -9,7 +9,9 @@ Keys are used by path only; no key material is printed, copied to a host or comm
 
 **Status: §0–§6 done on 2026-10-09** (deployed at height 1121,
 [rollout record](observed/rollout-record.json); `demo-preflight.py` READY WITH ATTENTION).
-§7 done on 2026-10-12 ([records](observed/store-conversion/)); §8 not yet run. Every
+§7 done on 2026-10-12 ([records](observed/store-conversion/)). §8 on 2026-10-12: FastPay
+half done (epoch 2 installed at 1123); bridge half stopped at 8.2, refused by the RPC size
+limit, after the `StopPrepare` at 1122 ([records](observed/signer-activation/)). Every
 step marked **GO** needs the operator's go on the day. The name keeps its date
 suffix; it is not the rollout day.
 
@@ -192,14 +194,54 @@ After the objection window, so 2026-10-09 at the earliest.
 Signatures are requested separately under the
 [decision proposal](../../docs/review/validator-5-signer-committees-decision-proposal-20261001.md).
 
-- [ ] **GO 8.0.** Read-only: route `outstanding_bridge_claims_atoms` and pending returns are 0; list `fastswap_policy_snapshots`; build the epoch-2 `FastSwapCommitteeV1` from the six current registry keys (quorum 5) and record its root; `fastswap_checkpoint_status` answers on validators 0–4.
-- [ ] **GO 8.1.** Bridge: one epoch-1 `StopPrepare` per FastSwap policy epoch, if any (`fastswap-control-prepare --kind stop-prepare --policy-epoch N`, `fastswap-control-vote-sign` on validators 0–4, `fastswap-control-assemble`). Not reversible.
-- [ ] **GO 8.2.** Bridge: final drained epoch-1 checkpoint (`fastswap_checkpoint_status` votes, `AnchorCheckpoint`) from validators 0–4.
+**Rollback (written 2026-10-12, before the first signature).** The chain records
+of this section cannot be removed or undone: no `StopPrepare` fence, anchored
+checkpoint, `ActivateCommittee`, route policy update or FastPay committee record
+is ever deleted. Before `ActivateCommittee` (8.3) is admitted, nothing changes
+who signs: epoch 1 keeps signing and the steps can stop. After it, the only
+correction is forward: epoch 3, by repeating the steps under epoch 2 (a
+`StopPrepare` per policy epoch, a new drained final checkpoint, `ActivateCommittee`
+epoch 3, and the issuer's update to `authority_epoch` 3). The route stays at
+epoch 1 until the issuer's update (8.4), so a wrong epoch-2 committee is simply
+never adopted by the route. The FastPay epoch-2 record starts at 10001 and can
+only be followed by epoch 3 at its own `new_orders_through_height` + 1; before
+the batch commits, the signatures are discarded. The release executable can
+still be rolled back (below); the chain decisions stay.
+
+- [x] **GO 8.0.** Read-only: route `outstanding_bridge_claims_atoms` and pending returns are 0; list `fastswap_policy_snapshots`; build the epoch-2 `FastSwapCommitteeV1` from the six current registry keys (quorum 5) and record its root; `fastswap_checkpoint_status` answers on validators 0–4.
+- [x] **GO 8.1.** Bridge: one epoch-1 `StopPrepare` per FastSwap policy epoch, if any (`fastswap-control-prepare --kind stop-prepare --policy-epoch N`, `fastswap-control-vote-sign` on validators 0–4, `fastswap-control-assemble`). Not reversible.
+- [ ] **GO 8.2.** Bridge: final drained epoch-1 checkpoint (`fastswap_checkpoint_status` votes, `AnchorCheckpoint`) from validators 0–4. **Refused on 2026-10-12** (below); 8.3–8.5 not run.
 - [ ] **GO 8.3.** Bridge: `ActivateCommittee` epoch 2 (`fastswap-control-prepare --kind activate-committee --epoch 2 --committee-root <8.0 root>`, vote-sign on each of 0–4, assemble, submit as `Control`). Not reversible; harmless until 8.4.
 - [ ] **GO 8.4.** Bridge: the issuer signs `pftl_uniswap_route_bridge_policy_update` (`scripts/a666-build-route-epoch-advance.py bridge-policy-update`, `--committee-root` from 8.0, `authority_epoch 2`). Other lane; the epoch only increases.
 - [ ] **GO 8.5.** Bridge: next checkpoint with `ethereum-checkpoint-vote-sign`, validator-5 with its current key; assemble 5 of 6.
-- [ ] **GO 8.6.** FastPay: `fastpay-committee-prepare` on one validator; confirm valid from 10001, six members, quorum 5.
-- [ ] **GO 8.7.** FastPay: `governance-authorization-sign` by all six at the agreed proposal slot, `governance-amendment-assemble`, `fastpay-recovery-governance-bootstrap-assemble`, submit, all below height 10001.
+- [x] **GO 8.6.** FastPay: `fastpay-committee-prepare` on one validator; confirm valid from 10001, six members, quorum 5.
+- [x] **GO 8.7.** FastPay: `governance-authorization-sign` by all six at the agreed proposal slot, `governance-amendment-assemble`, `fastpay-recovery-governance-bootstrap-assemble`, submit, all below height 10001.
+
+**Run on 2026-10-12** ([record](observed/signer-activation/signer-activation-record.json);
+state read before and after each live step with [state-read.py](observed/signer-activation/state-read.py),
+`observe-fleet.py` PASS each time). Each validator signed on its own host with its own key file,
+by path; the work files are in `/var/lib/postfiat/signer-activation-20261012/` on each host.
+
+| Step | Result |
+|---|---|
+| 8.0 | Height 1121. A666 and BMNRC routes: claims 0, pending returns 0. One FastSwap policy, `356e5cca…`, policy epoch 1. Active committee epoch 1, root `a2eebcba…`. Epoch-2 committee over the six registry keys (validator-5 `aad48519…`), quorum 5: root **`72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37`**, the same on all six hosts ([committee](observed/signer-activation/epoch2-bridge-committee.json)) |
+| 8.1 | `StopPrepare` (committee epoch 1, policy epoch 1, finalized height 1121), action `20d0ccfc…`, votes from validators 0–4. Submitted through `mempool_submit_fastlane_primary_finality` on validator-0: tx `fbafffe4…`, **height 1122**, block `506a634f…`, `fastlane_control_applied` on all six. The RPC replied `rpc_finality_submit_failed` because its handler only accepts `owned_deposit_applied` (`crates/node/src/rpc_cli.rs:2427`); the block committed |
+| 8.2 | Five identical `drain_ready` checkpoint votes from validators 0–4 (fenced policy epochs `[1]`, no exit claims, `previous_checkpoint_id` null). **Refused** at validator-1: `fastlane_primary_json` must not exceed 65536 bytes (`crates/rpc_sdk/src/protocol_requests.rs:197`, `:2352`); the `AnchorCheckpoint` is 70,944 bytes ([transaction](observed/signer-activation/final-checkpoint-epoch1.fastlane-primary.json)). Nothing admitted; stopped here |
+| 8.6 | Validator-1, read-only: epoch 2, six members, quorum 5, valid 10001–19990, registry root `86125482…`, replaces validator-5's entry ([output](observed/signer-activation/8.6-fastpay-committee-prepare-validator-1.json)) |
+| 8.7 | Six authorizations at proposal slot 1123 (expiry 1133), validator-5 with its current key. Batch `66746fa2…` ([batch](observed/signer-activation/fastpay-epoch2.batch.json)) through `transport-peer-certified-batch-round --batch-kind governance` on validator-1, the proposer of 1123: **height 1123**, block `bafcc6ef…`, certificate `b2f5c70c…` (5 votes), `fastpay_recovery_committee_rotated` on all six |
+| 8.8 | On all six: the latest FastPay committee is epoch 2, valid 10001–19990; `owned_recovery_capabilities` still answers epoch 1 at 1123. Payments are unchanged until 10001 |
+
+**State after.** Height 1123, root `942d1fc2…`, six-way agreement. The bridge stays on
+epoch 1 (root `a2eebcba…`) with policy epoch 1 fenced: new epoch-1 FastSwap prepares
+are stopped; Ethereum route checkpoints still need validators 0–4. Validator-5 still
+answers `fastswap_unavailable`.
+
+**Before 8.2 can resume.** `mempool_submit_fastlane_primary_finality` cannot carry an
+`AnchorCheckpoint` with five ML-DSA-65 votes, and the `ActivateCommittee` certificate,
+which embeds that checkpoint, would be larger still. The RPC limit for these two
+operations (or a compact codec) and the handler's receipt check need a fix in a
+release, or another admission path needs review. The fence and the epoch-2 root
+stay valid; 8.2 restarts from fresh checkpoint votes.
 
 ## Rollback (one validator, emergency only)
 

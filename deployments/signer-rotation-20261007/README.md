@@ -21,7 +21,11 @@ passed on 2026-10-06 ([qualification packet](qualification/README.md)).
 
 FastSwap store converted on all six on 2026-10-12, height 1121 unchanged
 ([sheet §7](DEPLOY-SHEET.md#7-fastswap-store-conversion-one-host-at-a-time),
-[records](observed/store-conversion/)). Not done yet: the signer-group activation (§8).
+[records](observed/store-conversion/)). Signer-group activation (§8) on 2026-10-12:
+FastPay committee epoch 2 (six members, quorum 5, from 10001) installed at height 1123;
+bridge `StopPrepare` at 1122, then the final checkpoint anchor was refused by the RPC
+size limit, so the bridge committee stays at epoch 1
+([sheet §8](DEPLOY-SHEET.md#8-signer-group-activation), [records](observed/signer-activation/)).
 
 ## Scope since `c93b2137`
 

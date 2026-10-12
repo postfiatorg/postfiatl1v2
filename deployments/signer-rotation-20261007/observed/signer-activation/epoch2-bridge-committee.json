@@ -1,0 +1,57 @@
+{
+  "step": "8.0",
+  "read_at": "2026-10-12",
+  "source": "fastswap-control-prepare --kind activate-committee --epoch 2 with a zero --committee-root on each of the six hosts (read-only; it refuses and names the registry committee root; no control file written)",
+  "registry_file_sha256": "43e588344d75348b3fc74eff2daad8ed643e6eb92819bf0fd86a2084b0960237",
+  "epoch": 2,
+  "validator_count": 6,
+  "quorum": 5,
+  "committee_root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+  "same_root_on": [
+    "validator-0",
+    "validator-1",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ],
+  "members": [
+    {
+      "validator_id": "validator-0",
+      "public_key_sha256": "225cd7899a1aab80bdf92bc927d2d7be9cc0f6dae23cb96c05c88530f8e5898e"
+    },
+    {
+      "validator_id": "validator-1",
+      "public_key_sha256": "497ee0c635d20f09283593a2da775b5564bcaaf1b9551b901ccde93193d3d858"
+    },
+    {
+      "validator_id": "validator-2",
+      "public_key_sha256": "4063c018c697506d5399965673b248bd5b39a3cbbda2c55f76bbf2e2c2bc05a5"
+    },
+    {
+      "validator_id": "validator-3",
+      "public_key_sha256": "32dc105d6b3edeb1776072be6fcf213acf12977ba8f86cbcd1b79db876b160b2"
+    },
+    {
+      "validator_id": "validator-4",
+      "public_key_sha256": "dd2d0c14aa9753465d2243a0bc0e6a5cbc93e151651732276c630e622858f6fb"
+    },
+    {
+      "validator_id": "validator-5",
+      "public_key_sha256": "aad485197f47040cab5ecc2cd880aff65266bc859cef8a49206fd83d4d3e5819"
+    }
+  ],
+  "epoch1_root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e",
+  "fastswap_policies": [
+    {
+      "policy_hash": "356e5cca344cde537ccaa2aab7d960f9228182ce22812671e8d053512302a75395e80ade6876670dc2379a9d66e48cc9",
+      "policy_epoch": 1,
+      "valid_from_height": 152,
+      "valid_through_height": 10000,
+      "source": "fastswap_policy RPC, validator-1"
+    }
+  ],
+  "stop_prepare_required_for_policy_epochs": [
+    1
+  ]
+}

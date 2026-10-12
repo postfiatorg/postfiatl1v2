@@ -1,0 +1,8 @@
+{
+  "kind": "stop_prepare",
+  "fence": {
+    "committee_epoch": 1,
+    "policy_epoch": 1,
+    "finalized_primary_height": 1121
+  }
+}

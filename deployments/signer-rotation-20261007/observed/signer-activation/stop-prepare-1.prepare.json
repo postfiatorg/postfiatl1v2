@@ -1,0 +1,9 @@
+{
+  "action_digest": "20d0ccfc7bb6ed3f6ca98df05e381894fd36e7af8afbad5df876ef9207d57169ff93b5e8d5302b25d93c406690fbfd63",
+  "control_file": "/var/lib/postfiat/signer-activation-20261012/stop-prepare-1.json",
+  "kind": "stop_prepare",
+  "schema": "postfiat-fastswap-control-prepare-v1",
+  "signatures_required": 5,
+  "signer_committee_epoch": 1,
+  "signer_committee_root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e"
+}
