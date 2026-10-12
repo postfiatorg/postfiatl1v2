@@ -1,0 +1,17 @@
+{
+  "version": "postfiat-local-rpc-v1",
+  "id": "fastswap-convert-fastswap_checkpoint_status",
+  "ok": false,
+  "result": null,
+  "error": {
+    "code": "fastswap_unavailable",
+    "message": "FastSwap service unavailable"
+  },
+  "events": [
+    {
+      "event_type": "rpc_serve",
+      "subject": "fastswap_unavailable",
+      "message": "remote rpc request rejected"
+    }
+  ]
+}

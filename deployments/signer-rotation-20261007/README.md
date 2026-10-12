@@ -19,7 +19,9 @@ backup, applies, grants and after state: [observed/](observed/)
 ([rollout record](observed/rollout-record.json)). The local qualification
 passed on 2026-10-06 ([qualification packet](qualification/README.md)).
 
-Not done yet: the FastSwap store conversion (§7) and the signer-group activation (§8).
+FastSwap store converted on all six on 2026-10-12, height 1121 unchanged
+([sheet §7](DEPLOY-SHEET.md#7-fastswap-store-conversion-one-host-at-a-time),
+[records](observed/store-conversion/)). Not done yet: the signer-group activation (§8).
 
 ## Scope since `c93b2137`
 

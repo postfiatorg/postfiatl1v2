@@ -1,0 +1,103 @@
+{
+  "validator": "validator-0",
+  "host": "64.176.220.75",
+  "before_identity": {
+    "height": 1121,
+    "tip": "329bc2f1f31c9079e59ba3f57aa92ab50447d0a499a192cc5c07cbaf999fca303512f5cffba90e2cd1cca71948b3557b",
+    "state_root": "aa462feb712d9b82be399bad8bc2db6f43d40387285ed03302a25f9573b138e86b653bfae3a43768ccc4fa1ec2a2c06d"
+  },
+  "disk_avail_bytes": 16420323328,
+  "before_store": {
+    "files": [
+      "2003 postfiat:postfiat 600 base-state.json",
+      "42673 postfiat:postfiat 600 committee.json",
+      "12 postfiat:postfiat 600 fastswap-v1.lock",
+      "177899 postfiat:postfiat 600 fastswap-v1.wal",
+      "12288 postfiat:postfiat 700 vote-artifacts"
+    ],
+    "dir_bytes": 1231707,
+    "vote_artifacts": 30,
+    "wal_sha256": "35d8b33779bca49bb26306bb2ac041226d904f8441068a66f4f6b029b1932792"
+  },
+  "stop_time": "2026-10-12T11:00:39Z",
+  "dry_run": {
+    "store_directory": "/var/lib/postfiat/validator-0/fastswap-v1",
+    "dry_run": true,
+    "outcome": "would-convert",
+    "wal_bytes": 177899,
+    "wal_records": 26,
+    "legacy_wal_records": 26,
+    "converted_wal_records": 0,
+    "legacy_snapshot": false,
+    "converted_snapshot": false,
+    "integrity_key_fingerprint": null,
+    "integrity_key_created": false,
+    "backup_directory": null,
+    "backup_files_verified": 0,
+    "verification": "not run (dry run)"
+  },
+  "convert": {
+    "store_directory": "/var/lib/postfiat/validator-0/fastswap-v1",
+    "dry_run": false,
+    "outcome": "converted",
+    "wal_bytes": 177899,
+    "wal_records": 26,
+    "legacy_wal_records": 26,
+    "converted_wal_records": 26,
+    "legacy_snapshot": false,
+    "converted_snapshot": false,
+    "integrity_key_fingerprint": "e63978739e7e071ed41c12296e056aa2",
+    "integrity_key_created": true,
+    "backup_directory": "/var/lib/postfiat/fastswap-v1-backup-validator-0",
+    "backup_files_verified": 33,
+    "verification": "normal open verified 26 record(s) with the keyed MAC"
+  },
+  "recheck": {
+    "store_directory": "/var/lib/postfiat/validator-0/fastswap-v1",
+    "dry_run": true,
+    "outcome": "nothing-to-convert",
+    "wal_bytes": 177899,
+    "wal_records": 26,
+    "legacy_wal_records": 0,
+    "converted_wal_records": 0,
+    "legacy_snapshot": false,
+    "converted_snapshot": false,
+    "integrity_key_fingerprint": "e63978739e7e071ed41c12296e056aa2",
+    "integrity_key_created": false,
+    "backup_directory": null,
+    "backup_files_verified": 0,
+    "verification": "not run (dry run)"
+  },
+  "after_store": {
+    "files": [
+      "2003 postfiat:postfiat 600 base-state.json",
+      "42673 postfiat:postfiat 600 committee.json",
+      "12 postfiat:postfiat 600 fastswap-v1.lock",
+      "177899 postfiat:postfiat 600 fastswap-v1.wal",
+      "12288 postfiat:postfiat 700 vote-artifacts",
+      "48 postfiat:postfiat 600 .integrity.key"
+    ],
+    "dir_bytes": 1231755,
+    "vote_artifacts": 30,
+    "wal_sha256": "8650d3e5735b28fb018a5e56186487a45f89b65bdccfb718264b0c6041a27b45"
+  },
+  "backup_listing": [
+    "postfiat:postfiat 700",
+    "4",
+    "35d8b33779bca49bb26306bb2ac041226d904f8441068a66f4f6b029b1932792"
+  ],
+  "start_time": "2026-10-12T11:00:49Z",
+  "rejoin_seconds": 15,
+  "rejoin_identity": [
+    1121,
+    "329bc2f1f31c9079e59ba3f57aa92ab50447d0a499a192cc5c07cbaf999fca303512f5cffba90e2cd1cca71948b3557b",
+    "aa462feb712d9b82be399bad8bc2db6f43d40387285ed03302a25f9573b138e86b653bfae3a43768ccc4fa1ec2a2c06d"
+  ],
+  "fastswap_capabilities": "ok",
+  "fastswap_checkpoint_status": "ok",
+  "after_identity": {
+    "height": 1121,
+    "tip": "329bc2f1f31c9079e59ba3f57aa92ab50447d0a499a192cc5c07cbaf999fca303512f5cffba90e2cd1cca71948b3557b",
+    "state_root": "aa462feb712d9b82be399bad8bc2db6f43d40387285ed03302a25f9573b138e86b653bfae3a43768ccc4fa1ec2a2c06d"
+  }
+}

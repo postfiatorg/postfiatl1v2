@@ -7,8 +7,9 @@ The release-day sequence (2026-10-09 at the earliest), run from the signing work
 and the [release-day procedure](../../docs/review/signer-committee-rotation-dry-run-20261005.md#live-procedure-for-release-day).
 Keys are used by path only; no key material is printed, copied to a host or committed.
 
-**Status: §0–§5 and the §6 after state done on 2026-10-09** (deployed at height 1121,
-[rollout record](observed/rollout-record.json)); `demo-preflight.py`, §7 and §8 not yet run. Every
+**Status: §0–§6 done on 2026-10-09** (deployed at height 1121,
+[rollout record](observed/rollout-record.json); `demo-preflight.py` READY WITH ATTENTION).
+§7 done on 2026-10-12 ([records](observed/store-conversion/)); §8 not yet run. Every
 step marked **GO** needs the operator's go on the day. The name keeps its date
 suffix; it is not the rollout day.
 
@@ -117,18 +118,30 @@ Expected: all 12 validator and RPC processes on `decaa411…`;
 `POSTFIAT_DEPLOYMENT_VERIFIED_RECORD`); RPC units run with `--max-requests 100000`
 and `RestartSec=1`; an `account_tx` read reports `truncated` only when rows are omitted.
 
-- [ ] **GO 6.** After state passes; proceed to the store conversion.
+- [x] **GO 6.** After state passes; proceed to the store conversion. Passed on 2026-10-09
+  ([after state](observed/after.json)). `demo-preflight.py` ran at 2026-10-09T12:43:09Z:
+  READY WITH ATTENTION, 55 PASS, 5 ATTENTION (the hand-started relays on validators
+  0, 2, 3, 4 and 5), 0 FAIL.
 
 ## 7. FastSwap store conversion, one host at a time
 
 validator-5 first, then validators 0–4. Both units of that host are stopped;
 the other five keep quorum.
 
-- [ ] **GO 7.N** (one go per host: validator-5, validator-0, validator-1, validator-2, validator-3, validator-4).
+- [x] **GO 7.5** validator-5, 2026-10-12
+- [x] **GO 7.0** validator-0, 2026-10-12
+- [x] **GO 7.1** validator-1, 2026-10-12
+- [x] **GO 7.2** validator-2, 2026-10-12
+- [x] **GO 7.3** validator-3, 2026-10-12
+- [x] **GO 7.4** validator-4, 2026-10-12
+
+`/var/lib/postfiat` is `root:root 755`, so the `postfiat` user cannot create the
+backup directory: root creates it empty first (the command refuses a non-empty one).
 
 ```bash
 ssh root@HOST 'systemctl stop postfiat-validator-N-rpc.service postfiat-validator-N.service;
   ! systemctl is-active --quiet postfiat-validator-N-rpc.service && ! systemctl is-active --quiet postfiat-validator-N.service'
+ssh root@HOST 'install -d -o postfiat -g postfiat -m 700 /var/lib/postfiat/fastswap-v1-backup-validator-N'
 ssh root@HOST 'runuser -u postfiat -- /opt/postfiat/releases/signer-rotation-20261007/postfiat-node fastswap-store-migrate \
   --data-dir /var/lib/postfiat/validator-N --dry-run'      # would-convert, legacy_wal_records == wal_records
 ssh root@HOST 'runuser -u postfiat -- /opt/postfiat/releases/signer-rotation-20261007/postfiat-node fastswap-store-migrate \
@@ -137,10 +150,40 @@ ssh root@HOST 'systemctl start postfiat-validator-N.service postfiat-validator-N
 ```
 
 Then `fastswap_checkpoint_status` on that host's RPC must answer instead of
-`fastswap_unavailable`, and `observe-fleet.py` must show six-way agreement,
-before the next host. Rollback per host: stop both units, move `fastswap-v1/`
-aside, `cp -a` the backup back, start the units (FastSwap is then unavailable
-on that host again).
+`fastswap_unavailable` (validators 0–4; see validator-5 below), and
+`observe-fleet.py` must show six-way agreement, before the next host. Rollback
+per host: stop both units, move `fastswap-v1/` aside, `cp -a` the backup back,
+start the units (FastSwap is then unavailable on that host again).
+
+**Done on 2026-10-12** with [fastswap-convert-host.py](observed/store-conversion/fastswap-convert-host.py)
+(these steps, one host per run). Records: [observed/store-conversion/](observed/store-conversion/).
+
+| Host | Stopped → started (UTC) | Rejoined | WAL bytes before → after | Store bytes before → after | Records legacy → keyed | Backup files | Key fingerprint | `fastswap_checkpoint_status` |
+|---|---|---|---|---|---|---|---|---|
+| validator-5 | 10:57:18 → 10:57:36 | 12 s | 177,899 → 177,899 | 1,231,643 → 1,231,692 | 26 → 26 | 33 | `7ac0eb5d…` (new) | `fastswap_unavailable` (key, below) |
+| validator-0 | 11:00:39 → 11:00:49 | 22 s | 177,899 → 177,899 | 1,231,707 → 1,231,755 | 26 → 26 | 33 | `e6397873…` (new) | answers |
+| validator-1 | 11:03:37 → 11:03:42 | 19 s | 177,899 → 177,899 | 1,231,830 → 1,231,831 | 26 → 26 | 34 | `0308c2a7…` (existing) | answers |
+| validator-2 | 11:06:42 → 11:07:06 | 14 s | 177,899 → 177,899 | 1,231,704 → 1,231,753 | 26 → 26 | 33 | `6b09f698…` (new) | answers |
+| validator-3 | 11:09:52 → 11:10:02 | 8 s | 177,899 → 177,899 | 1,231,808 → 1,231,857 | 26 → 26 | 33 | `68ac6e5b…` (new) | answers |
+| validator-4 | 11:12:40 → 11:12:44 | 7 s | 177,899 → 177,899 | 1,231,600 → 1,231,649 | 26 → 26 | 33 | `67b6b305…` (new) | answers |
+
+- Every host: dry run `would-convert` (26 of 26 records legacy), then `converted` with
+  "normal open verified 26 record(s) with the keyed MAC", then a second dry run
+  `nothing-to-convert`. The six original WALs were identical (SHA-256 `35d8b337…`)
+  and each backup WAL matches it. The store grew by the new 48-byte `.integrity.key`
+  (validator-1 already had one) and the converter's lock PID.
+- `observe-fleet.py` PASS before the first host and after each: six on
+  `decaa411…` at height 1121, tip `329bc2f1…`, root `aa462feb…`. No block was
+  needed; no stop condition was hit and no rollback was used.
+- Validators 0–4 return the same checkpoint: committee epoch 1, root `a2eebcba…`,
+  `drain_ready: true`, `rotation_ready: false`, `highest_wal_sequence` 25, one active
+  policy `356e5cca…`. The canonical refresh appended no `anchor_checkpoint` record
+  (WAL still 177,899 B, no snapshot), so no epoch-1 checkpoint is anchored yet.
+- Validator-5: its local key (rotated at heights 917 and 924) is not its member key in
+  the epoch-1 committee (public-key digests `aad48519…` and `b8d197ab…`, read before
+  the change). The service refuses at its key self-check before it opens the store
+  (the lock file is still the converter's after the read), so FastSwap stays
+  unavailable there. That is the §8 committee change; the store is converted and verified.
 
 ## 8. Signer-group activation
 

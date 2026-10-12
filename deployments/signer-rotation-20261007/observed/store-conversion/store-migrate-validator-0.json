@@ -1,0 +1,16 @@
+{
+  "store_directory": "/var/lib/postfiat/validator-0/fastswap-v1",
+  "dry_run": false,
+  "outcome": "converted",
+  "wal_bytes": 177899,
+  "wal_records": 26,
+  "legacy_wal_records": 26,
+  "converted_wal_records": 26,
+  "legacy_snapshot": false,
+  "converted_snapshot": false,
+  "integrity_key_fingerprint": "e63978739e7e071ed41c12296e056aa2",
+  "integrity_key_created": true,
+  "backup_directory": "/var/lib/postfiat/fastswap-v1-backup-validator-0",
+  "backup_files_verified": 33,
+  "verification": "normal open verified 26 record(s) with the keyed MAC"
+}

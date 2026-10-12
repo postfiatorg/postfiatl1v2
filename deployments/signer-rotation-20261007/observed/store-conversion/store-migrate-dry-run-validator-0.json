@@ -1,0 +1,16 @@
+{
+  "store_directory": "/var/lib/postfiat/validator-0/fastswap-v1",
+  "dry_run": true,
+  "outcome": "would-convert",
+  "wal_bytes": 177899,
+  "wal_records": 26,
+  "legacy_wal_records": 26,
+  "converted_wal_records": 0,
+  "legacy_snapshot": false,
+  "converted_snapshot": false,
+  "integrity_key_fingerprint": null,
+  "integrity_key_created": false,
+  "backup_directory": null,
+  "backup_files_verified": 0,
+  "verification": "not run (dry run)"
+}
