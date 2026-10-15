@@ -1,0 +1,208 @@
+{
+  "tag": "7.2-after",
+  "read_at": "2026-10-15T11:37:40Z",
+  "validators": {
+    "validator-0": {
+      "height": 1131,
+      "tip": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+      "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341",
+      "mempool_pending": 0,
+      "fastswap_committee": {
+        "epoch": 1,
+        "root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e"
+      },
+      "fastswap_checkpoint_status": {
+        "committee_epoch": 1,
+        "committee_root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e",
+        "drain_ready": true,
+        "rotation_ready": true,
+        "fenced_policy_epochs": [
+          1
+        ],
+        "previous_checkpoint_id": null,
+        "highest_wal_sequence": 27,
+        "active_policy_hashes": [
+          "356e5cca344cde537ccaa2aab7d960f9228182ce22812671e8d053512302a75395e80ade6876670dc2379a9d66e48cc9"
+        ],
+        "exit_claim_totals": [],
+        "terminal_root": "b194b1290d2064080f10163b5cb389cb2358f4d93298fc054337195d87147e9aea7fddcd131c2ae301008d18911fccd9"
+      },
+      "fastpay_committee": {
+        "committee_epoch": 1,
+        "quorum": 5,
+        "validator_count": 6,
+        "current_height": 1131
+      }
+    },
+    "validator-1": {
+      "height": 1131,
+      "tip": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+      "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341",
+      "mempool_pending": 0,
+      "fastswap_committee": {
+        "epoch": 1,
+        "root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e"
+      },
+      "fastswap_checkpoint_status": {
+        "committee_epoch": 1,
+        "committee_root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e",
+        "drain_ready": true,
+        "rotation_ready": true,
+        "fenced_policy_epochs": [
+          1
+        ],
+        "previous_checkpoint_id": null,
+        "highest_wal_sequence": 27,
+        "active_policy_hashes": [
+          "356e5cca344cde537ccaa2aab7d960f9228182ce22812671e8d053512302a75395e80ade6876670dc2379a9d66e48cc9"
+        ],
+        "exit_claim_totals": [],
+        "terminal_root": "b194b1290d2064080f10163b5cb389cb2358f4d93298fc054337195d87147e9aea7fddcd131c2ae301008d18911fccd9"
+      },
+      "fastpay_committee": {
+        "committee_epoch": 1,
+        "quorum": 5,
+        "validator_count": 6,
+        "current_height": 1131
+      }
+    },
+    "validator-2": {
+      "height": 1131,
+      "tip": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+      "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341",
+      "mempool_pending": 0,
+      "fastswap_committee": {
+        "epoch": 1,
+        "root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e"
+      },
+      "fastswap_checkpoint_status": {
+        "committee_epoch": 1,
+        "committee_root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e",
+        "drain_ready": true,
+        "rotation_ready": true,
+        "fenced_policy_epochs": [
+          1
+        ],
+        "previous_checkpoint_id": null,
+        "highest_wal_sequence": 27,
+        "active_policy_hashes": [
+          "356e5cca344cde537ccaa2aab7d960f9228182ce22812671e8d053512302a75395e80ade6876670dc2379a9d66e48cc9"
+        ],
+        "exit_claim_totals": [],
+        "terminal_root": "b194b1290d2064080f10163b5cb389cb2358f4d93298fc054337195d87147e9aea7fddcd131c2ae301008d18911fccd9"
+      },
+      "fastpay_committee": {
+        "committee_epoch": 1,
+        "quorum": 5,
+        "validator_count": 6,
+        "current_height": 1131
+      }
+    },
+    "validator-3": {
+      "height": 1131,
+      "tip": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+      "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341",
+      "mempool_pending": 0,
+      "fastswap_committee": {
+        "epoch": 1,
+        "root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e"
+      },
+      "fastswap_checkpoint_status": {
+        "committee_epoch": 1,
+        "committee_root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e",
+        "drain_ready": true,
+        "rotation_ready": true,
+        "fenced_policy_epochs": [
+          1
+        ],
+        "previous_checkpoint_id": null,
+        "highest_wal_sequence": 27,
+        "active_policy_hashes": [
+          "356e5cca344cde537ccaa2aab7d960f9228182ce22812671e8d053512302a75395e80ade6876670dc2379a9d66e48cc9"
+        ],
+        "exit_claim_totals": [],
+        "terminal_root": "b194b1290d2064080f10163b5cb389cb2358f4d93298fc054337195d87147e9aea7fddcd131c2ae301008d18911fccd9"
+      },
+      "fastpay_committee": {
+        "committee_epoch": 1,
+        "quorum": 5,
+        "validator_count": 6,
+        "current_height": 1131
+      }
+    },
+    "validator-4": {
+      "height": 1131,
+      "tip": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+      "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341",
+      "mempool_pending": 0,
+      "fastswap_committee": {
+        "epoch": 1,
+        "root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e"
+      },
+      "fastswap_checkpoint_status": {
+        "committee_epoch": 1,
+        "committee_root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e",
+        "drain_ready": true,
+        "rotation_ready": true,
+        "fenced_policy_epochs": [
+          1
+        ],
+        "previous_checkpoint_id": null,
+        "highest_wal_sequence": 27,
+        "active_policy_hashes": [
+          "356e5cca344cde537ccaa2aab7d960f9228182ce22812671e8d053512302a75395e80ade6876670dc2379a9d66e48cc9"
+        ],
+        "exit_claim_totals": [],
+        "terminal_root": "b194b1290d2064080f10163b5cb389cb2358f4d93298fc054337195d87147e9aea7fddcd131c2ae301008d18911fccd9"
+      },
+      "fastpay_committee": {
+        "committee_epoch": 1,
+        "quorum": 5,
+        "validator_count": 6,
+        "current_height": 1131
+      }
+    },
+    "validator-5": {
+      "height": 1131,
+      "tip": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+      "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341",
+      "mempool_pending": 0,
+      "fastswap_committee": {
+        "error": "fastswap_unavailable"
+      },
+      "fastswap_checkpoint_status": {
+        "error": "fastswap_unavailable"
+      },
+      "fastpay_committee": {
+        "committee_epoch": 1,
+        "quorum": 5,
+        "validator_count": 6,
+        "current_height": 1131
+      }
+    }
+  },
+  "routes": [
+    {
+      "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+      "outstanding_bridge_claims_atoms": 0,
+      "pending_return_import_claims_atoms": 0,
+      "outstanding_export_packet_count": 0,
+      "pending_return_burn_count": 0,
+      "paused": false,
+      "ledger_hash": "57da38373813c34b9629fa56123eed8ebb49433d71ff4021400cabe673c5943977065f14f3a18f726941edef03ee78f5"
+    },
+    {
+      "route_id": "pftl-bmnrc-ethereum-wBMNRC-usdc-v1",
+      "outstanding_bridge_claims_atoms": 0,
+      "pending_return_import_claims_atoms": 0,
+      "outstanding_export_packet_count": 0,
+      "pending_return_burn_count": 0,
+      "paused": false,
+      "ledger_hash": "b2817e68d96e950bc6700643a56636880aa7a1e5bc9c4a130204e725512691b4618364807af8d30392a58b12a32840a4"
+    }
+  ],
+  "observe_fleet": [
+    "PASS height=1131 tip=9b054f091757 root=a12e7c5f1ee5 validator-0=fastlane-cap-20261014, validator-1=fastlane-cap-20261014, validator-2=fastlane-cap-20261014, validator-3=fastlane-cap-20261014, validator-4=fastlane-cap-20261014, validator-5=fastlane-cap-20261014; /home/postfiatchad/repos/postfiatl1v2-rel20261014/deployments/fastlane-cap-20261014/observed/bridge-activation/observe-7.2-after.json"
+  ],
+  "observe_fleet_rc": 0
+}

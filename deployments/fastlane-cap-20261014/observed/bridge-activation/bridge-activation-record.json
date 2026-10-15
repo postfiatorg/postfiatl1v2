@@ -1,0 +1,200 @@
+{
+  "schema": "postfiat-bridge-activation-record-v1",
+  "date": "2026-10-15",
+  "release": "fastlane-cap-20261014 (executable b1b3dbb1..., manifest 4f379c57..., source 8bed9b90)",
+  "sheet": "DEPLOY-SHEET.md section 7 (previous sheet 8.2-8.4); rollback note written before the first signature",
+  "7.0": {
+    "result": "done (read-only)",
+    "state_read": "bridge-activation/state-7.0-before.json",
+    "height": 1129,
+    "tip": "41154d2c41211e43d9b09d457f072b099fad9cddca52a1ab419b5352fc62daa1746802e35fee62f2985cae6cc539dfdd",
+    "state_root": "053fb35c15e5387b8d66678133c04b099b590ae9625e924029dab772108290dc773d39238d63abdee09808267559a772",
+    "mempools": [
+      0
+    ],
+    "observe_fleet": "PASS, six-way agreement",
+    "routes": {
+      "pftl-a666-ethereum-wA666-usdc-v1": {
+        "outstanding_bridge_claims_atoms": 0,
+        "pending_return_import_claims_atoms": 0
+      },
+      "pftl-bmnrc-ethereum-wBMNRC-usdc-v1": {
+        "outstanding_bridge_claims_atoms": 0,
+        "pending_return_import_claims_atoms": 0
+      }
+    },
+    "active_bridge_committee": {
+      "epoch": 1,
+      "root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e"
+    },
+    "checkpoint_status_validators_0_4": "drain_ready true, fenced policy epochs [1], previous_checkpoint_id null, WAL 26; validator-5 fastswap_unavailable (expected)",
+    "epoch2_root_recompute": {
+      "method": "fastswap-control-prepare --kind activate-committee --epoch 2 with a zero --committee-root on each host as postfiat; refuses and names the registry root; no control file written",
+      "root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+      "same_on": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4",
+        "validator-5"
+      ],
+      "registry_file_sha256": "43e588344d75348b3fc74eff2daad8ed643e6eb92819bf0fd86a2084b0960237"
+    },
+    "next_proposers": {
+      "1130": "validator-2",
+      "1131": "validator-3"
+    }
+  },
+  "7.1": {
+    "result": "done",
+    "kind": "AnchorCheckpoint",
+    "votes": "fresh fastswap_checkpoint_status votes from validators 0-4 at 11:31Z (signatures differ from 2026-10-12), identical checkpoints",
+    "checkpoint": {
+      "committee_epoch": 1,
+      "drain_ready": true,
+      "fenced_policy_epochs": [
+        1
+      ],
+      "previous_checkpoint_id": null,
+      "highest_wal_sequence": 26,
+      "exit_claim_totals": [],
+      "terminal_root": "b194b1290d2064080f10163b5cb389cb2358f4d93298fc054337195d87147e9aea7fddcd131c2ae301008d18911fccd9",
+      "live_object_root": "ce71ff2c3dda854c90a8b0a0ea7bab2b7de6176a0099a43663664c01b84135d8bf79dfba4190dab16ed7ee791fcc08bd",
+      "checkpoint_id": "355fe6080068e961ed1f295217d3f0f54a7b7b6a2fcb883824a7c6e9f3a8f49869fdd12b46be88eb5509e1a1f8120ede"
+    },
+    "submitted_via": "mempool_submit_fastlane_primary_finality on validator-2 (proposer of 1130)",
+    "tx_id": "f34dd1f54dba632340f688cbdb5decf378223a82ae95d7b89888544b8bf747816053152b947c46f24ea9b13ecb778462",
+    "height": 1130,
+    "block_hash": "4dafdfc8f91a54b45e2bc776860ffc6276ae90db5d4191609383f28fc41ce7590a4dfc6f6be36bf9eddde7ca4b10962c",
+    "state_root": "fe991e1455fc48adc6bf74392d3a2f5ccb3a1d9c5d9082222de63f43b4ff2d5fe4fea210862557f96f3e128c5adfb9ef",
+    "certificate_id": "e5664d35fbed05587205721098030bbaf0e68b1543a768167e3f61680c68ebceb4ef43653742f0f026541c067fc793e0",
+    "proposer": "validator-2",
+    "block_certificate_signers": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-4",
+      "validator-5"
+    ],
+    "receipt": "fastlane_checkpoint_anchored, accepted, on all six",
+    "rpc_reply": "ok=True; finality confirmed=True; round_ok=False (certified sends deferred, 0 send or vote failures; all six then reported the block)",
+    "transaction_file": "bridge-activation/7.1-anchor-checkpoint.fastlane-primary.json",
+    "transaction_bytes": 71005,
+    "transaction_sha256": "4497c495ee172a5db74235279b756bd0d289bbcf8f794135312831f42e88588d",
+    "receipts": "bridge-activation/7.1-receipts-six.json",
+    "state_after": {
+      "state_read": "bridge-activation/state-7.1-after.json",
+      "height": 1130,
+      "tip": "4dafdfc8f91a54b45e2bc776860ffc6276ae90db5d4191609383f28fc41ce7590a4dfc6f6be36bf9eddde7ca4b10962c",
+      "state_root": "fe991e1455fc48adc6bf74392d3a2f5ccb3a1d9c5d9082222de63f43b4ff2d5fe4fea210862557f96f3e128c5adfb9ef",
+      "mempools": [
+        0
+      ],
+      "observe_fleet": "PASS, six-way agreement"
+    }
+  },
+  "7.2": {
+    "result": "done",
+    "kind": "ActivateCommittee",
+    "committee_epoch": 2,
+    "committee_root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+    "members": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+    ],
+    "quorum": 5,
+    "final_checkpoint_id": "355fe6080068e961ed1f295217d3f0f54a7b7b6a2fcb883824a7c6e9f3a8f49869fdd12b46be88eb5509e1a1f8120ede",
+    "action_digest": "0ffe278b4870d215c4c5a518985c9fc4ccb1134bdb097d9c654d244a22b5d5f8b90ac50a523085bfb0093bd92afc5501",
+    "prepare": "fastswap-control-prepare on each of validators 0-4: identical control file (sha256 291670cc61499ab714498dbaf24f5cdd64f8e79338c1aa8e7eb43ea332adf26f) and action digest",
+    "signers": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4"
+    ],
+    "signing": "fastswap-control-vote-sign on each validator's own host with its own key file by path (/var/lib/postfiat/validator-N/validator_keys.json); work files in /var/lib/postfiat/bridge-activation-20261015/; assembled on validator-3",
+    "submitted_via": "mempool_submit_fastlane_primary_finality on validator-3 (proposer of 1131)",
+    "tx_id": "2b2efa37e12f5d14c4b1f7da62a4fc7f9ea8a2d7d2d21ad20427d56646d99c158693072e9f7c022cf5f49deb8ee34826",
+    "height": 1131,
+    "block_hash": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+    "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341",
+    "certificate_id": "8f95c50bebd2f2ae4bc3e747d6b07f0ae956bccfc4ec25ed7c36ae5bc5dc4eb643d02fd6aa9160409dd96394760d57c3",
+    "proposer": "validator-3",
+    "block_certificate_signers": [
+      "validator-0",
+      "validator-1",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+    ],
+    "receipt": "fastlane_control_applied, accepted, on all six",
+    "rpc_reply": "ok=True; finality confirmed=True; round_ok=False (certified sends deferred, 0 send or vote failures; all six then reported the block)",
+    "transaction_file": "bridge-activation/7.2-activate-committee.fastlane-primary.json",
+    "transaction_bytes": 176546,
+    "transaction_sha256": "35acb2ff13fdcb85aedf446e9d5ca5211baaef45abe5b7a63a5b41807576ae35",
+    "receipts": "bridge-activation/7.2-receipts-six.json",
+    "state_after": {
+      "state_read": "bridge-activation/state-7.2-after.json",
+      "height": 1131,
+      "tip": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+      "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341",
+      "mempools": [
+        0
+      ],
+      "observe_fleet": "PASS, six-way agreement"
+    },
+    "active_committee_after": {
+      "ledger": "all six: fastswap-control-prepare --epoch 2 now refuses 'committee epoch must be 3 (active epoch 2 + 1)'",
+      "committed_batch": "bridge-activation/7.2-after-committee-from-batch-archive.json: block 1131's batch on all six carries epoch 2, root 72836827..., quorum 5, six members, identical to the submitted transaction",
+      "fastswap_service": "fastswap_capabilities on validators 0-4 still reports its configured local committee (fastswap-v1/committee.json): epoch 1, root a2eebcba..., enabled false; validator-5 fastswap_unavailable. The local FastSwap committee is not switched by this step"
+    }
+  },
+  "7.3": {
+    "result": "prepared, NOT signed, NOT submitted",
+    "builder": "scripts/a666-build-route-epoch-advance.py bridge-policy-update --current-policy bridge-activation/a666-route-policy-current.json --committee-root 72836827... --issuer-key-file <placeholder> --output-dir <tmp>",
+    "current_policy": "bridge-activation/a666-route-policy-current.json (from the verified 1123 backup ledger; the route state hash 57da3837... reported by navcoin_bridge_routes is identical at 1123, 1129 and 1131, so the policy is unchanged)",
+    "operation": {
+      "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+      "issuer": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+      "authority_epoch": 2,
+      "committee_root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+      "minimum_confirmations": 12,
+      "handoff_controller_code_hash": "4c62b7d8b3a7928fd9667445f8fd68b3336ba0ec9a8f3e59b463b684fe6ceaaf",
+      "wrapped_navcoin_code_hash": "671ee905050e2969995a8c6db8b05e4c2f30bd690eeff55093c03f9722be66b0"
+    },
+    "file": "a666-bridge-policy-update.unsigned.json",
+    "sha256": "24aa2e28ff942d0be9557416d2b796d6b9a8131abf7704c6ad1348539f51c03f",
+    "key_file": "placeholder /tmp/a666-issuer-key-set-by-issuer-lane (empty file); the issuer lane points key_file at its own key",
+    "remains_for_the_other_lane": "the issuer signs and submits it (pftl-submit-certified-asset-ops --ops-file); the receipt must be route_bridge_policy_updated. Then the next Ethereum checkpoint with validator-5's current key, 5 of 6 (previous 8.5). The BMNRC route also stays on authority_epoch 1 (root a2eebcba...) until its issuer sends the same update"
+  },
+  "after": {
+    "state_read": "bridge-activation/state-7.3-after.json",
+    "read_at": "2026-10-15T11:45:37Z",
+    "height": 1131,
+    "tip": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+    "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341",
+    "mempools": [
+      0
+    ],
+    "observe_fleet": "PASS, six-way agreement",
+    "routes": {
+      "pftl-a666-ethereum-wA666-usdc-v1": {
+        "outstanding_bridge_claims_atoms": 0,
+        "pending_return_import_claims_atoms": 0,
+        "ledger_hash": "57da38373813c34b9629fa56123eed8ebb49433d71ff4021400cabe673c5943977065f14f3a18f726941edef03ee78f5"
+      },
+      "pftl-bmnrc-ethereum-wBMNRC-usdc-v1": {
+        "outstanding_bridge_claims_atoms": 0,
+        "pending_return_import_claims_atoms": 0,
+        "ledger_hash": "b2817e68d96e950bc6700643a56636880aa7a1e5bc9c4a130204e725512691b4618364807af8d30392a58b12a32840a4"
+      }
+    },
+    "route_state_hash_note": "A666 route state hash 57da3837... unchanged from 1123 through 1131 (policy still authority_epoch 1)"
+  }
+}

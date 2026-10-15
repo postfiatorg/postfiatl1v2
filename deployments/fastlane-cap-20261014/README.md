@@ -21,7 +21,12 @@ backup, applies, grants and after state: [observed/](observed/)
 ([rollout record](observed/rollout-record.json)); after checks in the
 [qualification packet](qualification/README.md#after-rollout).
 
-Not done yet: the bridge half of the signer-group activation ([DEPLOY-SHEET.md](DEPLOY-SHEET.md) §7).
+**Bridge half done** ([DEPLOY-SHEET.md](DEPLOY-SHEET.md) §7,
+[record](observed/bridge-activation/bridge-activation-record.json)): the drained epoch-1
+checkpoint anchored at 1130 (`fastlane_checkpoint_anchored`) and bridge committee epoch 2
+(root `72836827…`) activated at 1131 (`fastlane_control_applied`), both on all six.
+The issuer's A666 route update is [prepared unsigned](observed/a666-bridge-policy-update.unsigned.json)
+for the other lane; the routes stay on `authority_epoch` 1 until it is submitted.
 
 ## Scope since `0fa55d0b`
 

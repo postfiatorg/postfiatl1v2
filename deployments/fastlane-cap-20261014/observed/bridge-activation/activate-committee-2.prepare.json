@@ -1,0 +1,20 @@
+{
+  "action_digest": "0ffe278b4870d215c4c5a518985c9fc4ccb1134bdb097d9c654d244a22b5d5f8b90ac50a523085bfb0093bd92afc5501",
+  "committee_epoch": 2,
+  "committee_root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+  "control_file": "/var/lib/postfiat/bridge-activation-20261015/activate-committee-2.json",
+  "final_checkpoint_id": "355fe6080068e961ed1f295217d3f0f54a7b7b6a2fcb883824a7c6e9f3a8f49869fdd12b46be88eb5509e1a1f8120ede",
+  "kind": "activate_committee",
+  "schema": "postfiat-fastswap-control-prepare-v1",
+  "signatures_required": 5,
+  "signer_committee_epoch": 1,
+  "signer_committee_root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e",
+  "validators": [
+    "validator-0",
+    "validator-1",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ]
+}

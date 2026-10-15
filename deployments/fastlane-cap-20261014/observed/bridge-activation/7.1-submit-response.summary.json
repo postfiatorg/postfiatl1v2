@@ -1,0 +1,68 @@
+{
+  "request_id": "bridge-activation-7.1-anchor-checkpoint",
+  "ok": true,
+  "error": null,
+  "elapsed_s": 23.8,
+  "result": {
+    "artifact_dir": "/var/lib/postfiat/validator-2/finality-artifacts/rpc-finality-74-bridge-activation-7.1-anchor-checkpoint",
+    "certified_round_ms": 10939.337008,
+    "certified_sends_deferred": true,
+    "idempotent_replay": false,
+    "mempool_batch_ms": 145.770302,
+    "mempool_submit_ms": 187.761547,
+    "readiness_wait_ms": 0.0,
+    "round_ok": false,
+    "round_report_file": "/var/lib/postfiat/validator-2/finality-artifacts/rpc-finality-74-bridge-activation-7.1-anchor-checkpoint/rpc-finality-round.json",
+    "schema": "postfiat-rpc-mempool-submit-fastlane-primary-finality-v1",
+    "total_ms": 15151.633755,
+    "tx_id": "f34dd1f54dba632340f688cbdb5decf378223a82ae95d7b89888544b8bf747816053152b947c46f24ea9b13ecb778462"
+  },
+  "finality": {
+    "block_count": 1130,
+    "block_log_verified": false,
+    "chain_id": "postfiat-wan-devnet-2",
+    "confirmed": true,
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "proof_id": "bf8c111c4ae40958835c036f895c243b80f13d01754c012c75682a57fba23d1c982019f91aa5898823db0248f3b0da23",
+    "protocol_version": 1,
+    "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "fastlane_checkpoint_anchored",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "FastLane checkpoint anchored",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "f34dd1f54dba632340f688cbdb5decf378223a82ae95d7b89888544b8bf747816053152b947c46f24ea9b13ecb778462"
+    },
+    "receipt_count": 1,
+    "receipt_index": 0,
+    "schema": "postfiat-tx-finality-v1",
+    "tip_hash": "4dafdfc8f91a54b45e2bc776860ffc6276ae90db5d4191609383f28fc41ce7590a4dfc6f6be36bf9eddde7ca4b10962c",
+    "tip_state_root": "fe991e1455fc48adc6bf74392d3a2f5ccb3a1d9c5d9082222de63f43b4ff2d5fe4fea210862557f96f3e128c5adfb9ef",
+    "tx_id": "f34dd1f54dba632340f688cbdb5decf378223a82ae95d7b89888544b8bf747816053152b947c46f24ea9b13ecb778462",
+    "verification_mode": "selected-block-hot-path"
+  },
+  "block_header": {
+    "batch_id": "13b576a37827f572f4d964f777fb6b1fe63fe63df5683c236a59eec22bb57b38b2c61324c324578c554abaaf56d96842",
+    "batch_kind": "transparent",
+    "block_hash": "4dafdfc8f91a54b45e2bc776860ffc6276ae90db5d4191609383f28fc41ce7590a4dfc6f6be36bf9eddde7ca4b10962c",
+    "bridge_exit_root": "b8e0f151a40d5d0d6fdc429d75c9daf57e9c193bd1880fa3ddcced6d138b1d81eb9ac3a65bbb699c5a78d05681e521ae",
+    "certificate_id": "e5664d35fbed05587205721098030bbaf0e68b1543a768167e3f61680c68ebceb4ef43653742f0f026541c067fc793e0",
+    "height": 1130,
+    "parent_hash": "41154d2c41211e43d9b09d457f072b099fad9cddca52a1ab419b5352fc62daa1746802e35fee62f2985cae6cc539dfdd",
+    "pftl_uniswap_receipt_root": "d81bd22547c81a5608987f00096e0e609ab0279bbf8bab15ec0a8e41a16aeb10a8ef873ecbe35498fd586d6420c697dd",
+    "proposer": "validator-2",
+    "receipt_count": 1,
+    "state_root": "fe991e1455fc48adc6bf74392d3a2f5ccb3a1d9c5d9082222de63f43b4ff2d5fe4fea210862557f96f3e128c5adfb9ef",
+    "view": 0
+  },
+  "block_certificate_signers": [
+    "validator-0",
+    "validator-1",
+    "validator-2",
+    "validator-4",
+    "validator-5"
+  ]
+}

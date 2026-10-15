@@ -1,0 +1,44 @@
+{
+ "validator-0": {
+  "receipt_code": "fastlane_checkpoint_anchored",
+  "accepted": true,
+  "tx_block_height": 1130,
+  "tx_block_hash": "4dafdfc8f91a54b45e2bc776860ffc6276ae90db5d4191609383f28fc41ce7590a4dfc6f6be36bf9eddde7ca4b10962c",
+  "tx_block_state_root": "fe991e1455fc48adc6bf74392d3a2f5ccb3a1d9c5d9082222de63f43b4ff2d5fe4fea210862557f96f3e128c5adfb9ef"
+ },
+ "validator-1": {
+  "receipt_code": "fastlane_checkpoint_anchored",
+  "accepted": true,
+  "tx_block_height": 1130,
+  "tx_block_hash": "4dafdfc8f91a54b45e2bc776860ffc6276ae90db5d4191609383f28fc41ce7590a4dfc6f6be36bf9eddde7ca4b10962c",
+  "tx_block_state_root": "fe991e1455fc48adc6bf74392d3a2f5ccb3a1d9c5d9082222de63f43b4ff2d5fe4fea210862557f96f3e128c5adfb9ef"
+ },
+ "validator-2": {
+  "receipt_code": "fastlane_checkpoint_anchored",
+  "accepted": true,
+  "tx_block_height": 1130,
+  "tx_block_hash": "4dafdfc8f91a54b45e2bc776860ffc6276ae90db5d4191609383f28fc41ce7590a4dfc6f6be36bf9eddde7ca4b10962c",
+  "tx_block_state_root": "fe991e1455fc48adc6bf74392d3a2f5ccb3a1d9c5d9082222de63f43b4ff2d5fe4fea210862557f96f3e128c5adfb9ef"
+ },
+ "validator-3": {
+  "receipt_code": "fastlane_checkpoint_anchored",
+  "accepted": true,
+  "tx_block_height": 1130,
+  "tx_block_hash": "4dafdfc8f91a54b45e2bc776860ffc6276ae90db5d4191609383f28fc41ce7590a4dfc6f6be36bf9eddde7ca4b10962c",
+  "tx_block_state_root": "fe991e1455fc48adc6bf74392d3a2f5ccb3a1d9c5d9082222de63f43b4ff2d5fe4fea210862557f96f3e128c5adfb9ef"
+ },
+ "validator-4": {
+  "receipt_code": "fastlane_checkpoint_anchored",
+  "accepted": true,
+  "tx_block_height": 1130,
+  "tx_block_hash": "4dafdfc8f91a54b45e2bc776860ffc6276ae90db5d4191609383f28fc41ce7590a4dfc6f6be36bf9eddde7ca4b10962c",
+  "tx_block_state_root": "fe991e1455fc48adc6bf74392d3a2f5ccb3a1d9c5d9082222de63f43b4ff2d5fe4fea210862557f96f3e128c5adfb9ef"
+ },
+ "validator-5": {
+  "receipt_code": "fastlane_checkpoint_anchored",
+  "accepted": true,
+  "tx_block_height": 1130,
+  "tx_block_hash": "4dafdfc8f91a54b45e2bc776860ffc6276ae90db5d4191609383f28fc41ce7590a4dfc6f6be36bf9eddde7ca4b10962c",
+  "tx_block_state_root": "fe991e1455fc48adc6bf74392d3a2f5ccb3a1d9c5d9082222de63f43b4ff2d5fe4fea210862557f96f3e128c5adfb9ef"
+ }
+}

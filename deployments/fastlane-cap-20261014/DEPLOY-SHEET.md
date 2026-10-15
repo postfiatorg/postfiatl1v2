@@ -6,8 +6,10 @@ the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md) and the
 [FastLane control submission notes](../../docs/runbooks/fastpay-committee-recovery.md#submitting-fastlane-control-transactions).
 Keys are used by path only; no key material is printed, copied to a host or committed.
 
-**Status: §0–§6 done on 2026-10-15** (deployed at height 1129, [rollout record](observed/rollout-record.json));
-§7 not yet run. Every step marked **GO** needs the operator's go on the day.
+**Status: §0–§7 done on 2026-10-15** (deployed at height 1129, [rollout record](observed/rollout-record.json);
+bridge committee epoch 2 active at height 1131, [record](observed/bridge-activation/bridge-activation-record.json)).
+The issuer's route update (7.3) is prepared unsigned and waits for the other lane.
+Every step marked **GO** needs the operator's go on the day.
 No store conversion (done 2026-10-12) and no FastPay committee record (done 2026-10-12, epoch 2 at height 1123).
 
 ```bash
@@ -119,17 +121,50 @@ Expected: all 12 validator and RPC processes on `b1b3dbb1…`;
 ## 7. Signer-group activation, bridge half
 
 The steps the previous sheet stopped at (its §8.2–8.4). The epoch-1 `StopPrepare`
-committed at 1122 and stays valid. Chain records of this section cannot be removed;
-before 7.2 is admitted nothing changes who signs (previous sheet §8, rollback note).
+committed at 1122 and stays valid.
+
+**Rollback (written 2026-10-15, before the first signature).** The chain records of
+this section cannot be removed or undone: no anchored checkpoint, `ActivateCommittee`
+or route policy update is ever deleted. Before 7.2 is admitted nothing changes who
+signs: epoch 1 keeps signing and the steps can stop; an anchored drained checkpoint
+alone changes no signer. After 7.2 the only correction is forward: epoch 3, by repeating
+the steps under epoch 2 (a `StopPrepare` per policy epoch, a new drained final
+checkpoint, `ActivateCommittee` epoch 3, and the issuer's update to `authority_epoch` 3).
+The route stays at `authority_epoch` 1 until the issuer's update (7.3), so a wrong
+epoch-2 committee is simply never adopted by the route. The executable can still be
+rolled back (below); the chain decisions stay.
+
 Submit each transaction as a file (`--fastlane-primary-file`, Linux caps one argument at 128 KiB)
 through `mempool_submit_fastlane_primary_finality` on the proposer of the next height.
 
-- [ ] **GO 7.1** (previous 8.2). Final drained epoch-1 checkpoint: fresh `fastswap_checkpoint_status` votes from validators 0–4 (identical, `drain_ready`, fenced policy epochs `[1]`, `previous_checkpoint_id` null), assembled as an `AnchorCheckpoint`; the receipt must carry `fastlane_checkpoint_anchored`. Do not reuse the 2026-10-12 votes. Needs the operator's go on the day.
-- [ ] **GO 7.2** (previous 8.3). `ActivateCommittee` epoch 2: `fastswap-control-prepare --kind activate-committee --epoch 2 --committee-root 72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37`, `fastswap-control-vote-sign` on each of 0–4, `fastswap-control-assemble`, submit as `Control`; the receipt must carry `fastlane_control_applied`. Not reversible; harmless until 7.3. Needs the operator's go on the day.
-- [ ] **GO 7.3** (previous 8.4). Build the unsigned `pftl_uniswap_route_bridge_policy_update` (`scripts/a666-build-route-epoch-advance.py bridge-policy-update`, the root above, `authority_epoch 2`) and hand it to the issuer to sign; the other lane submits it. The epoch only increases. Needs the operator's go on the day.
+- [x] **GO 7.1** (previous 8.2). Final drained epoch-1 checkpoint: fresh `fastswap_checkpoint_status` votes from validators 0–4 (identical, `drain_ready`, fenced policy epochs `[1]`, `previous_checkpoint_id` null), assembled as an `AnchorCheckpoint`; the receipt must carry `fastlane_checkpoint_anchored`. Do not reuse the 2026-10-12 votes. Needs the operator's go on the day.
+- [x] **GO 7.2** (previous 8.3). `ActivateCommittee` epoch 2: `fastswap-control-prepare --kind activate-committee --epoch 2 --committee-root 72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37`, `fastswap-control-vote-sign` on each of 0–4, `fastswap-control-assemble`, submit as `Control`; the receipt must carry `fastlane_control_applied`. Not reversible; harmless until 7.3. Needs the operator's go on the day.
+- [x] **GO 7.3** (previous 8.4). Build the unsigned `pftl_uniswap_route_bridge_policy_update` (`scripts/a666-build-route-epoch-advance.py bridge-policy-update`, the root above, `authority_epoch 2`) and hand it to the issuer to sign; the other lane submits it. The epoch only increases. Needs the operator's go on the day.
 
 After 7.3: the next Ethereum checkpoint is signed with `ethereum-checkpoint-vote-sign`,
 validator-5 with its current key, 5 of 6 (previous 8.5), on the operator's go.
+
+**Run on 2026-10-15** ([record](observed/bridge-activation/bridge-activation-record.json);
+state read before and after each step with [state-read.py](observed/bridge-activation/state-read.py),
+`observe-fleet.py` PASS each time). Each validator signed on its own host with its own key file,
+by path; work files are in `/var/lib/postfiat/bridge-activation-20261015/` on validators 0–4.
+Each transaction was sent from its file through the RPC socket (no command-line argument).
+
+| Step | Result |
+|---|---|
+| 7.0 | Height 1129, tip `41154d2c…`, root `053fb35c…`, mempools 0. A666 and BMNRC routes: claims 0, pending returns 0. Committee epoch 1, root `a2eebcba…`; policy epoch 1 fenced; validators 0–4 `drain_ready`, `previous_checkpoint_id` null. Epoch-2 root recomputed on all six: `72836827…` (registry file `43e58834…`, as on 2026-10-12) |
+| 7.1 | Five fresh identical votes from validators 0–4 (WAL 26, no exit claims, checkpoint `355fe608…`). `AnchorCheckpoint` (71,005 bytes) through validator-2, the proposer of 1130: tx `f34dd1f5…`, **height 1130**, block `4dafdfc8…`, root `fe991e14…`, `fastlane_checkpoint_anchored` on all six; the RPC reported success |
+| 7.2 | `fastswap-control-prepare` on each of 0–4 gave the same control file (`291670cc…`), action `0ffe278b…`. Votes from 0–4, assembled on validator-3. `ActivateCommittee` (176,546 bytes) through validator-3, the proposer of 1131: tx `2b2efa37…`, **height 1131**, block `9b054f09…`, root `a12e7c5f…`, `fastlane_control_applied` on all six; the RPC reported success. All six now report active epoch 2; block 1131 carries root `72836827…`, quorum 5, six members |
+| 7.3 | [Unsigned update](observed/a666-bridge-policy-update.unsigned.json), sha256 `24aa2e28ff942d0be9557416d2b796d6b9a8131abf7704c6ad1348539f51c03f`: A666 route, issuer `pffcb93d…`, `authority_epoch` 2, root `72836827…`, echoed fields from the [current policy](observed/bridge-activation/a666-route-policy-current.json) (12 confirmations, `4c62b7d8…`, `671ee905…`). Not signed, not submitted; `key_file` is a placeholder for the issuer's key |
+
+**State after.** Height 1131, root `a12e7c5f…`, six-way agreement, mempools 0. The routes stay on
+`authority_epoch` 1 (root `a2eebcba…`) until the issuer's update. `fastswap_capabilities` still
+reports each validator's local FastSwap committee (`fastswap-v1/committee.json`: epoch 1,
+`enabled` false); the local committee is not switched by this section.
+
+**Remaining (other lane).** The issuer signs and submits the update; the receipt must carry
+`route_bridge_policy_updated`. The BMNRC route also stays on epoch 1 until its issuer sends
+the same update. Then the next Ethereum checkpoint (previous 8.5).
 
 ## Rollback (one validator, emergency only)
 

@@ -1,0 +1,104 @@
+{
+ "validator-0": {
+  "batch_id": "029fcac6e8f9501a631fb25147f226a5226e40fce1f8ca74bf9cf8859d32f190639dba5dca86093869175a1ebe218e5c",
+  "matches_block_1131": true,
+  "committee_epoch": 2,
+  "committee_root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+  "quorum": 5,
+  "validator_count": 6,
+  "members": [
+   "validator-0",
+   "validator-1",
+   "validator-2",
+   "validator-3",
+   "validator-4",
+   "validator-5"
+  ],
+  "identical_to_submitted": true
+ },
+ "validator-1": {
+  "batch_id": "029fcac6e8f9501a631fb25147f226a5226e40fce1f8ca74bf9cf8859d32f190639dba5dca86093869175a1ebe218e5c",
+  "matches_block_1131": true,
+  "committee_epoch": 2,
+  "committee_root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+  "quorum": 5,
+  "validator_count": 6,
+  "members": [
+   "validator-0",
+   "validator-1",
+   "validator-2",
+   "validator-3",
+   "validator-4",
+   "validator-5"
+  ],
+  "identical_to_submitted": true
+ },
+ "validator-2": {
+  "batch_id": "029fcac6e8f9501a631fb25147f226a5226e40fce1f8ca74bf9cf8859d32f190639dba5dca86093869175a1ebe218e5c",
+  "matches_block_1131": true,
+  "committee_epoch": 2,
+  "committee_root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+  "quorum": 5,
+  "validator_count": 6,
+  "members": [
+   "validator-0",
+   "validator-1",
+   "validator-2",
+   "validator-3",
+   "validator-4",
+   "validator-5"
+  ],
+  "identical_to_submitted": true
+ },
+ "validator-3": {
+  "batch_id": "029fcac6e8f9501a631fb25147f226a5226e40fce1f8ca74bf9cf8859d32f190639dba5dca86093869175a1ebe218e5c",
+  "matches_block_1131": true,
+  "committee_epoch": 2,
+  "committee_root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+  "quorum": 5,
+  "validator_count": 6,
+  "members": [
+   "validator-0",
+   "validator-1",
+   "validator-2",
+   "validator-3",
+   "validator-4",
+   "validator-5"
+  ],
+  "identical_to_submitted": true
+ },
+ "validator-4": {
+  "batch_id": "029fcac6e8f9501a631fb25147f226a5226e40fce1f8ca74bf9cf8859d32f190639dba5dca86093869175a1ebe218e5c",
+  "matches_block_1131": true,
+  "committee_epoch": 2,
+  "committee_root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+  "quorum": 5,
+  "validator_count": 6,
+  "members": [
+   "validator-0",
+   "validator-1",
+   "validator-2",
+   "validator-3",
+   "validator-4",
+   "validator-5"
+  ],
+  "identical_to_submitted": true
+ },
+ "validator-5": {
+  "batch_id": "029fcac6e8f9501a631fb25147f226a5226e40fce1f8ca74bf9cf8859d32f190639dba5dca86093869175a1ebe218e5c",
+  "matches_block_1131": true,
+  "committee_epoch": 2,
+  "committee_root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+  "quorum": 5,
+  "validator_count": 6,
+  "members": [
+   "validator-0",
+   "validator-1",
+   "validator-2",
+   "validator-3",
+   "validator-4",
+   "validator-5"
+  ],
+  "identical_to_submitted": true
+ }
+}
