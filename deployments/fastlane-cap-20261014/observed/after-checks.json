@@ -1,0 +1,217 @@
+{
+  "schema": "fastlane-cap-20261014-after-checks-v1",
+  "after_state": {
+    "height": 1129,
+    "tip": "41154d2c41211e43d9b09d457f072b099fad9cddca52a1ab419b5352fc62daa1746802e35fee62f2985cae6cc539dfdd",
+    "state_root": "053fb35c15e5387b8d66678133c04b099b590ae9625e924029dab772108290dc773d39238d63abdee09808267559a772",
+    "observed_at": "2026-10-15T11:07:27.439834+00:00",
+    "evidence": "after.json"
+  },
+  "demo_preflight": {
+    "observed_at": "2026-10-15T11:07:33.184282+00:00",
+    "verdict": "READY",
+    "counts": {
+      "PASS": 60,
+      "ATTENTION": 0,
+      "FAIL": 0
+    },
+    "evidence": "demo-preflight-after.json"
+  },
+  "processes_on_release_executable": {
+    "count": 12,
+    "all_b1b3dbb1": true
+  },
+  "status_deployment_manifest_verified": {
+    "validator-0": true,
+    "validator-1": true,
+    "validator-2": true,
+    "validator-3": true,
+    "validator-4": true,
+    "validator-5": true
+  },
+  "hosts": [
+    {
+      "validator_id": "validator-0",
+      "rpc_unit": {
+        "exec_release_binary": true,
+        "max_requests_100000": true,
+        "restart_always": true,
+        "restart_sec_1": true
+      },
+      "event_logs": {
+        "transport-validator-events.ndjson": {
+          "bytes": 10118768,
+          "mtime": "2026-10-15T11:04:02+00:00"
+        },
+        "rpc-events.ndjson": {
+          "bytes": 367942578,
+          "mtime": "2026-10-15T11:11:46+00:00"
+        },
+        "transport_accepted_batch_events_by_grant_height": {
+          "1124": 1,
+          "1125": 1,
+          "1126": 1,
+          "1127": 1,
+          "1129": 1
+        }
+      },
+      "disk_root_avail_bytes": 16425418752
+    },
+    {
+      "validator_id": "validator-1",
+      "rpc_unit": {
+        "exec_release_binary": true,
+        "max_requests_100000": true,
+        "restart_always": true,
+        "restart_sec_1": true
+      },
+      "event_logs": {
+        "transport-validator-events.ndjson": {
+          "bytes": 9964376,
+          "mtime": "2026-10-15T10:59:42+00:00"
+        },
+        "rpc-events.ndjson": {
+          "bytes": 271735170,
+          "mtime": "2026-10-15T11:11:43+00:00"
+        },
+        "transport_accepted_batch_events_by_grant_height": {
+          "1124": 1,
+          "1125": 1,
+          "1126": 1,
+          "1127": 1,
+          "1128": 1
+        }
+      },
+      "disk_root_avail_bytes": 17938661376
+    },
+    {
+      "validator_id": "validator-2",
+      "rpc_unit": {
+        "exec_release_binary": true,
+        "max_requests_100000": true,
+        "restart_always": true,
+        "restart_sec_1": true
+      },
+      "event_logs": {
+        "transport-validator-events.ndjson": {
+          "bytes": 2827521,
+          "mtime": "2026-10-15T11:04:03+00:00"
+        },
+        "rpc-events.ndjson": {
+          "bytes": 280344861,
+          "mtime": "2026-10-15T11:11:46+00:00"
+        },
+        "transport_accepted_batch_events_by_grant_height": {
+          "1125": 1,
+          "1126": 1,
+          "1127": 1,
+          "1128": 1,
+          "1129": 1
+        }
+      },
+      "disk_root_avail_bytes": 22859812864
+    },
+    {
+      "validator_id": "validator-3",
+      "rpc_unit": {
+        "exec_release_binary": true,
+        "max_requests_100000": true,
+        "restart_always": true,
+        "restart_sec_1": true
+      },
+      "event_logs": {
+        "transport-validator-events.ndjson": {
+          "bytes": 10064261,
+          "mtime": "2026-10-15T11:04:02+00:00"
+        },
+        "rpc-events.ndjson": {
+          "bytes": 271334536,
+          "mtime": "2026-10-15T11:11:46+00:00"
+        },
+        "transport_accepted_batch_events_by_grant_height": {
+          "1124": 1,
+          "1126": 1,
+          "1127": 1,
+          "1128": 1,
+          "1129": 1
+        }
+      },
+      "disk_root_avail_bytes": 27803070464
+    },
+    {
+      "validator_id": "validator-4",
+      "rpc_unit": {
+        "exec_release_binary": true,
+        "max_requests_100000": true,
+        "restart_always": true,
+        "restart_sec_1": true
+      },
+      "event_logs": {
+        "transport-validator-events.ndjson": {
+          "bytes": 10064368,
+          "mtime": "2026-10-15T11:04:02+00:00"
+        },
+        "rpc-events.ndjson": {
+          "bytes": 271305383,
+          "mtime": "2026-10-15T11:11:43+00:00"
+        },
+        "transport_accepted_batch_events_by_grant_height": {
+          "1124": 1,
+          "1125": 1,
+          "1127": 1,
+          "1128": 1,
+          "1129": 1
+        }
+      },
+      "disk_root_avail_bytes": 23219904512
+    },
+    {
+      "validator_id": "validator-5",
+      "rpc_unit": {
+        "exec_release_binary": true,
+        "max_requests_100000": true,
+        "restart_always": true,
+        "restart_sec_1": true
+      },
+      "event_logs": {
+        "transport-validator-events.ndjson": {
+          "bytes": 10064582,
+          "mtime": "2026-10-15T11:04:03+00:00"
+        },
+        "rpc-events.ndjson": {
+          "bytes": 285977754,
+          "mtime": "2026-10-15T11:11:46+00:00"
+        },
+        "transport_accepted_batch_events_by_grant_height": {
+          "1124": 1,
+          "1125": 1,
+          "1126": 1,
+          "1128": 1,
+          "1129": 1
+        }
+      },
+      "disk_root_avail_bytes": 25927651328
+    }
+  ],
+  "grant_proposers": {
+    "1124": "validator-2",
+    "1125": "validator-3",
+    "1126": "validator-4",
+    "1127": "validator-5",
+    "1128": "validator-0",
+    "1129": "validator-1"
+  },
+  "anchor_size_check": {
+    "anchor_file": "release/signer-rotation-20261007:deployments/signer-rotation-20261007/observed/signer-activation/final-checkpoint-epoch1.fastlane-primary.json",
+    "anchor_sha256": "6dddedd5aef1f8e1f17365c47439f6093731ac7e8b8e13c8fe405c2ad1f02b37",
+    "anchor_bytes": 70944,
+    "offline_validate_request": {
+      "binary": "postfiat-rpc-sdk built from 8bed9b90 (sha256 114e17d25c1967daf4f5c0f0dcc7752606de876b0d3a2fe777db5cea3821fe43)",
+      "mempool_submit_fastlane_primary --expect-kind": "rpc_request=ok (exit 0)",
+      "mempool_submit_fastlane_primary_finality": "rpc_request=ok params=unchecked (exit 0; the CLI maps no kind for this method)",
+      "checked_at": "2026-10-15T11:10:40Z"
+    },
+    "live_validator_rpc": "not exercised: the live rpc-serve units run with --allow-mempool-submit-finality and the method has no dry-run flag; rpc-serve dispatches a request right after validate_protocol (crates/node/src/rpc_cli.rs:884-895), so a valid request would be submitted. Left to sheet section 7.1.",
+    "same_code_on_hosts": "all 12 validator and RPC processes run b1b3dbb1, the executable whose read-only local rpc-serve accepted this anchor in the qualification (qualification/anchor-check.json)"
+  }
+}

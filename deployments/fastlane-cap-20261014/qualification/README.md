@@ -31,6 +31,24 @@ Not done today: canary backup, fleet before-state, rollout, bridge activation.
 | Previous release's focused suites (quick subset) | PASS: node lib `account_tx`, FastPay epoch, FastSwap legacy, Cobalt shadow 29; Python `account_tx` fallback 11 | same |
 | Full workspace suite | Not run here (no Orchard boundary changed). CI `rust-ci` `test` on `8bed9b90` was still running at 10:04Z; read it before GO 0 | [ci-main.json](ci-main.json) |
 
+## After rollout
+
+Live, read-only checks after the six applies on 2026-10-15 (sheet §6). Records:
+[after-checks.json](../observed/after-checks.json), [after.json](../observed/after.json),
+[rollout record](../observed/rollout-record.json).
+
+| Check | Result |
+|---|---|
+| After state (11:07:27Z) | Six on `fastlane-cap-20261014` at height 1129, tip `41154d2c4121…`, root `053fb35c15e5…`; mempools empty |
+| Faucet grants | One 1 PFT grant after each apply, each certified at view 0 with the same block, tip and root on all six: heights 1124–1129 |
+| `demo-preflight.py` (11:07:33Z) | READY: 60 PASS, 0 ATTENTION, 0 FAIL ([output](../observed/demo-preflight-after.json)) |
+| Running executables | All 12 validator and RPC processes on `b1b3dbb1…` |
+| `status` | `deployment_manifest_verified=true` on all six; manifest `4f379c57…` |
+| RPC units (`systemctl cat`) | `--max-requests 100000`, `Restart=always`, `RestartSec=1` on all six |
+| Event logs | Each host's transport log gained one accepted-batch event for every grant height it did not propose |
+| Disk free `/` | validator-0 16.4 GB, validator-1 17.9 GB, validator-2 22.9 GB, validator-3 27.8 GB, validator-4 23.2 GB, validator-5 25.9 GB |
+| Anchor size (the real 70,944 B `AnchorCheckpoint`) | Offline: `postfiat-rpc-sdk validate-request` (8bed9b90 build) accepts it. Live: not exercised. The live RPC units allow `mempool_submit_fastlane_primary_finality`, the method has no dry-run and rpc-serve dispatches right after its parameter check, so a valid request would be submitted. Left to §7.1 |
+
 ## Method
 
 The signer-rotation-20261007 method ([packet](https://github.com/postfiatorg/postfiatl1v2/blob/release/signer-rotation-20261007/deployments/signer-rotation-20261007/qualification/README.md)) with these differences:

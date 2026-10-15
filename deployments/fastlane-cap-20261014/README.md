@@ -14,9 +14,14 @@ Rollback release: `signer-rotation-20261007` (`decaa411…`). Identities:
 
 ## Status
 
-**Cut, not deployed.** Local qualification passed on 2026-10-15
-([qualification packet](qualification/README.md)). Not done today: canary backup,
-fleet before-state, rollout, bridge activation ([DEPLOY-SHEET.md](DEPLOY-SHEET.md)).
+**Deployed** (`status=DEPLOYED`, 2026-10-15 11:07:27Z). All six validators run
+`b1b3dbb1…` with the signed manifest `4f379c57…`, at height 1129 after one
+certified faucet grant per validator (1124–1129). Before state, signed canary
+backup, applies, grants and after state: [observed/](observed/)
+([rollout record](observed/rollout-record.json)); after checks in the
+[qualification packet](qualification/README.md#after-rollout).
+
+Not done yet: the bridge half of the signer-group activation ([DEPLOY-SHEET.md](DEPLOY-SHEET.md) §7).
 
 ## Scope since `0fa55d0b`
 

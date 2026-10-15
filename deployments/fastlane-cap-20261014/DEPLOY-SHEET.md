@@ -6,7 +6,8 @@ the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md) and the
 [FastLane control submission notes](../../docs/runbooks/fastpay-committee-recovery.md#submitting-fastlane-control-transactions).
 Keys are used by path only; no key material is printed, copied to a host or committed.
 
-**Status: nothing run yet.** Every step marked **GO** needs the operator's go on the day.
+**Status: §0–§6 done on 2026-10-15** (deployed at height 1129, [rollout record](observed/rollout-record.json));
+§7 not yet run. Every step marked **GO** needs the operator's go on the day.
 No store conversion (done 2026-10-12) and no FastPay committee record (done 2026-10-12, epoch 2 at height 1123).
 
 ```bash
@@ -21,7 +22,7 @@ VULTR=~/.postfiat/deployments/cobalt-activation-8694b99d/vultr-api-key
 
 ## 0. Go/no-go — needs the operator's go on the day
 
-- [ ] **GO 0.** No other rollout or session is active on the fleet; `apt-daily-upgrade` is not running; CI on `8bed9b90` has no failed workflow (`gh run list --branch main`).
+- [x] **GO 0.** No other rollout or session is active on the fleet; `apt-daily-upgrade` is not running; CI on `8bed9b90` has no failed workflow (`gh run list --branch main`).
 
 ## 1. Before state (read-only)
 
@@ -33,7 +34,7 @@ Expected: six validators on `signer-rotation-20261007` (`decaa411…`, build
 `0fa55d0b`, manifest `fa4649aa…`), height 1123, tip `bafcc6ef…`, root `942d1fc2…`
 (or a later height with six-way agreement), mempools empty.
 
-- [ ] **GO 1.** Before state matches. Otherwise stop.
+- [x] **GO 1.** Before state matches. Otherwise stop.
 
 ## 2. Stage and local preflight (local)
 
@@ -61,7 +62,7 @@ Expected: six-way agreement, six signer rosters valid, 0 deletions, order 1, 0, 
 
 ## 4. Fresh signed canary backup from validator-1
 
-- [ ] **GO 4.** Take the backup (writes one export on validator-1; check its free disk first).
+- [x] **GO 4.** Take the backup (writes one export on validator-1; check its free disk first).
 
 ```bash
 scripts/postfiat-safe-rollout backup --state-file $E/rollout-state.json \
@@ -87,7 +88,7 @@ only on applied hosts (done this way on 2026-10-09).
 
 For each validator, only after the previous check passed:
 
-- [ ] **GO 5.N** (one go per validator: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5).
+- [x] **GO 5.N** (one go per validator: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5).
 
 ```bash
 scripts/postfiat-safe-rollout apply-next --state-file $E/rollout-state.json > $E/apply-N.json
@@ -113,7 +114,7 @@ Expected: all 12 validator and RPC processes on `b1b3dbb1…`;
 `deployment_manifest_verified=true` on every host; RPC units with
 `--max-requests 100000` and `RestartSec=1`.
 
-- [ ] **GO 6.** After state passes; proceed to §7.
+- [x] **GO 6.** After state passes; proceed to §7.
 
 ## 7. Signer-group activation, bridge half
 
