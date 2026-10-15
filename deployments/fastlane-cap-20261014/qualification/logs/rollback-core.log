@@ -1,0 +1,12 @@
+validator-0: checkpoint and identity PASS at 1021 7f730afd 8d2e654d
+validator-0: validate-local-keys NOT RUN (the archived copy has no faucet key file; hosts do)
+validator-1: checkpoint and identity PASS at 1021 7f730afd 8d2e654d
+validator-1: validate-local-keys NOT RUN (the archived copy has no faucet key file; hosts do)
+validator-2: checkpoint and identity PASS at 1021 7f730afd 8d2e654d
+validator-2: validate-local-keys NOT RUN (the archived copy has no faucet key file; hosts do)
+validator-3: checkpoint and identity PASS at 1021 7f730afd 8d2e654d
+validator-3: validate-local-keys NOT RUN (the archived copy has no faucet key file; hosts do)
+validator-4: checkpoint and identity PASS at 1021 7f730afd 8d2e654d
+validator-4: validate-local-keys NOT RUN (the archived copy has no faucet key file; hosts do)
+validator-5: checkpoint and identity PASS at 1021 7f730afd 8d2e654d
+validator-5: validate-local-keys NOT RUN (the archived copy has no faucet key file; hosts do)

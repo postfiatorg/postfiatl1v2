@@ -1,0 +1,8 @@
+1. no record variable:
+{"block_height": 1115, "state_root": "a5287eaff909a636575b8dbe056af1f9546d07e0da9819d4450ab83d41e047428348eef10f8689b1d0127c9d27726d72", "deployment_manifest_sha256": "4f379c57b42c4a050154a344e7cea72e1af381e9f2a05ff21d3b2a1831465b48", "deployment_manifest_verified": false}
+2. record variable set, record absent:
+{"block_height": 1115, "state_root": "a5287eaff909a636575b8dbe056af1f9546d07e0da9819d4450ab83d41e047428348eef10f8689b1d0127c9d27726d72", "deployment_manifest_sha256": "4f379c57b42c4a050154a344e7cea72e1af381e9f2a05ff21d3b2a1831465b48", "deployment_manifest_verified": false}
+3. after deployment-manifest-verify wrote the record:
+{"block_height": 1115, "state_root": "a5287eaff909a636575b8dbe056af1f9546d07e0da9819d4450ab83d41e047428348eef10f8689b1d0127c9d27726d72", "deployment_manifest_sha256": "4f379c57b42c4a050154a344e7cea72e1af381e9f2a05ff21d3b2a1831465b48", "deployment_manifest_verified": true}
+4. record with a changed manifest hash:
+{"block_height": 1115, "state_root": "a5287eaff909a636575b8dbe056af1f9546d07e0da9819d4450ab83d41e047428348eef10f8689b1d0127c9d27726d72", "deployment_manifest_sha256": "4f379c57b42c4a050154a344e7cea72e1af381e9f2a05ff21d3b2a1831465b48", "deployment_manifest_verified": false}

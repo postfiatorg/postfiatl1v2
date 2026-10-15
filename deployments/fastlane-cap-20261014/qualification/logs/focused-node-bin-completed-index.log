@@ -1,0 +1,38 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running unittests src/main.rs (target/debug/deps/postfiat_node-8451ae729848bf6f)
+
+running 30 tests
+test certified_send_completed_index::completed_index_tests::bounded_read_open_does_not_follow_an_existing_symlink ... ok
+test certified_send_completed_index::completed_index_tests::bounded_regular_file_read_enforces_the_cap_on_the_opened_handle ... ok
+test certified_send_completed_index::completed_index_tests::bounded_regular_file_read_rejects_fifo_swapped_in_after_the_check ... ok
+test certified_send_completed_index::completed_index_tests::bounded_regular_file_read_rejects_symlink_swapped_in_after_the_check ... ok
+test certified_send_completed_index::completed_index_tests::burn5_append_recovery_retries_directory_sync_before_index_publication ... ok
+test certified_send_completed_index::completed_index_tests::burn5_intent_recovery_rejects_unrelated_directory_divergence ... ok
+test certified_send_completed_index::completed_index_tests::campaign_replay_no_outbox_then_deliveries_then_resume ... ok
+test certified_send_completed_index::completed_index_tests::crash_between_move_and_index_rewrite_recovers ... ok
+test certified_send_completed_index::completed_index_tests::crash_mid_batch_intent_recovers_all_operations ... ok
+test certified_send_completed_index::completed_index_tests::enqueue_duplicate_job_id_behavior_unchanged ... ok
+test certified_send_completed_index::completed_index_tests::index_directory_divergence_fails_closed ... ok
+test certified_send_completed_index::completed_index_tests::index_migration_runs_once_and_validates_everything ... ok
+test certified_send_completed_index::completed_index_tests::maintenance_sweeps_at_most_five_jobs_per_pass ... ok
+test certified_send_completed_index::completed_index_tests::no_outbox_first_resume_migrates_empty_index ... ok
+test certified_send_completed_index::completed_index_tests::no_outbox_intent_without_index_fails_closed ... ok
+test certified_send_completed_index::completed_index_tests::no_outbox_second_resume_reads_index_without_migration ... ok
+test certified_send_completed_index::completed_index_tests::non_empty_index_with_deleted_outbox_still_fails_closed ... ok
+test certified_send_completed_index::completed_index_tests::pending_jobs_still_block_proposals ... ok
+test certified_send_completed_index::completed_index_tests::pending_only_resume_defers_all_maintenance ... ok
+test certified_send_completed_index::completed_index_tests::prune_preserves_retention_and_fsync_flow ... ok
+test certified_send_completed_index::completed_index_tests::release_at_cap_steady_state_rounds_are_bounded ... ignored, release-mode manual spot check of the at-cap steady-state campaign round
+test certified_send_completed_index::completed_index_tests::release_proposer_rotation_with_1024_tombstones_is_bounded ... ignored, release-mode manual spot check; the runner carries the same gate
+test certified_send_completed_index::completed_index_tests::at_cap_resume_batches_appends_and_prunes_with_one_index_write ... ok
+test certified_send_completed_index::completed_index_tests::resume_with_zero_tombstones_is_bounded ... ok
+test certified_send_completed_index::completed_index_tests::smg07_fixture_completed_paths_stay_refused ... ok
+test certified_send_completed_index::completed_index_tests::resume_with_240_and_1024_tombstones_examines_no_retained_payloads ... ok
+test certified_send_completed_index::completed_index_tests::smg07_prune_recovery_rename_branch_retries_directory_sync ... ok
+test certified_send_completed_index::completed_index_tests::tampered_tombstone_after_index_is_caught_by_repair_and_by_prune ... ok
+test certified_send_completed_index::completed_index_tests::tampered_tombstone_fails_migration_and_quarantines ... ok
+test certified_send_completed_index::completed_index_tests::smg07_prune_recovery_retries_directory_sync_before_index_publication ... ok
+
+test result: ok. 28 passed; 0 failed; 2 ignored; 0 measured; 176 filtered out; finished in 1.38s
+
+exit=0

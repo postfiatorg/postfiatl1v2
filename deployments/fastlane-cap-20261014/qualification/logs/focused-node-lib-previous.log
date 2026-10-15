@@ -1,0 +1,37 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running unittests src/lib.rs (target/debug/deps/postfiat_node-d8915e1a3b6c8f91)
+
+running 29 tests
+test cobalt_shadow::tests::adversarial_drill_converges_without_live_authority ... ok
+test cobalt_shadow::tests::catch_up_rejects_malformed_batches_without_durable_mutation ... ok
+test cobalt_shadow::tests::authority_lineage_reset_archives_drills_and_requires_active_transition_binding ... ok
+test cobalt_shadow::tests::protocol_journal_recovers_journal_before_state_and_stable_state_restart ... ok
+test cobalt_shadow::tests::queue_bound_is_enforced_before_durable_acceptance ... ok
+test cobalt_shadow::tests::queued_shadow_reordered_sequences_property_preserves_maximum_after_restart ... ok
+test cobalt_shadow::tests::queued_shadow_round_order_cannot_lower_peer_sequence_after_restart ... ok
+test cobalt_shadow::tests::live_registry_binding_requires_validator_signed_sidecar_keys ... ok
+test cobalt_shadow::tests::restart_verifies_state_signature_and_private_permissions ... ok
+test cobalt_shadow::tests::signed_history_catch_up_refuses_gap_then_converges ... ok
+test cobalt_shadow::tests::signed_protocol_transcript_converges_and_replays_after_restart ... ok
+test cobalt_shadow::tests::signed_protocol_transcript_rejects_tamper_and_wrong_root ... ok
+test cobalt_shadow::tests::v2_state_migrates_without_relabeling_legacy_decisions ... ok
+test cobalt_shadow_runtime::tests::burn5_response_failures_do_not_stop_shadow_service ... ok
+test cobalt_shadow_runtime::tests::local_network_drill_runs_real_signed_protocol_over_three_sockets ... ok
+test cobalt_shadow_runtime::tests::public_listener_requires_explicit_private_network_and_rejects_public_ip ... ok
+test cobalt_shadow_runtime::tests::sidecar_policy_is_bounded_and_not_coupled_to_validator_lifecycle ... ok
+test tests::account_tx_truncation::account_tx_scan_and_index_return_the_newest_rows_without_a_start_height ... ok
+test tests::account_tx_truncation::account_tx_scan_and_index_return_the_same_transaction_kinds ... ok
+test tests::account_tx_truncation::account_tx_truncated_only_when_rows_are_omitted ... ok
+test tests::asset_transactions_apply_from_batch_replay_and_account_tx ... ok
+test tests::consensus_history::account_tx_index_explicit_build_catches_up_after_archive_prune ... ok
+test cobalt_shadow::tests::registry_lineage_reset_preserves_global_dabc_anchor_with_local_history ... ok
+test tests::nft_collection_policy_flags_flow_through_rpc_account_tx_and_mempool ... ok
+test tests::issued_asset_escrow_fee_mempool_account_tx_and_replay_flow ... ok
+test tests::nft_fee_quote_mempool_batch_replay_and_account_tx_flow ... ok
+test tests::offer_create_matching_replay_and_maker_account_tx_flow ... ok
+test tests::payment_v2_memo_flows_through_mempool_batch_finality_and_account_tx ... ok
+test tests::offer_fee_quote_mempool_batch_replay_and_account_tx_flow ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 76.51s
+
+exit=0

@@ -1,0 +1,35 @@
+   Compiling generic-array v0.14.7
+   Compiling byteorder v1.5.0
+   Compiling bitvec v1.0.1
+   Compiling subtle v2.6.1
+   Compiling constant_time_eq v0.4.2
+   Compiling crunchy v0.2.4
+   Compiling blake3 v1.8.5
+   Compiling substrate-bn-succinct-rs v0.6.0
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling sha3 v0.10.9
+   Compiling postfiat-types v0.1.0 (/home/postfiatchad/.cache/release-fastlane-cap-20261014/source-1/crates/types)
+   Compiling ff v0.13.1
+   Compiling p3-bn254-fr v0.4.3-succinct
+   Compiling fips204 v0.4.6 (/home/postfiatchad/.cache/release-fastlane-cap-20261014/source-1/third_party/fips204)
+   Compiling postfiat-crypto-provider v0.1.0 (/home/postfiatchad/.cache/release-fastlane-cap-20261014/source-1/crates/crypto_provider)
+   Compiling slop-bn254 v6.3.1
+   Compiling slop-merkle-tree v6.3.1
+   Compiling slop-basefold v6.3.1
+   Compiling slop-basefold-prover v6.3.1
+   Compiling sp1-primitives v6.3.1
+   Compiling slop-stacked v6.3.1
+   Compiling slop-jagged v6.3.1
+   Compiling slop-whir v6.3.1
+   Compiling sp1-hypercube v6.3.1
+   Compiling sp1-recursion-executor v6.3.1
+   Compiling sp1-recursion-machine v6.3.1
+   Compiling sp1-verifier v6.3.1
+   Compiling postfiat-nav-reserve-protocol v0.1.0 (/home/postfiatchad/.cache/release-fastlane-cap-20261014/source-1/crates/nav_reserve_protocol)
+   Compiling postfiat-bridge v0.1.0 (/home/postfiatchad/.cache/release-fastlane-cap-20261014/source-1/crates/bridge)
+   Compiling postfiat-execution v0.1.0 (/home/postfiatchad/.cache/release-fastlane-cap-20261014/source-1/crates/execution)
+   Compiling postfiat-rpc-sdk v0.1.0 (/home/postfiatchad/.cache/release-fastlane-cap-20261014/source-1/crates/rpc_sdk)
+    Finished `release` profile [optimized] target(s) in 39.59s

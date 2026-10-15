@@ -1,0 +1,61 @@
+2026-10-15T09:50:49.612790+00:00 START original-validator-2
+2026-10-15T09:50:49.613690+00:00 START original-validator-3
+2026-10-15T09:50:49.614992+00:00 START original-validator-0
+2026-10-15T09:50:49.618681+00:00 START original-validator-1
+2026-10-15T09:50:49.631131+00:00 START original-validator-4
+2026-10-15T09:50:49.632553+00:00 START original-validator-5
+2026-10-15T09:50:49.633290+00:00 START canary-1115-import-signed
+2026-10-15T09:51:31.656980+00:00 PASS canary-1115-import-signed (42.0s)
+2026-10-15T09:51:32.032504+00:00 START canary-1115-import-tampered-signature
+2026-10-15T09:51:33.036631+00:00 FAIL canary-1115-import-tampered-signature (1.0s)
+2026-10-15T09:54:06.721560+00:00 PASS original-validator-3 (197.1s)
+2026-10-15T09:54:06.723042+00:00 PASS original-validator-2 (197.1s)
+2026-10-15T09:54:06.724239+00:00 START canary-1115-checkpoint-new
+2026-10-15T09:54:06.724704+00:00 START canary-1115-full-new
+2026-10-15T09:54:07.720618+00:00 PASS original-validator-4 (198.1s)
+2026-10-15T09:54:07.722378+00:00 START canary-1115-checkpoint-rollback
+2026-10-15T09:54:07.722522+00:00 PASS original-validator-0 (198.1s)
+2026-10-15T09:54:07.724753+00:00 PASS original-validator-5 (198.1s)
+2026-10-15T09:54:07.727122+00:00 START canary-1115-full-rollback
+2026-10-15T09:54:07.727821+00:00 PASS original-validator-1 (198.1s)
+2026-10-15T09:54:08.174009+00:00 START governance-prepare
+2026-10-15T09:54:10.735860+00:00 PASS canary-1115-checkpoint-new (4.0s)
+2026-10-15T09:54:14.738967+00:00 PASS canary-1115-checkpoint-rollback (7.0s)
+2026-10-15T09:54:18.182956+00:00 PASS governance-prepare (10.0s)
+2026-10-15T09:54:18.293738+00:00 START governance-gate
+2026-10-15T09:54:57.315489+00:00 PASS governance-gate (39.0s)
+2026-10-15T09:54:57.428903+00:00 START fresh-v2-validator-0
+2026-10-15T09:54:57.429550+00:00 START fresh-v2-validator-2
+2026-10-15T09:54:57.432303+00:00 START fresh-v2-validator-3
+2026-10-15T09:54:57.432518+00:00 START fresh-v2-validator-1
+2026-10-15T09:57:35.817981+00:00 PASS canary-1115-full-new (209.1s)
+2026-10-15T09:57:35.819865+00:00 START fresh-v2-validator-4
+2026-10-15T09:57:39.821597+00:00 PASS canary-1115-full-rollback (212.1s)
+2026-10-15T09:57:39.822899+00:00 START fresh-v2-validator-5
+2026-10-15T09:57:39.928768+00:00 START canary-1050-import-signed
+2026-10-15T09:58:15.529312+00:00 PASS fresh-v2-validator-1 (198.1s)
+2026-10-15T09:58:15.530035+00:00 PASS fresh-v2-validator-2 (198.1s)
+2026-10-15T09:58:15.530154+00:00 PASS fresh-v2-validator-0 (198.1s)
+2026-10-15T09:58:15.531000+00:00 PASS fresh-v2-validator-3 (198.1s)
+2026-10-15T09:58:19.948898+00:00 PASS canary-1050-import-signed (40.0s)
+2026-10-15T09:58:20.059325+00:00 START canary-1050-full-new
+2026-10-15T09:58:20.059426+00:00 START canary-1050-checkpoint-new
+2026-10-15T09:58:28.070993+00:00 PASS canary-1050-checkpoint-new (8.0s)
+2026-10-15T10:00:53.924987+00:00 PASS fresh-v2-validator-4 (198.1s)
+2026-10-15T10:00:57.926845+00:00 PASS fresh-v2-validator-5 (198.1s)
+2026-10-15T10:00:58.041650+00:00 START rollback-checkpoint-v2-validator-1
+2026-10-15T10:00:58.041807+00:00 START rollback-checkpoint-v2-validator-0
+2026-10-15T10:00:58.044452+00:00 START rollback-checkpoint-v2-validator-3
+2026-10-15T10:00:58.049007+00:00 START rollback-checkpoint-v2-validator-2
+2026-10-15T10:00:58.053713+00:00 START rollback-checkpoint-v2-validator-4
+2026-10-15T10:01:02.063471+00:00 PASS rollback-checkpoint-v2-validator-1 (4.0s)
+2026-10-15T10:01:02.065523+00:00 START rollback-checkpoint-v2-validator-5
+2026-10-15T10:01:02.065576+00:00 PASS rollback-checkpoint-v2-validator-0 (4.0s)
+2026-10-15T10:01:02.072480+00:00 PASS rollback-checkpoint-v2-validator-2 (4.0s)
+2026-10-15T10:01:02.074399+00:00 START rollback-full-v2-validator-0
+2026-10-15T10:01:02.074800+00:00 PASS rollback-checkpoint-v2-validator-3 (4.0s)
+2026-10-15T10:01:02.080109+00:00 PASS rollback-checkpoint-v2-validator-4 (4.0s)
+2026-10-15T10:01:06.080923+00:00 PASS rollback-checkpoint-v2-validator-5 (4.0s)
+2026-10-15T10:01:39.144661+00:00 PASS canary-1050-full-new (199.1s)
+2026-10-15T10:04:17.163582+00:00 PASS rollback-full-v2-validator-0 (195.1s)
+2026-10-15T10:04:17.275485+00:00 operational sequence complete

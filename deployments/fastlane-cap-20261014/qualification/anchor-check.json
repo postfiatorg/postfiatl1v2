@@ -1,0 +1,147 @@
+{
+  "anchor_file": "/home/postfiatchad/repos/postfiatl1v2-rel20261007/deployments/signer-rotation-20261007/observed/signer-activation/final-checkpoint-epoch1.fastlane-primary.json",
+  "anchor_sha256": "6dddedd5aef1f8e1f17365c47439f6093731ac7e8b8e13c8fe405c2ad1f02b37",
+  "anchor_bytes": 70944,
+  "activate_bytes": 176181,
+  "activate_shape": "synthetic keys and vote signatures; real final checkpoint; committee_root = epoch-2 root",
+  "cap_bytes": 262144,
+  "validate_request": [
+    {
+      "input": "anchor-70944",
+      "method": "mempool_submit_fastlane_primary",
+      "expect_kind": "mempool_submit_fastlane_primary",
+      "bytes": 70944,
+      "exit_code": 0,
+      "accepted": true,
+      "stdout": "rpc_request=ok id=anchor-70944 method=mempool_submit_fastlane_primary",
+      "stderr": "",
+      "status": "PASS"
+    },
+    {
+      "input": "anchor-70944",
+      "method": "mempool_submit_fastlane_primary_finality",
+      "expect_kind": null,
+      "bytes": 70944,
+      "exit_code": 0,
+      "accepted": true,
+      "stdout": "rpc_request=ok id=anchor-70944 method=mempool_submit_fastlane_primary_finality params=unchecked",
+      "stderr": "",
+      "status": "REFERENCE"
+    },
+    {
+      "input": "activate-176181",
+      "method": "mempool_submit_fastlane_primary",
+      "expect_kind": "mempool_submit_fastlane_primary",
+      "bytes": 176181,
+      "exit_code": 0,
+      "accepted": true,
+      "stdout": "rpc_request=ok id=activate-176181 method=mempool_submit_fastlane_primary",
+      "stderr": "",
+      "status": "PASS"
+    },
+    {
+      "input": "activate-176181",
+      "method": "mempool_submit_fastlane_primary_finality",
+      "expect_kind": null,
+      "bytes": 176181,
+      "exit_code": 0,
+      "accepted": true,
+      "stdout": "rpc_request=ok id=activate-176181 method=mempool_submit_fastlane_primary_finality params=unchecked",
+      "stderr": "",
+      "status": "REFERENCE"
+    },
+    {
+      "input": "over-cap-262145",
+      "method": "mempool_submit_fastlane_primary",
+      "expect_kind": "mempool_submit_fastlane_primary",
+      "bytes": 262145,
+      "exit_code": 1,
+      "accepted": false,
+      "stdout": "",
+      "stderr": "error: request validation failed at /home/postfiatchad/.cache/release-fastlane-cap-20261014/anchor-check/over-cap-262145.mempool_submit_fastlane_primary.request.json: rpc request param `fastlane_primary_json` must not exceed 262144 bytes\nusage:\n  postfiat-rpc-sdk request --method METHOD --id ID --ou",
+      "status": "PASS"
+    },
+    {
+      "input": "over-cap-262145",
+      "method": "mempool_submit_fastlane_primary_finality",
+      "expect_kind": null,
+      "bytes": 262145,
+      "exit_code": 1,
+      "accepted": false,
+      "stdout": "",
+      "stderr": "error: request validation failed at /home/postfiatchad/.cache/release-fastlane-cap-20261014/anchor-check/over-cap-262145.mempool_submit_fastlane_primary_finality.request.json: rpc request param `fastlane_primary_json` must not exceed 262144 bytes\nusage:\n  postfiat-rpc-sdk request --method METHOD --i",
+      "status": "REFERENCE"
+    }
+  ],
+  "rpc_serve": [
+    {
+      "binary": "new",
+      "binary_sha256": "b1b3dbb150d3596577df3bb3fe145103d90988cf71558c4d34a035fe4bb44405",
+      "input": "anchor-70944",
+      "bytes": 70944,
+      "ok": false,
+      "error_code": "rpc_method_not_allowed",
+      "error_message": "rpc method `mempool_submit_fastlane_primary_finality` is not enabled on the read-only remote server",
+      "parameter_check_passed": true,
+      "status": "PASS"
+    },
+    {
+      "binary": "new",
+      "binary_sha256": "b1b3dbb150d3596577df3bb3fe145103d90988cf71558c4d34a035fe4bb44405",
+      "input": "activate-176181",
+      "bytes": 176181,
+      "ok": false,
+      "error_code": "rpc_method_not_allowed",
+      "error_message": "rpc method `mempool_submit_fastlane_primary_finality` is not enabled on the read-only remote server",
+      "parameter_check_passed": true,
+      "status": "PASS"
+    },
+    {
+      "binary": "new",
+      "binary_sha256": "b1b3dbb150d3596577df3bb3fe145103d90988cf71558c4d34a035fe4bb44405",
+      "input": "over-cap-262145",
+      "bytes": 262145,
+      "ok": false,
+      "error_code": "rpc_protocol_error",
+      "error_message": "rpc request param `fastlane_primary_json` must not exceed 262144 bytes",
+      "parameter_check_passed": false,
+      "status": "PASS"
+    },
+    {
+      "binary": "old",
+      "binary_sha256": "decaa411376a125fb377a29037b6dd470afb2208a268d30a3ce8130f571b370f",
+      "input": "anchor-70944",
+      "bytes": 70944,
+      "ok": false,
+      "error_code": "rpc_protocol_error",
+      "error_message": "rpc request param `fastlane_primary_json` must not exceed 65536 bytes",
+      "parameter_check_passed": false,
+      "status": "REFERENCE"
+    },
+    {
+      "binary": "old",
+      "binary_sha256": "decaa411376a125fb377a29037b6dd470afb2208a268d30a3ce8130f571b370f",
+      "input": "activate-176181",
+      "bytes": 176181,
+      "ok": false,
+      "error_code": "rpc_protocol_error",
+      "error_message": "rpc request param `fastlane_primary_json` must not exceed 65536 bytes",
+      "parameter_check_passed": false,
+      "status": "REFERENCE"
+    },
+    {
+      "binary": "old",
+      "binary_sha256": "decaa411376a125fb377a29037b6dd470afb2208a268d30a3ce8130f571b370f",
+      "input": "over-cap-262145",
+      "bytes": 262145,
+      "ok": false,
+      "error_code": "rpc_protocol_error",
+      "error_message": "rpc request param `fastlane_primary_json` must not exceed 65536 bytes",
+      "parameter_check_passed": false,
+      "status": "REFERENCE"
+    }
+  ],
+  "live_mutations": false,
+  "host_contact": false,
+  "result": "PASS"
+}

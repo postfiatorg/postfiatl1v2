@@ -1,0 +1,52 @@
+   Compiling postfiat-node v0.1.0 (/home/postfiatchad/repos/postfiatl1v2/crates/node)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 44.67s
+     Running unittests src/lib.rs (target/debug/deps/postfiat_node-d8915e1a3b6c8f91)
+
+running 43 tests
+test cobalt_handoff::tests::authority_modes_are_exclusive_and_cobalt_scope_is_validator_trust_only ... ok
+test cobalt_handoff::tests::burn5_cobalt_authority_bounds_shared_check_expansion ... ok
+test cobalt_handoff::tests::burn5_negative_rehearsal_probes_each_vary_only_their_declared_binding ... ok
+test cobalt_handoff::tests::burn5_negative_rehearsal_probes_reject_for_their_own_reasons_with_approvals_present ... ok
+test cobalt_handoff::tests::burn5_cobalt_authority_rejects_replayed_full_knowledge_checkpoint ... ok
+test cobalt_handoff::tests::burn5_rehearsal_finalizes_valid_update_with_mixed_scope_evidence ... ok
+test cobalt_handoff::tests::cobalt_update_replay_parent_is_rejected_after_first_apply ... ok
+test cobalt_handoff::tests::cobalt_authority_rejects_quorum_only_and_tampered_protocol_decisions ... ok
+test cobalt_handoff::tests::handoff_requires_distinct_mldsa65_quorum_approvals ... ok
+test cobalt_handoff::tests::handoff_uses_the_consensus_ordered_governance_batch_and_committed_state_path ... ok
+test cobalt_handoff::tests::cobalt_validator_update_fits_and_verifies_through_the_live_governance_batch_path ... ok
+test cobalt_handoff::tests::production_operator_lifecycle_emits_an_applicable_cobalt_handoff_batch ... ok
+test cobalt_handoff::tests::transition_replay_and_non_forward_rollback_are_rejected ... ok
+test cobalt_handoff::tests::subsequent_cobalt_decision_round_is_independent_of_activation_height_gap ... ok
+test cobalt_handoff_rehearsal::tests::decision_certificate_encoding_rejects_mixed_raw_and_compact_values ... ok
+test cobalt_handoff_rehearsal::tests::rehearsal_digest_predicate_requires_lowercase_hexadecimal ... ok
+test fastswap_control_signing::tests::fastswap_control_assemble_refuses_rotated_validator_5_vote_and_four_votes ... ok
+test fastswap_control_signing::tests::fastswap_control_assembled_activation_is_admitted_by_six_validator_fixture ... ok
+test fastswap_control_signing::tests::fastswap_control_prepare_refuses_without_drained_final_checkpoint ... ok
+test fastswap_control_signing::tests::fastswap_control_stop_prepare_certificate_is_admitted_and_fences_the_policy ... ok
+test fastswap_control_signing::tests::fastswap_control_stop_prepare_refuses_rotated_validator_5_and_four_votes ... ok
+test fastswap_control_signing::tests::fastswap_control_vote_sign_refuses_second_different_vote_for_same_key ... ok
+test fastswap_control_signing::tests::rpc_finality_reports_five_vote_anchor_then_activate_committee_as_success ... ok
+test fastswap_control_signing::tests::rpc_finality_reports_stop_prepare_as_success ... ok
+test mempool_proposals::burn5_tests::latest_tx_id_follows_execution_order ... ok
+test pftl_swap_service::tests::burn5_oversized_journal_preserves_readable_durable_state ... ok
+test pftl_swap_service::tests::burn5_published_journal_keeps_prepared_batch_identity ... ok
+test pftl_swap_service::tests::journal_is_idempotent_and_reserves_inputs ... ok
+test pftl_swap_service::tests::journal_records_bounded_machine_timings_idempotently ... ok
+test pftl_swap_service::tests::journal_reserves_crash_and_terminal_transition_capacity ... ok
+test pftl_swap_service::tests::newly_signed_intent_supersedes_failed_input_reservation ... ok
+test pftl_swap_service::tests::quote_and_intent_reject_noncanonical_identifiers ... ok
+test pftl_swap_service::tests::quote_store_is_durable_bounded_and_exact ... ok
+test pftl_swap_service::tests::signed_intent_binds_quote_and_detects_tampering ... ok
+test pftl_swap_service::tests::signed_intent_key_file_helper_binds_the_principal_and_zeroizes_key_bytes ... ok
+test pftl_swap_service::tests::timing_replay_at_capacity_is_idempotent_and_new_stages_are_refused ... ok
+test storage_migration::storage_migration_tests::available_disk_bytes_accepts_a_bare_relative_output ... ok
+test storage_migration::storage_migration_tests::bounded_text_reader_enforces_the_cap_and_keeps_reasons ... ok
+test storage_migration::storage_migration_tests::missing_manifest_keeps_its_reason ... ok
+test storage_migration::storage_migration_tests::nearest_existing_location_treats_an_empty_ancestor_as_the_working_directory ... ok
+test storage_migration::storage_migration_tests::nearest_existing_location_walks_up_to_the_first_existing_directory ... ok
+test storage_migration::storage_migration_tests::oversized_manifest_is_rejected_before_parsing ... ok
+test cobalt_handoff::tests::twenty_validator_post_quantum_decision_certificate_fits_consensus_batch ... ok
+
+test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 390 filtered out; finished in 74.43s
+
+exit=0

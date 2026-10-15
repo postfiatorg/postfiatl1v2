@@ -1,0 +1,9 @@
+{
+  "schema": "postfiat.deployment_manifest_verified.v1",
+  "manifest_sha256": "4f379c57b42c4a050154a344e7cea72e1af381e9f2a05ff21d3b2a1831465b48",
+  "deployment_id": "fastlane-cap-20261014",
+  "publisher": "pfc531e00ffefecb8fabe40c6f47c69148df31e49c",
+  "verified_at_unix": 1792058411,
+  "valid_from_unix": 1792057923,
+  "valid_until_unix": 1823594223
+}

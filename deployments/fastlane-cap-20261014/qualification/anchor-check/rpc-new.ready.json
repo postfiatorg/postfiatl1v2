@@ -1,0 +1,20 @@
+{
+  "schema": "postfiat-rpc-serve-readiness-v1",
+  "ready": true,
+  "degraded": false,
+  "node_id": "validator-1",
+  "bind_address": "127.0.0.1:37773",
+  "data_dir": "/home/postfiatchad/.cache/release-fastlane-cap-20261014/anchor-check/fixture-new",
+  "data_dir_readable": true,
+  "spool_dir": "/home/postfiatchad/.cache/release-fastlane-cap-20261014/anchor-check/spool-new",
+  "spool_probe_ok": true,
+  "event_log": "/home/postfiatchad/.cache/release-fastlane-cap-20261014/anchor-check/rpc-new.events.ndjson",
+  "event_log_writable": true,
+  "local_state_loaded": true,
+  "listener_bound": true,
+  "finality_enabled": false,
+  "finality_topology_available": true,
+  "finality_key_available": true,
+  "telemetry_failure_count": 0,
+  "last_telemetry_error": null
+}

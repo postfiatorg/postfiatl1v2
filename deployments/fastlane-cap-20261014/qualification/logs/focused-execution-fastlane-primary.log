@@ -1,0 +1,15 @@
+   Compiling postfiat-execution v0.1.0 (/home/postfiatchad/repos/postfiatl1v2/crates/execution)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.78s
+     Running unittests src/lib.rs (target/debug/deps/postfiat_execution-8272e39e1fe1c085)
+
+running 6 tests
+test fastlane_primary::tests::canonical_primary_deposit_is_accepted_once_with_exact_code ... ok
+test fastlane_primary::tests::ordered_fastpay_recovery_cancels_and_permanently_fences_a_late_certificate ... ok
+test fastlane_primary::tests::signed_owned_deposit_failure_matrix_never_mutates ... ok
+test fastlane_primary::tests::signed_owned_deposit_is_atomic_conserving_and_replay_safe ... ok
+test fastlane_primary::tests::ordered_fastpay_recovery_reveal_confirms_exactly_once_with_conservation ... ok
+test fastlane_primary::tests::signed_owned_deposit_rejects_the_declared_object_cap_without_mutation ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 210 filtered out; finished in 0.50s
+
+exit=0
