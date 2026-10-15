@@ -1,0 +1,23 @@
+{
+  "amount_atoms": 1000000,
+  "artifact_dir": "/var/lib/postfiat/validator-3/pft-wallet/pft-faucet-4ec37ef71ace",
+  "asset": "PFT",
+  "fee_atoms": 32,
+  "from": "pfcd4cc8c354bd340fe18386e6f875ff68f215a95c",
+  "height": 1125,
+  "label": "pft-faucet",
+  "ok": true,
+  "proposer": "validator-3",
+  "recipient_after": {
+    "balance": 55073000,
+    "sequence": 0
+  },
+  "schema": "pft-ce22-transfer-receipt-v2",
+  "sender_after": {
+    "balance": 66993716,
+    "sequence": 36
+  },
+  "to": "pf6395ef7f43ffaa74ce178d320b9bbbfd45532b38",
+  "tx_id": "276d00759762add5edaf6814641e5cdee69fabe65fa2801ad05de33b6237d634cd32b793af342d9ffac97b3cb1da8bda",
+  "verified_6_of_6": true
+}

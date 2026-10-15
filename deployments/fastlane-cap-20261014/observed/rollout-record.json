@@ -1,0 +1,311 @@
+{
+  "schema": "fastlane-cap-20261014-rollout-record-v1",
+  "tool": "scripts/postfiat-safe-rollout apply-next",
+  "release_id": "fastlane-cap-20261014",
+  "executable_sha256": "b1b3dbb150d3596577df3bb3fe145103d90988cf71558c4d34a035fe4bb44405",
+  "signed_manifest_sha256": "4f379c57b42c4a050154a344e7cea72e1af381e9f2a05ff21d3b2a1831465b48",
+  "canary_backup_signed_manifest_sha256": "d957141e68a29f8cf690aec9f9193ec0631fede0fad95a2329f4cf3a8b21189a",
+  "order": [
+    "validator-1",
+    "validator-0",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ],
+  "rollout_state_sha256_after": "8d67868c26f4514df9f155a9754825acbfffe649b05add874d83c387765e78ce",
+  "before": {
+    "height": 1123,
+    "tip": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+    "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+  },
+  "after": {
+    "height": 1129,
+    "tip": "41154d2c41211e43d9b09d457f072b099fad9cddca52a1ab419b5352fc62daa1746802e35fee62f2985cae6cc539dfdd",
+    "state_root": "053fb35c15e5387b8d66678133c04b099b590ae9625e924029dab772108290dc773d39238d63abdee09808267559a772"
+  },
+  "after_observed_at": "2026-10-15T11:07:27.439834+00:00",
+  "applies": [
+    {
+      "validator_id": "validator-1",
+      "started": "2026-10-15T10:38:19Z",
+      "completed": "2026-10-15T10:39:15Z",
+      "restart_height": 1123,
+      "restart_tip": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+      "restart_state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803",
+      "fleet_convergence_height": 1123,
+      "fleet_convergence_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803",
+      "mempool_pending": 0,
+      "exit": 0,
+      "evidence": "apply-1.json"
+    },
+    {
+      "validator_id": "validator-0",
+      "started": "2026-10-15T10:42:06Z",
+      "completed": "2026-10-15T10:43:20Z",
+      "restart_height": 1124,
+      "restart_tip": "3bed550fe5b63243684501389c5d51436c327a328230422ef229062c77ef17a5f5b164c8f40de963b63ff6c4740ab9a4",
+      "restart_state_root": "9c3d56a9b5e0517641f6403e8b5b0c1945779f7c3e9fd63368baf8c6621fe2f741a50bfe3eab3ca6cb65ecae409c64f8",
+      "fleet_convergence_height": 1124,
+      "fleet_convergence_root": "9c3d56a9b5e0517641f6403e8b5b0c1945779f7c3e9fd63368baf8c6621fe2f741a50bfe3eab3ca6cb65ecae409c64f8",
+      "mempool_pending": 0,
+      "exit": 0,
+      "evidence": "apply-2.json"
+    },
+    {
+      "validator_id": "validator-2",
+      "started": "2026-10-15T10:45:54Z",
+      "completed": "2026-10-15T10:51:39Z",
+      "restart_height": 1125,
+      "restart_tip": "c3c71895eb3bfc7a30b6ea227e305129820c1dae5ec09801d090f4fdfd647f05d153766843291415039a31dab4b14851",
+      "restart_state_root": "bf347d636c115a20a87a0f41d3e13486cb9ca3bb3912e1089476fbe64a42aafa7b4ba3130c2cc22d15bc4ff00d8670ed",
+      "fleet_convergence_height": 1125,
+      "fleet_convergence_root": "bf347d636c115a20a87a0f41d3e13486cb9ca3bb3912e1089476fbe64a42aafa7b4ba3130c2cc22d15bc4ff00d8670ed",
+      "mempool_pending": 0,
+      "exit": 0,
+      "evidence": "apply-3.json"
+    },
+    {
+      "validator_id": "validator-3",
+      "started": "2026-10-15T10:54:14Z",
+      "completed": "2026-10-15T10:55:30Z",
+      "restart_height": 1126,
+      "restart_tip": "dfd1c306d20533c299f97560fb778536dbab4fcec777dd9e0118d50001080ac595e91cce6ea9155e550a6c2abc93ed43",
+      "restart_state_root": "14032397492b638b4849fdc0d56ac5c447ab4428d44bbb7110958f087cfdd74011c7fb07972374979e6c1688b9574319",
+      "fleet_convergence_height": 1126,
+      "fleet_convergence_root": "14032397492b638b4849fdc0d56ac5c447ab4428d44bbb7110958f087cfdd74011c7fb07972374979e6c1688b9574319",
+      "mempool_pending": 0,
+      "exit": 0,
+      "evidence": "apply-4.json"
+    },
+    {
+      "validator_id": "validator-4",
+      "started": "2026-10-15T10:58:23Z",
+      "completed": "2026-10-15T10:59:10Z",
+      "restart_height": 1127,
+      "restart_tip": "46e0ef43c8729b3cca819de97668364053a9993727e264b01cba12e8b93efc2d112a90254d6631e20fd8d31ee71e98cd",
+      "restart_state_root": "9aa0138c9ff398c071cedd2141af7b169ed7953cf1f7c7d2640bce3b5c6bd385ffd89f877ca45da074ce19f0e1f54ead",
+      "fleet_convergence_height": 1127,
+      "fleet_convergence_root": "9aa0138c9ff398c071cedd2141af7b169ed7953cf1f7c7d2640bce3b5c6bd385ffd89f877ca45da074ce19f0e1f54ead",
+      "mempool_pending": 0,
+      "exit": 0,
+      "evidence": "apply-5.json"
+    },
+    {
+      "validator_id": "validator-5",
+      "started": "2026-10-15T11:01:51Z",
+      "completed": "2026-10-15T11:03:35Z",
+      "restart_height": 1128,
+      "restart_tip": "bfd9d40f28be8897512501e1f71ac8b70db0ffac4c3ce774a66befe149f278fdc3a3e831244ed81633042f4b477197bd",
+      "restart_state_root": "175997c795075f02c73d6bb8ac6e7c26b27f85e90185fa9879be99d9fe683fbb6bd7bbae3ffcc2e4a14218325a93292f",
+      "fleet_convergence_height": 1128,
+      "fleet_convergence_root": "175997c795075f02c73d6bb8ac6e7c26b27f85e90185fa9879be99d9fe683fbb6bd7bbae3ffcc2e4a14218325a93292f",
+      "mempool_pending": 0,
+      "exit": 0,
+      "evidence": "apply-6.json"
+    }
+  ],
+  "faucet_path": "StakeHub .venv/bin/pft --json faucet testing --asset PFT --amount 1000000 (1 PFT), faucet pfcd4cc8...",
+  "faucet_grants": [
+    {
+      "after": "validator-1",
+      "height": 1124,
+      "proposer": "validator-2",
+      "view": 0,
+      "tx_id": "78b334100031161dd9a67c45a330a990be3bf369b9a082720f4a251b7070f6c0d4165493bb4c1e8552db9d4a37e051e9",
+      "amount_atoms": 1000000,
+      "block_hash": "3bed550fe5b63243684501389c5d51436c327a328230422ef229062c77ef17a5f5b164c8f40de963b63ff6c4740ab9a4",
+      "state_root": "9c3d56a9b5e0517641f6403e8b5b0c1945779f7c3e9fd63368baf8c6621fe2f741a50bfe3eab3ca6cb65ecae409c64f8",
+      "certificate_id": "f5b9261f7bd5302e637f8b956c6857ae2660e4c22142e392df0c8970c21e11ed98aaf8f640008d2bc2781799a82725a2",
+      "voters": [
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4",
+        "validator-5"
+      ],
+      "checks": {
+        "identical_block_on_6": true,
+        "quorum_5_of_6": true,
+        "tip_is_grant_block_on_6": true,
+        "mempools_empty": true,
+        "receipt_verified_6_of_6": true,
+        "proposer_matches_receipt": true
+      },
+      "pass": true,
+      "evidence": [
+        "grant-after-validator-1.out",
+        "grant-check-after-validator-1.json",
+        "after-validator-1.json"
+      ]
+    },
+    {
+      "after": "validator-0",
+      "height": 1125,
+      "proposer": "validator-3",
+      "view": 0,
+      "tx_id": "276d00759762add5edaf6814641e5cdee69fabe65fa2801ad05de33b6237d634cd32b793af342d9ffac97b3cb1da8bda",
+      "amount_atoms": 1000000,
+      "block_hash": "c3c71895eb3bfc7a30b6ea227e305129820c1dae5ec09801d090f4fdfd647f05d153766843291415039a31dab4b14851",
+      "state_root": "bf347d636c115a20a87a0f41d3e13486cb9ca3bb3912e1089476fbe64a42aafa7b4ba3130c2cc22d15bc4ff00d8670ed",
+      "certificate_id": "4d7f781415f092935c5c55e591aaba3943827fb9d923d9ae8cd17a4102665894d3d16e7f1c403bc5a03267fb74fbfda1",
+      "voters": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4"
+      ],
+      "checks": {
+        "identical_block_on_6": true,
+        "quorum_5_of_6": true,
+        "tip_is_grant_block_on_6": true,
+        "mempools_empty": true,
+        "receipt_verified_6_of_6": true,
+        "proposer_matches_receipt": true
+      },
+      "pass": true,
+      "evidence": [
+        "grant-after-validator-0.out",
+        "grant-check-after-validator-0.json",
+        "after-validator-0.json"
+      ]
+    },
+    {
+      "after": "validator-2",
+      "height": 1126,
+      "proposer": "validator-4",
+      "view": 0,
+      "tx_id": "e4b71ed046d575a9fb03114ebfb11c1217ffcdb4ea7ca495a481249a94c57fc0b95b7c2e40812d41be655c39dc215dc2",
+      "amount_atoms": 1000000,
+      "block_hash": "dfd1c306d20533c299f97560fb778536dbab4fcec777dd9e0118d50001080ac595e91cce6ea9155e550a6c2abc93ed43",
+      "state_root": "14032397492b638b4849fdc0d56ac5c447ab4428d44bbb7110958f087cfdd74011c7fb07972374979e6c1688b9574319",
+      "certificate_id": "088718a5e7c8025bfccefb2cdf11e514a1836e2f6e9c179b287241de6a9c67fd21ace7ab15de3d5f86590c3b23ef22a8",
+      "voters": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4"
+      ],
+      "checks": {
+        "identical_block_on_6": true,
+        "quorum_5_of_6": true,
+        "tip_is_grant_block_on_6": true,
+        "mempools_empty": true,
+        "receipt_verified_6_of_6": true,
+        "proposer_matches_receipt": true
+      },
+      "pass": true,
+      "evidence": [
+        "grant-after-validator-2.out",
+        "grant-check-after-validator-2.json",
+        "after-validator-2.json"
+      ]
+    },
+    {
+      "after": "validator-3",
+      "height": 1127,
+      "proposer": "validator-5",
+      "view": 0,
+      "tx_id": "5dc0e901afbf66a1952edc2f213a08b2fd81d489c2d818a3c40d79273ceda0fa94a4ae3ed0b3412e92df9baae3168af9",
+      "amount_atoms": 1000000,
+      "block_hash": "46e0ef43c8729b3cca819de97668364053a9993727e264b01cba12e8b93efc2d112a90254d6631e20fd8d31ee71e98cd",
+      "state_root": "9aa0138c9ff398c071cedd2141af7b169ed7953cf1f7c7d2640bce3b5c6bd385ffd89f877ca45da074ce19f0e1f54ead",
+      "certificate_id": "66ef30c6047ca38275ed94d95f03c2cd4a777baf7c32e09c51a26a0fc22f330b4b8ca6ebf37d4cce09d642179c02c7ac",
+      "voters": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-5"
+      ],
+      "checks": {
+        "identical_block_on_6": true,
+        "quorum_5_of_6": true,
+        "tip_is_grant_block_on_6": true,
+        "mempools_empty": true,
+        "receipt_verified_6_of_6": true,
+        "proposer_matches_receipt": true
+      },
+      "pass": true,
+      "evidence": [
+        "grant-after-validator-3.out",
+        "grant-check-after-validator-3.json",
+        "after-validator-3.json"
+      ]
+    },
+    {
+      "after": "validator-4",
+      "height": 1128,
+      "proposer": "validator-0",
+      "view": 0,
+      "tx_id": "8e8028ca75140f523bd0e70c8f731db885993530e3c9f7a0eea4b9033a850bba3283776cc8f5429234c029a32e27a834",
+      "amount_atoms": 1000000,
+      "block_hash": "bfd9d40f28be8897512501e1f71ac8b70db0ffac4c3ce774a66befe149f278fdc3a3e831244ed81633042f4b477197bd",
+      "state_root": "175997c795075f02c73d6bb8ac6e7c26b27f85e90185fa9879be99d9fe683fbb6bd7bbae3ffcc2e4a14218325a93292f",
+      "certificate_id": "fa2447d6ceb94111cd21e2a0ad43c5e5752a18beadda650a2d3632782df792a160a3162e802b57edf52d75150a6a3a96",
+      "voters": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4"
+      ],
+      "checks": {
+        "identical_block_on_6": true,
+        "quorum_5_of_6": true,
+        "tip_is_grant_block_on_6": true,
+        "mempools_empty": true,
+        "receipt_verified_6_of_6": true,
+        "proposer_matches_receipt": true
+      },
+      "pass": true,
+      "evidence": [
+        "grant-after-validator-4.out",
+        "grant-check-after-validator-4.json",
+        "after-validator-4.json"
+      ]
+    },
+    {
+      "after": "validator-5",
+      "height": 1129,
+      "proposer": "validator-1",
+      "view": 0,
+      "tx_id": "648275cfaa867a6956615f770ec1cb1799ecfd03d03c70a39bf0b9622c10eb4f2f6d7c197cd5b3d8c44c924dd95ea7d9",
+      "amount_atoms": 1000000,
+      "block_hash": "41154d2c41211e43d9b09d457f072b099fad9cddca52a1ab419b5352fc62daa1746802e35fee62f2985cae6cc539dfdd",
+      "state_root": "053fb35c15e5387b8d66678133c04b099b590ae9625e924029dab772108290dc773d39238d63abdee09808267559a772",
+      "certificate_id": "f6081fde0d138604c0773af9126acfa7f0ea0d0d05b62ebc39c6171c4d2541bcb9534586bf2d4121f4b5ff4d44f26d54",
+      "voters": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4"
+      ],
+      "checks": {
+        "identical_block_on_6": true,
+        "quorum_5_of_6": true,
+        "tip_is_grant_block_on_6": true,
+        "mempools_empty": true,
+        "receipt_verified_6_of_6": true,
+        "proposer_matches_receipt": true
+      },
+      "pass": true,
+      "evidence": [
+        "grant-after-validator-5.out",
+        "grant-check-after-validator-5.json",
+        "after-validator-5.json"
+      ]
+    }
+  ],
+  "stakehub_config": {
+    "local_node_binary": "switched to fastlane-cap-20261014 before the first grant",
+    "runtime_binary_and_topology_file": "switched to fastlane-cap-20261014 after the grant following validator-5",
+    "backups": [
+      "~/.pft/config.toml.bak-20261015",
+      "~/.pft/config.toml.bak-20261015b"
+    ]
+  }
+}
