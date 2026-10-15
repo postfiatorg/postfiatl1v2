@@ -2237,11 +2237,7 @@ mod tests {
                     assert_eq!(value.total_yocto, 7_300_000, "{name}");
                     (true, None, None)
                 }
-                Err(error) => (
-                    false,
-                    Some(format!("{error:?}")),
-                    Some(error.to_string()),
-                ),
+                Err(error) => (false, Some(format!("{error:?}")), Some(error.to_string())),
             };
             let expected = &case["expected_corrected"];
             let observed = serde_json::json!({
