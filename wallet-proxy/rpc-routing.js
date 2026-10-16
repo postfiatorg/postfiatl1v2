@@ -946,6 +946,7 @@ wss } = runtime;
                     route_source: routeSource,
                     required_current_height: options.requiredCurrentHeight ?? null,
                     required_state_root: options.requiredStateRoot || null,
+                    required_parent_hash: options.requiredParentHash || null,
                 },
             },
         };
@@ -969,6 +970,7 @@ wss } = runtime;
                         : 'post_finality_cache',
                     requiredCurrentHeight: Number.isFinite(finalizedHeight) ? finalizedHeight : null,
                     requiredStateRoot: header.state_root || null,
+                    requiredParentHash: header.block_hash || null,
                 });
             } else {
                 invalidateProposerRouteCache();
@@ -1003,6 +1005,12 @@ wss } = runtime;
         ) {
             return false;
         }
+        if (
+            route.required_parent_hash
+            && status?.block_tip_hash !== route.required_parent_hash
+        ) {
+            return false;
+        }
         return true;
     }
 
@@ -1031,6 +1039,7 @@ wss } = runtime;
         const requirementKey = [
             route.required_current_height,
             route.required_state_root || '',
+            route.required_parent_hash || '',
         ].join('|');
         if (selection.ready_requirement_key === requirementKey) {
             return {
