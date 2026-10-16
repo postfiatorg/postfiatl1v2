@@ -1,0 +1,720 @@
+{
+ "date": "2026-10-16",
+ "chain": "postfiat-wan-devnet-2",
+ "release": "fastlane-cap-20261014",
+ "change": "transient systemd-run relay units replaced by persistent units in /etc/systemd/system (Restart=always, WantedBy=multi-user.target), modelled on navcoin-ethereum-rpc-28702.service; ExecStart unchanged",
+ "unit_files": {
+  "navcoin-ethereum-rpc-28703.service": {
+   "md5": "78ca5ddf9591654f091176af090c756d",
+   "hosts": 6,
+   "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+  },
+  "navcoin-ethereum-rpc-28701.service (validator-1)": {
+   "md5": "c5825a65d6ff0ed79e5530bc2b9437c8",
+   "note": "byte-identical to the 28701 unit installed on the other five hosts on 2026-10-13"
+  }
+ },
+ "not_touched": "no validator or RPC service restarted or changed; watchdog user units on validator-0/3 untouched (all paused or pause_retry before each swap); no transaction",
+ "steps": [
+  {
+   "validator": "validator-5",
+   "host": "45.32.110.170",
+   "port": 28703,
+   "old_unit": "navcoin-ethereum-archive-rpc-20260907.service",
+   "new_unit": "navcoin-ethereum-rpc-28703.service",
+   "swap": {
+    "old_cmdline_matches_facts": true,
+    "unit_file_md5": "78ca5ddf9591654f091176af090c756d",
+    "relisten_after_stop_s": 1.296,
+    "eth_blockNumber_http": 200
+   },
+   "before": {
+    "utc": "2026-10-16T10:44:48Z",
+    "listener": {
+     "port": 28703,
+     "pid": 2680072,
+     "cgroup_unit": "navcoin-ethereum-archive-rpc-20260907.service"
+    },
+    "old_unit": {
+     "unit": "navcoin-ethereum-archive-rpc-20260907.service",
+     "active": "active",
+     "unit_file_state": "transient",
+     "fragment_path": "/run/systemd/transient/navcoin-ethereum-archive-rpc-20260907.service",
+     "main_pid": 2680072,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+    },
+    "new_unit": null,
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-5.service": 3686559,
+     "postfiat-validator-5-rpc.service": 3686564
+    },
+    "watchdogs": {
+     "units": 0,
+     "status": [],
+     "pids": {}
+    }
+   },
+   "after": {
+    "utc": "2026-10-16T10:45:16Z",
+    "listener": {
+     "port": 28703,
+     "pid": 3720660,
+     "cgroup_unit": "navcoin-ethereum-rpc-28703.service"
+    },
+    "old_unit": null,
+    "new_unit": {
+     "unit": "navcoin-ethereum-rpc-28703.service",
+     "active": "active",
+     "unit_file_state": "enabled",
+     "fragment_path": "/etc/systemd/system/navcoin-ethereum-rpc-28703.service",
+     "main_pid": 3720660,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+    },
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-5.service": 3686559,
+     "postfiat-validator-5-rpc.service": 3686564
+    },
+    "watchdogs": {
+     "units": 0,
+     "status": [],
+     "pids": {}
+    }
+   },
+   "core_pids_unchanged": true,
+   "watchdog_pids_unchanged": true
+  },
+  {
+   "validator": "validator-2",
+   "host": "66.42.48.39",
+   "port": 28703,
+   "old_unit": "navcoin-ethereum-archive-rpc-20260907.service",
+   "new_unit": "navcoin-ethereum-rpc-28703.service",
+   "swap": {
+    "old_cmdline_matches_facts": true,
+    "unit_file_md5": "78ca5ddf9591654f091176af090c756d",
+    "relisten_after_stop_s": 1.004,
+    "eth_blockNumber_http": 200
+   },
+   "before": {
+    "utc": "2026-10-16T10:45:31Z",
+    "listener": {
+     "port": 28703,
+     "pid": 1076559,
+     "cgroup_unit": "navcoin-ethereum-archive-rpc-20260907.service"
+    },
+    "old_unit": {
+     "unit": "navcoin-ethereum-archive-rpc-20260907.service",
+     "active": "active",
+     "unit_file_state": "transient",
+     "fragment_path": "/run/systemd/transient/navcoin-ethereum-archive-rpc-20260907.service",
+     "main_pid": 1076559,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+    },
+    "new_unit": null,
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-2.service": 2090054,
+     "postfiat-validator-2-rpc.service": 2090059
+    },
+    "watchdogs": {
+     "units": 0,
+     "status": [],
+     "pids": {}
+    }
+   },
+   "after": {
+    "utc": "2026-10-16T10:45:44Z",
+    "listener": {
+     "port": 28703,
+     "pid": 2129140,
+     "cgroup_unit": "navcoin-ethereum-rpc-28703.service"
+    },
+    "old_unit": null,
+    "new_unit": {
+     "unit": "navcoin-ethereum-rpc-28703.service",
+     "active": "active",
+     "unit_file_state": "enabled",
+     "fragment_path": "/etc/systemd/system/navcoin-ethereum-rpc-28703.service",
+     "main_pid": 2129140,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+    },
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-2.service": 2090054,
+     "postfiat-validator-2-rpc.service": 2090059
+    },
+    "watchdogs": {
+     "units": 0,
+     "status": [],
+     "pids": {}
+    }
+   },
+   "core_pids_unchanged": true,
+   "watchdog_pids_unchanged": true
+  },
+  {
+   "validator": "validator-4",
+   "host": "95.179.179.206",
+   "port": 28703,
+   "old_unit": "navcoin-ethereum-archive-rpc-20260907.service",
+   "new_unit": "navcoin-ethereum-rpc-28703.service",
+   "swap": {
+    "old_cmdline_matches_facts": true,
+    "unit_file_md5": "78ca5ddf9591654f091176af090c756d",
+    "relisten_after_stop_s": 1.056,
+    "eth_blockNumber_http": 200
+   },
+   "before": {
+    "utc": "2026-10-16T10:45:48Z",
+    "listener": {
+     "port": 28703,
+     "pid": 2387273,
+     "cgroup_unit": "navcoin-ethereum-archive-rpc-20260907.service"
+    },
+    "old_unit": {
+     "unit": "navcoin-ethereum-archive-rpc-20260907.service",
+     "active": "active",
+     "unit_file_state": "transient",
+     "fragment_path": "/run/systemd/transient/navcoin-ethereum-archive-rpc-20260907.service",
+     "main_pid": 2387273,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+    },
+    "new_unit": null,
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-4.service": 3057681,
+     "postfiat-validator-4-rpc.service": 3057686
+    },
+    "watchdogs": {
+     "units": 0,
+     "status": [],
+     "pids": {}
+    }
+   },
+   "after": {
+    "utc": "2026-10-16T10:45:52Z",
+    "listener": {
+     "port": 28703,
+     "pid": 3092594,
+     "cgroup_unit": "navcoin-ethereum-rpc-28703.service"
+    },
+    "old_unit": null,
+    "new_unit": {
+     "unit": "navcoin-ethereum-rpc-28703.service",
+     "active": "active",
+     "unit_file_state": "enabled",
+     "fragment_path": "/etc/systemd/system/navcoin-ethereum-rpc-28703.service",
+     "main_pid": 3092594,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+    },
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-4.service": 3057681,
+     "postfiat-validator-4-rpc.service": 3057686
+    },
+    "watchdogs": {
+     "units": 0,
+     "status": [],
+     "pids": {}
+    }
+   },
+   "core_pids_unchanged": true,
+   "watchdog_pids_unchanged": true
+  },
+  {
+   "validator": "validator-0",
+   "host": "64.176.220.75",
+   "port": 28703,
+   "old_unit": "navcoin-ethereum-archive-rpc-20260907.service",
+   "new_unit": "navcoin-ethereum-rpc-28703.service",
+   "swap": {
+    "old_cmdline_matches_facts": true,
+    "unit_file_md5": "78ca5ddf9591654f091176af090c756d",
+    "relisten_after_stop_s": 0.977,
+    "eth_blockNumber_http": 200
+   },
+   "before": {
+    "utc": "2026-10-16T10:45:59Z",
+    "listener": {
+     "port": 28703,
+     "pid": 3821783,
+     "cgroup_unit": "navcoin-ethereum-archive-rpc-20260907.service"
+    },
+    "old_unit": {
+     "unit": "navcoin-ethereum-archive-rpc-20260907.service",
+     "active": "active",
+     "unit_file_state": "transient",
+     "fragment_path": "/run/systemd/transient/navcoin-ethereum-archive-rpc-20260907.service",
+     "main_pid": 3821783,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+    },
+    "new_unit": null,
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-0.service": 1485048,
+     "postfiat-validator-0-rpc.service": 1485053
+    },
+    "watchdogs": {
+     "units": 3,
+     "status": [
+      "paused"
+     ],
+     "pids": {
+      "navcoin-proof-watchdog@normal.service": 4088691,
+      "navcoin-proof-watchdog@normald40.service": 4180585,
+      "navcoin-proof-watchdog@normald40final.service": 4182851
+     }
+    }
+   },
+   "after": {
+    "utc": "2026-10-16T10:46:05Z",
+    "listener": {
+     "port": 28703,
+     "pid": 1598172,
+     "cgroup_unit": "navcoin-ethereum-rpc-28703.service"
+    },
+    "old_unit": null,
+    "new_unit": {
+     "unit": "navcoin-ethereum-rpc-28703.service",
+     "active": "active",
+     "unit_file_state": "enabled",
+     "fragment_path": "/etc/systemd/system/navcoin-ethereum-rpc-28703.service",
+     "main_pid": 1598172,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+    },
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-0.service": 1485048,
+     "postfiat-validator-0-rpc.service": 1485053
+    },
+    "watchdogs": {
+     "units": 3,
+     "status": [
+      "paused"
+     ],
+     "pids": {
+      "navcoin-proof-watchdog@normal.service": 4088691,
+      "navcoin-proof-watchdog@normald40.service": 4180585,
+      "navcoin-proof-watchdog@normald40final.service": 4182851
+     }
+    }
+   },
+   "core_pids_unchanged": true,
+   "watchdog_pids_unchanged": true
+  },
+  {
+   "validator": "validator-3",
+   "host": "149.28.63.106",
+   "port": 28703,
+   "old_unit": "navcoin-ethereum-archive-rpc-20260907.service",
+   "new_unit": "navcoin-ethereum-rpc-28703.service",
+   "swap": {
+    "old_cmdline_matches_facts": true,
+    "unit_file_md5": "78ca5ddf9591654f091176af090c756d",
+    "relisten_after_stop_s": 1.215,
+    "eth_blockNumber_http": 200
+   },
+   "before": {
+    "utc": "2026-10-16T10:46:11Z",
+    "listener": {
+     "port": 28703,
+     "pid": 2238013,
+     "cgroup_unit": "navcoin-ethereum-archive-rpc-20260907.service"
+    },
+    "old_unit": {
+     "unit": "navcoin-ethereum-archive-rpc-20260907.service",
+     "active": "active",
+     "unit_file_state": "transient",
+     "fragment_path": "/run/systemd/transient/navcoin-ethereum-archive-rpc-20260907.service",
+     "main_pid": 2238013,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+    },
+    "new_unit": null,
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-3.service": 4080618,
+     "postfiat-validator-3-rpc.service": 4080695
+    },
+    "watchdogs": {
+     "units": 14,
+     "status": [
+      "pause_retry",
+      "paused"
+     ],
+     "pids": {
+      "navcoin-proof-watchdog@fallback.service": 2459567,
+      "navcoin-proof-watchdog@fallbackd12.service": 2478994,
+      "navcoin-proof-watchdog@fallbackd16.service": 2489796,
+      "navcoin-proof-watchdog@fallbackd16c.service": 2507575,
+      "navcoin-proof-watchdog@fallbackd16d.service": 2507618,
+      "navcoin-proof-watchdog@fallbackd16f.service": 2507674,
+      "navcoin-proof-watchdog@fallbackd16g.service": 2507725,
+      "navcoin-proof-watchdog@fallbackd16h.service": 2507783,
+      "navcoin-proof-watchdog@fallbackd16j.service": 2507525,
+      "navcoin-proof-watchdog@fallbackd40.service": 2511462,
+      "navcoin-proof-watchdog@fallbackd40final.service": 2512672,
+      "navcoin-proof-watchdog@normal.service": 2459579,
+      "navcoin-proof-watchdog@normald40.service": 2511481,
+      "navcoin-proof-watchdog@normald40final.service": 2512706
+     }
+    }
+   },
+   "after": {
+    "utc": "2026-10-16T10:46:18Z",
+    "listener": {
+     "port": 28703,
+     "pid": 10951,
+     "cgroup_unit": "navcoin-ethereum-rpc-28703.service"
+    },
+    "old_unit": null,
+    "new_unit": {
+     "unit": "navcoin-ethereum-rpc-28703.service",
+     "active": "active",
+     "unit_file_state": "enabled",
+     "fragment_path": "/etc/systemd/system/navcoin-ethereum-rpc-28703.service",
+     "main_pid": 10951,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+    },
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-3.service": 4080618,
+     "postfiat-validator-3-rpc.service": 4080695
+    },
+    "watchdogs": {
+     "units": 14,
+     "status": [
+      "pause_retry",
+      "paused"
+     ],
+     "pids": {
+      "navcoin-proof-watchdog@fallback.service": 2459567,
+      "navcoin-proof-watchdog@fallbackd12.service": 2478994,
+      "navcoin-proof-watchdog@fallbackd16.service": 2489796,
+      "navcoin-proof-watchdog@fallbackd16c.service": 2507575,
+      "navcoin-proof-watchdog@fallbackd16d.service": 2507618,
+      "navcoin-proof-watchdog@fallbackd16f.service": 2507674,
+      "navcoin-proof-watchdog@fallbackd16g.service": 2507725,
+      "navcoin-proof-watchdog@fallbackd16h.service": 2507783,
+      "navcoin-proof-watchdog@fallbackd16j.service": 2507525,
+      "navcoin-proof-watchdog@fallbackd40.service": 2511462,
+      "navcoin-proof-watchdog@fallbackd40final.service": 2512672,
+      "navcoin-proof-watchdog@normal.service": 2459579,
+      "navcoin-proof-watchdog@normald40.service": 2511481,
+      "navcoin-proof-watchdog@normald40final.service": 2512706
+     }
+    }
+   },
+   "core_pids_unchanged": true,
+   "watchdog_pids_unchanged": true
+  },
+  {
+   "validator": "validator-1",
+   "host": "95.179.184.122",
+   "port": 28703,
+   "old_unit": "navcoin-ethereum-archive-rpc-20260907.service",
+   "new_unit": "navcoin-ethereum-rpc-28703.service",
+   "swap": {
+    "old_cmdline_matches_facts": true,
+    "unit_file_md5": "78ca5ddf9591654f091176af090c756d",
+    "relisten_after_stop_s": 0.772,
+    "eth_blockNumber_http": 200
+   },
+   "before": {
+    "utc": "2026-10-16T10:46:32Z",
+    "listener": {
+     "port": 28703,
+     "pid": 533903,
+     "cgroup_unit": "navcoin-ethereum-archive-rpc-20260907.service"
+    },
+    "old_unit": {
+     "unit": "navcoin-ethereum-archive-rpc-20260907.service",
+     "active": "active",
+     "unit_file_state": "transient",
+     "fragment_path": "/run/systemd/transient/navcoin-ethereum-archive-rpc-20260907.service",
+     "main_pid": 533903,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+    },
+    "new_unit": null,
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-1.service": 1250898,
+     "postfiat-validator-1-rpc.service": 1250984
+    },
+    "watchdogs": {
+     "units": 0,
+     "status": [],
+     "pids": {}
+    }
+   },
+   "after": {
+    "utc": "2026-10-16T10:46:36Z",
+    "listener": {
+     "port": 28703,
+     "pid": 1290647,
+     "cgroup_unit": "navcoin-ethereum-rpc-28703.service"
+    },
+    "old_unit": null,
+    "new_unit": {
+     "unit": "navcoin-ethereum-rpc-28703.service",
+     "active": "active",
+     "unit_file_state": "enabled",
+     "fragment_path": "/etc/systemd/system/navcoin-ethereum-rpc-28703.service",
+     "main_pid": 1290647,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28703 --upstream https://eth.drpc.org --attempts 3"
+    },
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-1.service": 1250898,
+     "postfiat-validator-1-rpc.service": 1250984
+    },
+    "watchdogs": {
+     "units": 0,
+     "status": [],
+     "pids": {}
+    }
+   },
+   "core_pids_unchanged": true,
+   "watchdog_pids_unchanged": true
+  },
+  {
+   "validator": "validator-1",
+   "host": "95.179.184.122",
+   "port": 28701,
+   "old_unit": "navcoin-ethereum-rpc-proxy-20260907.service",
+   "new_unit": "navcoin-ethereum-rpc-28701.service",
+   "swap": {
+    "old_cmdline_matches_facts": true,
+    "unit_file_md5": "c5825a65d6ff0ed79e5530bc2b9437c8",
+    "relisten_after_stop_s": 1.028,
+    "eth_blockNumber_http": 200
+   },
+   "before": {
+    "utc": "2026-10-16T10:46:37Z",
+    "listener": {
+     "port": 28701,
+     "pid": 533907,
+     "cgroup_unit": "navcoin-ethereum-rpc-proxy-20260907.service"
+    },
+    "old_unit": {
+     "unit": "navcoin-ethereum-rpc-proxy-20260907.service",
+     "active": "active",
+     "unit_file_state": "transient",
+     "fragment_path": "/run/systemd/transient/navcoin-ethereum-rpc-proxy-20260907.service",
+     "main_pid": 533907,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28701 --upstream https://ethereum-rpc.publicnode.com --attempts 3"
+    },
+    "new_unit": null,
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-1.service": 1250898,
+     "postfiat-validator-1-rpc.service": 1250984
+    },
+    "watchdogs": {
+     "units": 0,
+     "status": [],
+     "pids": {}
+    }
+   },
+   "after": {
+    "utc": "2026-10-16T10:46:41Z",
+    "listener": {
+     "port": 28701,
+     "pid": 1291243,
+     "cgroup_unit": "navcoin-ethereum-rpc-28701.service"
+    },
+    "old_unit": null,
+    "new_unit": {
+     "unit": "navcoin-ethereum-rpc-28701.service",
+     "active": "active",
+     "unit_file_state": "enabled",
+     "fragment_path": "/etc/systemd/system/navcoin-ethereum-rpc-28701.service",
+     "main_pid": 1291243,
+     "exec_start": "/usr/bin/python3 /opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py --listen-port 28701 --upstream https://ethereum-rpc.publicnode.com --attempts 3"
+    },
+    "eth_blockNumber": {
+     "http": 200,
+     "result_present": true
+    },
+    "core_pids": {
+     "postfiat-validator-1.service": 1250898,
+     "postfiat-validator-1-rpc.service": 1250984
+    },
+    "watchdogs": {
+     "units": 0,
+     "status": [],
+     "pids": {}
+    }
+   },
+   "core_pids_unchanged": true,
+   "watchdog_pids_unchanged": true
+  }
+ ],
+ "preflight": {
+  "script": "deployments/fastlane-cap-20261014/demo-preflight.py",
+  "observed_at": "2026-10-16T10:46:48.783674+00:00",
+  "verdict": "NOT READY",
+  "counts": {
+   "PASS": 54,
+   "ATTENTION": 0,
+   "FAIL": 6
+  },
+  "note": "the 6 FAIL rows are the units check, which names navcoin-ethereum-archive-rpc-20260907.service (demo-preflight.py line 44); that transient unit is now gone by design; relay rows PASS on all six",
+  "rows": [
+   {
+    "check": "ledger agreement",
+    "scope": "fleet",
+    "result": "PASS",
+    "detail": "6/6 at height 1131, tip 9b054f09, root a12e7c5f"
+   },
+   {
+    "check": "units",
+    "scope": "validator-0",
+    "result": "FAIL",
+    "detail": "inactive: navcoin-ethereum-archive-rpc-20260907.service; validator up 1d0h restarts 0; rpc up 1d0h restarts 0; aux 1/2 active"
+   },
+   {
+    "check": "relay 28703 archive",
+    "scope": "validator-0",
+    "result": "PASS",
+    "detail": "eth_getCode @26094220: HTTP 200, 2186 B"
+   },
+   {
+    "check": "relays 28701/28702",
+    "scope": "validator-0",
+    "result": "PASS",
+    "detail": "28701 ethereum-rpc.publicnode.com navcoin-ethereum-rpc-28701.service; 28702 eth.drpc.org navcoin-ethereum-rpc-28702.service"
+   },
+   {
+    "check": "units",
+    "scope": "validator-1",
+    "result": "FAIL",
+    "detail": "inactive: navcoin-ethereum-archive-rpc-20260907.service; validator up 1d0h restarts 0; rpc up 1d0h restarts 0; aux 1/2 active"
+   },
+   {
+    "check": "relay 28703 archive",
+    "scope": "validator-1",
+    "result": "PASS",
+    "detail": "eth_getCode @26094220: HTTP 200, 2186 B"
+   },
+   {
+    "check": "relays 28701/28702",
+    "scope": "validator-1",
+    "result": "PASS",
+    "detail": "28701 ethereum-rpc.publicnode.com navcoin-ethereum-rpc-28701.service; 28702 eth.drpc.org navcoin-ethereum-rpc-28702.service"
+   },
+   {
+    "check": "units",
+    "scope": "validator-2",
+    "result": "FAIL",
+    "detail": "inactive: navcoin-ethereum-archive-rpc-20260907.service; validator up 23h55m restarts 0; rpc up 23h55m restarts 0; aux 1/2 active"
+   },
+   {
+    "check": "relay 28703 archive",
+    "scope": "validator-2",
+    "result": "PASS",
+    "detail": "eth_getCode @26094220: HTTP 200, 2186 B"
+   },
+   {
+    "check": "relays 28701/28702",
+    "scope": "validator-2",
+    "result": "PASS",
+    "detail": "28701 ethereum-rpc.publicnode.com navcoin-ethereum-rpc-28701.service; 28702 eth.drpc.org navcoin-ethereum-rpc-28702.service"
+   },
+   {
+    "check": "units",
+    "scope": "validator-3",
+    "result": "FAIL",
+    "detail": "inactive: navcoin-ethereum-archive-rpc-20260907.service; validator up 23h51m restarts 0; rpc up 23h51m restarts 0; aux 1/2 active"
+   },
+   {
+    "check": "relay 28703 archive",
+    "scope": "validator-3",
+    "result": "PASS",
+    "detail": "eth_getCode @26094220: HTTP 200, 2186 B"
+   },
+   {
+    "check": "relays 28701/28702",
+    "scope": "validator-3",
+    "result": "PASS",
+    "detail": "28701 ethereum-rpc.publicnode.com navcoin-ethereum-rpc-28701.service; 28702 eth.drpc.org navcoin-ethereum-rpc-28702.service"
+   },
+   {
+    "check": "units",
+    "scope": "validator-4",
+    "result": "FAIL",
+    "detail": "inactive: navcoin-ethereum-archive-rpc-20260907.service; validator up 23h47m restarts 0; rpc up 23h47m restarts 0; aux 1/2 active"
+   },
+   {
+    "check": "relay 28703 archive",
+    "scope": "validator-4",
+    "result": "PASS",
+    "detail": "eth_getCode @26094220: HTTP 200, 2186 B"
+   },
+   {
+    "check": "relays 28701/28702",
+    "scope": "validator-4",
+    "result": "PASS",
+    "detail": "28701 ethereum-rpc.publicnode.com navcoin-ethereum-rpc-28701.service; 28702 eth.drpc.org navcoin-ethereum-rpc-28702.service"
+   },
+   {
+    "check": "units",
+    "scope": "validator-5",
+    "result": "FAIL",
+    "detail": "inactive: navcoin-ethereum-archive-rpc-20260907.service; validator up 23h43m restarts 0; rpc up 23h43m restarts 0; aux 1/2 active"
+   },
+   {
+    "check": "relay 28703 archive",
+    "scope": "validator-5",
+    "result": "PASS",
+    "detail": "eth_getCode @26094220: HTTP 200, 2186 B"
+   },
+   {
+    "check": "relays 28701/28702",
+    "scope": "validator-5",
+    "result": "PASS",
+    "detail": "28701 ethereum-rpc.publicnode.com navcoin-ethereum-rpc-28701.service; 28702 eth.drpc.org navcoin-ethereum-rpc-28702.service"
+   }
+  ]
+ }
+}
