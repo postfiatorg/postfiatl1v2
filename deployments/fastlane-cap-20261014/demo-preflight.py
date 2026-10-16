@@ -41,7 +41,7 @@ out = {}
 boot = float(open("/proc/uptime").read().split()[0])
 units = {}
 for u in (f"postfiat-{v}.service", f"postfiat-{v}-rpc.service", "postfiat-cobalt-shadow.service",
-          "navcoin-ethereum-archive-rpc-20260907.service"):
+          "navcoin-ethereum-rpc-28703.service"):
     p = dict(l.split("=", 1) for l in sh("systemctl", "show", u, "--property=ActiveState,NRestarts,"
              "MainPID,ActiveEnterTimestamp,ActiveEnterTimestampMonotonic").stdout.splitlines() if "=" in l)
     mono = int(p.get("ActiveEnterTimestampMonotonic") or 0)

@@ -34,7 +34,7 @@ CHAIN = {
     "protocol_version": 1,
     "rpc_schema": "postfiat-local-rpc-v1",
 }
-AUXILIARY = ["postfiat-cobalt-shadow.service", "navcoin-ethereum-archive-rpc-20260907.service"]
+AUXILIARY = ["postfiat-cobalt-shadow.service", "navcoin-ethereum-rpc-28703.service"]
 
 
 def require(condition, message):
