@@ -378,7 +378,7 @@ fn write_private_record(path: &Path, record: &PrivateSwapRecord, replace: bool) 
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    fs::create_dir_all(parent)?;
+    create_private_directory(parent)?;
     set_private_directory_permissions(parent)?;
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -431,6 +431,20 @@ fn set_private_file_permissions(path: &Path) -> io::Result<()> {
 #[cfg(not(unix))]
 fn set_private_file_permissions(_path: &Path) -> io::Result<()> {
     Ok(())
+}
+
+#[cfg(unix)]
+fn create_private_directory(path: &Path) -> io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)
+}
+
+#[cfg(not(unix))]
+fn create_private_directory(path: &Path) -> io::Result<()> {
+    fs::create_dir_all(path)
 }
 
 #[cfg(unix)]
@@ -716,4 +730,113 @@ fn usage() -> &'static str {
 
 fn invalid_data(error: impl ToString) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, error.to_string())
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use postfiat_node::{wallet_keygen, WalletKeygenOptions, PFTL_SWAP_QUOTE_SCHEMA_V1};
+    use std::os::unix::fs::PermissionsExt;
+
+    fn signed_record(dir: &Path) -> PrivateSwapRecord {
+        let key_file = dir.join("key.json");
+        let report = wallet_keygen(WalletKeygenOptions {
+            chain_id: "postfiat-test".to_string(),
+            master_seed_hex: "13".repeat(32),
+            account_index: 0,
+            key_file: key_file.clone(),
+            backup_file: dir.join("backup.json"),
+            overwrite: true,
+        })
+        .expect("test key");
+        let mut quote = PftlSwapQuoteV1 {
+            schema: PFTL_SWAP_QUOTE_SCHEMA_V1.to_string(),
+            quote_id: String::new(),
+            chain_id: "postfiat-test".to_string(),
+            genesis_hash: "11".repeat(48),
+            protocol_version: 1,
+            route_id: "route-1".to_string(),
+            direction: PftlSwapDirection::Issue,
+            output_mode: PftlSwapOutputMode::Private,
+            nav_amount_atoms: 1_000_000,
+            input_asset_id: "44".repeat(48),
+            input_amount_atoms: 1_005_000,
+            output_asset_id: "55".repeat(48),
+            output_amount_atoms: 1_000_000,
+            base_settlement_atoms: 1_000_000,
+            spread_atoms: 5_000,
+            maximum_fee_atoms: 100,
+            route_epoch: 2,
+            policy_epoch: 3,
+            policy_hash: "33".repeat(48),
+            pricing_nav_epoch: 3,
+            pricing_reserve_packet_hash: "66".repeat(48),
+            quote_height: 90,
+            quote_block_id: "77".repeat(48),
+            state_root: "88".repeat(48),
+            orchard_root: "99".repeat(32),
+            route_state_hash: "aa".repeat(48),
+            expiry_height: 99,
+            created_at_unix_ms: 1,
+        };
+        quote.quote_id = postfiat_crypto_provider::hash_hex(
+            "postfiat.pftl_swap.quote.v1",
+            &serde_json::to_vec(&quote).expect("quote json"),
+        );
+        let intent = PftlSwapIntentV1 {
+            schema: PFTL_SWAP_INTENT_SCHEMA_V1.to_string(),
+            chain_id: quote.chain_id.clone(),
+            genesis_hash: quote.genesis_hash.clone(),
+            protocol_version: quote.protocol_version,
+            principal: report.address,
+            controlled_wallet_id: "wallet-1".to_string(),
+            route_id: quote.route_id.clone(),
+            direction: quote.direction,
+            output_mode: quote.output_mode,
+            input_reference: "ref-1".to_string(),
+            input_amount_atoms: quote.input_amount_atoms,
+            minimum_output_amount_atoms: quote.output_amount_atoms,
+            maximum_fee_atoms: quote.maximum_fee_atoms,
+            quote_id: quote.quote_id.clone(),
+            pricing_nav_epoch: quote.pricing_nav_epoch,
+            policy_hash: quote.policy_hash.clone(),
+            expiry_height: quote.expiry_height,
+            idempotency_key: "idem-1".to_string(),
+        };
+        let signed_intent = sign_pftl_swap_intent_with_key_file(&key_file, intent).expect("sign");
+        PrivateSwapRecord {
+            schema: RECORD_SCHEMA.to_string(),
+            state: "signed".to_string(),
+            quote,
+            signed_intent,
+            response: None,
+        }
+    }
+
+    #[test]
+    fn private_record_write_creates_a_missing_directory_as_private() {
+        let root = std::env::temp_dir().join(format!(
+            "pftl-swapctl-record-dir-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("test root");
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).expect("private root");
+        let record = signed_record(&root);
+        let record_file = root.join("records").join("nested").join("swap.json");
+
+        write_private_record(&record_file, &record, false)
+            .expect("write record into new directory");
+
+        for dir in [root.join("records"), root.join("records").join("nested")] {
+            let mode = fs::metadata(&dir).expect("record dir").permissions().mode();
+            assert_eq!(mode & 0o777, 0o700, "{}", dir.display());
+        }
+        let read_back = read_private_record(&record_file).expect("read back record");
+        assert_eq!(read_back.signed_intent, record.signed_intent);
+        fs::remove_dir_all(&root).expect("cleanup");
+    }
 }
