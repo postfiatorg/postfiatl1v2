@@ -6,22 +6,22 @@ the server boundary.
 ## Status
 
 ```bash
-PYTHONPATH=python python -m postfiat_rpc --endpoint 127.0.0.1:8080 --method status
+PYTHONPATH=python python -m postfiat_rpc --endpoint 127.0.0.1:27650 --method status
 ```
 
 ## Fee
 
 ```bash
-PYTHONPATH=python python -m postfiat_rpc --endpoint 127.0.0.1:8080 --method fee
+PYTHONPATH=python python -m postfiat_rpc --endpoint 127.0.0.1:27650 --method fee
 ```
 
 ## Account History
 
 ```bash
 PYTHONPATH=python python -m postfiat_rpc \
-  --endpoint 127.0.0.1:8080 \
+  --endpoint 127.0.0.1:27650 \
   --method account_tx \
-  --account <address> \
+  --address <address> \
   --limit 50
 ```
 

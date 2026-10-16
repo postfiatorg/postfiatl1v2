@@ -5,18 +5,18 @@ The Python client is under `python/postfiat_rpc`.
 ## Use From The Repo
 
 ```bash
-PYTHONPATH=python python -m postfiat_rpc --endpoint 127.0.0.1:8080 --method status
-PYTHONPATH=python python -m postfiat_rpc --endpoint 127.0.0.1:8080 --method ledger
-PYTHONPATH=python python -m postfiat_rpc --endpoint 127.0.0.1:8080 --method fee
+PYTHONPATH=python python -m postfiat_rpc --endpoint 127.0.0.1:27650 --method status
+PYTHONPATH=python python -m postfiat_rpc --endpoint 127.0.0.1:27650 --method ledger
+PYTHONPATH=python python -m postfiat_rpc --endpoint 127.0.0.1:27650 --method fee
 ```
 
 ## Account History
 
 ```bash
 PYTHONPATH=python python -m postfiat_rpc \
-  --endpoint 127.0.0.1:8080 \
+  --endpoint 127.0.0.1:27650 \
   --method account_tx_history \
-  --account <address> \
+  --address <address> \
   --to-height 100 \
   --window-size 100
 ```
