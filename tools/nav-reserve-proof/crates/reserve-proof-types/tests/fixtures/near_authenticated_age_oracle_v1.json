@@ -1,0 +1,523 @@
+{
+  "schema": "independent-near-authenticated-age-cases-v1",
+  "independent_oracle_sha256": "dc7a2b4880c1051e977ef6ca3edc9a4f9bec0a2c3ef88b2d95a8d388712f523b",
+  "policy_chosen_before_outputs": {
+    "age_semantics": "checked head_ns-receipt_ns and checked head_height-receipt_height; reject underflow or age>positivepolicybound; exactboundvalid.",
+    "authoritative_head_ns": "parse_u64(head.header.timestamp_nanosec)",
+    "authoritative_receipt_ns": "parse_u64(proof.block_header_lite.inner_lite.timestamp_nanosec)",
+    "certified_ms_binding": "checkpoint.source_timestamp_ms == parsed_committed_head_ns // 1000000",
+    "numeric_alias_policy": "Ignore numeric receipt/head.timestamp aliases for authoritative time decisions; no new exact-alias equality requirement.",
+    "payload_policy": "Preserve event.block_timestamp==decodedpayload.block_timestamp; no new payload/header equality requirement."
+  },
+  "policy_bounds": {
+    "max_receipt_age_blocks": 100,
+    "max_receipt_age_ns": 3600000000000
+  },
+  "cases": [
+    {
+      "name": "within_both_bounds",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1899996400000000001,
+        "receipt_alias": 1899996400000000001,
+        "receipt_height": 49901,
+        "receipt_ns": 1899996400000000001
+      },
+      "post_construction_mutation": null,
+      "expected_original": {
+        "accept": true,
+        "error_message": null,
+        "error_variant": null
+      },
+      "expected_corrected": {
+        "accept": true,
+        "error_message": null,
+        "error_variant": null
+      },
+      "after_mutation_is_deliberately_invalid_input": false
+    },
+    {
+      "name": "exact_both_bounds",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1899996400000000000,
+        "receipt_alias": 1899996400000000000,
+        "receipt_height": 49900,
+        "receipt_ns": 1899996400000000000
+      },
+      "post_construction_mutation": null,
+      "expected_original": {
+        "accept": true,
+        "error_message": null,
+        "error_variant": null
+      },
+      "expected_corrected": {
+        "accept": true,
+        "error_message": null,
+        "error_variant": null
+      },
+      "after_mutation_is_deliberately_invalid_input": false
+    },
+    {
+      "name": "stale_committed_receipt_fresh_payload_and_alias",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000000,
+        "receipt_height": 49999,
+        "receipt_ns": 1899996399999999999
+      },
+      "post_construction_mutation": null,
+      "expected_original": {
+        "accept": true,
+        "error_message": null,
+        "error_variant": null
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "snapshot receipt is older than the policy bound or after the certified head",
+        "error_variant": "StaleReceipt"
+      },
+      "after_mutation_is_deliberately_invalid_input": false
+    },
+    {
+      "name": "plus_one_ns_matching_payload",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1899996399999999999,
+        "receipt_alias": 1899996399999999999,
+        "receipt_height": 49999,
+        "receipt_ns": 1899996399999999999
+      },
+      "post_construction_mutation": null,
+      "expected_original": {
+        "accept": false,
+        "error_message": "snapshot receipt is older than the policy bound or after the certified head",
+        "error_variant": "StaleReceipt"
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "snapshot receipt is older than the policy bound or after the certified head",
+        "error_variant": "StaleReceipt"
+      },
+      "after_mutation_is_deliberately_invalid_input": false
+    },
+    {
+      "name": "plus_one_block",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000000,
+        "receipt_height": 49899,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": null,
+      "expected_original": {
+        "accept": false,
+        "error_message": "snapshot receipt is older than the policy bound or after the certified head",
+        "error_variant": "StaleReceipt"
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "snapshot receipt is older than the policy bound or after the certified head",
+        "error_variant": "StaleReceipt"
+      },
+      "after_mutation_is_deliberately_invalid_input": false
+    },
+    {
+      "name": "future_committed_receipt_fresh_payload",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000001,
+        "receipt_height": 49999,
+        "receipt_ns": 1900000000000000001
+      },
+      "post_construction_mutation": null,
+      "expected_original": {
+        "accept": true,
+        "error_message": null,
+        "error_variant": null
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "snapshot receipt is older than the policy bound or after the certified head",
+        "error_variant": "StaleReceipt"
+      },
+      "after_mutation_is_deliberately_invalid_input": false
+    },
+    {
+      "name": "future_receipt_height",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000000,
+        "receipt_height": 50001,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": null,
+      "expected_original": {
+        "accept": false,
+        "error_message": "snapshot receipt is older than the policy bound or after the certified head",
+        "error_variant": "StaleReceipt"
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "snapshot receipt is older than the policy bound or after the certified head",
+        "error_variant": "StaleReceipt"
+      },
+      "after_mutation_is_deliberately_invalid_input": false
+    },
+    {
+      "name": "arbitrary_numeric_aliases_ignored",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 0,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 18446744073709551615,
+        "receipt_height": 49999,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": null,
+      "expected_original": {
+        "accept": false,
+        "error_message": "head block hash does not equal the certified head hash",
+        "error_variant": "BadCertifiedHeadHash"
+      },
+      "expected_corrected": {
+        "accept": true,
+        "error_message": null,
+        "error_variant": null
+      },
+      "after_mutation_is_deliberately_invalid_input": false
+    },
+    {
+      "name": "within_same_ms_numeric_aliases_ignored",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000999999,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000888888,
+        "receipt_height": 49999,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": null,
+      "expected_original": {
+        "accept": true,
+        "error_message": null,
+        "error_variant": null
+      },
+      "expected_corrected": {
+        "accept": true,
+        "error_message": null,
+        "error_variant": null
+      },
+      "after_mutation_is_deliberately_invalid_input": false
+    },
+    {
+      "name": "old_committed_head_fresh_cert_and_alias",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1899996399999999999,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000000,
+        "receipt_height": 49999,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": null,
+      "expected_original": {
+        "accept": true,
+        "error_message": null,
+        "error_variant": null
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "head block hash does not equal the certified head hash",
+        "error_variant": "BadCertifiedHeadHash"
+      },
+      "after_mutation_is_deliberately_invalid_input": false
+    },
+    {
+      "name": "correct_head_signed_checkpoint_ms_mismatch",
+      "inputs": {
+        "checkpoint_ms": 1900000000001,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000000,
+        "receipt_height": 49999,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": null,
+      "expected_original": {
+        "accept": false,
+        "error_message": "head block hash does not equal the certified head hash",
+        "error_variant": "BadCertifiedHeadHash"
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "head block hash does not equal the certified head hash",
+        "error_variant": "BadCertifiedHeadHash"
+      },
+      "after_mutation_is_deliberately_invalid_input": false
+    },
+    {
+      "name": "largest_u64_committed_ns_exact_age",
+      "inputs": {
+        "checkpoint_ms": 18446744073709,
+        "head_alias": 18446744073709551615,
+        "head_height": 50000,
+        "head_ns": 18446744073709551615,
+        "payload_event_ns": 18446740473709551615,
+        "receipt_alias": 18446740473709551615,
+        "receipt_height": 49999,
+        "receipt_ns": 18446740473709551615
+      },
+      "post_construction_mutation": null,
+      "expected_original": {
+        "accept": true,
+        "error_message": null,
+        "error_variant": null
+      },
+      "expected_corrected": {
+        "accept": true,
+        "error_message": null,
+        "error_variant": null
+      },
+      "after_mutation_is_deliberately_invalid_input": false
+    },
+    {
+      "name": "malformed_receipt_committed_string",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000000,
+        "receipt_height": 49999,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": {
+        "kind": "replace_committed_timestamp_string",
+        "target": "proof.block_header_lite.inner_lite.timestamp_nanosec",
+        "value": "not-an-integer"
+      },
+      "expected_original": {
+        "accept": false,
+        "error_message": "payload malformed",
+        "error_variant": "BadPayload"
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "payload malformed",
+        "error_variant": "BadPayload"
+      },
+      "after_mutation_is_deliberately_invalid_input": true
+    },
+    {
+      "name": "malformed_head_committed_string",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000000,
+        "receipt_height": 49999,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": {
+        "kind": "replace_committed_timestamp_string",
+        "target": "head.header.timestamp_nanosec",
+        "value": "not-an-integer"
+      },
+      "expected_original": {
+        "accept": false,
+        "error_message": "payload malformed",
+        "error_variant": "BadPayload"
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "payload malformed",
+        "error_variant": "BadPayload"
+      },
+      "after_mutation_is_deliberately_invalid_input": true
+    },
+    {
+      "name": "overflow_receipt_committed_string",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000000,
+        "receipt_height": 49999,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": {
+        "kind": "replace_committed_timestamp_string",
+        "target": "proof.block_header_lite.inner_lite.timestamp_nanosec",
+        "value": "18446744073709551616"
+      },
+      "expected_original": {
+        "accept": false,
+        "error_message": "payload malformed",
+        "error_variant": "BadPayload"
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "payload malformed",
+        "error_variant": "BadPayload"
+      },
+      "after_mutation_is_deliberately_invalid_input": true
+    },
+    {
+      "name": "overflow_head_committed_string",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000000,
+        "receipt_height": 49999,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": {
+        "kind": "replace_committed_timestamp_string",
+        "target": "head.header.timestamp_nanosec",
+        "value": "18446744073709551616"
+      },
+      "expected_original": {
+        "accept": false,
+        "error_message": "payload malformed",
+        "error_variant": "BadPayload"
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "payload malformed",
+        "error_variant": "BadPayload"
+      },
+      "after_mutation_is_deliberately_invalid_input": true
+    },
+    {
+      "name": "tampered_proven_hash",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000000,
+        "receipt_height": 49999,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": {
+        "kind": "xor_base58_decoded_hash_first_byte",
+        "mask": 1,
+        "target": "proof.outcome_proof.block_hash"
+      },
+      "expected_original": {
+        "accept": false,
+        "error_message": "proven block hash mismatch",
+        "error_variant": "BadProvenBlockHash"
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "proven block hash mismatch",
+        "error_variant": "BadProvenBlockHash"
+      },
+      "after_mutation_is_deliberately_invalid_input": true
+    },
+    {
+      "name": "tampered_checkpoint_signature",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000000,
+        "receipt_height": 49999,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": {
+        "index": 0,
+        "kind": "xor_byte",
+        "mask": 1,
+        "target": "checkpoint_certificate.votes[0].signature"
+      },
+      "expected_original": {
+        "accept": false,
+        "error_message": "checkpoint binding or certificate mismatch",
+        "error_variant": "CheckpointMismatch"
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "checkpoint binding or certificate mismatch",
+        "error_variant": "CheckpointMismatch"
+      },
+      "after_mutation_is_deliberately_invalid_input": true
+    },
+    {
+      "name": "tampered_owner_signature",
+      "inputs": {
+        "checkpoint_ms": 1900000000000,
+        "head_alias": 1900000000000000000,
+        "head_height": 50000,
+        "head_ns": 1900000000000000000,
+        "payload_event_ns": 1900000000000000000,
+        "receipt_alias": 1900000000000000000,
+        "receipt_height": 49999,
+        "receipt_ns": 1900000000000000000
+      },
+      "post_construction_mutation": {
+        "index": 0,
+        "kind": "xor_byte",
+        "mask": 1,
+        "target": "ownership_signature"
+      },
+      "expected_original": {
+        "accept": false,
+        "error_message": "reserve owner authorization failed",
+        "error_variant": "OwnerAuthorization"
+      },
+      "expected_corrected": {
+        "accept": false,
+        "error_message": "reserve owner authorization failed",
+        "error_variant": "OwnerAuthorization"
+      },
+      "after_mutation_is_deliberately_invalid_input": true
+    }
+  ]
+}

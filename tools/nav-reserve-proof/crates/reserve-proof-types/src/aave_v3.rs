@@ -74,6 +74,8 @@ pub struct AaveV3PolicyV1 {
     pub oracle_address: Address,
     pub oracle_code_hash: B256,
     pub reserve_mapping_slot_index: u64,
+    /// Pool storage slot of `_usersConfig`, the per-user reserve bitmap.
+    pub user_config_mapping_slot_index: u64,
     pub oracle_sources_slot_index: u64,
     pub chainlink_proxy_phase_slot_index: u64,
     pub chainlink_hot_vars_slot_index: u64,
@@ -143,6 +145,9 @@ pub struct AaveV3ProofV1 {
     pub owner: Address,
     pub ownership_signature: Vec<u8>,
     pub positions: Vec<AaveV3PositionProofV1>,
+    /// `_usersConfig[owner]` in Pool storage. Its borrowing bits prove that
+    /// the governed debt positions are the owner's only Aave debt.
+    pub user_configuration: EvmStorageProofV1,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -191,6 +196,7 @@ pub enum AaveV3Error {
     BadTimestamp,
     BadPrice,
     ArithmeticOverflow,
+    UnlistedDebt,
 }
 
 impl AaveV3PolicyV1 {
@@ -204,6 +210,8 @@ impl AaveV3PolicyV1 {
             || self.oracle_address == Address::ZERO
             || self.oracle_code_hash == B256::ZERO
             || self.reserve_mapping_slot_index == 0
+            || self.user_config_mapping_slot_index == 0
+            || self.user_config_mapping_slot_index == self.reserve_mapping_slot_index
             || self.chainlink_proxy_phase_slot_index == 0
             || self.chainlink_hot_vars_slot_index == 0
             || self.chainlink_transmissions_slot_index == 0
@@ -264,6 +272,7 @@ impl AaveV3PolicyV1 {
         out.extend_from_slice(self.oracle_code_hash.as_slice());
         for value in [
             self.reserve_mapping_slot_index,
+            self.user_config_mapping_slot_index,
             self.oracle_sources_slot_index,
             self.chainlink_proxy_phase_slot_index,
             self.chainlink_hot_vars_slot_index,
@@ -366,6 +375,7 @@ pub fn derive_aave_v3_proof_v1(
     }
     let mut collateral = 0u128;
     let mut liabilities = 0u128;
+    let mut debt_reserve_ids = Vec::new();
     for (position_proof, position_policy) in proof.positions.iter().zip(&proof.policy.positions) {
         if position_proof.position_id != position_policy.position_id {
             return Err(AaveV3Error::PositionMismatch);
@@ -388,9 +398,19 @@ pub fn derive_aave_v3_proof_v1(
                 liabilities = liabilities
                     .checked_add(value)
                     .ok_or(AaveV3Error::ArithmeticOverflow)?;
+                // `verify_position` proved this reserve's metadata slot.
+                debt_reserve_ids.push(aave_reserve_id(position_proof.reserve.metadata.value)?);
             }
         }
     }
+    // Every position proved the same Pool account against the state root.
+    verify_debt_completeness(
+        &proof.policy,
+        proof.owner,
+        &proof.positions[0].reserve.pool_account,
+        &proof.user_configuration,
+        &debt_reserve_ids,
+    )?;
     let collateral_usd_e8 =
         u64::try_from(collateral).map_err(|_| AaveV3Error::ArithmeticOverflow)?;
     let liability_usd_e8 =
@@ -457,6 +477,7 @@ impl AaveV3ProofV1 {
         for position in &self.positions {
             append_position_proof(&mut out, position)?;
         }
+        append_storage_proof(&mut out, &self.user_configuration)?;
         Ok(hash48(EVIDENCE_COMMITMENT_DOMAIN, &[&out]))
     }
 }
@@ -676,6 +697,46 @@ fn verify_reserve(
     ray_mul_half_up(accrued, index)
 }
 
+/// Aave v3 `ReserveData` word 3: `uint128` rate, `uint40` last update,
+/// then the `uint16` reserve id.
+fn aave_reserve_id(metadata: U256) -> Result<u64, AaveV3Error> {
+    extract_bits_u64(metadata, 168, 16)
+}
+
+/// Reject any Aave borrowing bit (bit `2 * id` of the user configuration)
+/// set for a reserve that is not a governed debt position.
+fn verify_debt_completeness(
+    policy: &AaveV3PolicyV1,
+    owner: Address,
+    pool_account: &EvmAccountProofV1,
+    user_configuration: &EvmStorageProofV1,
+    debt_reserve_ids: &[u64],
+) -> Result<(), AaveV3Error> {
+    if pool_account.address != policy.pool_address
+        || user_configuration.key
+            != mapping_slot_address(owner, U256::from(policy.user_config_mapping_slot_index))
+    {
+        return Err(AaveV3Error::ReserveProof);
+    }
+    verify_storage_proof(pool_account.storage_root, user_configuration)?;
+    check_borrowing_bits(user_configuration.value, debt_reserve_ids)
+}
+
+fn check_borrowing_bits(configuration: U256, debt_reserve_ids: &[u64]) -> Result<(), AaveV3Error> {
+    let mut governed = U256::ZERO;
+    for id in debt_reserve_ids {
+        if *id >= 128 {
+            return Err(AaveV3Error::ReserveProof);
+        }
+        governed |= U256::from(1u8) << (2 * *id as usize);
+    }
+    let borrowing = configuration & U256::from_be_bytes([0x55; 32]);
+    if borrowing & !governed != U256::ZERO {
+        return Err(AaveV3Error::UnlistedDebt);
+    }
+    Ok(())
+}
+
 fn verify_oracle_price(
     policy: &AaveV3PolicyV1,
     position: &AaveV3PositionPolicyV1,
@@ -839,6 +900,7 @@ fn validate_proof_bounds(proof: &AaveV3ProofV1) -> Result<(), AaveV3Error> {
     {
         return Err(AaveV3Error::BoundsExceeded);
     }
+    validate_storage_proof(&proof.user_configuration)?;
     for position in &proof.positions {
         validate_identifier(&position.position_id)?;
         validate_account_proof(&position.token_account)?;
@@ -1515,7 +1577,16 @@ mod tests {
         )
     }
 
+    /// The fixture reserve has id 0, so bit 1 is "using as collateral".
+    const COLLATERAL_ONLY_CONFIGURATION: u64 = 0b10;
+
     fn synthetic_fixture() -> (AaveV3ProofV1, AaveV3VerifyContextV1<'static>) {
+        synthetic_fixture_with_user_configuration(U256::from(COLLATERAL_ONLY_CONFIGURATION))
+    }
+
+    fn synthetic_fixture_with_user_configuration(
+        user_configuration: U256,
+    ) -> (AaveV3ProofV1, AaveV3VerifyContextV1<'static>) {
         let owner_key = SigningKey::from_bytes((&[0x21; 32]).into()).unwrap();
         let owner = Address::from_private_key(&owner_key);
         let underlying = Address::repeat_byte(0x31);
@@ -1539,12 +1610,14 @@ mod tests {
             aave_reserve_storage_slot(underlying, reserve_slot, 4),
             aave_reserve_storage_slot(underlying, reserve_slot, 6),
         ];
+        let user_config_key = mapping_slot_address(owner, U256::from(53));
         let pool_storage = vec![
             (reserve_keys[0], U256::from(AAVE_RAY)),
             (reserve_keys[1], U256::from(AAVE_RAY)),
             (reserve_keys[2], U256::from(timestamp) << 128usize),
             (reserve_keys[3], U256::from_be_slice(token.as_slice())),
             (reserve_keys[4], U256::from_be_slice(debt_token.as_slice())),
+            (user_config_key, user_configuration),
         ];
         let (pool_storage_root, _) = storage_root_and_proof(&pool_storage, reserve_keys[0]);
 
@@ -1650,6 +1723,7 @@ mod tests {
             oracle_address: oracle,
             oracle_code_hash: code_hash,
             reserve_mapping_slot_index: 52,
+            user_config_mapping_slot_index: 53,
             oracle_sources_slot_index: 0,
             chainlink_proxy_phase_slot_index: 2,
             chainlink_hot_vars_slot_index: 13,
@@ -1731,6 +1805,7 @@ mod tests {
             owner,
             ownership_signature: vec![0; 65],
             positions: vec![position],
+            user_configuration: storage_proof(&pool_storage, user_config_key),
         };
         let owner_commitment = Box::leak(aave_v3_owner_commitment(owner).into_boxed_str());
         let policy_static = Box::leak(policy_commitment.into_boxed_str());
@@ -1878,6 +1953,67 @@ mod tests {
     }
 
     #[test]
+    fn rejects_borrowing_in_a_reserve_outside_the_policy() {
+        // The owner borrowed reserve 5 against the governed collateral.
+        // Before the completeness check this proof verified, reporting full
+        // collateral and no liability.
+        let unlisted_borrow = U256::from(COLLATERAL_ONLY_CONFIGURATION) | (U256::from(1u8) << 10);
+        let (proof, context) = synthetic_fixture_with_user_configuration(unlisted_borrow);
+        assert_eq!(
+            verify_aave_v3_proof_v1(&proof, &context),
+            Err(AaveV3Error::UnlistedDebt)
+        );
+
+        // The bitmap must be the owner's own `_usersConfig` slot, proven
+        // under the Pool storage root.
+        let (mut wrong_slot, context) = synthetic_fixture();
+        wrong_slot.user_configuration.key = B256::repeat_byte(0x44);
+        let evidence = Box::leak(wrong_slot.commitment().unwrap().into_boxed_str());
+        let bad_context = AaveV3VerifyContextV1 {
+            expected_evidence_commitment: evidence,
+            ..context
+        };
+        assert_eq!(
+            verify_aave_v3_proof_v1(&wrong_slot, &bad_context),
+            Err(AaveV3Error::ReserveProof)
+        );
+
+        let (mut hidden, context) = synthetic_fixture_with_user_configuration(unlisted_borrow);
+        hidden.user_configuration.value = U256::from(COLLATERAL_ONLY_CONFIGURATION);
+        let evidence = Box::leak(hidden.commitment().unwrap().into_boxed_str());
+        let bad_context = AaveV3VerifyContextV1 {
+            expected_evidence_commitment: evidence,
+            ..context
+        };
+        assert_eq!(
+            verify_aave_v3_proof_v1(&hidden, &bad_context),
+            Err(AaveV3Error::StorageProof)
+        );
+    }
+
+    #[test]
+    fn borrowing_bits_must_be_governed_debt_reserves() {
+        // Collateral bits (odd) never count as debt.
+        check_borrowing_bits(U256::from_be_bytes([0xaa; 32]), &[]).unwrap();
+        // Governed debt in reserve 3 (bit 6), with or without a balance.
+        check_borrowing_bits(U256::from(1u8) << 6, &[3]).unwrap();
+        check_borrowing_bits(U256::ZERO, &[3]).unwrap();
+        assert_eq!(
+            check_borrowing_bits((U256::from(1u8) << 6) | (U256::from(1u8) << 8), &[3]),
+            Err(AaveV3Error::UnlistedDebt)
+        );
+        assert_eq!(
+            check_borrowing_bits(U256::from(1u8) << 254, &[3]),
+            Err(AaveV3Error::UnlistedDebt)
+        );
+        assert_eq!(
+            check_borrowing_bits(U256::ZERO, &[128]),
+            Err(AaveV3Error::ReserveProof)
+        );
+        assert_eq!(aave_reserve_id(U256::from(7u8) << 168usize).unwrap(), 7);
+    }
+
+    #[test]
     fn historical_aave_state_reconstructs_collateral_and_debt() {
         let historical: HistoricalWitness = serde_json::from_str(HISTORICAL_WITNESS).unwrap();
         let collateral_policy = AaveV3PositionPolicyV1 {
@@ -1952,6 +2088,7 @@ mod tests {
             oracle_address: historical.collateral.oracle.aave_oracle_account.address,
             oracle_code_hash: historical.collateral.oracle.aave_oracle_account.code_hash,
             reserve_mapping_slot_index: reserve_slot,
+            user_config_mapping_slot_index: reserve_slot + 1,
             oracle_sources_slot_index: 0,
             chainlink_proxy_phase_slot_index: 2,
             chainlink_hot_vars_slot_index: 13,

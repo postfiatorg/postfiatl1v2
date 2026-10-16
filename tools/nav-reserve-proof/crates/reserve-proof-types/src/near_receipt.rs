@@ -47,6 +47,12 @@ pub struct NearReceiptPolicyV1 {
     pub snapshot_version: String,
     pub snapshot_event: String,
     pub owner_public_key: Vec<u8>,
+    /// Maximum age of the snapshot receipt below the certified head, in
+    /// nanoseconds of NEAR block time.
+    pub max_receipt_age_ns: u64,
+    /// Maximum height distance between the receipt block and the certified
+    /// head.
+    pub max_receipt_age_blocks: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -408,6 +414,8 @@ pub enum NearReceiptLegError {
     BoundsExceeded,
     #[error("policy binding mismatch")]
     PolicyMismatch,
+    #[error("snapshot receipt is older than the policy bound or after the certified head")]
+    StaleReceipt,
     #[error("checkpoint binding or certificate mismatch")]
     CheckpointMismatch,
     #[error("reserve owner authorization failed")]
@@ -430,7 +438,10 @@ impl NearReceiptPolicyV1 {
         validate_text(&self.snapshot_standard, 128)?;
         validate_text(&self.snapshot_version, 64)?;
         validate_text(&self.snapshot_event, 128)?;
-        if self.owner_public_key.len() != 32 {
+        if self.owner_public_key.len() != 32
+            || self.max_receipt_age_ns == 0
+            || self.max_receipt_age_blocks == 0
+        {
             return Err(NearReceiptLegError::PolicyMismatch);
         }
         VerifyingKey::from_bytes(
@@ -457,6 +468,8 @@ impl NearReceiptPolicyV1 {
         append_bytes(&mut out, self.snapshot_version.as_bytes())?;
         append_bytes(&mut out, self.snapshot_event.as_bytes())?;
         append_bytes(&mut out, &self.owner_public_key)?;
+        out.extend_from_slice(&self.max_receipt_age_ns.to_be_bytes());
+        out.extend_from_slice(&self.max_receipt_age_blocks.to_be_bytes());
         append_hex(&mut out, committee_root, 48)?;
         Ok(hash48(POLICY_COMMITMENT_DOMAIN, &[&out]))
     }
@@ -549,7 +562,8 @@ pub fn verify_near_receipt_quantity_proof_v1(
     if B256::from(head_hash) != checkpoint.source_block_hash
         || checkpoint.source_height != witness.head.head_height
         || checkpoint.source_height != witness.head.header.height
-        || checkpoint.source_timestamp_ms != witness.head.header.timestamp / 1_000_000
+        || checkpoint.source_timestamp_ms
+            != parse_u64(&witness.head.header.timestamp_nanosec)? / 1_000_000
         || witness.head.head_hash != to_base58(&head_hash)
         || witness.head.header.hash != witness.head.head_hash
         || witness.head.head_block_merkle_root != witness.head.header.block_merkle_root
@@ -592,6 +606,10 @@ pub fn verify_near_receipt_quantity_proof_v1(
     if event.block_timestamp != payload.block_timestamp {
         return Err(NearReceiptLegError::BadSnapshotEvent);
     }
+    verify_receipt_age(
+        witness,
+        parse_u64(&witness.proof.block_header_lite.inner_lite.timestamp_nanosec)?,
+    )?;
     let salt: [u8; 32] = witness
         .salt
         .as_slice()
@@ -646,6 +664,30 @@ pub fn verify_near_receipt_quantity_proof_v1(
         evidence_commitment,
         metadata_hash,
     })
+}
+
+/// The block Merkle root admits every ancestor of the certified head, so the
+/// receipt must also be recent relative to that head. Both nanosecond times
+/// come from the canonical header encoding, not payload or numeric aliases.
+fn verify_receipt_age(
+    witness: &NearReceiptQuantityProofV1,
+    receipt_timestamp_ns: u64,
+) -> Result<(), NearReceiptLegError> {
+    let age_ns = parse_u64(&witness.head.header.timestamp_nanosec)?
+        .checked_sub(receipt_timestamp_ns)
+        .ok_or(NearReceiptLegError::StaleReceipt)?;
+    let age_blocks = witness
+        .head
+        .header
+        .height
+        .checked_sub(witness.proof.block_header_lite.inner_lite.height)
+        .ok_or(NearReceiptLegError::StaleReceipt)?;
+    if age_ns > witness.policy.max_receipt_age_ns
+        || age_blocks > witness.policy.max_receipt_age_blocks
+    {
+        return Err(NearReceiptLegError::StaleReceipt);
+    }
+    Ok(())
 }
 
 pub fn near_block_hash_from_lite(
@@ -1751,7 +1793,19 @@ mod tests {
         out
     }
 
+    const FIXTURE_MAX_RECEIPT_AGE_NS: u64 = 1_800_000_000_000;
+    const FIXTURE_MAX_RECEIPT_AGE_BLOCKS: u64 = 3_000;
+
     fn fixture() -> (NearReceiptQuantityProofV1, OwnedContext) {
+        fixture_with_receipt_age(None)
+    }
+
+    /// `receipt_age` places the snapshot receipt `(nanoseconds, blocks)`
+    /// below the certified head and re-signs everything that binds it.
+    fn fixture_with_receipt_age(
+        receipt_age: Option<(u64, u64)>,
+    ) -> (NearReceiptQuantityProofV1, OwnedContext) {
+        let (mut proof, mut head) = historical_proof_and_head();
         let owner_key = SigningKey::from_bytes(&[0x2a; 32]);
         let owner_public_key = owner_key.verifying_key().to_bytes();
         let account_id = hex::encode(owner_public_key);
@@ -1768,9 +1822,15 @@ mod tests {
             snapshot_version: "1.0.0".to_string(),
             snapshot_event: "NearStakeSnapshot".to_string(),
             owner_public_key: owner_public_key.to_vec(),
+            max_receipt_age_ns: FIXTURE_MAX_RECEIPT_AGE_NS,
+            max_receipt_age_blocks: FIXTURE_MAX_RECEIPT_AGE_BLOCKS,
         };
         let salt = [0x42; 32];
-        let timestamp = 1_785_437_354_895_501_665;
+        let mut timestamp = 1_785_437_354_895_501_665;
+        if let Some((age_ns, age_blocks)) = receipt_age {
+            timestamp = head.header.timestamp - age_ns;
+            proof.block_header_lite.inner_lite.height = head.header.height - age_blocks;
+        }
         let payload = encode_payload(
             &account_id,
             &pool_id,
@@ -1780,7 +1840,6 @@ mod tests {
             salt,
         );
         let commitment = to_base58(&sha256(&payload));
-        let (mut proof, mut head) = historical_proof_and_head();
         proof.outcome_proof.outcome.executor_id = policy.reader_account_id.clone();
         proof.outcome_proof.outcome.status = NearExecutionStatus::SuccessValue(payload.clone());
         proof.outcome_proof.outcome.logs = vec![format!(
@@ -1870,6 +1929,335 @@ mod tests {
         (witness, context)
     }
 
+    // Independently chosen in-memory literals for authenticated-age regressions.
+    // No historical witness, author age fixture, live key or operator is used.
+    const AGE_ORACLE_HEAD_NS: u64 = 1_900_000_000_000_000_000;
+    const AGE_ORACLE_HEAD_HEIGHT: u64 = 50_000;
+    const AGE_ORACLE_MAX_NS: u64 = 3_600_000_000_000;
+    const AGE_ORACLE_MAX_BLOCKS: u64 = 100;
+
+    #[derive(Clone, Copy)]
+    struct IndependentAgeInput {
+        head_ns: u64,
+        receipt_ns: u64,
+        head_alias: u64,
+        receipt_alias: u64,
+        payload_event_ns: u64,
+        head_height: u64,
+        receipt_height: u64,
+        checkpoint_ms: u64,
+    }
+
+    fn independent_age_fixture(
+        input: IndependentAgeInput,
+    ) -> (NearReceiptQuantityProofV1, OwnedContext) {
+        let hash = |byte| to_base58(&[byte; 32]);
+        let owner_key = SigningKey::from_bytes(&[0x6b; 32]);
+        let owner_public_key = owner_key.verifying_key().to_bytes();
+        let account_id = hex::encode(owner_public_key);
+        let policy = NearReceiptPolicyV1 {
+            source_domain: "near:mainnet".to_string(),
+            position_id: "independent-age-position".to_string(),
+            reader_account_id: "age-reader.near".to_string(),
+            reader_code_hash: hash(0x61),
+            pool_id: "age-pool.near".to_string(),
+            pool_code_hash: hash(0x62),
+            snapshot_standard: "independent-age".to_string(),
+            snapshot_version: "1.0.0".to_string(),
+            snapshot_event: "IndependentAgeSnapshot".to_string(),
+            owner_public_key: owner_public_key.to_vec(),
+            max_receipt_age_ns: AGE_ORACLE_MAX_NS,
+            max_receipt_age_blocks: AGE_ORACLE_MAX_BLOCKS,
+        };
+        let salt = [0x6c; 32];
+        let payload = encode_payload(
+            &account_id,
+            &policy.pool_id,
+            7_000_000,
+            300_000,
+            input.payload_event_ns,
+            salt,
+        );
+        let commitment = to_base58(&sha256(&payload));
+        let outcome = NearExecutionOutcome {
+            logs: vec![format!(
+                "EVENT_JSON:{}",
+                serde_json::json!({
+                    "standard": policy.snapshot_standard,
+                    "version": policy.snapshot_version,
+                    "event": policy.snapshot_event,
+                    "data": [{"commitment": commitment,
+                              "block_timestamp": input.payload_event_ns,
+                              "payload": BASE64.encode(&payload)}]
+                })
+            )],
+            receipt_ids: Vec::new(),
+            gas_burnt: 17,
+            tokens_burnt: "0".to_string(),
+            executor_id: policy.reader_account_id.clone(),
+            status: NearExecutionStatus::SuccessValue(payload.clone()),
+        };
+        let mut proof = NearLightClientProof {
+            block_header_lite: NearBlockHeaderLite {
+                inner_lite: NearInnerLite {
+                    height: input.receipt_height,
+                    epoch_id: hash(0x71),
+                    next_epoch_id: hash(0x72),
+                    prev_state_root: hash(0x73),
+                    outcome_root: hash(0x74),
+                    timestamp: input.receipt_alias,
+                    timestamp_nanosec: input.receipt_ns.to_string(),
+                    next_bp_hash: hash(0x75),
+                    block_merkle_root: hash(0x76),
+                },
+                inner_rest_hash: hash(0x77),
+                prev_block_hash: hash(0x78),
+            },
+            outcome_proof: NearOutcomeProof {
+                block_hash: hash(0x79),
+                id: hash(0x7a),
+                outcome,
+                proof: Vec::new(),
+            },
+            outcome_root_proof: Vec::new(),
+            block_proof: Vec::new(),
+        };
+        let outcome_root = near_outcome_root(&proof).unwrap();
+        proof.block_header_lite.inner_lite.outcome_root = to_base58(&outcome_root);
+        let receipt_hash = near_block_hash_from_lite(&proof.block_header_lite).unwrap();
+        proof.outcome_proof.block_hash = to_base58(&receipt_hash);
+        let mut header = NearFullBlockHeader {
+            approvals: Vec::new(),
+            block_body_hash: hash(0x81),
+            block_merkle_root: to_base58(&receipt_hash),
+            block_ordinal: 80_001,
+            challenges_result: Vec::new(),
+            challenges_root: hash(0x82),
+            chunk_endorsements: Vec::new(),
+            chunk_headers_root: hash(0x83),
+            chunk_mask: vec![true],
+            chunk_receipts_root: hash(0x84),
+            chunk_tx_root: hash(0x85),
+            epoch_id: hash(0x86),
+            epoch_sync_data_hash: None,
+            gas_price: "19".to_string(),
+            hash: String::new(),
+            height: input.head_height,
+            last_ds_final_block: hash(0x87),
+            last_final_block: hash(0x88),
+            latest_protocol_version: 85,
+            next_bp_hash: hash(0x89),
+            next_epoch_id: hash(0x8a),
+            outcome_root: hash(0x8b),
+            prev_hash: hash(0x8c),
+            prev_height: input.head_height - 1,
+            prev_state_root: hash(0x8d),
+            random_value: hash(0x8e),
+            shard_split: None,
+            timestamp: input.head_alias,
+            timestamp_nanosec: input.head_ns.to_string(),
+            total_supply: "23000000".to_string(),
+            validator_proposals: Vec::new(),
+        };
+        let head_hash = near_head_block_hash(&header).unwrap();
+        header.hash = to_base58(&head_hash);
+        let head = NearHeadBlock {
+            head_height: input.head_height,
+            head_hash: header.hash.clone(),
+            head_block_merkle_root: header.block_merkle_root.clone(),
+            header,
+        };
+        let keys: Vec<_> = (0u8..5)
+            .map(|index| ml_dsa_65_keygen_from_seed(&[0x41 + index; 32]))
+            .collect();
+        let committee = BftCheckpointCommitteeV1 {
+            epoch: 11,
+            quorum: 4,
+            validators: keys
+                .iter()
+                .enumerate()
+                .map(|(index, key)| BftCheckpointValidatorV1 {
+                    validator_id: format!("age-oracle-validator-{index}"),
+                    public_key: key.public_key.clone(),
+                })
+                .collect(),
+        };
+        let committee_root = committee.root().unwrap();
+        let checkpoint = BftSourceCheckpointV1 {
+            pftl_genesis_hash: "a1".repeat(48),
+            checkpoint_kind: NEAR_CHECKPOINT_KIND_V1.to_string(),
+            source_domain: policy.source_domain.clone(),
+            source_height: input.head_height,
+            source_timestamp_ms: input.checkpoint_ms,
+            source_block_hash: B256::from(head_hash),
+            source_state_commitment: policy.source_state_commitment(&receipt_hash).unwrap(),
+            observed_source_head: input.head_height + 5,
+            minimum_depth: 5,
+            pftl_observation_height: 309,
+            committee_epoch: committee.epoch,
+            committee_root: committee_root.clone(),
+        };
+        let votes = keys
+            .iter()
+            .take(4)
+            .enumerate()
+            .map(|(index, key)| {
+                let validator_id = format!("age-oracle-validator-{index}");
+                let statement = checkpoint.vote_signing_statement(&validator_id).unwrap();
+                let signature = ml_dsa_65_sign_with_context_seed(
+                    &key.private_key,
+                    &statement,
+                    BFT_SOURCE_CHECKPOINT_SIGNATURE_CONTEXT_V1,
+                    &[0xa0 + index as u8; 32],
+                )
+                .unwrap();
+                BftSourceCheckpointVoteV1 {
+                    validator_id,
+                    signature,
+                }
+            })
+            .collect();
+        let checkpoint_certificate = BftSourceCheckpointCertificateV1 {
+            committee,
+            checkpoint,
+            votes,
+        };
+        let mut context = OwnedContext {
+            pftl_genesis_hash: "a1".repeat(48),
+            nav_asset_id: "a2".repeat(48),
+            proof_profile_id: "a3".repeat(48),
+            valuation_policy_hash: "a4".repeat(32),
+            source_manifest_hash: "a5".repeat(48),
+            source_id: "independent-age-source".to_string(),
+            source_domain: policy.source_domain.clone(),
+            asset_or_position_id: policy.position_id.clone(),
+            reserve_owner_commitment: policy.reserve_owner_commitment(&account_id).unwrap(),
+            quantity_verifier_commitment: policy.commitment(&committee_root).unwrap(),
+            observed_at_pftl_height: 309,
+            expected_evidence_commitment: "00".repeat(48),
+        };
+        let mut witness = NearReceiptQuantityProofV1 {
+            policy,
+            checkpoint_certificate,
+            account_id,
+            ownership_signature: vec![0; 64],
+            commitment,
+            salt: salt.to_vec(),
+            payload,
+            proof,
+            head,
+        };
+        let statement = near_owner_authorization_statement_v1(&witness, &context.borrow()).unwrap();
+        witness.ownership_signature = owner_key.sign(&statement).to_bytes().to_vec();
+        context.expected_evidence_commitment =
+            near_receipt_evidence_commitment_v1(&witness).unwrap();
+        (witness, context)
+    }
+
+    #[test]
+    fn authenticated_receipt_age_rejects_fresh_payload_for_stale_committed_time() {
+        let oracle: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/near_authenticated_age_oracle_v1.json"
+        ))
+        .unwrap();
+        assert_eq!(
+            oracle["policy_bounds"]["max_receipt_age_ns"],
+            AGE_ORACLE_MAX_NS
+        );
+        assert_eq!(
+            oracle["policy_bounds"]["max_receipt_age_blocks"],
+            AGE_ORACLE_MAX_BLOCKS
+        );
+        let cases = oracle["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 19);
+        assert_eq!(cases[0]["inputs"]["head_ns"], AGE_ORACLE_HEAD_NS);
+        assert_eq!(cases[0]["inputs"]["head_height"], AGE_ORACLE_HEAD_HEIGHT);
+        let mut mismatches = Vec::new();
+        for case in cases {
+            let name = case["name"].as_str().unwrap();
+            let inputs = &case["inputs"];
+            let number = |key| inputs[key].as_u64().unwrap();
+            let input = IndependentAgeInput {
+                head_ns: number("head_ns"),
+                receipt_ns: number("receipt_ns"),
+                head_alias: number("head_alias"),
+                receipt_alias: number("receipt_alias"),
+                payload_event_ns: number("payload_event_ns"),
+                head_height: number("head_height"),
+                receipt_height: number("receipt_height"),
+                checkpoint_ms: number("checkpoint_ms"),
+            };
+            let (mut witness, context) = independent_age_fixture(input);
+            let certificate_valid_before_mutation = witness.checkpoint_certificate.verify().is_ok();
+            assert!(
+                certificate_valid_before_mutation,
+                "{name}: synthetic certificate invalid"
+            );
+            let mutation = &case["post_construction_mutation"];
+            if !mutation.is_null() {
+                match mutation["kind"].as_str().unwrap() {
+                    "replace_committed_timestamp_string" => {
+                        let value = mutation["value"].as_str().unwrap().to_string();
+                        match mutation["target"].as_str().unwrap() {
+                            "proof.block_header_lite.inner_lite.timestamp_nanosec" => {
+                                witness.proof.block_header_lite.inner_lite.timestamp_nanosec =
+                                    value;
+                            }
+                            "head.header.timestamp_nanosec" => {
+                                witness.head.header.timestamp_nanosec = value;
+                            }
+                            target => panic!("unrecognized timestamp mutation: {target}"),
+                        }
+                    }
+                    "xor_base58_decoded_hash_first_byte" => {
+                        let mut hash =
+                            decode_hash(&witness.proof.outcome_proof.block_hash).unwrap();
+                        hash[0] ^= mutation["mask"].as_u64().unwrap() as u8;
+                        witness.proof.outcome_proof.block_hash = to_base58(&hash);
+                    }
+                    "xor_byte" => {
+                        let index = mutation["index"].as_u64().unwrap() as usize;
+                        let mask = mutation["mask"].as_u64().unwrap() as u8;
+                        match mutation["target"].as_str().unwrap() {
+                            "checkpoint_certificate.votes[0].signature" => {
+                                witness.checkpoint_certificate.votes[0].signature[index] ^= mask;
+                            }
+                            "ownership_signature" => witness.ownership_signature[index] ^= mask,
+                            target => panic!("unrecognized signature mutation: {target}"),
+                        }
+                    }
+                    kind => panic!("unrecognized mutation: {kind}"),
+                }
+            }
+            let actual = verify_near_receipt_quantity_proof_v1(&witness, &context.borrow());
+            let (accept, error_variant, error_message) = match &actual {
+                Ok(value) => {
+                    assert_eq!(value.staked_yocto, 7_000_000, "{name}");
+                    assert_eq!(value.unstaked_yocto, 300_000, "{name}");
+                    assert_eq!(value.total_yocto, 7_300_000, "{name}");
+                    (true, None, None)
+                }
+                Err(error) => (
+                    false,
+                    Some(format!("{error:?}")),
+                    Some(error.to_string()),
+                ),
+            };
+            let expected = &case["expected_corrected"];
+            let observed = serde_json::json!({
+                "accept": accept, "error_variant": error_variant, "error_message": error_message,
+            });
+            let matches_corrected = observed == *expected;
+            if !matches_corrected {
+                mismatches.push(name.to_string());
+            }
+        }
+        assert!(
+            mismatches.is_empty(),
+            "fixed independent age expectations failed: {mismatches:?}"
+        );
+    }
+
     #[test]
     fn historical_artifact_reconstructs_near_roots_and_head_hash() {
         let (proof, head) = historical_proof_and_head();
@@ -1901,6 +2289,78 @@ mod tests {
             context.expected_evidence_commitment
         );
         assert_ne!(verified.metadata_hash, B256::ZERO);
+    }
+
+    #[test]
+    fn rejects_receipt_older_than_policy_bound() {
+        // The review's N1 reproduction: a snapshot 90 days and 7,776,000
+        // blocks below a freshly certified head, with the checkpoint and
+        // owner statement re-signed. It verified before the age bound.
+        let (witness, context) =
+            fixture_with_receipt_age(Some((90 * 86_400 * 1_000_000_000, 7_776_000)));
+        assert_eq!(
+            verify_near_receipt_quantity_proof_v1(&witness, &context.borrow()).unwrap_err(),
+            NearReceiptLegError::StaleReceipt
+        );
+
+        // One block or one nanosecond beyond either bound is rejected.
+        let (witness, context) =
+            fixture_with_receipt_age(Some((1_000_000_000, FIXTURE_MAX_RECEIPT_AGE_BLOCKS + 1)));
+        assert_eq!(
+            verify_near_receipt_quantity_proof_v1(&witness, &context.borrow()).unwrap_err(),
+            NearReceiptLegError::StaleReceipt
+        );
+        let (witness, context) =
+            fixture_with_receipt_age(Some((FIXTURE_MAX_RECEIPT_AGE_NS + 1, 10)));
+        assert_eq!(
+            verify_near_receipt_quantity_proof_v1(&witness, &context.borrow()).unwrap_err(),
+            NearReceiptLegError::StaleReceipt
+        );
+
+        // Exactly at both bounds still verifies.
+        let (witness, context) = fixture_with_receipt_age(Some((
+            FIXTURE_MAX_RECEIPT_AGE_NS,
+            FIXTURE_MAX_RECEIPT_AGE_BLOCKS,
+        )));
+        verify_near_receipt_quantity_proof_v1(&witness, &context.borrow()).unwrap();
+    }
+
+    #[test]
+    fn rejects_receipt_timestamp_after_certified_head() {
+        let (mut witness, context) = fixture_with_receipt_age(Some((0, 0)));
+        let head_timestamp = witness.head.header.timestamp;
+        assert_eq!(verify_receipt_age(&witness, head_timestamp), Ok(()));
+        assert_eq!(
+            verify_receipt_age(&witness, head_timestamp + 1),
+            Err(NearReceiptLegError::StaleReceipt)
+        );
+        witness.proof.block_header_lite.inner_lite.height = witness.head.header.height + 1;
+        assert_eq!(
+            verify_receipt_age(&witness, head_timestamp),
+            Err(NearReceiptLegError::StaleReceipt)
+        );
+        verify_near_receipt_quantity_proof_v1(&fixture().0, &fixture().1.borrow()).unwrap();
+        let _ = context;
+    }
+
+    #[test]
+    fn policy_rejects_zero_receipt_age_bounds() {
+        let (witness, _) = fixture();
+        let mut zero_ns = witness.policy.clone();
+        zero_ns.max_receipt_age_ns = 0;
+        assert_eq!(zero_ns.validate(), Err(NearReceiptLegError::PolicyMismatch));
+        let mut zero_blocks = witness.policy.clone();
+        zero_blocks.max_receipt_age_blocks = 0;
+        assert_eq!(
+            zero_blocks.validate(),
+            Err(NearReceiptLegError::PolicyMismatch)
+        );
+        let mut wider = witness.policy.clone();
+        wider.max_receipt_age_blocks += 1;
+        assert_ne!(
+            wider.commitment(&"00".repeat(48)).unwrap(),
+            witness.policy.commitment(&"00".repeat(48)).unwrap()
+        );
     }
 
     #[test]

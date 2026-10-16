@@ -1,0 +1,27 @@
+{
+  "schema": "postfiat.reserve_program_identity_candidate.v1",
+  "status": "candidate_not_registered",
+  "identity_role": "a666_public_reserve_successor_candidate",
+  "sp1_version": "6.3.1",
+  "source_commit": "303d2c147e5227383d8850a4aa74e143b8b0120b",
+  "guest_features": [
+    "a666-public-adapters-v2"
+  ],
+  "repairs": [
+    "N1 NEAR receipt age bounded below the certified head",
+    "A1 Aave borrowing bits outside the governed debt positions rejected",
+    "B1 duplicate committee public keys rejected",
+    "M1 duplicate (source_domain, reserve_owner_commitment) manifest entries rejected"
+  ],
+  "elf_sha256": "not built here",
+  "program_vkey": "not built here",
+  "not_built_reason": "Docker and cargo-prove (SP1 6.3.1) are not installed for the preparing user; docker info failed and cargo prove is not a cargo subcommand.",
+  "build_commands": [
+    "git -C \"$repo_root\" archive 303d2c147e5227383d8850a4aa74e143b8b0120b | tar -x -C \"$workspace\"",
+    "cd \"$workspace/tools/nav-reserve-proof/programs/reserve-proof-guest\"",
+    "cargo prove build --docker --tag v6.3.1 --locked --features a666-public-adapters-v2 --workspace-directory \"$workspace\" --output-directory \"$out\"",
+    "sha256sum \"$out/postfiat-reserve-proof-guest\"",
+    "cargo run --locked --release --manifest-path \"$workspace/tools/nav-reserve-proof/Cargo.toml\" -p postfiat-reserve-proof --features sp1 -- program-info --elf \"$out/postfiat-reserve-proof-guest\""
+  ],
+  "note": "Do not write this build into elf/ or edit program-identity.json or a666-successor-program-identity.json. Record two byte-identical reproductions here, then register through governance as a new proof profile."
+}
