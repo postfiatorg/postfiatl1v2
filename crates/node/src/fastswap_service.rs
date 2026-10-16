@@ -116,6 +116,13 @@ impl FastSwapValidatorServiceV1 {
         base.asset_rules = canonical_rules;
         base.holder_permits = canonical_holder_permits;
         base.policy_snapshots = canonical_policies;
+        // Verify the migrated base itself: the service never rewrites
+        // base-state.json, so this is the file the migration checked. The
+        // replayed state legitimately diverges once epoch-2 records exist.
+        let committee_active = ledger.fastswap_committees.last() == Some(&committee);
+        if committee_active && committee.domain.committee_epoch > 1 {
+            verify_migrated_base_at_open(&base, &ledger, &committee)?;
+        }
         let mut store = FastSwapStore::open(&directory).map_err(store_error)?;
         let mut state = store.replay(&base).map_err(store_error)?;
         for fence in ledger
@@ -168,10 +175,6 @@ impl FastSwapValidatorServiceV1 {
         }
         let finalized_primary_height = node_store.read_chain_tip()?.height;
         let activation_height = ledger.fastswap_activation_height.unwrap_or(u64::MAX);
-        let committee_active = ledger.fastswap_committees.last() == Some(&committee);
-        if committee_active && committee.domain.committee_epoch > 1 {
-            verify_migrated_committee_base(&state, &ledger, &committee)?;
-        }
         let mut service = Self {
             store,
             state,
@@ -1501,6 +1504,62 @@ fn verify_migrated_committee_base(
     ledger: &LedgerState,
     committee: &FastSwapCommitteeV1,
 ) -> io::Result<()> {
+    let (previous_checkpoint_id, previous_checkpoint) =
+        migrated_base_drain_checkpoint(state, ledger, committee)?;
+    let candidate = build_fastlane_checkpoint(state, ledger, Some(previous_checkpoint_id), 0)
+        .map_err(|error| {
+            invalid_data(&format!(
+                "FastSwap migration base checkpoint failed: {error:?}"
+            ))
+        })?;
+    if !base_fields_match_drain_checkpoint(&candidate, &previous_checkpoint)
+        || candidate.redeemed_exit_claim_root != previous_checkpoint.redeemed_exit_claim_root
+    {
+        return Err(invalid_data(
+            "FastSwap migration base does not match the anchored drain checkpoint",
+        ));
+    }
+    Ok(())
+}
+
+/// The open-time form of `verify_migrated_committee_base`. It checks the
+/// migrated base file against the anchored drain checkpoint only. Reserves
+/// and redeemed exits on the live ledger move with epoch-2 deposits, exits
+/// and fee burns, so the epoch-1 base cannot balance against them; live
+/// solvency belongs to the replayed state and is enforced where checkpoints
+/// are built. Here the base's liabilities are balanced against the drain
+/// checkpoint's own live totals instead.
+fn verify_migrated_base_at_open(
+    base: &FastLaneStateV1,
+    ledger: &LedgerState,
+    committee: &FastSwapCommitteeV1,
+) -> io::Result<()> {
+    let (previous_checkpoint_id, previous_checkpoint) =
+        migrated_base_drain_checkpoint(base, ledger, committee)?;
+    let mut drain_view = LedgerState::empty();
+    drain_view.fast_lane_reserves = previous_checkpoint.live_object_totals.clone();
+    drain_view
+        .redeemed_fast_lane_exit_claims
+        .clone_from(&ledger.redeemed_fast_lane_exit_claims);
+    let candidate = build_fastlane_checkpoint(base, &drain_view, Some(previous_checkpoint_id), 0)
+        .map_err(|error| {
+        invalid_data(&format!(
+            "FastSwap migration base checkpoint failed: {error:?}"
+        ))
+    })?;
+    if !base_fields_match_drain_checkpoint(&candidate, &previous_checkpoint) {
+        return Err(invalid_data(
+            "FastSwap migration base does not match the anchored drain checkpoint",
+        ));
+    }
+    Ok(())
+}
+
+fn migrated_base_drain_checkpoint(
+    state: &FastLaneStateV1,
+    ledger: &LedgerState,
+    committee: &FastSwapCommitteeV1,
+) -> io::Result<(FastLaneCheckpointIdV1, postfiat_types::FastLaneCheckpointV1)> {
     let previous_epoch = committee.domain.committee_epoch.saturating_sub(1);
     let previous_committee = ledger
         .fastswap_committees
@@ -1548,26 +1607,20 @@ fn verify_migrated_committee_base(
             "FastSwap migration base is not a clean drained state",
         ));
     }
-    let candidate = build_fastlane_checkpoint(state, ledger, Some(previous_checkpoint_id), 0)
-        .map_err(|error| {
-            invalid_data(&format!(
-                "FastSwap migration base checkpoint failed: {error:?}"
-            ))
-        })?;
-    if candidate.live_object_root != previous_checkpoint.live_object_root
-        || candidate.live_object_totals != previous_checkpoint.live_object_totals
-        || candidate.exit_claim_root != previous_checkpoint.exit_claim_root
-        || candidate.exit_claim_totals != previous_checkpoint.exit_claim_totals
-        || candidate.terminal_root != previous_checkpoint.terminal_root
-        || candidate.active_policy_hashes != previous_checkpoint.active_policy_hashes
-        || candidate.imported_deposit_root != previous_checkpoint.imported_deposit_root
-        || candidate.redeemed_exit_claim_root != previous_checkpoint.redeemed_exit_claim_root
-    {
-        return Err(invalid_data(
-            "FastSwap migration base does not match the anchored drain checkpoint",
-        ));
-    }
-    Ok(())
+    Ok((previous_checkpoint_id, previous_checkpoint))
+}
+
+fn base_fields_match_drain_checkpoint(
+    candidate: &postfiat_types::FastLaneCheckpointV1,
+    previous_checkpoint: &postfiat_types::FastLaneCheckpointV1,
+) -> bool {
+    candidate.live_object_root == previous_checkpoint.live_object_root
+        && candidate.live_object_totals == previous_checkpoint.live_object_totals
+        && candidate.exit_claim_root == previous_checkpoint.exit_claim_root
+        && candidate.exit_claim_totals == previous_checkpoint.exit_claim_totals
+        && candidate.terminal_root == previous_checkpoint.terminal_root
+        && candidate.active_policy_hashes == previous_checkpoint.active_policy_hashes
+        && candidate.imported_deposit_root == previous_checkpoint.imported_deposit_root
 }
 
 fn read_bounded_json<T: serde::de::DeserializeOwned>(path: &Path) -> io::Result<T> {

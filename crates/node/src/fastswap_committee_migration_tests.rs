@@ -496,3 +496,151 @@ fn committee_migrate_reads_the_real_release_packet_files() {
     assert!(migrated.prepare_fences.is_empty());
     assert!(migrated.anchored_checkpoints.contains(&anchor_id));
 }
+
+fn reserve_one_object_in_epoch_two(node: &Node) {
+    let mut service =
+        FastSwapValidatorServiceV1::open(&node.data_dir, "validator-0").expect("open epoch 2");
+    let input = *service.state.objects.keys().next().expect("object");
+    service
+        .store
+        .reserve_all(
+            &mut service.state,
+            FastSwapIdV1([5; 48]),
+            FastSwapIntentIdV1([6; 48]),
+            FastSwapEffectsDigestV1([7; 48]),
+            120,
+            &[input],
+        )
+        .expect("reserve in epoch 2");
+}
+
+fn assert_reopens(node: &Node) -> FastSwapValidatorServiceV1 {
+    let service = FastSwapValidatorServiceV1::open(&node.data_dir, "validator-0")
+        .unwrap_or_else(|error| panic!("reopen epoch 2: {error}"));
+    let capabilities = service.capabilities();
+    assert_eq!(capabilities.committee, node.next.domain);
+    assert!(capabilities.enabled);
+    service
+}
+
+#[test]
+fn committee_migrate_store_reopens_after_epoch_two_reservation() {
+    let node = node(Shape::Snapshot);
+    assert_migrates(&node, "snapshot");
+    reserve_one_object_in_epoch_two(&node);
+    let service = assert_reopens(&node);
+    assert_eq!(service.state.reservations.len(), 1);
+}
+
+#[test]
+fn committee_migrate_legacy_store_reopens_after_epoch_two_reservation() {
+    let node = node(Shape::LegacyNoRecords);
+    assert_migrates(&node, "base+wal");
+    reserve_one_object_in_epoch_two(&node);
+    let service = assert_reopens(&node);
+    assert_eq!(service.state.reservations.len(), 1);
+}
+
+#[test]
+fn committee_migrate_store_reopens_after_epoch_two_deposit_import() {
+    let node = node(Shape::Snapshot);
+    assert_migrates(&node, "snapshot");
+    let node_store = NodeStore::new(&node.data_dir);
+    let mut ledger = node_store.read_ledger().expect("ledger");
+    let rule = ledger.fast_lane_asset_rules[0].clone();
+    let receipt = postfiat_types::FastLaneDepositReceiptV1 {
+        deposit_id: postfiat_types::FastSwapDepositIdV1([23; 48]),
+        accepted: true,
+        code: "fastlane_deposit_applied".to_owned(),
+        destination_owner_pubkey: vec![24; 32],
+        asset_id: rule.asset_id,
+        asset_rule_hash: rule.rule_hash().expect("rule hash"),
+        amount_atoms: 1,
+        initial_object_key: postfiat_types::FastObjectKeyV1 {
+            object_id: postfiat_types::FastObjectIdV1([25; 32]),
+            version: 1,
+        },
+    };
+    // A finalized deposit credits the FastLane reserve and records the receipt.
+    ledger
+        .fast_lane_reserves
+        .iter_mut()
+        .find(|reserve| reserve.asset_id == rule.asset_id)
+        .expect("reserve")
+        .amount_atoms += 1;
+    ledger.fast_lane_deposit_receipts.push(receipt.clone());
+    node_store.write_ledger(&ledger).expect("ledger");
+    for _ in 0..2 {
+        let service = assert_reopens(&node);
+        assert!(service
+            .state
+            .imported_deposits
+            .contains(&receipt.deposit_id));
+        assert!(service
+            .state
+            .objects
+            .contains_key(&receipt.initial_object_key));
+    }
+}
+
+#[test]
+fn committee_migrated_open_refuses_relabelled_epoch_one_base() {
+    let node = node(Shape::Snapshot);
+    let store_dir = node.store();
+    let base = read_fastlane_base_state(&store_dir.join(FASTSWAP_BASE_STATE)).expect("base");
+    let store = FastSwapStore::open(&store_dir).expect("open store");
+    let mut relabelled = store.replay(&base).expect("replay");
+    drop(store);
+    assert!(relabelled
+        .prepare_fences
+        .values()
+        .any(|fence| fence.committee_epoch == 1));
+    relabelled.committee = node.next.domain.clone();
+    fs::write(
+        store_dir.join(FASTSWAP_BASE_STATE),
+        postfiat_storage::fastswap_store::encode_fastlane_state_file(&relabelled).expect("encode"),
+    )
+    .expect("base file");
+    fs::write(
+        store_dir.join(FASTSWAP_COMMITTEE),
+        serde_json::to_vec(&node.next).expect("committee"),
+    )
+    .expect("committee file");
+    for name in ["fastswap-v1.wal", "fastswap-v1.snapshot.json"] {
+        let _ = fs::remove_file(store_dir.join(name));
+    }
+    let Err(error) = FastSwapValidatorServiceV1::open(&node.data_dir, "validator-0") else {
+        panic!("an un-migrated base relabelled epoch 2 must be refused");
+    };
+    assert!(
+        error
+            .to_string()
+            .contains("FastSwap migration base is not a clean drained state"),
+        "{error}"
+    );
+}
+
+#[test]
+fn committee_migrated_open_refuses_edited_base() {
+    let node = node(Shape::Snapshot);
+    assert_migrates(&node, "snapshot");
+    let base_path = node.store().join(FASTSWAP_BASE_STATE);
+    let mut base = read_fastlane_base_state(&base_path).expect("base");
+    let first_key = *base.objects.keys().next().expect("object");
+    base.objects
+        .get_mut(&first_key)
+        .expect("object")
+        .amount_atoms -= 1;
+    fs::write(
+        &base_path,
+        postfiat_storage::fastswap_store::encode_fastlane_state_file(&base).expect("encode"),
+    )
+    .expect("base file");
+    let Err(error) = FastSwapValidatorServiceV1::open(&node.data_dir, "validator-0") else {
+        panic!("an edited migrated base must be refused");
+    };
+    assert!(
+        error.to_string().starts_with("FastSwap migration base"),
+        "{error}"
+    );
+}
