@@ -41,6 +41,11 @@ const FILE_HASH_RE = /^[0-9a-f]{64}$/;
 const PROGRAM_VKEY_RE = /^0x[0-9a-f]{64}$/;
 const HASH48_RE = /^[0-9a-f]{96}$/;
 const EVM_CODE_HASH_RE = /^0x[0-9a-f]{64}$/;
+// Node clamps any timer delay above 2^31-1 ms to 1 ms, so an unbounded timeout would
+// kill every worker or readiness probe at once. Refuse only values a Node timer cannot hold.
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+const MAX_WORKER_TIMEOUT_MS = MAX_TIMER_DELAY_MS;
+const MAX_READINESS_TIMEOUT_MS = MAX_TIMER_DELAY_MS;
 const SEPOLIA_P0_PROGRAM_VKEY = '0x0077f479ed28535dbb5035f455a875334bae7d5a1eaa7c22c6f070a404eab31f';
 const SEPOLIA_P0_MANIFEST_HASH = 'dc409b424e7627b936d81a16d2fc8f4c17e21a108d654be6b992e552d7b0c6d3';
 const ROUTE_PROFILES = new Map([
@@ -93,8 +98,11 @@ function processStartToken(pid) {
     }
 }
 
-function positiveInteger(value, fallback, minimum = 1) {
+function positiveInteger(value, fallback, minimum = 1, maximum = Infinity, label = 'value') {
     const parsed = Number.parseInt(String(value ?? ''), 10);
+    if (parsed > maximum || (typeof value === 'number' && value > maximum)) {
+        throw new Error(`${label} exceeds the maximum of ${maximum} ms`);
+    }
     return Number.isSafeInteger(parsed) && parsed >= minimum ? parsed : fallback;
 }
 
@@ -218,8 +226,14 @@ function normalizeRoute(raw) {
         pinned_files: pinnedFiles,
         cwd: path.resolve(String(raw.cwd || process.cwd())),
         stages: ethereum ? ETH_STAGES : ARBITRUM_STAGES,
-        readiness_timeout_ms: positiveInteger(raw.readiness_timeout_ms, 60_000, 1_000),
-        worker_timeout_ms: positiveInteger(raw.worker_timeout_ms, 6 * 60 * 60 * 1000, 60_000),
+        readiness_timeout_ms: positiveInteger(
+            raw.readiness_timeout_ms, 60_000, 1_000, MAX_READINESS_TIMEOUT_MS,
+            `bridge route ${routeId} readiness_timeout_ms`,
+        ),
+        worker_timeout_ms: positiveInteger(
+            raw.worker_timeout_ms, 6 * 60 * 60 * 1000, 60_000, MAX_WORKER_TIMEOUT_MS,
+            `bridge route ${routeId} worker_timeout_ms`,
+        ),
     };
 }
 

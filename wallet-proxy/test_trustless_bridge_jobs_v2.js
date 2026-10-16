@@ -115,6 +115,36 @@ assert.throws(
     /configures retired max_amount_atoms/,
     'operators must not be able to reintroduce a route-specific business cap',
 );
+// Node clamps timer delays above 2^31-1 ms to 1 ms, so oversized timeouts must fail closed.
+assert.strictEqual(normalizeRoute({ ...routeRows[0] }).worker_timeout_ms, 6 * 60 * 60 * 1000);
+assert.strictEqual(normalizeRoute({ ...routeRows[0] }).readiness_timeout_ms, 60_000);
+for (const [value, expected] of [
+    [1_000, 6 * 60 * 60 * 1000],
+    [3_600_000, 3_600_000],
+    [86_400_000, 86_400_000],
+    [172_800_000, 172_800_000],
+    [2_147_483_647, 2_147_483_647],
+]) {
+    assert.strictEqual(normalizeRoute({ ...routeRows[0], worker_timeout_ms: value }).worker_timeout_ms, expected);
+}
+for (const value of [1_000, 600_000, 900_000, 2_147_483_647]) {
+    assert.strictEqual(normalizeRoute({ ...routeRows[0], readiness_timeout_ms: value }).readiness_timeout_ms, value);
+}
+for (const value of [2_147_483_648, 2_592_000_000, `1${'0'.repeat(399)}`]) {
+    assert.throws(
+        () => normalizeRoute({ ...routeRows[0], worker_timeout_ms: value }),
+        /worker_timeout_ms exceeds the maximum of 2147483647 ms/,
+        `worker_timeout_ms ${String(value).slice(0, 20)} must be refused`,
+    );
+}
+for (const value of [2_147_483_648, 2_592_000_000, `1${'0'.repeat(399)}`]) {
+    assert.throws(
+        () => normalizeRoute({ ...routeRows[0], readiness_timeout_ms: value }),
+        /readiness_timeout_ms exceeds the maximum of 2147483647 ms/,
+        `readiness_timeout_ms ${String(value).slice(0, 20)} must be refused`,
+    );
+}
+assert.strictEqual(normalizeRoute({ ...routeRows[0], worker_timeout_ms: 'abc' }).worker_timeout_ms, 6 * 60 * 60 * 1000);
 
 function readinessPayload(routeId) {
     const route = routeRows.find((row) => row.route_id === routeId);
