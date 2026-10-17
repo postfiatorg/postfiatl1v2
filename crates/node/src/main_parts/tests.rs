@@ -271,3 +271,63 @@ mod replicated_state_activation_cli_tests {
 #[cfg(test)]
 mod market_ops_replay_cli_tests {
 }
+
+#[test]
+fn operator_attestation_commands_reach_their_cli_handler() {
+    let root = std::env::temp_dir().join(format!(
+        "postfiat-operator-attestation-cli-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root).expect("create fixture root");
+    let path = |name: &str| root.join(name).to_str().expect("utf-8 path").to_string();
+    let fingerprint = "ab".repeat(32);
+    let args = |items: &[&str]| {
+        items
+            .iter()
+            .map(|item| item.to_string())
+            .collect::<Vec<_>>()
+    };
+    run_cli(args(&[
+        "operator-onboarding-keygen",
+        "--validator-id",
+        "validator-0",
+        "--master-key-file",
+        &path("master.json"),
+        "--validator-key-file",
+        &path("validator.json"),
+    ]))
+    .expect("generate onboarding keys");
+    run_cli(args(&[
+        "operator-attestation-create",
+        "--master-key-file",
+        &path("master.json"),
+        "--validator-id",
+        "validator-0",
+        "--onboarding-challenge-id",
+        &fingerprint,
+        "--operator",
+        "test-operator",
+        "--observed-at",
+        "2026-10-17T00:00:00Z",
+        "--kind",
+        "host",
+        "--host-fingerprint",
+        &fingerprint,
+        "--host-admin-fingerprint",
+        &fingerprint,
+        "--output",
+        &path("host.json"),
+    ]))
+    .expect("create the host-control attestation");
+    run_cli(args(&[
+        "operator-attestation-verify",
+        "--attestation-file",
+        &path("host.json"),
+    ]))
+    .expect("verify the host-control attestation");
+    std::fs::remove_dir_all(root).expect("remove fixture root");
+}

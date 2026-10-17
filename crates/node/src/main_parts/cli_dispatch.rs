@@ -501,6 +501,8 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "operator-onboarding-keygen"
         | "operator-manifest-create"
         | "operator-manifest-verify"
+        | "operator-attestation-create"
+        | "operator-attestation-verify"
         | "operator-independence-verify"
         | "governance-genesis-bundle"
         | "governance-genesis-verify"
