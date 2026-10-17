@@ -326,7 +326,7 @@ fails when a window truncates unless `--allow-truncated` is explicitly set.
 The CLI now uses the same client-level `account_tx_history()` helper exposed to
 Python integrations. The helper resolves the current height when `to_height` is
 omitted, walks deterministic height windows, deduplicates rows by
-height/batch/transaction id, and reports whether the pull completed without
+height/batch/transaction id/role/fill index, and reports whether the pull completed without
 truncation or max-window exhaustion.
 
 `tx(tx_id)` uses the selected-block hot path by default. The client only sends

@@ -2880,8 +2880,11 @@ class PostFiatRpcClient:
 
     @staticmethod
     def _account_tx_row_identity(row: AccountTxRow) -> str:
+        # One transaction can list several rows for an account: one per atomic
+        # swap leg (`tx_role`) and one per offer fill (`fill_index`).
         height, batch_id, tx_index, tx_id = PostFiatRpcClient._account_tx_row_sort_key(row)
-        return f"{height}:{batch_id}:{tx_index}:{tx_id}"
+        fill_index = "" if row.fill_index is None else row.fill_index
+        return f"{height}:{batch_id}:{tx_index}:{tx_id}:{row.tx_role or ''}:{fill_index}"
 
     @staticmethod
     def _required_int(value: dict[str, Any], key: str, label: str) -> int:
