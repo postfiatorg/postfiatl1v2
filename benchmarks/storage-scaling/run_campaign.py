@@ -51,8 +51,14 @@ PERSISTENT_ADVANCE_REPORT_SCHEMA = (
 )
 BATCH_BUILD_REPORT_SCHEMA = "postfiat-storage-corpus-batch-build-report-v1"
 QUALIFICATION_TIMEOUT_MS = 900_000
-MAX_PROPOSAL_PAGE_READS_PER_ROUND = 64
-MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND = 64
+# Re-derived 2026-10-19 for the fixed per-round cost of 8bed9b90: f0013c29 re-validates
+# the generation pointer on every handle lookup (+1 metadata read per state read), and
+# d8f65885/943c4ca7 make read_fastpay_ledger do ~11 lookups where it did 2. Each bound
+# keeps its old headroom over the d0ae79f3 figures (flat at heights 2, 50 and 5,000),
+# rounded up to a multiple of 16: proposal 74 x 64/29 -> 176 (also covers validator
+# reconstruction, 80 x 64/35 -> 160); apply 79 x 64/34 -> 160; writes unchanged at 8.
+MAX_PROPOSAL_PAGE_READS_PER_ROUND = 176
+MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND = 160
 MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND = 32
 MATERIAL_STAGE_PATHS = {
     "proposal_ms": ("round_timings", "proposal_ms"),
