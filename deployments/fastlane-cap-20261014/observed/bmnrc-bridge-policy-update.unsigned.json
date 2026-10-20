@@ -1,0 +1,20 @@
+{
+  "operations": [
+    {
+      "key_file": "/tmp/bmnrc-issuer-key-set-by-issuer-lane",
+      "label": "route-bridge-policy-update-epoch-2",
+      "operation": {
+        "authority_epoch": 2,
+        "committee_root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+        "handoff_controller_code_hash": "837e85549716a482ed1eb79618c76b48e0a123510be0563b9c53328360589ddb",
+        "issuer": "pf9bd7958a0779f4de39e871878bbd6552dc461c3f",
+        "minimum_confirmations": 12,
+        "operation": "pftl_uniswap_route_bridge_policy_update",
+        "route_id": "pftl-bmnrc-ethereum-wBMNRC-usdc-v1",
+        "wrapped_navcoin_code_hash": "671ee905050e2969995a8c6db8b05e4c2f30bd690eeff55093c03f9722be66b0"
+      },
+      "source": "pf9bd7958a0779f4de39e871878bbd6552dc461c3f"
+    }
+  ],
+  "schema": "postfiat-certified-asset-ops-request-v1"
+}
