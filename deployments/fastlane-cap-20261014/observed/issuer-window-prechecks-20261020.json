@@ -1,0 +1,65 @@
+{
+  "recorded_at": "2026-10-20T11:45:35Z",
+  "observed_at": "2026-10-20T11:41Z",
+  "authority": "operator's read-only pre-checks before the 2026-10-20 12:00-16:00 UTC issuer signing window (ISSUER-SIGNING-SHEET-20261020.md \u00a74)",
+  "scope": "read-only RPC reads (status, navcoin_bridge_routes, tx) and block-proposer; no transaction; no service touched",
+  "branch": "release/fastlane-cap-20261014",
+  "sheet_commit": "ad9d706c",
+  "rpcs_read": [
+    "validator-0",
+    "validator-1",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ],
+  "status_all_six": {
+    "height": 1131,
+    "tip_prefix": "9b054f091757",
+    "state_root_prefix": "a12e7c5f1ee5",
+    "mempool": 0,
+    "agree": true
+  },
+  "routes": {
+    "pftl-a666-ethereum-wA666-usdc-v1": {
+      "claims": 0,
+      "returns": 0,
+      "open_packets": 0,
+      "pending_burns": 0,
+      "paused": false,
+      "hash": "57da38373813c34b9629fa56123eed8ebb49433d71ff4021400cabe673c5943977065f14f3a18f726941edef03ee78f5"
+    },
+    "pftl-bmnrc-ethereum-wBMNRC-usdc-v1": {
+      "claims": 0,
+      "returns": 0,
+      "open_packets": 0,
+      "pending_burns": 0,
+      "paused": false,
+      "hash": "b2817e68d96e950bc6700643a56636880aa7a1e5bc9c4a130204e725512691b4618364807af8d30392a58b12a32840a4"
+    }
+  },
+  "epoch_2_activation": {
+    "tx_id": "2b2efa37e12f5d14c4b1f7da62a4fc7f9ea8a2d7d2d21ad20427d56646d99c158693072e9f7c022cf5f49deb8ee34826",
+    "confirmed": true,
+    "receipt_code": "fastlane_control_applied",
+    "block_height": 1131
+  },
+  "proposer_height_1132": {
+    "validator_id": "validator-4",
+    "view": 0,
+    "local_is_proposer": true
+  },
+  "files_on_branch": {
+    "a666-bridge-policy-update.unsigned.json": "24aa2e28ff942d0be9557416d2b796d6b9a8131abf7704c6ad1348539f51c03f",
+    "bmnrc-bridge-policy-update.unsigned.json": "5179d6f7b1a67971d6e591597e3ee63a0775b9af001e1b5bc27ae64969603650"
+  },
+  "preconditions": {
+    "1_claims_and_returns_zero": "pass",
+    "2_epoch_2_current_by_activation_receipt": "pass",
+    "3_no_open_handoff": "pass",
+    "4_chain_not_moved": "pass",
+    "5_local_is_proposer_validator_4_height_1132": "pass"
+  },
+  "finding": "the sheet's precondition 2 had read the hosts' legacy /var/lib/postfiat/validator-N/ledger.json, which shows committee 1; corrected in ad9d706c to the epoch-2 activation-receipt check",
+  "verdict": "PASS"
+}
