@@ -1,0 +1,375 @@
+{
+  "recorded_at": "2026-10-20T10:26:48Z",
+  "authority": "other lane's 2026-10-20 handoff, 'For you' item 4: stop and disable navcoin-proof-watchdog@ units on validator-0 and validator-3 (local-fork watchers; runs ended 2026-10-02)",
+  "scope": "systemd user units of root (lingering user manager); no validator or RPC service touched; no transaction; state and config files left in place",
+  "commands": [
+    "systemctl --user stop <all navcoin-proof-watchdog@ units>",
+    "systemctl --user disable <all navcoin-proof-watchdog@ units>"
+  ],
+  "hosts": [
+    {
+      "validator_id": "validator-0",
+      "host": "64.176.220.75",
+      "hostname": "postfiat-validator-0-recovery-v3",
+      "unit_manager": "systemd --user (root, Linger=yes); template /root/.config/systemd/user/navcoin-proof-watchdog@.service",
+      "config_validator_endpoints": "['127.0.0.1'] ports 40001-41706 (90 ports); listeners on those ports: 0",
+      "units_stopped_and_disabled": 3,
+      "units": [
+        {
+          "unit": "navcoin-proof-watchdog@normal.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 4088691,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"617a1fbb4be972e2a00daaf7788bcc1458c2fc8b68810460118aa235201c4e50\",\"paused_unix_ms\":1790818647199,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@normald40.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 4180585,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"29a82d274da4bd933e3c1471be69e74405935d27a249ef9448186d8825bd6131\",\"paused_unix_ms\":1790861840024,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@normald40final.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 4182851,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"e5b173405a578e8c45ec051a8d98dd7fe6f0f906da3b09a39554f97508061206\",\"paused_unix_ms\":1790861826515,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        }
+      ],
+      "watchdog_processes_before": 3,
+      "watchdog_processes_after": 0,
+      "processes_that_would_not_stop": [],
+      "navcoin_user_timers_before": [],
+      "enabled_symlinks_after": [],
+      "services": {
+        "postfiat-validator-0": {
+          "before_pid": 1485048,
+          "after_pid": 1485048,
+          "active_since": "Thu 2026-10-15 10:43:11 UTC",
+          "unchanged": true
+        },
+        "postfiat-validator-0-rpc": {
+          "before_pid": 1485053,
+          "after_pid": 1485053,
+          "active_since": "Thu 2026-10-15 10:43:11 UTC",
+          "unchanged": true
+        }
+      },
+      "files_left_in_place": {
+        "config_files_before": 15,
+        "config_files_after": 15,
+        "state_files_before": 30,
+        "state_files_after": 30,
+        "unit_template_present_after": true
+      },
+      "note": "empty app-navcoin\\x2dproof\\x2dwatchdog.slice left as is; navcoin-ethereum-rpc-2870x system relays not touched"
+    },
+    {
+      "validator_id": "validator-3",
+      "host": "149.28.63.106",
+      "hostname": "postfiat-validator-3",
+      "unit_manager": "systemd --user (root, Linger=yes); template /root/.config/systemd/user/navcoin-proof-watchdog@.service",
+      "config_validator_endpoints": "['127.0.0.1'] ports 40001-41706 (90 ports); listeners on those ports: 0",
+      "units_stopped_and_disabled": 14,
+      "units": [
+        {
+          "unit": "navcoin-proof-watchdog@fallback.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2459567,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"49c8b6b99ad9882b860a37b07968194fbfa0107cfa45393a8febd895ef4c0200\",\"paused_unix_ms\":1790818663902,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@fallbackd12.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2478994,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"d77dbb5025d0a39f0f4e845a45d2f4a01e0358d09f18e94c2fc104b91b302d91\",\"paused_unix_ms\":1790834573315,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@fallbackd16.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2489796,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"a4492f76e2506e9824bf11c6a7e5324d23ccac8dd0912c4ba458141f9c19c566\",\"paused_unix_ms\":1790834685552,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@fallbackd16c.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2507575,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"989ddc45c694115cc74ed298cef76a2b1ce73e1e3f0f5fb48a3db19db8a72375\",\"paused_unix_ms\":1790848416992,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@fallbackd16d.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2507618,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"b879413b37d507759c567e132150bfc082f50e2f3d0e9af0c886f5ec2506b274\",\"paused_unix_ms\":1790848438862,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@fallbackd16f.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2507674,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"a4bc6faf326ffca9fd3db6779d3be3d3437102831e1107fd1474e33dcc3ee3ea\",\"paused_unix_ms\":1790848460754,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@fallbackd16g.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2507725,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"493bb40a8c4e9ef654d049466bcaa6a6e0aa123988bfab1b335ae50e3e5be848\",\"paused_unix_ms\":1790848483505,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@fallbackd16h.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2507783,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"afc018d742198ddb948d73a61c341778baf73a0e90afeed11a34efbd303e692d\",\"paused_unix_ms\":1790848505435,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@fallbackd16j.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2507525,
+            "unit_file_state": "enabled",
+            "state_status": "pause_retry",
+            "state_last_line_tail": "s\":1792491965835,\"lease_error\":null,\"maximum_unix_ms\":1792491965835,\"pause_error\":\"RuntimeError\",\"status\":\"pause_retry\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@fallbackd40.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2511462,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"49fbedf23ba172185ca4c14af4fd13a07b543d7c9d4cf3cefe085cbc753fa565\",\"paused_unix_ms\":1790861859628,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@fallbackd40final.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2512672,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"af6c121cea2d6a2080ab250bf2eddbc548bc992fbd5b13c4e515becb8d02b540\",\"paused_unix_ms\":1790861852969,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@normal.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2459579,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"617a1fbb4be972e2a00daaf7788bcc1458c2fc8b68810460118aa235201c4e50\",\"paused_unix_ms\":1790818656211,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@normald40.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2511481,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"29a82d274da4bd933e3c1471be69e74405935d27a249ef9448186d8825bd6131\",\"paused_unix_ms\":1790861836926,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        },
+        {
+          "unit": "navcoin-proof-watchdog@normald40final.service",
+          "before": {
+            "active_state": "active",
+            "sub_state": "running",
+            "main_pid": 2512706,
+            "unit_file_state": "enabled",
+            "state_status": "paused",
+            "state_last_line_tail": "st\":\"e5b173405a578e8c45ec051a8d98dd7fe6f0f906da3b09a39554f97508061206\",\"paused_unix_ms\":1790861833880,\"status\":\"paused\"}"
+          },
+          "after": {
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "main_pid": 0,
+            "unit_file_state": "disabled"
+          }
+        }
+      ],
+      "watchdog_processes_before": 14,
+      "watchdog_processes_after": 0,
+      "processes_that_would_not_stop": [],
+      "navcoin_user_timers_before": [],
+      "enabled_symlinks_after": [],
+      "services": {
+        "postfiat-validator-3": {
+          "before_pid": 4080618,
+          "after_pid": 4080618,
+          "active_since": "Thu 2026-10-15 10:55:21 UTC",
+          "unchanged": true
+        },
+        "postfiat-validator-3-rpc": {
+          "before_pid": 4080695,
+          "after_pid": 4080695,
+          "active_since": "Thu 2026-10-15 10:55:23 UTC",
+          "unchanged": true
+        }
+      },
+      "files_left_in_place": {
+        "config_files_before": 15,
+        "config_files_after": 15,
+        "state_files_before": 30,
+        "state_files_after": 30,
+        "unit_template_present_after": true
+      },
+      "note": "empty app-navcoin\\x2dproof\\x2dwatchdog.slice left as is; config fallbackd16e has no unit"
+    }
+  ],
+  "verified": true
+}
