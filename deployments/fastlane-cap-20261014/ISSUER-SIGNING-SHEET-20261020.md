@@ -96,7 +96,7 @@ for r in d["pftl_uniswap_routes"]:
 EOF
 ```
 
-Both are read-only except `submit`. `ledger-read.py` only reads the ledger file.
+Both are read-only except `submit`. `ledger-read.py` is for the verified backup imports on the work server only, not for the hosts.
 
 ## 4. Preconditions (we check just before 12:00 on all six; you check again on the submit host)
 
@@ -104,7 +104,7 @@ Both are read-only except `submit`. `ledger-read.py` only reads the ledger file.
 cd /root/issuer-20261020
 N=4; H=1132   # BMNRC: N=5; H=1133
 python3 issuer-rpc.py check 2765$N
-python3 ledger-read.py /var/lib/postfiat/validator-$N/ledger.json
+python3 issuer-rpc.py tx 2765$N 2b2efa37e12f5d14c4b1f7da62a4fc7f9ea8a2d7d2d21ad20427d56646d99c158693072e9f7c022cf5f49deb8ee34826   # the epoch-2 activation: confirmed True, code fastlane_control_applied, block 1131
 runuser -u postfiat -- /opt/postfiat/releases/fastlane-cap-20261014/postfiat-node block-proposer \
   --unsafe-devnet-json-storage --data-dir /var/lib/postfiat/validator-$N --height $H --view 0
 ```
@@ -118,8 +118,11 @@ Submit only if every line holds:
 
 1. On each route, `claims 0` and `returns 0`. Consensus refuses the update otherwise
    (`pftl_uniswap_bridge_policy_handoff_active`).
-2. Committee epoch 2 is the newest and has no fence: `newest committee 2 72836827…` and
-   `fenced epochs [1]` (`pftl_uniswap_bridge_policy_committee_not_current` otherwise).
+2. Committee epoch 2 is the newest and has no fence: the activation transaction above reports
+   `confirmed True` with receipt code `fastlane_control_applied` in block 1131, and the chain tip is
+   still that block before A666 (`height 1131`). Do NOT read `/var/lib/postfiat/validator-N/ledger.json`
+   on the hosts for this: it is a legacy file that still shows committee 1
+   (`pftl_uniswap_bridge_policy_committee_not_current` is the refusal if epoch 2 were not current).
 3. There is no open handoff on the route: `open_packets 0`, `pending_burns 0`, `paused False`.
 4. The chain has not moved. Before A666: `height 1131`, tip `9b054f09…`, root `a12e7c5f…`,
    `mempool 0`, A666 `hash 57da3837…`, BMNRC `hash b2817e68…`, both routes `epoch 1` root
@@ -168,14 +171,15 @@ After A666, on validator-4:
 ```bash
 python3 issuer-rpc.py tx 27654 <tx_id>   # confirmed True, accepted
 python3 issuer-rpc.py check 27654        # height 1132, mempool 0, A666 hash changed, claims 0
-python3 ledger-read.py /var/lib/postfiat/validator-4/ledger.json
 ```
 
-The ledger read must show A666 `epoch 2 root 72836827…` and `last route_bridge_policy_updated 1132`,
-with `state_after_hash` equal to the new A666 `hash`. BMNRC must still be on epoch 1.
+The `tx` read must show `confirmed True` with receipt code `accepted`; the `check` read must show
+`height 1132`, `mempool 0` and a changed A666 `hash` (it was `57da3837…`), with the BMNRC hash
+unchanged (`b2817e68…`). The authority epoch 2 of the route is confirmed from the work server after the
+window with the verified ledger import; the hosts' `ledger.json` is a legacy file and is not read.
 
-After BMNRC, on validator-5, the same reads must show `height 1133` (1131 + 2). Both routes must
-show `epoch 2 root 72836827…`, and BMNRC must show `last route_bridge_policy_updated 1133`.
+After BMNRC, on validator-5, the same reads must show `height 1133` (1131 + 2) and a changed BMNRC
+`hash`.
 We then confirm six-way agreement (height, tip, root and route hashes) through all six RPCs.
 
 Then the next Ethereum checkpoint is signed by the epoch-2 committee, 5 of 6
