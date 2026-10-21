@@ -1,0 +1,33 @@
+   Compiling postfiat-storage v0.1.0 (/home/postfiatchad/repos/postfiatl1v2/crates/storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.43s
+     Running unittests src/lib.rs (target/debug/deps/postfiat_storage-01904886460da305)
+
+running 25 tests
+test fastswap_store::legacy_migration::tests::migration_refuses_while_the_store_lock_is_held ... ok
+test fastswap_store::legacy_migration::tests::migration_dry_run_reports_without_writing ... ok
+test fastswap_store::tests::oversized_sparse_wal_is_rejected_before_allocation ... ok
+test fastswap_store::tests::nonempty_fastlane_base_state_uses_canonical_vector_file ... ok
+test fastswap_store::tests::injected_crash_after_sync_replays_complete_new_state ... ok
+test fastswap_store::tests::injected_storage_failure_before_append_leaves_complete_old_state ... ok
+test fastswap_store::legacy_migration::tests::migration_converts_legacy_store_so_normal_open_verifies_every_record ... ok
+test fastswap_store::tests::store_drop_releases_a_descriptor_inherited_by_a_child ... ok
+test fastswap_store::tests::signed_vote_artifacts_survive_restart_and_replace_idempotently ... ok
+test fastswap_store::tests::cross_process_lock_fails_closed ... ok
+test fastswap_store::legacy_migration::tests::migration_refuses_truncated_or_corrupt_records_and_leaves_the_original ... ok
+test fastswap_store::tests::reservation_is_synced_and_replays_exactly ... ok
+test fastswap_store::tests::anchored_checkpoint_burn_is_atomic_idempotent_and_replays ... ok
+test fastswap_store::tests::tampered_wal_mac_is_rejected_not_upgraded ... ok
+test fastswap_store::legacy_migration::tests::migration_refuses_before_writing_when_the_backup_fails ... ok
+test fastswap_store::tests::torn_final_record_is_ignored_but_checksum_corruption_is_fatal ... ok
+test fastswap_store::tests::stale_pid_file_does_not_block_restart ... ok
+test fastswap_store::legacy_migration::tests::migration_creates_a_missing_key_with_owner_only_mode ... ok
+test fastswap_store::tests::legacy_wal_loads_and_upgrades ... ok
+test fastswap_store::tests::tampered_snapshot_mac_is_rejected ... ok
+test fastswap_store::legacy_migration::tests::migration_converts_a_legacy_checksum_snapshot_so_normal_open_verifies ... ok
+test fastswap_store::tests::legacy_snapshot_loads_and_upgrades ... ok
+test fastswap_store::tests::torn_wal_suffix_property_truncates_before_the_next_durable_append ... ok
+test fastswap_store::legacy_migration::tests::migration_restores_original_bytes_and_removes_new_key_when_verification_fails ... ok
+test fastswap_store::tests::checkpoint_snapshot_survives_old_wal_prefix_and_preserves_sequence ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 80 filtered out; finished in 0.03s
+

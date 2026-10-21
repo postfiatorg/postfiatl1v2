@@ -1,0 +1,3 @@
+2026-10-21T10:24:39Z START node-bin-fastswap-service-and-committee-migration: cargo test -p postfiat-node --bin postfiat-node fastswap_service::
+2026-10-21T10:24:51Z EXIT 0 node-bin-fastswap-service-and-committee-migration
+2026-10-21T10:24:51Z DONE

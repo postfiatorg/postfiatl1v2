@@ -1,0 +1,39 @@
+2026-10-21T10:26:13.278628+00:00 START original-validator-1
+2026-10-21T10:26:13.278882+00:00 START original-validator-0
+2026-10-21T10:26:13.288800+00:00 START original-validator-3
+2026-10-21T10:26:13.292502+00:00 START original-validator-4
+2026-10-21T10:26:13.294287+00:00 START original-validator-2
+2026-10-21T10:26:13.295317+00:00 START canary-1123-import-signed
+2026-10-21T10:26:13.295728+00:00 START original-validator-5
+2026-10-21T10:26:55.325720+00:00 PASS canary-1123-import-signed (42.0s)
+2026-10-21T10:26:55.693061+00:00 START canary-1123-import-tampered-signature
+2026-10-21T10:26:56.699071+00:00 FAIL canary-1123-import-tampered-signature (1.0s)
+2026-10-21T10:29:32.387606+00:00 PASS original-validator-0 (199.1s)
+2026-10-21T10:29:32.387730+00:00 PASS original-validator-1 (199.1s)
+2026-10-21T10:29:32.391343+00:00 PASS original-validator-2 (199.1s)
+2026-10-21T10:29:32.391983+00:00 START canary-1123-full-new
+2026-10-21T10:29:32.392414+00:00 START canary-1123-checkpoint-new
+2026-10-21T10:29:32.392925+00:00 PASS original-validator-5 (199.1s)
+2026-10-21T10:29:32.396663+00:00 PASS original-validator-4 (199.1s)
+2026-10-21T10:29:32.401780+00:00 START canary-1123-checkpoint-rollback
+2026-10-21T10:29:32.402463+00:00 START canary-1123-full-rollback
+2026-10-21T10:29:32.412175+00:00 PASS original-validator-3 (199.1s)
+2026-10-21T10:29:33.019640+00:00 START governance-prepare
+2026-10-21T10:29:36.028012+00:00 FAIL governance-prepare (3.0s)
+2026-10-21T10:29:36.402821+00:00 PASS canary-1123-checkpoint-new (4.0s)
+2026-10-21T10:29:44.418787+00:00 PASS canary-1123-checkpoint-rollback (12.0s)
+2026-10-21T10:32:58.506357+00:00 PASS canary-1123-full-new (206.1s)
+2026-10-21T10:33:07.509382+00:00 PASS canary-1123-full-rollback (215.1s)
+2026-10-21T10:33:07.622856+00:00 START canary-1115-import-signed
+2026-10-21T10:33:49.645949+00:00 PASS canary-1115-import-signed (42.0s)
+2026-10-21T10:33:49.750986+00:00 START canary-1115-full-new
+2026-10-21T10:33:49.752512+00:00 START canary-1115-checkpoint-new
+2026-10-21T10:33:53.759412+00:00 PASS canary-1115-checkpoint-new (4.0s)
+2026-10-21T10:37:13.842851+00:00 PASS canary-1115-full-new (204.1s)
+2026-10-21T10:37:13.930930+00:00 START canary-1050-import-signed
+2026-10-21T10:37:53.954064+00:00 PASS canary-1050-import-signed (40.0s)
+2026-10-21T10:37:54.038488+00:00 START canary-1050-full-new
+2026-10-21T10:37:54.040463+00:00 START canary-1050-checkpoint-new
+2026-10-21T10:38:02.050052+00:00 PASS canary-1050-checkpoint-new (8.0s)
+2026-10-21T10:41:11.126785+00:00 PASS canary-1050-full-new (197.1s)
+2026-10-21T10:41:11.239451+00:00 operational sequence complete

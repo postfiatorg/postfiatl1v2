@@ -1,0 +1,24 @@
+{
+  "dry": {
+    "exit_code": 0,
+    "outcome": "would-migrate",
+    "verification": "not run (dry run)",
+    "backup_entries": 0,
+    "error": null
+  },
+  "real": {
+    "exit_code": 0,
+    "outcome": "migrated",
+    "verification": "service open: committee epoch 2, root b0958eddba23f493dcb397da0e7f079d446582c680f5b8c9b880d39e89e657898358d8cffcb6864f37a9d5359ca53aad, enabled true",
+    "backup_entries": 5,
+    "error": null
+  },
+  "backup_dir": "pre-created with install -d -m 700 (runbook \u00a77 step 2), empty",
+  "backup_files": [
+    ".integrity.key",
+    "base-state.json",
+    "committee.json",
+    "fastswap-v1.snapshot.json",
+    "fastswap-v1.wal"
+  ]
+}

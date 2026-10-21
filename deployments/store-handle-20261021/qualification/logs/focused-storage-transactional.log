@@ -1,0 +1,43 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/debug/deps/postfiat_storage-01904886460da305)
+
+running 36 tests
+test backend_mode::tests::missing_mode_defaults_to_transactional_and_records_are_authenticated ... ok
+test transactional::tests::big_endian_height_and_ordinal_keys_preserve_numeric_order ... ok
+test transactional::tests::inactive_shared_store_release_closes_redb_cleanly ... ok
+test transactional::tests::dropped_write_transaction_exposes_only_the_old_tip_after_reopen ... ok
+test transactional::tests::authenticated_values_reject_cross_table_and_cross_key_substitution ... ok
+test transactional::tests::initialize_reopen_and_domain_binding ... ok
+test transactional::tests::atomic_commit_preserves_literal_receipts_and_is_idempotent ... ok
+test transactional::tests::finalized_commit_indexes_fastpay_anchor_for_point_lookup ... ok
+test transactional::tests::logical_scan_rejects_authenticated_conflicting_ordered_index ... ok
+test transactional::tests::durable_commit_survives_close_and_restart ... ok
+test transactional::tests::logical_scan_rejects_deleted_hash_index_without_blessing_metadata ... ok
+test transactional::tests::generation_pointer_is_bound_to_the_verified_database_manifest ... ok
+test transactional::tests::corrupted_transactional_data_pages_reject_without_logical_state ... ok
+test transactional::tests::rejected_parent_or_commitment_leaves_genesis_tip ... ok
+test transactional::lease::tests::rpc_reader_opens_the_database_between_two_operations ... ok
+test transactional::tests::read_snapshot_remains_bound_to_one_finalized_tip_across_commit ... ok
+test transactional::tests::injected_disk_permission_write_and_sync_failures_preserve_the_old_tip ... ok
+test transactional::tests::missing_transactional_data_page_rejects_without_logical_state ... ok
+test transactional::tests::writer_lease_contention_error_is_detected ... ok
+test transactional::tests::writer_lease_is_shared_by_concurrent_callers_in_one_process ... ok
+test transactional::tests::logical_scan_rejects_padded_reordered_duplicated_omitted_and_modified_history ... ok
+test transactional::tests::writer_lease_releases_database_when_idle ... ok
+test transactional::tests::logical_scan_rejects_forged_receipt_archive_and_state_values ... ok
+test transactional::tests::substituted_transactional_data_page_rejects_without_logical_state ... ok
+test transactional::tests::shared_store_registry_keeps_one_redb_owner_across_concurrent_reopens ... ok
+test transactional::lease::tests::held_store_reuses_its_validated_pointer_binding_until_it_closes ... ok
+test transactional::tests::rejected_receipt_retry_preserves_both_literal_occurrences ... ok
+test transactional::tests::dropped_transaction_at_every_logical_write_cut_exposes_only_old_tip ... ok
+test transactional::tests::retained_checkpoint_initialization_preserves_prefix_and_suffix_relations ... ok
+test transactional::tests::retained_history_prune_is_atomic_and_keeps_ordered_commitment ... ok
+test transactional::tests::missing_substituted_and_one_sided_indexes_fail_without_mutation ... ok
+test transactional::tests::retained_history_prune_rebuilds_fastpay_anchors_from_retained_suffix ... ok
+test transactional::tests::canonical_jsonl_export_rejects_missing_corrupted_and_substituted_files_without_database_mutation ... ok
+test transactional::tests::authenticated_stale_metadata_tip_count_and_accumulator_fail_without_marker ... ok
+test transactional::tests::writer_lease_fails_closed_when_database_is_held ... ok
+test transactional::tests::writer_lease_acquires_after_holder_releases ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 69 filtered out; finished in 0.70s
+

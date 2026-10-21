@@ -1,0 +1,48 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running unittests src/main.rs (target/debug/deps/postfiat_node-8451ae729848bf6f)
+
+running 41 tests
+test fastswap_service::committee_migration_tests::committee_migrate_reads_the_real_release_packet_files ... ok
+test fastswap_service::committee_migration_tests::committee_migrate_refuses_held_store_lock ... ok
+test fastswap_service::tests::byzantine_vote_is_ignored_and_below_quorum_cannot_advance ... ok
+test fastswap_service::tests::canonical_activation_height_gates_swap_votes_fail_closed ... ok
+test fastswap_service::committee_migration_tests::committee_migrated_open_refuses_relabelled_epoch_one_base ... ok
+test fastswap_service::tests::canonical_refresh_waits_for_commit_before_persisting_controls ... ok
+test fastswap_service::committee_migration_tests::committee_migrate_refuses_store_with_pending_fee_burn ... ok
+test fastswap_service::tests::canonical_checkpoint_clears_pending_burn_once_and_replays ... ok
+test fastswap_service::tests::hundred_warm_wallet_operations_meet_local_latency_gate ... ignored, explicit 100-operation performance gate
+test fastswap_service::tests::exit_and_swap_reservation_are_mutually_exclusive ... ok
+test fastswap_service::tests::issuer_asset_control_round_zero_rejects_later_recovery_vote ... ok
+test fastswap_service::committee_migration_tests::committee_migrate_refuses_unapplied_legacy_wal_with_pre_anchor_records ... ok
+test fastswap_service::committee_migration_tests::committee_migrate_refuses_store_with_open_reservation ... ok
+test fastswap_service::committee_migration_tests::committee_migrate_moves_drained_base_wal_store_to_epoch_two ... ok
+test fastswap_service::tests::migrated_committee_base_must_match_anchored_drain_root ... ok
+test fastswap_service::tests::persistent_wallet_driver_meets_isolated_warm_latency_gate ... ignored, isolated in-process warm-latency gate; CI executes it after workspace tests
+test fastswap_service::tests::certified_confirm_catches_up_and_supersedes_a_partial_local_lock ... ok
+test fastswap_service::committee_migration_tests::committee_migrate_moves_drained_snapshot_store_to_epoch_two ... ok
+test fastswap_service::committee_migration_tests::committee_migrated_open_refuses_edited_base ... ok
+test fastswap_service::committee_migration_tests::committee_migrate_store_reopens_after_epoch_two_policy_registration ... ok
+test fastswap_service::committee_migration_tests::committee_migrate_accepts_legacy_store_equal_to_the_drained_state ... ok
+test fastswap_service::tests::six_validator_exit_is_durable_before_vote_and_restart_idempotent ... ok
+test fastswap_service::committee_migration_tests::committee_migrate_store_reopens_after_epoch_two_reservation ... ok
+test fastswap_service::tests::swap_id_parser_is_exact_width ... ok
+test fastswap_service::committee_migration_tests::committee_migrate_restores_backup_when_verification_fails_after_write ... ok
+test fastswap_service::tests::quorum_early_path_ignores_a_gated_sixth_response ... ok
+test fastswap_service::committee_migration_tests::committee_migrate_legacy_store_reopens_after_epoch_two_reservation ... ok
+test fastswap_service::tests::issuer_wallet_driver_previews_persists_and_repairs_exact_six ... ok
+test fastswap_service::tests::persistent_wallet_driver_executes_real_three_wave_rpc_contract ... ok
+test fastswap_service::tests::validator_provisions_empty_epoch_one_base_from_canonical_governance ... ok
+test fastswap_service::tests::validator_opens_nonempty_canonical_base_state_file ... ok
+test fastswap_service::tests::below_quorum_partitions_cannot_settle_and_heal_idempotently ... ok
+test fastswap_service::tests::restart_after_each_signed_wave_replays_before_next_vote ... ok
+test fastswap_service::committee_migration_tests::committee_migrate_store_reopens_after_epoch_two_deposit_import ... ok
+test fastswap_service::tests::replacement_relayer_recovers_expired_partial_prepare_via_rpc_evidence ... ok
+test fastswap_service::tests::expired_prepare_recovers_to_quorum_cancel_without_unlock_race ... ok
+test fastswap_service::tests::replacement_relayer_preserves_locked_confirm_and_finishes_swap ... ok
+test fastswap_service::tests::replacement_relayer_reconciles_accepted_terminal_without_resubmission ... ok
+test fastswap_service::tests::lost_responses_after_every_mutating_wave_resume_idempotently ... ok
+test fastswap_service::tests::six_validator_three_wave_lifecycle_is_terminal_and_restart_idempotent ... ok
+test fastswap_service::tests::issuer_freeze_unfreeze_and_clawback_use_the_swap_lock_domain ... ok
+
+test result: ok. 39 passed; 0 failed; 2 ignored; 0 measured; 183 filtered out; finished in 11.50s
+

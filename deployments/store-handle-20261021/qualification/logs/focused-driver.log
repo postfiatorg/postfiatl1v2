@@ -1,0 +1,15 @@
+2026-10-21T10:23:23Z START storage-fastswap-store: cargo test -p postfiat-storage --lib fastswap_store
+2026-10-21T10:23:26Z EXIT 0 storage-fastswap-store
+2026-10-21T10:23:26Z START storage-transactional: cargo test -p postfiat-storage --lib transactional
+2026-10-21T10:23:27Z EXIT 0 storage-transactional
+2026-10-21T10:23:27Z START node-lib-committee-migration: cargo test -p postfiat-node --lib fastswap_committee_migration
+2026-10-21T10:23:44Z EXIT 0 node-lib-committee-migration
+2026-10-21T10:23:44Z START node-lib-fastswap-service: cargo test -p postfiat-node --lib fastswap_service
+2026-10-21T10:23:44Z EXIT 0 node-lib-fastswap-service
+2026-10-21T10:23:44Z START node-bin-store-handle-round: cargo test -p postfiat-node --bin postfiat-node transactional_six_validator_round_opens_each_database_a_bounded_number_of_times
+2026-10-21T10:24:23Z EXIT 0 node-bin-store-handle-round
+2026-10-21T10:24:23Z START node-bin-operator-attestation: cargo test -p postfiat-node --bin postfiat-node operator_attestation_commands_reach_their_cli_handler
+2026-10-21T10:24:36Z EXIT 0 node-bin-operator-attestation
+2026-10-21T10:24:36Z START node-bin-pftl-swapctl: cargo test -p postfiat-node --bin pftl_swapctl
+2026-10-21T10:24:38Z EXIT 0 node-bin-pftl-swapctl
+2026-10-21T10:24:38Z DONE

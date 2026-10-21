@@ -1,0 +1,205 @@
+{
+  "binary_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+  "real_files": {
+    "7.1-anchor-checkpoint.fastlane-primary.json": "4497c495ee172a5db74235279b756bd0d289bbcf8f794135312831f42e88588d",
+    "7.2-activate-committee.fastlane-primary.json": "35acb2ff13fdcb85aedf446e9d5ca5211baaef45abe5b7a63a5b41807576ae35"
+  },
+  "runs": [
+    {
+      "name": "snapshot-own-files-dry",
+      "command": [
+        "postfiat-node",
+        "fastswap-committee-migrate",
+        "--data-dir",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-0/validator-0",
+        "--committee-file",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-0/7.2-activate-committee.json",
+        "--anchor-file",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-0/7.1-anchor-checkpoint.json",
+        "--dry-run"
+      ],
+      "exit_code": 0,
+      "outcome": "would-migrate",
+      "load_path": "snapshot",
+      "validator_id": "validator-0",
+      "notes": [],
+      "before_epoch": 1,
+      "after_epoch": 2,
+      "after_root": "b0958eddba23f493dcb397da0e7f079d446582c680f5b8c9b880d39e89e657898358d8cffcb6864f37a9d5359ca53aad",
+      "after_fences": [],
+      "after_anchored": [
+        "4b8aa39b849e00a033a1e33f81475935e4f6fc3478c628af2a7723521e34fa6efdb385d0e2fbe0b685730e83c6b2ffd2"
+      ],
+      "verification": "not run (dry run)",
+      "backup_entries": 0,
+      "store_unchanged": true
+    },
+    {
+      "name": "snapshot-own-files-real",
+      "command": [
+        "postfiat-node",
+        "fastswap-committee-migrate",
+        "--data-dir",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-0/validator-0",
+        "--committee-file",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-0/7.2-activate-committee.json",
+        "--anchor-file",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-0/7.1-anchor-checkpoint.json",
+        "--backup-dir",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-0/backup"
+      ],
+      "exit_code": 0,
+      "outcome": "migrated",
+      "load_path": "snapshot",
+      "validator_id": "validator-0",
+      "notes": [],
+      "before_epoch": 1,
+      "after_epoch": 2,
+      "after_root": "b0958eddba23f493dcb397da0e7f079d446582c680f5b8c9b880d39e89e657898358d8cffcb6864f37a9d5359ca53aad",
+      "after_fences": [],
+      "after_anchored": [
+        "4b8aa39b849e00a033a1e33f81475935e4f6fc3478c628af2a7723521e34fa6efdb385d0e2fbe0b685730e83c6b2ffd2"
+      ],
+      "verification": "service open: committee epoch 2, root b0958eddba23f493dcb397da0e7f079d446582c680f5b8c9b880d39e89e657898358d8cffcb6864f37a9d5359ca53aad, enabled true",
+      "backup_entries": 5,
+      "expected_root": "b0958eddba23f493dcb397da0e7f079d446582c680f5b8c9b880d39e89e657898358d8cffcb6864f37a9d5359ca53aad",
+      "pass": true
+    },
+    {
+      "name": "snapshot-own-files-second-dry",
+      "command": [
+        "postfiat-node",
+        "fastswap-committee-migrate",
+        "--data-dir",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-0/validator-0",
+        "--committee-file",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-0/7.2-activate-committee.json",
+        "--anchor-file",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-0/7.1-anchor-checkpoint.json",
+        "--dry-run"
+      ],
+      "exit_code": 1,
+      "stderr": "error: fastswap-committee-migrate refused: committee file is epoch 2 on another chain or not the epoch after the store's epoch 2"
+    },
+    {
+      "name": "legacy-own-files-dry",
+      "command": [
+        "postfiat-node",
+        "fastswap-committee-migrate",
+        "--data-dir",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-2/validator-0",
+        "--committee-file",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-2/7.2-activate-committee.json",
+        "--anchor-file",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-2/7.1-anchor-checkpoint.json",
+        "--dry-run"
+      ],
+      "exit_code": 0,
+      "outcome": "would-migrate",
+      "load_path": "base+wal",
+      "validator_id": "validator-0",
+      "notes": [
+        "store (base+WAL load, 0 WAL record(s), 0 fence and 0 anchor record(s)) never applied the epoch-1 prepare fence for policy epoch(s) [1] or the anchored drain checkpoint 4b8aa39b849e00a033a1e33f81475935e4f6fc3478c628af2a7723521e34fa6efdb385d0e2fbe0b685730e83c6b2ffd2; its replayed state equals the anchored drained state (no reservations, no pending burns, every checkpoint root and total matches), so the migration subsumes them"
+      ],
+      "before_epoch": 1,
+      "after_epoch": 2,
+      "after_root": "b0958eddba23f493dcb397da0e7f079d446582c680f5b8c9b880d39e89e657898358d8cffcb6864f37a9d5359ca53aad",
+      "after_fences": [],
+      "after_anchored": [
+        "4b8aa39b849e00a033a1e33f81475935e4f6fc3478c628af2a7723521e34fa6efdb385d0e2fbe0b685730e83c6b2ffd2"
+      ],
+      "verification": "not run (dry run)",
+      "backup_entries": 0,
+      "store_unchanged": true
+    },
+    {
+      "name": "legacy-own-files-real",
+      "command": [
+        "postfiat-node",
+        "fastswap-committee-migrate",
+        "--data-dir",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-2/validator-0",
+        "--committee-file",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-2/7.2-activate-committee.json",
+        "--anchor-file",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-2/7.1-anchor-checkpoint.json",
+        "--backup-dir",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-2/backup"
+      ],
+      "exit_code": 0,
+      "outcome": "migrated",
+      "load_path": "base+wal",
+      "validator_id": "validator-0",
+      "notes": [
+        "store (base+WAL load, 0 WAL record(s), 0 fence and 0 anchor record(s)) never applied the epoch-1 prepare fence for policy epoch(s) [1] or the anchored drain checkpoint 4b8aa39b849e00a033a1e33f81475935e4f6fc3478c628af2a7723521e34fa6efdb385d0e2fbe0b685730e83c6b2ffd2; its replayed state equals the anchored drained state (no reservations, no pending burns, every checkpoint root and total matches), so the migration subsumes them"
+      ],
+      "before_epoch": 1,
+      "after_epoch": 2,
+      "after_root": "b0958eddba23f493dcb397da0e7f079d446582c680f5b8c9b880d39e89e657898358d8cffcb6864f37a9d5359ca53aad",
+      "after_fences": [],
+      "after_anchored": [
+        "4b8aa39b849e00a033a1e33f81475935e4f6fc3478c628af2a7723521e34fa6efdb385d0e2fbe0b685730e83c6b2ffd2"
+      ],
+      "verification": "service open: committee epoch 2, root b0958eddba23f493dcb397da0e7f079d446582c680f5b8c9b880d39e89e657898358d8cffcb6864f37a9d5359ca53aad, enabled true",
+      "backup_entries": 2,
+      "expected_root": "b0958eddba23f493dcb397da0e7f079d446582c680f5b8c9b880d39e89e657898358d8cffcb6864f37a9d5359ca53aad",
+      "pass": true
+    },
+    {
+      "name": "legacy-own-files-second-dry",
+      "command": [
+        "postfiat-node",
+        "fastswap-committee-migrate",
+        "--data-dir",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-2/validator-0",
+        "--committee-file",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-2/7.2-activate-committee.json",
+        "--anchor-file",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-2/7.1-anchor-checkpoint.json",
+        "--dry-run"
+      ],
+      "exit_code": 1,
+      "stderr": "error: fastswap-committee-migrate refused: committee file is epoch 2 on another chain or not the epoch after the store's epoch 2"
+    },
+    {
+      "name": "real-files-dry",
+      "command": [
+        "postfiat-node",
+        "fastswap-committee-migrate",
+        "--data-dir",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-1/validator-0",
+        "--committee-file",
+        "/home/postfiatchad/repos/postfiatl1v2-rel20261021/deployments/store-handle-20261021/observed/bridge-activation/7.2-activate-committee.fastlane-primary.json",
+        "--anchor-file",
+        "/home/postfiatchad/repos/postfiatl1v2-rel20261021/deployments/store-handle-20261021/observed/bridge-activation/7.1-anchor-checkpoint.fastlane-primary.json",
+        "--dry-run"
+      ],
+      "exit_code": 1,
+      "stderr": "error: fastswap-committee-migrate refused: committee file is epoch 2 on another chain or not the epoch after the store's epoch 1"
+    },
+    {
+      "name": "real-files-real",
+      "command": [
+        "postfiat-node",
+        "fastswap-committee-migrate",
+        "--data-dir",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-1/validator-0",
+        "--committee-file",
+        "/home/postfiatchad/repos/postfiatl1v2-rel20261021/deployments/store-handle-20261021/observed/bridge-activation/7.2-activate-committee.fastlane-primary.json",
+        "--anchor-file",
+        "/home/postfiatchad/repos/postfiatl1v2-rel20261021/deployments/store-handle-20261021/observed/bridge-activation/7.1-anchor-checkpoint.fastlane-primary.json",
+        "--backup-dir",
+        "$Q/scratch-migration/tmp/postfiat-fastswap-service-2883757-1/backup"
+      ],
+      "exit_code": 1,
+      "stderr": "error: fastswap-committee-migrate refused: committee file is epoch 2 on another chain or not the epoch after the store's epoch 1",
+      "store_unchanged": true,
+      "backup_written": false
+    }
+  ],
+  "scratch_stores": "built by a temporary #[ignore] test calling node() of crates/node/src/fastswap_committee_migration_tests.rs (Shape::Snapshot twice, Shape::LegacyNoRecords), main checkout at 86706699, file restored afterwards (git status clean); fixture chain \"test\", fixture committee (synthetic keys), synthetic five-vote drain anchor",
+  "expected": {
+    "own files": "dry would-migrate and no write; real migrated, service open epoch 2 enabled true; a second run refuses (store already at epoch 2)",
+    "real files on a fixture store": "refused before any write: the real 2026-10-15 committee and anchor are for postfiat-wan-devnet-2 and the real drained epoch-1 state, which a scratch store does not hold"
+  }
+}

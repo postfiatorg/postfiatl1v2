@@ -1,0 +1,41 @@
+{
+  "cwd": "/home/postfiatchad/repos/postfiatl1v2 (main at 86706699, default test profile)",
+  "suites": [
+    {
+      "name": "focused-node-bin-fastswap-service-and-committee-migration",
+      "log": "logs/focused-node-bin-fastswap-service-and-committee-migration.log",
+      "passed": 39,
+      "status": "PASS"
+    },
+    {
+      "name": "focused-node-bin-operator-attestation",
+      "log": "logs/focused-node-bin-operator-attestation.log",
+      "passed": 1,
+      "status": "PASS"
+    },
+    {
+      "name": "focused-node-bin-pftl-swapctl",
+      "log": "logs/focused-node-bin-pftl-swapctl.log",
+      "passed": 1,
+      "status": "PASS"
+    },
+    {
+      "name": "focused-node-bin-store-handle-round",
+      "log": "logs/focused-node-bin-store-handle-round.log",
+      "passed": 1,
+      "status": "PASS"
+    },
+    {
+      "name": "focused-storage-fastswap-store",
+      "log": "logs/focused-storage-fastswap-store.log",
+      "passed": 25,
+      "status": "PASS"
+    },
+    {
+      "name": "focused-storage-transactional",
+      "log": "logs/focused-storage-transactional.log",
+      "passed": 36,
+      "status": "PASS"
+    }
+  ]
+}

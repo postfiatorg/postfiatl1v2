@@ -1,0 +1,11 @@
+{
+  "source_commit": "86706699f646405743385beabf609c6771a518a3",
+  "completed_at": "2026-10-21T10:23:33.295684+00:00",
+  "scope": "new disposable clones of the 1020 originals; authenticated local database-pointer relocation only",
+  "working_source": "/home/postfiatchad/.cache/release-repair-20260928/working",
+  "signers_source": "/home/postfiatchad/.cache/release-fastlane-cap-20261014/isolated-signers",
+  "old_binary_source": "/home/postfiatchad/.local/lib/postfiat/releases/fastlane-cap-20261014/postfiat-node",
+  "old_binary_sha256": "b1b3dbb150d3596577df3bb3fe145103d90988cf71558c4d34a035fe4bb44405",
+  "topology_sha256": "f222915addedcc6322cb935816727b3b597807880e57df24a3e6a2d34f69e8eb",
+  "live_mutations": false
+}

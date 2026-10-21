@@ -1,0 +1,9 @@
+{
+  "schema": "postfiat.deployment_manifest_verified.v1",
+  "manifest_sha256": "8ce1da304f7a2f2ab1c62c63295ec79f729f99922b47cd825f1f05931ea7c34e",
+  "deployment_id": "store-handle-20261021",
+  "publisher": "pfc531e00ffefecb8fabe40c6f47c69148df31e49c",
+  "verified_at_unix": 1792578833,
+  "valid_from_unix": 1792578425,
+  "valid_until_unix": 1824114725
+}

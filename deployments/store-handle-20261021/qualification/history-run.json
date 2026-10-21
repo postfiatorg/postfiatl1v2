@@ -1,0 +1,838 @@
+{
+  "source_commit": "86706699f646405743385beabf609c6771a518a3",
+  "binary_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+  "rollback_binary_sha256": "b1b3dbb150d3596577df3bb3fe145103d90988cf71558c4d34a035fe4bb44405",
+  "checks": [
+    {
+      "name": "canary-1123-import-signed",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "snapshot-import-signed-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1123/signed-import",
+        "--snapshot-dir",
+        "/home/postfiatchad/.postfiat/deployments/fastlane-cap-20261014/evidence/pre-rollout-backup/backup-signed",
+        "--trusted-publisher-key-file",
+        "/home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json",
+        "--node-id",
+        "validator-1"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:26:13.284104+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1123-import-signed.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1123-import-signed.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2885064,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:26:55.325331+00:00",
+      "elapsed_seconds": 42.0,
+      "minimum_available_memory_observed_bytes": 17114599424
+    },
+    {
+      "name": "canary-1123-import-tampered-signature",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "snapshot-import-signed-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1123/tampered-import",
+        "--snapshot-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1123/tampered-signed",
+        "--trusted-publisher-key-file",
+        "/home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json",
+        "--node-id",
+        "validator-1"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:26:55.692823+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1123-import-tampered-signature.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1123-import-tampered-signature.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2885531,
+      "exit_code": 1,
+      "completed_at": "2026-10-21T10:26:56.698547+00:00",
+      "elapsed_seconds": 1.0,
+      "minimum_available_memory_observed_bytes": 19076382720,
+      "expected": "nonzero exit (rejection)"
+    },
+    {
+      "name": "original-validator-0",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/working/validator-0"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:26:13.273860+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/original-validator-0.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/original-validator-0.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2885058,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:29:32.386740+00:00",
+      "elapsed_seconds": 199.1,
+      "minimum_available_memory_observed_bytes": 17114599424,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "error": "verification or certified identity mismatch",
+      "expected_1020_original": {
+        "block_height": 1020,
+        "block_tip_hash": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6"
+      },
+      "note": "the 1020 originals (~/.cache/combined-release-20260915/raw) are deleted; this is a 2026-09-28 copy, rotated at 1021 that day; expected = ~/.cache/release-repair-20260928/v2-service-receipt.json finality_statuses[0]"
+    },
+    {
+      "name": "original-validator-2",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/working/validator-2"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:26:13.276240+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/original-validator-2.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/original-validator-2.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2885063,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:29:32.390121+00:00",
+      "elapsed_seconds": 199.1,
+      "minimum_available_memory_observed_bytes": 17114599424,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "error": "verification or certified identity mismatch",
+      "expected_1020_original": {
+        "block_height": 1020,
+        "block_tip_hash": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6"
+      },
+      "note": "the 1020 originals (~/.cache/combined-release-20260915/raw) are deleted; this is a 2026-09-28 copy, rotated at 1021 that day; expected = ~/.cache/release-repair-20260928/v2-service-receipt.json finality_statuses[0]"
+    },
+    {
+      "name": "original-validator-1",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/working/validator-1"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:26:13.274889+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/original-validator-1.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/original-validator-1.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2885060,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:29:32.387111+00:00",
+      "elapsed_seconds": 199.1,
+      "minimum_available_memory_observed_bytes": 17114599424,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "error": "verification or certified identity mismatch",
+      "expected_1020_original": {
+        "block_height": 1020,
+        "block_tip_hash": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6"
+      },
+      "note": "the 1020 originals (~/.cache/combined-release-20260915/raw) are deleted; this is a 2026-09-28 copy, rotated at 1021 that day; expected = ~/.cache/release-repair-20260928/v2-service-receipt.json finality_statuses[0]"
+    },
+    {
+      "name": "original-validator-5",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/working/validator-5"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:26:13.285919+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/original-validator-5.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/original-validator-5.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2885065,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:29:32.389628+00:00",
+      "elapsed_seconds": 199.1,
+      "minimum_available_memory_observed_bytes": 17114599424,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "error": "verification or certified identity mismatch",
+      "expected_1020_original": {
+        "block_height": 1020,
+        "block_tip_hash": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6"
+      },
+      "note": "the 1020 originals (~/.cache/combined-release-20260915/raw) are deleted; this is a 2026-09-28 copy, rotated at 1021 that day; expected = ~/.cache/release-repair-20260928/v2-service-receipt.json finality_statuses[0]"
+    },
+    {
+      "name": "original-validator-4",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/working/validator-4"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:26:13.279889+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/original-validator-4.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/original-validator-4.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2885062,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:29:32.390865+00:00",
+      "elapsed_seconds": 199.1,
+      "minimum_available_memory_observed_bytes": 17114599424,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "error": "verification or certified identity mismatch",
+      "expected_1020_original": {
+        "block_height": 1020,
+        "block_tip_hash": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6"
+      },
+      "note": "the 1020 originals (~/.cache/combined-release-20260915/raw) are deleted; this is a 2026-09-28 copy, rotated at 1021 that day; expected = ~/.cache/release-repair-20260928/v2-service-receipt.json finality_statuses[0]"
+    },
+    {
+      "name": "original-validator-3",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/working/validator-3"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:26:13.278086+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/original-validator-3.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/original-validator-3.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2885061,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:29:32.392801+00:00",
+      "elapsed_seconds": 199.1,
+      "minimum_available_memory_observed_bytes": 17114599424,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "error": "verification or certified identity mismatch",
+      "expected_1020_original": {
+        "block_height": 1020,
+        "block_tip_hash": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+        "state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6"
+      },
+      "note": "the 1020 originals (~/.cache/combined-release-20260915/raw) are deleted; this is a 2026-09-28 copy, rotated at 1021 that day; expected = ~/.cache/release-repair-20260928/v2-service-receipt.json finality_statuses[0]"
+    },
+    {
+      "name": "governance-prepare",
+      "command": [
+        "python3",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/tools/governance_prepare.py"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/tools",
+      "started_at": "2026-10-21T10:29:33.018890+00:00",
+      "status": "FAIL",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/governance-prepare.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/governance-prepare.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2888505,
+      "exit_code": 1,
+      "completed_at": "2026-10-21T10:29:36.027351+00:00",
+      "elapsed_seconds": 3.0,
+      "minimum_available_memory_observed_bytes": 22487351296,
+      "note": "governed rotation not run: it needs the deleted 1020 originals; the 2026-09-28 copies already carry it (slot 1021 vs next height 1022)"
+    },
+    {
+      "name": "canary-1123-checkpoint-new",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "verify-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1123/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:29:32.389292+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1123-checkpoint-new.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1123-checkpoint-new.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2888501,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:29:36.402153+00:00",
+      "elapsed_seconds": 4.0,
+      "minimum_available_memory_observed_bytes": 22476677120,
+      "verified": true,
+      "observed": {
+        "block_height": 1123,
+        "block_tip_hash": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+        "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+      },
+      "expected": {
+        "block_height": 1123,
+        "block_tip_hash": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+        "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+      }
+    },
+    {
+      "name": "canary-1123-checkpoint-rollback",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/rollback",
+        "verify-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1123/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:29:32.391555+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1123-checkpoint-rollback.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1123-checkpoint-rollback.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2888503,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:29:44.417922+00:00",
+      "elapsed_seconds": 12.0,
+      "minimum_available_memory_observed_bytes": 21590192128,
+      "verified": true,
+      "observed": {
+        "block_height": 1123,
+        "block_tip_hash": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+        "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+      },
+      "expected": {
+        "block_height": 1123,
+        "block_tip_hash": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+        "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+      }
+    },
+    {
+      "name": "canary-1123-full-new",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1123/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:29:32.388299+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1123-full-new.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1123-full-new.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2888502,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:32:58.505721+00:00",
+      "elapsed_seconds": 206.1,
+      "minimum_available_memory_observed_bytes": 17660616704,
+      "verified": true,
+      "observed": {
+        "block_height": 1123,
+        "block_tip_hash": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+        "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+      },
+      "expected": {
+        "block_height": 1123,
+        "block_tip_hash": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+        "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+      }
+    },
+    {
+      "name": "canary-1123-full-rollback",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/rollback",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1123/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:29:32.393123+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1123-full-rollback.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1123-full-rollback.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2888504,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:33:07.508700+00:00",
+      "elapsed_seconds": 215.1,
+      "minimum_available_memory_observed_bytes": 17660616704,
+      "verified": true,
+      "observed": {
+        "block_height": 1123,
+        "block_tip_hash": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+        "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+      },
+      "expected": {
+        "block_height": 1123,
+        "block_tip_hash": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+        "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+      }
+    },
+    {
+      "name": "canary-1115-import-signed",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "snapshot-import-signed-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1115/signed-import",
+        "--snapshot-dir",
+        "/home/postfiatchad/.postfiat/deployments/signer-rotation-20261007/evidence/pre-rollout-backup/backup-signed",
+        "--trusted-publisher-key-file",
+        "/home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json",
+        "--node-id",
+        "validator-1"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:33:07.622345+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1115-import-signed.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1115-import-signed.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2891669,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:33:49.645098+00:00",
+      "elapsed_seconds": 42.0,
+      "minimum_available_memory_observed_bytes": 20605202432
+    },
+    {
+      "name": "canary-1115-checkpoint-new",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "verify-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1115/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:33:49.750208+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1115-checkpoint-new.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1115-checkpoint-new.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2892067,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:33:53.758623+00:00",
+      "elapsed_seconds": 4.0,
+      "minimum_available_memory_observed_bytes": 21692506112,
+      "verified": true,
+      "observed": {
+        "block_height": 1115,
+        "block_tip_hash": "28e1175b63a9ad73947fe605f9580b59c1b225a16a76093b9de525a1d5271d41043f4a0939396d127814cda9b1ab8480",
+        "state_root": "a5287eaff909a636575b8dbe056af1f9546d07e0da9819d4450ab83d41e047428348eef10f8689b1d0127c9d27726d72"
+      },
+      "expected": {
+        "block_height": 1115,
+        "block_tip_hash": "28e1175b63a9ad73947fe605f9580b59c1b225a16a76093b9de525a1d5271d41043f4a0939396d127814cda9b1ab8480",
+        "state_root": "a5287eaff909a636575b8dbe056af1f9546d07e0da9819d4450ab83d41e047428348eef10f8689b1d0127c9d27726d72"
+      }
+    },
+    {
+      "name": "canary-1115-full-new",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1115/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:33:49.750486+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1115-full-new.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1115-full-new.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2892066,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:37:13.842145+00:00",
+      "elapsed_seconds": 204.1,
+      "minimum_available_memory_observed_bytes": 21300264960,
+      "verified": true,
+      "observed": {
+        "block_height": 1115,
+        "block_tip_hash": "28e1175b63a9ad73947fe605f9580b59c1b225a16a76093b9de525a1d5271d41043f4a0939396d127814cda9b1ab8480",
+        "state_root": "a5287eaff909a636575b8dbe056af1f9546d07e0da9819d4450ab83d41e047428348eef10f8689b1d0127c9d27726d72"
+      },
+      "expected": {
+        "block_height": 1115,
+        "block_tip_hash": "28e1175b63a9ad73947fe605f9580b59c1b225a16a76093b9de525a1d5271d41043f4a0939396d127814cda9b1ab8480",
+        "state_root": "a5287eaff909a636575b8dbe056af1f9546d07e0da9819d4450ab83d41e047428348eef10f8689b1d0127c9d27726d72"
+      }
+    },
+    {
+      "name": "canary-1050-import-signed",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "snapshot-import-signed-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1050/signed-import",
+        "--snapshot-dir",
+        "/home/postfiatchad/.postfiat/deployments/combined-fastpay-20260928/evidence/pre-rollout-backup/backup-signed",
+        "--trusted-publisher-key-file",
+        "/home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json",
+        "--node-id",
+        "validator-1"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:37:13.930404+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1050-import-signed.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1050-import-signed.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2894860,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:37:53.953609+00:00",
+      "elapsed_seconds": 40.0,
+      "minimum_available_memory_observed_bytes": 21468758016
+    },
+    {
+      "name": "canary-1050-checkpoint-new",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "verify-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1050/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:37:54.037439+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1050-checkpoint-new.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1050-checkpoint-new.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2895367,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:38:02.049385+00:00",
+      "elapsed_seconds": 8.0,
+      "minimum_available_memory_observed_bytes": 21742452736,
+      "verified": true,
+      "observed": {
+        "block_height": 1050,
+        "block_tip_hash": "03a24230278caaf1740ee99782ad1868ed28453f84fd34efe9f9a9fe226b5daf56a87d3168058d6849f51772d0611259",
+        "state_root": "13d9e652392be49f03eb3c0f683718684203051d56a05da365dbb45e03dda183e89977b5e0772fbf6c633df65c3c39be"
+      },
+      "expected": {
+        "block_height": 1050,
+        "block_tip_hash": "03a24230278caaf1740ee99782ad1868ed28453f84fd34efe9f9a9fe226b5daf56a87d3168058d6849f51772d0611259",
+        "state_root": "13d9e652392be49f03eb3c0f683718684203051d56a05da365dbb45e03dda183e89977b5e0772fbf6c633df65c3c39be"
+      }
+    },
+    {
+      "name": "canary-1050-full-new",
+      "command": [
+        "/home/postfiatchad/.cache/release-store-handle-20261021/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-store-handle-20261021/canary-1050/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-store-handle-20261021/source-1",
+      "started_at": "2026-10-21T10:37:54.037824+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1050-full-new.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-store-handle-20261021/logs/canary-1050-full-new.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-store-handle-20261021/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2895366,
+      "exit_code": 0,
+      "completed_at": "2026-10-21T10:41:11.126077+00:00",
+      "elapsed_seconds": 197.1,
+      "minimum_available_memory_observed_bytes": 21742452736,
+      "verified": true,
+      "observed": {
+        "block_height": 1050,
+        "block_tip_hash": "03a24230278caaf1740ee99782ad1868ed28453f84fd34efe9f9a9fe226b5daf56a87d3168058d6849f51772d0611259",
+        "state_root": "13d9e652392be49f03eb3c0f683718684203051d56a05da365dbb45e03dda183e89977b5e0772fbf6c633df65c3c39be"
+      },
+      "expected": {
+        "block_height": 1050,
+        "block_tip_hash": "03a24230278caaf1740ee99782ad1868ed28453f84fd34efe9f9a9fe226b5daf56a87d3168058d6849f51772d0611259",
+        "state_root": "13d9e652392be49f03eb3c0f683718684203051d56a05da365dbb45e03dda183e89977b5e0772fbf6c633df65c3c39be"
+      }
+    }
+  ],
+  "live_mutations": false,
+  "updated_at": "2026-10-21T10:41:11.237115+00:00",
+  "notes_added_at": "2026-10-21T10:41:26.519657+00:00"
+}

@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/home/postfiatchad/.cache/release-store-handle-20261021/tools/governance_prepare.py", line 14, in <module>
+    cli(f'governance-sign-{i}',['governance-authorization-sign','--data-dir',data,'--amendment-file',out/'amendment.json','--validator',f'validator-{i}','--validator-key-file',ROOT/'isolated-signers'/f'validator-{i}'/'validator_keys.json','--proposal-slot','1021','--expires-at-height','1026','--authorization-file',out/f'authorization-{i}.json'])
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/postfiatchad/.cache/release-store-handle-20261021/tools/governance_prepare.py", line 11, in cli
+    if rec['status']!='PASS': raise RuntimeError(f'{name}: {rec["status"]}')
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: governance-sign-0: FAIL
