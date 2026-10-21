@@ -1,0 +1,60 @@
+{
+ "recorded_at": "2026-10-21T11:05Z",
+ "sheet": "DEPLOY-SHEET.md \u00a70, \u00a71, \u00a73 (read-only on the fleet)",
+ "go_no_go": {
+  "other_rollout_or_session": "none: origin/main head 55edef74 (candidate cut record); no open rollout in docs/handoffs (latest 2026-10-20); the only other agent session on this server (tmux dravlic2) is local evidence work with no host or RPC contact; on each host only the persistent forwarding sessions (this server since 2026-10-08, 5.223.45.94 since 2026-10-15, no child process) and no safe-rollout, migrate or export process",
+  "apt_daily_upgrade_service": "inactive on all six",
+  "ci_86706699": "rust-ci, product-security-ci, docs-build: success (gh run list --commit 86706699, read once 10:56Z)"
+ },
+ "routes_all_six": {
+  "observed_at": "2026-10-21T10:59:09+00:00",
+  "agree": true,
+  "height": 1131,
+  "tip": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+  "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341",
+  "mempool_pending": 0,
+  "routes": {
+   "pftl-a666-ethereum-wA666-usdc-v1": {
+    "ledger_hash": "57da38373813c34b9629fa56123eed8ebb49433d71ff4021400cabe673c5943977065f14f3a18f726941edef03ee78f5",
+    "claims_atoms": 0,
+    "returns_atoms": 0,
+    "open_packets": 0,
+    "pending_burns": 0,
+    "paused": false,
+    "authority_epoch": 1
+   },
+   "pftl-bmnrc-ethereum-wBMNRC-usdc-v1": {
+    "ledger_hash": "b2817e68d96e950bc6700643a56636880aa7a1e5bc9c4a130204e725512691b4618364807af8d30392a58b12a32840a4",
+    "claims_atoms": 0,
+    "returns_atoms": 0,
+    "open_packets": 0,
+    "pending_burns": 0,
+    "paused": false,
+    "authority_epoch": 1
+   }
+  },
+  "authority_epoch_basis": "navcoin_bridge_routes does not report authority_epoch; ledger_hash commits to it (pftl_uniswap_route_state_hash, crates/types/src/market_nav_asset_types.rs); both hashes equal the epoch-1 values of the verified 1123 backup and height is still 1131, so neither issuer update has been submitted",
+  "issuer_updates": "not yet submitted"
+ },
+ "stage_recheck": {
+  "executable_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+  "manifest_sha256": "8ce1da304f7a2f2ab1c62c63295ec79f729f99922b47cd825f1f05931ea7c34e",
+  "local_preflight": "PASS_SIGNED_LOCAL_INPUTS_ONLY: 33 generated files, 4 circuit artifacts, signed gate PASS for all six"
+ },
+ "fleet_preflight": {
+  "result": "verified",
+  "agreement": "six-way at 1131/9b054f09/a12e7c5f, mempools 0",
+  "signer_rosters": "6 valid, registry root 08a451e0, 6 validators",
+  "deletions": 0,
+  "diff_per_validator": "9 create, 2 update (the two units)",
+  "order": [
+   "validator-1",
+   "validator-0",
+   "validator-2",
+   "validator-3",
+   "validator-4",
+   "validator-5"
+  ]
+ },
+ "validator_1_root_fs_avail_bytes": 17649025024
+}
