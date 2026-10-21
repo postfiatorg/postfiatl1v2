@@ -1,13 +1,22 @@
 # Issuer signing sheet, 2026-10-20
 
+**State on 2026-10-21.** The release changed: since today all six validators run
+`store-handle-20261021` (executable `eea96ba6…`, source `86706699`). The heights moved: that
+release added one grant block per validator (1132–1137), so the fleet is at 1137 and the two
+updates go into the next heights (1138 and 1139 on today's read). The files and the procedure
+did not change: the same two unsigned files and hashes, the same routes (A666 `57da3837…`,
+BMNRC `b2817e68…`, authority epoch 1, 0 claims, 0 returns, not paused), the same committee
+epoch 2 (root `72836827…`, active since 1131) and the same steps. Every height below is read
+at the pre-check (current height H, next height H+1), so the sheet holds for any later height.
+
 Two issuer-signed bridge policy updates move the A666 and BMNRC routes to the
 epoch-2 checkpoint committee. Key material never leaves the founder's host:
 only the quote goes to it and only the signed transaction comes back.
 
 ## 1. Window and files
 
-- **Window:** 2026-10-20 12:00–16:00 UTC. Order: **A666 first, then BMNRC**.
-- **Release:** `fastlane-cap-20261014` (executable `b1b3dbb150d3596577df3bb3fe145103d90988cf71558c4d34a035fe4bb44405`).
+- **Window:** the one we name in the handoff of the day (the first was 2026-10-20 12:00–16:00 UTC). Order: **A666 first, then BMNRC**.
+- **Release:** `store-handle-20261021` (executable `eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36`, source `86706699`), running on all six since 2026-10-21. The files were prepared under `fastlane-cap-20261014` and are unchanged.
 - **Files** (branch `release/fastlane-cap-20261014`, `deployments/fastlane-cap-20261014/observed/`):
 
 | Route | File | File sha256 | Operation sha256 |
@@ -27,19 +36,28 @@ only the quote goes to it and only the signed transaction comes back.
 
 ## 2. Where each step runs
 
-- **Sign:** on the founder's host, with a `postfiat-node` of release `8bed9b90`
-  (`/opt/postfiat/releases/fastlane-cap-20261014/postfiat-node` copied from any validator
-  host; sha256 above).
+- **Sign:** on the founder's host, with a `postfiat-node` of release `86706699`
+  (`/opt/postfiat/releases/store-handle-20261021/postfiat-node` copied from any validator
+  host; sha256 above). It is the release the six hosts run, so signing, the proposer read
+  and the validators use one executable.
 - **Quote, submit, read:** as root on the validator host that proposes the next height. The
   RPC submit path accepts only the local proposer. Each host's RPC listens on
   `127.0.0.1:2765N` (validator-N). Its `rpc-serve` unit already carries
-  `--allow-mempool-submit-finality`, `--finality-topology /etc/postfiat/releases/fastlane-cap-20261014/topology.json`
-  and the validator's key, so you pass no topology or key file.
+  `--allow-mempool-submit-finality`, `--finality-topology /etc/postfiat/releases/store-handle-20261021/topology.json`
+  and the validator's key, so no topology or key file is passed.
+- **Heights:** H is the current height as read by the pre-check (§4); each update goes into
+  the next height H+1. The submit host is the view-0 proposer of that height as `block-proposer`
+  reports it in §4, read again before each submission.
 
-| Update | Height | Proposer (view 0) | RPC on that host |
+| Update | Height | Expected proposer (view 0) | RPC on that host |
 |---|---|---|---|
-| A666 | 1132 | validator-4 | `127.0.0.1:27654` |
-| BMNRC | 1133 | validator-5 | `127.0.0.1:27655` |
+| A666 | H+1 (today: H = 1137, so 1138) | validator-4 | `127.0.0.1:27654` |
+| BMNRC | the next height after A666 (today 1139) | validator-5 | `127.0.0.1:27655` |
+
+Worked example, 2026-10-21: the release blocks rotated 1132 validator-4, 1133 validator-5,
+1134 validator-0, 1135 validator-1, 1136 validator-2, 1137 validator-3, so 1138 is expected on
+validator-4 and 1139 on validator-5, the same hosts as on 2026-10-20. The `block-proposer` read
+for the actual next height decides.
 
 - **Method:** `mempool_submit_signed_asset_transaction_finality`, the same RPC finality path
   as the 2026-10-15 `mempool_submit_fastlane_primary_finality` submission (from a file,
@@ -98,52 +116,58 @@ EOF
 
 Both are read-only except `submit`. `ledger-read.py` is for the verified backup imports on the work server only, not for the hosts.
 
-## 4. Preconditions (we check just before 12:00 on all six; you check again on the submit host)
+## 4. Preconditions (we check all six just before the window; please check again on the submit host)
 
 ```bash
 cd /root/issuer-20261020
-N=4; H=1132   # BMNRC: N=5; H=1133
-python3 issuer-rpc.py check 2765$N
+N=4                                   # expected proposer of the next height (today: A666 4, BMNRC 5)
+python3 issuer-rpc.py check 2765$N    # the "height" line is H
+H=1137                                # set to the height just read (1137 is today's example)
 python3 issuer-rpc.py tx 2765$N 2b2efa37e12f5d14c4b1f7da62a4fc7f9ea8a2d7d2d21ad20427d56646d99c158693072e9f7c022cf5f49deb8ee34826   # the epoch-2 activation: confirmed True, code fastlane_control_applied, block 1131
-runuser -u postfiat -- /opt/postfiat/releases/fastlane-cap-20261014/postfiat-node block-proposer \
-  --unsafe-devnet-json-storage --data-dir /var/lib/postfiat/validator-$N --height $H --view 0
+runuser -u postfiat -- /opt/postfiat/releases/store-handle-20261021/postfiat-node block-proposer \
+  --unsafe-devnet-json-storage --data-dir /var/lib/postfiat/validator-$N --height $((H+1)) --view 0
 ```
 
-Our read at 2026-10-20T10:13:12Z through all six RPCs: all six at height 1131, tip `9b054f09…`,
-root `a12e7c5f…`, `mempool 0`. On both routes: claims 0, returns 0, open packets 0, pending
-burns 0, not paused. The A666 hash is `57da3837…` and the BMNRC hash `b2817e68…`, unchanged
-since their last receipts at 1111 and 1115 (verified 1123 backup). We read again before 12:00.
+Our read after the store-handle release (2026-10-21T11:43:17Z, all six): height 1137, tip
+`18a4dc869b52…`, root `1277c76c16af…`, `mempool 0`. Blocks 1132–1137 are that release's six
+grant blocks. On both routes: claims 0, returns 0, not paused, authority epoch 1. The A666 hash
+is `57da3837…` and the BMNRC hash `b2817e68…`, unchanged since their last receipts at 1111 and
+1115 (verified 1123 backup). We read again before the window and note any newer block.
 
 Submit only if every line holds:
 
 1. On each route, `claims 0` and `returns 0`. Consensus refuses the update otherwise
    (`pftl_uniswap_bridge_policy_handoff_active`).
 2. Committee epoch 2 is the newest and has no fence: the activation transaction above reports
-   `confirmed True` with receipt code `fastlane_control_applied` in block 1131, and the chain tip is
-   still that block before A666 (`height 1131`). Do NOT read `/var/lib/postfiat/validator-N/ledger.json`
+   `confirmed True` with receipt code `fastlane_control_applied` in block 1131, and every block
+   above 1131 is one we have noted (today: the six grant blocks 1132–1137, so H = 1137). A
+   higher H without a note from us means stop. Do NOT read `/var/lib/postfiat/validator-N/ledger.json`
    on the hosts for this: it is a legacy file that still shows committee 1
    (`pftl_uniswap_bridge_policy_committee_not_current` is the refusal if epoch 2 were not current).
 3. There is no open handoff on the route: `open_packets 0`, `pending_burns 0`, `paused False`.
-4. The chain has not moved. Before A666: `height 1131`, tip `9b054f09…`, root `a12e7c5f…`,
-   `mempool 0`, A666 `hash 57da3837…`, BMNRC `hash b2817e68…`, both routes `epoch 1` root
-   `a2eebcba…`. Before BMNRC: `height 1132`, and the tip is the block that `issuer-rpc.py tx`
-   reports for the A666 update. BMNRC is still on `epoch 1`.
-5. `block-proposer` reports `"local_is_proposer": true`.
+4. The chain has not moved since our read. Before A666: `height` H with the tip and root of our
+   latest read (today `height 1137`, tip `18a4dc869b52…`, root `1277c76c16af…`), `mempool 0`,
+   A666 `hash 57da3837…`, BMNRC `hash b2817e68…`, both routes `epoch 1` root `a2eebcba…`.
+   Before BMNRC: `height` is the A666 height (today 1138), and the tip is the block that
+   `issuer-rpc.py tx` reports for the A666 update. BMNRC is still on `epoch 1`.
+5. `block-proposer` for the next height (`$((H+1))`) reports `"local_is_proposer": true`.
+6. The fetched file's sha256 equals §1: A666 `24aa2e28…`, BMNRC `5179d6f7…`.
 
 **If any precondition fails, do not submit.** Write what you saw in a handoff and stop. We
 re-check and name a new window.
 
 ## 5. Submission (A666, then BMNRC)
 
-For A666, use `a666`, validator-4, port 27654 and height 1132. For BMNRC, use `bmnrc`,
-validator-5, port 27655 and height 1133.
+For A666, use `a666` and the proposer of H+1 (today validator-4, `N=4`, height 1138). For BMNRC,
+use `bmnrc` and the proposer of the height after A666 (today validator-5, `N=5`, height 1139).
+`N` is the one set in §4.
 
 1. **Submit host:** fetch the file and check it.
    ```bash
    cd /root/issuer-20261020
    curl -fsSLO https://raw.githubusercontent.com/postfiatorg/postfiatl1v2/release/fastlane-cap-20261014/deployments/fastlane-cap-20261014/observed/a666-bridge-policy-update.unsigned.json
    sha256sum a666-bridge-policy-update.unsigned.json      # must equal the table in §1
-   python3 issuer-rpc.py quote 27654 a666-bridge-policy-update.unsigned.json > a666.quote.json
+   python3 issuer-rpc.py quote 2765$N a666-bridge-policy-update.unsigned.json > a666.quote.json
    ```
    The `operation sha256` line must equal §1. The quote must have `"ok": true`, `source` set to
    the issuer, `sender_meets_reserve_after_fee: true` and the same operation.
@@ -158,28 +182,28 @@ validator-5, port 27655 and height 1133.
 4. **Copy `a666.signed.json` back to the submit host.** It contains a signature, not a key.
 5. **Submit host:** run §4 again, then submit once.
    ```bash
-   python3 issuer-rpc.py submit 27654 a666.signed.json issuer-a666-bridge-policy-update-20261020 | tee a666.submit.json
+   python3 issuer-rpc.py submit 2765$N a666.signed.json issuer-a666-bridge-policy-update-20261020 | tee a666.submit.json
    ```
    Expected: `"ok": true`, `result.finality.confirmed: true` and `receipt.accepted: true` with
    code `accepted`. The route records the transition `route_bridge_policy_updated`. If the
-   reply is an error, do not resend. Run `issuer-rpc.py tx 27654 <tx_id>` and write it in the handoff.
+   reply is an error, do not resend. Run `issuer-rpc.py tx 2765$N <tx_id>` and write it in the handoff.
 
 ## 6. After-reads
 
-After A666, on validator-4:
+After A666, on its submit host (today validator-4):
 
 ```bash
-python3 issuer-rpc.py tx 27654 <tx_id>   # confirmed True, accepted
-python3 issuer-rpc.py check 27654        # height 1132, mempool 0, A666 hash changed, claims 0
+python3 issuer-rpc.py tx 2765$N <tx_id>   # confirmed True, accepted
+python3 issuer-rpc.py check 2765$N        # height H+1 (today 1138), mempool 0, A666 hash changed, claims 0
 ```
 
 The `tx` read must show `confirmed True` with receipt code `accepted`; the `check` read must show
-`height 1132`, `mempool 0` and a changed A666 `hash` (it was `57da3837…`), with the BMNRC hash
+`height` H+1 (today 1138), `mempool 0` and a changed A666 `hash` (it was `57da3837…`), with the BMNRC hash
 unchanged (`b2817e68…`). The authority epoch 2 of the route is confirmed from the work server after the
 window with the verified ledger import; the hosts' `ledger.json` is a legacy file and is not read.
 
-After BMNRC, on validator-5, the same reads must show `height 1133` (1131 + 2) and a changed BMNRC
-`hash`.
+After BMNRC, on its submit host (today validator-5), the same reads must show `height` H+2
+(today 1139) and a changed BMNRC `hash`.
 We then confirm six-way agreement (height, tip, root and route hashes) through all six RPCs.
 
 Then the next Ethereum checkpoint is signed by the epoch-2 committee, 5 of 6
