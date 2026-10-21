@@ -1,0 +1,311 @@
+{
+ "schema": "store-handle-20261021-rollout-record-v1",
+ "tool": "scripts/postfiat-safe-rollout apply-next",
+ "release_id": "store-handle-20261021",
+ "executable_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+ "signed_manifest_sha256": "8ce1da304f7a2f2ab1c62c63295ec79f729f99922b47cd825f1f05931ea7c34e",
+ "canary_backup_signed_manifest_sha256": "df9b3847c2229b23e9c97627b9cf14447de6aab1f5d4cafa894f8eca4a108ef1",
+ "order": [
+  "validator-1",
+  "validator-0",
+  "validator-2",
+  "validator-3",
+  "validator-4",
+  "validator-5"
+ ],
+ "rollout_state_sha256_after": "bd5f9a2cad18beef2035b7d5412c87e1202b558d926ed598e59fc96c1d22ee15",
+ "before": {
+  "height": 1131,
+  "tip": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+  "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341"
+ },
+ "after": {
+  "height": 1137,
+  "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+  "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+ },
+ "after_observed_at": "2026-10-21T11:43:17.768962+00:00",
+ "applies": [
+  {
+   "validator_id": "validator-1",
+   "started": "2026-10-21T11:15:17Z",
+   "completed": "2026-10-21T11:16:10Z",
+   "restart_height": 1131,
+   "restart_tip": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+   "restart_state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341",
+   "fleet_convergence_height": 1131,
+   "fleet_convergence_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341",
+   "mempool_pending": 0,
+   "exit": 0,
+   "evidence": "apply-1.json"
+  },
+  {
+   "validator_id": "validator-0",
+   "started": "2026-10-21T11:18:57Z",
+   "completed": "2026-10-21T11:20:12Z",
+   "restart_height": 1132,
+   "restart_tip": "5966a47c16213544f9cf76917d2fda5d7d93446112017173bc71ceb3d6ab66a46d919d912d839651a1c49edf273da32e",
+   "restart_state_root": "48f8f8e5422a055b00dc02ce1bf49120ccc310cff56eee9f4f65285e705184bc680d3ef662805d3edc6a6d99d5654511",
+   "fleet_convergence_height": 1132,
+   "fleet_convergence_root": "48f8f8e5422a055b00dc02ce1bf49120ccc310cff56eee9f4f65285e705184bc680d3ef662805d3edc6a6d99d5654511",
+   "mempool_pending": 0,
+   "exit": 0,
+   "evidence": "apply-2.json"
+  },
+  {
+   "validator_id": "validator-2",
+   "started": "2026-10-21T11:23:06Z",
+   "completed": "2026-10-21T11:25:49Z",
+   "restart_height": 1133,
+   "restart_tip": "cd5b764420fbd3823443cf7e01d046ab60ec8efb0016343cb3ffaf271729c5150be23517224a044916416b60391a051d",
+   "restart_state_root": "8163e71ab72f859229b64a3ca31822cf374dd6c84bbdd0a3d69ffddf076cf21349479bcd1ac3a8b94f3b267befdd91ae",
+   "fleet_convergence_height": 1133,
+   "fleet_convergence_root": "8163e71ab72f859229b64a3ca31822cf374dd6c84bbdd0a3d69ffddf076cf21349479bcd1ac3a8b94f3b267befdd91ae",
+   "mempool_pending": 0,
+   "exit": 0,
+   "evidence": "apply-3.json"
+  },
+  {
+   "validator_id": "validator-3",
+   "started": "2026-10-21T11:28:44Z",
+   "completed": "2026-10-21T11:30:00Z",
+   "restart_height": 1134,
+   "restart_tip": "69fe2f35123e122f3c8397bc3b0199eb55097ac1a9296156dda40412ff3027b8f2b898072c7881a7af8a5a17dd11e2a5",
+   "restart_state_root": "c1473eac772959976f179f1d10b95b954a338ce09ca6d405d79c3343d845961f52ec34a624851301fcf1cdd6f530301b",
+   "fleet_convergence_height": 1134,
+   "fleet_convergence_root": "c1473eac772959976f179f1d10b95b954a338ce09ca6d405d79c3343d845961f52ec34a624851301fcf1cdd6f530301b",
+   "mempool_pending": 0,
+   "exit": 0,
+   "evidence": "apply-4.json"
+  },
+  {
+   "validator_id": "validator-4",
+   "started": "2026-10-21T11:32:37Z",
+   "completed": "2026-10-21T11:33:29Z",
+   "restart_height": 1135,
+   "restart_tip": "68b64acf5d9f9e73a65248a82cdefcd20c6ac20bd92da9de6bb32f59380766ffe7a8c5ddc56c077f9efe3159c8778569",
+   "restart_state_root": "b48700906c1e744ac3ed4abd0efd2d8a284aa2cf3ad8710f517c3af16456a8e6f13197c707655e7352af0b9b0349a176",
+   "fleet_convergence_height": 1135,
+   "fleet_convergence_root": "b48700906c1e744ac3ed4abd0efd2d8a284aa2cf3ad8710f517c3af16456a8e6f13197c707655e7352af0b9b0349a176",
+   "mempool_pending": 0,
+   "exit": 0,
+   "evidence": "apply-5.json"
+  },
+  {
+   "validator_id": "validator-5",
+   "started": "2026-10-21T11:36:28Z",
+   "completed": "2026-10-21T11:38:16Z",
+   "restart_height": 1136,
+   "restart_tip": "2034a58ebd49580294decded9eca2ddb7d0aed8248f454c01d7acfeb60a779602a2109f9f3be80295a73e24eddb63bd3",
+   "restart_state_root": "12be285a6aa62b3f6be99271871aef147059478f3eba6d4948f65739769a56376ceca4ded3a84745ccaadca833e8380e",
+   "fleet_convergence_height": 1136,
+   "fleet_convergence_root": "12be285a6aa62b3f6be99271871aef147059478f3eba6d4948f65739769a56376ceca4ded3a84745ccaadca833e8380e",
+   "mempool_pending": 0,
+   "exit": 0,
+   "evidence": "apply-6.json"
+  }
+ ],
+ "faucet_path": "StakeHub .venv/bin/pft --json faucet testing --asset PFT --amount 1000000 (1 PFT), faucet pfcd4cc8...",
+ "faucet_grants": [
+  {
+   "after": "validator-1",
+   "height": 1132,
+   "proposer": "validator-4",
+   "view": 0,
+   "tx_id": "a287a5b76d5328e87d7c913f6c2495f223ad9df3e12902ba428ea27b722d978c31a0a31d5067e6caf73d31eff57236dd",
+   "amount_atoms": 1000000,
+   "block_hash": "5966a47c16213544f9cf76917d2fda5d7d93446112017173bc71ceb3d6ab66a46d919d912d839651a1c49edf273da32e",
+   "state_root": "48f8f8e5422a055b00dc02ce1bf49120ccc310cff56eee9f4f65285e705184bc680d3ef662805d3edc6a6d99d5654511",
+   "certificate_id": "7c08c7549926f5d7bc14a6482e03523c2dcf1ec5e6ff64e8d5b8b353a2b6afac8846ed5e0268129e259050937ae3e931",
+   "voters": [
+    "validator-0",
+    "validator-1",
+    "validator-2",
+    "validator-3",
+    "validator-4"
+   ],
+   "checks": {
+    "identical_block_on_6": true,
+    "quorum_5_of_6": true,
+    "tip_is_grant_block_on_6": true,
+    "mempools_empty": true,
+    "receipt_verified_6_of_6": true,
+    "proposer_matches_receipt": true
+   },
+   "pass": true,
+   "evidence": [
+    "grant-after-validator-1.out",
+    "grant-check-after-validator-1.json",
+    "after-validator-1.json"
+   ]
+  },
+  {
+   "after": "validator-0",
+   "height": 1133,
+   "proposer": "validator-5",
+   "view": 0,
+   "tx_id": "5c99a5b73ba6c1fab67c7a3d87a386bbc5081ef2045ed40d716a9c3947dc4376981b437e40e71c104a487f5a3a85c5c9",
+   "amount_atoms": 1000000,
+   "block_hash": "cd5b764420fbd3823443cf7e01d046ab60ec8efb0016343cb3ffaf271729c5150be23517224a044916416b60391a051d",
+   "state_root": "8163e71ab72f859229b64a3ca31822cf374dd6c84bbdd0a3d69ffddf076cf21349479bcd1ac3a8b94f3b267befdd91ae",
+   "certificate_id": "a6fb574dce9baf6e9fbeeb11102264ec3cea36d564a735de252151204a7e8722e66d41b80ff4a6ce7424147463e2e2a2",
+   "voters": [
+    "validator-1",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+   ],
+   "checks": {
+    "identical_block_on_6": true,
+    "quorum_5_of_6": true,
+    "tip_is_grant_block_on_6": true,
+    "mempools_empty": true,
+    "receipt_verified_6_of_6": true,
+    "proposer_matches_receipt": true
+   },
+   "pass": true,
+   "evidence": [
+    "grant-after-validator-0.out",
+    "grant-check-after-validator-0.json",
+    "after-validator-0.json"
+   ]
+  },
+  {
+   "after": "validator-2",
+   "height": 1134,
+   "proposer": "validator-0",
+   "view": 0,
+   "tx_id": "522bd45802ee9cf04a573197c434ead429cedc1a2abc0d2d5fd4fadc71bcc9a4643f95b518f4d8498616ff925db15735",
+   "amount_atoms": 1000000,
+   "block_hash": "69fe2f35123e122f3c8397bc3b0199eb55097ac1a9296156dda40412ff3027b8f2b898072c7881a7af8a5a17dd11e2a5",
+   "state_root": "c1473eac772959976f179f1d10b95b954a338ce09ca6d405d79c3343d845961f52ec34a624851301fcf1cdd6f530301b",
+   "certificate_id": "d3f0f87594dee75d0f21aefc668e5bfc36cc30862ba2da96f759aa953876d6763209a29351a794da058bd429700ff51f",
+   "voters": [
+    "validator-0",
+    "validator-1",
+    "validator-2",
+    "validator-3",
+    "validator-4"
+   ],
+   "checks": {
+    "identical_block_on_6": true,
+    "quorum_5_of_6": true,
+    "tip_is_grant_block_on_6": true,
+    "mempools_empty": true,
+    "receipt_verified_6_of_6": true,
+    "proposer_matches_receipt": true
+   },
+   "pass": true,
+   "evidence": [
+    "grant-after-validator-2.out",
+    "grant-check-after-validator-2.json",
+    "after-validator-2.json"
+   ]
+  },
+  {
+   "after": "validator-3",
+   "height": 1135,
+   "proposer": "validator-1",
+   "view": 0,
+   "tx_id": "8d4ffd85dce39dcd62f23e51bdf044def3849a42810d9fc753e38e81bdbcafcaf111159f2fef98ef463c0d3e09cdc349",
+   "amount_atoms": 1000000,
+   "block_hash": "68b64acf5d9f9e73a65248a82cdefcd20c6ac20bd92da9de6bb32f59380766ffe7a8c5ddc56c077f9efe3159c8778569",
+   "state_root": "b48700906c1e744ac3ed4abd0efd2d8a284aa2cf3ad8710f517c3af16456a8e6f13197c707655e7352af0b9b0349a176",
+   "certificate_id": "0e8bfda735af4c49eebd7368b144b45024ffad218a8cfd55f919e83c12b364acddfe6d78b598788c13a513c31e1ad48b",
+   "voters": [
+    "validator-0",
+    "validator-1",
+    "validator-2",
+    "validator-3",
+    "validator-4"
+   ],
+   "checks": {
+    "identical_block_on_6": true,
+    "quorum_5_of_6": true,
+    "tip_is_grant_block_on_6": true,
+    "mempools_empty": true,
+    "receipt_verified_6_of_6": true,
+    "proposer_matches_receipt": true
+   },
+   "pass": true,
+   "evidence": [
+    "grant-after-validator-3.out",
+    "grant-check-after-validator-3.json",
+    "after-validator-3.json"
+   ]
+  },
+  {
+   "after": "validator-4",
+   "height": 1136,
+   "proposer": "validator-2",
+   "view": 0,
+   "tx_id": "d3c8500109192a28885f079462deb2824dfe03daa7980649f8a8c35bc60c1e4cc0e3b270292412cee9024c9323c2f303",
+   "amount_atoms": 1000000,
+   "block_hash": "2034a58ebd49580294decded9eca2ddb7d0aed8248f454c01d7acfeb60a779602a2109f9f3be80295a73e24eddb63bd3",
+   "state_root": "12be285a6aa62b3f6be99271871aef147059478f3eba6d4948f65739769a56376ceca4ded3a84745ccaadca833e8380e",
+   "certificate_id": "efb782357ce0047b46b7255a874cc87469c2ecf0a73f5cd97907fcf1df442d5f991d582a5e956eace344f30fae1cd7d9",
+   "voters": [
+    "validator-0",
+    "validator-1",
+    "validator-2",
+    "validator-3",
+    "validator-5"
+   ],
+   "checks": {
+    "identical_block_on_6": true,
+    "quorum_5_of_6": true,
+    "tip_is_grant_block_on_6": true,
+    "mempools_empty": true,
+    "receipt_verified_6_of_6": true,
+    "proposer_matches_receipt": true
+   },
+   "pass": true,
+   "evidence": [
+    "grant-after-validator-4.out",
+    "grant-check-after-validator-4.json",
+    "after-validator-4.json"
+   ]
+  },
+  {
+   "after": "validator-5",
+   "height": 1137,
+   "proposer": "validator-3",
+   "view": 0,
+   "tx_id": "cd1a242e880764c3929710a075feb06204d1c0774c7acd64105a968ce7b6dbd71300f027fd44ff773e1cf320bf10e2c8",
+   "amount_atoms": 1000000,
+   "block_hash": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+   "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a",
+   "certificate_id": "f917359056a52b59bc83f1ba31b96b559b4f11c470c803063d4cfc97c5323b40f8002e82684bf5313085eab4c2b37a23",
+   "voters": [
+    "validator-0",
+    "validator-1",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+   ],
+   "checks": {
+    "identical_block_on_6": true,
+    "quorum_5_of_6": true,
+    "tip_is_grant_block_on_6": true,
+    "mempools_empty": true,
+    "receipt_verified_6_of_6": true,
+    "proposer_matches_receipt": true
+   },
+   "pass": true,
+   "evidence": [
+    "grant-after-validator-5.out",
+    "grant-check-after-validator-5.json",
+    "after-validator-5.json"
+   ]
+  }
+ ],
+ "stakehub_config": {
+  "local_node_binary": "switched to store-handle-20261021 before the first grant",
+  "runtime_binary_and_topology_file": "switched to store-handle-20261021 after the grant following validator-5",
+  "backups": [
+   "~/.pft/config.toml.bak-20261021",
+   "~/.pft/config.toml.bak-20261021b"
+  ]
+ }
+}
