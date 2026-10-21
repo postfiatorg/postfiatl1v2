@@ -1,0 +1,960 @@
+{
+  "observed_at": "2026-10-21T11:43:22.180200+00:00",
+  "verdict": "READY",
+  "counts": {
+    "PASS": 60,
+    "ATTENTION": 0,
+    "FAIL": 0
+  },
+  "expected": {
+    "release_id": "store-handle-20261021",
+    "binary_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+    "build_git_revision": "86706699",
+    "manifest_sha256": "8ce1da304f7a2f2ab1c62c63295ec79f729f99922b47cd825f1f05931ea7c34e"
+  },
+  "checks": [
+    {
+      "check": "ledger agreement",
+      "scope": "fleet",
+      "result": "PASS",
+      "detail": "6/6 at height 1137, tip 18a4dc86, root 1277c76c"
+    },
+    {
+      "check": "release",
+      "scope": "validator-0",
+      "result": "PASS",
+      "detail": "store-handle-20261021 86706699 eea96ba6, manifest verified"
+    },
+    {
+      "check": "mempool",
+      "scope": "validator-0",
+      "result": "PASS",
+      "detail": "0 pending"
+    },
+    {
+      "check": "units",
+      "scope": "validator-0",
+      "result": "PASS",
+      "detail": "validator up 0h23m restarts 0; rpc up 0h23m restarts 0; aux 2/2 active"
+    },
+    {
+      "check": "relay 28703 archive",
+      "scope": "validator-0",
+      "result": "PASS",
+      "detail": "eth_getCode @26094220: HTTP 200, 2186 B"
+    },
+    {
+      "check": "relays 28701/28702",
+      "scope": "validator-0",
+      "result": "PASS",
+      "detail": "28701 ethereum-rpc.publicnode.com navcoin-ethereum-rpc-28701.service; 28702 eth.drpc.org navcoin-ethereum-rpc-28702.service"
+    },
+    {
+      "check": "checkpoint signing",
+      "scope": "validator-0",
+      "result": "PASS",
+      "detail": "/var/lib/postfiat/validator-0/validator_keys.json present; 57 records, newest 2026-10-03 08:12Z"
+    },
+    {
+      "check": "rpc readiness",
+      "scope": "validator-0",
+      "result": "PASS",
+      "detail": "ready=True degraded=False event_log_writable=True finality_key=True telemetry_failures=0"
+    },
+    {
+      "check": "disk /",
+      "scope": "validator-0",
+      "result": "PASS",
+      "detail": "16.0 GB free (threshold 10 GB)"
+    },
+    {
+      "check": "logrotate",
+      "scope": "validator-0",
+      "result": "PASS",
+      "detail": "postfiat-validator-events, postfiat-rpc-events"
+    },
+    {
+      "check": "apt-daily-upgrade",
+      "scope": "validator-0",
+      "result": "PASS",
+      "detail": "service inactive"
+    },
+    {
+      "check": "release",
+      "scope": "validator-1",
+      "result": "PASS",
+      "detail": "store-handle-20261021 86706699 eea96ba6, manifest verified"
+    },
+    {
+      "check": "mempool",
+      "scope": "validator-1",
+      "result": "PASS",
+      "detail": "0 pending"
+    },
+    {
+      "check": "units",
+      "scope": "validator-1",
+      "result": "PASS",
+      "detail": "validator up 0h27m restarts 0; rpc up 0h27m restarts 0; aux 2/2 active"
+    },
+    {
+      "check": "relay 28703 archive",
+      "scope": "validator-1",
+      "result": "PASS",
+      "detail": "eth_getCode @26094220: HTTP 200, 2186 B"
+    },
+    {
+      "check": "relays 28701/28702",
+      "scope": "validator-1",
+      "result": "PASS",
+      "detail": "28701 ethereum-rpc.publicnode.com navcoin-ethereum-rpc-28701.service; 28702 eth.drpc.org navcoin-ethereum-rpc-28702.service"
+    },
+    {
+      "check": "checkpoint signing",
+      "scope": "validator-1",
+      "result": "PASS",
+      "detail": "/var/lib/postfiat/validator-1/validator_keys.json present; 57 records, newest 2026-10-03 08:12Z"
+    },
+    {
+      "check": "rpc readiness",
+      "scope": "validator-1",
+      "result": "PASS",
+      "detail": "ready=True degraded=False event_log_writable=True finality_key=True telemetry_failures=0"
+    },
+    {
+      "check": "disk /",
+      "scope": "validator-1",
+      "result": "PASS",
+      "detail": "17.3 GB free (threshold 10 GB)"
+    },
+    {
+      "check": "logrotate",
+      "scope": "validator-1",
+      "result": "PASS",
+      "detail": "postfiat-validator-events, postfiat-rpc-events"
+    },
+    {
+      "check": "apt-daily-upgrade",
+      "scope": "validator-1",
+      "result": "PASS",
+      "detail": "service inactive"
+    },
+    {
+      "check": "release",
+      "scope": "validator-2",
+      "result": "PASS",
+      "detail": "store-handle-20261021 86706699 eea96ba6, manifest verified"
+    },
+    {
+      "check": "mempool",
+      "scope": "validator-2",
+      "result": "PASS",
+      "detail": "0 pending"
+    },
+    {
+      "check": "units",
+      "scope": "validator-2",
+      "result": "PASS",
+      "detail": "validator up 0h17m restarts 0; rpc up 0h17m restarts 0; aux 2/2 active"
+    },
+    {
+      "check": "relay 28703 archive",
+      "scope": "validator-2",
+      "result": "PASS",
+      "detail": "eth_getCode @26094220: HTTP 200, 2186 B"
+    },
+    {
+      "check": "relays 28701/28702",
+      "scope": "validator-2",
+      "result": "PASS",
+      "detail": "28701 ethereum-rpc.publicnode.com navcoin-ethereum-rpc-28701.service; 28702 eth.drpc.org navcoin-ethereum-rpc-28702.service"
+    },
+    {
+      "check": "checkpoint signing",
+      "scope": "validator-2",
+      "result": "PASS",
+      "detail": "/var/lib/postfiat/validator-2/validator_keys.json present; 57 records, newest 2026-10-03 08:12Z"
+    },
+    {
+      "check": "rpc readiness",
+      "scope": "validator-2",
+      "result": "PASS",
+      "detail": "ready=True degraded=False event_log_writable=True finality_key=True telemetry_failures=0"
+    },
+    {
+      "check": "disk /",
+      "scope": "validator-2",
+      "result": "PASS",
+      "detail": "22.5 GB free (threshold 10 GB)"
+    },
+    {
+      "check": "logrotate",
+      "scope": "validator-2",
+      "result": "PASS",
+      "detail": "postfiat-validator-events, postfiat-rpc-events"
+    },
+    {
+      "check": "apt-daily-upgrade",
+      "scope": "validator-2",
+      "result": "PASS",
+      "detail": "service inactive"
+    },
+    {
+      "check": "release",
+      "scope": "validator-3",
+      "result": "PASS",
+      "detail": "store-handle-20261021 86706699 eea96ba6, manifest verified"
+    },
+    {
+      "check": "mempool",
+      "scope": "validator-3",
+      "result": "PASS",
+      "detail": "0 pending"
+    },
+    {
+      "check": "units",
+      "scope": "validator-3",
+      "result": "PASS",
+      "detail": "validator up 0h13m restarts 0; rpc up 0h13m restarts 0; aux 2/2 active"
+    },
+    {
+      "check": "relay 28703 archive",
+      "scope": "validator-3",
+      "result": "PASS",
+      "detail": "eth_getCode @26094220: HTTP 200, 2186 B"
+    },
+    {
+      "check": "relays 28701/28702",
+      "scope": "validator-3",
+      "result": "PASS",
+      "detail": "28701 ethereum-rpc.publicnode.com navcoin-ethereum-rpc-28701.service; 28702 eth.drpc.org navcoin-ethereum-rpc-28702.service"
+    },
+    {
+      "check": "checkpoint signing",
+      "scope": "validator-3",
+      "result": "PASS",
+      "detail": "/var/lib/postfiat/validator-3/validator_keys.json present; 56 records, newest 2026-10-03 08:12Z"
+    },
+    {
+      "check": "rpc readiness",
+      "scope": "validator-3",
+      "result": "PASS",
+      "detail": "ready=True degraded=False event_log_writable=True finality_key=True telemetry_failures=0"
+    },
+    {
+      "check": "disk /",
+      "scope": "validator-3",
+      "result": "PASS",
+      "detail": "27.4 GB free (threshold 10 GB)"
+    },
+    {
+      "check": "logrotate",
+      "scope": "validator-3",
+      "result": "PASS",
+      "detail": "postfiat-validator-events, postfiat-rpc-events"
+    },
+    {
+      "check": "apt-daily-upgrade",
+      "scope": "validator-3",
+      "result": "PASS",
+      "detail": "service inactive"
+    },
+    {
+      "check": "release",
+      "scope": "validator-4",
+      "result": "PASS",
+      "detail": "store-handle-20261021 86706699 eea96ba6, manifest verified"
+    },
+    {
+      "check": "mempool",
+      "scope": "validator-4",
+      "result": "PASS",
+      "detail": "0 pending"
+    },
+    {
+      "check": "units",
+      "scope": "validator-4",
+      "result": "PASS",
+      "detail": "validator up 0h10m restarts 0; rpc up 0h10m restarts 0; aux 2/2 active"
+    },
+    {
+      "check": "relay 28703 archive",
+      "scope": "validator-4",
+      "result": "PASS",
+      "detail": "eth_getCode @26094220: HTTP 200, 2186 B"
+    },
+    {
+      "check": "relays 28701/28702",
+      "scope": "validator-4",
+      "result": "PASS",
+      "detail": "28701 ethereum-rpc.publicnode.com navcoin-ethereum-rpc-28701.service; 28702 eth.drpc.org navcoin-ethereum-rpc-28702.service"
+    },
+    {
+      "check": "checkpoint signing",
+      "scope": "validator-4",
+      "result": "PASS",
+      "detail": "/var/lib/postfiat/validator-4/validator_keys.json present; 57 records, newest 2026-10-03 08:12Z"
+    },
+    {
+      "check": "rpc readiness",
+      "scope": "validator-4",
+      "result": "PASS",
+      "detail": "ready=True degraded=False event_log_writable=True finality_key=True telemetry_failures=0"
+    },
+    {
+      "check": "disk /",
+      "scope": "validator-4",
+      "result": "PASS",
+      "detail": "22.9 GB free (threshold 10 GB)"
+    },
+    {
+      "check": "logrotate",
+      "scope": "validator-4",
+      "result": "PASS",
+      "detail": "postfiat-validator-events, postfiat-rpc-events"
+    },
+    {
+      "check": "apt-daily-upgrade",
+      "scope": "validator-4",
+      "result": "PASS",
+      "detail": "service inactive"
+    },
+    {
+      "check": "release",
+      "scope": "validator-5",
+      "result": "PASS",
+      "detail": "store-handle-20261021 86706699 eea96ba6, manifest verified"
+    },
+    {
+      "check": "mempool",
+      "scope": "validator-5",
+      "result": "PASS",
+      "detail": "0 pending"
+    },
+    {
+      "check": "units",
+      "scope": "validator-5",
+      "result": "PASS",
+      "detail": "validator up 0h05m restarts 0; rpc up 0h05m restarts 0; aux 2/2 active"
+    },
+    {
+      "check": "relay 28703 archive",
+      "scope": "validator-5",
+      "result": "PASS",
+      "detail": "eth_getCode @26094220: HTTP 200, 2186 B"
+    },
+    {
+      "check": "relays 28701/28702",
+      "scope": "validator-5",
+      "result": "PASS",
+      "detail": "28701 ethereum-rpc.publicnode.com navcoin-ethereum-rpc-28701.service; 28702 eth.drpc.org navcoin-ethereum-rpc-28702.service"
+    },
+    {
+      "check": "rpc readiness",
+      "scope": "validator-5",
+      "result": "PASS",
+      "detail": "ready=True degraded=False event_log_writable=True finality_key=True telemetry_failures=0"
+    },
+    {
+      "check": "disk /",
+      "scope": "validator-5",
+      "result": "PASS",
+      "detail": "25.5 GB free (threshold 10 GB)"
+    },
+    {
+      "check": "logrotate",
+      "scope": "validator-5",
+      "result": "PASS",
+      "detail": "postfiat-validator-events, postfiat-rpc-events"
+    },
+    {
+      "check": "apt-daily-upgrade",
+      "scope": "validator-5",
+      "result": "PASS",
+      "detail": "service inactive"
+    }
+  ],
+  "hosts": {
+    "validator-0": {
+      "units": {
+        "postfiat-validator-0.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 2092516,
+          "since": "Wed 2026-10-21 11:20:03 UTC",
+          "uptime_s": 1400,
+          "exe_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+          "exe": "/opt/postfiat/releases/store-handle-20261021/postfiat-node"
+        },
+        "postfiat-validator-0-rpc.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 2092521,
+          "since": "Wed 2026-10-21 11:20:03 UTC",
+          "uptime_s": 1400,
+          "exe_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+          "exe": "/opt/postfiat/releases/store-handle-20261021/postfiat-node"
+        },
+        "postfiat-cobalt-shadow.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 3611198,
+          "since": "Fri 2026-09-11 06:16:06 UTC",
+          "uptime_s": 3475637
+        },
+        "navcoin-ethereum-rpc-28703.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 1598172,
+          "since": "Fri 2026-10-16 10:46:03 UTC",
+          "uptime_s": 435440
+        }
+      },
+      "manifest_verify_rc": 0,
+      "relays": {
+        "28701": {
+          "pid": 1272184,
+          "managed_by": "navcoin-ethereum-rpc-28701.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "ethereum-rpc.publicnode.com"
+        },
+        "28703": {
+          "pid": 1598172,
+          "managed_by": "navcoin-ethereum-rpc-28703.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "eth.drpc.org"
+        },
+        "28702": {
+          "pid": 1272586,
+          "managed_by": "navcoin-ethereum-rpc-28702.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "eth.drpc.org"
+        }
+      },
+      "archive": {
+        "http": 200,
+        "code_bytes": 2186,
+        "error": null
+      },
+      "checkpoint": {
+        "key_file": "/var/lib/postfiat/validator-0/validator_keys.json",
+        "key_present": true,
+        "records_dir": "/var/lib/postfiat/validator-0/ethereum-checkpoint-signing",
+        "records": 57,
+        "newest_unix": 1791015174.6613715
+      },
+      "readiness": {
+        "schema": "postfiat-rpc-serve-readiness-v1",
+        "ready": true,
+        "degraded": false,
+        "node_id": "validator-0",
+        "bind_address": "127.0.0.1:27650",
+        "data_dir": "/var/lib/postfiat/validator-0",
+        "data_dir_readable": true,
+        "spool_dir": "/var/lib/postfiat/validator-0/runtime/rpc-spool",
+        "spool_probe_ok": true,
+        "event_log": "/var/log/postfiat/validator-0/rpc-events.ndjson",
+        "event_log_writable": true,
+        "local_state_loaded": true,
+        "listener_bound": true,
+        "finality_enabled": true,
+        "finality_topology_available": true,
+        "finality_key_available": true,
+        "telemetry_failure_count": 0,
+        "last_telemetry_error": null
+      },
+      "disk_free_bytes": 16040333312,
+      "logrotate": {
+        "postfiat-validator-events": true,
+        "postfiat-rpc-events": true
+      },
+      "apt_upgrade_active": "inactive"
+    },
+    "validator-1": {
+      "units": {
+        "postfiat-validator-1.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 1409406,
+          "since": "Wed 2026-10-21 11:16:01 UTC",
+          "uptime_s": 1641,
+          "exe_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+          "exe": "/opt/postfiat/releases/store-handle-20261021/postfiat-node"
+        },
+        "postfiat-validator-1-rpc.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 1409411,
+          "since": "Wed 2026-10-21 11:16:02 UTC",
+          "uptime_s": 1641,
+          "exe_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+          "exe": "/opt/postfiat/releases/store-handle-20261021/postfiat-node"
+        },
+        "postfiat-cobalt-shadow.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 346183,
+          "since": "Fri 2026-09-11 06:26:48 UTC",
+          "uptime_s": 3474995
+        },
+        "navcoin-ethereum-rpc-28703.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 1290647,
+          "since": "Fri 2026-10-16 10:46:35 UTC",
+          "uptime_s": 435408
+        }
+      },
+      "manifest_verify_rc": 0,
+      "relays": {
+        "28702": {
+          "pid": 1210786,
+          "managed_by": "navcoin-ethereum-rpc-28702.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "eth.drpc.org"
+        },
+        "28703": {
+          "pid": 1290647,
+          "managed_by": "navcoin-ethereum-rpc-28703.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "eth.drpc.org"
+        },
+        "28701": {
+          "pid": 1291243,
+          "managed_by": "navcoin-ethereum-rpc-28701.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "ethereum-rpc.publicnode.com"
+        }
+      },
+      "archive": {
+        "http": 200,
+        "code_bytes": 2186,
+        "error": null
+      },
+      "checkpoint": {
+        "key_file": "/var/lib/postfiat/validator-1/validator_keys.json",
+        "key_present": true,
+        "records_dir": "/var/lib/postfiat/validator-1/ethereum-checkpoint-signing",
+        "records": 57,
+        "newest_unix": 1791015173.2850637
+      },
+      "readiness": {
+        "schema": "postfiat-rpc-serve-readiness-v1",
+        "ready": true,
+        "degraded": false,
+        "node_id": "validator-1",
+        "bind_address": "127.0.0.1:27651",
+        "data_dir": "/var/lib/postfiat/validator-1",
+        "data_dir_readable": true,
+        "spool_dir": "/var/lib/postfiat/validator-1/runtime/rpc-spool",
+        "spool_probe_ok": true,
+        "event_log": "/var/log/postfiat/validator-1/rpc-events.ndjson",
+        "event_log_writable": true,
+        "local_state_loaded": true,
+        "listener_bound": true,
+        "finality_enabled": true,
+        "finality_topology_available": true,
+        "finality_key_available": true,
+        "telemetry_failure_count": 0,
+        "last_telemetry_error": null
+      },
+      "disk_free_bytes": 17264611328,
+      "logrotate": {
+        "postfiat-validator-events": true,
+        "postfiat-rpc-events": true
+      },
+      "apt_upgrade_active": "inactive"
+    },
+    "validator-2": {
+      "units": {
+        "postfiat-validator-2.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 2250426,
+          "since": "Wed 2026-10-21 11:25:39 UTC",
+          "uptime_s": 1067,
+          "exe_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+          "exe": "/opt/postfiat/releases/store-handle-20261021/postfiat-node"
+        },
+        "postfiat-validator-2-rpc.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 2250431,
+          "since": "Wed 2026-10-21 11:25:40 UTC",
+          "uptime_s": 1066,
+          "exe_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+          "exe": "/opt/postfiat/releases/store-handle-20261021/postfiat-node"
+        },
+        "postfiat-cobalt-shadow.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 889783,
+          "since": "Fri 2026-09-11 06:01:47 UTC",
+          "uptime_s": 3476499
+        },
+        "navcoin-ethereum-rpc-28703.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 2129140,
+          "since": "Fri 2026-10-16 10:45:37 UTC",
+          "uptime_s": 435469
+        }
+      },
+      "manifest_verify_rc": 0,
+      "relays": {
+        "28703": {
+          "pid": 2129140,
+          "managed_by": "navcoin-ethereum-rpc-28703.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "eth.drpc.org"
+        },
+        "28702": {
+          "pid": 2037504,
+          "managed_by": "navcoin-ethereum-rpc-28702.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "eth.drpc.org"
+        },
+        "28701": {
+          "pid": 2037380,
+          "managed_by": "navcoin-ethereum-rpc-28701.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "ethereum-rpc.publicnode.com"
+        }
+      },
+      "archive": {
+        "http": 200,
+        "code_bytes": 2186,
+        "error": null
+      },
+      "checkpoint": {
+        "key_file": "/var/lib/postfiat/validator-2/validator_keys.json",
+        "key_present": true,
+        "records_dir": "/var/lib/postfiat/validator-2/ethereum-checkpoint-signing",
+        "records": 57,
+        "newest_unix": 1791015172.2660635
+      },
+      "readiness": {
+        "schema": "postfiat-rpc-serve-readiness-v1",
+        "ready": true,
+        "degraded": false,
+        "node_id": "validator-2",
+        "bind_address": "127.0.0.1:27652",
+        "data_dir": "/var/lib/postfiat/validator-2",
+        "data_dir_readable": true,
+        "spool_dir": "/var/lib/postfiat/validator-2/runtime/rpc-spool",
+        "spool_probe_ok": true,
+        "event_log": "/var/log/postfiat/validator-2/rpc-events.ndjson",
+        "event_log_writable": true,
+        "local_state_loaded": true,
+        "listener_bound": true,
+        "finality_enabled": true,
+        "finality_topology_available": true,
+        "finality_key_available": true,
+        "telemetry_failure_count": 0,
+        "last_telemetry_error": null
+      },
+      "disk_free_bytes": 22524375040,
+      "logrotate": {
+        "postfiat-validator-events": true,
+        "postfiat-rpc-events": true
+      },
+      "apt_upgrade_active": "inactive"
+    },
+    "validator-3": {
+      "units": {
+        "postfiat-validator-3.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 448200,
+          "since": "Wed 2026-10-21 11:29:50 UTC",
+          "uptime_s": 813,
+          "exe_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+          "exe": "/opt/postfiat/releases/store-handle-20261021/postfiat-node"
+        },
+        "postfiat-validator-3-rpc.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 448271,
+          "since": "Wed 2026-10-21 11:29:51 UTC",
+          "uptime_s": 812,
+          "exe_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+          "exe": "/opt/postfiat/releases/store-handle-20261021/postfiat-node"
+        },
+        "postfiat-cobalt-shadow.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 2047264,
+          "since": "Fri 2026-09-11 06:46:42 UTC",
+          "uptime_s": 3473801
+        },
+        "navcoin-ethereum-rpc-28703.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 10951,
+          "since": "Fri 2026-10-16 10:46:15 UTC",
+          "uptime_s": 435428
+        }
+      },
+      "manifest_verify_rc": 0,
+      "relays": {
+        "28703": {
+          "pid": 10951,
+          "managed_by": "navcoin-ethereum-rpc-28703.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "eth.drpc.org"
+        },
+        "28702": {
+          "pid": 3847857,
+          "managed_by": "navcoin-ethereum-rpc-28702.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "eth.drpc.org"
+        },
+        "28701": {
+          "pid": 3847724,
+          "managed_by": "navcoin-ethereum-rpc-28701.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "ethereum-rpc.publicnode.com"
+        }
+      },
+      "archive": {
+        "http": 200,
+        "code_bytes": 2186,
+        "error": null
+      },
+      "checkpoint": {
+        "key_file": "/var/lib/postfiat/validator-3/validator_keys.json",
+        "key_present": true,
+        "records_dir": "/var/lib/postfiat/validator-3/ethereum-checkpoint-signing",
+        "records": 56,
+        "newest_unix": 1791015174.387928
+      },
+      "readiness": {
+        "schema": "postfiat-rpc-serve-readiness-v1",
+        "ready": true,
+        "degraded": false,
+        "node_id": "validator-3",
+        "bind_address": "127.0.0.1:27653",
+        "data_dir": "/var/lib/postfiat/validator-3",
+        "data_dir_readable": true,
+        "spool_dir": "/var/lib/postfiat/validator-3/runtime/rpc-spool",
+        "spool_probe_ok": true,
+        "event_log": "/var/log/postfiat/validator-3/rpc-events.ndjson",
+        "event_log_writable": true,
+        "local_state_loaded": true,
+        "listener_bound": true,
+        "finality_enabled": true,
+        "finality_topology_available": true,
+        "finality_key_available": true,
+        "telemetry_failure_count": 0,
+        "last_telemetry_error": null
+      },
+      "disk_free_bytes": 27443372032,
+      "logrotate": {
+        "postfiat-validator-events": true,
+        "postfiat-rpc-events": true
+      },
+      "apt_upgrade_active": "inactive"
+    },
+    "validator-4": {
+      "units": {
+        "postfiat-validator-4.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 3200279,
+          "since": "Wed 2026-10-21 11:33:21 UTC",
+          "uptime_s": 602,
+          "exe_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+          "exe": "/opt/postfiat/releases/store-handle-20261021/postfiat-node"
+        },
+        "postfiat-validator-4-rpc.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 3200284,
+          "since": "Wed 2026-10-21 11:33:21 UTC",
+          "uptime_s": 601,
+          "exe_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+          "exe": "/opt/postfiat/releases/store-handle-20261021/postfiat-node"
+        },
+        "postfiat-cobalt-shadow.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 2182962,
+          "since": "Fri 2026-09-11 06:25:15 UTC",
+          "uptime_s": 3475088
+        },
+        "navcoin-ethereum-rpc-28703.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 3092594,
+          "since": "Fri 2026-10-16 10:45:51 UTC",
+          "uptime_s": 435451
+        }
+      },
+      "manifest_verify_rc": 0,
+      "relays": {
+        "28703": {
+          "pid": 3092594,
+          "managed_by": "navcoin-ethereum-rpc-28703.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "eth.drpc.org"
+        },
+        "28702": {
+          "pid": 2993453,
+          "managed_by": "navcoin-ethereum-rpc-28702.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "eth.drpc.org"
+        },
+        "28701": {
+          "pid": 2993327,
+          "managed_by": "navcoin-ethereum-rpc-28701.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "ethereum-rpc.publicnode.com"
+        }
+      },
+      "archive": {
+        "http": 200,
+        "code_bytes": 2186,
+        "error": null
+      },
+      "checkpoint": {
+        "key_file": "/var/lib/postfiat/validator-4/validator_keys.json",
+        "key_present": true,
+        "records_dir": "/var/lib/postfiat/validator-4/ethereum-checkpoint-signing",
+        "records": 57,
+        "newest_unix": 1791015173.6075668
+      },
+      "readiness": {
+        "schema": "postfiat-rpc-serve-readiness-v1",
+        "ready": true,
+        "degraded": false,
+        "node_id": "validator-4",
+        "bind_address": "127.0.0.1:27654",
+        "data_dir": "/var/lib/postfiat/validator-4",
+        "data_dir_readable": true,
+        "spool_dir": "/var/lib/postfiat/validator-4/runtime/rpc-spool",
+        "spool_probe_ok": true,
+        "event_log": "/var/log/postfiat/validator-4/rpc-events.ndjson",
+        "event_log_writable": true,
+        "local_state_loaded": true,
+        "listener_bound": true,
+        "finality_enabled": true,
+        "finality_topology_available": true,
+        "finality_key_available": true,
+        "telemetry_failure_count": 0,
+        "last_telemetry_error": null
+      },
+      "disk_free_bytes": 22897709056,
+      "logrotate": {
+        "postfiat-validator-events": true,
+        "postfiat-rpc-events": true
+      },
+      "apt_upgrade_active": "inactive"
+    },
+    "validator-5": {
+      "units": {
+        "postfiat-validator-5.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 3836022,
+          "since": "Wed 2026-10-21 11:38:05 UTC",
+          "uptime_s": 319,
+          "exe_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+          "exe": "/opt/postfiat/releases/store-handle-20261021/postfiat-node"
+        },
+        "postfiat-validator-5-rpc.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 3836059,
+          "since": "Wed 2026-10-21 11:38:06 UTC",
+          "uptime_s": 318,
+          "exe_sha256": "eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36",
+          "exe": "/opt/postfiat/releases/store-handle-20261021/postfiat-node"
+        },
+        "postfiat-cobalt-shadow.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 2464211,
+          "since": "Fri 2026-09-11 06:26:15 UTC",
+          "uptime_s": 3475029
+        },
+        "navcoin-ethereum-rpc-28703.service": {
+          "active": "active",
+          "restarts": 0,
+          "pid": 3720660,
+          "since": "Fri 2026-10-16 10:45:12 UTC",
+          "uptime_s": 435492
+        }
+      },
+      "manifest_verify_rc": 0,
+      "relays": {
+        "28701": {
+          "pid": 3620271,
+          "managed_by": "navcoin-ethereum-rpc-28701.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "ethereum-rpc.publicnode.com"
+        },
+        "28702": {
+          "pid": 3620393,
+          "managed_by": "navcoin-ethereum-rpc-28702.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "eth.drpc.org"
+        },
+        "28703": {
+          "pid": 3720660,
+          "managed_by": "navcoin-ethereum-rpc-28703.service",
+          "script": "/opt/postfiat/route-tools/navcoin-20260907/https-jsonrpc-loopback-proxy.py",
+          "script_exists": true,
+          "upstream_host": "eth.drpc.org"
+        }
+      },
+      "archive": {
+        "http": 200,
+        "code_bytes": 2186,
+        "error": null
+      },
+      "readiness": {
+        "schema": "postfiat-rpc-serve-readiness-v1",
+        "ready": true,
+        "degraded": false,
+        "node_id": "validator-5",
+        "bind_address": "127.0.0.1:27655",
+        "data_dir": "/var/lib/postfiat/validator-5",
+        "data_dir_readable": true,
+        "spool_dir": "/var/lib/postfiat/validator-5/runtime/rpc-spool",
+        "spool_probe_ok": true,
+        "event_log": "/var/log/postfiat/validator-5/rpc-events.ndjson",
+        "event_log_writable": true,
+        "local_state_loaded": true,
+        "listener_bound": true,
+        "finality_enabled": true,
+        "finality_topology_available": true,
+        "finality_key_available": true,
+        "telemetry_failure_count": 0,
+        "last_telemetry_error": null
+      },
+      "disk_free_bytes": 25458593792,
+      "logrotate": {
+        "postfiat-validator-events": true,
+        "postfiat-rpc-events": true
+      },
+      "apt_upgrade_active": "inactive"
+    }
+  }
+}

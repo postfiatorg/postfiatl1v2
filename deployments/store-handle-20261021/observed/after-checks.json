@@ -1,0 +1,259 @@
+{
+ "schema": "store-handle-20261021-after-checks-v1",
+ "after_state": {
+  "height": 1137,
+  "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+  "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a",
+  "observed_at": "2026-10-21T11:43:17.768962+00:00",
+  "evidence": "after.json"
+ },
+ "demo_preflight": {
+  "observed_at": "2026-10-21T11:43:22.180200+00:00",
+  "verdict": "READY",
+  "counts": {
+   "PASS": 60,
+   "ATTENTION": 0,
+   "FAIL": 0
+  },
+  "evidence": "demo-preflight-after.json"
+ },
+ "processes_on_release_executable": {
+  "count": 12,
+  "all_eea96ba6": true
+ },
+ "status_deployment_manifest_verified": {
+  "validator-0": true,
+  "validator-1": true,
+  "validator-2": true,
+  "validator-3": true,
+  "validator-4": true,
+  "validator-5": true
+ },
+ "status_build_git_revision": {
+  "validator-0": "86706699",
+  "validator-1": "86706699",
+  "validator-2": "86706699",
+  "validator-3": "86706699",
+  "validator-4": "86706699",
+  "validator-5": "86706699"
+ },
+ "hosts": [
+  {
+   "validator_id": "validator-0",
+   "rpc_unit": {
+    "exec_release_binary": true,
+    "max_requests_100000": true,
+    "restart_always": true,
+    "restart_sec_1": true
+   },
+   "event_logs": {
+    "transport-validator-events.ndjson": {
+     "bytes": 10472844,
+     "mtime": "2026-10-21T11:38:50+00:00"
+    },
+    "rpc-events.ndjson": {
+     "bytes": 489071433,
+     "mtime": "2026-10-21T11:44:20+00:00"
+    },
+    "transport_accepted_batch_events_by_grant_height": {
+     "1132": 1,
+     "1133": 1,
+     "1135": 1,
+     "1136": 1,
+     "1137": 1
+    },
+    "storage_work_database_opens_by_height": {
+     "1132": null,
+     "1133": 0,
+     "1135": 0,
+     "1136": 0,
+     "1137": 0
+    }
+   },
+   "disk_root_avail_bytes": 16040316928
+  },
+  {
+   "validator_id": "validator-1",
+   "rpc_unit": {
+    "exec_release_binary": true,
+    "max_requests_100000": true,
+    "restart_always": true,
+    "restart_sec_1": true
+   },
+   "event_logs": {
+    "transport-validator-events.ndjson": {
+     "bytes": 10318643,
+     "mtime": "2026-10-21T11:38:51+00:00"
+    },
+    "rpc-events.ndjson": {
+     "bytes": 362584893,
+     "mtime": "2026-10-21T11:44:20+00:00"
+    },
+    "transport_accepted_batch_events_by_grant_height": {
+     "1132": 1,
+     "1133": 1,
+     "1134": 1,
+     "1136": 1,
+     "1137": 1
+    },
+    "storage_work_database_opens_by_height": {
+     "1132": 0,
+     "1133": 0,
+     "1134": 0,
+     "1136": 0,
+     "1137": 0
+    }
+   },
+   "disk_root_avail_bytes": 17264574464
+  },
+  {
+   "validator_id": "validator-2",
+   "rpc_unit": {
+    "exec_release_binary": true,
+    "max_requests_100000": true,
+    "restart_always": true,
+    "restart_sec_1": true
+   },
+   "event_logs": {
+    "transport-validator-events.ndjson": {
+     "bytes": 3130857,
+     "mtime": "2026-10-21T11:38:51+00:00"
+    },
+    "rpc-events.ndjson": {
+     "bytes": 371540455,
+     "mtime": "2026-10-21T11:44:23+00:00"
+    },
+    "transport_accepted_batch_events_by_grant_height": {
+     "1132": 1,
+     "1133": 1,
+     "1134": 1,
+     "1135": 1,
+     "1137": 1
+    },
+    "storage_work_database_opens_by_height": {
+     "1132": null,
+     "1133": null,
+     "1134": 0,
+     "1135": 0,
+     "1137": 0
+    }
+   },
+   "disk_root_avail_bytes": 22524358656
+  },
+  {
+   "validator_id": "validator-3",
+   "rpc_unit": {
+    "exec_release_binary": true,
+    "max_requests_100000": true,
+    "restart_always": true,
+    "restart_sec_1": true
+   },
+   "event_logs": {
+    "transport-validator-events.ndjson": {
+     "bytes": 10367445,
+     "mtime": "2026-10-21T11:34:17+00:00"
+    },
+    "rpc-events.ndjson": {
+     "bytes": 362139357,
+     "mtime": "2026-10-21T11:44:20+00:00"
+    },
+    "transport_accepted_batch_events_by_grant_height": {
+     "1132": 1,
+     "1133": 1,
+     "1134": 1,
+     "1135": 1,
+     "1136": 1
+    },
+    "storage_work_database_opens_by_height": {
+     "1132": null,
+     "1133": null,
+     "1134": null,
+     "1135": 0,
+     "1136": 0
+    }
+   },
+   "disk_root_avail_bytes": 27443355648
+  },
+  {
+   "validator_id": "validator-4",
+   "rpc_unit": {
+    "exec_release_binary": true,
+    "max_requests_100000": true,
+    "restart_always": true,
+    "restart_sec_1": true
+   },
+   "event_logs": {
+    "transport-validator-events.ndjson": {
+     "bytes": 10418162,
+     "mtime": "2026-10-21T11:38:51+00:00"
+    },
+    "rpc-events.ndjson": {
+     "bytes": 362136703,
+     "mtime": "2026-10-21T11:44:20+00:00"
+    },
+    "transport_accepted_batch_events_by_grant_height": {
+     "1133": 1,
+     "1134": 1,
+     "1135": 1,
+     "1136": 1,
+     "1137": 1
+    },
+    "storage_work_database_opens_by_height": {
+     "1133": null,
+     "1134": null,
+     "1135": null,
+     "1136": 0,
+     "1137": 0
+    }
+   },
+   "disk_root_avail_bytes": 22897692672
+  },
+  {
+   "validator_id": "validator-5",
+   "rpc_unit": {
+    "exec_release_binary": true,
+    "max_requests_100000": true,
+    "restart_always": true,
+    "restart_sec_1": true
+   },
+   "event_logs": {
+    "transport-validator-events.ndjson": {
+     "bytes": 10418322,
+     "mtime": "2026-10-21T11:39:12+00:00"
+    },
+    "rpc-events.ndjson": {
+     "bytes": 551778583,
+     "mtime": "2026-10-21T11:44:22+00:00"
+    },
+    "transport_accepted_batch_events_by_grant_height": {
+     "1132": 1,
+     "1134": 1,
+     "1135": 1,
+     "1136": 1,
+     "1137": 1
+    },
+    "storage_work_database_opens_by_height": {
+     "1132": null,
+     "1134": null,
+     "1135": null,
+     "1136": null,
+     "1137": 0
+    }
+   },
+   "disk_root_avail_bytes": 25458532352
+  }
+ ],
+ "grant_proposers": {
+  "1132": "validator-4",
+  "1133": "validator-5",
+  "1134": "validator-0",
+  "1135": "validator-1",
+  "1136": "validator-2",
+  "1137": "validator-3"
+ },
+ "release_purpose_checks": {
+  "build_revision": "status build_git_revision 86706699 on all six (postfiat-node has no --version flag)",
+  "fastswap_committee_migrate_in_help": "listed in /opt/postfiat/releases/store-handle-20261021/postfiat-node --help on all six hosts; not run",
+  "store_handle_reuse": "transport batch acks report storage_work.database_opens=0 on every accepted batch from the new executable; the fastlane-cap-20261014 executable did not report the field (null) for the heights before each host's apply"
+ }
+}

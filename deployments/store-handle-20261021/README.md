@@ -13,10 +13,14 @@ Rollback release: `fastlane-cap-20261014` (`b1b3dbb1…`). Identities:
 
 ## Status
 
-**Cut and locally qualified, not deployed** (2026-10-21). The deployed release is
-`fastlane-cap-20261014` on all six validators. The release day runs
-[DEPLOY-SHEET.md](DEPLOY-SHEET.md) under the operator's go: canary backup,
-rollout, then the per-host FastSwap committee migration (§7).
+**Deployed** (`status=DEPLOYED`, 2026-10-21 11:43:17Z). All six validators run
+`eea96ba6…` with the signed manifest `8ce1da30…`, at height 1137 after one
+certified faucet grant per validator (1132–1137). Before state, signed canary
+backup, applies, grants and after state: [observed/](observed/)
+([rollout record](observed/rollout-record.json)); after checks in the
+[qualification packet](qualification/README.md#after-rollout).
+
+Not done yet: the per-host FastSwap committee migration ([DEPLOY-SHEET.md](DEPLOY-SHEET.md) §7).
 
 ## Scope since `8bed9b90`
 

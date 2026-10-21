@@ -36,6 +36,25 @@ Rollback executable: the deployed `fastlane-cap-20261014` (`b1b3dbb1…`, copied
 | Focused suites for this release's changes | PASS: storage `fastswap_store` 25, storage `transactional` 36 (both lease tests), node bin `fastswap_service::` 39, store-handle six-validator round 1, operator-attestation routing (#136) 1, `pftl_swapctl` (#135) 1 | [focused-suites.json](focused-suites.json) |
 | Full workspace suite | Not run here (no Orchard boundary changed); CI `rust-ci` `test` on `86706699` (above) is the gate | [ci-jobs.txt](ci-jobs.txt) |
 
+## After rollout
+
+Live, read-only checks after the six applies on 2026-10-21 (sheet §6). Records:
+[after-checks.json](../observed/after-checks.json), [after.json](../observed/after.json),
+[rollout record](../observed/rollout-record.json).
+
+| Check | Result |
+|---|---|
+| After state (11:43:17Z) | Six on `store-handle-20261021` at height 1137, tip `18a4dc869b52…`, root `1277c76c16af…`; mempools empty |
+| Faucet grants | One 1 PFT grant after each apply, each certified at view 0 with the same block, tip and root on all six: heights 1132–1137 |
+| `demo-preflight.py` (11:43:22Z) | READY: 60 PASS, 0 ATTENTION, 0 FAIL ([output](../observed/demo-preflight-after.json)) |
+| Running executables | All 12 validator and RPC processes on `eea96ba6…` |
+| `status` | `deployment_manifest_verified=true` and `build_git_revision` `86706699` on all six; manifest `8ce1da30…` |
+| RPC units (`systemctl cat`) | `--max-requests 100000`, `Restart=always`, `RestartSec=1` on all six |
+| Event logs | Each host's transport log gained one accepted-batch event for every grant height it did not propose |
+| Store handle (STO-07) | Every batch the new executable accepted reports `storage_work.database_opens=0`; the `fastlane-cap-20261014` executable did not report the field |
+| `fastswap-committee-migrate` | Listed in `postfiat-node --help` on all six hosts; not run (sheet §7) |
+| Disk free `/` | validator-0 16.0 GB, validator-1 17.3 GB, validator-2 22.5 GB, validator-3 27.4 GB, validator-4 22.9 GB, validator-5 25.5 GB |
+
 ## Method
 
 The fastlane-cap-20261014 method ([packet](https://github.com/postfiatorg/postfiatl1v2/blob/release/fastlane-cap-20261014/deployments/fastlane-cap-20261014/qualification/README.md)) with these differences:

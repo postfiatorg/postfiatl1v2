@@ -6,7 +6,8 @@ the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md) and the
 [FastSwap committee migration runbook](../../docs/runbooks/fastpay-committee-recovery.md#moving-the-fastswap-store-to-the-activated-committee-epoch).
 Keys are used by path only; no key material is printed, copied to a host or committed.
 
-**Status: not started.** Cut and locally qualified on 2026-10-21 ([packet](qualification/README.md)).
+**Status: §0–§6 done on 2026-10-21** (deployed at height 1137, [rollout record](observed/rollout-record.json));
+§7 not yet run. Cut and locally qualified on 2026-10-21 ([packet](qualification/README.md)).
 Every live section (§0, §1, §3–§8) is covered by the operator's go of the day; each step marked
 **GO** needs that go. No store conversion, no FastPay committee record and no chain transaction
 are part of this release.
@@ -23,7 +24,7 @@ VULTR=~/.postfiat/deployments/cobalt-activation-8694b99d/vultr-api-key
 
 ## 0. Go/no-go — covered by the operator's go of the day
 
-- [ ] **GO 0.** No other rollout or session is active on the fleet; `apt-daily-upgrade` is not running; CI on `86706699` has no failed workflow (`gh run list --commit 86706699f646405743385beabf609c6771a518a3`).
+- [x] **GO 0.** No other rollout or session is active on the fleet; `apt-daily-upgrade` is not running; CI on `86706699` has no failed workflow (`gh run list --commit 86706699f646405743385beabf609c6771a518a3`).
 
 ## 1. Before state (read-only) — covered by the operator's go of the day
 
@@ -35,7 +36,7 @@ Expected: six validators on `fastlane-cap-20261014` (`b1b3dbb1…`, build
 `8bed9b90`, manifest `4f379c57…`), height 1131, tip `9b054f09…`, root `a12e7c5f…`
 (or a later height with six-way agreement), mempools empty.
 
-- [ ] **GO 1.** Before state matches. Otherwise stop.
+- [x] **GO 1.** Before state matches. Otherwise stop.
 
 ## 2. Stage and local preflight (local)
 
@@ -63,7 +64,7 @@ Expected: six-way agreement, six signer rosters valid, 0 deletions, order 1, 0, 
 
 ## 4. Fresh signed canary backup from validator-1 — covered by the operator's go of the day
 
-- [ ] **GO 4.** Take the backup (writes one export on validator-1; check its free disk first).
+- [x] **GO 4.** Take the backup (writes one export on validator-1; check its free disk first).
 
 ```bash
 scripts/postfiat-safe-rollout backup --state-file $E/rollout-state.json \
@@ -89,7 +90,7 @@ only on applied hosts (done this way on 2026-10-09 and 2026-10-15).
 
 For each validator, only after the previous check passed:
 
-- [ ] **GO 5.N** (one go per validator: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5).
+- [x] **GO 5.N** (one go per validator: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5).
 
 ```bash
 scripts/postfiat-safe-rollout apply-next --state-file $E/rollout-state.json > $E/apply-N.json
@@ -115,7 +116,7 @@ Expected: all 12 validator and RPC processes on `eea96ba6…`;
 `deployment_manifest_verified=true` on every host; RPC units with
 `--max-requests 100000` and `RestartSec=1`.
 
-- [ ] **GO 6.** After checks pass; proceed to §7.
+- [x] **GO 6.** After checks pass; proceed to §7.
 
 ## 7. FastSwap committee migration, one host at a time — covered by the operator's go of the day
 
