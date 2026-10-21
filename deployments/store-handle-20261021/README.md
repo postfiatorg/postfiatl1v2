@@ -20,7 +20,8 @@ backup, applies, grants and after state: [observed/](observed/)
 ([rollout record](observed/rollout-record.json)); after checks in the
 [qualification packet](qualification/README.md#after-rollout).
 
-Not done yet: the per-host FastSwap committee migration ([DEPLOY-SHEET.md](DEPLOY-SHEET.md) §7).
+FastSwap committee migration done on all six (2026-10-21 12:07–12:30Z): each store and
+service at committee epoch 2, root `72836827…`, enabled ([DEPLOY-SHEET.md](DEPLOY-SHEET.md) §7).
 
 ## Scope since `8bed9b90`
 

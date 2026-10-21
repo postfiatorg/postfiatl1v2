@@ -6,8 +6,8 @@ the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md) and the
 [FastSwap committee migration runbook](../../docs/runbooks/fastpay-committee-recovery.md#moving-the-fastswap-store-to-the-activated-committee-epoch).
 Keys are used by path only; no key material is printed, copied to a host or committed.
 
-**Status: §0–§6 done on 2026-10-21** (deployed at height 1137, [rollout record](observed/rollout-record.json));
-§7 not yet run. Cut and locally qualified on 2026-10-21 ([packet](qualification/README.md)).
+**Status: §0–§8 done on 2026-10-21** (deployed at height 1137, [rollout record](observed/rollout-record.json);
+FastSwap committee epoch 2 on all six, [§7](#7-fastswap-committee-migration-one-host-at-a-time--covered-by-the-operators-go-of-the-day)). Cut and locally qualified on 2026-10-21 ([packet](qualification/README.md)).
 Every live section (§0, §1, §3–§8) is covered by the operator's go of the day; each step marked
 **GO** needs that go. No store conversion, no FastPay committee record and no chain transaction
 are part of this release.
@@ -127,7 +127,7 @@ transaction is sent. The inputs are the 2026-10-15 files in
 `7.2-activate-committee.fastlane-primary.json` (sha256 `35acb2ff…`, committee epoch 2, root
 `72836827…`) and `7.1-anchor-checkpoint.fastlane-primary.json` (sha256 `4497c495…`, anchor `355fe608…`).
 
-- [ ] **GO 7.N** (one go per host: validator-5, validator-0, validator-1, validator-2, validator-3, validator-4).
+- [x] **GO 7.N** (one go per host: validator-5, validator-0, validator-1, validator-2, validator-3, validator-4).
 
 ```bash
 N=5   # then 0, 1, 2, 3, 4
@@ -152,12 +152,39 @@ Expected: `migrated` and `service open: committee epoch 2, root 72836827…, ena
 Then, before the next host: both units active; `fastswap_capabilities` shows committee epoch 2,
 root `72836827…`, `enabled: true`; `fastswap_checkpoint_status` answers;
 `observe-fleet.py --stage $S --applied <all six>` shows six-way agreement. Keep each report
-as `observed/fastswap-migration-validator-N.json`.
+in [observed/committee-migration/](observed/committee-migration/).
 
 validator-5 may be refused because its store never applied the epoch-1 fence or the anchor
 (the command accepts such a store only if its replayed state still equals the anchored drained
 state, with a note). If refused: record the refusal as the note for validator-5, start its two
 units unchanged, and continue with the others.
+
+**Result (2026-10-21, height 1137 throughout, no block produced or needed).** All six migrated;
+each host was back at 1137 / `18a4dc86…` / `1277c76c…` at the first poll (11–18 s after its start), both units
+active with 0 restarts, `rpc.ready.json` ready and not degraded, six-way agreement before and after
+every host ([observations](observed/committee-migration/observations.json)). Store before: epoch 1,
+root `a2eebcba…`; after: epoch 2, root `72836827…`, 2 objects kept, anchor `355fe608…` recorded.
+Before the run `fastswap_capabilities` reported epoch 1 `enabled: false` on validators 0–4 and
+`fastswap_unavailable` on validator-5.
+
+| Host | Dry run | Real run | Store before → after | Stopped → started (UTC) | `fastswap_capabilities` after |
+|---|---|---|---|---|---|
+| validator-5 | would-migrate, note¹ | migrated (base+WAL, 26 records; WAL moved aside) | 1 `a2eebcba…` → 2 `72836827…` | 12:07:44 → 12:08:09 | epoch 2, `72836827…`, enabled true; checkpoint status answers |
+| validator-0 | would-migrate | migrated (snapshot; WAL and snapshot moved aside) | 1 `a2eebcba…` → 2 `72836827…` | 12:12:25 → 12:12:30 | epoch 2, `72836827…`, enabled true; checkpoint status answers |
+| validator-1 | would-migrate | migrated (snapshot; WAL and snapshot moved aside) | 1 `a2eebcba…` → 2 `72836827…` | 12:15:51 → 12:15:53 | epoch 2, `72836827…`, enabled true; checkpoint status answers |
+| validator-2 | would-migrate | migrated (snapshot; WAL and snapshot moved aside) | 1 `a2eebcba…` → 2 `72836827…` | 12:19:35 → 12:19:50 | epoch 2, `72836827…`, enabled true; checkpoint status answers |
+| validator-3 | would-migrate | migrated (snapshot; WAL and snapshot moved aside) | 1 `a2eebcba…` → 2 `72836827…` | 12:23:21 → 12:23:26 | epoch 2, `72836827…`, enabled true; checkpoint status answers |
+| validator-4 | would-migrate | migrated (snapshot; WAL and snapshot moved aside) | 1 `a2eebcba…` → 2 `72836827…` | 12:27:06 → 12:27:08 | epoch 2, `72836827…`, enabled true; checkpoint status answers |
+
+Every real run reported `service open: committee epoch 2, root 72836827…, enabled true`; reports
+`committee-migrate-validator-N{.dry-run,}.json`, RPC reads `fastswap-rpc-after-validator-N.json`.
+Backups: `/var/lib/postfiat/fastswap-v1-epoch2-backup-validator-N` on each host.
+
+¹ validator-5 was not refused. Note, verbatim: "store (base+WAL load, 26 WAL record(s), 0 fence and
+0 anchor record(s)) never applied the epoch-1 prepare fence for policy epoch(s) [1] or the anchored
+drain checkpoint 355fe608…; its replayed state equals the anchored drained state (no reservations,
+no pending burns, every checkpoint root and total matches), so the migration subsumes them".
+Its FastSwap service, unavailable before, now opens at epoch 2.
 
 Store rollback for one host: stop both units, restore `fastswap-v1/` from
 `/var/lib/postfiat/fastswap-v1-epoch2-backup-validator-N` with `cp -a`, start both units.
@@ -173,6 +200,11 @@ python3 $PACKET/demo-preflight.py
 
 Expected: six on `eea96ba6…` with six-way agreement; FastSwap committee epoch 2 (root `72836827…`,
 `enabled: true`) on every migrated host. Record the result in `RELEASE-ID.txt` and the plan.
+
+- [x] **GO 8.** 2026-10-21 12:30Z: [after-migration.json](observed/after-migration.json) PASS, six on
+  `store-handle-20261021` at 1137 / `18a4dc86…` / `1277c76c…`, mempools 0;
+  [demo preflight](observed/demo-preflight-after-migration.json) READY, 60 PASS, 0 ATTENTION, 0 FAIL;
+  `fastswap_capabilities` epoch 2, `72836827…`, enabled true on all six.
 
 ## Rollback (one validator, emergency only)
 

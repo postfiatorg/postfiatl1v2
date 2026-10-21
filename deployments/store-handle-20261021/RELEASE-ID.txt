@@ -20,3 +20,6 @@ canary_backup_signed_manifest_sha256=df9b3847c2229b23e9c97627b9cf14447de6aab1f5d
 status=DEPLOYED
 deployed_at=2026-10-21T11:43:17Z
 deployed_height=1137
+fastswap_committee_migration=DONE validator-5,validator-0,validator-1,validator-2,validator-3,validator-4 2026-10-21T12:07Z..12:27Z height=1137
+fastswap_committee_after=epoch=2 root=72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37 enabled=true hosts=6
+after_migration_observation_sha256=570c24291cc1793909c4db4cf7d5a6f7930b2458bbe923c0bcb86528550a47cd

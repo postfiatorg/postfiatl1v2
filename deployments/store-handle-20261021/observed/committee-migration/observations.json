@@ -1,0 +1,409 @@
+{
+ "schema": "store-handle-20261021-committee-migration-observations-v1",
+ "order": [
+  "validator-5",
+  "validator-0",
+  "validator-1",
+  "validator-2",
+  "validator-3",
+  "validator-4"
+ ],
+ "hosts": {
+  "validator-5": {
+   "observe_before": {
+    "observed_at": "2026-10-21T12:06:48.638080+00:00",
+    "verified": true,
+    "ledger_identity": {
+     "height": 1137,
+     "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+     "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "releases": [
+     "store-handle-20261021"
+    ],
+    "mempools": [
+     0
+    ]
+   },
+   "observe_after": {
+    "observed_at": "2026-10-21T12:10:15.181151+00:00",
+    "verified": true,
+    "ledger_identity": {
+     "height": 1137,
+     "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+     "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "releases": [
+     "store-handle-20261021"
+    ],
+    "mempools": [
+     0
+    ]
+   },
+   "disk_avail_bytes_before": "25457278976",
+   "stop": [
+    "2026-10-21T12:07:44Z",
+    "inactive",
+    "inactive"
+   ],
+   "start": [
+    "2026-10-21T12:08:09Z",
+    "active",
+    "active"
+   ],
+   "units_after": [
+    "active",
+    "active",
+    "NRestarts=0",
+    "ActiveEnterTimestamp=Wed",
+    "2026-10-21",
+    "12:08:10",
+    "UTC",
+    "NRestarts=0",
+    "ActiveEnterTimestamp=Wed",
+    "2026-10-21",
+    "12:08:10",
+    "UTC"
+   ],
+   "rpc_readiness_after": {
+    "ready": true,
+    "degraded": false,
+    "event_log_writable": true,
+    "listener_bound": true,
+    "local_state_loaded": true,
+    "finality_key_available": true,
+    "telemetry_failure_count": 0
+   }
+  },
+  "validator-0": {
+   "observe_before": {
+    "observed_at": "2026-10-21T12:12:16.061217+00:00",
+    "verified": true,
+    "ledger_identity": {
+     "height": 1137,
+     "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+     "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "releases": [
+     "store-handle-20261021"
+    ],
+    "mempools": [
+     0
+    ]
+   },
+   "observe_after": {
+    "observed_at": "2026-10-21T12:14:16.706958+00:00",
+    "verified": true,
+    "ledger_identity": {
+     "height": 1137,
+     "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+     "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "releases": [
+     "store-handle-20261021"
+    ],
+    "mempools": [
+     0
+    ]
+   },
+   "disk_avail_bytes_before": "16039825408",
+   "stop": [
+    "2026-10-21T12:12:25Z",
+    "inactive",
+    "inactive"
+   ],
+   "start": [
+    "2026-10-21T12:12:30Z",
+    "active",
+    "active"
+   ],
+   "units_after": [
+    "active",
+    "active",
+    "NRestarts=0",
+    "ActiveEnterTimestamp=Wed",
+    "2026-10-21",
+    "12:12:30",
+    "UTC",
+    "NRestarts=0",
+    "ActiveEnterTimestamp=Wed",
+    "2026-10-21",
+    "12:12:31",
+    "UTC"
+   ],
+   "rpc_readiness_after": {
+    "ready": true,
+    "degraded": false,
+    "event_log_writable": true,
+    "listener_bound": true,
+    "local_state_loaded": true,
+    "finality_key_available": true,
+    "telemetry_failure_count": 0
+   }
+  },
+  "validator-1": {
+   "observe_before": {
+    "observed_at": "2026-10-21T12:15:47.167076+00:00",
+    "verified": true,
+    "ledger_identity": {
+     "height": 1137,
+     "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+     "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "releases": [
+     "store-handle-20261021"
+    ],
+    "mempools": [
+     0
+    ]
+   },
+   "observe_after": {
+    "observed_at": "2026-10-21T12:17:38.411084+00:00",
+    "verified": true,
+    "ledger_identity": {
+     "height": 1137,
+     "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+     "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "releases": [
+     "store-handle-20261021"
+    ],
+    "mempools": [
+     0
+    ]
+   },
+   "disk_avail_bytes_before": "17263513600",
+   "stop": [
+    "2026-10-21T12:15:51Z",
+    "inactive",
+    "inactive"
+   ],
+   "start": [
+    "2026-10-21T12:15:53Z",
+    "active",
+    "active"
+   ],
+   "units_after": [
+    "active",
+    "active",
+    "NRestarts=0",
+    "ActiveEnterTimestamp=Wed",
+    "2026-10-21",
+    "12:15:53",
+    "UTC",
+    "NRestarts=0",
+    "ActiveEnterTimestamp=Wed",
+    "2026-10-21",
+    "12:15:54",
+    "UTC"
+   ],
+   "rpc_readiness_after": {
+    "ready": true,
+    "degraded": false,
+    "event_log_writable": true,
+    "listener_bound": true,
+    "local_state_loaded": true,
+    "finality_key_available": true,
+    "telemetry_failure_count": 0
+   }
+  },
+  "validator-2": {
+   "observe_before": {
+    "observed_at": "2026-10-21T12:19:08.531678+00:00",
+    "verified": true,
+    "ledger_identity": {
+     "height": 1137,
+     "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+     "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "releases": [
+     "store-handle-20261021"
+    ],
+    "mempools": [
+     0
+    ]
+   },
+   "observe_after": {
+    "observed_at": "2026-10-21T12:21:41.171363+00:00",
+    "verified": true,
+    "ledger_identity": {
+     "height": 1137,
+     "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+     "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "releases": [
+     "store-handle-20261021"
+    ],
+    "mempools": [
+     0
+    ]
+   },
+   "disk_avail_bytes_before": "22523789312",
+   "stop": [
+    "2026-10-21T12:19:35Z",
+    "inactive",
+    "inactive"
+   ],
+   "start": [
+    "2026-10-21T12:19:50Z",
+    "active",
+    "active"
+   ],
+   "units_after": [
+    "active",
+    "active",
+    "NRestarts=0",
+    "ActiveEnterTimestamp=Wed",
+    "2026-10-21",
+    "12:19:50",
+    "UTC",
+    "NRestarts=0",
+    "ActiveEnterTimestamp=Wed",
+    "2026-10-21",
+    "12:19:51",
+    "UTC"
+   ],
+   "rpc_readiness_after": {
+    "ready": true,
+    "degraded": false,
+    "event_log_writable": true,
+    "listener_bound": true,
+    "local_state_loaded": true,
+    "finality_key_available": true,
+    "telemetry_failure_count": 0
+   }
+  },
+  "validator-3": {
+   "observe_before": {
+    "observed_at": "2026-10-21T12:23:12.307639+00:00",
+    "verified": true,
+    "ledger_identity": {
+     "height": 1137,
+     "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+     "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "releases": [
+     "store-handle-20261021"
+    ],
+    "mempools": [
+     0
+    ]
+   },
+   "observe_after": {
+    "observed_at": "2026-10-21T12:25:10.134426+00:00",
+    "verified": true,
+    "ledger_identity": {
+     "height": 1137,
+     "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+     "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "releases": [
+     "store-handle-20261021"
+    ],
+    "mempools": [
+     0
+    ]
+   },
+   "disk_avail_bytes_before": "27442511872",
+   "stop": [
+    "2026-10-21T12:23:21Z",
+    "inactive",
+    "inactive"
+   ],
+   "start": [
+    "2026-10-21T12:23:26Z",
+    "active",
+    "active"
+   ],
+   "units_after": [
+    "active",
+    "active",
+    "NRestarts=0",
+    "ActiveEnterTimestamp=Wed",
+    "2026-10-21",
+    "12:23:26",
+    "UTC",
+    "NRestarts=0",
+    "ActiveEnterTimestamp=Wed",
+    "2026-10-21",
+    "12:23:27",
+    "UTC"
+   ],
+   "rpc_readiness_after": {
+    "ready": true,
+    "degraded": false,
+    "event_log_writable": true,
+    "listener_bound": true,
+    "local_state_loaded": true,
+    "finality_key_available": true,
+    "telemetry_failure_count": 0
+   }
+  },
+  "validator-4": {
+   "observe_before": {
+    "observed_at": "2026-10-21T12:27:02.577875+00:00",
+    "verified": true,
+    "ledger_identity": {
+     "height": 1137,
+     "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+     "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "releases": [
+     "store-handle-20261021"
+    ],
+    "mempools": [
+     0
+    ]
+   },
+   "observe_after": {
+    "observed_at": "2026-10-21T12:28:52.499503+00:00",
+    "verified": true,
+    "ledger_identity": {
+     "height": 1137,
+     "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+     "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "releases": [
+     "store-handle-20261021"
+    ],
+    "mempools": [
+     0
+    ]
+   },
+   "disk_avail_bytes_before": "22896914432",
+   "stop": [
+    "2026-10-21T12:27:06Z",
+    "inactive",
+    "inactive"
+   ],
+   "start": [
+    "2026-10-21T12:27:08Z",
+    "active",
+    "active"
+   ],
+   "units_after": [
+    "active",
+    "active",
+    "NRestarts=0",
+    "ActiveEnterTimestamp=Wed",
+    "2026-10-21",
+    "12:27:09",
+    "UTC",
+    "NRestarts=0",
+    "ActiveEnterTimestamp=Wed",
+    "2026-10-21",
+    "12:27:09",
+    "UTC"
+   ],
+   "rpc_readiness_after": {
+    "ready": true,
+    "degraded": false,
+    "event_log_writable": true,
+    "listener_bound": true,
+    "local_state_loaded": true,
+    "finality_key_available": true,
+    "telemetry_failure_count": 0
+   }
+  }
+ }
+}

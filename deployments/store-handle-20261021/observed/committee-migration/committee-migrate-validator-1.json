@@ -1,0 +1,451 @@
+{
+  "schema": "postfiat-fastswap-committee-migration-v1",
+  "store_directory": "/var/lib/postfiat/validator-1/fastswap-v1",
+  "validator_id": "validator-1",
+  "dry_run": false,
+  "outcome": "migrated",
+  "load_path": "snapshot",
+  "wal_records": 0,
+  "replayed_wal_records": 0,
+  "anchor_checkpoint_id": "355fe6080068e961ed1f295217d3f0f54a7b7b6a2fcb883824a7c6e9f3a8f49869fdd12b46be88eb5509e1a1f8120ede",
+  "notes": [],
+  "before": {
+    "committee_epoch": 1,
+    "committee_root": "a2eebcbaa026e9a527861001dcc8f362f1173c5c2001a0eb4b3b7b5114e959c4ccdc6b01cc400f985e34fbc02095968e",
+    "domain": {
+      "chain": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": [
+          206,
+          34,
+          202,
+          140,
+          147,
+          45,
+          160,
+          153,
+          139,
+          72,
+          68,
+          131,
+          160,
+          150,
+          71,
+          19,
+          138,
+          48,
+          224,
+          191,
+          68,
+          64,
+          141,
+          212,
+          154,
+          141,
+          109,
+          69,
+          39,
+          135,
+          173,
+          37,
+          82,
+          26,
+          255,
+          62,
+          211,
+          52,
+          218,
+          7,
+          225,
+          80,
+          167,
+          35,
+          58,
+          62,
+          144,
+          169
+        ],
+        "protocol_version": 1
+      },
+      "fastswap_schema_version": 1,
+      "committee_epoch": 1,
+      "committee_root": [
+        162,
+        238,
+        188,
+        186,
+        160,
+        38,
+        233,
+        165,
+        39,
+        134,
+        16,
+        1,
+        220,
+        200,
+        243,
+        98,
+        241,
+        23,
+        60,
+        92,
+        32,
+        1,
+        160,
+        235,
+        75,
+        59,
+        123,
+        81,
+        20,
+        233,
+        89,
+        196,
+        204,
+        220,
+        107,
+        1,
+        204,
+        64,
+        15,
+        152,
+        94,
+        52,
+        251,
+        192,
+        32,
+        149,
+        150,
+        142
+      ],
+      "validator_count": 6,
+      "quorum": 5
+    },
+    "prepare_fences": [
+      {
+        "committee_epoch": 1,
+        "policy_epoch": 1,
+        "finalized_primary_height": 1121
+      }
+    ],
+    "anchored_checkpoints": [
+      "355fe6080068e961ed1f295217d3f0f54a7b7b6a2fcb883824a7c6e9f3a8f49869fdd12b46be88eb5509e1a1f8120ede"
+    ],
+    "objects": 2,
+    "file_sha3_384": {
+      "base-state.json": "ae8bdb5427abd80034ffdef8b1360c10c71bc013d7802822739c18356b930f81e78367003e151abac1fadebcf116b22f",
+      "committee.json": "875f7259b2ab2c1ad63bb058beb2daf13fc881cc953382a4b7ffadf601493799ae4c867793dc9813aacffd564e74b3a8",
+      "fastswap-v1.snapshot.json": "7a1a37d1ac778e8dc981fcf692b481fa5cdbe728bb7a179e76f7e3d854297fe3eea49fa66bdff7e882da194b5bd8a388",
+      "fastswap-v1.wal": "0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2ac3713831264adb47fb6bd1e058d5f004"
+    }
+  },
+  "after": {
+    "committee_epoch": 2,
+    "committee_root": "72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37",
+    "domain": {
+      "chain": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": [
+          206,
+          34,
+          202,
+          140,
+          147,
+          45,
+          160,
+          153,
+          139,
+          72,
+          68,
+          131,
+          160,
+          150,
+          71,
+          19,
+          138,
+          48,
+          224,
+          191,
+          68,
+          64,
+          141,
+          212,
+          154,
+          141,
+          109,
+          69,
+          39,
+          135,
+          173,
+          37,
+          82,
+          26,
+          255,
+          62,
+          211,
+          52,
+          218,
+          7,
+          225,
+          80,
+          167,
+          35,
+          58,
+          62,
+          144,
+          169
+        ],
+        "protocol_version": 1
+      },
+      "fastswap_schema_version": 1,
+      "committee_epoch": 2,
+      "committee_root": [
+        114,
+        131,
+        104,
+        39,
+        249,
+        243,
+        236,
+        211,
+        4,
+        34,
+        97,
+        167,
+        122,
+        191,
+        247,
+        34,
+        53,
+        240,
+        35,
+        139,
+        106,
+        129,
+        246,
+        115,
+        99,
+        10,
+        98,
+        25,
+        148,
+        21,
+        2,
+        26,
+        27,
+        224,
+        203,
+        213,
+        69,
+        24,
+        120,
+        237,
+        202,
+        14,
+        17,
+        4,
+        52,
+        193,
+        218,
+        55
+      ],
+      "validator_count": 6,
+      "quorum": 5
+    },
+    "prepare_fences": [],
+    "anchored_checkpoints": [
+      "355fe6080068e961ed1f295217d3f0f54a7b7b6a2fcb883824a7c6e9f3a8f49869fdd12b46be88eb5509e1a1f8120ede"
+    ],
+    "objects": 2,
+    "file_sha3_384": {
+      "base-state.json": "6905b7ce66e17b7216ee089c20389d4cd4a0e049d60c60b78d58e842deb2c00b8f87063d43db2895b12fc8c4378def0f",
+      "committee.json": "39644f1caa28549e11e01fdbec928cabf0db8aa75a20cfffb53da14d1f63af993eda66e22a6cfcae951b0edd89ddf550",
+      "fastswap-v1.snapshot.json": null,
+      "fastswap-v1.wal": null
+    }
+  },
+  "backup_directory": "/var/lib/postfiat/fastswap-v1-epoch2-backup-validator-1",
+  "backup_manifest": [
+    {
+      "path": "base-state.json",
+      "bytes": 2003,
+      "sha3_384": "ae8bdb5427abd80034ffdef8b1360c10c71bc013d7802822739c18356b930f81e78367003e151abac1fadebcf116b22f"
+    },
+    {
+      "path": "vote-artifacts/54fc512ca49a66ce799f7f0ad9ce500caecd70d32b0312f2e4442e53533346a0286ce9dd5d30c6bd52cc6178ede28d22-precommit-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 12809,
+      "sha3_384": "67499732a2a27ef40fb11974d5305f77dd41a751ec2e539e05d0a556bf76f01d3c283bbfac56b4badab0e13bf44f188d"
+    },
+    {
+      "path": "vote-artifacts/9e03cc7df7218a3951657cf004d07d8ae0ed013cfd20d71033c496cf93147b5c0c1073b8b311b4106d5169c2f475ba27-precommit-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 12815,
+      "sha3_384": "9de904d87f7df93ae0deef3172428b046fee464198b32d68f379c5625f8562edf46e37d08d2474b1ef9668b7ea0613c3"
+    },
+    {
+      "path": "vote-artifacts/certificate-81fe654eb16bfc0b15f7ad45e555cc42a8f99130bea8f7dfb51dccbf30103d94e6e2f36ced530f16c1c3f3cd5de2af77.json",
+      "bytes": 64164,
+      "sha3_384": "8be6b8ded4c24fd3c0734929e9795fb315615385d0ae2be7be37961dd7593cb4b1f8dd22112e30e39f9cce6b3658a305"
+    },
+    {
+      "path": "vote-artifacts/9e03cc7df7218a3951657cf004d07d8ae0ed013cfd20d71033c496cf93147b5c0c1073b8b311b4106d5169c2f475ba27-effects-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 13123,
+      "sha3_384": "272c1f512dc5e09a350c5f503dccd0efe46f7d8925614220c1b7e211c051f84a09ca14a9e6d28ccb72487e63fb07ef25"
+    },
+    {
+      "path": "vote-artifacts/certificate-117a74241531186f4d05ee33aee6234a71e38895012f391f0591b7164cccfa5e042f31ffe02a9d26d526727a08c72cc4.json",
+      "bytes": 64093,
+      "sha3_384": "78d98bec505b8ea829cb0a28ec8e14edf0f2015b77bd349dd0ff04b22b600e397b7c75cf35f89a8fffb8f3a02be2ac7d"
+    },
+    {
+      "path": "vote-artifacts/certificate-3fb1246fa74001761ab73330409e8f86086527994c0539b59408b8aff93c29dedfd7fa45b8d33ad11b1059110f38d1d4.json",
+      "bytes": 64266,
+      "sha3_384": "3ddea416ad4bcaa95bd3ba2ab1b26c75bb809f344c0f24f3035ba9974ec896080ee4e862fb0fa325b368ab70e9972132"
+    },
+    {
+      "path": "vote-artifacts/certificate-fd4f0d1a2a785a842c8d22a0e563fe437d44646ce3f6cc72fbf0880de9d1e2d9933d54ffdbcacffa7985cc2cc92f266b.json",
+      "bytes": 65136,
+      "sha3_384": "6307970ab60cba17c1faf5a07803bb15de7249665ba4a6a0a1a70e74224e63bf467cf5a7d9ca33fb5c92aa2a517bab18"
+    },
+    {
+      "path": "vote-artifacts/0bfc6adac967e2a4257c44d83f234fb88ba63ce858790e751173315eac5ba81d2ee7cb468411fdbe1a010530e06739d6-precommit-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 12848,
+      "sha3_384": "24cb5b291efdd22d9c560365068e7f41d47b3f1812bebef64c165f3c9b9ea3e741a02b2e056c0799842c82e5e4094f71"
+    },
+    {
+      "path": "vote-artifacts/35c84d2a06049f8f04f4107736d5d510ad3b970481a5869a43fdb053ae1811d7ca2d437176bb4c89506d7ec68caa2959-effects-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 13158,
+      "sha3_384": "62deb9a0fdf87db87ce948be7b51c489ca931cb5b373827a2bc2ad6dfdfe1e3630af032cdf739b23868af55532e08d4c"
+    },
+    {
+      "path": "vote-artifacts/certificate-ed853db53b3335336a5b41cb489bd17dac625e9fa4801e5f8e37ebd6c3b801d900a1eacb1ef98d455915afaa99b26b5e.json",
+      "bytes": 64268,
+      "sha3_384": "7f2aa8301a4e7fc47a4197eff754fa231b907dc6b814ee1b9bc9b11c1db1f5eceae1342f135a8c14e3d21f2c20895cf8"
+    },
+    {
+      "path": "vote-artifacts/eca90e29f10baadf8a11a43b2920d027c6361ae8d7de749eb0c1de62445e685d22feedb7ce406bdc1912b59ecf7a8cb0-effects-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 13201,
+      "sha3_384": "b41d86d8d9fbee09f8fc548f1003cdaf203140fc6dea9630259d6fe7435bb0eb14ef7a8a7a40caf8d57ae8e6ffa1b01a"
+    },
+    {
+      "path": "vote-artifacts/eca90e29f10baadf8a11a43b2920d027c6361ae8d7de749eb0c1de62445e685d22feedb7ce406bdc1912b59ecf7a8cb0-commit-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 13044,
+      "sha3_384": "c6cae2333281c2dec1e0cb238599959ea7c25bf1ebd10a76cebcc69e59bdb068b631e281c29eba5acff323942c8a4c30"
+    },
+    {
+      "path": "vote-artifacts/35c84d2a06049f8f04f4107736d5d510ad3b970481a5869a43fdb053ae1811d7ca2d437176bb4c89506d7ec68caa2959-commit-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 12969,
+      "sha3_384": "da99a8b70b964e9e6aaea4d15b60329b6b58c8e291900bed35c969db251ce9ff6ec08e52d0782dfc7c17d0205b03af09"
+    },
+    {
+      "path": "vote-artifacts/183398bea2073377bc9d46b1f98cb821864ddd074c0892b8eaabb719b41d7829bde6f131170f3a447d66fb2e3c3b3d4f-commit-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 12988,
+      "sha3_384": "98d5cdd0053b1324a9efcbfae4f440754ca53ac3fcedc6e864ad923a3e9e81671b3747997134a75ca53ebc6db0b11821"
+    },
+    {
+      "path": "vote-artifacts/54fc512ca49a66ce799f7f0ad9ce500caecd70d32b0312f2e4442e53533346a0286ce9dd5d30c6bd52cc6178ede28d22-effects-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 13235,
+      "sha3_384": "79aaa561e11fdee6079f1d2aa03bb964858cc99874edfee8894e20ed3fd8a9ccccafb0f1ea4f085d13116f5f69f8dcb5"
+    },
+    {
+      "path": "vote-artifacts/certificate-e6ea131cba338fb2cfa3fad387bb85df0831e6d9d9847e972ca43a8318753b60e05be835e4ba41260b5194a3f009d2b8.json",
+      "bytes": 64963,
+      "sha3_384": "3027e7c0c0d372a1dfcc1191834cb26e4df522ff72a1d0f6799c5883762ccda5579eb461ba40eb8bd0c07bac616d9741"
+    },
+    {
+      "path": "vote-artifacts/eca90e29f10baadf8a11a43b2920d027c6361ae8d7de749eb0c1de62445e685d22feedb7ce406bdc1912b59ecf7a8cb0-precommit-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 12922,
+      "sha3_384": "112fff442c757b2c124f1e48faf1fd86ce81e3460d7685a6f5ef4dcc9578a0353f3bc2872101a014f476073c976f5b02"
+    },
+    {
+      "path": "vote-artifacts/certificate-0d2d606ca32fb18ff7e1f37fa41dbabd97787c2efb6cfdeef1f5e3f4aea40b796936030f32f276f744df91a1e819a3a5.json",
+      "bytes": 64988,
+      "sha3_384": "075d8d4f52689c605ec735d15b17d717834fab3f0138d2eb09950156a78d3a343f00d563ed89f4404b5c2ea9edc41a43"
+    },
+    {
+      "path": "vote-artifacts/9e03cc7df7218a3951657cf004d07d8ae0ed013cfd20d71033c496cf93147b5c0c1073b8b311b4106d5169c2f475ba27-commit-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 12960,
+      "sha3_384": "efec3c7924169b3882eae826add0bfa8c6a23332dd581ea904e90de36e884ce28181f54d828998851007390586b2b599"
+    },
+    {
+      "path": "vote-artifacts/certificate-82731a5d7f03004021d6d49ebca611c2514298ca8027fa365832db931679d2d1a1f4c44c2fbc3c80c039c7bb126ceef6.json",
+      "bytes": 64192,
+      "sha3_384": "bf1c9ab7b8d07e339c94fbb13cdbea8fe9ad429d09e0d68ce93043387fd4a0053d610389efb3ae013ec94b26b2600dc7"
+    },
+    {
+      "path": "vote-artifacts/35c84d2a06049f8f04f4107736d5d510ad3b970481a5869a43fdb053ae1811d7ca2d437176bb4c89506d7ec68caa2959-precommit-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 12839,
+      "sha3_384": "b5b9ec190ce16f061dbe9b736f31d687d952f9e14d49d81b48e09d0cdd119adc9b6405b7a0fc102fc80c206afca7eac2"
+    },
+    {
+      "path": "vote-artifacts/54fc512ca49a66ce799f7f0ad9ce500caecd70d32b0312f2e4442e53533346a0286ce9dd5d30c6bd52cc6178ede28d22-commit-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 13015,
+      "sha3_384": "a53f40356f2441830ee968531d6994778c765025bcf5c0f0c6694677318996e2ae2c2be9e84d268f587af1c5c0575108"
+    },
+    {
+      "path": "vote-artifacts/certificate-255a289234d9fdb35944fe708f6a50cbd67836c1cd27a9715d464f8649a4b35e5928cb13960e82b6e16bf4ce785165dc.json",
+      "bytes": 65166,
+      "sha3_384": "cb8189d4b2324b5b51bba4eeafc6e0b1dd8176ac753b5531354d4abe90250e78b3bf6fdfd37626482e0837931c2a101d"
+    },
+    {
+      "path": "vote-artifacts/certificate-d855bd8480f5f5ba3b9f91c6dc88fd25a62326dbd8568593ed61f62918730bd322f9c50ea1a876ea106a4601ca7cd4b1.json",
+      "bytes": 64948,
+      "sha3_384": "dd134c1474e4e3a7f564187751290242f9d9f5d6ce74564a4910ed160d8feee7d798d029baf19d1a0f553b5eb46bcb46"
+    },
+    {
+      "path": "vote-artifacts/0bfc6adac967e2a4257c44d83f234fb88ba63ce858790e751173315eac5ba81d2ee7cb468411fdbe1a010530e06739d6-effects-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 13134,
+      "sha3_384": "5b89d011cb90ad9b7fc10493bd3c70975ec339a4dbab118bef013b293d10e574e12218d144731db27b33a7e95b7f9768"
+    },
+    {
+      "path": "vote-artifacts/certificate-a4d07f20c1f6a9b39f44d4ff11a439840dfb70ff67248fb216119a7424999706b10947bf93f81655c008a414c3909af2.json",
+      "bytes": 64134,
+      "sha3_384": "5f009d9a69ccd72b26d1b6ca33f99b7faaac59af19640c656f025166142de9072b60d5dcc84bc38522cbcb073d008cd7"
+    },
+    {
+      "path": "vote-artifacts/certificate-1fbc69c718662f5b7adfc81cb61a216e4e03ce0982f5fef4bdf9915d18ba006ca61e28c41011e4694152ca816e79ed87.json",
+      "bytes": 64825,
+      "sha3_384": "4711c0bb136ac5d675a6061183e8f75ae50509e47f3592ab3960075683aa64cf3456177e4d53e54ebc4685125d03af89"
+    },
+    {
+      "path": "vote-artifacts/183398bea2073377bc9d46b1f98cb821864ddd074c0892b8eaabb719b41d7829bde6f131170f3a447d66fb2e3c3b3d4f-effects-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 13145,
+      "sha3_384": "d1d8fe79b584c1348d426ee862cb8a4eb039fece3d669c06b82268c0c6ecff68b2ffdd0c8dfb86868c33ddb7b9c1423c"
+    },
+    {
+      "path": "vote-artifacts/0bfc6adac967e2a4257c44d83f234fb88ba63ce858790e751173315eac5ba81d2ee7cb468411fdbe1a010530e06739d6-commit-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 13052,
+      "sha3_384": "9351f67e7baa41cd5f22f8eb52afe1b59ca1da90eb7944dd07a78688c7838e4b65b6ba555b0f5d6f53c98d8257cf90a5"
+    },
+    {
+      "path": "vote-artifacts/183398bea2073377bc9d46b1f98cb821864ddd074c0892b8eaabb719b41d7829bde6f131170f3a447d66fb2e3c3b3d4f-precommit-0-2f13be8e2737c239df27aece4fa5657a3ec385c62cc45425ce3d10a4e87d1997782d7847b8abf69a1d0a790ed899de5b.json",
+      "bytes": 12796,
+      "sha3_384": "bb0cfa7d0d9a0a8a59fcf8b0aee8725ddc3fbd2a46e36e77ff3c2395f4913a83f697bdec7d4afebeb9815b9d770455e0"
+    },
+    {
+      "path": ".integrity.key",
+      "bytes": 48,
+      "sha3_384": "4df7479ae29fbbc2bd36ef27cb60902670218a01e866074ac5afad3df6533fd59b69dc7dfc01a7c7055c41c8c1fa968c"
+    },
+    {
+      "path": "fastswap-v1.wal",
+      "bytes": 0,
+      "sha3_384": "0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2ac3713831264adb47fb6bd1e058d5f004"
+    },
+    {
+      "path": "fastswap-v1.snapshot.json",
+      "bytes": 71700,
+      "sha3_384": "7a1a37d1ac778e8dc981fcf692b481fa5cdbe728bb7a179e76f7e3d854297fe3eea49fa66bdff7e882da194b5bd8a388"
+    },
+    {
+      "path": "committee.json",
+      "bytes": 42673,
+      "sha3_384": "875f7259b2ab2c1ad63bb058beb2daf13fc881cc953382a4b7ffadf601493799ae4c867793dc9813aacffd564e74b3a8"
+    }
+  ],
+  "moved_aside": [
+    "fastswap-v1.wal",
+    "fastswap-v1.snapshot.json"
+  ],
+  "verification": "service open: committee epoch 2, root 72836827f9f3ecd3042261a77abff72235f0238b6a81f673630a62199415021a1be0cbd5451878edca0e110434c1da37, enabled true"
+}
