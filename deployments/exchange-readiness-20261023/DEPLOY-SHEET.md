@@ -189,6 +189,33 @@ start the RPC was ready again within 15 s and `account_tx` for `testing` answere
 The build time includes the ssh round trip. The index is current to 1143. Ordered commit does not extend it, so after
 the next block `account_tx` falls back to the archive scan until `account-tx-index-build` runs again (runbook).
 
+**After the activation (2026-10-23, height 1153 throughout, no block produced).** The same procedure was run
+again so that all six hosts serve history from the index up to 1153. This repeats an operation already
+recorded under this section, so no new Task Node task was opened.
+- validator-1 ran at 10:32Z, right after §8.
+- Validators 0, 2, 3, 4 and 5 followed in that order, 10:51–11:07Z.
+- [x] **GO 7.N after the activation:** each host was rebuilt only after the previous one was ready.
+  Only the RPC unit was stopped, for 11–27 s; the validator unit stayed active.
+- [x] Six-way agreement held at 1153 / `db8b87b6…` / `7141956e…` with mempools 0, before and after every
+  host.
+- [x] Every host has a usable v2 index for 1–1153. `account_tx` for `testing` answers from the index with
+  all 13 grants.
+
+Records: [account-tx-index/after-activation/](observed/account-tx-index/after-activation/), and for
+validator-1 [activation/account-tx-index-validator-1/](observed/activation/account-tx-index-validator-1/).
+
+| Host | Index before | Index after | Range | Blocks indexed | Rows | Build (s, incl. ssh) | RPC stopped | RPC started | Ready again | `account_tx` `testing` (index) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| validator-1 | v2 to 1143, stale (tip hash) | v2 usable (index True, disk True) | 1–1153 | 1112 | 977 | 6.5 | 10:32:17 | 10:32:28 | 10:32:37 | 65 rows, 13 grants (1138–1143, 1147–1153) |
+| validator-0 | v2 to 1143, stale (tip hash) | v2 usable (index True, disk True) | 1–1153 | 1112 | 977 | 8.0 | 10:52:17 | 10:52:32 | 10:52:46 | 65 rows, 13 grants (1138–1143, 1147–1153) |
+| validator-2 | v2 to 1143, stale (tip hash) | v2 usable (index True, disk True) | 1–1153 | 1112 | 977 | 12.6 | 10:55:27 | 10:55:54 | 10:56:07 | 65 rows, 13 grants (1138–1143, 1147–1153) |
+| validator-3 | v2 to 1143, stale (tip hash) | v2 usable (index True, disk True) | 1–1153 | 1112 | 977 | 8.2 | 10:58:58 | 10:59:12 | 10:59:27 | 65 rows, 13 grants (1138–1143, 1147–1153) |
+| validator-4 | v2 to 1143, stale (tip hash) | v2 usable (index True, disk True) | 1–1153 | 1112 | 977 | 6.9 | 11:01:59 | 11:02:10 | 11:02:20 | 65 rows, 13 grants (1138–1143, 1147–1153) |
+| validator-5 | v2 to 1143, stale (tip hash) | v2 usable (index True, disk True) | 1–1153 | 1112 | 977 | 10.8 | 11:05:14 | 11:05:35 | 11:05:44 | 65 rows, 13 grants (1138–1143, 1147–1153) |
+
+This release's index still does not follow commits, so after the next block reads fall back to the archive
+scan until the next release, whose index follows commits (main `0ac2bc9b`).
+
 ## 8. Governance activation of the three heights — covered by the operator's go of the day, only after §6 and §7 are clean on all six
 
 Kinds `recipient_format_activation_height`, `rejected_tx_fee_activation_height`,

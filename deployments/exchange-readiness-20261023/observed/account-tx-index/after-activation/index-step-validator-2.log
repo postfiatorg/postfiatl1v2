@@ -1,0 +1,16 @@
+== validator-2 2026-10-23T10:54:03Z (a) agreement before
+PASS height=1153 tip=db8b87b65a5a root=7141956e778c validator-0=exchange-readiness-20261023, validator-1=exchange-readiness-20261023, validator-2=exchange-readiness-20261023, validator-3=exchange-readiness-20261023, validator-4=exchange-readiness-20261023, validator-5=exchange-readiness-20261023; /home/postfiatchad/.postfiat/deployments/exchange-readiness-20261023/evidence/account-tx-index-after-activation/observe-before-validator-2.json
+disk avail 22355038208
+index before True False account_tx index tip hash is stale
+== validator-2 2026-10-23T10:55:27Z (b) stop the RPC unit
+stopped at 2026-10-23T10:55:27Z: rpc,validator = inactive active 
+== validator-2 2026-10-23T10:55:35Z (c) build
+build rc=0 seconds=12.591088995
+== validator-2 2026-10-23T10:55:54Z (d) start the RPC unit
+started at 2026-10-23T10:55:54Z (rc=0)
+PASS index {'indexed_from_height': 1, 'indexed_to_height': 1153, 'indexed_block_count': 1112, 'indexed_row_count': 977, 'account_count': 255, 'disk_account_shard_count': 255} status True True None
+rejoined at 2026-10-23T10:56:07Z; units active active ; readiness True False 1792752961
+PASS account_tx testing index_used True rows 65 truncated False grants [1138, 1139, 1140, 1141, 1142, 1143, 1147, 1148, 1149, 1150, 1151, 1152, 1153] None
+== validator-2 2026-10-23T10:56:12Z (f) agreement after
+PASS height=1153 tip=db8b87b65a5a root=7141956e778c validator-0=exchange-readiness-20261023, validator-1=exchange-readiness-20261023, validator-2=exchange-readiness-20261023, validator-3=exchange-readiness-20261023, validator-4=exchange-readiness-20261023, validator-5=exchange-readiness-20261023; /home/postfiatchad/.postfiat/deployments/exchange-readiness-20261023/evidence/account-tx-index-after-activation/observe-after-validator-2.json
+== validator-2 PASS 2026-10-23T10:57:40Z
