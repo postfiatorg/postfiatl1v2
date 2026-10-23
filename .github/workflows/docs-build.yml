@@ -18,6 +18,7 @@ jobs:
           python-version: "3.12"
       - run: sudo apt-get update && sudo apt-get install -y ripgrep
       - run: python -m pip install --disable-pip-version-check --require-hashes -r requirements-docs.txt
+      - run: scripts/docs-handoffs-index --check
       - run: scripts/docs-site-evidence-index
       - run: scripts/docs-site-redaction-check
       - run: scripts/test-whitepaper-implementation-boundaries

@@ -10,7 +10,7 @@
         > docs/status/testnet-path.md
     ```
 
-Generated at input commit `9f5382bf` (2026-10-20), the newest commit touching the input documents at generation time.
+Generated at input commit `9537af66` (2026-10-23), the newest commit touching the input documents at generation time.
 
 Inputs: the [testnet-path milestone](../plans/active/l1v2-public-testnet-path-milestone.md),
 the [storage scaling milestone](../plans/active/storage-scaling-milestone.md) gate table,
@@ -36,7 +36,7 @@ No community-facing step may start until all three close.
 | G4 | DONE | scaling PASS at candidate d0ae79f3, binary 9e82d928…8c80c, report e2cff9cd…999f (handoff) |
 | A1 | OPEN | (operator, external) Height-915 quarantine archive: lost (other lane, 2026-10-20, answer (h)). I propose the… |
 | A2 | DONE | (operator, external) Height-924 custodian named and one read-only copy approved (2026-10-20): I am the… |
-| A3 | OPEN | Run both exact replays against the frozen binary with benchmarks/storage-scaling/run_replay_evidence.py; bind… |
+| A3 | DONE | Run both exact replays against the frozen binary with benchmarks/storage-scaling/run_replay_evidence.py; bind… |
 | A4 | OPEN | Assemble the redaction-safe packet with benchmarks/storage-scaling/package_packet.py; run the offline… |
 | A5 | OPEN | Retire storage-scaling-milestone.md into docs/plans/completed/ and refresh… |
 
@@ -84,7 +84,7 @@ Row states from the storage scaling milestone's gate-status table.
 | G1 — candidate freeze | PASS FOR CLOSED FAILED LINEAGE |
 | G2 — safety | EAGER-INDEX LOCAL PASS / PACKET BINDING PENDING |
 | G3 — exact replay | HEIGHT 924 REBUILD/VERIFY PASS / ROLLBACK CLAIM INVALIDATED / HEIGHT 915 INPUT LOST, 1123 REPLACEMENT PROPOSED |
-| G4 — scaling | HISTORICAL PASS FOR d0ae79f3 ONLY |
+| G4 — scaling | PASS FOR d0ae79f3 (2026-08-30); REGRESSION PASS FOR 8644f0af (2026-10-20) |
 | G5 — offline packet | BLOCKED BY THE REPLAY INPUTS (915 LOST, 1123 PROPOSED; 924 AFTER STO-07) AND DEPLOYMENT-TOPOLOGY DEFECT |
 | G6 — six-clone rehearsal | OLD RUNNER PASS INVALIDATED / LIVE CANARY ROLLED BACK (2026-08-30) |
 | G7 — Dynamic UNL handoff | DIRECTION RECORDED / IMPLEMENTATION DEFERRED |
@@ -92,4 +92,4 @@ Row states from the storage scaling milestone's gate-status table.
 ## Context
 
 - Plans registry: the testnet-path milestone is LISTED ACTIVE.
-- Chain state head: updated 2026-10-15T11:50:00Z — 2026-10-15: fastlane-cap release deployed; bridge committee epoch 2 active.
+- Chain state head: updated 2026-10-21T12:35:00Z — 2026-10-21: store-handle release deployed to all six validators.
