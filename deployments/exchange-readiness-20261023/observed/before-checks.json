@@ -1,0 +1,131 @@
+{
+ "recorded_at": "2026-10-23T06:36Z",
+ "sheet": "DEPLOY-SHEET.md \u00a70, \u00a71, \u00a72, \u00a73 (read-only on the fleet; the fleet preflight wrote only the local rollout state)",
+ "go_no_go": {
+  "other_rollout_or_session": "none: origin/main head 2cd26f4f (storage packet docs; the last release record is 0f852110, this release's re-qualification); latest handoff 2026-10-23 codex chain PR merge (asks for this rollout); tmux sessions on this server: dravlic (this session), dravlic2 (storage rehearsal, worktree postfiatl1v2-dravlic2) and dravlic3 (Z2 scorer, worktree postfiatl1v2-dravlic3), both local only, and postfiatchad (an interactive session with no fleet connection); the only TCP connections to the six hosts are the six persistent RPC tunnels (ssh -N -L 2765x, 14 days); the pft-fastpay proxy (node server.js, 28 days) reads through the tunnels; no safe-rollout, apply or export process",
+  "apt_daily_upgrade_service": "not active on any of the six (observe-fleet.py check)",
+  "ci_d9260e93": "no failed workflow: docs-build 39907715773 success; rust-ci 39907715795 check success, test in progress; product-security-ci 39907715862 six jobs success, open-reserve-proof-kit in progress (read 06:30Z)"
+ },
+ "before_state": {
+  "observed_at": "2026-10-23T06:32:15.753445+00:00",
+  "result": "PASS",
+  "release": "store-handle-20261021 on all six (eea96ba6..., build 86706699, manifest 8ce1da30...)",
+  "height": 1137,
+  "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+  "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a",
+  "mempools": "0 on all six",
+  "root_fs_avail_bytes": {
+   "validator-0": 15914762240,
+   "validator-1": 17185521664,
+   "validator-2": 22455226368,
+   "validator-3": 27359543296,
+   "validator-4": 22817402880,
+   "validator-5": 25851723776
+  }
+ },
+ "activation_heights": {
+  "running_binary": "not readable by the old binary: its status and server_info RPC carry no field for recipient_format_activation_height, rejected_tx_fee_activation_height or require_memo_activation_height, and it has no governance read; read from the \u00a74 canary import instead (read-import-state.py)"
+ },
+ "routes_all_six": {
+  "observed_at": "2026-10-23T06:33:07.391438+00:00",
+  "agree": true,
+  "routes": {
+   "pftl-a666-ethereum-wA666-usdc-v1": {
+    "ledger_hash": "57da38373813c34b9629fa56123eed8ebb49433d71ff4021400cabe673c5943977065f14f3a18f726941edef03ee78f5",
+    "paused": false,
+    "authority_epoch": 1
+   },
+   "pftl-bmnrc-ethereum-wBMNRC-usdc-v1": {
+    "ledger_hash": "b2817e68d96e950bc6700643a56636880aa7a1e5bc9c4a130204e725512691b4618364807af8d30392a58b12a32840a4",
+    "paused": false,
+    "authority_epoch": 1
+   }
+  },
+  "authority_epoch_basis": "navcoin_bridge_routes does not report authority_epoch; ledger_hash commits to it (pftl_uniswap_route_state_hash); both hashes equal the epoch-1 values recorded on 2026-10-21 and the height is still 1137, so neither issuer update has been submitted; the \u00a74 import's ledger is read for the epoch itself",
+  "issuer_updates": "not yet submitted"
+ },
+ "account_tx_index_status_all_six": {
+  "validator-0": {
+   "index_present": false,
+   "index_usable": false,
+   "reason": "account_tx index file is absent",
+   "disk_index_present": false,
+   "disk_index_usable": false,
+   "disk_index_reason": "account_tx disk index file is absent",
+   "indexed_from_height": null,
+   "indexed_to_height": null
+  },
+  "validator-1": {
+   "index_present": false,
+   "index_usable": false,
+   "reason": "account_tx index file is absent",
+   "disk_index_present": false,
+   "disk_index_usable": false,
+   "disk_index_reason": "account_tx disk index file is absent",
+   "indexed_from_height": null,
+   "indexed_to_height": null
+  },
+  "validator-2": {
+   "index_present": false,
+   "index_usable": false,
+   "reason": "account_tx index file is absent",
+   "disk_index_present": false,
+   "disk_index_usable": false,
+   "disk_index_reason": "account_tx disk index file is absent",
+   "indexed_from_height": null,
+   "indexed_to_height": null
+  },
+  "validator-3": {
+   "index_present": false,
+   "index_usable": false,
+   "reason": "account_tx index file is absent",
+   "disk_index_present": false,
+   "disk_index_usable": false,
+   "disk_index_reason": "account_tx disk index file is absent",
+   "indexed_from_height": null,
+   "indexed_to_height": null
+  },
+  "validator-4": {
+   "index_present": false,
+   "index_usable": false,
+   "reason": "account_tx index file is absent",
+   "disk_index_present": false,
+   "disk_index_usable": false,
+   "disk_index_reason": "account_tx disk index file is absent",
+   "indexed_from_height": null,
+   "indexed_to_height": null
+  },
+  "validator-5": {
+   "index_present": false,
+   "index_usable": false,
+   "reason": "account_tx index file is absent",
+   "disk_index_present": false,
+   "disk_index_usable": false,
+   "disk_index_reason": "account_tx disk index file is absent",
+   "indexed_from_height": null,
+   "indexed_to_height": null
+  }
+ },
+ "account_tx_index_note": "absent on all six (no v1 index file either), not v1 as expected; reads therefore use the archive scan, which the deployed binary cannot complete on this history (repeated governance receipt ids); \u00a77 builds the v2 index",
+ "stage_recheck": {
+  "executable_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+  "manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+  "local_preflight": "PASS_SIGNED_LOCAL_INPUTS_ONLY: 33 generated files, 4 circuit artifacts, signed gate PASS_SIGNED_LOCAL_VERIFICATION for all six"
+ },
+ "fleet_preflight": {
+  "result": "verified",
+  "agreement": "six-way at 1137/18a4dc86/1277c76c, mempools 0",
+  "signer_rosters": "6 valid, registry root 08a451e0, 6 validators",
+  "deletions": 0,
+  "diff_per_validator": "9 create, 2 update (the two units)",
+  "order": [
+   "validator-1",
+   "validator-0",
+   "validator-2",
+   "validator-3",
+   "validator-4",
+   "validator-5"
+  ]
+ },
+ "validator_1_root_fs_avail_bytes_before_export": 17185402880
+}
