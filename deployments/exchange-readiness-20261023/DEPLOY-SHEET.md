@@ -7,7 +7,7 @@ the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md), the
 [activation facts](../../docs/review/exchange-readiness-merge-review-20261023.md#activation-steps-later-today-after-all-six-run-the-new-binary).
 Keys are used by path only; no key material is printed, copied to a host or committed.
 
-**Status: §0–§4 done on 2026-10-23** (before state at 1137, [checks](observed/before-checks.json); signed canary backup `3257115c…` and current-head replay PASS, [record](observed/canary-backup.json)); §5 not started. Cut and locally qualified on 2026-10-23, re-qualified the same day with the account history index fix (`6b1a0585`, [packet](qualification/README.md)).
+**Status: §0–§5 done on 2026-10-23** (deployed at 1143) (before state at 1137, [checks](observed/before-checks.json); signed canary backup `3257115c…` and current-head replay PASS, [record](observed/canary-backup.json)); §5 not started. Cut and locally qualified on 2026-10-23, re-qualified the same day with the account history index fix (`6b1a0585`, [packet](qualification/README.md)).
 Every live section (§0, §1, §3–§9) is covered by the operator's go of the day; each step marked
 **GO** needs that go. §8 (governance activation) runs only after §6 and §7 are clean on all six.
 
@@ -111,7 +111,7 @@ the new build admitted it locally, [admission check](qualification/admission-res
 
 For each validator, only after the previous check passed:
 
-- [ ] **GO 5.N** (one go per validator: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5).
+- [x] **GO 5.N** (one go per validator: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5). 2026-10-23 07:10:57–07:39:43Z: all six applied in order; grants at 1138–1143 (proposers validator-4, 5, 0, 1, 2, 3), each certified at view 0 with quorum 5 of 6 and the same block, tip and root on all six; no rollback ([rollout record](observed/rollout-record.json)).
 
 ```bash
 scripts/postfiat-safe-rollout apply-next --state-file $E/rollout-state.json > $E/apply-N.json

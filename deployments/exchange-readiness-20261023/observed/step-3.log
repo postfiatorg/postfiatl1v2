@@ -1,0 +1,9 @@
+apply-3 validator-2 start 2026-10-23T07:20:25Z
+PASS apply validator-2 applied ['validator-1', 'validator-0', 'validator-2'] height 1139 f74c722aa1eb 4d4b36e46ed5 convergence 1139 f74c722aa1eb 4d4b36e46ed5
+apply-3 done 2026-10-23T07:23:05Z
+grant True 1140 validator-0 f872baa44020c5b4 True {'balance': 53993300, 'sequence': 49} {'balance': 68073000, 'sequence': 0}
+grant done 2026-10-23T07:24:17Z
+PASS height=1140 proposer=validator-0 view=0 block=9801d81fd45d root=3dd3f446f598 voters=validator-0,validator-1,validator-2,validator-3,validator-4 {'identical_block_on_6': True, 'quorum_5_of_6': True, 'tip_is_grant_block_on_6': True, 'mempools_empty': True, 'receipt_verified_6_of_6': True, 'proposer_matches_receipt': True}
+PASS height=1140 tip=9801d81fd45d root=3dd3f446f598 validator-0=exchange-readiness-20261023, validator-1=exchange-readiness-20261023, validator-2=exchange-readiness-20261023, validator-3=store-handle-20261021, validator-4=store-handle-20261021, validator-5=store-handle-20261021; deployments/exchange-readiness-20261023/observed/after-validator-2.json
+PASS applied identity ['validator-1', 'validator-0', 'validator-2'] on 4085ac70 manifest verified on six []
+step 3 validator-2 PASS 2026-10-23T07:26:02Z
