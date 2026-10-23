@@ -1,0 +1,251 @@
+{
+  "scope": "scratch copy of the signed 1131 canary import (store-handle-20261021 export, manifest df9b3847...) imported by the new build 4085ac70...; local only",
+  "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+  "steps": [
+    {
+      "step": "status-before",
+      "exit_code": 0,
+      "seconds": 1.27
+    },
+    {
+      "step": "scan-testing",
+      "exit_code": 0,
+      "seconds": 3.59
+    },
+    {
+      "step": "index-build",
+      "exit_code": 0,
+      "seconds": 4.08
+    },
+    {
+      "step": "status-after",
+      "exit_code": 0,
+      "seconds": 1.29
+    },
+    {
+      "step": "indexed-testing",
+      "exit_code": 0,
+      "seconds": 1.31
+    },
+    {
+      "step": "indexed-faucet",
+      "exit_code": 0,
+      "seconds": 1.3
+    },
+    {
+      "step": "tx-219306e6",
+      "exit_code": 0,
+      "seconds": 2.24
+    },
+    {
+      "step": "tx-c9acb974",
+      "exit_code": 0,
+      "seconds": 2.41,
+      "note": "re-run with the full 96-character id; the first run passed a truncated id and was refused by id validation"
+    },
+    {
+      "step": "index-build-again",
+      "exit_code": 0,
+      "seconds": 3.99
+    }
+  ],
+  "build": {
+    "indexed_from_height": 1,
+    "indexed_to_height": 1131,
+    "indexed_block_count": 1093,
+    "indexed_row_count": 958,
+    "account_count": 255,
+    "disk_account_shard_count": 255,
+    "index_usable": true,
+    "disk_index_usable": true,
+    "tip_hash": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd"
+  },
+  "status_after": {
+    "index_usable": true,
+    "disk_index_usable": true,
+    "reason": null,
+    "indexed_from_height": 1,
+    "indexed_to_height": 1131
+  },
+  "build_seconds_per_1000_blocks": 3.61,
+  "account_tx_scan_testing": {
+    "index_used": false,
+    "row_count": 19,
+    "truncated": true,
+    "grant_rows": [
+      [
+        1124,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1125,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1126,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1127,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1128,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1129,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ]
+    ]
+  },
+  "account_tx_indexed_testing": {
+    "index_used": true,
+    "row_count": 46,
+    "truncated": false,
+    "grant_rows": [
+      [
+        1124,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1125,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1126,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1127,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1128,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1129,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ]
+    ]
+  },
+  "account_tx_indexed_faucet": {
+    "index_used": true,
+    "row_count": 44,
+    "truncated": false,
+    "grant_rows": [
+      [
+        1124,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1125,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1126,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1127,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1128,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ],
+      [
+        1129,
+        "pfcd4cc8",
+        "pf6395ef",
+        1000000,
+        "accepted"
+      ]
+    ]
+  },
+  "tx_219306e6": {
+    "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "vault bridge route profile activated",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "219306e62688976275b0c98499a4f43e2d69ced8e2d2ee12c35ca486896ed2f4fbc92fcfa5c997e1614d69ac20ad39d9"
+    },
+    "block_height": 66,
+    "batch_kind": "governance",
+    "receipt_index": 0
+  },
+  "tx_c9acb974": {
+    "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "vault bridge route profile activated",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "c9acb9745bd610893cbbd0288916d098a2af9bf35a08a5002e44c33ed944391b7025fadd1f007c0a70e8520274f0b917"
+    },
+    "block_height": 945,
+    "batch_kind": "governance",
+    "receipt_index": 0
+  },
+  "before_fix": "59bcd5b5 and the deployed eea96ba6: index build and scan stop with duplicate tx_id 219306e6...; tx 219306e6 answers \"has multiple receipts\"; see the 8b0ea1f8 packet index-check.json"
+}

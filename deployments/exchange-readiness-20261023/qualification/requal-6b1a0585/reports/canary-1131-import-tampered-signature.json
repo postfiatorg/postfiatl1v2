@@ -1,0 +1,38 @@
+{
+  "name": "canary-1131-import-tampered-signature",
+  "command": [
+    "/home/postfiatchad/.cache/release-exchange-readiness-20261023-r2/binaries/candidate-1",
+    "snapshot-import-signed-finalized-checkpoint",
+    "--data-dir",
+    "/home/postfiatchad/.cache/release-exchange-readiness-20261023-r2/canary-1131/tampered-import",
+    "--snapshot-dir",
+    "/home/postfiatchad/.cache/release-exchange-readiness-20261023-r2/canary-1131/tampered-signed",
+    "--trusted-publisher-key-file",
+    "/home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json",
+    "--node-id",
+    "validator-1"
+  ],
+  "cwd": "/home/postfiatchad/.cache/release-exchange-readiness-20261023-r2/source-1",
+  "started_at": "2026-10-23T05:52:05.816147+00:00",
+  "status": "FAIL",
+  "stdout": "/home/postfiatchad/.cache/release-exchange-readiness-20261023-r2/logs/canary-1131-import-tampered-signature.stdout",
+  "stderr": "/home/postfiatchad/.cache/release-exchange-readiness-20261023-r2/logs/canary-1131-import-tampered-signature.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-exchange-readiness-20261023-r2/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 3621986,
+  "exit_code": 1,
+  "completed_at": "2026-10-23T05:52:06.821325+00:00",
+  "elapsed_seconds": 1.0,
+  "minimum_available_memory_observed_bytes": 20938432512
+}

@@ -7,7 +7,7 @@ the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md), the
 [activation facts](../../docs/review/exchange-readiness-merge-review-20261023.md#activation-steps-later-today-after-all-six-run-the-new-binary).
 Keys are used by path only; no key material is printed, copied to a host or committed.
 
-**Status: not started.** Cut and locally qualified on 2026-10-23 ([packet](qualification/README.md)).
+**Status: not started.** Cut and locally qualified on 2026-10-23, re-qualified the same day with the account history index fix (`6b1a0585`, [packet](qualification/README.md)).
 Every live section (§0, §1, §3–§9) is covered by the operator's go of the day; each step marked
 **GO** needs that go. §8 (governance activation) runs only after §6 and §7 are clean on all six.
 
@@ -23,7 +23,7 @@ VULTR=~/.postfiat/deployments/cobalt-activation-8694b99d/vultr-api-key
 
 ## 0. Go/no-go — covered by the operator's go of the day
 
-- [ ] **GO 0.** No other rollout or session is active on the fleet (the storage migration rehearsal under `~/.cache/g3-migration-rehearsal-20261023/` is local only); `apt-daily-upgrade` is not running; CI on `6604c93e` has no failed workflow (`gh run list --commit 6604c93e92c0bb5eac37837bb1669b987426469a`).
+- [ ] **GO 0.** No other rollout or session is active on the fleet (the storage migration rehearsal under `~/.cache/g3-migration-rehearsal-20261023/` is local only); `apt-daily-upgrade` is not running; CI on `d9260e93` (main) has no failed workflow (`gh run list --commit d9260e93…`; the release merge `6b1a0585` adds no other code).
 
 ## 1. Before state (read-only) — covered by the operator's go of the day
 
@@ -40,11 +40,11 @@ read from the §4 canary import (no extra host read).
 
 ## 2. Stage and local preflight (local)
 
-The stage and the signed manifest were prepared on 2026-10-23 (manifest `be297bef…`, publisher
-`pfc531e0…`, valid 1792732134–1824268434). Recheck them:
+The stage and the signed manifest were prepared on 2026-10-23 and re-made for `6b1a0585` (manifest `210544a8…`,
+publisher `pfc531e0…`, valid 1792734699–1824270999; the first stage is kept as `stage-6604c93e/`). Recheck them:
 
 ```bash
-sha256sum $B $C/deployment-manifest.json   # 59bcd5b5…, be297bef…
+sha256sum $B $C/deployment-manifest.json   # 4085ac70…, 210544a8…
 python3 $PACKET/local-preflight.py --stage $S --require-signed > $E/local-preflight-signed.json
 ```
 
@@ -79,18 +79,18 @@ python3 $PACKET/read-import-state.py $X > $E/import-state.json   # three heights
 ```
 
 Then the current-head exact replay the other lane asks for, on a scratch copy of the new
-export, from a clean checkout of `6604c93e` (the build tree `~/.cache/release-exchange-readiness-20261023/source-1`):
+export, from a clean checkout of `6b1a0585` (the build tree `~/.cache/release-exchange-readiness-20261023-r2/source-1`):
 
 ```bash
 H=$(python3 -c 'import json,sys; b=json.load(open(sys.argv[1]))["backup"]; print(b["height"], b["tip"], b["state_root"])' $E/rollout-state.json)
 read -r HT TIP ROOT <<< "$H"
 Y=~/.cache/deploy-exchange-readiness-20261023/replay-$HT; mkdir -p $Y
 cp -a $E/pre-rollout-backup/backup-signed $Y/backup-signed
-(cd ~/.cache/release-exchange-readiness-20261023/source-1 && python3 benchmarks/storage-scaling/run_replay_evidence.py \
-  --node-bin ~/.cache/release-exchange-readiness-20261023/target-1/release/postfiat-node \
+(cd ~/.cache/release-exchange-readiness-20261023-r2/source-1 && python3 benchmarks/storage-scaling/run_replay_evidence.py \
+  --node-bin ~/.cache/release-exchange-readiness-20261023-r2/target-1/release/postfiat-node \
   --signed-archive-dir $Y/backup-signed --trusted-publisher-file $K/snapshot-publisher.public.json \
   --expected-height $HT --expected-tip $TIP --expected-root $ROOT \
-  --output-dir $Y/out --expected-source-revision 6604c93e92c0bb5eac37837bb1669b987426469a)
+  --output-dir $Y/out --expected-source-revision 6b1a05854c0b3a0ac0dec583fa09ff380d95d952)
 ```
 
 Expected: PASS at the before-state height, tip and root (signed import, checkpoint, full replay);
@@ -134,28 +134,27 @@ python3 $PACKET/observe-fleet.py --stage $S \
 python3 $PACKET/demo-preflight.py
 ```
 
-Expected: all 12 validator and RPC processes on `59bcd5b5…`; `deployment_manifest_verified=true`
-and `build_git_revision` `6604c93e` on every host; RPC units with `--max-requests 100000` and
+Expected: all 12 validator and RPC processes on `4085ac70…`; `deployment_manifest_verified=true`
+and `build_git_revision` `6b1a0585` on every host; RPC units with `--max-requests 100000` and
 `RestartSec=1`.
 
 - [ ] **GO 6.** After checks pass; proceed to §7.
 
 ## 7. account_tx index build, one host at a time — covered by the operator's go of the day
 
-**Read first: on this devnet's history the build fails today.** On the signed 1131 import, both
-this build and the deployed `eea96ba6…` stop with `receipt log contains duplicate tx_id
-219306e6…` (governance receipts repeat at heights 64/66, and `c9acb974…` at 940/941/945); the
-`account_tx` archive scan fails the same way, before and after this release
-([index check](qualification/index-check.json)). The failure writes nothing. Run validator-1 only;
-if it fails that way, do not run the others, record it, and leave §8 to the operator (the index is
-an operator cache, not consensus state). On a chain without duplicate receipts the build
-produces a usable v2 index ([fixture](qualification/index-rollback.json)).
+The build is expected to succeed. The first cut's executable stopped on devnet history with
+`receipt log contains duplicate tx_id 219306e6…` (a retried governance amendment keeps its id, so the
+transactional receipt log repeats it at heights 64/66, and `c9acb974…` at 940/941/945); `d9260e93`
+accepts exactly those governance repeats. On the signed 1131 import the new executable builds a usable
+v2 index in 4.1 s (958 rows, 255 accounts), and `account_tx` answers for the `testing` wallet and the
+faucet with the grant rows ([index check](qualification/requal-6b1a0585/index-fix.json)). Run validator-1
+first; continue with the others only if it reports both indexes usable.
 
 The runbook needs no stopped unit (ordered commit never touches the cache). Conservative here:
 stop the host's RPC unit (the only reader) during the build; the validator unit keeps running.
 
 ```bash
-N=1   # then 0, 2, 3, 4, 5 only if validator-1 succeeded
+N=1   # then 0, 2, 3, 4, 5
 ssh root@HOST
   N=1; P=/opt/postfiat/releases/exchange-readiness-20261023/postfiat-node
   systemctl stop postfiat-validator-$N-rpc.service
@@ -164,10 +163,9 @@ ssh root@HOST
   systemctl start postfiat-validator-$N-rpc.service
 ```
 
-Expected on success: `index_usable: true`, `disk_index_usable: true`, schema
-`postfiat-account-tx-index-v2`, indexed range up to the tip. Time: not measurable on devnet
-history (the build fails after 3.6 s on the 1131 import); the 1,137-block history is small, so
-expect seconds per host.
+Expected: `index_usable: true`, `disk_index_usable: true`, schema `postfiat-account-tx-index-v2`,
+indexed range 1 to the tip. Time: 3.6 s per 1,000 blocks on the work server (4.1 s for 1131 blocks),
+so about 5 s per host at 1,137+ blocks; allow a minute on the smaller validator hosts.
 
 ## 8. Governance activation of the three heights — covered by the operator's go of the day, only after §6 and §7 are clean on all six
 
@@ -207,7 +205,7 @@ python3 $PACKET/observe-fleet.py --stage $S \
 python3 $PACKET/demo-preflight.py
 ```
 
-Expected: six on `59bcd5b5…` with six-way agreement; the three heights as recorded in §8 (or
+Expected: six on `4085ac70…` with six-way agreement; the three heights as recorded in §8 (or
 unset if §8 did not run). Record the result in `RELEASE-ID.txt` and the plan.
 
 ## Rollback (one validator, emergency only)
@@ -227,10 +225,11 @@ ssh root@HOST bash -s -- validator-N HEIGHT TIP ROOT < $PACKET/rollback-one.sh
 Rehearsed locally: the 2026-10-21 executable verifies and replays the data this build imported
 and ran six services on ([packet](qualification/README.md)).
 
-- **After the index build (§7):** rollback is safe. The old executable still reads the data dir
-  (`status`, `verify-state` pass); it reports the v2 index as unusable (`unsupported account_tx
-  index schema`) and answers `account_tx` from the scan. To get an indexed read again, rebuild the
-  index with the old executable (`account-tx-index-build` writes v1 over v2), rehearsed on a fixture.
+- **After the index build (§7):** rollback is safe for consensus: the old executable still reads the
+  data dir (`status`, `verify-state` pass) and ignores the v2 index (`unsupported account_tx index
+  schema`). It can rebuild a v1 index on a chain without repeated receipt ids (rehearsed on a fixture),
+  but not on this devnet's history: its own scan and index build stop on the repeated governance id, as
+  before this release. So after a rollback, `account_tx` on that host fails as it does today.
 - **After §8:** do not roll back any validator once an activation record is committed: the old
   executable rejects the new amendment kinds and cannot apply that block (review XR-04).
 

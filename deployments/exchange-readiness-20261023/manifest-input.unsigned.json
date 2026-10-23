@@ -5,8 +5,8 @@
   "previous_release_id": "store-handle-20261021",
   "chain_id": "postfiat-wan-devnet-2",
   "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
-  "git_revision": "6604c93e92c0bb5eac37837bb1669b987426469a",
-  "binary_sha256": "59bcd5b5d021b8765f89b404e2327dd6dc1f8daa2645a1e1d487fb50d80f206e",
+  "git_revision": "6b1a05854c0b3a0ac0dec583fa09ff380d95d952",
+  "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
   "build_profile": "release",
   "build_features": [
     "privacy",

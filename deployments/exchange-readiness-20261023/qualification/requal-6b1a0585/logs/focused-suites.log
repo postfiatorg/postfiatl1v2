@@ -1,0 +1,8 @@
+=== HEAD d9260e93
+=== node lib: account_tx, tx_finality, repeated receipts, atomic swap rows, fee/memo/recipient
+test tests::account_tx_exchange_history::repeated_ordinary_receipt_ids_are_still_rejected ... ok
+test tests::account_tx_exchange_history::repeated_governance_receipt_ids_build_the_index_and_answer_account_tx_and_tx ... ok
+test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 408 filtered out; finished in 11.72s
+=== node exchange_rpc_history
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+=== DONE

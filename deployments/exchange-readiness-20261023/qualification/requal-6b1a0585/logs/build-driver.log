@@ -1,0 +1,7 @@
+Preparing worktree (detached HEAD 6b1a0585)
+Preparing worktree (detached HEAD 6b1a0585)
+Updating files:  96% (6286/6540)Updating files:  96% (6282/6540)Updating files:  97% (6344/6540)Updating files:  97% (6344/6540)Updating files:  98% (6410/6540)Updating files:  98% (6410/6540)Updating files:  99% (6475/6540)Updating files:  99% (6475/6540)Updating files: 100% (6540/6540)Updating files: 100% (6540/6540), done.
+Updating files: 100% (6540/6540)Updating files: 100% (6540/6540), done.
+HEAD is now at 6b1a0585 Merge main d9260e93 (account history index fix) into the exchange readiness release
+HEAD is now at 6b1a0585 Merge main d9260e93 (account history index fix) into the exchange readiness release
+{"result": "PASS", "hashes": ["4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9", "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"]}

@@ -8,15 +8,47 @@ sent and nothing was deployed. Source tip `6604c93e92c0bb5eac37837bb1669b9874264
 **Not done today: canary backup, fleet before-state, rollout, index build, activation**
 (release day, [DEPLOY-SHEET.md](../DEPLOY-SHEET.md) §0–§9, under the operator's go).
 
-**Read first — `account_tx` on this devnet.** `account-tx-index-build` and the `account_tx`
-archive scan stop on the signed 1131 import with `receipt log contains duplicate tx_id 219306e6…`
-(governance receipts repeat at heights 64/66, and `c9acb974…` at 940/941/945). The deployed
-`eea96ba6…` stops the same way, so this release does not cause it, and it changes no consensus result.
-But the sheet's §7 index build is expected to fail on the fleet, so #142's history cannot be served
-on this devnet until `receipt_by_tx_id` (`crates/node/src/block_finality.rs`) tolerates repeated
-governance receipts ([index-check.json](index-check.json)).
+**Re-qualified 2026-10-23 with the account history index fix** (`d9260e93` on main, merged into the
+release branch as `6b1a0585`; executable `4085ac70…`, manifest `210544a8…`). The first cut's results
+(source `6604c93e`, executable `59bcd5b5…`, manifest `be297bef…`, release commit `8b0ea1f8`) follow under
+"Results (first cut)". Its index finding is fixed: see below.
 
-## Results
+## Re-qualification (`6b1a0585`)
+
+Since `6604c93e`, `git diff 6604c93e..6b1a0585 -- crates/ Cargo.lock` is the fix only
+(`crates/node/src/block_finality.rs`, two node test files). Also merged from main, none in the executable:
+`9537af66` (storage milestone note), `3e956ff1` (this release's cut record), `ef7b406b` (a
+`benchmarks/ai-governance` usage note). Records: [requal-6b1a0585/](requal-6b1a0585/).
+
+**Cause.** A governance receipt's `tx_id` is its amendment id (`crates/node/src/execution_actions.rs:1182–1234`),
+and a rejected governance operation may be retried under the same id in a later governance batch
+(`crates/storage/src/lib.rs:2244`). The transactional store returns one receipt per linking block
+(`receipts_in_block_order`, `crates/storage/src/transactional.rs:1124`), so on this devnet `219306e6…`
+appears at heights 64 and 66 (both accepted; the known replay anomaly `WAN_DEVNET2_DEDUPLICATED_GOVERNANCE_RECEIPT`)
+and `c9acb974…` at 940 and 941 (rejected, `vault_bridge_route_profile_rejected`) and 945 (accepted). No
+non-governance id repeats in this history.
+
+**Rule** (`receipt_by_tx_id`, `crates/node/src/block_finality.rs:972`; `tx`, `:40–90`): a repeated `tx_id` is
+accepted only when every block linking it is a governance block and the receipt count equals the link count
+(or is one, the legacy log's terminal receipt); `tx` then answers with the latest link and receipt. Governance
+blocks have no `account_tx` rows, so no history row reads those receipts. Any other repeat is refused with the
+same `receipt log contains duplicate tx_id` / `has multiple receipts` errors as before. Read path only: no
+consensus, execution, state commitment or receipt log format change (the exact replays below reproduce the
+recorded receipts root and state roots).
+
+| Check | Result | Evidence |
+|---|---|---|
+| Fail-first tests | `repeated_governance_receipt_ids_build_the_index_and_answer_account_tx_and_tx` FAILED on `3e956ff1` code (the archive scan stops on the duplicate id) and passes with the fix; `repeated_ordinary_receipt_ids_are_still_rejected` passes before and after (ordinary and mixed governance/transparent repeats still refused by scan, build and `tx`). Focused node suites pass; `cargo fmt --check`, `cargo clippy -p postfiat-node --all-targets -D warnings` clean | [log](requal-6b1a0585/focused-suites.log) |
+| Two clean builds of `6b1a0585` | PASS: both `4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9`, `cmp` identical, GCC linker, no RPATH/RUNPATH, trees clean | [node-builds.json](../node-builds.json) |
+| Stage, signed manifest, local preflight | PASS: manifest `210544a8…` signed by `pfc531e0…`, valid 1792734699–1824270999; `PASS_SIGNED_LOCAL_INPUTS_ONLY`. The 33 generated files are byte-identical to `8b0ea1f8`'s (only the manifest, its input and `node-builds.json` changed), so the rotation and rollback rehearsal of the first cut stands | [preflight](requal-6b1a0585/local-preflight-signed.json) |
+| Canary 1131: signed import, tampered copy, checkpoint and full replay, new build; deployed `eea96ba6…` on the new build's import | PASS: signed import (42 s); a copy with a changed signature is rejected (exit 1); checkpoint and full replay at 1131, tip `9b054f09…`, root `a12e7c5f…` = recorded; the deployed build passes checkpoint and full replay on the new build's import. The new build's, the deployed build's and the first cut's full-replay reports agree in all 63 fields | [history-run.json](requal-6b1a0585/history-run.json) |
+| Exact replay, height 924 (legacy source) | **PASS** with `4085ac70…`: 924, tip `ebeb0e1e…`, root `0854bc47…`; all 14 recorded manifest fields matched (972 receipts, receipts root `f2e27abe…`, ordered-history accumulator); verify-only trees unchanged; source tree `13ffe388…` before and after; the receipt equals the 2026-10-22 one in all 45 content fields | [replays/height-924/](requal-6b1a0585/replays/height-924/) |
+| Exact replay, current head 1131 (signed archive) | **PASS** with `4085ac70…`: signed import, checkpoint and full replay at 1131, tip `9b054f09…`, root `a12e7c5f…` = the signed manifest `df9b3847…`; archive tree `be4e6ebb…` unchanged; receipt `f78946d5…` | [replays/height-1131/](requal-6b1a0585/replays/height-1131/) |
+| Admission probe (loopback `rpc-serve`, fresh fixture) | PASS, unchanged: `testing` `pf6395ef…` admitted; 41 characters, `PF` prefix, `pf-exchange` → `invalid_recipient_address`; mixed-case checksum → `noncanonical_recipient_address` | [admission-result.json](requal-6b1a0585/admission-result.json) |
+| Activation heights | PASS: none of the three set in the new build's 1131 import; both routes `authority_epoch` 1 | [import-state-1131.json](requal-6b1a0585/import-state-1131.json) |
+| **Index build on the 1131 import, new executable** | **PASS**: `account-tx-index-build` 4.08 s for 1131 blocks (**3.61 s per 1,000 blocks**; 1,093 indexed blocks, 958 rows, 255 accounts and shards; a second build 3.99 s); `account-tx-index-status` both indexes usable, range 1–1131. `account_tx` (index used): `testing` 46 rows, faucet `pfcd4cc8…` 44 rows, each with the grants at 1124–1129 (1,000,000 atoms, accepted); the scan answers too (19 newest rows, truncated by its limit). `tx 219306e6…` → accepted, height 66, index 0; `tx c9acb974…` → accepted, height 945. With the first cut and the deployed build the same `tx` answers `has multiple receipts` | [index-fix.json](requal-6b1a0585/index-fix.json) |
+
+## Results (first cut, `6604c93e`)
 
 | Check | Result | Evidence |
 |---|---|---|
@@ -58,5 +90,6 @@ Disposable copies stay under `~/.cache/release-exchange-readiness-20261023`.
 
 ## Task Node
 
-Task `task_660fb846a75c2cdbe8262156b20a3ecf` (request `req_405f299f…`), generated by Task Node,
-inspected and accepted. Evidence is submitted after the push.
+First cut: task `task_660fb846a75c2cdbe8262156b20a3ecf` (rewarded). Re-qualification: task
+`task_5bb9dfd7369cf5949e2acd7eeecefb45` (request `req_e60e9294…`), generated by Task Node, inspected and
+accepted; evidence is submitted after the push.
