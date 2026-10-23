@@ -19,7 +19,7 @@ Usage (from this directory, venv with the fork's parser deps):
 
     .venv/bin/python fetch_rounds.py            # rounds 12-19
     .venv/bin/python fetch_rounds.py --rounds 12 13
-    python3 fetch_rounds.py --rounds 28        # bare python3 + pydantic works too
+    .venv/bin/python fetch_rounds.py --rounds 28  # not bare python3: needs python-dotenv, openai, pydantic (work server: the ~/repos/postfiatl1v2-e1 fetch venv)
 
 Rounds 9-11 predate the frozen-input-package contract on testnet and are
 not replayable; do not extend the range downward.

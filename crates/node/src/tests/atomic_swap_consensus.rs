@@ -1422,7 +1422,8 @@ fn atomic_swap_account_index_emits_two_plain_balance_rows_without_trustline_fiel
             payload_json: serde_json::to_string(&batch).expect("serialize atomic batch"),
         }],
     };
-    let receipt_map = receipt_by_tx_id(&receipts).expect("receipt map");
+    let receipt_map = receipt_by_tx_id(&receipts, &BlockLog { blocks: vec![block.clone()] })
+        .expect("receipt map");
     let rows = account_tx_rows_for_block(&block, &archive, &receipt_map)
         .expect("atomic account rows");
     assert_eq!(rows.len(), 2);

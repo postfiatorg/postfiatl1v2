@@ -35,6 +35,15 @@ release starts after `signer-rotation-20261007` is deployed and its activation i
 - [x] `0a4d6967` (PR #135): `pftl_swapctl` creates a missing record directory as 0700; existing directories are still only checked (`crates/node/src/bin/pftl_swapctl.rs`). Operator tool.
 - [x] `79d5f909` (past the `86706699` cut): root `Cargo.lock` rustls-webpki 0.103.15 → 0.103.16 (RUSTSEC-2026-0382) and webpki-roots 1.0.9 → 1.0.10 (RUSTSEC-2026-0381), the `rust-supply-chain` gate fix; checksums equal the crates.io index, no edge changed (`rustls`/`hyper-rustls`/`reqwest` → `arc-conformance`). Goes into the next release binary. The five non-frozen `tools/*` locks got the same bump on 2026-10-22 in `a70ce9f9` (rustls-webpki 0.103.16, webpki-roots 1.0.10; checksums equal the crates.io index); the frozen fuzz lock is untouched.
 - [x] `56be18af` (past the `86706699` cut): `wallet-web/package-lock.json` only, `npm audit fix` (no `--force`): vite 8.1.4 → 8.3.5 for the bundled launch-editor (GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm), with rolldown 1.1.5 → 1.2.14 (and its bindings), lightningcss 1.32.0 → 1.33.0, postcss 8.5.26 → 8.5.31, nanoid, picomatch and `@oxc-project/types`; the wasm32-wasi binding and its six support packages removed; 36 dropped license lines restored, `package.json` unchanged; audit 0 vulnerabilities, `npm test` 260/260, build passes. The `wallet-and-proxy` gate fix; browser wallet build only.
+- [x] #138 (`25ffe212`, past the `86706699` cut, merged through #145 `124a187b`): integrator documentation front door and smaller navigation. Docs only.
+- [x] #139 (`aeb7e981`): Coinbase integration plan, comparisons and reviewer guide (`docs/listings/coinbase/`). Docs only.
+- [x] #140 (`e6c0f7d1`): documentation contradictions repaired; the production-genesis supply question stays open. Docs only.
+- [x] #141 (`28594176`): Asset-Orchard verifying-key fingerprints and their regeneration check. No executable code change.
+- [x] #142 (`920f7cc4`): `account_tx`/`tx` memo contents, shielded-withdrawal rows and receipt positions in mixed blocks (`crates/node/src/block_finality.rs`, `crates/rpc_sdk/src/response_validation.rs`, `python/postfiat_rpc/client.py`); index schema v2, so `account-tx-index-build` on every node after install. Read path.
+- [x] #143 (`59343085`): malformed destination addresses refused at RPC and mempool from install (`crates/node/src/atomic_swap_rpc_server.rs`, `mempool_proposals.rs`) and in execution from `recipient_format_activation_height` (`crates/execution/src/recipient_format.rs`); optional mixed-case checksum (`crates/crypto_provider/src/address.rs`). **Admission change ships with the binary; execution change governance-gated.**
+- [x] #144 (`92866ba3`): `tec_*` fee claims from `rejected_tx_fee_activation_height` (`crates/execution/src/rejected_fee_claim.rs`), require-memo flag and `issued_payment_v2` from `require_memo_activation_height` (`crates/types/src/transactions_mempool_receipts.rs`, `crates/consensus_cobalt/src/internal_validation.rs`). **Consensus change, governance-gated: inactive until a record sets the heights.**
+- [x] #49 (`d01cb121`): reserve-proof successor candidate (`candidate_not_registered`, ELF `b64b7666…`); consumers repointed in `fa3d9b9b`; `program-identity.json`, `a666-successor-program-identity.json` and `elf/` unchanged. Tools only.
+- [x] `6604c93e`: review XR-02 (`verify_mempool` counts pending `issued_payment_v2`) and XR-01 (Orchard funding transfer pinned to plain `execute_transfer`) ([review](../../review/exchange-readiness-merge-review-20261023.md)). Read path and a test.
 
 ## Candidates
 
@@ -169,6 +178,8 @@ bradsbots (fork, read permission) opened #56–#108 between 2026-10-08 and 2026-
 - [x] `signer-rotation-20261007` deployed on all six validators and its activation finished (both signer groups; [activation](next-validator-release-plan-20261005.md#activation-after-rollout)). Done 2026-10-15: anchor at 1130, bridge committee epoch 2 at 1131.
 - [x] CI green on main at the cut commit. `86706699`: `docs-build` 39433228893, `rust-ci` 39433228794, `product-security-ci` 39433228932, all success.
 - [x] Full workspace suite at the cut commit (the release gate for the full suite). `rust-ci` `test` (job 118663408449) runs `cargo test --workspace --locked`: success on `86706699`; it stands in for this gate, so it was not rerun locally.
+- [x] `store-handle-20261021` deployed on all six validators (2026-10-21, height 1137) before the next cut.
+- [ ] CI green on main at the `6604c93e` cut commit. Read 2026-10-23 05:15Z: `docs-build` 39903101066 success; `rust-ci` 39903101023 (its `test` job is the full workspace suite gate) and `product-security-ci` 39903101051 in progress. Last fully green combined source: `7e7169b6`/`124a187b` (`rust-ci` 39864672912 including `test`, `product-security-ci` 39864672901, `docs` 39864672913). Sheet GO 0 rechecks it.
 
 ## Qualification and rollout
 
@@ -202,3 +213,16 @@ Local checks only; CI on the tip all green, `rust-ci` `test` (the workspace suit
 - [x] Signed manifest `8ce1da30…` (publisher `pfc531e0…`); units byte-identical to `fastlane-cap-20261014` after the release-ID change; `systemd-analyze verify` clean.
 - [x] Focused suites of this release's changes.
 - [x] Canary backup, fleet before-state, rollout, FastSwap committee migration (release day, operator's go; [sheet](https://github.com/postfiatorg/postfiatl1v2/blob/release/store-handle-20261021/deployments/store-handle-20261021/DEPLOY-SHEET.md)). 2026-10-21: deployed at 1137, migration on all six, six-way agreement throughout.
+
+Cut 2026-10-23: `exchange-readiness-20261023`, main at `6604c93e`, branch `release/exchange-readiness-20261023`
+([release inputs](https://github.com/postfiatorg/postfiatl1v2/blob/release/exchange-readiness-20261023/deployments/exchange-readiness-20261023/README.md),
+[qualification packet](https://github.com/postfiatorg/postfiatl1v2/blob/release/exchange-readiness-20261023/deployments/exchange-readiness-20261023/qualification/README.md)).
+Local checks only; CI `docs-build` green on the tip, `rust-ci` (with `test`) and `product-security-ci` still running at the cut. Crates changed since `86706699`: `node`, `execution`, `types`, `crypto_provider`, `consensus_cobalt`, `rpc_sdk` (plus `fastpay-prototype`, `fuzz_harness` fixtures) and the root `Cargo.lock`.
+
+- [x] Two identical clean builds: `59bcd5b5d021b8765f89b404e2327dd6dc1f8daa2645a1e1d487fb50d80f206e`.
+- [x] History: signed canaries 1131 (2026-10-21), 1123, 1115 and 1050, checkpoint and full replay, recorded roots; the six 2026-09-28 copies at 1021.
+- [x] Exact replays through `run_replay_evidence.py`: height 924 PASS (legacy source, every recorded manifest field, receipt equal to the 2026-10-22 one) and the 1131 current-head signed archive PASS (tip `9b054f09…`, root `a12e7c5f…`, archive tree unchanged). The live 1137 head is replayed at sheet §4.
+- [x] Six new-build services on the 1021 copies (startup, restart); rollback build `eea96ba6…` reads them and the new build's 1131 import; it also reads a data dir after the v2 index build (index unusable, scan answers, its own build restores v1).
+- [x] Admission change (loopback `rpc-serve`), activation heights unset, focused suites, signed manifest `be297bef…` (publisher `pfc531e0…`), units byte-identical to `store-handle-20261021` after the release-ID change, `systemd-analyze verify` clean.
+- [ ] `account-tx-index-build` on devnet history: fails with a duplicate governance `tx_id` (heights 64/66, 940/941/945) in both this and the deployed build (`receipt_by_tx_id`, `block_finality.rs`); pre-existing. Needs a fix before #142's history can be served on this devnet ([index check](https://github.com/postfiatorg/postfiatl1v2/blob/release/exchange-readiness-20261023/deployments/exchange-readiness-20261023/qualification/index-check.json)).
+- [ ] Canary backup and its exact replay, fleet before-state, rollout, index build, governance activation (release day, operator's go; [sheet](https://github.com/postfiatorg/postfiatl1v2/blob/release/exchange-readiness-20261023/deployments/exchange-readiness-20261023/DEPLOY-SHEET.md)).

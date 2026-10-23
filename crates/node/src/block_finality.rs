@@ -43,35 +43,46 @@ pub fn tx_finality(options: TxFinalityQueryOptions) -> io::Result<TxFinalityRepo
             .filter(|receipt| receipt.tx_id == tx_id)
             .cloned()
             .collect::<Vec<_>>();
-        let receipt = match matching_receipts.as_slice() {
-            [receipt] => receipt.clone(),
-            [] => {
-                return Err(tx_finality_transaction_not_found(&tx_id));
-            }
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("transaction `{tx_id}` has multiple receipts"),
-                ));
-            }
-        };
+        if matching_receipts.is_empty() {
+            return Err(tx_finality_transaction_not_found(&tx_id));
+        }
 
         let mut matches = Vec::new();
         for block in &blocks.blocks {
             for (index, receipt_id) in block.receipt_ids.iter().enumerate() {
                 if receipt_id == &tx_id {
-                    matches.push((block.clone(), index as u64));
+                    matches.push((block, index as u64));
                 }
             }
         }
+        // A retried governance amendment keeps its id, so it may be linked
+        // from several governance blocks: with one receipt per link
+        // (transactional store) or one terminal receipt (legacy log). `tx`
+        // then answers with the latest link and receipt.
+        let repeated_governance = matches.len() > 1
+            && matches
+                .iter()
+                .all(|(block, _)| block.header.batch_kind == BATCH_KIND_GOVERNANCE)
+            && (matching_receipts.len() == 1 || matching_receipts.len() == matches.len());
+        if matching_receipts.len() > 1 && !repeated_governance {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("transaction `{tx_id}` has multiple receipts"),
+            ));
+        }
+        let receipt = matching_receipts
+            .last()
+            .cloned()
+            .expect("at least one receipt");
         let (block, receipt_index) = match matches.as_slice() {
-            [(block, index)] => (block.clone(), *index),
+            [(block, index)] => ((*block).clone(), *index),
             [] => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!("transaction `{tx_id}` receipt is not linked from any verified block"),
                 ));
             }
+            [.., (block, index)] if repeated_governance => ((*block).clone(), *index),
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -330,7 +341,7 @@ fn extend_account_tx_index_after_ordered_commit(
 
     let mut touched_accounts = BTreeSet::new();
     if extension_start < block_log.blocks.len() {
-        let receipt_by_tx = receipt_by_tx_id(receipts)?;
+        let receipt_by_tx = receipt_by_tx_id(receipts, block_log)?;
         for block in &block_log.blocks[extension_start..] {
             append_account_tx_index_block(
                 &mut index,
@@ -388,7 +399,7 @@ fn build_account_tx_index(
     archive: &BatchArchive,
     receipts: &[Receipt],
 ) -> io::Result<AccountTxIndex> {
-    let receipt_by_tx = receipt_by_tx_id(receipts)?;
+    let receipt_by_tx = receipt_by_tx_id(receipts, block_log)?;
     let mut accounts: BTreeMap<String, Vec<AccountTxRow>> = BTreeMap::new();
     let mut indexed_row_count = 0_u64;
     let mut indexed_block_count = 0_u64;
@@ -614,7 +625,7 @@ fn account_tx_scan(
 ) -> io::Result<AccountTxReport> {
     let archive = store.read_batch_archive()?;
     let receipts = store.read_receipts()?;
-    let receipt_by_tx = receipt_by_tx_id(&receipts)?;
+    let receipt_by_tx = receipt_by_tx_id(&receipts, block_log)?;
 
     let mut block_indexes = block_log
         .blocks
@@ -946,17 +957,56 @@ fn account_tx_account_shard_matches(
     Ok(())
 }
 
-fn receipt_by_tx_id(receipts: &[Receipt]) -> io::Result<HashMap<&str, &Receipt>> {
+/// Receipts by `tx_id` for the `account_tx` index and archive scan.
+///
+/// A `tx_id` is unique in the receipt log with one exception. A governance
+/// receipt's id is its amendment id (`execute_governance_batch_with_replay`),
+/// and a rejected governance operation may be retried under the same id in a
+/// later governance batch. The transactional store keeps one receipt per
+/// linking block (`receipts_in_block_order`), so that id repeats once per
+/// governance block (postfiat-wan-devnet-2: heights 64/66 and 940/941/945).
+/// Such a repeat is accepted only when every block linking the id is a
+/// governance block and the receipt count equals the link count; the map then
+/// holds the latest receipt, which no `account_tx` row reads (governance
+/// blocks have no rows). Every other repeat is refused as before.
+fn receipt_by_tx_id<'a>(
+    receipts: &'a [Receipt],
+    block_log: &BlockLog,
+) -> io::Result<HashMap<&'a str, &'a Receipt>> {
+    let duplicate = |tx_id: &str| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("receipt log contains duplicate tx_id `{tx_id}`"),
+        )
+    };
     let mut receipt_by_tx = HashMap::new();
+    let mut repeated = BTreeMap::<&str, usize>::new();
     for receipt in receipts {
         if receipt_by_tx
             .insert(receipt.tx_id.as_str(), receipt)
             .is_some()
         {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("receipt log contains duplicate tx_id `{}`", receipt.tx_id),
-            ));
+            *repeated.entry(receipt.tx_id.as_str()).or_insert(1) += 1;
+        }
+    }
+    if repeated.is_empty() {
+        return Ok(receipt_by_tx);
+    }
+    let mut governance_links = BTreeMap::<&str, usize>::new();
+    for block in &block_log.blocks {
+        for receipt_id in &block.receipt_ids {
+            let Some((tx_id, _)) = repeated.get_key_value(receipt_id.as_str()) else {
+                continue;
+            };
+            if block.header.batch_kind != BATCH_KIND_GOVERNANCE {
+                return Err(duplicate(tx_id));
+            }
+            *governance_links.entry(tx_id).or_default() += 1;
+        }
+    }
+    for (tx_id, count) in repeated {
+        if governance_links.get(tx_id) != Some(&count) {
+            return Err(duplicate(tx_id));
         }
     }
     Ok(receipt_by_tx)

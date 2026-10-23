@@ -4,6 +4,14 @@ Updated: `2026-10-21T12:35:00Z` (release `store-handle-20261021` deployed to all
 
 Status: **canonical operational-state reference**
 
+!!! note "2026-10-23: exchange-readiness candidate cut, not deployed"
+
+    On 2026-10-23 the next candidate, `exchange-readiness-20261023` (`main` at `6604c93e`,
+    executable `59bcd5b5…`), which carries #138–#144, #49 and their integration fixes, was cut
+    and qualified locally; it is cut, not deployed
+    ([release inputs](https://github.com/postfiatorg/postfiatl1v2/blob/release/exchange-readiness-20261023/deployments/exchange-readiness-20261023/README.md)).
+    Its three governed activation heights stay unset until a governance record after rollout.
+
 !!! success "2026-10-21: store-handle release deployed to all six validators"
 
     Release `store-handle-20261021` runs on all six validators: source
@@ -1108,4 +1116,3 @@ certified sends grow with height
 so the cost is real there too. The chain is idle at height 1131, though, and nothing changes
 on the validators today. The fix and one G4 re-run are in the
 [next release plan](../plans/active/next-validator-release-plan-20261101.md#candidates).
-

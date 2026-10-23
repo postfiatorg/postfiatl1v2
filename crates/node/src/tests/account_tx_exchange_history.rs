@@ -498,3 +498,193 @@ fn account_tx_index_rebuild_backfills_memos_and_shielded_withdrawals_over_a_v1_i
 
     fs::remove_dir_all(data_dir).expect("remove test data dir");
 }
+
+/// Appends a block of `batch_kind` that links `receipt` (appended to the
+/// receipt log) and reuses `batch_id`'s archive entry when it has one.
+fn append_block_linking_receipt(
+    data_dir: &Path,
+    batch_kind: &str,
+    batch_id: &str,
+    receipt: Receipt,
+    label: &str,
+) -> u64 {
+    let store = NodeStore::new(data_dir);
+    let tip = store
+        .read_blocks()
+        .expect("blocks")
+        .blocks
+        .last()
+        .cloned()
+        .expect("chain has a block");
+    let mut block = tip.clone();
+    block.header.height = tip.header.height + 1;
+    block.header.parent_hash = tip.header.block_hash.clone();
+    block.header.batch_kind = batch_kind.to_string();
+    block.header.batch_id = batch_id.to_string();
+    block.header.receipt_count = 1;
+    block.header.block_hash = shielded_test_id(label);
+    block.receipt_ids = vec![receipt.tx_id.clone()];
+    block.fastpay_pre_state_effects = Vec::new();
+    store.append_receipt(receipt).expect("append receipt");
+    store.append_block(block.clone()).expect("append block");
+    block.header.height
+}
+
+// A governance receipt's tx_id is the amendment id, so resubmitting the same
+// signed amendment in a later governance batch repeats it in the receipt log
+// (postfiat-wan-devnet-2: heights 64/66 and 940/941/945). The history index,
+// the archive scan and `tx` must accept exactly that repeat.
+#[test]
+fn repeated_governance_receipt_ids_build_the_index_and_answer_account_tx_and_tx() {
+    let (data_dir, signed, receipt) = payment_v2_memo_chain("repeated-governance-receipt");
+    let amendment_id = shielded_test_id("repeated-amendment");
+    let rejected = Receipt::rejected(
+        amendment_id.clone(),
+        "vault_bridge_route_profile_rejected",
+        "vault bridge route does not exactly match the active NAV proof profile",
+    );
+    let accepted = Receipt::accepted(amendment_id.clone(), "vault bridge route profile activated");
+    append_block_linking_receipt(
+        &data_dir,
+        BATCH_KIND_GOVERNANCE,
+        &shielded_test_id("governance-batch-1"),
+        rejected.clone(),
+        "governance-block-1",
+    );
+    let second = append_block_linking_receipt(
+        &data_dir,
+        BATCH_KIND_GOVERNANCE,
+        &shielded_test_id("governance-batch-2"),
+        accepted.clone(),
+        "governance-block-2",
+    );
+    // The transactional store keeps one receipt per linking block
+    // (`receipts_in_block_order`); write that receipt log.
+    let store = NodeStore::new(&data_dir);
+    store
+        .write_receipts(&[receipt.clone(), rejected.clone(), accepted.clone()])
+        .expect("write block-ordered receipt log");
+    let receipts = store.read_receipts().expect("receipts");
+    assert_eq!(receipts.iter().filter(|r| r.tx_id == amendment_id).count(), 2);
+
+    // Archive scan, then the index build and indexed reads.
+    let scanned = history(&data_dir, PAYMENT_RECIPIENT);
+    assert!(!scanned.index_used);
+    assert_eq!(scanned.rows.len(), 1);
+    assert_eq!(scanned.rows[0].tx_id, receipt.tx_id);
+    assert_exchange_memo_views(&scanned.rows[0]);
+    let build = rebuild_account_tx_index(AccountTxIndexOptions {
+        data_dir: data_dir.clone(),
+    })
+    .expect("index build with repeated governance receipt ids");
+    assert!(build.index_usable && build.disk_index_usable);
+    let indexed = history(&data_dir, PAYMENT_RECIPIENT);
+    assert!(indexed.index_used);
+    assert_eq!(indexed.rows, scanned.rows);
+    let sender = history(&data_dir, &signed.unsigned.from);
+    assert!(sender.index_used);
+    assert_eq!(sender.rows.len(), 1);
+
+    // `tx` of the repeated id answers with its latest receipt and block; the
+    // payment's own `tx` is unchanged.
+    let governance = finality(&data_dir, &amendment_id);
+    assert_eq!(governance.receipt, accepted);
+    assert_eq!(governance.block.header.height, second);
+    assert_eq!(governance.receipt_index, 0);
+    let payment = finality(&data_dir, &receipt.tx_id);
+    assert_eq!(payment.receipt, receipt);
+    assert_eq!(payment.transaction_rows.len(), 1);
+
+    // The legacy receipt log keeps one terminal receipt per id
+    // (`merge_appended_receipt`); `tx` answers the same way from it.
+    store
+        .write_receipts(&[receipt.clone(), accepted.clone()])
+        .expect("write terminal receipt log");
+    let terminal = finality(&data_dir, &amendment_id);
+    assert_eq!(terminal.receipt, accepted);
+    assert_eq!(terminal.block.header.height, second);
+    assert_eq!(history(&data_dir, PAYMENT_RECIPIENT).rows, scanned.rows);
+
+    fs::remove_dir_all(data_dir).expect("remove test data dir");
+}
+
+// An ordinary transaction's tx_id must stay unique in the receipt log; a
+// repeat (here the payment linked again by a later transparent block, and an
+// id linked by one governance and one transparent block) is still refused.
+#[test]
+fn repeated_ordinary_receipt_ids_are_still_rejected() {
+    let (data_dir, _signed, receipt) = payment_v2_memo_chain("repeated-ordinary-receipt");
+    let payment_block = NodeStore::new(&data_dir)
+        .read_blocks()
+        .expect("blocks")
+        .blocks
+        .last()
+        .cloned()
+        .expect("payment block");
+    append_block_linking_receipt(
+        &data_dir,
+        BATCH_KIND_TRANSPARENT,
+        &payment_block.header.batch_id,
+        receipt.clone(),
+        "repeated-transparent-block",
+    );
+    NodeStore::new(&data_dir)
+        .write_receipts(&[receipt.clone(), receipt.clone()])
+        .expect("write block-ordered receipt log");
+    let duplicate = |error: io::Error| error.to_string();
+    let scan = account_tx(AccountTxQueryOptions {
+        data_dir: data_dir.clone(),
+        address: PAYMENT_RECIPIENT.to_string(),
+        from_height: None,
+        to_height: None,
+        limit: Some(50),
+    })
+    .map_err(duplicate)
+    .expect_err("archive scan refuses a repeated ordinary tx_id");
+    assert!(scan.contains("receipt log contains duplicate tx_id"), "{scan}");
+    let build = rebuild_account_tx_index(AccountTxIndexOptions {
+        data_dir: data_dir.clone(),
+    })
+    .map_err(duplicate)
+    .expect_err("index build refuses a repeated ordinary tx_id");
+    assert!(build.contains("receipt log contains duplicate tx_id"), "{build}");
+    let tx = tx_finality(TxFinalityQueryOptions {
+        data_dir: data_dir.clone(),
+        tx_id: receipt.tx_id.clone(),
+        audit_block_log: false,
+    })
+    .map_err(duplicate)
+    .expect_err("tx refuses a repeated ordinary tx_id");
+    assert!(tx.contains("has multiple receipts"), "{tx}");
+    fs::remove_dir_all(&data_dir).expect("remove test data dir");
+
+    // Mixed: one governance link and one transparent link of the same id.
+    let (data_dir, _signed, payment) = payment_v2_memo_chain("repeated-mixed-receipt");
+    let mixed_id = shielded_test_id("mixed-id");
+    let governance = Receipt::accepted(mixed_id.clone(), "vault bridge route profile activated");
+    let transparent = Receipt::accepted(mixed_id, "accepted");
+    append_block_linking_receipt(
+        &data_dir,
+        BATCH_KIND_GOVERNANCE,
+        &shielded_test_id("mixed-governance-batch"),
+        governance.clone(),
+        "mixed-governance-block",
+    );
+    append_block_linking_receipt(
+        &data_dir,
+        BATCH_KIND_TRANSPARENT,
+        &shielded_test_id("mixed-transparent-batch"),
+        transparent.clone(),
+        "mixed-transparent-block",
+    );
+    NodeStore::new(&data_dir)
+        .write_receipts(&[payment, governance, transparent])
+        .expect("write block-ordered receipt log");
+    let build = rebuild_account_tx_index(AccountTxIndexOptions {
+        data_dir: data_dir.clone(),
+    })
+    .map_err(duplicate)
+    .expect_err("index build refuses an id repeated outside governance blocks");
+    assert!(build.contains("receipt log contains duplicate tx_id"), "{build}");
+    fs::remove_dir_all(data_dir).expect("remove test data dir");
+}

@@ -1268,6 +1268,44 @@ binary. The remaining gaps follow in order:
 | 4 | Redact the home-directory paths in `verify-only.json` (harness fix) | ours | **done 2026-10-22** (`325afbdb`) |
 | 5 | Assemble the packet and run the offline verifier | ours | 0.25 d |
 
+**Gap 3 attempt (2026-10-23): six-clone migration rehearsal on `eea96ba6…`.**
+The packet needs the lighter rehearsal, not the G6 deployment-exact gate. The
+packager (`package_packet.py:716-726`) and verifier (`storage_scaling.py:3271`)
+bind only the `run_migration_rehearsal.py` report
+(`postfiat-storage-scaling-six-clone-migration-v1`). That is a PASS from exact
+height 924, with six clones and ten phases (925–934, the 932 activation round
+with five votes and one catch-up). It also needs the restart receipts and the
+mixed-version refusal. The report must name the packet's source and binary.
+Signed systemd units, RPC co-start, RPC-to-finality and old-binary rollback
+stay in G6.
+
+- Node `eea96ba6761ed223047d7781663100d34efe5641d36031bd50874bd9c8b41f36`,
+  source `86706699`, the deployed `store-handle-20261021` (copy
+  `~/.cache/g3-1123-replay-20261021/bin/release/`). Not rebuilt.
+- Incompatible binary `b5e408bb…`, source `13c969f8`. It is on disk after
+  all: `~/repos/postfiat-storage-verifier-v1-13c969f8/target/release/`. It is
+  the same binary as in August.
+- Harness: a clean worktree at `86706699`. The script binds HEAD to the
+  binary's revision (`run_migration_rehearsal.py:1206-1209`, `:363-372`). It has
+  not changed since `86706699`.
+- Inputs: `cp -a` scratch copies of
+  `storage-rollout-10dd9f20/g6-rehearsal-20260830-v3/backups/validator-0..5`,
+  with tree hashes `13ffe388…`, `5061fbea…`, `3f82686d…`, `446e0d3f…`,
+  `72eeabe5…` and `8073bcf8…`. They equal the August report's sources, tip
+  `ebeb0e1e…`, root `0854bc47…`. The keys and workload key are the August
+  rehearsal's isolated split keys (`storage-rollout-d0ae79f3/g6-private/`),
+  recipient `pf15ee51…`.
+- Output (work server, not in git): `~/.cache/g3-migration-rehearsal-20261023/`.
+- Progress (05:10Z), run started 04:15Z:
+  - [x] Height 924: the initial migration passed on all six (rebuild, then
+    verify-only). They share one packet root, `6a6b53ea…`, the same as in
+    August.
+  - [x] Height 925: the legacy-finality round, where August failed, was
+    accepted with 6 of 6 votes. All six are at tip `325cf746…`, root
+    `a931c1f2…`.
+  - [ ] Still to run: the restart refreeze, heights 926–934 and the final
+    refreeze.
+
 **Exit:** the candidate may be described as offline qualified. Controlled-devnet
 deployment and public testnet remain blocked.
 
