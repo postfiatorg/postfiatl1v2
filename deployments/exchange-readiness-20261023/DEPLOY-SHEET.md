@@ -230,6 +230,69 @@ python3 $PACKET/demo-preflight.py
 Expected: six on `4085ac70…` with six-way agreement; the three heights as recorded in §8 (or
 unset if §8 did not run). Record the result in `RELEASE-ID.txt` and the plan.
 
+## 8b. View change at 1144, 2026-10-23 — covered by the operator's go of the day
+
+**Why.** The first governance round for `rejected_tx_fee_activation_height` (batch `3c2a18d7…`,
+amendment `e4745af7…`, H = 1153, slot 1144, signatures valid to 1154) stalled at 08:40Z. All six hold a
+durable prepare and precommit for the same block at 1144 view 0: locked block `cee96283…`, payload
+`e2902657…`. The proposer, validator-4, timed out reading validator-5's precommit reply
+([first stop](observed/activation/STOP-20261023.json)). The same-round retry at 08:56Z was refused
+locally with `consensus v2 prepare vote would violate durable round monotonicity`
+([second stop](observed/activation/STOP-20261023-retry-1.json)). No command assembles the existing
+commit-phase votes, so the block moves to view 1. Read from the deployed source `6b1a0585`:
+
+- **(a) Timeout votes and certificate.**
+  - Each validator signs a timeout vote for 1144 view 0 on its own host with
+    `block-timeout-vote --height 1144 --view 0 --high-qc consensus-v2-signed-high-qc --skip-block-log-verify`
+    (`crates/node/src/main_parts/cli_dispatch_parts/group_04.rs:2188-2220`; the high-QC string is the RPC
+    path's, `finality_view_recovery.rs:2`).
+  - Full-history replay is skipped because this chain's replay stops at block 1011, the same reason the
+    RPC path skips it (`finality_view_recovery.rs:165-178`).
+  - The v2 vote carries the host's durable `high_qc`, the view-0 prepare QC for `cee96283…`
+    (`crates/node/src/consensus_v2_store.rs:346-381`). It is allowed because the host's highest timeout
+    round is unset and no round above 1144/0 exists (`crates/ordering_fast/src/consensus_v2.rs:751-796`,
+    `:1105-1123`).
+  - `block-timeout-certificate --height 1144 --view 0 --vote-files … --skip-block-log-verify` assembles the
+    certificate (`group_04.rs:2221-2253`). It needs the BFT quorum of the six: **5**
+    (`consensus_artifacts.rs:1024-1026`; v2 `consensus_v2.rs:619-623`). The certificate's high QC is the
+    highest of the votes' QCs (`consensus_v2.rs:629`, `:1374-1390`): here the 1144/0 prepare QC.
+- **(b) View-1 proposer and proposal.**
+  - The leader is `((height % n) + (view % n)) % n` (`crates/ordering_fast/src/lib.rs:355-364`), so
+    1144 view 1 is **validator-5**. `block-proposer --height 1144 --view 1` agrees.
+  - The view-1 proposal's `valid_qc` is the certificate's high QC (`crates/node/src/consensus_v2_finality.rs:56`).
+    `verify_consensus_v2_proposal` (`consensus_v2.rs:432-461`) requires a timeout certificate for view 0,
+    `valid_qc` equal to that certificate's high QC, and that QC to be a prior prepare QC **for the
+    proposal's own block** (`:451-461`). Any other block is refused when the proposer signs
+    (`consensus_v2_finality.rs:113`) and by every voter.
+  - The v2 block id is built from height, parent, payload hash, state root and the roots, not the view
+    (`consensus_v2_finality.rs:58-89`). So view 1 must re-propose the same governance batch, giving the
+    same block `cee96283…` and payload `e2902657…`.
+  - The locked votes are not discarded: a different or empty block cannot pass.
+- **(c) Existing locks at view 1.**
+  - A view-1 prepare vote needs `highest_prepare_round < 1144/1`, and the proposal's block must equal
+    the lock (`consensus_v2.rs:810-836`); here it does.
+  - A view-1 precommit needs `highest_precommit_round < 1144/1` and must not conflict with the lock
+    (`:869-893`); 1144/1 is newer than the 1144/0 lock on the same block.
+  - All six can therefore vote again for the locked block at view 1.
+- **(d) Sequence** (state read on all six before and after every step; `--timeout-ms 60000
+  --send-retries 3 --retry-backoff-ms 2000` on the round):
+  1. State read: all six at 1143 / `7fef75aa…`, safety records at 1144/0 locked on `cee96283…`.
+  2. On each host, validator-0 to validator-5 one at a time: `block-timeout-vote` (as `postfiat`, own key
+     file by path) → `/var/lib/postfiat/governance-activation-20261023/timeout-1144-v0-validator-N.json`,
+     copied to this server.
+  3. On validator-5: `block-timeout-certificate` over the six votes, then `block-timeout-verify`.
+  4. On validator-5: the same batch file (sha256 `46772a02…`), then
+     `transport-peer-certified-batch-round --batch-kind governance --require-local-proposer --height 1144
+     --view 1 --timeout-certificate-file … --timeout-ms 60000 --send-retries 3 --retry-backoff-ms 2000`.
+  5. State read: all six at 1144 view 1, same tip and root, batch `3c2a18d7…`, payload `e2902657…`,
+     receipt accepted for `e4745af7…`, archived value 1153, mempools 0.
+  - **Stop** on any command error, a host not at 1144 within two minutes of the others, any disagreement,
+    or a 1144 payload other than the governance batch.
+- **(e) Slot and expiry.** The governance authorization is checked against the block height, not the view:
+  `proposal_slot` is the next height (`mempool_proposals.rs:3233-3249`, `governance.rs:2589-2599`), with
+  `proposal_slot == height` and `expires_at_height >= height` (`consensus_artifacts.rs:2888-2889`). Slot
+  1144 with expiry 1154 still fits a view-1 commit at 1144.
+
 ## Rollback (one validator, emergency only)
 
 `safe-rollout` has no rollback subcommand and makes no per-host data anchor. Each host keeps the

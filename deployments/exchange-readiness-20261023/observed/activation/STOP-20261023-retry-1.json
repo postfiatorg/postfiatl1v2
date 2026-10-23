@@ -1,0 +1,73 @@
+{
+ "recorded_at": "2026-10-23T08:58:18Z",
+ "result": "STOPPED (second failure)",
+ "first_failure": "STOP-20261023.json",
+ "decision": "option (a): re-run the same governance round for proposal 502b7fe1 at height 1144",
+ "before": {
+  "height": 1143,
+  "six_way_agreement": true,
+  "mempools_empty": true,
+  "validator_5_units": "active active",
+  "state_read": "state-retry-1-before.json"
+ },
+ "command": "runuser -u postfiat -- postfiat-node transport-peer-certified-batch-round --data-dir /var/lib/postfiat/validator-4 --topology /etc/postfiat/releases/exchange-readiness-20261023/topology.json --batch-kind governance --batch-file /var/lib/postfiat/governance-activation-20261023/rejected-tx-fee.batch.json --key-file /var/lib/postfiat/validator-4/validator_keys.json --require-local-proposer --height 1144 --timeout-ms 60000 --send-retries 3 --retry-backoff-ms 2000 --artifact-dir /var/lib/postfiat/governance-activation-20261023/rejected-tx-fee-round-retry1 (on validator-4)",
+ "started": "2026-10-23T08:55:54Z",
+ "finished": "2026-10-23T08:56:53Z",
+ "exit": 1,
+ "error": "peer certified batch round local v2 prepare failed: consensus v2 prepare authorization: consensus v2 prepare vote would violate durable round monotonicity",
+ "proposal_rebuilt_identically": "yes: block-proposal.json sha256 3b74c7bb0babf684... in both rejected-tx-fee-round/ and rejected-tx-fee-round-retry1/, no differing field",
+ "what_happened": "validator-4 rebuilt the same proposal and wrote its block vote, then its own consensus-v2 prepare authorization refused to sign a second prepare for height 1144 view 0, because its durable safety record already holds the prepare (and precommit) for that round. The round stopped locally; the safety records on all six were not rewritten (mtimes unchanged), so no new vote was cast anywhere",
+ "per_host_vote_state_1144_view_0": {
+  "validator-0": {
+   "highest_prepare_round": "1144/0",
+   "highest_precommit_round": "1144/0",
+   "locked_qc": "prepare, block cee9628341ec..., payload e2902657dbbc...",
+   "safety_record_mtime": "08:39:52"
+  },
+  "validator-1": {
+   "highest_prepare_round": "1144/0",
+   "highest_precommit_round": "1144/0",
+   "locked_qc": "prepare, block cee9628341ec..., payload e2902657dbbc...",
+   "safety_record_mtime": "08:39:52"
+  },
+  "validator-2": {
+   "highest_prepare_round": "1144/0",
+   "highest_precommit_round": "1144/0",
+   "locked_qc": "prepare, block cee9628341ec..., payload e2902657dbbc...",
+   "safety_record_mtime": "08:39:53"
+  },
+  "validator-3": {
+   "highest_prepare_round": "1144/0",
+   "highest_precommit_round": "1144/0",
+   "locked_qc": "prepare, block cee9628341ec..., payload e2902657dbbc...",
+   "safety_record_mtime": "08:39:52"
+  },
+  "validator-4": {
+   "highest_prepare_round": "1144/0",
+   "highest_precommit_round": "1144/0",
+   "locked_qc": "prepare, block cee9628341ec..., payload e2902657dbbc...",
+   "safety_record_mtime": "08:39:52"
+  },
+  "validator-5": {
+   "highest_prepare_round": "1144/0",
+   "highest_precommit_round": "1144/0",
+   "locked_qc": "prepare, block cee9628341ec..., payload e2902657dbbc...",
+   "safety_record_mtime": "08:40:09"
+  }
+ },
+ "vote_state_note": "all six hold a durable precommit for the same block at 1144/0 (validator-5's written at 08:40:09, after the first round gave up at 08:40:03). The first round's artifacts on validator-4 hold the six prepares (block certificate 3890271c...) and the precommits of validators 0-3; validator-4's own and validator-5's precommit votes are in their safety state but not in that artifact directory",
+ "chain_after": {
+  "height": 1143,
+  "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+  "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+  "six_way_agreement": true,
+  "mempools_empty": true,
+  "state_read": "state-retry-1-after.json"
+ },
+ "not_done": [
+  "no view change",
+  "no other transaction",
+  "require_memo and recipient_format batches not prepared",
+  "no grants, probes, records or commits"
+ ]
+}

@@ -1,0 +1,45 @@
+{
+ "recorded_at": "2026-10-23T08:42:25Z",
+ "result": "STOPPED",
+ "stop_condition": "block not certified on all six: the governance round for rejected_tx_fee_activation_height at height 1144 failed; no host committed 1144",
+ "kind": "rejected_tx_fee_activation_height",
+ "value_H": 1153,
+ "slot": 1144,
+ "expires_at_height": 1154,
+ "proposer": "validator-4",
+ "amendment_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab",
+ "batch_id": "3c2a18d7d107752ccfb3ab28c9636bced246e9dbfff4b77783eea598ca0b6e6e5dbd84ba09967c3d26969fc96ad3e55d",
+ "steps_passed": [
+  "tip 1143 on all six, mempools 0",
+  "proposer of 1144 = validator-4",
+  "ratify on validator-1 (quorum 6, support 6)",
+  "six authorizations, each on its own host with its own key file",
+  "assemble accepted against the live registry",
+  "governance-batch built"
+ ],
+ "round": {
+  "command": "transport-peer-certified-batch-round --batch-kind governance --require-local-proposer --height 1144 on validator-4, default timeouts and retries",
+  "exit": 1,
+  "error": "transport block vote request to `validator-5` failed after 1 attempts: attempt 1: transport block vote response read failed: Resource temporarily unavailable (os error 11)",
+  "artifacts_on_validator_4": "proposal 502b7fe1... (governance batch 3c2a18d7..., state root 34ede112...), block certificate 3890271c... with six accepting prevotes; precommit votes from validators 0-3 only (validator-4's own and validator-5's missing)",
+  "validator_5_side": "its transport log shows both vote requests from validator-4 at 1144 view 0 accepted and answered; the reply was not read before validator-4's read timeout"
+ },
+ "chain_after": {
+  "height": 1143,
+  "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+  "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+  "six_way_agreement": true,
+  "mempools_empty": true
+ },
+ "consequence": "the six validators hold vote records for proposal 502b7fe1 at height 1144 view 0 (validator-0 has a consensus-v2 safety record for 1144). The next block at 1144 view 0 can only be this proposal; a different block there (for example a faucet grant) would be refused. Do not send transactions until 1144 is resolved by re-running the same round or by a view change",
+ "nothing_to_undo": "no amendment is on chain; the three heights are still unset; the authorizations (public) and the batch are in /var/lib/postfiat/governance-activation-20261023/ on the hosts and in this directory",
+ "not_run": [
+  "require_memo_activation_height",
+  "recipient_format_activation_height",
+  "faucet grants to H",
+  "probes",
+  "after state",
+  "validator-1 index rebuild",
+  "records and commits"
+ ]
+}
