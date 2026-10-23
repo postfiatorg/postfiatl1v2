@@ -1,0 +1,61 @@
+{
+  "amendment_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "instance_id": "3c0729183e71012531d47694b9a419f0324264995a8697fcc9fa99deea6115dae9c23cadf95dadca221677ba188f294a",
+  "proposal_id": "f60c765ce4c1fab2f74644b1554601fec402f93a5fb6f5b0904e7653e48eebf534c34786a031188198a72c53fb4bd2c0",
+  "certificate_id": "d10a4307e2662ac289a1ed641ab1ce188094aa50b37901b40c25cdecb993176e100ef9fb97b1a76c6f2875cf1cabeaa6",
+  "proposer": "validator-0",
+  "validators": [
+    "validator-0",
+    "validator-1",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ],
+  "quorum": 6,
+  "kind": "recipient_format_activation_height",
+  "value": 1153,
+  "support": [
+    "validator-0",
+    "validator-1",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ],
+  "votes": [
+    {
+      "vote_id": "a9adf10a01338c5ca7e88132fc4758c689120023e5cf52e2e7a08e3729bbf176985e09ddfa279adadc7b72e085d62302",
+      "validator": "validator-0",
+      "accept": true
+    },
+    {
+      "vote_id": "2da0e897809da681d0600a2273fee9ad5e7713d578d64e1fb92c1668835fedc83efa86b613e1d17ae24844946cd9e1ef",
+      "validator": "validator-1",
+      "accept": true
+    },
+    {
+      "vote_id": "54edc5cd898900209e73e5ec547318a15f964d28b9c273458cced88a34b739eaa9a737a908fdc74e6e4d0268d2d9df2f",
+      "validator": "validator-2",
+      "accept": true
+    },
+    {
+      "vote_id": "61bbb72e158cc20636ef04d70c35997fc4ad573ff67cba2c22c57462e579839567a4a9438a9029c72e4169f8b018d9ee",
+      "validator": "validator-3",
+      "accept": true
+    },
+    {
+      "vote_id": "acc8a6b5da5bfd23d0854240fcc6c67d704b28feb04977ae20d5ca8bc5006862c215b9bee730d1ed007b43fd7ddebafb",
+      "validator": "validator-4",
+      "accept": true
+    },
+    {
+      "vote_id": "f7ec6e1e8abebb568d46cd55a3db91596df3c3b3a9f43c54ef7299efb2ba362c67b5d26411c9bc2a38ac1e602c751a10",
+      "validator": "validator-5",
+      "accept": true
+    }
+  ]
+}

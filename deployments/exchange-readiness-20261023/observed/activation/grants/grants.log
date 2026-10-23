@@ -1,0 +1,15 @@
+-- grant 1 2026-10-23T10:14:32Z tip 1146
+PASS height=1147 proposer=validator-1 view=0 block=519299d8f7bb root=1e32b366c381 voters=validator-0,validator-1,validator-3,validator-4,validator-5 {'identical_block_on_6': True, 'quorum_5_of_6': True, 'tip_is_grant_block_on_6': True, 'mempools_empty': True, 'receipt_verified_6_of_6': True, 'proposer_matches_receipt': True}
+-- grant 2 2026-10-23T10:16:27Z tip 1147
+PASS height=1148 proposer=validator-2 view=0 block=20b2854ebab5 root=bdb082ace59e voters=validator-1,validator-2,validator-3,validator-4,validator-5 {'identical_block_on_6': True, 'quorum_5_of_6': True, 'tip_is_grant_block_on_6': True, 'mempools_empty': True, 'receipt_verified_6_of_6': True, 'proposer_matches_receipt': True}
+-- grant 3 2026-10-23T10:18:48Z tip 1148
+PASS height=1149 proposer=validator-3 view=0 block=0d17981a03b8 root=89d73bbee92e voters=validator-0,validator-1,validator-3,validator-4,validator-5 {'identical_block_on_6': True, 'quorum_5_of_6': True, 'tip_is_grant_block_on_6': True, 'mempools_empty': True, 'receipt_verified_6_of_6': True, 'proposer_matches_receipt': True}
+-- grant 4 2026-10-23T10:20:31Z tip 1149
+PASS height=1150 proposer=validator-4 view=0 block=4853941bffc4 root=7ed7c54fed8e voters=validator-0,validator-1,validator-3,validator-4,validator-5 {'identical_block_on_6': True, 'quorum_5_of_6': True, 'tip_is_grant_block_on_6': True, 'mempools_empty': True, 'receipt_verified_6_of_6': True, 'proposer_matches_receipt': True}
+-- grant 5 2026-10-23T10:22:04Z tip 1150
+PASS height=1151 proposer=validator-5 view=0 block=c5eb82f1658f root=e74b9e554764 voters=validator-0,validator-1,validator-2,validator-3,validator-4,validator-5 {'identical_block_on_6': True, 'quorum_5_of_6': True, 'tip_is_grant_block_on_6': True, 'mempools_empty': True, 'receipt_verified_6_of_6': True, 'proposer_matches_receipt': True}
+-- grant 6 2026-10-23T10:24:20Z tip 1151
+PASS height=1152 proposer=validator-0 view=0 block=88dcf3529adb root=6f35a7130dae voters=validator-0,validator-1,validator-3,validator-4,validator-5 {'identical_block_on_6': True, 'quorum_5_of_6': True, 'tip_is_grant_block_on_6': True, 'mempools_empty': True, 'receipt_verified_6_of_6': True, 'proposer_matches_receipt': True}
+-- grant 7 2026-10-23T10:25:56Z tip 1152
+PASS height=1153 proposer=validator-1 view=0 block=db8b87b65a5a root=7141956e778c voters=validator-0,validator-1,validator-3,validator-4,validator-5 {'identical_block_on_6': True, 'quorum_5_of_6': True, 'tip_is_grant_block_on_6': True, 'mempools_empty': True, 'receipt_verified_6_of_6': True, 'proposer_matches_receipt': True}
+== grants done: 7, tip 1153 2026-10-23T10:27:53Z

@@ -1,0 +1,1 @@
+interrupted 09:58:47Z: the launching shell exited and took the background script with it during 'sign on each host' (validator-0 not yet signed); nothing was signed or sent; unsigned files renamed *.interrupted-0958.json on validator-0/1

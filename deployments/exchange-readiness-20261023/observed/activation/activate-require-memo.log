@@ -1,0 +1,22 @@
+== require-memo 2026-10-23T10:00:11Z slot=1145 H=1153 expires=1155 proposer=validator-5
+tip {(1144, 'cee9628341ecea36f9656f8215c5d86c5de1edb48dce32967799ea9b52ac900d3332dbf599fc8ae12c9a8194c16388b0', 0)}
+-- ratify on validator-1
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; a=json.load(open(sys.argv[1])); print(a["amendment_id"]); print(a["kind"], a["value"], a["quorum"], a["support"], a["paused"], a["activation_height"], a["veto_until_height"], file=sys.stderr)
+                                                                                                                                       ~^^^^^^^^^^
+KeyError: 'paused'
+amendment cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b
+-- sign on each host
+signed validator-0
+signed validator-1
+signed validator-2
+signed validator-3
+signed validator-4
+signed validator-5
+-- assemble, batch and round on validator-5
+batch ad5be4b6994d8fc8da060bb9e266ba69f3b93f2eb2e60b7e93148d682b8bf3e110b77cb2e9711cdece329fede7effb7f sha256 ea82cd70c5c75466
+-- round 2026-10-23T10:02:01Z
+round rc=0 2026-10-23T10:03:11Z
+PASS height=1145 tip=2dc1aff3081e root=d3e6fce58c8d {'six_way_agreement': True, 'mempools_empty': True, 'governance_identical_on_6': True, 'uniform_binary': True, '1145_governance_block_quorum_receipt_accepted': True} {'1145': ('require_memo_activation_height', 1153, 'accepted')}
+== require-memo PASS 2026-10-23T10:05:04Z

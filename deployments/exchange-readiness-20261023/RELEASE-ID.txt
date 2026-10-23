@@ -14,7 +14,7 @@ deployment_publisher=pfc531e00ffefecb8fabe40c6f47c69148df31e49c
 trusted_publisher_file_sha256=221973bb58e7a51d7fe0e30186c73e7c15154c06208f3d1469c78e7ec4693c9d
 signed_manifest_sha256=210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1
 signed_manifest_valid_unix=1792734699..1824270999
-governed_activation_heights=unset (recipient_format, rejected_tx_fee, require_memo; sheet §8)
+governed_activation_heights=1153 for recipient_format, rejected_tx_fee, require_memo (set by governance 2026-10-23, blocks 1144-1146; sheet §8)
 account_tx_index_build=PASS on the signed 1131 import: 4.08 s for 1131 blocks (3.61 s per 1,000 blocks), v2 index usable, 958 rows, 255 accounts
 superseded_cut=source 6604c93e, executable 59bcd5b5d021b8765f89b404e2327dd6dc1f8daa2645a1e1d487fb50d80f206e, manifest be297bef02aca34488403e86a85992a090b1949bf310b5658a59f4bb6b2e9a60 (release commit 8b0ea1f8; its index build failed on devnet history)
 canary_backup_signed_manifest_sha256=3257115c7d57dcfb6a28743723cfae58bce80235bb6901c803e5765299d6c070
@@ -26,4 +26,4 @@ deployed_height=1143
 deployed_tip=7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb
 deployed_state_root=8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90
 account_tx_index_build=DONE 2026-10-23T08:02Z..08:23Z on all six (v2 usable, range 1-1143, 1105 blocks, 970 rows; 6.9-14.8 s per host incl. ssh)
-governed_activation=PENDING (sheet §8; all three heights inactive)
+governed_activation=DONE 2026-10-23: rejected_tx_fee_activation_height=1153 (block 1144 view 1, amendment e4745af7, batch 3c2a18d7), require_memo_activation_height=1153 (block 1145, amendment cdf4c13c, batch ad5be4b6), recipient_format_activation_height=1153 (block 1146, amendment a3771fed, batch cb15f8f2; irreversible); tip 1153 db8b87b65a5a / 7141956e778c after seven grants; sheet §8, §8b

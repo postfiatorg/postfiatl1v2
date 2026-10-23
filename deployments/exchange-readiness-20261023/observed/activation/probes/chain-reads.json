@@ -1,0 +1,137 @@
+{
+ "observed_at": "2026-10-23T10:28:20.936376+00:00",
+ "tip": 1153,
+ "blocks_1138_1153": [
+  {
+   "height": 1138,
+   "batch_kind": "transparent",
+   "receipts": 1
+  },
+  {
+   "height": 1139,
+   "batch_kind": "transparent",
+   "receipts": 1
+  },
+  {
+   "height": 1140,
+   "batch_kind": "transparent",
+   "receipts": 1
+  },
+  {
+   "height": 1141,
+   "batch_kind": "transparent",
+   "receipts": 1
+  },
+  {
+   "height": 1142,
+   "batch_kind": "transparent",
+   "receipts": 1
+  },
+  {
+   "height": 1143,
+   "batch_kind": "transparent",
+   "receipts": 1
+  },
+  {
+   "height": 1144,
+   "batch_kind": "governance",
+   "receipts": 1
+  },
+  {
+   "height": 1145,
+   "batch_kind": "governance",
+   "receipts": 1
+  },
+  {
+   "height": 1146,
+   "batch_kind": "governance",
+   "receipts": 1
+  },
+  {
+   "height": 1147,
+   "batch_kind": "transparent",
+   "receipts": 1
+  },
+  {
+   "height": 1148,
+   "batch_kind": "transparent",
+   "receipts": 1
+  },
+  {
+   "height": 1149,
+   "batch_kind": "transparent",
+   "receipts": 1
+  },
+  {
+   "height": 1150,
+   "batch_kind": "transparent",
+   "receipts": 1
+  },
+  {
+   "height": 1151,
+   "batch_kind": "transparent",
+   "receipts": 1
+  },
+  {
+   "height": 1152,
+   "batch_kind": "transparent",
+   "receipts": 1
+  },
+  {
+   "height": 1153,
+   "batch_kind": "transparent",
+   "receipts": 1
+  }
+ ],
+ "grant_at_1153": {
+  "height": 1153,
+  "tx_id": "42e11d071a39b7f0ce0c29c328d175f8c710f6dfd4dc024180464373080325086b329f46ca5650ccd38bcaaa3831dcaf",
+  "fee_atoms": 32,
+  "amount_atoms": 1000000,
+  "from": "pfcd4cc8c354bd340fe18386e6f875ff68f215a95c",
+  "to": "pf6395ef7f43ffaa74ce178d320b9bbbfd45532b38",
+  "ok": true,
+  "proposer": "validator-1"
+ },
+ "transparent_kinds": {
+  "1138": [
+   "transparent_transfer"
+  ],
+  "1139": [
+   "transparent_transfer"
+  ],
+  "1140": [
+   "transparent_transfer"
+  ],
+  "1141": [
+   "transparent_transfer"
+  ],
+  "1142": [
+   "transparent_transfer"
+  ],
+  "1143": [
+   "transparent_transfer"
+  ],
+  "1147": [
+   "transparent_transfer"
+  ],
+  "1148": [
+   "transparent_transfer"
+  ],
+  "1149": [
+   "transparent_transfer"
+  ],
+  "1150": [
+   "transparent_transfer"
+  ],
+  "1151": [
+   "transparent_transfer"
+  ],
+  "1152": [
+   "transparent_transfer"
+  ],
+  "1153": [
+   "transparent_transfer"
+  ]
+ }
+}

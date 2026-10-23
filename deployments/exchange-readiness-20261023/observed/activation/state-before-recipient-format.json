@@ -1,0 +1,48 @@
+{
+ "observed_at": "2026-10-23T10:05:13.179423+00:00",
+ "hosts": {
+  "validator-0": {
+   "height": 1145,
+   "tip": "2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63",
+   "state_root": "d3e6fce58c8d0b6d30813aad0393ab4e973f509c10742a3053e5b3cac4ddf62d227cb732b319d92825c2edbad95fd7fd",
+   "mempool_pending": 0,
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"
+  },
+  "validator-1": {
+   "height": 1145,
+   "tip": "2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63",
+   "state_root": "d3e6fce58c8d0b6d30813aad0393ab4e973f509c10742a3053e5b3cac4ddf62d227cb732b319d92825c2edbad95fd7fd",
+   "mempool_pending": 0,
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"
+  },
+  "validator-2": {
+   "height": 1145,
+   "tip": "2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63",
+   "state_root": "d3e6fce58c8d0b6d30813aad0393ab4e973f509c10742a3053e5b3cac4ddf62d227cb732b319d92825c2edbad95fd7fd",
+   "mempool_pending": 0,
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"
+  },
+  "validator-3": {
+   "height": 1145,
+   "tip": "2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63",
+   "state_root": "d3e6fce58c8d0b6d30813aad0393ab4e973f509c10742a3053e5b3cac4ddf62d227cb732b319d92825c2edbad95fd7fd",
+   "mempool_pending": 0,
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"
+  },
+  "validator-4": {
+   "height": 1145,
+   "tip": "2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63",
+   "state_root": "d3e6fce58c8d0b6d30813aad0393ab4e973f509c10742a3053e5b3cac4ddf62d227cb732b319d92825c2edbad95fd7fd",
+   "mempool_pending": 0,
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"
+  },
+  "validator-5": {
+   "height": 1145,
+   "tip": "2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63",
+   "state_root": "d3e6fce58c8d0b6d30813aad0393ab4e973f509c10742a3053e5b3cac4ddf62d227cb732b319d92825c2edbad95fd7fd",
+   "mempool_pending": 0,
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"
+  }
+ },
+ "six_way": true
+}

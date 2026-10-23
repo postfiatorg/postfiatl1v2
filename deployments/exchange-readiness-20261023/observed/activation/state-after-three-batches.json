@@ -1,0 +1,855 @@
+{
+ "observed_at": "2026-10-23T10:14:11.195585+00:00",
+ "checks": {
+  "six_way_agreement": true,
+  "mempools_empty": true,
+  "governance_identical_on_6": true,
+  "uniform_binary": true,
+  "1144_governance_block_quorum_receipt_accepted": true,
+  "1145_governance_block_quorum_receipt_accepted": true,
+  "1146_governance_block_quorum_receipt_accepted": true
+ },
+ "pass": true,
+ "hosts": {
+  "validator-0": {
+   "height": 1146,
+   "tip": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+   "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64",
+   "mempool_pending": 0,
+   "build_git_revision": "6b1a0585",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "governance": {
+    "1144": {
+     "height": 1144,
+     "batch_kind": "governance",
+     "batch_id": "3c2a18d7d107752ccfb3ab28c9636bced246e9dbfff4b77783eea598ca0b6e6e5dbd84ba09967c3d26969fc96ad3e55d",
+     "block_hash": "cee9628341ecea36f9656f8215c5d86c5de1edb48dce32967799ea9b52ac900d3332dbf599fc8ae12c9a8194c16388b0",
+     "state_root": "34ede1122cc6bf3a5408f82da6537adf6dd505ec925f547e5e11fb818d81eb413483c2a25772e2c4480f3eb109343ea6",
+     "proposer": "validator-5",
+     "view": 1,
+     "certificate_id": "c26c7a9938465ea08bfaceeb37cf4a2d6f81949216622e2867237c0f706f87097d8117d3aab98c20fd914e51050995f3",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab",
+       "kind": "rejected_tx_fee_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab"
+     }
+    },
+    "1145": {
+     "height": 1145,
+     "batch_kind": "governance",
+     "batch_id": "ad5be4b6994d8fc8da060bb9e266ba69f3b93f2eb2e60b7e93148d682b8bf3e110b77cb2e9711cdece329fede7effb7f",
+     "block_hash": "2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63",
+     "state_root": "d3e6fce58c8d0b6d30813aad0393ab4e973f509c10742a3053e5b3cac4ddf62d227cb732b319d92825c2edbad95fd7fd",
+     "proposer": "validator-5",
+     "view": 0,
+     "certificate_id": "60b5afef0324a284b75bcb38bf1d490d36e89fd684992e1f83a4baddf8ad8649fdac4ebe773ac4b15fcec393a258c112",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b",
+       "kind": "require_memo_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b"
+     }
+    },
+    "1146": {
+     "height": 1146,
+     "batch_kind": "governance",
+     "batch_id": "cb15f8f2cb8512a8594b24d028912ecebb6415f9a81bb52980d1f5596b91460f70366a623cdb522ae35db1fe3086281f",
+     "block_hash": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+     "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64",
+     "proposer": "validator-0",
+     "view": 0,
+     "certificate_id": "365f275e06bcf6a6b5d8cf627d360486f9e41aa026c4016eb471de6e98a846959103e4e5a6f8cd8a601910d58b8c5f77",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-0",
+      "validator-1",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94",
+       "kind": "recipient_format_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94"
+     }
+    }
+   }
+  },
+  "validator-1": {
+   "height": 1146,
+   "tip": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+   "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64",
+   "mempool_pending": 0,
+   "build_git_revision": "6b1a0585",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "governance": {
+    "1144": {
+     "height": 1144,
+     "batch_kind": "governance",
+     "batch_id": "3c2a18d7d107752ccfb3ab28c9636bced246e9dbfff4b77783eea598ca0b6e6e5dbd84ba09967c3d26969fc96ad3e55d",
+     "block_hash": "cee9628341ecea36f9656f8215c5d86c5de1edb48dce32967799ea9b52ac900d3332dbf599fc8ae12c9a8194c16388b0",
+     "state_root": "34ede1122cc6bf3a5408f82da6537adf6dd505ec925f547e5e11fb818d81eb413483c2a25772e2c4480f3eb109343ea6",
+     "proposer": "validator-5",
+     "view": 1,
+     "certificate_id": "c26c7a9938465ea08bfaceeb37cf4a2d6f81949216622e2867237c0f706f87097d8117d3aab98c20fd914e51050995f3",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab",
+       "kind": "rejected_tx_fee_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab"
+     }
+    },
+    "1145": {
+     "height": 1145,
+     "batch_kind": "governance",
+     "batch_id": "ad5be4b6994d8fc8da060bb9e266ba69f3b93f2eb2e60b7e93148d682b8bf3e110b77cb2e9711cdece329fede7effb7f",
+     "block_hash": "2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63",
+     "state_root": "d3e6fce58c8d0b6d30813aad0393ab4e973f509c10742a3053e5b3cac4ddf62d227cb732b319d92825c2edbad95fd7fd",
+     "proposer": "validator-5",
+     "view": 0,
+     "certificate_id": "60b5afef0324a284b75bcb38bf1d490d36e89fd684992e1f83a4baddf8ad8649fdac4ebe773ac4b15fcec393a258c112",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b",
+       "kind": "require_memo_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b"
+     }
+    },
+    "1146": {
+     "height": 1146,
+     "batch_kind": "governance",
+     "batch_id": "cb15f8f2cb8512a8594b24d028912ecebb6415f9a81bb52980d1f5596b91460f70366a623cdb522ae35db1fe3086281f",
+     "block_hash": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+     "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64",
+     "proposer": "validator-0",
+     "view": 0,
+     "certificate_id": "365f275e06bcf6a6b5d8cf627d360486f9e41aa026c4016eb471de6e98a846959103e4e5a6f8cd8a601910d58b8c5f77",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-0",
+      "validator-1",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94",
+       "kind": "recipient_format_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94"
+     }
+    }
+   }
+  },
+  "validator-2": {
+   "height": 1146,
+   "tip": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+   "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64",
+   "mempool_pending": 0,
+   "build_git_revision": "6b1a0585",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "governance": {
+    "1144": {
+     "height": 1144,
+     "batch_kind": "governance",
+     "batch_id": "3c2a18d7d107752ccfb3ab28c9636bced246e9dbfff4b77783eea598ca0b6e6e5dbd84ba09967c3d26969fc96ad3e55d",
+     "block_hash": "cee9628341ecea36f9656f8215c5d86c5de1edb48dce32967799ea9b52ac900d3332dbf599fc8ae12c9a8194c16388b0",
+     "state_root": "34ede1122cc6bf3a5408f82da6537adf6dd505ec925f547e5e11fb818d81eb413483c2a25772e2c4480f3eb109343ea6",
+     "proposer": "validator-5",
+     "view": 1,
+     "certificate_id": "c26c7a9938465ea08bfaceeb37cf4a2d6f81949216622e2867237c0f706f87097d8117d3aab98c20fd914e51050995f3",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab",
+       "kind": "rejected_tx_fee_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab"
+     }
+    },
+    "1145": {
+     "height": 1145,
+     "batch_kind": "governance",
+     "batch_id": "ad5be4b6994d8fc8da060bb9e266ba69f3b93f2eb2e60b7e93148d682b8bf3e110b77cb2e9711cdece329fede7effb7f",
+     "block_hash": "2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63",
+     "state_root": "d3e6fce58c8d0b6d30813aad0393ab4e973f509c10742a3053e5b3cac4ddf62d227cb732b319d92825c2edbad95fd7fd",
+     "proposer": "validator-5",
+     "view": 0,
+     "certificate_id": "60b5afef0324a284b75bcb38bf1d490d36e89fd684992e1f83a4baddf8ad8649fdac4ebe773ac4b15fcec393a258c112",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b",
+       "kind": "require_memo_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b"
+     }
+    },
+    "1146": {
+     "height": 1146,
+     "batch_kind": "governance",
+     "batch_id": "cb15f8f2cb8512a8594b24d028912ecebb6415f9a81bb52980d1f5596b91460f70366a623cdb522ae35db1fe3086281f",
+     "block_hash": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+     "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64",
+     "proposer": "validator-0",
+     "view": 0,
+     "certificate_id": "365f275e06bcf6a6b5d8cf627d360486f9e41aa026c4016eb471de6e98a846959103e4e5a6f8cd8a601910d58b8c5f77",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-0",
+      "validator-1",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94",
+       "kind": "recipient_format_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94"
+     }
+    }
+   }
+  },
+  "validator-3": {
+   "height": 1146,
+   "tip": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+   "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64",
+   "mempool_pending": 0,
+   "build_git_revision": "6b1a0585",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "governance": {
+    "1144": {
+     "height": 1144,
+     "batch_kind": "governance",
+     "batch_id": "3c2a18d7d107752ccfb3ab28c9636bced246e9dbfff4b77783eea598ca0b6e6e5dbd84ba09967c3d26969fc96ad3e55d",
+     "block_hash": "cee9628341ecea36f9656f8215c5d86c5de1edb48dce32967799ea9b52ac900d3332dbf599fc8ae12c9a8194c16388b0",
+     "state_root": "34ede1122cc6bf3a5408f82da6537adf6dd505ec925f547e5e11fb818d81eb413483c2a25772e2c4480f3eb109343ea6",
+     "proposer": "validator-5",
+     "view": 1,
+     "certificate_id": "c26c7a9938465ea08bfaceeb37cf4a2d6f81949216622e2867237c0f706f87097d8117d3aab98c20fd914e51050995f3",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab",
+       "kind": "rejected_tx_fee_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab"
+     }
+    },
+    "1145": {
+     "height": 1145,
+     "batch_kind": "governance",
+     "batch_id": "ad5be4b6994d8fc8da060bb9e266ba69f3b93f2eb2e60b7e93148d682b8bf3e110b77cb2e9711cdece329fede7effb7f",
+     "block_hash": "2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63",
+     "state_root": "d3e6fce58c8d0b6d30813aad0393ab4e973f509c10742a3053e5b3cac4ddf62d227cb732b319d92825c2edbad95fd7fd",
+     "proposer": "validator-5",
+     "view": 0,
+     "certificate_id": "60b5afef0324a284b75bcb38bf1d490d36e89fd684992e1f83a4baddf8ad8649fdac4ebe773ac4b15fcec393a258c112",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b",
+       "kind": "require_memo_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b"
+     }
+    },
+    "1146": {
+     "height": 1146,
+     "batch_kind": "governance",
+     "batch_id": "cb15f8f2cb8512a8594b24d028912ecebb6415f9a81bb52980d1f5596b91460f70366a623cdb522ae35db1fe3086281f",
+     "block_hash": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+     "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64",
+     "proposer": "validator-0",
+     "view": 0,
+     "certificate_id": "365f275e06bcf6a6b5d8cf627d360486f9e41aa026c4016eb471de6e98a846959103e4e5a6f8cd8a601910d58b8c5f77",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-0",
+      "validator-1",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94",
+       "kind": "recipient_format_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94"
+     }
+    }
+   }
+  },
+  "validator-4": {
+   "height": 1146,
+   "tip": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+   "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64",
+   "mempool_pending": 0,
+   "build_git_revision": "6b1a0585",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "governance": {
+    "1144": {
+     "height": 1144,
+     "batch_kind": "governance",
+     "batch_id": "3c2a18d7d107752ccfb3ab28c9636bced246e9dbfff4b77783eea598ca0b6e6e5dbd84ba09967c3d26969fc96ad3e55d",
+     "block_hash": "cee9628341ecea36f9656f8215c5d86c5de1edb48dce32967799ea9b52ac900d3332dbf599fc8ae12c9a8194c16388b0",
+     "state_root": "34ede1122cc6bf3a5408f82da6537adf6dd505ec925f547e5e11fb818d81eb413483c2a25772e2c4480f3eb109343ea6",
+     "proposer": "validator-5",
+     "view": 1,
+     "certificate_id": "c26c7a9938465ea08bfaceeb37cf4a2d6f81949216622e2867237c0f706f87097d8117d3aab98c20fd914e51050995f3",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab",
+       "kind": "rejected_tx_fee_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab"
+     }
+    },
+    "1145": {
+     "height": 1145,
+     "batch_kind": "governance",
+     "batch_id": "ad5be4b6994d8fc8da060bb9e266ba69f3b93f2eb2e60b7e93148d682b8bf3e110b77cb2e9711cdece329fede7effb7f",
+     "block_hash": "2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63",
+     "state_root": "d3e6fce58c8d0b6d30813aad0393ab4e973f509c10742a3053e5b3cac4ddf62d227cb732b319d92825c2edbad95fd7fd",
+     "proposer": "validator-5",
+     "view": 0,
+     "certificate_id": "60b5afef0324a284b75bcb38bf1d490d36e89fd684992e1f83a4baddf8ad8649fdac4ebe773ac4b15fcec393a258c112",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b",
+       "kind": "require_memo_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b"
+     }
+    },
+    "1146": {
+     "height": 1146,
+     "batch_kind": "governance",
+     "batch_id": "cb15f8f2cb8512a8594b24d028912ecebb6415f9a81bb52980d1f5596b91460f70366a623cdb522ae35db1fe3086281f",
+     "block_hash": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+     "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64",
+     "proposer": "validator-0",
+     "view": 0,
+     "certificate_id": "365f275e06bcf6a6b5d8cf627d360486f9e41aa026c4016eb471de6e98a846959103e4e5a6f8cd8a601910d58b8c5f77",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-0",
+      "validator-1",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94",
+       "kind": "recipient_format_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94"
+     }
+    }
+   }
+  },
+  "validator-5": {
+   "height": 1146,
+   "tip": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+   "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64",
+   "mempool_pending": 0,
+   "build_git_revision": "6b1a0585",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "governance": {
+    "1144": {
+     "height": 1144,
+     "batch_kind": "governance",
+     "batch_id": "3c2a18d7d107752ccfb3ab28c9636bced246e9dbfff4b77783eea598ca0b6e6e5dbd84ba09967c3d26969fc96ad3e55d",
+     "block_hash": "cee9628341ecea36f9656f8215c5d86c5de1edb48dce32967799ea9b52ac900d3332dbf599fc8ae12c9a8194c16388b0",
+     "state_root": "34ede1122cc6bf3a5408f82da6537adf6dd505ec925f547e5e11fb818d81eb413483c2a25772e2c4480f3eb109343ea6",
+     "proposer": "validator-5",
+     "view": 1,
+     "certificate_id": "c26c7a9938465ea08bfaceeb37cf4a2d6f81949216622e2867237c0f706f87097d8117d3aab98c20fd914e51050995f3",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab",
+       "kind": "rejected_tx_fee_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab"
+     }
+    },
+    "1145": {
+     "height": 1145,
+     "batch_kind": "governance",
+     "batch_id": "ad5be4b6994d8fc8da060bb9e266ba69f3b93f2eb2e60b7e93148d682b8bf3e110b77cb2e9711cdece329fede7effb7f",
+     "block_hash": "2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63",
+     "state_root": "d3e6fce58c8d0b6d30813aad0393ab4e973f509c10742a3053e5b3cac4ddf62d227cb732b319d92825c2edbad95fd7fd",
+     "proposer": "validator-5",
+     "view": 0,
+     "certificate_id": "60b5afef0324a284b75bcb38bf1d490d36e89fd684992e1f83a4baddf8ad8649fdac4ebe773ac4b15fcec393a258c112",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b",
+       "kind": "require_memo_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "cdf4c13c636408d046babe41d603ae499c8403ddaf040ad27ca64b7855ab63792681c0168a63c2fbcbe0a43a52a9ac9b"
+     }
+    },
+    "1146": {
+     "height": 1146,
+     "batch_kind": "governance",
+     "batch_id": "cb15f8f2cb8512a8594b24d028912ecebb6415f9a81bb52980d1f5596b91460f70366a623cdb522ae35db1fe3086281f",
+     "block_hash": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+     "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64",
+     "proposer": "validator-0",
+     "view": 0,
+     "certificate_id": "365f275e06bcf6a6b5d8cf627d360486f9e41aa026c4016eb471de6e98a846959103e4e5a6f8cd8a601910d58b8c5f77",
+     "quorum": 5,
+     "accepting_votes": [
+      "validator-0",
+      "validator-1",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+     ],
+     "receipt_ids": [
+      "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94"
+     ],
+     "amendments": [
+      {
+       "amendment_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94",
+       "kind": "recipient_format_activation_height",
+       "value": 1153,
+       "quorum": 6,
+       "support": 6,
+       "signed_authorizations": 6,
+       "paused": false
+      }
+     ],
+     "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94"
+     }
+    }
+   }
+  }
+ }
+}

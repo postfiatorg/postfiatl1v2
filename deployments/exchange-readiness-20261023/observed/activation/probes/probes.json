@@ -1,0 +1,16 @@
+{
+ "observed_at": "2026-10-23T10:28Z",
+ "tip": 1153,
+ "rejected_tx_fee_activation_height": {
+  "value": 1153, "active_from_tip": true,
+  "probe": "read-only: amendment e4745af7... archived with value 1153 and an accepted receipt at block 1144 on all six (state-after-three-batches.json), tip 1153. No transaction was sent to fail on its effect: mempool admission dry-runs execution and refuses any transfer whose receipt is not accepted (crates/node/src/mempool_proposals.rs:249-263), so a tec_* row cannot reach a block through the mempool from the testing wallet. The 1153 grant (tx 42e11d07..., fee 32) is an accepted transfer and is unaffected."
+ },
+ "require_memo_activation_height": {
+  "value": 1153, "active_from_tip": true,
+  "probe": "read-only: amendment cdf4c13c... archived with value 1153 and an accepted receipt at block 1145 on all six. No account carries the require-memo flag: blocks 1138-1153 hold only transparent_transfer and governance batches (chain-reads.json), and no account_set transaction exists in the history before them."
+ },
+ "recipient_format_activation_height": {
+  "value": 1153, "active_from_tip": true, "irreversible": true,
+  "probe": "read-only admission probe through validator-1's RPC (127.0.0.1:27651): malformed pf6395ef...532b3 (41 chars) refused with invalid_recipient_address; canonical pf6395ef...532b38 passes the address check and is refused only by the probe's deliberate protocol error (rpc_protocol_error). Nothing submitted (admission-probe-validator-1.json)."
+ }
+}

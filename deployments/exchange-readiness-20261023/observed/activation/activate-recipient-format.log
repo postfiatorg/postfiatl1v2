@@ -1,0 +1,22 @@
+== recipient-format 2026-10-23T10:05:28Z slot=1146 H=1153 expires=1156 proposer=validator-0
+tip {(1145, '2dc1aff3081e277409d9453ef78e274cdbf2ed418d423a7642c8111e6f28b1a5e430accf05f4dc930e9faf1f3641ec63', 0)}
+-- ratify on validator-1
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; a=json.load(open(sys.argv[1])); print(a["amendment_id"]); print(a["kind"], a["value"], a["quorum"], a["support"], a["paused"], a["activation_height"], a["veto_until_height"], file=sys.stderr)
+                                                                                                                                       ~^^^^^^^^^^
+KeyError: 'paused'
+amendment a3771feda1ab8a8b6fd3175d8eb4fcd15e41265cea52304baacd0327eccb9f1360a165e1861774a88ae675989fb4eb94
+-- sign on each host
+signed validator-0
+signed validator-1
+signed validator-2
+signed validator-3
+signed validator-4
+signed validator-5
+-- assemble, batch and round on validator-0
+batch cb15f8f2cb8512a8594b24d028912ecebb6415f9a81bb52980d1f5596b91460f70366a623cdb522ae35db1fe3086281f sha256 215db276a4a73214
+-- round 2026-10-23T10:07:03Z
+round rc=0 2026-10-23T10:07:53Z
+PASS height=1146 tip=085d7e3bcaf3 root=c38e5d3ba15b {'six_way_agreement': True, 'mempools_empty': True, 'governance_identical_on_6': True, 'uniform_binary': True, '1146_governance_block_quorum_receipt_accepted': True} {'1146': ('recipient_format_activation_height', 1153, 'accepted')}
+== recipient-format PASS 2026-10-23T10:09:40Z

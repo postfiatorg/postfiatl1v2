@@ -1,0 +1,66 @@
+{
+ "observed_at": "2026-10-23T09:28:06.742675+00:00",
+ "checks": {
+  "six_way_agreement": true,
+  "mempools_empty": true,
+  "governance_identical_on_6": true,
+  "uniform_binary": true
+ },
+ "pass": true,
+ "hosts": {
+  "validator-0": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "mempool_pending": 0,
+   "build_git_revision": "6b1a0585",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "governance": {}
+  },
+  "validator-1": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "mempool_pending": 0,
+   "build_git_revision": "6b1a0585",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "governance": {}
+  },
+  "validator-2": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "mempool_pending": 0,
+   "build_git_revision": "6b1a0585",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "governance": {}
+  },
+  "validator-3": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "mempool_pending": 0,
+   "build_git_revision": "6b1a0585",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "governance": {}
+  },
+  "validator-4": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "mempool_pending": 0,
+   "build_git_revision": "6b1a0585",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "governance": {}
+  },
+  "validator-5": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "mempool_pending": 0,
+   "build_git_revision": "6b1a0585",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "governance": {}
+  }
+ }
+}

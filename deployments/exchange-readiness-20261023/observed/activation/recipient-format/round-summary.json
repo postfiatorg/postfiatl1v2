@@ -1,0 +1,73 @@
+{
+ "schema": "postfiat-transport-peer-certified-batch-round-v1",
+ "certification": {
+  "block_height": 1146,
+  "view": 0,
+  "certificate_id": "365f275e06bcf6a6b5d8cf627d360486f9e41aa026c4016eb471de6e98a846959103e4e5a6f8cd8a601910d58b8c5f77",
+  "vote_count": 5,
+  "batch_kind": "governance",
+  "batch_id": "cb15f8f2cb8512a8594b24d028912ecebb6415f9a81bb52980d1f5596b91460f70366a623cdb522ae35db1fe3086281f"
+ },
+ "unresolved_vote_targets": [
+  "validator-2"
+ ],
+ "send_failures": [],
+ "local_apply_verified": true,
+ "local_state": {
+  "block_height": 1146,
+  "block_tip_hash": "085d7e3bcaf35e29547f42f6fe09e76270b2fb430e84ce92b8b4f163cdc84abae541ce2922722ac2297cce23cedcb1a0",
+  "state_root": "c38e5d3ba15b46066189d57eed9704b1c2d04bc11a843fd2bbd29e5802e03087eb98c09346f4ece20f441bb58d25cb64"
+ },
+ "certified_send_targets": [
+  {
+   "target": "validator-1",
+   "duration_ms": 2071,
+   "result": "ok"
+  },
+  {
+   "target": "validator-2",
+   "duration_ms": 3203,
+   "result": "ok"
+  },
+  {
+   "target": "validator-3",
+   "duration_ms": 1692,
+   "result": "ok"
+  },
+  {
+   "target": "validator-4",
+   "duration_ms": 2026,
+   "result": "ok"
+  },
+  {
+   "target": "validator-5",
+   "duration_ms": 23615,
+   "result": "ok"
+  }
+ ],
+ "timings_ms": {
+  "total_ms": 48180,
+  "outbox_resume_ms": 47,
+  "outbox_compaction_ms": 43,
+  "outbox_validation_ms": 6,
+  "outbox_prune_ms": 0,
+  "setup_ms": 75,
+  "proposal_ms": 525,
+  "target_selection_ms": 15,
+  "local_vote_ms": 324,
+  "vote_requests_ms": 2621,
+  "certificate_ms": 20735,
+  "legacy_certificate_ms": 40,
+  "consensus_v2_prepare_qc_ms": 44,
+  "consensus_v2_precommit_votes_ms": 20466,
+  "consensus_v2_precommit_qc_ms": 70,
+  "consensus_v2_commit_assembly_ms": 74,
+  "consensus_v2_commit_attach_write_ms": 41,
+  "certified_sends_ms": 23616,
+  "local_apply_ms": 384,
+  "post_apply_status_ms": 57,
+  "local_commit_publish_ms": 0,
+  "client_visible_finality_ms": 24518,
+  "verification_ms": 0
+ }
+}

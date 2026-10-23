@@ -211,12 +211,71 @@ for KIND in rejected-tx-fee require-memo recipient-format; do
   $B governance-amendment-assemble --data-dir PATH --amendment-file $E/$KIND.unsigned.json \
     --authorization-files $E/$KIND.0.json,…,$E/$KIND.5.json --proposal-slot S --output $E/$KIND.signed.json
   $B governance-batch --data-dir PATH --amendment-file $E/$KIND.signed.json --batch-file $E/$KIND.batch.json
+  # on the proposer of slot S (block-proposer --height S); see §8b for why the last two flags are required
   $B transport-peer-certified-batch-round --data-dir PATH --topology PATH --batch-kind governance \
-    --batch-file $E/$KIND.batch.json --key-file PATH --artifact-dir PATH
+    --batch-file $E/$KIND.batch.json --key-file PATH --artifact-dir PATH --require-local-proposer --height S \
+    --quorum-early-full-propagation --local-apply-before-certified-send \
+    --timeout-ms 60000 --send-retries 3 --retry-backoff-ms 2000
 done
 ```
 
-- [ ] **GO 8.N** (one go per record).
+- [x] **GO 8.N** (one go per record), 2026-10-23 08:38–10:34Z. Tip T = 1143, so H = 1153 for all three.
+  Each record was ratified on validator-1 and signed on each host with its own key file by path; the
+  amendment needs quorum 6 with support 6 and has six signed authorizations. Evidence is in
+  [observed/activation/](observed/activation/).
+
+| Kind | Amendment | Batch | Height / view / proposer | Block / root | Certificate (votes) | H | Read on six |
+|---|---|---|---|---|---|---|---|
+| `rejected_tx_fee_activation_height` | `e4745af7…` | `3c2a18d7…` | 1144 / **1** / validator-5 (view change, §8b) | `cee96283…` / `34ede112…` | `c26c7a99…` (6 of 6) | 1153 | identical, receipt accepted |
+| `require_memo_activation_height` | `cdf4c13c…` | `ad5be4b6…` | 1145 / 0 / validator-5 | `2dc1aff3…` / `d3e6fce5…` | `60b5afef…` (5: v1–v5) | 1153 | identical, receipt accepted |
+| `recipient_format_activation_height` (last, irreversible) | `a3771fed…` | `cb15f8f2…` | 1146 / 0 / validator-0 | `085d7e3b…` / `c38e5d3b…` | `365f275e…` (5: v0, v1, v3–v5) | 1153 | identical, receipt accepted |
+
+The reads in `state-after-three-batches.json` cover all six hosts: the three blocks, the archived
+amendments with value 1153, and receipts accepted.
+
+- [x] **Grants to H.** Seven faucet grants of 1 PFT, faucet `pfcd4cc8…` → testing `pf6395ef…`, both
+  canonical addresses, 10:14–10:28Z. Each was certified identically on six, view 0, with mempools 0
+  (`grants/grant-N.check.json`):
+
+| Height | Proposer | Block / root | Voters | tx |
+|---|---|---|---|---|
+| 1147 | validator-1 | `519299d8…` / `1e32b366…` | 5 | `64c7fd8c…` |
+| 1148 | validator-2 | `20b2854e…` / `bdb082ac…` | 5 | `d8fc2dbe…` |
+| 1149 | validator-3 | `0d17981a…` / `89d73bbe…` | 5 | `f80e71d7…` |
+| 1150 | validator-4 | `4853941b…` / `7ed7c54f…` | 5 | `6f8f4b27…` |
+| 1151 | validator-5 | `c5eb82f1…` / `e74b9e55…` | 6 | `f919fc50…` |
+| 1152 | validator-0 | `88dcf352…` / `6f35a713…` | 5 | `a7cf0689…` |
+| 1153 | validator-1 | `db8b87b6…` / `7141956e…` | 5 | `42e11d07…` (first block under the three rules; fee 32, accepted) |
+
+- [x] **Probes at tip 1153** ([probes.json](observed/activation/probes/probes.json)):
+  - **Fee claim:** a read-only confirmation that the rule is active. No `tec_*` transaction was sent.
+    Mempool admission dry-runs execution and refuses any transfer whose receipt would not be accepted
+    (`crates/node/src/mempool_proposals.rs:249-263`), so such a transaction cannot reach a block from
+    the testing wallet.
+  - **Require-memo:** read-only. No account carries the flag. Blocks 1138–1153 hold only transparent
+    transfers and the three governance batches.
+  - **Recipient format:** a read-only admission probe through validator-1's RPC, with nothing submitted.
+    The 41-character `pf6395ef…532b3` is refused with `invalid_recipient_address`. The canonical
+    `pf6395ef…532b38` passes the address check and then fails only on the probe's deliberate protocol
+    error.
+- [x] **After state** ([after-activation.json](observed/after-activation.json)):
+  - all six on `4085ac70…` at 1153 / `db8b87b6…` / `7141956e…`, six-way agreement, mempools 0;
+  - `demo-preflight.py` READY.
+- [x] **validator-1 index rebuild.** The release's index does not follow commits, so §7 was run again on
+  validator-1 only:
+  - RPC unit stopped 10:32:17–10:32:28Z (11 s); the build took 6.5 s;
+  - v2 index usable for 1–1153 (1112 blocks, 977 rows, 255 accounts);
+  - `account_tx` for the testing wallet is served from the index and shows all 13 grants (1138–1143
+    and 1147–1153);
+  - six-way agreement before and after.
+  Evidence: `observed/activation/account-tx-index-validator-1/`. The other five hosts' indexes stay at
+  1143 and fall back to the archive scan for later blocks until the next release, whose index follows
+  commits (main `0ac2bc9b`).
+
+**Rollback after §8.** No validator may return to `store-handle-20261021` (`eea96ba6…`), because it
+rejects the new amendment kinds (review XR-04). The fee-claim and require-memo rules can be postponed
+by a later amendment of the same kind with a far height, since the latest amendment wins. The
+recipient-format rule cannot be undone: the earliest unpaused amendment wins, so it holds from 1153.
 
 ## 9. After state — covered by the operator's go of the day
 
@@ -292,6 +351,64 @@ commit-phase votes, so the block moves to view 1. Read from the deployed source 
   `proposal_slot` is the next height (`mempool_proposals.rs:3233-3249`, `governance.rs:2589-2599`), with
   `proposal_slot == height` and `expires_at_height >= height` (`consensus_artifacts.rs:2888-2889`). Slot
   1144 with expiry 1154 still fits a view-1 commit at 1144.
+
+**Part 2 result.** Six timeout votes 09:28:33–09:29:47Z; timeout certificate `7e2541c4…` (v2 `319dca74…`,
+6 of 6 votes, quorum 5, verified) on validator-5; the view-1 round on validator-5 09:31:34–09:34:07Z built
+block certificate `c26c7a99…` with six accepting votes, and validators 0–4 committed 1144 view 1
+(`cee96283…` / root `34ede112…`, batch `3c2a18d7…`). The round then exited 1: its delivery to validator-5's
+own service was reset four times, so validator-5 stayed at 1143
+([third stop](observed/activation/view-change-1144/STOP-20261023-view-change.json)).
+
+**Validator-5 catch-up, 09:46:27–09:46:32Z.** From validator-4: `transport-batch-send --to validator-5
+--batch-kind governance` with the same batch file and the view-1 block certificate (`--timeout-ms 60000
+--send-retries 3 --retry-backoff-ms 2000`): one attempt, applied, one accepted receipt. All six at
+1144 / `cee96283…` / `34ede112…`, mempools 0, `rejected_tx_fee_activation_height = 1153` archived on six
+([state read](observed/activation/catch-up-validator-5/state-after-catch-up.json)). The fallback
+`rpc-catch-up-certified-delta` was not needed.
+
+**Cause of the reset (not a host fault).** Without `--local-apply-before-certified-send`, the round adds the
+proposer itself to the certified-send targets when its topology address is not loopback
+(`crates/node/src/transport_protocol.rs:910-918`). The round holds the store lease for its whole run
+(`crates/node/src/transport_runtime.rs:2838`). The local validator service opens the store before it
+reads a request (`transport_runtime.rs:1130`), so it fails and drops the connection unread. The client
+sees `Connection reset by peer`, and the service logs no event: none of the four attempts appears in
+validator-5's event log. The live-fleet scripts pass `--quorum-early-full-propagation
+--local-apply-before-certified-send` (`scripts/pfusdc-private-send-live:158-172`,
+`scripts/a666-remote-sync-batch-round.py:53-55`). That applies the block in the round's own process and
+sends only to the five peers. The 1145 and 1146 rounds use those flags.
+
+**Health of validator-5 vs validator-4 (read-only, 09:50–09:56Z).**
+
+| Reading | validator-5 | validator-4 |
+|---|---|---|
+| Load (1/5/15 min, 2 CPUs) | 0.87 / 0.65 / 0.65 | 0.24 / 0.09 / 0.02 |
+| CPU pressure some avg10/avg60 | 1.36 / 1.38 % | 0.02 / 0.21 % |
+| Memory available, swap used | 2.55 GB of 4.1 GB, 68 MB | 2.60 GB of 4.1 GB, 68 MB |
+| Memory pressure | 0 | 0 |
+| Disk free | 25.8 GB (67 % used) | 22.7 GB (71 % used) |
+| Validator unit | active since 07:36:56, NRestarts 0, 107 MB, 1 thread, 5 fds | active since 07:31:06, NRestarts 0, 86 MB, 1 thread, 5 fds |
+| RPC unit | active since 08:21:22 (§7), NRestarts 0, 794 MB (peak 1.47 GB) | active since 08:17:54, NRestarts 0, 721 MB (peak 1.41 GB) |
+| Unit limits | none (MemoryMax, CPUQuota unset; TasksMax 1024; NOFILE 65536) | same |
+| RPC CPU over 10 s | 56 % of one CPU | 32 % (fleet range 32–56 %; v2 52 %) |
+| Transport | 1 listener 10.77.0.6:26660 | 1 listener 10.77.0.5:26658 |
+| Journal, last 2 h | validator 0 lines; RPC 6 lines, 0 error/reset/timeout; kernel clean | same |
+| Transport events, last 400 | 395 accepted; 5 refused votes (the duplicate-vote refusals of the view change) | 400 accepted |
+| 28701/28702/28703, cobalt-shadow | active, NRestarts 0 | active, NRestarts 0 |
+
+Verdict: **clean**. There is no sustained load, no memory pressure, no unit near a limit and no reset in
+the journal. The RPC units use a third to a half of one CPU on all six hosts, so this is a fleet-wide
+pattern rather than something specific to validator-5. The 09:34Z reset is the self-send described
+above. The 08:40Z read timeout is validator-4's then-default 5 s read timeout expiring while waiting for
+validator-5's vote reply; all later rounds use 60 s.
+Evidence: `observed/activation/health-validator-5/`.
+
+**After the health check.** `require_memo_activation_height` landed at 1145 view 0 with proposer
+validator-5. The round ran 10:02:01–10:03:11Z with the two flags above: no send failures, certificate
+5 of 6, and validator-0's vote was still outstanding at quorum. `recipient_format_activation_height`
+landed at 1146 view 0 with proposer validator-0, 10:07:03–10:07:53Z. After each round, all six read the
+same height, tip and root. A first launch of the require-memo script at 09:58Z was cut off by its
+launching shell during signing, before any authorization existed. The re-run produced the same
+amendment id `cdf4c13c…` ([note](observed/activation/require-memo-interrupted-0958-NOTE.txt)).
 
 ## Rollback (one validator, emergency only)
 

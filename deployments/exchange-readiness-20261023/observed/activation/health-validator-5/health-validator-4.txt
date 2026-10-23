@@ -1,0 +1,47 @@
+## host validator-4 2026-10-23T09:50:55Z uptime: up 13 weeks, 6 days, 7 hours, 45 minutes
+## loadavg 0.24 0.09 0.02 1/194 3282363 nproc 2
+## memory
+               total        used        free      shared  buff/cache   available
+Mem:      4099997696  1503936512   662327296     1097728  2243264512  2596061184
+Swap:     8283746304    68091904  8215654400
+## pressure
+cpu some avg10=0.02 avg60=0.21 avg300=0.08 total=24578598649
+memory some avg10=0.00 avg60=0.00 avg300=0.00 total=23536820
+io some avg10=0.00 avg60=0.00 avg300=0.00 total=18144618522
+## disk
+79941234688 53717102592 22726729728  71%
+## unit postfiat-validator-4.service
+MainPID=3261996 NRestarts=0 MemoryCurrent=86134784 MemoryPeak=184549376 CPUUsageNSec=69573118000 TasksCurrent=1 CPUQuotaPerSecUSec=infinity MemoryHigh=infinity MemoryMax=infinity MemorySwapMax=infinity TasksMax=1024 LimitNOFILE=65536 ActiveState=active SubState=running ActiveEnterTimestamp=Fri 2026-10-23 07:31:06 UTC 
+fds 5 threads 1 cpu%  0.8 rss_kb 113852
+## unit postfiat-validator-4-rpc.service
+MainPID=3275120 NRestarts=0 MemoryCurrent=720965632 MemoryPeak=1408237568 CPUUsageNSec=1736626137000 TasksCurrent=5 CPUQuotaPerSecUSec=infinity MemoryHigh=infinity MemoryMax=infinity MemorySwapMax=infinity TasksMax=1024 LimitNOFILE=65536 ActiveState=active SubState=running ActiveEnterTimestamp=Fri 2026-10-23 08:17:54 UTC 
+fds 9 threads 5 cpu% 30.3 rss_kb 719604
+## transport connections (validator pid 3261996)
+      1 LISTEN 
+listening: 10.77.0.5:26658 
+## all TCP states
+     11 ESTAB      10 LISTEN       2 TIME-WAIT 
+## journal last 2h (both units)
+postfiat-validator-4.service lines=0 error=0 reset=0 timeout=0 fail=0
+postfiat-validator-4-rpc.service lines=6 error=0 reset=0 timeout=0 fail=0
+## kernel last 2h
+(end kernel)
+## transport event log last 2h
+last 400 events by kind/outcome: {('health_request', 'accepted'): 250, ('block_vote_request', 'accepted'): 100, ('batch', 'accepted'): 50}
+non-accepted: {}
+log mtime 09:32:42 size 10720699
+## relay/aux units
+navcoin-ethereum-rpc-28701.service active running
+navcoin-ethereum-rpc-28702.service active running
+navcoin-ethereum-rpc-28703.service active running
+postfiat-cobalt-shadow.service active running
+navcoin-ethereum-rpc-28701.service NRestarts=0 since=Tue 2026-10-13 09:44:33 UTC
+navcoin-ethereum-rpc-28702.service NRestarts=0 since=Tue 2026-10-13 09:44:35 UTC
+navcoin-ethereum-rpc-28703.service NRestarts=0 since=Fri 2026-10-16 10:45:51 UTC
+## top cpu
+    PID %CPU %MEM     ELAPSED COMMAND
+3275120 30.3 19.5    01:33:02 postfiat-node
+3282360  1.7  0.0       00:01 bash
+3282302  0.9  0.2       00:02 sshd
+3261996  0.8  2.8    02:19:49 postfiat-node
+     17  0.1  0.0 97-07:45:23 rcu_preempt

@@ -1,0 +1,33 @@
+{
+ "recorded_at": "2026-10-23T08:38Z",
+ "tip_T": 1143,
+ "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+ "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+ "six_way_agreement": true,
+ "mempools_empty": true,
+ "activation_value_H": 1153,
+ "planned": [
+  {
+   "kind": "rejected_tx_fee_activation_height",
+   "slot": 1144,
+   "proposer": "validator-4"
+  },
+  {
+   "kind": "require_memo_activation_height",
+   "slot": 1145,
+   "proposer": "validator-5"
+  },
+  {
+   "kind": "recipient_format_activation_height",
+   "slot": 1146,
+   "proposer": "validator-0"
+  }
+ ],
+ "heights_before": "inactive on all six: no amendment of the three kinds in the signed 1137 canary's governance, and blocks 1138-1143 are transparent on all six (observed/after-checks.json)",
+ "rollback_path": {
+  "rejected_tx_fee_activation_height": "postponable: the latest amendment wins (shielded_bridge_governance.rs:1550-1557); a later amendment of the same kind with a far value (above its applying block) switches the rule off again until that height",
+  "require_memo_activation_height": "postponable, same rule (shielded_bridge_governance.rs:1559-1564)",
+  "recipient_format_activation_height": "NOT reversible: the earliest unpaused amendment wins (shielded_bridge_governance.rs:1601-1610) and a paused amendment is refused (execution_actions.rs:1999); once applied the rule holds from H forever. Its probes are read-only and every address in use passes (review table R3: 58/58 ledger accounts, 646/646 destination values); the remaining risk is a transaction from a tool or address outside that table",
+  "executable": "no validator may roll back to store-handle-20261021 after the first record commits: that executable rejects the new amendment kinds (review XR-04)"
+ }
+}

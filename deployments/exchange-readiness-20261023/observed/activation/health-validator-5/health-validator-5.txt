@@ -1,0 +1,47 @@
+## host validator-5 2026-10-23T09:50:52Z uptime: up 13 weeks, 5 days, 15 hours, 38 minutes
+## loadavg 0.87 0.65 0.65 1/188 3923161 nproc 2
+## memory
+               total        used        free      shared  buff/cache   available
+Mem:      4100009984  1545265152   857677824      745472  2006134784  2554744832
+Swap:     8283746304    68653056  8215093248
+## pressure
+cpu some avg10=1.36 avg60=1.38 avg300=0.65 total=54546912210
+memory some avg10=0.00 avg60=0.00 avg300=0.00 total=29362481
+io some avg10=0.27 avg60=0.22 avg300=0.14 total=38214011146
+## disk
+79941234688 50675773440 25768058880  67%
+## unit postfiat-validator-5.service
+MainPID=3906943 NRestarts=0 MemoryCurrent=107483136 MemoryPeak=203468800 CPUUsageNSec=94870828000 TasksCurrent=1 CPUQuotaPerSecUSec=infinity MemoryHigh=infinity MemoryMax=infinity MemorySwapMax=infinity TasksMax=1024 LimitNOFILE=65536 ActiveState=active SubState=running ActiveEnterTimestamp=Fri 2026-10-23 07:36:56 UTC 
+fds 5 threads 1 cpu%  1.1 rss_kb 135512
+## unit postfiat-validator-5-rpc.service
+MainPID=3919307 NRestarts=0 MemoryCurrent=794492928 MemoryPeak=1470992384 CPUUsageNSec=2434889911000 TasksCurrent=6 CPUQuotaPerSecUSec=infinity MemoryHigh=infinity MemoryMax=infinity MemorySwapMax=infinity TasksMax=1024 LimitNOFILE=65536 ActiveState=active SubState=running ActiveEnterTimestamp=Fri 2026-10-23 08:21:22 UTC 
+fds 12 threads 6 cpu% 44.7 rss_kb 834816
+## transport connections (validator pid 3906943)
+      1 LISTEN 
+listening: 10.77.0.6:26660 
+## all TCP states
+     15 ESTAB      10 LISTEN       8 TIME-WAIT 
+## journal last 2h (both units)
+postfiat-validator-5.service lines=0 error=0 reset=0 timeout=0 fail=0
+postfiat-validator-5-rpc.service lines=6 error=0 reset=0 timeout=0 fail=0
+## kernel last 2h
+(end kernel)
+## transport event log last 2h
+last 400 events by kind/outcome: {('health_request', 'accepted'): 245, ('block_vote_request', 'accepted'): 100, ('batch', 'accepted'): 50, ('block_vote_request', 'rejected'): 5}
+non-accepted: {'transport consensus v2 precommit signing failed: consensus v2 precommit authorization: consensus v2 precommit ': 1, 'transport consensus v2 prepare signing failed: consensus v2 prepare authorization: consensus v2 prepare vote w': 4}
+log mtime 09:46:32 size 10727199
+## relay/aux units
+navcoin-ethereum-rpc-28701.service active running
+navcoin-ethereum-rpc-28702.service active running
+navcoin-ethereum-rpc-28703.service active running
+postfiat-cobalt-shadow.service active running
+navcoin-ethereum-rpc-28701.service NRestarts=0 since=Tue 2026-10-13 09:42:09 UTC
+navcoin-ethereum-rpc-28702.service NRestarts=0 since=Tue 2026-10-13 09:42:13 UTC
+navcoin-ethereum-rpc-28703.service NRestarts=0 since=Fri 2026-10-16 10:45:12 UTC
+## top cpu
+    PID %CPU %MEM     ELAPSED COMMAND
+3919307 44.7 19.2    01:29:31 postfiat-node
+3923157  2.2  0.0       00:01 bash
+3906943  1.1  3.3    02:13:57 postfiat-node
+3923156  0.7  0.2       00:01 sshd
+     17  0.5  0.0 96-15:38:27 rcu_preempt

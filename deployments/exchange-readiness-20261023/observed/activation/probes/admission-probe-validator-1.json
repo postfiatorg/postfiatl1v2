@@ -1,0 +1,14 @@
+[
+ {
+  "to": "pf6395ef7f43ffaa74ce178d320b9bbbfd45532b3",
+  "ok": false,
+  "error_code": "invalid_recipient_address",
+  "error_message": "transfer.to `pf6395ef7f43ffaa74ce178d320b9bbbfd45532b3` is not a valid PFTL address: address must be `pf` followed by exactly 40 hex characters"
+ },
+ {
+  "to": "pf6395ef7f43ffaa74ce178d320b9bbbfd45532b38",
+  "ok": false,
+  "error_code": "rpc_protocol_error",
+  "error_message": "remote finality submit requires signed_transfer_json, not transfer_file"
+ }
+]

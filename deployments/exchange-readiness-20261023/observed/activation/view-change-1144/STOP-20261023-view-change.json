@@ -1,0 +1,160 @@
+{
+ "recorded_at": "2026-10-23T09:37:33Z",
+ "result": "STOPPED (view change: 1144 committed on five of six)",
+ "earlier": [
+  "../STOP-20261023.json",
+  "../STOP-20261023-retry-1.json"
+ ],
+ "steps": {
+  "timeout_votes": "block-timeout-vote --height 1144 --view 0 on each host 09:28:33-09:29:47Z, all rc 0; each v2 vote carries high QC prepare 1144/0 for cee96283; each host's safety record now has highest_timeout_round 1144/0",
+  "timeout_certificate": {
+   "host": "validator-5",
+   "certificate_id": "7e2541c49e542f583eb249947a70bb5a11dac77e63f96e7851d20cf4c428f4f2d5b2dc44492174a0dd225f81b0f4aa7d",
+   "hotstuff_certificate_id": "0b05defaa81eb388e411ff223de4d36f9100a845e101194c21fb5287cf5e3af33c194b77f739f4ce051f76e048dada78",
+   "v2_certificate_id": "319dca74e15c3d4fe09e274ab7d145bd27659288a72f47d962099c1549a8e92236b154e7d9c2b9767457e48de158e3fa",
+   "votes": 6,
+   "quorum": 5,
+   "verify": "block-timeout-verify rc 0"
+  },
+  "round_view_1": {
+   "host": "validator-5 (leader of 1144 view 1)",
+   "command": "transport-peer-certified-batch-round --batch-kind governance --batch-file rejected-tx-fee.batch.json (sha256 46772a02...) --require-local-proposer --height 1144 --view 1 --timeout-certificate-file timeout-1144-v0.certificate.json --timeout-ms 60000 --send-retries 3 --retry-backoff-ms 2000",
+   "started": "2026-10-23T09:31:34Z",
+   "finished": "2026-10-23T09:34:07Z",
+   "exit": 1,
+   "error": "transport batch send to `validator-5` failed after 4 attempts: attempt 1-4: transport batch ack read failed: Connection reset by peer (os error 104)",
+   "certificate": {
+    "block_certificate_bytes": 359500,
+    "certificate_id": "c26c7a9938465ea08bfaceeb37cf4a2d6f81949216622e2867237c0f706f87097d8117d3aab98c20fd914e51050995f3",
+    "accepting_votes": [
+     "validator-0",
+     "validator-1",
+     "validator-2",
+     "validator-3",
+     "validator-4",
+     "validator-5"
+    ]
+   }
+  }
+ },
+ "per_host_after": {
+  "validator-0": {
+   "height": 1144,
+   "tip": "cee9628341ecea36f9656f8215c5d86c5de1edb48dce32967799ea9b52ac900d3332dbf599fc8ae12c9a8194c16388b0",
+   "state_root": "34ede1122cc6bf3a5408f82da6537adf6dd505ec925f547e5e11fb818d81eb413483c2a25772e2c4480f3eb109343ea6",
+   "mempool_pending": 0,
+   "block_1144": {
+    "view": 1,
+    "proposer": "validator-5",
+    "batch_id": "3c2a18d7d107752ccfb3ab28c9636bced246e9dbfff4b77783eea598ca0b6e6e5dbd84ba09967c3d26969fc96ad3e55d",
+    "amendment": [
+     {
+      "amendment_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab",
+      "kind": "rejected_tx_fee_activation_height",
+      "value": 1153
+     }
+    ],
+    "receipt_code": "accepted"
+   }
+  },
+  "validator-1": {
+   "height": 1144,
+   "tip": "cee9628341ecea36f9656f8215c5d86c5de1edb48dce32967799ea9b52ac900d3332dbf599fc8ae12c9a8194c16388b0",
+   "state_root": "34ede1122cc6bf3a5408f82da6537adf6dd505ec925f547e5e11fb818d81eb413483c2a25772e2c4480f3eb109343ea6",
+   "mempool_pending": 0,
+   "block_1144": {
+    "view": 1,
+    "proposer": "validator-5",
+    "batch_id": "3c2a18d7d107752ccfb3ab28c9636bced246e9dbfff4b77783eea598ca0b6e6e5dbd84ba09967c3d26969fc96ad3e55d",
+    "amendment": [
+     {
+      "amendment_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab",
+      "kind": "rejected_tx_fee_activation_height",
+      "value": 1153
+     }
+    ],
+    "receipt_code": "accepted"
+   }
+  },
+  "validator-2": {
+   "height": 1144,
+   "tip": "cee9628341ecea36f9656f8215c5d86c5de1edb48dce32967799ea9b52ac900d3332dbf599fc8ae12c9a8194c16388b0",
+   "state_root": "34ede1122cc6bf3a5408f82da6537adf6dd505ec925f547e5e11fb818d81eb413483c2a25772e2c4480f3eb109343ea6",
+   "mempool_pending": 0,
+   "block_1144": {
+    "view": 1,
+    "proposer": "validator-5",
+    "batch_id": "3c2a18d7d107752ccfb3ab28c9636bced246e9dbfff4b77783eea598ca0b6e6e5dbd84ba09967c3d26969fc96ad3e55d",
+    "amendment": [
+     {
+      "amendment_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab",
+      "kind": "rejected_tx_fee_activation_height",
+      "value": 1153
+     }
+    ],
+    "receipt_code": "accepted"
+   }
+  },
+  "validator-3": {
+   "height": 1144,
+   "tip": "cee9628341ecea36f9656f8215c5d86c5de1edb48dce32967799ea9b52ac900d3332dbf599fc8ae12c9a8194c16388b0",
+   "state_root": "34ede1122cc6bf3a5408f82da6537adf6dd505ec925f547e5e11fb818d81eb413483c2a25772e2c4480f3eb109343ea6",
+   "mempool_pending": 0,
+   "block_1144": {
+    "view": 1,
+    "proposer": "validator-5",
+    "batch_id": "3c2a18d7d107752ccfb3ab28c9636bced246e9dbfff4b77783eea598ca0b6e6e5dbd84ba09967c3d26969fc96ad3e55d",
+    "amendment": [
+     {
+      "amendment_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab",
+      "kind": "rejected_tx_fee_activation_height",
+      "value": 1153
+     }
+    ],
+    "receipt_code": "accepted"
+   }
+  },
+  "validator-4": {
+   "height": 1144,
+   "tip": "cee9628341ecea36f9656f8215c5d86c5de1edb48dce32967799ea9b52ac900d3332dbf599fc8ae12c9a8194c16388b0",
+   "state_root": "34ede1122cc6bf3a5408f82da6537adf6dd505ec925f547e5e11fb818d81eb413483c2a25772e2c4480f3eb109343ea6",
+   "mempool_pending": 0,
+   "block_1144": {
+    "view": 1,
+    "proposer": "validator-5",
+    "batch_id": "3c2a18d7d107752ccfb3ab28c9636bced246e9dbfff4b77783eea598ca0b6e6e5dbd84ba09967c3d26969fc96ad3e55d",
+    "amendment": [
+     {
+      "amendment_id": "e4745af7acc45bfd0c31444f357c49bef5b9e1bea2c413133aef1b54fab28ae7bec77b2a22a35ff21c455e3062b407ab",
+      "kind": "rejected_tx_fee_activation_height",
+      "value": 1153
+     }
+    ],
+    "receipt_code": "accepted"
+   }
+  },
+  "validator-5": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "mempool_pending": 0,
+   "block_1144": null
+  }
+ },
+ "validator_5": {
+  "units": "active active, NRestarts 0",
+  "safety_1144": "prepare 1144/1, precommit 1144/1, timeout 1144/0, locked and high QC 1144/1",
+  "transport_log": "the latest events are block_vote_request rejections (one precommit: not authorized by a newer non-nil prepare QC; four prepares: would violate durable round monotonicity), no batch event for 1144; validator-5's own view-1 votes were signed by the round process on that host",
+  "state": "still at 1143 / 7fef75aa... / 8c3a32fd...; it has voted for the committed block but has not applied it"
+ },
+ "stop_conditions_hit": [
+  "command error (round exit 1)",
+  "validator-5 not at 1144 within two minutes of the others"
+ ],
+ "governance_effect": "on validators 0-4 the amendment e4745af7... (rejected_tx_fee_activation_height = 1153) is committed in block 1144 (batch 3c2a18d7..., receipt accepted); validator-5 does not have it yet",
+ "not_done": [
+  "validator-5 catch-up",
+  "require_memo and recipient_format batches",
+  "grants, probes, after state, index rebuild, records and commits"
+ ]
+}

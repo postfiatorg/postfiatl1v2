@@ -1,0 +1,7 @@
+validator-0 rpc pid 2293657 cpu_pct_10s=335% load=0.08 0.11 0.09 rpc_estab=4
+validator-1 rpc pid 1480050 cpu_pct_10s=339% load=1.04 1.04 1.05 rpc_estab=4
+validator-2 rpc pid 2311760 cpu_pct_10s=524% load=1.07 1.05 1.00 rpc_estab=4
+validator-3 rpc pid 516690 cpu_pct_10s=431% load=0.10 0.09 0.09 rpc_estab=4
+validator-4 rpc pid 3275120 cpu_pct_10s=320% load=0.10 0.10 0.03 rpc_estab=4
+validator-5 rpc pid 3919307 cpu_pct_10s=559% load=1.07 0.80 0.71 rpc_estab=5
+# note: the cpu_pct_10s field is clock ticks (100 Hz) over 10 s; divide by 10 for percent of one CPU (335 -> 33.5 %)
