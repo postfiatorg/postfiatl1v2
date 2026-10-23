@@ -1,0 +1,10 @@
+{
+  "recipient_format_activation_height": null,
+  "rejected_tx_fee_activation_height": null,
+  "require_memo_activation_height": null,
+  "route_authority_epoch": {
+    "pftl-a666-ethereum-wA666-usdc-v1": 1,
+    "pftl-bmnrc-ethereum-wBMNRC-usdc-v1": 1
+  },
+  "result": "PASS"
+}

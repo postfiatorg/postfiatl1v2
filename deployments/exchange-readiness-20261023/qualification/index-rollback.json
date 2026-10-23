@@ -1,0 +1,96 @@
+{
+  "scope": "fresh local fixture chain postfiat-local-admission (init, one validator, 0 blocks); new build 59bcd5b5..., rollback build eea96ba6...; local only",
+  "all_exit_codes_zero": true,
+  "steps": [
+    {
+      "step": "new-build",
+      "result": {
+        "schema": "postfiat-account-tx-index-build-v1",
+        "index_usable": true,
+        "disk_index_usable": true
+      }
+    },
+    {
+      "step": "new-status",
+      "result": {
+        "schema": "postfiat-account-tx-index-status-v1",
+        "index_usable": true,
+        "disk_index_usable": true,
+        "reason": null
+      }
+    },
+    {
+      "step": "old-status-on-v2",
+      "result": {
+        "schema": "postfiat-account-tx-index-status-v1",
+        "index_usable": false,
+        "disk_index_usable": false,
+        "reason": "unsupported account_tx index schema `postfiat-account-tx-index-v2`"
+      }
+    },
+    {
+      "step": "old-account-tx-on-v2",
+      "result": {
+        "schema": "postfiat-account-tx-v1",
+        "index_used": false
+      }
+    },
+    {
+      "step": "old-node-status-on-v2",
+      "result": {
+        "block_height": 0
+      }
+    },
+    {
+      "step": "old-verify-state-on-v2",
+      "result": {
+        "schema": "postfiat-state-verification-v1",
+        "verified": true
+      }
+    },
+    {
+      "step": "old-rebuild-over-v2",
+      "result": {
+        "schema": "postfiat-account-tx-index-build-v1",
+        "index_usable": true,
+        "disk_index_usable": true
+      }
+    },
+    {
+      "step": "old-status-after-rebuild",
+      "result": {
+        "schema": "postfiat-account-tx-index-status-v1",
+        "index_usable": true,
+        "disk_index_usable": true,
+        "reason": null
+      }
+    },
+    {
+      "step": "new-status-on-v1",
+      "result": {
+        "schema": "postfiat-account-tx-index-status-v1",
+        "index_usable": false,
+        "disk_index_usable": false,
+        "reason": "unsupported account_tx index schema `postfiat-account-tx-index-v1`"
+      }
+    },
+    {
+      "step": "new-rebuild-v2-again",
+      "result": {
+        "schema": "postfiat-account-tx-index-build-v1",
+        "index_usable": true,
+        "disk_index_usable": true
+      }
+    },
+    {
+      "step": "new-status-final",
+      "result": {
+        "schema": "postfiat-account-tx-index-status-v1",
+        "index_usable": true,
+        "disk_index_usable": true,
+        "reason": null
+      }
+    }
+  ],
+  "conclusion": "the old executable reads a data dir after the v2 index build (status, verify-state pass), reports the v2 index unusable (unsupported schema), answers account_tx from the scan, and its account-tx-index-build writes a usable v1 index; the new build then reports v1 unusable and rebuilds v2"
+}

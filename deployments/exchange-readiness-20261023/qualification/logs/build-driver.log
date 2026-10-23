@@ -1,0 +1,5 @@
+Preparing worktree (detached HEAD 6604c93e)
+Preparing worktree (detached HEAD 6604c93e)
+HEAD is now at 6604c93e Count pending issued payment v2 amounts in verify_mempool and pin the Orchard funding transfer path
+HEAD is now at 6604c93e Count pending issued payment v2 amounts in verify_mempool and pin the Orchard funding transfer path
+{"result": "PASS", "hashes": ["59bcd5b5d021b8765f89b404e2327dd6dc1f8daa2645a1e1d487fb50d80f206e", "59bcd5b5d021b8765f89b404e2327dd6dc1f8daa2645a1e1d487fb50d80f206e"]}

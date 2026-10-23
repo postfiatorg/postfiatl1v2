@@ -1,0 +1,42 @@
+{
+  "name": "rollback-checkpoint-new-build-services-validator-0",
+  "command": [
+    "/home/postfiatchad/.cache/release-exchange-readiness-20261023/binaries/rollback",
+    "verify-finalized-checkpoint",
+    "--data-dir",
+    "/home/postfiatchad/.cache/release-exchange-readiness-20261023/working/validator-0"
+  ],
+  "cwd": "/home/postfiatchad/.cache/release-exchange-readiness-20261023/source-1",
+  "started_at": "2026-10-23T05:05:24.775284+00:00",
+  "status": "PASS",
+  "stdout": "/home/postfiatchad/.cache/release-exchange-readiness-20261023/logs/rollback-checkpoint-new-build-services-validator-0.stdout",
+  "stderr": "/home/postfiatchad/.cache/release-exchange-readiness-20261023/logs/rollback-checkpoint-new-build-services-validator-0.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-exchange-readiness-20261023/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 3548317,
+  "exit_code": 0,
+  "completed_at": "2026-10-23T05:05:28.801350+00:00",
+  "elapsed_seconds": 4.0,
+  "minimum_available_memory_observed_bytes": 15919902720,
+  "observed": {
+    "block_height": 1021,
+    "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+    "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+  },
+  "expected": {
+    "block_height": 1021,
+    "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+    "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+  }
+}

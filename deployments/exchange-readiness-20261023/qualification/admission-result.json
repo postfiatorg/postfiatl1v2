@@ -1,0 +1,50 @@
+{
+  "binary": "/home/postfiatchad/.cache/release-exchange-readiness-20261023/binaries/candidate-1",
+  "build_git_revision": "6604c93e",
+  "chain_id": "postfiat-local-admission",
+  "results": [
+    {
+      "case": "canonical (testing wallet)",
+      "to": "pf6395ef7f43ffaa74ce178d320b9bbbfd45532b38",
+      "ok": true,
+      "error_code": null,
+      "error_message": "",
+      "result_code": null
+    },
+    {
+      "case": "one hex character short (41)",
+      "to": "pf6395ef7f43ffaa74ce178d320b9bbbfd45532b3",
+      "ok": false,
+      "error_code": "invalid_recipient_address",
+      "error_message": "transfer.to `pf6395ef7f43ffaa74ce178d320b9bbbfd45532b3` is not a valid PFTL address: address must be `pf` followed by exactly 40 hex characters",
+      "result_code": null
+    },
+    {
+      "case": "uppercase prefix",
+      "to": "PF6395ef7f43ffaa74ce178d320b9bbbfd45532b38",
+      "ok": false,
+      "error_code": "invalid_recipient_address",
+      "error_message": "transfer.to `PF6395ef7f43ffaa74ce178d320b9bbbfd45532b38` is not a valid PFTL address: address prefix must be lowercase `pf`",
+      "result_code": null
+    },
+    {
+      "case": "valid mixed-case checksum",
+      "to": "pf6395EF7f43FfaA74ce178D320b9bbbFD45532b38",
+      "ok": false,
+      "error_code": "noncanonical_recipient_address",
+      "error_message": "transfer.to `pf6395EF7f43FfaA74ce178D320b9bbbFD45532b38` is not a valid PFTL address: address must use the canonical lowercase form in a signed transaction",
+      "result_code": null
+    },
+    {
+      "case": "named account",
+      "to": "pf-exchange",
+      "ok": false,
+      "error_code": "invalid_recipient_address",
+      "error_message": "transfer.to `pf-exchange` is not a valid PFTL address: address must be `pf` followed by exactly 40 hex characters",
+      "result_code": null
+    }
+  ],
+  "mempool_pending_transfers": [
+    "pf6395ef7f43ffaa74ce178d320b9bbbfd45532b38"
+  ]
+}

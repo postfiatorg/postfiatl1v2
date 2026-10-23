@@ -1,0 +1,121 @@
+{
+  "schema": "postfiat.deployment_manifest_input.unsigned.v1",
+  "status": "UNSIGNED_INPUT_NOT_A_MANIFEST",
+  "deployment_id": "exchange-readiness-20261023",
+  "previous_release_id": "store-handle-20261021",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "git_revision": "6604c93e92c0bb5eac37837bb1669b987426469a",
+  "binary_sha256": "59bcd5b5d021b8765f89b404e2327dd6dc1f8daa2645a1e1d487fb50d80f206e",
+  "build_profile": "release",
+  "build_features": [
+    "privacy",
+    "rpc",
+    "transport"
+  ],
+  "protocol_version": 1,
+  "rpc_schema": "postfiat-local-rpc-v1",
+  "service_unit_file": "rootfs/etc/systemd/system/postfiat-validator-0-rpc.service",
+  "environment_file": "rootfs/etc/postfiat/releases/exchange-readiness-20261023/validator-0.rpc.env",
+  "service_unit_sha256": "5be4c86bd1abfdaabdd23eddb5080a8342c606b4f7a32d518619d58e0ccf169c",
+  "environment_sha256": "64700cb3303ffcb0a18b0f5fcb05d38c80e9c714338a2103c56390b09f00aa49",
+  "validator_bindings": [
+    {
+      "validator_id": "validator-0",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_sha256": "5be4c86bd1abfdaabdd23eddb5080a8342c606b4f7a32d518619d58e0ccf169c",
+          "environment_sha256": "64700cb3303ffcb0a18b0f5fcb05d38c80e9c714338a2103c56390b09f00aa49"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_sha256": "1849a4bba37a3539100b09b9c09f3e8e89ee109e8b9cb42009b71de4400ef95d",
+          "environment_sha256": "4cc2072d0e0239dee508b4b4cc6d508cc848e98dd9d656bd73264f543501cc04"
+        }
+      ]
+    },
+    {
+      "validator_id": "validator-1",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_sha256": "7aa324e91b4e951e0a054af0a09e75de5494b53bb325e963e1ad51f2f5f0d1fb",
+          "environment_sha256": "9610734cc02d161c0661dfaf98e0d0f4c87623cb6c28e44638f445aaaddc55e0"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_sha256": "6683d0262afb0a34948c3b60c996b0742db4a1e3aa28e0135a567e5d06f97f18",
+          "environment_sha256": "317c459df2fce5921123451876e4888f32bee4f24c599cab239aa5f53b8a3279"
+        }
+      ]
+    },
+    {
+      "validator_id": "validator-2",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_sha256": "339d41c9c36235e557dc4494aa8b8ea35c87ec11b92878bfc074d8c8d40b05ca",
+          "environment_sha256": "ec4023e996a30c7a9db575058474d79d4225d081da7afc61b77b6398fd39c84d"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_sha256": "ef0e524813e1b234a6e65030e3d13b236d244a857a360b5a3d036ea451a33506",
+          "environment_sha256": "36ae96b03d25f6906f58a089eae9cc013b6b75f3eea0ea69b9e04d141dd2ef6a"
+        }
+      ]
+    },
+    {
+      "validator_id": "validator-3",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_sha256": "70ca6463adb81bb4c181a729ef38c6510d2b9a2369bba8326113b5529043c636",
+          "environment_sha256": "abe3e2ae725fe6f6b3df26dadbfc0bff783026439126514aa0de55ac0c29fb3e"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_sha256": "53f19555e5c06ab319938fbd9027fa3314757d48c8b16afe1c8c116a5726e89f",
+          "environment_sha256": "63c673c6e9d84e8b3c85ed89a072f6f78f4417c11b4a2c2486044c150bf05982"
+        }
+      ]
+    },
+    {
+      "validator_id": "validator-4",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_sha256": "bb4dab5074197c0bcf113fcf3fe07ce96ccf8a6f85ae6132381b17434580a812",
+          "environment_sha256": "419a7d64a8b910439ac10926d7d26ed2d5290cc72f437a59b3ef616075955dbe"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_sha256": "0d920505bead0e335276d7c7e6c767bd07223266ee930a42a19098193cd619a4",
+          "environment_sha256": "5212d3234eff3a371aab75db001a62d6fd8d8ea3cde342115db1d4409597b1aa"
+        }
+      ]
+    },
+    {
+      "validator_id": "validator-5",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_sha256": "f01544d37703302a1874dc5248ad2dee8e03a5f5ef631f179b6afbbb9542f0d1",
+          "environment_sha256": "f91fb06481d52ce1d04c3391d075f6d1785c985979aec78d3087ad835fde45ea"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_sha256": "7ed8a7e67b198fbafcd0f4ac5d1ddfe6098a1756cd9bbd389cd9386f912f76fa",
+          "environment_sha256": "11b63df86d12ce42d04f29dda941d04c69ee27f43033f9ba50c494774181250a"
+        }
+      ]
+    }
+  ],
+  "topology_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+  "swap_circuit_metadata_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+  "private_egress_circuit_metadata_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+  "trusted_publisher": "pfc531e00ffefecb8fabe40c6f47c69148df31e49c",
+  "trusted_publisher_file_sha256": "221973bb58e7a51d7fe0e30186c73e7c15154c06208f3d1469c78e7ec4693c9d",
+  "valid_for_seconds": 31536300,
+  "valid_from_backdate_seconds": 0
+}

@@ -1,0 +1,30 @@
+{
+  "name": "rollback-new-build-services",
+  "command": [
+    "python3",
+    "/home/postfiatchad/.cache/release-exchange-readiness-20261023/tools/rollback_new.py"
+  ],
+  "cwd": "/home/postfiatchad/.cache/release-exchange-readiness-20261023/tools",
+  "started_at": "2026-10-23T05:05:24.715480+00:00",
+  "status": "PASS",
+  "stdout": "/home/postfiatchad/.cache/release-exchange-readiness-20261023/logs/rollback-new-build-services.stdout",
+  "stderr": "/home/postfiatchad/.cache/release-exchange-readiness-20261023/logs/rollback-new-build-services.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-exchange-readiness-20261023/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 3548310,
+  "exit_code": 0,
+  "completed_at": "2026-10-23T05:09:13.827733+00:00",
+  "elapsed_seconds": 229.1,
+  "minimum_available_memory_observed_bytes": 15919902720
+}

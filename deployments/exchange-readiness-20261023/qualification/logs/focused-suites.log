@@ -1,0 +1,35 @@
+=== node lib focused
+test mempool_proposals::burn5_tests::verify_mempool_amount_counts_issued_payment_v2_like_issued_payment ... ok
+test tests::rejected_fee_require_memo::new_activation_kinds_must_be_scheduled_after_the_amendment_block ... ok
+test tests::recipient_format_activation::recipient_format_activation_amendment_is_scheduled_once_and_never_retroactive ... ok
+test tests::rejected_fee_require_memo::issued_payment_v2_uses_recipient_validation_and_exposes_memos ... ok
+test tests::recipient_format_activation::orchard_deposit_funding_transfer_stays_on_plain_execute_transfer ... ok
+test tests::rejected_fee_require_memo::recipient_failures_claim_fees_with_both_gates_and_replay_identically ... ok
+test tests::rejected_fee_require_memo::mempool_admission_rejects_memo_less_payment_to_flagged_account_without_charging ... ok
+test tests::rejected_fee_require_memo::transparent_batch_claims_rejected_fees_only_from_the_governed_height ... ok
+test tests::recipient_format_activation::recipient_format_rule_gates_live_execution_and_archive_replay_identically ... ok
+test tests::rejected_fee_require_memo::transparent_batch_enforces_require_memo_after_activation ... ok
+test tests::recipient_format_activation::mempool_admission_rejects_malformed_recipients_without_governance_activation ... ok
+test tests::account_tx_exchange_history::payment_v2_memo_contents_flow_through_tx_scan_and_index ... ok
+test tests::account_tx_exchange_history::account_tx_lists_shielded_withdrawal_credits_through_tx_scan_and_index ... ok
+test tests::account_tx_exchange_history::account_tx_index_rebuild_backfills_memos_and_shielded_withdrawals_over_a_v1_index ... ok
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 435 filtered out; finished in 0.60s
+=== node exchange_rpc_history
+test rpc_tx_and_account_tx_return_memo_contents_and_shielded_withdrawal_credits ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+=== rpc_sdk response_validation
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 187 filtered out; finished in 0.03s
+=== execution recipient_format
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 225 filtered out; finished in 0.75s
+=== types activation defaults
+test shielded_bridge_governance_tests::recipient_format_activation_is_absent_for_legacy_and_cannot_be_postponed ... ok
+test shielded_bridge_governance_tests::rejected_tx_fee_and_require_memo_activation_heights_are_independent_and_latest_wins ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 151 filtered out; finished in 0.00s
+=== reserve builders
+Ran 8 tests in 0.822s
+
+OK
+Ran 14 tests in 1.542s
+
+OK
+=== DONE
