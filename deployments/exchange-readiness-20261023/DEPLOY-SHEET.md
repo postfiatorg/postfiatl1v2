@@ -7,7 +7,7 @@ the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md), the
 [activation facts](../../docs/review/exchange-readiness-merge-review-20261023.md#activation-steps-later-today-after-all-six-run-the-new-binary).
 Keys are used by path only; no key material is printed, copied to a host or committed.
 
-**Status: §0–§5 done on 2026-10-23** (deployed at 1143) (before state at 1137, [checks](observed/before-checks.json); signed canary backup `3257115c…` and current-head replay PASS, [record](observed/canary-backup.json)); §5 not started. Cut and locally qualified on 2026-10-23, re-qualified the same day with the account history index fix (`6b1a0585`, [packet](qualification/README.md)).
+**Status: §0–§6 done on 2026-10-23** (deployed at 1143) (before state at 1137, [checks](observed/before-checks.json); signed canary backup `3257115c…` and current-head replay PASS, [record](observed/canary-backup.json)); §5 not started. Cut and locally qualified on 2026-10-23, re-qualified the same day with the account history index fix (`6b1a0585`, [packet](qualification/README.md)).
 Every live section (§0, §1, §3–§9) is covered by the operator's go of the day; each step marked
 **GO** needs that go. §8 (governance activation) runs only after §6 and §7 are clean on all six.
 
@@ -138,7 +138,7 @@ Expected: all 12 validator and RPC processes on `4085ac70…`; `deployment_manif
 and `build_git_revision` `6b1a0585` on every host; RPC units with `--max-requests 100000` and
 `RestartSec=1`.
 
-- [ ] **GO 6.** After checks pass; proceed to §7.
+- [x] **GO 6.** After checks pass; proceed to §7. 2026-10-23 07:40–07:55Z: after state 1143 / `7fef75aa…` / `8c3a32fd…` on six; demo preflight READY (60 PASS); 12 processes on `4085ac70…`; manifest verified, build `6b1a0585`; RPC unit flags kept ([after checks](observed/after-checks.json)).
 
 ## 7. account_tx index build, one host at a time — covered by the operator's go of the day
 

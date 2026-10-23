@@ -1,0 +1,548 @@
+{
+ "recorded_at": "2026-10-23T07:48Z",
+ "sheet": "DEPLOY-SHEET.md \u00a76 (read-only)",
+ "after_state": {
+  "observed_at": "2026-10-23T07:41:43.274992+00:00",
+  "verified": true,
+  "height": 1143,
+  "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+  "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+  "all_six_release": [
+   "exchange-readiness-20261023"
+  ]
+ },
+ "demo_preflight": {
+  "observed_at": "2026-10-23T07:42:05.589034+00:00",
+  "verdict": "READY",
+  "counts": {
+   "PASS": 60,
+   "ATTENTION": 0,
+   "FAIL": 0
+  },
+  "expected": {
+   "release_id": "exchange-readiness-20261023",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "build_git_revision": "6b1a0585",
+   "manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1"
+  }
+ },
+ "processes_on_new_executable": {
+  "count": 12,
+  "of": 12,
+  "per_host": {
+   "validator-0": {
+    "postfiat-validator-0.service": true,
+    "postfiat-validator-0-rpc.service": true
+   },
+   "validator-1": {
+    "postfiat-validator-1.service": true,
+    "postfiat-validator-1-rpc.service": true
+   },
+   "validator-2": {
+    "postfiat-validator-2.service": true,
+    "postfiat-validator-2-rpc.service": true
+   },
+   "validator-3": {
+    "postfiat-validator-3.service": true,
+    "postfiat-validator-3-rpc.service": true
+   },
+   "validator-4": {
+    "postfiat-validator-4.service": true,
+    "postfiat-validator-4-rpc.service": true
+   },
+   "validator-5": {
+    "postfiat-validator-5.service": true,
+    "postfiat-validator-5-rpc.service": true
+   }
+  }
+ },
+ "status_all_six": {
+  "validator-0": {
+   "deployment_manifest_verified": true,
+   "build_git_revision": "6b1a0585",
+   "deployment_manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"
+  },
+  "validator-1": {
+   "deployment_manifest_verified": true,
+   "build_git_revision": "6b1a0585",
+   "deployment_manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"
+  },
+  "validator-2": {
+   "deployment_manifest_verified": true,
+   "build_git_revision": "6b1a0585",
+   "deployment_manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"
+  },
+  "validator-3": {
+   "deployment_manifest_verified": true,
+   "build_git_revision": "6b1a0585",
+   "deployment_manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"
+  },
+  "validator-4": {
+   "deployment_manifest_verified": true,
+   "build_git_revision": "6b1a0585",
+   "deployment_manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"
+  },
+  "validator-5": {
+   "deployment_manifest_verified": true,
+   "build_git_revision": "6b1a0585",
+   "deployment_manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9"
+  }
+ },
+ "rpc_units": {
+  "validator-0": {
+   "exec_release_binary": true,
+   "max_requests_100000": true,
+   "restart_always": true,
+   "restart_sec_1": true
+  },
+  "validator-1": {
+   "exec_release_binary": true,
+   "max_requests_100000": true,
+   "restart_always": true,
+   "restart_sec_1": true
+  },
+  "validator-2": {
+   "exec_release_binary": true,
+   "max_requests_100000": true,
+   "restart_always": true,
+   "restart_sec_1": true
+  },
+  "validator-3": {
+   "exec_release_binary": true,
+   "max_requests_100000": true,
+   "restart_always": true,
+   "restart_sec_1": true
+  },
+  "validator-4": {
+   "exec_release_binary": true,
+   "max_requests_100000": true,
+   "restart_always": true,
+   "restart_sec_1": true
+  },
+  "validator-5": {
+   "exec_release_binary": true,
+   "max_requests_100000": true,
+   "restart_always": true,
+   "restart_sec_1": true
+  }
+ },
+ "event_logs_accepted_batch_by_grant_height": {
+  "validator-0": {
+   "1138": 1,
+   "1139": 1,
+   "1141": 1,
+   "1142": 1,
+   "1143": 1
+  },
+  "validator-1": {
+   "1138": 1,
+   "1139": 1,
+   "1140": 1,
+   "1142": 1,
+   "1143": 1
+  },
+  "validator-2": {
+   "1138": 1,
+   "1139": 1,
+   "1140": 1,
+   "1141": 1,
+   "1143": 1
+  },
+  "validator-3": {
+   "1138": 1,
+   "1139": 1,
+   "1140": 1,
+   "1141": 1,
+   "1142": 1
+  },
+  "validator-4": {
+   "1139": 1,
+   "1140": 1,
+   "1141": 1,
+   "1142": 1,
+   "1143": 1
+  },
+  "validator-5": {
+   "1138": 1,
+   "1140": 1,
+   "1141": 1,
+   "1142": 1,
+   "1143": 1
+  }
+ },
+ "event_logs_note": "each host gained one accepted-batch event for every grant height it did not propose (validator-0 proposed 1140, validator-1 1141, validator-2 1142, validator-3 1143, validator-4 1138, validator-5 1139)",
+ "disk_root_avail_bytes": {
+  "validator-0": 15836741632,
+  "validator-1": 16791064576,
+  "validator-2": 22376685568,
+  "validator-3": 27282776064,
+  "validator-4": 22746710016,
+  "validator-5": 25780084736
+ },
+ "activation_heights": {
+  "result": "inactive on all six",
+  "basis": "blocks 1138-1143 are transparent on all six (blocks RPC), so no governance block and no amendment since the signed 1137 canary, whose governance has none of recipient_format_activation_height, rejected_tx_fee_activation_height, require_memo_activation_height (observed/canary-backup.json import_state); the new binary exposes no RPC read of the amendment list",
+  "blocks_since_1138_per_host": {
+   "validator-0": [
+    [
+     1138,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1139,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1140,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1141,
+     "transparent",
+     "validator-1"
+    ],
+    [
+     1142,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1143,
+     "transparent",
+     "validator-3"
+    ]
+   ],
+   "validator-1": [
+    [
+     1138,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1139,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1140,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1141,
+     "transparent",
+     "validator-1"
+    ],
+    [
+     1142,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1143,
+     "transparent",
+     "validator-3"
+    ]
+   ],
+   "validator-2": [
+    [
+     1138,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1139,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1140,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1141,
+     "transparent",
+     "validator-1"
+    ],
+    [
+     1142,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1143,
+     "transparent",
+     "validator-3"
+    ]
+   ],
+   "validator-3": [
+    [
+     1138,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1139,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1140,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1141,
+     "transparent",
+     "validator-1"
+    ],
+    [
+     1142,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1143,
+     "transparent",
+     "validator-3"
+    ]
+   ],
+   "validator-4": [
+    [
+     1138,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1139,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1140,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1141,
+     "transparent",
+     "validator-1"
+    ],
+    [
+     1142,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1143,
+     "transparent",
+     "validator-3"
+    ]
+   ],
+   "validator-5": [
+    [
+     1138,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1139,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1140,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1141,
+     "transparent",
+     "validator-1"
+    ],
+    [
+     1142,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1143,
+     "transparent",
+     "validator-3"
+    ]
+   ]
+  }
+ },
+ "account_tx_index_status_all_six": {
+  "validator-0": {
+   "index_present": false,
+   "index_usable": false,
+   "reason": "account_tx index file is absent",
+   "disk_index_present": false,
+   "disk_index_usable": false,
+   "disk_index_reason": "account_tx disk index file is absent"
+  },
+  "validator-1": {
+   "index_present": false,
+   "index_usable": false,
+   "reason": "account_tx index file is absent",
+   "disk_index_present": false,
+   "disk_index_usable": false,
+   "disk_index_reason": "account_tx disk index file is absent"
+  },
+  "validator-2": {
+   "index_present": false,
+   "index_usable": false,
+   "reason": "account_tx index file is absent",
+   "disk_index_present": false,
+   "disk_index_usable": false,
+   "disk_index_reason": "account_tx disk index file is absent"
+  },
+  "validator-3": {
+   "index_present": false,
+   "index_usable": false,
+   "reason": "account_tx index file is absent",
+   "disk_index_present": false,
+   "disk_index_usable": false,
+   "disk_index_reason": "account_tx disk index file is absent"
+  },
+  "validator-4": {
+   "index_present": false,
+   "index_usable": false,
+   "reason": "account_tx index file is absent",
+   "disk_index_present": false,
+   "disk_index_usable": false,
+   "disk_index_reason": "account_tx disk index file is absent"
+  },
+  "validator-5": {
+   "index_present": false,
+   "index_usable": false,
+   "reason": "account_tx index file is absent",
+   "disk_index_present": false,
+   "disk_index_usable": false,
+   "disk_index_reason": "account_tx disk index file is absent"
+  }
+ },
+ "account_tx_validator_1": {
+  "ok": true,
+  "error": null,
+  "index_used": false,
+  "row_count": 10,
+  "truncated": true,
+  "rows": [
+   [
+    1134,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1135,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1136,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1137,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1138,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1139,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1140,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1141,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1142,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1143,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ]
+  ]
+ },
+ "account_tx_note": "the index is absent on all six (\u00a77 builds v2); account_tx answers from the archive scan with the new binary (the deployed store-handle binary could not finish that scan on this history)",
+ "admission_probe_validator_0": {
+  "method": "mempool_submit_signed_transfer_finality with a wrong chain domain, a zeroed signature and a transfer_file parameter the finality handler refuses before any lock or round (never admissible); the destination check runs first",
+  "results": [
+   {
+    "to": "pf6395ef7f43ffaa74ce178d320b9bbbfd45532b3",
+    "ok": false,
+    "error_code": "invalid_recipient_address",
+    "error_message": "transfer.to `pf6395ef7f43ffaa74ce178d320b9bbbfd45532b3` is not a valid PFTL address: address must be `pf` followed by exactly 40 hex characters"
+   },
+   {
+    "to": "pf6395ef7f43ffaa74ce178d320b9bbbfd45532b38",
+    "ok": false,
+    "error_code": "rpc_protocol_error",
+    "error_message": "remote finality submit requires signed_transfer_json, not transfer_file"
+   }
+  ],
+  "mempool_after": "0 pending",
+  "artifact_dir_written": false
+ },
+ "account_tx_index_build_run": false,
+ "governance_record_submitted": false,
+ "result": "PASS"
+}

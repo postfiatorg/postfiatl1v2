@@ -74,6 +74,28 @@ recorded receipts root and state roots).
 | Focused suites | PASS: node lib 14 (all `rejected_fee_require_memo`, `recipient_format_activation` incl. XR-01, `account_tx_exchange_history`, XR-02), node `exchange_rpc_history` 1, rpc_sdk `response_validation` 8, execution `recipient_format` 5, types activation defaults 2, reserve builders 8 + 14 (temporary keys) | [log](logs/focused-suites.log) |
 | Full workspace suite | Not run here (no Orchard boundary changed); CI `rust-ci` `test` is the gate (above) | — |
 
+## After rollout
+
+Live, read-only checks after the six applies on 2026-10-23 (sheet §6). Records:
+[after-checks.json](../observed/after-checks.json), [after.json](../observed/after.json),
+[rollout record](../observed/rollout-record.json).
+
+| Check | Result |
+|---|---|
+| After state (07:40Z) | Six on `exchange-readiness-20261023` at height 1143, tip `7fef75aaebc5…`, root `8c3a32fd0202…`; mempools empty |
+| Applies | validator-1, 0, 2, 3, 4, 5, 07:10:57–07:37:03Z, one at a time; each restarted at the converged tip; no rollback |
+| Faucet grants | One 1 PFT grant (`pfcd4cc8…` → `testing` `pf6395ef…`, 32 atoms fee) after each apply, each certified at view 0 with quorum 5 of 6 and the same block, tip and root on all six: 1138 (proposer validator-4), 1139 (5), 1140 (0), 1141 (1), 1142 (2), 1143 (3) |
+| `demo-preflight.py` | READY: 60 PASS, 0 ATTENTION, 0 FAIL ([output](../observed/demo-preflight-after.json)) |
+| Running executables | All 12 validator and RPC processes on `4085ac70…` |
+| `status` | `deployment_manifest_verified=true`, build `6b1a0585`, manifest `210544a8…` on all six |
+| RPC units (`systemctl cat`) | `--max-requests 100000`, `Restart=always`, `RestartSec=1`, ExecStart on this release on all six |
+| Event logs | Each host's transport log gained one accepted-batch event for every grant height it did not propose |
+| Activation heights | Inactive on all six: blocks 1138–1143 are transparent (no governance block since the signed 1137 canary, which has none of the three kinds) |
+| `account_tx` index | Absent on all six (index build is §7); `account_tx` on validator-1 answers from the archive scan with the new executable (`testing`: grant rows through 1143) |
+| Admission probe (validator-0 RPC, never admissible) | Malformed recipient → `invalid_recipient_address` at the destination check; canonical recipient passes it and is refused by the protocol check before any lock or round; mempool stays empty |
+| Disk free `/` | validator-0 15.8 GB, validator-1 16.8 GB, validator-2 22.4 GB, validator-3 27.3 GB, validator-4 22.7 GB, validator-5 25.8 GB |
+| Not run in this step | `account-tx-index-build` (§7), governance activation (§8) |
+
 ## Method
 
 The store-handle-20261021 method ([packet](https://github.com/postfiatorg/postfiatl1v2/blob/release/store-handle-20261021/deployments/store-handle-20261021/qualification/README.md)) with these differences:

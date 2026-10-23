@@ -1,0 +1,388 @@
+{
+ "observed_at": "2026-10-23T07:45:39.809227+00:00",
+ "hosts": {
+  "validator-0": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "build_git_revision": "6b1a0585",
+   "deployment_manifest_verified": true,
+   "deployment_manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "blocks_since_1138": [
+    [
+     1138,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1139,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1140,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1141,
+     "transparent",
+     "validator-1"
+    ],
+    [
+     1142,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1143,
+     "transparent",
+     "validator-3"
+    ]
+   ],
+   "account_tx_index_status": {
+    "index_present": false,
+    "index_usable": false,
+    "reason": "account_tx index file is absent",
+    "disk_index_present": false,
+    "disk_index_usable": false,
+    "disk_index_reason": "account_tx disk index file is absent"
+   }
+  },
+  "validator-1": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "build_git_revision": "6b1a0585",
+   "deployment_manifest_verified": true,
+   "deployment_manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "blocks_since_1138": [
+    [
+     1138,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1139,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1140,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1141,
+     "transparent",
+     "validator-1"
+    ],
+    [
+     1142,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1143,
+     "transparent",
+     "validator-3"
+    ]
+   ],
+   "account_tx_index_status": {
+    "index_present": false,
+    "index_usable": false,
+    "reason": "account_tx index file is absent",
+    "disk_index_present": false,
+    "disk_index_usable": false,
+    "disk_index_reason": "account_tx disk index file is absent"
+   }
+  },
+  "validator-2": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "build_git_revision": "6b1a0585",
+   "deployment_manifest_verified": true,
+   "deployment_manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "blocks_since_1138": [
+    [
+     1138,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1139,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1140,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1141,
+     "transparent",
+     "validator-1"
+    ],
+    [
+     1142,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1143,
+     "transparent",
+     "validator-3"
+    ]
+   ],
+   "account_tx_index_status": {
+    "index_present": false,
+    "index_usable": false,
+    "reason": "account_tx index file is absent",
+    "disk_index_present": false,
+    "disk_index_usable": false,
+    "disk_index_reason": "account_tx disk index file is absent"
+   }
+  },
+  "validator-3": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "build_git_revision": "6b1a0585",
+   "deployment_manifest_verified": true,
+   "deployment_manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "blocks_since_1138": [
+    [
+     1138,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1139,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1140,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1141,
+     "transparent",
+     "validator-1"
+    ],
+    [
+     1142,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1143,
+     "transparent",
+     "validator-3"
+    ]
+   ],
+   "account_tx_index_status": {
+    "index_present": false,
+    "index_usable": false,
+    "reason": "account_tx index file is absent",
+    "disk_index_present": false,
+    "disk_index_usable": false,
+    "disk_index_reason": "account_tx disk index file is absent"
+   }
+  },
+  "validator-4": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "build_git_revision": "6b1a0585",
+   "deployment_manifest_verified": true,
+   "deployment_manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "blocks_since_1138": [
+    [
+     1138,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1139,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1140,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1141,
+     "transparent",
+     "validator-1"
+    ],
+    [
+     1142,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1143,
+     "transparent",
+     "validator-3"
+    ]
+   ],
+   "account_tx_index_status": {
+    "index_present": false,
+    "index_usable": false,
+    "reason": "account_tx index file is absent",
+    "disk_index_present": false,
+    "disk_index_usable": false,
+    "disk_index_reason": "account_tx disk index file is absent"
+   }
+  },
+  "validator-5": {
+   "height": 1143,
+   "tip": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+   "state_root": "8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90",
+   "build_git_revision": "6b1a0585",
+   "deployment_manifest_verified": true,
+   "deployment_manifest_sha256": "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1",
+   "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+   "blocks_since_1138": [
+    [
+     1138,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1139,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1140,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1141,
+     "transparent",
+     "validator-1"
+    ],
+    [
+     1142,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1143,
+     "transparent",
+     "validator-3"
+    ]
+   ],
+   "account_tx_index_status": {
+    "index_present": false,
+    "index_usable": false,
+    "reason": "account_tx index file is absent",
+    "disk_index_present": false,
+    "disk_index_usable": false,
+    "disk_index_reason": "account_tx disk index file is absent"
+   }
+  }
+ },
+ "account_tx_validator_1_testing": {
+  "ok": true,
+  "error": null,
+  "index_used": false,
+  "row_count": 10,
+  "truncated": true,
+  "rows": [
+   [
+    1134,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1135,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1136,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1137,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1138,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1139,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1140,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1141,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1142,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ],
+   [
+    1143,
+    "transparent_transfer",
+    "pfcd4cc8",
+    "pf6395ef",
+    1000000,
+    "accepted"
+   ]
+  ]
+ }
+}
