@@ -7,7 +7,7 @@ the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md), the
 [activation facts](../../docs/review/exchange-readiness-merge-review-20261023.md#activation-steps-later-today-after-all-six-run-the-new-binary).
 Keys are used by path only; no key material is printed, copied to a host or committed.
 
-**Status: §0–§6 done on 2026-10-23** (deployed at 1143) (before state at 1137, [checks](observed/before-checks.json); signed canary backup `3257115c…` and current-head replay PASS, [record](observed/canary-backup.json)); §5 not started. Cut and locally qualified on 2026-10-23, re-qualified the same day with the account history index fix (`6b1a0585`, [packet](qualification/README.md)).
+**Status: §0–§7 done on 2026-10-23** (deployed at 1143; account_tx v2 index on all six) (before state at 1137, [checks](observed/before-checks.json); signed canary backup `3257115c…` and current-head replay PASS, [record](observed/canary-backup.json)); §5 not started. Cut and locally qualified on 2026-10-23, re-qualified the same day with the account history index fix (`6b1a0585`, [packet](qualification/README.md)).
 Every live section (§0, §1, §3–§9) is covered by the operator's go of the day; each step marked
 **GO** needs that go. §8 (governance activation) runs only after §6 and §7 are clean on all six.
 
@@ -166,6 +166,28 @@ ssh root@HOST
 Expected: `index_usable: true`, `disk_index_usable: true`, schema `postfiat-account-tx-index-v2`,
 indexed range 1 to the tip. Time: 3.6 s per 1,000 blocks on the work server (4.1 s for 1131 blocks),
 so about 5 s per host at 1,137+ blocks; allow a minute on the smaller validator hosts.
+
+- [x] **GO 7.N** (one go per host: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5).
+- [x] validator-1 reported both indexes usable before the others ran.
+- [x] Six-way agreement at 1143 / `7fef75aa…` / `8c3a32fd…`, mempools 0, before and after every host (`observe-fleet.py`).
+
+**Result (2026-10-23, 08:02–08:23Z, height 1143 throughout, no block produced).** All six built a usable v2
+index (schema `postfiat-account-tx-index-v2`, range 1–1143: 1,105 indexed blocks, 970 rows, 255 accounts and
+shards). Only the host's RPC unit was stopped, 11–31 s per host; the validator unit stayed active. After each
+start the RPC was ready again within 15 s and `account_tx` for `testing` answered from the index
+(`index_used: true`) with the grants at 1138–1143. Records: [account-tx-index/](observed/account-tx-index/).
+
+| Host | Index before | Index after | Range | Blocks indexed | Rows | Build (s, incl. ssh) | RPC stopped | RPC started | Ready again | `account_tx` `testing` (index) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| validator-1 | absent | v2 usable (index True, disk True) | 1–1143 | 1105 | 970 | 6.9 | 08:04:06 | 08:04:17 | 08:04:26 | 58 rows, grants 1138–1143 |
+| validator-0 | absent | v2 usable (index True, disk True) | 1–1143 | 1105 | 970 | 8.4 | 08:07:21 | 08:07:36 | 08:07:41 | 58 rows, grants 1138–1143 |
+| validator-2 | absent | v2 usable (index True, disk True) | 1–1143 | 1105 | 970 | 14.8 | 08:10:37 | 08:11:08 | 08:11:23 | 58 rows, grants 1138–1143 |
+| validator-3 | absent | v2 usable (index True, disk True) | 1–1143 | 1105 | 970 | 8.8 | 08:14:25 | 08:14:40 | 08:14:46 | 58 rows, grants 1138–1143 |
+| validator-4 | absent | v2 usable (index True, disk True) | 1–1143 | 1105 | 970 | 7.4 | 08:17:41 | 08:17:52 | 08:18:02 | 58 rows, grants 1138–1143 |
+| validator-5 | absent | v2 usable (index True, disk True) | 1–1143 | 1105 | 970 | 11.5 | 08:20:57 | 08:21:19 | 08:21:28 | 58 rows, grants 1138–1143 |
+
+The build time includes the ssh round trip. The index is current to 1143. Ordered commit does not extend it, so after
+the next block `account_tx` falls back to the archive scan until `account-tx-index-build` runs again (runbook).
 
 ## 8. Governance activation of the three heights — covered by the operator's go of the day, only after §6 and §7 are clean on all six
 

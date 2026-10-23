@@ -25,5 +25,5 @@ deployed_at=2026-10-23T07:39:43Z
 deployed_height=1143
 deployed_tip=7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb
 deployed_state_root=8c3a32fd0202e35efae3eea4f6f640cb9b3a27abb4f677df2aaae243df59c1e2548368abe5998e97bcacca12c058ef90
-account_tx_index_build=PENDING (sheet §7)
+account_tx_index_build=DONE 2026-10-23T08:02Z..08:23Z on all six (v2 usable, range 1-1143, 1105 blocks, 970 rows; 6.9-14.8 s per host incl. ssh)
 governed_activation=PENDING (sheet §8; all three heights inactive)

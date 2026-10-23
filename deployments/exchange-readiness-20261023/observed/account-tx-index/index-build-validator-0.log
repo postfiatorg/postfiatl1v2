@@ -1,0 +1,17 @@
+{
+  "schema": "postfiat-account-tx-index-build-v1",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "index_path": "/var/lib/postfiat/validator-0/account_tx_index.json",
+  "disk_index_path": "/var/lib/postfiat/validator-0/account_tx_index_meta.json",
+  "indexed_from_height": 1,
+  "indexed_to_height": 1143,
+  "indexed_block_count": 1105,
+  "indexed_row_count": 970,
+  "account_count": 255,
+  "tip_hash": "7fef75aaebc522b2ccb6a54f572992745151ae2c68f95528c28c9fbe63e4be3a9bff95b35bab8174e1583023287835cb",
+  "index_usable": true,
+  "disk_index_usable": true,
+  "disk_account_shard_count": 255
+}
