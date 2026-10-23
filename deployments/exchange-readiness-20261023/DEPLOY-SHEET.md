@@ -7,7 +7,7 @@ the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md), the
 [activation facts](../../docs/review/exchange-readiness-merge-review-20261023.md#activation-steps-later-today-after-all-six-run-the-new-binary).
 Keys are used by path only; no key material is printed, copied to a host or committed.
 
-**Status: not started.** Cut and locally qualified on 2026-10-23, re-qualified the same day with the account history index fix (`6b1a0585`, [packet](qualification/README.md)).
+**Status: §0–§4 done on 2026-10-23** (before state at 1137, [checks](observed/before-checks.json); signed canary backup `3257115c…` and current-head replay PASS, [record](observed/canary-backup.json)); §5 not started. Cut and locally qualified on 2026-10-23, re-qualified the same day with the account history index fix (`6b1a0585`, [packet](qualification/README.md)).
 Every live section (§0, §1, §3–§9) is covered by the operator's go of the day; each step marked
 **GO** needs that go. §8 (governance activation) runs only after §6 and §7 are clean on all six.
 
@@ -23,7 +23,7 @@ VULTR=~/.postfiat/deployments/cobalt-activation-8694b99d/vultr-api-key
 
 ## 0. Go/no-go — covered by the operator's go of the day
 
-- [ ] **GO 0.** No other rollout or session is active on the fleet (the storage migration rehearsal under `~/.cache/g3-migration-rehearsal-20261023/` is local only); `apt-daily-upgrade` is not running; CI on `d9260e93` (main) has no failed workflow (`gh run list --commit d9260e93…`; the release merge `6b1a0585` adds no other code).
+- [x] **GO 0.** No other rollout or session is active on the fleet (the storage migration rehearsal under `~/.cache/g3-migration-rehearsal-20261023/` is local only); `apt-daily-upgrade` is not running; CI on `d9260e93` (main) has no failed workflow (`gh run list --commit d9260e93…`; the release merge `6b1a0585` adds no other code).
 
 ## 1. Before state (read-only) — covered by the operator's go of the day
 
@@ -36,7 +36,7 @@ Expected: six validators on `store-handle-20261021` (`eea96ba6…`, build `86706
 agreement), mempools empty. The three activation heights and both routes' `authority_epoch` are
 read from the §4 canary import (no extra host read).
 
-- [ ] **GO 1.** Before state matches. Otherwise stop.
+- [x] **GO 1.** Before state matches. Otherwise stop. 2026-10-23 06:31Z: six on `store-handle-20261021` at 1137 / `18a4dc86…` / `1277c76c…`, mempools 0 ([before.json](observed/before.json)).
 
 ## 2. Stage and local preflight (local)
 
@@ -64,7 +64,7 @@ Expected: six-way agreement, six signer rosters valid, 0 deletions, order 1, 0, 
 
 ## 4. Fresh signed canary backup from validator-1 and its exact replay — covered by the operator's go of the day
 
-- [ ] **GO 4.** Take the backup (writes one export on validator-1; check its free disk first).
+- [x] **GO 4.** Take the backup (writes one export on validator-1; check its free disk first). 2026-10-23 06:39–06:48Z: manifest `3257115c…` at 1137; re-import, checkpoint and full replay verified; harness PASS, receipt `18114495…`; validator-1 free disk 17.19 GB → 16.87 GB.
 
 ```bash
 scripts/postfiat-safe-rollout backup --state-file $E/rollout-state.json \

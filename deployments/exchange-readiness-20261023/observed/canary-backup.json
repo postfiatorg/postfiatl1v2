@@ -1,0 +1,91 @@
+{
+ "recorded_at": "2026-10-23T06:49Z",
+ "sheet": "DEPLOY-SHEET.md \u00a74 (one export on validator-1; nothing applied)",
+ "backup": {
+  "source_validator": "validator-1",
+  "height": 1137,
+  "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+  "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a",
+  "signed_manifest_sha256": "3257115c7d57dcfb6a28743723cfae58bce80235bb6901c803e5765299d6c070",
+  "certificate_id": "f917359056a52b59bc83f1ba31b96b559b4f11c470c803063d4cfc97c5323b40f8002e82684bf5313085eab4c2b37a23",
+  "verification_basis": "consensus-v2-finalized-checkpoint",
+  "verified": true,
+  "candidate_binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+  "remote_unsigned_snapshot": "/var/lib/postfiat/pre-rollout-snapshots/exchange-readiness-20261023-validator-1-finalized-checkpoint",
+  "finalized_checkpoint_verification_sha256": "3c6327a045bed8b525158c833d7aa6f1a60f35bcba20e77b2e9e65e3a476618b"
+ },
+ "backup_tool": "scripts/postfiat-safe-rollout backup at 06:39:46-06:41:54Z; the old (running) executable exported the finalized checkpoint on validator-1; the new executable imported it locally and signed it with the snapshot publisher key (by path); verified by the tool at 1137",
+ "written_on_validator_1": [
+  "/var/lib/postfiat/pre-rollout-snapshots/exchange-readiness-20261023-validator-1-finalized-checkpoint (240M, the export)",
+  "/var/lib/postfiat/pre-rollout-snapshots/.exchange-readiness-20261023-validator-1.candidate-postfiat-node (63,701,608 bytes, the candidate executable the backup tool stages beside the export, as every earlier release did; ten earlier ones are in that directory)"
+ ],
+ "validator_1_root_fs_avail_bytes": {
+  "before_export": 17185320960,
+  "after_export": 16869933056
+ },
+ "reimport_new_binary": {
+  "binary_sha256": "4085ac70c7bb3c21b46cc67be8cb1bbb3556bfea9f49fbf6b128cdac2adcbef9",
+  "data_dir": "~/.cache/deploy-exchange-readiness-20261023/backup-reverify",
+  "snapshot_import_signed_finalized_checkpoint": "exit 0 (41 s)",
+  "verify_finalized_checkpoint": {
+   "verified": true,
+   "height": 1137,
+   "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+   "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+  },
+  "verify_state": {
+   "verified": true,
+   "block_log_verified": true,
+   "block_count": 1137,
+   "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+   "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a",
+   "governance_verified": true,
+   "shielded_verified": true,
+   "seconds": 181
+  }
+ },
+ "import_state": {
+  "recipient_format_activation_height": null,
+  "rejected_tx_fee_activation_height": null,
+  "require_memo_activation_height": null,
+  "route_authority_epoch": {
+   "pftl-a666-ethereum-wA666-usdc-v1": 1,
+   "pftl-bmnrc-ethereum-wBMNRC-usdc-v1": 1
+  },
+  "result": "PASS"
+ },
+ "receipts_fees_sequences_vs_recorded": {
+  "basis": "the 2026-10-21 signed 1131 export (manifest df9b3847..., verified import) and the 2026-10-21 rollout record (six 1 PFT grants at 1132-1137, 6 PFT plus 192 atoms of fees)",
+  "receipt_log": "1186 receipts; the first 1180 byte-identical to the 1131 export's; 6 new, all accepted, fee_charged 32 and fee_burned 32 each (192 atoms)",
+  "faucet_pfcd4cc8": "sequence +6, balance -6000192 atoms",
+  "testing_pf6395ef": "sequence +0, balance +6000000 atoms",
+  "new_blocks": "1132-1137, all transparent",
+  "result": "PASS"
+ },
+ "head_replay": {
+  "harness": "benchmarks/storage-scaling/run_replay_evidence.py --signed-archive-dir (clean checkout 6b1a0585, ~/.cache/release-exchange-readiness-20261023-r2/source-1)",
+  "node_bin": "target-1/release/postfiat-node (4085ac70...)",
+  "started": "2026-10-23T06:43:50Z",
+  "finished": "2026-10-23T06:47:40Z",
+  "verdict": "PASS",
+  "matched": {
+   "height": true,
+   "root": true,
+   "tip": true
+  },
+  "exact_replay": true,
+  "full_replay_passed": true,
+  "height": 1137,
+  "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+  "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a",
+  "signed_manifest_sha256": "3257115c7d57dcfb6a28743723cfae58bce80235bb6901c803e5765299d6c070",
+  "archive_tree_sha256_before_after": [
+   "38a7da588b115edc7acd96e2b18b85f84f41c19bb76b6265995390e64cc60b68",
+   "38a7da588b115edc7acd96e2b18b85f84f41c19bb76b6265995390e64cc60b68"
+  ],
+  "receipt": "observed/head-replay-1137/receipts/height-1137.json",
+  "receipt_sha256": "18114495ecc6d3b2261b2d2c215e3b7a94956907cac887151c09ef506445b0f3",
+  "network_contacted": false
+ },
+ "stopped_before": "\u00a75 (no apply-next run)"
+}
