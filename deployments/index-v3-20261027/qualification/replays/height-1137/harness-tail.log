@@ -1,0 +1,26 @@
+storage-signed-archive-replay=PASS
+receipt=/home/postfiatchad/.cache/release-index-v3-20261027/replay-1137/out/receipts/height-1137.json
+receipt_sha256=7b95bea8bafee84f6e1c8c56dc2f5c71432c3fce2903d8ef946234b56f275661
+	Command being timed: "python3 benchmarks/storage-scaling/run_replay_evidence.py --node-bin /home/postfiatchad/.cache/release-index-v3-20261027/target-1/release/postfiat-node --signed-archive-dir /home/postfiatchad/.cache/release-index-v3-20261027/replay-1137/scratch/backup-signed --trusted-publisher-file /home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json --expected-height 1137 --expected-tip 18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648 --expected-root 1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a --output-dir /home/postfiatchad/.cache/release-index-v3-20261027/replay-1137/out --expected-source-revision d728f895ee6c6d9910c6e0c0f3b9d92f30e0f3f2"
+	User time (seconds): 309.59
+	System time (seconds): 6.38
+	Percent of CPU this job got: 140%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 3:44.50
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1871872
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 93
+	Minor (reclaiming a frame) page faults: 1881981
+	Voluntary context switches: 29481
+	Involuntary context switches: 14402
+	Swaps: 0
+	File system inputs: 80152
+	File system outputs: 2946408
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

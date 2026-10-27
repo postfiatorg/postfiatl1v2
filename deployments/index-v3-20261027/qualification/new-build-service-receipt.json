@@ -1,0 +1,133 @@
+{
+  "scope": "disposable_loopback_clones",
+  "live_mutations": false,
+  "finality_exercised": false,
+  "binary_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+  "expected_identity_source": "~/.cache/release-repair-20260928/v2-service-receipt.json finality_statuses[0] (2026-09-28 rotation at 1021)",
+  "expected": {
+    "block_height": 1021,
+    "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+    "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+  },
+  "startup": [
+    {
+      "block_height": 1021,
+      "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+      "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091",
+      "mempool_pending": 0,
+      "build_git_revision": "d728f895",
+      "storage_backend": "redb",
+      "transactional_active": true
+    },
+    {
+      "block_height": 1021,
+      "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+      "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091",
+      "mempool_pending": 0,
+      "build_git_revision": "d728f895",
+      "storage_backend": "redb",
+      "transactional_active": true
+    },
+    {
+      "block_height": 1021,
+      "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+      "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091",
+      "mempool_pending": 0,
+      "build_git_revision": "d728f895",
+      "storage_backend": "redb",
+      "transactional_active": true
+    },
+    {
+      "block_height": 1021,
+      "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+      "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091",
+      "mempool_pending": 0,
+      "build_git_revision": "d728f895",
+      "storage_backend": "redb",
+      "transactional_active": true
+    },
+    {
+      "block_height": 1021,
+      "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+      "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091",
+      "mempool_pending": 0,
+      "build_git_revision": "d728f895",
+      "storage_backend": "redb",
+      "transactional_active": true
+    },
+    {
+      "block_height": 1021,
+      "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+      "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091",
+      "mempool_pending": 0,
+      "build_git_revision": "d728f895",
+      "storage_backend": "redb",
+      "transactional_active": true
+    }
+  ],
+  "start_orders": {
+    "validator-0": "transport-first",
+    "validator-1": "rpc-first",
+    "validator-2": "transport-first",
+    "validator-3": "rpc-first",
+    "validator-4": "transport-first",
+    "validator-5": "rpc-first"
+  },
+  "restart": [
+    {
+      "block_height": 1021,
+      "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+      "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091",
+      "mempool_pending": 0,
+      "build_git_revision": "d728f895",
+      "storage_backend": "redb",
+      "transactional_active": true
+    },
+    {
+      "block_height": 1021,
+      "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+      "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091",
+      "mempool_pending": 0,
+      "build_git_revision": "d728f895",
+      "storage_backend": "redb",
+      "transactional_active": true
+    },
+    {
+      "block_height": 1021,
+      "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+      "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091",
+      "mempool_pending": 0,
+      "build_git_revision": "d728f895",
+      "storage_backend": "redb",
+      "transactional_active": true
+    },
+    {
+      "block_height": 1021,
+      "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+      "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091",
+      "mempool_pending": 0,
+      "build_git_revision": "d728f895",
+      "storage_backend": "redb",
+      "transactional_active": true
+    },
+    {
+      "block_height": 1021,
+      "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+      "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091",
+      "mempool_pending": 0,
+      "build_git_revision": "d728f895",
+      "storage_backend": "redb",
+      "transactional_active": true
+    },
+    {
+      "block_height": 1021,
+      "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+      "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091",
+      "mempool_pending": 0,
+      "build_git_revision": "d728f895",
+      "storage_backend": "redb",
+      "transactional_active": true
+    }
+  ],
+  "result": "PASS_STARTUP_AND_RESTART_ONLY"
+}

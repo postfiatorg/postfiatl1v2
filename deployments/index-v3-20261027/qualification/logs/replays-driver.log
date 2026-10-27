@@ -1,0 +1,10 @@
+== 2026-10-27T09:59:43Z 924 start tip=ebeb0e1e root=0854bc47
+13ffe388f3ec5cfb80971cc6c5a8a7469a88d79ea5834d1495db0c44bf703046 /home/postfiatchad/.postfiat/deployments/storage-rollout-10dd9f20/g6-rehearsal-20260830-v3/backups/validator-0
+13ffe388f3ec5cfb80971cc6c5a8a7469a88d79ea5834d1495db0c44bf703046 /home/postfiatchad/.cache/release-index-v3-20261027/replay-924/scratch/validator-0
+== 2026-10-27T10:15:16Z 924 harness exit 0
+13ffe388f3ec5cfb80971cc6c5a8a7469a88d79ea5834d1495db0c44bf703046 /home/postfiatchad/.postfiat/deployments/storage-rollout-10dd9f20/g6-rehearsal-20260830-v3/backups/validator-0
+== 2026-10-27T10:15:23Z 1137 start tip=18a4dc86 root=1277c76c
+38a7da588b115edc7acd96e2b18b85f84f41c19bb76b6265995390e64cc60b68 /home/postfiatchad/.postfiat/deployments/exchange-readiness-20261023/evidence/pre-rollout-backup/backup-signed
+== 2026-10-27T10:19:08Z 1137 harness exit 0
+38a7da588b115edc7acd96e2b18b85f84f41c19bb76b6265995390e64cc60b68 /home/postfiatchad/.postfiat/deployments/exchange-readiness-20261023/evidence/pre-rollout-backup/backup-signed
+== 2026-10-27T10:19:08Z replays done

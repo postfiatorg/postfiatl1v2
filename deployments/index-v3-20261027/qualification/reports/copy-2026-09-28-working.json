@@ -1,0 +1,32 @@
+{
+  "name": "copy-2026-09-28-working",
+  "command": [
+    "cp",
+    "-a",
+    "/home/postfiatchad/.cache/release-repair-20260928/working",
+    "/home/postfiatchad/.cache/release-index-v3-20261027/working"
+  ],
+  "cwd": "/home/postfiatchad/.cache/release-index-v3-20261027",
+  "started_at": "2026-10-27T09:59:43.960115+00:00",
+  "status": "PASS",
+  "stdout": "/home/postfiatchad/.cache/release-index-v3-20261027/logs/copy-2026-09-28-working.stdout",
+  "stderr": "/home/postfiatchad/.cache/release-index-v3-20261027/logs/copy-2026-09-28-working.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-index-v3-20261027/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 376714,
+  "exit_code": 0,
+  "completed_at": "2026-10-27T10:00:09.976058+00:00",
+  "elapsed_seconds": 26.0,
+  "minimum_available_memory_observed_bytes": 14830313472
+}

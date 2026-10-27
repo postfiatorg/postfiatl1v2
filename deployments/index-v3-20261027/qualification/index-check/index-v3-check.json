@@ -1,0 +1,152 @@
+{
+  "scope": "scratch import of the 1137 signed archive; no host contact",
+  "checks": {
+    "import": {
+      "height": 1137,
+      "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+      "root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+    },
+    "v2_build_old": {
+      "seconds": 4.837,
+      "rows": 964,
+      "accounts": 255,
+      "blocks": 1099,
+      "index_usable": true,
+      "disk_index_usable": true
+    },
+    "v2_status_new": {
+      "index_present": true,
+      "index_usable": false,
+      "reason": "unsupported account_tx index schema `postfiat-account-tx-index-v2`",
+      "disk_index_present": true,
+      "disk_index_usable": false,
+      "disk_index_reason": "unsupported account_tx disk index schema `postfiat-account-tx-disk-index-v2`"
+    },
+    "scan_new_index_used": false,
+    "scan_new_rows_equal_v2_rows": false,
+    "v3_build_new": {
+      "seconds": 6.834,
+      "seconds_per_1000_blocks": 6.011,
+      "chain_blocks": 1137,
+      "rows": 964,
+      "accounts": 255,
+      "index_usable": true,
+      "disk_index_usable": true,
+      "disk_account_shard_count": 255
+    },
+    "v3_status_new": {
+      "index_usable": true,
+      "reason": null,
+      "disk_index_usable": true,
+      "disk_index_reason": null,
+      "indexed_to_height": 1137,
+      "disk_index_lag_blocks": 0
+    },
+    "v3_schema": "postfiat-account-tx-disk-index-v3",
+    "v3_new_bytes_identical_to_v2_old": "20/20",
+    "v3_new_index_used": true,
+    "old_after_v3_index_used": false,
+    "old_after_v3_rows_equal": false,
+    "old_status_after_v3": {
+      "exit_code": 1,
+      "stderr_tail": "adata-file PATH]\n  postfiat-node rpc --method METHOD [--id ID] [--data-dir PATH] [method flags]\n  postfiat-node rpc --request-file PATH [--data-dir PATH]\n\nDirect state mutation commands require POSTFIAT_ALLOW_DIRECT_STATE=1 and are debug-only; ordered batch and mempool commands are the normal path.",
+      "index_usable": null,
+      "reason": null,
+      "error": "error: account-tx-index-status failed: failed to parse account_tx index `/home/postfiatchad/.cache/release-index-v3-20261027/index-check/data/account_tx_index.json`: missing field `accounts` at line 14 column 1"
+    },
+    "old_rebuild_after_v3": {
+      "exit_code": 0,
+      "seconds": 4.285,
+      "index_usable": true,
+      "disk_index_usable": true
+    },
+    "old_rebuilt_index_used": true,
+    "old_rebuilt_bytes_identical_to_v2_old": "20/20",
+    "status_activation_heights_new": {},
+    "scan_new_rows_equal_v2_rows_in_scanned_window": "20/20",
+    "old_after_v3_rows_equal_v2_rows_in_scanned_window": "20/20",
+    "scan_note": "the archive scan reads the newest 100 blocks (scanned_block_count 100, truncated true); its rows are compared with the v2 index rows of the same blocks"
+  },
+  "addresses": [
+    {
+      "address": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "v2_rows": 373
+    },
+    {
+      "address": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+      "v2_rows": 298
+    },
+    {
+      "address": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+      "v2_rows": 144
+    },
+    {
+      "address": "pftl-a666-ethereum-wA666-usdc-v1",
+      "v2_rows": 106
+    },
+    {
+      "address": "pfd0c86d9084915e1fefd22eab891806397d5a5937",
+      "v2_rows": 89
+    },
+    {
+      "address": "pf6395ef7f43ffaa74ce178d320b9bbbfd45532b38",
+      "v2_rows": 52
+    },
+    {
+      "address": "pfcd4cc8c354bd340fe18386e6f875ff68f215a95c",
+      "v2_rows": 50
+    },
+    {
+      "address": "pf4b45cd05434a6d1493a3225b4034cef0ea3765f3",
+      "v2_rows": 43
+    },
+    {
+      "address": "asset-orchard-v1",
+      "v2_rows": 40
+    },
+    {
+      "address": "evm:1:0xaaa78fda7062efce769e95cd72fc55e507bc8183:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "v2_rows": 37
+    },
+    {
+      "address": "pfecc40b1974515445c37a6f715ed0bc643801fd50",
+      "v2_rows": 33
+    },
+    {
+      "address": "pf8c1d625c660f4b014a9618a3d4b0261b12f02218",
+      "v2_rows": 32
+    },
+    {
+      "address": "pfb8f250e27a4ff89bf81da0f4a4bdd63f8ba45c12",
+      "v2_rows": 32
+    },
+    {
+      "address": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+      "v2_rows": 21
+    },
+    {
+      "address": "pf2ddefa436ad1ccc40b61e26409b334ace71b9fb2",
+      "v2_rows": 16
+    },
+    {
+      "address": "pf94f3ff2246a3ab737dd3924d2335aafb1b848c84",
+      "v2_rows": 15
+    },
+    {
+      "address": "pfde0ba09f38b1748f8d77709715e1095a0ff74d0f",
+      "v2_rows": 15
+    },
+    {
+      "address": "evm:42161:0x850e4ceea147f3551c68c2251129e5945d0afb58:0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+      "v2_rows": 14
+    },
+    {
+      "address": "pf9fbc934f9676b29451747f324b5d851c519c904d",
+      "v2_rows": 12
+    },
+    {
+      "address": "pf9bd7958a0779f4de39e871878bbd6552dc461c3f",
+      "v2_rows": 11
+    }
+  ]
+}

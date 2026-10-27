@@ -1,0 +1,63 @@
+{
+ "import": {
+  "height": 1137,
+  "tip": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+  "root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+ },
+ "v2_build_old": {
+  "seconds": 4.837,
+  "rows": 964,
+  "accounts": 255,
+  "blocks": 1099,
+  "index_usable": true,
+  "disk_index_usable": true
+ },
+ "v2_status_new": {
+  "index_present": true,
+  "index_usable": false,
+  "reason": "unsupported account_tx index schema `postfiat-account-tx-index-v2`",
+  "disk_index_present": true,
+  "disk_index_usable": false,
+  "disk_index_reason": "unsupported account_tx disk index schema `postfiat-account-tx-disk-index-v2`"
+ },
+ "scan_new_index_used": false,
+ "scan_new_rows_equal_v2_rows": false,
+ "v3_build_new": {
+  "seconds": 6.834,
+  "seconds_per_1000_blocks": 6.011,
+  "chain_blocks": 1137,
+  "rows": 964,
+  "accounts": 255,
+  "index_usable": true,
+  "disk_index_usable": true,
+  "disk_account_shard_count": 255
+ },
+ "v3_status_new": {
+  "index_usable": true,
+  "reason": null,
+  "disk_index_usable": true,
+  "disk_index_reason": null,
+  "indexed_to_height": 1137,
+  "disk_index_lag_blocks": 0
+ },
+ "v3_schema": "postfiat-account-tx-disk-index-v3",
+ "v3_new_bytes_identical_to_v2_old": "20/20",
+ "v3_new_index_used": true,
+ "old_after_v3_index_used": false,
+ "old_after_v3_rows_equal": false,
+ "old_status_after_v3": {
+  "exit_code": 1,
+  "stderr_tail": "adata-file PATH]\n  postfiat-node rpc --method METHOD [--id ID] [--data-dir PATH] [method flags]\n  postfiat-node rpc --request-file PATH [--data-dir PATH]\n\nDirect state mutation commands require POSTFIAT_ALLOW_DIRECT_STATE=1 and are debug-only; ordered batch and mempool commands are the normal path.",
+  "index_usable": null,
+  "reason": null
+ },
+ "old_rebuild_after_v3": {
+  "exit_code": 0,
+  "seconds": 4.285,
+  "index_usable": true,
+  "disk_index_usable": true
+ },
+ "old_rebuilt_index_used": true,
+ "old_rebuilt_bytes_identical_to_v2_old": "20/20",
+ "status_activation_heights_new": {}
+}

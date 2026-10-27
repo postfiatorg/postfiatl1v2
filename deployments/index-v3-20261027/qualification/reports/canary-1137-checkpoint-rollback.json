@@ -1,0 +1,43 @@
+{
+  "name": "canary-1137-checkpoint-rollback",
+  "command": [
+    "/home/postfiatchad/.cache/release-index-v3-20261027/binaries/rollback",
+    "verify-finalized-checkpoint",
+    "--data-dir",
+    "/home/postfiatchad/.cache/release-index-v3-20261027/canary-1137/signed-import"
+  ],
+  "cwd": "/home/postfiatchad/.cache/release-index-v3-20261027/source-1",
+  "started_at": "2026-10-27T10:05:39.654406+00:00",
+  "status": "PASS",
+  "stdout": "/home/postfiatchad/.cache/release-index-v3-20261027/logs/canary-1137-checkpoint-rollback.stdout",
+  "stderr": "/home/postfiatchad/.cache/release-index-v3-20261027/logs/canary-1137-checkpoint-rollback.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-index-v3-20261027/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 386653,
+  "exit_code": 0,
+  "completed_at": "2026-10-27T10:05:45.660671+00:00",
+  "elapsed_seconds": 6.0,
+  "minimum_available_memory_observed_bytes": 11177910272,
+  "verified": true,
+  "observed": {
+    "block_height": 1137,
+    "block_tip_hash": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+    "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+  },
+  "expected": {
+    "block_height": 1137,
+    "block_tip_hash": "18a4dc869b52fe9b576cd518904c1c9176d69b010e684c3b8e7fe88ff9848b2551d42ac4aff591f8a799697c76d3e648",
+    "state_root": "1277c76c16affa0c5061bc2b5f0fd265d19f2f03808966ea99b7d5427cfd85838cb3b515f3b4acacc05d3654279b0d8a"
+  }
+}

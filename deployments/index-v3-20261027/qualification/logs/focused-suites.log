@@ -1,0 +1,22 @@
+=== cargo test -p postfiat-node --lib account_tx
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 439 filtered out; finished in 31.79s
+exit 0
+=== cargo test -p postfiat-node --lib transport_protocol
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 465 filtered out; finished in 0.00s
+exit 0
+=== cargo test -p postfiat-node --bin postfiat-node transport_protocol
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 198 filtered out; finished in 0.69s
+exit 0
+=== cargo test -p postfiat-node --bin postfiat-node transport_batch_payload_tests
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 214 filtered out; finished in 253.10s
+exit 0
+=== cargo test -p postfiat-node --lib block_vote_records
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 461 filtered out; finished in 0.05s
+exit 0
+=== cargo test -p postfiat-node --bin postfiat-node block_vote_records
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 230 filtered out; finished in 0.00s
+exit 0
+=== cargo test -p postfiat-node --test fastpay_default_rpc
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+exit 0
+=== DONE
