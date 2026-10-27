@@ -1,0 +1,62 @@
+{
+ "validator-0": {
+  "height": 1160,
+  "tip": "f65e6fac482e",
+  "root": "f06608d4a078",
+  "index_usable": true,
+  "disk_index_usable": true,
+  "disk_to": 1160,
+  "lag": 0,
+  "disk_lag": 0
+ },
+ "validator-1": {
+  "height": 1160,
+  "tip": "f65e6fac482e",
+  "root": "f06608d4a078",
+  "index_usable": true,
+  "disk_index_usable": true,
+  "disk_to": 1160,
+  "lag": 0,
+  "disk_lag": 0
+ },
+ "validator-2": {
+  "height": 1160,
+  "tip": "f65e6fac482e",
+  "root": "f06608d4a078",
+  "index_usable": true,
+  "disk_index_usable": true,
+  "disk_to": 1160,
+  "lag": 0,
+  "disk_lag": 0
+ },
+ "validator-3": {
+  "height": 1160,
+  "tip": "f65e6fac482e",
+  "root": "f06608d4a078",
+  "index_usable": true,
+  "disk_index_usable": true,
+  "disk_to": 1160,
+  "lag": 0,
+  "disk_lag": 0
+ },
+ "validator-4": {
+  "height": 1160,
+  "tip": "f65e6fac482e",
+  "root": "f06608d4a078",
+  "index_usable": true,
+  "disk_index_usable": true,
+  "disk_to": 1160,
+  "lag": 0,
+  "disk_lag": 0
+ },
+ "validator-5": {
+  "height": 1160,
+  "tip": "f65e6fac482e",
+  "root": "f06608d4a078",
+  "index_usable": true,
+  "disk_index_usable": true,
+  "disk_to": 1160,
+  "lag": 0,
+  "disk_lag": 0
+ }
+}

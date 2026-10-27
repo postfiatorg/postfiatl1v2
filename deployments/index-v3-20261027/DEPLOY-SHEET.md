@@ -6,7 +6,7 @@ the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md) and the
 [account_tx index runbook](../../docs/runbooks/account-tx-index.md). Keys are used by path only; no key
 material is printed, copied to a host or committed.
 
-**Status: §0–§4 done on 2026-10-27** (before state at 1153, [checks](observed/before-checks.json); signed canary backup `03e5c61f…` and current-head replay PASS, [record](observed/canary-backup.json)); §5–§6 done (all six on `b5cf3ce4…` at 1159, [rollout record](observed/rollout-record.json), [after checks](observed/after-checks.json)). Cut and locally qualified on 2026-10-27 ([packet](qualification/README.md)).
+**Status: deployed to all six on 2026-10-27 (§0–§9 done).** Applied at 1154–1159 ([rollout record](observed/rollout-record.json)); account_tx index v3 built on all six to 1159 and following commits to 1160 (§7); vote records partly live, defect VR-01 (§8); after state 1160 / `f65e6fac…` / `f06608d4…` ([after.json](observed/after.json), 12:14Z). Before state and canary: [checks](observed/before-checks.json), [canary record](observed/canary-backup.json). Cut and locally qualified on 2026-10-27 ([packet](qualification/README.md)).
 Every live section (§0, §1, §3–§9) is covered by the operator's go of the day; each step marked **GO**
 needs that go. This release has no governance step: the three activation heights stay as set on
 2026-10-23 (active from 1153).
@@ -160,9 +160,9 @@ index check (work server, signed 1137 import: 6.8 s for 1,137 blocks, 6.0 s per 
 blocks; allow a minute on the smaller validator hosts. Then one grant: every host's `disk_index_lag_blocks`
 stays 0 (the index follows the commit).
 
-- [ ] **GO 7.N** (one go per host: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5).
-- [ ] validator-1 reported both indexes usable at v3 before the others ran.
-- [ ] Six-way agreement before and after every host (`observe-fleet.py`).
+- [x] **GO 7.N** (one go per host: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5). 2026-10-27 11:38–11:41Z, only the host's RPC unit stopped (10–13 s), validator unit active, no block produced. Build time per host: validator-1 7.09 s, validator-0 8.66 s, validator-2 9.83 s, validator-3 8.57 s, validator-4 8.20 s, validator-5 9.27 s; RPC ready 6.4–8.5 s after start. Every host: both indexes usable at v3 (`postfiat-account-tx-disk-index-v3`), range 1–1159, 983 rows, lag 0; `account_tx` for `testing` through the tunnel from the index (71 rows, `index_used: true`) ([account-tx-index/](observed/account-tx-index/)).
+- [x] validator-1 reported both indexes usable at v3 before the others ran.
+- [x] Six-way agreement before and after every host. Each host read 1159 / `ae91ad6d…` after its build (no block during §7; `observe-fleet.py` was not rerun between hosts); after the §8 grant all six were at 1160 / `f65e6fac…` with the index following, lag 0 on six ([after-grant-follow.json](observed/account-tx-index/after-grant-follow.json)).
 
 ## 8. Vote-record check — covered by the operator's go of the day
 
@@ -180,7 +180,8 @@ Expected: `height-H.json` exists and names the six validators with an outcome ea
 field names if the file differs). A missing file is recorded, not a rollback reason: the record is not read by
 consensus.
 
-- [ ] **GO 8.** The record exists on the proposer and names the six validators.
+- [x] **GO 8.** The record exists on the proposer and names the six validators. 2026-10-27 11:43Z: the grant at 1160 (proposer validator-2, view 0, block `f65e6fac…`) applied identically on all six; validator-2 wrote `block-vote-records/height-00000000000000001160.json` (the file name pads the height), naming the six: validators 1–5 `accepted` with vote ids, validator-0 `no_answer` ([record](observed/vote-record/height-1160.json)).
+- **VR-01 (known defect, accepted 2026-10-27; next-release fix).** Observed: validator-2's record for 1160 lists validator-0 as `no_answer`, although validator-0's event log shows it accepted both vote requests and the batch for 1160 ([events](observed/vote-record/validator-0-events-1160.ndjson)); there is no `block-vote-records` directory on validator-0 after its 1158 proposal nor on validator-1 after its 1159 proposal ([listing](observed/vote-record/other-records.txt)); every certificate from 1154 to 1160 carried 5 of 6 votes, with validator-2 missing at 1155–1159 and validator-0 at 1160 ([rollout record](observed/rollout-record.json)). Likely causes to investigate: a late answer after the 60-second round deadline treated as no answer; the record written on only one of the two proposer paths; the background late-vote writer. The record is an operator artifact that consensus never reads, so this is no reason to roll back.
 
 ## 9. After state — covered by the operator's go of the day
 

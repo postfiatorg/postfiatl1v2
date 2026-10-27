@@ -9,9 +9,7 @@ manifest `a61e290a…`, publisher `pfc531e0…` (key on this server). Rollback r
 
 ## Status
 
-**Cut, locally qualified, not deployed** (2026-10-27, [packet](qualification/README.md)).
-Not done today: canary backup, fleet before-state, rollout, index build
-([DEPLOY-SHEET.md](DEPLOY-SHEET.md) §0–§9, under the operator's go). This release has no governance step.
+**Deployed to all six validators on 2026-10-27** (applied at 1154–1159, 11:05–11:35Z; account_tx index v3 built on all six to 1159 and following commits; vote records partly live with known defect VR-01; after state 1160 / `f65e6fac…` / `f06608d4…`, 12:14Z; [DEPLOY-SHEET.md](DEPLOY-SHEET.md) §0–§9, [RELEASE-ID.txt](RELEASE-ID.txt)). Cut and locally qualified the same morning ([packet](qualification/README.md)). This release has no governance step.
 
 ## Scope since `d9260e93`
 

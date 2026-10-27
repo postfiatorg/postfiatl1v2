@@ -1,0 +1,49 @@
+{
+ "validator_id": "validator-0",
+ "rpc_ready_after_start_seconds": 7.0,
+ "index_status": {
+  "account_count": 255,
+  "chain_id": "postfiat-wan-devnet-2",
+  "current_tip_hash": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+  "current_tip_height": 1159,
+  "disk_account_shard_count": 255,
+  "disk_index_lag_blocks": 0,
+  "disk_index_path": "account_tx_index_meta.json",
+  "disk_index_present": true,
+  "disk_index_reason": null,
+  "disk_index_usable": true,
+  "disk_indexed_from_height": 1,
+  "disk_indexed_to_height": 1159,
+  "disk_tip_hash": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "index_lag_blocks": 0,
+  "index_path": "account_tx_index.json",
+  "index_present": true,
+  "index_usable": true,
+  "indexed_block_count": 1118,
+  "indexed_from_height": 1,
+  "indexed_row_count": 983,
+  "indexed_to_height": 1159,
+  "protocol_version": 1,
+  "reason": null,
+  "schema": "postfiat-account-tx-index-status-v1",
+  "tip_hash": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd"
+ },
+ "account_tx_testing": {
+  "index_used": true,
+  "row_count": 71,
+  "truncated": false,
+  "scanned_block_count": 0,
+  "archive_lookup_count": 0
+ },
+ "testing_last_heights": [
+  1154,
+  1155,
+  1156,
+  1157,
+  1158,
+  1159
+ ],
+ "status_height": 1159,
+ "status_tip": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd"
+}

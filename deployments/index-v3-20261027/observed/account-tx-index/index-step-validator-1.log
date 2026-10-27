@@ -1,0 +1,52 @@
+before False unsupported account_tx index schema `postfiat-account-tx-index-v2` False unsupported account_tx disk index schema `postfiat-account-tx-disk-index-v2`
+rpc_stop 11:38:25
+build_seconds 7.094
+{
+  "schema": "postfiat-account-tx-index-build-v1",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "index_path": "/var/lib/postfiat/validator-1/account_tx_index.json",
+  "disk_index_path": "/var/lib/postfiat/validator-1/account_tx_index_meta.json",
+  "indexed_from_height": 1,
+  "indexed_to_height": 1159,
+  "indexed_block_count": 1118,
+  "indexed_row_count": 983,
+  "account_count": 255,
+  "tip_hash": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+  "index_usable": true,
+  "disk_index_usable": true,
+  "disk_account_shard_count": 255
+}
+{
+  "schema": "postfiat-account-tx-index-status-v1",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "index_path": "account_tx_index.json",
+  "disk_index_path": "account_tx_index_meta.json",
+  "index_present": true,
+  "index_usable": true,
+  "reason": null,
+  "disk_index_present": true,
+  "disk_index_usable": true,
+  "disk_index_reason": null,
+  "indexed_from_height": 1,
+  "indexed_to_height": 1159,
+  "indexed_block_count": 1118,
+  "indexed_row_count": 983,
+  "account_count": 255,
+  "disk_account_shard_count": 255,
+  "tip_hash": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+  "current_tip_hash": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+  "index_lag_blocks": 0,
+  "current_tip_height": 1159,
+  "disk_indexed_from_height": 1,
+  "disk_indexed_to_height": 1159,
+  "disk_tip_hash": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+  "disk_index_lag_blocks": 0
+}
+meta_schema postfiat-account-tx-disk-index-v3 aggregate_schema postfiat-account-tx-index-v3
+rpc_start 11:38:35
+active
+active

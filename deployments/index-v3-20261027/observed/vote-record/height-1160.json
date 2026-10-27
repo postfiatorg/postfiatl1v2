@@ -1,0 +1,48 @@
+{
+ "schema": "postfiat.block_vote_record.v1",
+ "chain_id": "postfiat-wan-devnet-2",
+ "block_height": 1160,
+ "view": 0,
+ "block_hash": "f65e6fac482e3817e5e1c1fad6143adb3e12fb8afd6d7808fc43e6112ac091afa02b3a971cff32757d4a4a7344c519cd",
+ "certificate_id": "a1b1ccaa4aa2c0fd0e3a8cdf8728dff2fae1da0d612b09819841d56647b7895c1bfc36d036d2f49a1fda8e67532d3ee4",
+ "proposer": "validator-2",
+ "quorum": 5,
+ "round_deadline_ms": 60000,
+ "entries": [
+  {
+   "validator": "validator-0",
+   "outcome": "no_answer",
+   "answered_after_quorum": false
+  },
+  {
+   "validator": "validator-1",
+   "outcome": "accepted",
+   "vote_id": "11a3c8716f4ab4a7a981626d66140ea1c0c9f346677030f0a481f7be372527f42188a919823372993aa997b2083c9770",
+   "answered_after_quorum": false
+  },
+  {
+   "validator": "validator-2",
+   "outcome": "accepted",
+   "vote_id": "b03cd0f268bf726d4bef88ba4b9c42935684192e4cfb659c7a6d24979d82db6e891954f417756f7d452f40ac64720cf3",
+   "answered_after_quorum": false
+  },
+  {
+   "validator": "validator-3",
+   "outcome": "accepted",
+   "vote_id": "2f8e4f3a9cf7cc42b80f77af75b52335e7eae2353ca02c49e0f74e7c00f6987b67f7765bd1459ab6551e32d9b711ac00",
+   "answered_after_quorum": false
+  },
+  {
+   "validator": "validator-4",
+   "outcome": "accepted",
+   "vote_id": "61f32015d80dc149a76a05e42345667814440454921dcfd667adbf33d0ed6bafba20b9461efc26c75429e33ebbb60b5e",
+   "answered_after_quorum": false
+  },
+  {
+   "validator": "validator-5",
+   "outcome": "accepted",
+   "vote_id": "4cff4c00e43744a454052f863f81bea0f85424d2492ebb48ae34950c5240a715e6dd59ae08c745c4d05c19b81ccbedb4",
+   "answered_after_quorum": false
+  }
+ ]
+}
