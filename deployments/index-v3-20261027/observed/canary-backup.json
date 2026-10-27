@@ -1,0 +1,68 @@
+{
+  "schema": "index-v3-20261027-canary-backup-v1",
+  "backup": {
+    "source_validator": "validator-1",
+    "height": 1153,
+    "tip": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+    "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25",
+    "certificate_id": "18bb94beebf64d38ca1c66e7b2f108e5b293a2bc6453433197af50379fa96c64dead1be39945c75a942717c23641f765",
+    "signed_manifest_sha256": "03e5c61ffc10da8a89e5b9f32c71097462f7363a84bfc422f639f1e462672aa6",
+    "finalized_checkpoint_verification_sha256": "19f5d4cb5ca44e95e2e93cc0e7bdf680cd911883fa2a0c81f4cc09562d8d30b1",
+    "verification_basis": "consensus-v2-finalized-checkpoint",
+    "verified": true,
+    "candidate_binary_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+    "remote_unsigned_snapshot": "/var/lib/postfiat/pre-rollout-snapshots/index-v3-20261027-validator-1-finalized-checkpoint",
+    "created_unix": 1793098082
+  },
+  "validator_1_free_disk_bytes": {
+    "before": 16610373632,
+    "after": 16291389440
+  },
+  "reimport": {
+    "binary_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+    "data_dir": "~/.cache/deploy-index-v3-20261027/backup-reverify",
+    "import_exit": 0,
+    "verify_finalized_checkpoint": {
+      "verified": true,
+      "height": 1153,
+      "tip": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+      "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25"
+    },
+    "verify_state": {
+      "verified": true,
+      "block_log_verified": true,
+      "block_count": 1153,
+      "tip": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+      "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25",
+      "governance_verified": true,
+      "shielded_verified": true
+    },
+    "import_state": {
+      "recipient_format_activation_height": 1153,
+      "rejected_tx_fee_activation_height": 1153,
+      "require_memo_activation_height": 1153,
+      "route_authority_epoch": {
+        "pftl-a666-ethereum-wA666-usdc-v1": 1,
+        "pftl-bmnrc-ethereum-wBMNRC-usdc-v1": 1
+      },
+      "result": "ATTENTION"
+    }
+  },
+  "head_replay": {
+    "command": "run_replay_evidence.py --signed-archive-dir (scratch copy of the export) --trusted-publisher-file snapshot-publisher.public.json --expected-height 1153 --expected-tip db8b87b6\u2026 --expected-root 7141956e\u2026 --node-bin ~/.cache/release-index-v3-20261027/target-1/release/postfiat-node --expected-source-revision d728f895 (from the clean source-1 tree at d728f895)",
+    "verdict": "storage-signed-archive-replay=PASS",
+    "matched": {
+      "height": true,
+      "root": true,
+      "tip": true
+    },
+    "exact_replay": true,
+    "full_replay_passed": true,
+    "signed_manifest_sha256": "03e5c61ffc10da8a89e5b9f32c71097462f7363a84bfc422f639f1e462672aa6",
+    "node_binary_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+    "network_contacted": false,
+    "receipt": "observed/head-replay-1153/receipts/height-1153.json",
+    "receipt_sha256": "d3d06a9aee648e39099abc9e4836ccfb9a5de2f99101fd65993d93ddde841145",
+    "archive_tree_unchanged": true
+  }
+}

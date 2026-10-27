@@ -6,7 +6,7 @@ the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md) and the
 [account_tx index runbook](../../docs/runbooks/account-tx-index.md). Keys are used by path only; no key
 material is printed, copied to a host or committed.
 
-**Status: cut and locally qualified on 2026-10-27 ([packet](qualification/README.md)); §0–§9 not started.**
+**Status: §0–§4 done on 2026-10-27** (before state at 1153, [checks](observed/before-checks.json); signed canary backup `03e5c61f…` and current-head replay PASS, [record](observed/canary-backup.json)); §5 not started. Cut and locally qualified on 2026-10-27 ([packet](qualification/README.md)).
 Every live section (§0, §1, §3–§9) is covered by the operator's go of the day; each step marked **GO**
 needs that go. This release has no governance step: the three activation heights stay as set on
 2026-10-23 (active from 1153).
@@ -24,9 +24,9 @@ Q=~/.cache/release-index-v3-20261027   # build trees: source-1 at d728f895, targ
 
 ## 0. Go/no-go — covered by the operator's go of the day
 
-- [ ] **GO 0.** No other rollout or session is active on the fleet; `apt-daily-upgrade` is not running;
+- [x] **GO 0.** No other rollout or session is active on the fleet; `apt-daily-upgrade` is not running;
   CI on `d728f895` is green in docs-build (40335966553), rust-ci with the full workspace test job
-  (40335966336) and product-security-ci (40335966335).
+  (40335966336) and product-security-ci (40335966335). 2026-10-27 10:41Z: `origin/main` at `77725bef` (the cut record); no other rollout; the two other tmux sessions on this server are read-only reviews; `apt-daily-upgrade` inactive on all six.
 
 ## 1. Before state (read-only) — covered by the operator's go of the day
 
@@ -39,7 +39,7 @@ Expected: six validators on `exchange-readiness-20261023` (`4085ac70…`, build 
 mempools empty. Record on each host, read-only, the index status: v2 usable or stale, not v3
 (`postfiat-node account-tx-index-status` with the deployed executable).
 
-- [ ] **GO 1.** Before state matches. Otherwise stop.
+- [x] **GO 1.** Before state matches. Otherwise stop. 2026-10-27 10:42Z: six on `exchange-readiness-20261023` (`4085ac70…`, build `6b1a0585`, manifest `210544a8…`, signature gate PASS) at 1153 / `db8b87b6…` / `7141956e…`, mempools 0 ([before.json](observed/before.json)); index v2 usable to 1153 on all six ([before-index-status/](observed/before-index-status/)).
 
 ## 2. Stage and local preflight (local)
 
@@ -66,11 +66,11 @@ scripts/postfiat-safe-rollout preflight --stage-report $S/stage-report.json \
 Expected: six-way agreement, six signer rosters valid, 0 deletions, order 1, 0, 2, 3, 4, 5. Read the
 three activation heights from the §4 import (`read-import-state.py`): 1153 each.
 
-- [ ] **GO 3.** Preflight passes.
+- [x] **GO 3.** Preflight passes. 2026-10-27 10:44Z: stage `b5cf3ce4…`/`a61e290a…`, local preflight `PASS_SIGNED_LOCAL_INPUTS_ONLY`; fleet preflight verified, six-way agreement at 1153, six rosters valid (one registry root), 0 deletions, order 1, 0, 2, 3, 4, 5. Activation heights from the §4 import: 1153, 1153, 1153; both routes `authority_epoch` 1.
 
 ## 4. Fresh signed canary backup from validator-1 and its exact replay — covered by the operator's go of the day
 
-- [ ] **GO 4.** Take the backup (writes one export on validator-1; check its free disk first).
+- [x] **GO 4.** Take the backup (writes one export on validator-1; check its free disk first). 2026-10-27 10:45–10:53Z: manifest `03e5c61f…` at 1153; re-import, checkpoint and full replay verified with the new executable; harness PASS, receipt `d3d06a9a…`; validator-1 free disk 16.61 GB → 16.29 GB.
 
 ```bash
 scripts/postfiat-safe-rollout backup --state-file $E/rollout-state.json \
