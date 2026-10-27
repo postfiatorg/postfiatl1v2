@@ -1,0 +1,117 @@
+{
+  "schema": "index-v3-20261027-before-checks-v1",
+  "recorded_at": "2026-10-27T10:42:42.520234+00:00",
+  "go0": {
+    "ci_d728f895": {
+      "docs_build": "40335966553 success",
+      "rust_ci": "40335966336 success (full workspace test job)",
+      "product_security_ci": "40335966335 success"
+    },
+    "other_rollouts": "none: origin/main tip 77725bef (the cut record), latest handoff 2026-10-26; tmux sessions dravlic2/dravlic3 are read-only review sessions on this server; the persistent ssh -N processes are the RPC tunnels (since 2026-10-08)",
+    "apt_daily_upgrade_service": [
+      "inactive"
+    ]
+  },
+  "before": {
+    "release": [
+      "exchange-readiness-20261023"
+    ],
+    "height": 1153,
+    "tip": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+    "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25",
+    "mempools": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "build": [
+      "6b1a0585"
+    ],
+    "manifest": [
+      "210544a8627ab366f6b982fe3d0f1994a6e2e2025db5b2cc3ce03139a0923bc1"
+    ],
+    "manifest_signature_gate": [
+      "PASS"
+    ]
+  },
+  "index_status": {
+    "validator-0": {
+      "index_usable": true,
+      "disk_index_usable": true,
+      "indexed_to_height": 1153,
+      "tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+      "schema_on_disk": "postfiat-account-tx-index-v2 / postfiat-account-tx-disk-index-v2"
+    },
+    "validator-1": {
+      "index_usable": true,
+      "disk_index_usable": true,
+      "indexed_to_height": 1153,
+      "tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+      "schema_on_disk": "postfiat-account-tx-index-v2 / postfiat-account-tx-disk-index-v2"
+    },
+    "validator-2": {
+      "index_usable": true,
+      "disk_index_usable": true,
+      "indexed_to_height": 1153,
+      "tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+      "schema_on_disk": "postfiat-account-tx-index-v2 / postfiat-account-tx-disk-index-v2"
+    },
+    "validator-3": {
+      "index_usable": true,
+      "disk_index_usable": true,
+      "indexed_to_height": 1153,
+      "tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+      "schema_on_disk": "postfiat-account-tx-index-v2 / postfiat-account-tx-disk-index-v2"
+    },
+    "validator-4": {
+      "index_usable": true,
+      "disk_index_usable": true,
+      "indexed_to_height": 1153,
+      "tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+      "schema_on_disk": "postfiat-account-tx-index-v2 / postfiat-account-tx-disk-index-v2"
+    },
+    "validator-5": {
+      "index_usable": true,
+      "disk_index_usable": true,
+      "indexed_to_height": 1153,
+      "tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+      "schema_on_disk": "postfiat-account-tx-index-v2 / postfiat-account-tx-disk-index-v2"
+    }
+  },
+  "activation_heights": "read from the section 4 canary import (sheet section 3)",
+  "stage": {
+    "executable_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+    "manifest_sha256": "a61e290a6045e71b38c5451df33ddc08c16505d9d3453f98a0131466d662b007",
+    "local_preflight": "PASS_SIGNED_LOCAL_INPUTS_ONLY",
+    "generated_files": 33,
+    "circuit_artifacts": 4,
+    "network_calls": 0
+  },
+  "fleet_preflight": {
+    "verified": true,
+    "order": [
+      "validator-1",
+      "validator-0",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+    ],
+    "canary": "validator-1",
+    "deletion_count": 0,
+    "convergence": {
+      "height": 1153,
+      "tip": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+      "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25",
+      "validator_count": 6
+    },
+    "rosters_valid": true,
+    "registry_roots": [
+      "08a451e07aeaf9ada41a69e7c26dfd3fd86fce11c02f5567127c598b3cf775ac054b2add85295cc8c0d429bb6d2b9b1d"
+    ]
+  },
+  "validator_1_free_disk_bytes_before": 16610373632
+}
