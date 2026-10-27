@@ -1,0 +1,212 @@
+{
+ "schema": "index-v3-20261027-rollout-record-v1",
+ "release": "index-v3-20261027",
+ "executable": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+ "previous": "exchange-readiness-20261023 (4085ac70\u2026)",
+ "grant": "StakeHub pft faucet testing --asset PFT --amount 1000000 (1 PFT from the devnet faucet to the testing wallet pf6395ef7f43ffaa74ce178d320b9bbbfd45532b38), as on 2026-10-23",
+ "steps": [
+  {
+   "order": 1,
+   "validator": "validator-1",
+   "applied": [
+    "validator-1"
+   ],
+   "grant_height": 1154,
+   "grant_tx": "b720cc890bb96d9a1e812e21ae5e236374cdc3a19f3cc52e01a1637d687673821728d9e4f96a07c525cb35d843af7ad8",
+   "proposer": "validator-2",
+   "view": 0,
+   "block": "b969b633d933d831205731f7337e669991b9270c923afc3d8673e3533017f9d972f90acc02a706643aabd96e62e1053a",
+   "state_root": "ff6ff3178e809fc8a3ebcf66e13cd606d7e2cc4ca0c660a6c97d94c104bd78545e41ce0b4aac63bb025e5ebcb2f50d79",
+   "voters": [
+    "validator-1",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+   ],
+   "checks": {
+    "identical_block_on_6": true,
+    "quorum_5_of_6": true,
+    "tip_is_grant_block_on_6": true,
+    "mempools_empty": true,
+    "receipt_verified_6_of_6": true,
+    "proposer_matches_receipt": true
+   },
+   "grant_check_pass": true
+  },
+  {
+   "order": 2,
+   "validator": "validator-0",
+   "applied": [
+    "validator-1",
+    "validator-0"
+   ],
+   "grant_height": 1155,
+   "grant_tx": "9c4c4b47becd0427fd9c2e77a9038a636ea2f1edd997718a3eccdf435725e5a74e8ce235f996095297030164016a1170",
+   "proposer": "validator-3",
+   "view": 0,
+   "block": "932a4414852e00c0dc978e4571e0880e36a2a797abb3c70a9069997642dadb5adb89516817e87b329b095f320617913d",
+   "state_root": "b25a908468d38c0991df76f769718d5be9da5a292b810de45f98e84c44a95e08b02c2817480704159512509bdf034ada",
+   "voters": [
+    "validator-0",
+    "validator-1",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+   ],
+   "checks": {
+    "identical_block_on_6": true,
+    "quorum_5_of_6": true,
+    "tip_is_grant_block_on_6": true,
+    "mempools_empty": true,
+    "receipt_verified_6_of_6": true,
+    "proposer_matches_receipt": true
+   },
+   "grant_check_pass": true
+  },
+  {
+   "order": 3,
+   "validator": "validator-2",
+   "applied": [
+    "validator-1",
+    "validator-0",
+    "validator-2"
+   ],
+   "grant_height": 1156,
+   "grant_tx": "beb965761955169785f57431ae90a338375441b392d871c08d45f5fc1808a4dfced50107e058de6e9b56b0b52d15c6c1",
+   "proposer": "validator-4",
+   "view": 0,
+   "block": "b30f6284ee83213e92111013e91f9523df5d894eade2d444d1a48707729c5c8ce07763b53c7cfab56f65d1d005edd1e5",
+   "state_root": "ef1889e8f350de0e113b0f6621c6d9b8b13ba4651273eca50915576bad59b8ee1bb0cccae35c350865d145c81aa3577c",
+   "voters": [
+    "validator-0",
+    "validator-1",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+   ],
+   "checks": {
+    "identical_block_on_6": true,
+    "quorum_5_of_6": true,
+    "tip_is_grant_block_on_6": true,
+    "mempools_empty": true,
+    "receipt_verified_6_of_6": true,
+    "proposer_matches_receipt": true
+   },
+   "grant_check_pass": true
+  },
+  {
+   "order": 4,
+   "validator": "validator-3",
+   "applied": [
+    "validator-1",
+    "validator-0",
+    "validator-2",
+    "validator-3"
+   ],
+   "grant_height": 1157,
+   "grant_tx": "1c7a2c07c0792d9139a658239c68eefcf1859decfe03b2c84933eda8075b196475836e190feb663d1094bd2a5377a1e4",
+   "proposer": "validator-5",
+   "view": 0,
+   "block": "a87e94b908769ccb84df73663414867f2d859cb2ba1b0f7e0e1099fc8bb6b096bd7f165898606bb294e9d73abdb6cea4",
+   "state_root": "a6455e9ca1f815e1fadacba469bd4937bab44de341c8368e7b2d6380647179753e0f781ab5cbc4323c3c9c1f14dc00f0",
+   "voters": [
+    "validator-0",
+    "validator-1",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+   ],
+   "checks": {
+    "identical_block_on_6": true,
+    "quorum_5_of_6": true,
+    "tip_is_grant_block_on_6": true,
+    "mempools_empty": true,
+    "receipt_verified_6_of_6": true,
+    "proposer_matches_receipt": true
+   },
+   "grant_check_pass": true
+  },
+  {
+   "order": 5,
+   "validator": "validator-4",
+   "applied": [
+    "validator-1",
+    "validator-0",
+    "validator-2",
+    "validator-3",
+    "validator-4"
+   ],
+   "grant_height": 1158,
+   "grant_tx": "5addfcccdcc1cc1326b23bd1cc1fd17d2fb42309e8fb5861f4f1142ddbe5a65a69ab53a2096c05b8c8d925e2d628f13b",
+   "proposer": "validator-0",
+   "view": 0,
+   "block": "9895b778118e228c30f78ef4c85286aa02c4420f4bfa57106c055694f54760b1e7956816d490b1427f18098506ba53ff",
+   "state_root": "319d815607c09e2578a33bd80ab46adca27e035d77e040a5cc67f12db52b5cd5e343e22de09b923adab5aa358344923a",
+   "voters": [
+    "validator-0",
+    "validator-1",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+   ],
+   "checks": {
+    "identical_block_on_6": true,
+    "quorum_5_of_6": true,
+    "tip_is_grant_block_on_6": true,
+    "mempools_empty": true,
+    "receipt_verified_6_of_6": true,
+    "proposer_matches_receipt": true
+   },
+   "grant_check_pass": true
+  },
+  {
+   "order": 6,
+   "validator": "validator-5",
+   "applied": [
+    "validator-1",
+    "validator-0",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+   ],
+   "grant_height": 1159,
+   "grant_tx": "18aa3934e0a86e7639367903bd01ee7671959035d7f68dd0a0f4ead68fc781996931a200a018dd0893a79dc7ed8305fc",
+   "proposer": "validator-1",
+   "view": 0,
+   "block": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+   "state_root": "60ddbee34e5ee8a4ca7372c6b7befd39ce9872cbbe37de79414997ce87178315a49dcc23a847837ee4aa1b2df5933392",
+   "voters": [
+    "validator-0",
+    "validator-1",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+   ],
+   "checks": {
+    "identical_block_on_6": true,
+    "quorum_5_of_6": true,
+    "tip_is_grant_block_on_6": true,
+    "mempools_empty": true,
+    "receipt_verified_6_of_6": true,
+    "proposer_matches_receipt": true
+   },
+   "grant_check_pass": true
+  }
+ ],
+ "after": {
+  "six_way_agreement": true,
+  "mempools_empty": true,
+  "all_six_on_new_executable": true,
+  "manifest_verified_on_six": true,
+  "build_d728f895_on_six": true,
+  "rpc_units_flags": true,
+  "verified_record_env_on_six": true,
+  "units_active": true,
+  "no_governance_block_since_1153": true,
+  "swap_service_committee_epoch_2": true,
+  "v2_index_reported_unsupported": true
+ },
+ "demo_preflight": "READY"
+}

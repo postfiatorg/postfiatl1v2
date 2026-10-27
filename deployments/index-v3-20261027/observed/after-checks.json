@@ -1,0 +1,1143 @@
+{
+ "observed_at": "2026-10-27T11:36:17.677124+00:00",
+ "checks": {
+  "six_way_agreement": true,
+  "mempools_empty": true,
+  "all_six_on_new_executable": true,
+  "manifest_verified_on_six": true,
+  "build_d728f895_on_six": true,
+  "rpc_units_flags": true,
+  "verified_record_env_on_six": true,
+  "units_active": true,
+  "no_governance_block_since_1153": true,
+  "swap_service_committee_epoch_2": true,
+  "v2_index_reported_unsupported": true
+ },
+ "pass_": true,
+ "hosts": {
+  "validator-0": {
+   "height": 1159,
+   "tip": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+   "state_root": "60ddbee34e5ee8a4ca7372c6b7befd39ce9872cbbe37de79414997ce87178315a49dcc23a847837ee4aa1b2df5933392",
+   "mempool_pending": 0,
+   "binary_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+   "build_git_revision": "d728f895",
+   "deployment_manifest_verified": true,
+   "blocks_since_1153": [
+    [
+     1154,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1155,
+     "transparent",
+     "validator-3"
+    ],
+    [
+     1156,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1157,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1158,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1159,
+     "transparent",
+     "validator-1"
+    ]
+   ],
+   "fastswap_capabilities": {
+    "committee": {
+     "chain": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "genesis_hash": [
+       206,
+       34,
+       202,
+       140,
+       147,
+       45,
+       160,
+       153,
+       139,
+       72,
+       68,
+       131,
+       160,
+       150,
+       71,
+       19,
+       138,
+       48,
+       224,
+       191,
+       68,
+       64,
+       141,
+       212,
+       154,
+       141,
+       109,
+       69,
+       39,
+       135,
+       173,
+       37,
+       82,
+       26,
+       255,
+       62,
+       211,
+       52,
+       218,
+       7,
+       225,
+       80,
+       167,
+       35,
+       58,
+       62,
+       144,
+       169
+      ],
+      "protocol_version": 1
+     },
+     "committee_epoch": 2,
+     "committee_root": [
+      114,
+      131,
+      104,
+      39,
+      249,
+      243,
+      236,
+      211,
+      4,
+      34,
+      97,
+      167,
+      122,
+      191,
+      247,
+      34,
+      53,
+      240,
+      35,
+      139,
+      106,
+      129,
+      246,
+      115,
+      99,
+      10,
+      98,
+      25,
+      148,
+      21,
+      2,
+      26,
+      27,
+      224,
+      203,
+      213,
+      69,
+      24,
+      120,
+      237,
+      202,
+      14,
+      17,
+      4,
+      52,
+      193,
+      218,
+      55
+     ],
+     "fastswap_schema_version": 1,
+     "quorum": 5,
+     "validator_count": 6
+    },
+    "enabled": true,
+    "phases": [
+     "precommit",
+     "commit",
+     "effects",
+     "new_round",
+     "cancel_apply"
+    ],
+    "schema": "postfiat-fastswap-capabilities-v1",
+    "terminal_receipt_code": "fastswap_applied",
+    "wire_codecs": [
+     "gzip-base64-v2"
+    ]
+   },
+   "account_tx_index_status": {
+    "index_present": true,
+    "index_usable": false,
+    "reason": "unsupported account_tx index schema `postfiat-account-tx-index-v2`",
+    "disk_index_present": true,
+    "disk_index_usable": false,
+    "disk_index_reason": "unsupported account_tx disk index schema `postfiat-account-tx-disk-index-v2`"
+   },
+   "remote": {
+    "rpc_unit": {
+     "exec_release_binary": true,
+     "max_requests_100000": true,
+     "restart_sec_1": true
+    },
+    "verified_record_env": 2,
+    "active": {
+     "postfiat-validator-0.service": "active",
+     "postfiat-validator-0-rpc.service": "active"
+    },
+    "disk_root_avail_bytes": 15545294848
+   }
+  },
+  "validator-1": {
+   "height": 1159,
+   "tip": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+   "state_root": "60ddbee34e5ee8a4ca7372c6b7befd39ce9872cbbe37de79414997ce87178315a49dcc23a847837ee4aa1b2df5933392",
+   "mempool_pending": 0,
+   "binary_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+   "build_git_revision": "d728f895",
+   "deployment_manifest_verified": true,
+   "blocks_since_1153": [
+    [
+     1154,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1155,
+     "transparent",
+     "validator-3"
+    ],
+    [
+     1156,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1157,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1158,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1159,
+     "transparent",
+     "validator-1"
+    ]
+   ],
+   "fastswap_capabilities": {
+    "committee": {
+     "chain": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "genesis_hash": [
+       206,
+       34,
+       202,
+       140,
+       147,
+       45,
+       160,
+       153,
+       139,
+       72,
+       68,
+       131,
+       160,
+       150,
+       71,
+       19,
+       138,
+       48,
+       224,
+       191,
+       68,
+       64,
+       141,
+       212,
+       154,
+       141,
+       109,
+       69,
+       39,
+       135,
+       173,
+       37,
+       82,
+       26,
+       255,
+       62,
+       211,
+       52,
+       218,
+       7,
+       225,
+       80,
+       167,
+       35,
+       58,
+       62,
+       144,
+       169
+      ],
+      "protocol_version": 1
+     },
+     "committee_epoch": 2,
+     "committee_root": [
+      114,
+      131,
+      104,
+      39,
+      249,
+      243,
+      236,
+      211,
+      4,
+      34,
+      97,
+      167,
+      122,
+      191,
+      247,
+      34,
+      53,
+      240,
+      35,
+      139,
+      106,
+      129,
+      246,
+      115,
+      99,
+      10,
+      98,
+      25,
+      148,
+      21,
+      2,
+      26,
+      27,
+      224,
+      203,
+      213,
+      69,
+      24,
+      120,
+      237,
+      202,
+      14,
+      17,
+      4,
+      52,
+      193,
+      218,
+      55
+     ],
+     "fastswap_schema_version": 1,
+     "quorum": 5,
+     "validator_count": 6
+    },
+    "enabled": true,
+    "phases": [
+     "precommit",
+     "commit",
+     "effects",
+     "new_round",
+     "cancel_apply"
+    ],
+    "schema": "postfiat-fastswap-capabilities-v1",
+    "terminal_receipt_code": "fastswap_applied",
+    "wire_codecs": [
+     "gzip-base64-v2"
+    ]
+   },
+   "account_tx_index_status": {
+    "index_present": true,
+    "index_usable": false,
+    "reason": "unsupported account_tx index schema `postfiat-account-tx-index-v2`",
+    "disk_index_present": true,
+    "disk_index_usable": false,
+    "disk_index_reason": "unsupported account_tx disk index schema `postfiat-account-tx-disk-index-v2`"
+   },
+   "remote": {
+    "rpc_unit": {
+     "exec_release_binary": true,
+     "max_requests_100000": true,
+     "restart_sec_1": true
+    },
+    "verified_record_env": 2,
+    "active": {
+     "postfiat-validator-1.service": "active",
+     "postfiat-validator-1-rpc.service": "active"
+    },
+    "disk_root_avail_bytes": 16222232576
+   }
+  },
+  "validator-2": {
+   "height": 1159,
+   "tip": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+   "state_root": "60ddbee34e5ee8a4ca7372c6b7befd39ce9872cbbe37de79414997ce87178315a49dcc23a847837ee4aa1b2df5933392",
+   "mempool_pending": 0,
+   "binary_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+   "build_git_revision": "d728f895",
+   "deployment_manifest_verified": true,
+   "blocks_since_1153": [
+    [
+     1154,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1155,
+     "transparent",
+     "validator-3"
+    ],
+    [
+     1156,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1157,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1158,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1159,
+     "transparent",
+     "validator-1"
+    ]
+   ],
+   "fastswap_capabilities": {
+    "committee": {
+     "chain": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "genesis_hash": [
+       206,
+       34,
+       202,
+       140,
+       147,
+       45,
+       160,
+       153,
+       139,
+       72,
+       68,
+       131,
+       160,
+       150,
+       71,
+       19,
+       138,
+       48,
+       224,
+       191,
+       68,
+       64,
+       141,
+       212,
+       154,
+       141,
+       109,
+       69,
+       39,
+       135,
+       173,
+       37,
+       82,
+       26,
+       255,
+       62,
+       211,
+       52,
+       218,
+       7,
+       225,
+       80,
+       167,
+       35,
+       58,
+       62,
+       144,
+       169
+      ],
+      "protocol_version": 1
+     },
+     "committee_epoch": 2,
+     "committee_root": [
+      114,
+      131,
+      104,
+      39,
+      249,
+      243,
+      236,
+      211,
+      4,
+      34,
+      97,
+      167,
+      122,
+      191,
+      247,
+      34,
+      53,
+      240,
+      35,
+      139,
+      106,
+      129,
+      246,
+      115,
+      99,
+      10,
+      98,
+      25,
+      148,
+      21,
+      2,
+      26,
+      27,
+      224,
+      203,
+      213,
+      69,
+      24,
+      120,
+      237,
+      202,
+      14,
+      17,
+      4,
+      52,
+      193,
+      218,
+      55
+     ],
+     "fastswap_schema_version": 1,
+     "quorum": 5,
+     "validator_count": 6
+    },
+    "enabled": true,
+    "phases": [
+     "precommit",
+     "commit",
+     "effects",
+     "new_round",
+     "cancel_apply"
+    ],
+    "schema": "postfiat-fastswap-capabilities-v1",
+    "terminal_receipt_code": "fastswap_applied",
+    "wire_codecs": [
+     "gzip-base64-v2"
+    ]
+   },
+   "account_tx_index_status": {
+    "index_present": true,
+    "index_usable": false,
+    "reason": "unsupported account_tx index schema `postfiat-account-tx-index-v2`",
+    "disk_index_present": true,
+    "disk_index_usable": false,
+    "disk_index_reason": "unsupported account_tx disk index schema `postfiat-account-tx-disk-index-v2`"
+   },
+   "remote": {
+    "rpc_unit": {
+     "exec_release_binary": true,
+     "max_requests_100000": true,
+     "restart_sec_1": true
+    },
+    "verified_record_env": 2,
+    "active": {
+     "postfiat-validator-2.service": "active",
+     "postfiat-validator-2-rpc.service": "active"
+    },
+    "disk_root_avail_bytes": 22163288064
+   }
+  },
+  "validator-3": {
+   "height": 1159,
+   "tip": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+   "state_root": "60ddbee34e5ee8a4ca7372c6b7befd39ce9872cbbe37de79414997ce87178315a49dcc23a847837ee4aa1b2df5933392",
+   "mempool_pending": 0,
+   "binary_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+   "build_git_revision": "d728f895",
+   "deployment_manifest_verified": true,
+   "blocks_since_1153": [
+    [
+     1154,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1155,
+     "transparent",
+     "validator-3"
+    ],
+    [
+     1156,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1157,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1158,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1159,
+     "transparent",
+     "validator-1"
+    ]
+   ],
+   "fastswap_capabilities": {
+    "committee": {
+     "chain": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "genesis_hash": [
+       206,
+       34,
+       202,
+       140,
+       147,
+       45,
+       160,
+       153,
+       139,
+       72,
+       68,
+       131,
+       160,
+       150,
+       71,
+       19,
+       138,
+       48,
+       224,
+       191,
+       68,
+       64,
+       141,
+       212,
+       154,
+       141,
+       109,
+       69,
+       39,
+       135,
+       173,
+       37,
+       82,
+       26,
+       255,
+       62,
+       211,
+       52,
+       218,
+       7,
+       225,
+       80,
+       167,
+       35,
+       58,
+       62,
+       144,
+       169
+      ],
+      "protocol_version": 1
+     },
+     "committee_epoch": 2,
+     "committee_root": [
+      114,
+      131,
+      104,
+      39,
+      249,
+      243,
+      236,
+      211,
+      4,
+      34,
+      97,
+      167,
+      122,
+      191,
+      247,
+      34,
+      53,
+      240,
+      35,
+      139,
+      106,
+      129,
+      246,
+      115,
+      99,
+      10,
+      98,
+      25,
+      148,
+      21,
+      2,
+      26,
+      27,
+      224,
+      203,
+      213,
+      69,
+      24,
+      120,
+      237,
+      202,
+      14,
+      17,
+      4,
+      52,
+      193,
+      218,
+      55
+     ],
+     "fastswap_schema_version": 1,
+     "quorum": 5,
+     "validator_count": 6
+    },
+    "enabled": true,
+    "phases": [
+     "precommit",
+     "commit",
+     "effects",
+     "new_round",
+     "cancel_apply"
+    ],
+    "schema": "postfiat-fastswap-capabilities-v1",
+    "terminal_receipt_code": "fastswap_applied",
+    "wire_codecs": [
+     "gzip-base64-v2"
+    ]
+   },
+   "account_tx_index_status": {
+    "index_present": true,
+    "index_usable": false,
+    "reason": "unsupported account_tx index schema `postfiat-account-tx-index-v2`",
+    "disk_index_present": true,
+    "disk_index_usable": false,
+    "disk_index_reason": "unsupported account_tx disk index schema `postfiat-account-tx-disk-index-v2`"
+   },
+   "remote": {
+    "rpc_unit": {
+     "exec_release_binary": true,
+     "max_requests_100000": true,
+     "restart_sec_1": true
+    },
+    "verified_record_env": 2,
+    "active": {
+     "postfiat-validator-3.service": "active",
+     "postfiat-validator-3-rpc.service": "active"
+    },
+    "disk_root_avail_bytes": 27009339392
+   }
+  },
+  "validator-4": {
+   "height": 1159,
+   "tip": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+   "state_root": "60ddbee34e5ee8a4ca7372c6b7befd39ce9872cbbe37de79414997ce87178315a49dcc23a847837ee4aa1b2df5933392",
+   "mempool_pending": 0,
+   "binary_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+   "build_git_revision": "d728f895",
+   "deployment_manifest_verified": true,
+   "blocks_since_1153": [
+    [
+     1154,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1155,
+     "transparent",
+     "validator-3"
+    ],
+    [
+     1156,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1157,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1158,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1159,
+     "transparent",
+     "validator-1"
+    ]
+   ],
+   "fastswap_capabilities": {
+    "committee": {
+     "chain": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "genesis_hash": [
+       206,
+       34,
+       202,
+       140,
+       147,
+       45,
+       160,
+       153,
+       139,
+       72,
+       68,
+       131,
+       160,
+       150,
+       71,
+       19,
+       138,
+       48,
+       224,
+       191,
+       68,
+       64,
+       141,
+       212,
+       154,
+       141,
+       109,
+       69,
+       39,
+       135,
+       173,
+       37,
+       82,
+       26,
+       255,
+       62,
+       211,
+       52,
+       218,
+       7,
+       225,
+       80,
+       167,
+       35,
+       58,
+       62,
+       144,
+       169
+      ],
+      "protocol_version": 1
+     },
+     "committee_epoch": 2,
+     "committee_root": [
+      114,
+      131,
+      104,
+      39,
+      249,
+      243,
+      236,
+      211,
+      4,
+      34,
+      97,
+      167,
+      122,
+      191,
+      247,
+      34,
+      53,
+      240,
+      35,
+      139,
+      106,
+      129,
+      246,
+      115,
+      99,
+      10,
+      98,
+      25,
+      148,
+      21,
+      2,
+      26,
+      27,
+      224,
+      203,
+      213,
+      69,
+      24,
+      120,
+      237,
+      202,
+      14,
+      17,
+      4,
+      52,
+      193,
+      218,
+      55
+     ],
+     "fastswap_schema_version": 1,
+     "quorum": 5,
+     "validator_count": 6
+    },
+    "enabled": true,
+    "phases": [
+     "precommit",
+     "commit",
+     "effects",
+     "new_round",
+     "cancel_apply"
+    ],
+    "schema": "postfiat-fastswap-capabilities-v1",
+    "terminal_receipt_code": "fastswap_applied",
+    "wire_codecs": [
+     "gzip-base64-v2"
+    ]
+   },
+   "account_tx_index_status": {
+    "index_present": true,
+    "index_usable": false,
+    "reason": "unsupported account_tx index schema `postfiat-account-tx-index-v2`",
+    "disk_index_present": true,
+    "disk_index_usable": false,
+    "disk_index_reason": "unsupported account_tx disk index schema `postfiat-account-tx-disk-index-v2`"
+   },
+   "remote": {
+    "rpc_unit": {
+     "exec_release_binary": true,
+     "max_requests_100000": true,
+     "restart_sec_1": true
+    },
+    "verified_record_env": 2,
+    "active": {
+     "postfiat-validator-4.service": "active",
+     "postfiat-validator-4-rpc.service": "active"
+    },
+    "disk_root_avail_bytes": 22494142464
+   }
+  },
+  "validator-5": {
+   "height": 1159,
+   "tip": "ae91ad6d99bdeaa5038ca4c5a87a04c5bd346a520507b49bc14801f705f597a39d743a9ff6c973498d539b389a2ceebd",
+   "state_root": "60ddbee34e5ee8a4ca7372c6b7befd39ce9872cbbe37de79414997ce87178315a49dcc23a847837ee4aa1b2df5933392",
+   "mempool_pending": 0,
+   "binary_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+   "build_git_revision": "d728f895",
+   "deployment_manifest_verified": true,
+   "blocks_since_1153": [
+    [
+     1154,
+     "transparent",
+     "validator-2"
+    ],
+    [
+     1155,
+     "transparent",
+     "validator-3"
+    ],
+    [
+     1156,
+     "transparent",
+     "validator-4"
+    ],
+    [
+     1157,
+     "transparent",
+     "validator-5"
+    ],
+    [
+     1158,
+     "transparent",
+     "validator-0"
+    ],
+    [
+     1159,
+     "transparent",
+     "validator-1"
+    ]
+   ],
+   "fastswap_capabilities": {
+    "committee": {
+     "chain": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "genesis_hash": [
+       206,
+       34,
+       202,
+       140,
+       147,
+       45,
+       160,
+       153,
+       139,
+       72,
+       68,
+       131,
+       160,
+       150,
+       71,
+       19,
+       138,
+       48,
+       224,
+       191,
+       68,
+       64,
+       141,
+       212,
+       154,
+       141,
+       109,
+       69,
+       39,
+       135,
+       173,
+       37,
+       82,
+       26,
+       255,
+       62,
+       211,
+       52,
+       218,
+       7,
+       225,
+       80,
+       167,
+       35,
+       58,
+       62,
+       144,
+       169
+      ],
+      "protocol_version": 1
+     },
+     "committee_epoch": 2,
+     "committee_root": [
+      114,
+      131,
+      104,
+      39,
+      249,
+      243,
+      236,
+      211,
+      4,
+      34,
+      97,
+      167,
+      122,
+      191,
+      247,
+      34,
+      53,
+      240,
+      35,
+      139,
+      106,
+      129,
+      246,
+      115,
+      99,
+      10,
+      98,
+      25,
+      148,
+      21,
+      2,
+      26,
+      27,
+      224,
+      203,
+      213,
+      69,
+      24,
+      120,
+      237,
+      202,
+      14,
+      17,
+      4,
+      52,
+      193,
+      218,
+      55
+     ],
+     "fastswap_schema_version": 1,
+     "quorum": 5,
+     "validator_count": 6
+    },
+    "enabled": true,
+    "phases": [
+     "precommit",
+     "commit",
+     "effects",
+     "new_round",
+     "cancel_apply"
+    ],
+    "schema": "postfiat-fastswap-capabilities-v1",
+    "terminal_receipt_code": "fastswap_applied",
+    "wire_codecs": [
+     "gzip-base64-v2"
+    ]
+   },
+   "account_tx_index_status": {
+    "index_present": true,
+    "index_usable": false,
+    "reason": "unsupported account_tx index schema `postfiat-account-tx-index-v2`",
+    "disk_index_present": true,
+    "disk_index_usable": false,
+    "disk_index_reason": "unsupported account_tx disk index schema `postfiat-account-tx-disk-index-v2`"
+   },
+   "remote": {
+    "rpc_unit": {
+     "exec_release_binary": true,
+     "max_requests_100000": true,
+     "restart_sec_1": true
+    },
+    "verified_record_env": 2,
+    "active": {
+     "postfiat-validator-5.service": "active",
+     "postfiat-validator-5-rpc.service": "active"
+    },
+    "disk_root_avail_bytes": 25405755392
+   }
+  }
+ },
+ "activation_heights_note": "1153, 1153, 1153 at the section 4 import (1153); every block since 1153 is a transparent faucet grant, so no amendment changed them",
+ "routes_note": "both routes authority_epoch 1 at the section 4 import; no governance or route-policy block since"
+}

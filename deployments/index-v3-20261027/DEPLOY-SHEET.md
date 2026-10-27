@@ -6,7 +6,7 @@ the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md) and the
 [account_tx index runbook](../../docs/runbooks/account-tx-index.md). Keys are used by path only; no key
 material is printed, copied to a host or committed.
 
-**Status: §0–§4 done on 2026-10-27** (before state at 1153, [checks](observed/before-checks.json); signed canary backup `03e5c61f…` and current-head replay PASS, [record](observed/canary-backup.json)); §5 not started. Cut and locally qualified on 2026-10-27 ([packet](qualification/README.md)).
+**Status: §0–§4 done on 2026-10-27** (before state at 1153, [checks](observed/before-checks.json); signed canary backup `03e5c61f…` and current-head replay PASS, [record](observed/canary-backup.json)); §5–§6 done (all six on `b5cf3ce4…` at 1159, [rollout record](observed/rollout-record.json), [after checks](observed/after-checks.json)). Cut and locally qualified on 2026-10-27 ([packet](qualification/README.md)).
 Every live section (§0, §1, §3–§9) is covered by the operator's go of the day; each step marked **GO**
 needs that go. This release has no governance step: the three activation heights stay as set on
 2026-10-23 (active from 1153).
@@ -108,7 +108,7 @@ Order: validator-1 (canary), then 0, 2, 3, 4, 5. Before the first grant, point S
 validator is applied. The grant recipient is the `testing` wallet
 `pf6395ef7f43ffaa74ce178d320b9bbbfd45532b38`.
 
-- [ ] **GO 5.N** (one go per validator: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5).
+- [x] **GO 5.N** (one go per validator: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5). 2026-10-27 11:05:29–11:34:43Z: all six applied in order; one 1-PFT grant to `testing` after each, at 1154–1159 (proposers validator-2, 3, 4, 5, 0, 1), each certified at view 0 with quorum 5 of 6 and the same block, tip and root on all six; no rollback ([rollout record](observed/rollout-record.json)).
 
 ```bash
 scripts/postfiat-safe-rollout apply-next --state-file $E/rollout-state.json > $E/apply-N.json
@@ -134,7 +134,7 @@ python3 $PACKET/demo-preflight.py
 Expected: all 12 validator and RPC processes on `b5cf3ce4…`; `deployment_manifest_verified=true` and
 `build_git_revision` `d728f895` on every host; RPC units with `--max-requests 100000` and `RestartSec=1`.
 
-- [ ] **GO 6.** After checks pass; proceed to §7.
+- [x] **GO 6.** After checks pass; proceed to §7. 2026-10-27 11:35–11:37Z: after state 1159 / `ae91ad6d…` / `60ddbee3…` on six; demo preflight READY (60 PASS); all six on `b5cf3ce4…`, manifest verified, build `d728f895`; RPC units keep `--max-requests 100000` and `RestartSec=1`, both env files `POSTFIAT_DEPLOYMENT_VERIFIED_RECORD`; no governance block since 1153 (activation heights stay 1153, both routes `authority_epoch` 1); swap service committee epoch 2 on six; the v2 index reported unsupported on six, as expected before §7 ([after checks](observed/after-checks.json)).
 
 ## 7. account_tx index build, one host at a time — covered by the operator's go of the day
 
