@@ -107,6 +107,25 @@ fi
 grep -q "ArtifactMetadataMismatch" <<<"$out" || { printf '%s\n' "$out"; exit 1; }
 echo "ok: spliced artifact (this code, another build's metadata) refused"
 
+# This build's artifact with its runtime cut to its last 1,000 bytes (trailer
+# kept, still the end of the creation code): refused before the broadcast.
+TRUNCATED_OUT=cache/deploy-test/out-truncated
+rm -rf "$TRUNCATED_OUT" && mkdir -p "$TRUNCATED_OUT/PFTToken.sol"
+python3 - "$TRUNCATED_OUT/PFTToken.sol/PFTToken.json" <<'PY'
+import json, sys
+artifact = json.load(open("out/PFTToken.sol/PFTToken.json"))
+runtime = artifact["deployedBytecode"]["object"]
+assert runtime.startswith("0x") and len(runtime) > 2 + 2000
+artifact["deployedBytecode"]["object"] = "0x" + runtime[-2000:]
+json.dump(artifact, open(sys.argv[1], "w"))
+PY
+if out="$(run PFT_TOKEN_TEST_FOUNDRY_OUT="$TRUNCATED_OUT")"; then
+  printf '%s\n' "$out"; echo "FAIL: the script accepted a truncated runtime" >&2; exit 1
+fi
+grep -q "ArtifactMetadataMismatch" <<<"$out" && ! grep -qE "DeployedCodeMismatch|PFTToken deployed at" <<<"$out" \
+  || { printf '%s\n' "$out"; exit 1; }
+echo "ok: truncated runtime (last 1,000 bytes) refused before the broadcast"
+
 # ---- a local anvil: the creation transaction of a real Safe, read from the chain.
 # anvil and cast run under the same env -i, temporary HOME and URL redaction.
 CAST="$(dirname "$FORGE")/cast"

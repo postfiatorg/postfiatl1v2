@@ -199,7 +199,8 @@ After the broadcast, in this order:
    `broadcast/DeployPFTToken.s.sol/<chain id>/run-latest.json` is mined with
    status 1 on the explorer, and the token address it created has the code.
    Every script check, `checkDeployedCode` included, ran in forge's simulation
-   before the transaction was submitted; none of them read the mined chain.
+   before the transaction was submitted; none of them read the state the
+   deployment transaction creates.
 2. Verify the source on Basescan (`BASESCAN_API_KEY` exported in the shell,
    never in a file; `foundry.toml` reads it for chain ids 8453 and 84532):
 

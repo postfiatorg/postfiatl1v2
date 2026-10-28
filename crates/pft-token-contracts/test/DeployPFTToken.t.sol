@@ -977,14 +977,17 @@ contract DeployPFTTokenTest is SafeFixtures {
         bytes memory v37 = _alter("legacy", 70, abi.encodePacked(hex"8302948d", signature));
         VM.expectRevert(abi.encodeWithSelector(DeployPFTToken.TreasuryCreationWrongChain.selector, BASE_SEPOLIA + 1));
         script.checkCreation(BASE_SEPOLIA, legacy, legacySafe, v37);
-        bytes memory v35 = _alter("legacy", 70, abi.encodePacked(hex"8302948b", signature));
-        (uint256 chain35,,) = script.decodeRawTransaction(v35);
-        _assertEq(chain35, BASE_SEPOLIA, "v 2 x chain + 35");
         // + 36 is the other parity, not chain 84532.5: accepted as 84532.
+        // The legacy fixture is itself the + 36 case (v 0x02948c = 169100): v36 rebuilds it byte for byte.
         bytes memory v36 = _alter("legacy", 70, abi.encodePacked(hex"8302948c", signature));
         (uint256 chain36,,) = script.decodeRawTransaction(v36);
         _assertEq(chain36, BASE_SEPOLIA, "v 2 x chain + 36");
         script.checkCreation(BASE_SEPOLIA, legacy, legacySafe, v36);
+        // + 35 (v 169099) from the same envelope: accepted as 84532 (checkCreation reads no hash pin).
+        bytes memory v35 = _alter("legacy", 70, abi.encodePacked(hex"8302948b", signature));
+        (uint256 chain35,,) = script.decodeRawTransaction(v35);
+        _assertEq(chain35, BASE_SEPOLIA, "v 2 x chain + 35");
+        script.checkCreation(BASE_SEPOLIA, legacy, legacySafe, v35);
     }
 
     function testRefusesAMissingOrWrongCreationTransaction() public {
