@@ -1,0 +1,9 @@
+[Unit]
+Description=Read-only L1 Task Node validator registry publisher
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flock -n /home/postfiat/var/track-e-20261028/publisher.lock /bin/sh /home/postfiat/repos/postfiatl1v2-tasknode-l1-20261028/tools/tasknode-validator-binding/publish.sh
+TimeoutStartSec=5min
+UMask=0022
+NoNewPrivileges=yes

@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh L1 Task Node validator registry every ten minutes
+
+[Timer]
+OnCalendar=*:0/10
+Persistent=true
+AccuracySec=5s
+Unit=l1-tasknode-registry.service
+
+[Install]
+WantedBy=timers.target
