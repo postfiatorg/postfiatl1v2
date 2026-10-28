@@ -57,6 +57,7 @@ Decided by the product owner 2026-10-28: total supply 100 billion PFT; the Base 
 - [ ] P2.2 *(this lane)* The genesis external lane. Genesis reserves exactly the ERC-20 slice there, and the native supply invariant counts it (today it counts only live custody and fee burns, `docs/status/OPEN-SOURCE-NATIVE-SUPPLY-INVENTORY-20260716.md:23`).
 - [x] P2.3 *(this lane)* The Base lock contract, following `ERC20BridgeVaultL1` (`crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol:6-16`), with no holder snapshot and no closing date: `crates/pft-token-contracts/src/PFTLockV1.sol`, merged in `39bfb547`; `forge test` passes 123 tests (111 from the lock branch, 12 from main's deploy-script checks).
   - Its deployment on Base, the PFTL finality verifier first and then the lock, is a later step with its own record.
+  - The lock deployment script exists: `crates/pft-token-contracts/script/DeployPFTLock.s.sol`, merged in `182b3f22`; the Base deployment waits for the PFTL finality verifier on Base.
 - [ ] P2.4 *(this lane)* The inbound release path on PFTL and its proof. It extends the BFT-checkpoint ingress (`docs/status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md:391`) with a Base checkpoint source. The SP1 ingress program is pinned to Sepolia (`programs/pfusdc-eth-ingress/src/lib.rs:19`, `:91`).
 - [ ] P2.5 *(this lane)* Its own qualification before genesis: tests, a devnet run, and an audit of the lock contract. To tick it: the qualification record.
 
