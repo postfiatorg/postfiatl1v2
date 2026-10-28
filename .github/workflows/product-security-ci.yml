@@ -466,6 +466,7 @@ jobs:
           git submodule update --init --depth 1 crates/pft-token-contracts/lib/openzeppelin-contracts
           forge test --root crates/pft-token-contracts
           crates/pft-token-contracts/test/deploy-script-cli.sh
+          crates/pft-token-contracts/test/deploy-lock-cli.sh
 
   official-mainnet-fork:
     if: github.event_name != 'pull_request'
