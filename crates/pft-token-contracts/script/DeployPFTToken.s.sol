@@ -616,13 +616,15 @@ contract DeployPFTToken {
     /// The artifact whose metadata goes in the record must be this build of the
     /// token: its creation code is the code `deploy` sends.
     /// Its recorded metadata must be the metadata of that code: the build keeps
-    /// the IPFS metadata hash (`--no-metadata` and bytecode_hash = "none" drop
-    /// it, and two builds with other settings would then share one code), the
-    /// creation code ends with the artifact's runtime code (PFTToken has
-    /// immutables, so `type(PFTToken).runtimeCode` does not exist) and exceeds its
-    /// CBOR trailer by at least MIN_RUNTIME_CODE_BEYOND_TRAILER bytes, and the
-    /// IPFS digest of the artifact's rawMetadata is the digest in that runtime
-    /// code's CBOR trailer.
+    /// the IPFS metadata hash (the rawMetadata's settings.metadata.bytecodeHash is
+    /// "ipfs"; `--no-metadata` and bytecode_hash = "none" drop it, and two builds
+    /// with other settings would then share one code), the creation code ends
+    /// with the artifact's runtime code (PFTToken has immutables, so
+    /// `type(PFTToken).runtimeCode` does not exist), which has the length the
+    /// creation code declares (`declaredRuntimeLength`) and exceeds its CBOR
+    /// trailer by at least MIN_RUNTIME_CODE_BEYOND_TRAILER bytes, and the IPFS
+    /// digest of the artifact's rawMetadata is the digest in that runtime code's
+    /// CBOR trailer. All of it runs before the broadcast.
     function _checkArtifact(Config memory cfg) private view returns (string memory artifact) {
         artifact = VM.readFile(cfg.artifact);
         bytes32 built = keccak256(VM.parseJsonBytes(artifact, ".bytecode.object"));
@@ -637,16 +639,43 @@ contract DeployPFTToken {
     /// The metadata check of `_checkArtifact` for the artifact `json` at `path`
     /// and the creation code `creation` it must describe.
     function checkArtifactMetadata(string memory path, string memory json, bytes memory creation) public pure {
-        string memory artifact = json;
-        string memory hashKind = VM.parseJsonString(artifact, ".metadata.settings.metadata.bytecodeHash");
+        string memory metadata = VM.parseJsonString(json, ".rawMetadata");
+        string memory hashKind = VM.parseJsonString(metadata, ".settings.metadata.bytecodeHash");
         if (keccak256(bytes(hashKind)) != keccak256("ipfs")) revert MetadataHashDisabled();
-        bytes memory runtime = VM.parseJsonBytes(artifact, ".deployedBytecode.object");
+        bytes memory runtime = VM.parseJsonBytes(json, ".deployedBytecode.object");
         bytes32 digest = metadataDigest(runtime);
         if (
             digest == 0 || runtime.length < metadataTrailer(runtime).length + MIN_RUNTIME_CODE_BEYOND_TRAILER
-                || !endsWith(creation, runtime)
-                || ipfsDigest(bytes(VM.parseJsonString(artifact, ".rawMetadata"))) != digest
+                || runtime.length != declaredRuntimeLength(creation) || !endsWith(creation, runtime)
+                || ipfsDigest(bytes(metadata)) != digest
         ) revert ArtifactMetadataMismatch(path);
+    }
+
+    /// The runtime length `creation` declares: the size of its constructor's
+    /// `PUSH size PUSH offset PUSH0 CODECOPY` (PUSH1 0x00 before Shanghai) that
+    /// copies the runtime, the first such copy to memory 0 with offset + size the
+    /// code's length. solc 0.8.24 emits it for PFTToken (immutables) as
+    /// `PUSH2 0x0e03 PUSH3 0x0006b9 PUSH0 CODECOPY`. Zero if there is none.
+    function declaredRuntimeLength(bytes memory creation) public pure returns (uint256) {
+        uint256 pushes = 0; // consecutive PUSH instructions just before `i`
+        (uint256 size, uint256 offset, uint256 dest) = (0, 0, 0); // their last three values
+        uint256 i = 0;
+        while (i < creation.length) {
+            uint256 op = uint8(creation[i]);
+            if (op == 0x39 && pushes >= 3 && dest == 0 && size <= creation.length && offset == creation.length - size) {
+                return size;
+            }
+            uint256 width = op >= 0x5f && op <= 0x7f ? op - 0x5f : 0; // PUSH0 to PUSH32
+            if (i + width >= creation.length) return 0;
+            uint256 value = 0;
+            for (uint256 j = 1; j <= width; j++) {
+                value = (value << 8) | uint8(creation[i + j]);
+            }
+            (size, offset, dest) = (offset, dest, value);
+            pushes = op >= 0x5f && op <= 0x7f ? pushes + 1 : 0;
+            i += 1 + width;
+        }
+        return 0;
     }
 
     /// The sha256 digest of the IPFS multihash (0x12 0x20 <digest>) under the
@@ -697,7 +726,8 @@ contract DeployPFTToken {
         return _slice(code, code.length - length, length);
     }
 
-    /// Right after the broadcast: the token's code has the length and the CBOR
+    /// Right after the broadcast (the confirmation; the length was pinned before
+    /// it by `checkArtifactMetadata`): the token's code has the length and the CBOR
     /// trailer of the artifact's runtime code `runtime` (the immutables make the
     /// rest differ).
     function checkDeployedCode(address token, bytes memory runtime) public view {

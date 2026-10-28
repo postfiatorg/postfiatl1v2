@@ -89,10 +89,10 @@ outside the repository, `*.env` is ignored) and refuses, before the broadcast:
 | the initializer's owners and threshold are the live ones; its fallback handler is zero or the canonical CompatibilityFallbackHandler of that version with its pinned code | `TreasuryCreationMismatch(field)` |
 | the initializer pays nothing: `paymentToken` zero and `payment` 0 | `TreasurySetupHasPayment(token, payment)` |
 | the artifact under `$FOUNDRY_OUT` (else `out`) `/PFTToken.sol/PFTToken.json` has `bytecode.object` equal to the deployed creation code | `ArtifactMismatch(path, artifact hash, compiled hash)` |
-| its `metadata.settings.metadata.bytecodeHash` is `ipfs`; the creation code ends with its `deployedBytecode.object`, which exceeds its CBOR trailer by at least 512 bytes and whose trailer holds the IPFS digest of its `rawMetadata` | `MetadataHashDisabled`, `ArtifactMetadataMismatch(path)` |
+| its `rawMetadata` has `settings.metadata.bytecodeHash` `ipfs` (the editable `metadata` object is not read); the creation code ends with its `deployedBytecode.object`, which has the runtime length the creation code's constructor copies (the size of its `CODECOPY`), exceeds its CBOR trailer by at least 512 bytes and whose trailer holds the IPFS digest of that `rawMetadata` | `MetadataHashDisabled`, `ArtifactMetadataMismatch(path)` |
 | the deployer's nonce on the target chain is 0 (a one-time key) | `DeployerAlreadyUsed(deployer, nonce)` |
 | a real deployment sets no test switch, sets `PFT_TOKEN_SOURCE_COMMIT` and has no record yet | `RealDeploymentWithTestSwitch`, `SourceCommitMissing`, `RecordExists(path)` |
-| right after the broadcast, the token's code has the length and the CBOR trailer of `deployedBytecode.object` (the immutables make the rest differ) | `DeployedCodeMismatch(token, code length, artifact length)` |
+| right after the broadcast in forge's simulation, before the transaction is submitted, the token's code has the length and the CBOR trailer of `deployedBytecode.object` (the immutables make the rest differ) | `DeployedCodeMismatch(token, code length, artifact length)` |
 
 The Safe checks fail closed on both chains. Pinned singletons (the canonical
 deployments in safe-global/safe-deployments, commit `b45417dd`, listed there
@@ -198,6 +198,8 @@ After the broadcast, in this order:
 1. Confirm the receipt: the transaction in
    `broadcast/DeployPFTToken.s.sol/<chain id>/run-latest.json` is mined with
    status 1 on the explorer, and the token address it created has the code.
+   Every script check, `checkDeployedCode` included, ran in forge's simulation
+   before the transaction was submitted; none of them read the mined chain.
 2. Verify the source on Basescan (`BASESCAN_API_KEY` exported in the shell,
    never in a file; `foundry.toml` reads it for chain ids 8453 and 84532):
 
@@ -211,7 +213,10 @@ After the broadcast, in this order:
    The encoded arguments equal `constructor_args` in the deployment record,
    and the compiler settings equal the record's.
 3. On the explorer, `totalSupply()` equals `PFT_TOKEN_TOTAL_SUPPLY` and the
-   treasury Safe holds all of it.
+   treasury Safe holds all of it, and the record's `treasury_safe_creation_tx`
+   is a mined transaction of the target chain that created the treasury. The
+   script binds the raw bytes to that hash, not the hash to the chain; this
+   step does.
 4. Finalise the record: check that `deployed_code_keccak256` equals
    `cast keccak $(cast code <token> --rpc-url <base-rpc-url>)`, copy `tx_hash`
    and `block_number` in from `run-latest.json`, fill
@@ -227,6 +232,12 @@ transactions and nonce. If the creation transaction was mined, continue from
 step 1 with that transaction and keep the record. Only when the explorer shows
 no transaction from the deployer is the uncommitted record deleted and the
 deployment retried. Never delete or retry before that check.
+
+If any check fails after a broadcast was mined (an ambiguous or mismatching
+outcome: a step above fails, or forge reports an error once the transaction
+is on chain), stop. Keep `broadcast/DeployPFTToken.s.sol/<chain id>/run-latest.json`
+and the explorer evidence, reconcile the record by hand as the paragraph above
+says, and never retry with the same deployer.
 
 OpenZeppelin pin: `lib/openzeppelin-contracts` is a git submodule at tag
 `v5.7.0`, commit `cab19933c33c2ad1d4c7a84864a3601dddfd16f3`. `foundry.toml`

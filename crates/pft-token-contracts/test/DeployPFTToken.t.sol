@@ -737,10 +737,49 @@ contract DeployPFTTokenTest is SafeFixtures {
     }
 
     function testRefusesAnArtifactWithoutTheIpfsMetadataHash() public {
+        // The hash kind is read from rawMetadata, the string the code's trailer digests.
         string memory path = _artifactCopy("no-metadata");
-        VM.writeJson('"none"', path, ".metadata.settings.metadata.bytecodeHash");
+        string memory raw = VM.parseJsonString(VM.readFile(path), ".rawMetadata");
+        string memory none = VM.replace(raw, '"bytecodeHash":"ipfs"', '"bytecodeHash":"none"');
+        _assertTrue(!_eq(raw, none), "rawMetadata names none");
+        VM.writeJson(string.concat('"', _escape(none), '"'), path, ".rawMetadata");
         VM.expectRevert(DeployPFTToken.MetadataHashDisabled.selector);
         script.checkArtifactMetadata(path, VM.readFile(path), _outCreationCode());
+    }
+
+    function testTheEditableMetadataObjectDoesNotGateTheHashKind() public {
+        // Only the unchecked metadata object says none; the trailer still carries ipfs.
+        string memory path = _artifactCopy("object-none");
+        VM.writeJson('"none"', path, ".metadata.settings.metadata.bytecodeHash");
+        script.checkArtifactMetadata(path, VM.readFile(path), _outCreationCode());
+    }
+
+    function testRefusesATruncatedRuntimeBeforeTheBroadcast() public {
+        // The runtime cut to its last 1,000 bytes still ends the creation code and
+        // keeps the trailer; the creation code declares the full runtime length.
+        bytes memory creation = _outCreationCode();
+        bytes memory runtime = VM.parseJsonBytes(VM.readFile(ARTIFACT), ".deployedBytecode.object");
+        _assertEq(script.declaredRuntimeLength(creation), runtime.length, "declared runtime length");
+        string memory path = _artifactCopy("truncated");
+        VM.writeJson(string.concat('"', VM.toString(_last(runtime, 1000)), '"'), path, ".deployedBytecode.object");
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTToken.ArtifactMetadataMismatch.selector, path));
+        script.checkArtifactMetadata(path, VM.readFile(path), creation);
+        // deploy refuses it before the broadcast (not DeployedCodeMismatch after it).
+        // Under coverage deploy skips the metadata check; see _checkArtifact.
+        if (!VM.isContext(COVERAGE)) {
+            DeployPFTToken.Config memory cfg = _config(BASE_SEPOLIA);
+            cfg.artifact = path;
+            VM.expectRevert(abi.encodeWithSelector(DeployPFTToken.ArtifactMetadataMismatch.selector, path));
+            broadcaster.deploy(script, cfg);
+        }
+        script.checkArtifactMetadata(ARTIFACT, VM.readFile(ARTIFACT), creation);
+        // No `PUSH size PUSH offset PUSH0 CODECOPY` covering the code's end, or a cut PUSH: none declared.
+        _assertEq(script.declaredRuntimeLength(""), 0, "empty");
+        _assertEq(script.declaredRuntimeLength(hex"6001600260003900"), 0, "offset + size is not the length");
+        _assertEq(script.declaredRuntimeLength(hex"6001600139"), 0, "two pushes only");
+        _assertEq(script.declaredRuntimeLength(hex"61"), 0, "a cut push");
+        _assertEq(script.declaredRuntimeLength(hex"6001600860003900ff"), 1, "PUSH1 0x00 form");
+        _assertEq(script.declaredRuntimeLength(hex"600160075f3900ff"), 1, "PUSH0 form");
     }
 
     function testRefusesAnArtifactWhoseMetadataIsFromAnotherBuild() public {
@@ -941,6 +980,11 @@ contract DeployPFTTokenTest is SafeFixtures {
         bytes memory v35 = _alter("legacy", 70, abi.encodePacked(hex"8302948b", signature));
         (uint256 chain35,,) = script.decodeRawTransaction(v35);
         _assertEq(chain35, BASE_SEPOLIA, "v 2 x chain + 35");
+        // + 36 is the other parity, not chain 84532.5: accepted as 84532.
+        bytes memory v36 = _alter("legacy", 70, abi.encodePacked(hex"8302948c", signature));
+        (uint256 chain36,,) = script.decodeRawTransaction(v36);
+        _assertEq(chain36, BASE_SEPOLIA, "v 2 x chain + 36");
+        script.checkCreation(BASE_SEPOLIA, legacy, legacySafe, v36);
     }
 
     function testRefusesAMissingOrWrongCreationTransaction() public {
@@ -1087,7 +1131,7 @@ contract DeployPFTTokenTest is SafeFixtures {
         bytes memory rs = _last(creationRaw, 66);
         bytes memory s = _last(creationRaw, 33);
         bytes memory r = _truncate(rs, 33);
-        bytes[] memory bad = new bytes[](13);
+        bytes[] memory bad = new bytes[](14);
         bad[0] = _alter("type2", 68, ""); // no accessList, yParity, r, s
         bad[1] = _alter("type2", 66, ""); // no r, s
         bad[2] = _alter("type2", 33, ""); // no s
@@ -1101,6 +1145,7 @@ contract DeployPFTTokenTest is SafeFixtures {
         bad[10] = _alter("legacy", 70, ""); // no v, r, s
         bad[11] = _alter("legacy", 33, ""); // no s
         bad[12] = _alter("legacy", 0, hex"80"); // a tenth item
+        bad[13] = _alter("legacy", 33, abi.encodePacked(hex"a100", _last(_fixtureRaw("legacy"), 32))); // s of 33 bytes
         for (uint256 i = 0; i < bad.length; i++) {
             VM.expectRevert(DeployPFTToken.TreasuryCreationUnreadable.selector);
             script.decodeRawTransaction(bad[i]);
@@ -1108,6 +1153,11 @@ contract DeployPFTTokenTest is SafeFixtures {
         // The unaltered envelopes, re-wrapped, still read.
         script.decodeRawTransaction(_alter("type2", 0, ""));
         script.decodeRawTransaction(_alter("legacy", 0, ""));
+        // By design only the access list's type is read: a list of malformed entries is accepted.
+        (uint256 chain, address to, bytes memory data) =
+            script.decodeRawTransaction(_alter("type2", 68, abi.encodePacked(hex"c50102c28080", hex"01", rs)));
+        (uint256 chain0, address to0, bytes memory data0) = script.decodeRawTransaction(creationRaw);
+        _assertTrue(chain == chain0 && to == to0 && keccak256(data) == keccak256(data0), "malformed entries read");
     }
 
     /// The fixture `name` with the last `drop` bytes of its list payload replaced by `tail`.
