@@ -1,6 +1,6 @@
 # An ERC-20 form of PFT before mainnet: options and a recommended path
 
-**Status:** Draft, 2026-10-26. Operator dravlic, for the product owner's Coinbase document. Text Improvement Harness full gate on 2026-10-26, after four passes: 85.67 (GPT-6 Astra Pro 83.80, Claude Fable 5.1 83.00, GLM 5.3 90.20; 5 runs per judge, scored without the score line). On 2026-10-28 the text as it stood scored 82.60 (GPT-6 Astra Pro 79.20, Claude Fable 5.1 80.80, GLM 5.3 87.80; run group `pft-erc20-options-20261028-r6`, `c9bb449d808a26b4…`), and after one wording and structure pass from the judges' points 84.00 (80.20, 82.60, 89.20; `pft-erc20-options-20261028-r7`, `4639ecb08d221763…`). It is not locked, being below 86.
+**Status:** Draft, 2026-10-26. Operator dravlic, for the product owner's Coinbase document. Text Improvement Harness full gate on 2026-10-26, after four passes: 85.67 (GPT-6 Astra Pro 83.80, Claude Fable 5.1 83.00, GLM 5.3 90.20; 5 runs per judge, scored without the score line). On 2026-10-28 the text as it stood scored 82.60 (GPT-6 Astra Pro 79.20, Claude Fable 5.1 80.80, GLM 5.3 87.80; run group `pft-erc20-options-20261028-r6`, `c9bb449d808a26b4…`), and after one wording and structure pass from the judges' points 84.00 (80.20, 82.60, 89.20; `pft-erc20-options-20261028-r7`, `4639ecb08d221763…`). With the launch state of section 11 added on 2026-10-28, it scored 79.60 (78.00, 74.80, 86.00; `pft-erc20-options-20261028-r8`, `1dccd5bb4b9ef29d…`). It is not locked, being below 86.
 
 ## 1. BLUF
 
@@ -30,7 +30,7 @@ This paper extends the "Interim path: PFT as an ERC-20" section of the [integrat
 
 **On PFTL's devnet.** The genesis constant is `GENESIS_NATIVE_SUPPLY_ATOMS = 1_000_000_000` (`crates/types/src/core_chain.rs:10`). Wallets show 1 PFT as 1,000,000 atoms, so the devnet holds 1,000 PFT; that decimal convention is not a Rust constant (`docs/listings/coinbase/comparisons.md:96-101`). Genesis is the only creation event, and NAV and bridge records cannot create native PFT. Native PFT has no asset id. PFTL is a controlled devnet, not a production mainnet (see also `OPEN-SOURCE-NATIVE-SUPPLY-INVENTORY-20260716.md:12-13`, `:69`, `docs/rpc/account-history.md:73`, `integration-plan.md:22-29`).
 
-**On Base or any other EVM chain.** Nowhere yet. The token contract is written but not deployed (`crates/pft-token-contracts/src/PFTToken.sol`); no bridge, proof profile or threat model exists (`integration-plan.md:729`). postfiat.org mentions no ERC-20, bridge or migration for PFT (postfiat.org, 2026-10-26).
+**On Base or any other EVM chain.** Nowhere on a mainnet yet. The token contract is on main and deployed only on the Base Sepolia testnet (`crates/pft-token-contracts/src/PFTToken.sol`, section 11); no bridge, proof profile or threat model exists (`integration-plan.md:729`). postfiat.org mentions no ERC-20, bridge or migration for PFT (postfiat.org, 2026-10-26).
 
 **The supply number.** The total supply is 100 billion PFT, fixed, decided by the product owner on 2026-10-28; it is not yet a protocol artifact, and no production genesis, allocation table or vesting escrow exists (`integration-plan.md:99-105`). The devnet still holds 1,000 PFT, a gap the 2026-10-23 handoff left open (`docs/handoffs/2026-10-23___codex__chain_pr_merge_handoff.md:198-200`). Token migration from the PFT Ledger is out of scope of the launch spec and left to "a separate document", which does not exist (see also `docs/architecture/l1v2-testnet-genesis-and-launch-spec.md:27`, `:402`).
 
@@ -50,7 +50,7 @@ Sizes are my estimates in working days, without audit time.
 
 | Form | What it is | Exists / missing | Main risk | Days |
 | --- | --- | --- | --- | ---: |
-| A. Treasury ERC-20, one-way swap at mainnet | Fixed-supply ERC-20 held by a treasury; holders later swap into native PFT reserved at genesis | Exists: migration precedent, token template, Ethereum-to-PFTL ingress. Missing: the token, the genesis reserve, the release path, the token document | Backed only by the genesis promise until mainnet | 2 + 5–10 |
+| A. Treasury ERC-20, one-way swap at mainnet | Fixed-supply ERC-20 held by a treasury; holders later swap into native PFT reserved at genesis | Exists: migration precedent, the token (contract on main, Base Sepolia test deployment, section 11), Ethereum-to-PFTL ingress. Missing: the token's Base mainnet deployment and the open decisions of the token document, the genesis reserve, the release path | Backed only by the genesis promise until mainnet | 2 + 5–10 |
 | B. Bridged wPFT after mainnet | Native PFT locked on PFTL; an equal ERC-20 minted on Base against a finality proof | Exists: A666 export route, verifier, relay. Missing: a native-PFT export lane, a custody lane, route generalisation, threat model | Only as strong as the PFTL validator set | 10–15 |
 | C. PFT-backed NAVCoin with an ERC-20 | An issued NAVCoin holding native PFT in reserve, exported like wA666 | Exists: the A666 stack. Missing: a PFT reserve adapter, a PFT valuation source, route generalisation | Coinbase reviews an issued product, not PFT | 8–12 |
 | D. ERC-20 now, "external" lane at genesis | Fixed ERC-20 now; genesis places the same native amount in the external supply lane, released on bridge-in | Exists: the four-way supply partition, the A666 opening precedent. Missing: genesis support for the lane, the inbound release path | Supply number chosen now binds genesis | 8–12 |
@@ -144,6 +144,20 @@ On 2026-10-28 the product owner also decided that PFT gets an SPL version on Sol
 3. Then the Phase 2 design note for the genesis external lane and the lock-and-release path.
 
 Also decided by the product owner on 2026-10-28: the product owner's target for token generation is late Q1 2027, as the ERC-20 on Base; the development organization's allocation unlocks monthly over five years from an on-chain escrow (planned); and the Base ERC-20 is a slice of the 100 billion, the rest being native PFT at mainnet genesis, with the slice size still open.
+
+## 11. Launch state
+
+As of 2026-10-28.
+
+| Exists today | Open |
+| --- | --- |
+| The token contract and deploy script on main (`crates/pft-token-contracts`), reviewed, 127 tests | The Base slice size |
+| The Base Sepolia test deployment, 2026-10-28, source verified: token `0x18fE4ca51A0cE042688D5A54917319d03B527D92`, treasury Safe `0x7424F4F4A620d37CFB54A4558a1Ec7f60b71A0CB` | The launch allocation |
+| The Phase 2 lock contract on main (`PFTLockV1`, `39bfb547`) | The issuing entity |
+| The Python state reader and read-only page (`python/postfiat_rpc/pft_token.py`, `python/postfiat_rpc/pft_token_ui.py`) | The treasury signers and threshold |
+| The total supply, decided 2026-10-28: 100 billion PFT | The PFT Ledger treatment |
+| The Solana SPL version, a separate product decision; its own supply accounting is still to be defined by the product owner | The audit |
+| | The mainnet deployment |
 
 ## Appendix A: text for the Coinbase document
 
