@@ -1,6 +1,6 @@
 # Phase 2 design: ERC-20 PFT on Base into native PFT at genesis
 
-This is a draft research specification, written on 2026-10-26 by operator dravlic for the lead developer. It records the lead developer's four decisions of 2026-10-26 (section 10) and authorizes no code, deployment or genesis change. On 2026-10-26, after the release cap and the committee lifecycle were added, the Text Improvement Harness full gate scored it, without this paragraph, at 84.73/100 (GPT-6 Astra Pro 80.60, Claude Fable 5.1 85.60, GLM 5.3 88.00; five runs per judge; run group `pft-erc20-base-bridge-phase2-20261026-r3`; scored content SHA-256 `ce7a294f47092ca3…`; Task Node task `task_47bbfbbc2aeee1c1290f82475af551b4`). The previous score was 84.93. On 2026-10-28, with the supply invariant stated net of releases, the same gate scored it at 85.67 (GPT-6 Astra Pro 81.20, Claude Fable 5.1 85.60, GLM 5.3 90.20; run group `pft-erc20-base-bridge-phase2-20261028-r4`; scored content SHA-256 `8b19f4896f6b7eba…`), and after one wording and structure pass from the judges' points at 85.27 (81.60, 85.20, 89.00; run group `pft-erc20-base-bridge-phase2-20261028-r5`; `48dea0976825e426…`). It is not locked, being below 86, and is not iterated further.
+This is a draft research specification, written on 2026-10-26 by operator dravlic for the lead developer. It records the lead developer's four decisions of 2026-10-26 (section 10) and authorizes no code, deployment or genesis change. On 2026-10-26, after the release cap and the committee lifecycle were added, the Text Improvement Harness full gate scored it, without this paragraph, at 84.73/100 (GPT-6 Astra Pro 80.60, Claude Fable 5.1 85.60, GLM 5.3 88.00; five runs per judge; run group `pft-erc20-base-bridge-phase2-20261026-r3`; scored content SHA-256 `ce7a294f47092ca3…`; Task Node task `task_47bbfbbc2aeee1c1290f82475af551b4`). The previous score was 84.93. On 2026-10-28, with the supply invariant stated net of releases, the same gate scored it at 85.67 (GPT-6 Astra Pro 81.20, Claude Fable 5.1 85.60, GLM 5.3 90.20; run group `pft-erc20-base-bridge-phase2-20261028-r4`; scored content SHA-256 `8b19f4896f6b7eba…`), and after one wording and structure pass from the judges' points at 85.27 (81.60, 85.20, 89.00; run group `pft-erc20-base-bridge-phase2-20261028-r5`; `48dea0976825e426…`). On 2026-10-28, with the cap's raise delay and the false-release response of sections 5.1, 5.2 and 9 added as the lead developer decided that day, it scored 84.02 (78.60, 84.20, 89.25; GLM 5.3 over four recorded runs, because a malformed response aborted the first call; run group `pft-erc20-base-bridge-phase2-20261028-r6`; `5e0ef5811079192a…`). It is not locked, being below 86, and is not iterated further.
 
 ## 1. BLUF
 
@@ -149,6 +149,28 @@ The lead developer decided on 2026-10-26 that releases are capped per window; th
 
 A cap change is a governed amendment, as the three activation heights of 2026-10-23 were: one amendment each, signed by the six validators (`docs/status/chain-state-current.md:41-46`). An amendment names its kind and a `u32` value with the validators and quorum that signed it (`crates/types/src/shielded_bridge_governance.rs:1722-1735`), and the latest committed amendment of a kind wins (`:1548-1556`). A cap of zero stops releases without touching the lane or any Lock.
 
+**Lowering and raising the cap.** The lead developer decided on 2026-10-28 that the two directions differ.
+
+- An amendment that lowers the cap takes effect immediately. A cap of zero halts releases at once and moves no PFT.
+- An amendment that raises the cap takes effect only seven windows after it commits, so a quorum that could sign false checkpoints cannot also lift the cap in the same week.
+- The lock contract's `maxLockAmount` is fixed at construction and is not changed by the amendment: a larger cap on PFTL does not enlarge single Locks on Base.
+
+### 5.2 Detecting and answering a false release
+
+The lead developer decided on 2026-10-28 how a false release is detected and answered.
+
+**Detection.** Every release is a receipt in a block and names its Lock nonce. A watcher, the Python CLI of this milestone extended, compares the released nonces on PFTL with the `Locked` events of the lock contract on Base. It raises an alarm for any release whose nonce has no matching Lock, whose amount differs from the Lock's amount, or whose recipient hash differs from the Lock's `pftlRecipientHash`.
+
+**Response.** The response is three governed steps, in this order.
+
+1. One governed amendment sets the cap to zero: six signatures, with immediate effect (section 5.1).
+2. A new epoch rotates the committee (section 4.1).
+3. The amendment that restores the cap takes effect after the seven-window delay of section 5.1.
+
+**The lane during the response.** The lane stays whole throughout, because a release never exceeds the cap and the false release is bounded by the window in which it lands.
+
+**What the cap buys.** At 2 % of the lane per window, a quorum that nobody stops needs 100 % ÷ 2 % = 50 windows to empty the lane, about 50 days at one window per day. That buffer of about 50 days is what the cap buys: the watcher raises its alarm on the first false release, and the zero-cap amendment halts the next one at once.
+
 ## 6. Phase 3 hooks kept open
 
 Phase 3 exports native PFT back to Base by releasing ERC-20 PFT that was bridged in, from this same lock contract (`pft-erc20-representation-options-20261026.md:98-104`).
@@ -188,7 +210,7 @@ Three "not before" rules apply. No genesis code merges before the token document
 
 ## 9. Risks
 
-- A colluding committee quorum could sign a false Base block and release native PFT with no Lock behind it. The per-window cap of section 5.1 bounds that to 2 % of the lane per window under the lean; left unchecked for 50 windows, it still reaches the whole lane.
+- A colluding committee quorum could sign a false Base block and release native PFT with no Lock behind it. Two mitigations decided on 2026-10-28 answer it. First, the per-window cap of section 5.1 bounds that to 2 % of the lane per window under the lean, and a raise of the cap takes effect only seven windows after its amendment commits, so the quorum that signs false checkpoints cannot also lift the cap in the same week. Second, the watcher of section 5.2 matches every release on PFTL against a Lock on Base and raises an alarm on the first false one; one zero-cap amendment halts releases at once, a new epoch rotates the committee, and the cap returns only after the seven-window delay. Left unchecked for 50 windows, the false releases still reach the whole lane.
 - Base blocks can reorganise before their data is final on Ethereum. A checkpoint policy that signs only blocks derived from finalized Ethereum data avoids this.
 - A Lock to a mistyped PFTL address is lost for good, because the lock contract has no admin. The CLI must validate the address first.
 - ERC-20 PFT sent to the lock contract by plain transfer is also lost for good.
@@ -196,7 +218,7 @@ Three "not before" rules apply. No genesis code merges before the token document
 - The dormant Phase 3 release path enlarges the Phase 2 audit.
 - Generalising the checkpoint schema touches the PFTL-Uniswap verification path (`pftl_uniswap_ethereum_verification.rs:411-440`), so that route's tests must stay green.
 
-The residual risk after the cap and the committee lifecycle is plain. The six committee members are today's six validators (`docs/status/chain-state-current.md:186-188`), so the quorum that could sign false checkpoints is the same quorum that votes on blocks and signs governance amendments. The cap and the rotation rules protect the lane against a few stolen or lost checkpoint keys, a faulty Base observer, and an outage: none of these releases anything. They do not protect it against five of six validators acting together, who could also lift the cap, and who are already trusted with every rule of the chain. Against that quorum the cap only slows the loss to 2 % of the lane per window, which gives holders and the product owner about 50 days to see it.
+The residual risk after the cap, its raise delay, the watcher and the committee lifecycle is plain. The six committee members are today's six validators (`docs/status/chain-state-current.md:186-188`), so the quorum that could sign false checkpoints is the same quorum that votes on blocks and signs governance amendments. The cap and the rotation rules protect the lane against a few stolen or lost checkpoint keys, a faulty Base observer, and an outage: none of these releases anything. They do not protect it against five of six validators acting together, who could also lift the cap seven windows after the amendment commits, without whom the six-signature zero-cap amendment cannot pass, and who are already trusted with every rule of the chain. Against that quorum the cap only slows the loss to 2 % of the lane per window, which gives holders and the product owner about 50 days to see it, and the watcher shows each false release as it lands.
 
 ## 10. Decisions
 
