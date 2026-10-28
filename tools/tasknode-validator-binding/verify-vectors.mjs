@@ -12,7 +12,9 @@ export function verify(publicKey, message, signature, context = 'postfiat-l1-v2/
 }
 const data = JSON.parse(readFileSync(process.argv[2] || new URL('./l1-vectors.json', import.meta.url), 'utf8'));
 for (const v of data.vectors) {
-  const actual = verify(v.ml_dsa_public_key, v.message, v.signature, v.context);
+  assert.equal(v.context, 'postfiat-l1-v2/tasknode-validator-binding/v1');
+  // Production verification fixes its own context; callers cannot select it.
+  const actual = verify(v.ml_dsa_public_key, v.message, v.signature);
   assert.equal(actual, v.expected_valid, v.name);
   console.log(`${v.name}: PASS (${actual})`);
 }

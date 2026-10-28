@@ -16,6 +16,14 @@ fn main() {
         .unwrap();
         vectors.push(serde_json::json!({"name":format!("valid-{i}"),"ml_dsa_public_key":bytes_to_hex(&key.public_key),"message":message,"context":String::from_utf8_lossy(CONTEXT),"signature":bytes_to_hex(&signature),"expected_valid":true}));
     }
+    let wrong_context_key = ml_dsa_65_keygen_from_seed(&[1; 32]);
+    let wrong_context_signature = ml_dsa_65_sign_with_context_seed(
+        &wrong_context_key.private_key,
+        vectors[0]["message"].as_str().unwrap().as_bytes(),
+        b"postfiat-l1-v2/tx/v1",
+        &[11; 32],
+    )
+    .unwrap();
     for (name, field, value) in [
         (
             "wrong-key",
@@ -24,8 +32,8 @@ fn main() {
         ),
         (
             "wrong-context",
-            "context",
-            serde_json::json!("postfiat-l1-v2/tx/v1"),
+            "signature",
+            serde_json::json!(bytes_to_hex(&wrong_context_signature)),
         ),
         (
             "wrong-message",
@@ -38,6 +46,9 @@ fn main() {
         v["name"] = name.into();
         v[field] = value;
         v["expected_valid"] = false.into();
+        if name == "wrong-context" {
+            v["signed_context"] = "postfiat-l1-v2/tx/v1".into();
+        }
         vectors.push(v);
     }
     println!("{}",serde_json::to_string_pretty(&serde_json::json!({"schema":"postfiat-tasknode-l1-vectors-v1","algorithm":"ML-DSA-65","implementation":"postfiatl1v2/crates/crypto_provider","public_key_bytes":1952,"signature_bytes":3309,"vectors":vectors})).unwrap());

@@ -23,7 +23,7 @@ const valid = ml_dsa65.verify(
 );
 ```
 
-Catch verification errors and refuse. Use `.verify`, not `.internal.verify` or `.prehash`. API order is signature, message, public key, options. Primary library API: https://github.com/paulmillr/noble-post-quantum . `l1-vectors.json` has 3 positives and wrong-key/context/message + truncated-signature negatives; all 7 pass Rust-to-Node verification. Vector challenge expiries are fixed fixtures: cryptographic tests only, never usable connect tokens.
+Catch verification errors and refuse. Use `.verify`, not `.internal.verify` or `.prehash`. API order is signature, message, public key, options. Primary library API: https://github.com/paulmillr/noble-post-quantum . `l1-vectors.json` has 3 positives and wrong-key/context/message + truncated-signature negatives; all 7 pass Rust-to-Node verification. Every vector uses the required verification context; the wrong-context signature was actually generated under the transaction context (recorded as `signed_context`). Run all vectors through the fixed-context production verifier. Vector challenge expiries are fixed fixtures: cryptographic tests only, never usable connect tokens.
 
 ## One-command handoff
 
