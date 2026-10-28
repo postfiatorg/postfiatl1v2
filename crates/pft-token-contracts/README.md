@@ -277,3 +277,85 @@ PFTL finality verifier is deployed on Base, which must come first. The
 genesis lane and the PFTL release operation (P2.2, P2.4) are not built, and
 mainnet deployment waits for the audit (design note, section 8). The tests
 use a mock verifier.
+
+## Deploy the lock contract
+
+Order (design note, sections 5 and 6): the PFTL finality verifier is deployed
+on Base first, then the lock contract, which fixes the verifier at
+construction; genesis later names the lock's address and runtime code hash.
+No PFTL finality verifier exists on Base yet, so only test runs are possible.
+
+`script/DeployPFTLock.s.sol` follows `script/DeployPFTToken.s.sol` (its own
+cheatcode interface, named errors, placeholder refusal, test-only switches on
+84532 only, the artifact binding). Its values come from the environment
+(`script/pft-lock.env.example`, placeholders only). Before the broadcast it
+refuses:
+
+| Check | Refusal |
+|---|---|
+| any input empty, blank, `replace...` or zero | `PlaceholderValue(name)` |
+| `PFT_LOCK_CHAIN_ID` is 8453 or 84532 and equals the RPC's chain id | `UnsupportedChain`, `WrongChain(expected, actual)` |
+| `PFT_LOCK_TOKEN` has code whose keccak256 is `PFT_LOCK_TOKEN_CODEHASH`; `decimals()` is 6 and `totalSupply()` > 0 (checked staticcalls) | `TokenNotAContract`, `TokenCodeHashMismatch(expected, actual)`, `TokenUnreadable(field)`, `TokenDecimalsMismatch`, `TokenSupplyZero` |
+| `PFT_LOCK_VERIFIER` has code whose keccak256 is `PFT_LOCK_VERIFIER_CODEHASH` | `VerifierNotAContract`, `VerifierCodeHashMismatch(expected, actual)` |
+| `PFT_LOCK_MAX_LOCK_AMOUNT` (units) fits `uint64` and equals `PFT_LOCK_MAX_LOCK_AMOUNT_PFT` × 1,000,000 | `MaxLockAmountTooLarge`, `MaxLockAmountMismatch(units, pft)` |
+| the deployer's nonce is 0 | `DeployerAlreadyUsed(deployer, nonce)` |
+| `out/PFTLockV1.sol/PFTLockV1.json` (or under `$FOUNDRY_OUT`) is the deployed creation code with its IPFS metadata | `ArtifactMismatch`, `MetadataHashDisabled`, `ArtifactMetadataMismatch` |
+| a real deployment sets no test switch, sets `PFT_LOCK_SOURCE_COMMIT` and has no record yet | `RealDeploymentWithTestSwitch`, `SourceCommitMissing`, `RecordExists(path)` |
+
+After construction it re-reads `token()`, `finalityVerifier()`,
+`maxLockAmount()`, `nextNonce() == 0` and `totalLocked() == 0`
+(`LockStateMismatch(field)`), and logs every checked value and the lock's
+runtime code hash. `PFT_LOCK_ALLOW_TEST_VERIFIER=1` admits a verifier whose
+code hash is not pinned (`PFT_LOCK_VERIFIER_CODEHASH` may stay unset) and
+`PFT_LOCK_ALLOW_USED_DEPLOYER=1` a used deployer; both are refused on 8453
+(`TestSwitchOnMainnet`) and with `PFT_LOCK_REAL_DEPLOYMENT=1`.
+`test/DeployPFTLock.t.sol` covers every refusal and the accepted paths (100 %
+line coverage of the script).
+
+On 84532 the token is the test token `0x18fE4ca51A0cE042688D5A54917319d03B527D92`,
+runtime keccak256 `0xb0939a2407cd571d158498ba0f405f4ddb3857e688d2bc5ada170dcc655903df`
+(its [dry-run record](../../docs/listings/coinbase/pft-token-dry-run-20261026.md));
+`testDryRunAgainstTheRecordedBaseSepoliaTestToken` rebuilds it at that address
+with that hash. Initialise the OpenZeppelin submodule without `--recursive`: its
+nested submodules add remappings to the metadata and change the bytecode.
+
+Dry run against a local anvil (no key, no broadcast; the token and a stand-in
+verifier deployed there first, e.g. `forge create` with `--unlocked`):
+
+```bash
+anvil --chain-id 84532 &
+PFT_LOCK_CHAIN_ID=84532 PFT_LOCK_TOKEN=<token> \
+PFT_LOCK_TOKEN_CODEHASH=$(cast keccak $(cast code <token> --rpc-url http://127.0.0.1:8545)) \
+PFT_LOCK_VERIFIER=<verifier> PFT_LOCK_ALLOW_TEST_VERIFIER=1 \
+PFT_LOCK_MAX_LOCK_AMOUNT=2000000000000000 PFT_LOCK_MAX_LOCK_AMOUNT_PFT=2000000000 \
+  forge script script/DeployPFTLock.s.sol:DeployPFTLock --rpc-url http://127.0.0.1:8545 \
+  --unlocked --sender <fresh-anvil-account>
+```
+
+Adding `--broadcast` deploys on the anvil and writes the test record. The
+test-network run is the same command against Base Sepolia with the recorded
+test token, a stand-in verifier deployed there, `--ledger --sender
+<deployer-address> --broadcast` and the switch; it writes its record under the
+ignored `cache/deploy-test/`, because a real deployment refuses the switch.
+
+The record: only a broadcast with `PFT_LOCK_REAL_DEPLOYMENT=1` writes the
+durable `deployments/pft-lock-base-<chain id>/deployment.json`, never over an
+existing one; other broadcasts write under `cache/deploy-test/`, a dry run
+none. It holds the mode, the lock and its runtime code hash, the chain id, the
+token and its code hash, the verifier, its on-chain code hash and whether it
+was pinned, `maxLockAmount` in units and PFT, the constructor arguments, the
+deployer, `PFT_LOCK_SOURCE_COMMIT`, the OpenZeppelin commit, the artifact, the
+creation code keccak256 and the effective compiler settings; `tx_hash` and
+`block_number` are `pending` until copied from
+`broadcast/DeployPFTLock.s.sol/<chain id>/run-latest.json`.
+
+The Base mainnet run additionally needs:
+
+- [ ] the real PFTL finality verifier deployed and qualified on Base, its
+      address and runtime code hash pinned in `PFT_LOCK_VERIFIER` and
+      `PFT_LOCK_VERIFIER_CODEHASH` (no test switch);
+- [ ] the independent audit of the exact commit (design note, section 8);
+- [ ] `maxLockAmount` as the genesis plan fixes it (section 5.1);
+- [ ] the mainnet PFTToken and its code hash, a fresh deployer on a hardware
+      wallet, `PFT_LOCK_REAL_DEPLOYMENT=1` and
+      `PFT_LOCK_SOURCE_COMMIT=$(git rev-parse HEAD)`.
