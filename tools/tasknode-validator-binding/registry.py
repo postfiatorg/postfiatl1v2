@@ -132,15 +132,19 @@ def daily_participation(state, rows, now):
         total = sum(d['committed_blocks'] for d in reported)
         signed = sum(d['signed_blocks'] for d in reported)
         mean = sum(d['score'] for d in reported) / len(reported) if reported else None
-        # Observer-derived days are visible but reward eligibility remains held
-        # until the mission manager accepts this clock source (no silent waiver).
+        # D63 accepts conservative observer brackets as the time source. D1
+        # requires at least 25 reported days and the unweighted daily mean.
+        available = len(reported) >= 25
+        eligible = available and mean >= 0.95
         results[row['validator_id']] = {
             'window_start': iso(start), 'window_end': iso(end),
             'time_basis': 'observer_brackets', 'historical_clock_available': False,
-            'available': len(reported) == 30, 'reported_days': len(reported),
+            'available': available, 'reported_days': len(reported),
             'committed_blocks': total, 'signed_blocks': signed,
             'share': signed / total if total else None, 'mean_daily_score': mean,
-            'eligible': False, 'eligibility_reason': 'historical_clock_unavailable',
+            'eligible': eligible, 'eligibility_reason': (
+                'insufficient_observed_days' if not available else
+                'eligible' if eligible else 'below_participation_threshold'),
             'daily': daily,
         }
     return results
@@ -213,7 +217,7 @@ def snapshot(ports, state, now, read=rpc, clock=lambda: dt.datetime.now(UTC)):
     output = {'schema': SCHEMA, 'network': 'l1-devnet', 'chain_id': chain, 'genesis_hash': genesis,
               'generated_at': iso(finished), 'height': height, 'registry_root': validators['registry_root'],
               'source_heights': sources, 'latest_commit': latest, 'validators': rows,
-              'participation_note': 'No UTC timestamp exists in chain blocks. Historical 30-day participation is unavailable; observer brackets are recorded from exporter startup. No rewards authorized.'}
+              'participation_note': 'Chain blocks have no UTC timestamps. Participation uses conservative read-only observer brackets from exporter startup, without inferred earlier history. Availability requires at least 25 reported days in the last 30 complete UTC days; eligibility also requires mean daily participation >=0.95.'}
     return output, state
 
 

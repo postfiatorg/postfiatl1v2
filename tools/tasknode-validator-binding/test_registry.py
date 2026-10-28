@@ -69,6 +69,60 @@ class RegistryTest(unittest.TestCase):
         state['intervals'][-1]['blocks'] = [{'height': 12, 'precommit_signers':['v0']}]
         self.assertEqual(daily_participation(state, [{'validator_id':'v0'}], now)['v0']['reported_days'], 0)
 
+    def observed_history(self, scores, first_day=dt.datetime(2026, 10, 1, tzinfo=UTC)):
+        intervals = []
+        height = 1
+        for offset, (signed, total) in enumerate(scores):
+            day = first_day + dt.timedelta(days=offset)
+            for step in range(144):
+                lower = day + dt.timedelta(minutes=10 * step)
+                blocks = []
+                if step == 30:
+                    for index in range(total):
+                        blocks.append({'height': height, 'precommit_signers': ['v0'] if index < signed else ['v1']})
+                        height += 1
+                intervals.append({'lower_bound': iso(lower), 'upper_bound': iso(lower + dt.timedelta(minutes=10)), 'blocks': blocks})
+        return {'intervals': intervals}
+
+    def test_d63_twenty_five_reported_days_and_d1_daily_mean(self):
+        now = dt.datetime(2026, 10, 26, 14, tzinfo=UTC)
+        rows = [{'validator_id': 'v0'}]
+        before = daily_participation(self.observed_history([(1, 1)] * 24), rows, now)['v0']
+        self.assertEqual(before['reported_days'], 24)
+        self.assertFalse(before['available']); self.assertFalse(before['eligible'])
+        self.assertEqual(before['eligibility_reason'], 'insufficient_observed_days')
+        # D1 is an unweighted daily average, not aggregate block share.
+        above = daily_participation(self.observed_history([(1, 1)] * 24 + [(0, 100)]), rows, now)['v0']
+        self.assertEqual(above['reported_days'], 25)
+        self.assertTrue(above['available']); self.assertTrue(above['eligible'])
+        self.assertEqual(above['mean_daily_score'], 0.96)
+        self.assertLess(above['share'], 0.95)
+        below = daily_participation(self.observed_history([(100, 100)] * 23 + [(0, 1)] * 2), rows, now)['v0']
+        self.assertTrue(below['available']); self.assertFalse(below['eligible'])
+        self.assertEqual(below['mean_daily_score'], 0.92)
+        self.assertGreater(below['share'], 0.95)
+        self.assertEqual(below['eligibility_reason'], 'below_participation_threshold')
+        boundary = daily_participation(self.observed_history([(1, 1)] * 23 + [(3, 4), (0, 1)]), rows, now)['v0']
+        self.assertEqual(boundary['mean_daily_score'], 0.95)
+        self.assertTrue(boundary['eligible'])
+
+    def test_d63_gaps_empty_days_and_rolling_window_cannot_inflate_coverage(self):
+        now = dt.datetime(2026, 10, 26, 14, tzinfo=UTC)
+        rows = [{'validator_id': 'v0'}]
+        history = self.observed_history([(1, 1)] * 25)
+        history['intervals'].pop(60)
+        gapped = daily_participation(history, rows, now)['v0']
+        self.assertEqual(gapped['reported_days'], 24)
+        self.assertFalse(gapped['available']); self.assertFalse(gapped['eligible'])
+        empty_day = daily_participation(self.observed_history([(1, 1)] * 24 + [(0, 0)]), rows, now)['v0']
+        self.assertTrue(empty_day['daily'][-1]['complete'])
+        self.assertFalse(empty_day['daily'][-1]['reported'])
+        self.assertFalse(empty_day['available']); self.assertFalse(empty_day['eligible'])
+        history = self.observed_history([(1, 1)] * 25)
+        expired = daily_participation(history, rows, dt.datetime(2026, 11, 2, tzinfo=UTC))['v0']
+        self.assertEqual(expired['reported_days'], 23)
+        self.assertFalse(expired['available']); self.assertFalse(expired['eligible'])
+
     def source(self, port, method, params=None):
         if method == 'blocks': return [block()]
         if method == 'status':
