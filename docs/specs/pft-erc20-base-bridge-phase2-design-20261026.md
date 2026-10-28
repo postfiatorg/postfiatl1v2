@@ -167,9 +167,9 @@ The lead developer decided on 2026-10-28 how a false release is detected and ans
 2. A new epoch rotates the committee (section 4.1).
 3. The amendment that restores the cap takes effect after the seven-window delay of section 5.1.
 
-**The lane during the response.** The lane stays whole throughout, because a release never exceeds the cap and the false release is bounded by the window in which it lands.
+**The lane during the response.** The lane loses at most one window's cap, 2 % under the lean, before the zero-cap amendment lands, and it cannot lose more than that per window, because a release never exceeds the cap and the false release is bounded by the window in which it lands.
 
-**What the cap buys.** At 2 % of the lane per window, a quorum that nobody stops needs 100 % ÷ 2 % = 50 windows to empty the lane, about 50 days at one window per day. That buffer of about 50 days is what the cap buys: the watcher raises its alarm on the first false release, and the zero-cap amendment halts the next one at once.
+**What the cap buys.** At 2 % of the lane per window, a quorum that nobody stops needs 100 % ÷ 2 % = 50 windows to empty the lane, about 50 days at one window per day. The arithmetic assumes no cap raise: a raise takes effect only seven windows after its amendment commits, so the buffer holds for at least seven windows after any raise is proposed. That buffer of about 50 days is what the cap buys: the watcher raises its alarm on the first false release, and the zero-cap amendment halts the next one at once.
 
 ## 6. Phase 3 hooks kept open
 
@@ -200,7 +200,7 @@ The tests are written before the code.
 - The Foundry tests for the lock contract are `test_lock_pulls_tokens_and_records_nonce`, `test_lock_nonces_are_sequential`, `test_lock_rejects_zero_amount`, `test_lock_rejects_amount_above_uint64`, `test_lock_rejects_empty_or_oversized_recipient`, `test_lock_with_permit_matches_lock`, `test_total_locked_equals_sum_of_lock_events`, `test_plain_transfer_is_not_a_lock`, `test_release_is_bound_to_immutable_finality_verifier`, `test_lock_rejects_amount_above_max_lock_amount` and `test_contract_has_no_owner_pause_or_withdraw`.
 - The type tests are `genesis_external_lane_requires_reserved_equal_to_erc20_supply`, `genesis_rejects_lanes_above_native_supply`, `genesis_faucet_holds_supply_minus_lanes`, `genesis_rejects_unknown_lane_fields` and `genesis_rejects_release_cap_outside_one_to_ten_thousand_bps`.
 - The execution tests are `external_lane_release_credits_recipient_once`, `external_lane_release_rejects_replayed_nonce_without_mutation`, `external_lane_release_rejects_wrong_chain_contract_or_token`, `external_lane_release_rejects_checkpoint_below_quorum`, `external_lane_release_rejects_amount_above_lane_remainder`, `external_lane_release_creates_missing_recipient_account` and `rejected_release_in_accepted_block_leaves_supply_unchanged`.
-- The cap tests are `external_lane_release_refuses_amount_past_window_cap_without_mutation`, `external_lane_window_released_amount_resets_in_next_window`, `external_lane_release_refused_by_cap_succeeds_in_later_window_with_same_proof` and `external_lane_cap_amendment_latest_value_wins`.
+- The cap tests are `external_lane_release_refuses_amount_past_window_cap_without_mutation`, `external_lane_window_released_amount_resets_in_next_window`, `external_lane_release_refused_by_cap_succeeds_in_later_window_with_same_proof`, `external_lane_cap_amendment_latest_value_wins`, `external_lane_cap_lowering_takes_effect_immediately`, `external_lane_cap_raise_waits_seven_windows`, `watcher_flags_release_without_matching_lock` and `watcher_flags_release_with_mismatched_amount_or_recipient`.
 - The committee tests are `external_lane_release_rejects_checkpoint_of_superseded_epoch`, `external_lane_epoch_move_requires_newest_unfenced_committee`, `external_lane_release_halts_below_quorum_and_leaves_lane_unchanged` and `external_lane_release_reproven_by_new_epoch_pays_the_nonce_once`.
 - The node tests are `native_live_total_counts_external_lane_remainder`, `replay_from_genesis_preserves_supply_across_releases` and `checkpoint_snapshot_restore_preserves_lane_and_nonce_set`.
 
@@ -218,18 +218,20 @@ Three "not before" rules apply. No genesis code merges before the token document
 - The dormant Phase 3 release path enlarges the Phase 2 audit.
 - Generalising the checkpoint schema touches the PFTL-Uniswap verification path (`pftl_uniswap_ethereum_verification.rs:411-440`), so that route's tests must stay green.
 
-The residual risk after the cap, its raise delay, the watcher and the committee lifecycle is plain. The six committee members are today's six validators (`docs/status/chain-state-current.md:186-188`), so the quorum that could sign false checkpoints is the same quorum that votes on blocks and signs governance amendments. The cap and the rotation rules protect the lane against a few stolen or lost checkpoint keys, a faulty Base observer, and an outage: none of these releases anything. They do not protect it against five of six validators acting together, who could also lift the cap seven windows after the amendment commits, without whom the six-signature zero-cap amendment cannot pass, and who are already trusted with every rule of the chain. Against that quorum the cap only slows the loss to 2 % of the lane per window, which gives holders and the product owner about 50 days to see it, and the watcher shows each false release as it lands.
+The residual risk after the cap, its raise delay, the watcher and the committee lifecycle is plain. The six committee members are today's six validators (`docs/status/chain-state-current.md:186-188`), so the quorum that could sign false checkpoints is the same quorum that votes on blocks and signs governance amendments. The cap and the rotation rules protect the lane against a few stolen or lost checkpoint keys, a faulty Base observer, and an outage: none of these releases anything. They do not protect it against five of six validators acting together, who could also lift the cap seven windows after the amendment commits, without whom the six-signature zero-cap amendment cannot pass, and who are already trusted with every rule of the chain. With all six validators operated by one organisation today, the cap bounds the damage per window, but the committee-collusion risk is fully mitigated only by independent validator operators, which the readiness work tracks separately. Against that quorum the cap only slows the loss to 2 % of the lane per window, which gives holders and the product owner about 50 days to see it, and the watcher shows each false release as it lands.
 
 ## 10. Decisions
 
 The product owner decides the supply number, which the token document fixes (`integration-plan.md:99-105`), and the audit budget for the lock contract and its release path.
 
-The lead developer decided four things on 2026-10-26. All are revisited only if the code shows a reason.
+The lead developer decided four things on 2026-10-26 and two on 2026-10-28. All are revisited only if the code shows a reason.
 
 1. The proof style is (b), a BFT checkpoint of a Base block signed by the bridge committee, plus a receipt-log proof of the Lock event (section 4). The SP1 path through Base's dispute games, option (a), stays a later upgrade.
 2. The lock contract ships the dormant Phase 3 release path in Phase 2 (section 6). The PFTL finality verifier's address is fixed at construction, immutable, with no setter and no admin, so Phase 3 stays possible without any privileged role.
 3. Releases are capped per window by genesis parameters, changed only by a governed amendment; the lean is 2 % of the lane per window of one day's blocks, and the lock contract caps each Lock at the same amount (section 5.1).
 4. The lane follows the bridge committee's lifecycle: a new epoch by governed amendment, old-epoch checkpoints refused after it, and a halt rather than any release below quorum (section 4.1).
+5. On 2026-10-28: an amendment that lowers the cap takes effect immediately, and a cap of zero halts releases at once and moves no PFT; an amendment that raises it takes effect only seven windows after it commits; the lock contract's `maxLockAmount` stays fixed at construction (section 5.1).
+6. On 2026-10-28: a watcher, the Python CLI of this milestone extended, matches every release on PFTL against a `Locked` event on Base, and a false release is answered by a zero-cap amendment, then a committee rotation by a new epoch, then the amendment that restores the cap after the seven-window delay (section 5.2).
 
 ## 11. Sources
 
