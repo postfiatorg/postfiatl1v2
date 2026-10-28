@@ -295,29 +295,43 @@ refuses:
 |---|---|
 | any input empty, blank, `replace...` or zero | `PlaceholderValue(name)` |
 | `PFT_LOCK_CHAIN_ID` is 8453 or 84532 and equals the RPC's chain id | `UnsupportedChain`, `WrongChain(expected, actual)` |
+| on 84532, `PFT_LOCK_TOKEN` and `PFT_LOCK_TOKEN_CODEHASH` are the recorded test token and its code hash (`BASE_SEPOLIA_TEST_TOKEN`, `BASE_SEPOLIA_TEST_TOKEN_CODEHASH`) unless `PFT_LOCK_ALLOW_TEST_TOKEN=1` | `TokenNotTheTestToken(token)` |
 | `PFT_LOCK_TOKEN` has code whose keccak256 is `PFT_LOCK_TOKEN_CODEHASH`; `decimals()` is 6 and `totalSupply()` > 0 (checked staticcalls) | `TokenNotAContract`, `TokenCodeHashMismatch(expected, actual)`, `TokenUnreadable(field)`, `TokenDecimalsMismatch`, `TokenSupplyZero` |
 | `PFT_LOCK_VERIFIER` has code whose keccak256 is `PFT_LOCK_VERIFIER_CODEHASH` | `VerifierNotAContract`, `VerifierCodeHashMismatch(expected, actual)` |
 | `PFT_LOCK_MAX_LOCK_AMOUNT` (units) fits `uint64` and equals `PFT_LOCK_MAX_LOCK_AMOUNT_PFT` × 1,000,000 | `MaxLockAmountTooLarge`, `MaxLockAmountMismatch(units, pft)` |
 | the deployer's nonce is 0 | `DeployerAlreadyUsed(deployer, nonce)` |
-| `out/PFTLockV1.sol/PFTLockV1.json` (or under `$FOUNDRY_OUT`) is the deployed creation code with its IPFS metadata | `ArtifactMismatch`, `MetadataHashDisabled`, `ArtifactMetadataMismatch` |
-| a real deployment sets no test switch, sets `PFT_LOCK_SOURCE_COMMIT` and has no record yet | `RealDeploymentWithTestSwitch`, `SourceCommitMissing`, `RecordExists(path)` |
+| `out/PFTLockV1.sol/PFTLockV1.json` (or under `$FOUNDRY_OUT`) is the deployed creation code with its IPFS metadata; its `deployedBytecode.object` exceeds its CBOR trailer by at least 512 bytes | `ArtifactMismatch`, `MetadataHashDisabled`, `ArtifactMetadataMismatch` |
+| a real deployment sets no test switch, sets `PFT_LOCK_SOURCE_COMMIT` to exactly 40 hexadecimal characters (either casing; the shape only, the value is the operator's statement) and has no record yet | `RealDeploymentWithTestSwitch`, `SourceCommitMissing`, `SourceCommitInvalid(value)`, `RecordExists(path)` |
+| right after the broadcast, the lock's code has the length and the CBOR trailer of `deployedBytecode.object` (the immutables make the rest differ) | `DeployedCodeMismatch(lock, code length, artifact length)` |
 
 After construction it re-reads `token()`, `finalityVerifier()`,
 `maxLockAmount()`, `nextNonce() == 0` and `totalLocked() == 0`
 (`LockStateMismatch(field)`), and logs every checked value and the lock's
 runtime code hash. `PFT_LOCK_ALLOW_TEST_VERIFIER=1` admits a verifier whose
 code hash is not pinned (`PFT_LOCK_VERIFIER_CODEHASH` may stay unset) and
-`PFT_LOCK_ALLOW_USED_DEPLOYER=1` a used deployer; both are refused on 8453
+`PFT_LOCK_ALLOW_USED_DEPLOYER=1` a used deployer and `PFT_LOCK_ALLOW_TEST_TOKEN=1`
+a token other than the recorded test token; all three are refused on 8453
 (`TestSwitchOnMainnet`) and with `PFT_LOCK_REAL_DEPLOYMENT=1`.
 `test/DeployPFTLock.t.sol` covers every refusal and the accepted paths (100 %
 line coverage of the script).
 
-On 84532 the token is the test token `0x18fE4ca51A0cE042688D5A54917319d03B527D92`,
+On 84532 the token must be the test token `0x18fE4ca51A0cE042688D5A54917319d03B527D92`,
 runtime keccak256 `0xb0939a2407cd571d158498ba0f405f4ddb3857e688d2bc5ada170dcc655903df`
 (its [dry-run record](../../docs/listings/coinbase/pft-token-dry-run-20261026.md));
+any other token needs the test-only `PFT_LOCK_ALLOW_TEST_TOKEN=1`.
 `testDryRunAgainstTheRecordedBaseSepoliaTestToken` rebuilds it at that address
 with that hash. Initialise the OpenZeppelin submodule without `--recursive`: its
 nested submodules add remappings to the metadata and change the bytecode.
+
+Preflight: `test/deploy-lock-cli.sh` (run in CI with `test/deploy-script-cli.sh`)
+first compares `git -C lib/openzeppelin-contracts rev-parse HEAD` with
+`OPENZEPPELIN_COMMIT` and fails on a mismatch or an initialised nested
+submodule; run that comparison before any deployment. Its anvil cases, isolated
+as the token script's: the recorded test token rebuilt at its address, a dry run
+refusing an unpinned verifier without the switch, the switch with
+`PFT_LOCK_REAL_DEPLOYMENT=1` and another token without
+`PFT_LOCK_ALLOW_TEST_TOKEN`, then a broadcast with the switch and a stand-in
+verifier whose test record holds the five compiler settings and both code hashes.
 
 Dry run against a local anvil (no key, no broadcast; the token and a stand-in
 verifier deployed there first, e.g. `forge create` with `--unlocked`):
@@ -345,9 +359,21 @@ none. It holds the mode, the lock and its runtime code hash, the chain id, the
 token and its code hash, the verifier, its on-chain code hash and whether it
 was pinned, `maxLockAmount` in units and PFT, the constructor arguments, the
 deployer, `PFT_LOCK_SOURCE_COMMIT`, the OpenZeppelin commit, the artifact, the
-creation code keccak256 and the effective compiler settings; `tx_hash` and
-`block_number` are `pending` until copied from
-`broadcast/DeployPFTLock.s.sol/<chain id>/run-latest.json`.
+keccak256 of the creation code (`creation_code_keccak256`), of the artifact's
+runtime code (`runtime_code_keccak256`) and of the lock's code on the chain
+(`deployed_code_keccak256`), and the effective compiler settings (solc,
+optimizer, runs, `evm_version`, `bytecode_hash`), read from the artifact's
+`rawMetadata`, whose IPFS digest the code carries, never from its unchecked
+`metadata` object. The record is written during the run, before the
+transaction is mined, so `tx_hash` and `block_number` are `pending` until copied
+from `broadcast/DeployPFTLock.s.sol/<chain id>/run-latest.json`.
+
+If the broadcast fails ambiguously (a timeout, a dropped connection, an
+unknown receipt), reconcile on the explorer first: look up the deployer's
+transactions and nonce. If the creation transaction was mined, copy its
+`tx_hash` and `block_number` into the record and keep it. Only when the
+explorer shows no transaction from the deployer is the uncommitted record
+deleted and the deployment retried. Never delete or retry before that check.
 
 The Base mainnet run additionally needs:
 

@@ -129,6 +129,9 @@ contract DeployPFTLockTest {
         VM.createDir(string.concat(dir, "/PFTLockV1.sol"), true);
         VM.writeFile(path, VM.readFile(ARTIFACT));
         VM.writeJson(string.concat('"', VM.toString(type(PFTLockV1).creationCode), '"'), path, ".bytecode.object");
+        bytes memory runtime =
+            address(new PFTLockV1(address(token), address(verifier), address(token).codehash, uint64(CAP))).code;
+        VM.writeJson(string.concat('"', VM.toString(runtime), '"'), path, ".deployedBytecode.object");
     }
 
     // ---------------------------------------------------------------- accepted
@@ -177,6 +180,8 @@ contract DeployPFTLockTest {
         cfg.token = address(testToken);
         cfg.tokenCodeHash = address(testToken).codehash;
         cfg.allowTestVerifier = true;
+        // The recorded token needs no switch; `forge coverage`'s build has another code hash.
+        cfg.allowTestToken = VM.isContext(COVERAGE);
         PFTLockV1 lock = broadcaster.deploy(script, cfg);
         _assertTrue(lock.token() == script.BASE_SEPOLIA_TEST_TOKEN(), "lock token");
     }
@@ -192,6 +197,7 @@ contract DeployPFTLockTest {
         VM.setEnv("PFT_LOCK_MAX_LOCK_AMOUNT_PFT", "2000000000");
         VM.setEnv("PFT_LOCK_ALLOW_TEST_VERIFIER", "");
         VM.setEnv("PFT_LOCK_ALLOW_USED_DEPLOYER", "0");
+        VM.setEnv("PFT_LOCK_ALLOW_TEST_TOKEN", "");
         VM.setEnv("PFT_LOCK_REAL_DEPLOYMENT", "");
         VM.setEnv("PFT_LOCK_SOURCE_COMMIT", COMMIT);
 
@@ -202,7 +208,10 @@ contract DeployPFTLockTest {
         _assertTrue(cfg.verifierCodeHash == address(verifier).codehash, "verifier code hash");
         _assertEq(cfg.maxLockAmount, CAP, "cap");
         _assertEq(cfg.maxLockAmountPft, CAP_PFT, "cap in PFT");
-        _assertTrue(!cfg.allowTestVerifier && !cfg.allowUsedDeployer && !cfg.realDeployment, "switches off");
+        _assertTrue(
+            !cfg.allowTestVerifier && !cfg.allowUsedDeployer && !cfg.allowTestToken && !cfg.realDeployment,
+            "switches off"
+        );
         _assertTrue(!cfg.writeRecord, "no record outside a broadcast");
         _assertTrue(_eq(cfg.recordDir, "cache/deploy-test/pft-lock-base-84532"), "test record path");
         _assertTrue(_eq(cfg.sourceCommit, COMMIT), "source commit");
@@ -218,7 +227,17 @@ contract DeployPFTLockTest {
         VM.setEnv("PFT_LOCK_SOURCE_COMMIT", "");
         VM.expectRevert(DeployPFTLock.SourceCommitMissing.selector);
         broadcaster.run(script);
+        VM.setEnv("PFT_LOCK_SOURCE_COMMIT", "not-a-commit");
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.SourceCommitInvalid.selector, "not-a-commit"));
+        broadcaster.run(script);
         VM.setEnv("PFT_LOCK_SOURCE_COMMIT", COMMIT);
+        VM.setEnv("PFT_LOCK_ALLOW_TEST_TOKEN", "1");
+        _assertTrue(script.readConfig().allowTestToken, "test token switch on");
+        VM.expectRevert(
+            abi.encodeWithSelector(DeployPFTLock.RealDeploymentWithTestSwitch.selector, "PFT_LOCK_ALLOW_TEST_TOKEN")
+        );
+        broadcaster.run(script);
+        VM.setEnv("PFT_LOCK_ALLOW_TEST_TOKEN", "");
 
         // The verifier switch makes the pinned hash optional; it is still read when set.
         VM.setEnv("PFT_LOCK_ALLOW_TEST_VERIFIER", "1");
@@ -287,6 +306,41 @@ contract DeployPFTLockTest {
         cfg.allowUsedDeployer = true;
         VM.expectRevert(
             abi.encodeWithSelector(DeployPFTLock.TestSwitchOnMainnet.selector, "PFT_LOCK_ALLOW_USED_DEPLOYER")
+        );
+        broadcaster.deploy(script, cfg);
+        cfg = _config(BASE);
+        cfg.allowTestToken = true;
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.TestSwitchOnMainnet.selector, "PFT_LOCK_ALLOW_TEST_TOKEN"));
+        broadcaster.deploy(script, cfg);
+    }
+
+    // ------------------------------------------------------------ test token
+
+    function testRequiresTheRecordedTestTokenOnBaseSepoliaWithoutTheSwitch() public {
+        DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
+        cfg.allowTestToken = false;
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.TokenNotTheTestToken.selector, address(token)));
+        broadcaster.deploy(script, cfg);
+        // The recorded address with another pinned code hash is not the test token either.
+        VM.prank(TEST_TOKEN_DEPLOYER);
+        PFTToken testToken = new PFTToken("Post Fiat Token", "PFT", SUPPLY, TEST_TOKEN_TREASURY);
+        cfg.token = address(testToken);
+        cfg.tokenCodeHash = keccak256("another token");
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.TokenNotTheTestToken.selector, address(testToken)));
+        broadcaster.deploy(script, cfg);
+        // The switch admits the other token.
+        cfg = _config(BASE_SEPOLIA);
+        cfg.allowTestToken = true;
+        _checkLock(broadcaster.deploy(script, cfg));
+    }
+
+    function testRefusesTheTestTokenSwitchForARealDeployment() public {
+        DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
+        cfg.realDeployment = true;
+        cfg.sourceCommit = COMMIT;
+        cfg.allowTestToken = true;
+        VM.expectRevert(
+            abi.encodeWithSelector(DeployPFTLock.RealDeploymentWithTestSwitch.selector, "PFT_LOCK_ALLOW_TEST_TOKEN")
         );
         broadcaster.deploy(script, cfg);
     }
@@ -445,6 +499,7 @@ contract DeployPFTLockTest {
 
     function testRefusesARealDeploymentWithATestSwitch() public {
         DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
+        cfg.allowTestToken = false;
         cfg.realDeployment = true;
         cfg.sourceCommit = COMMIT;
         cfg.allowTestVerifier = true;
@@ -464,6 +519,7 @@ contract DeployPFTLockTest {
         string[3] memory commits = ["", " ", "replace_with_the_deployed_git_commit"];
         for (uint256 i = 0; i < commits.length; i++) {
             DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
+            cfg.allowTestToken = false;
             cfg.realDeployment = true;
             cfg.sourceCommit = commits[i];
             VM.expectRevert(DeployPFTLock.SourceCommitMissing.selector);
@@ -471,8 +527,47 @@ contract DeployPFTLockTest {
         }
     }
 
+    function testRefusesARealDeploymentWithASourceCommitOfAnotherShape() public {
+        // A 1-byte value is shorter than "replace": the placeholder search must not underflow.
+        string[6] memory invalid = [
+            "a",
+            "not-a-commit",
+            "0123456789abcdef0123456789abcdef0123456",
+            "0123456789abcdef0123456789abcdef012345678",
+            "0123456789abcdef0123456789abcdef0123456g",
+            " 123456789abcdef0123456789abcdef01234567"
+        ];
+        for (uint256 i = 0; i < invalid.length; i++) {
+            DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
+            cfg.allowTestToken = false;
+            cfg.realDeployment = true;
+            cfg.sourceCommit = invalid[i];
+            VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.SourceCommitInvalid.selector, invalid[i]));
+            broadcaster.deploy(script, cfg);
+        }
+    }
+
+    function testAcceptsASourceCommitOfFortyHexCharacters() public {
+        // The shape only: the value is the operator's statement, so 40 zeros pass.
+        VM.chainId(BASE);
+        string[3] memory valid =
+            [COMMIT, "0000000000000000000000000000000000000000", "0123456789ABCDEF0123456789abcdef01234567"];
+        for (uint256 i = 0; i < valid.length; i++) {
+            DeployPFTLock.Config memory cfg = _config(BASE);
+            cfg.realDeployment = true;
+            cfg.recordDir = "cache/deploy-test/lock-commit-shape-never-written";
+            cfg.sourceCommit = valid[i];
+            LockBroadcaster fresh = new LockBroadcaster(); // a fresh deployer each time
+            VM.setNonceUnsafe(address(fresh), 0);
+            PFTLockV1 lock = fresh.deploy(script, cfg);
+            _assertTrue(lock.token() == address(token) && lock.totalLocked() == 0, "lock deployed");
+        }
+    }
+
     function testRealDeploymentWritesOnceAndRefusesToOverwrite() public {
-        DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
+        // On 8453: on 84532 a real deployment needs the recorded test token.
+        VM.chainId(BASE);
+        DeployPFTLock.Config memory cfg = _config(BASE);
         cfg.realDeployment = true;
         cfg.recordDir = "cache/deploy-test/lock-real-once";
         cfg.writeRecord = true;
@@ -480,7 +575,7 @@ contract DeployPFTLockTest {
         string memory path = string.concat(cfg.recordDir, "/deployment.json");
         if (VM.exists(path)) VM.removeFile(path);
         PFTLockV1 lock = broadcaster.deploy(script, cfg);
-        _checkRecord(cfg.recordDir, lock, BASE_SEPOLIA, "real", true);
+        _checkRecord(cfg.recordDir, lock, BASE, "real", true);
 
         // A second run, even a dry run that writes nothing, stops before deploying.
         VM.setNonceUnsafe(address(broadcaster), 0);
@@ -565,6 +660,56 @@ contract DeployPFTLockTest {
         script.checkArtifactMetadata(ARTIFACT, VM.readFile(ARTIFACT), creation);
     }
 
+    function testRecordsTheCompilerSettingsOfTheRawMetadata() public {
+        // The metadata object is not covered by the code's IPFS digest; the record ignores it.
+        string memory dir =
+            string.concat("cache/deploy-test/lock-edited-metadata-", VM.toString(abi.encode(VM.randomUint())));
+        string memory path = string.concat(dir, "/PFTLockV1.sol/PFTLockV1.json");
+        VM.createDir(string.concat(dir, "/PFTLockV1.sol"), true);
+        VM.writeFile(path, VM.readFile(_artifact()));
+        VM.writeJson('"0.8.20+commit.a1b79de6"', path, ".metadata.compiler.version");
+        VM.writeJson("999", path, ".metadata.settings.optimizer.runs");
+        VM.writeJson("false", path, ".metadata.settings.optimizer.enabled");
+        VM.writeJson('"paris"', path, ".metadata.settings.evmVersion");
+        DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
+        cfg.artifact = path;
+        cfg.recordDir = string.concat(dir, "/record");
+        cfg.writeRecord = true;
+        broadcaster.deploy(script, cfg);
+        string memory json = VM.readFile(string.concat(cfg.recordDir, "/deployment.json"));
+        _assertTrue(_eq(VM.parseJsonString(json, ".solc_version"), "0.8.24+commit.e11b9ed9"), "solc of rawMetadata");
+        _assertEq(VM.parseJsonUint(json, ".optimizer_runs"), 200, "runs of rawMetadata");
+        _assertTrue(VM.parseJsonBool(json, ".optimizer"), "optimizer of rawMetadata");
+        _assertTrue(_eq(VM.parseJsonString(json, ".evm_version"), "cancun"), "evm version of rawMetadata");
+        _assertTrue(_eq(VM.parseJsonString(json, ".bytecode_hash"), "ipfs"), "bytecode hash of rawMetadata");
+    }
+
+    function testRefusesATrailerOnlyRuntimeCode() public {
+        bytes memory runtime = VM.parseJsonBytes(VM.readFile(ARTIFACT), ".deployedBytecode.object");
+        bytes memory trailer = script.metadataTrailer(runtime);
+        _assertTrue(trailer.length == 53 && script.metadataDigest(trailer) != 0, "a 53-byte trailer with the digest");
+        string memory path = _artifactCopy("trailer-only");
+        VM.writeJson(string.concat('"', VM.toString(trailer), '"'), path, ".deployedBytecode.object");
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.ArtifactMetadataMismatch.selector, path));
+        script.checkArtifactMetadata(path, VM.readFile(path), _outCreationCode());
+        // After the broadcast: the deployed code has the artifact's length and trailer.
+        PFTLockV1 lock = broadcaster.deploy(script, _config(BASE_SEPOLIA));
+        bytes memory built = VM.parseJsonBytes(VM.readFile(_artifact()), ".deployedBytecode.object");
+        script.checkDeployedCode(address(lock), built);
+        uint256 length = address(lock).code.length;
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.DeployedCodeMismatch.selector, address(lock), length, 53));
+        script.checkDeployedCode(address(lock), trailer);
+        bytes memory other = abi.encodePacked(built);
+        other[other.length - 3] = bytes1(uint8(other[other.length - 3]) ^ 1);
+        VM.expectRevert(
+            abi.encodeWithSelector(DeployPFTLock.DeployedCodeMismatch.selector, address(lock), length, length)
+        );
+        script.checkDeployedCode(address(lock), other);
+        _assertTrue(
+            script.metadataTrailer(hex"00").length == 0 && script.metadataTrailer(hex"ffff").length == 0, "none"
+        );
+    }
+
     function testMetadataDigestReadsTheCborTrailer() public view {
         bytes32 digest = sha256("metadata");
         bytes memory cbor = abi.encodePacked(hex"a264697066735822", hex"1220", digest, hex"64736f6c6343000818");
@@ -599,6 +744,8 @@ contract DeployPFTLockTest {
         cfg.maxLockAmount = CAP;
         cfg.maxLockAmountPft = CAP_PFT;
         cfg.artifact = _artifact();
+        // The tests' token is not the recorded Base Sepolia test token.
+        cfg.allowTestToken = chainId == BASE_SEPOLIA;
     }
 
     function _withToken(address t) private view returns (DeployPFTLock.Config memory cfg) {
@@ -658,14 +805,16 @@ contract DeployPFTLockTest {
         _assertTrue(_eq(VM.parseJsonString(json, ".solc_version"), "0.8.24+commit.e11b9ed9"), "record solc");
         _assertTrue(_eq(VM.parseJsonString(json, ".evm_version"), "cancun"), "record evm version");
         _assertTrue(_eq(VM.parseJsonString(json, ".bytecode_hash"), "ipfs"), "record bytecode hash");
-        _assertEq(
-            VM.parseJsonUint(json, ".optimizer_runs"),
-            VM.parseJsonUint(artifact, ".metadata.settings.optimizer.runs"),
-            "record optimizer runs"
+        _assertEq(VM.parseJsonUint(json, ".optimizer_runs"), 200, "record optimizer runs");
+        _assertTrue(VM.parseJsonBool(json, ".optimizer"), "record optimizer");
+        _assertTrue(
+            VM.parseJsonBytes32(json, ".runtime_code_keccak256")
+                == keccak256(VM.parseJsonBytes(artifact, ".deployedBytecode.object")),
+            "record runtime code"
         );
         _assertTrue(
-            VM.parseJsonBool(json, ".optimizer") == VM.parseJsonBool(artifact, ".metadata.settings.optimizer.enabled"),
-            "record optimizer"
+            VM.parseJsonBytes32(json, ".deployed_code_keccak256") == keccak256(address(lock).code),
+            "record deployed code"
         );
         _assertTrue(_eq(VM.parseJsonString(json, ".source_commit"), _eq(mode, "real") ? COMMIT : ""), "record commit");
         _assertTrue(

@@ -67,7 +67,8 @@ contract DeployPFTLock {
     /// The Base Sepolia test token and its runtime keccak256, from
     /// `deployments/pft-token-base-84532/deployment.json` and
     /// `docs/listings/coinbase/pft-token-dry-run-20261026.md`: the expected
-    /// PFT_LOCK_TOKEN and PFT_LOCK_TOKEN_CODEHASH on 84532 (documented, not enforced).
+    /// PFT_LOCK_TOKEN and PFT_LOCK_TOKEN_CODEHASH on 84532, required there unless
+    /// the test-only PFT_LOCK_ALLOW_TEST_TOKEN=1 is set.
     address public constant BASE_SEPOLIA_TEST_TOKEN = 0x18fE4ca51A0cE042688D5A54917319d03B527D92;
     bytes32 public constant BASE_SEPOLIA_TEST_TOKEN_CODEHASH =
         0xb0939a2407cd571d158498ba0f405f4ddb3857e688d2bc5ada170dcc655903df;
@@ -78,6 +79,8 @@ contract DeployPFTLock {
     /// The compiled lock contract under forge's output directory (FOUNDRY_OUT,
     /// else out); its creation code must be the code this script deploys.
     string public constant LOCK_ARTIFACT = "/PFTLockV1.sol/PFTLockV1.json";
+    /// The artifact's runtime code must exceed its CBOR trailer by at least this many bytes.
+    uint256 public constant MIN_RUNTIME_CODE_BEYOND_TRAILER = 512;
 
     struct Config {
         uint256 chainId;
@@ -89,6 +92,7 @@ contract DeployPFTLock {
         uint256 maxLockAmountPft; // whole PFT
         bool allowTestVerifier; // Base Sepolia only: admits a verifier whose code hash is not pinned
         bool allowUsedDeployer; // Base Sepolia only
+        bool allowTestToken; // Base Sepolia only: admits a token other than the recorded test token
         bool realDeployment; // PFT_LOCK_REAL_DEPLOYMENT=1: the durable record under deployments/
         string recordDir; // deployments/... for a real deployment, else cache/deploy-test/...
         bool writeRecord; // only `forge script --broadcast` writes the record
@@ -110,6 +114,8 @@ contract DeployPFTLock {
     error TestSwitchOnMainnet(string name);
     error RealDeploymentWithTestSwitch(string name);
     error SourceCommitMissing();
+    error SourceCommitInvalid(string value);
+    error TokenNotTheTestToken(address token);
     error TokenNotAContract(address token);
     error TokenCodeHashMismatch(bytes32 expected, bytes32 actual);
     error TokenUnreadable(string field);
@@ -125,6 +131,7 @@ contract DeployPFTLock {
     error MetadataHashDisabled();
     error ArtifactMetadataMismatch(string path);
     error LockStateMismatch(string field);
+    error DeployedCodeMismatch(address lock, uint256 codeLength, uint256 artifactLength);
 
     event PFTLockDeployed(
         address indexed lock, address indexed token, address indexed finalityVerifier, uint64 maxLockAmount
@@ -150,6 +157,7 @@ contract DeployPFTLock {
         cfg.maxLockAmount = VM.parseUint(_required("PFT_LOCK_MAX_LOCK_AMOUNT"));
         cfg.maxLockAmountPft = VM.parseUint(_required("PFT_LOCK_MAX_LOCK_AMOUNT_PFT"));
         cfg.allowUsedDeployer = _switch("PFT_LOCK_ALLOW_USED_DEPLOYER");
+        cfg.allowTestToken = _switch("PFT_LOCK_ALLOW_TEST_TOKEN");
         cfg.realDeployment = _switch("PFT_LOCK_REAL_DEPLOYMENT");
         string memory root = cfg.realDeployment ? "deployments/" : "cache/deploy-test/";
         cfg.recordDir = string.concat(root, "pft-lock-base-", VM.toString(block.chainid));
@@ -195,6 +203,7 @@ contract DeployPFTLock {
         VM.startBroadcast(deployer);
         lock = new PFTLockV1(cfg.token, cfg.verifier, cfg.tokenCodeHash, uint64(cfg.maxLockAmount));
         VM.stopBroadcast();
+        checkDeployedCode(address(lock), VM.parseJsonBytes(artifact, ".deployedBytecode.object"));
 
         checkLock(cfg, lock);
         emit PFTLockDeployed(address(lock), cfg.token, cfg.verifier, uint64(cfg.maxLockAmount));
@@ -228,18 +237,38 @@ contract DeployPFTLock {
         if (cfg.chainId == BASE) {
             if (cfg.allowTestVerifier) revert TestSwitchOnMainnet("PFT_LOCK_ALLOW_TEST_VERIFIER");
             if (cfg.allowUsedDeployer) revert TestSwitchOnMainnet("PFT_LOCK_ALLOW_USED_DEPLOYER");
+            if (cfg.allowTestToken) revert TestSwitchOnMainnet("PFT_LOCK_ALLOW_TEST_TOKEN");
         }
         if (cfg.realDeployment) {
             if (cfg.allowTestVerifier) revert RealDeploymentWithTestSwitch("PFT_LOCK_ALLOW_TEST_VERIFIER");
             if (cfg.allowUsedDeployer) revert RealDeploymentWithTestSwitch("PFT_LOCK_ALLOW_USED_DEPLOYER");
+            if (cfg.allowTestToken) revert RealDeploymentWithTestSwitch("PFT_LOCK_ALLOW_TEST_TOKEN");
             if (_isPlaceholder(bytes(cfg.sourceCommit))) revert SourceCommitMissing();
+            if (!_isCommitHash(bytes(cfg.sourceCommit))) revert SourceCommitInvalid(cfg.sourceCommit);
         }
     }
 
-    /// The token has code, the pinned runtime code hash, six decimals and a supply.
+    /// Exactly 40 hexadecimal characters, either casing: the shape of a git
+    /// commit. That it names the deployed source is the operator's statement.
+    function _isCommitHash(bytes memory value) private pure returns (bool) {
+        if (value.length != 40) return false;
+        for (uint256 i = 0; i < 40; i++) {
+            bytes1 c = value[i];
+            if (!((c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F"))) return false;
+        }
+        return true;
+    }
+
+    /// The token has code, the pinned runtime code hash, six decimals and a
+    /// supply; on 84532 it is the recorded test token with its recorded code hash
+    /// unless PFT_LOCK_ALLOW_TEST_TOKEN (refused on 8453 and for a real deployment).
     function _checkToken(Config memory cfg) private view returns (uint256 decimals, uint256 supply) {
         if (cfg.token == address(0)) revert PlaceholderValue("PFT_LOCK_TOKEN");
         if (cfg.tokenCodeHash == 0) revert PlaceholderValue("PFT_LOCK_TOKEN_CODEHASH");
+        if (
+            cfg.chainId == BASE_SEPOLIA && !cfg.allowTestToken
+                && (cfg.token != BASE_SEPOLIA_TEST_TOKEN || cfg.tokenCodeHash != BASE_SEPOLIA_TEST_TOKEN_CODEHASH)
+        ) revert TokenNotTheTestToken(cfg.token);
         if (cfg.token.code.length == 0) revert TokenNotAContract(cfg.token);
         if (cfg.token.codehash != cfg.tokenCodeHash) {
             revert TokenCodeHashMismatch(cfg.tokenCodeHash, cfg.token.codehash);
@@ -282,7 +311,8 @@ contract DeployPFTLock {
     /// The artifact whose metadata goes in the record must be this build of the
     /// lock contract: its creation code is the code `deploy` sends, and its
     /// metadata is that code's (see DeployPFTToken._checkArtifact; PFTLockV1 has
-    /// immutables, so the runtime code is the tail of the creation code).
+    /// immutables, so the runtime code is the tail of the creation code). The
+    /// runtime code exceeds its CBOR trailer by MIN_RUNTIME_CODE_BEYOND_TRAILER bytes.
     function _checkArtifact(Config memory cfg) private view returns (string memory artifact) {
         artifact = VM.readFile(cfg.artifact);
         bytes32 built = keccak256(VM.parseJsonBytes(artifact, ".bytecode.object"));
@@ -301,8 +331,8 @@ contract DeployPFTLock {
         bytes memory runtime = VM.parseJsonBytes(json, ".deployedBytecode.object");
         bytes32 digest = metadataDigest(runtime);
         if (
-            digest == 0 || !endsWith(creation, runtime)
-                || ipfsDigest(bytes(VM.parseJsonString(json, ".rawMetadata"))) != digest
+            digest == 0 || runtime.length < metadataTrailer(runtime).length + MIN_RUNTIME_CODE_BEYOND_TRAILER
+                || !endsWith(creation, runtime) || ipfsDigest(bytes(VM.parseJsonString(json, ".rawMetadata"))) != digest
         ) revert ArtifactMetadataMismatch(path);
     }
 
@@ -343,6 +373,26 @@ contract DeployPFTLock {
         out = abi.encodePacked(out, bytes1(uint8(value)));
     }
 
+    /// The CBOR trailer of `code` with its two length bytes, empty if there is none.
+    function metadataTrailer(bytes memory code) public pure returns (bytes memory trailer) {
+        if (code.length < 2) return "";
+        uint256 length = uint256(uint16(bytes2(abi.encodePacked(code[code.length - 2], code[code.length - 1])))) + 2;
+        if (length > code.length) return "";
+        trailer = new bytes(length);
+        for (uint256 i = 0; i < length; i++) {
+            trailer[i] = code[code.length - length + i];
+        }
+    }
+
+    /// Right after the broadcast: the lock's code has the length and the CBOR
+    /// trailer of the artifact's runtime code `runtime` (the immutables make the rest differ).
+    function checkDeployedCode(address lock, bytes memory runtime) public view {
+        bytes memory code = lock.code;
+        if (code.length != runtime.length || !endsWith(code, metadataTrailer(runtime))) {
+            revert DeployedCodeMismatch(lock, code.length, runtime.length);
+        }
+    }
+
     /// True when `code` ends with the non-empty `tail`.
     function endsWith(bytes memory code, bytes memory tail) public pure returns (bool) {
         if (tail.length == 0 || tail.length > code.length) return false;
@@ -355,7 +405,8 @@ contract DeployPFTLock {
 
     /// The broadcast transaction hash and block are "pending" here and copied in
     /// from broadcast/.../run-latest.json. The compiler settings are the
-    /// effective ones, read from the metadata of the artifact bound to the deployed code.
+    /// effective ones, read from the artifact's rawMetadata, whose IPFS digest
+    /// `_checkArtifact` bound to the deployed code, never from its unchecked metadata object.
     function _writeRecord(
         Config memory cfg,
         PFTLockV1 lock,
@@ -386,11 +437,16 @@ contract DeployPFTLock {
         VM.serializeAddress(o, "deployer", deployer);
         VM.serializeString(o, "artifact", cfg.artifact);
         VM.serializeBytes32(o, "creation_code_keccak256", keccak256(type(PFTLockV1).creationCode));
-        VM.serializeString(o, "solc_version", VM.parseJsonString(artifact, ".metadata.compiler.version"));
-        VM.serializeBool(o, "optimizer", VM.parseJsonBool(artifact, ".metadata.settings.optimizer.enabled"));
-        VM.serializeUint(o, "optimizer_runs", VM.parseJsonUint(artifact, ".metadata.settings.optimizer.runs"));
-        VM.serializeString(o, "evm_version", VM.parseJsonString(artifact, ".metadata.settings.evmVersion"));
-        VM.serializeString(o, "bytecode_hash", VM.parseJsonString(artifact, ".metadata.settings.metadata.bytecodeHash"));
+        VM.serializeBytes32(
+            o, "runtime_code_keccak256", keccak256(VM.parseJsonBytes(artifact, ".deployedBytecode.object"))
+        );
+        VM.serializeBytes32(o, "deployed_code_keccak256", keccak256(address(lock).code));
+        string memory metadata = VM.parseJsonString(artifact, ".rawMetadata");
+        VM.serializeString(o, "solc_version", VM.parseJsonString(metadata, ".compiler.version"));
+        VM.serializeBool(o, "optimizer", VM.parseJsonBool(metadata, ".settings.optimizer.enabled"));
+        VM.serializeUint(o, "optimizer_runs", VM.parseJsonUint(metadata, ".settings.optimizer.runs"));
+        VM.serializeString(o, "evm_version", VM.parseJsonString(metadata, ".settings.evmVersion"));
+        VM.serializeString(o, "bytecode_hash", VM.parseJsonString(metadata, ".settings.metadata.bytecodeHash"));
         VM.serializeString(o, "source_commit", cfg.sourceCommit);
         string memory json = VM.serializeString(o, "openzeppelin_commit", OPENZEPPELIN_COMMIT);
         VM.createDir(cfg.recordDir, true);
