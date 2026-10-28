@@ -2,7 +2,7 @@
 
 Network: `l1-devnet`; algorithm: pure FIPS 204 **ML-DSA-65**. The challenge is the exact UTF-8 string issued by Task Node, with no newline, trimming, prehash or JSON serialization. Context bytes are UTF-8 `postfiat-l1-v2/tasknode-validator-binding/v1`. Public key: 1952 bytes / 3904 lowercase hex characters. Signature: 3309 bytes / 6618 lowercase hex characters.
 
-Registry URL (pending additive TLS HOLD): `https://178-156-143-199.sslip.io:18443/l1-registry/registry.json`.
+Registry URL (LIVE under D54, externally verified with trusted TLS): `https://178-156-143-199.sslip.io:18443/l1-registry/registry.json`.
 Schema `postfiat-tasknode-l1-registry-v1`: network, chain_id, genesis_hash, generated_at (ISO UTC), height, registry_root, source_heights (two distinct agreeing validator RPC observations), latest_commit (height/hash/actual precommit_signers), validators [{validator_id, ml_dsa_public_key, active, participation}]. Current chain_id is `postfiat-wan-devnet-2`. Do not use the stale genesis in the fleet text file.
 
 ## Task Node verification
@@ -38,6 +38,10 @@ The live RPC's blocks (height 1160) expose `header.consensus_v2_commit.precommit
 Each participation object has window_start/window_end for the last 30 complete UTC days, daily [{date, complete, reported, committed_blocks, signed_blocks, score, from_height, to_height}], reported_days, share (block-weighted), mean_daily_score (D1's unweighted daily mean), available, eligible and eligibility_reason. Unknown scores are null, never 0 or 1. Initial reported_days=0, available=false, eligible=false, reason=historical_clock_unavailable. **Do not pay L1 rewards while this HOLD is unresolved.**
 
 The exporter begins timestamped observations now. Actual precommit votes are counted, never committee membership. Observed head transitions are bounded by consecutive RPC read intervals; changed heads spanning midnight and gaps >15 minutes make the affected days incomplete. A day with no committed blocks has undefined score and is not reported. Observer-derived coverage is explicitly time_basis=observer_brackets and cannot silently replace the missing historical consensus clock. State, source heights and latest-commit signer list are retained for manual reproduction. Registry publication fails closed on chain reset, source disagreement, missing certificates or invalid vote structure, leaving the prior JSON to expire.
+
+## Live publication
+
+D54 activated the additive TLS routes on 2026-10-28 at 14:45 UTC. External trusted-TLS checks returned HTTP200 for research health, registry and helper. Registry had six validators at height1160, age212 seconds, Cache-Control:no-store. Helper is675448 bytes with the SHA256 above. The foundation user timer `l1-tasknode-registry.timer` is enabled for ten-minute refreshes; failed reads preserve the previous JSON until it expires. Activation and rollback scripts/evidence are in the private mission E-release and acceptance/E directories.
 
 ## Acceptance ownership
 
