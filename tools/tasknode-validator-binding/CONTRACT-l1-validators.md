@@ -2,7 +2,9 @@
 
 Network: `l1-devnet`; algorithm: pure FIPS 204 **ML-DSA-65**. The challenge is the exact UTF-8 string issued by Task Node, with no newline, trimming, prehash or JSON serialization. Context bytes are UTF-8 `postfiat-l1-v2/tasknode-validator-binding/v1`. Public key: 1952 bytes / 3904 lowercase hex characters. Signature: 3309 bytes / 6618 lowercase hex characters.
 
-Registry URL (LIVE under D54, externally verified with trusted TLS): `https://178-156-143-199.sslip.io:18443/l1-registry/registry.json`.
+Canonical registry URL (LIVE under D70, externally verified with trusted TLS): `https://research.goodalexander.com:18443/l1-registry/registry.json`.
+Fallback registry URL: `https://178-156-143-199.sslip.io:18443/l1-registry/registry.json`.
+The sslip.io routes remain available for seven days under D70, through 2026-11-04T18:00:00Z. Both hosts serve the same artifacts on port 18443. Fallback URLs are fixed trusted endpoints; the no-redirect rule still applies.
 Schema `postfiat-tasknode-l1-registry-v1`: network, chain_id, genesis_hash, generated_at (ISO UTC), height, registry_root, source_heights (two distinct agreeing validator RPC observations), latest_commit (height/hash/actual precommit_signers), validators [{validator_id, ml_dsa_public_key, active, participation}]. Current chain_id is `postfiat-wan-devnet-2`. Do not use the stale genesis in the fleet text file.
 
 ## Task Node verification
@@ -29,7 +31,9 @@ Catch verification errors and refuse. Use `.verify`, not `.internal.verify` or `
 
 Serve `l1-validator.sh` from Track C public root with Cache-Control: no-store. Existing challenge route payload stays {token}. Completion payload is {token, network:"l1-devnet", validator_id, ml_dsa_public_key, signature}. The static Rust helper emits only the three proof fields. The wrapper identifies the running `postfiat-node transport-validator-serve` process and reads its exact --key-file/--data-dir metadata; node id comes from the public node_state.json object before its appended MAC. No directory search for secret files. It downloads the SHA-256-pinned helper to a sealed memfd, runs it via `unshare --net`, reads the existing private key locally, and posts only the proof plus token. No helper/key/proof files are written on the validator host. Root is required for network namespace creation. Linux x86_64 currently supported; a clear error is returned elsewhere. --discover reads process metadata and node id only, without opening the key.
 
-Helper URL: https://178-156-143-199.sslip.io:18443/l1-registry/l1-validator-signer-linux-x86_64 . Binary SHA-256: 63c5e3d56556447dc06cbcd9fd0b4d8e620dc17068166bb51d3cdb41f50f6eca . Built with Rust 1.95.0, musl static PIE (no dynamic interpreter), using repository crates/crypto_provider and vendored fips204. No consensus or validator release changes.
+Canonical helper URL: https://research.goodalexander.com:18443/l1-registry/l1-validator-signer-linux-x86_64 .
+Fallback helper URL: https://178-156-143-199.sslip.io:18443/l1-registry/l1-validator-signer-linux-x86_64 .
+Binary SHA-256 (unchanged under D70): 63c5e3d56556447dc06cbcd9fd0b4d8e620dc17068166bb51d3cdb41f50f6eca . Built with Rust 1.95.0, musl static PIE (no dynamic interpreter), using repository crates/crypto_provider and vendored fips204. No consensus or validator release changes.
 
 ## Participation and rewards: D63 observation policy
 
@@ -42,6 +46,8 @@ The exporter retains timestamped observations across publications. Actual precom
 ## Live publication
 
 D54 activated the additive TLS routes on 2026-10-28 at 14:45 UTC. External trusted-TLS checks returned HTTP200 for research health, registry and helper. Registry had six validators at height1160, age212 seconds, Cache-Control:no-store. Helper is675448 bytes with the SHA256 above. The foundation user timer `l1-tasknode-registry.timer` is enabled for ten-minute refreshes; failed reads preserve the previous JSON until it expires. Activation and rollback scripts/evidence are in the private mission E-release and acceptance/E directories.
+
+D70 makes `https://research.goodalexander.com:18443` the canonical base. External trusted-TLS checks on both hosts returned HTTP200 for research health, registry and helper, with identical registry/helper bytes and the unchanged binary digest. The publisher destination and ten-minute timer are unchanged. Track C owns the corresponding Task Node registry URL and public-script deployment; the delivered wrapper changes only HELPER_URL.
 
 ## Acceptance ownership
 

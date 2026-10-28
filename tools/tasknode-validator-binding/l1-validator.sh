@@ -8,7 +8,7 @@ exec python3 - "$@" <<'PY'
 import fcntl, glob, hashlib, json, os, pathlib, platform, re, resource, subprocess, sys, urllib.request
 
 BASE = 'https://tasknode.postfiat.org'
-HELPER_URL = 'https://178-156-143-199.sslip.io:18443/l1-registry/l1-validator-signer-linux-x86_64'
+HELPER_URL = 'https://research.goodalexander.com:18443/l1-registry/l1-validator-signer-linux-x86_64'
 HELPER_SHA256 = '63c5e3d56556447dc06cbcd9fd0b4d8e620dc17068166bb51d3cdb41f50f6eca'
 
 def fail(message):

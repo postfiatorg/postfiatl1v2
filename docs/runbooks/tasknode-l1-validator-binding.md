@@ -40,6 +40,14 @@ consensus and bridge signature contexts.
 
 ## Registry and participation
 
+The canonical registry is
+<https://research.goodalexander.com:18443/l1-registry/registry.json>.
+The pinned helper is served at
+<https://research.goodalexander.com:18443/l1-registry/l1-validator-signer-linux-x86_64>.
+The same paths on `https://178-156-143-199.sslip.io:18443` remain available as
+fallbacks through 2026-11-04T18:00:00Z under D70. The helper SHA-256 remains
+`63c5e3d56556447dc06cbcd9fd0b4d8e620dc17068166bb51d3cdb41f50f6eca`.
+
 The public registry is a projection of two agreeing read-only RPC observations.
 Task Node must reject registry data older than one hour, unknown/inactive ids,
 public-key mismatches, expired challenges and replayed tokens. It must bind
