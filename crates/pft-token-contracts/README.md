@@ -200,19 +200,33 @@ After the broadcast, in this order:
    and the compiler settings equal the record's.
 3. On the explorer, `totalSupply()` equals `PFT_TOKEN_TOTAL_SUPPLY` and the
    treasury Safe holds all of it.
-4. Finalise the record: copy `tx_hash` and `block_number` in from
-   `run-latest.json`, fill `verification_sourcify`, `verification_sourcify_url`,
+4. Finalise the record (outcome 3 below): copy `tx_hash` and `block_number`
+   in from `run-latest.json`, fill `verification_sourcify`, `verification_sourcify_url`,
    `verification_blockscout`, `verification_blockscout_url` and
    `verification_basescan` with each explorer's verification result, then
    commit it.
 5. Retire the deployer key; it holds nothing and is never used again.
 
-If the broadcast fails ambiguously (a timeout, a dropped connection, an
-unknown receipt), reconcile on the explorer first: look up the deployer's
-transactions and nonce. If the creation transaction was mined, continue from
-step 1 with that transaction and keep the record. Only when the explorer shows
-no transaction from the deployer is the uncommitted record deleted and the
-deployment retried. Never delete or retry before that check.
+If the broadcast fails or its outcome is unclear (a timeout, a dropped
+connection, an unknown receipt), remember that the record and the script's checks are
+results of forge's simulation before submission, not of the chain. Read the
+deployer's nonces and receipt, then act on the one outcome that holds; the
+explorer showing no transaction is not, alone, proof that none was submitted.
+
+1. **Not submitted.** The deployer's latest and pending nonces
+   (`cast nonce <deployer> --block latest`, `--block pending`) are both
+   unchanged and no transaction exists: delete the uncommitted record; the run
+   may be repeated.
+2. **Pending.** The pending nonce is ahead of the latest: wait and re-read.
+   Never send a second transaction.
+3. **Mined and successful.** Receipt status 1: copy `tx_hash` and
+   `block_number` into the record, compare the token's code hash on the chain
+   (`cast keccak $(cast code <token> --rpc-url <base-rpc-url>)`) with the
+   explorer's; only then is the record final.
+4. **Mined and reverted.** Receipt status 0: the nonce is consumed and no
+   token exists. Archive the record under a `failed-<tx hash>` name with the
+   receipt (`cast receipt <tx hash> --json`) beside it; any retry uses a fresh
+   deployer at nonce 0.
 
 OpenZeppelin pin: `lib/openzeppelin-contracts` is a git submodule at tag
 `v5.7.0`, commit `cab19933c33c2ad1d4c7a84864a3601dddfd16f3`. `foundry.toml`
@@ -340,13 +354,16 @@ verifier deployed there first, e.g. `forge create` with `--unlocked`):
 anvil --chain-id 84532 &
 PFT_LOCK_CHAIN_ID=84532 PFT_LOCK_TOKEN=<token> \
 PFT_LOCK_TOKEN_CODEHASH=$(cast keccak $(cast code <token> --rpc-url http://127.0.0.1:8545)) \
-PFT_LOCK_VERIFIER=<verifier> PFT_LOCK_ALLOW_TEST_VERIFIER=1 \
+PFT_LOCK_VERIFIER=<verifier> PFT_LOCK_ALLOW_TEST_VERIFIER=1 PFT_LOCK_ALLOW_TEST_TOKEN=1 \
 PFT_LOCK_MAX_LOCK_AMOUNT=2000000000000000 PFT_LOCK_MAX_LOCK_AMOUNT_PFT=2000000000 \
   forge script script/DeployPFTLock.s.sol:DeployPFTLock --rpc-url http://127.0.0.1:8545 \
   --unlocked --sender <fresh-anvil-account>
 ```
 
-Adding `--broadcast` deploys on the anvil and writes the test record. The
+A locally deployed token is not the recorded Base Sepolia test token, so the
+example sets `PFT_LOCK_ALLOW_TEST_TOKEN=1`; the switch is accepted on 84532 only
+and is never used for a real deployment. Adding `--broadcast` deploys on the
+anvil and writes the test record. The
 test-network run is the same command against Base Sepolia with the recorded
 test token, a stand-in verifier deployed there, `--ledger --sender
 <deployer-address> --broadcast` and the switch; it writes its record under the
@@ -368,12 +385,26 @@ optimizer, runs, `evm_version`, `bytecode_hash`), read from the artifact's
 transaction is mined, so `tx_hash` and `block_number` are `pending` until copied
 from `broadcast/DeployPFTLock.s.sol/<chain id>/run-latest.json`.
 
-If the broadcast fails ambiguously (a timeout, a dropped connection, an
-unknown receipt), reconcile on the explorer first: look up the deployer's
-transactions and nonce. If the creation transaction was mined, copy its
-`tx_hash` and `block_number` into the record and keep it. Only when the
-explorer shows no transaction from the deployer is the uncommitted record
-deleted and the deployment retried. Never delete or retry before that check.
+If the broadcast fails or its outcome is unclear (a timeout, a dropped
+connection, an unknown receipt), remember that the record and its code checks (`DeployedCodeMismatch`, `LockStateMismatch`) are
+results of forge's simulation before submission, not of the chain. Read the
+deployer's nonces and receipt, then act on the one outcome that holds; the
+explorer showing no transaction is not, alone, proof that none was submitted.
+
+1. **Not submitted.** The deployer's latest and pending nonces
+   (`cast nonce <deployer> --block latest`, `--block pending`) are both
+   unchanged and no transaction exists: delete the uncommitted record; the run
+   may be repeated.
+2. **Pending.** The pending nonce is ahead of the latest: wait and re-read.
+   Never send a second transaction.
+3. **Mined and successful.** Receipt status 1: copy `tx_hash` and
+   `block_number` into the record, compare the lock's code hash on the chain
+   (`cast keccak $(cast code <lock> --rpc-url <base-rpc-url>)`) with
+   `deployed_code_keccak256` and the explorer's; only then is the record final.
+4. **Mined and reverted.** Receipt status 0: the nonce is consumed and no
+   lock exists. Archive the record under a `failed-<tx hash>` name with the
+   receipt (`cast receipt <tx hash> --json`) beside it; any retry uses a fresh
+   deployer at nonce 0.
 
 The Base mainnet run additionally needs:
 
