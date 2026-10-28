@@ -2,8 +2,9 @@
 # CLI-level test of the deploy script: runs `forge script` (not `forge test`,
 # which does not apply forge's script-only rules such as the address(this)
 # check) on forge's in-process chain with a real Safe treasury, then against a
-# local anvil (started here, on a random local port, killed on exit) where a
-# real factory creates the Safes whose creation transactions the script reads.
+# local anvil for 84532 and another for 8453 (started here, on random local
+# ports, killed on exit) where a real factory creates the Safes whose creation
+# transactions the script reads.
 # No public RPC, no key, no broadcast. Isolated: forge runs under `env -i` with FOUNDRY_OFFLINE=true,
 # no RPC variable, FOUNDRY_CONFIG unset and a temporary empty HOME (removed on
 # exit), so no user environment, no ~/.foundry/foundry.toml and no RPC alias of
@@ -126,25 +127,39 @@ grep -q "ArtifactMetadataMismatch" <<<"$out" && ! grep -qE "DeployedCodeMismatch
   || { printf '%s\n' "$out"; exit 1; }
 echo "ok: truncated runtime (last 1,000 bytes) refused before the broadcast"
 
-# ---- a local anvil: the creation transaction of a real Safe, read from the chain.
+# ---- local anvils: the creation transaction of a real Safe, read from the chain.
 # anvil and cast run under the same env -i, temporary HOME and URL redaction.
+# Each chain id gets its own anvil: after anvil_setChainId some anvil versions
+# keep signing for the start-up chain id.
 CAST="$(dirname "$FORGE")/cast"
 ANVIL="$(dirname "$FORGE")/anvil"
-PORT=$((20000 + RANDOM % 20000))
-RPC="http://127.0.0.1:$PORT"
-env -i PATH="$SAFE_PATH" HOME="$TMP_HOME" "$ANVIL" --chain-id 84532 --port "$PORT" --silent &
-ANVIL_PID=$!
-trap 'kill "$ANVIL_PID" 2>/dev/null; rm -rf "$TMP_HOME"' EXIT
-c() { env -i PATH="$SAFE_PATH" HOME="$TMP_HOME" "$CAST" "$@" --rpc-url "$RPC"; }
-for _ in $(seq 50); do c chain-id >/dev/null 2>&1 && break; sleep 0.1; done
 FACTORY=0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67
 SAFE_L2=0x29fcB43b46531BcA003ddC8FCB67FFE91900C762
-c rpc anvil_setCode "$FACTORY" "$(cat test/fixtures/safe/safe-proxy-factory-1.4.1.runtime.hex)" >/dev/null
-c rpc anvil_setCode "$SAFE_L2" "$(cat test/fixtures/safe/safe-l2-1.4.1.runtime.hex)" >/dev/null
 # anvil's first dev account, unlocked by anvil itself (no key in this file).
 FUNDER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 DEPLOYER=0x00000000000000000000000000000000DE910E00
-c rpc anvil_setBalance "$DEPLOYER" 0x56BC75E2D63100000 >/dev/null
+PORT=""
+ANVIL_PIDS=()
+trap 'kill "${ANVIL_PIDS[@]}" 2>/dev/null; rm -rf "$TMP_HOME"' EXIT
+c() { env -i PATH="$SAFE_PATH" HOME="$TMP_HOME" "$CAST" "$@" --rpc-url "$RPC"; }
+
+# start_anvil CHAIN_ID: a new anvil for CHAIN_ID on a random local port (not the
+# previous one), now the one at $RPC, with the factory and the singleton set and
+# the deployer funded.
+start_anvil() {
+  local port
+  while port=$((20000 + RANDOM % 20000)); [ "$port" = "$PORT" ]; do :; done
+  PORT="$port"
+  RPC="http://127.0.0.1:$PORT"
+  env -i PATH="$SAFE_PATH" HOME="$TMP_HOME" "$ANVIL" --chain-id "$1" --port "$PORT" --silent &
+  ANVIL_PIDS+=($!)
+  for _ in $(seq 50); do c chain-id >/dev/null 2>&1 && break; sleep 0.1; done
+  [ "$(c chain-id)" = "$1" ] || { echo "FAIL: no anvil for chain id $1 on the random port" >&2; exit 1; }
+  c rpc anvil_setCode "$FACTORY" "$(cat test/fixtures/safe/safe-proxy-factory-1.4.1.runtime.hex)" >/dev/null
+  c rpc anvil_setCode "$SAFE_L2" "$(cat test/fixtures/safe/safe-l2-1.4.1.runtime.hex)" >/dev/null
+  c rpc anvil_setBalance "$DEPLOYER" 0x56BC75E2D63100000 >/dev/null
+}
+start_anvil 84532
 OWNERS="[0x00000000000000000000000000000000000000A1,0x00000000000000000000000000000000000000A2,0x00000000000000000000000000000000000000A3]"
 ZERO=0x0000000000000000000000000000000000000000
 SIG_SETUP="setup(address[],uint256,address,bytes,address,address,uint256,address)"
@@ -195,9 +210,12 @@ fi
 grep -q "TreasuryInitializerDelegates" <<<"$out" || { printf '%s\n' "$out"; exit 1; }
 echo "ok: anvil Safe with a delegating initializer refused"
 
-# The same Safe (a CREATE2 address is the same on every chain) checked on 8453
-# with its 84532 creation transaction: the signature binds it to 84532.
-c rpc anvil_setChainId 8453 >/dev/null
+# The same Safe (a CREATE2 address is the same on every chain), created again on
+# an 8453 anvil, checked there with its 84532 creation transaction: the
+# signature binds it to 84532.
+start_anvil 8453
+read -r SAFE_8453 _ <<<"$(create_safe "$ZERO" 0)"
+[ "$SAFE_8453" = "$SAFE" ] || { echo "FAIL: the 8453 Safe is not at the 84532 Safe's address" >&2; exit 1; }
 if out="$(run_anvil 8453 "$SAFE" PFT_TOKEN_TREASURY_CREATION_TX="$SAFE_TX" PFT_TOKEN_TREASURY_CREATION_RAW_TX="$SAFE_RAW")"; then
   printf '%s\n' "$out"; echo "FAIL: the script accepted a creation transaction signed for another chain" >&2; exit 1
 fi
