@@ -169,3 +169,62 @@ The script printed the Safe singleton, threshold 2, two owners, zero modules,
 a zero guard and deployment record `real`. After the broadcast,
 `totalSupply()` and the Safe's `balanceOf` were both `100000000000000000`, and
 the deployer's nonce was 1.
+
+## Base Sepolia lock rehearsal, 2026-10-28
+
+This is a test deployment with no value and a reverting stand-in verifier: the
+lock contract on the Base Sepolia test network (chain id 84532), paid with test
+ETH, holding the test token above.
+
+- Lock: `PFTLockV1` at `0xE36e7Fc384564419187546c19719A5654266dE0B`; `token()`
+  is the test token, `nextNonce()` and `totalLocked()` are 0.
+- Verifier stand-in: `0x531659D05d86C5C4cE6fdc3C473b246C294f2Ec9`, the tests'
+  `MockLockVerifier` (`crates/pft-token-contracts/test/DeployPFTLock.t.sol`),
+  deployed by the one-time key `0x2317C98D52135a43c06211b9Fa381CFe7b0eFa25` in
+  `0xbd16c9022ed4fccb0d2f5d387953032d7e4e4b51eabab265bb6ec29b8cbcb33b`. Its
+  `verifyAndConsume` reverts `NotDeployed()` on every input, so nothing can
+  ever be released from this lock. Its source is not verified.
+- Cap: `maxLockAmount()` 2,000,000,000 PFT (`2000000000000000` units), 2 % of
+  the 100 billion test supply.
+- Deployer: the one-time key `0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17`,
+  nonce 0 before and 1 after the deployment.
+- Transaction:
+  `0xf73be7afe357a6f23dc1052d8292eef50db9635c0f3e993cfdcb8745ee934400`,
+  block 51352801, status 1, 1,088,346 gas.
+- Code: deployed keccak256
+  `0x328a93e99cf9659bdb44807d60a9e0328e0ff867d0b584dc2eeed3b0d5442fb2` (equal to
+  the record's `deployed_code_keccak256`); creation code keccak256
+  `0x2af875b177e44457588eadb6660ce021474a88dd54d0e4041c0e212277a0a15a`; verifier
+  stand-in keccak256
+  `0xa26bc54573c6f471997352bf83746ebb0b37c702de858255ac9595e3d263fcde`.
+- Source verified:
+  [Sourcify](https://repo.sourcify.dev/84532/0xE36e7Fc384564419187546c19719A5654266dE0B)
+  (exact match) and
+  [Blockscout](https://base-sepolia.blockscout.com/address/0xE36e7Fc384564419187546c19719A5654266dE0B?tab=contract)
+  (verified). Basescan: not verified (no key).
+- Record: `crates/pft-token-contracts/deployments/pft-lock-base-84532/deployment.json`,
+  copied by hand from the script's test-mode record (`cache/deploy-test/`) with
+  the transaction and block filled in, `"mode": "test"` and
+  `"stand_in_verifier": true`. Built from `b4f98c72`.
+
+The verifier's code hash is not pinned, so this is the script's test mode
+(`PFT_LOCK_ALLOW_TEST_VERIFIER=1`, which `PFT_LOCK_REAL_DEPLOYMENT=1` refuses).
+Run from `crates/pft-token-contracts` after `forge clean && forge build`, first
+without and then with `--broadcast`:
+
+```bash
+PFT_LOCK_CHAIN_ID=84532 PFT_LOCK_TOKEN=0x18fE4ca51A0cE042688D5A54917319d03B527D92 \
+PFT_LOCK_TOKEN_CODEHASH=0xb0939a2407cd571d158498ba0f405f4ddb3857e688d2bc5ada170dcc655903df \
+PFT_LOCK_VERIFIER=0x531659D05d86C5C4cE6fdc3C473b246C294f2Ec9 PFT_LOCK_ALLOW_TEST_VERIFIER=1 \
+PFT_LOCK_MAX_LOCK_AMOUNT=2000000000000000 PFT_LOCK_MAX_LOCK_AMOUNT_PFT=2000000000 \
+  forge script script/DeployPFTLock.s.sol:DeployPFTLock \
+  --rpc-url https://sepolia.base.org --sender 0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17 \
+  --keystore <deployer keystore> --password-file <password file> --broadcast
+```
+
+The end-to-end lock was not exercised: the only holder of the test token is the
+2-of-2 treasury Safe, which needs both signatures to move any. Both one-time
+keys were funded with 0.0005 test ETH from `0xC75B…a4CB` and are retired, their
+leftovers returned in
+`0xa41c94dc4d80895b417bf01557839c6bda739497f21bc48301d3963b4cb4e8dc` and
+`0x9999c5d6f83d3f35aa5ac3f81dcd70c9b1667fe1460e543f0be8c47bd51f2987`.
