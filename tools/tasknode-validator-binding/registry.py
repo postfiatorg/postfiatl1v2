@@ -4,6 +4,7 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -131,7 +132,9 @@ def daily_participation(state, rows, now):
         reported = [d for d in daily if d['reported']]
         total = sum(d['committed_blocks'] for d in reported)
         signed = sum(d['signed_blocks'] for d in reported)
-        mean = sum(d['score'] for d in reported) / len(reported) if reported else None
+        # Preserve the inclusive 95% boundary on every supported Python 3,
+        # including versions whose built-in sum uses ordinary float addition.
+        mean = math.fsum(d['score'] for d in reported) / len(reported) if reported else None
         # D63 accepts conservative observer brackets as the time source. D1
         # requires at least 25 reported days and the unweighted daily mean.
         available = len(reported) >= 25

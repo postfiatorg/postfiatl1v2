@@ -105,6 +105,9 @@ class RegistryTest(unittest.TestCase):
         boundary = daily_participation(self.observed_history([(1, 1)] * 23 + [(3, 4), (0, 1)]), rows, now)['v0']
         self.assertEqual(boundary['mean_daily_score'], 0.95)
         self.assertTrue(boundary['eligible'])
+        repeated_boundary = daily_participation(self.observed_history([(19, 20)] * 25), rows, now)['v0']
+        self.assertEqual(repeated_boundary['mean_daily_score'], 0.95)
+        self.assertTrue(repeated_boundary['eligible'])
 
     def test_d63_gaps_empty_days_and_rolling_window_cannot_inflate_coverage(self):
         now = dt.datetime(2026, 10, 26, 14, tzinfo=UTC)
