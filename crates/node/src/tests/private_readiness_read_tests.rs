@@ -69,6 +69,7 @@
             PrivateReadinessOptions {
                 data_dir: fixture.data_dir.clone(),
                 pool_id: None,
+                admission_switch: None,
             },
             verifiers,
         )
@@ -191,6 +192,7 @@
             PrivateReadinessOptions {
                 data_dir: fixture.data_dir.clone(),
                 pool_id: None,
+                admission_switch: None,
             },
             &verifiers,
         )
@@ -205,6 +207,7 @@
         let report = private_readiness(PrivateReadinessOptions {
             data_dir: fixture.data_dir.clone(),
             pool_id: None,
+            admission_switch: None,
         })
         .expect("readiness");
         for verifier in [&report.swap_verifier, &report.private_egress_verifier] {

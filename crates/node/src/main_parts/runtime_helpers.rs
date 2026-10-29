@@ -622,6 +622,7 @@ fn print_usage() {
   postfiat-node archive-window-import [--data-dir PATH] --bundle-file PATH [--overwrite]
   postfiat-node archive-window-backfill [--data-dir PATH] --source-host HOST --source-rpc-port PORT --from-height N --to-height N [--archive-uri URI] [--work-dir PATH] [--timeout-ms MS] [--overwrite]
   postfiat-node block-proposer [--data-dir PATH] --height N [--view N]
+  postfiat-node private-action-resolve [--data-dir PATH] --intent-id ID [--abandon --reason TEXT]
   postfiat-node transport-listen [--data-dir PATH] --topology PATH [--bind-host HOST] [--max-peers N] [--timeout-ms MS]
   postfiat-node transport-dial [--data-dir PATH] --topology PATH --to NODE_ID [--timeout-ms MS]
   postfiat-node transport-batch-listen [--data-dir PATH] --topology PATH [--bind-host HOST] [--max-peers N] [--timeout-ms MS]

@@ -746,6 +746,33 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "private-action-resolve" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let intent_id = flag_value(flags, "--intent-id").ok_or("missing --intent-id")?;
+            let abandon = flag_present(flags, "--abandon");
+            let reason = flag_value(flags, "--reason");
+            if abandon && reason.is_none() {
+                return Err("--abandon needs --reason TEXT".to_string());
+            }
+            if !abandon && reason.is_some() {
+                return Err("--reason is only used with --abandon".to_string());
+            }
+            let now_unix = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|error| format!("system clock: {error}"))?
+                .as_secs();
+            let report = postfiat_node::private_action_resolve(
+                Path::new(data_dir),
+                intent_id,
+                if abandon { reason } else { None },
+                now_unix,
+            )
+            .map_err(|error| format!("private-action-resolve failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("private-action-resolve serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "block-proposer" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let block_height = flag_value(flags, "--height")

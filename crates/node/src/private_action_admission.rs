@@ -60,6 +60,10 @@ pub enum PrivateActionState {
     Accepted,
     Rejected,
     Unknown,
+    /// Set only by the operator command `private-action-resolve --abandon`
+    /// while the batch is not on chain; a resubmit of the same bytes
+    /// supersedes it with a fresh record.
+    Abandoned,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -132,7 +136,9 @@ fn contract_receipt(record: &PrivateActionRecord) -> postfiat_types::PrivateRece
         PrivateActionState::Dispatched => postfiat_types::PrivateAdmissionState::Dispatched,
         PrivateActionState::Accepted => postfiat_types::PrivateAdmissionState::Accepted,
         PrivateActionState::Rejected => postfiat_types::PrivateAdmissionState::Rejected,
-        PrivateActionState::Unknown => postfiat_types::PrivateAdmissionState::Unknown,
+        PrivateActionState::Unknown | PrivateActionState::Abandoned => {
+            postfiat_types::PrivateAdmissionState::Unknown
+        }
     };
     let outcome = record.outcome.as_ref();
     let inclusion = outcome.and_then(|outcome| outcome.inclusion.as_ref());
@@ -290,6 +296,23 @@ impl PrivateActionAdmissionStore {
 
     pub fn records(&self) -> impl Iterator<Item = &PrivateActionRecord> {
         self.records.values()
+    }
+
+    /// Every logged record for the intent, oldest first: the audit trail.
+    pub fn history(&self, intent_id: &str) -> io::Result<Vec<PrivateActionRecord>> {
+        let log = self.dir.join(ADMISSION_LOG);
+        if !log.exists() {
+            return Ok(Vec::new());
+        }
+        let mut history = Vec::new();
+        for line in fs::read_to_string(log)?.lines() {
+            if let Ok(record) = serde_json::from_str::<PrivateActionRecord>(line) {
+                if record.intent_id == intent_id {
+                    history.push(record);
+                }
+            }
+        }
+        Ok(history)
     }
 
     /// Appends the record and fsyncs before returning.
@@ -452,7 +475,19 @@ pub fn private_action_submit(
     }
 
     let mut store = PrivateActionAdmissionStore::open(data_dir)?;
-    if let Some(existing) = store.get(&request.intent_id) {
+    // The same bytes after an operator abandonment reserve again under the same
+    // intent; the indexes keep pointing at that intent and the abandoned
+    // record stays in the log.
+    let supersedes_abandoned = store.get(&request.intent_id).is_some_and(|existing| {
+        existing.state == PrivateActionState::Abandoned
+            && existing.action_json == request.action_json
+    });
+    let owned_by_this_intent =
+        |intent: &str| supersedes_abandoned && intent == request.intent_id.as_str();
+    if let Some(existing) = store
+        .get(&request.intent_id)
+        .filter(|_| !supersedes_abandoned)
+    {
         if existing.action_json == request.action_json && existing.domain == request.domain {
             return Ok(PrivateActionSubmitReport {
                 schema: PRIVATE_ACTION_RECORD_SCHEMA.to_string(),
@@ -465,7 +500,10 @@ pub fn private_action_submit(
             "a different action is already reserved under this intent",
         ));
     }
-    if store.intent_for_action_hash(&request.action_hash).is_some() {
+    if store
+        .intent_for_action_hash(&request.action_hash)
+        .is_some_and(|intent| !owned_by_this_intent(intent))
+    {
         return Err(refused(
             "private_action_duplicate",
             "this action is already reserved under another intent",
@@ -475,7 +513,10 @@ pub fn private_action_submit(
     let batch =
         consensus_artifacts::build_atomic_shielded_action_batch(&state.genesis, vec![action])?;
     consensus_artifacts::verify_shielded_action_batch_id(&state.genesis, &batch)?;
-    if store.intent_for_batch_id(&batch.batch_id).is_some() {
+    if store
+        .intent_for_batch_id(&batch.batch_id)
+        .is_some_and(|intent| !owned_by_this_intent(intent))
+    {
         return Err(refused(
             "private_action_duplicate",
             "this canonical batch is already reserved under another intent",
@@ -816,4 +857,102 @@ fn finish(
     updated.outcome = Some(outcome);
     store.write(updated)?;
     Ok(step)
+}
+
+pub const PRIVATE_ACTION_RESOLVE_SCHEMA: &str = "postfiat.private_action_resolve.v1";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PrivateActionResolveReport {
+    pub schema: String,
+    pub intent_id: String,
+    /// `settled` (from the chain), `unchanged` or `abandoned`.
+    pub action: String,
+    pub record: PrivateActionRecord,
+    /// Every logged record for the intent, oldest first.
+    pub history: Vec<PrivateActionRecord>,
+}
+
+/// The operator rule for a stuck record. Without `abandon_reason`, settles
+/// the record from the chain if its batch is there and otherwise changes
+/// nothing. With it, marks a `queued` or `unknown` record `abandoned` only if
+/// the batch is not on chain. Never dispatches. Holding the store lock means
+/// no service step, and so no round, is running.
+pub fn private_action_resolve(
+    data_dir: &Path,
+    intent_id: &str,
+    abandon_reason: Option<&str>,
+    now_unix: u64,
+) -> io::Result<PrivateActionResolveReport> {
+    let mut store = PrivateActionAdmissionStore::open(data_dir)?;
+    let record = store.get(intent_id).cloned().ok_or_else(|| {
+        refused(
+            "private_action_unknown_intent",
+            "this node holds no admission record for the intent",
+        )
+    })?;
+    let on_chain = private_action_chain_inclusion(data_dir, &record.batch_id)?;
+    let (action, record) = match abandon_reason {
+        None => match on_chain {
+            Some((inclusion, receipts))
+                if !matches!(
+                    record.state,
+                    PrivateActionState::Accepted | PrivateActionState::Rejected
+                ) =>
+            {
+                finish(&mut store, record, included_outcome(inclusion, &receipts))?;
+                let settled = store.get(intent_id).cloned().expect("settled record");
+                ("settled", settled)
+            }
+            _ => ("unchanged", record),
+        },
+        Some(reason) => {
+            let reason = reason.trim();
+            if reason.is_empty() {
+                return Err(refused(
+                    "private_action_request_invalid",
+                    "--abandon needs a non-empty --reason",
+                ));
+            }
+            if on_chain.is_some() {
+                return Err(refused(
+                    "private_action_on_chain",
+                    "the batch is on chain; resolve without --abandon to settle the record",
+                ));
+            }
+            match record.state {
+                PrivateActionState::Queued | PrivateActionState::Unknown => {}
+                PrivateActionState::Dispatched => {
+                    return Err(refused(
+                        "private_action_round_in_flight",
+                        "the record is dispatched; let the round service settle it first",
+                    ))
+                }
+                _ => {
+                    return Err(refused(
+                        "private_action_final",
+                        "the record is already accepted, rejected or abandoned",
+                    ))
+                }
+            }
+            let mut abandoned = record;
+            abandoned.state = PrivateActionState::Abandoned;
+            abandoned.outcome = Some(PrivateActionOutcome {
+                accepted: false,
+                code: "private_action_abandoned".to_string(),
+                message: format!("abandoned by the operator at unix {now_unix}: {reason}"),
+                fee_charged: 0,
+                state_effects: "none".to_string(),
+                inclusion: None,
+            });
+            store.write(abandoned.clone())?;
+            ("abandoned", abandoned)
+        }
+    };
+    Ok(PrivateActionResolveReport {
+        schema: PRIVATE_ACTION_RESOLVE_SCHEMA.to_string(),
+        intent_id: intent_id.to_string(),
+        action: action.to_string(),
+        history: store.history(intent_id)?,
+        record,
+    })
 }

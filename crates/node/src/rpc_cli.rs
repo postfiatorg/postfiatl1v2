@@ -914,6 +914,9 @@ fn handle_rpc_serve_connection(
             "rpc_method_not_allowed",
             &format!("rpc method `{method}` is not enabled on the read-only remote server"),
         )
+    } else if method == "private_readiness" {
+        // In-process so the read reports this server's own admission switch.
+        run_rpc_serve_private_readiness(&request, context)
     } else if method == "status" {
         match rpc_serve_cached_status(&context.data_dir, &context.health_cache) {
             Ok((report, cache_hit)) => {

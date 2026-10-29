@@ -444,6 +444,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "archive-window-import"
         | "archive-window-backfill"
         | "block-proposer"
+        | "private-action-resolve"
         | "metrics"
         | "faucet"
         | "owned-apply"

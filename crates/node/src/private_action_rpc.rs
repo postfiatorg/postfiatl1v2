@@ -147,6 +147,56 @@ fn run_rpc_serve_private_action(
     }
 }
 
+/// `private_readiness` served by rpc-serve: the admission switch is this
+/// server's own `--allow-private-action-admission` setting, never a request
+/// parameter (the only parameter is the optional `pool_id`).
+fn run_rpc_serve_private_readiness(
+    request: &RpcRequest,
+    context: &RpcServeConnectionContext,
+) -> RpcResponse {
+    let params = request.params.as_object();
+    if let Some(extra) = params.and_then(|params| params.keys().find(|key| key.as_str() != "pool_id")) {
+        return rpc_serve_error_response(
+            &request.id,
+            "rpc_protocol_error",
+            &format!("unknown private_readiness param `{extra}`"),
+        );
+    }
+    let pool_id = match params.and_then(|params| params.get("pool_id")) {
+        None => None,
+        Some(serde_json::Value::String(pool_id)) => Some(pool_id.clone()),
+        Some(_) => {
+            return rpc_serve_error_response(
+                &request.id,
+                "rpc_protocol_error",
+                "private_readiness pool_id must be a string",
+            )
+        }
+    };
+    match postfiat_node::private_readiness(postfiat_node::PrivateReadinessOptions {
+        data_dir: context.data_dir.clone(),
+        pool_id,
+        admission_switch: Some(context.allow_private_action_admission),
+    }) {
+        Ok(report) => {
+            let subject = if report.ready { "ready" } else { "not_ready" };
+            success_response(
+                &request.id,
+                &report,
+                vec![RpcEvent::new("private_readiness", subject, "queried")],
+            )
+            .unwrap_or_else(|error| {
+                rpc_serve_error_response(&request.id, "rpc_internal", &error.to_string())
+            })
+        }
+        Err(error) => rpc_serve_error_response(
+            &request.id,
+            "rpc_error",
+            &format!("rpc private_readiness failed: {error}"),
+        ),
+    }
+}
+
 /// Local `postfiat-node rpc --method private_action_*`: flat flags, or
 /// `--action-file` for the action text.
 fn run_rpc_private_action(id: &str, method: &str, flags: &[String], data_dir: &Path) -> Result<(), String> {
@@ -391,6 +441,44 @@ mod private_action_rpc_tests {
             on[1].error.as_ref().unwrap().code,
             "private_action_request_invalid"
         );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rpc_serve_readiness_reports_its_own_admission_switch() {
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-private-readiness-switch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        init(InitOptions {
+            data_dir: root.clone(),
+            chain_id: "private-readiness-switch-test".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 1,
+        })
+        .expect("init node");
+        std::fs::write(root.join("topology.json"), "{}").expect("topology placeholder");
+        let readiness = RpcRequest::new("readiness", "private_readiness", serde_json::json!({}));
+        // A request cannot claim the switch: unknown parameters are refused.
+        let claim = RpcRequest::new(
+            "claim",
+            "private_readiness",
+            serde_json::json!({ "admission_switch": "on" }),
+        );
+        let off = private_action_serve(&root, false, &[readiness.clone(), claim.clone()]);
+        assert!(off[0].ok, "{:?}", off[0].error);
+        assert_eq!(off[0].result.as_ref().unwrap()["admission_switch"]["state"], "off");
+        assert_eq!(off[1].error.as_ref().unwrap().code, "rpc_protocol_error");
+        let on = private_action_serve(&root, true, &[readiness]);
+        assert!(on[0].ok, "{:?}", on[0].error);
+        let report = on[0].result.as_ref().unwrap();
+        assert_eq!(report["admission_switch"]["state"], "on");
+        // The switch never gates readiness: `ready` is identical either way.
+        assert_eq!(report["ready"], off[0].result.as_ref().unwrap()["ready"]);
         let _ = std::fs::remove_dir_all(root);
     }
 

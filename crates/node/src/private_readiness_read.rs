@@ -21,6 +21,10 @@ const PRIVATE_READINESS_MAX_ROUTES: usize = 16;
 pub struct PrivateReadinessOptions {
     pub data_dir: PathBuf,
     pub pool_id: Option<String>,
+    /// The serving process's own `--allow-private-action-admission` setting;
+    /// `None` (a local read with no server) reports `unknown`. Never taken
+    /// from request parameters.
+    pub admission_switch: Option<bool>,
 }
 
 /// The identity a verifier proves it was built with.
@@ -270,13 +274,19 @@ pub(super) fn private_readiness_with_probe(
         .clone()
         .unwrap_or_else(|| ao::ASSET_ORCHARD_POOL_ID_V1.to_string());
     let snapshot = read_finalized_pair_snapshot(&options.data_dir)?;
-    Ok(readiness_report(&snapshot, pool_id, probe))
+    Ok(readiness_report(
+        &snapshot,
+        pool_id,
+        probe,
+        options.admission_switch,
+    ))
 }
 
 fn readiness_report(
     snapshot: &FinalizedPairSnapshot,
     pool_id: String,
     probe: &dyn PrivateVerifierProbe,
+    admission_switch: Option<bool>,
 ) -> PrivateReadinessReport {
     let next_height = snapshot.tip.height.saturating_add(1);
     let governance = &snapshot.governance;
@@ -304,7 +314,12 @@ fn readiness_report(
         .as_ref()
         .is_some_and(|pool| pool.pool_id == pool_id);
     let admission_switch = PrivateAdmissionSwitch {
-        state: "unknown".to_string(),
+        state: match admission_switch {
+            Some(true) => "on",
+            Some(false) => "off",
+            None => "unknown",
+        }
+        .to_string(),
         looked_for: PRIVATE_ACTION_ADMISSION_SWITCH_KEYS
             .iter()
             .map(|key| key.to_string())
