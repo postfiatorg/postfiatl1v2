@@ -1728,6 +1728,22 @@ fn nav_profile_register_omits_default_sp1_fields_for_legacy_serialization() {
 }
 
 #[test]
+fn nav_reserve_packet_id_matches_python_sdk_vector() {
+    // Same vector asserted in python/tests/test_navcoin.py
+    // (test_nav_reserve_packet_id_matches_rust_vector).
+    let packet_id = nav_reserve_packet_id(
+        "f0fcc338230cfbc693203d46deb36c39cfe7f492c088dbb4811b0bca54eda8082ec3d7c4bbfe0fe79fa42fe10b1713b8",
+        1,
+        "75c981a212c520fa45f7846c0265740a9ed9b8c7bedf9963ead6e0dd1828951c1337df22d68d2487516c68d3927a47f5",
+    )
+    .expect("valid packet id inputs");
+    assert_eq!(
+        packet_id,
+        "69eb1f8adda23bfd3f8078d4ad76e7cca15f9d80d191e0dfb57f79e5319f63fd708b2080afae35e0fce5c9f4952dcab9"
+    );
+}
+
+#[test]
 fn nav_reserve_profile_identity_and_signing_bind_every_successor_field() {
     let build_profile = |manifest: &str, unit: &str, span: u64, controlled: bool| {
         NavProofProfile::new(

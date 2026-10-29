@@ -106,6 +106,25 @@ def test_nav_proof_profile_id_matches_rust_consensus_vector():
     )
 
 
+def test_nav_reserve_packet_id_matches_rust_vector():
+    from postfiat_rpc.navcoin import nav_reserve_packet_id
+
+    # Same vector asserted in crates/types/src/tests.rs
+    # (nav_reserve_packet_id_matches_python_sdk_vector).
+    asset_id = (
+        "f0fcc338230cfbc693203d46deb36c39cfe7f492c088dbb4811b0bca54eda808"
+        "2ec3d7c4bbfe0fe79fa42fe10b1713b8"
+    )
+    reserve_packet_hash = (
+        "75c981a212c520fa45f7846c0265740a9ed9b8c7bedf9963ead6e0dd1828951c"
+        "1337df22d68d2487516c68d3927a47f5"
+    )
+    assert nav_reserve_packet_id(asset_id, 1, reserve_packet_hash) == (
+        "69eb1f8adda23bfd3f8078d4ad76e7cca15f9d80d191e0dfb57f79e5319f63fd"
+        "708b2080afae35e0fce5c9f4952dcab9"
+    )
+
+
 def test_profile_register_and_settle_builders_shape():
     from postfiat_rpc.navcoin import (
         build_profile_register_operation,

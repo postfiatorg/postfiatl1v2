@@ -179,9 +179,14 @@ def build_redeem_settle_operation(
 
 
 def nav_reserve_packet_id(asset_id: str, epoch: int, reserve_packet_hash: str) -> str:
-    return sha384_hex(
-        f"postfiat.nav_reserve_packet_id.v1:{asset_id}:{epoch}:{reserve_packet_hash}".encode()
+    """The chain's reserve packet id (``postfiat_types::nav_reserve_packet_id``)."""
+    hasher = hashlib.sha3_384()
+    hasher.update(b"postfiat.nav_reserve_packet_id.v1")
+    hasher.update(b"\x00")
+    hasher.update(
+        f"asset_id={asset_id}\nepoch={epoch}\nreserve_packet_hash={reserve_packet_hash}\n".encode()
     )
+    return hasher.hexdigest()
 
 
 def calculate_nav(inputs: NavInputs) -> dict[str, int]:
