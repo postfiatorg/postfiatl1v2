@@ -40,8 +40,10 @@ function handleRetiredLegacyRoute(req, res, url, env = process.env) {
     return true;
 }
 
-// Startup: the mode line, and a refusal when the switch is on, a legacy path is
-// enabled and its validator key file or data directory is missing.
+// Startup: the mode line, and a warning (never a refusal) when the switch is on,
+// a legacy path is enabled and its validator key file or data directory is
+// missing; those routes then answer 409 as before. Only an invalid switch
+// value stops startup.
 function legacyShieldedCertificationStartup(ingressConfig, env = process.env) {
     if (!legacyShieldedCertificationEnabled(env)) {
         return {
@@ -60,9 +62,10 @@ function legacyShieldedCertificationStartup(ingressConfig, env = process.env) {
     }
     if (missing.length) {
         return {
-            ok: false,
-            line: `Legacy shielded certification is on and enabled, but ${missing.join(' and ')} is missing; `
-                + `configure it or set ${SWITCH}=off.`,
+            ok: true,
+            warning: true,
+            line: `Warning: legacy shielded certification is on and enabled, but ${missing.join(' and ')} is missing; `
+                + `its routes answer 409 until it is configured or ${SWITCH}=off.`,
         };
     }
     return {

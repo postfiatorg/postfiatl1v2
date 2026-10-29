@@ -85,8 +85,9 @@ function freePort() {
     });
 }
 
-// Starts `node server.js` and resolves with its exit code, or with the mode line once it listens.
-async function startProxy(extraEnv) {
+// Starts `node server.js` and resolves with its exit code, or, once it listens, with its
+// output and the result of `whileListening(port)`.
+async function startProxy(extraEnv, whileListening = null) {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pft-legacy-switch-home-'));
     const port = await freePort();
     const child = spawn(process.execPath, ['server.js'], {
@@ -105,13 +106,14 @@ async function startProxy(extraEnv) {
         child.on('exit', (code) => { clearTimeout(timer); resolve({ exitCode: code, output, listening: false }); });
         const poll = setInterval(() => {
             const probe = net.connect(port, '127.0.0.1');
-            probe.on('connect', () => {
+            probe.on('connect', async () => {
                 probe.end();
                 clearInterval(poll);
                 clearTimeout(timer);
                 child.removeAllListeners('exit');
+                const observed = whileListening ? await whileListening(port) : null;
                 child.kill('SIGKILL');
-                resolve({ exitCode: null, output, listening: true });
+                resolve({ exitCode: null, output, listening: true, observed });
             });
             probe.on('error', () => {});
         }, 100);
@@ -162,12 +164,20 @@ async function main() {
     const defaultStart = await startProxy({});
     assert.ok(defaultStart.listening, defaultStart.output);
     assert.match(defaultStart.output, /Legacy shielded certification: on \(routes present, not enabled\)/);
+    // On, enabled and no key file: starts with one warning and answers 409 as before.
     const misconfigured = await startProxy({
         NAVSWAP_ENABLE_SHIELDED_INGRESS: 'true', NAVSWAP_SHIELDED_INGRESS_KEY_FILE: '/nonexistent/validator.key',
-        NAVSWAP_SHIELDED_INGRESS_DATA_DIR: '/nonexistent/data',
-    });
-    assert.strictEqual(misconfigured.exitCode, 78, misconfigured.output);
-    assert.match(misconfigured.output, /validator key file and the validator data directory is missing/);
+        NAVSWAP_SHIELDED_INGRESS_DATA_DIR: '/nonexistent/data', WALLET_PROXY_API_TOKEN: TOKEN, ALLOWED_ORIGINS: ORIGIN,
+    }, (port) => post(port, '/api/shielded-nav-swap/ingress', {}));
+    assert.ok(misconfigured.listening, misconfigured.output);
+    assert.match(misconfigured.output,
+        /Warning: legacy shielded certification is on and enabled, but the validator key file and the validator data directory is missing/);
+    assert.strictEqual(misconfigured.output.split('\n').filter((line) => line.startsWith('Warning: legacy shielded')).length, 1);
+    assert.strictEqual(misconfigured.observed.statusCode, 409, JSON.stringify(misconfigured.observed.body));
+    // Only an invalid switch value stops startup.
+    const invalid = await startProxy({ WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION: 'maybe' });
+    assert.ok(!invalid.listening && invalid.exitCode !== 0 && invalid.exitCode !== null, invalid.output);
+    assert.match(invalid.output, /WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION must be on or off/);
     const offIgnoresThem = await startProxy({
         WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION: 'off', NAVSWAP_ENABLE_SHIELDED_INGRESS: 'true',
         NAVSWAP_SHIELDED_INGRESS_KEY_FILE: '/nonexistent/validator.key', NAVSWAP_SHIELDED_INGRESS_DATA_DIR: '/nonexistent/data',

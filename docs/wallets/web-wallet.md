@@ -221,7 +221,9 @@ ingress, swap and egress on the HTTP side. `WALLET_PROXY_LEGACY_SHIELDED_CERTIFI
 (default `on`) controls it, and the proxy logs the active mode at startup.
 
 - **On:** if `NAVSWAP_ENABLE_SHIELDED_INGRESS`, `_SWAPS` or `_EGRESS` is set but
-  the validator key file or data directory is missing, startup is refused.
+  the validator key file or data directory is missing, the proxy still starts.
+  It logs one warning naming what is missing, and those routes answer 409 as
+  before. Only an invalid switch value stops startup.
 - **Off:** `/api/shielded-nav-swap/ingress`, `/swap` and `/egress` answer 410
   `legacy_shielded_certification_retired`, pointing to `/api/private/v1/`.
   The proxy starts with no key file, data directory or local Asset-Orchard

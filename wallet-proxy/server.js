@@ -1767,11 +1767,8 @@ if (require.main === module) {
     const navswapIdempotencyStoreLoad = loadNavswapIdempotencyStore();
     const startupShieldedSwapConfig = shieldedNavswapSwapConfig();
     const legacyStartup = legacyShieldedCertificationStartup(shieldedNavswapIngressConfig());
-    if (!legacyStartup.ok) {
-        console.error(legacyStartup.line);
-        process.exit(78);
-    }
-    console.log(legacyStartup.line);
+    if (legacyStartup.warning) console.warn(legacyStartup.line);
+    else console.log(legacyStartup.line);
     const startupCertifierLoop = startupShieldedSwapConfig.certifier_loop?.enabled
         ? startShieldedCertifierLoop(startupShieldedSwapConfig)
         : null;
