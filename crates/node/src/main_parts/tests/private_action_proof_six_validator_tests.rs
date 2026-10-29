@@ -24,11 +24,11 @@ mod private_action_proof_six_validator_tests {
 
     const EGRESS_POLICY: &str = "wallet_private_egress_public_exit_v1";
 
-    fn seed_hex(seed: u8) -> String {
+    pub(crate) fn seed_hex(seed: u8) -> String {
         postfiat_crypto_provider::bytes_to_hex(&[seed; 32])
     }
 
-    fn holder_address(fleet: &Fleet) -> String {
+    pub(crate) fn holder_address(fleet: &Fleet) -> String {
         let holder: DevKeyFile =
             serde_json::from_slice(&std::fs::read(&fleet.holder_key_file).unwrap()).unwrap();
         holder.address
@@ -36,7 +36,7 @@ mod private_action_proof_six_validator_tests {
 
     /// Admits an action on all six validators and runs the round service
     /// until every validator records it accepted.
-    fn admit_and_accept(fleet: &Fleet, action_json: &str) -> String {
+    pub(crate) fn admit_and_accept(fleet: &Fleet, action_json: &str) -> String {
         let request = fleet.request(action_json);
         for result in fleet.submit_everywhere(&request) {
             assert_eq!(result.expect("reserve").state, PrivateActionState::Queued);
@@ -62,7 +62,7 @@ mod private_action_proof_six_validator_tests {
     }
 
     /// A refusal at admission on every validator with no state change.
-    fn assert_refused_everywhere(fleet: &Fleet, action_json: &str) -> String {
+    pub(crate) fn assert_refused_everywhere(fleet: &Fleet, action_json: &str) -> String {
         let before = fleet.pool_fingerprint();
         let request = fleet.request(action_json);
         let results = fleet.submit_everywhere(&request);
@@ -243,29 +243,5 @@ mod private_action_proof_six_validator_tests {
             started.elapsed().as_secs_f64()
         );
         let _ = std::fs::remove_dir_all(&fleet.root);
-    }
-
-    #[test]
-    #[ignore = "not built: needs a second swap proof after the NAV age bound to show asset_orchard_pricing_nav_stale"]
-    fn pricing_nav_stale_not_built_needs_a_second_swap_proof() {
-        panic!("not built: asset_orchard_pricing_nav_stale needs a second real swap proof submitted after the governed NAV age bound");
-    }
-
-    #[test]
-    #[ignore = "not built: needs a swap proof over a claim whose pair has no governed route"]
-    fn pricing_pair_not_governed_not_built_needs_a_violating_claim_proof() {
-        panic!("not built: asset_orchard_pricing_pair_not_governed needs a real swap proof over a claim whose pair has no governed route; mutating the claim breaks the proof first");
-    }
-
-    #[test]
-    #[ignore = "not built: needs a swap proof over an at_nav claim"]
-    fn pricing_mode_mismatch_not_built_needs_a_violating_claim_proof() {
-        panic!("not built: asset_orchard_pricing_mode_mismatch needs a real swap proof over an at_nav claim; mutating the mode breaks the proof first");
-    }
-
-    #[test]
-    #[ignore = "not built: needs a swap proof against an anchor that was never a retained root"]
-    fn stale_anchor_not_built_needs_a_proof_over_an_unretained_root() {
-        panic!("not built: a stale anchor needs a real proof against a root outside the retained prefixes; mutating the anchor breaks the proof first");
     }
 }

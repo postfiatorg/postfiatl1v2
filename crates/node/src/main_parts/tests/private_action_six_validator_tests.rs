@@ -47,6 +47,8 @@ mod private_action_six_validator_tests {
         validator_ids: Vec<String>,
         pub(crate) holder_key_file: PathBuf,
         pub(crate) asset_ids: [String; 2],
+        /// A third issued asset that no route names, when requested.
+        pub(crate) extra_asset_id: Option<String>,
     }
 
     fn reserve_ports(count: usize) -> (u16, Vec<TcpListener>) {
@@ -204,6 +206,23 @@ mod private_action_six_validator_tests {
     /// With `pricing`, the common state also carries a NAV-tracked base asset,
     /// a governed A666/USDC route and the signed pricing enforcement activation.
     pub(crate) fn fleet_with(pricing: bool) -> Fleet {
+        fleet_with_options(FleetOptions {
+            pricing,
+            max_nav_age_blocks: None,
+            extra_asset: false,
+        })
+    }
+
+    pub(crate) struct FleetOptions {
+        pub(crate) pricing: bool,
+        /// Signed governance for `asset_orchard_pricing_max_nav_age_blocks`.
+        pub(crate) max_nav_age_blocks: Option<u32>,
+        /// Issue a third asset ("EURC") with a holder trustline.
+        pub(crate) extra_asset: bool,
+    }
+
+    pub(crate) fn fleet_with_options(options: FleetOptions) -> Fleet {
+        let pricing = options.pricing;
         let root = std::env::temp_dir().join(format!(
             "postfiat-s6-private-actions-{}-{}",
             std::process::id(),
@@ -252,6 +271,12 @@ mod private_action_six_validator_tests {
             amendments.push((
                 GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT,
                 3,
+            ));
+        }
+        if let Some(blocks) = options.max_nav_age_blocks {
+            amendments.push((
+                postfiat_types::GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS,
+                blocks,
             ));
         }
         for (slot, (kind, value)) in amendments.into_iter().enumerate() {
@@ -357,7 +382,13 @@ mod private_action_six_validator_tests {
         let mut dry_run = ledger.clone();
         let mut transactions = Vec::new();
         let mut asset_ids = Vec::new();
-        for (offset, code) in ["A666", "USDC"].into_iter().enumerate() {
+        let codes: &[&str] = if options.extra_asset {
+            &["A666", "USDC", "EURC"]
+        } else {
+            &["A666", "USDC"]
+        };
+        let asset_count = codes.len() as u64;
+        for (offset, code) in codes.iter().copied().enumerate() {
             let create = signed_asset_transaction(
                 &genesis,
                 &dry_run,
@@ -406,7 +437,7 @@ mod private_action_six_validator_tests {
                 &dry_run,
                 &faucet,
                 postfiat_types::ISSUED_PAYMENT_TRANSACTION_KIND,
-                4 + offset as u64,
+                2 + asset_count + offset as u64,
                 AssetTransactionOperation::IssuedPayment(IssuedPaymentOperation {
                     from: faucet.address.clone(),
                     to: holder.address.clone(),
@@ -505,6 +536,7 @@ mod private_action_six_validator_tests {
             validator_ids,
             holder_key_file,
             asset_ids: [asset_ids[0].clone(), asset_ids[1].clone()],
+            extra_asset_id: asset_ids.get(2).cloned(),
         }
     }
 
@@ -634,11 +666,15 @@ mod private_action_six_validator_tests {
         }
 
         pub(crate) fn ingress_action(&self, asset: usize, amount: u64, seed: u8) -> String {
+            self.ingress_action_for(&self.asset_ids[asset].clone(), amount, seed)
+        }
+
+        pub(crate) fn ingress_action_for(&self, asset_id: &str, amount: u64, seed: u8) -> String {
             let ingress_file = self.root.join(format!("ingress-{seed}.json"));
             create_asset_orchard_ingress(AssetOrchardIngressCreateOptions {
                 data_dir: self.data_dirs[0].clone(),
                 key_file: self.holder_key_file.clone(),
-                asset_id: self.asset_ids[asset].clone(),
+                asset_id: asset_id.to_string(),
                 amount,
                 fee: 0,
                 note_seed_hex: postfiat_crypto_provider::bytes_to_hex(&[seed; 32]),
