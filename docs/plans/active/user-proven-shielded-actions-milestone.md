@@ -21,12 +21,24 @@ Owners are marked *(this lane)* or *(wallet team)*.
 
 ## S1 — the contract (3–5 days)
 
-- [ ] S1.1 *(this lane)* Versioned request and response fixtures for `snapshot`, `submit` and `receipt`, including a typed terminal rejection.
-- [ ] S1.2 *(this lane)* Canonical vectors: an action of each kind, its intent id under `tasknode.private-intent.v1`, and its atomic batch id from `build_atomic_shielded_action_batch` (`crates/node/src/consensus_artifacts.rs:1591`).
+- [x] S1.1 *(this lane)* Versioned request and response fixtures for `snapshot`, `submit` and `receipt`, including a typed terminal rejection (`state: rejected` with its code and fee).
+- [x] S1.2 *(this lane)* Canonical vectors: an action of each kind, its intent id under `tasknode.private-intent.v1`, and its atomic batch id from `build_atomic_shielded_action_batch` (`crates/node/src/consensus_artifacts.rs:1591`).
   - The three accepted kinds are in `crates/types/src/shielded_bridge_governance.rs:334-501`; `asset_orchard_ingress_v1` and `asset_orchard_egress_v1` are refused.
 - [ ] S1.3 *(this lane)* The deployed identity, verifier and activation manifest: genesis, protocol, revision, proof system, circuit, parameters and verifying keys.
-- [ ] S1.4 *(this lane)* The full A666 and pfUSDC profile: full asset ids, issuers, proof profiles and precision, replacing the retired a651/a652 registry (`wallet-proxy/navswap-config-bridge.js:963`).
+  - [x] Identity, release and the swap and egress verifier pins.
+  - [ ] The atomic-batch activation height: no read-only RPC on the deployed release reports it, and no record of the amendment exists here, so `manifest.json` holds `null`.
+- [x] S1.4 *(this lane)* The full A666 and pfUSDC profile: full asset ids, issuers, proof profiles and precision, replacing the retired a651/a652 registry (`wallet-proxy/navswap-config-bridge.js:963`).
+  - The governed swap pair is `null`: it arrives with `ed89c916` behind a governed activation, after the deployed release.
 - [ ] S1.5 *(wallet team)* Their intent helper (`core/src/private_actions.rs:110`) reproduces the S1.2 vectors. To tick S1: the fixtures in the repository and both sides passing the vectors.
+
+## Contract fixtures
+
+In `crates/node/tests/fixtures/private-actions-v1/`, shared types in `crates/types/src/private_actions_v1.rs`:
+
+- `schema.json`: schema `postfiat-private-actions-v1`, the three routes, admission states, refusal codes and examples.
+- `vectors.json`: generated and pinned byte for byte by `crates/node/tests/private_actions_contract.rs`. One action of each kind with its intent id (96 hex, SHA3-384), action hash and atomic batch id for the devnet genesis, and six refusals. The proofs and signatures are placeholders and never verify.
+- `manifest.json`: devnet identity, release `index-v3-20261027` (`d728f895`), verifier pins, atomic-batch activation (`null`).
+- `assets.json`: A666 and pfUSDC from live reads on 2026-10-29, each field with its source; the governed pair is `null`.
 
 ## S2 — the gateway entry points (1–2 weeks)
 

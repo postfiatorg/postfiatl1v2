@@ -14,6 +14,7 @@ include!("yolo_collection_public_values.rs");
 include!("yolo_target_public_values.rs");
 include!("yolo_target_receipt.rs");
 include!("genesis_registry.rs");
+include!("private_actions_v1.rs");
 
 #[cfg(test)]
 mod tests {

@@ -1,0 +1,56 @@
+{
+  "schema": "postfiat-private-actions-v1-manifest",
+  "network": "postfiat-wan-devnet-2 (controlled devnet)",
+  "recorded_at": "2026-10-29",
+  "identity": {
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "protocol_version": 1,
+    "source": "live read: server_info on validator-0 (127.0.0.1:27650 over SSH), 2026-10-29, finalized height 1161, block a4d5bd82\u2026, state root f3b09178\u2026; genesis also in crates/node/testdata/pfeth-reserve-replay/genesis.json"
+  },
+  "l1_revision": {
+    "release": "index-v3-20261027",
+    "source_commit": "d728f895",
+    "executable_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+    "source": "docs/status/chain-state-current.md (2026-10-27 deployment on all six validators)",
+    "note": "The deployed release predates the pricing-claim reads (93454729) and their consensus enforcement (ed89c916)."
+  },
+  "verifiers": {
+    "shielded_swap_v1": {
+      "proof_system_id": "postfiat.privacy.asset-orchard-halo2.v1",
+      "circuit_id": "asset_orchard.swap.pricing_bound.v4",
+      "proof_system": "halo2-ipa",
+      "curve": "vesta",
+      "k": 15,
+      "params_hash": "9be0057af858459fe2b4545dec144e83f4951be0bef2bc90e30e5f26e75f88ba69f1be10ac376a6af5ce973c6b7ad0d8",
+      "vk_hash": "640e83ff0edc500eae1499eebf8c658097088de0b0e44ed6dd10906f158bbf55b781772a43fff839095ed7431823b828",
+      "runtime_pinned_vk_fingerprint": "1b38a9d9906cbfce9addf9a500a1b4bec720a33118507946f427a628772fac48f1786bffa390a5254db215fadf7f3460",
+      "public_instance_layout_hash": "4a97e6254fe6ce1416723ebc0908f6a2a617a8d223f902905a91d7f006a8d1e8cee4cb2ccd81decd29c85b4a2c0f7ed1",
+      "source": "code constants in crates/privacy_orchard/src/asset_orchard.rs and crates/privacy_orchard/src/asset_orchard_circuit.rs (ASSET_ORCHARD_SWAP_V1_*), unchanged between d728f895 and main"
+    },
+    "asset_orchard_private_egress_v1": {
+      "proof_system_id": "postfiat.privacy.asset-orchard-halo2.v1",
+      "circuit_id": "asset_orchard.private_egress.v2",
+      "proof_system": "halo2-ipa",
+      "curve": "vesta",
+      "k": 15,
+      "params_hash": "bcd57a07fc6729861fa7524a16825722d7c96e1703990f673d95e7c28c77db2da7844a4a9f981dd54b4499edddd3d555",
+      "vk_hash": "a8e020b877a45f9691a266990e3466b52b1518518d3a5264f9725be201b9884db80d4c9cb457c29020e65cfefa85d6be",
+      "runtime_pinned_vk_fingerprint": "d29cab6577eb9d968ec67d9134844c605f88ddd0241ce1147fc364e882f259a35318b869a95927be3fdb1e2e521ed4cc",
+      "public_instance_layout_hash": "21e4ba88556d23e3d1c53d3f309ee90bc6321a9f6f8e7b1662083e2d712c9d576020248dd1727b2ca154e8203d09dc44",
+      "source": "code constants in crates/privacy_orchard/src/asset_orchard_circuit.rs (ASSET_ORCHARD_PRIVATE_EGRESS_V1_*), unchanged between d728f895 and main"
+    },
+    "asset_orchard_ingress_v2": {
+      "proof_system_id": null,
+      "circuit_id": null,
+      "source": "Ingress v2 carries no zero-knowledge proof: a signed asset burn plus the output commitment and encrypted output (crates/types/src/shielded_bridge_governance.rs, AssetOrchardIngressV2ActionPayload)."
+    }
+  },
+  "atomic_shielded_batches": {
+    "activation_height": null,
+    "active": null,
+    "refusal_when_inactive": "shielded_atomic_batch_not_active (crates/node/src/execution_actions.rs, execute_shielded_batch)",
+    "governance_kind": "shielded_atomic_batch_activation_height",
+    "source": "Not readable today. The one live read (server_info) does not report governance amendments, and the deployed release has no read-only RPC that does. The repository's records hold no amendment of this kind for postfiat-wan-devnet-2. Treat atomic batches as inactive until a governed activation is recorded."
+  }
+}

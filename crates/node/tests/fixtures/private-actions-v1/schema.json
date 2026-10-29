@@ -1,0 +1,713 @@
+{
+  "schema": "postfiat-private-actions-v1",
+  "status": "Contract for W-1 segment S1. The routes are not implemented yet; the shapes are pinned by crates/types/src/private_actions_v1.rs and crates/node/tests/private_actions_contract.rs.",
+  "transport": "POST JSON with the W-2 native session bearer (Authorization header). No query parameters. No redirects.",
+  "limits": {
+    "max_action_json_bytes": 1048576,
+    "max_request_bytes": 2097152,
+    "max_response_bytes": 4194304
+  },
+  "admission_states": {
+    "queued": "Reserved durably (domain, intent id, action bytes and hash, batch id); not yet sent to a validator.",
+    "dispatched": "Sent to the validator admission service; outcome not known.",
+    "accepted": "Included in a finalized block with an accepted receipt.",
+    "rejected": "Included or refused with a final rejection; code and fee effects in the receipt.",
+    "unknown": "No outcome is known. Stays pending and never authorizes a replacement action."
+  },
+  "refusals": {
+    "private_intent_mismatch": "intent_id is not the recomputed id of (domain, action_json).",
+    "private_intent_conflict": "different action bytes under an intent id that is already reserved.",
+    "private_action_duplicate": "the canonical action hash or batch id is already reserved under another intent.",
+    "private_action_malformed": "action_json does not decode as postfiat_types::ShieldedAction.",
+    "private_action_kind_refused": "a kind other than asset_orchard_ingress_v2, shielded_swap_v1, asset_orchard_private_egress_v1.",
+    "private_action_legacy_refused": "asset_orchard_ingress_v1 or asset_orchard_egress_v1 (they carry openings or spend material).",
+    "private_action_unknown_fields": "a field the typed action does not define.",
+    "private_swap_json_malformed": "swap_json is not a JSON object.",
+    "private_swap_json_fields_refused": "swap_json fields differ from the exact public field set."
+  },
+  "routes": {
+    "snapshot": {
+      "path": "/api/private/v1/snapshot",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "address"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "pattern": "^pf[0-9a-f]{40}$"
+          }
+        }
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema",
+          "domain",
+          "address",
+          "snapshot_token",
+          "commitments",
+          "nullifiers",
+          "accepted_anchors",
+          "outputs",
+          "assets",
+          "base_asset_id",
+          "quote_asset_id",
+          "pricing_claim_json",
+          "policy_id",
+          "disclosure_hash",
+          "complete",
+          "cursors"
+        ],
+        "properties": {
+          "schema": {
+            "const": "postfiat-private-actions-v1"
+          },
+          "domain": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "chain_id",
+              "genesis_hash",
+              "protocol_version"
+            ],
+            "properties": {
+              "chain_id": {
+                "type": "string"
+              },
+              "genesis_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{96}$"
+              },
+              "protocol_version": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "address": {
+            "type": "string",
+            "pattern": "^pf[0-9a-f]{40}$"
+          },
+          "snapshot_token": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "height",
+              "block_hash",
+              "state_root"
+            ],
+            "properties": {
+              "height": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "block_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{96}$"
+              },
+              "state_root": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{96}$"
+              }
+            }
+          },
+          "commitments": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "nullifiers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "accepted_anchors": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "commitment",
+                "ciphertext"
+              ],
+              "properties": {
+                "commitment": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "ciphertext": {
+                  "type": "string",
+                  "pattern": "^([0-9a-f]{2})*$"
+                }
+              }
+            }
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "asset_id",
+                "issuer",
+                "code",
+                "precision",
+                "requires_authorization",
+                "proof_profile_id"
+              ],
+              "properties": {
+                "asset_id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{96}$"
+                },
+                "issuer": {
+                  "type": "string",
+                  "pattern": "^pf[0-9a-f]{40}$"
+                },
+                "code": {
+                  "type": "string"
+                },
+                "precision": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "requires_authorization": {
+                  "type": "boolean"
+                },
+                "proof_profile_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{96}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "base_asset_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$"
+          },
+          "quote_asset_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$"
+          },
+          "pricing_claim_json": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "disclosure_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "complete": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "commitments",
+              "nullifiers",
+              "accepted_anchors",
+              "outputs",
+              "assets"
+            ],
+            "properties": {
+              "commitments": {
+                "type": "boolean"
+              },
+              "nullifiers": {
+                "type": "boolean"
+              },
+              "accepted_anchors": {
+                "type": "boolean"
+              },
+              "outputs": {
+                "type": "boolean"
+              },
+              "assets": {
+                "type": "boolean"
+              }
+            }
+          },
+          "cursors": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "commitments",
+              "nullifiers",
+              "accepted_anchors",
+              "outputs"
+            ],
+            "properties": {
+              "commitments": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "nullifiers": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "accepted_anchors": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "outputs": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "paging": "Every page carries the same snapshot_token. A page with a different token, a missing, duplicated or reordered item, or a cursor after complete=true is refused by the client."
+    },
+    "submit": {
+      "path": "/api/private/v1/submit",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "address",
+          "intent_id",
+          "action_json"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "pattern": "^pf[0-9a-f]{40}$"
+          },
+          "intent_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$"
+          },
+          "action_json": {
+            "type": "string",
+            "maxLength": 1048576
+          }
+        }
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema",
+          "intent_id",
+          "state",
+          "batch_id",
+          "action_hash"
+        ],
+        "properties": {
+          "schema": {
+            "const": "postfiat-private-actions-v1"
+          },
+          "intent_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "dispatched",
+              "accepted",
+              "rejected",
+              "unknown"
+            ]
+          },
+          "batch_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$"
+          },
+          "action_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$"
+          }
+        }
+      },
+      "semantics": "An acknowledgement means admitted and pending. Repeating the identical request returns the same reservation; it never starts a second round."
+    },
+    "receipt": {
+      "path": "/api/private/v1/receipt",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "address",
+          "intent_id",
+          "action_json"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "pattern": "^pf[0-9a-f]{40}$"
+          },
+          "intent_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$"
+          },
+          "action_json": {
+            "type": "string",
+            "maxLength": 1048576
+          }
+        }
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema",
+          "intent_id",
+          "state",
+          "action_hash",
+          "batch_id",
+          "transaction_id",
+          "inclusion_height",
+          "block_hash",
+          "state_root",
+          "accepted",
+          "code",
+          "fee",
+          "finality"
+        ],
+        "properties": {
+          "schema": {
+            "const": "postfiat-private-actions-v1"
+          },
+          "intent_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "dispatched",
+              "accepted",
+              "rejected",
+              "unknown"
+            ]
+          },
+          "action_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$"
+          },
+          "batch_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$"
+          },
+          "transaction_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{96}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inclusion_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "block_hash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{96}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state_root": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{96}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accepted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fee": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finality": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "height",
+                  "block_hash",
+                  "state_root",
+                  "quorum",
+                  "validator_count",
+                  "certificate_json"
+                ],
+                "properties": {
+                  "kind": {
+                    "const": "validator_quorum_block_certificate_v1"
+                  },
+                  "height": {
+                    "type": "integer"
+                  },
+                  "block_hash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{96}$"
+                  },
+                  "state_root": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{96}$"
+                  },
+                  "quorum": {
+                    "type": "integer"
+                  },
+                  "validator_count": {
+                    "type": "integer"
+                  },
+                  "certificate_json": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "semantics": "Read-only. Bindings never change once set. Outcome fields are null while the state is queued, dispatched or unknown."
+    }
+  },
+  "examples": {
+    "snapshot": {
+      "request": {
+        "address": "pf0123456789abcdef0123456789abcdef01234567"
+      },
+      "response": {
+        "schema": "postfiat-private-actions-v1",
+        "domain": {
+          "chain_id": "postfiat-wan-devnet-2",
+          "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+          "protocol_version": 1
+        },
+        "address": "pf0123456789abcdef0123456789abcdef01234567",
+        "snapshot_token": {
+          "height": 1161,
+          "block_hash": "a4d5bd8252569ef2c5e9ce26d441361677be3e5569dc92718a8f97e639950ae24493ba24ce91bc813132b8a5bad29946",
+          "state_root": "f3b091782937ebf085926ee9f6646e133677e04742afcfe8bff77af4b058298d9349bda556851ecc592d7513f56acabb"
+        },
+        "commitments": [
+          "0300000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "nullifiers": [],
+        "accepted_anchors": [
+          "0200000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "outputs": [
+          {
+            "commitment": "0300000000000000000000000000000000000000000000000000000000000000",
+            "ciphertext": "4444444444444444"
+          }
+        ],
+        "assets": [
+          {
+            "asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+            "issuer": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+            "code": "A666",
+            "precision": 6,
+            "requires_authorization": true,
+            "proof_profile_id": "a94a392926967722b2cceb88b19c4108726381f5b184007185a27e91f3e27c63dcc713a28f6cc4cf765826564e2b5f52"
+          },
+          {
+            "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+            "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+            "code": "PFUSDC",
+            "precision": 6,
+            "requires_authorization": false,
+            "proof_profile_id": "e0bc0d58e1a53fa6061f3618fb11bad2e7ccf17d04570957a52212864773419f3300440bf5f3cdfc8fb36ed6b45d28c5"
+          }
+        ],
+        "base_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+        "quote_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "pricing_claim_json": null,
+        "policy_id": null,
+        "disclosure_hash": null,
+        "complete": {
+          "commitments": true,
+          "nullifiers": true,
+          "accepted_anchors": true,
+          "outputs": true,
+          "assets": true
+        },
+        "cursors": {
+          "commitments": null,
+          "nullifiers": null,
+          "accepted_anchors": null,
+          "outputs": null
+        }
+      }
+    },
+    "submit": {
+      "request": {
+        "address": "pf0123456789abcdef0123456789abcdef01234567",
+        "intent_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "action_json": "{\"kind\":\"asset_orchard_ingress_v2\",\"...\":\"see vectors.json\"}"
+      },
+      "response": {
+        "schema": "postfiat-private-actions-v1",
+        "intent_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "state": "queued",
+        "batch_id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+        "action_hash": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      }
+    },
+    "receipt": {
+      "request": {
+        "address": "pf0123456789abcdef0123456789abcdef01234567",
+        "intent_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "action_json": "{\"kind\":\"asset_orchard_ingress_v2\",\"...\":\"see vectors.json\"}"
+      },
+      "response": {
+        "schema": "postfiat-private-actions-v1",
+        "intent_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "state": "accepted",
+        "action_hash": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+        "batch_id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+        "transaction_id": "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4",
+        "inclusion_height": 1170,
+        "block_hash": "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
+        "state_root": "f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6",
+        "accepted": true,
+        "code": "accepted",
+        "fee": 10,
+        "finality": {
+          "kind": "validator_quorum_block_certificate_v1",
+          "height": 1170,
+          "block_hash": "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
+          "state_root": "f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6",
+          "quorum": 5,
+          "validator_count": 6,
+          "certificate_json": "{\"...\":\"the node's block certificate for this height\"}"
+        }
+      },
+      "pending_response": {
+        "schema": "postfiat-private-actions-v1",
+        "intent_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "state": "dispatched",
+        "action_hash": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+        "batch_id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+        "transaction_id": null,
+        "inclusion_height": null,
+        "block_hash": null,
+        "state_root": null,
+        "accepted": null,
+        "code": null,
+        "fee": null,
+        "finality": null
+      }
+    }
+  }
+}

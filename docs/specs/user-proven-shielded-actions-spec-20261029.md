@@ -224,3 +224,12 @@ replacement. A custodial `pftl_swapd` route does not close W-1.
   keep proposal and vote signing.
 - **Separate gates.** W-4, admission of outside money, and W-5, backing
   reconciliation, stay separate gates.
+
+## 12. References
+
+Section 12 was added after scoring.
+
+- Contract fixtures: `crates/node/tests/fixtures/private-actions-v1/` (`schema.json`, `vectors.json`, `manifest.json`, `assets.json`).
+- Shared request and response types: `crates/types/src/private_actions_v1.rs`.
+- Vector generator and pins: `crates/node/tests/private_actions_contract.rs`.
+- [Milestone](../plans/active/user-proven-shielded-actions-milestone.md).

@@ -1,0 +1,72 @@
+{
+  "schema": "postfiat-private-actions-v1-assets",
+  "network": "postfiat-wan-devnet-2",
+  "recorded_at": "2026-10-29",
+  "assets": {
+    "A666": {
+      "asset_id": {
+        "value": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29; docs/status/z3-cycle1-inputs-20260922.md"
+      },
+      "code": {
+        "value": "A666",
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29"
+      },
+      "issuer": {
+        "value": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29"
+      },
+      "precision": {
+        "value": 6,
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29"
+      },
+      "requires_authorization": {
+        "value": true,
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29"
+      },
+      "version": {
+        "value": 2,
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29"
+      },
+      "proof_profile_id": {
+        "value": "a94a392926967722b2cceb88b19c4108726381f5b184007185a27e91f3e27c63dcc713a28f6cc4cf765826564e2b5f52",
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29 (active_profile.profile_id, source class stakehub-six-leg-reserves-v3)"
+      }
+    },
+    "pfUSDC": {
+      "asset_id": {
+        "value": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29; docs/status/z3-cycle1-inputs-20260922.md"
+      },
+      "code": {
+        "value": "PFUSDC",
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29"
+      },
+      "issuer": {
+        "value": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29"
+      },
+      "precision": {
+        "value": 6,
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29"
+      },
+      "requires_authorization": {
+        "value": false,
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29"
+      },
+      "version": {
+        "value": 1,
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29"
+      },
+      "proof_profile_id": {
+        "value": "e0bc0d58e1a53fa6061f3618fb11bad2e7ccf17d04570957a52212864773419f3300440bf5f3cdfc8fb36ed6b45d28c5",
+        "source": "live read: asset_info and nav_reserve_proof_status on validator-0, 2026-10-29 (active_profile.profile_id, Ethereum vault bridge source class)"
+      }
+    }
+  },
+  "governed_pair": {
+    "base_asset_id": null,
+    "quote_asset_id": null,
+    "source": "Not readable today. The governed pair for at-NAV swaps arrives with ed89c916 behind a governed activation; the deployed release (d728f895) predates it and has no asset_orchard_pricing_claim read, and no pair is recorded in the repository's governance records."
+  }
+}
