@@ -23,7 +23,7 @@ Owners are marked *(this lane)* or *(wallet team)*.
 
 - [x] S1.1 *(this lane)* Versioned request and response fixtures for `snapshot`, `submit` and `receipt`, including a typed terminal rejection (`state: rejected` with its code and fee).
 - [x] S1.2 *(this lane)* Canonical vectors: an action of each kind, its intent id under `tasknode.private-intent.v1`, and its atomic batch id from `build_atomic_shielded_action_batch` (`crates/node/src/consensus_artifacts.rs:1591`).
-  - The three accepted kinds are in `crates/types/src/shielded_bridge_governance.rs:348-515`; `asset_orchard_ingress_v1` and `asset_orchard_egress_v1` are refused.
+  - The three accepted kinds are in `crates/types/src/shielded_bridge_governance.rs:369-536`; `asset_orchard_ingress_v1` and `asset_orchard_egress_v1` are refused.
 - [ ] S1.3 *(this lane)* The deployed identity, verifier and activation manifest: genesis, protocol, revision, proof system, circuit, parameters and verifying keys.
   - [x] Identity, release and the swap and egress verifier pins.
   - [ ] The atomic-batch activation height: the deployed release has no read that reports it, so `manifest.json` holds `null`. The `private_readiness` read (`556cac38`) reports it once validator-0 runs a release that serves it.
@@ -60,24 +60,25 @@ In `crates/node/tests/fixtures/private-actions-v1/`, shared types in `crates/typ
 - [ ] S3.2 *(this lane)* Proposer routing, height ownership, quorum, catch-up and durable intent reconciliation.
   - [x] Proposer routing and durable reconciliation (`968da908`): a `dispatched` record is reconciled from the chain by batch id and never dispatched again, and only the local proposer dispatches.
   - [x] A certified round reaching quorum across two validators, with both sources reconciling the same record (`crates/node/tests/private_actions_gateway.rs`). A one-validator topology cannot commit a private action: the round needs at least one active peer.
+  - [x] A stuck `unknown` record settles as accepted when its batch later lands (`e37d77fd`). An operator resolves one that does not land with `postfiat-node private-action-resolve` (`657ce706`): settle it from the chain, or abandon it so the wallet can resubmit the same bytes, with the abandoned record kept for audit. The wallet contract reports `abandoned` as itself (`ea2213d0`).
   - [ ] Height ownership, quorum and catch-up across six validators, shown by S6.
 - [ ] S3.3 *(this lane)* Retire the HTTP-side certification: `transport-peer-certified-batch-round --key-file` (`wallet-proxy/navswap-shielded.js:1421`), the `/asset-orchard/swap-batch` call (`:2292`) and the swap execution that certifies it (`:2386`).
-  - The `shield_batch_*` builders (`crates/node/src/rpc_cli.rs:2083`) may be reused after review; a built batch is never reported as committed.
+  - The `shield_batch_*` builders (`crates/node/src/rpc_cli.rs:2086`) may be reused after review; a built batch is never reported as committed.
 - [x] S3.4 *(this lane)* Receipts with the action, batch and transaction bindings, inclusion height, block hash, state root, outcome, code, fee and checkable finality evidence (`968da908`): `private_action_receipt` returns the S1 `PrivateReceiptResponse` with the block certificate as `validator_quorum_block_certificate_v1`. To tick S3: S3.3's code paths unused on the W-1 route and an S6 test through the service.
 
 ## S4 — finalized public reads (1–2 days left)
 
 - [x] S4.1 *(this lane)* A snapshot token pinning one finalized height, block hash and state root, with counts and cursors (`683a5b32`, `private_pool_snapshot` in `crates/node/src/private_pool_reads.rs`).
 - [x] S4.2 *(this lane)* Paged pool reads: commitments, nullifiers, accepted anchors from the retained tree prefixes, outputs with ciphertexts (`683a5b32`, `private_pool_page`; the gateway assembles them in `f8b9a838`).
-- [ ] S4.3 *(this lane)* Paged receipt and market reads, and asset rows bound to `asset_info`.
+- [x] S4.3 *(this lane)* Paged receipt and market reads, and asset rows bound to `asset_info`.
   - [x] Asset rows bound to `asset_info` and account lines with zero balances (`683a5b32`, the `assets` section and `private_account_lines`).
-  - [ ] Paged receipt and market reads.
+  - [x] Paged receipt and market reads under the snapshot token (`0c396fc8`): `private_pool_receipts` and `private_pool_market` in `crates/node/src/private_pool_receipt_market_reads.rs`.
 - [ ] S4.4 *(wallet team)* Versioned paging and incremental scan in the app, replacing today's ceilings (64 ciphertexts, 2 MiB of ciphertext, 4096 commitments, 16 assets, 1 MiB action, 2 MiB request, 4 MiB response). To tick S4: a missing, duplicated, reordered or mixed-tip page refused in tests.
 
 ## S5 — the pricing claim and egress binding reads (done)
 
 - [x] S5 *(this lane)* `asset_orchard_pricing_claim` and `asset_orchard_private_egress_binding` (`93454729`).
-  - `crates/node/src/asset_orchard_pricing_reads.rs:362` and `:527`; the claim is built by the function consensus uses.
+  - `crates/node/src/asset_orchard_pricing_reads.rs:368` and `:533`; the claim is built by the function consensus uses.
   - Python: `python -m postfiat_rpc --method asset_orchard_pricing_claim` and `--method asset_orchard_private_egress_binding` (`python/postfiat_rpc/__main__.py:146-147`).
   - The egress read returns `ungoverned`: finalized state has no governed egress policy yet.
 
@@ -89,14 +90,17 @@ halt flag and the ratio within the band.
 - [x] S5b.1 *(this lane)* A staleness limit, behind a governed activation (`ed89c916`): governance keys `asset_orchard_pricing_enforcement_activation_height` and `asset_orchard_pricing_max_nav_age_blocks`, refusal `asset_orchard_pricing_nav_stale`.
 - [x] S5b.2 *(this lane)* A governed pair, behind the same activation (`ed89c916`): the pair must be a route in `pftl_uniswap_routes`, refusal `asset_orchard_pricing_pair_not_governed`.
 - [x] S5b.3 *(this lane)* A mode-label check for at-NAV claims, behind the same activation (`ed89c916`), refusal `asset_orchard_pricing_mode_mismatch`.
-- [ ] S5b.4 *(this lane)* A governance-registered egress policy, so the policy id and disclosure hash are governed and not only checked for form and bound into the proof.
+- [x] S5b.4 *(this lane)* A governance-registered egress policy, so the policy id and disclosure hash are governed and not only checked for form and bound into the proof (`899b26f8`).
+  - Each record is an amendment of kind `asset_orchard_egress_policy_v1:<asset_id>:<disclosure_schema_hash>:<policy_id>` whose value is its effective height.
+  - The global switch is `asset_orchard_egress_policy_activation_height`. After it, a private egress must name its asset's governed policy, and its disclosure hash must equal the governed schema hash. Otherwise it is refused as `asset_orchard_egress_policy_mismatch` or `asset_orchard_egress_policy_not_governed`.
+  - CLI: `postfiat-node ratify-asset-orchard-egress-policy` and `ratify-asset-orchard-egress-policy-activation-height`. The egress binding read reports the registry.
 
 ## S6 — the six-validator test suite (2–4 days)
 
 - [x] S6.1 *(this lane)* Both ingress assets, swap and egress accepted on six validators.
   - [x] Both ingress assets (A666 and a pfUSDC stand-in) accepted on six validators through `private_action_submit`, the round service and `private_action_receipt` (`crates/node/src/main_parts/tests/private_action_six_validator_tests.rs`).
   - [x] A real swap proof and a real private-egress proof accepted through the same path, with pricing enforcement activated by signed governance and a governed route (`crates/node/src/main_parts/tests/private_action_proof_six_validator_tests.rs`, release-only: `cargo test --release -p postfiat-node --bin postfiat-node private_action_proof_six_validator -- --ignored`).
-- [ ] S6.2 *(this lane)* Refusals with no unintended state change: invalid proof, stale anchor or NAV, wrong issuer, domain or recipient, replay, inactive governance (`shielded_atomic_batch_not_active`, `crates/node/src/execution_actions.rs:3219`), tampered receipt.
+- [ ] S6.2 *(this lane)* Refusals with no unintended state change: invalid proof, stale anchor or NAV, wrong issuer, domain or recipient, replay, inactive governance (`shielded_atomic_batch_not_active`, `crates/node/src/execution_actions.rs:3245`), tampered receipt.
   - [x] Inactive governance, wrong domain, an asset/issuer binding mismatch (`asset_orchard_ingress_v2_bad_payload`), the same action under a new intent, a final rejection after reservation (code, zero fee, no state effects) and a tampered receipt checked against another validator's view. None changes commitments, nullifiers, balances or the tip.
   - [x] Invalid proof (`asset_orchard_swap_proof_verification_failed`), wrong recipient (`asset_orchard_private_egress_bad_payload`) and a spent nullifier under a new intent (`duplicate_nullifier`), each refused at admission with no state change on any validator.
   - [ ] Stale anchor, `asset_orchard_pricing_nav_stale`, `asset_orchard_pricing_pair_not_governed` and `asset_orchard_pricing_mode_mismatch`. Each needs another real proof, because mutating the public bytes breaks the proof first. They are ignored tests named for the missing proof.
@@ -138,7 +142,8 @@ halt flag and the ratio within the band.
 ## Mandate deliverables (AGENTS.md)
 
 - [ ] M1 *(this lane)* Lock the source spec at 86 or above on the full gate, requested as a Task Node task.
-- [ ] M2 *(this lane)* A Python CLI for the new public reads (S4), alongside the S5 commands.
+- [x] M2 *(this lane)* A Python CLI for the new public reads (S4), alongside the S5 commands.
+  - `python -m postfiat_rpc --method` with `asset_orchard_pricing_claim`, `asset_orchard_private_egress_binding`, `private_pool_snapshot`, `private_pool_page`, `private_account_lines`, `private_pool_receipts`, `private_pool_market`, `private_readiness`, `private_action_submit` and `private_action_receipt` (`python/postfiat_rpc/__main__.py:146-153`, `:213-220`, `:224-225`; client methods in `python/postfiat_rpc/client.py`).
 - [x] M3 *(this lane)* A read-only view that consumes the CLI output.
   - `python/postfiat_rpc/private_path_ui.py` with `private_path_ui_assets/`: a read-only page on 127.0.0.1 for one validator. It shows readiness with the not-ready reasons, the pool snapshot, the next-height pricing claim, the egress binding and a receipt by intent id. GET only, through the Python RPC client's read methods. `python/tests/test_private_path_ui.py`: 12 tests. Documented in [RPC examples](../../rpc/examples.md#private-path-state).
 - [ ] M4 *(this lane)* Retire this document into `docs/plans/completed/` and document the path in the existing documentation.
@@ -147,6 +152,7 @@ halt flag and the ratio within the band.
 
 - No admission on ce22 before S7 and the governed activation of atomic shielded batches.
 - No governed activation of the pricing rules (S5b) before the A666/pfUSDC route exists in `pftl_uniswap_routes`: after activation, a pair without a route is refused as `asset_orchard_pricing_pair_not_governed`.
+- No scheduling of `asset_orchard_egress_policy_activation_height` before governance writes the real A666 and pfUSDC policy records, with an agreed disclosure schema document and its hash.
 - No ce22 run before review and the wallet team's HOLD approval (S8).
 - No two-party exchange: a counterparty, its liquidity and its reservation get their own specification.
 
