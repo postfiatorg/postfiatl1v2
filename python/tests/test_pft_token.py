@@ -192,6 +192,13 @@ class PftTokenTests(unittest.TestCase):
         self.assertEqual(pft_token.redact_rpc_url("https://sepolia.base.org"), "https://sepolia.base.org")
         self.assertEqual(pft_token.redact_rpc_url("https://base.example/v2/KEY?x=1"), "https://base.example/…")
         self.assertEqual(pft_token.redact_rpc_url("http://user:pw@127.0.0.1:8545"), "http://127.0.0.1:8545/…")
+        # An IPv6 host keeps its brackets, and any userinfo is marked hidden (#176).
+        self.assertEqual(pft_token.redact_rpc_url("http://[::1]:8545"), "http://[::1]:8545")
+        self.assertEqual(pft_token.redact_rpc_url("https://[2001:db8::1]/v2/KEY"), "https://[2001:db8::1]/…")
+        self.assertEqual(pft_token.redact_rpc_url("https://:pw@base.example"), "https://base.example/…")
+        self.assertEqual(pft_token.redact_rpc_url("http://user:pw@[::1]:8545"), "http://[::1]:8545/…")
+        state = pft_token.read_token_state("http://[::1]:8545", record=self.record)
+        self.assertEqual(state["rpc_url"], "http://[::1]:8545")
         state = pft_token.read_token_state("https://base.example/v2/KEY", record=self.record)
         self.assertEqual(state["rpc_url"], "https://base.example/…")
         code, _, err = self.run_main("--record", str(self.record), "--rpc-url", "file:///etc/passwd")

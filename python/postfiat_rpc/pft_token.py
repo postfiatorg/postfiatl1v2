@@ -79,9 +79,11 @@ def redact_rpc_url(url: str) -> str:
 
     parts = urlsplit(url)
     host = parts.hostname or ""
+    if ":" in host:
+        host = f"[{host}]"
     if parts.port is not None:
         host = f"{host}:{parts.port}"
-    hidden = parts.path not in ("", "/") or parts.query or parts.fragment or parts.username
+    hidden = parts.path not in ("", "/") or parts.query or parts.fragment or "@" in parts.netloc
     return f"{parts.scheme}://{host}" + ("/…" if hidden else "")
 
 
