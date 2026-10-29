@@ -1099,7 +1099,20 @@ pub(super) fn current_replicated_state_root(
     let ledger = store.read_ledger()?;
     let shielded = store.read_shielded()?;
     let bridge = store.read_bridge()?;
-    let activation_height = effective_storage_commitment_activation_height(genesis, &governance);
+    replicated_state_root_of_parts(store, genesis, &governance, &ledger, &shielded, &bridge)
+}
+
+/// The replicated state root of already-read state parts, so a caller can
+/// prove the exact copies it serves belong to the committed chain tip.
+pub(super) fn replicated_state_root_of_parts(
+    store: &NodeStore,
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+) -> io::Result<String> {
+    let activation_height = effective_storage_commitment_activation_height(genesis, governance);
     let ordered_history_active = match (activation_height, store.read_chain_tip()) {
         (Some(activation_height), Ok(tip)) if tip.height >= activation_height => Some(tip),
         (_, Ok(_)) => None,
@@ -1116,21 +1129,21 @@ pub(super) fn current_replicated_state_root(
         }
         replicated_state_root_v2(
             genesis,
-            &governance,
-            &ledger,
+            governance,
+            ledger,
             &ordered_history,
-            &shielded,
-            &bridge,
+            shielded,
+            bridge,
         )
     } else {
         let ordered_batches = store.read_ordered_batches()?;
         replicated_state_root(
             genesis,
-            &governance,
-            &ledger,
+            governance,
+            ledger,
             &ordered_batches,
-            &shielded,
-            &bridge,
+            shielded,
+            bridge,
         )
     }
 }

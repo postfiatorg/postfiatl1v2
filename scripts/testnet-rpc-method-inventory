@@ -58,6 +58,8 @@ POSTURE_NOTES = {
     "fx_fix_reservation_info": "public fixed-rate FX reservation status read",
     "fx_fix_quote": "deterministic fixed-rate FX quote preview",
     "asset_orchard_action_status": "public private-action finality/status read",
+    "asset_orchard_pricing_claim": "finalized at-NAV Asset-Orchard pricing claim for an inclusion height",
+    "asset_orchard_private_egress_binding": "governed Asset-Orchard private-egress policy/disclosure binding read",
     "mempool_submit_signed_transfer": "controlled write edge; disabled unless explicitly enabled",
     "mempool_submit_signed_transfer_finality": "controlled in-process write/finality edge; disabled unless explicitly enabled",
     "shield_batch_orchard": "privacy-alpha batch-create edge; disabled unless explicitly enabled",
@@ -152,6 +154,8 @@ READ_ONLY_PUBLIC_METHODS = {
     "fx_fix_reservation_info",
     "fx_fix_quote",
     "asset_orchard_action_status",
+    "asset_orchard_pricing_claim",
+    "asset_orchard_private_egress_binding",
 }
 
 AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS = {

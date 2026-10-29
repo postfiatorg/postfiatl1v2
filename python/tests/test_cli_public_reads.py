@@ -80,6 +80,20 @@ class CliPublicReadDispatchTests(unittest.TestCase):
             ("fx_fix_reservation_info", {"reservation_id": "r"}, "fx_fix_reservation_info", ("r",), {}),
             ("fx_fix_quote", {"fix_packet_hash": "ab" * 48, "base_atoms": 5}, "fx_fix_quote", ("ab" * 48, 5), {}),
             (
+                "asset_orchard_pricing_claim",
+                {"base_asset_id": "A", "quote_asset_id": "B", "inclusion_height": 701},
+                "asset_orchard_pricing_claim",
+                ("A", "B", 701),
+                {},
+            ),
+            (
+                "asset_orchard_private_egress_binding",
+                {"base_asset_id": "A", "quote_asset_id": "B", "inclusion_height": 701},
+                "asset_orchard_private_egress_binding",
+                ("A", "B", 701),
+                {},
+            ),
+            (
                 "pfusdc_ingress_preflight",
                 {"asset_id": "a", "recipient": "r", "depositor": "d", "amount_atoms": 9},
                 "pfusdc_ingress_preflight",
@@ -109,6 +123,8 @@ class CliPublicReadDispatchTests(unittest.TestCase):
             ("archive_window", {"from_height": 1}, "--to-height"),
             ("shield_scan", {}, "--owner"),
             ("fx_fix_quote", {"fix_packet_hash": "ab" * 48}, "--base-atoms"),
+            ("asset_orchard_pricing_claim", {"base_asset_id": "A", "quote_asset_id": "B"}, "--inclusion-height"),
+            ("asset_orchard_private_egress_binding", {"base_asset_id": "A", "inclusion_height": 1}, "--quote-asset-id"),
             ("pfusdc_ingress_preflight", {"asset_id": "a", "recipient": "r", "depositor": "d"}, "--amount-atoms"),
             ("asset_orchard_action_status", {"nullifier_1": "n1", "nullifier_2": "n2", "output_commitment_1": "c1"}, "--output-commitment-2"),
         ):

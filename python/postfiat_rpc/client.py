@@ -1761,6 +1761,39 @@ class PostFiatRpcClient:
             },
         )
 
+    def asset_orchard_pricing_claim(
+        self, base_asset_id: str, quote_asset_id: str, inclusion_height: int
+    ) -> dict[str, Any]:
+        """Exact at-NAV Asset-Orchard pricing claim consensus accepts for the
+        full base/quote asset ids at `inclusion_height` (public read).
+
+        `status` is `ok` with `pricing_claim`, or `stale`/`halted`/`mismatch`
+        with a `refusal` code and reason.
+        """
+        return self._object_read(
+            "asset_orchard_pricing_claim",
+            self._asset_orchard_pair_params(base_asset_id, quote_asset_id, inclusion_height),
+        )
+
+    def asset_orchard_private_egress_binding(
+        self, base_asset_id: str, quote_asset_id: str, inclusion_height: int
+    ) -> dict[str, Any]:
+        """Governed private-egress policy/disclosure binding for each asset of
+        the pair (public read); `ungoverned` when finalized state has none."""
+        return self._object_read(
+            "asset_orchard_private_egress_binding",
+            self._asset_orchard_pair_params(base_asset_id, quote_asset_id, inclusion_height),
+        )
+
+    def _asset_orchard_pair_params(
+        self, base_asset_id: str, quote_asset_id: str, inclusion_height: int
+    ) -> dict[str, Any]:
+        return {
+            "base_asset_id": self._required_text(base_asset_id, "base_asset_id"),
+            "quote_asset_id": self._required_text(quote_asset_id, "quote_asset_id"),
+            "inclusion_height": self._required_u64(inclusion_height, "inclusion_height"),
+        }
+
     def pfusdc_ingress_preflight(
         self,
         asset_id: str,

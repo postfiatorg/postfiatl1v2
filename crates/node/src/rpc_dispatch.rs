@@ -737,6 +737,30 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 )],
             )
         }
+        "asset_orchard_pricing_claim" | "asset_orchard_private_egress_binding" => {
+            let required =
+                |flag: &str| flag_value(flags, flag).ok_or_else(|| format!("missing {flag}"));
+            let options = AssetOrchardPairReadOptions {
+                data_dir,
+                base_asset_id: required("--base-asset-id")?.to_string(),
+                quote_asset_id: required("--quote-asset-id")?.to_string(),
+                inclusion_height: parse_u64_flag(flags, "--inclusion-height")?,
+            };
+            let (report, status) = if method == "asset_orchard_pricing_claim" {
+                let report = asset_orchard_pricing_claim(options)
+                    .map_err(|error| format!("rpc {method} failed: {error}"))?;
+                let status = report.status.clone();
+                (serde_json::to_value(report), status)
+            } else {
+                let report = asset_orchard_private_egress_binding(options)
+                    .map_err(|error| format!("rpc {method} failed: {error}"))?;
+                let status = report.status.clone();
+                (serde_json::to_value(report), status)
+            };
+            let report =
+                report.map_err(|error| format!("rpc {method} serialization failed: {error}"))?;
+            print_rpc_success(id, &report, vec![RpcEvent::new(method, status, "queried")])
+        }
         "market_ops_status" => {
             let asset_id = flag_value(flags, "--asset-id").ok_or("missing --asset-id")?;
             let epoch = flag_value(flags, "--epoch")

@@ -116,6 +116,23 @@ class ParameterizedReadWrapperTests(unittest.TestCase):
             },
         )
 
+    def test_asset_orchard_pair_reads_send_full_ids_and_the_inclusion_height(self) -> None:
+        client = _client()
+        for method in ("asset_orchard_pricing_claim", "asset_orchard_private_egress_binding"):
+            with self.subTest(method=method):
+                with mock.patch.object(client, "_call", return_value={"status": "ok"}) as call:
+                    getattr(client, method)("aa" * 48, "bb" * 48, 701)
+                call.assert_called_once_with(
+                    method,
+                    {"base_asset_id": "aa" * 48, "quote_asset_id": "bb" * 48, "inclusion_height": 701},
+                )
+                with mock.patch.object(client, "_call") as call:
+                    with self.assertRaisesRegex(ValueError, "inclusion_height must be a non-negative integer"):
+                        getattr(client, method)("aa" * 48, "bb" * 48, -1)
+                    with self.assertRaisesRegex(ValueError, "quote_asset_id must be a non-empty string"):
+                        getattr(client, method)("aa" * 48, "", 701)
+                call.assert_not_called()
+
     def test_bad_arguments_fail_before_any_request(self) -> None:
         client = _client()
         with mock.patch.object(client, "_call") as call:

@@ -4410,6 +4410,25 @@ pub(super) fn asset_orchard_swap_pricing_plan(
         }));
     }
 
+    let policy = asset_orchard_at_nav_pricing_policy(ledger, base_tag, quote_tag, block_height)?;
+    validate_asset_orchard_pricing_policy(&verified.pricing, &policy)?;
+    Ok(None)
+}
+
+/// Validator pricing policy for an at-NAV swap of `base_tag` against
+/// `quote_tag` executed at `block_height`. Consensus and the
+/// `asset_orchard_pricing_claim` read share this one derivation.
+pub(super) fn asset_orchard_at_nav_pricing_policy(
+    ledger: &LedgerState,
+    base_tag: postfiat_privacy_orchard::AssetTag,
+    quote_tag: postfiat_privacy_orchard::AssetTag,
+    block_height: u64,
+) -> Result<
+    postfiat_privacy_orchard::AssetOrchardPricingPolicy,
+    postfiat_privacy_orchard::OrchardVerificationError,
+> {
+    use postfiat_privacy_orchard::{AssetOrchardPricingPolicy, AssetTag, OrchardVerificationError};
+
     let matching_nav_assets = ledger
         .nav_assets
         .iter()
@@ -4456,7 +4475,7 @@ pub(super) fn asset_orchard_swap_pricing_plan(
             "active NAV profile tolerance does not fit validator pricing band",
         )
     })?;
-    let policy = AssetOrchardPricingPolicy {
+    Ok(AssetOrchardPricingPolicy {
         nav_epoch: nav_asset.finalized_epoch,
         reserve_packet_hash: nav_asset.finalized_reserve_packet_hash.clone(),
         nav_ratio_numerator: nav_asset.nav_per_unit,
@@ -4465,9 +4484,7 @@ pub(super) fn asset_orchard_swap_pricing_plan(
         base_asset_tag: base_tag,
         quote_asset_tag: quote_tag,
         halted: nav_asset.halted,
-    };
-    validate_asset_orchard_pricing_policy(&verified.pricing, &policy)?;
-    Ok(None)
+    })
 }
 
 pub(super) fn consume_fx_fix_swap_plan(

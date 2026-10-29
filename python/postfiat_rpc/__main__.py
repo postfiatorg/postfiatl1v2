@@ -128,6 +128,8 @@ PUBLIC_READ_OBJECT_METHODS = frozenset(
         "fx_fix_info",
         "fx_fix_reservation_info",
         "fx_fix_quote",
+        "asset_orchard_pricing_claim",
+        "asset_orchard_private_egress_binding",
         "pfusdc_ingress_preflight",
         "pfusdc_egress_witness",
         "yolo_target_receipt",
@@ -187,6 +189,8 @@ CLI_METHODS: tuple[str, ...] = (
     "fx_fix_info",
     "fx_fix_reservation_info",
     "fx_fix_quote",
+    "asset_orchard_pricing_claim",
+    "asset_orchard_private_egress_binding",
     "pfusdc_ingress_preflight",
     "pfusdc_egress_witness",
     "yolo_target_receipt",
@@ -368,6 +372,12 @@ def call_method(client: PostFiatRpcClient, args: argparse.Namespace) -> Any:
             require_arg(args, "fix_packet_hash", method),
             require_arg(args, "base_atoms", method),
         )
+    if method in {"asset_orchard_pricing_claim", "asset_orchard_private_egress_binding"}:
+        return getattr(client, method)(
+            require_arg(args, "base_asset_id", method),
+            require_arg(args, "quote_asset_id", method),
+            require_arg(args, "inclusion_height", method),
+        )
     if method == "pfusdc_ingress_preflight":
         return client.pfusdc_ingress_preflight(
             require_arg(args, "asset_id", method),
@@ -444,6 +454,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fix-packet-hash")
     parser.add_argument("--reservation-id")
     parser.add_argument("--base-atoms", type=int)
+    parser.add_argument("--inclusion-height", type=int)
     parser.add_argument("--recipient")
     parser.add_argument("--depositor")
     parser.add_argument("--amount-atoms", type=int)

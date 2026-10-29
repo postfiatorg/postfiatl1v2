@@ -278,6 +278,8 @@ mod yolo_target_queries;
 pub use yolo_target_queries::*;
 mod lifecycle_queries;
 pub use lifecycle_queries::*;
+mod asset_orchard_pricing_reads;
+pub use asset_orchard_pricing_reads::*;
 mod atomic_swap_rpc;
 pub use atomic_swap_rpc::*;
 #[allow(unused_imports)]
@@ -480,10 +482,11 @@ use execution_actions::{
     archived_wan_devnet2_incremental_age_release_identity_allowed,
     archived_wan_devnet2_orchard_aware_bridge_claim_identity_allowed,
     asset_execution_compatibility_for_genesis_and_governance,
-    asset_execution_compatibility_with_chain_activation, asset_orchard_nav_ratio_denominator,
-    asset_orchard_swap_pricing_plan, atomic_swap_activation_height_for_chain,
-    bridge_exit_root_activation_height_for_chain, bridge_verification_activation_height_for_chain,
-    bridge_witness_registry_error, consume_fx_fix_swap_plan, debug_shielded_pool_disabled_receipt,
+    asset_execution_compatibility_with_chain_activation, asset_orchard_at_nav_pricing_policy,
+    asset_orchard_nav_ratio_denominator, asset_orchard_swap_pricing_plan,
+    atomic_swap_activation_height_for_chain, bridge_exit_root_activation_height_for_chain,
+    bridge_verification_activation_height_for_chain, bridge_witness_registry_error,
+    consume_fx_fix_swap_plan, debug_shielded_pool_disabled_receipt,
     ensure_atomic_shielded_batch_accepted, ensure_atomic_swap_batch_allowed,
     ensure_governance_batch_lifecycle_ready, execute_asset_orchard_egress_action,
     execute_asset_orchard_ingress_action, execute_asset_orchard_private_egress_action,
