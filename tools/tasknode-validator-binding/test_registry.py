@@ -1,7 +1,9 @@
 import copy
 import datetime as dt
 import unittest
-from registry import UTC, CHAIN, block_summary, daily_participation, iso, registry_rows, snapshot
+import tempfile
+from pathlib import Path
+from registry import UTC, CHAIN, atomic_json, block_summary, daily_participation, iso, registry_rows, snapshot
 
 GENESIS = 'a' * 96
 PK = 'a' * 3904
@@ -159,6 +161,17 @@ class RegistryTest(unittest.TestCase):
         r=self.source(1,'validators'); r['validator_count']=2
         r['validators'].append({**r['validators'][0], 'node_id':'v1'})
         with self.assertRaises(ValueError): registry_rows(r)
+
+    def test_refuses_to_write_inside_validator_data_directory(self):
+        with tempfile.TemporaryDirectory() as root:
+            data = Path(root) / 'validator'
+            (data / 'nested').mkdir(parents=True)
+            (data / 'node_state.json').write_text('{}')
+            for target in [data / 'registry.json', data / 'nested' / 'observer.json']:
+                with self.assertRaises(ValueError): atomic_json(target, {})
+                self.assertFalse(target.exists())
+            atomic_json(Path(root) / 'publish' / 'registry.json', {'ok': True})
+            self.assertTrue((Path(root) / 'publish' / 'registry.json').exists())
 
 
 if __name__ == '__main__': unittest.main()

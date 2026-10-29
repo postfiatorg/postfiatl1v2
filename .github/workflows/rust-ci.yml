@@ -47,6 +47,7 @@ jobs:
       - name: cargo test
         run: |
           cargo test --workspace --locked
+          cargo test --locked --manifest-path tools/tasknode-validator-binding/Cargo.toml
           cargo test --locked -p postfiat-node --bin postfiat-node \
             fastswap_service::tests::persistent_wallet_driver_meets_isolated_warm_latency_gate \
             -- --ignored --exact --nocapture

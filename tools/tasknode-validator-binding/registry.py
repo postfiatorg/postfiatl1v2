@@ -224,7 +224,15 @@ def snapshot(ports, state, now, read=rpc, clock=lambda: dt.datetime.now(UTC)):
     return output, state
 
 
+def refuse_validator_data_dir(path):
+    # The exporter is read-only towards validators: never write beside node state.
+    for directory in Path(path).resolve().parents:
+        if (directory / 'node_state.json').exists():
+            raise ValueError('refusing to write inside a validator data directory')
+
+
 def atomic_json(path, value):
+    refuse_validator_data_dir(path)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix='.' + path.name, dir=path.parent)
@@ -246,6 +254,8 @@ def main():
     parser.add_argument('--state', required=True)
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
+    refuse_validator_data_dir(args.state)
+    refuse_validator_data_dir(args.output)
     state = json.loads(Path(args.state).read_text()) if Path(args.state).exists() else {}
     # Store the read start and close each new-block bracket after reads finish.
     started = dt.datetime.now(UTC)
