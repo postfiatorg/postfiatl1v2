@@ -128,6 +128,7 @@ wss } = runtime;
     let { fastpayFleetStatusCache,fastpayFleetStatusInFlight,latestFinalizedReadCache,preferredSequencedReadIndex,proposerRouteCache,shieldedCertifierLoopState } = runtime;
     const httpMutationAuthorized = (...args) => runtime.httpMutationAuthorized(...args);
     const httpMutationPrincipal = (...args) => runtime.httpMutationPrincipal(...args);
+    const httpMutationAuthentication = (...args) => runtime.httpMutationAuthentication(...args);
     const httpRequestRequiresAuth = (...args) => runtime.httpRequestRequiresAuth(...args);
     const acquireMutationAdmission = (...args) => runtime.acquireMutationAdmission(...args);
     const boundedHttpBodyLimit = (...args) => runtime.boundedHttpBodyLimit(...args);
@@ -1513,11 +1514,12 @@ wss } = runtime;
             res.end();
             return true;
         }
-        const principalId = requiresAuth ? httpMutationPrincipal(req) : null;
+        const authentication = requiresAuth ? httpMutationAuthentication(req) : null;
+        const principalId = authentication?.principal || null;
         if (requiresAuth && !principalId) {
-            sendJson(req, res, 401, {
+            sendJson(req, res, authentication?.failure?.statusCode || 401, {
                 ok: false,
-                code: 'proxy_auth_required',
+                code: authentication?.failure?.code || 'proxy_auth_required',
                 message: 'authenticated wallet proxy mutation required',
             });
             return true;

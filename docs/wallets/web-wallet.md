@@ -81,6 +81,12 @@ The optional HTTPS dev cert paths are controlled by:
 | `WALLET_PROXY_MUTATION_RATE_LIMIT` | `120` | Authenticated mutations admitted per principal and rate window. |
 | `WALLET_PROXY_MUTATION_RATE_WINDOW_MS` | `60000` | Principal mutation-rate window. |
 | `WALLET_PROXY_MUTATION_CONCURRENCY` | `16` | Process-wide in-flight authenticated HTTP mutation ceiling. |
+| `WALLET_PROXY_NATIVE_SESSION_ORIGIN` | empty | Exact `https://host[:port]` origin native apps use. Unset disables native sessions (the open route returns 404). |
+| `WALLET_PROXY_NATIVE_SESSION_SECRET` | empty | Token HMAC key, at least 32 random bytes. Required when native sessions are enabled. Unique per gateway. |
+| `WALLET_PROXY_NATIVE_SESSION_CHAIN_ID` | empty | Network id native sessions are bound to, such as `postfiat-wan-devnet-2`. Required when enabled. |
+| `WALLET_PROXY_NATIVE_SESSION_GENESIS_HASH` | empty | 96-hex genesis hash native sessions are bound to. Required when enabled. |
+| `WALLET_PROXY_NATIVE_SESSION_TTL_MS` | `900000` | Native token lifetime, 60000 to 3600000. |
+| `WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE` | empty | Optional install allowlist. When set, only listed installs may open a session. |
 | `WALLET_STATIC_DIR` | `wallet-web/dist` | Immutable production wallet build served same-origin by the hardened proxy. |
 | `INJECT_RPC_CAPS` | `true` | Injects RPC capability fields into `server_info` responses. Like every wallet-proxy on/off setting, it takes `true`/`false` (any case) or `1`/`0`; any other value stops startup, or fails the request for a setting read per request (`<NAME> must be true or false`). Exception: `PFUSDC_WITHDRAWAL_ENABLED` is on only for exactly `true`. |
 
@@ -121,6 +127,28 @@ The browser receives a session token out of band and keeps it only in
 idempotency-store data, or access-log fields. Rotating one principal token
 invalidates only that principal; another principal cannot replay or receive its
 durable idempotency result.
+
+### Native app sessions
+
+Native apps cannot use the loopback-only `GET /api/bridge/local-session`. They
+call `POST /api/native-session/v1/open` with a per-install ML-DSA-65 public key,
+a 32-byte nonce, the gateway origin, chain id, genesis hash and a timestamp,
+signed under the context `postfiat-l1-v2/native-session/v1`. The gateway checks
+the signature, origin, network, timestamp (±5 minutes), nonce reuse and a 16-KiB
+body limit. It returns a bearer token for the principal `native:<install id>`.
+
+The token has the browser relay's caps: the same routes, per-principal rate
+window, concurrency and body limits. It is refused when expired (401
+`native_session_expired`), minted for another origin or network (403), signed by
+another gateway's secret (401), or sent with a foreign `Origin` header (403).
+Any request that carries a token in its query string gets 400. Add the native
+origin to `ALLOWED_ORIGINS`, because authenticated writes still need an allowed
+`Origin` header.
+
+The allowlist file must be a regular file owned by the service user, not a
+symlink and not group- or world-writable:
+`{"schema":"postfiat-native-session-allowlist-v1","install_public_keys_hex":["<3904 hex>"]}`.
+It is read at startup. Rotating the secret ends all native sessions.
 
 In-app settings are stored in IndexedDB with the wallet settings record. The
 More tab can change:

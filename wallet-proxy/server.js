@@ -14,6 +14,7 @@ const { promisify } = require('util');
 const { WebSocketServer } = require('ws');
 const atomicNavswapModule = require('./navswap-atomic');
 const { FastpayCertificateOutbox } = require('./fastpay-certificate-outbox');
+const { OPEN_PATH: NATIVE_SESSION_OPEN_PATH, createNativeSessions } = require('./native-session');
 
 const execFileAsync = promisify(execFile);
 
@@ -302,8 +303,29 @@ function requestBearerToken(req) {
     return match ? match[1] : '';
 }
 
+// A per-install native session token (native-session.js) authenticates with the
+// same caps as a configured proxy principal; everything downstream is unchanged.
+function credentialAuthentication(candidate, requestOrigin) {
+    if (nativeSessions.isNativeToken(candidate)) {
+        return nativeSessions.authenticate(candidate, String(requestOrigin || '').trim());
+    }
+    return { principal: authenticateProxyToken(candidate), failure: null };
+}
+
+function httpMutationAuthentication(req) {
+    return credentialAuthentication(requestBearerToken(req), req?.headers?.origin);
+}
+
 function httpMutationPrincipal(req) {
-    return authenticateProxyToken(requestBearerToken(req));
+    return httpMutationAuthentication(req).principal;
+}
+
+function queryCarriesCredential(url) {
+    if (nativeSessions.queryCarriesToken(url)) return true;
+    for (const value of url.searchParams.values()) {
+        if (authenticateProxyToken(value) !== null) return true;
+    }
+    return false;
 }
 
 function httpMutationAuthorized(req) {
@@ -381,8 +403,12 @@ function rpcRequestRequiresAuth(method) {
     return !PUBLIC_READ_RPC_METHODS.has(method);
 }
 
-function rpcRequestPrincipal(request) {
-    return authenticateProxyToken(request?.proxy_auth_token);
+function rpcRequestAuthentication(request, req = null) {
+    return credentialAuthentication(request?.proxy_auth_token, req?.headers?.origin);
+}
+
+function rpcRequestPrincipal(request, req = null) {
+    return rpcRequestAuthentication(request, req).principal;
 }
 
 function rpcRequestAuthorized(request) {
@@ -632,6 +658,16 @@ const MUTATION_CONCURRENCY = parseBoundedPositiveIntegerEnv(
     4096,
 );
 const mutationAdmissionByPrincipal = new Map();
+const nativeSessions = createNativeSessions({
+    env: process.env,
+    caps: {
+        mutation_rate_limit: MUTATION_RATE_LIMIT,
+        mutation_rate_window_ms: MUTATION_RATE_WINDOW_MS,
+        mutation_concurrency: MUTATION_CONCURRENCY,
+        max_http_body_bytes: MAX_HTTP_BODY_BYTES,
+        max_ws_message_bytes: MAX_WS_MESSAGE_BYTES,
+    },
+});
 let activeMutationAdmissions = 0;
 
 function parseBoundedIntegerEnv(name, fallback, minimum, maximum) {
@@ -926,6 +962,7 @@ fastpayFleetStatusCache,
 fastpayFleetStatusInFlight,
 fs,
 http,
+httpMutationAuthentication,
 httpMutationAuthorized,
 httpMutationPrincipal,
 httpRequestRequiresAuth,
@@ -1302,6 +1339,17 @@ verifyAtomicTemplateSymmetry,
 writeSseEvent } = walletProxyRuntime;
 const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    if (queryCarriesCredential(url)) {
+        res.writeHead(400, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ ok: false, code: 'proxy_token_in_query' }));
+        return;
+    }
+    if (url.pathname === NATIVE_SESSION_OPEN_PATH) {
+        const result = await nativeSessions.open(req);
+        res.writeHead(result.statusCode, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(result.body));
+        return;
+    }
     if (handleLocalSessionRequest(req, res, url)) return;
     if (await handleNavswapHttp(req, res, url)) return;
     if (await serveWalletStatic(req, res, url)) return;
@@ -1418,14 +1466,15 @@ wss.on('connection', (ws, req) => {
         }
 
         const requiresAuth = rpcRequestRequiresAuth(parsed.method);
-        const principalId = requiresAuth ? rpcRequestPrincipal(parsed) : null;
+        const authentication = requiresAuth ? rpcRequestAuthentication(parsed, req) : null;
+        const principalId = authentication?.principal || null;
         if (requiresAuth && !principalId) {
             ws.send(JSON.stringify(responseEnvelope(
                 parsed.id,
                 false,
                 null,
                 {
-                    code: 'proxy_auth_required',
+                    code: authentication?.failure?.code || 'proxy_auth_required',
                     message: 'authenticated wallet proxy mutation required',
                 },
                 [],
@@ -1824,7 +1873,9 @@ module.exports = {
     handleLocalSessionRequest,
     isLoopbackRemoteAddress,
     localSessionRequestAllowed,
+    httpMutationAuthentication,
     httpMutationPrincipal,
+    nativeSessions,
     rpcRequestRequiresAuth,
     serveWalletStatic,
     validateProxyExposureConfig,
