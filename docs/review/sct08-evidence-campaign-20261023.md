@@ -273,6 +273,8 @@ The re-run, with outputs under `~/.cache/sct08-20261023/item5/`:
 | 4 | The vote records of the reliability decision (a node change); accountability, ρ and domain-control inputs from items 1–3; operator manifests; model classification | This lane (vote records, next-release candidate); operators; the governance lane |
 | 5 | Done 2026-10-23 (runner change and 1137 re-run). A real non-empty derivation still needs items 1–3. | — |
 
+2026-10-29: PR #180 (`29589ab2`) added the [Task Node L1 validator binding](../runbooks/tasknode-l1-validator-binding.md) tool, in which the validator key alone signs a Task Node account challenge; it is not the dual-signed ledger-memo record item 1 needs, so item 1 stays open.
+
 ## Commands
 
 ```bash
