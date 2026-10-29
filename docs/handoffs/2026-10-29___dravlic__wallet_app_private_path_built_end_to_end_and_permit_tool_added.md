@@ -18,34 +18,40 @@ The wallet lane's [handoff of 2026-10-29](2026-10-29___goodalexander__tasknode_w
    - the three at-NAV pricing rules in consensus, behind a governed activation (`ed89c916`);
    - the governed egress policy registry (`899b26f8`) and its [disclosure schema document](../specs/asset-orchard-private-egress-disclosure-schema-v1.md) (`1e02d103`);
    - the readiness read `private_readiness` (`556cac38`);
-   - six-validator test suites, including a release-only module with real swap and egress proofs (`e37d77fd`, `e5f8f5b8`);
+   - six-validator test suites, including two release-only modules with real swap and egress proofs (`e37d77fd`, `e5f8f5b8`, `14c8e43e`);
    - the gateway-to-node integration test with the real node and proxy (`3747a2e7`, `c308b7af`, `46c5a956`);
-   - the read-only page `python/postfiat_rpc/private_path_ui.py` (`403af19d`).
+   - the read-only page `python/postfiat_rpc/private_path_ui.py` (`403af19d`);
+   - retained finalized snapshot points, so a snapshot token outlives new blocks (`110997f1`, `a4346f94`).
 4. **Asset-Orchard secret lifetimes.** Filed as [issue #181](https://github.com/postfiatorg/postfiatl1v2/issues/181). Points 1, 2 and 4 are fixed (`548d4918`); points 3 and 5 need upstream changes, analysed on the issue.
 
 Also today:
 
 - [PR #180](https://github.com/postfiatorg/postfiatl1v2/pull/180) was reviewed and merged (`29589ab2`), with the SCT-08 note `2f38e608`.
-- Bot PRs #177 and #179 are still open.
+- Bot PRs [#177](https://github.com/postfiatorg/postfiatl1v2/pull/177) (IPv6 brackets in `pft_token`'s redacted RPC URL; `3592c25b`) and [#179](https://github.com/postfiatorg/postfiatl1v2/pull/179) (`nav_reserve_packet_id` computed like the chain; `8db13571`) were merged after both bugs were reproduced on main.
+- The ERC-20 milestone's P1.10 records that the other lane sent the exchange guidance page to Coinbase on 2026-10-28; it now waits for Coinbase's reply (`cfb5960e`).
 - Vite in the web wallet was updated to clear the open dependency alerts (`ca337838`).
 - The proof public-input inventory hashes were updated after the privacy change (`d23b14d1`).
 
 ## Current state
 
 - **W-1 user-proven private path.** The milestone records ticked and open items.
-  - **Ticked:** S1.1–S1.4, S2.1–S2.3, S2.5, S3.1, S3.4, S4.1–S4.3, S5, S5b.1–S5b.4, S6.1, S6.3, S7.2, W-2, M2 and M3.
-  - **Open, wallet team:** S1.5, S2.4 and the app part of S6.4.
+  - **Ticked:** S1.1, S1.2, S1.4, S2.1–S2.3, S2.5, S3.1, S3.4, S4.1–S4.3, S5, S5b.1–S5b.4, S6.1–S6.3, S7.2, W-2, M2 and M3.
+  - **S6.2 complete.** `e5f8f5b8` accepts a real swap proof and a real private-egress proof on six validators and refuses an invalid proof, a wrong recipient and a spent nullifier. `14c8e43e` adds a second release-only module (`crates/node/src/main_parts/tests/private_action_pricing_six_validator_tests.rs`) for mode mismatch, pair not governed, stale anchor and stale NAV: each is a real swap proof that breaks one rule, refused on all six validators with no state change (355 s in release). The "wrong issuer" case is an asset/issuer binding mismatch, because no A666/pfUSDC issuer profile exists on the ingress path yet.
+  - **Open, wallet team:** S1.5, S2.4, S4.4 and the app part of S6.4.
+  - **Open, S1.3:** the atomic-batch activation height; `manifest.json` holds `null` until validator-0 runs a release that serves `private_readiness`.
+  - **Open, S3.2:** height ownership, quorum and catch-up across six validators.
   - **Open, S3.3:** the operator switch `WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION` is in (default `on`; `4bf643aa`, `cd4dab07`). Removing the legacy paths waits until the app is on `/api/private/v1/`.
-  - **Open, S6.2:** `e5f8f5b8` accepts a real swap proof and a real private-egress proof on six validators, and refuses an invalid proof, a wrong recipient and a spent nullifier. Its module is release-only and ignored by default. Still uncovered: a stale anchor, `asset_orchard_pricing_nav_stale`, `_pair_not_governed` and `_mode_mismatch`. Each needs another real proof.
-  - **Open, others:** S7.1 (publication from a deployed release), S8 (the approved ce22 run), M1 (the spec scored 84.20 on its second harness run and is not locked) and M4.
+  - **Open, M1:** the spec scored 85.13, then 84.20, then 85.40 (GPT-6 Astra Pro 86.20, Claude Fable 5.1 82.40, GLM 5.3 87.60) after its AGENTS.md step-4 pass: one direct call to `openai/gpt-5.6-sol-pro` with the second run's critiques, the rewrite corrected against the code. Below 86, so it is not locked (`60424350`).
+  - **Open, others:** S7.1 (publication from a deployed release), S8 (the approved ce22 run) and M4.
 - **Nothing of W-1 runs on ce22.**
   - The admission switch is off by default.
   - The pricing enforcement and the egress policy are governed activations, and neither is scheduled.
   - The devnet runs `index-v3-20261027` (`d728f895`), which has none of today's code ([Current State](../status/chain-state-current.md)).
+- **Finalized reads and snapshot tokens.** Since `110997f1` each node keeps the last 16 finalized snapshot points (`POSTFIAT_PRIVATE_POOL_SNAPSHOT_POINTS`, 1–1024) in `private_pool_snapshot_points.json` in its data directory, a node-local file rewritten atomically after each durable commit and never consensus state, so the ring survives a restart. An older retained token still serves its pages, asset rows and receipts; account lines and the market need the current tip and refuse it with `snapshot_not_current`; a token 16 or more blocks behind the tip gets `snapshot_expired`, and a wrong hash or root stays `snapshot_unavailable`. On the gateway side, `a4346f94` reads the account lines right after taking the snapshot and treats all three codes as a stale token: one retry from a fresh token, then 503.
 - **Interface facts for the wallet team:**
   - The intent id covers only `chain_id`, `genesis_hash` and `protocol_version`. The address is bound to the native session principal at the gateway.
   - The gateway sends the identical reserved bytes to every configured validator, because a node holds a record until it is the proposer.
-  - A snapshot token is valid until the next finalized block.
+  - A snapshot token is valid for the node's last 16 finalized points (account lines and the market only at the tip).
   - The egress `disclosure_hash` must equal the governed schema hash. The schema document gives that hash and the proposed policy ids.
 - **W-2 native session.**
   - Documented in [the web wallet page](../wallets/web-wallet.md) under "Native app sessions" and "Private actions".
@@ -59,15 +65,10 @@ Also today:
 - **Consensus changes,** all behind governance and inactive on the devnet:
   - **Pricing rules.** Keys `asset_orchard_pricing_enforcement_activation_height` and `asset_orchard_pricing_max_nav_age_blocks`. Codes `asset_orchard_pricing_nav_stale`, `_pair_not_governed` and `_mode_mismatch`. The governed pair comes from `pftl_uniswap_routes`, so the A666/pfUSDC route must be registered before activation.
   - **Egress policy registry.** Amendment kind `asset_orchard_egress_policy_v1:<asset_id>:<disclosure_schema_hash>:<policy_id>`. Global switch `asset_orchard_egress_policy_activation_height`. Records are ratified with the `ratify-asset-orchard-egress-policy` commands.
-- **CI.**
-  - product-security-ci was red from `548d4918` to `346c79e4` on the proof-inventory source-hash drift, and green on every completed run from `d23b14d1` on.
-  - rust-ci was green on every completed run today.
-  - Still in progress at the time of writing:
-    - both workflows for `403af19d`, `c308b7af`, `0c396fc8`, `657ce706`, `ca337838`, `e5f8f5b8`, `46c5a956`, `ea2213d0`, `3475c5f0`, `987eddb6`, `1e02d103`, `4bf643aa` and `cd4dab07`;
-    - rust-ci for `d9095797`, `e37d77fd` and `3747a2e7`.
-- **Devnet.** Nothing was changed. The only live reads were read-only RPC calls to validator-0 for the contract manifest and asset profile (`server_info`, `asset_info` and `nav_reserve_proof_status`, at finalized height 1161). Repository HEAD before this handoff is `cd4dab07`. Everything above is merged but not deployed.
+- **CI.** At the time of writing, `gh run list` shows today's product-security-ci green on every completed run from `d23b14d1` on except `8db13571` (an anvil port collision in the evm-contracts job), after the superseded red runs from `548d4918` to `346c79e4` (the proof-inventory hash drift), and 16 runs of both workflows still in progress. rust-ci is green up to `c308b7af` and red on all 11 completed runs from `0c396fc8` on, each time in `transport_batch_payload_tests::activated_consensus_v2_transport_survives_failed_view_zero_proposer_n4` (the transport ack read times out after three attempts, and the poisoned test lock then fails six more tests in that module; the `ca337838` run also hit the same socket read timeout in `rpc_serve_readiness_reports_its_own_admission_switch`); the cause is not yet diagnosed, and no commit after `c308b7af` qualifies for a release until it is.
+- **Devnet.** Nothing was changed. The only live reads were read-only RPC calls to validator-0 for the contract manifest and asset profile (`server_info`, `asset_info` and `nav_reserve_proof_status`, at finalized height 1161). Everything above is merged but not deployed.
 - **Task Node.**
-  - Sixteen tasks were rewarded today, 42.68 PFT in total:
+  - Nineteen tasks were rewarded today, 50.68 PFT in total:
     - `task_aca4932b…`, 1.4 (PR #180);
     - `task_1805d127…`, 2.5 (pricing rules);
     - `task_00b2f692…`, 2 (spec and milestone);
@@ -81,24 +82,27 @@ Also today:
     - `task_bdf551ff…`, 3.5 (operations follow-ups);
     - `task_35f46503…`, 2.98 (proof cases);
     - `task_bcdb68c4…`, 2 (gateway crash cases);
-    - `task_722b0b60…`, 2 (spec pass);
+    - `task_722b0b60…`, 2 (spec content pass);
     - `task_54999557…`, 2 (disclosure schema);
-    - `task_5dc3515c…`, 3.2 (legacy switch).
+    - `task_5dc3515c…`, 3.2 (legacy switch);
+    - `task_bca136c3…`, 3 (the S6.2 cases);
+    - `task_a5a692aa…`, 2 (the specification's improvement pass and third score);
+    - `task_7443dd94…`, 3 (snapshot retention).
   - Task generation failed and was skipped for the permit tool, the secret fix, the pricing reads, W-2, the contract fixtures, the gateway routes, the pool reads and the integration test. The backend errors were `taskgen_readiness_invalid`, `inference_http_503` and `inference_timeout`.
 
 ## Next decision or action
 
 My next steps, in order:
 
-1. Cut and roll out the next validator release: the VR-01 fix `5fc43961` plus #174 and #175, from a commit with both workflows green. Today's W-1 code stays out unless it is qualified separately.
-2. The remaining S6.2 proof cases, and removing the S3.3 legacy paths once the app has moved to `/api/private/v1/`.
+1. Cut and roll out the next validator release: the VR-01 fix `5fc43961` plus #174 and #175, from a commit with both workflows green (first diagnose the rust-ci transport test failure above). Today's W-1 code stays out unless it is qualified separately.
+2. Remove the S3.3 legacy paths once the app has moved to `/api/private/v1/`.
 3. With the wallet team, in order:
    - S1.5 (their helper reproduces the vectors);
    - S2.4 (the app on the new routes);
    - agreeing the egress disclosure schema;
    - the governance records and activations on the devnet;
    - S8.
-4. M1: an improvement pass on the spec through the harness.
+4. M1: the spec's next improvement pass through the harness.
 5. The Phase 2 genesis lane and release path of the ERC-20 milestone, once the mainnet genesis plan exists. The biweekly page update is due on 2026-11-10.
 
 Only the other lanes can provide these (date first asked):
@@ -123,12 +127,7 @@ Only the other lanes can provide these (date first asked):
 - [Web wallet](../wallets/web-wallet.md)
 - [Issue #181](https://github.com/postfiatorg/postfiatl1v2/issues/181) and [PR #180](https://github.com/postfiatorg/postfiatl1v2/pull/180)
 - [PFT as an ERC-20 on Base milestone](../plans/active/pft-erc20-base-listing-milestone.md)
+- [PR #177](https://github.com/postfiatorg/postfiatl1v2/pull/177) and [PR #179](https://github.com/postfiatorg/postfiatl1v2/pull/179)
 - Previous handoff: [Base Sepolia token live, lock contract merged and exchange page corrected](2026-10-28___dravlic__base_sepolia_token_live_lock_contract_merged_and_exchange_page_corrected.md)
 - [Current State](../status/chain-state-current.md)
 
-## End of session
-
-- Bot PRs: [#177](https://github.com/postfiatorg/postfiatl1v2/pull/177) (IPv6 brackets in `pft_token`'s redacted RPC URL) was squash-merged as `3592c25b`, and [#179](https://github.com/postfiatorg/postfiatl1v2/pull/179) (`nav_reserve_packet_id` computed like the chain) as `8db13571`. Both bugs were reproduced on main and the touched tests pass.
-- The ERC-20 milestone's P1.10 now records that the other lane sent the exchange guidance page to Coinbase on 2026-10-28. It waits for Coinbase's reply (`cfb5960e`).
-- This supersedes the line "Bot PRs #177 and #179 are still open" in the BLUF.
-- `14c8e43e` adds the second release-only six-validator module (`crates/node/src/main_parts/tests/private_action_pricing_six_validator_tests.rs`) with the four remaining S6.2 cases: mode mismatch, pair not governed, stale anchor and stale NAV. Each is a real swap proof that breaks one rule, and all six validators refuse it with no state change (355 s in release). S6.2 is now ticked in the milestone. Its "wrong issuer" case is an asset/issuer binding mismatch, because no A666/pfUSDC issuer profile exists on the ingress path yet.
