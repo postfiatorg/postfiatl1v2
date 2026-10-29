@@ -64,6 +64,8 @@ In `crates/node/tests/fixtures/private-actions-v1/`, shared types in `crates/typ
   - [ ] Height ownership, quorum and catch-up across six validators, shown by S6.
 - [ ] S3.3 *(this lane)* Retire the HTTP-side certification: `transport-peer-certified-batch-round --key-file` (`wallet-proxy/navswap-shielded.js:1421`), the `/asset-orchard/swap-batch` call (`:2292`) and the swap execution that certifies it (`:2386`).
   - The `shield_batch_*` builders (`crates/node/src/rpc_cli.rs:2086`) may be reused after review; a built batch is never reported as committed.
+  - [x] The switch `WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION` (default `on`; `wallet-proxy/legacy-shielded-certification.js`). When `off`, the three legacy routes answer 410 `legacy_shielded_certification_retired` and the proxy reads no validator key file, data directory or local Asset-Orchard service; the user-proven routes work without them (`wallet-proxy/test_legacy_shielded_certification.js`). Cutover: the apps on `/api/private/v1/`, the switch `off` on the public deployment, then removal.
+  - [ ] Remove the legacy code in a later release.
 - [x] S3.4 *(this lane)* Receipts with the action, batch and transaction bindings, inclusion height, block hash, state root, outcome, code, fee and checkable finality evidence (`968da908`): `private_action_receipt` returns the S1 `PrivateReceiptResponse` with the block certificate as `validator_quorum_block_certificate_v1`. To tick S3: S3.3's code paths unused on the W-1 route and an S6 test through the service.
 
 ## S4 — finalized public reads (1–2 days left)

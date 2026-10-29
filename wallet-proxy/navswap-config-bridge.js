@@ -1,6 +1,7 @@
 'use strict';
 
 const { parseBooleanEnv } = require('./boolean-env');
+const { legacyShieldedCertificationEnabled } = require('./legacy-shielded-certification');
 
 function create(runtime) {
     const { A651_ASSET_ID,
@@ -780,6 +781,26 @@ wss } = runtime;
     }
 
     function shieldedNavswapIngressConfig() {
+        // Off: no validator key file, data directory or topology is read (S3.3).
+        if (!legacyShieldedCertificationEnabled()) {
+            return {
+                enabled: false,
+                configured: false,
+                missing: ['WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION=on'],
+                node_bin: null,
+                data_dir: null,
+                topology: null,
+                key_file: null,
+                proposal_key_file: null,
+                artifact_root: null,
+                timeout_ms: SHIELDED_ROUND_TIMEOUT_DEFAULT_MS,
+                max_amount_atoms: '1000000',
+                endpoint: '/api/shielded-nav-swap/ingress',
+                custody_boundary: 'retired',
+                supported_assets: [],
+                retired: true,
+            };
+        }
         const nodeBin = presentEnv('NAVSWAP_SHIELDED_INGRESS_NODE_BIN')
             || presentEnv('NAVSWAP_OPERATOR_NODE_BIN')
             || presentEnv('POSTFIAT_NODE_BIN')
@@ -847,7 +868,8 @@ wss } = runtime;
         const certifierLoopRoot = presentEnv('NAVSWAP_SHIELDED_CERTIFIER_LOOP_ROOT')
             || path.join(artifactRoot, 'certifier-loop');
         const certifierLoop = {
-            enabled: certifierLoopEnabled,
+            // The certifier loop runs the legacy certified round; off with the switch.
+            enabled: certifierLoopEnabled && legacyShieldedCertificationEnabled(),
             batch_dir: presentEnv('NAVSWAP_SHIELDED_CERTIFIER_LOOP_BATCH_DIR')
                 || path.join(certifierLoopRoot, 'batches'),
             artifact_root: presentEnv('NAVSWAP_SHIELDED_CERTIFIER_LOOP_ARTIFACT_ROOT')
@@ -908,6 +930,17 @@ wss } = runtime;
     }
 
     function assetOrchardLocalServiceConfig() {
+        // Off: no local Asset-Orchard service is configured (S3.3).
+        if (!legacyShieldedCertificationEnabled()) {
+            return {
+                url: null,
+                readiness_endpoint: null,
+                timeout_ms: DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_READINESS_TIMEOUT_MS,
+                local_only: false,
+                missing: ['WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION=on'],
+                retired: true,
+            };
+        }
         const serviceUrl = process.env.ASSET_ORCHARD_LOCAL_SERVICE_URL || DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_URL;
         const readinessTimeoutMs = Number.parseInt(
             process.env.ASSET_ORCHARD_LOCAL_SERVICE_READINESS_TIMEOUT_MS

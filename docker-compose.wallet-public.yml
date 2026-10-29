@@ -50,6 +50,8 @@ services:
       WALLET_PROXY_PRIVATE_ACTIONS_STORE: "${WALLET_PROXY_PRIVATE_ACTIONS_STORE:-}"
       # Per-call validator timeout in ms; empty keeps 15000.
       WALLET_PROXY_PRIVATE_ACTIONS_RPC_TIMEOUT_MS: "${WALLET_PROXY_PRIVATE_ACTIONS_RPC_TIMEOUT_MS:-}"
+      # off retires the legacy shielded certification routes (410) and reads no validator key or data dir.
+      WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION: "${WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION:-on}"
       RPC_HOST: "${RPC_HOST:?set an explicit private validator or RPC-edge host}"
       RPC_PORT: "${RPC_PORT:-27650}"
       RPC_FLEET: "${RPC_FLEET:?set the exact validator-id=host:port fleet topology}"

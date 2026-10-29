@@ -16,6 +16,14 @@ const atomicNavswapModule = require('./navswap-atomic');
 const { FastpayCertificateOutbox } = require('./fastpay-certificate-outbox');
 const { OPEN_PATH: NATIVE_SESSION_OPEN_PATH, createNativeSessions } = require('./native-session');
 const { createPrivateActions } = require('./private-actions');
+const {
+    handleRetiredLegacyRoute,
+    legacyShieldedCertificationEnabled,
+    legacyShieldedCertificationStartup,
+} = require('./legacy-shielded-certification');
+
+// Fail fast on an invalid WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION value.
+legacyShieldedCertificationEnabled();
 
 const execFileAsync = promisify(execFile);
 
@@ -1364,6 +1372,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (handleLocalSessionRequest(req, res, url)) return;
     if (await privateActions.handleHttp(req, res, url, privateActionsAuth)) return;
+    if (handleRetiredLegacyRoute(req, res, url)) return;
     if (await handleNavswapHttp(req, res, url)) return;
     if (await serveWalletStatic(req, res, url)) return;
     if (req.method === 'GET' && url.pathname === '/healthz') {
@@ -1757,6 +1766,12 @@ if (require.main === module) {
     const navswapStoreLoad = loadNavswapRunStore();
     const navswapIdempotencyStoreLoad = loadNavswapIdempotencyStore();
     const startupShieldedSwapConfig = shieldedNavswapSwapConfig();
+    const legacyStartup = legacyShieldedCertificationStartup(shieldedNavswapIngressConfig());
+    if (!legacyStartup.ok) {
+        console.error(legacyStartup.line);
+        process.exit(78);
+    }
+    console.log(legacyStartup.line);
     const startupCertifierLoop = startupShieldedSwapConfig.certifier_loop?.enabled
         ? startShieldedCertifierLoop(startupShieldedSwapConfig)
         : null;
