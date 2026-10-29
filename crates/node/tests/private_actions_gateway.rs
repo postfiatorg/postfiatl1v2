@@ -534,51 +534,79 @@ fn gateway_admits_a_user_proven_ingress_through_the_real_node() {
     // The wallet proxy with both validators as its sources (the default: all of RPC_FLEET).
     let proxy_port = free_port();
     let secret = "integration-native-session-secret-32-bytes-01";
-    harness.children.push(
-        Command::new("node")
-            .arg("server.js")
-            .current_dir(proxy_dir())
-            .env("HOME", &harness.root)
-            .env("LISTEN_HOST", "127.0.0.1")
-            .env("LISTEN_PORT", proxy_port.to_string())
-            .env("ALLOWED_ORIGINS", ORIGIN)
-            .env("WALLET_PROXY_API_TOKEN", BROWSER_TOKEN)
-            .env("RPC_HOST", "127.0.0.1")
-            .env("RPC_PORT", rpc_port.to_string())
-            .env(
-                "RPC_FLEET",
-                rpc_ports
-                    .iter()
-                    .enumerate()
-                    .map(|(index, port)| format!("validator-{index}=127.0.0.1:{port}"))
-                    .collect::<Vec<_>>()
-                    .join(","),
-            )
-            .env("NAVSWAP_IDEMPOTENCY_STORE_PATH", "off")
-            .env("NAVSWAP_RUN_STORE_PATH", "off")
-            .env("WALLET_PROXY_NATIVE_SESSION_ORIGIN", ORIGIN)
-            .env("WALLET_PROXY_NATIVE_SESSION_SECRET", secret)
-            .env("WALLET_PROXY_NATIVE_SESSION_CHAIN_ID", &genesis.chain_id)
-            .env(
-                "WALLET_PROXY_NATIVE_SESSION_GENESIS_HASH",
-                &genesis_hash_hex,
-            )
-            .env("WALLET_PROXY_PRIVATE_ACTIONS_CHAIN_ID", &genesis.chain_id)
-            .env(
-                "WALLET_PROXY_PRIVATE_ACTIONS_GENESIS_HASH",
-                &genesis_hash_hex,
-            )
-            .env("WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID", &asset_id)
-            .env("WALLET_PROXY_PRIVATE_ACTIONS_QUOTE_ASSET_ID", &asset_id)
-            .env(
-                "WALLET_PROXY_PRIVATE_ACTIONS_STORE",
-                harness.root.join("gateway-store"),
-            )
-            .stdout(Stdio::null())
-            .stderr(fs::File::create(harness.root.join("proxy.log")).expect("log"))
-            .spawn()
-            .expect("spawn wallet proxy"),
-    );
+    let proxy_home = harness.root.join("proxy-home");
+    let gateway_store = harness.root.join("gateway-store");
+    fs::create_dir_all(&proxy_home).expect("proxy home");
+    // The proxy's whole environment, every setting at its most permissive value.
+    let rpc_fleet = rpc_ports
+        .iter()
+        .enumerate()
+        .map(|(index, port)| format!("validator-{index}=127.0.0.1:{port}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let proxy_env: Vec<(String, String)> = [
+        ("PATH", std::env::var("PATH").unwrap_or_default()),
+        ("HOME", path(&proxy_home)),
+        ("LISTEN_HOST", "127.0.0.1".to_string()),
+        ("LISTEN_PORT", proxy_port.to_string()),
+        ("ALLOWED_ORIGINS", ORIGIN.to_string()),
+        ("WALLET_PROXY_API_TOKEN", BROWSER_TOKEN.to_string()),
+        ("RPC_HOST", "127.0.0.1".to_string()),
+        ("RPC_PORT", rpc_port.to_string()),
+        ("RPC_FLEET", rpc_fleet),
+        ("NAVSWAP_IDEMPOTENCY_STORE_PATH", "off".to_string()),
+        ("NAVSWAP_RUN_STORE_PATH", "off".to_string()),
+        ("WALLET_PROXY_MAX_HTTP_BODY_BYTES", "16777216".to_string()),
+        ("WALLET_PROXY_MUTATION_RATE_LIMIT", "100000".to_string()),
+        ("WALLET_PROXY_MUTATION_RATE_WINDOW_MS", "1".to_string()),
+        ("WALLET_PROXY_MUTATION_CONCURRENCY", "4096".to_string()),
+        ("WALLET_PROXY_NATIVE_SESSION_ORIGIN", ORIGIN.to_string()),
+        ("WALLET_PROXY_NATIVE_SESSION_SECRET", secret.to_string()),
+        (
+            "WALLET_PROXY_NATIVE_SESSION_CHAIN_ID",
+            genesis.chain_id.clone(),
+        ),
+        (
+            "WALLET_PROXY_NATIVE_SESSION_GENESIS_HASH",
+            genesis_hash_hex.clone(),
+        ),
+        ("WALLET_PROXY_NATIVE_SESSION_TTL_MS", "3600000".to_string()),
+        (
+            "WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT",
+            "100000".to_string(),
+        ),
+        (
+            "WALLET_PROXY_PRIVATE_ACTIONS_CHAIN_ID",
+            genesis.chain_id.clone(),
+        ),
+        (
+            "WALLET_PROXY_PRIVATE_ACTIONS_GENESIS_HASH",
+            genesis_hash_hex.clone(),
+        ),
+        (
+            "WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID",
+            asset_id.clone(),
+        ),
+        (
+            "WALLET_PROXY_PRIVATE_ACTIONS_QUOTE_ASSET_ID",
+            asset_id.clone(),
+        ),
+        ("WALLET_PROXY_PRIVATE_ACTIONS_STORE", path(&gateway_store)),
+    ]
+    .into_iter()
+    .map(|(name, value)| (name.to_string(), value))
+    .collect();
+    let proxy = Command::new("node")
+        .arg("server.js")
+        .current_dir(proxy_dir())
+        .env_clear()
+        .envs(proxy_env.iter().map(|(name, value)| (name, value)))
+        .stdout(fs::File::create(harness.root.join("proxy.stdout.log")).expect("log"))
+        .stderr(fs::File::create(harness.root.join("proxy.stderr.log")).expect("log"))
+        .spawn()
+        .expect("spawn wallet proxy");
+    let proxy_pid = proxy.id();
+    harness.children.push(proxy);
     let deadline = Instant::now() + Duration::from_secs(30);
     while TcpStream::connect(("127.0.0.1", proxy_port)).is_err() {
         assert!(Instant::now() < deadline, "wallet proxy did not start");
@@ -642,6 +670,9 @@ fn gateway_admits_a_user_proven_ingress_through_the_real_node() {
     assert_eq!(empty["domain"]["genesis_hash"], genesis_hash_hex.as_str());
 
     // A user-built ingress v2: the exact public JSON the wallet would persist.
+    let note_seed =
+        postfiat_crypto_provider::hash_bytes("gateway-test-note-seed", &nanos.to_le_bytes())[..32]
+            .to_vec();
     let ingress_file = harness.root.join("ingress.json");
     create_asset_orchard_ingress(AssetOrchardIngressCreateOptions {
         data_dir: data_dir.clone(),
@@ -649,7 +680,7 @@ fn gateway_admits_a_user_proven_ingress_through_the_real_node() {
         asset_id: asset_id.clone(),
         amount: 9,
         fee: 0,
-        note_seed_hex: bytes_to_hex(&[0x51; 32]),
+        note_seed_hex: bytes_to_hex(&note_seed),
         encrypted_output_hex: None,
         ingress_file: ingress_file.clone(),
         note_file: harness.root.join("note.json"),
@@ -743,8 +774,421 @@ fn gateway_admits_a_user_proven_ingress_through_the_real_node() {
     assert_eq!(status, 200, "{pending}");
     assert_eq!(pending["state"], "unknown");
     assert_eq!(pending["finality"], Value::Null);
+    let proxy_fds_after_flow = open_paths(proxy_pid);
+
+    // S7.2 (3): verification cannot be turned off. A tampered ingress (one hex
+    // digit of the burn signature flipped) passes the gateway's shape checks
+    // under the most permissive settings, and the node refuses it itself.
+    let tampered_seed =
+        postfiat_crypto_provider::hash_bytes("gateway-test-tampered-seed", &nanos.to_le_bytes())
+            [..32]
+            .to_vec();
+    let tampered_file = harness.root.join("tampered-ingress.json");
+    create_asset_orchard_ingress(AssetOrchardIngressCreateOptions {
+        data_dir: data_dir.clone(),
+        key_file: holder_key_file.clone(),
+        asset_id: asset_id.clone(),
+        amount: 7,
+        fee: 0,
+        note_seed_hex: bytes_to_hex(&tampered_seed),
+        encrypted_output_hex: None,
+        ingress_file: tampered_file.clone(),
+        note_file: harness.root.join("tampered-note.json"),
+        overwrite: false,
+    })
+    .expect("create second ingress");
+    let mut tampered_payload = serde_json::from_slice::<AssetOrchardIngressFile>(
+        &fs::read(&tampered_file).expect("read second ingress"),
+    )
+    .expect("second ingress json")
+    .payload;
+    let signature = &mut tampered_payload.burn_transaction.signature_hex;
+    let flipped = if signature.starts_with('0') { "1" } else { "0" };
+    signature.replace_range(0..1, flipped);
+    let tampered_json =
+        serde_json::to_string(&ShieldedAction::AssetOrchardIngressV2(tampered_payload))
+            .expect("tampered json");
+    let tampered_domain = json!([{"chain_id": genesis.chain_id, "genesis_hash": genesis_hash_hex, "protocol_version": genesis.protocol_version}, tampered_json]);
+    let tampered_intent = sha3_hex(
+        "tasknode.private-intent.v1",
+        tampered_domain.to_string().as_bytes(),
+    );
+    let tampered_body = json!({"address": holder.address, "intent_id": tampered_intent, "action_json": tampered_json});
+    let (status, tampered) = http(proxy_port, "/api/private/v1/submit", &tampered_body, &token);
+    assert_eq!(status, 202, "condition: tampered submit through the gateway; observed: {status} {tampered}; expected: 202 (the gateway does not verify signatures)");
+    assert_eq!(tampered["state"], "queued", "condition: tampered ingress at the node; observed: {tampered}; expected: queued, nothing reserved");
+    let (_, tampered_receipt) = http(
+        proxy_port,
+        "/api/private/v1/receipt",
+        &tampered_body,
+        &token,
+    );
+    let node_code = tampered_receipt["code"].as_str().unwrap_or("").to_string();
+    assert!(
+        !node_code.is_empty() && tampered_receipt["accepted"].is_null() && tampered_receipt["finality"].is_null(),
+        "condition: receipt of the tampered intent; observed: {tampered_receipt}; expected: pending with the node's refusal code"
+    );
+    let tampered_action_hash = tampered["action_hash"]
+        .as_str()
+        .expect("action hash")
+        .to_string();
+    for (index, port) in rpc_ports.iter().enumerate() {
+        let direct = rpc(
+            *port,
+            "private_action_submit",
+            json!({
+                "chain_id": genesis.chain_id, "genesis_hash": genesis_hash_hex, "protocol_version": genesis.protocol_version,
+                "pool_id": "asset-orchard-v1", "session_scope": session["principal"], "intent_id": tampered_intent,
+                "action_json": tampered_json, "action_hash": tampered_action_hash,
+            }),
+        );
+        assert_eq!(direct["ok"], false, "condition: validator-{index} given the tampered ingress directly; observed: {direct}; expected: refused");
+        assert_eq!(direct["error"]["code"].as_str(), Some(node_code.as_str()), "condition: validator-{index} refusal code; observed: {direct}; expected: the code the gateway reported");
+        let receipt = rpc(
+            *port,
+            "private_action_receipt",
+            json!({"intent_id": tampered_intent}),
+        );
+        assert_eq!(receipt["result"]["state"], "pending_unknown", "condition: validator-{index} record of the tampered intent; observed: {receipt}; expected: none");
+    }
+    thread::sleep(Duration::from_millis(1_500));
+    let tip = rpc(rpc_port, "server_info", json!({}));
+    assert_eq!(
+        tip["result"]["ledger"]["height"].as_u64(),
+        Some(height),
+        "condition: chain after the tampered submit; observed: {tip}; expected: no new block"
+    );
+    eprintln!("tampered ingress refused by the node with code {node_code}");
+
+    // S7.2 (2): the gateway process holds no validator key and never opens the
+    // validators' data directories.
+    let validator_roots: Vec<String> = validator_dirs.iter().map(|dir| path(dir)).collect();
+    let validator_secret_hex: Vec<String> = validator_dirs
+        .iter()
+        .flat_map(|dir| validator_private_keys(dir))
+        .collect();
+    for (name, value) in &proxy_env {
+        let lower = name.to_ascii_lowercase();
+        assert!(
+            !lower.contains("key_file") && !lower.contains("data_dir") && !lower.contains("private_key"),
+            "condition: proxy environment variable names; observed: {name}; expected: no key file, data directory or private key setting"
+        );
+        assert!(
+            !validator_roots.iter().any(|root| value.contains(root.as_str()))
+                && !value.contains("validator_keys")
+                && !validator_secret_hex.iter().any(|key| value.contains(key.as_str())),
+            "condition: proxy environment variable {name}; observed: a validator path or key; expected: none"
+        );
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let environ = fs::read(format!("/proc/{proxy_pid}/environ")).expect("proxy environ");
+        let mut names: Vec<String> = environ
+            .split(|byte| *byte == 0)
+            .filter(|entry| !entry.is_empty())
+            .map(|entry| {
+                String::from_utf8_lossy(entry)
+                    .split('=')
+                    .next()
+                    .unwrap_or("")
+                    .to_string()
+            })
+            .collect();
+        names.sort();
+        let mut expected: Vec<String> = proxy_env.iter().map(|(name, _)| name.clone()).collect();
+        expected.sort();
+        assert_eq!(names, expected, "condition: the live proxy environment; observed: other variables; expected: exactly the test's list");
+        for (label, paths) in [
+            ("after the flow", proxy_fds_after_flow),
+            ("at the end", open_paths(proxy_pid)),
+        ] {
+            let inside: Vec<&String> = paths
+                .iter()
+                .filter(|open| {
+                    validator_roots
+                        .iter()
+                        .any(|root| open.starts_with(root.as_str()))
+                })
+                .collect();
+            assert!(inside.is_empty(), "condition: files the proxy holds open {label}; observed: {} under a validator data directory; expected: none", inside.len());
+        }
+    }
+
+    // S7.2 (1): no secret in anything the proxy or the nodes wrote.
+    let mut secrets: Vec<(&str, Vec<Vec<u8>>)> = vec![
+        (
+            "install identity secret key",
+            byte_forms(&install.private_key),
+        ),
+        ("native session secret", vec![secret.as_bytes().to_vec()]),
+        ("native bearer token", vec![token.as_bytes().to_vec()]),
+        (
+            "browser relay token",
+            vec![BROWSER_TOKEN.as_bytes().to_vec()],
+        ),
+        ("issuer secret key", hex_forms(&issuer.private_key_hex)),
+        ("holder secret key", hex_forms(&holder.private_key_hex)),
+        ("note seed", byte_forms(&note_seed)),
+        ("note seed", byte_forms(&tampered_seed)),
+    ];
+    for note in ["note.json", "tampered-note.json"] {
+        let opening: Value =
+            serde_json::from_slice(&fs::read(harness.root.join(note)).expect("note"))
+                .expect("note json");
+        for field in ["rho", "psi", "rcm"] {
+            let value = opening["note"][field]
+                .as_str()
+                .expect("opening field")
+                .to_string();
+            secrets.push(("note opening field", hex_forms(&value)));
+        }
+    }
+    for dir in &validator_dirs {
+        for key in validator_private_keys(dir) {
+            secrets.push(("validator secret key", hex_forms(&key)));
+        }
+        secrets.push((
+            "validator key file",
+            vec![fs::read(dir.join("validator_keys.json")).expect("key file")],
+        ));
+    }
+    let mut scanned = Vec::new();
+    for root in [proxy_home.clone(), gateway_store.clone()] {
+        collect_files(&root, &mut scanned);
+    }
+    scanned.push(harness.root.join("proxy.stdout.log"));
+    scanned.push(harness.root.join("proxy.stderr.log"));
+    for (index, dir) in validator_dirs.iter().enumerate() {
+        let mut node_files = Vec::new();
+        collect_files(dir, &mut node_files);
+        // The key files the test and init placed there are the keys themselves.
+        node_files.retain(|file| {
+            let name = file
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("");
+            !name.ends_with("validator_keys.json") && name != "faucet_key.json"
+        });
+        scanned.extend(node_files);
+        for extra in ["finality", "votes", "rpc-spool"] {
+            collect_files(
+                &harness.root.join(format!("validator-{index}.{extra}")),
+                &mut scanned,
+            );
+        }
+        scanned.push(harness.root.join(format!("validator-{index}.rpc.log")));
+        scanned.push(
+            harness
+                .root
+                .join(format!("validator-{index}.transport.log")),
+        );
+    }
+    // Positive control: the scanner finds planted secrets in each encoding.
+    let control = harness.root.join("scanner-control.bin");
+    let mut planted = base64(&install.private_key).into_bytes();
+    planted.extend_from_slice(holder.private_key_hex.to_ascii_uppercase().as_bytes());
+    planted.extend_from_slice(&note_seed);
+    fs::write(&control, &planted).expect("write control");
+    let planted_classes: Vec<&str> = secrets
+        .iter()
+        .filter(|(_, forms)| forms.iter().any(|form| contains(&planted, form)))
+        .map(|(class, _)| *class)
+        .collect();
+    assert!(
+        ["install identity secret key", "holder secret key", "note seed"]
+            .iter()
+            .all(|class| planted_classes.contains(class)),
+        "condition: scanner positive control; observed: {planted_classes:?}; expected: all three planted classes found"
+    );
+    let mut findings = Vec::new();
+    for file in &scanned {
+        let Ok(bytes) = fs::read(file) else { continue };
+        for (class, forms) in &secrets {
+            if forms
+                .iter()
+                .any(|form| !form.is_empty() && contains(&bytes, form))
+            {
+                findings.push(format!("{}: {class}", file.display()));
+            }
+        }
+    }
+    findings.sort();
+    findings.dedup();
+    assert!(
+        findings.is_empty(),
+        "condition: {} files the proxy and nodes wrote; observed: secrets in {:?} (values redacted); expected: none",
+        scanned.len(),
+        findings
+    );
+    assert!(scanned.len() > 20, "condition: inspection coverage; observed: {} files; expected: the stores, logs and round artifacts", scanned.len());
+    eprintln!("secret inspection scanned {} files: clean", scanned.len());
     eprintln!(
         "private actions gateway integration took {:?}",
         started.elapsed()
+    );
+}
+
+/// Paths the process holds open (Linux `/proc/<pid>/fd`).
+fn open_paths(pid: u32) -> Vec<String> {
+    let Ok(entries) = fs::read_dir(format!("/proc/{pid}/fd")) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(|entry| fs::read_link(entry.ok()?.path()).ok())
+        .map(|target| target.to_string_lossy().into_owned())
+        .collect()
+}
+
+fn validator_private_keys(dir: &Path) -> Vec<String> {
+    let keys: Value =
+        serde_json::from_slice(&fs::read(dir.join("validator_keys.json")).expect("keys"))
+            .expect("keys json");
+    keys["validators"]
+        .as_array()
+        .expect("validator keys")
+        .iter()
+        .filter_map(|record| record["private_key_hex"].as_str().map(str::to_string))
+        .collect()
+}
+
+fn collect_files(root: &Path, files: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_files(&path, files);
+        } else {
+            files.push(path);
+        }
+    }
+}
+
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    needle.len() <= haystack.len()
+        && haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
+}
+
+fn base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let n = (u32::from(chunk[0]) << 16)
+            | (u32::from(*chunk.get(1).unwrap_or(&0)) << 8)
+            | u32::from(*chunk.get(2).unwrap_or(&0));
+        for (index, shift) in [18, 12, 6, 0].into_iter().enumerate() {
+            if index <= chunk.len() {
+                out.push(ALPHABET[((n >> shift) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
+/// Raw bytes, lower and upper hex, and base64 of a secret.
+fn byte_forms(bytes: &[u8]) -> Vec<Vec<u8>> {
+    let hex = bytes_to_hex(bytes);
+    vec![
+        bytes.to_vec(),
+        hex.clone().into_bytes(),
+        hex.to_ascii_uppercase().into_bytes(),
+        base64(bytes).into_bytes(),
+        base64(bytes).trim_end_matches('=').as_bytes().to_vec(),
+    ]
+}
+
+fn hex_forms(hex: &str) -> Vec<Vec<u8>> {
+    let bytes = hex_to_bytes(hex).expect("secret hex");
+    byte_forms(&bytes)
+}
+
+/// S7.2 (3): no switch on the private action path turns verification off.
+#[test]
+fn private_action_path_has_no_verification_switch() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = vec![
+        repo.join("wallet-proxy/private-actions.js"),
+        repo.join("wallet-proxy/native-session.js"),
+        repo.join("wallet-proxy/server.js"),
+        repo.join("crates/node/src/asset_orchard_pricing_reads.rs"),
+        repo.join("crates/node/src/rpc_serve_runtime.rs"),
+        repo.join("crates/node/src/main_parts/cli_dispatch.rs"),
+        repo.join("crates/node/src/main_parts/cli_dispatch_parts/group_03.rs"),
+    ];
+    for entry in fs::read_dir(repo.join("crates/node/src")).expect("node sources") {
+        let path = entry.expect("entry").path();
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("")
+            .to_string();
+        if name.starts_with("private_") && name.ends_with(".rs") {
+            files.push(path);
+        }
+    }
+    let upper = [
+        "SKIP_VERIF",
+        "NO_VERIF",
+        "DISABLE_VERIF",
+        "UNSAFE",
+        "ALLOW_INVALID",
+        "INSECURE",
+        "BYPASS",
+    ];
+    let lower = [
+        "skip-verif",
+        "no-verif",
+        "disable-verif",
+        "unsafe",
+        "allow-invalid",
+        "insecure",
+        "bypass",
+    ];
+    // Documented test-only switches on this path; none disables verification.
+    let documented: [&str; 0] = [];
+    let mut found = Vec::new();
+    for file in &files {
+        let text = fs::read_to_string(file).expect("source file");
+        for token in text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-')) {
+            let env_name = token.len() > 3
+                && token
+                    .chars()
+                    .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+                && upper.iter().any(|word| token.contains(word));
+            let flag = token.starts_with("--") && lower.iter().any(|word| token.contains(word));
+            if (env_name || flag) && !documented.contains(&token) {
+                found.push(format!(
+                    "{}: {token}",
+                    file.strip_prefix(&repo).unwrap_or(file).display()
+                ));
+            }
+        }
+    }
+    // The gateway's private action module names no key file or validator data directory.
+    let gateway =
+        fs::read_to_string(repo.join("wallet-proxy/private-actions.js")).expect("gateway source");
+    for marker in [
+        "validator_keys",
+        "key_file",
+        "--key-file",
+        "KEY_FILE",
+        "DATA_DIR",
+        "--data-dir",
+    ] {
+        if gateway.contains(marker) {
+            found.push(format!("wallet-proxy/private-actions.js: {marker}"));
+        }
+    }
+    found.sort();
+    found.dedup();
+    assert!(
+        found.is_empty(),
+        "condition: environment variables and CLI flags on the private action path ({} files); observed: {found:?}; expected: none that could disable verification",
+        files.len()
     );
 }
