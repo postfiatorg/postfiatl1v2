@@ -29,24 +29,24 @@ mod private_action_six_validator_tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     /// Per validator: commitments, nullifiers, the holder's line balances, tip.
-    type PoolFingerprint = (usize, usize, Vec<(String, u64)>, String);
+    pub(crate) type PoolFingerprint = (usize, usize, Vec<(String, u64)>, String);
 
-    const VALIDATORS: usize = 6;
+    pub(crate) const VALIDATORS: usize = 6;
     /// Consensus v2 stays inactive: every round is the legacy certified round
     /// with a BFT quorum certificate (one block vote per peer).
     const CONSENSUS_V2_ACTIVATION: u64 = 1_000;
     /// Atomic shielded batches activate at this height by governance.
-    const ATOMIC_ACTIVATION: u64 = 6;
+    pub(crate) const ATOMIC_ACTIVATION: u64 = 6;
     const CHAIN_ID: &str = "postfiat-private-action-six-validator-test";
 
-    struct Fleet {
-        root: PathBuf,
-        data_dirs: Vec<PathBuf>,
+    pub(crate) struct Fleet {
+        pub(crate) root: PathBuf,
+        pub(crate) data_dirs: Vec<PathBuf>,
         topology_file: PathBuf,
         listeners: Vec<TcpListener>,
         validator_ids: Vec<String>,
-        holder_key_file: PathBuf,
-        asset_ids: [String; 2],
+        pub(crate) holder_key_file: PathBuf,
+        pub(crate) asset_ids: [String; 2],
     }
 
     fn reserve_ports(count: usize) -> (u16, Vec<TcpListener>) {
@@ -66,7 +66,7 @@ mod private_action_six_validator_tests {
         panic!("could not reserve {count} transport ports");
     }
 
-    fn write_private_json<T: serde::Serialize>(path: &Path, value: &T) {
+    pub(crate) fn write_private_json<T: serde::Serialize>(path: &Path, value: &T) {
         std::fs::write(path, serde_json::to_vec_pretty(value).expect("json")).expect("write json");
         #[cfg(unix)]
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
@@ -114,10 +114,96 @@ mod private_action_six_validator_tests {
         panic!("asset transaction fee did not converge");
     }
 
+    pub(crate) const NAV_PER_UNIT: u64 = 2 * postfiat_types::VAULT_BRIDGE_UNIT;
+
+    /// The NAV state the pricing claim binds to and the governed route for the
+    /// pair (no governance kind registers a route).
+    fn write_pricing_state(primary: &Path, genesis: &Genesis, issuer: &str) {
+        let store = NodeStore::new(primary);
+        let base = postfiat_types::AssetDefinition::new(&genesis.chain_id, issuer, "A666", 1, 6)
+            .expect("A666 id");
+        let quote = postfiat_types::AssetDefinition::new(&genesis.chain_id, issuer, "USDC", 1, 6)
+            .expect("USDC id");
+        let profile = postfiat_types::NavProofProfile::new(
+            issuer,
+            postfiat_types::NAV_PROFILE_VERIFIER_PLACEHOLDER,
+            "s6-finalized-nav",
+            100,
+            1,
+            10_000,
+            0,
+            0,
+            0,
+            0,
+            "",
+            "",
+            "",
+            0,
+            0,
+        )
+        .expect("NAV profile");
+        let mut nav = postfiat_types::NavTrackedAsset::new(
+            base.asset_id.clone(),
+            issuer,
+            issuer,
+            profile.profile_id.clone(),
+            "USD",
+            issuer,
+        )
+        .expect("NAV asset");
+        nav.finalized_epoch = 7;
+        nav.circulating_supply = 200;
+        nav.nav_per_unit = NAV_PER_UNIT;
+        nav.finalized_reserve_packet_hash = "ab".repeat(48);
+        nav.finalized_at_height = 1;
+        let mut ledger = store.read_ledger().expect("ledger");
+        ledger.nav_proof_profiles.push(profile);
+        ledger.nav_assets.push(nav);
+        ledger.pftl_uniswap_routes.push(postfiat_types::PftlUniswapConsensusRouteState {
+            route_id: "s6-a666-usdc-route".to_string(),
+            route_family: postfiat_types::PFTL_UNISWAP_ROUTE_FAMILY_PRIMARY_MINT.to_string(),
+            route_config_digest: "11".repeat(48),
+            route_trust_class: "governed".to_string(),
+            native_nav_asset_id: base.asset_id.clone(),
+            settlement_asset_id: quote.asset_id.clone(),
+            handoff_controller: "0x".to_string() + &"33".repeat(20),
+            settlement_adapter: "0x".to_string() + &"44".repeat(20),
+            wrapped_navcoin_token: "0x".to_string() + &"22".repeat(20),
+            ethereum_chain_id: 1,
+            route_supply_cap_atoms: 1_000_000,
+            packet_notional_cap_atoms: 1_000,
+            latest_finalized_nav_epoch: 7,
+            return_finality_blocks: 10,
+            live_value_enabled: false,
+            ethereum_verification_policy: None,
+            authorized_valid_supply_atoms: 0,
+            pftl_spendable_supply_atoms: 0,
+            native_spendable_balances_atoms: BTreeMap::new(),
+            ethereum_spendable_supply_atoms: 0,
+            other_registered_venue_supply_atoms: 0,
+            outstanding_bridge_claims_atoms: 0,
+            pending_return_import_claims_atoms: 0,
+            settlement_reserve_atoms: 0,
+            primary_subscription_nonces: BTreeMap::new(),
+            export_packets: BTreeMap::new(),
+            export_nonces: BTreeMap::new(),
+            return_imports: BTreeMap::new(),
+            paused: false,
+            v2: None,
+        });
+        store.write_ledger(&ledger).expect("write pricing ledger");
+    }
+
     /// Builds the common pre-state on validator-0 (governed activation set at
     /// genesis, a funded holder, two issued assets with trustlines) and
     /// restores it on every other validator.
-    fn fleet() -> Fleet {
+    pub(crate) fn fleet() -> Fleet {
+        fleet_with(false)
+    }
+
+    /// With `pricing`, the common state also carries a NAV-tracked base asset,
+    /// a governed A666/USDC route and the signed pricing enforcement activation.
+    pub(crate) fn fleet_with(pricing: bool) -> Fleet {
         let root = std::env::temp_dir().join(format!(
             "postfiat-s6-private-actions-{}-{}",
             std::process::id(),
@@ -146,84 +232,99 @@ mod private_action_six_validator_tests {
         let validator_ids = (0..VALIDATORS)
             .map(|index| format!("validator-{index}"))
             .collect::<Vec<_>>();
-        // Block 1: the signed governance amendment that schedules atomic
-        // shielded batches, authorized by all six validators.
+        let faucet: DevKeyFile = serde_json::from_slice(
+            &std::fs::read(primary.join("faucet_key.json")).expect("faucet key"),
+        )
+        .expect("parse faucet key");
+        // Signed governance amendments authorized by all six validators: the
+        // atomic shielded batch activation, and with `pricing` the pricing
+        // enforcement activation.
         let all_keys: ValidatorKeyFile = serde_json::from_slice(
             &std::fs::read(primary.join(VALIDATOR_KEYS_FILE)).expect("validator keys"),
         )
         .expect("parse validator keys");
-        let unsigned = root.join("atomic-activation.unsigned.json");
         std::fs::create_dir_all(&root).expect("root");
-        ratify_governance(RatifyGovernanceOptions {
-            data_dir: primary.clone(),
-            validators: validator_ids.clone(),
-            support: validator_ids.clone(),
-            kind: GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT.to_string(),
-            value: ATOMIC_ACTIVATION as u32,
-            activation_height: 0,
-            veto_until_height: 0,
-            paused: false,
-            amendment_file: unsigned.clone(),
-        })
-        .expect("ratify activation");
-        let authorization_files = all_keys
-            .validators
-            .iter()
-            .map(|record| {
-                let key_path = root.join(format!("{}.governance-key.json", record.node_id));
-                write_private_json(
-                    &key_path,
-                    &ValidatorKeyFile {
-                        validators: vec![record.clone()],
-                    },
-                );
-                let authorization = root.join(format!("{}.authorization.json", record.node_id));
-                sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
-                    data_dir: primary.clone(),
-                    amendment_file: unsigned.clone(),
-                    validator: record.node_id.clone(),
-                    validator_key_file: key_path,
-                    proposal_slot: 1,
-                    expires_at_height: 8,
-                    authorization_file: authorization.clone(),
-                })
-                .expect("sign activation");
-                authorization
+        let mut amendments = vec![(
+            GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
+            ATOMIC_ACTIVATION as u32,
+        )];
+        if pricing {
+            amendments.push((
+                GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT,
+                3,
+            ));
+        }
+        for (slot, (kind, value)) in amendments.into_iter().enumerate() {
+            let slot = slot as u64 + 1;
+            let unsigned = root.join(format!("governance-{slot}.unsigned.json"));
+            ratify_governance(RatifyGovernanceOptions {
+                data_dir: primary.clone(),
+                validators: validator_ids.clone(),
+                support: validator_ids.clone(),
+                kind: kind.to_string(),
+                value,
+                activation_height: 0,
+                veto_until_height: 0,
+                paused: false,
+                amendment_file: unsigned.clone(),
             })
-            .collect::<Vec<_>>();
-        let signed = root.join("atomic-activation.signed.json");
-        assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
-            data_dir: primary.clone(),
-            amendment_file: unsigned,
-            authorization_files,
-            proposal_slot: 1,
-            output_file: signed.clone(),
-        })
-        .expect("assemble activation");
-        let governance_batch = root.join("atomic-activation.batch.json");
-        create_governance_batch(GovernanceBatchOptions {
-            data_dir: primary.clone(),
-            amendment_file: Some(signed),
-            registry_update_file: None,
-            batch_file: governance_batch.clone(),
-        })
-        .expect("governance batch");
-        let receipts = apply_governance_batch(ApplyBatchOptions {
-            data_dir: primary.clone(),
-            batch_file: governance_batch,
-            certificate_file: None,
-        })
-        .expect("apply governance");
-        assert!(receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
+            .expect("ratify amendment");
+            let authorization_files = all_keys
+                .validators
+                .iter()
+                .map(|record| {
+                    let key_path = root.join(format!("{}.governance-key.json", record.node_id));
+                    write_private_json(
+                        &key_path,
+                        &ValidatorKeyFile {
+                            validators: vec![record.clone()],
+                        },
+                    );
+                    let authorization =
+                        root.join(format!("{}.authorization-{slot}.json", record.node_id));
+                    sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                        data_dir: primary.clone(),
+                        amendment_file: unsigned.clone(),
+                        validator: record.node_id.clone(),
+                        validator_key_file: key_path,
+                        proposal_slot: slot,
+                        expires_at_height: slot + 8,
+                        authorization_file: authorization.clone(),
+                    })
+                    .expect("sign amendment");
+                    authorization
+                })
+                .collect::<Vec<_>>();
+            let signed = root.join(format!("governance-{slot}.signed.json"));
+            assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
+                data_dir: primary.clone(),
+                amendment_file: unsigned,
+                authorization_files,
+                proposal_slot: slot,
+                output_file: signed.clone(),
+            })
+            .expect("assemble amendment");
+            let governance_batch = root.join(format!("governance-{slot}.batch.json"));
+            create_governance_batch(GovernanceBatchOptions {
+                data_dir: primary.clone(),
+                amendment_file: Some(signed),
+                registry_update_file: None,
+                batch_file: governance_batch.clone(),
+            })
+            .expect("governance batch");
+            let receipts = apply_governance_batch(ApplyBatchOptions {
+                data_dir: primary.clone(),
+                batch_file: governance_batch,
+                certificate_file: None,
+            })
+            .expect("apply governance");
+            assert!(receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
+        }
         assert_eq!(
             store.read_governance().unwrap().shielded_atomic_batch_activation_height(),
             Some(ATOMIC_ACTIVATION)
         );
 
-        let faucet: DevKeyFile = serde_json::from_slice(
-            &std::fs::read(primary.join("faucet_key.json")).expect("faucet key"),
-        )
-        .expect("parse faucet key");
         let holder_pair = postfiat_crypto_provider::ml_dsa_65_keygen_from_seed(&[17u8; 32]);
         let holder = DevKeyFile {
             algorithm_id: postfiat_crypto_provider::ML_DSA_65_ALGORITHM.to_string(),
@@ -339,7 +440,6 @@ mod private_action_six_validator_tests {
         })
         .expect("apply asset setup");
         assert!(receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
-
         // Common state for every validator, with each validator's own key.
         let shared_keys = std::fs::read(primary.join(VALIDATOR_KEYS_FILE)).expect("keys");
         let key_file: ValidatorKeyFile = serde_json::from_slice(&shared_keys).expect("keys json");
@@ -375,6 +475,15 @@ mod private_action_six_validator_tests {
                 },
             );
         }
+        if pricing {
+            // The NAV state the claim binds to and the governed route reference
+            // the issued assets. Snapshot export replays every block, so they
+            // are written identically on all six validators after the import;
+            // the next certified block's state root commits them.
+            for data_dir in &data_dirs {
+                write_pricing_state(data_dir, &genesis, &faucet.address);
+            }
+        }
         let topology_file = root.join("topology.json");
         let (base_port, listeners) = reserve_ports(VALIDATORS);
         write_consensus_v2_topology(TopologyConsensusV2Options {
@@ -400,7 +509,7 @@ mod private_action_six_validator_tests {
     }
 
     impl Fleet {
-        fn height(&self) -> u64 {
+        pub(crate) fn height(&self) -> u64 {
             status(NodeOptions {
                 data_dir: self.data_dirs[0].clone(),
             })
@@ -408,7 +517,7 @@ mod private_action_six_validator_tests {
             .block_height
         }
 
-        fn proposer_index(&self, height: u64) -> usize {
+        pub(crate) fn proposer_index(&self, height: u64) -> usize {
             let proposer = postfiat_ordering_fast::leader_for_view(&self.validator_ids, height, 0)
                 .expect("proposer");
             self.validator_ids
@@ -418,7 +527,7 @@ mod private_action_six_validator_tests {
         }
 
         /// One certified round on all six validators with the real transport.
-        fn round(&self, kind: &str, batch_file: PathBuf) {
+        pub(crate) fn round(&self, kind: &str, batch_file: PathBuf) {
             let height = self.height() + 1;
             let proposer = self.proposer_index(height);
             let label = format!("h{height}");
@@ -493,7 +602,7 @@ mod private_action_six_validator_tests {
             self.assert_converged(height);
         }
 
-        fn assert_converged(&self, height: u64) {
+        pub(crate) fn assert_converged(&self, height: u64) {
             let statuses = self
                 .data_dirs
                 .iter()
@@ -509,7 +618,7 @@ mod private_action_six_validator_tests {
                 && pair[0].state_root == pair[1].state_root));
         }
 
-        fn transparent_round(&self) {
+        pub(crate) fn transparent_round(&self) {
             let height = self.height() + 1;
             let proposer = self.proposer_index(height);
             let batch = self.root.join(format!("h{height}-transfer.batch.json"));
@@ -524,7 +633,7 @@ mod private_action_six_validator_tests {
             self.round("transparent", batch);
         }
 
-        fn ingress_action(&self, asset: usize, amount: u64, seed: u8) -> String {
+        pub(crate) fn ingress_action(&self, asset: usize, amount: u64, seed: u8) -> String {
             let ingress_file = self.root.join(format!("ingress-{seed}.json"));
             create_asset_orchard_ingress(AssetOrchardIngressCreateOptions {
                 data_dir: self.data_dirs[0].clone(),
@@ -544,7 +653,7 @@ mod private_action_six_validator_tests {
             serde_json::to_string(&ShieldedAction::AssetOrchardIngressV2(file.payload)).unwrap()
         }
 
-        fn request(&self, action_json: &str) -> PrivateActionSubmitRequest {
+        pub(crate) fn request(&self, action_json: &str) -> PrivateActionSubmitRequest {
             let genesis = NodeStore::new(&self.data_dirs[0]).read_genesis().unwrap();
             let domain = PrivateActionSubmitDomain {
                 chain_id: genesis.chain_id.clone(),
@@ -562,7 +671,7 @@ mod private_action_six_validator_tests {
         }
 
         /// The gateway relays the same bytes to every validator.
-        fn submit_everywhere(&self, request: &PrivateActionSubmitRequest) -> Vec<io::Result<PrivateActionRecord>> {
+        pub(crate) fn submit_everywhere(&self, request: &PrivateActionSubmitRequest) -> Vec<io::Result<PrivateActionRecord>> {
             self.data_dirs
                 .iter()
                 .map(|data_dir| private_action_submit(data_dir, request).map(|report| report.record))
@@ -571,7 +680,7 @@ mod private_action_six_validator_tests {
 
         /// One round-service pass on every validator. The next height's
         /// proposer dispatches through the certified round.
-        fn service_pass(&self) -> usize {
+        pub(crate) fn service_pass(&self) -> usize {
             let mut rounds = 0;
             for (index, data_dir) in self.data_dirs.iter().enumerate() {
                 private_action_service_step(
@@ -587,21 +696,21 @@ mod private_action_six_validator_tests {
             rounds
         }
 
-        fn dispatch(&self, record: &PrivateActionRecord) -> PrivateActionDispatch {
+        pub(crate) fn dispatch(&self, record: &PrivateActionRecord) -> PrivateActionDispatch {
             let batch_file = self.root.join(format!("reserved-{}.json", &record.batch_id[..16]));
             std::fs::write(&batch_file, &record.batch_json).expect("write reserved batch");
             self.round("shielded", batch_file);
             PrivateActionDispatch::Finished
         }
 
-        fn state(&self, index: usize, intent_id: &str) -> Option<PrivateActionState> {
+        pub(crate) fn state(&self, index: usize, intent_id: &str) -> Option<PrivateActionState> {
             PrivateActionAdmissionStore::open(&self.data_dirs[index])
                 .unwrap()
                 .get(intent_id)
                 .map(|record| record.state)
         }
 
-        fn pool_fingerprint(&self) -> Vec<PoolFingerprint> {
+        pub(crate) fn pool_fingerprint(&self) -> Vec<PoolFingerprint> {
             self.data_dirs
                 .iter()
                 .map(|data_dir| {
@@ -637,14 +746,14 @@ mod private_action_six_validator_tests {
         }
     }
 
-    fn refused_code(result: &io::Result<PrivateActionRecord>) -> String {
+    pub(crate) fn refused_code(result: &io::Result<PrivateActionRecord>) -> String {
         let error = result.as_ref().expect_err("refused").to_string();
         error.split(": ").next().unwrap().to_string()
     }
 
     /// The wallet's check of a receipt from one validator against another
     /// validator's finalized view.
-    fn receipt_matches_independent_view(
+    pub(crate) fn receipt_matches_independent_view(
         receipt: &postfiat_types::PrivateReceiptResponse,
         data_dir: &Path,
     ) -> bool {

@@ -93,12 +93,13 @@ halt flag and the ratio within the band.
 
 ## S6 — the six-validator test suite (2–4 days)
 
-- [ ] S6.1 *(this lane)* Both ingress assets, swap and egress accepted on six validators.
+- [x] S6.1 *(this lane)* Both ingress assets, swap and egress accepted on six validators.
   - [x] Both ingress assets (A666 and a pfUSDC stand-in) accepted on six validators through `private_action_submit`, the round service and `private_action_receipt` (`crates/node/src/main_parts/tests/private_action_six_validator_tests.rs`).
-  - [ ] Swap and egress: need real Halo2 proofs and a governed NAV route on the fleet.
+  - [x] A real swap proof and a real private-egress proof accepted through the same path, with pricing enforcement activated by signed governance and a governed route (`crates/node/src/main_parts/tests/private_action_proof_six_validator_tests.rs`, release-only: `cargo test --release -p postfiat-node --bin postfiat-node private_action_proof_six_validator -- --ignored`).
 - [ ] S6.2 *(this lane)* Refusals with no unintended state change: invalid proof, stale anchor or NAV, wrong issuer, domain or recipient, replay, inactive governance (`shielded_atomic_batch_not_active`, `crates/node/src/execution_actions.rs:3219`), tampered receipt.
   - [x] Inactive governance, wrong domain, an asset/issuer binding mismatch (`asset_orchard_ingress_v2_bad_payload`), the same action under a new intent, a final rejection after reservation (code, zero fee, no state effects) and a tampered receipt checked against another validator's view. None changes commitments, nullifiers, balances or the tip.
-  - [ ] Invalid proof, stale anchor, stale NAV, pair and mode, wrong recipient and a reused nullifier: these need swap or egress proofs.
+  - [x] Invalid proof (`asset_orchard_swap_proof_verification_failed`), wrong recipient (`asset_orchard_private_egress_bad_payload`) and a spent nullifier under a new intent (`duplicate_nullifier`), each refused at admission with no state change on any validator.
+  - [ ] Stale anchor, `asset_orchard_pricing_nav_stale`, `asset_orchard_pricing_pair_not_governed` and `asset_orchard_pricing_mode_mismatch`. Each needs another real proof, because mutating the public bytes breaks the proof first. They are ignored tests named for the missing proof.
 - [x] S6.3 *(this lane)* Crash after dispatch and lost responses; a new session recovers the same persisted action with no replacement or double spend.
   - Proven with ingress actions. A kill after `dispatched` settles as `unknown`, a new session gets the same record, and the next proposer lands the same reserved batch once. A kill after the certified send settles as accepted from the chain.
 - [ ] S6.4 *(this lane, wallet team)* Fresh-key full rescan and page boundaries.
