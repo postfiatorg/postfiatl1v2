@@ -12,21 +12,21 @@ device. Shielded rounds today run through a wallet proxy that holds a validator
 key and drives the round itself. This milestone moves admission and
 certification to the validators: the gateway relays the user's exact public
 bytes, once, and holds no key. W-2, the native session, is done (`e037829f`).
-The finalized pricing and egress-binding reads are on main (`93454729`), and
-consensus enforcement of the claim is in progress. My optimistic estimate is
-five to eight weeks of engineering for S1 to S7, before the review and the
-ce22 run.
+On 2026-10-29 the contract, the gateway routes, the pricing reads and their
+consensus rules, the pool reads, the validator admission service and the
+readiness read all landed on main. At that pace my optimistic estimate is one
+to two weeks for what remains of S1 to S7, before the review and the ce22 run.
 
 Owners are marked *(this lane)* or *(wallet team)*.
 
-## S1 — the contract (3–5 days)
+## S1 — the contract (done but for S1.3 and S1.5)
 
 - [x] S1.1 *(this lane)* Versioned request and response fixtures for `snapshot`, `submit` and `receipt`, including a typed terminal rejection (`state: rejected` with its code and fee).
 - [x] S1.2 *(this lane)* Canonical vectors: an action of each kind, its intent id under `tasknode.private-intent.v1`, and its atomic batch id from `build_atomic_shielded_action_batch` (`crates/node/src/consensus_artifacts.rs:1591`).
-  - The three accepted kinds are in `crates/types/src/shielded_bridge_governance.rs:334-501`; `asset_orchard_ingress_v1` and `asset_orchard_egress_v1` are refused.
+  - The three accepted kinds are in `crates/types/src/shielded_bridge_governance.rs:348-515`; `asset_orchard_ingress_v1` and `asset_orchard_egress_v1` are refused.
 - [ ] S1.3 *(this lane)* The deployed identity, verifier and activation manifest: genesis, protocol, revision, proof system, circuit, parameters and verifying keys.
   - [x] Identity, release and the swap and egress verifier pins.
-  - [ ] The atomic-batch activation height: no read-only RPC on the deployed release reports it, and no record of the amendment exists here, so `manifest.json` holds `null`.
+  - [ ] The atomic-batch activation height: the deployed release has no read that reports it, so `manifest.json` holds `null`. The `private_readiness` read (`556cac38`) reports it once validator-0 runs a release that serves it.
 - [x] S1.4 *(this lane)* The full A666 and pfUSDC profile: full asset ids, issuers, proof profiles and precision, replacing the retired a651/a652 registry (`wallet-proxy/navswap-config-bridge.js:963`).
   - The governed swap pair is `null`: it arrives with `ed89c916` behind a governed activation, after the deployed release.
 - [ ] S1.5 *(wallet team)* Their intent helper (`core/src/private_actions.rs:110`) reproduces the S1.2 vectors. To tick S1: the fixtures in the repository and both sides passing the vectors.
@@ -40,7 +40,7 @@ In `crates/node/tests/fixtures/private-actions-v1/`, shared types in `crates/typ
 - `manifest.json`: devnet identity, release `index-v3-20261027` (`d728f895`), verifier pins, atomic-batch activation (`null`).
 - `assets.json`: A666 and pfUSDC from live reads on 2026-10-29, each field with its source; the governed pair is `null`.
 
-## S2 — the gateway entry points (1–2 weeks)
+## S2 — the gateway entry points (1 day left)
 
 - [x] S2.1 *(this lane)* `POST /api/private/v1/snapshot`, `/submit` and `/receipt` behind the browser relay or native session token, with the S1 schemas and size limits (1 MiB action, 2 MiB request, 4 MiB response): `wallet-proxy/private-actions.js`, wired in `wallet-proxy/server.js`. `submit` counts against the mutation rate window; `snapshot` and `receipt` are authenticated reads.
   - [x] The snapshot is assembled from the node reads `private_pool_snapshot`, `private_pool_page` and `private_account_lines` (`683a5b32`). It takes one token from both sources and refuses a mixed tip, pages every section under the wallet's ceilings with all pages pinned to that token, retries once when the tip moves, and takes the pricing claim, policy id and disclosure hash from the node. The `complete` flags combine the node's flags with whether paging reached each total.
@@ -49,51 +49,58 @@ In `crates/node/tests/fixtures/private-actions-v1/`, shared types in `crates/typ
 - [x] S2.2 *(this lane)* Durable once-only admission. The gateway recomputes the intent id (SHA3-384, `tasknode.private-intent.v1`) and the action hash and atomic batch id from the re-serialized action, all three checked against the S1 vectors. It keeps the action text byte for byte, binds the intent to the session principal, the address, the configured domain and the pool, and claims the action hash and batch id with exclusive index files before writing the record (`queued`) and before any transport. A duplicate returns the record; only a reservation no validator has seen is resent, with the reserved bytes. An acknowledgement means pending; `receipt` is read-only and reconciles two validator sources.
 - [x] S2.3 *(this lane)* No key and no validator filesystem access in the HTTP process. Dispatch goes only through the node methods `private_action_submit` and `private_action_receipt` on two configured RPC sources, never through `transport-peer-certified-batch-round` (`wallet-proxy/navswap-shielded.js:1421`), the data-directory configuration (`wallet-proxy/navswap-config-bridge.js:782`) or the local Asset-Orchard service (`:837`).
 - [x] Crash-and-retry: `wallet-proxy/test_private_actions.js` kills the process after the reservation; on restart the intent is `queued`, no new batch is built, and the reserved batch is sent once.
+- [ ] S2.5 *(this lane)* Adapt the gateway's dispatch to the S3 methods as they landed (`968da908`, `d7de5ec7`). The node wants flat `chain_id`, `genesis_hash`, `protocol_version`, `pool_id`, `session_scope`, `intent_id`, `action_json` and `action_hash`, and returns `{record}` from submit and `{record, contract_receipt}` from receipt. Only real refusals may be final, and the `session_scope` the gateway sends is still to be decided.
 - [ ] S2.4 *(wallet team)* The app moves from `/api/private-local/` to `/api/private/v1/`.
 - S2 is ticked on the gateway side; the routes reach a validator only once S3 deploys the two node methods behind its operator switch.
 
-## S3 — the validator-owned admission and round service (2–3 weeks)
+## S3 — the validator-owned admission and round service (2–4 days left)
 
-- [ ] S3.1 *(this lane)* A validator-side service that accepts a verified atomic batch and runs proof, spend, retained-anchor, nullifier, pricing and policy checks before ordinary proposal, vote and apply.
+- [x] S3.1 *(this lane)* A validator-side service that accepts a verified atomic batch and runs proof, spend, retained-anchor, nullifier, pricing and policy checks before ordinary proposal, vote and apply (`968da908`, `d7de5ec7`): `crates/node/src/private_action_admission.rs` re-verifies each batch against the current state (`verify_private_batch`) and hands only the exact reserved batch to a round; `crates/node/src/private_action_rpc.rs` serves `private_action_submit` and `private_action_receipt` behind the operator switch.
 - [ ] S3.2 *(this lane)* Proposer routing, height ownership, quorum, catch-up and durable intent reconciliation.
+  - [x] Proposer routing and durable reconciliation (`968da908`): a `dispatched` record is reconciled from the chain by batch id and never dispatched again, and only the local proposer dispatches.
+  - [ ] Height ownership, quorum and catch-up across six validators, shown by S6.
 - [ ] S3.3 *(this lane)* Retire the HTTP-side certification: `transport-peer-certified-batch-round --key-file` (`wallet-proxy/navswap-shielded.js:1421`), the `/asset-orchard/swap-batch` call (`:2292`) and the swap execution that certifies it (`:2386`).
-  - The `shield_batch_*` builders (`crates/node/src/rpc_cli.rs:2070`) may be reused after review; a built batch is never reported as committed.
-- [ ] S3.4 *(this lane)* Receipts with the action, batch and transaction bindings, inclusion height, block hash, state root, outcome, code, fee and checkable finality evidence. To tick S3: S3.3's code paths unused on the W-1 route and an S6 test through the service.
+  - The `shield_batch_*` builders (`crates/node/src/rpc_cli.rs:2083`) may be reused after review; a built batch is never reported as committed.
+- [x] S3.4 *(this lane)* Receipts with the action, batch and transaction bindings, inclusion height, block hash, state root, outcome, code, fee and checkable finality evidence (`968da908`): `private_action_receipt` returns the S1 `PrivateReceiptResponse` with the block certificate as `validator_quorum_block_certificate_v1`. To tick S3: S3.3's code paths unused on the W-1 route and an S6 test through the service.
 
-## S4 — finalized public reads (1–2 weeks)
+## S4 — finalized public reads (1–2 days left)
 
-- [ ] S4.1 *(this lane)* A snapshot token pinning one finalized height, block hash and state root, with counts and cursors.
-- [ ] S4.2 *(this lane)* Paged pool reads: commitments, nullifiers, accepted anchors from the retained tree prefixes, outputs with ciphertexts.
+- [x] S4.1 *(this lane)* A snapshot token pinning one finalized height, block hash and state root, with counts and cursors (`683a5b32`, `private_pool_snapshot` in `crates/node/src/private_pool_reads.rs`).
+- [x] S4.2 *(this lane)* Paged pool reads: commitments, nullifiers, accepted anchors from the retained tree prefixes, outputs with ciphertexts (`683a5b32`, `private_pool_page`; the gateway assembles them in `f8b9a838`).
 - [ ] S4.3 *(this lane)* Paged receipt and market reads, and asset rows bound to `asset_info`.
+  - [x] Asset rows bound to `asset_info` and account lines with zero balances (`683a5b32`, the `assets` section and `private_account_lines`).
+  - [ ] Paged receipt and market reads.
 - [ ] S4.4 *(wallet team)* Versioned paging and incremental scan in the app, replacing today's ceilings (64 ciphertexts, 2 MiB of ciphertext, 4096 commitments, 16 assets, 1 MiB action, 2 MiB request, 4 MiB response). To tick S4: a missing, duplicated, reordered or mixed-tip page refused in tests.
 
 ## S5 — the pricing claim and egress binding reads (done)
 
 - [x] S5 *(this lane)* `asset_orchard_pricing_claim` and `asset_orchard_private_egress_binding` (`93454729`).
-  - `crates/node/src/asset_orchard_pricing_reads.rs:324` and `:444`; the claim is built by the function consensus uses.
-  - Python: `python -m postfiat_rpc --method asset_orchard_pricing_claim` and `--method asset_orchard_private_egress_binding` (`python/postfiat_rpc/__main__.py:131-132`).
+  - `crates/node/src/asset_orchard_pricing_reads.rs:362` and `:527`; the claim is built by the function consensus uses.
+  - Python: `python -m postfiat_rpc --method asset_orchard_pricing_claim` and `--method asset_orchard_private_egress_binding` (`python/postfiat_rpc/__main__.py:146-147`).
   - The egress read returns `ungoverned`: finalized state has no governed egress policy yet.
 
-## S5b — consensus enforcement of the claim (in progress, another session)
+## S5b — consensus enforcement of the claim
 
 Consensus checks the epoch, the reserve-packet hash, the band, the tags, the
 halt flag and the ratio within the band.
 
-- [ ] S5b.1 *(this lane)* A staleness limit, behind a governed activation.
-- [ ] S5b.2 *(this lane)* A governed pair; today the base asset is accepted as its own quote. Behind the same activation.
-- [ ] S5b.3 *(this lane)* A mode-label check for at-NAV claims. Behind the same activation.
+- [x] S5b.1 *(this lane)* A staleness limit, behind a governed activation (`ed89c916`): governance keys `asset_orchard_pricing_enforcement_activation_height` and `asset_orchard_pricing_max_nav_age_blocks`, refusal `asset_orchard_pricing_nav_stale`.
+- [x] S5b.2 *(this lane)* A governed pair, behind the same activation (`ed89c916`): the pair must be a route in `pftl_uniswap_routes`, refusal `asset_orchard_pricing_pair_not_governed`.
+- [x] S5b.3 *(this lane)* A mode-label check for at-NAV claims, behind the same activation (`ed89c916`), refusal `asset_orchard_pricing_mode_mismatch`.
 - [ ] S5b.4 *(this lane)* A governance-registered egress policy, so the policy id and disclosure hash are governed and not only checked for form and bound into the proof.
 
-## S6 — the six-validator test suite (1–2 weeks)
+## S6 — the six-validator test suite (2–4 days)
 
 - [ ] S6.1 *(this lane)* Both ingress assets, swap and egress accepted on six validators.
-- [ ] S6.2 *(this lane)* Refusals with no unintended state change: invalid proof, stale anchor or NAV, wrong issuer, domain or recipient, replay, inactive governance (`shielded_atomic_batch_not_active`, `crates/node/src/execution_actions.rs:3184`), tampered receipt.
+- [ ] S6.2 *(this lane)* Refusals with no unintended state change: invalid proof, stale anchor or NAV, wrong issuer, domain or recipient, replay, inactive governance (`shielded_atomic_batch_not_active`, `crates/node/src/execution_actions.rs:3219`), tampered receipt.
 - [ ] S6.3 *(this lane)* Crash after dispatch and lost responses; a new session recovers the same persisted action with no replacement or double spend.
 - [ ] S6.4 *(this lane, wallet team)* Fresh-key full rescan and page boundaries.
 
-## S7 — readiness and secret inspection (3–5 days)
+## S7 — readiness and secret inspection (1–2 days left)
 
 - [ ] S7.1 *(this lane)* Readiness published by the running service and the deployed manifest; no mock verifier, copied store, unsafe file signer or proxy-owned key satisfies it.
+  - [x] The `private_readiness` read attests the deployed verifiers and governed activations (`556cac38`, `crates/node/src/private_readiness_read.rs`).
+  - [ ] Published from the deployed release on the devnet.
 - [ ] S7.2 *(this lane)* Logs and artifacts inspected for secrets; the gateway holds no wallet or validator key; no remote prover receives openings; no HTTP request or release setting turns off verification.
 
 ## S8 — the approved ce22 run (with the wallet team)
@@ -103,9 +110,9 @@ halt flag and the ratio within the band.
 ## W-2 — the native session (done)
 
 - [x] W-2 *(this lane)* `POST /api/native-session/v1/open` (`e037829f`): an ML-DSA-65 install identity signed under `postfiat-l1-v2/native-session/v1`, an HMAC token `pfns1.<payload>.<mac>` bound to origin, chain id and genesis hash (15 minutes by default), the browser relay's caps, an optional install allowlist, query-string tokens refused on every route. Documented in [the web wallet page](../../wallets/web-wallet.md#native-app-sessions).
-  - [ ] `docker-compose.wallet-public.yml` passes the new environment variables.
-  - [ ] A rate limit on the open route itself.
-  - [ ] A cross-check that a signature from the Rust crypto provider verifies in the proxy.
+  - [x] `docker-compose.wallet-public.yml` passes the new environment variables (`74992eb5`).
+  - [x] A rate limit on the open route itself, per source address (`74992eb5`).
+  - [x] A cross-check that a signature from the Rust crypto provider verifies in the proxy (`74992eb5`): `wallet-proxy/fixtures/native-session-rust-vector.json`, generated by `crates/crypto_provider/examples/native_session_vector.rs`.
   - [ ] Individual token revocation.
 
 ## Mandate deliverables (AGENTS.md)
@@ -118,6 +125,7 @@ halt flag and the ratio within the band.
 ## Not before
 
 - No admission on ce22 before S7 and the governed activation of atomic shielded batches.
+- No governed activation of the pricing rules (S5b) before the A666/pfUSDC route exists in `pftl_uniswap_routes`: after activation, a pair without a route is refused as `asset_orchard_pricing_pair_not_governed`.
 - No ce22 run before review and the wallet team's HOLD approval (S8).
 - No two-party exchange: a counterparty, its liquidity and its reservation get their own specification.
 

@@ -26,7 +26,8 @@ authorizes no deployment and no transaction.
    intent.
 4. Recovery uses finalized public reads pinned to one snapshot token, with
    paging. The NAV pricing claim and the egress binding reads are already on
-   main (`93454729`); consensus enforcement of the claim is in progress.
+   main (`93454729`), and consensus enforces the claim's freshness, pair and
+   mode behind a governed activation (`ed89c916`).
 5. User-proven admission is not a two-party exchange. A counterparty, its
    liquidity and its reservation get their own specification later.
 6. W-2, the native session, is done (`e037829f`). It is the transport for this
@@ -61,7 +62,7 @@ Shielded swaps on the wallet proxy are operator-run, not user-proven.
 | `wallet-proxy/navswap-shielded.js:1421` | Runs `postfiat-node transport-peer-certified-batch-round` with `--key-file`. | The proxy drives the certified round with a validator key. |
 | `wallet-proxy/navswap-shielded.js:2292` | Posts the swap to `/asset-orchard/swap-batch` on the local service. | Batch construction depends on that service. |
 | `wallet-proxy/navswap-shielded.js:2386` | Executes and certifies the swap on the HTTP side. | Certification belongs to the validators. |
-| `crates/node/src/rpc_cli.rs:2070` | `shield_batch_orchard`, `shield_batch_orchard_deposit`, `shield_batch_orchard_withdraw` and `shield_batch_swap` build batches. | A built batch is not an admitted transaction: there is no durable admission, finality or receipt contract. |
+| `crates/node/src/rpc_cli.rs:2083` | `shield_batch_orchard`, `shield_batch_orchard_deposit`, `shield_batch_orchard_withdraw` and `shield_batch_swap` build batches. | A built batch is not an admitted transaction: there is no durable admission, finality or receipt contract. |
 
 The internals of the last row may be reused after review. A successful
 batch-build response is never reported as a committed action.
@@ -81,9 +82,9 @@ batch-build response is never reported as a committed action.
 
 ## 5. The public action contract
 
-The normative payloads are in `crates/types/src/shielded_bridge_governance.rs:334-501`
-(`ShieldedSwapActionPayload` at 334, `AssetOrchardIngressV2ActionPayload` at 365,
-`AssetOrchardPrivateEgressActionPayload` at 392, the `ShieldedAction` enum at 474).
+The normative payloads are in `crates/types/src/shielded_bridge_governance.rs:348-515`
+(`ShieldedSwapActionPayload` at 348, `AssetOrchardIngressV2ActionPayload` at 379,
+`AssetOrchardPrivateEgressActionPayload` at 406, the `ShieldedAction` enum at 488).
 
 | Kind | Public content | Checks before the state change |
 | --- | --- | --- |
@@ -97,10 +98,14 @@ path. Registering A666 or pfUSDC never authorizes them.
 ### 5.1 The intent id and once-only admission
 
 The intent id is a domain-separated hash under the tag
-`tasknode.private-intent.v1` over the JSON pair `(domain, action_json)`, where
-the domain names the chain, genesis, protocol, pool and session scope. The
-wallet's helper is `core/src/private_actions.rs:110` in the wallet repository.
-The gateway recomputes it and refuses a mismatch. The admission rules:
+`tasknode.private-intent.v1` over the JSON pair `(domain, action_json)`. The
+wallet's domain (`PrivateDomain`) has exactly three fields: `chain_id`,
+`genesis_hash` and `protocol_version`. The intent id therefore does not cover
+the address, the pool or the session. The gateway binds those itself: the
+address to the native session principal, and the pool to its route
+configuration. The wallet's helper is `core/src/private_actions.rs:110` in the
+wallet repository. The gateway recomputes the id and refuses a mismatch. The
+admission rules:
 
 1. The original action text is kept byte for byte, so the wallet can compare it.
 2. Different bytes under an existing intent id are refused. The canonical batch
@@ -154,22 +159,32 @@ A swap's pricing claim is the typed `AssetOrchardPricingClaim` built from
 consensus-finalized NAV for the intended inclusion height: epoch, reserve-packet
 hash, ratio, mode and band, and both asset tags. Stale, halted or mismatched
 state is refused. The NAV denominator changes units at height 608
-(`ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT`, `crates/node/src/execution_actions.rs:4267`;
-pricing plan at `:4284`), so a pre-608 ratio is not a ce22 configuration.
+(`ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT`, `crates/node/src/execution_actions.rs:4311`;
+pricing plan at `:4351`), so a pre-608 ratio is not a ce22 configuration.
 
 The reads are on main (`93454729`): `asset_orchard_pricing_claim` and
-`asset_orchard_private_egress_binding` (`crates/node/src/asset_orchard_pricing_reads.rs:324`,
-`:444`). The claim is built by the function consensus uses. The egress binding
+`asset_orchard_private_egress_binding` (`crates/node/src/asset_orchard_pricing_reads.rs:362`,
+`:527`). The claim is built by the function consensus uses. The egress binding
 returns `ungoverned` because finalized state has no governed egress policy yet.
 A fixture policy or an all-zero disclosure hash is never a substitute.
 
-Consensus enforcement of the claim is in progress. Consensus checks the epoch,
-the reserve-packet hash, the band, the tags, the halt flag and the ratio within
-the band. It has no staleness limit, no governed pair (the base asset is
-accepted as its own quote) and no mode-label check for at-NAV claims; those
-three need a governed activation. The egress policy and disclosure hash are
-checked for form and bound into the proof but not governed; that needs a
-governance-registered egress policy.
+Consensus checks the epoch, the reserve-packet hash, the band, the tags, the
+halt flag and the ratio within the band. Three more rules are implemented
+behind a governed activation (`ed89c916`). The governance keys are
+`asset_orchard_pricing_enforcement_activation_height` and
+`asset_orchard_pricing_max_nav_age_blocks`.
+
+- **Staleness:** NAV older than the governed limit is refused as
+  `asset_orchard_pricing_nav_stale`.
+- **Governed pair:** a pair without a route in `pftl_uniswap_routes` is
+  refused as `asset_orchard_pricing_pair_not_governed`. Governance must not
+  activate the rules before the A666/pfUSDC route exists there.
+- **Mode label:** an at-NAV claim with another mode label is refused as
+  `asset_orchard_pricing_mode_mismatch`.
+
+The egress policy registry remains open. The egress policy and disclosure hash
+are checked for form and bound into the proof, but they are not governed until
+an egress policy is registered by governance.
 
 ## 8. Readiness
 
@@ -178,7 +193,7 @@ revision, proof system, circuit, parameters and verifying keys, and that real
 swap and egress verifiers are ready. Atomic shielded batches are activated by
 ordinary signed governance at the effective height; before it, execution
 refuses them with `shielded_atomic_batch_not_active`
-(`crates/node/src/execution_actions.rs:3184`). A mock verifier, a copied store,
+(`crates/node/src/execution_actions.rs:3219`). A mock verifier, a copied store,
 an unsafe file signer or a proxy-owned validator key never satisfies readiness.
 Readiness is published by the running service and the deployed manifest.
 
