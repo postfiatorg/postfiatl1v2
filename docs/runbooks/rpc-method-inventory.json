@@ -13,9 +13,9 @@
     "operator_or_local_only": 40,
     "owned_lane_gated": 8,
     "privacy_alpha_gated": 4,
-    "read_only_public": 76,
+    "read_only_public": 78,
     "sdk_only_or_unknown": 0,
-    "total_methods": 155
+    "total_methods": 157
   },
   "gaps": [
     {
@@ -34,10 +34,10 @@
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-10-22T15:55:56Z",
+  "generated_utc": "2026-10-29T10:50:52Z",
   "git": {
-    "dirty": true,
-    "revision": "a2516a1b8e7da088bd27136cc9c7df218e821d41"
+    "dirty": false,
+    "revision": "93454729ba1fc127bc2a3f2f55444e4bbc93014e"
   },
   "methods": [
     {
@@ -256,6 +256,36 @@
       "method": "asset_orchard_action_status",
       "node_dispatch": true,
       "notes": "public private-action finality/status read",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "sdk_constant": false
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "asset_orchard_pricing_claim",
+      "node_dispatch": true,
+      "notes": "finalized at-NAV Asset-Orchard pricing claim for an inclusion height",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "sdk_constant": false
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "asset_orchard_private_egress_binding",
+      "node_dispatch": true,
+      "notes": "governed Asset-Orchard private-egress policy/disclosure binding read",
       "owned_lane_allowed_when_enabled": false,
       "posture": "read_only_public",
       "privacy_alpha_allowed_when_enabled": false,

@@ -1,7 +1,7 @@
 # RPC Method Inventory
 
 Status: code-derived inventory
-Date: 2026-10-22
+Date: 2026-10-29
 Report: `docs/runbooks/rpc-method-inventory.json`
 
 This inventory is generated from Rust SDK method constants, node RPC dispatch,
@@ -14,8 +14,8 @@ method lacks an explicit posture.
 
 ## Summary
 
-- Total methods observed: 155
-- Read-only public methods: 76
+- Total methods observed: 157
+- Read-only public methods: 78
 - Public cryptographically authorized protocol mutations: 12
 - Controlled write gated methods: 15
 - Privacy-alpha gated methods: 4
@@ -64,6 +64,8 @@ method lacks an explicit posture.
 | asset_fee_quote | read_only_public | yes | no | yes | yes | yes |  |
 | asset_info | read_only_public | yes | no | yes | yes | yes |  |
 | asset_orchard_action_status | read_only_public | yes | no | yes | no | yes | public private-action finality/status read |
+| asset_orchard_pricing_claim | read_only_public | yes | no | yes | no | yes | finalized at-NAV Asset-Orchard pricing claim for an inclusion height |
+| asset_orchard_private_egress_binding | read_only_public | yes | no | yes | no | yes | governed Asset-Orchard private-egress policy/disclosure binding read |
 | asset_orchard_swap_create | operator_or_local_only | no | no | yes | no | no |  |
 | atomic_settlement_template | read_only_public | yes | no | yes | yes | yes |  |
 | atomic_swap_fee_quote | read_only_public | yes | no | yes | yes | no |  |
