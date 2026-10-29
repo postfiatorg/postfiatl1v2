@@ -13,9 +13,9 @@
     "operator_or_local_only": 42,
     "owned_lane_gated": 8,
     "privacy_alpha_gated": 4,
-    "read_only_public": 82,
+    "read_only_public": 84,
     "sdk_only_or_unknown": 0,
-    "total_methods": 163
+    "total_methods": 165
   },
   "gaps": [
     {
@@ -34,10 +34,10 @@
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-10-29T11:54:37Z",
+  "generated_utc": "2026-10-29T12:41:27Z",
   "git": {
     "dirty": true,
-    "revision": "d7de5ec78210a3316251adde7a44626f82854ead"
+    "revision": "403af19d0ac81916078591d32b84ca2f550fc19e"
   },
   "methods": [
     {
@@ -1993,9 +1993,39 @@
     {
       "authorized_protocol_mutation_public": false,
       "controlled_write_allowed_when_enabled": false,
+      "method": "private_pool_market",
+      "node_dispatch": true,
+      "notes": "token-pinned pricing, route, NAV epoch, enforcement and egress binding for a pair",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "sdk_constant": false
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
       "method": "private_pool_page",
       "node_dispatch": true,
       "notes": "token-pinned bounded page of a private pool section",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "sdk_constant": false
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "private_pool_receipts",
+      "node_dispatch": true,
+      "notes": "token-pinned page of this node's final private action admission records",
       "owned_lane_allowed_when_enabled": false,
       "posture": "read_only_public",
       "privacy_alpha_allowed_when_enabled": false,

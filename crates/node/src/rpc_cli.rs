@@ -3967,6 +3967,8 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "private_pool_snapshot"
             | "private_pool_page"
             | "private_account_lines"
+            | "private_pool_receipts"
+            | "private_pool_market"
             | "private_readiness"
             | "fx_fix_quote"
             | "account_lines"
@@ -4359,6 +4361,8 @@ mod remote_method_policy_tests {
             "private_pool_snapshot",
             "private_pool_page",
             "private_account_lines",
+            "private_pool_receipts",
+            "private_pool_market",
             "private_readiness",
         ] {
             assert!(rpc_serve_method_allowed(method, false, false, false));

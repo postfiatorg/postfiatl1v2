@@ -217,11 +217,11 @@ pub struct PrivateAccountLinesReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct SnapshotToken {
-    pool_id: String,
-    height: u64,
-    block_hash: String,
-    state_root: String,
+pub(super) struct SnapshotToken {
+    pub(super) pool_id: String,
+    pub(super) height: u64,
+    pub(super) block_hash: String,
+    pub(super) state_root: String,
 }
 
 impl SnapshotToken {
@@ -241,7 +241,7 @@ impl SnapshotToken {
         )
     }
 
-    fn parse(token: &str) -> Option<Self> {
+    pub(super) fn parse(token: &str) -> Option<Self> {
         let mut parts = token.split(':');
         let (prefix, pool_id, height, block_hash, state_root) = (
             parts.next()?,
@@ -271,7 +271,7 @@ impl SnapshotToken {
         })
     }
 
-    fn matches(&self, snapshot: &FinalizedPairSnapshot) -> bool {
+    pub(super) fn matches(&self, snapshot: &FinalizedPairSnapshot) -> bool {
         self.height == snapshot.tip.height
             && self.block_hash == snapshot.tip.block_hash
             && self.state_root == snapshot.tip.state_root
@@ -290,7 +290,7 @@ fn invalid_input(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, message.into())
 }
 
-fn read_refusal(code: &str, reason: impl Into<String>) -> AssetOrchardReadRefusal {
+pub(super) fn read_refusal(code: &str, reason: impl Into<String>) -> AssetOrchardReadRefusal {
     AssetOrchardReadRefusal {
         code: code.to_string(),
         reason: reason.into(),
@@ -585,7 +585,7 @@ fn cursor_digest(token: &str, section: &str) -> String {
     hash_hex(CURSOR_DOMAIN, format!("{token}\n{section}").as_bytes())[..16].to_string()
 }
 
-fn encode_cursor(token: &str, section: &str, offset: usize) -> String {
+pub(super) fn encode_cursor(token: &str, section: &str, offset: usize) -> String {
     format!(
         "{CURSOR_PREFIX}:{section}:{offset}:{}",
         cursor_digest(token, section)
@@ -594,7 +594,7 @@ fn encode_cursor(token: &str, section: &str, offset: usize) -> String {
 
 /// A cursor is bound to its snapshot token and section; any other cursor is
 /// malformed.
-fn parse_cursor(cursor: &str, token: &str, section: &str) -> Option<usize> {
+pub(super) fn parse_cursor(cursor: &str, token: &str, section: &str) -> Option<usize> {
     let mut parts = cursor.split(':');
     let (prefix, cursor_section, offset, digest) =
         (parts.next()?, parts.next()?, parts.next()?, parts.next()?);

@@ -219,6 +219,27 @@ class RemainingReadWrapperTests(unittest.TestCase):
             },
         )
 
+    def test_private_receipt_and_market_reads_send_the_token_and_filters(self) -> None:
+        client = _client()
+        with mock.patch.object(client, "_call", return_value={"status": "ok"}) as call:
+            client.private_pool_receipts("t", cursor="c", limit=10, address="pfa", session_scope="s")
+        call.assert_called_once_with(
+            "private_pool_receipts",
+            {"snapshot_token": "t", "cursor": "c", "limit": 10, "address": "pfa", "session_scope": "s"},
+        )
+        with mock.patch.object(client, "_call", return_value={"status": "ok"}) as call:
+            client.private_pool_market("t", "A", "B", inclusion_height=9)
+        call.assert_called_once_with(
+            "private_pool_market",
+            {"snapshot_token": "t", "base_asset_id": "A", "quote_asset_id": "B", "inclusion_height": 9},
+        )
+        with mock.patch.object(client, "_call") as call:
+            with self.assertRaisesRegex(ValueError, "limit must be a positive integer"):
+                client.private_pool_receipts("t", limit=0)
+            with self.assertRaisesRegex(ValueError, "quote_asset_id must be a non-empty string"):
+                client.private_pool_market("t", "A", "")
+        call.assert_not_called()
+
     def test_private_readiness_sends_only_the_optional_pool_id(self) -> None:
         client = _client()
         with mock.patch.object(client, "_call", return_value={"ready": False}) as call:

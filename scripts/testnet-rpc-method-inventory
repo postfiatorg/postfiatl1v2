@@ -63,6 +63,8 @@ POSTURE_NOTES = {
     "private_pool_snapshot": "finalized private pool snapshot token, counts, pricing and completeness",
     "private_pool_page": "token-pinned bounded page of a private pool section",
     "private_account_lines": "token-pinned account lines bound to asset_info",
+    "private_pool_receipts": "token-pinned page of this node's final private action admission records",
+    "private_pool_market": "token-pinned pricing, route, NAV epoch, enforcement and egress binding for a pair",
     "private_readiness": "finalized-state and in-process verifier readiness attestation for private actions",
     "mempool_submit_signed_transfer": "controlled write edge; disabled unless explicitly enabled",
     "mempool_submit_signed_transfer_finality": "controlled in-process write/finality edge; disabled unless explicitly enabled",
@@ -163,6 +165,8 @@ READ_ONLY_PUBLIC_METHODS = {
     "private_pool_snapshot",
     "private_pool_page",
     "private_account_lines",
+    "private_pool_receipts",
+    "private_pool_market",
     "private_readiness",
 }
 

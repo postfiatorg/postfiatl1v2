@@ -826,6 +826,8 @@ fn print_usage() {
   postfiat-node rpc --method private_pool_snapshot [--data-dir PATH] --pool-id ID [--address ADDRESS] [--base-asset-id ID --quote-asset-id ID] [--inclusion-height N]
   postfiat-node rpc --method private_pool_page [--data-dir PATH] --snapshot-token TOKEN --section commitments|nullifiers|accepted_anchors|outputs|assets [--cursor CURSOR] [--limit N]
   postfiat-node rpc --method private_account_lines [--data-dir PATH] --snapshot-token TOKEN --address ADDRESS
+  postfiat-node rpc --method private_pool_receipts [--data-dir PATH] --snapshot-token TOKEN [--cursor CURSOR] [--limit N] [--address ADDRESS] [--session-scope SCOPE]
+  postfiat-node rpc --method private_pool_market [--data-dir PATH] --snapshot-token TOKEN --base-asset-id ID --quote-asset-id ID [--inclusion-height N]
   postfiat-node rpc --method private_readiness [--data-dir PATH] [--pool-id ID]
   postfiat-node rpc --method account_lines [--data-dir PATH] --account ADDRESS [--issuer ADDRESS] [--asset-id ID] [--limit N]
   postfiat-node rpc --method account_assets [--data-dir PATH] --account ADDRESS [--asset-id ID] [--limit N]

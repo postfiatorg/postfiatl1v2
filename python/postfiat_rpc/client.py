@@ -1837,6 +1837,47 @@ class PostFiatRpcClient:
             params["limit"] = limit
         return self._object_read("private_pool_page", params)
 
+    def private_pool_receipts(
+        self,
+        snapshot_token: str,
+        *,
+        cursor: str | None = None,
+        limit: int | None = None,
+        address: str | None = None,
+        session_scope: str | None = None,
+    ) -> dict[str, Any]:
+        """One page of this node's final admission records at a snapshot (public read)."""
+        params: dict[str, Any] = {"snapshot_token": self._required_text(snapshot_token, "snapshot_token")}
+        if cursor is not None:
+            params["cursor"] = self._required_text(cursor, "cursor")
+        if limit is not None:
+            if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+                raise ValueError("limit must be a positive integer")
+            params["limit"] = limit
+        if address is not None:
+            params["address"] = self._required_text(address, "address")
+        if session_scope is not None:
+            params["session_scope"] = self._required_text(session_scope, "session_scope")
+        return self._object_read("private_pool_receipts", params)
+
+    def private_pool_market(
+        self,
+        snapshot_token: str,
+        base_asset_id: str,
+        quote_asset_id: str,
+        *,
+        inclusion_height: int | None = None,
+    ) -> dict[str, Any]:
+        """The pair's pricing, route, NAV epoch, enforcement and egress bindings at a snapshot."""
+        params: dict[str, Any] = {
+            "snapshot_token": self._required_text(snapshot_token, "snapshot_token"),
+            "base_asset_id": self._required_text(base_asset_id, "base_asset_id"),
+            "quote_asset_id": self._required_text(quote_asset_id, "quote_asset_id"),
+        }
+        if inclusion_height is not None:
+            params["inclusion_height"] = self._required_u64(inclusion_height, "inclusion_height")
+        return self._object_read("private_pool_market", params)
+
     def private_account_lines(self, snapshot_token: str, address: str) -> dict[str, Any]:
         """The account's asset lines at a snapshot, zero balances included (public read)."""
         return self._object_read(

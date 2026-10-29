@@ -14,8 +14,8 @@ method lacks an explicit posture.
 
 ## Summary
 
-- Total methods observed: 163
-- Read-only public methods: 82
+- Total methods observed: 165
+- Read-only public methods: 84
 - Public cryptographically authorized protocol mutations: 12
 - Controlled write gated methods: 15
 - Privacy-alpha gated methods: 4
@@ -179,7 +179,9 @@ method lacks an explicit posture.
 | private_account_lines | read_only_public | yes | no | yes | no | yes | token-pinned account lines bound to asset_info |
 | private_action_receipt | operator_or_local_only | no | no | yes | no | yes |  |
 | private_action_submit | operator_or_local_only | no | no | yes | no | yes |  |
+| private_pool_market | read_only_public | yes | no | yes | no | yes | token-pinned pricing, route, NAV epoch, enforcement and egress binding for a pair |
 | private_pool_page | read_only_public | yes | no | yes | no | yes | token-pinned bounded page of a private pool section |
+| private_pool_receipts | read_only_public | yes | no | yes | no | yes | token-pinned page of this node's final private action admission records |
 | private_pool_snapshot | read_only_public | yes | no | yes | no | yes | finalized private pool snapshot token, counts, pricing and completeness |
 | private_readiness | read_only_public | yes | no | yes | no | yes | finalized-state and in-process verifier readiness attestation for private actions |
 | receipts | read_only_public | yes | no | yes | yes | yes | bounded receipt lookup |

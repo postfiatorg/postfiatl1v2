@@ -148,6 +148,8 @@ PUBLIC_READ_OBJECT_METHODS = frozenset(
         "private_pool_snapshot",
         "private_pool_page",
         "private_account_lines",
+        "private_pool_receipts",
+        "private_pool_market",
         "private_readiness",
         "pfusdc_ingress_preflight",
         "pfusdc_egress_witness",
@@ -213,6 +215,8 @@ CLI_METHODS: tuple[str, ...] = (
     "private_pool_snapshot",
     "private_pool_page",
     "private_account_lines",
+    "private_pool_receipts",
+    "private_pool_market",
     "private_readiness",
     "pfusdc_ingress_preflight",
     "pfusdc_egress_witness",
@@ -422,6 +426,21 @@ def call_method(client: PostFiatRpcClient, args: argparse.Namespace) -> Any:
         return client.private_account_lines(
             require_arg(args, "snapshot_token", method),
             require_arg(args, "address", method),
+        )
+    if method == "private_pool_receipts":
+        return client.private_pool_receipts(
+            require_arg(args, "snapshot_token", method),
+            cursor=args.cursor,
+            limit=args.limit,
+            address=args.address,
+            session_scope=args.session_scope,
+        )
+    if method == "private_pool_market":
+        return client.private_pool_market(
+            require_arg(args, "snapshot_token", method),
+            require_arg(args, "base_asset_id", method),
+            require_arg(args, "quote_asset_id", method),
+            inclusion_height=args.inclusion_height,
         )
     if method == "private_readiness":
         return client.private_readiness(pool_id=args.pool_id)
