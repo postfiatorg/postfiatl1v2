@@ -8,6 +8,7 @@ Only current execution plans and completed plans belong here.
 ## Active
 
 - [PFT as an ERC-20 on Base: the Coinbase listing path](active/pft-erc20-base-listing-milestone.md): this lane's priority from 2026-10-26
+- [User-proven shielded actions (W-1): the wallet app's private path](active/user-proven-shielded-actions-milestone.md)
 - [Next Validator Release Plan (after the conference)](active/next-validator-release-plan-20261005.md)
 - [Validator Release Plan after signer-rotation-20261007 (skeleton)](active/next-validator-release-plan-20261101.md)
 - [Validator Release Plan after exchange-readiness-20261023 (skeleton)](active/next-validator-release-plan-20261108.md)
