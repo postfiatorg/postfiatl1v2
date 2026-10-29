@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Private path state</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">Read only · user-proven shielded actions</p>
+        <h1 id="title">Private path state</h1>
+      </div>
+      <button id="refresh" type="button">Refresh</button>
+    </header>
+
+    <main>
+      <p id="status" class="status" role="status" aria-live="polite">Reading the validator…</p>
+      <p class="context"><span id="endpoint"></span> · pool <span id="pool"></span> · next height <span id="next-height"></span></p>
+
+      <div id="sections"></div>
+
+      <section class="panel" aria-labelledby="receipt-title">
+        <h2 id="receipt-title">Receipt by intent id</h2>
+        <div class="receipt-query">
+          <input id="intent-id" type="text" inputmode="text" autocomplete="off" spellcheck="false"
+                 placeholder="96 lowercase hex characters" aria-label="Intent id">
+          <button id="receipt-read" type="button">Read receipt</button>
+        </div>
+        <div id="receipt"></div>
+      </section>
+    </main>
+  </body>
+</html>

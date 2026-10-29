@@ -127,7 +127,8 @@ halt flag and the ratio within the band.
 
 - [ ] M1 *(this lane)* Lock the source spec at 86 or above on the full gate, requested as a Task Node task.
 - [ ] M2 *(this lane)* A Python CLI for the new public reads (S4), alongside the S5 commands.
-- [ ] M3 *(this lane)* A read-only view that consumes the CLI output.
+- [x] M3 *(this lane)* A read-only view that consumes the CLI output.
+  - `python/postfiat_rpc/private_path_ui.py` with `private_path_ui_assets/`: a read-only page on 127.0.0.1 for one validator. It shows readiness with the not-ready reasons, the pool snapshot, the next-height pricing claim, the egress binding and a receipt by intent id. GET only, through the Python RPC client's read methods. `python/tests/test_private_path_ui.py`: 12 tests. Documented in [RPC examples](../../rpc/examples.md#private-path-state).
 - [ ] M4 *(this lane)* Retire this document into `docs/plans/completed/` and document the path in the existing documentation.
 
 ## Not before

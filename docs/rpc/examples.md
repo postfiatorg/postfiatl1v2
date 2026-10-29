@@ -68,10 +68,35 @@ PYTHONPATH=python python -m postfiat_rpc.pft_token_ui \
   --record crates/pft-token-contracts/deployments/pft-token-base-84532/deployment.json
 ```
 
+## Private Path State
+
+`postfiat_rpc.private_path_ui` serves a read-only page on `127.0.0.1`
+(default port 8767) for one validator's user-proven shielded action path:
+
+- every `private_readiness` field, with the reasons when it is not ready;
+- the `private_pool_snapshot` token, counts and completeness;
+- the `asset_orchard_pricing_claim` for the governed A666/pfUSDC pair at the
+  next height, with its status or refusal;
+- the `asset_orchard_private_egress_binding`, which is `ungoverned` or shows
+  the registered policy;
+- a `private_action_receipt` for an intent id typed into the page.
+
+It calls only those read methods, shows a node refusal as a refusal, and
+answers only GET:
+
+```bash
+PYTHONPATH=python python -m postfiat_rpc.private_path_ui \
+  --endpoint validator-0=127.0.0.1:27650
+```
+
+`--base-asset-id` and `--quote-asset-id` override the pair taken from the
+governed route.
+
 ## Source
 
 - `python/postfiat_rpc/__main__.py`
 - `python/postfiat_rpc/client.py`
 - `python/postfiat_rpc/pft_token.py`
 - `python/postfiat_rpc/pft_token_ui.py`
+- `python/postfiat_rpc/private_path_ui.py`
 - `docs/runbooks/python-rpc-client.md`
