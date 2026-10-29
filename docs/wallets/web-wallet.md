@@ -95,7 +95,7 @@ The optional HTTPS dev cert paths are controlled by:
 | `WALLET_PROXY_PRIVATE_ACTIONS_POOL_ID` | `asset-orchard-v1` | The only pool an action may name. |
 | `WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID` | empty | 96-hex base asset of the pair; with the quote asset, required for `snapshot` and the only assets ingress and egress may use. |
 | `WALLET_PROXY_PRIVATE_ACTIONS_QUOTE_ASSET_ID` | empty | 96-hex quote asset of the pair. |
-| `WALLET_PROXY_PRIVATE_ACTIONS_RPC_SOURCES` | first two of `RPC_FLEET` | Exactly two `validator-id=host:port` sources; submissions go to both and every answer is reconciled across them. |
+| `WALLET_PROXY_PRIVATE_ACTIONS_RPC_SOURCES` | all of `RPC_FLEET` | Two or more `validator-id=host:port` sources. A submission goes to every source, because a node holds a record until it proposes; answers are reconciled across all of them. |
 | `WALLET_PROXY_PRIVATE_ACTIONS_STORE` | `~/.local/share/postfiat/wallet-proxy/private-actions` | Directory of the durable intent records and their dedupe indexes. Must be writable. |
 | `WALLET_PROXY_PRIVATE_ACTIONS_RPC_TIMEOUT_MS` | `15000` | Timeout of each validator read or submission. |
 | `WALLET_STATIC_DIR` | `wallet-web/dist` | Immutable production wallet build served same-origin by the hardened proxy. |
@@ -181,10 +181,10 @@ token; `submit` counts against the mutation rate window. The contract is in
 `crates/node/tests/fixtures/private-actions-v1/`.
 
 - **Submit** recomputes the intent id, reserves the intent durably once, and
-  relays the exact action text to both RPC sources through the node methods
+  relays the exact action text to every RPC source through the node methods
   `private_action_submit` and `private_action_receipt`. The gateway holds no
   key and reads no validator data directory.
-- **Snapshot** pins one finalized token on both sources (a mixed tip is 503),
+- **Snapshot** pins one finalized token on every source (a mixed tip is 503),
   then pages every section under the wallet's ceilings: 4096 commitments,
   nullifiers or anchors, 64 ciphertexts, 2 MiB of ciphertext, 16 assets and a
   4 MiB response. If the tip moves while paging it retries once, then answers 503. A

@@ -44,7 +44,7 @@ services:
       WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID: "${WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID:-}"
       # 96-hex quote asset of the pair; required for snapshot.
       WALLET_PROXY_PRIVATE_ACTIONS_QUOTE_ASSET_ID: "${WALLET_PROXY_PRIVATE_ACTIONS_QUOTE_ASSET_ID:-}"
-      # Two validator-id=host:port sources; empty takes the first two of RPC_FLEET.
+      # Two or more validator-id=host:port sources, all sent every submission; empty takes all of RPC_FLEET.
       WALLET_PROXY_PRIVATE_ACTIONS_RPC_SOURCES: "${WALLET_PROXY_PRIVATE_ACTIONS_RPC_SOURCES:-}"
       # Intent store directory; set it under /state (for example /state/private-actions) when enabling.
       WALLET_PROXY_PRIVATE_ACTIONS_STORE: "${WALLET_PROXY_PRIVATE_ACTIONS_STORE:-}"

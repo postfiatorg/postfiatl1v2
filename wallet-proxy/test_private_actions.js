@@ -28,6 +28,9 @@ const positive = Object.fromEntries(vectors.positive.map((vector) => [vector.kin
 const negative = Object.fromEntries(vectors.negative.map((vector) => [vector.name, vector]));
 const h96 = (byte) => byte.repeat(48);
 
+const NODE_RECORD_SCHEMA = 'postfiat.private_action_admission.record.v1';
+const NODE_RECEIPT_SCHEMA = 'postfiat.private_action_receipt.v1';
+const SUBMIT_PARAMS = ['chain_id', 'genesis_hash', 'protocol_version', 'pool_id', 'session_scope', 'intent_id', 'action_json', 'action_hash'];
 const SECTIONS = ['commitments', 'nullifiers', 'accepted_anchors', 'outputs', 'assets'];
 const assetRow = (row) => ({
     asset_id: row.asset_id.value, ingress_total: 1, egress_total: 0, live_total: 1, asset_info_bound: true,
@@ -51,16 +54,44 @@ function basePool() {
 }
 
 function stub(validatorId) {
-    const state = { submits: [], receipts: new Map(), tip: { height: 1161 }, pool: basePool(), pageSize: {}, pageCalls: [], onPage: null, sockets: new Set() };
+    const state = { submits: [], records: new Map(), submitError: null, receipts: new Map(), tip: { height: 1161 }, pool: basePool(), pageSize: {}, pageCalls: [], onPage: null, sockets: new Set() };
     const answer = (request) => {
         const p = request.params || {};
+        // Shapes of crates/node/src/private_action_rpc.rs and private_action_admission.rs.
         if (request.method === 'private_action_submit') {
             state.submits.push(p);
+            const extra = Object.keys(p).find((key) => !SUBMIT_PARAMS.includes(key));
+            if (extra || SUBMIT_PARAMS.some((key) => p[key] === undefined)) {
+                return { ok: false, error: { code: 'private_action_request_invalid', message: `unknown or missing param ${extra || ''}` } };
+            }
+            if (state.submitError) return { ok: false, error: { code: state.submitError, message: 'stubbed refusal' } };
+            const existing = state.records.get(p.intent_id);
+            if (existing) return { ok: true, result: { schema: NODE_RECORD_SCHEMA, existing: true, record: existing } };
+            const domain = { chain_id: p.chain_id, genesis_hash: p.genesis_hash, protocol_version: p.protocol_version };
             const parsed = parsePublicAction(p.action_json);
-            return { ok: true, result: { intent_id: p.intent_id, action_hash: p.action_hash, batch_id: batchIdFor(p.domain, parsed.canonical), state: 'queued' } };
+            const batchId = batchIdFor(domain, parsed.canonical);
+            const record = {
+                schema: NODE_RECORD_SCHEMA, intent_id: p.intent_id,
+                domain: { ...domain, pool_id: p.pool_id, session_scope: p.session_scope },
+                action_hash: p.action_hash, action_kind: parsed.kind, action_json: p.action_json, batch_id: batchId,
+                batch_json: `{"batch_id":"${batchId}","atomic":true,"actions":[${parsed.canonical}]}`,
+                state: 'queued', received_height: state.tip.height, dispatch_count: 0, outcome: null,
+            };
+            state.records.set(p.intent_id, record);
+            return { ok: true, result: { schema: NODE_RECORD_SCHEMA, existing: false, record } };
         }
         if (request.method === 'private_action_receipt') {
-            return { ok: true, result: state.receipts.get(p.intent_id) || { state: 'pending_unknown', intent_id: p.intent_id } };
+            const contract = state.receipts.get(p.intent_id);
+            const record = state.records.get(p.intent_id) || null;
+            if (!contract && !record) {
+                return { ok: true, result: { schema: NODE_RECEIPT_SCHEMA, intent_id: p.intent_id, state: 'pending_unknown', record: null, contract_receipt: null } };
+            }
+            const receipt = contract || {
+                schema: 'postfiat-private-actions-v1', intent_id: record.intent_id, state: record.state, action_hash: record.action_hash,
+                batch_id: record.batch_id, transaction_id: null, inclusion_height: null, block_hash: null, state_root: null,
+                accepted: null, code: null, fee: null, finality: null,
+            };
+            return { ok: true, result: { schema: NODE_RECEIPT_SCHEMA, intent_id: p.intent_id, state: receipt.state, record, contract_receipt: receipt } };
         }
         if (request.method === 'private_pool_snapshot') {
             const height = state.tip.height;
@@ -274,7 +305,9 @@ async function main() {
                 const sent = submitsFor(s, vector.intent_id);
                 assert.strictEqual(sent.length, 1);
                 assert.strictEqual(sent[0].action_json, vector.action_json);
-                assert.deepStrictEqual(sent[0].domain, DOMAIN);
+                assert.deepStrictEqual(Object.keys(sent[0]).sort(), [...SUBMIT_PARAMS].sort());
+                assert.strictEqual(sent[0].session_scope, 'alpha');
+                assert.strictEqual(sent[0].pool_id, 'asset-orchard-v1');
             }
             const stored = JSON.parse(fs.readFileSync(path.join(storeDir, 'intents', `${vector.intent_id}.json`), 'utf8'));
             assert.strictEqual(stored.batch_json, vector.batch_json);
@@ -332,7 +365,7 @@ async function main() {
         const queued = await post(port, 'receipt', body(ingress));
         assert.strictEqual(queued.body.state, 'queued');
         const rejection = {
-            state: 'rejected', intent_id: ingress.intent_id, action_hash: ingress.action_hash, batch_id: ingress.batch_id,
+            schema: 'postfiat-private-actions-v1', state: 'rejected', intent_id: ingress.intent_id, action_hash: ingress.action_hash, batch_id: ingress.batch_id,
             transaction_id: h96('d4'), inclusion_height: 1170, block_hash: h96('e5'), state_root: h96('f6'),
             accepted: false, code: 'asset_orchard_proof_invalid', fee: 10,
             finality: { kind: 'validator_quorum_block_certificate_v1', height: 1170, block_hash: h96('e5'), state_root: h96('f6'), quorum: 5, validator_count: 6, certificate_json: '{}' },
@@ -355,6 +388,45 @@ async function main() {
         assert.strictEqual(split.body.state, 'unknown');
         assert.strictEqual(split.body.code, 'private_action_source_mismatch');
         assert.strictEqual(submitsFor(a, ingress.intent_id).length, 1, 'receipt never resubmits');
+
+        // The node's refusal classes: request_invalid reserves nothing (queued, resent later);
+        // a final refusal from every source makes the record rejected.
+        const variant = (amountDelta) => {
+            const value = JSON.parse(positive.asset_orchard_private_egress_v1.action_json);
+            value.amount += amountDelta;
+            return withIntent(JSON.stringify(value));
+        };
+        a.state.submitError = 'private_action_request_invalid';
+        b.state.submitError = 'private_action_request_invalid';
+        const invalid = variant(10);
+        const held = await post(port, 'submit', invalid);
+        assert.strictEqual(held.statusCode, 202);
+        assert.strictEqual(held.body.state, 'queued');
+        a.state.submitError = null;
+        b.state.submitError = null;
+        const resent = await post(port, 'submit', invalid);
+        assert.strictEqual(resent.body.state, 'queued');
+        assert.strictEqual(submitsFor(a, invalid.intent_id).length, 2, 'the reserved bytes are resent once nothing was reserved');
+        await post(port, 'submit', invalid);
+        assert.strictEqual(submitsFor(a, invalid.intent_id).length, 2, 'no resend once every source holds them');
+        a.state.submitError = 'private_action_rejected';
+        b.state.submitError = 'private_action_rejected';
+        const refusedEverywhere = await post(port, 'submit', variant(11));
+        assert.strictEqual(refusedEverywhere.body.state, 'rejected');
+        a.state.submitError = 'private_action_rejected';
+        b.state.submitError = 'shielded_atomic_batch_not_active';
+        const notYet = await post(port, 'submit', variant(12));
+        assert.strictEqual(notYet.body.state, 'queued', 'an execution code is not a final refusal');
+        a.state.submitError = null;
+        b.state.submitError = null;
+
+        // The node's `unknown`: two unknown answers are unknown, not a mismatch.
+        const unknownIntent = variant(13);
+        await post(port, 'submit', unknownIntent);
+        for (const s of [a, b]) s.state.records.get(unknownIntent.intent_id).state = 'unknown';
+        const unknownReceipt = await post(port, 'receipt', unknownIntent);
+        assert.strictEqual(unknownReceipt.body.state, 'unknown');
+        assert.notStrictEqual(unknownReceipt.body.code, 'private_action_source_mismatch');
 
         // Crash between the reservation write and the dispatch.
         const crashStore = fs.mkdtempSync(path.join(os.tmpdir(), 'pft-private-crash-'));
@@ -379,6 +451,38 @@ async function main() {
         assert.strictEqual(submitsFor(a, swap.intent_id).at(-1).action_json, swap.action_json);
         await restarted.submit(body(swap), 'alpha');
         assert.strictEqual(submitsFor(a, swap.intent_id).length, before + 1, 'no further dispatch once acknowledged');
+
+        // Three sources: the record reaches every one; the proposer's acceptance is
+        // unconfirmed until another source follows the chain, then final.
+        const c = stub('validator-c');
+        await new Promise((resolve) => c.server.listen(0, '127.0.0.1', resolve));
+        const trio = [a, b, c].map((s) => `${s.validatorId}=127.0.0.1:${s.server.address().port}`).join(',');
+        const three = createPrivateActions({
+            env: { ...privateEnv, WALLET_PROXY_PRIVATE_ACTIONS_RPC_SOURCES: trio, WALLET_PROXY_PRIVATE_ACTIONS_STORE: fs.mkdtempSync(path.join(os.tmpdir(), 'pft-private-three-')) },
+            rpcRequest: (source, request) => oneShot(source, request),
+        });
+        const chained = variant(14);
+        const admitted = await three.submit(chained, 'alpha');
+        assert.strictEqual(admitted.state, 'queued');
+        for (const s of [a, b, c]) assert.strictEqual(submitsFor(s, chained.intent_id).length, 1, s.validatorId);
+        const accepted = {
+            schema: 'postfiat-private-actions-v1', state: 'accepted', intent_id: chained.intent_id, action_hash: admitted.action_hash,
+            batch_id: admitted.batch_id, transaction_id: h96('d7'), inclusion_height: 1175, block_hash: h96('e7'), state_root: h96('f7'),
+            accepted: true, code: 'accepted', fee: 10,
+            finality: { kind: 'validator_quorum_block_certificate_v1', height: 1175, block_hash: h96('e7'), state_root: h96('f7'), quorum: 5, validator_count: 6, certificate_json: '{}' },
+        };
+        c.state.receipts.set(chained.intent_id, accepted);
+        const proposerOnly = await three.receipt(chained, 'alpha');
+        assert.strictEqual(proposerOnly.code, 'private_receipt_unconfirmed');
+        a.state.records.get(chained.intent_id).state = 'unknown';
+        assert.strictEqual((await three.receipt(chained, 'alpha')).code, 'private_receipt_unconfirmed', 'accepted plus unknown stays unconfirmed');
+        a.state.receipts.set(chained.intent_id, accepted);
+        const followed = await three.receipt(chained, 'alpha');
+        assert.strictEqual(followed.state, 'accepted');
+        assert.strictEqual(followed.inclusion_height, 1175);
+        assert.deepStrictEqual(followed.finality, accepted.finality);
+        c.server.close();
+        for (const socket of c.state.sockets) socket.destroy();
 
         // Disabled without a configured domain.
         const disabled = createPrivateActions({ env: {} });

@@ -27,11 +27,30 @@ const MAX_SNAPSHOT_OUTPUTS = 64;
 const MAX_SNAPSHOT_CIPHERTEXT_BYTES = 2 * 1024 * 1024;
 const MAX_SNAPSHOT_ASSETS = 16;
 const STATES = new Set(['queued', 'dispatched', 'accepted', 'rejected', 'unknown']);
-const NODE_STATES = new Set(['queued', 'dispatched', 'accepted', 'rejected']);
+const NODE_STATES = new Set(['queued', 'dispatched', 'accepted', 'rejected', 'unknown']);
+const NODE_RECORD_SCHEMA = 'postfiat.private_action_admission.record.v1';
+const NODE_RECEIPT_SCHEMA = 'postfiat.private_action_receipt.v1';
+// Codes of the node's private_action_submit (crates/node/src/private_action_rpc.rs and
+// private_action_admission.rs), in two classes.
+// Final: the node examined this exact action and will never admit it. When every source
+// answers with the same one, the record is `rejected`.
+//   private_action_rejected       re-verification against finalized state failed
+//   private_action_wrong_domain   the domain names another chain, genesis, protocol or pool
+//   private_action_hash_mismatch  action_hash is not the canonical hash of the decoded action
+const FINAL_REFUSALS = new Set(['private_action_rejected', 'private_action_wrong_domain', 'private_action_hash_mismatch']);
+// Not reserved: nothing was written on that node, so the reserved bytes are resent later.
+//   private_action_request_invalid  malformed params, scope or sizes
+//   private_intent_mismatch         the node's intent recomputation disagrees with ours
+//   private_intent_conflict         other bytes are reserved there under this intent
+//   private_action_duplicate        the action or batch is reserved under another intent or on chain
+//   execution codes from re-verification (e.g. shielded_atomic_batch_not_active): may pass later
+//   private_action_failed, rpc_internal  node-side I/O or internal errors
+//   private_action_not_proposer, private_action_dispatch_interrupted, private_action_result_unknown:
+//                                   round-service codes on records, not submit errors
+//   anything else, e.g. the methods absent while the operator switch is off
 const FAULT_ENV = 'PFT_PRIVATE_ACTIONS_FAULT'; // test-only: 'after-reservation'
 const HEX96 = /^[0-9a-f]{96}$/;
 const ADDRESS_RE = /^pf[0-9a-f]{40}$/;
-const UNDELIVERED = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN']);
 
 // Field order and types of the serde serialization of postfiat_types, so the
 // re-serialized action is byte-identical to the node's canonical form.
@@ -189,9 +208,11 @@ function loadConfig(env, fleet = []) {
             }
             return { validatorId, host: endpoint.slice(0, colon), port };
         })
-        : fleet.slice(0, 2);
-    if (sources.length !== 2 || sources[0].validatorId === sources[1].validatorId) {
-        throw new Error('private actions need exactly two distinct validator RPC sources');
+        : fleet.slice();
+    // A record waits on each node until that node proposes, so submissions go to every
+    // source; at least two are needed to reconcile.
+    if (sources.length < 2 || new Set(sources.map((source) => source.validatorId)).size !== sources.length) {
+        throw new Error('private actions need at least two distinct validator RPC sources');
     }
     const assetIds = ['BASE', 'QUOTE'].map((name) => String(env[`WALLET_PROXY_PRIVATE_ACTIONS_${name}_ASSET_ID`] || '').trim().toLowerCase());
     if (assetIds.some((id) => id && !HEX96.test(id))) throw new Error('private action asset ids must be 96 hex');
@@ -265,16 +286,15 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
         try {
             const response = await rpcRequest(source, request, config.timeoutMs);
             if (response?.ok === true) return { source: source.validatorId, ok: true, result: response.result };
-            // Only the node's own refusal of the action is final; other errors (an unknown
-            // method, the operator switch off) mean nothing was reserved there.
             const code = String(response?.error?.code || 'rpc_error').slice(0, 64);
-            const refused = code.startsWith('private_action_');
-            return { source: source.validatorId, ok: false, refused, delivered: refused, code };
+            return { source: source.validatorId, ok: false, final: FINAL_REFUSALS.has(code), code };
         } catch (error) {
-            return { source: source.validatorId, ok: false, delivered: !UNDELIVERED.has(error.code), code: String(error.code || 'rpc_transport_error').slice(0, 64) };
+            // Transport errors reserve nothing that a resend could duplicate: the node returns
+            // the existing record for an intent it already holds.
+            return { source: source.validatorId, ok: false, final: false, code: String(error.code || 'rpc_transport_error').slice(0, 64) };
         }
     }
-    const bothSources = (method, params) => Promise.all(config.sources.map((source) => callSource(source, method, params)));
+    const allSources = (method, params, sources = config.sources) => Promise.all(sources.map((source) => callSource(source, method, params)));
     const bindingsMatch = (result, record) => result?.intent_id === record.intent_id
         && result.action_hash === record.action_hash && result.batch_id === record.batch_id;
 
@@ -316,40 +336,70 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
         schema: SCHEMA, intent_id: record.intent_id, state: record.state, batch_id: record.batch_id, action_hash: record.action_hash,
     });
 
-    // Sends the reserved bytes, never the request's; reconciles the two sources.
+    const nodeDomain = (record) => ({
+        chain_id: record.domain.chain_id, genesis_hash: record.domain.genesis_hash,
+        protocol_version: record.domain.protocol_version, pool_id: record.pool_id, session_scope: record.principal,
+    });
+
+    function nodeRecordMatches(report, record) {
+        const node = report?.record;
+        return report?.schema === NODE_RECORD_SCHEMA && node?.schema === NODE_RECORD_SCHEMA
+            && bindingsMatch(node, record) && node.action_json === record.action_json
+            && JSON.stringify(node.domain) === JSON.stringify(nodeDomain(record)) && NODE_STATES.has(node.state);
+    }
+
+    // One gateway state from the per-source views.
+    function aggregate(views) {
+        const entries = config.sources.map((source) => views[source.validatorId]);
+        if (entries.some((entry) => entry?.mismatch)) return { state: 'unknown', code: 'private_action_source_mismatch' };
+        const reserved = entries.filter((entry) => entry?.acknowledged);
+        if (reserved.length === 0) {
+            if (entries.every((entry) => entry?.final && entry.code === entries[0].code)) return { state: 'rejected', code: entries[0].code };
+            return { state: 'queued', code: entries.find((entry) => entry?.code)?.code || null };
+        }
+        const states = new Set(reserved.map((entry) => entry.state));
+        if (entries.some((entry) => entry?.final) || (states.has('accepted') && states.has('rejected'))) {
+            return { state: 'unknown', code: 'private_action_source_mismatch' };
+        }
+        if (states.size === 1 && reserved.length === entries.length) return { state: [...states][0], code: null };
+        if (states.has('unknown')) return { state: 'unknown', code: null };
+        if (states.has('accepted') || states.has('rejected') || states.has('dispatched')) return { state: 'dispatched', code: null };
+        return { state: 'queued', code: null };
+    }
+
+    const unreservedSources = (record) => config.sources
+        .filter((source) => !(record.acknowledged_by || []).includes(source.validatorId));
+
+    // Sends the reserved bytes, never the request's, to every source that does not hold them yet.
     async function dispatch(intentId) {
         if (inflight.has(intentId)) return inflight.get(intentId);
         const run = (async () => {
             const record = store.read(intentId);
-            const results = await bothSources('private_action_submit', {
-                domain: config.domain, intent_id: record.intent_id, action_json: record.action_json, action_hash: record.action_hash,
-            });
+            const targets = unreservedSources(record);
+            const results = await allSources('private_action_submit', {
+                ...nodeDomain(record), intent_id: record.intent_id, action_json: record.action_json, action_hash: record.action_hash,
+            }, targets);
             return serialized(() => {
                 const current = store.read(intentId);
-                const answered = results.filter((result) => result.ok);
-                const states = new Set(answered.map((result) => result.result?.state));
-                let state = current.state;
-                let code = null;
-                if (answered.some((result) => !bindingsMatch(result.result, current) || !NODE_STATES.has(result.result?.state))
-                    || states.size > 1 || (answered.length && results.some((result) => result.refused))) {
-                    state = 'unknown';
-                    code = 'private_action_source_mismatch';
-                } else if (answered.length) {
-                    state = [...states][0];
-                } else if (results.every((result) => result.refused && result.code === results[0].code)) {
-                    state = 'rejected';
-                    code = results[0].code;
-                } else if (results.some((result) => result.delivered)) {
-                    state = 'unknown';
-                    code = 'private_action_dispatch_unknown';
-                } else {
-                    code = 'private_action_sources_unreachable';
+                const views = { ...(current.sources || {}) };
+                for (const result of results) {
+                    if (result.ok) {
+                        views[result.source] = nodeRecordMatches(result.result, current)
+                            ? { acknowledged: true, state: result.result.record.state, existing: result.result.existing === true }
+                            : { mismatch: true };
+                    } else {
+                        views[result.source] = { final: result.final, code: result.code };
+                    }
                 }
+                const { state, code } = aggregate(views);
+                const acknowledgedBy = Object.keys(views).filter((id) => views[id].acknowledged);
                 const updated = {
                     ...current,
                     state,
                     code,
-                    acknowledged: current.acknowledged || answered.length > 0 || results.some((result) => result.delivered),
+                    sources: views,
+                    acknowledged_by: acknowledgedBy,
+                    acknowledged: acknowledgedBy.length > 0,
                     dispatch_attempts: (current.dispatch_attempts || 0) + 1,
                     last_dispatch: { at_ms: Date.now(), sources: results.map(({ source, ok, code: c }) => ({ source, ok, code: c || null })) },
                     updated_at_ms: Date.now(),
@@ -384,8 +434,13 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
             return { record, fresh: true };
         });
         if (env[FAULT_ENV] === 'after-reservation') process.kill(process.pid, 'SIGKILL');
-        // Only a reservation no validator has seen is (re)sent; anything else is returned as it stands.
-        if (reserved.record.state !== 'queued' || reserved.record.acknowledged) return submitResponse(reserved.record);
+        // The identical reserved bytes go only to sources that do not hold them yet; a refused,
+        // mismatched or fully reserved record is returned as it stands.
+        const current = reserved.record;
+        if (current.state === 'rejected' || current.code === 'private_action_source_mismatch'
+            || unreservedSources(current).length === 0) {
+            return submitResponse(current);
+        }
         return submitResponse(await dispatch(request.intentId));
     }
 
@@ -406,28 +461,48 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
             state_root: null, accepted: null, code, fee: null, finality: null,
         });
         const localState = record ? record.state : 'unknown';
-        const results = await bothSources('private_action_receipt', { intent_id: request.intentId });
-        const answers = results.filter((result) => result.ok && result.result?.state !== 'pending_unknown');
-        if (answers.some((result) => !bindingsMatch(result.result, expected))) return pending('unknown', 'private_action_source_mismatch');
-        const finals = answers.filter((result) => result.result.state === 'accepted' || result.result.state === 'rejected');
-        if (finals.length === 0) return pending(localState, record?.code || null);
-        if (finals.length === 1) return pending(localState, 'private_receipt_unconfirmed');
-        const outcome = (result) => {
-            const r = result.result;
-            return JSON.stringify([r.state, r.transaction_id, r.inclusion_height, r.block_hash, r.state_root, r.accepted, r.code, r.fee]);
-        };
-        const evidence = finality(finals[0].result.finality);
-        const first = finals[0].result;
-        if (outcome(finals[0]) !== outcome(finals[1]) || !evidence || evidence.height !== first.inclusion_height
-            || evidence.block_hash !== first.block_hash || evidence.state_root !== first.state_root
-            || first.accepted !== (first.state === 'accepted')) {
-            return pending('unknown', 'private_action_source_mismatch');
+        const results = await allSources('private_action_receipt', { intent_id: request.intentId });
+        const views = [];
+        for (const result of results) {
+            if (!result.ok) continue;
+            const report = result.result;
+            if (report?.schema !== NODE_RECEIPT_SCHEMA || report.intent_id !== request.intentId) {
+                return pending('unknown', 'private_action_source_mismatch');
+            }
+            if (report.state === 'pending_unknown') continue;
+            const contract = report.contract_receipt;
+            if (contract?.schema !== SCHEMA || !bindingsMatch(contract, expected) || contract.state !== report.state
+                || !NODE_STATES.has(contract.state)) {
+                return pending('unknown', 'private_action_source_mismatch');
+            }
+            views.push(contract);
         }
-        return {
-            schema: SCHEMA, ...expected, state: first.state, transaction_id: first.transaction_id ?? null,
-            inclusion_height: first.inclusion_height, block_hash: first.block_hash, state_root: first.state_root,
-            accepted: first.accepted, code: first.code ?? null, fee: first.fee, finality: evidence,
-        };
+        const outcome = (c) => JSON.stringify([c.state, c.transaction_id, c.inclusion_height, c.block_hash, c.state_root,
+            c.accepted, c.code, c.fee, c.finality]);
+        const finals = views.filter((c) => c.state === 'accepted' || c.state === 'rejected');
+        if (finals.some((c) => outcome(c) !== outcome(finals[0]))) return pending('unknown', 'private_action_source_mismatch');
+        if (finals.length === 1) return pending(localState, 'private_receipt_unconfirmed');
+        if (finals.length >= 2) {
+            const first = finals[0];
+            const included = first.inclusion_height !== null && first.inclusion_height !== undefined;
+            const evidence = included ? finality(first.finality) : null;
+            // A rejection before any round has no inclusion and no state effect; anything
+            // included must carry finality for exactly that block.
+            const consistent = first.accepted === (first.state === 'accepted') && (included
+                ? evidence && evidence.height === first.inclusion_height && evidence.block_hash === first.block_hash
+                    && evidence.state_root === first.state_root
+                : first.state === 'rejected' && first.finality === null);
+            if (!consistent) return pending('unknown', 'private_action_source_mismatch');
+            return {
+                schema: SCHEMA, ...expected, state: first.state, transaction_id: first.transaction_id ?? null,
+                inclusion_height: first.inclusion_height ?? null, block_hash: first.block_hash ?? null,
+                state_root: first.state_root ?? null, accepted: first.accepted, code: first.code ?? null,
+                fee: first.fee, finality: evidence,
+            };
+        }
+        if (views.some((c) => c.state === 'unknown')) return pending('unknown', views.find((c) => c.state === 'unknown').code ?? null);
+        if (views.some((c) => c.state === 'dispatched')) return pending('dispatched', null);
+        return pending(views.length ? 'queued' : localState, record?.code || null);
     }
 
     async function readSource(source, method, params) {
