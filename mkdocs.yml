@@ -200,6 +200,7 @@ nav:
           - Signed Validator Snapshot Recovery: runbooks/signed-validator-snapshot-recovery.md
           - Public RPC Operator Policy: runbooks/public-rpc-operator-policy.md
           - Validator Identity Packets: runbooks/validator-identity-packets.md
+          - Task Node L1 Validator Binding: runbooks/tasknode-l1-validator-binding.md
           - Faucet Testnet Transactions: runbooks/faucet-testnet-transactions.md
           - Ingress Permit Activation: runbooks/ingress-permit-activation.md
   - Security:

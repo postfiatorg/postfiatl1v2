@@ -1,0 +1,1 @@
+{"name":"postfiat-tasknode-l1-vectors","private":true,"type":"module","scripts":{"test":"node verify-vectors.mjs"},"dependencies":{"@noble/post-quantum":"0.7.1"}}
