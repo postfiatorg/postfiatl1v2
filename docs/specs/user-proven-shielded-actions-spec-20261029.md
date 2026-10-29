@@ -5,8 +5,13 @@ Harness full gate scored it, without this paragraph, at 85.13/100 (GPT-6 Astra
 Pro 87.00, Claude Fable 5.1 80.80, GLM 5.3 87.60; five runs per judge; run group
 `user-proven-shielded-actions-spec-20261029-r1`; scored content SHA-256
 `59bb690fa97b4754…`). It is below 86 and was not iterated; locking it is M1 of
-the [milestone](../plans/active/user-proven-shielded-actions-milestone.md). It
-authorizes no deployment and no transaction.
+the [milestone](../plans/active/user-proven-shielded-actions-milestone.md). The
+same day, after one content pass bringing it up to date with main, the same
+gate scored 84.20/100 (GPT-6 Astra Pro 87.60, Claude Fable 5.1 81.00, GLM 5.3
+84.00; five runs per judge; run group
+`user-proven-shielded-actions-spec-20261029-r2`; scored content SHA-256
+`41ccab38ee41eef6…`). It is still below 86, was not iterated, and is not
+locked. It authorizes no deployment and no transaction.
 
 ## 1. BLUF
 
@@ -23,11 +28,14 @@ authorizes no deployment and no transaction.
 3. Admission is once-only. The gateway recomputes the client's intent id,
    durably reserves the intent, the action bytes and the canonical batch id
    before any transport, and never builds a second round or proof for the same
-   intent.
+   intent. The gateway routes (`db9af4f2`, `d9095797`) and the validators'
+   admission store and round service (`968da908`, `e37d77fd`) are on main, and
+   an integration test runs them together against real validators (`3747a2e7`).
 4. Recovery uses finalized public reads pinned to one snapshot token, with
-   paging. The NAV pricing claim and the egress binding reads are already on
-   main (`93454729`), and consensus enforces the claim's freshness, pair and
-   mode behind a governed activation (`ed89c916`).
+   paging (`683a5b32`, `0c396fc8`). The NAV pricing claim and the egress binding
+   reads are on main (`93454729`). Consensus enforces the claim's freshness,
+   pair and mode behind a governed activation (`ed89c916`), and governs the
+   egress policy through a registry behind its own activation (`899b26f8`).
 5. User-proven admission is not a two-party exchange. A counterparty, its
    liquidity and its reservation get their own specification later.
 6. W-2, the native session, is done (`e037829f`). It is the transport for this
@@ -62,7 +70,7 @@ Shielded swaps on the wallet proxy are operator-run, not user-proven.
 | `wallet-proxy/navswap-shielded.js:1421` | Runs `postfiat-node transport-peer-certified-batch-round` with `--key-file`. | The proxy drives the certified round with a validator key. |
 | `wallet-proxy/navswap-shielded.js:2292` | Posts the swap to `/asset-orchard/swap-batch` on the local service. | Batch construction depends on that service. |
 | `wallet-proxy/navswap-shielded.js:2386` | Executes and certifies the swap on the HTTP side. | Certification belongs to the validators. |
-| `crates/node/src/rpc_cli.rs:2083` | `shield_batch_orchard`, `shield_batch_orchard_deposit`, `shield_batch_orchard_withdraw` and `shield_batch_swap` build batches. | A built batch is not an admitted transaction: there is no durable admission, finality or receipt contract. |
+| `crates/node/src/rpc_cli.rs:2086` | `shield_batch_orchard`, `shield_batch_orchard_deposit`, `shield_batch_orchard_withdraw` and `shield_batch_swap` build batches. | A built batch is not an admitted transaction: there is no durable admission, finality or receipt contract. |
 
 The internals of the last row may be reused after review. A successful
 batch-build response is never reported as a committed action.
@@ -80,11 +88,24 @@ batch-build response is never reported as a committed action.
   ordinary proposal, vote and apply. Proposer routing, height ownership, quorum,
   catch-up and durable intent reconciliation are theirs.
 
+The admission and round service is `crates/node/src/private_action_admission.rs`.
+`crates/node/src/private_action_rpc.rs` serves it as `private_action_submit` and
+`private_action_receipt`, behind `rpc-serve --allow-private-action-admission`
+(`968da908`, `d7de5ec7`). A record waits until its validator is the proposer for
+the next height. A record left `unknown` by a crash settles as accepted when its
+batch lands (`e37d77fd`). The gateway is `wallet-proxy/private-actions.js`. It
+submits the reserved bytes to every configured validator source and reconciles
+their records (`db9af4f2`, `d9095797`).
+
 ## 5. The public action contract
 
-The normative payloads are in `crates/types/src/shielded_bridge_governance.rs:348-515`
-(`ShieldedSwapActionPayload` at 348, `AssetOrchardIngressV2ActionPayload` at 379,
-`AssetOrchardPrivateEgressActionPayload` at 406, the `ShieldedAction` enum at 488).
+The normative payloads are in `crates/types/src/shielded_bridge_governance.rs:369-536`
+(`ShieldedSwapActionPayload` at 369, `AssetOrchardIngressV2ActionPayload` at 400,
+`AssetOrchardPrivateEgressActionPayload` at 427, the `ShieldedAction` enum at 509).
+The routes' request and response types are `crates/types/src/private_actions_v1.rs`.
+Their fixtures, including vectors generated and pinned by
+`crates/node/tests/private_actions_contract.rs`, are in
+`crates/node/tests/fixtures/private-actions-v1/` (`346c79e4`).
 
 | Kind | Public content | Checks before the state change |
 | --- | --- | --- |
@@ -127,6 +148,13 @@ admission rules:
    inclusion, or an independently sourced validator view. Terminal rejections
    are typed, with their fee and state effects.
 
+On a validator, `postfiat-node private-action-resolve` settles a stuck `unknown`
+record from the chain (`657ce706`). If its batch is not on chain, the operator
+may instead abandon it with a reason. The receipt then reports `abandoned`
+with that reason (`ea2213d0`). The wallet may resubmit the same bytes under the
+same intent, which creates a fresh record, and the abandoned record stays in
+the admission log.
+
 ## 6. Recovery reads
 
 The wallet rebuilds its notes from one finalized snapshot. A snapshot holds the
@@ -147,6 +175,13 @@ and an explicit completeness flag.
 - Asset rows bind issuer, code, precision and `requires_authorization` to
   `asset_info`; frozen or unauthorized lines fail.
 
+The reads are `private_pool_snapshot`, `private_pool_page` and
+`private_account_lines` (`683a5b32`, `crates/node/src/private_pool_reads.rs`),
+and `private_pool_receipts` and `private_pool_market` (`0c396fc8`,
+`crates/node/src/private_pool_receipt_market_reads.rs`). The gateway's snapshot
+pages them to completeness under the client ceilings and refuses a mixed tip
+(`f8b9a838`).
+
 The client's current ceilings are 64 ciphertexts, 2 MiB of ciphertext,
 4096 commitments, nullifiers or anchors, 16 assets, 1 MiB of action text, a
 2 MiB request and a 4 MiB response, and it fails closed above them. Production
@@ -159,12 +194,12 @@ A swap's pricing claim is the typed `AssetOrchardPricingClaim` built from
 consensus-finalized NAV for the intended inclusion height: epoch, reserve-packet
 hash, ratio, mode and band, and both asset tags. Stale, halted or mismatched
 state is refused. The NAV denominator changes units at height 608
-(`ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT`, `crates/node/src/execution_actions.rs:4311`;
-pricing plan at `:4351`), so a pre-608 ratio is not a ce22 configuration.
+(`ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT`, `crates/node/src/execution_actions.rs:4386`;
+pricing plan at `:4426`), so a pre-608 ratio is not a ce22 configuration.
 
 The reads are on main (`93454729`): `asset_orchard_pricing_claim` and
-`asset_orchard_private_egress_binding` (`crates/node/src/asset_orchard_pricing_reads.rs:362`,
-`:527`). The claim is built by the function consensus uses. The egress binding
+`asset_orchard_private_egress_binding` (`crates/node/src/asset_orchard_pricing_reads.rs:368`,
+`:533`). The claim is built by the function consensus uses. The egress binding
 returns `ungoverned` because finalized state has no governed egress policy yet.
 A fixture policy or an all-zero disclosure hash is never a substitute.
 
@@ -182,9 +217,19 @@ behind a governed activation (`ed89c916`). The governance keys are
 - **Mode label:** an at-NAV claim with another mode label is refused as
   `asset_orchard_pricing_mode_mismatch`.
 
-The egress policy registry remains open. The egress policy and disclosure hash
-are checked for form and bound into the proof, but they are not governed until
-an egress policy is registered by governance.
+The egress policy is governed through a registry (`899b26f8`). Each record is
+an amendment of kind
+`asset_orchard_egress_policy_v1:<asset_id>:<disclosure_schema_hash>:<policy_id>`,
+whose value is its effective height.
+After the global switch `asset_orchard_egress_policy_activation_height`, a
+private egress must name its asset's governed policy, and its disclosure hash
+must equal the governed schema hash. Otherwise it is refused as
+`asset_orchard_egress_policy_mismatch` or `asset_orchard_egress_policy_not_governed`.
+Records and the switch are ratified with `postfiat-node
+ratify-asset-orchard-egress-policy` and
+`ratify-asset-orchard-egress-policy-activation-height`. Until governance writes
+the A666 and pfUSDC records, with an agreed disclosure schema, the egress
+binding read stays `ungoverned`.
 
 ## 8. Readiness
 
@@ -193,9 +238,14 @@ revision, proof system, circuit, parameters and verifying keys, and that real
 swap and egress verifiers are ready. Atomic shielded batches are activated by
 ordinary signed governance at the effective height; before it, execution
 refuses them with `shielded_atomic_batch_not_active`
-(`crates/node/src/execution_actions.rs:3219`). A mock verifier, a copied store,
+(`crates/node/src/execution_actions.rs:3245`). A mock verifier, a copied store,
 an unsafe file signer or a proxy-owned validator key never satisfies readiness.
 Readiness is published by the running service and the deployed manifest.
+
+The `private_readiness` read (`556cac38`, `crates/node/src/private_readiness_read.rs`)
+reports the pinned and loaded verifier identities and the governed activations.
+On `rpc-serve` it also reports the server's own admission switch (`657ce706`).
+The release deployed on the devnet predates the read.
 
 ## 9. Scope: admission, not exchange
 
@@ -232,6 +282,19 @@ replacement. A custodial `pftl_swapd` route does not close W-1.
    shield, private swap and unshield bounded at 1 pfUSDC, with exact public and
    private balances and fees, finality and fleet convergence.
 
+On main:
+
+- The contract test.
+- A gateway-to-node integration test with two real validators, covering
+  restart and diverging-tip cases and a secret inspection of every file the
+  proxy and the nodes wrote (`3747a2e7`, `46c5a956`, `c308b7af`;
+  `crates/node/tests/private_actions_gateway.rs`).
+- Six-validator tests with ingress actions and with real swap and egress proofs
+  (`e37d77fd`, `e5f8f5b8`).
+
+The stale-anchor and pricing-rule refusals and the ce22 run are not yet
+covered.
+
 ## 11. What does not change
 
 - **Wire formats.** `ShieldedAction` and its payloads keep their serialization.
@@ -242,9 +305,12 @@ replacement. A custodial `pftl_swapd` route does not close W-1.
 
 ## 12. References
 
-Section 12 was added after scoring.
+Section 12 was added after the first scoring.
 
 - Contract fixtures: `crates/node/tests/fixtures/private-actions-v1/` (`schema.json`, `vectors.json`, `manifest.json`, `assets.json`).
 - Shared request and response types: `crates/types/src/private_actions_v1.rs`.
 - Vector generator and pins: `crates/node/tests/private_actions_contract.rs`.
+- Gateway: `wallet-proxy/private-actions.js`; admission service: `crates/node/src/private_action_admission.rs`, `crates/node/src/private_action_rpc.rs`.
+- Reads: `crates/node/src/private_pool_reads.rs`, `crates/node/src/private_pool_receipt_market_reads.rs`, `crates/node/src/private_readiness_read.rs`.
+- Integration and secret inspection: `crates/node/tests/private_actions_gateway.rs`.
 - [Milestone](../plans/active/user-proven-shielded-actions-milestone.md).
