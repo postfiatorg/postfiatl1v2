@@ -201,6 +201,7 @@ nav:
           - Public RPC Operator Policy: runbooks/public-rpc-operator-policy.md
           - Validator Identity Packets: runbooks/validator-identity-packets.md
           - Faucet Testnet Transactions: runbooks/faucet-testnet-transactions.md
+          - Ingress Permit Activation: runbooks/ingress-permit-activation.md
   - Security:
       - Overview: security/index.md
       - Threat Model: security/threat-model.md
