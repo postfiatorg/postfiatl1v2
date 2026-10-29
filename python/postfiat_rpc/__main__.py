@@ -130,6 +130,9 @@ PUBLIC_READ_OBJECT_METHODS = frozenset(
         "fx_fix_quote",
         "asset_orchard_pricing_claim",
         "asset_orchard_private_egress_binding",
+        "private_pool_snapshot",
+        "private_pool_page",
+        "private_account_lines",
         "pfusdc_ingress_preflight",
         "pfusdc_egress_witness",
         "yolo_target_receipt",
@@ -191,6 +194,9 @@ CLI_METHODS: tuple[str, ...] = (
     "fx_fix_quote",
     "asset_orchard_pricing_claim",
     "asset_orchard_private_egress_binding",
+    "private_pool_snapshot",
+    "private_pool_page",
+    "private_account_lines",
     "pfusdc_ingress_preflight",
     "pfusdc_egress_witness",
     "yolo_target_receipt",
@@ -378,6 +384,26 @@ def call_method(client: PostFiatRpcClient, args: argparse.Namespace) -> Any:
             require_arg(args, "quote_asset_id", method),
             require_arg(args, "inclusion_height", method),
         )
+    if method == "private_pool_snapshot":
+        return client.private_pool_snapshot(
+            require_arg(args, "pool_id", method),
+            address=args.address,
+            base_asset_id=args.base_asset_id,
+            quote_asset_id=args.quote_asset_id,
+            inclusion_height=args.inclusion_height,
+        )
+    if method == "private_pool_page":
+        return client.private_pool_page(
+            require_arg(args, "snapshot_token", method),
+            require_arg(args, "section", method),
+            cursor=args.cursor,
+            limit=args.limit,
+        )
+    if method == "private_account_lines":
+        return client.private_account_lines(
+            require_arg(args, "snapshot_token", method),
+            require_arg(args, "address", method),
+        )
     if method == "pfusdc_ingress_preflight":
         return client.pfusdc_ingress_preflight(
             require_arg(args, "asset_id", method),
@@ -455,6 +481,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reservation-id")
     parser.add_argument("--base-atoms", type=int)
     parser.add_argument("--inclusion-height", type=int)
+    parser.add_argument("--pool-id")
+    parser.add_argument("--snapshot-token")
+    parser.add_argument("--section")
+    parser.add_argument("--cursor")
     parser.add_argument("--recipient")
     parser.add_argument("--depositor")
     parser.add_argument("--amount-atoms", type=int)

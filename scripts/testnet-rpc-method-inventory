@@ -60,6 +60,9 @@ POSTURE_NOTES = {
     "asset_orchard_action_status": "public private-action finality/status read",
     "asset_orchard_pricing_claim": "finalized at-NAV Asset-Orchard pricing claim for an inclusion height",
     "asset_orchard_private_egress_binding": "governed Asset-Orchard private-egress policy/disclosure binding read",
+    "private_pool_snapshot": "finalized private pool snapshot token, counts, pricing and completeness",
+    "private_pool_page": "token-pinned bounded page of a private pool section",
+    "private_account_lines": "token-pinned account lines bound to asset_info",
     "mempool_submit_signed_transfer": "controlled write edge; disabled unless explicitly enabled",
     "mempool_submit_signed_transfer_finality": "controlled in-process write/finality edge; disabled unless explicitly enabled",
     "shield_batch_orchard": "privacy-alpha batch-create edge; disabled unless explicitly enabled",
@@ -156,6 +159,9 @@ READ_ONLY_PUBLIC_METHODS = {
     "asset_orchard_action_status",
     "asset_orchard_pricing_claim",
     "asset_orchard_private_egress_binding",
+    "private_pool_snapshot",
+    "private_pool_page",
+    "private_account_lines",
 }
 
 AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS = {

@@ -821,6 +821,9 @@ fn print_usage() {
   postfiat-node rpc --method fx_fix_quote [--data-dir PATH] --fix-packet-hash HASH --base-atoms N
   postfiat-node rpc --method asset_orchard_pricing_claim [--data-dir PATH] --base-asset-id ID --quote-asset-id ID --inclusion-height N
   postfiat-node rpc --method asset_orchard_private_egress_binding [--data-dir PATH] --base-asset-id ID --quote-asset-id ID --inclusion-height N
+  postfiat-node rpc --method private_pool_snapshot [--data-dir PATH] --pool-id ID [--address ADDRESS] [--base-asset-id ID --quote-asset-id ID] [--inclusion-height N]
+  postfiat-node rpc --method private_pool_page [--data-dir PATH] --snapshot-token TOKEN --section commitments|nullifiers|accepted_anchors|outputs|assets [--cursor CURSOR] [--limit N]
+  postfiat-node rpc --method private_account_lines [--data-dir PATH] --snapshot-token TOKEN --address ADDRESS
   postfiat-node rpc --method account_lines [--data-dir PATH] --account ADDRESS [--issuer ADDRESS] [--asset-id ID] [--limit N]
   postfiat-node rpc --method account_assets [--data-dir PATH] --account ADDRESS [--asset-id ID] [--limit N]
   postfiat-node rpc --method owned_objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N]

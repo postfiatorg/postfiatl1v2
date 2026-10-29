@@ -761,6 +761,59 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 report.map_err(|error| format!("rpc {method} serialization failed: {error}"))?;
             print_rpc_success(id, &report, vec![RpcEvent::new(method, status, "queried")])
         }
+        "private_pool_snapshot" => {
+            let report = private_pool_snapshot(PrivatePoolSnapshotOptions {
+                data_dir,
+                pool_id: flag_value(flags, "--pool-id")
+                    .ok_or("missing --pool-id")?
+                    .to_string(),
+                address: flag_value(flags, "--address").map(str::to_string),
+                base_asset_id: flag_value(flags, "--base-asset-id").map(str::to_string),
+                quote_asset_id: flag_value(flags, "--quote-asset-id").map(str::to_string),
+                inclusion_height: flag_value(flags, "--inclusion-height")
+                    .map(|_| parse_u64_flag(flags, "--inclusion-height"))
+                    .transpose()?,
+            })
+            .map_err(|error| format!("rpc {method} failed: {error}"))?;
+            let subject = report.snapshot_token.clone();
+            print_rpc_success(id, &report, vec![RpcEvent::new(method, subject, "queried")])
+        }
+        "private_pool_page" => {
+            let report = private_pool_page(PrivatePoolPageOptions {
+                data_dir,
+                snapshot_token: flag_value(flags, "--snapshot-token")
+                    .ok_or("missing --snapshot-token")?
+                    .to_string(),
+                section: flag_value(flags, "--section")
+                    .ok_or("missing --section")?
+                    .to_string(),
+                cursor: flag_value(flags, "--cursor").map(str::to_string),
+                limit: flag_value(flags, "--limit")
+                    .map(|value| {
+                        value
+                            .parse::<usize>()
+                            .map_err(|_| "--limit must be a usize".to_string())
+                    })
+                    .transpose()?,
+            })
+            .map_err(|error| format!("rpc {method} failed: {error}"))?;
+            let subject = report.status.clone();
+            print_rpc_success(id, &report, vec![RpcEvent::new(method, subject, "queried")])
+        }
+        "private_account_lines" => {
+            let report = private_account_lines(PrivateAccountLinesOptions {
+                data_dir,
+                snapshot_token: flag_value(flags, "--snapshot-token")
+                    .ok_or("missing --snapshot-token")?
+                    .to_string(),
+                address: flag_value(flags, "--address")
+                    .ok_or("missing --address")?
+                    .to_string(),
+            })
+            .map_err(|error| format!("rpc {method} failed: {error}"))?;
+            let subject = report.status.clone();
+            print_rpc_success(id, &report, vec![RpcEvent::new(method, subject, "queried")])
+        }
         "market_ops_status" => {
             let asset_id = flag_value(flags, "--asset-id").ok_or("missing --asset-id")?;
             let epoch = flag_value(flags, "--epoch")

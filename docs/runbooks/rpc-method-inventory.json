@@ -13,9 +13,9 @@
     "operator_or_local_only": 40,
     "owned_lane_gated": 8,
     "privacy_alpha_gated": 4,
-    "read_only_public": 78,
+    "read_only_public": 81,
     "sdk_only_or_unknown": 0,
-    "total_methods": 157
+    "total_methods": 160
   },
   "gaps": [
     {
@@ -34,10 +34,10 @@
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-10-29T10:50:52Z",
+  "generated_utc": "2026-10-29T11:31:41Z",
   "git": {
-    "dirty": false,
-    "revision": "93454729ba1fc127bc2a3f2f55444e4bbc93014e"
+    "dirty": true,
+    "revision": "2bf89150a942dd9e47b302e69d46e21ea4392fd0"
   },
   "methods": [
     {
@@ -1936,6 +1936,51 @@
       "method": "pfusdc_ingress_preflight",
       "node_dispatch": true,
       "notes": "read-only exact pfUSDC ingress transition simulation",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "sdk_constant": false
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "private_account_lines",
+      "node_dispatch": true,
+      "notes": "token-pinned account lines bound to asset_info",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "sdk_constant": false
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "private_pool_page",
+      "node_dispatch": true,
+      "notes": "token-pinned bounded page of a private pool section",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "sdk_constant": false
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "private_pool_snapshot",
+      "node_dispatch": true,
+      "notes": "finalized private pool snapshot token, counts, pricing and completeness",
       "owned_lane_allowed_when_enabled": false,
       "posture": "read_only_public",
       "privacy_alpha_allowed_when_enabled": false,

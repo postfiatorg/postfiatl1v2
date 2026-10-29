@@ -219,6 +219,32 @@ class RemainingReadWrapperTests(unittest.TestCase):
             },
         )
 
+    def test_private_pool_reads_send_the_token_section_cursor_and_limit(self) -> None:
+        client = _client()
+        with mock.patch.object(client, "_call", return_value={"snapshot_token": "t"}) as call:
+            client.private_pool_snapshot("asset-orchard-v1", address="pfa", inclusion_height=7)
+        call.assert_called_once_with(
+            "private_pool_snapshot",
+            {"pool_id": "asset-orchard-v1", "address": "pfa", "inclusion_height": 7},
+        )
+        with mock.patch.object(client, "_call", return_value={"status": "ok"}) as call:
+            client.private_pool_page("t", "commitments", cursor="c", limit=100)
+        call.assert_called_once_with(
+            "private_pool_page",
+            {"snapshot_token": "t", "section": "commitments", "cursor": "c", "limit": 100},
+        )
+        with mock.patch.object(client, "_call", return_value={"status": "ok"}) as call:
+            client.private_account_lines("t", "pfa")
+        call.assert_called_once_with("private_account_lines", {"snapshot_token": "t", "address": "pfa"})
+        with mock.patch.object(client, "_call") as call:
+            with self.assertRaisesRegex(ValueError, "must be given together"):
+                client.private_pool_snapshot("p", base_asset_id="A")
+            with self.assertRaisesRegex(ValueError, "limit must be a positive integer"):
+                client.private_pool_page("t", "outputs", limit=0)
+            with self.assertRaisesRegex(ValueError, "snapshot_token must be a non-empty string"):
+                client.private_account_lines("", "pfa")
+        call.assert_not_called()
+
     def test_bad_arguments_fail_before_any_request(self) -> None:
         client = _client()
         with mock.patch.object(client, "_call") as call:

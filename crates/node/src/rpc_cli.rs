@@ -3951,6 +3951,9 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "asset_orchard_action_status"
             | "asset_orchard_pricing_claim"
             | "asset_orchard_private_egress_binding"
+            | "private_pool_snapshot"
+            | "private_pool_page"
+            | "private_account_lines"
             | "fx_fix_quote"
             | "account_lines"
             | "account_assets"
@@ -4339,6 +4342,9 @@ mod remote_method_policy_tests {
             "asset_orchard_action_status",
             "asset_orchard_pricing_claim",
             "asset_orchard_private_egress_binding",
+            "private_pool_snapshot",
+            "private_pool_page",
+            "private_account_lines",
         ] {
             assert!(rpc_serve_method_allowed(method, false, false, false));
         }

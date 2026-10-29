@@ -111,17 +111,18 @@ pub struct AssetOrchardPrivateEgressBindingReport {
     pub bindings: Vec<AssetOrchardPrivateEgressBinding>,
 }
 
-struct FinalizedPairSnapshot {
-    genesis: Genesis,
-    tip: ChainTipState,
-    governance: GovernanceState,
-    ledger: LedgerState,
+pub(super) struct FinalizedPairSnapshot {
+    pub(super) genesis: Genesis,
+    pub(super) tip: ChainTipState,
+    pub(super) governance: GovernanceState,
+    pub(super) ledger: LedgerState,
+    pub(super) shielded: ShieldedState,
 }
 
 /// Reads governance and ledger state and proves, by recomputing the
 /// replicated state root over the exact copies served, that they are the
 /// committed chain-tip state. A commit racing the read is retried.
-fn read_finalized_pair_snapshot(data_dir: &Path) -> io::Result<FinalizedPairSnapshot> {
+pub(super) fn read_finalized_pair_snapshot(data_dir: &Path) -> io::Result<FinalizedPairSnapshot> {
     let store = NodeStore::new(data_dir);
     let genesis = store.read_genesis()?;
     for _ in 0..SNAPSHOT_READ_ATTEMPTS {
@@ -153,6 +154,7 @@ fn read_finalized_pair_snapshot(data_dir: &Path) -> io::Result<FinalizedPairSnap
                 tip,
                 governance,
                 ledger,
+                shielded,
             });
         }
     }
@@ -362,6 +364,16 @@ pub fn asset_orchard_pricing_claim(
 ) -> io::Result<AssetOrchardPricingClaimReport> {
     validate_pair_options(&options)?;
     let snapshot = read_finalized_pair_snapshot(&options.data_dir)?;
+    asset_orchard_pricing_claim_from_snapshot(&snapshot, &options)
+}
+
+/// [`asset_orchard_pricing_claim`] over an already-read finalized snapshot,
+/// so a caller serving several reads keeps them on one state.
+pub(super) fn asset_orchard_pricing_claim_from_snapshot(
+    snapshot: &FinalizedPairSnapshot,
+    options: &AssetOrchardPairReadOptions,
+) -> io::Result<AssetOrchardPricingClaimReport> {
+    validate_pair_options(options)?;
     let enforcement = pricing_enforcement(&snapshot, options.inclusion_height);
     let max_nav_age = enforcement.and_then(|enforcement| enforcement.max_nav_age_blocks);
     let base = governing_asset(&snapshot.ledger, &options.base_asset_id, max_nav_age)?;
@@ -517,6 +529,14 @@ pub fn asset_orchard_private_egress_binding(
 ) -> io::Result<AssetOrchardPrivateEgressBindingReport> {
     validate_pair_options(&options)?;
     let snapshot = read_finalized_pair_snapshot(&options.data_dir)?;
+    asset_orchard_private_egress_binding_from_snapshot(&snapshot, &options)
+}
+
+pub(super) fn asset_orchard_private_egress_binding_from_snapshot(
+    snapshot: &FinalizedPairSnapshot,
+    options: &AssetOrchardPairReadOptions,
+) -> io::Result<AssetOrchardPrivateEgressBindingReport> {
+    validate_pair_options(options)?;
     let enforcement = pricing_enforcement(&snapshot, options.inclusion_height);
     let max_nav_age = enforcement.and_then(|enforcement| enforcement.max_nav_age_blocks);
     let base = governing_asset(&snapshot.ledger, &options.base_asset_id, max_nav_age)?;
@@ -552,8 +572,8 @@ pub fn asset_orchard_private_egress_binding(
         inclusion_height: options.inclusion_height,
         status: status.to_string(),
         refusal: Some(refusal),
-        base_asset_id: options.base_asset_id,
-        quote_asset_id: options.quote_asset_id,
+        base_asset_id: options.base_asset_id.clone(),
+        quote_asset_id: options.quote_asset_id.clone(),
         base_asset: base,
         quote_asset: quote,
         bindings,

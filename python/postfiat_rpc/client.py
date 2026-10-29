@@ -1785,6 +1785,68 @@ class PostFiatRpcClient:
             self._asset_orchard_pair_params(base_asset_id, quote_asset_id, inclusion_height),
         )
 
+    def private_pool_snapshot(
+        self,
+        pool_id: str,
+        *,
+        address: str | None = None,
+        base_asset_id: str | None = None,
+        quote_asset_id: str | None = None,
+        inclusion_height: int | None = None,
+    ) -> dict[str, Any]:
+        """Pin one finalized private-pool snapshot (public read).
+
+        Returns the `snapshot_token` every page and account-line read must
+        name, the identity, counts, page limits, pricing claim, egress binding
+        and completeness flags.
+        """
+        params: dict[str, Any] = {"pool_id": self._required_text(pool_id, "pool_id")}
+        if address is not None:
+            params["address"] = self._required_text(address, "address")
+        if (base_asset_id is None) != (quote_asset_id is None):
+            raise ValueError("base_asset_id and quote_asset_id must be given together")
+        if base_asset_id is not None and quote_asset_id is not None:
+            params["base_asset_id"] = self._required_text(base_asset_id, "base_asset_id")
+            params["quote_asset_id"] = self._required_text(quote_asset_id, "quote_asset_id")
+        if inclusion_height is not None:
+            params["inclusion_height"] = self._required_u64(inclusion_height, "inclusion_height")
+        return self._object_read("private_pool_snapshot", params)
+
+    def private_pool_page(
+        self,
+        snapshot_token: str,
+        section: str,
+        *,
+        cursor: str | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """One bounded page of a snapshot section (public read).
+
+        `status` is `ok` with `items` and `next_cursor`, or `refused` with a
+        `refusal` code such as `snapshot_unavailable` or `cursor_malformed`.
+        """
+        params: dict[str, Any] = {
+            "snapshot_token": self._required_text(snapshot_token, "snapshot_token"),
+            "section": self._required_text(section, "section"),
+        }
+        if cursor is not None:
+            params["cursor"] = self._required_text(cursor, "cursor")
+        if limit is not None:
+            if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+                raise ValueError("limit must be a positive integer")
+            params["limit"] = limit
+        return self._object_read("private_pool_page", params)
+
+    def private_account_lines(self, snapshot_token: str, address: str) -> dict[str, Any]:
+        """The account's asset lines at a snapshot, zero balances included (public read)."""
+        return self._object_read(
+            "private_account_lines",
+            {
+                "snapshot_token": self._required_text(snapshot_token, "snapshot_token"),
+                "address": self._required_text(address, "address"),
+            },
+        )
+
     def _asset_orchard_pair_params(
         self, base_asset_id: str, quote_asset_id: str, inclusion_height: int
     ) -> dict[str, Any]:

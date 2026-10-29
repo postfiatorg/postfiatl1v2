@@ -14,8 +14,8 @@ method lacks an explicit posture.
 
 ## Summary
 
-- Total methods observed: 157
-- Read-only public methods: 78
+- Total methods observed: 160
+- Read-only public methods: 81
 - Public cryptographically authorized protocol mutations: 12
 - Controlled write gated methods: 15
 - Privacy-alpha gated methods: 4
@@ -176,6 +176,9 @@ method lacks an explicit posture.
 | pfusdc_checkpoint_witness | operator_or_local_only | no | no | yes | no | no |  |
 | pfusdc_egress_witness | read_only_public | yes | no | yes | no | yes |  |
 | pfusdc_ingress_preflight | read_only_public | yes | no | yes | no | yes | read-only exact pfUSDC ingress transition simulation |
+| private_account_lines | read_only_public | yes | no | yes | no | yes | token-pinned account lines bound to asset_info |
+| private_pool_page | read_only_public | yes | no | yes | no | yes | token-pinned bounded page of a private pool section |
+| private_pool_snapshot | read_only_public | yes | no | yes | no | yes | finalized private pool snapshot token, counts, pricing and completeness |
 | receipts | read_only_public | yes | no | yes | yes | yes | bounded receipt lookup |
 | server_info | read_only_public | yes | no | yes | yes | yes | XRP-like server info alias |
 | shield_batch_asset_orchard_ingress | operator_or_local_only | no | no | yes | no | no |  |

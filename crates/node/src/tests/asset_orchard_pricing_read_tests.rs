@@ -1,3 +1,13 @@
+    /// Parallel tests can read the same nanosecond clock tick; a sequence
+    /// number keeps their fixture directories distinct.
+    static READ_FIXTURE_SEQUENCE: std::sync::atomic::AtomicU64 =
+        std::sync::atomic::AtomicU64::new(0);
+
+    fn unique_read_fixture_dir(prefix: &str) -> PathBuf {
+        let sequence = READ_FIXTURE_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        unique_test_dir(&format!("{prefix}-{sequence}"))
+    }
+
     const PRICING_READ_NAV_PER_UNIT: u64 = 1_234_500_000;
     const PRICING_READ_FINALIZED_AT: u64 = 590;
     const PRICING_READ_EPOCH_GAP: u64 = 200;
@@ -17,7 +27,7 @@
         tip_height: u64,
         mutate: impl FnOnce(&mut LedgerState, &mut GovernanceState),
     ) -> PricingReadFixture {
-        let data_dir = unique_test_dir("postfiat-asset-orchard-pricing-read");
+        let data_dir = unique_read_fixture_dir("postfiat-asset-orchard-pricing-read");
         init(InitOptions {
             data_dir: data_dir.clone(),
             chain_id: "postfiat-asset-orchard-pricing-read".to_string(),

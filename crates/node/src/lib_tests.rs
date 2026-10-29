@@ -6,6 +6,7 @@ mod tests {
     include!("tests/fx_fix_query_tests.rs");
     include!("tests/asset_orchard_pricing_read_tests.rs");
     include!("tests/asset_orchard_pricing_enforcement_tests.rs");
+    include!("tests/private_pool_read_tests.rs");
     include!("tests/yolo_target_receipt_tests.rs");
     include!("tests/nav_reserve_proof_status_tests.rs");
     mod a666_recovery_regression_tests;
