@@ -452,6 +452,7 @@ mod transport_batch_payload_tests {
                 allow_mempool_submit: false,
                 allow_mempool_submit_finality: true,
                 allow_orchard_batch_create: false,
+                allow_private_action_admission: false,
                 owned_lane_enabled: true,
                 finality_topology_file: recovery_topology,
                 finality_key_file: recovery_data_dir.join(VALIDATOR_KEYS_FILE),

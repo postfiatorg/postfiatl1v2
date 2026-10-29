@@ -737,6 +737,9 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 )],
             )
         }
+        "private_action_submit" | "private_action_receipt" => {
+            run_rpc_private_action(id, method, flags, &data_dir)
+        }
         "asset_orchard_pricing_claim" | "asset_orchard_private_egress_binding" => {
             let required =
                 |flag: &str| flag_value(flags, flag).ok_or_else(|| format!("missing {flag}"));

@@ -325,6 +325,9 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             let allow_mempool_submit_finality =
                 flag_present(flags, "--allow-mempool-submit-finality");
             let allow_orchard_batch_create = flag_present(flags, "--allow-orchard-batch-create");
+            // Off by default: private action admission and its round service.
+            let allow_private_action_admission =
+                flag_present(flags, "--allow-private-action-admission");
             // FastPay is a normal signed payment capability. Operators may
             // disable it explicitly during an incident, but ordinary startup
             // must not silently remove the lane.
@@ -442,6 +445,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                     allow_mempool_submit_finality,
                     allow_orchard_batch_create,
                     owned_lane_enabled,
+                    allow_private_action_admission,
                     finality_topology_file,
                     finality_key_file,
                     finality_proposal_key_file,

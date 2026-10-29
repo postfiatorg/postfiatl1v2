@@ -14,13 +14,13 @@ method lacks an explicit posture.
 
 ## Summary
 
-- Total methods observed: 160
+- Total methods observed: 162
 - Read-only public methods: 81
 - Public cryptographically authorized protocol mutations: 12
 - Controlled write gated methods: 15
 - Privacy-alpha gated methods: 4
 - Owned-lane gated methods: 8
-- Operator/local-only methods: 40
+- Operator/local-only methods: 42
 - Unclassified methods: 0
 - Classification checks: PASS
 
@@ -177,6 +177,8 @@ method lacks an explicit posture.
 | pfusdc_egress_witness | read_only_public | yes | no | yes | no | yes |  |
 | pfusdc_ingress_preflight | read_only_public | yes | no | yes | no | yes | read-only exact pfUSDC ingress transition simulation |
 | private_account_lines | read_only_public | yes | no | yes | no | yes | token-pinned account lines bound to asset_info |
+| private_action_receipt | operator_or_local_only | no | no | yes | no | yes |  |
+| private_action_submit | operator_or_local_only | no | no | yes | no | yes |  |
 | private_pool_page | read_only_public | yes | no | yes | no | yes | token-pinned bounded page of a private pool section |
 | private_pool_snapshot | read_only_public | yes | no | yes | no | yes | finalized private pool snapshot token, counts, pricing and completeness |
 | receipts | read_only_public | yes | no | yes | yes | yes | bounded receipt lookup |

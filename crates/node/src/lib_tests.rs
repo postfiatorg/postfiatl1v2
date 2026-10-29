@@ -9,6 +9,7 @@ mod tests {
     include!("tests/private_pool_read_tests.rs");
     include!("tests/yolo_target_receipt_tests.rs");
     include!("tests/nav_reserve_proof_status_tests.rs");
+    include!("tests/private_action_admission_tests.rs");
     mod a666_recovery_regression_tests;
     mod account_tx_chunked_index;
     mod account_tx_commit_index;

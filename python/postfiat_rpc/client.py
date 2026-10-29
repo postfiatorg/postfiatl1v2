@@ -1856,6 +1856,44 @@ class PostFiatRpcClient:
             "inclusion_height": self._required_u64(inclusion_height, "inclusion_height"),
         }
 
+    def private_action_submit(
+        self,
+        *,
+        chain_id: str,
+        genesis_hash: str,
+        protocol_version: int,
+        pool_id: str,
+        session_scope: str,
+        intent_id: str,
+        action_json: str,
+        action_hash: str,
+    ) -> dict[str, Any]:
+        """Reserve a user-proven shielded action on a validator that enables
+        private action admission. Returns the durable record; an acknowledgement
+        means admitted and pending, never committed."""
+        return self._object_read(
+            "private_action_submit",
+            {
+                "chain_id": self._required_text(chain_id, "chain_id"),
+                "genesis_hash": self._required_text(genesis_hash, "genesis_hash"),
+                "protocol_version": self._required_u64(protocol_version, "protocol_version"),
+                "pool_id": self._required_text(pool_id, "pool_id"),
+                "session_scope": self._required_text(session_scope, "session_scope"),
+                "intent_id": self._required_text(intent_id, "intent_id"),
+                "action_json": self._required_text(action_json, "action_json"),
+                "action_hash": self._required_text(action_hash, "action_hash"),
+            },
+        )
+
+    def private_action_receipt(self, intent_id: str) -> dict[str, Any]:
+        """Read-only receipt for an intent: its state and, once included, the
+        inclusion height, block hash, state root, fee and finality evidence.
+        An unknown intent is `pending_unknown`."""
+        return self._object_read(
+            "private_action_receipt",
+            {"intent_id": self._required_text(intent_id, "intent_id")},
+        )
+
     def pfusdc_ingress_preflight(
         self,
         asset_id: str,
@@ -3494,3 +3532,33 @@ def _nft_id(chain_id: str, issuer: str, collection_id: str, serial: int) -> str:
 def _offer_id(chain_id: str, owner: str, owner_sequence: int) -> str:
     preimage = f"chain_id={chain_id}\nowner={owner}\nowner_sequence={owner_sequence}\n"
     return _hash_hex_domain(OFFER_ID_DOMAIN, preimage.encode("utf-8"))
+
+
+PRIVATE_ACTION_INTENT_DOMAIN = "tasknode.private-intent.v1"
+PRIVATE_ACTION_HASH_DOMAIN = "postfiat.private-actions.action.v1"
+
+
+def _domain_hash_hex(domain: str, payload: bytes) -> str:
+    return hashlib.sha3_384(domain.encode() + b"\x00" + payload).hexdigest()
+
+
+def private_action_intent_id(
+    chain_id: str, genesis_hash: str, protocol_version: int, action_json: str
+) -> str:
+    """The wallet's intent id: SHA3-384 under `tasknode.private-intent.v1`
+    over the compact JSON pair (domain, action text)."""
+    pair = [
+        {"chain_id": chain_id, "genesis_hash": genesis_hash, "protocol_version": protocol_version},
+        action_json,
+    ]
+    payload = json.dumps(pair, separators=(",", ":"), ensure_ascii=False).encode()
+    return _domain_hash_hex(PRIVATE_ACTION_INTENT_DOMAIN, payload)
+
+
+def private_action_hash(action_json: str) -> str:
+    """SHA3-384 of the action text under `postfiat.private-actions.action.v1`.
+
+    The contract hashes the canonical serialization of the decoded action;
+    this equals it when the text is canonical, which is what the wallet
+    persists. The node recomputes it and refuses a mismatch."""
+    return _domain_hash_hex(PRIVATE_ACTION_HASH_DOMAIN, action_json.encode())

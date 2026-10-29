@@ -95,6 +95,7 @@ struct RpcServeOptions {
     allow_mempool_submit_finality: bool,
     allow_orchard_batch_create: bool,
     owned_lane_enabled: bool,
+    allow_private_action_admission: bool,
     finality_topology_file: PathBuf,
     finality_key_file: PathBuf,
     finality_proposal_key_file: Option<PathBuf>,
@@ -122,6 +123,7 @@ struct RpcServeConnectionContext {
     allow_mempool_submit_finality: bool,
     allow_orchard_batch_create: bool,
     owned_lane_enabled: bool,
+    allow_private_action_admission: bool,
     owned_certificate_domain: postfiat_types::OwnedCertificateDomain,
     child_timeout_ms: u64,
     finality_topology_file: PathBuf,
@@ -656,6 +658,7 @@ fn rpc_serve_accept_budget_allows(accepted_count: usize, max_requests: usize) ->
 }
 
 include!("rpc_serve_runtime.rs");
+include!("private_action_rpc.rs");
 
 fn receive_rpc_serve_event(
     event_receiver: &mpsc::Receiver<(Option<RpcServeEventRecord>, bool)>,
@@ -889,6 +892,16 @@ fn handle_rpc_serve_connection(
             "rpc_protocol_error",
             "remote rpc request contains key material fields",
         )
+    } else if is_private_action_method(&method) {
+        if rpc_serve_private_action_allowed(&method, context.allow_private_action_admission) {
+            run_rpc_serve_private_action(&request, context)
+        } else {
+            rpc_serve_error_response(
+                &id,
+                "rpc_method_not_allowed",
+                &format!("rpc method `{method}` is not enabled on the read-only remote server"),
+            )
+        }
     } else if !rpc_serve_method_allowed_with_owned_lane(
         &method,
         context.allow_mempool_submit,
@@ -5407,6 +5420,7 @@ mod child_dispatch_limit_tests {
             allow_mempool_submit_finality: false,
             allow_orchard_batch_create: false,
             owned_lane_enabled: true,
+            allow_private_action_admission: false,
             owned_certificate_domain: postfiat_types::OwnedCertificateDomain {
                 schema: postfiat_types::OWNED_CERTIFICATE_DOMAIN_SCHEMA_V2.to_string(),
                 chain_id: "child-dispatch-test".to_string(),

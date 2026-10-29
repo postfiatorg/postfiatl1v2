@@ -11,7 +11,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .client import Endpoint, PostFiatRpcClient, RpcClientError
+from .client import (
+    Endpoint,
+    PostFiatRpcClient,
+    RpcClientError,
+    private_action_hash,
+    private_action_intent_id,
+)
 
 
 NONLOCAL_IPV4_RE = re.compile(
@@ -92,6 +98,13 @@ def method_checks(method: str, result: Any, args: argparse.Namespace) -> dict[st
         checks["orchard_pool_passed"] = isinstance(result, dict) and result.get("passed") is True
     elif method in {"blocks", "receipts", "batch_archive", "shield_scan"}:
         checks[f"{method}_is_list"] = isinstance(result, list)
+    elif method == "private_action_submit":
+        record = result.get("record") if isinstance(result, dict) else None
+        checks["private_action_reserved"] = isinstance(record, dict) and record.get("state") in PRIVATE_ACTION_STATES
+    elif method == "private_action_receipt":
+        checks["private_action_receipt_state"] = isinstance(result, dict) and (
+            result.get("state") in PRIVATE_ACTION_STATES or result.get("state") == "pending_unknown"
+        )
     elif method in PUBLIC_READ_OBJECT_METHODS:
         checks[f"{method}_is_object"] = isinstance(result, dict)
     else:
@@ -107,6 +120,8 @@ def report_has_sensitive_text(report: dict[str, Any]) -> bool:
         return True
     return False
 
+
+PRIVATE_ACTION_STATES = frozenset({"queued", "dispatched", "accepted", "rejected", "unknown"})
 
 # Documented public reads (docs/rpc/method-coverage.md) whose result is one
 # report object; `shield_scan` is the list-shaped one and is checked above.
@@ -200,6 +215,8 @@ CLI_METHODS: tuple[str, ...] = (
     "pfusdc_ingress_preflight",
     "pfusdc_egress_witness",
     "yolo_target_receipt",
+    "private_action_submit",
+    "private_action_receipt",
 )
 
 
@@ -418,6 +435,29 @@ def call_method(client: PostFiatRpcClient, args: argparse.Namespace) -> Any:
         )
     if method == "yolo_target_receipt":
         return client.yolo_target_receipt(require_arg(args, "registration_id", method))
+    if method == "private_action_submit":
+        chain_id = require_arg(args, "chain_id", method)
+        genesis_hash = require_arg(args, "genesis_hash", method)
+        protocol_version = require_arg(args, "protocol_version", method)
+        session_scope = require_arg(args, "session_scope", method)
+        action_file = require_arg(args, "action_file", method)
+        with open(action_file, encoding="utf-8") as handle:
+            action_json = handle.read()
+        intent_id = private_action_intent_id(chain_id, genesis_hash, protocol_version, action_json)
+        if args.intent_id is not None and args.intent_id != intent_id:
+            raise SystemExit(f"--intent-id does not match the recomputed intent id {intent_id}")
+        return client.private_action_submit(
+            chain_id=chain_id,
+            genesis_hash=genesis_hash,
+            protocol_version=protocol_version,
+            pool_id=args.pool_id or "asset-orchard-v1",
+            session_scope=session_scope,
+            intent_id=intent_id,
+            action_json=action_json,
+            action_hash=private_action_hash(action_json),
+        )
+    if method == "private_action_receipt":
+        return client.private_action_receipt(require_arg(args, "intent_id", method))
     raise SystemExit(f"unsupported method: {method}")
 
 
@@ -491,6 +531,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--withdrawal-id")
     parser.add_argument("--prior-checkpoint")
     parser.add_argument("--registration-id")
+    # Private action admission (validators started with --allow-private-action-admission)
+    parser.add_argument("--chain-id")
+    parser.add_argument("--genesis-hash")
+    parser.add_argument("--protocol-version", type=int)
+    parser.add_argument("--session-scope")
+    parser.add_argument("--intent-id")
+    parser.add_argument("--action-file")
     parser.add_argument("--timeout-seconds", type=float, default=8.0)
     parser.add_argument("--response-byte-cap", type=int, default=1_048_576)
     parser.add_argument(

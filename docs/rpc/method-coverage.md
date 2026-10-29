@@ -126,6 +126,18 @@ governed NAVCoin and vault-bridge surfaces.
 | `bridge_batch_resume` | operator/local only | Builds a bridge-resume action batch file without applying it. |
 | `apply_bridge_batch` | operator/local only | Applies a prepared bridge-action batch directly and returns its receipts. |
 
+## Private action admission (W-1)
+
+These arms admit user-proven shielded actions on a validator. The code-derived
+inventory lists them as operator/local only because they are not in the
+read-only allowlist; `rpc-serve` exposes them remotely only when started with
+`--allow-private-action-admission`, which is off by default.
+
+| Method | Posture | Current dispatch behavior |
+| --- | --- | --- |
+| `private_action_submit` | operator/local only | Takes the flat domain (`chain_id`, `genesis_hash`, `protocol_version`, `pool_id`, `session_scope`), `intent_id`, the exact `action_json` and `action_hash`. Applies the `postfiat_types::private_actions_v1` contract: recomputes the `tasknode.private-intent.v1` intent id, strictly decodes only `asset_orchard_ingress_v2`, `shielded_swap_v1` and `asset_orchard_private_egress_v1`, and checks the canonical action hash. Runs the execution's verification at the finalized state and refuses with the execution's code, builds the canonical atomic batch and reserves it durably as `queued`. The same intent and bytes return the existing record; a conflicting intent is `private_intent_conflict`, and a known action hash or batch id under a new intent is `private_action_duplicate`. |
+| `private_action_receipt` | operator/local only | Read-only. Returns the record for an intent with its state (`queued`, `dispatched`, `accepted`, `rejected`, `unknown`) and, once included, the height, block hash, state root, receipt ids, fee and the block's certificate and consensus-v2 commit. `contract_receipt` carries the same outcome in the contract's receipt shape, with `validator_quorum_block_certificate_v1` finality. An intent this node never admitted is `pending_unknown`. |
+
 ## Coverage contract
 
 `scripts/test-rpc-method-inventory` extracts the current dispatch arms and

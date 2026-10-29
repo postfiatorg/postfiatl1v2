@@ -77,6 +77,14 @@ fn rpc_serve_drain(
     if !finality_topology_available || !finality_key_available {
         return Err("rpc serve finality configuration files are unavailable".to_string());
     }
+    if options.allow_private_action_admission
+        && (!options.finality_topology_file.is_file() || !options.finality_key_file.is_file())
+    {
+        return Err(
+            "--allow-private-action-admission needs the finality topology and validator key files"
+                .to_string(),
+        );
+    }
     let initial_mempool = mempool_state(NodeOptions {
         data_dir: options.data_dir.clone(),
     })
@@ -125,6 +133,51 @@ fn rpc_serve_drain(
     let fastswap_service = Arc::new(Mutex::new(None));
     let runtime_metrics = Arc::new(RpcServeRuntimeMetrics::default());
     let (event_sender, event_receiver) = mpsc::channel::<(Option<RpcServeEventRecord>, bool)>();
+    let build_context = |peer_addr: String| RpcServeConnectionContext {
+        data_dir: options.data_dir.clone(),
+        spool_dir: options.spool_dir.clone(),
+        node_id: local_status.node_id.clone(),
+        peer_addr,
+        allow_mempool_submit: options.allow_mempool_submit,
+        allow_mempool_submit_finality: options.allow_mempool_submit_finality,
+        allow_orchard_batch_create: options.allow_orchard_batch_create,
+        owned_lane_enabled: options.owned_lane_enabled,
+        allow_private_action_admission: options.allow_private_action_admission,
+        owned_certificate_domain: owned_certificate_domain.clone(),
+        child_timeout_ms: options.child_timeout_ms,
+        finality_topology_file: options.finality_topology_file.clone(),
+        finality_key_file: options.finality_key_file.clone(),
+        finality_proposal_key_file: options.finality_proposal_key_file.clone(),
+        finality_artifact_root: options.finality_artifact_root.clone(),
+        finality_timeout_ms: options.finality_timeout_ms,
+        finality_send_retries: options.finality_send_retries,
+        finality_retry_backoff_ms: options.finality_retry_backoff_ms,
+        finality_quorum_early_full_propagation: options
+            .finality_quorum_early_full_propagation,
+        max_mempool_submit_per_peer: options.max_mempool_submit_per_peer,
+        max_mempool_submit_total: options.max_mempool_submit_total,
+        max_orchard_batch_create_per_peer: options.max_orchard_batch_create_per_peer,
+        max_orchard_batch_create_total: options.max_orchard_batch_create_total,
+        max_orchard_batch_create_concurrent: options.max_orchard_batch_create_concurrent,
+        max_child_dispatch_concurrent: options.max_child_dispatch_concurrent,
+        max_child_dispatch_per_peer: options.max_child_dispatch_per_peer,
+        mempool_submit_state: Arc::clone(&mempool_submit_state),
+        orchard_batch_create_state: Arc::clone(&orchard_batch_create_state),
+        child_dispatch_state: Arc::clone(&child_dispatch_state),
+        mempool_mutation_lock: Arc::clone(&mempool_mutation_lock),
+        finality_submit_lock: Arc::clone(&finality_submit_lock),
+        health_cache: Arc::clone(&health_cache),
+        fastswap_service: Arc::clone(&fastswap_service),
+        runtime_metrics: Arc::clone(&runtime_metrics),
+    };
+    let private_action_stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let _private_action_stop_guard = PrivateActionServiceStopGuard(Arc::clone(&private_action_stop));
+    if options.allow_private_action_admission {
+        spawn_private_action_round_service(
+            build_context("private-action-round-service".to_string()),
+            Arc::clone(&private_action_stop),
+        );
+    }
     let mut accepted_count = 0_usize;
     let mut active_connections = 0_usize;
     while rpc_serve_accept_budget_allows(accepted_count, options.max_requests) {
@@ -161,42 +214,7 @@ fn rpc_serve_drain(
         active_connections = active_connections.saturating_add(1);
         runtime_metrics.connection_opened();
         let request_index = accepted_count as u64;
-        let context = RpcServeConnectionContext {
-            data_dir: options.data_dir.clone(),
-            spool_dir: options.spool_dir.clone(),
-            node_id: local_status.node_id.clone(),
-            peer_addr: peer_addr.ip().to_string(),
-            allow_mempool_submit: options.allow_mempool_submit,
-            allow_mempool_submit_finality: options.allow_mempool_submit_finality,
-            allow_orchard_batch_create: options.allow_orchard_batch_create,
-            owned_lane_enabled: options.owned_lane_enabled,
-            owned_certificate_domain: owned_certificate_domain.clone(),
-            child_timeout_ms: options.child_timeout_ms,
-            finality_topology_file: options.finality_topology_file.clone(),
-            finality_key_file: options.finality_key_file.clone(),
-            finality_proposal_key_file: options.finality_proposal_key_file.clone(),
-            finality_artifact_root: options.finality_artifact_root.clone(),
-            finality_timeout_ms: options.finality_timeout_ms,
-            finality_send_retries: options.finality_send_retries,
-            finality_retry_backoff_ms: options.finality_retry_backoff_ms,
-            finality_quorum_early_full_propagation: options
-                .finality_quorum_early_full_propagation,
-            max_mempool_submit_per_peer: options.max_mempool_submit_per_peer,
-            max_mempool_submit_total: options.max_mempool_submit_total,
-            max_orchard_batch_create_per_peer: options.max_orchard_batch_create_per_peer,
-            max_orchard_batch_create_total: options.max_orchard_batch_create_total,
-            max_orchard_batch_create_concurrent: options.max_orchard_batch_create_concurrent,
-            max_child_dispatch_concurrent: options.max_child_dispatch_concurrent,
-            max_child_dispatch_per_peer: options.max_child_dispatch_per_peer,
-            mempool_submit_state: Arc::clone(&mempool_submit_state),
-            orchard_batch_create_state: Arc::clone(&orchard_batch_create_state),
-            child_dispatch_state: Arc::clone(&child_dispatch_state),
-            mempool_mutation_lock: Arc::clone(&mempool_mutation_lock),
-            finality_submit_lock: Arc::clone(&finality_submit_lock),
-            health_cache: Arc::clone(&health_cache),
-            fastswap_service: Arc::clone(&fastswap_service),
-            runtime_metrics: Arc::clone(&runtime_metrics),
-        };
+        let context = build_context(peer_addr.ip().to_string());
         let event_sender = event_sender.clone();
         let keep_alive = options.keep_alive;
         let timeout_ms = options.timeout_ms;

@@ -284,6 +284,8 @@ mod asset_orchard_pricing_reads;
 pub use asset_orchard_pricing_reads::*;
 mod private_pool_reads;
 pub use private_pool_reads::*;
+mod private_action_admission;
+pub use private_action_admission::*;
 mod atomic_swap_rpc;
 pub use atomic_swap_rpc::*;
 #[allow(unused_imports)]

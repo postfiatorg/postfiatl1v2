@@ -10,12 +10,12 @@
   "counts": {
     "authorized_protocol_mutation_public": 12,
     "controlled_write_gated": 15,
-    "operator_or_local_only": 40,
+    "operator_or_local_only": 42,
     "owned_lane_gated": 8,
     "privacy_alpha_gated": 4,
     "read_only_public": 81,
     "sdk_only_or_unknown": 0,
-    "total_methods": 160
+    "total_methods": 162
   },
   "gaps": [
     {
@@ -34,10 +34,10 @@
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-10-29T11:31:41Z",
+  "generated_utc": "2026-10-29T11:47:29Z",
   "git": {
     "dirty": true,
-    "revision": "2bf89150a942dd9e47b302e69d46e21ea4392fd0"
+    "revision": "683a5b32b4903c87bb6582ab8667a1bb5aee0a4d"
   },
   "methods": [
     {
@@ -1958,6 +1958,36 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "sdk_constant": false
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "private_action_receipt",
+      "node_dispatch": true,
+      "notes": "",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "operator_or_local_only",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": false,
+      "remote_read_allowed": false,
+      "remote_rpc_implemented": false,
+      "sdk_constant": false
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "private_action_submit",
+      "node_dispatch": true,
+      "notes": "",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "operator_or_local_only",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": false,
+      "remote_read_allowed": false,
+      "remote_rpc_implemented": false,
       "sdk_constant": false
     },
     {
