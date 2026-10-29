@@ -572,6 +572,12 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
 
     class SnapshotMoved extends Error {}
 
+    // The node's stale-token refusals (110997f1): the tip moved past the token
+    // (`snapshot_unavailable`), the read needs the current tip
+    // (`snapshot_not_current`), or the token left the retained points
+    // (`snapshot_expired`). Each one restarts the scan from a fresh token.
+    const STALE_TOKEN_CODES = new Set(['snapshot_unavailable', 'snapshot_not_current', 'snapshot_expired']);
+
     // Pages one section from the first source under a client ceiling; every page names the token.
     async function pageSection(report, section, accept) {
         const items = [];
@@ -583,7 +589,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
             if (cursor) params.cursor = cursor;
             const page = await readSource(config.sources[0], 'private_pool_page', params);
             if (page?.status !== 'ok') {
-                if (page?.refusal?.code === 'snapshot_unavailable') throw new SnapshotMoved();
+                if (STALE_TOKEN_CODES.has(page?.refusal?.code)) throw new SnapshotMoved();
                 throw refusal(503, 'private_snapshot_page_refused', String(page?.refusal?.code || 'page_refused'));
             }
             if (page.snapshot_token !== report.snapshot_token || page.section !== section || page.offset !== items.length) {
@@ -605,16 +611,18 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
     async function assembleSnapshot(address) {
         const report = await pinSnapshot(address);
         const node = report.completeness || {};
+        // Account lines are served only for the current tip, so they are read
+        // first; pages, assets and receipts are served from retained points.
+        const lines = await readSource(config.sources[0], 'private_account_lines', { snapshot_token: report.snapshot_token, address });
+        if (lines?.status !== 'ok') {
+            if (STALE_TOKEN_CODES.has(lines?.refusal?.code)) throw new SnapshotMoved();
+            throw refusal(503, 'private_snapshot_lines_refused', String(lines?.refusal?.code || 'lines_refused'));
+        }
         const listCeiling = (limit) => (item, items) => items.length < limit;
         const commitments = await pageSection(report, 'commitments', listCeiling(MAX_SNAPSHOT_LIST));
         const nullifiers = await pageSection(report, 'nullifiers', listCeiling(MAX_SNAPSHOT_LIST));
         const anchors = await pageSection(report, 'accepted_anchors', listCeiling(MAX_SNAPSHOT_LIST));
         const assets = await pageSection(report, 'assets', listCeiling(MAX_SNAPSHOT_ASSETS));
-        const lines = await readSource(config.sources[0], 'private_account_lines', { snapshot_token: report.snapshot_token, address });
-        if (lines?.status !== 'ok') {
-            if (lines?.refusal?.code === 'snapshot_unavailable') throw new SnapshotMoved();
-            throw refusal(503, 'private_snapshot_lines_refused', String(lines?.refusal?.code || 'lines_refused'));
-        }
         const assetRows = assets.items.filter((row) => row.asset_info_bound && row.issuer && row.code
             && Number.isInteger(row.precision) && typeof row.requires_authorization === 'boolean')
             .map((row) => ({
@@ -672,7 +680,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
     async function snapshot(body) {
         if (!exactKeys(body, ['address']) || !ADDRESS_RE.test(String(body.address))) throw refusal(400, 'private_request_invalid');
         if (!config.baseAssetId || !config.quoteAssetId) throw refusal(503, 'private_snapshot_not_configured');
-        // The token is valid until the next finalized block: one fresh retry, then 503.
+        // A stale token (any STALE_TOKEN_CODES refusal): one fresh retry, then 503.
         for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
                 return await assembleSnapshot(body.address);

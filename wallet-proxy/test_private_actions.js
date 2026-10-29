@@ -54,7 +54,7 @@ function basePool() {
 }
 
 function stub(validatorId) {
-    const state = { submits: [], records: new Map(), submitError: null, receipts: new Map(), tip: { height: 1161 }, pool: basePool(), pageSize: {}, pageCalls: [], onPage: null, sockets: new Set() };
+    const state = { submits: [], records: new Map(), submitError: null, receipts: new Map(), tip: { height: 1161 }, pool: basePool(), pageSize: {}, pageCalls: [], refusals: [], onPage: null, sockets: new Set() };
     const answer = (request) => {
         const p = request.params || {};
         // Shapes of crates/node/src/private_action_rpc.rs and private_action_admission.rs.
@@ -112,11 +112,17 @@ function stub(validatorId) {
         }
         if (request.method === 'private_pool_page' || request.method === 'private_account_lines') {
             state.pageCalls.push(request.method === 'private_pool_page' ? p.section : 'lines');
-            const current = `tok-asset-orchard-v1-${state.tip.height}`;
             const report = { snapshot_token: p.snapshot_token, status: 'ok', refusal: null };
-            if (state.onPage) state.onPage(state.pageCalls.length);
-            if (p.snapshot_token !== `tok-asset-orchard-v1-${state.tip.height}` || p.snapshot_token !== current) {
-                return { ok: true, result: { ...report, status: 'refused', refusal: { code: 'snapshot_unavailable', reason: 'tip moved' } } };
+            if (state.onPage) state.onPage(state.pageCalls.length, state.pageCalls[state.pageCalls.length - 1]);
+            // Like resolve_snapshot_token (110997f1): the tip, a retained point below
+            // it (pages only; account lines need the tip), expired at 16 behind.
+            const match = /^tok-asset-orchard-v1-(\d+)$/.exec(String(p.snapshot_token));
+            const behind = match ? state.tip.height - Number(match[1]) : -1;
+            const code = behind < 0 ? 'snapshot_unavailable' : behind >= 16 ? 'snapshot_expired'
+                : behind > 0 && request.method === 'private_account_lines' ? 'snapshot_not_current' : null;
+            if (code) {
+                state.refusals.push(code);
+                return { ok: true, result: { ...report, status: 'refused', refusal: { code, reason: 'stale token' } } };
             }
             if (request.method === 'private_account_lines') {
                 return { ok: true, result: { ...report, schema: 'postfiat.private_account_lines.v1', address: p.address,
@@ -254,16 +260,49 @@ async function main() {
         assert.deepStrictEqual(flagged.body.complete, { commitments: false, nullifiers: false, accepted_anchors: true, outputs: true, assets: false });
         a.state.pool = basePool();
 
-        // The tip moves between pages: one retry from a fresh token, then 503.
+        // The lines are read right after the snapshot, before any page.
         a.state.pageCalls = [];
-        a.state.onPage = (calls) => { if (calls === 1) sharedTip.height = 1162; };
+        await post(port, 'snapshot', { address: WALLET });
+        assert.strictEqual(a.state.pageCalls[0], 'lines');
+
+        // A block lands between the snapshot and the first page: the pages complete
+        // under the old (retained) token, with no retry.
+        a.state.pageCalls = [];
+        a.state.refusals = [];
+        a.state.onPage = (calls, kind) => { if (kind === 'commitments' && calls === 2) sharedTip.height += 1; };
+        const retained = await post(port, 'snapshot', { address: WALLET });
+        assert.strictEqual(retained.statusCode, 200, JSON.stringify(retained.body));
+        assert.strictEqual(retained.body.snapshot_token.height, 1161);
+        assert.deepStrictEqual(retained.body.commitments, pool.commitments);
+        assert.deepStrictEqual(retained.body.complete, { commitments: true, nullifiers: true, accepted_anchors: true, outputs: true, assets: true });
+        assert.strictEqual(a.state.pageCalls.filter((call) => call === 'lines').length, 1, 'no retry');
+        assert.deepStrictEqual(a.state.refusals, []);
+
+        // The tip moves before the lines read: snapshot_not_current, one retry from a fresh token.
+        a.state.pageCalls = [];
+        a.state.onPage = (calls, kind) => { if (kind === 'lines' && calls === 1) sharedTip.height += 1; };
         const refreshed = await post(port, 'snapshot', { address: WALLET });
         assert.strictEqual(refreshed.statusCode, 200, JSON.stringify(refreshed.body));
-        assert.strictEqual(refreshed.body.snapshot_token.height, 1162);
-        a.state.onPage = () => { sharedTip.height += 1; };
+        assert.strictEqual(refreshed.body.snapshot_token.height, 1163);
+        assert.deepStrictEqual(a.state.refusals, ['snapshot_not_current']);
+        assert.strictEqual(a.state.pageCalls.filter((call) => call === 'lines').length, 2);
+
+        // A token that left the retained points mid-scan: snapshot_expired, one retry.
+        a.state.pageCalls = [];
+        a.state.refusals = [];
+        a.state.onPage = (calls, kind) => { if (kind === 'nullifiers' && a.state.refusals.length === 0) sharedTip.height += 16; };
+        const expired = await post(port, 'snapshot', { address: WALLET });
+        assert.strictEqual(expired.statusCode, 200, JSON.stringify(expired.body));
+        assert.strictEqual(expired.body.snapshot_token.height, 1179);
+        assert.deepStrictEqual(a.state.refusals, ['snapshot_expired']);
+
+        // Stale on both attempts: 503 with the gateway's existing code.
+        a.state.refusals = [];
+        a.state.onPage = (calls, kind) => { if (kind === 'lines') sharedTip.height += 1; };
         const moving = await post(port, 'snapshot', { address: WALLET });
         assert.strictEqual(moving.statusCode, 503);
         assert.strictEqual(moving.body.code, 'private_snapshot_unavailable');
+        assert.deepStrictEqual(a.state.refusals, ['snapshot_not_current', 'snapshot_not_current']);
         a.state.onPage = null;
 
         // Sources at different tokens: a mixed tip is refused.
