@@ -15,6 +15,7 @@ const { WebSocketServer } = require('ws');
 const atomicNavswapModule = require('./navswap-atomic');
 const { FastpayCertificateOutbox } = require('./fastpay-certificate-outbox');
 const { OPEN_PATH: NATIVE_SESSION_OPEN_PATH, createNativeSessions } = require('./native-session');
+const { createPrivateActions } = require('./private-actions');
 
 const execFileAsync = promisify(execFile);
 
@@ -1337,6 +1338,17 @@ swapAtomicTemplateParams,
 verifyAtomicTemplateResult,
 verifyAtomicTemplateSymmetry,
 writeSseEvent } = walletProxyRuntime;
+// W-1 private action routes: relay only, through the validators' node RPC (no key, no data dir).
+const privateActions = createPrivateActions({
+    env: process.env,
+    fleet: RPC_FLEET,
+    rpcRequest: (source, request, timeoutMs) => rpcTcpRequest(source.host, source.port, request, timeoutMs),
+});
+const privateActionsAuth = {
+    originAllowed,
+    authenticate: httpMutationAuthentication,
+    admitMutation: acquireMutationAdmission,
+};
 const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     if (queryCarriesCredential(url)) {
@@ -1351,6 +1363,7 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     if (handleLocalSessionRequest(req, res, url)) return;
+    if (await privateActions.handleHttp(req, res, url, privateActionsAuth)) return;
     if (await handleNavswapHttp(req, res, url)) return;
     if (await serveWalletStatic(req, res, url)) return;
     if (req.method === 'GET' && url.pathname === '/healthz') {

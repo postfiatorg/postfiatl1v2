@@ -42,10 +42,13 @@ In `crates/node/tests/fixtures/private-actions-v1/`, shared types in `crates/typ
 
 ## S2 — the gateway entry points (1–2 weeks)
 
-- [ ] S2.1 *(this lane)* `POST /api/private/v1/snapshot`, `/submit` and `/receipt` behind the native session, with the S1 schemas and size limits.
-- [ ] S2.2 *(this lane)* Durable once-only admission: recompute the intent id; keep the action text byte for byte; refuse other bytes under a known intent; deduplicate the canonical batch; reserve before transport; keep queued, dispatched, accepted, rejected and unknown distinct. An acknowledgement means pending; `receipt` is read-only.
-- [ ] S2.3 *(this lane)* No key and no validator filesystem access in the HTTP process. The ingress configuration that needs a data directory, topology and key file (`wallet-proxy/navswap-config-bridge.js:782`) and the local Asset-Orchard service dependency (`:837`) are not on this path.
-- [ ] S2.4 *(wallet team)* The app moves from `/api/private-local/` to `/api/private/v1/`. To tick S2: a crash-and-retry test that shows one reservation and one round per intent.
+- [x] S2.1 *(this lane)* `POST /api/private/v1/snapshot`, `/submit` and `/receipt` behind the browser relay or native session token, with the S1 schemas and size limits (1 MiB action, 2 MiB request, 4 MiB response): `wallet-proxy/private-actions.js`, wired in `wallet-proxy/server.js`. `submit` counts against the mutation rate window; `snapshot` and `receipt` are authenticated reads.
+  - [ ] The snapshot's pool lists, pricing claim and egress binding wait for S4 and S5; until then they are empty or null and marked incomplete.
+- [x] S2.2 *(this lane)* Durable once-only admission. The gateway recomputes the intent id (SHA3-384, `tasknode.private-intent.v1`) and the action hash and atomic batch id from the re-serialized action, all three checked against the S1 vectors. It keeps the action text byte for byte, binds the intent to the session principal, the address, the configured domain and the pool, and claims the action hash and batch id with exclusive index files before writing the record (`queued`) and before any transport. A duplicate returns the record; only a reservation no validator has seen is resent, with the reserved bytes. An acknowledgement means pending; `receipt` is read-only and reconciles two validator sources.
+- [x] S2.3 *(this lane)* No key and no validator filesystem access in the HTTP process. Dispatch goes only through the node methods `private_action_submit` and `private_action_receipt` on two configured RPC sources, never through `transport-peer-certified-batch-round` (`wallet-proxy/navswap-shielded.js:1421`), the data-directory configuration (`wallet-proxy/navswap-config-bridge.js:782`) or the local Asset-Orchard service (`:837`).
+- [x] Crash-and-retry: `wallet-proxy/test_private_actions.js` kills the process after the reservation; on restart the intent is `queued`, no new batch is built, and the reserved batch is sent once.
+- [ ] S2.4 *(wallet team)* The app moves from `/api/private-local/` to `/api/private/v1/`.
+- S2 is ticked on the gateway side; the routes reach a validator only once S3 deploys the two node methods behind its operator switch.
 
 ## S3 — the validator-owned admission and round service (2–3 weeks)
 
