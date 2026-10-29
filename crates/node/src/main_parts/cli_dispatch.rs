@@ -296,6 +296,8 @@ use postfiat_types::{
     GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
+    GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT,
+    GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS,
 };
 
 const DEFAULT_DATA_DIR: &str = ".postfiat/node0";
@@ -488,6 +490,8 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ratify-bridge-exit-root-activation-height"
         | "ratify-shielded-atomic-batch-activation-height"
         | "ratify-recipient-format-activation-height"
+        | "ratify-asset-orchard-pricing-enforcement-activation-height"
+        | "ratify-asset-orchard-pricing-max-nav-age-blocks"
         | "governance-authorization-sign"
         | "governance-amendment-assemble"
         | "ethereum-checkpoint-observe"

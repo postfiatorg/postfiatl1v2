@@ -1860,6 +1860,8 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
         | "ratify-bridge-exit-root-activation-height"
         | "ratify-shielded-atomic-batch-activation-height"
         | "ratify-recipient-format-activation-height"
+        | "ratify-asset-orchard-pricing-enforcement-activation-height"
+        | "ratify-asset-orchard-pricing-max-nav-age-blocks"
         | "ratify-vault-bridge-route-authority-activation-height" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let validators =
@@ -1906,6 +1908,14 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 "ratify-recipient-format-activation-height" => (
                     GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT,
                     "--recipient-format-activation-height",
+                ),
+                "ratify-asset-orchard-pricing-enforcement-activation-height" => (
+                    GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT,
+                    "--asset-orchard-pricing-enforcement-activation-height",
+                ),
+                "ratify-asset-orchard-pricing-max-nav-age-blocks" => (
+                    GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS,
+                    "--max-nav-age-blocks",
                 ),
                 _ => (
                     GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,

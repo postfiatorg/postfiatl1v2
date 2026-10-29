@@ -49,6 +49,20 @@ pub const GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT: &str =
     "bridge_exit_root_activation_height";
 pub const GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT: &str =
     "shielded_atomic_batch_activation_height";
+/// First block height at which an at-NAV Asset-Orchard swap pricing claim
+/// must be fresh, priced against the base NAV asset's governed settlement
+/// asset and labelled with the validator policy's mode. `value` is the
+/// effective height; it must be scheduled strictly after its amendment block
+/// and the earliest unpaused height wins. Absent by default, so historical
+/// blocks replay unchanged.
+pub const GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT: &str =
+    "asset_orchard_pricing_enforcement_activation_height";
+/// Optional payload of the pricing enforcement: `value` is the maximum age in
+/// blocks of the latest finalized NAV epoch at the inclusion height (nonzero;
+/// the latest unpaused amendment wins). Absent, the NAV asset's proof-profile
+/// `max_epoch_gap_blocks` applies.
+pub const GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS: &str =
+    "asset_orchard_pricing_max_nav_age_blocks";
 /// First block height at which execution rejects transactions whose
 /// destination address fields are not canonical PFTL addresses. Absent by
 /// default, so historical blocks replay unchanged.
@@ -1594,6 +1608,31 @@ impl GovernanceState {
             })
             .map(|amendment| u64::from(amendment.value))
             .min()
+    }
+
+    /// The earliest unpaused scheduled height wins, so a later amendment
+    /// cannot postpone or disable the rule once it is scheduled.
+    pub fn asset_orchard_pricing_enforcement_activation_height(&self) -> Option<u64> {
+        self.amendments
+            .iter()
+            .filter(|amendment| {
+                amendment.kind == GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT
+                    && !amendment.paused
+            })
+            .map(|amendment| u64::from(amendment.value))
+            .min()
+    }
+
+    pub fn asset_orchard_pricing_max_nav_age_blocks(&self) -> Option<u64> {
+        self.amendments
+            .iter()
+            .rev()
+            .find(|amendment| {
+                amendment.kind == GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS
+                    && !amendment.paused
+                    && amendment.value != 0
+            })
+            .map(|amendment| u64::from(amendment.value))
     }
 
     /// The earliest unpaused scheduled height wins, so a later amendment

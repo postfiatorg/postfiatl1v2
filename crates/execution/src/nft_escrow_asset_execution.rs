@@ -637,6 +637,11 @@ pub struct AssetExecutionCompatibility {
     pub rejected_tx_fee_activation_height: Option<u64>,
     /// Governance `require_memo_activation_height`.
     pub require_memo_activation_height: Option<u64>,
+    /// Governance `asset_orchard_pricing_enforcement_activation_height`.
+    pub asset_orchard_pricing_enforcement_activation_height: Option<u64>,
+    /// Governance `asset_orchard_pricing_max_nav_age_blocks`; `None` uses the
+    /// NAV proof profile's `max_epoch_gap_blocks`.
+    pub asset_orchard_pricing_max_nav_age_blocks: Option<u64>,
 }
 
 impl AssetExecutionCompatibility {
@@ -665,6 +670,8 @@ impl AssetExecutionCompatibility {
             recipient_format_activation_height: None,
             rejected_tx_fee_activation_height: None,
             require_memo_activation_height: None,
+            asset_orchard_pricing_enforcement_activation_height: None,
+            asset_orchard_pricing_max_nav_age_blocks: None,
         }
     }
 
@@ -688,6 +695,8 @@ impl AssetExecutionCompatibility {
             recipient_format_activation_height: None,
             rejected_tx_fee_activation_height: None,
             require_memo_activation_height: None,
+            asset_orchard_pricing_enforcement_activation_height: None,
+            asset_orchard_pricing_max_nav_age_blocks: None,
         }
     }
 
@@ -711,6 +720,8 @@ impl AssetExecutionCompatibility {
             recipient_format_activation_height: None,
             rejected_tx_fee_activation_height: None,
             require_memo_activation_height: None,
+            asset_orchard_pricing_enforcement_activation_height: None,
+            asset_orchard_pricing_max_nav_age_blocks: None,
         }
     }
 
@@ -734,6 +745,8 @@ impl AssetExecutionCompatibility {
             recipient_format_activation_height: None,
             rejected_tx_fee_activation_height: None,
             require_memo_activation_height: None,
+            asset_orchard_pricing_enforcement_activation_height: None,
+            asset_orchard_pricing_max_nav_age_blocks: None,
         }
     }
 
@@ -757,6 +770,8 @@ impl AssetExecutionCompatibility {
             recipient_format_activation_height: None,
             rejected_tx_fee_activation_height: None,
             require_memo_activation_height: None,
+            asset_orchard_pricing_enforcement_activation_height: None,
+            asset_orchard_pricing_max_nav_age_blocks: None,
         }
     }
 
@@ -876,6 +891,21 @@ impl AssetExecutionCompatibility {
 
     pub fn require_memo_active(&self, block_height: u64) -> bool {
         self.require_memo_activation_height
+            .is_some_and(|activation_height| block_height >= activation_height)
+    }
+
+    pub const fn with_asset_orchard_pricing_enforcement(
+        mut self,
+        activation_height: Option<u64>,
+        max_nav_age_blocks: Option<u64>,
+    ) -> Self {
+        self.asset_orchard_pricing_enforcement_activation_height = activation_height;
+        self.asset_orchard_pricing_max_nav_age_blocks = max_nav_age_blocks;
+        self
+    }
+
+    pub fn asset_orchard_pricing_enforced(&self, block_height: u64) -> bool {
+        self.asset_orchard_pricing_enforcement_activation_height
             .is_some_and(|activation_height| block_height >= activation_height)
     }
 }

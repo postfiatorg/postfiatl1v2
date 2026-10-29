@@ -261,7 +261,7 @@
         assert_eq!(pricing_read_status(&fixture, live_through).0, "ok");
         assert_eq!(
             pricing_read_status(&fixture, live_through + 1),
-            ("stale".to_string(), "asset_orchard_nav_epoch_stale".to_string())
+            ("stale".to_string(), "asset_orchard_pricing_nav_stale".to_string())
         );
         fs::remove_dir_all(&fixture.data_dir).expect("cleanup");
 

@@ -498,6 +498,10 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
         .with_atomic_swap_paused(governance.atomic_swap_paused)
         .with_recipient_format_activation_height(governance.recipient_format_activation_height())
         .with_require_memo_activation_height(governance.require_memo_activation_height())
+        .with_asset_orchard_pricing_enforcement(
+            governance.asset_orchard_pricing_enforcement_activation_height(),
+            governance.asset_orchard_pricing_max_nav_age_blocks(),
+        )
 }
 
 pub(super) fn asset_execution_compatibility_with_chain_activation(
@@ -522,6 +526,10 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
         .with_atomic_swap_paused(governance.atomic_swap_paused)
         .with_recipient_format_activation_height(governance.recipient_format_activation_height())
         .with_require_memo_activation_height(governance.require_memo_activation_height())
+        .with_asset_orchard_pricing_enforcement(
+            governance.asset_orchard_pricing_enforcement_activation_height(),
+            governance.asset_orchard_pricing_max_nav_age_blocks(),
+        )
 }
 
 pub(super) fn ensure_atomic_swap_batch_allowed(
@@ -1951,6 +1959,23 @@ pub(super) fn governance_amendment_lifecycle_rejection(
                 .to_string(),
         ));
     }
+    if amendment.kind == GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "invalid_asset_orchard_pricing_enforcement_activation_height",
+            "Asset-Orchard pricing enforcement activation must be scheduled strictly after the amendment block"
+                .to_string(),
+        ));
+    }
+    if amendment.kind == GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS
+        && amendment.value == 0
+    {
+        return Some((
+            "invalid_asset_orchard_pricing_max_nav_age_blocks",
+            "Asset-Orchard pricing max NAV age must be nonzero".to_string(),
+        ));
+    }
     if amendment.kind == GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT
         && u64::from(amendment.value) <= block_height
     {
@@ -2151,6 +2176,14 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .recipient_format_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
+        GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT => governance
+            .asset_orchard_pricing_enforcement_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS => governance
+            .asset_orchard_pricing_max_nav_age_blocks()
+            .and_then(|blocks| u32::try_from(blocks).ok())
+            .unwrap_or(0),
         _ => 0,
     }
 }
@@ -2175,6 +2208,8 @@ fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
             | GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS
     )
 }
 
@@ -3406,6 +3441,7 @@ fn execute_shielded_batch_actions(
                 index,
                 action,
                 archive_replay,
+                asset_execution_compatibility,
             ),
             ShieldedAction::AssetOrchardIngressV1(action) => {
                 if archive_replay {
@@ -4122,6 +4158,7 @@ pub(super) fn execute_shielded_swap_action(
     index: usize,
     payload: &ShieldedSwapActionPayload,
     archive_replay: bool,
+    asset_execution_compatibility: AssetExecutionCompatibility,
 ) -> Receipt {
     if payload.swap_json.trim().is_empty() {
         return Receipt::rejected(
@@ -4163,7 +4200,14 @@ pub(super) fn execute_shielded_swap_action(
                 );
             }
         };
-        let fx_fix_plan = match asset_orchard_swap_pricing_plan(ledger, &verified, block_height) {
+        let enforcement =
+            asset_orchard_pricing_enforcement_at(&asset_execution_compatibility, block_height);
+        let fx_fix_plan = match asset_orchard_swap_pricing_plan_with_enforcement(
+            ledger,
+            &verified,
+            block_height,
+            enforcement,
+        ) {
             Ok(plan) => plan,
             Err(error) => {
                 return Receipt::rejected(
@@ -4281,10 +4325,42 @@ pub(super) struct FxFixSwapPlan {
     next_fill_count: u32,
 }
 
+/// Rules an at-NAV pricing claim must also satisfy once governance
+/// `asset_orchard_pricing_enforcement_activation_height` is reached.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct AssetOrchardPricingEnforcement {
+    /// Governed maximum age in blocks of the latest finalized NAV epoch;
+    /// `None` uses the NAV proof profile's `max_epoch_gap_blocks`.
+    pub(super) max_nav_age_blocks: Option<u64>,
+}
+
+pub(super) fn asset_orchard_pricing_enforcement_at(
+    compatibility: &AssetExecutionCompatibility,
+    block_height: u64,
+) -> Option<AssetOrchardPricingEnforcement> {
+    compatibility
+        .asset_orchard_pricing_enforced(block_height)
+        .then_some(AssetOrchardPricingEnforcement {
+            max_nav_age_blocks: compatibility.asset_orchard_pricing_max_nav_age_blocks,
+        })
+}
+
+/// Pre-enforcement validator pricing plan; identical to
+/// [`asset_orchard_swap_pricing_plan_with_enforcement`] with no enforcement.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn asset_orchard_swap_pricing_plan(
     ledger: &LedgerState,
     verified: &postfiat_privacy_orchard::VerifiedAssetOrchardSwap,
     block_height: u64,
+) -> Result<Option<FxFixSwapPlan>, postfiat_privacy_orchard::OrchardVerificationError> {
+    asset_orchard_swap_pricing_plan_with_enforcement(ledger, verified, block_height, None)
+}
+
+pub(super) fn asset_orchard_swap_pricing_plan_with_enforcement(
+    ledger: &LedgerState,
+    verified: &postfiat_privacy_orchard::VerifiedAssetOrchardSwap,
+    block_height: u64,
+    enforcement: Option<AssetOrchardPricingEnforcement>,
 ) -> Result<Option<FxFixSwapPlan>, postfiat_privacy_orchard::OrchardVerificationError> {
     use postfiat_privacy_orchard::{
         validate_asset_orchard_pricing_policy, AssetOrchardPricingPolicy, AssetTag,
@@ -4411,8 +4487,112 @@ pub(super) fn asset_orchard_swap_pricing_plan(
     }
 
     let policy = asset_orchard_at_nav_pricing_policy(ledger, base_tag, quote_tag, block_height)?;
+    if let Some(enforcement) = enforcement {
+        enforce_asset_orchard_at_nav_pricing_rules(ledger, claim, block_height, enforcement)?;
+    }
     validate_asset_orchard_pricing_policy(&verified.pricing, &policy)?;
     Ok(None)
+}
+
+/// Governed at-NAV rules, checked after the pricing policy resolved exactly
+/// one NAV base asset and one quote asset for the claim's tags: the pair must
+/// be a governed NAV/settlement route, the mode must be the validator
+/// policy's mode, and the claim must name the latest finalized NAV epoch and
+/// reserve packet within the governed age bound at `block_height`.
+pub(super) fn enforce_asset_orchard_at_nav_pricing_rules(
+    ledger: &LedgerState,
+    claim: &postfiat_privacy_orchard::AssetOrchardPricingClaim,
+    block_height: u64,
+    enforcement: AssetOrchardPricingEnforcement,
+) -> Result<(), postfiat_privacy_orchard::OrchardVerificationError> {
+    use postfiat_privacy_orchard::{AssetTag, OrchardVerificationError};
+
+    let tag_of = |asset_id: &str| AssetTag::derive(asset_id).ok().map(|tag| (tag.lo, tag.hi));
+    let base_tag = Some((claim.base_asset_tag_lo, claim.base_asset_tag_hi));
+    let quote_tag = Some((claim.quote_asset_tag_lo, claim.quote_asset_tag_hi));
+    let nav_asset = ledger
+        .nav_assets
+        .iter()
+        .find(|asset| tag_of(&asset.asset_id) == base_tag)
+        .ok_or_else(|| {
+            OrchardVerificationError::new(
+                "asset_orchard_pricing_nav_asset_mismatch",
+                "pricing base asset tag must resolve to exactly one ledger NAV asset",
+            )
+        })?;
+    let quote_asset_id = ledger
+        .asset_definitions
+        .iter()
+        .find(|asset| tag_of(&asset.asset_id) == quote_tag)
+        .map(|asset| asset.asset_id.as_str())
+        .ok_or_else(|| {
+            OrchardVerificationError::new(
+                "asset_orchard_pricing_quote_asset_mismatch",
+                "pricing quote asset tag must resolve to exactly one ledger asset",
+            )
+        })?;
+    if quote_asset_id == nav_asset.asset_id
+        || !ledger.pftl_uniswap_routes.iter().any(|route| {
+            route.native_nav_asset_id == nav_asset.asset_id
+                && route.settlement_asset_id == quote_asset_id
+        })
+    {
+        return Err(OrchardVerificationError::new(
+            "asset_orchard_pricing_pair_not_governed",
+            "pricing quote asset is not the governed settlement asset of the NAV base asset",
+        ));
+    }
+    if claim.mode != ASSET_ORCHARD_AT_NAV_PRICING_MODE {
+        return Err(OrchardVerificationError::new(
+            "asset_orchard_pricing_mode_mismatch",
+            format!(
+                "at-NAV pricing claim mode must be `{ASSET_ORCHARD_AT_NAV_PRICING_MODE}`, got `{}`",
+                claim.mode
+            ),
+        ));
+    }
+    if claim.nav_epoch < nav_asset.finalized_epoch
+        || (claim.nav_epoch == nav_asset.finalized_epoch
+            && claim.reserve_packet_hash != nav_asset.finalized_reserve_packet_hash)
+    {
+        return Err(OrchardVerificationError::new(
+            "asset_orchard_pricing_nav_stale",
+            "pricing claim does not name the latest finalized NAV epoch and reserve packet",
+        ));
+    }
+    if let Some(live_through) =
+        asset_orchard_nav_live_through_height(ledger, nav_asset, enforcement.max_nav_age_blocks)
+    {
+        if live_through.is_none_or(|live_through| block_height > live_through) {
+            return Err(OrchardVerificationError::new(
+                "asset_orchard_pricing_nav_stale",
+                "latest finalized NAV epoch is older than the governed maximum age",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The last height at which `nav_asset`'s latest finalized epoch may price an
+/// at-NAV claim: `Some(None)` when an age bound applies but the epoch carries
+/// no finalization height, `None` when no bound applies.
+pub(super) fn asset_orchard_nav_live_through_height(
+    ledger: &LedgerState,
+    nav_asset: &postfiat_types::NavTrackedAsset,
+    max_nav_age_blocks: Option<u64>,
+) -> Option<Option<u64>> {
+    let bound = max_nav_age_blocks
+        .filter(|blocks| *blocks != 0)
+        .or_else(|| {
+            ledger
+                .nav_proof_profile(&nav_asset.proof_profile)
+                .map(|profile| profile.max_epoch_gap_blocks)
+                .filter(|blocks| *blocks != 0)
+        })?;
+    Some(
+        (nav_asset.finalized_at_height != 0)
+            .then(|| nav_asset.finalized_at_height.saturating_add(bound)),
+    )
 }
 
 /// Validator pricing policy for an at-NAV swap of `base_tag` against

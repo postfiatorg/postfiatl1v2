@@ -74,6 +74,13 @@ pub struct AssetOrchardPricingClaimReport {
     pub quote_asset: Option<AssetOrchardGoverningAsset>,
     pub nav_usd_e8_activation_height: u64,
     pub ratio_denominator_unit: u64,
+    /// Governance `asset_orchard_pricing_enforcement_activation_height`.
+    pub pricing_enforcement_activation_height: Option<u64>,
+    /// Whether the freshness, governed-pair and mode rules apply at the
+    /// inclusion height.
+    pub pricing_enforced: bool,
+    /// The governed NAV/settlement route binding this pair, if any.
+    pub governed_route_id: Option<String>,
     pub pricing_claim: Option<AssetOrchardPricingClaim>,
 }
 
@@ -183,6 +190,7 @@ fn refusal(code: &str, reason: impl Into<String>) -> AssetOrchardReadRefusal {
 fn governing_asset(
     ledger: &LedgerState,
     asset_id: &str,
+    max_nav_age_blocks: Option<u64>,
 ) -> io::Result<Option<AssetOrchardGoverningAsset>> {
     let Some(definition) = ledger.asset_definition(asset_id) else {
         return Ok(None);
@@ -192,13 +200,9 @@ fn governing_asset(
         .nav_assets
         .iter()
         .find(|asset| asset.asset_id == asset_id);
-    let live_through = nav.and_then(|asset| {
-        let gap = ledger
-            .nav_proof_profile(&asset.proof_profile)?
-            .max_epoch_gap_blocks;
-        (gap != 0 && asset.finalized_at_height != 0)
-            .then(|| asset.finalized_at_height.saturating_add(gap))
-    });
+    let live_through = nav
+        .and_then(|asset| asset_orchard_nav_live_through_height(ledger, asset, max_nav_age_blocks))
+        .flatten();
     Ok(Some(AssetOrchardGoverningAsset {
         asset_id: definition.asset_id.clone(),
         asset_tag_lo: format!("{:032x}", tag.lo),
@@ -227,6 +231,7 @@ fn governing_asset(
 fn pair_refusal(
     snapshot: &FinalizedPairSnapshot,
     options: &AssetOrchardPairReadOptions,
+    enforcement: Option<AssetOrchardPricingEnforcement>,
     base: Option<&AssetOrchardGoverningAsset>,
     quote: Option<&AssetOrchardGoverningAsset>,
 ) -> Option<(&'static str, AssetOrchardReadRefusal)> {
@@ -246,7 +251,7 @@ fn pair_refusal(
         return Some((
             "mismatch",
             refusal(
-                "asset_orchard_pair_assets_identical",
+                "asset_orchard_pricing_pair_not_governed",
                 "base and quote must be different assets",
             ),
         ));
@@ -291,14 +296,32 @@ fn pair_refusal(
                 ),
             ));
         }
-        if let Some(live_through) = asset.nav_live_through_height {
-            if options.inclusion_height > live_through {
+        let nav = snapshot
+            .ledger
+            .nav_assets
+            .iter()
+            .find(|nav| nav.asset_id == asset.asset_id);
+        let live_through = nav.and_then(|nav| {
+            asset_orchard_nav_live_through_height(
+                &snapshot.ledger,
+                nav,
+                enforcement.and_then(|enforcement| enforcement.max_nav_age_blocks),
+            )
+        });
+        // Consensus refuses an epoch of unknown age only once enforcement is
+        // active; before that the read reports the profile deadman alone.
+        if let Some(live_through) = live_through {
+            let stale = match live_through {
+                Some(live_through) => options.inclusion_height > live_through,
+                None => enforcement.is_some(),
+            };
+            if stale {
                 return Some((
                     "stale",
                     refusal(
-                        "asset_orchard_nav_epoch_stale",
+                        "asset_orchard_pricing_nav_stale",
                         format!(
-                            "NAV epoch of {} is live through height {live_through}, before inclusion height {}",
+                            "NAV epoch of {} is live through height {live_through:?}, before inclusion height {}",
                             asset.asset_id, options.inclusion_height
                         ),
                     ),
@@ -309,9 +332,22 @@ fn pair_refusal(
     None
 }
 
+fn pricing_enforcement(
+    snapshot: &FinalizedPairSnapshot,
+    inclusion_height: u64,
+) -> Option<AssetOrchardPricingEnforcement> {
+    asset_orchard_pricing_enforcement_at(
+        &asset_execution_compatibility_for_genesis_and_governance(
+            &snapshot.genesis,
+            &snapshot.governance,
+        ),
+        inclusion_height,
+    )
+}
+
 fn pricing_refusal_status(code: &str) -> &'static str {
     match code {
-        "asset_orchard_pricing_not_finalized" => "stale",
+        "asset_orchard_pricing_not_finalized" | "asset_orchard_pricing_nav_stale" => "stale",
         "asset_orchard_pricing_halted" => "halted",
         _ => "mismatch",
     }
@@ -326,8 +362,10 @@ pub fn asset_orchard_pricing_claim(
 ) -> io::Result<AssetOrchardPricingClaimReport> {
     validate_pair_options(&options)?;
     let snapshot = read_finalized_pair_snapshot(&options.data_dir)?;
-    let base = governing_asset(&snapshot.ledger, &options.base_asset_id)?;
-    let quote = governing_asset(&snapshot.ledger, &options.quote_asset_id)?;
+    let enforcement = pricing_enforcement(&snapshot, options.inclusion_height);
+    let max_nav_age = enforcement.and_then(|enforcement| enforcement.max_nav_age_blocks);
+    let base = governing_asset(&snapshot.ledger, &options.base_asset_id, max_nav_age)?;
+    let quote = governing_asset(&snapshot.ledger, &options.quote_asset_id, max_nav_age)?;
     let mut report = AssetOrchardPricingClaimReport {
         schema: ASSET_ORCHARD_PRICING_CLAIM_READ_SCHEMA.to_string(),
         chain_id: snapshot.genesis.chain_id.clone(),
@@ -345,6 +383,19 @@ pub fn asset_orchard_pricing_claim(
         quote_asset: quote.clone(),
         nav_usd_e8_activation_height: ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT,
         ratio_denominator_unit: asset_orchard_nav_ratio_denominator(options.inclusion_height),
+        pricing_enforcement_activation_height: snapshot
+            .governance
+            .asset_orchard_pricing_enforcement_activation_height(),
+        pricing_enforced: enforcement.is_some(),
+        governed_route_id: snapshot
+            .ledger
+            .pftl_uniswap_routes
+            .iter()
+            .find(|route| {
+                route.native_nav_asset_id == options.base_asset_id
+                    && route.settlement_asset_id == options.quote_asset_id
+            })
+            .map(|route| route.route_id.clone()),
         pricing_claim: None,
     };
     let refuse = |mut report: AssetOrchardPricingClaimReport,
@@ -354,8 +405,13 @@ pub fn asset_orchard_pricing_claim(
         report.refusal = Some(refusal);
         report
     };
-    if let Some((status, reason)) = pair_refusal(&snapshot, &options, base.as_ref(), quote.as_ref())
-    {
+    if let Some((status, reason)) = pair_refusal(
+        &snapshot,
+        &options,
+        enforcement,
+        base.as_ref(),
+        quote.as_ref(),
+    ) {
         return Ok(refuse(report, status, reason));
     }
     if options.inclusion_height < ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT {
@@ -399,6 +455,21 @@ pub fn asset_orchard_pricing_claim(
             "mismatch",
             refusal(error.code(), error.to_string()),
         ));
+    }
+    if let Some(enforcement) = enforcement {
+        if let Err(error) = enforce_asset_orchard_at_nav_pricing_rules(
+            &snapshot.ledger,
+            &claim,
+            options.inclusion_height,
+            enforcement,
+        ) {
+            let status = pricing_refusal_status(error.code());
+            return Ok(refuse(
+                report,
+                status,
+                refusal(error.code(), error.to_string()),
+            ));
+        }
     }
     // Self-check against the validator policy consensus applies at the
     // inclusion height, so a returned claim is never one consensus rejects.
@@ -446,10 +517,12 @@ pub fn asset_orchard_private_egress_binding(
 ) -> io::Result<AssetOrchardPrivateEgressBindingReport> {
     validate_pair_options(&options)?;
     let snapshot = read_finalized_pair_snapshot(&options.data_dir)?;
-    let base = governing_asset(&snapshot.ledger, &options.base_asset_id)?;
-    let quote = governing_asset(&snapshot.ledger, &options.quote_asset_id)?;
+    let enforcement = pricing_enforcement(&snapshot, options.inclusion_height);
+    let max_nav_age = enforcement.and_then(|enforcement| enforcement.max_nav_age_blocks);
+    let base = governing_asset(&snapshot.ledger, &options.base_asset_id, max_nav_age)?;
+    let quote = governing_asset(&snapshot.ledger, &options.quote_asset_id, max_nav_age)?;
     let (status, refusal) =
-        match pair_refusal(&snapshot, &options, base.as_ref(), quote.as_ref()) {
+        match pair_refusal(&snapshot, &options, enforcement, base.as_ref(), quote.as_ref()) {
             Some((status, reason)) => (status, reason),
             None => (
                 "ungoverned",
