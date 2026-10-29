@@ -102,6 +102,10 @@ halt flag and the ratio within the band.
   - [ ] Stale anchor, `asset_orchard_pricing_nav_stale`, `asset_orchard_pricing_pair_not_governed` and `asset_orchard_pricing_mode_mismatch`. Each needs another real proof, because mutating the public bytes breaks the proof first. They are ignored tests named for the missing proof.
 - [x] S6.3 *(this lane)* Crash after dispatch and lost responses; a new session recovers the same persisted action with no replacement or double spend.
   - Proven with ingress actions. A kill after `dispatched` settles as `unknown`, a new session gets the same record, and the next proposer lands the same reserved batch once. A kill after the certified send settles as accepted from the chain.
+  - [x] Through the gateway against the live node (`crates/node/tests/private_actions_gateway.rs`):
+    - A proxy killed right after the submit returns `queued` and restarted on the same store keeps the record. A repeat submit returns the same record, and the validators' round lands it once.
+    - A stopped source refuses the snapshot with 503 `private_snapshot_unavailable` until it serves again.
+    - Sources at different finalized heights refuse it with 503 `private_snapshot_sources_diverged`.
 - [ ] S6.4 *(this lane, wallet team)* Fresh-key full rescan and page boundaries.
   - [x] Lane part: a fresh wallet that holds only its note seeds decrypts every retained output from `private_pool_page`, with a page limit of 2 below the total, and matches each asset's live total.
 

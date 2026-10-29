@@ -307,6 +307,91 @@ fn sha3_hex(domain: &str, bytes: &[u8]) -> String {
     bytes_to_hex(&postfiat_crypto_provider::hash_bytes(domain, bytes))
 }
 
+/// One validator's `rpc-serve` with the admission switch and its finality
+/// settings; it writes `<validator>.rpc.ready.json` once it serves.
+fn spawn_rpc_serve(
+    root: &Path,
+    dir: &Path,
+    validator: &str,
+    port: u16,
+    topology: &Path,
+    key: &Path,
+) -> Child {
+    let path = |p: &Path| p.to_str().expect("UTF-8 path").to_string();
+    let rpc_ready = root.join(format!("{validator}.rpc.ready.json"));
+    let _ = fs::remove_file(&rpc_ready);
+    Command::new(node_bin())
+        .args([
+            "rpc-serve",
+            "--unsafe-devnet-json-storage",
+            "--data-dir",
+            &path(dir),
+            "--spool-dir",
+            &path(&root.join(format!("{validator}.rpc-spool"))),
+            "--ready-file",
+            &path(&rpc_ready),
+            "--port",
+            &port.to_string(),
+            "--max-requests",
+            "10000",
+            "--timeout-ms",
+            "60000",
+            "--child-timeout-ms",
+            "60000",
+            "--allow-private-action-admission",
+            "--finality-topology",
+            &path(topology),
+            "--finality-key-file",
+            &path(key),
+            "--finality-artifact-root",
+            &path(&root.join(format!("{validator}.finality"))),
+            "--finality-timeout-ms",
+            "60000",
+            "--finality-send-retries",
+            "2",
+            "--finality-retry-backoff-ms",
+            "25",
+            "--finality-quorum-early-full-propagation",
+            "--keep-alive",
+        ])
+        .stdout(Stdio::null())
+        .stderr(
+            fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(root.join(format!("{validator}.rpc.log")))
+                .expect("log"),
+        )
+        .spawn()
+        .expect("spawn rpc-serve")
+}
+
+/// The wallet proxy with `env` as its whole environment, once it listens.
+fn spawn_proxy(root: &Path, env: &[(String, String)], port: u16) -> Child {
+    let log = |name: &str| {
+        fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(root.join(name))
+            .expect("log")
+    };
+    let proxy = Command::new("node")
+        .arg("server.js")
+        .current_dir(proxy_dir())
+        .env_clear()
+        .envs(env.iter().map(|(name, value)| (name, value)))
+        .stdout(log("proxy.stdout.log"))
+        .stderr(log("proxy.stderr.log"))
+        .spawn()
+        .expect("spawn wallet proxy");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while TcpStream::connect(("127.0.0.1", port)).is_err() {
+        assert!(Instant::now() < deadline, "wallet proxy did not start");
+        thread::sleep(Duration::from_millis(50));
+    }
+    proxy
+}
+
 #[test]
 fn gateway_admits_a_user_proven_ingress_through_the_real_node() {
     if !proxy_available() {
@@ -439,6 +524,8 @@ fn gateway_admits_a_user_proven_ingress_through_the_real_node() {
     .expect("write topology");
     let path = |p: &Path| p.to_str().expect("UTF-8 path").to_string();
     let mut ready_files = Vec::new();
+    let mut validator_keys = Vec::new();
+    let mut rpc_children = Vec::new();
     for (index, dir) in validator_dirs.iter().enumerate() {
         let validator = format!("validator-{index}");
         let key = split_validator_key(dir, &validator);
@@ -481,49 +568,16 @@ fn gateway_admits_a_user_proven_ingress_through_the_real_node() {
                 .expect("spawn transport service"),
         );
         let rpc_ready = harness.root.join(format!("{validator}.rpc.ready.json"));
-        harness.children.push(
-            Command::new(node_bin())
-                .args([
-                    "rpc-serve",
-                    "--unsafe-devnet-json-storage",
-                    "--data-dir",
-                    &path(dir),
-                    "--spool-dir",
-                    &path(&harness.root.join(format!("{validator}.rpc-spool"))),
-                    "--ready-file",
-                    &path(&rpc_ready),
-                    "--port",
-                    &rpc_ports[index].to_string(),
-                    "--max-requests",
-                    "10000",
-                    "--timeout-ms",
-                    "60000",
-                    "--child-timeout-ms",
-                    "60000",
-                    "--allow-private-action-admission",
-                    "--finality-topology",
-                    &path(&topology_path),
-                    "--finality-key-file",
-                    &path(&key),
-                    "--finality-artifact-root",
-                    &path(&harness.root.join(format!("{validator}.finality"))),
-                    "--finality-timeout-ms",
-                    "60000",
-                    "--finality-send-retries",
-                    "2",
-                    "--finality-retry-backoff-ms",
-                    "25",
-                    "--finality-quorum-early-full-propagation",
-                    "--keep-alive",
-                ])
-                .stdout(Stdio::null())
-                .stderr(
-                    fs::File::create(harness.root.join(format!("{validator}.rpc.log")))
-                        .expect("log"),
-                )
-                .spawn()
-                .expect("spawn rpc-serve"),
-        );
+        harness.children.push(spawn_rpc_serve(
+            &harness.root,
+            dir,
+            &validator,
+            rpc_ports[index],
+            &topology_path,
+            &key,
+        ));
+        rpc_children.push(harness.children.len() - 1);
+        validator_keys.push(key);
         ready_files.push(transport_ready);
         ready_files.push(rpc_ready);
     }
@@ -596,22 +650,10 @@ fn gateway_admits_a_user_proven_ingress_through_the_real_node() {
     .into_iter()
     .map(|(name, value)| (name.to_string(), value))
     .collect();
-    let proxy = Command::new("node")
-        .arg("server.js")
-        .current_dir(proxy_dir())
-        .env_clear()
-        .envs(proxy_env.iter().map(|(name, value)| (name, value)))
-        .stdout(fs::File::create(harness.root.join("proxy.stdout.log")).expect("log"))
-        .stderr(fs::File::create(harness.root.join("proxy.stderr.log")).expect("log"))
-        .spawn()
-        .expect("spawn wallet proxy");
+    let proxy = spawn_proxy(&harness.root, &proxy_env, proxy_port);
     let proxy_pid = proxy.id();
     harness.children.push(proxy);
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while TcpStream::connect(("127.0.0.1", proxy_port)).is_err() {
-        assert!(Instant::now() < deadline, "wallet proxy did not start");
-        thread::sleep(Duration::from_millis(50));
-    }
+    let proxy_index = harness.children.len() - 1;
 
     // A native session opened with a Rust-signed install identity.
     let install = ml_dsa_65_keygen().expect("install key");
@@ -1022,6 +1064,213 @@ fn gateway_admits_a_user_proven_ingress_through_the_real_node() {
     );
     assert!(scanned.len() > 20, "condition: inspection coverage; observed: {} files; expected: the stores, logs and round artifacts", scanned.len());
     eprintln!("secret inspection scanned {} files: clean", scanned.len());
+
+    // A lagging source for the diverging-tip case: validator-1's state at the
+    // current tip, copied while no round runs, later served by its own rpc-serve.
+    let stale_height = rpc(rpc_port, "server_info", json!({}))["result"]["ledger"]["height"]
+        .as_u64()
+        .expect("tip height");
+    let stale_dir = harness.root.join("validator-1-stale");
+    copy_dir(&validator_dirs[1], &stale_dir);
+
+    // (a) A proxy crash right after the submit returns, then a restart on the
+    // same store: the record survives, a repeat submit is the same record, the
+    // validators' round lands once.
+    let restart_seed =
+        postfiat_crypto_provider::hash_bytes("gateway-test-restart-seed", &nanos.to_le_bytes())
+            [..32]
+            .to_vec();
+    let restart_file = harness.root.join("restart-ingress.json");
+    create_asset_orchard_ingress(AssetOrchardIngressCreateOptions {
+        data_dir: data_dir.clone(),
+        key_file: holder_key_file.clone(),
+        asset_id: asset_id.clone(),
+        amount: 5,
+        fee: 0,
+        note_seed_hex: bytes_to_hex(&restart_seed),
+        encrypted_output_hex: None,
+        ingress_file: restart_file.clone(),
+        note_file: harness.root.join("restart-note.json"),
+        overwrite: false,
+    })
+    .expect("create restart ingress");
+    let restart_json = serde_json::to_string(&ShieldedAction::AssetOrchardIngressV2(
+        serde_json::from_slice::<AssetOrchardIngressFile>(
+            &fs::read(&restart_file).expect("read restart ingress"),
+        )
+        .expect("restart ingress json")
+        .payload,
+    ))
+    .expect("restart action json");
+    let restart_domain = json!([{"chain_id": genesis.chain_id, "genesis_hash": genesis_hash_hex, "protocol_version": genesis.protocol_version}, restart_json]);
+    let restart_intent = sha3_hex(
+        "tasknode.private-intent.v1",
+        restart_domain.to_string().as_bytes(),
+    );
+    let restart_body = json!({"address": holder.address, "intent_id": restart_intent, "action_json": restart_json});
+    let (status, first) = http(proxy_port, "/api/private/v1/submit", &restart_body, &token);
+    assert_eq!(
+        status, 202,
+        "condition: submit before the proxy crash; observed: {first}"
+    );
+    assert!(
+        ["queued", "dispatched"].contains(&first["state"].as_str().unwrap_or("")),
+        "condition: submit state before the crash; observed: {first}; expected: queued or dispatched"
+    );
+    let crashed = &mut harness.children[proxy_index];
+    crashed.kill().expect("kill the proxy");
+    crashed.wait().expect("reap the proxy");
+    assert!(
+        TcpStream::connect(("127.0.0.1", proxy_port)).is_err(),
+        "the proxy is down"
+    );
+    harness.children[proxy_index] = spawn_proxy(&harness.root, &proxy_env, proxy_port);
+    let (status, kept) = http(proxy_port, "/api/private/v1/receipt", &restart_body, &token);
+    assert_eq!(
+        status, 200,
+        "condition: receipt after the restart; observed: {kept}"
+    );
+    assert_eq!(kept["intent_id"], restart_intent.as_str());
+    assert_ne!(
+        kept["state"], "unknown",
+        "condition: the record after the restart; observed: {kept}; expected: still known"
+    );
+    let (status, repeated) = http(proxy_port, "/api/private/v1/submit", &restart_body, &token);
+    assert_eq!(
+        status, 202,
+        "condition: repeat submit after the restart; observed: {repeated}"
+    );
+    for field in ["intent_id", "action_hash", "batch_id"] {
+        assert_eq!(
+            repeated[field], first[field],
+            "condition: repeat submit {field}; observed: {repeated}; expected: the first record"
+        );
+    }
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let landed = loop {
+        let (status, receipt) = http(proxy_port, "/api/private/v1/receipt", &restart_body, &token);
+        assert_eq!(status, 200, "receipt after the restart: {receipt}");
+        if receipt["state"] == "accepted" {
+            break receipt;
+        }
+        assert!(
+            receipt["state"] != "rejected",
+            "rejected after the restart: {receipt}"
+        );
+        assert!(
+            Instant::now() < deadline,
+            "not accepted after the restart: {receipt}"
+        );
+        thread::sleep(Duration::from_millis(500));
+    };
+    assert_eq!(
+        landed["inclusion_height"].as_u64(),
+        Some(stale_height + 1),
+        "condition: inclusion after the restart; observed: {landed}"
+    );
+    thread::sleep(Duration::from_millis(1_500));
+    for port in &rpc_ports {
+        let tip = rpc(*port, "server_info", json!({}));
+        assert_eq!(
+            tip["result"]["ledger"]["height"].as_u64(),
+            Some(stale_height + 1),
+            "condition: chain after the restart and the repeat submit; observed: {tip}; expected: exactly one new block"
+        );
+    }
+
+    // (b) One source's rpc-serve stopped (its transport keeps running): the
+    // snapshot is refused with 503, then succeeds once it serves again.
+    let stopped = &mut harness.children[rpc_children[1]];
+    stopped.kill().expect("stop validator-1 rpc-serve");
+    stopped.wait().expect("reap validator-1 rpc-serve");
+    let snapshot_body = json!({"address": holder.address});
+    let (status, missing) = http(
+        proxy_port,
+        "/api/private/v1/snapshot",
+        &snapshot_body,
+        &token,
+    );
+    assert_eq!(
+        status, 503,
+        "condition: snapshot with one source down; observed: {status} {missing}; expected: 503"
+    );
+    assert_eq!(missing["code"], "private_snapshot_unavailable", "{missing}");
+    harness.children[rpc_children[1]] = spawn_rpc_serve(
+        &harness.root,
+        &validator_dirs[1],
+        "validator-1",
+        rpc_ports[1],
+        &topology_path,
+        &validator_keys[1],
+    );
+    wait_for_file(
+        &harness.root.join("validator-1.rpc.ready.json"),
+        Duration::from_secs(60),
+    );
+    let (status, restored) = http(
+        proxy_port,
+        "/api/private/v1/snapshot",
+        &snapshot_body,
+        &token,
+    );
+    assert_eq!(
+        status, 200,
+        "condition: snapshot after validator-1 rpc-serve restarted; observed: {restored}"
+    );
+    assert_eq!(
+        restored["snapshot_token"]["height"].as_u64(),
+        Some(stale_height + 1)
+    );
+
+    // (c) Sources at different finalized heights: validator-0 at the tip and a
+    // source serving validator-1's state one block back. The snapshot refuses
+    // with the mixed-tip code.
+    let stale_port = free_port();
+    harness.children.push(spawn_rpc_serve(
+        &harness.root,
+        &stale_dir,
+        "validator-1-stale",
+        stale_port,
+        &topology_path,
+        &validator_keys[1],
+    ));
+    wait_for_file(
+        &harness.root.join("validator-1-stale.rpc.ready.json"),
+        Duration::from_secs(60),
+    );
+    let stale_tip = rpc(stale_port, "server_info", json!({}));
+    assert_eq!(
+        stale_tip["result"]["ledger"]["height"].as_u64(),
+        Some(stale_height),
+        "{stale_tip}"
+    );
+    let lagging_env: Vec<(String, String)> = proxy_env
+        .iter()
+        .map(|(name, value)| {
+            let value = if name == "RPC_FLEET" {
+                format!("validator-0=127.0.0.1:{rpc_port},validator-1=127.0.0.1:{stale_port}")
+            } else {
+                value.clone()
+            };
+            (name.clone(), value)
+        })
+        .collect();
+    let replaced = &mut harness.children[proxy_index];
+    replaced.kill().expect("stop the proxy");
+    replaced.wait().expect("reap the proxy");
+    harness.children[proxy_index] = spawn_proxy(&harness.root, &lagging_env, proxy_port);
+    let (status, mixed) = http(
+        proxy_port,
+        "/api/private/v1/snapshot",
+        &snapshot_body,
+        &token,
+    );
+    assert_eq!(status, 503, "condition: snapshot from sources at heights {} and {stale_height}; observed: {status} {mixed}; expected: 503", stale_height + 1);
+    assert_eq!(
+        mixed["code"], "private_snapshot_sources_diverged",
+        "{mixed}"
+    );
+    eprintln!("proxy restart, stopped source and diverging tips: proven");
     eprintln!(
         "private actions gateway integration took {:?}",
         started.elapsed()
