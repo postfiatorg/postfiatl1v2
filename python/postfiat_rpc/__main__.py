@@ -148,6 +148,7 @@ PUBLIC_READ_OBJECT_METHODS = frozenset(
         "private_pool_snapshot",
         "private_pool_page",
         "private_account_lines",
+        "private_readiness",
         "pfusdc_ingress_preflight",
         "pfusdc_egress_witness",
         "yolo_target_receipt",
@@ -212,6 +213,7 @@ CLI_METHODS: tuple[str, ...] = (
     "private_pool_snapshot",
     "private_pool_page",
     "private_account_lines",
+    "private_readiness",
     "pfusdc_ingress_preflight",
     "pfusdc_egress_witness",
     "yolo_target_receipt",
@@ -421,6 +423,8 @@ def call_method(client: PostFiatRpcClient, args: argparse.Namespace) -> Any:
             require_arg(args, "snapshot_token", method),
             require_arg(args, "address", method),
         )
+    if method == "private_readiness":
+        return client.private_readiness(pool_id=args.pool_id)
     if method == "pfusdc_ingress_preflight":
         return client.pfusdc_ingress_preflight(
             require_arg(args, "asset_id", method),

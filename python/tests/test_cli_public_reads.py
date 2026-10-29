@@ -121,6 +121,8 @@ class CliPublicReadDispatchTests(unittest.TestCase):
                 ("t", "pfa"),
                 {},
             ),
+            ("private_readiness", {}, "private_readiness", (), {"pool_id": None}),
+            ("private_readiness", {"pool_id": "asset-orchard-v1"}, "private_readiness", (), {"pool_id": "asset-orchard-v1"}),
             (
                 "pfusdc_ingress_preflight",
                 {"asset_id": "a", "recipient": "r", "depositor": "d", "amount_atoms": 9},

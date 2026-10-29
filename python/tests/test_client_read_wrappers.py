@@ -219,6 +219,19 @@ class RemainingReadWrapperTests(unittest.TestCase):
             },
         )
 
+    def test_private_readiness_sends_only_the_optional_pool_id(self) -> None:
+        client = _client()
+        with mock.patch.object(client, "_call", return_value={"ready": False}) as call:
+            client.private_readiness()
+        call.assert_called_once_with("private_readiness", {})
+        with mock.patch.object(client, "_call", return_value={"ready": False}) as call:
+            client.private_readiness(pool_id="asset-orchard-v1")
+        call.assert_called_once_with("private_readiness", {"pool_id": "asset-orchard-v1"})
+        with mock.patch.object(client, "_call") as call:
+            with self.assertRaisesRegex(ValueError, "pool_id must be a non-empty string"):
+                client.private_readiness(pool_id="")
+        call.assert_not_called()
+
     def test_private_pool_reads_send_the_token_section_cursor_and_limit(self) -> None:
         client = _client()
         with mock.patch.object(client, "_call", return_value={"snapshot_token": "t"}) as call:

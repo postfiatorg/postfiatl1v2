@@ -1847,6 +1847,18 @@ class PostFiatRpcClient:
             },
         )
 
+    def private_readiness(self, *, pool_id: str | None = None) -> dict[str, Any]:
+        """Private-action readiness of the node (public read).
+
+        `ready` is true only when both verifiers are built with their pinned
+        identity, the governed activations are active at the next height and
+        the governed A666/pfUSDC route exists; otherwise `reasons` says why.
+        """
+        params: dict[str, Any] = {}
+        if pool_id is not None:
+            params["pool_id"] = self._required_text(pool_id, "pool_id")
+        return self._object_read("private_readiness", params)
+
     def _asset_orchard_pair_params(
         self, base_asset_id: str, quote_asset_id: str, inclusion_height: int
     ) -> dict[str, Any]:

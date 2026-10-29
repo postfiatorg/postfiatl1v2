@@ -51,6 +51,7 @@
     "active": null,
     "refusal_when_inactive": "shielded_atomic_batch_not_active (crates/node/src/execution_actions.rs, execute_shielded_batch)",
     "governance_kind": "shielded_atomic_batch_activation_height",
+    "readiness_read": "private_readiness (node RPC, added 2026-10-29) reports atomic_shielded_batches.effective_height and active_at_next_height from finalized governance. The deployed index-v3-20261027 release predates it, so the null stays until validator-0 runs a release that serves it.",
     "source": "Not readable today. The one live read (server_info) does not report governance amendments, and the deployed release has no read-only RPC that does. The repository's records hold no amendment of this kind for postfiat-wan-devnet-2. Treat atomic batches as inactive until a governed activation is recorded."
   }
 }

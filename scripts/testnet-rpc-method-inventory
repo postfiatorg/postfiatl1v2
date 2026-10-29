@@ -63,6 +63,7 @@ POSTURE_NOTES = {
     "private_pool_snapshot": "finalized private pool snapshot token, counts, pricing and completeness",
     "private_pool_page": "token-pinned bounded page of a private pool section",
     "private_account_lines": "token-pinned account lines bound to asset_info",
+    "private_readiness": "finalized-state and in-process verifier readiness attestation for private actions",
     "mempool_submit_signed_transfer": "controlled write edge; disabled unless explicitly enabled",
     "mempool_submit_signed_transfer_finality": "controlled in-process write/finality edge; disabled unless explicitly enabled",
     "shield_batch_orchard": "privacy-alpha batch-create edge; disabled unless explicitly enabled",
@@ -162,6 +163,7 @@ READ_ONLY_PUBLIC_METHODS = {
     "private_pool_snapshot",
     "private_pool_page",
     "private_account_lines",
+    "private_readiness",
 }
 
 AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS = {

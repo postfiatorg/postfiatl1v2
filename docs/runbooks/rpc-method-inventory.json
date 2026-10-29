@@ -13,9 +13,9 @@
     "operator_or_local_only": 42,
     "owned_lane_gated": 8,
     "privacy_alpha_gated": 4,
-    "read_only_public": 81,
+    "read_only_public": 82,
     "sdk_only_or_unknown": 0,
-    "total_methods": 162
+    "total_methods": 163
   },
   "gaps": [
     {
@@ -34,10 +34,10 @@
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-10-29T11:47:29Z",
+  "generated_utc": "2026-10-29T11:54:37Z",
   "git": {
     "dirty": true,
-    "revision": "683a5b32b4903c87bb6582ab8667a1bb5aee0a4d"
+    "revision": "d7de5ec78210a3316251adde7a44626f82854ead"
   },
   "methods": [
     {
@@ -2011,6 +2011,21 @@
       "method": "private_pool_snapshot",
       "node_dispatch": true,
       "notes": "finalized private pool snapshot token, counts, pricing and completeness",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "sdk_constant": false
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "private_readiness",
+      "node_dispatch": true,
+      "notes": "finalized-state and in-process verifier readiness attestation for private actions",
       "owned_lane_allowed_when_enabled": false,
       "posture": "read_only_public",
       "privacy_alpha_allowed_when_enabled": false,

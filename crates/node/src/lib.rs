@@ -286,6 +286,8 @@ mod private_pool_reads;
 pub use private_pool_reads::*;
 mod private_action_admission;
 pub use private_action_admission::*;
+mod private_readiness_read;
+pub use private_readiness_read::*;
 mod atomic_swap_rpc;
 pub use atomic_swap_rpc::*;
 #[allow(unused_imports)]

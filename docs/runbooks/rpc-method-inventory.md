@@ -14,8 +14,8 @@ method lacks an explicit posture.
 
 ## Summary
 
-- Total methods observed: 162
-- Read-only public methods: 81
+- Total methods observed: 163
+- Read-only public methods: 82
 - Public cryptographically authorized protocol mutations: 12
 - Controlled write gated methods: 15
 - Privacy-alpha gated methods: 4
@@ -181,6 +181,7 @@ method lacks an explicit posture.
 | private_action_submit | operator_or_local_only | no | no | yes | no | yes |  |
 | private_pool_page | read_only_public | yes | no | yes | no | yes | token-pinned bounded page of a private pool section |
 | private_pool_snapshot | read_only_public | yes | no | yes | no | yes | finalized private pool snapshot token, counts, pricing and completeness |
+| private_readiness | read_only_public | yes | no | yes | no | yes | finalized-state and in-process verifier readiness attestation for private actions |
 | receipts | read_only_public | yes | no | yes | yes | yes | bounded receipt lookup |
 | server_info | read_only_public | yes | no | yes | yes | yes | XRP-like server info alias |
 | shield_batch_asset_orchard_ingress | operator_or_local_only | no | no | yes | no | no |  |

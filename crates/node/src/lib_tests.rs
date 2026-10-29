@@ -7,6 +7,7 @@ mod tests {
     include!("tests/asset_orchard_pricing_read_tests.rs");
     include!("tests/asset_orchard_pricing_enforcement_tests.rs");
     include!("tests/private_pool_read_tests.rs");
+    include!("tests/private_readiness_read_tests.rs");
     include!("tests/yolo_target_receipt_tests.rs");
     include!("tests/nav_reserve_proof_status_tests.rs");
     include!("tests/private_action_admission_tests.rs");

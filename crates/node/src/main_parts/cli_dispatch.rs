@@ -86,7 +86,7 @@ use postfiat_node::{
     fx_fix_reservation_info, asset_orchard_action_status, asset_orchard_pricing_claim,
     asset_orchard_private_egress_binding, AssetOrchardPairReadOptions, private_account_lines,
     private_pool_page, private_pool_snapshot, PrivateAccountLinesOptions, PrivatePoolPageOptions,
-    PrivatePoolSnapshotOptions,
+    PrivatePoolSnapshotOptions, private_readiness, PrivateReadinessOptions,
     governance_agent_evidence_lineage_audit,
     governance_agent_gate_10_1, governance_agent_gate_10_5, governance_agent_gate_14,
     governance_agent_gate_15, governance_agent_gate_1_5, governance_agent_gate_3_5,
