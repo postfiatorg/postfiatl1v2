@@ -3,9 +3,9 @@
   "audit_date": "2026-08-02",
   "baseline_commit": "bfe0ded03033085ab1db9df274f93cc41d0d2690",
   "source_hashes": {
-    "crates/privacy_orchard/src/asset_orchard.rs": "9b63632e1d4c5cb4bd7d061103552db5b8380f8404659c73f8e48f14b28ba739",
+    "crates/privacy_orchard/src/asset_orchard.rs": "3b4c08bff2cc2bcb6243451461304dbeeab816d9d42bc0f0d0fb9aacbe9b9283",
     "crates/privacy_orchard/src/asset_orchard_circuit.rs": "77ab533ed63a10a2a4a2902de11f3a94d5f2d1045afb6839d4c7f59407e9d310",
-    "crates/privacy_orchard/src/verify.rs": "0b48191344297c4c1a7720b3cc54844d919205f58013bd6f4e8af3d60b72e66a",
+    "crates/privacy_orchard/src/verify.rs": "c526157c4dde4bc40e343892d1cca0e80ce84635536e95e93c2dbc4570030381",
     "crates/execution/src/nav_sp1_verifier.rs": "04ba754797c122c326e71fe2ed99452f559f387367b4128c0979eb6574d4ff54",
     "crates/nav_reserve_protocol/src/lib.rs": "8de1f518993479564da9bd6c400826490cd4875abf8fd18ecc0008216b8ce228",
     "crates/proofs/src/lib.rs": "6ad08dd265fc25958daf6e0ae3d55bbecaa13cdebdcafc9739c2d682d0eb4527",
