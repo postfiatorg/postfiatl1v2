@@ -266,6 +266,134 @@ mod private_action_rpc_tests {
         assert!(!rpc_serve_private_action_allowed("status", true));
     }
 
+    fn private_action_serve_options(
+        root: &Path,
+        allow: bool,
+        port: u16,
+        max_requests: usize,
+    ) -> RpcServeOptions {
+        RpcServeOptions {
+            data_dir: root.to_path_buf(),
+            spool_dir: root.join("runtime/rpc-spool"),
+            ready_file: root.join(format!("readiness/rpc-{allow}.json")),
+            bind_host: "127.0.0.1".to_string(),
+            port,
+            max_requests,
+            timeout_ms: 5_000,
+            child_timeout_ms: 5_000,
+            event_log: None,
+            allow_mempool_submit: false,
+            allow_mempool_submit_finality: false,
+            allow_orchard_batch_create: false,
+            owned_lane_enabled: true,
+            allow_private_action_admission: allow,
+            finality_topology_file: root.join("topology.json"),
+            finality_key_file: root.join(VALIDATOR_KEYS_FILE),
+            finality_proposal_key_file: None,
+            finality_artifact_root: root.join("finality-artifacts"),
+            finality_timeout_ms: 2_000,
+            finality_send_retries: 0,
+            finality_retry_backoff_ms: 0,
+            finality_quorum_early_full_propagation: true,
+            max_mempool_submit_per_peer: 8,
+            max_mempool_submit_total: 32,
+            max_orchard_batch_create_per_peer: 2,
+            max_orchard_batch_create_total: 8,
+            max_orchard_batch_create_concurrent: 1,
+            max_child_dispatch_concurrent: 8,
+            max_child_dispatch_per_peer: 4,
+            keep_alive: false,
+        }
+    }
+
+    fn private_action_serve(root: &Path, allow: bool, requests: &[RpcRequest]) -> Vec<RpcResponse> {
+        let port = TcpListener::bind(("127.0.0.1", 0))
+            .expect("reserve port")
+            .local_addr()
+            .expect("port")
+            .port();
+        let options = private_action_serve_options(root, allow, port, requests.len());
+        let server = thread::spawn(move || rpc_serve(options));
+        let responses = requests
+            .iter()
+            .map(|request| {
+                let mut stream = (0..200)
+                    .find_map(|_| match TcpStream::connect(("127.0.0.1", port)) {
+                        Ok(stream) => Some(stream),
+                        Err(_) => {
+                            thread::sleep(Duration::from_millis(10));
+                            None
+                        }
+                    })
+                    .expect("connect RPC");
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(10)))
+                    .expect("read timeout");
+                let mut line = serde_json::to_vec(request).expect("request json");
+                line.push(b'\n');
+                stream.write_all(&line).expect("write request");
+                let mut response = String::new();
+                BufReader::new(stream)
+                    .read_line(&mut response)
+                    .expect("read response");
+                serde_json::from_str(&response).expect("response json")
+            })
+            .collect();
+        server.join().expect("server thread").expect("rpc serve");
+        responses
+    }
+
+    #[test]
+    fn rpc_serve_exposes_private_actions_only_with_the_switch() {
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-private-action-rpc-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        init(InitOptions {
+            data_dir: root.clone(),
+            chain_id: "private-action-rpc-test".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 1,
+        })
+        .expect("init node");
+        let receipt = RpcRequest::new(
+            "receipt",
+            "private_action_receipt",
+            serde_json::json!({ "intent_id": "ab".repeat(48) }),
+        );
+        let submit = RpcRequest::new(
+            "submit",
+            "private_action_submit",
+            serde_json::json!({ "intent_id": "ab".repeat(48) }),
+        );
+        let off = private_action_serve(&root, false, &[receipt.clone(), submit.clone()]);
+        for response in &off {
+            assert!(!response.ok);
+            assert_eq!(response.error.as_ref().unwrap().code, "rpc_method_not_allowed");
+        }
+        assert!(!root.join("private_action_admission").exists());
+
+        // The switch needs the round's topology and key files.
+        let missing = rpc_serve(private_action_serve_options(&root, true, 0, 1))
+            .expect_err("missing finality topology must refuse the switch");
+        assert!(missing.contains("needs the finality topology"), "{missing}");
+        std::fs::write(root.join("topology.json"), "{}").expect("topology placeholder");
+        assert!(root.join(VALIDATOR_KEYS_FILE).is_file());
+        let on = private_action_serve(&root, true, &[receipt, submit]);
+        assert!(on[0].ok, "{:?}", on[0].error);
+        assert_eq!(on[0].result.as_ref().unwrap()["state"], "pending_unknown");
+        assert!(!on[1].ok);
+        assert_eq!(
+            on[1].error.as_ref().unwrap().code,
+            "private_action_request_invalid"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     #[test]
     fn private_action_params_are_flat_and_closed() {
         let mut params = serde_json::Map::new();
