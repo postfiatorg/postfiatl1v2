@@ -649,7 +649,8 @@ pub struct PrivateActionServiceStep {
 ///
 /// 1. `dispatched` records (a crash mid-round) are reconciled from the chain by
 ///    batch id and never dispatched again: included → accepted/rejected,
-///    absent → `unknown`, which stays pending.
+///    absent → `unknown`, which stays pending until the batch appears on
+///    chain (for example proposed by another validator holding it queued).
 /// 2. `queued` records whose batch is already on chain (another validator
 ///    proposed it) are reconciled without a round.
 /// 3. The oldest other `queued` record is re-verified at the current state;
@@ -672,7 +673,9 @@ where
         .filter(|record| {
             matches!(
                 record.state,
-                PrivateActionState::Queued | PrivateActionState::Dispatched
+                PrivateActionState::Queued
+                    | PrivateActionState::Dispatched
+                    | PrivateActionState::Unknown
             )
         })
         .cloned()
@@ -687,6 +690,10 @@ where
                 record,
                 included_outcome(inclusion, &receipts),
             )?);
+            continue;
+        }
+        // `unknown` is only ever settled by the chain; it is never dispatched.
+        if record.state == PrivateActionState::Unknown {
             continue;
         }
         if record.state == PrivateActionState::Dispatched {
