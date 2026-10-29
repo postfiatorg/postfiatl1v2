@@ -23,6 +23,7 @@ const SIGNATURE_HEX_LENGTH = 6_618;
 const MAX_OPEN_BODY_BYTES = 16 * 1024;
 const MAX_TOKEN_BYTES = 1024;
 const MAX_CLOCK_SKEW_MS = 5 * 60_000;
+const MAX_RATE_WINDOW_ADDRESSES = 100_000;
 const OPEN_FIELDS = [
     'schema', 'algorithm_id', 'public_key_hex', 'client_nonce_hex', 'origin',
     'chain_id', 'genesis_hash_hex', 'issued_at_ms', 'signature_hex',
@@ -98,6 +99,11 @@ function createNativeSessions({ env = process.env, caps = {}, now = Date.now } =
     let allowlist = null;
     const replayLimit = boundedInteger(env.WALLET_PROXY_NATIVE_SESSION_REPLAY_CACHE_LIMIT,
         'WALLET_PROXY_NATIVE_SESSION_REPLAY_CACHE_LIMIT', 100_000, 100, 10_000_000);
+    // The open route is unauthenticated and verifies ML-DSA per call: bound it per source address.
+    const openRateLimit = boundedInteger(env.WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT,
+        'WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT', 10, 1, 100_000);
+    const openRateWindowMs = boundedInteger(env.WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_WINDOW_MS,
+        'WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_WINDOW_MS', 60_000, 1_000, 86_400_000);
     if (enabled) {
         origin = normalizeOrigin(rawOrigin);
         secret = String(env.WALLET_PROXY_NATIVE_SESSION_SECRET || '');
@@ -115,6 +121,27 @@ function createNativeSessions({ env = process.env, caps = {}, now = Date.now } =
         if (allowlistFile) allowlist = loadAllowlist(allowlistFile);
     }
     const seenNonces = new Map();
+    const openWindows = new Map();
+
+    // Returns 0 when admitted, otherwise the milliseconds until the window reopens.
+    function admitOpen(address) {
+        const nowMs = now();
+        let window = openWindows.get(address);
+        if (!window || nowMs - window.startedAtMs >= openRateWindowMs) {
+            if (!window && openWindows.size >= MAX_RATE_WINDOW_ADDRESSES) {
+                for (const [key, entry] of openWindows) {
+                    if (nowMs - entry.startedAtMs >= openRateWindowMs) openWindows.delete(key);
+                }
+                // A full table fails closed instead of forgetting live windows.
+                if (openWindows.size >= MAX_RATE_WINDOW_ADDRESSES) return openRateWindowMs;
+            }
+            window = { startedAtMs: nowMs, count: 0 };
+            openWindows.set(address, window);
+        }
+        if (window.count >= openRateLimit) return Math.max(1, openRateWindowMs - (nowMs - window.startedAtMs));
+        window.count += 1;
+        return 0;
+    }
 
     function mac(payloadPart) {
         return crypto.createHmac('sha256', secret).update(TOKEN_MAC_DOMAIN).update('\0').update(payloadPart).digest();
@@ -202,6 +229,13 @@ function createNativeSessions({ env = process.env, caps = {}, now = Date.now } =
         const fail = (statusCode, code) => ({ statusCode, body: { ok: false, schema: SESSION_SCHEMA, code } });
         if (!enabled) return fail(404, 'native_session_disabled');
         if (req.method !== 'POST') return fail(405, 'method_not_allowed');
+        // Before any body read or signature check. Behind a reverse proxy the
+        // source address is the proxy's, so the window is shared by its clients.
+        const retryAfterMs = admitOpen(String(req.socket?.remoteAddress || 'unknown'));
+        if (retryAfterMs) {
+            req.resume();
+            return { statusCode: 429, body: { ok: false, schema: SESSION_SCHEMA, code: 'native_session_rate_limited', retry_after_ms: retryAfterMs } };
+        }
         const headerOrigin = String(req.headers.origin || '').trim();
         if (headerOrigin && headerOrigin !== origin) return fail(403, 'native_session_wrong_origin');
         let body;

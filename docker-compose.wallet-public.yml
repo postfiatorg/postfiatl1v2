@@ -16,6 +16,22 @@ services:
       WALLET_PROXY_MUTATION_RATE_LIMIT: "${WALLET_PROXY_MUTATION_RATE_LIMIT:-120}"
       WALLET_PROXY_MUTATION_RATE_WINDOW_MS: "${WALLET_PROXY_MUTATION_RATE_WINDOW_MS:-60000}"
       WALLET_PROXY_MUTATION_CONCURRENCY: "${WALLET_PROXY_MUTATION_CONCURRENCY:-16}"
+      # Native app sessions stay off until an operator sets this exact https origin.
+      WALLET_PROXY_NATIVE_SESSION_ORIGIN: "${WALLET_PROXY_NATIVE_SESSION_ORIGIN:-}"
+      # Token HMAC key, at least 32 random bytes, from the private environment file.
+      WALLET_PROXY_NATIVE_SESSION_SECRET: "${WALLET_PROXY_NATIVE_SESSION_SECRET:-}"
+      # Network id native tokens are bound to; required once sessions are on.
+      WALLET_PROXY_NATIVE_SESSION_CHAIN_ID: "${WALLET_PROXY_NATIVE_SESSION_CHAIN_ID:-}"
+      # 96-hex genesis hash native tokens are bound to; required once sessions are on.
+      WALLET_PROXY_NATIVE_SESSION_GENESIS_HASH: "${WALLET_PROXY_NATIVE_SESSION_GENESIS_HASH:-}"
+      # Optional install allowlist path inside the container; mount the file read-only.
+      WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: "${WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE:-}"
+      # Native token lifetime in ms; empty keeps the 900000 default.
+      WALLET_PROXY_NATIVE_SESSION_TTL_MS: "${WALLET_PROXY_NATIVE_SESSION_TTL_MS:-}"
+      # Session opens per source address and window; empty keeps 10 per 60000 ms.
+      WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT: "${WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT:-}"
+      # Open rate window in ms; empty keeps the 60000 default.
+      WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_WINDOW_MS: "${WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_WINDOW_MS:-}"
       RPC_HOST: "${RPC_HOST:?set an explicit private validator or RPC-edge host}"
       RPC_PORT: "${RPC_PORT:-27650}"
       RPC_FLEET: "${RPC_FLEET:?set the exact validator-id=host:port fleet topology}"

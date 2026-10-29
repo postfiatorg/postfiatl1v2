@@ -87,6 +87,8 @@ The optional HTTPS dev cert paths are controlled by:
 | `WALLET_PROXY_NATIVE_SESSION_GENESIS_HASH` | empty | 96-hex genesis hash native sessions are bound to. Required when enabled. |
 | `WALLET_PROXY_NATIVE_SESSION_TTL_MS` | `900000` | Native token lifetime, 60000 to 3600000. |
 | `WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE` | empty | Optional install allowlist. When set, only listed installs may open a session. |
+| `WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT` | `10` | Session opens admitted per source address and window, 1 to 100000. Further opens get 429 `native_session_rate_limited` with `retry_after_ms`. |
+| `WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_WINDOW_MS` | `60000` | Open rate window, 1000 to 86400000. |
 | `WALLET_STATIC_DIR` | `wallet-web/dist` | Immutable production wallet build served same-origin by the hardened proxy. |
 | `INJECT_RPC_CAPS` | `true` | Injects RPC capability fields into `server_info` responses. Like every wallet-proxy on/off setting, it takes `true`/`false` (any case) or `1`/`0`; any other value stops startup, or fails the request for a setting read per request (`<NAME> must be true or false`). Exception: `PFUSDC_WITHDRAWAL_ENABLED` is on only for exactly `true`. |
 
@@ -136,6 +138,17 @@ a 32-byte nonce, the gateway origin, chain id, genesis hash and a timestamp,
 signed under the context `postfiat-l1-v2/native-session/v1`. The gateway checks
 the signature, origin, network, timestamp (±5 minutes), nonce reuse and a 16-KiB
 body limit. It returns a bearer token for the principal `native:<install id>`.
+The signed bytes are the newline-joined schema, origin, chain id, genesis hash,
+public key, nonce and timestamp. `wallet-proxy/fixtures/native-session-rust-vector.json`
+is a request signed by `crates/crypto_provider`
+(`examples/native_session_vector.rs`), and the proxy tests open a session with it.
+
+Opens are limited per source address before any signature check (10 per minute
+by default). Behind the bundled TLS edge every request arrives from the edge, so
+the limit applies to all native clients together; size it for that.
+`docker-compose.wallet-public.yml` passes the native-session variables through
+unset, so native sessions stay off until an operator sets them. An allowlist
+file must also be mounted into the container.
 
 The token has the browser relay's caps: the same routes, per-principal rate
 window, concurrency and body limits. It is refused when expired (401
@@ -143,7 +156,8 @@ window, concurrency and body limits. It is refused when expired (401
 another gateway's secret (401), or sent with a foreign `Origin` header (403).
 Any request that carries a token in its query string gets 400. Add the native
 origin to `ALLOWED_ORIGINS`, because authenticated writes still need an allowed
-`Origin` header.
+`Origin` header. WebSocket calls carry the token as `proxy_auth_token`, with the
+same origin binding.
 
 The allowlist file must be a regular file owned by the service user, not a
 symlink and not group- or world-writable:

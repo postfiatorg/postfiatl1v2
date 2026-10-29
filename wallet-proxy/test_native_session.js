@@ -7,9 +7,11 @@ const assert = require('assert');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
+const net = require('net');
 const os = require('os');
 const path = require('path');
 const { Readable } = require('stream');
+const WebSocket = require('ws');
 
 const BROWSER_TOKEN = 'browser-relay-test-token-32-bytes-min-01';
 const NATIVE_ORIGIN = 'https://gateway.example.test';
@@ -31,6 +33,8 @@ Object.assign(process.env, NATIVE_ENV, {
   WALLET_PROXY_API_TOKEN: BROWSER_TOKEN,
   WALLET_PROXY_LOCAL_SESSION_PRINCIPAL: 'default',
   ALLOWED_ORIGINS: `${NATIVE_ORIGIN},${WALLET_ORIGIN}`,
+  WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT: '1000',
+  ENABLE_PROPOSER_ROUTING: 'false',
   WALLET_PROXY_MUTATION_RATE_LIMIT: '3',
   WALLET_PROXY_MUTATION_RATE_WINDOW_MS: '60000',
   WALLET_PROXY_MAX_HTTP_BODY_BYTES: '256',
@@ -38,7 +42,9 @@ Object.assign(process.env, NATIVE_ENV, {
   NAVSWAP_RUN_STORE_PATH: 'off',
 });
 
-const { clearMutationAdmissionForTest, server } = require('./server');
+// Loaded in main() once the fake validator RPC is listening.
+let clearMutationAdmissionForTest;
+let server;
 const {
   ALGORITHM_ID, OPEN_PATH, OPEN_SCHEMA, SIGNATURE_CONTEXT, createNativeSessions, installId, mlDsa65, openMessage,
 } = require('./native-session');
@@ -83,14 +89,40 @@ async function openBody(keys, overrides = {}, now = Date.now()) {
 }
 
 // Drives another gateway instance (different secret, origin, network or clock).
-async function openVia(instance, body) {
-  const req = Readable.from([Buffer.from(JSON.stringify(body))]);
+async function openVia(instance, body, remoteAddress = undefined) {
+  const req = Readable.from([Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))]);
   req.method = 'POST';
   req.headers = {};
+  if (remoteAddress) req.socket = { remoteAddress };
   return instance.open(req);
 }
 
+function websocketSubmit(port, token, origin) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}`, { origin });
+    const timer = setTimeout(() => { ws.terminate(); reject(new Error('websocket response timed out')); }, 5_000);
+    ws.on('open', () => ws.send(JSON.stringify({
+      version: 'postfiat-local-rpc-v1', id: 'native-ws', method: 'mempool_submit_signed_transfer',
+      params: { signed_transfer_json: '{}' }, proxy_auth_token: token,
+    })));
+    ws.on('message', (message) => { clearTimeout(timer); ws.close(); resolve(JSON.parse(message.toString('utf8'))); });
+    ws.on('error', reject);
+  });
+}
+
 async function main() {
+  // Fake validator RPC: answers every forwarded call so WebSocket auth can be observed.
+  const upstream = net.createServer((socket) => {
+    socket.setEncoding('utf8');
+    socket.once('data', (line) => {
+      const forwarded = JSON.parse(line.trim());
+      socket.end(`${JSON.stringify({ version: 'postfiat-local-rpc-v1', id: forwarded.id, ok: true, result: { forwarded: forwarded.method }, error: null, events: [] })}\n`);
+    });
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  process.env.RPC_HOST = '127.0.0.1';
+  process.env.RPC_PORT = String(upstream.address().port);
+  ({ clearMutationAdmissionForTest, server } = require('./server'));
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
   const fund = (token, key, origin = NATIVE_ORIGIN) => request(port, 'POST', '/api/navswap/devnet-fund-pfusdc', {
@@ -228,6 +260,58 @@ async function main() {
       assert.strictEqual(oversized.body.code, 'request_body_too_large');
     }
 
+    // WebSocket mutations accept the native token as proxy_auth_token, under the same origin binding.
+    clearMutationAdmissionForTest();
+    const wsAccepted = await websocketSubmit(port, native.token, NATIVE_ORIGIN);
+    assert.strictEqual(wsAccepted.ok, true, JSON.stringify(wsAccepted));
+    assert.strictEqual(wsAccepted.result.forwarded, 'mempool_submit_signed_transfer');
+    for (const [token, origin, code] of [
+      [`${native.token.slice(0, -2)}AA`, NATIVE_ORIGIN, 'native_session_invalid'],
+      [native.token, WALLET_ORIGIN, 'native_session_wrong_origin'],
+      [expired.body.token, NATIVE_ORIGIN, 'native_session_expired'],
+    ]) {
+      const refusedWs = await websocketSubmit(port, token, origin);
+      assert.strictEqual(refusedWs.ok, false, code);
+      assert.strictEqual(refusedWs.error.code, code);
+    }
+
+    // Open rate limit: per source address, before the body is read or a signature verified.
+    let clock = Date.now();
+    const limitedInstance = createNativeSessions({
+      env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT: '2', WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_WINDOW_MS: '60000' },
+      now: () => clock,
+    });
+    assert.strictEqual((await openVia(limitedInstance, await openBody(alpha, {}, clock), '203.0.113.7')).statusCode, 200);
+    assert.strictEqual((await openVia(limitedInstance, 'not json', '203.0.113.7')).statusCode, 400);
+    clock += 15_000;
+    const limited = await openVia(limitedInstance, await openBody(alpha, {}, clock), '203.0.113.7');
+    assert.strictEqual(limited.statusCode, 429);
+    assert.strictEqual(limited.body.code, 'native_session_rate_limited');
+    assert.strictEqual(limited.body.retry_after_ms, 45_000);
+    assert.strictEqual((await openVia(limitedInstance, 'not json', '203.0.113.7')).statusCode, 429);
+    assert.strictEqual((await openVia(limitedInstance, await openBody(beta, {}, clock), '203.0.113.8')).statusCode, 200);
+    clock += 45_000;
+    assert.strictEqual((await openVia(limitedInstance, await openBody(alpha, {}, clock), '203.0.113.7')).statusCode, 200);
+    assert.strictEqual(createNativeSessions({ env: NATIVE_ENV }).enabled, true);
+    for (const bad of ['0', '100001', '1.5']) {
+      assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT: bad } }), /OPEN_RATE_LIMIT/);
+    }
+
+    // Cross-implementation: an open request signed by crates/crypto_provider verifies here.
+    const vector = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'native-session-rust-vector.json'), 'utf8'));
+    assert.strictEqual(vector.context, SIGNATURE_CONTEXT);
+    assert.strictEqual(vector.request.origin, NATIVE_ORIGIN);
+    assert.strictEqual(vector.request.chain_id, CHAIN_ID);
+    assert.strictEqual(vector.request.genesis_hash_hex, GENESIS);
+    const atVectorTime = () => createNativeSessions({ env: NATIVE_ENV, now: () => vector.request.issued_at_ms + 1_000 });
+    const rustOpened = await openVia(atVectorTime(), vector.request);
+    assert.strictEqual(rustOpened.statusCode, 200, JSON.stringify(rustOpened.body));
+    assert.strictEqual(rustOpened.body.principal, `native:${installId(vector.request.public_key_hex)}`);
+    assert.strictEqual(atVectorTime().authenticate(rustOpened.body.token).principal, rustOpened.body.principal);
+    const rustTampered = await openVia(atVectorTime(), { ...vector.request, issued_at_ms: vector.request.issued_at_ms + 1 });
+    assert.strictEqual(rustTampered.statusCode, 401);
+    assert.strictEqual(rustTampered.body.code, 'native_session_bad_signature');
+
     // The browser local-session path is unchanged.
     const local = await request(port, 'GET', '/api/bridge/local-session', {
       headers: { host: `127.0.0.1:${port}`, 'sec-fetch-site': 'same-origin' },
@@ -242,6 +326,7 @@ async function main() {
   } finally {
     clearMutationAdmissionForTest();
     await new Promise((resolve) => server.close(resolve));
+    await new Promise((resolve) => upstream.close(resolve));
   }
 }
 
