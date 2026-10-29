@@ -340,3 +340,62 @@
         assert!(report.bindings.iter().all(|binding| binding.governed));
         fs::remove_dir_all(&fixture.data_dir).expect("cleanup");
     }
+
+    /// Serializes a JSON value with object keys sorted at every level and no
+    /// whitespace, independent of serde_json's map ordering.
+    fn canonical_json(value: &serde_json::Value) -> String {
+        match value {
+            serde_json::Value::Object(map) => {
+                let mut keys: Vec<&String> = map.keys().collect();
+                keys.sort();
+                let fields: Vec<String> = keys
+                    .into_iter()
+                    .map(|key| {
+                        format!(
+                            "{}:{}",
+                            serde_json::to_string(key).expect("key"),
+                            canonical_json(&map[key])
+                        )
+                    })
+                    .collect();
+                format!("{{{}}}", fields.join(","))
+            }
+            serde_json::Value::Array(items) => format!(
+                "[{}]",
+                items.iter().map(canonical_json).collect::<Vec<_>>().join(",")
+            ),
+            other => serde_json::to_string(other).expect("scalar"),
+        }
+    }
+
+    const EGRESS_DISCLOSURE_SCHEMA_HASH_V1: &str = "7a585bbd6b5682e0d4fe72bfafa7d7b2c0a19de73924429ef7b9e22c5e1dfa52be7c2de0804e7889900a8a32f9448831";
+
+    #[test]
+    fn asset_orchard_egress_disclosure_schema_hash_is_pinned() {
+        let fixture = include_str!("../../tests/fixtures/private-egress-disclosure-schema-v1.json");
+        let document = include_str!("../../../../docs/specs/asset-orchard-private-egress-disclosure-schema-v1.md");
+        let parsed: serde_json::Value = serde_json::from_str(fixture).expect("schema json");
+        assert_eq!(canonical_json(&parsed), fixture, "the fixture is the canonical document, no trailing newline");
+        assert_eq!(parsed["schema_id"], ASSET_ORCHARD_EGRESS_DISCLOSURE_SCHEMA_ID_V1);
+        assert_eq!(parsed["version"], 1);
+        // The registry's v1 schema id is the hash domain (hash_hex: SHA3-384 of domain || 0x00 || bytes).
+        let hash = hash_hex(ASSET_ORCHARD_EGRESS_DISCLOSURE_SCHEMA_ID_V1, fixture.as_bytes());
+        assert_eq!(hash, EGRESS_DISCLOSURE_SCHEMA_HASH_V1);
+        assert!(document.contains(&format!("**Schema hash:** `{hash}`")), "the document pins the hash");
+        assert!(document.contains(fixture), "the document carries the canonical bytes");
+        for (asset_id, policy_id) in [
+            (
+                "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+                "a666-egress-v1",
+            ),
+            (
+                "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+                "pfusdc-egress-v1",
+            ),
+        ] {
+            let record = AssetOrchardEgressPolicyRecordV1::new(asset_id, policy_id, &hash, 1)
+                .expect("proposed devnet record validates");
+            assert!(record.governance_kind().len() <= 256);
+            assert!(document.contains(asset_id) && document.contains(policy_id));
+        }
+    }

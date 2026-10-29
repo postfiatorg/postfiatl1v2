@@ -94,6 +94,7 @@ halt flag and the ratio within the band.
   - Each record is an amendment of kind `asset_orchard_egress_policy_v1:<asset_id>:<disclosure_schema_hash>:<policy_id>` whose value is its effective height.
   - The global switch is `asset_orchard_egress_policy_activation_height`. After it, a private egress must name its asset's governed policy, and its disclosure hash must equal the governed schema hash. Otherwise it is refused as `asset_orchard_egress_policy_mismatch` or `asset_orchard_egress_policy_not_governed`.
   - CLI: `postfiat-node ratify-asset-orchard-egress-policy` and `ratify-asset-orchard-egress-policy-activation-height`. The egress binding read reports the registry.
+  - The disclosure schema and its pinned hash, `7a585bbd…448831`, for the `a666-egress-v1` and `pfusdc-egress-v1` records: [disclosure schema v1](../../specs/asset-orchard-private-egress-disclosure-schema-v1.md).
 
 ## S6 — the six-validator test suite (2–4 days)
 

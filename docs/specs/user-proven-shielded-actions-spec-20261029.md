@@ -314,3 +314,4 @@ Section 12 was added after the first scoring.
 - Reads: `crates/node/src/private_pool_reads.rs`, `crates/node/src/private_pool_receipt_market_reads.rs`, `crates/node/src/private_readiness_read.rs`.
 - Integration and secret inspection: `crates/node/tests/private_actions_gateway.rs`.
 - [Milestone](../plans/active/user-proven-shielded-actions-milestone.md).
+- [Private egress disclosure schema, version 1](asset-orchard-private-egress-disclosure-schema-v1.md): the governed schema hash the egress policy records commit to.
