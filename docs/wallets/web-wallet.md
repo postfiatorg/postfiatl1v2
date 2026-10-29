@@ -89,6 +89,15 @@ The optional HTTPS dev cert paths are controlled by:
 | `WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE` | empty | Optional install allowlist. When set, only listed installs may open a session. |
 | `WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT` | `10` | Session opens admitted per source address and window, 1 to 100000. Further opens get 429 `native_session_rate_limited` with `retry_after_ms`. |
 | `WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_WINDOW_MS` | `60000` | Open rate window, 1000 to 86400000. |
+| `WALLET_PROXY_PRIVATE_ACTIONS_CHAIN_ID` | empty | Chain id the private action routes bind to. With the genesis hash unset as well, the routes return 404. |
+| `WALLET_PROXY_PRIVATE_ACTIONS_GENESIS_HASH` | empty | 96-hex genesis hash the routes bind to. Required with the chain id. |
+| `WALLET_PROXY_PRIVATE_ACTIONS_PROTOCOL_VERSION` | `1` | Protocol version in the intent domain. |
+| `WALLET_PROXY_PRIVATE_ACTIONS_POOL_ID` | `asset-orchard-v1` | The only pool an action may name. |
+| `WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID` | empty | 96-hex base asset of the pair; with the quote asset, required for `snapshot` and the only assets ingress and egress may use. |
+| `WALLET_PROXY_PRIVATE_ACTIONS_QUOTE_ASSET_ID` | empty | 96-hex quote asset of the pair. |
+| `WALLET_PROXY_PRIVATE_ACTIONS_RPC_SOURCES` | first two of `RPC_FLEET` | Exactly two `validator-id=host:port` sources; submissions go to both and every answer is reconciled across them. |
+| `WALLET_PROXY_PRIVATE_ACTIONS_STORE` | `~/.local/share/postfiat/wallet-proxy/private-actions` | Directory of the durable intent records and their dedupe indexes. Must be writable. |
+| `WALLET_PROXY_PRIVATE_ACTIONS_RPC_TIMEOUT_MS` | `15000` | Timeout of each validator read or submission. |
 | `WALLET_STATIC_DIR` | `wallet-web/dist` | Immutable production wallet build served same-origin by the hardened proxy. |
 | `INJECT_RPC_CAPS` | `true` | Injects RPC capability fields into `server_info` responses. Like every wallet-proxy on/off setting, it takes `true`/`false` (any case) or `1`/`0`; any other value stops startup, or fails the request for a setting read per request (`<NAME> must be true or false`). Exception: `PFUSDC_WITHDRAWAL_ENABLED` is on only for exactly `true`. |
 
@@ -163,6 +172,24 @@ The allowlist file must be a regular file owned by the service user, not a
 symlink and not group- or world-writable:
 `{"schema":"postfiat-native-session-allowlist-v1","install_public_keys_hex":["<3904 hex>"]}`.
 It is read at startup. Rotating the secret ends all native sessions.
+
+### Private actions
+
+`POST /api/private/v1/snapshot`, `/submit` and `/receipt` serve the native app's
+user-proven shielded actions (W-1). They take a browser relay or native session
+token; `submit` counts against the mutation rate window. The contract is in
+`crates/node/tests/fixtures/private-actions-v1/`.
+
+- **Submit** recomputes the intent id, reserves the intent durably once, and
+  relays the exact action text to both RPC sources through the node methods
+  `private_action_submit` and `private_action_receipt`. The gateway holds no
+  key and reads no validator data directory.
+- **Snapshot** pins one finalized token on both sources (a mixed tip is 503),
+  then pages every section under the wallet's ceilings: 4096 commitments,
+  nullifiers or anchors, 64 ciphertexts, 2 MiB of ciphertext, 16 assets and a
+  4 MiB response. If the tip moves while paging it retries once, then answers 503. A
+  section stopped at a ceiling or reported incomplete by the node has its
+  `complete` flag false.
 
 In-app settings are stored in IndexedDB with the wallet settings record. The
 More tab can change:

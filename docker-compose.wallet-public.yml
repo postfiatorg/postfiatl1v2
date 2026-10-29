@@ -32,6 +32,24 @@ services:
       WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT: "${WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT:-}"
       # Open rate window in ms; empty keeps the 60000 default.
       WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_WINDOW_MS: "${WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_WINDOW_MS:-}"
+      # Private action routes stay off (404) until the chain id and genesis hash are set.
+      WALLET_PROXY_PRIVATE_ACTIONS_CHAIN_ID: "${WALLET_PROXY_PRIVATE_ACTIONS_CHAIN_ID:-}"
+      # 96-hex genesis hash the private action routes bind to.
+      WALLET_PROXY_PRIVATE_ACTIONS_GENESIS_HASH: "${WALLET_PROXY_PRIVATE_ACTIONS_GENESIS_HASH:-}"
+      # Protocol version in the intent domain; empty keeps 1.
+      WALLET_PROXY_PRIVATE_ACTIONS_PROTOCOL_VERSION: "${WALLET_PROXY_PRIVATE_ACTIONS_PROTOCOL_VERSION:-}"
+      # The only pool an action may name; empty keeps asset-orchard-v1.
+      WALLET_PROXY_PRIVATE_ACTIONS_POOL_ID: "${WALLET_PROXY_PRIVATE_ACTIONS_POOL_ID:-}"
+      # 96-hex base asset of the pair; required for snapshot.
+      WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID: "${WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID:-}"
+      # 96-hex quote asset of the pair; required for snapshot.
+      WALLET_PROXY_PRIVATE_ACTIONS_QUOTE_ASSET_ID: "${WALLET_PROXY_PRIVATE_ACTIONS_QUOTE_ASSET_ID:-}"
+      # Two validator-id=host:port sources; empty takes the first two of RPC_FLEET.
+      WALLET_PROXY_PRIVATE_ACTIONS_RPC_SOURCES: "${WALLET_PROXY_PRIVATE_ACTIONS_RPC_SOURCES:-}"
+      # Intent store directory; set it under /state (for example /state/private-actions) when enabling.
+      WALLET_PROXY_PRIVATE_ACTIONS_STORE: "${WALLET_PROXY_PRIVATE_ACTIONS_STORE:-}"
+      # Per-call validator timeout in ms; empty keeps 15000.
+      WALLET_PROXY_PRIVATE_ACTIONS_RPC_TIMEOUT_MS: "${WALLET_PROXY_PRIVATE_ACTIONS_RPC_TIMEOUT_MS:-}"
       RPC_HOST: "${RPC_HOST:?set an explicit private validator or RPC-edge host}"
       RPC_PORT: "${RPC_PORT:-27650}"
       RPC_FLEET: "${RPC_FLEET:?set the exact validator-id=host:port fleet topology}"

@@ -21,6 +21,11 @@ const BATCH_DOMAIN = 'postfiat.shielded_action_batch.atomic.v2';
 const MAX_ACTION_BYTES = 1024 * 1024;
 const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+// The wallet's snapshot ceilings (contract limits): list items, ciphertexts, ciphertext bytes, assets.
+const MAX_SNAPSHOT_LIST = 4096;
+const MAX_SNAPSHOT_OUTPUTS = 64;
+const MAX_SNAPSHOT_CIPHERTEXT_BYTES = 2 * 1024 * 1024;
+const MAX_SNAPSHOT_ASSETS = 16;
 const STATES = new Set(['queued', 'dispatched', 'accepted', 'rejected', 'unknown']);
 const NODE_STATES = new Set(['queued', 'dispatched', 'accepted', 'rejected']);
 const FAULT_ENV = 'PFT_PRIVATE_ACTIONS_FAULT'; // test-only: 'after-reservation'
@@ -425,43 +430,141 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
         };
     }
 
+    async function readSource(source, method, params) {
+        const result = await callSource(source, method, params);
+        if (!result.ok) throw refusal(503, 'private_snapshot_unavailable', `${method} failed on ${result.source}: ${result.code}`);
+        return result.result;
+    }
+
+    // One finalized snapshot from both sources; a mixed tip is refused.
+    async function pinSnapshot(address) {
+        const params = { pool_id: config.poolId, address, base_asset_id: config.baseAssetId, quote_asset_id: config.quoteAssetId };
+        const reports = await Promise.all(config.sources.map((source) => readSource(source, 'private_pool_snapshot', params)));
+        for (const report of reports) {
+            if (report?.chain_id !== config.domain.chain_id || report.genesis_hash !== config.domain.genesis_hash
+                || report.protocol_version !== config.domain.protocol_version) {
+                throw refusal(503, 'private_snapshot_domain_mismatch');
+            }
+        }
+        const pinned = (report) => JSON.stringify([report.snapshot_token, report.finalized_height,
+            report.finalized_block_hash, report.finalized_state_root, report.counts]);
+        if (!reports[0].snapshot_token || pinned(reports[0]) !== pinned(reports[1])) {
+            throw refusal(503, 'private_snapshot_sources_diverged');
+        }
+        return reports[0];
+    }
+
+    class SnapshotMoved extends Error {}
+
+    // Pages one section from the first source under a client ceiling; every page names the token.
+    async function pageSection(report, section, accept) {
+        const items = [];
+        let cursor = null;
+        let total = 0;
+        let reachedEnd = false;
+        for (;;) {
+            const params = { snapshot_token: report.snapshot_token, section };
+            if (cursor) params.cursor = cursor;
+            const page = await readSource(config.sources[0], 'private_pool_page', params);
+            if (page?.status !== 'ok') {
+                if (page?.refusal?.code === 'snapshot_unavailable') throw new SnapshotMoved();
+                throw refusal(503, 'private_snapshot_page_refused', String(page?.refusal?.code || 'page_refused'));
+            }
+            if (page.snapshot_token !== report.snapshot_token || page.section !== section || page.offset !== items.length) {
+                throw refusal(503, 'private_snapshot_page_mismatch');
+            }
+            total = page.total;
+            let stopped = false;
+            for (const item of page.items || []) {
+                if (!accept(item, items)) { stopped = true; break; }
+                items.push(item);
+            }
+            if (stopped) return { items, total, reachedEnd: false, cursor: null, truncated: true };
+            if (!page.next_cursor) { reachedEnd = true; break; }
+            cursor = page.next_cursor;
+        }
+        return { items, total, reachedEnd: reachedEnd && items.length === total, cursor: null, truncated: false };
+    }
+
+    async function assembleSnapshot(address) {
+        const report = await pinSnapshot(address);
+        const node = report.completeness || {};
+        const listCeiling = (limit) => (item, items) => items.length < limit;
+        const commitments = await pageSection(report, 'commitments', listCeiling(MAX_SNAPSHOT_LIST));
+        const nullifiers = await pageSection(report, 'nullifiers', listCeiling(MAX_SNAPSHOT_LIST));
+        const anchors = await pageSection(report, 'accepted_anchors', listCeiling(MAX_SNAPSHOT_LIST));
+        const assets = await pageSection(report, 'assets', listCeiling(MAX_SNAPSHOT_ASSETS));
+        const lines = await readSource(config.sources[0], 'private_account_lines', { snapshot_token: report.snapshot_token, address });
+        if (lines?.status !== 'ok') {
+            if (lines?.refusal?.code === 'snapshot_unavailable') throw new SnapshotMoved();
+            throw refusal(503, 'private_snapshot_lines_refused', String(lines?.refusal?.code || 'lines_refused'));
+        }
+        const assetRows = assets.items.filter((row) => row.asset_info_bound && row.issuer && row.code
+            && Number.isInteger(row.precision) && typeof row.requires_authorization === 'boolean')
+            .map((row) => ({
+                asset_id: row.asset_id, issuer: row.issuer, code: row.code, precision: row.precision,
+                requires_authorization: row.requires_authorization, proof_profile_id: row.proof_profile_id ?? null,
+            }));
+        // A line for a listed asset must agree with its asset row and be usable.
+        const linesAgree = (lines.lines || []).every((line) => {
+            const row = assetRows.find((candidate) => candidate.asset_id === line.asset_id);
+            return !row || (line.line_status === 'ok' && line.issuer === row.issuer && line.code === row.code
+                && line.precision === row.precision && line.requires_authorization === row.requires_authorization);
+        });
+        const response = {
+            schema: SCHEMA, domain: config.domain, address,
+            snapshot_token: { height: report.finalized_height, block_hash: report.finalized_block_hash, state_root: report.finalized_state_root },
+            commitments: commitments.items,
+            nullifiers: nullifiers.items,
+            accepted_anchors: anchors.items.map((row) => row.root),
+            outputs: [],
+            assets: assetRows,
+            base_asset_id: report.base_asset_id || config.baseAssetId,
+            quote_asset_id: report.quote_asset_id || config.quoteAssetId,
+            pricing_claim_json: report.pricing_claim_json ?? null,
+            policy_id: report.policy_id ?? null,
+            disclosure_hash: report.disclosure_hash ?? null,
+            complete: {
+                commitments: commitments.reachedEnd && node.history_complete === true,
+                nullifiers: nullifiers.reachedEnd && node.history_complete === true,
+                accepted_anchors: anchors.reachedEnd && node.anchors_from_retained_prefixes === true,
+                outputs: false,
+                assets: assets.reachedEnd && assetRows.length === assets.items.length
+                    && lines.account_assets_consistent === true && linesAgree,
+            },
+            cursors: { commitments: null, nullifiers: null, accepted_anchors: null, outputs: null },
+        };
+        // Outputs last: they fill what the 4 MiB response, 64-ciphertext and 2 MiB ceilings leave.
+        let budget = MAX_RESPONSE_BYTES - Buffer.byteLength(JSON.stringify(response)) - 1024;
+        let ciphertextBytes = 0;
+        let missingCiphertext = false;
+        const outputs = await pageSection(report, 'outputs', (row, items) => {
+            if (typeof row.ciphertext !== 'string') { missingCiphertext = true; return true; }
+            const size = Buffer.byteLength(JSON.stringify({ commitment: row.commitment, ciphertext: row.ciphertext })) + 1;
+            if (items.length >= MAX_SNAPSHOT_OUTPUTS || ciphertextBytes + row.ciphertext.length / 2 > MAX_SNAPSHOT_CIPHERTEXT_BYTES
+                || size > budget) return false;
+            ciphertextBytes += row.ciphertext.length / 2;
+            budget -= size;
+            return true;
+        });
+        response.outputs = outputs.items.filter((row) => typeof row.ciphertext === 'string')
+            .map((row) => ({ commitment: row.commitment, ciphertext: row.ciphertext }));
+        response.complete.outputs = outputs.reachedEnd && !missingCiphertext && node.outputs_complete === true;
+        return response;
+    }
+
     async function snapshot(body) {
         if (!exactKeys(body, ['address']) || !ADDRESS_RE.test(String(body.address))) throw refusal(400, 'private_request_invalid');
         if (!config.baseAssetId || !config.quoteAssetId) throw refusal(503, 'private_snapshot_not_configured');
-        const info = await bothSources('server_info', {});
-        const tip = (result) => result.ok && result.result?.chain_id === config.domain.chain_id
-            && result.result?.genesis_hash === config.domain.genesis_hash
-            ? JSON.stringify([result.result.storage?.finalized_height, result.result.storage?.finalized_block_hash, result.result.storage?.finalized_state_root])
-            : null;
-        if (!tip(info[0]) || tip(info[0]) !== tip(info[1])) throw refusal(503, 'private_snapshot_sources_diverged');
-        const [height, blockHash, stateRoot] = JSON.parse(tip(info[0]));
-        const assets = [];
-        for (const assetId of [config.baseAssetId, config.quoteAssetId]) {
-            const rows = await bothSources('asset_info', { asset_id: assetId });
-            const profiles = await bothSources('nav_reserve_proof_status', { asset_id: assetId });
-            const row = (result) => {
-                const a = result.ok && result.result?.found === true ? result.result.asset : null;
-                return a ? JSON.stringify([a.asset_id, a.issuer, a.code, a.precision, a.requires_authorization]) : null;
-            };
-            if (!row(rows[0]) || row(rows[0]) !== row(rows[1])) throw refusal(503, 'private_snapshot_sources_diverged');
-            const profile = (result) => (result.ok ? result.result?.active_profile?.profile_id ?? null : null);
-            const [id, issuer, code, precision, requiresAuthorization] = JSON.parse(row(rows[0]));
-            assets.push({
-                asset_id: id, issuer, code, precision, requires_authorization: requiresAuthorization,
-                proof_profile_id: profile(profiles[0]) === profile(profiles[1]) ? profile(profiles[0]) : null,
-            });
+        // The token is valid until the next finalized block: one fresh retry, then 503.
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+                return await assembleSnapshot(body.address);
+            } catch (error) {
+                if (!(error instanceof SnapshotMoved)) throw error;
+            }
         }
-        // Pool lists, the pricing claim and the egress binding come with the finalized reads (S4/S5);
-        // until then they are empty or null and marked incomplete, never guessed.
-        return {
-            schema: SCHEMA, domain: config.domain, address: body.address,
-            snapshot_token: { height, block_hash: blockHash, state_root: stateRoot },
-            commitments: [], nullifiers: [], accepted_anchors: [], outputs: [], assets,
-            base_asset_id: config.baseAssetId, quote_asset_id: config.quoteAssetId,
-            pricing_claim_json: null, policy_id: null, disclosure_hash: null,
-            complete: { commitments: false, nullifiers: false, accepted_anchors: false, outputs: false, assets: true },
-            cursors: { commitments: null, nullifiers: null, accepted_anchors: null, outputs: null },
-        };
+        throw refusal(503, 'private_snapshot_unavailable', 'the finalized tip moved twice while paging');
     }
 
     async function handleHttp(req, res, url, auth) {

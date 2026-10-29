@@ -28,8 +28,30 @@ const positive = Object.fromEntries(vectors.positive.map((vector) => [vector.kin
 const negative = Object.fromEntries(vectors.negative.map((vector) => [vector.name, vector]));
 const h96 = (byte) => byte.repeat(48);
 
+const SECTIONS = ['commitments', 'nullifiers', 'accepted_anchors', 'outputs', 'assets'];
+const assetRow = (row) => ({
+    asset_id: row.asset_id.value, ingress_total: 1, egress_total: 0, live_total: 1, asset_info_bound: true,
+    issuer: row.issuer.value, code: row.code.value, precision: row.precision.value,
+    requires_authorization: row.requires_authorization.value, proof_profile_id: row.proof_profile_id.value,
+});
+function basePool() {
+    const field = (n) => `${n.toString(16).padStart(2, '0')}${'00'.repeat(31)}`;
+    return {
+        commitments: [1, 2, 3, 4].map(field),
+        nullifiers: [5, 6, 7, 8].map(field),
+        accepted_anchors: [9, 10, 11, 12].map((n, i) => ({ root: field(n), output_count: i + 1 })),
+        outputs: [1, 2, 3, 4].map((n, i) => ({ position: i, commitment: field(n), kind: 'asset_orchard', ciphertext: `${'4'}${n}`.repeat(290) })),
+        assets: [assetRow(assets.A666), assetRow(assets.pfUSDC)],
+        lines: [{ trustline_id: h96('11'), asset_id: assets.pfUSDC.asset_id.value, issuer: assets.pfUSDC.issuer.value,
+            code: 'PFUSDC', precision: 6, requires_authorization: false, balance: 0, limit: 1000000, authorized: true,
+            frozen: false, line_status: 'ok' }],
+        pricing_claim_json: '{"nav_epoch":12}',
+        completeness: { empty_pool_before_ingress: false, history_complete: true, outputs_complete: true, anchors_from_retained_prefixes: true, complete: true },
+    };
+}
+
 function stub(validatorId) {
-    const state = { submits: [], receipts: new Map(), height: 1161, sockets: new Set() };
+    const state = { submits: [], receipts: new Map(), tip: { height: 1161 }, pool: basePool(), pageSize: {}, pageCalls: [], onPage: null, sockets: new Set() };
     const answer = (request) => {
         const p = request.params || {};
         if (request.method === 'private_action_submit') {
@@ -40,16 +62,39 @@ function stub(validatorId) {
         if (request.method === 'private_action_receipt') {
             return { ok: true, result: state.receipts.get(p.intent_id) || { state: 'pending_unknown', intent_id: p.intent_id } };
         }
-        if (request.method === 'server_info') {
-            return { ok: true, result: { ...DOMAIN, storage: { finalized_height: state.height, finalized_block_hash: h96('a4'), finalized_state_root: h96('f3') } } };
+        if (request.method === 'private_pool_snapshot') {
+            const height = state.tip.height;
+            return { ok: true, result: {
+                schema: 'postfiat.private_pool_snapshot.v1', ...DOMAIN, address: p.address ?? null,
+                snapshot_token: `tok-${p.pool_id}-${height}`, finalized_height: height,
+                finalized_block_hash: h96('a4'), finalized_state_root: h96('f3'), pool_id: p.pool_id, pool_present: true,
+                counts: Object.fromEntries(SECTIONS.map((section) => [section, state.pool[section].length])),
+                page_limits: { items: 512, outputs: 64, output_ciphertext_bytes: 1048576, assets: 16 },
+                base_asset_id: p.base_asset_id, quote_asset_id: p.quote_asset_id, inclusion_height: height + 1,
+                pricing_status: 'ok', pricing_refusal: null, pricing_claim: null, pricing_claim_json: state.pool.pricing_claim_json,
+                egress_status: 'ungoverned', policy_id: null, disclosure_hash: null, completeness: state.pool.completeness,
+            } };
         }
-        if (request.method === 'asset_info') {
-            const row = p.asset_id === A666 ? assets.A666 : assets.pfUSDC;
-            return { ok: true, result: { found: true, asset: Object.fromEntries(['asset_id', 'issuer', 'code', 'precision', 'requires_authorization'].map((key) => [key, row[key].value])) } };
-        }
-        if (request.method === 'nav_reserve_proof_status') {
-            const row = p.asset_id === A666 ? assets.A666 : assets.pfUSDC;
-            return { ok: true, result: { active_profile: { profile_id: row.proof_profile_id.value } } };
+        if (request.method === 'private_pool_page' || request.method === 'private_account_lines') {
+            state.pageCalls.push(request.method === 'private_pool_page' ? p.section : 'lines');
+            const current = `tok-asset-orchard-v1-${state.tip.height}`;
+            const report = { snapshot_token: p.snapshot_token, status: 'ok', refusal: null };
+            if (state.onPage) state.onPage(state.pageCalls.length);
+            if (p.snapshot_token !== `tok-asset-orchard-v1-${state.tip.height}` || p.snapshot_token !== current) {
+                return { ok: true, result: { ...report, status: 'refused', refusal: { code: 'snapshot_unavailable', reason: 'tip moved' } } };
+            }
+            if (request.method === 'private_account_lines') {
+                return { ok: true, result: { ...report, schema: 'postfiat.private_account_lines.v1', address: p.address,
+                    line_count: state.pool.lines.length, lines: state.pool.lines, positive_asset_count: 1,
+                    account_assets_consistent: true, all_lines_usable: true } };
+            }
+            const rows = state.pool[p.section];
+            const offset = p.cursor ? Number(p.cursor.split(':')[1]) : 0;
+            const limit = state.pageSize[p.section] ?? (p.section === 'assets' ? 1 : 2);
+            const end = Math.min(rows.length, offset + limit);
+            return { ok: true, result: { ...report, schema: 'postfiat.private_pool_page.v1', section: p.section, offset, limit,
+                total: rows.length, item_count: end - offset, items: rows.slice(offset, end),
+                next_cursor: end < rows.length ? `${p.section}:${end}` : null } };
         }
         return { ok: false, error: { code: 'unknown_method' } };
     };
@@ -143,20 +188,78 @@ async function main() {
         assert.strictEqual(anonymous.body.code, 'proxy_auth_required');
         assert.strictEqual((await post(port, 'snapshot', { address: WALLET }, { token: '' })).statusCode, 401);
 
-        // Snapshot: the contract shape, one finalized token, honest completeness flags.
+        // Snapshot: two pages per section join into complete, ordered lists pinned to one token.
+        const sharedTip = { height: 1161 };
+        a.state.tip = sharedTip;
+        b.state.tip = sharedTip;
         const snap = await post(port, 'snapshot', { address: WALLET });
         assert.strictEqual(snap.statusCode, 200, JSON.stringify(snap.body));
         assert.deepStrictEqual(Object.keys(snap.body).sort(), Object.keys(schema.examples.snapshot.response).sort());
         assert.deepStrictEqual(snap.body.domain, DOMAIN);
         assert.deepStrictEqual(snap.body.snapshot_token, { height: 1161, block_hash: h96('a4'), state_root: h96('f3') });
-        assert.deepStrictEqual(snap.body.complete, { commitments: false, nullifiers: false, accepted_anchors: false, outputs: false, assets: true });
+        const pool = basePool();
+        assert.deepStrictEqual(snap.body.commitments, pool.commitments);
+        assert.deepStrictEqual(snap.body.nullifiers, pool.nullifiers);
+        assert.deepStrictEqual(snap.body.accepted_anchors, pool.accepted_anchors.map((row) => row.root));
+        assert.deepStrictEqual(snap.body.outputs, pool.outputs.map(({ commitment, ciphertext }) => ({ commitment, ciphertext })));
         assert.deepStrictEqual(snap.body.assets.map((row) => [row.code, row.precision, row.requires_authorization, row.proof_profile_id]), [
             ['A666', 6, true, assets.A666.proof_profile_id.value], ['PFUSDC', 6, false, assets.pfUSDC.proof_profile_id.value]]);
-        b.state.height = 1162;
+        assert.strictEqual(snap.body.pricing_claim_json, '{"nav_epoch":12}');
+        assert.strictEqual(snap.body.policy_id, null);
+        assert.deepStrictEqual(snap.body.complete, { commitments: true, nullifiers: true, accepted_anchors: true, outputs: true, assets: true });
+        assert.deepStrictEqual(snap.body.cursors, { commitments: null, nullifiers: null, accepted_anchors: null, outputs: null });
+        for (const section of SECTIONS) assert.strictEqual(a.state.pageCalls.filter((call) => call === section).length, 2, section);
+        assert.ok(a.state.pageCalls.includes('lines'), 'account lines are read under the token');
+        assert.strictEqual(b.state.pageCalls.length, 0, 'pages come from one source');
+
+        // A frozen line for a listed asset, or incomplete node history, clears the matching flags.
+        a.state.pool.lines = [{ ...pool.lines[0], frozen: true, line_status: 'frozen' }];
+        a.state.pool.completeness = { ...pool.completeness, history_complete: false, complete: false };
+        const flagged = await post(port, 'snapshot', { address: WALLET });
+        assert.deepStrictEqual(flagged.body.complete, { commitments: false, nullifiers: false, accepted_anchors: true, outputs: true, assets: false });
+        a.state.pool = basePool();
+
+        // The tip moves between pages: one retry from a fresh token, then 503.
+        a.state.pageCalls = [];
+        a.state.onPage = (calls) => { if (calls === 1) sharedTip.height = 1162; };
+        const refreshed = await post(port, 'snapshot', { address: WALLET });
+        assert.strictEqual(refreshed.statusCode, 200, JSON.stringify(refreshed.body));
+        assert.strictEqual(refreshed.body.snapshot_token.height, 1162);
+        a.state.onPage = () => { sharedTip.height += 1; };
+        const moving = await post(port, 'snapshot', { address: WALLET });
+        assert.strictEqual(moving.statusCode, 503);
+        assert.strictEqual(moving.body.code, 'private_snapshot_unavailable');
+        a.state.onPage = null;
+
+        // Sources at different tokens: a mixed tip is refused.
+        b.state.tip = { height: sharedTip.height + 1 };
         const diverged = await post(port, 'snapshot', { address: WALLET });
         assert.strictEqual(diverged.statusCode, 503);
         assert.strictEqual(diverged.body.code, 'private_snapshot_sources_diverged');
-        b.state.height = 1161;
+        b.state.tip = sharedTip;
+
+        // Ceilings: 4096 list items, 64 ciphertexts, and the 4 MiB response.
+        const big = basePool();
+        big.commitments = Array.from({ length: 4100 }, (_, n) => n.toString(16).padStart(64, '0'));
+        big.outputs = Array.from({ length: 70 }, (_, n) => ({ position: n, commitment: n.toString(16).padStart(64, '0'), kind: 'asset_orchard', ciphertext: 'ab'.repeat(100) }));
+        a.state.pool = big;
+        b.state.pool = big;
+        a.state.pageSize = { commitments: 512, outputs: 64 };
+        const capped = await post(port, 'snapshot', { address: WALLET });
+        assert.strictEqual(capped.statusCode, 200, JSON.stringify(capped.body).slice(0, 300));
+        assert.strictEqual(capped.body.commitments.length, 4096);
+        assert.strictEqual(capped.body.outputs.length, 64);
+        assert.strictEqual(capped.body.complete.commitments, false);
+        assert.strictEqual(capped.body.complete.outputs, false);
+        big.outputs = Array.from({ length: 64 }, (_, n) => ({ position: n, commitment: n.toString(16).padStart(64, '0'), kind: 'asset_orchard', ciphertext: 'cd'.repeat(48 * 1024) }));
+        const heavy = await post(port, 'snapshot', { address: WALLET });
+        assert.strictEqual(heavy.statusCode, 200);
+        assert.ok(Buffer.byteLength(JSON.stringify(heavy.body)) <= 4 * 1024 * 1024);
+        assert.ok(heavy.body.outputs.length < 64 && heavy.body.outputs.length > 0);
+        assert.strictEqual(heavy.body.complete.outputs, false);
+        a.state.pool = basePool();
+        b.state.pool = basePool();
+        a.state.pageSize = {};
 
         // Each S1 vector is admitted as queued with its pinned bindings, sent once to each source.
         for (const vector of vectors.positive) {
