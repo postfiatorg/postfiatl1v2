@@ -1,7 +1,8 @@
 //! Finalized public reads a wallet needs to recover its shielded notes: a
 //! snapshot token pinning one committed chain tip, deterministic pages of the
 //! pool's public sets, and the account's asset lines. Every page names the
-//! token; a page is served only while that token is the committed tip, so a
+//! token; a page is served at the committed tip or at one of the last K
+//! finalized points the node retains (`private_pool_snapshot_points`), so a
 //! wallet never stitches pages from two states. The node never receives a
 //! viewing key: it serves ciphertexts and the wallet scans locally.
 
@@ -9,6 +10,7 @@ use super::asset_orchard_pricing_reads::{
     asset_orchard_pricing_claim_from_snapshot, asset_orchard_private_egress_binding_from_snapshot,
     read_finalized_pair_snapshot, FinalizedPairSnapshot,
 };
+use super::private_pool_snapshot_points::resolve_snapshot_token;
 use super::*;
 
 pub const PRIVATE_POOL_SNAPSHOT_SCHEMA: &str = "postfiat.private_pool_snapshot.v1";
@@ -270,12 +272,6 @@ impl SnapshotToken {
             state_root: state_root.to_string(),
         })
     }
-
-    pub(super) fn matches(&self, snapshot: &FinalizedPairSnapshot) -> bool {
-        self.height == snapshot.tip.height
-            && self.block_hash == snapshot.tip.block_hash
-            && self.state_root == snapshot.tip.state_root
-    }
 }
 
 fn valid_pool_id(pool_id: &str) -> bool {
@@ -324,7 +320,9 @@ fn snapshot_pool<'a>(
 /// pool). This mirrors `orchard_anchor_is_retained_for_apply`. The pool's
 /// `accepted_anchors` list records anchors earlier spends used and is not
 /// served.
-fn retained_anchor_rows(pool: &OrchardPoolState) -> io::Result<Vec<PrivatePoolAnchorRow>> {
+pub(super) fn retained_anchor_rows(
+    pool: &OrchardPoolState,
+) -> io::Result<Vec<PrivatePoolAnchorRow>> {
     if !pool.root_history.is_empty() {
         return Ok(pool
             .root_history
@@ -346,18 +344,20 @@ fn retained_anchor_rows(pool: &OrchardPoolState) -> io::Result<Vec<PrivatePoolAn
     }])
 }
 
-fn output_rows(pool: &OrchardPoolState) -> Vec<PrivatePoolOutputRow> {
-    let asset_outputs = pool
-        .asset_orchard_outputs
+fn output_rows(
+    commitments: &[String],
+    asset_outputs: &[AssetOrchardEncryptedOutputRecord],
+    orchard_outputs: &[OrchardEncryptedOutputRecord],
+) -> Vec<PrivatePoolOutputRow> {
+    let asset_outputs = asset_outputs
         .iter()
         .map(|output| (output.output_commitment.as_str(), output))
         .collect::<BTreeMap<_, _>>();
-    let orchard_outputs = pool
-        .encrypted_outputs
+    let orchard_outputs = orchard_outputs
         .iter()
         .map(|output| (output.cmx.as_str(), output))
         .collect::<BTreeMap<_, _>>();
-    pool.output_commitments
+    commitments
         .iter()
         .enumerate()
         .map(|(position, commitment)| {
@@ -394,32 +394,61 @@ fn output_rows(pool: &OrchardPoolState) -> Vec<PrivatePoolOutputRow> {
         .collect()
 }
 
+pub(super) fn asset_row(
+    ledger: &LedgerState,
+    asset_id: &str,
+    ingress_total: u64,
+    egress_total: u64,
+    live_total: u64,
+) -> PrivatePoolAssetRow {
+    let asset = ledger.asset_definition(asset_id);
+    PrivatePoolAssetRow {
+        asset_id: asset_id.to_string(),
+        ingress_total,
+        egress_total,
+        live_total,
+        asset_info_bound: asset.is_some(),
+        issuer: asset.map(|asset| asset.issuer.clone()),
+        code: asset.map(|asset| asset.code.clone()),
+        precision: asset.map(|asset| asset.precision),
+        requires_authorization: asset.map(|asset| asset.requires_authorization),
+        proof_profile_id: ledger
+            .nav_assets
+            .iter()
+            .find(|nav| nav.asset_id == asset_id)
+            .map(|nav| nav.proof_profile.clone()),
+    }
+}
+
 fn asset_rows(ledger: &LedgerState, pool: &OrchardPoolState) -> Vec<PrivatePoolAssetRow> {
     let mut rows = pool
         .asset_orchard_balances
         .iter()
         .map(|balance| {
-            let asset = ledger.asset_definition(&balance.asset_id);
-            PrivatePoolAssetRow {
-                asset_id: balance.asset_id.clone(),
-                ingress_total: balance.ingress_total,
-                egress_total: balance.egress_total,
-                live_total: balance.live_total,
-                asset_info_bound: asset.is_some(),
-                issuer: asset.map(|asset| asset.issuer.clone()),
-                code: asset.map(|asset| asset.code.clone()),
-                precision: asset.map(|asset| asset.precision),
-                requires_authorization: asset.map(|asset| asset.requires_authorization),
-                proof_profile_id: ledger
-                    .nav_assets
-                    .iter()
-                    .find(|nav| nav.asset_id == balance.asset_id)
-                    .map(|nav| nav.proof_profile.clone()),
-            }
+            asset_row(
+                ledger,
+                &balance.asset_id,
+                balance.ingress_total,
+                balance.egress_total,
+                balance.live_total,
+            )
         })
         .collect::<Vec<_>>();
     rows.sort_by(|left, right| left.asset_id.cmp(&right.asset_id));
     rows
+}
+
+/// The first `count` items of an append-only list.
+fn prefix<T>(items: &[T], count: u64) -> io::Result<&[T]> {
+    usize::try_from(count)
+        .ok()
+        .and_then(|count| items.get(..count))
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "a retained snapshot point is longer than the current pool",
+            )
+        })
 }
 
 fn completeness(pool: Option<&OrchardPoolState>) -> io::Result<PrivatePoolCompleteness> {
@@ -441,7 +470,13 @@ fn completeness(pool: Option<&OrchardPoolState>) -> io::Result<PrivatePoolComple
         || pool.turnstile_deposit_total > 0;
     let empty_pool_before_ingress = commitments == 0 && !ingress_recorded;
     let history_complete = commitments > 0 || !ingress_recorded;
-    let outputs_complete = output_rows(pool).iter().all(|row| row.ciphertext.is_some());
+    let outputs_complete = output_rows(
+        &pool.output_commitments,
+        &pool.asset_orchard_outputs,
+        &pool.encrypted_outputs,
+    )
+    .iter()
+    .all(|row| row.ciphertext.is_some());
     let anchors = retained_anchor_rows(pool)?;
     let anchors_from_retained_prefixes = anchors
         .windows(2)
@@ -615,7 +650,9 @@ fn section_max(section: &str) -> usize {
     }
 }
 
-/// One deterministic page of a pool section at the token's committed tip.
+/// One deterministic page of a pool section at the token's finalized point:
+/// the committed tip, or a retained older point whose append-only lists are
+/// the current ones truncated to its lengths and whose asset rows it keeps.
 pub fn private_pool_page(options: PrivatePoolPageOptions) -> io::Result<PrivatePoolPageReport> {
     let max = section_max(&options.section);
     let limit = options.limit.unwrap_or(max).clamp(1, max);
@@ -652,13 +689,10 @@ pub fn private_pool_page(options: PrivatePoolPageOptions) -> io::Result<PrivateP
         );
     };
     let snapshot = read_finalized_pair_snapshot(&options.data_dir)?;
-    if !token.matches(&snapshot) {
-        let reason = format!(
-            "token pins height {} but the committed tip is height {}; take a new snapshot",
-            token.height, snapshot.tip.height
-        );
-        return refuse(report, "snapshot_unavailable", reason);
-    }
+    let point = match resolve_snapshot_token(&options.data_dir, &token, &snapshot.tip) {
+        Ok(point) => point,
+        Err(refusal) => return refuse(report, &refusal.code, refusal.reason),
+    };
     let offset = match options.cursor.as_deref() {
         None => 0,
         Some(cursor) => match parse_cursor(cursor, &options.snapshot_token, &options.section) {
@@ -672,20 +706,52 @@ pub fn private_pool_page(options: PrivatePoolPageOptions) -> io::Result<PrivateP
             }
         },
     };
-    let pool = snapshot_pool(&snapshot, &token.pool_id);
+    // An older point where this pool did not yet exist serves it empty.
+    let present = snapshot_pool(&snapshot, &token.pool_id).filter(|_| {
+        point
+            .as_ref()
+            .is_none_or(|point| point.pool_id.as_deref() == Some(token.pool_id.as_str()))
+    });
     let empty = OrchardPoolState::empty(token.pool_id.clone());
-    let pool = pool.unwrap_or(&empty);
+    let pool = present.unwrap_or(&empty);
+    let (commitments, nullifiers, asset_outputs, orchard_outputs) = match (&point, present) {
+        (None, _) | (Some(_), None) => (
+            &pool.output_commitments[..],
+            &pool.nullifiers[..],
+            &pool.asset_orchard_outputs[..],
+            &pool.encrypted_outputs[..],
+        ),
+        (Some(point), Some(_)) => (
+            prefix(&pool.output_commitments, point.counts.commitments)?,
+            prefix(&pool.nullifiers, point.counts.nullifiers)?,
+            prefix(&pool.asset_orchard_outputs, point.asset_orchard_outputs)?,
+            prefix(&pool.encrypted_outputs, point.encrypted_outputs)?,
+        ),
+    };
+    let anchors = match (options.section.as_str(), &point, present) {
+        ("accepted_anchors", None, Some(pool)) => retained_anchor_rows(pool)?,
+        ("accepted_anchors", Some(point), Some(pool)) => match &point.fallback_anchor {
+            Some(row) => vec![row.clone()],
+            None => prefix(&pool.root_history, point.root_history)?
+                .iter()
+                .map(|record| PrivatePoolAnchorRow {
+                    root: record.root.clone(),
+                    output_count: record.output_count,
+                })
+                .collect(),
+        },
+        _ => Vec::new(),
+    };
+    let assets = match (options.section.as_str(), &point) {
+        ("assets", None) if present.is_some() => asset_rows(&snapshot.ledger, pool),
+        ("assets", Some(point)) if present.is_some() => point.assets.clone(),
+        _ => Vec::new(),
+    };
     let total = match options.section.as_str() {
-        "commitments" | "outputs" => pool.output_commitments.len(),
-        "nullifiers" => pool.nullifiers.len(),
-        "accepted_anchors" => {
-            if snapshot_pool(&snapshot, &token.pool_id).is_some() {
-                retained_anchor_rows(pool)?.len()
-            } else {
-                0
-            }
-        }
-        _ => pool.asset_orchard_balances.len(),
+        "commitments" | "outputs" => commitments.len(),
+        "nullifiers" => nullifiers.len(),
+        "accepted_anchors" => anchors.len(),
+        _ => assets.len(),
     };
     report.total = total as u64;
     report.offset = offset as u64;
@@ -696,26 +762,19 @@ pub fn private_pool_page(options: PrivatePoolPageOptions) -> io::Result<PrivateP
     let end = offset.saturating_add(limit).min(total);
     let (items, end) = match options.section.as_str() {
         "commitments" => (
-            PrivatePoolPageItems::Strings(pool.output_commitments[offset..end].to_vec()),
+            PrivatePoolPageItems::Strings(commitments[offset..end].to_vec()),
             end,
         ),
         "nullifiers" => (
-            PrivatePoolPageItems::Strings(pool.nullifiers[offset..end].to_vec()),
+            PrivatePoolPageItems::Strings(nullifiers[offset..end].to_vec()),
             end,
         ),
-        "accepted_anchors" => {
-            let rows = if total == 0 {
-                Vec::new()
-            } else {
-                retained_anchor_rows(pool)?
-            };
-            (
-                PrivatePoolPageItems::Anchors(rows[offset..end].to_vec()),
-                end,
-            )
-        }
+        "accepted_anchors" => (
+            PrivatePoolPageItems::Anchors(anchors[offset..end].to_vec()),
+            end,
+        ),
         "outputs" => {
-            let rows = output_rows(pool);
+            let rows = output_rows(commitments, asset_outputs, orchard_outputs);
             let mut page = Vec::new();
             let mut bytes = 0usize;
             for row in &rows[offset..end] {
@@ -732,13 +791,10 @@ pub fn private_pool_page(options: PrivatePoolPageOptions) -> io::Result<PrivateP
             let end = offset + page.len();
             (PrivatePoolPageItems::Outputs(page), end)
         }
-        _ => {
-            let rows = asset_rows(&snapshot.ledger, pool);
-            (
-                PrivatePoolPageItems::Assets(rows[offset..end].to_vec()),
-                end,
-            )
-        }
+        _ => (
+            PrivatePoolPageItems::Assets(assets[offset..end].to_vec()),
+            end,
+        ),
     };
     report.item_count = (end - offset) as u64;
     report.items = Some(items);
@@ -748,7 +804,9 @@ pub fn private_pool_page(options: PrivatePoolPageOptions) -> io::Result<PrivateP
 }
 
 /// The account's issued-asset lines at the token's committed tip, including
-/// zero-balance lines, each bound to its `asset_info` row.
+/// zero-balance lines, each bound to its `asset_info` row. Balances at older
+/// heights are not retained, so a retained older token is refused with
+/// `snapshot_not_current`.
 pub fn private_account_lines(
     options: PrivateAccountLinesOptions,
 ) -> io::Result<PrivateAccountLinesReport> {
@@ -778,12 +836,16 @@ pub fn private_account_lines(
         );
     };
     let snapshot = read_finalized_pair_snapshot(&options.data_dir)?;
-    if !token.matches(&snapshot) {
-        let reason = format!(
-            "token pins height {} but the committed tip is height {}; take a new snapshot",
-            token.height, snapshot.tip.height
-        );
-        return refuse(report, "snapshot_unavailable", reason);
+    match resolve_snapshot_token(&options.data_dir, &token, &snapshot.tip) {
+        Ok(None) => {}
+        Ok(Some(_)) => {
+            let reason = format!(
+                "account lines are served only at the committed tip (height {}), not at height {}; take a new snapshot",
+                snapshot.tip.height, token.height
+            );
+            return refuse(report, "snapshot_not_current", reason);
+        }
+        Err(refusal) => return refuse(report, &refusal.code, refusal.reason),
     }
     let lines =
         issued_asset_line_reports(&snapshot.ledger, |line| line.account == options.address)?;

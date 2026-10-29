@@ -2466,6 +2466,9 @@ pub(super) fn write_ordered_commit_with_journal_timed_locked(
         }
         let stage_start = std::time::Instant::now();
         append_account_tx_index_after_durable_commit(store, &genesis, &journal);
+        super::private_pool_snapshot_points::record_snapshot_point_after_durable_commit(
+            store, &genesis, &journal,
+        );
         timings.refresh_account_tx_index_ms = apply_batch_elapsed_ms(stage_start);
         timings.total_ms = apply_batch_elapsed_ms(total_start);
         return Ok(timings);
@@ -2489,6 +2492,9 @@ pub(super) fn write_ordered_commit_with_journal_timed_locked(
 
     let stage_start = std::time::Instant::now();
     append_account_tx_index_after_durable_commit(store, &genesis, &journal);
+    super::private_pool_snapshot_points::record_snapshot_point_after_durable_commit(
+        store, &genesis, &journal,
+    );
     timings.refresh_account_tx_index_ms = apply_batch_elapsed_ms(stage_start);
     timings.total_ms = apply_batch_elapsed_ms(total_start);
     Ok(timings)
@@ -2730,7 +2736,11 @@ pub(super) fn recover_ordered_commit_journal_locked(
     if let StoredOrderedCommitJournal::Delta(journal) = &journal {
         // The recovered block is durable now; the append is a no-op when the
         // index already ends at it.
-        append_account_tx_index_after_durable_commit(store, &store.read_genesis()?, journal);
+        let genesis = store.read_genesis()?;
+        append_account_tx_index_after_durable_commit(store, &genesis, journal);
+        super::private_pool_snapshot_points::record_snapshot_point_after_durable_commit(
+            store, &genesis, journal,
+        );
     }
     Ok(())
 }

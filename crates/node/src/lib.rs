@@ -286,6 +286,12 @@ mod private_pool_reads;
 pub use private_pool_reads::*;
 mod private_pool_receipt_market_reads;
 pub use private_pool_receipt_market_reads::*;
+mod private_pool_snapshot_points;
+pub use private_pool_snapshot_points::{
+    private_pool_snapshot_points_limit, PRIVATE_POOL_SNAPSHOT_POINTS_DEFAULT,
+    PRIVATE_POOL_SNAPSHOT_POINTS_ENV, PRIVATE_POOL_SNAPSHOT_POINTS_FILE,
+    PRIVATE_POOL_SNAPSHOT_POINTS_MAX,
+};
 mod private_action_admission;
 pub use private_action_admission::*;
 mod private_readiness_read;

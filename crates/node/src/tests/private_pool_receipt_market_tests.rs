@@ -335,4 +335,32 @@
             "repeat reads are byte-identical"
         );
         fs::remove_dir_all(&fixture.data_dir).expect("cleanup");
+        }
+
+    #[test]
+    fn private_pool_receipts_serve_a_retained_older_token_and_the_market_refuses_it() {
+        let fixture = receipt_fixture();
+        record_private_pool_point(&fixture.fixture.data_dir);
+        let before = serde_json::to_vec(&receipts_page(&fixture, None, Some(2), None, None)).expect("json");
+        let cursor = receipts_page(&fixture, None, Some(2), None, None).next_cursor;
+        commit_private_pool_tip(&fixture.fixture.data_dir, 701);
+        record_private_pool_point(&fixture.fixture.data_dir);
+        // Receipts final at or before the token's height, as before the block.
+        assert_eq!(
+            serde_json::to_vec(&receipts_page(&fixture, None, Some(2), None, None)).expect("json"),
+            before
+        );
+        let second = receipts_page(&fixture, cursor, Some(2), None, None);
+        assert_eq!((second.status.as_str(), second.offset), ("ok", 2));
+        let market = private_pool_market(PrivatePoolMarketOptions {
+            data_dir: fixture.fixture.data_dir.clone(),
+            snapshot_token: fixture.token.clone(),
+            base_asset_id: fixture.fixture.base_asset_id.clone(),
+            quote_asset_id: fixture.fixture.quote_asset_id.clone(),
+            inclusion_height: None,
+        })
+        .expect("market");
+        assert_eq!(market.refusal.expect("refusal").code, "snapshot_not_current");
+        assert!(market.pricing.is_none());
+        fs::remove_dir_all(&fixture.fixture.data_dir).expect("cleanup");
     }

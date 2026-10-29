@@ -16,6 +16,26 @@
         store.write_chain_tip(&tip).expect("write tip");
     }
 
+    /// Records the committed tip's snapshot point, as the commit hook does.
+    fn record_private_pool_point(data_dir: &Path) {
+        let store = NodeStore::new(data_dir);
+        let genesis = store.read_genesis().expect("genesis");
+        let tip = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)
+            .expect("tip");
+        let point = crate::private_pool_snapshot_points::snapshot_point(
+            &tip,
+            &store.read_ledger().expect("ledger"),
+            &store.read_shielded().expect("shielded"),
+        )
+        .expect("point");
+        crate::private_pool_snapshot_points::record_snapshot_point(
+            data_dir,
+            point,
+            PRIVATE_POOL_SNAPSHOT_POINTS_DEFAULT,
+        )
+        .expect("record point");
+    }
+
     struct PrivatePoolIssuedFixture {
         data_dir: PathBuf,
         asset_id: String,
@@ -694,5 +714,198 @@
             panic!("outputs page: {page:?}");
         };
         assert_eq!((rows[0].kind.as_str(), rows[0].ciphertext.as_deref()), ("missing", None));
+        fs::remove_dir_all(&data_dir).expect("cleanup");
+        }
+
+    /// Every page of every section under `token`, serialized.
+    fn private_pool_page_bytes(data_dir: &Path, token: &str) -> Vec<Vec<u8>> {
+        PRIVATE_POOL_SECTIONS
+            .iter()
+            .flat_map(|section| private_pool_all_pages(data_dir, token, section, Some(16)))
+            .map(|page| serde_json::to_vec(&page).expect("page json"))
+            .collect()
+    }
+
+    #[test]
+    fn private_pool_tokens_outlive_new_blocks_until_the_ring_expires() {
+        // A small retained pool holding an issued asset's definition.
+        let fixture = private_pool_issued_fixture(0);
+        // The durable-commit hook recorded the applied blocks' points.
+        let ring: serde_json::Value = serde_json::from_slice(
+            &fs::read(fixture.data_dir.join(PRIVATE_POOL_SNAPSHOT_POINTS_FILE)).expect("ring"),
+        )
+        .expect("ring json");
+        assert_eq!(
+            ring["points"].as_array().expect("points").last().expect("point")["height"],
+            private_pool_snapshot_for(&fixture.data_dir).finalized_height
+        );
+        let definition = NodeStore::new(&fixture.data_dir)
+            .read_ledger()
+            .expect("ledger")
+            .asset_definitions[0]
+            .clone();
+        fs::remove_dir_all(&fixture.data_dir).expect("cleanup");
+        let data_dir = unique_read_fixture_dir("postfiat-private-pool-ring");
+        init(InitOptions {
+            data_dir: data_dir.clone(),
+            chain_id: "postfiat-private-pool-ring".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 1,
+        })
+        .expect("init node");
+        let store = NodeStore::new(&data_dir);
+        let mut ledger = store.read_ledger().expect("ledger");
+        ledger.asset_definitions.push(definition.clone());
+        store.write_ledger(&ledger).expect("write ledger");
+        let mut pool = OrchardPoolState::empty(PRIVATE_POOL_TEST_POOL);
+        pool.output_commitments = (0..40)
+            .map(|index| private_pool_hex("commitment", index, 32))
+            .collect();
+        pool.asset_orchard_outputs = pool
+            .output_commitments
+            .iter()
+            .enumerate()
+            .map(|(index, commitment)| AssetOrchardEncryptedOutputRecord {
+                output_commitment: commitment.clone(),
+                encrypted_output: private_pool_hex("ciphertext", index, 128),
+            })
+            .collect();
+        pool.nullifiers = (0..12)
+            .map(|index| private_pool_hex("nullifier", index, 32))
+            .collect();
+        pool.root_history = [1u64, 20, 40]
+            .into_iter()
+            .map(|output_count| OrchardRootRecord {
+                root: private_pool_hex("root", output_count as usize, 32),
+                output_count,
+            })
+            .collect();
+        pool.asset_orchard_balances = vec![AssetOrchardAssetBalance {
+            asset_id: definition.asset_id.clone(),
+            ingress_total: 10,
+            egress_total: 0,
+            live_total: 10,
+        }];
+        let mut shielded = store.read_shielded().expect("shielded");
+        shielded.orchard = Some(pool);
+        store.write_shielded(&shielded).expect("write shielded");
+        commit_private_pool_tip(&data_dir, 40);
+        record_private_pool_point(&data_dir);
+        let old = private_pool_snapshot_for(&data_dir);
+        let before = private_pool_page_bytes(&data_dir, &old.snapshot_token);
+        let first = private_pool_page_for(&data_dir, &old.snapshot_token, "commitments", None, Some(16));
+        let second_before = private_pool_page_for(
+            &data_dir,
+            &old.snapshot_token,
+            "commitments",
+            first.next_cursor.clone(),
+            Some(16),
+        );
+
+        // Every later block appends to each list and moves the asset balance.
+        let k = PRIVATE_POOL_SNAPSHOT_POINTS_DEFAULT as u64;
+        let mut tokens = Vec::new();
+        for height in 41..=40 + k {
+            let mut shielded = store.read_shielded().expect("shielded");
+            let pool = shielded.orchard.as_mut().expect("pool");
+            let commitment = private_pool_hex("late-commitment", height as usize, 32);
+            pool.output_commitments.push(commitment.clone());
+            pool.asset_orchard_outputs.push(AssetOrchardEncryptedOutputRecord {
+                output_commitment: commitment,
+                encrypted_output: private_pool_hex("late-ciphertext", height as usize, 128),
+            });
+            pool.nullifiers.push(private_pool_hex("late-nullifier", height as usize, 32));
+            pool.root_history.push(OrchardRootRecord {
+                root: private_pool_hex("late-root", height as usize, 32),
+                output_count: pool.output_commitments.len() as u64,
+            });
+            pool.asset_orchard_balances[0].live_total += 1;
+            store.write_shielded(&shielded).expect("write shielded");
+            commit_private_pool_tip(&data_dir, height);
+            record_private_pool_point(&data_dir);
+            tokens.push(private_pool_snapshot_for(&data_dir).snapshot_token);
+            if height < 40 + k {
+                // Through K-1 later blocks every page is byte-identical and
+                // nothing added after the token's height appears.
+                assert_eq!(private_pool_page_bytes(&data_dir, &old.snapshot_token), before, "height {height}");
+            }
+        }
+        let tip = private_pool_snapshot_for(&data_dir);
+        assert_eq!(tip.counts.commitments, 40 + k);
+
+        // Expired at K; the next-oldest token is still served.
+        for section in PRIVATE_POOL_SECTIONS {
+            assert_eq!(
+                private_pool_refusal_code(&private_pool_page_for(&data_dir, &old.snapshot_token, section, None, None)),
+                "snapshot_expired"
+            );
+            assert_eq!(
+                private_pool_refusal_code(&private_pool_page_for(&data_dir, &old.snapshot_token, section, first.next_cursor.clone(), None)),
+                "snapshot_expired"
+            );
+        }
+        let oldest = &tokens[0];
+        let commitments = private_pool_all_pages(&data_dir, oldest, "commitments", None)
+            .into_iter()
+            .flat_map(|page| match page.items {
+                Some(PrivatePoolPageItems::Strings(items)) => items,
+                other => panic!("{other:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(commitments.len(), 41);
+        assert!(!commitments.contains(&private_pool_hex("late-commitment", 42, 32)));
+        let outputs = private_pool_page_for(&data_dir, oldest, "outputs", Some(encode_cursor(oldest, "outputs", 39)), None);
+        let Some(PrivatePoolPageItems::Outputs(rows)) = &outputs.items else {
+            panic!("outputs page: {outputs:?}");
+        };
+        assert_eq!((outputs.total, rows.len()), (41, 2));
+        assert_eq!(rows[1].commitment, private_pool_hex("late-commitment", 41, 32));
+        let anchors = private_pool_page_for(&data_dir, oldest, "accepted_anchors", None, None);
+        assert_eq!(anchors.total, 4);
+        let assets = private_pool_page_for(&data_dir, oldest, "assets", None, None);
+        let Some(PrivatePoolPageItems::Assets(rows)) = &assets.items else {
+            panic!("assets page: {assets:?}");
+        };
+        assert_eq!(rows[0].live_total, 11, "the asset row as of the token's height");
+        let tip_assets = private_pool_page_for(&data_dir, &tip.snapshot_token, "assets", None, None);
+        let Some(PrivatePoolPageItems::Assets(rows)) = &tip_assets.items else {
+            panic!("assets page: {tip_assets:?}");
+        };
+        assert_eq!(rows[0].live_total, 10 + k);
+
+        // A token whose hash or root was never final at its height, a height
+        // above the tip, and a cursor from another token are refused as before.
+        let mut parts = oldest.split(':').collect::<Vec<_>>();
+        parts[4] = "ab";
+        let wrong_root = parts.join(":");
+        parts[2] = "999";
+        let above = parts.join(":");
+        for token in [wrong_root.as_str(), above.as_str()] {
+            assert_eq!(
+                private_pool_refusal_code(&private_pool_page_for(&data_dir, token, "commitments", None, None)),
+                "snapshot_unavailable",
+                "{token}"
+            );
+        }
+        let tip_cursor = private_pool_page_for(&data_dir, &tip.snapshot_token, "commitments", None, Some(16)).next_cursor;
+        assert_eq!(
+            private_pool_refusal_code(&private_pool_page_for(&data_dir, oldest, "commitments", tip_cursor, Some(16))),
+            "cursor_malformed"
+        );
+        // An older token's own cursor keeps working.
+        let oldest_first = private_pool_page_for(&data_dir, oldest, "commitments", None, Some(16));
+        let oldest_second = private_pool_page_for(&data_dir, oldest, "commitments", oldest_first.next_cursor, Some(16));
+        assert_eq!(oldest_second.status, "ok");
+        assert_eq!(oldest_second.offset, 16);
+        assert_eq!(second_before.items, oldest_second.items, "append-only prefix pages agree");
+
+        // Account lines need balances at the token's height, which are not kept.
+        let lines = private_account_lines(PrivateAccountLinesOptions {
+            data_dir: data_dir.clone(),
+            snapshot_token: oldest.clone(),
+            address: address_from_public_key(&[7u8; 1952]),
+        })
+        .expect("lines");
+        assert_eq!(lines.refusal.expect("refusal").code, "snapshot_not_current");
         fs::remove_dir_all(&data_dir).expect("cleanup");
     }

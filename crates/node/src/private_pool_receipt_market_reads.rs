@@ -3,12 +3,15 @@
 //! reconciles across nodes); only records whose outcome is final at or
 //! before the token's height are served, in a deterministic order, and a
 //! cursor is bound to the token, the filters and the exact eligible set.
+//! Receipts accept any retained token; the market is served only at the
+//! committed tip because NAV state at older heights is not retained.
 
 use super::asset_orchard_pricing_reads::{
     asset_orchard_pricing_claim_from_snapshot, asset_orchard_private_egress_binding_from_snapshot,
     read_finalized_pair_snapshot,
 };
 use super::private_pool_reads::{encode_cursor, parse_cursor, read_refusal, SnapshotToken};
+use super::private_pool_snapshot_points::resolve_snapshot_token;
 use super::*;
 
 pub const PRIVATE_POOL_RECEIPTS_SCHEMA: &str = "postfiat.private_pool_receipts.v1";
@@ -223,12 +226,8 @@ pub fn private_pool_receipts(
         );
     };
     let snapshot = read_finalized_pair_snapshot(&options.data_dir)?;
-    if !token.matches(&snapshot) {
-        let reason = format!(
-            "token pins height {} but the committed tip is height {}; take a new snapshot",
-            token.height, snapshot.tip.height
-        );
-        return refuse(report, "snapshot_unavailable", reason);
+    if let Err(refusal) = resolve_snapshot_token(&options.data_dir, &token, &snapshot.tip) {
+        return refuse(report, &refusal.code, refusal.reason);
     }
 
     let store = PrivateActionAdmissionStore::open(&options.data_dir)?;
@@ -310,7 +309,8 @@ pub fn private_pool_receipts(
     Ok(report)
 }
 
-/// The pair's market state at the inclusion height, from the token's state.
+/// The pair's market state at the inclusion height, from the committed tip;
+/// a retained older token is refused with `snapshot_not_current`.
 pub fn private_pool_market(
     options: PrivatePoolMarketOptions,
 ) -> io::Result<PrivatePoolMarketReport> {
@@ -342,12 +342,16 @@ pub fn private_pool_market(
         );
     };
     let snapshot = read_finalized_pair_snapshot(&options.data_dir)?;
-    if !token.matches(&snapshot) {
-        let reason = format!(
-            "token pins height {} but the committed tip is height {}; take a new snapshot",
-            token.height, snapshot.tip.height
-        );
-        return refuse(report, "snapshot_unavailable", reason);
+    match resolve_snapshot_token(&options.data_dir, &token, &snapshot.tip) {
+        Ok(None) => {}
+        Ok(Some(_)) => {
+            let reason = format!(
+                "the market is served only at the committed tip (height {}), not at height {}; take a new snapshot",
+                snapshot.tip.height, token.height
+            );
+            return refuse(report, "snapshot_not_current", reason);
+        }
+        Err(refusal) => return refuse(report, &refusal.code, refusal.reason),
     }
     let inclusion_height = options
         .inclusion_height
