@@ -125,3 +125,9 @@ Only the other lanes can provide these (date first asked):
 - [PFT as an ERC-20 on Base milestone](../plans/active/pft-erc20-base-listing-milestone.md)
 - Previous handoff: [Base Sepolia token live, lock contract merged and exchange page corrected](2026-10-28___dravlic__base_sepolia_token_live_lock_contract_merged_and_exchange_page_corrected.md)
 - [Current State](../status/chain-state-current.md)
+
+## End of session
+
+- Bot PRs: [#177](https://github.com/postfiatorg/postfiatl1v2/pull/177) (IPv6 brackets in `pft_token`'s redacted RPC URL) was squash-merged as `3592c25b`, and [#179](https://github.com/postfiatorg/postfiatl1v2/pull/179) (`nav_reserve_packet_id` computed like the chain) as `8db13571`. Both bugs were reproduced on main and the touched tests pass.
+- The ERC-20 milestone's P1.10 now records that the other lane sent the exchange guidance page to Coinbase on 2026-10-28. It waits for Coinbase's reply (`cfb5960e`).
+- This supersedes the line "Bot PRs #177 and #179 are still open" in the BLUF.
