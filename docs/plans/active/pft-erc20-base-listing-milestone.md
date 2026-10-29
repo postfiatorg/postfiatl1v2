@@ -40,6 +40,7 @@ Owners are marked *(this lane)*, *(other lane)* or *(Coinbase)*.
   - The test-network source is verified on [Sourcify](https://repo.sourcify.dev/84532/0x18fE4ca51A0cE042688D5A54917319d03B527D92) and [Blockscout](https://base-sepolia.blockscout.com/address/0x18fE4ca51A0cE042688D5A54917319d03B527D92?tab=contract) (Base Sepolia, 2026-10-28). The Base mainnet verification is still open.
 - [x] P1.9 *(this lane)* The Coinbase one-pager, built from the paper's Appendix A: [pft-erc20-one-pager.md](../../listings/coinbase/pft-erc20-one-pager.md) (`66326c6d`). It is final for now; its figures change only when the token document is published.
 - [ ] P1.10 *(other lane, then Coinbase)* The answer to the listing package's first ask, which route to plan on (`integration-plan.md:741-743`). To tick it: the message sent and Coinbase's reply.
+  - The other lane sent the [exchange guidance page](https://postfiat.org/exchange-integration/) to Coinbase on 2026-10-28 (his Telegram message of 2026-10-29: "sent update to coinbase"). The item now waits for Coinbase's reply.
 
 ## Phase 2 — the genesis bridge
 
