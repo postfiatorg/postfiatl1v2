@@ -63,6 +63,34 @@
         }
     }
 
+    #[test]
+    fn governance_accepts_canonical_asset_orchard_egress_policy_kinds() {
+        let activation = postfiat_types::GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_ACTIVATION_HEIGHT;
+        assert!(validate_amendment_kind(activation).is_ok());
+        assert!(validate_amendment_value(activation, 900).is_ok());
+        assert!(validate_amendment_value(activation, 0).is_err());
+        let record = postfiat_types::AssetOrchardEgressPolicyRecordV1::new(
+            root('a'),
+            "a666.private-egress.v1",
+            root('b'),
+            900,
+        )
+        .expect("record");
+        let kind = record.governance_kind();
+        assert!(validate_amendment_kind(&kind).is_ok());
+        assert!(validate_amendment_value(&kind, 900).is_ok());
+        let prefix = postfiat_types::GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_PREFIX_V1;
+        for malformed in [
+            format!("{prefix}:{}:{}:a666.v1", root('a'), root('0')),
+            format!("{prefix}:{}:{}:a666.v1", root('A'), root('b')),
+            format!("{prefix}:{}:{}:tnapp owned", root('a'), root('b')),
+            format!("{prefix}:{}:{}", root('a'), root('b')),
+            format!("{prefix}:{}", root('a')),
+        ] {
+            assert!(validate_amendment_kind(&malformed).is_err(), "{malformed}");
+        }
+    }
+
     fn validators(count: usize) -> Vec<String> {
         (0..count)
             .map(|index| format!("validator-{index}"))

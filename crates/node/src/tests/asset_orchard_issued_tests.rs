@@ -1096,6 +1096,7 @@
             AssetExecutionCompatibility::strict(),
             false,
             None,
+            &postfiat_types::AssetOrchardEgressPolicyRegistry::default(),
             false,
         );
         assert_eq!(
@@ -1116,6 +1117,7 @@
             AssetExecutionCompatibility::strict(),
             false,
             None,
+            &postfiat_types::AssetOrchardEgressPolicyRegistry::default(),
             true,
         );
         assert!(replay_receipts[0].accepted, "{replay_receipts:?}");

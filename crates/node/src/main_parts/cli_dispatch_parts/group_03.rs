@@ -1866,6 +1866,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
         | "ratify-recipient-format-activation-height"
         | "ratify-asset-orchard-pricing-enforcement-activation-height"
         | "ratify-asset-orchard-pricing-max-nav-age-blocks"
+        | "ratify-asset-orchard-egress-policy-activation-height"
         | "ratify-vault-bridge-route-authority-activation-height" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let validators =
@@ -1921,6 +1922,10 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                     GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS,
                     "--max-nav-age-blocks",
                 ),
+                "ratify-asset-orchard-egress-policy-activation-height" => (
+                    postfiat_types::GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_ACTIVATION_HEIGHT,
+                    "--asset-orchard-egress-policy-activation-height",
+                ),
                 _ => (
                     GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
                     "--vault-bridge-route-authority-activation-height",
@@ -1951,6 +1956,53 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 veto_until_height,
                 paused: flag_present(flags, "--paused"),
                 amendment_file: PathBuf::from(amendment_file),
+            })
+            .map_err(|error| format!("{command} failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&amendment)
+                .map_err(|error| format!("amendment serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "ratify-asset-orchard-egress-policy" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let validators =
+                split_csv(flag_value(flags, "--validators").ok_or("missing --validators")?);
+            let support = split_csv(flag_value(flags, "--support").unwrap_or(""));
+            let support = if support.is_empty() {
+                validators.clone()
+            } else {
+                support
+            };
+            let effective_height = flag_value(flags, "--effective-height")
+                .ok_or("missing --effective-height")?
+                .parse::<u32>()
+                .map_err(|_| "--effective-height must be a u32".to_string())?;
+            let record = postfiat_types::AssetOrchardEgressPolicyRecordV1::new(
+                flag_value(flags, "--asset-id").ok_or("missing --asset-id")?,
+                flag_value(flags, "--policy-id").ok_or("missing --policy-id")?,
+                flag_value(flags, "--disclosure-schema-hash")
+                    .ok_or("missing --disclosure-schema-hash")?,
+                u64::from(effective_height),
+            )
+            .map_err(|error| format!("{command} failed: {error}"))?;
+            let parse_height = |flag: &str| {
+                flag_value(flags, flag)
+                    .unwrap_or("0")
+                    .parse::<u64>()
+                    .map_err(|_| format!("{flag} must be a u64"))
+            };
+            let amendment = ratify_governance(RatifyGovernanceOptions {
+                data_dir: PathBuf::from(data_dir),
+                validators,
+                support,
+                kind: record.governance_kind(),
+                value: effective_height,
+                activation_height: parse_height("--activation-height")?,
+                veto_until_height: parse_height("--veto-until-height")?,
+                paused: flag_present(flags, "--paused"),
+                amendment_file: PathBuf::from(
+                    flag_value(flags, "--amendment-file").ok_or("missing --amendment-file")?,
+                ),
             })
             .map_err(|error| format!("{command} failed: {error}"))?;
             let json = serde_json::to_string_pretty(&amendment)

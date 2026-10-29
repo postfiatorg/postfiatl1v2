@@ -1729,6 +1729,12 @@ fn validate_amendment_kind(kind: &str) -> Result<(), String> {
         }
         return Err("FastSwap bootstrap governance kind must bind one lowercase 48-byte payload hash".to_string());
     }
+    if kind.starts_with(&format!(
+        "{}:",
+        postfiat_types::GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_PREFIX_V1
+    )) {
+        return postfiat_types::validate_asset_orchard_egress_policy_kind(kind);
+    }
     if let Some(route) = kind.strip_prefix(&format!(
         "{GOVERNANCE_VAULT_BRIDGE_ROUTE_KIND_PREFIX_V1}:"
     )) {
@@ -1776,6 +1782,7 @@ fn validate_amendment_kind(kind: &str) -> Result<(), String> {
         | GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS
+        | postfiat_types::GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT

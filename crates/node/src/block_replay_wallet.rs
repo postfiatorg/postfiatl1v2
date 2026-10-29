@@ -3042,6 +3042,7 @@ pub(super) fn replay_archived_payload(
                 compatibility,
                 state.governance.orchard_pool_paused,
                 state.governance.shielded_atomic_batch_activation_height(),
+                &state.governance.asset_orchard_egress_policy_registry(),
                 true,
             ))
         }

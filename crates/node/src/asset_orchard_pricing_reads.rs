@@ -87,8 +87,14 @@ pub struct AssetOrchardPricingClaimReport {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetOrchardPrivateEgressBinding {
     pub asset_id: String,
+    /// A governed record for this asset is in force at the inclusion height.
+    pub governed: bool,
     pub policy_id: Option<String>,
+    /// The governed disclosure schema hash; consensus requires the egress's
+    /// `disclosure_hash` to equal it.
     pub disclosure_hash: Option<String>,
+    pub disclosure_schema_id: Option<String>,
+    pub effective_height: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -541,26 +547,43 @@ pub(super) fn asset_orchard_private_egress_binding_from_snapshot(
     let max_nav_age = enforcement.and_then(|enforcement| enforcement.max_nav_age_blocks);
     let base = governing_asset(&snapshot.ledger, &options.base_asset_id, max_nav_age)?;
     let quote = governing_asset(&snapshot.ledger, &options.quote_asset_id, max_nav_age)?;
-    let (status, refusal) =
-        match pair_refusal(&snapshot, &options, enforcement, base.as_ref(), quote.as_ref()) {
-            Some((status, reason)) => (status, reason),
-            None => (
-                "ungoverned",
-                refusal(
-                    "asset_orchard_private_egress_policy_ungoverned",
-                    "finalized state registers no private-egress policy or disclosure binding \
-                     for these assets; consensus only binds caller-chosen values into the exit proof",
-                ),
-            ),
-        };
+    // The same registry and height rule the private egress apply path uses.
+    let registry = snapshot.governance.asset_orchard_egress_policy_registry();
     let bindings = [&options.base_asset_id, &options.quote_asset_id]
         .into_iter()
-        .map(|asset_id| AssetOrchardPrivateEgressBinding {
-            asset_id: asset_id.clone(),
-            policy_id: None,
-            disclosure_hash: None,
+        .map(|asset_id| {
+            let record = registry.record_at(asset_id, options.inclusion_height);
+            AssetOrchardPrivateEgressBinding {
+                asset_id: asset_id.clone(),
+                governed: record.is_some(),
+                policy_id: record.map(|record| record.policy_id.clone()),
+                disclosure_hash: record.map(|record| record.disclosure_schema_hash.clone()),
+                disclosure_schema_id: record.map(|record| record.disclosure_schema_id.clone()),
+                effective_height: record.map(|record| record.effective_height),
+            }
         })
-        .collect();
+        .collect::<Vec<_>>();
+    let (status, refusal) =
+        match pair_refusal(snapshot, options, enforcement, base.as_ref(), quote.as_ref()) {
+            Some((status, reason)) => (status, Some(reason)),
+            None if bindings.iter().all(|binding| binding.governed) => ("ok", None),
+            None if registry.activated_at(options.inclusion_height) => (
+                "ungoverned",
+                Some(refusal(
+                    "asset_orchard_egress_policy_not_governed",
+                    "governed egress policies are active and an asset of the pair has no record in force; \
+                     consensus refuses its private egress",
+                )),
+            ),
+            None => (
+                "ungoverned",
+                Some(refusal(
+                    "asset_orchard_private_egress_policy_ungoverned",
+                    "finalized state has no governed egress policy in force for an asset of the pair; \
+                     consensus only binds caller-chosen values into the exit proof",
+                )),
+            ),
+        };
     Ok(AssetOrchardPrivateEgressBindingReport {
         schema: ASSET_ORCHARD_PRIVATE_EGRESS_BINDING_READ_SCHEMA.to_string(),
         chain_id: snapshot.genesis.chain_id.clone(),
@@ -571,7 +594,7 @@ pub(super) fn asset_orchard_private_egress_binding_from_snapshot(
         finalized_state_root: snapshot.tip.state_root.clone(),
         inclusion_height: options.inclusion_height,
         status: status.to_string(),
-        refusal: Some(refusal),
+        refusal,
         base_asset_id: options.base_asset_id.clone(),
         quote_asset_id: options.quote_asset_id.clone(),
         base_asset: base,

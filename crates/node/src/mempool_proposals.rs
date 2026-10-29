@@ -3366,6 +3366,7 @@ fn build_shielded_batch_proposal_with_timings(
         asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance),
         governance.orchard_pool_paused,
         governance.shielded_atomic_batch_activation_height(),
+        &governance.asset_orchard_egress_policy_registry(),
         false,
     );
     ensure_atomic_shielded_batch_accepted(&batch, &receipts)?;

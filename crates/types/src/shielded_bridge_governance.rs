@@ -63,6 +63,27 @@ pub const GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT: &
 /// `max_epoch_gap_blocks` applies.
 pub const GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS: &str =
     "asset_orchard_pricing_max_nav_age_blocks";
+/// First block height from which every Asset-Orchard private egress must be
+/// bound to a governed egress policy for its asset; an asset with no
+/// effective record is then refused. `value` is the height, scheduled
+/// strictly after its amendment block; the earliest unpaused height wins.
+pub const GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_ACTIVATION_HEIGHT: &str =
+    "asset_orchard_egress_policy_activation_height";
+/// Governed egress policy record, version 1. The amendment kind is
+/// `asset_orchard_egress_policy_v1:<asset_id>:<disclosure_schema_hash>:<policy_id>`
+/// and its `value` is the record's effective height. See
+/// [`AssetOrchardEgressPolicyRecordV1`].
+pub const GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_PREFIX_V1: &str =
+    "asset_orchard_egress_policy_v1";
+/// The disclosure schema a version-1 record governs: a private egress
+/// discloses exactly its public payload (destination, asset, amount, fee,
+/// anchor and nullifier), and its `disclosure_hash` must equal the record's
+/// `disclosure_schema_hash`, the hash of the governed schema document.
+pub const ASSET_ORCHARD_EGRESS_DISCLOSURE_SCHEMA_ID_V1: &str =
+    "postfiat.asset_orchard.private_egress.disclosure.v1";
+/// Longest policy id that keeps a version-1 record kind within the 256-byte
+/// governance text bound.
+pub const ASSET_ORCHARD_EGRESS_POLICY_ID_MAX_BYTES: usize = 31;
 /// First block height at which execution rejects transactions whose
 /// destination address fields are not canonical PFTL addresses. Absent by
 /// default, so historical blocks replay unchanged.
@@ -1623,6 +1644,37 @@ impl GovernanceState {
             .min()
     }
 
+    /// The earliest unpaused scheduled height wins.
+    pub fn asset_orchard_egress_policy_activation_height(&self) -> Option<u64> {
+        self.amendments
+            .iter()
+            .filter(|amendment| {
+                amendment.kind == GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_ACTIVATION_HEIGHT
+                    && !amendment.paused
+            })
+            .map(|amendment| u64::from(amendment.value))
+            .min()
+    }
+
+    /// Every unpaused governed egress policy record, in amendment order, and
+    /// the global activation height.
+    pub fn asset_orchard_egress_policy_registry(&self) -> AssetOrchardEgressPolicyRegistry {
+        AssetOrchardEgressPolicyRegistry {
+            activation_height: self.asset_orchard_egress_policy_activation_height(),
+            records: self
+                .amendments
+                .iter()
+                .filter(|amendment| !amendment.paused)
+                .filter_map(|amendment| {
+                    AssetOrchardEgressPolicyRecordV1::from_amendment(
+                        &amendment.kind,
+                        amendment.value,
+                    )
+                })
+                .collect(),
+        }
+    }
+
     pub fn asset_orchard_pricing_max_nav_age_blocks(&self) -> Option<u64> {
         self.amendments
             .iter()
@@ -2154,6 +2206,166 @@ impl GovernanceActionBatch {
     }
 }
 
+/// A governed egress policy for one issued asset, registered by an ordinary
+/// signed governance amendment whose kind encodes the record.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetOrchardEgressPolicyRecordV1 {
+    pub version: u32,
+    pub asset_id: String,
+    pub policy_id: String,
+    pub disclosure_schema_id: String,
+    pub disclosure_schema_hash: String,
+    pub effective_height: u64,
+}
+
+fn egress_policy_lower_hex_96(value: &str) -> bool {
+    value.len() == 96
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+impl AssetOrchardEgressPolicyRecordV1 {
+    pub fn new(
+        asset_id: impl Into<String>,
+        policy_id: impl Into<String>,
+        disclosure_schema_hash: impl Into<String>,
+        effective_height: u64,
+    ) -> Result<Self, String> {
+        let record = Self {
+            version: 1,
+            asset_id: asset_id.into(),
+            policy_id: policy_id.into(),
+            disclosure_schema_id: ASSET_ORCHARD_EGRESS_DISCLOSURE_SCHEMA_ID_V1.to_string(),
+            disclosure_schema_hash: disclosure_schema_hash.into(),
+            effective_height,
+        };
+        record.validate()?;
+        Ok(record)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.version != 1 {
+            return Err("egress policy record version must be 1".to_string());
+        }
+        if self.disclosure_schema_id != ASSET_ORCHARD_EGRESS_DISCLOSURE_SCHEMA_ID_V1 {
+            return Err(format!(
+                "egress policy record v1 governs disclosure schema `{ASSET_ORCHARD_EGRESS_DISCLOSURE_SCHEMA_ID_V1}`"
+            ));
+        }
+        validate_asset_orchard_egress_policy_kind_parts(
+            &self.asset_id,
+            &self.disclosure_schema_hash,
+            &self.policy_id,
+        )?;
+        if self.effective_height == 0 || u32::try_from(self.effective_height).is_err() {
+            return Err("egress policy effective height must be a nonzero u32".to_string());
+        }
+        Ok(())
+    }
+
+    /// The amendment kind that registers this record.
+    pub fn governance_kind(&self) -> String {
+        format!(
+            "{GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_PREFIX_V1}:{}:{}:{}",
+            self.asset_id, self.disclosure_schema_hash, self.policy_id
+        )
+    }
+
+    /// The record an amendment registers, if its kind is a valid version-1
+    /// egress policy kind.
+    pub fn from_amendment(kind: &str, value: u32) -> Option<Self> {
+        let body =
+            kind.strip_prefix(&format!("{GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_PREFIX_V1}:"))?;
+        let mut parts = body.splitn(3, ':');
+        let (asset_id, schema_hash, policy_id) = (parts.next()?, parts.next()?, parts.next()?);
+        let record = Self {
+            version: 1,
+            asset_id: asset_id.to_string(),
+            policy_id: policy_id.to_string(),
+            disclosure_schema_id: ASSET_ORCHARD_EGRESS_DISCLOSURE_SCHEMA_ID_V1.to_string(),
+            disclosure_schema_hash: schema_hash.to_string(),
+            effective_height: u64::from(value),
+        };
+        record.validate().ok()?;
+        Some(record)
+    }
+}
+
+/// Validates the parts of an `asset_orchard_egress_policy_v1` kind: a
+/// lowercase 48-byte asset id, a lowercase 48-byte disclosure schema hash
+/// that is not all zero, and a policy id of 1 to 31 bytes of `[a-z0-9._-]`.
+pub fn validate_asset_orchard_egress_policy_kind_parts(
+    asset_id: &str,
+    disclosure_schema_hash: &str,
+    policy_id: &str,
+) -> Result<(), String> {
+    if !egress_policy_lower_hex_96(asset_id) {
+        return Err("egress policy asset id must be a lowercase 48-byte hash".to_string());
+    }
+    if !egress_policy_lower_hex_96(disclosure_schema_hash)
+        || disclosure_schema_hash.bytes().all(|byte| byte == b'0')
+    {
+        return Err(
+            "egress policy disclosure schema hash must be a nonzero lowercase 48-byte hash"
+                .to_string(),
+        );
+    }
+    if policy_id.is_empty()
+        || policy_id.len() > ASSET_ORCHARD_EGRESS_POLICY_ID_MAX_BYTES
+        || !policy_id.bytes().all(|byte| {
+            byte.is_ascii_digit() || byte.is_ascii_lowercase() || matches!(byte, b'.' | b'_' | b'-')
+        })
+    {
+        return Err(format!(
+            "egress policy id must be 1-{ASSET_ORCHARD_EGRESS_POLICY_ID_MAX_BYTES} bytes of [a-z0-9._-]"
+        ));
+    }
+    Ok(())
+}
+
+/// Validates an `asset_orchard_egress_policy_v1:` amendment kind.
+pub fn validate_asset_orchard_egress_policy_kind(kind: &str) -> Result<(), String> {
+    let body = kind
+        .strip_prefix(&format!("{GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_PREFIX_V1}:"))
+        .ok_or_else(|| "not an egress policy governance kind".to_string())?;
+    let mut parts = body.splitn(3, ':');
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some(asset_id), Some(schema_hash), Some(policy_id)) => {
+            validate_asset_orchard_egress_policy_kind_parts(asset_id, schema_hash, policy_id)
+        }
+        _ => Err(
+            "egress policy governance kind must bind an asset id, schema hash and policy id"
+                .to_string(),
+        ),
+    }
+}
+
+/// The governed egress policies in force, derived from governance amendments.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AssetOrchardEgressPolicyRegistry {
+    pub activation_height: Option<u64>,
+    pub records: Vec<AssetOrchardEgressPolicyRecordV1>,
+}
+
+impl AssetOrchardEgressPolicyRegistry {
+    /// The record in force for `asset_id` at `height`: the latest effective
+    /// height not after `height`; a later amendment wins a tie.
+    pub fn record_at(&self, asset_id: &str, height: u64) -> Option<&AssetOrchardEgressPolicyRecordV1> {
+        self.records
+            .iter()
+            .enumerate()
+            .filter(|(_, record)| record.asset_id == asset_id && record.effective_height <= height)
+            .max_by_key(|(index, record)| (record.effective_height, *index))
+            .map(|(_, record)| record)
+    }
+
+    pub fn activated_at(&self, height: u64) -> bool {
+        self.activation_height
+            .is_some_and(|activation_height| height >= activation_height)
+    }
+}
+
 #[cfg(test)]
 mod shielded_bridge_governance_tests {
     use super::*;
@@ -2366,6 +2578,65 @@ mod shielded_bridge_governance_tests {
         let parsed: ShieldedActionBatch =
             serde_json::from_value(atomic_json).expect("parse atomic shielded batch");
         assert!(parsed.atomic);
+    }
+
+    #[test]
+    fn asset_orchard_egress_policy_records_round_trip_through_governance_kinds() {
+        let asset = "ab".repeat(48);
+        let schema = "cd".repeat(48);
+        let record = AssetOrchardEgressPolicyRecordV1::new(&asset, "a666.private-egress.v1", &schema, 900)
+            .expect("record");
+        let kind = record.governance_kind();
+        assert!(kind.len() <= 256, "{}", kind.len());
+        assert_eq!(validate_asset_orchard_egress_policy_kind(&kind), Ok(()));
+        assert_eq!(AssetOrchardEgressPolicyRecordV1::from_amendment(&kind, 900), Some(record.clone()));
+        let longest = AssetOrchardEgressPolicyRecordV1::new(&asset, "p".repeat(31), &schema, 900)
+            .expect("31-byte policy id");
+        assert_eq!(longest.governance_kind().len(), 256);
+
+        for (asset_id, schema_hash, policy_id) in [
+            (asset.as_str(), "0".repeat(96), "a666.v1".to_string()),
+            (asset.as_str(), "CD".repeat(48), "a666.v1".to_string()),
+            ("ab", schema.clone(), "a666.v1".to_string()),
+            (asset.as_str(), schema.clone(), "tnapp owned".to_string()),
+            (asset.as_str(), schema.clone(), "p".repeat(32)),
+            (asset.as_str(), schema.clone(), String::new()),
+        ] {
+            assert!(
+                validate_asset_orchard_egress_policy_kind_parts(asset_id, &schema_hash, &policy_id)
+                    .is_err(),
+                "{asset_id} {schema_hash} {policy_id}"
+            );
+        }
+        assert_eq!(AssetOrchardEgressPolicyRecordV1::from_amendment(&kind, 0), None);
+        assert!(validate_asset_orchard_egress_policy_kind("asset_orchard_egress_policy_v1:ab").is_err());
+
+        let mut governance = GovernanceState::new(1);
+        assert_eq!(governance.asset_orchard_egress_policy_registry(), AssetOrchardEgressPolicyRegistry::default());
+        governance.apply(amendment(&kind, 900));
+        let later = AssetOrchardEgressPolicyRecordV1::new(&asset, "a666.private-egress.v2", &schema, 950)
+            .expect("later record");
+        governance.apply(amendment(&later.governance_kind(), 950));
+        let mut paused = amendment(
+            &AssetOrchardEgressPolicyRecordV1::new(&asset, "paused", &schema, 920)
+                .expect("paused record")
+                .governance_kind(),
+            920,
+        );
+        paused.paused = true;
+        governance.apply(paused);
+        governance.apply(amendment(GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_ACTIVATION_HEIGHT, 1_000));
+        governance.apply(amendment(GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_ACTIVATION_HEIGHT, 1_100));
+        let registry = governance.asset_orchard_egress_policy_registry();
+        assert_eq!(registry.records.len(), 2);
+        assert_eq!(registry.activation_height, Some(1_000));
+        assert_eq!(registry.record_at(&asset, 899), None);
+        assert_eq!(registry.record_at(&asset, 900), Some(&record));
+        assert_eq!(registry.record_at(&asset, 949), Some(&record));
+        assert_eq!(registry.record_at(&asset, 950), Some(&later));
+        assert_eq!(registry.record_at(&"ef".repeat(48), 2_000), None);
+        assert!(!registry.activated_at(999));
+        assert!(registry.activated_at(1_000));
     }
 
     #[test]

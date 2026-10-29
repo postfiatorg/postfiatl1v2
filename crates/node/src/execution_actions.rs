@@ -1968,6 +1968,30 @@ pub(super) fn governance_amendment_lifecycle_rejection(
                 .to_string(),
         ));
     }
+    if (amendment.kind
+        == postfiat_types::GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_ACTIVATION_HEIGHT
+        || amendment.kind.starts_with(&format!(
+            "{}:",
+            postfiat_types::GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_PREFIX_V1
+        )))
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "invalid_asset_orchard_egress_policy_effective_height",
+            "Asset-Orchard egress policy activation and records must take effect strictly after the amendment block"
+                .to_string(),
+        ));
+    }
+    if amendment.kind.starts_with(&format!(
+        "{}:",
+        postfiat_types::GOVERNANCE_KIND_ASSET_ORCHARD_EGRESS_POLICY_PREFIX_V1
+    )) {
+        if let Err(error) =
+            postfiat_types::validate_asset_orchard_egress_policy_kind(&amendment.kind)
+        {
+            return Some(("invalid_asset_orchard_egress_policy_record", error));
+        }
+    }
     if amendment.kind == GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS
         && amendment.value == 0
     {
@@ -3189,6 +3213,7 @@ pub(super) fn execute_shielded_batch(
     asset_execution_compatibility: AssetExecutionCompatibility,
     orchard_pool_paused: bool,
     shielded_atomic_batch_activation_height: Option<u64>,
+    egress_policies: &postfiat_types::AssetOrchardEgressPolicyRegistry,
     archive_replay: bool,
 ) -> Vec<Receipt> {
     if !batch.atomic {
@@ -3200,6 +3225,7 @@ pub(super) fn execute_shielded_batch(
             block_height,
             asset_execution_compatibility,
             orchard_pool_paused,
+            egress_policies,
             archive_replay,
         );
     }
@@ -3235,6 +3261,7 @@ pub(super) fn execute_shielded_batch(
         block_height,
         asset_execution_compatibility,
         orchard_pool_paused,
+        egress_policies,
         archive_replay,
     );
     if receipts.iter().all(|receipt| receipt.accepted) {
@@ -3293,6 +3320,7 @@ fn execute_shielded_batch_actions(
     block_height: u64,
     asset_execution_compatibility: AssetExecutionCompatibility,
     orchard_pool_paused: bool,
+    egress_policies: &postfiat_types::AssetOrchardEgressPolicyRegistry,
     archive_replay: bool,
 ) -> Vec<Receipt> {
     if orchard_pool_paused {
@@ -3496,6 +3524,7 @@ fn execute_shielded_batch_actions(
                     block_height,
                     index,
                     action,
+                    egress_policies,
                     archive_replay,
                 )
             }
@@ -3855,6 +3884,40 @@ pub(super) fn execute_asset_orchard_egress_action(
     }
 }
 
+/// The governed egress policy check: once a record for the egress's asset is
+/// effective, its `policy_id` must equal the record's and its
+/// `disclosure_hash` must equal the record's governed disclosure schema
+/// hash; once the global activation is reached, an asset without an
+/// effective record is refused. With no record and no activation nothing is
+/// checked, so execution before governance writes either is unchanged.
+pub(super) fn asset_orchard_egress_policy_refusal(
+    egress_policies: &postfiat_types::AssetOrchardEgressPolicyRegistry,
+    payload: &AssetOrchardPrivateEgressActionPayload,
+    block_height: u64,
+) -> Option<(&'static str, String)> {
+    match egress_policies.record_at(&payload.asset_id, block_height) {
+        Some(record) => (payload.policy_id != record.policy_id
+            || payload.disclosure_hash != record.disclosure_schema_hash)
+            .then(|| {
+                (
+                    "asset_orchard_egress_policy_mismatch",
+                    format!(
+                        "private egress must bind governed policy `{}` and disclosure hash `{}` for asset {}",
+                        record.policy_id, record.disclosure_schema_hash, record.asset_id
+                    ),
+                )
+            }),
+        None if egress_policies.activated_at(block_height) => Some((
+            "asset_orchard_egress_policy_not_governed",
+            format!(
+                "asset {} has no governed egress policy in force at height {block_height}",
+                payload.asset_id
+            ),
+        )),
+        None => None,
+    }
+}
+
 pub(super) fn execute_asset_orchard_private_egress_action(
     genesis: &Genesis,
     ledger: &mut LedgerState,
@@ -3863,8 +3926,20 @@ pub(super) fn execute_asset_orchard_private_egress_action(
     block_height: u64,
     index: usize,
     payload: &AssetOrchardPrivateEgressActionPayload,
+    egress_policies: &postfiat_types::AssetOrchardEgressPolicyRegistry,
     archive_replay: bool,
 ) -> Receipt {
+    // Checked first: it reads only the public asset, policy and disclosure
+    // fields, and it is inert until governance writes a record or activation.
+    if let Some((code, message)) =
+        asset_orchard_egress_policy_refusal(egress_policies, payload, block_height)
+    {
+        return Receipt::rejected(
+            shielded_action_rejection_id(batch_id, index, code),
+            code,
+            message,
+        );
+    }
     if let Err(error) = validate_asset_orchard_private_egress_payload(payload) {
         return Receipt::rejected(
             shielded_action_rejection_id(
