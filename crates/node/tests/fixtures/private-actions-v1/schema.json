@@ -12,7 +12,8 @@
     "dispatched": "Sent to the validator admission service; outcome not known.",
     "accepted": "Included in a finalized block with an accepted receipt.",
     "rejected": "Included or refused with a final rejection; code and fee effects in the receipt.",
-    "unknown": "No outcome is known. Stays pending and never authorizes a replacement action."
+    "unknown": "No outcome is known. Stays pending and never authorizes a replacement action.",
+    "abandoned": "Abandoned by the operator; the same action bytes may be resubmitted under the same intent. Terminal until the wallet resubmits; the gateway never resends on its own."
   },
   "refusals": {
     "private_intent_mismatch": "intent_id is not the recomputed id of (domain, action_json).",
@@ -375,7 +376,8 @@
               "dispatched",
               "accepted",
               "rejected",
-              "unknown"
+              "unknown",
+              "abandoned"
             ]
           },
           "batch_id": {
@@ -447,7 +449,8 @@
               "dispatched",
               "accepted",
               "rejected",
-              "unknown"
+              "unknown",
+              "abandoned"
             ]
           },
           "action_hash": {
@@ -575,10 +578,21 @@
                 "type": "null"
               }
             ]
+          },
+          "abandon_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only for abandoned: the operator's reason and Unix time; omitted for every other state."
           }
         }
       },
-      "semantics": "Read-only. Bindings never change once set. Outcome fields are null while the state is queued, dispatched or unknown."
+      "semantics": "Read-only. Bindings never change once set. Outcome fields are null while the state is queued, dispatched or unknown. An abandoned receipt carries abandon_reason; the wallet may resubmit the same bytes under the same intent."
     }
   },
   "examples": {
@@ -707,6 +721,22 @@
         "code": null,
         "fee": null,
         "finality": null
+      },
+      "abandoned_response": {
+        "schema": "postfiat-private-actions-v1",
+        "intent_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "state": "abandoned",
+        "action_hash": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+        "batch_id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+        "transaction_id": null,
+        "inclusion_height": null,
+        "block_hash": null,
+        "state_root": null,
+        "accepted": null,
+        "code": "private_action_abandoned",
+        "fee": null,
+        "finality": null,
+        "abandon_reason": "abandoned by the operator at unix 1793277600: lost after a crash before the certified send"
       }
     }
   }

@@ -27,7 +27,7 @@ const MAX_SNAPSHOT_OUTPUTS = 64;
 const MAX_SNAPSHOT_CIPHERTEXT_BYTES = 2 * 1024 * 1024;
 const MAX_SNAPSHOT_ASSETS = 16;
 const STATES = new Set(['queued', 'dispatched', 'accepted', 'rejected', 'unknown']);
-const NODE_STATES = new Set(['queued', 'dispatched', 'accepted', 'rejected', 'unknown']);
+const NODE_STATES = new Set(['queued', 'dispatched', 'accepted', 'rejected', 'unknown', 'abandoned']);
 const NODE_RECORD_SCHEMA = 'postfiat.private_action_admission.record.v1';
 const NODE_RECEIPT_SCHEMA = 'postfiat.private_action_receipt.v1';
 // Codes of the node's private_action_submit (crates/node/src/private_action_rpc.rs and
@@ -420,6 +420,22 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
             const existing = store.read(request.intentId);
             if (existing) {
                 checkOwner(existing, request);
+                if (existing.state === 'abandoned') {
+                    // The wallet's explicit resubmit of the same bytes after an operator
+                    // abandonment: the record goes back to queued and is sent again to the
+                    // sources that abandoned it. Never done on the gateway's own initiative.
+                    const resubmitted = {
+                        ...existing,
+                        state: 'queued',
+                        code: null,
+                        abandoned_history: [...(existing.abandoned_history || []),
+                            { reason: existing.abandon_reason ?? null, observed_at_ms: existing.updated_at_ms }],
+                        abandon_reason: undefined,
+                        updated_at_ms: Date.now(),
+                    };
+                    store.write(resubmitted);
+                    return { record: resubmitted, fresh: false };
+                }
                 return { record: existing, fresh: false };
             }
             for (const [index, key] of [['by-action', request.actionHash], ['by-batch', request.batchId]]) {
@@ -465,6 +481,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
         const localState = record ? record.state : 'unknown';
         const results = await allSources('private_action_receipt', { intent_id: request.intentId });
         const views = [];
+        const abandonedBy = [];
         for (const result of results) {
             if (!result.ok) continue;
             const report = result.result;
@@ -478,6 +495,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
                 return pending('unknown', 'private_action_source_mismatch');
             }
             views.push(contract);
+            if (contract.state === 'abandoned') abandonedBy.push(result.source);
         }
         const outcome = (c) => JSON.stringify([c.state, c.transaction_id, c.inclusion_height, c.block_hash, c.state_root,
             c.accepted, c.code, c.fee, c.finality]);
@@ -501,6 +519,27 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
                 state_root: first.state_root ?? null, accepted: first.accepted, code: first.code ?? null,
                 fee: first.fee, finality: evidence,
             };
+        }
+        // Abandoned by an operator on a node: terminal until the wallet resubmits the same
+        // bytes (a resubmit cannot double spend: it is the same batch). The gateway notes it
+        // so that resubmit reaches those sources, and never resends on its own.
+        if (abandonedBy.length) {
+            const reason = views.find((c) => c.state === 'abandoned').abandon_reason ?? null;
+            if (record) {
+                await serialized(() => {
+                    const current = store.read(request.intentId);
+                    if (['accepted', 'rejected'].includes(current.state)) return;
+                    const acknowledgedBy = (current.acknowledged_by || []).filter((id) => !abandonedBy.includes(id));
+                    const sources = { ...(current.sources || {}) };
+                    for (const id of abandonedBy) sources[id] = { abandoned: true, code: 'private_action_abandoned' };
+                    store.write({
+                        ...current, state: 'abandoned', code: 'private_action_abandoned', abandon_reason: reason,
+                        sources, acknowledged_by: acknowledgedBy, acknowledged: acknowledgedBy.length > 0,
+                        updated_at_ms: Date.now(),
+                    });
+                });
+            }
+            return { ...pending('abandoned', 'private_action_abandoned'), abandon_reason: reason };
         }
         if (views.some((c) => c.state === 'unknown')) return pending('unknown', views.find((c) => c.state === 'unknown').code ?? null);
         if (views.some((c) => c.state === 'dispatched')) return pending('dispatched', null);

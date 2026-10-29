@@ -41,7 +41,8 @@ pub struct PrivatePoolReceiptRow {
     pub action_hash: String,
     pub action_kind: String,
     pub batch_id: String,
-    /// `accepted` or `rejected`.
+    /// `accepted`, `rejected` or `abandoned` (by the operator; the same
+    /// bytes may be resubmitted under the same intent).
     pub state: String,
     /// The inclusion height, or the received height for an atomic batch
     /// refused before inclusion; the page's sort key.
@@ -53,6 +54,9 @@ pub struct PrivatePoolReceiptRow {
     pub code: String,
     pub fee_charged: u64,
     pub state_effects: String,
+    /// Only for `abandoned`: the operator's reason and Unix time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub abandon_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -133,6 +137,7 @@ fn final_row(record: &PrivateActionRecord, token_height: u64) -> Option<PrivateP
     let state = match record.state {
         PrivateActionState::Accepted => "accepted",
         PrivateActionState::Rejected => "rejected",
+        PrivateActionState::Abandoned => "abandoned",
         _ => return None,
     };
     let finalized_at = outcome
@@ -159,6 +164,8 @@ fn final_row(record: &PrivateActionRecord, token_height: u64) -> Option<PrivateP
         code: outcome.code.clone(),
         fee_charged: outcome.fee_charged,
         state_effects: outcome.state_effects.clone(),
+        abandon_reason: (record.state == PrivateActionState::Abandoned)
+            .then(|| outcome.message.clone()),
     })
 }
 

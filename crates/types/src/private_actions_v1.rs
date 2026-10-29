@@ -131,6 +131,9 @@ pub enum PrivateAdmissionState {
     Accepted,
     Rejected,
     Unknown,
+    /// Abandoned by the operator; the same action bytes may be resubmitted
+    /// under the same intent.
+    Abandoned,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -174,6 +177,10 @@ pub struct PrivateReceiptResponse {
     pub code: Option<String>,
     pub fee: Option<u64>,
     pub finality: Option<PrivateFinalityEvidence>,
+    /// Only for `abandoned`: the operator's reason and Unix time. Omitted
+    /// otherwise, so every other receipt serializes as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub abandon_reason: Option<String>,
 }
 
 fn private_actions_hash_hex(domain: &str, bytes: &[u8]) -> String {

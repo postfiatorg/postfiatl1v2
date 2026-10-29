@@ -66,7 +66,10 @@ function stub(validatorId) {
             }
             if (state.submitError) return { ok: false, error: { code: state.submitError, message: 'stubbed refusal' } };
             const existing = state.records.get(p.intent_id);
-            if (existing) return { ok: true, result: { schema: NODE_RECORD_SCHEMA, existing: true, record: existing } };
+            // Like the node: the same bytes over an abandoned record reserve a fresh one.
+            if (existing && existing.state !== 'abandoned') {
+                return { ok: true, result: { schema: NODE_RECORD_SCHEMA, existing: true, record: existing } };
+            }
             const domain = { chain_id: p.chain_id, genesis_hash: p.genesis_hash, protocol_version: p.protocol_version };
             const parsed = parsePublicAction(p.action_json);
             const batchId = batchIdFor(domain, parsed.canonical);
@@ -89,7 +92,8 @@ function stub(validatorId) {
             const receipt = contract || {
                 schema: 'postfiat-private-actions-v1', intent_id: record.intent_id, state: record.state, action_hash: record.action_hash,
                 batch_id: record.batch_id, transaction_id: null, inclusion_height: null, block_hash: null, state_root: null,
-                accepted: null, code: null, fee: null, finality: null,
+                accepted: null, code: record.state === 'abandoned' ? 'private_action_abandoned' : null, fee: null, finality: null,
+                ...(record.state === 'abandoned' ? { abandon_reason: record.abandon_reason } : {}),
             };
             return { ok: true, result: { schema: NODE_RECEIPT_SCHEMA, intent_id: p.intent_id, state: receipt.state, record, contract_receipt: receipt } };
         }
@@ -427,6 +431,50 @@ async function main() {
         const unknownReceipt = await post(port, 'receipt', unknownIntent);
         assert.strictEqual(unknownReceipt.body.state, 'unknown');
         assert.notStrictEqual(unknownReceipt.body.code, 'private_action_source_mismatch');
+
+        // Abandoned by an operator on the nodes: reported as itself, never resent by the gateway
+        // on its own; the wallet's explicit resubmit reaches every source, and the fresh node
+        // records follow the chain.
+        const lost = variant(15);
+        await post(port, 'submit', lost);
+        for (const s of [a, b]) {
+            Object.assign(s.state.records.get(lost.intent_id), {
+                state: 'abandoned', abandon_reason: 'abandoned by the operator at unix 1700000000: lost',
+            });
+        }
+        const sentBefore = [a, b].map((s) => submitsFor(s, lost.intent_id).length);
+        const abandonedReceipt = await post(port, 'receipt', lost);
+        assert.strictEqual(abandonedReceipt.statusCode, 200, JSON.stringify(abandonedReceipt.body));
+        assert.strictEqual(abandonedReceipt.body.state, 'abandoned');
+        assert.strictEqual(abandonedReceipt.body.code, 'private_action_abandoned');
+        assert.strictEqual(abandonedReceipt.body.abandon_reason, 'abandoned by the operator at unix 1700000000: lost');
+        assert.deepStrictEqual(Object.keys(abandonedReceipt.body).sort(),
+            Object.keys(schema.examples.receipt.abandoned_response).sort());
+        assert.strictEqual((await post(port, 'receipt', lost)).body.state, 'abandoned');
+        assert.deepStrictEqual([a, b].map((s) => submitsFor(s, lost.intent_id).length), sentBefore,
+            'an abandoned intent is never resent on the gateway\'s own initiative');
+        const resubmitted = await post(port, 'submit', lost);
+        assert.strictEqual(resubmitted.statusCode, 202, JSON.stringify(resubmitted.body));
+        assert.strictEqual(resubmitted.body.state, 'queued');
+        for (const [index, s] of [a, b].entries()) {
+            assert.strictEqual(submitsFor(s, lost.intent_id).length, sentBefore[index] + 1, s.validatorId);
+            assert.strictEqual(submitsFor(s, lost.intent_id).at(-1).action_json, lost.action_json);
+            assert.strictEqual(s.state.records.get(lost.intent_id).state, 'queued', 'a fresh node record');
+        }
+        assert.strictEqual((await post(port, 'submit', lost)).body.state, 'queued');
+        assert.strictEqual(submitsFor(a, lost.intent_id).length, sentBefore[0] + 1, 'no further resend');
+        const landed = {
+            schema: 'postfiat-private-actions-v1', state: 'accepted', intent_id: lost.intent_id,
+            action_hash: resubmitted.body.action_hash, batch_id: resubmitted.body.batch_id,
+            transaction_id: h96('d8'), inclusion_height: 1180, block_hash: h96('e8'), state_root: h96('f8'),
+            accepted: true, code: 'accepted', fee: 10,
+            finality: { kind: 'validator_quorum_block_certificate_v1', height: 1180, block_hash: h96('e8'), state_root: h96('f8'), quorum: 5, validator_count: 6, certificate_json: '{}' },
+        };
+        a.state.receipts.set(lost.intent_id, landed);
+        b.state.receipts.set(lost.intent_id, landed);
+        const settled = await post(port, 'receipt', lost);
+        assert.strictEqual(settled.body.state, 'accepted');
+        assert.strictEqual(settled.body.abandon_reason, undefined);
 
         // Crash between the reservation write and the dispatch.
         const crashStore = fs.mkdtempSync(path.join(os.tmpdir(), 'pft-private-crash-'));

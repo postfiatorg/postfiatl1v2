@@ -136,10 +136,10 @@ fn contract_receipt(record: &PrivateActionRecord) -> postfiat_types::PrivateRece
         PrivateActionState::Dispatched => postfiat_types::PrivateAdmissionState::Dispatched,
         PrivateActionState::Accepted => postfiat_types::PrivateAdmissionState::Accepted,
         PrivateActionState::Rejected => postfiat_types::PrivateAdmissionState::Rejected,
-        PrivateActionState::Unknown | PrivateActionState::Abandoned => {
-            postfiat_types::PrivateAdmissionState::Unknown
-        }
+        PrivateActionState::Unknown => postfiat_types::PrivateAdmissionState::Unknown,
+        PrivateActionState::Abandoned => postfiat_types::PrivateAdmissionState::Abandoned,
     };
+    let abandoned = record.state == PrivateActionState::Abandoned;
     let outcome = record.outcome.as_ref();
     let inclusion = outcome.and_then(|outcome| outcome.inclusion.as_ref());
     postfiat_types::PrivateReceiptResponse {
@@ -152,9 +152,14 @@ fn contract_receipt(record: &PrivateActionRecord) -> postfiat_types::PrivateRece
         inclusion_height: inclusion.map(|inclusion| inclusion.height),
         block_hash: inclusion.map(|inclusion| inclusion.block_hash.clone()),
         state_root: inclusion.map(|inclusion| inclusion.state_root.clone()),
-        accepted: outcome.map(|outcome| outcome.accepted),
+        // An abandonment is not a chain outcome: no accepted flag and no fee.
+        accepted: outcome
+            .filter(|_| !abandoned)
+            .map(|outcome| outcome.accepted),
         code: outcome.map(|outcome| outcome.code.clone()),
-        fee: outcome.map(|outcome| outcome.fee_charged),
+        fee: outcome
+            .filter(|_| !abandoned)
+            .map(|outcome| outcome.fee_charged),
         finality: inclusion.map(|inclusion| postfiat_types::PrivateFinalityEvidence {
             kind: PRIVATE_ACTION_FINALITY_KIND.to_string(),
             height: inclusion.height,
@@ -166,6 +171,9 @@ fn contract_receipt(record: &PrivateActionRecord) -> postfiat_types::PrivateRece
                 .map_or(0, |validators| validators.len() as u32),
             certificate_json: inclusion.certificate_json.clone(),
         }),
+        abandon_reason: outcome
+            .filter(|_| abandoned)
+            .map(|outcome| outcome.message.clone()),
     }
 }
 

@@ -119,10 +119,12 @@
         assert!(steps.is_empty());
         let receipt = private_action_receipt(&fixture.data_dir, &request.intent_id).unwrap();
         assert_eq!(receipt.state, "abandoned");
-        assert_eq!(
-            receipt.contract_receipt.unwrap().state,
-            postfiat_types::PrivateAdmissionState::Unknown
-        );
+        let contract = receipt.contract_receipt.unwrap();
+        assert_eq!(contract.state, postfiat_types::PrivateAdmissionState::Abandoned);
+        assert_eq!(contract.code.as_deref(), Some("private_action_abandoned"));
+        assert_eq!((contract.accepted, contract.fee), (None, None));
+        let reason = contract.abandon_reason.expect("abandon reason");
+        assert!(reason.contains("1700000000") && reason.contains("lost after a crash"), "{reason}");
 
         // The wallet resubmits the same bytes: a fresh `queued` record supersedes
         // the abandoned one under the same intent, action hash and batch id.
@@ -175,4 +177,56 @@
         assert_eq!(settled.record.state, PrivateActionState::Accepted);
         assert_eq!(settled.history.len(), 5);
         fs::remove_dir_all(fixture.data_dir).ok();
+    }
+
+    #[test]
+    fn private_pool_receipts_list_an_abandoned_record_as_itself() {
+        let fixture = pricing_read_fixture(700, |_, _| {});
+        let swap = serde_json::json!({ "kind": "shielded_swap_v1", "swap_json": "{}" });
+        let mut record = receipt_test_record("abandoned", None, None, 690, "session-a", swap);
+        record.state = PrivateActionState::Abandoned;
+        record.outcome = Some(PrivateActionOutcome {
+            accepted: false,
+            code: "private_action_abandoned".to_string(),
+            message: "abandoned by the operator at unix 1700000000: lost".to_string(),
+            fee_charged: 0,
+            state_effects: "none".to_string(),
+            inclusion: None,
+        });
+        PrivateActionAdmissionStore::open(&fixture.data_dir)
+            .unwrap()
+            .write(record.clone())
+            .unwrap();
+        let token = private_pool_snapshot_for(&fixture.data_dir).snapshot_token;
+        let report = private_pool_receipts(PrivatePoolReceiptsOptions {
+            data_dir: fixture.data_dir.clone(),
+            snapshot_token: token,
+            cursor: None,
+            limit: None,
+            address: None,
+            session_scope: None,
+        })
+        .expect("receipts");
+        let rows = report.items.expect("rows");
+        let row = rows
+            .iter()
+            .find(|row| row.intent_id == record.intent_id)
+            .expect("abandoned row");
+        assert_eq!(row.state, "abandoned");
+        assert_eq!(row.code, "private_action_abandoned");
+        assert_eq!((row.fee_charged, row.inclusion_height), (0, None));
+        assert_eq!(
+            row.abandon_reason.as_deref(),
+            Some("abandoned by the operator at unix 1700000000: lost")
+        );
+        // Every other row keeps its bytes: the field is omitted when absent.
+        let mut accepted = row.clone();
+        accepted.abandon_reason = None;
+        assert!(!serde_json::to_string(&accepted).unwrap().contains("abandon_reason"));
+        let receipt = private_action_receipt(&fixture.data_dir, &record.intent_id).unwrap();
+        assert_eq!(
+            receipt.contract_receipt.unwrap().state,
+            postfiat_types::PrivateAdmissionState::Abandoned
+        );
+        fs::remove_dir_all(&fixture.data_dir).ok();
     }

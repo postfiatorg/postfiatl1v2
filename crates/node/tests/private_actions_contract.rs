@@ -381,6 +381,22 @@ fn schema_examples_match_the_shared_types() {
     round_trip::<PrivateActionRequest>(&examples["receipt"]["request"]);
     round_trip::<PrivateReceiptResponse>(&examples["receipt"]["response"]);
     round_trip::<PrivateReceiptResponse>(&examples["receipt"]["pending_response"]);
+    round_trip::<PrivateReceiptResponse>(&examples["receipt"]["abandoned_response"]);
+    let abandoned: PrivateReceiptResponse =
+        serde_json::from_value(examples["receipt"]["abandoned_response"].clone())
+            .expect("abandoned");
+    assert_eq!(
+        abandoned.state,
+        postfiat_types::PrivateAdmissionState::Abandoned
+    );
+    assert!(abandoned.abandon_reason.is_some());
+    // Every other receipt keeps its bytes: the new field is omitted when absent.
+    assert!(!serde_json::to_string(
+        &serde_json::from_value::<PrivateReceiptResponse>(examples["receipt"]["response"].clone())
+            .expect("accepted")
+    )
+    .expect("encode")
+    .contains("abandon_reason"));
     let mut extra = examples["submit"]["request"].clone();
     extra["note"] = json!("refused");
     assert!(serde_json::from_value::<PrivateActionRequest>(extra).is_err());
