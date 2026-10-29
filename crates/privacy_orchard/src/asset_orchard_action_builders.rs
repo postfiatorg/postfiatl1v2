@@ -1412,7 +1412,8 @@ pub fn build_asset_orchard_swap_action(
     genesis_hash: [u8; 32],
     protocol_version: u32,
     input_notes: [AssetOrchardWalletNote; ASSET_ORCHARD_LEG_COUNT],
-    output_note_seed_hexes: [String; ASSET_ORCHARD_LEG_COUNT],
+    // Borrowed so the caller's owner (e.g. `Zeroizing<String>`) is the only copy; issue #181.
+    output_note_seed_hexes: [&str; ASSET_ORCHARD_LEG_COUNT],
     pool_output_commitments: &[String],
     pricing_claim: crate::asset_orchard::AssetOrchardPricingClaim,
 ) -> Result<AssetOrchardSwapBuildResult, AssetOrchardError> {
@@ -1485,7 +1486,7 @@ pub fn build_asset_orchard_swap_action(
             protocol_version,
             &input_notes[1].asset_id,
             input_notes[1].value,
-            &output_note_seed_hexes[0],
+            output_note_seed_hexes[0],
             output_rhos[0],
         )?,
         build_asset_orchard_wallet_note_with_rho(
@@ -1494,7 +1495,7 @@ pub fn build_asset_orchard_swap_action(
             protocol_version,
             &input_notes[0].asset_id,
             input_notes[0].value,
-            &output_note_seed_hexes[1],
+            output_note_seed_hexes[1],
             output_rhos[1],
         )?,
     ];
@@ -1599,6 +1600,7 @@ fn validate_wallet_note_for_swap(
     Ok(())
 }
 
+// see issue #181
 fn wallet_note_to_swap_witness(
     pool_domain: pallas::Base,
     note: &AssetOrchardWalletNote,
@@ -2012,4 +2014,100 @@ fn signed_asset_orchard_action_from_witnesses(
         .collect::<Result<Vec<_>, AssetOrchardError>>()?;
     action.validate()?;
     Ok(action)
+}
+
+#[cfg(test)]
+mod secret_lifetime_tests {
+    use super::*;
+    use crate::asset_orchard::{build_asset_orchard_wallet_note, AssetOrchardPricingClaim};
+    use postfiat_crypto_provider::bytes_to_hex;
+    use zeroize::Zeroizing;
+
+    const CHAIN_ID: &str = "postfiat-swap-seed-test";
+    const GENESIS_HASH: [u8; 32] = [5u8; 32];
+    const PROTOCOL_VERSION: u32 = 1;
+
+    fn input_note(asset_id: &str, value: u64, seed: u8) -> AssetOrchardWalletNote {
+        build_asset_orchard_wallet_note(
+            CHAIN_ID,
+            GENESIS_HASH,
+            PROTOCOL_VERSION,
+            asset_id,
+            value,
+            &bytes_to_hex(&[seed; 32]),
+        )
+        .expect("input note")
+    }
+
+    fn pricing_claim() -> AssetOrchardPricingClaim {
+        AssetOrchardPricingClaim {
+            nav_epoch: 1,
+            reserve_packet_hash: "00".repeat(32),
+            ratio_numerator: 1,
+            ratio_denominator: 1,
+            mode: "exact".to_string(),
+            band_bps: 0,
+            base_asset_tag_lo: 0,
+            base_asset_tag_hi: 0,
+            quote_asset_tag_lo: 0,
+            quote_asset_tag_hi: 0,
+        }
+    }
+
+    fn swap_with_seeds(
+        inputs: [AssetOrchardWalletNote; ASSET_ORCHARD_LEG_COUNT],
+        seeds: &[Zeroizing<String>; ASSET_ORCHARD_LEG_COUNT],
+    ) -> AssetOrchardError {
+        let commitments = inputs
+            .iter()
+            .map(|note| note.output_commitment.as_hex().to_string())
+            .collect::<Vec<_>>();
+        build_asset_orchard_swap_action(
+            CHAIN_ID,
+            GENESIS_HASH,
+            PROTOCOL_VERSION,
+            inputs,
+            [seeds[0].as_str(), seeds[1].as_str()],
+            &commitments,
+            pricing_claim(),
+        )
+        .expect_err("swap must fail before proving")
+    }
+
+    #[test]
+    fn swap_builder_borrows_zeroizing_output_seeds_and_keeps_error_codes() {
+        let valid = Zeroizing::new(bytes_to_hex(&[41u8; 32]));
+        let bad_hex = Zeroizing::new("zz".repeat(32));
+        let short = Zeroizing::new("ab".repeat(31));
+
+        let duplicate = swap_with_seeds(
+            [input_note("asset-a", 10, 31), input_note("asset-a", 10, 31)],
+            &[valid.clone(), valid.clone()],
+        );
+        assert_eq!(duplicate.code(), "duplicate_asset_orchard_input_note");
+
+        for (seeds, code) in [
+            ([bad_hex.clone(), valid.clone()], "invalid_hex"),
+            ([valid.clone(), bad_hex.clone()], "invalid_hex"),
+            ([short.clone(), valid.clone()], "undersized_hex"),
+            ([valid.clone(), short.clone()], "undersized_hex"),
+        ] {
+            let bad_seed = if seeds[0] == valid { &seeds[1] } else { &seeds[0] };
+            let direct = build_asset_orchard_wallet_note(
+                CHAIN_ID,
+                GENESIS_HASH,
+                PROTOCOL_VERSION,
+                "asset-a",
+                10,
+                bad_seed,
+            )
+            .expect_err("direct builder rejects seed");
+            let error = swap_with_seeds(
+                [input_note("asset-a", 10, 31), input_note("asset-b", 20, 32)],
+                &seeds,
+            );
+            assert_eq!(error.code(), code);
+            assert_eq!(error.to_string(), direct.to_string());
+        }
+    }
 }

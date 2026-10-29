@@ -348,7 +348,16 @@ impl From<AssetOrchardPoint> for String {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+impl Zeroize for AssetOrchardPoint {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+/// Note opening for a wallet note. Every field is custody material for a private wallet, so the
+/// owner wipes them on drop and `Debug` is redacted; the serde form is unchanged. `Clone` exists
+/// only because the embedding `AssetOrchardWalletNote` is cloned by the action builders.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetOrchardPublicNoteOpening {
     pub diversifier: String,
     pub g_d: AssetOrchardPoint,
@@ -360,10 +369,36 @@ pub struct AssetOrchardPublicNoteOpening {
     pub value: u64,
     pub rho: AssetOrchardFieldElement,
     pub psi: AssetOrchardFieldElement,
-    pub rcm: String,
+    pub rcm: AssetOrchardSecret<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+impl Zeroize for AssetOrchardPublicNoteOpening {
+    fn zeroize(&mut self) {
+        self.diversifier.zeroize();
+        self.g_d.zeroize();
+        self.pk_d.zeroize();
+        self.asset_tag_lo.zeroize();
+        self.asset_tag_hi.zeroize();
+        self.value.zeroize();
+        self.rho.zeroize();
+        self.psi.zeroize();
+        self.rcm.0.zeroize();
+    }
+}
+
+impl Drop for AssetOrchardPublicNoteOpening {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+impl std::fmt::Debug for AssetOrchardPublicNoteOpening {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("AssetOrchardPublicNoteOpening([redacted])")
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetOrchardWalletNote {
     pub schema: String,
     pub pool_id: String,
@@ -378,6 +413,18 @@ pub struct AssetOrchardWalletNote {
     pub rseed: AssetOrchardSecret<String>,
 }
 
+/// Prints only public chain data; the asset, amount, opening and keys are redacted.
+impl std::fmt::Debug for AssetOrchardWalletNote {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AssetOrchardWalletNote")
+            .field("schema", &self.schema)
+            .field("pool_id", &self.pool_id)
+            .field("pool_domain", &self.pool_domain)
+            .field("output_commitment", &self.output_commitment)
+            .finish_non_exhaustive()
+    }
+}
+
 impl AssetOrchardPublicNoteOpening {
     pub fn from_note(note: &AssetNoteOpening) -> Result<Self, AssetOrchardError> {
         note.validate()?;
@@ -390,7 +437,7 @@ impl AssetOrchardPublicNoteOpening {
             value: note.value,
             rho: AssetOrchardFieldElement::from_field(note.rho),
             psi: AssetOrchardFieldElement::from_field(note.psi),
-            rcm: bytes_to_hex(&scalar_enc(note.rcm)),
+            rcm: AssetOrchardSecret::new(bytes_to_hex(&scalar_enc(note.rcm))),
         })
     }
 
@@ -5251,5 +5298,95 @@ mod tests {
                 .code(),
             "identity_point"
         );
+    }
+
+    fn secret_lifetime_wallet_note() -> AssetOrchardWalletNote {
+        build_asset_orchard_wallet_note(
+            "postfiat-secret-lifetime-test",
+            [3u8; 32],
+            1,
+            "asset-secret-lifetime",
+            4_242_424_242,
+            &bytes_to_hex(&[21u8; 32]),
+        )
+        .expect("wallet note")
+    }
+
+    #[test]
+    fn note_opening_and_wallet_note_debug_redact_custody_fields() {
+        let note = secret_lifetime_wallet_note();
+        let opening = &note.note;
+        let forbidden = [
+            opening.rcm.as_str().to_string(),
+            opening.rho.as_hex().to_string(),
+            opening.psi.as_hex().to_string(),
+            opening.diversifier.clone(),
+            opening.g_d.as_hex().to_string(),
+            opening.pk_d.as_hex().to_string(),
+            opening.asset_tag_lo.to_string(),
+            opening.asset_tag_hi.to_string(),
+            note.value.to_string(),
+            note.asset_id.clone(),
+            "rcm".to_string(),
+            "rho".to_string(),
+            "psi".to_string(),
+            "value".to_string(),
+        ];
+        let renders = [
+            format!("{opening:?}"),
+            format!("{opening:#?}"),
+            format!("{note:?}"),
+            format!("{note:#?}"),
+        ];
+        for render in &renders {
+            for value in &forbidden {
+                assert!(
+                    !render.contains(value.as_str()),
+                    "Debug leaked {value}: {render}"
+                );
+            }
+        }
+        assert!(renders[0].contains("redacted"));
+        assert!(renders[2].contains(note.output_commitment.as_hex()));
+    }
+
+    #[test]
+    fn note_opening_zeroize_used_by_drop_clears_every_custody_field() {
+        let mut note = secret_lifetime_wallet_note();
+        note.note.zeroize();
+        let opening = &note.note;
+        for field in [
+            opening.diversifier.as_str(),
+            opening.g_d.as_hex(),
+            opening.pk_d.as_hex(),
+            opening.rho.as_hex(),
+            opening.psi.as_hex(),
+            opening.rcm.as_str(),
+        ] {
+            assert!(field.is_empty());
+        }
+        assert_eq!(
+            (opening.asset_tag_lo, opening.asset_tag_hi, opening.value),
+            (0, 0, 0)
+        );
+    }
+
+    #[test]
+    fn note_opening_and_wallet_note_serde_wire_format_is_pinned() {
+        let note = secret_lifetime_wallet_note();
+        let note_json = serde_json::to_vec(&note).expect("wallet note json");
+        let opening_json = serde_json::to_vec(&note.note).expect("opening json");
+        assert_eq!(
+            bytes_to_hex(&Sha3_256::digest(&note_json)),
+            "3b73943dc92e0fa071ab506b1205f413aa5ff5583064fbbe342d7969df971974"
+        );
+        assert_eq!(
+            bytes_to_hex(&Sha3_256::digest(&opening_json)),
+            "fcd8783f021f1aa306365c8ecbf0340fc9ab2d38501a25ed39dbbcaa64e578a3"
+        );
+        let decoded: AssetOrchardWalletNote =
+            serde_json::from_slice(&note_json).expect("decode wallet note");
+        assert_eq!(serde_json::to_vec(&decoded).expect("re-encode"), note_json);
+        assert!(decoded == note);
     }
 }

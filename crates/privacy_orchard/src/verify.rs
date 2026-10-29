@@ -2645,6 +2645,7 @@ pub fn orchard_spending_key_from_zip32_seed(
             "Orchard ZIP32 account index must be below 2^31",
         )
     })?;
+    // see issue #181
     let spending_key = SpendingKey::from_zip32_seed(seed, POSTFIAT_ORCHARD_COIN_TYPE, account)
         .map_err(|error| {
             OrchardVerificationError::new("zip32_spending_key_derivation_failed", error.to_string())

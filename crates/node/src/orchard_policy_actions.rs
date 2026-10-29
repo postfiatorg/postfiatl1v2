@@ -1807,7 +1807,10 @@ pub fn create_asset_orchard_swap_action_verified(
         genesis_hash_32,
         genesis.protocol_version,
         input_notes,
-        options.output_note_seed_hexes,
+        [
+            options.output_note_seed_hexes[0].as_str(),
+            options.output_note_seed_hexes[1].as_str(),
+        ],
         &pool.output_commitments,
         read_json_file::<postfiat_privacy_orchard::AssetOrchardPricingClaim>(
             &options.pricing_claim_file,
@@ -1965,7 +1968,7 @@ fn asset_orchard_ingress_note_from_public(
         value: note.value,
         rho: note.rho.as_hex().to_string(),
         psi: note.psi.as_hex().to_string(),
-        rcm: note.rcm.clone(),
+        rcm: note.rcm.expose_secret().clone(),
     }
 }
 
@@ -3549,7 +3552,7 @@ fn asset_orchard_public_note_from_ingress(
         value: note.value,
         rho: AssetOrchardFieldElement::parse_hex(note.rho.clone()).map_err(invalid_data)?,
         psi: AssetOrchardFieldElement::parse_hex(note.psi.clone()).map_err(invalid_data)?,
-        rcm: note.rcm.clone(),
+        rcm: postfiat_privacy_orchard::asset_orchard::AssetOrchardSecret::new(note.rcm.clone()),
     })
 }
 

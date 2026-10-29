@@ -7,7 +7,7 @@ use group::{prime::PrimeCurveAffine, Curve, GroupEncoding};
 use pasta_curves::pallas;
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use sha3::{Digest, Sha3_256};
-use zeroize::Zeroizing;
+use zeroize::{DefaultIsZeroes, Zeroizing};
 
 use crate::asset_orchard::{
     asset_orchard_incoming_viewing_key_from_seed, build_asset_orchard_wallet_note_with_rho,
@@ -22,6 +22,19 @@ const TAG_BYTES: usize = 16;
 const HEADER_BYTES: usize = ASSET_ORCHARD_NOTE_CIPHERTEXT_MAGIC.len() + EPK_BYTES + NONCE_BYTES;
 const KDF_DOMAIN: &[u8] = b"postfiat.asset_orchard.note_encryption.kdf.v1";
 const AAD_DOMAIN: &[u8] = b"postfiat.asset_orchard.note_encryption.aad.v1";
+
+/// pasta_curves 0.5 implements no `Zeroize` for its scalars or points, but `pallas::Scalar`,
+/// `pallas::Base` and `pallas::Affine` are `Copy + Default` with all-zero defaults (zero, identity),
+/// so this owner lets `Zeroizing` overwrite them on drop. Copies made inside curve arithmetic
+/// (projective points, registers) are outside its reach.
+#[derive(Clone, Copy, Default)]
+struct SecretCurveValue<T: Copy + Default>(T);
+
+impl<T: Copy + Default> DefaultIsZeroes for SecretCurveValue<T> {}
+
+fn secret_curve_value<T: Copy + Default>(value: T) -> Zeroizing<SecretCurveValue<T>> {
+    Zeroizing::new(SecretCurveValue(value))
+}
 
 pub fn encrypt_asset_orchard_wallet_note(
     chain_id: &str,
@@ -49,23 +62,23 @@ fn encrypt_asset_orchard_wallet_note_with_rng<R: RngCore + CryptoRng>(
         AssetOrchardSwapAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
     validate_asset_orchard_wallet_note_for_pool(note, pool_domain)?;
 
-    let g_d = note.note.g_d.to_affine()?;
-    let pk_d = note.note.pk_d.to_affine()?;
-    let esk = loop {
+    let g_d = secret_curve_value(note.note.g_d.to_affine()?);
+    let pk_d = secret_curve_value(note.note.pk_d.to_affine()?);
+    let esk = secret_curve_value(loop {
         let candidate = pallas::Scalar::random(&mut *rng);
         if !bool::from(candidate.is_zero()) {
             break candidate;
         }
-    };
-    let epk = (pallas::Point::from(g_d) * esk).to_affine();
+    });
+    let epk = (pallas::Point::from(g_d.0) * esk.0).to_affine();
     if bool::from(epk.is_identity()) {
         return Err(AssetOrchardError::new(
             "invalid_asset_orchard_note_ephemeral_key",
             "asset-orchard note encryption derived an identity ephemeral key",
         ));
     }
-    let shared = (pallas::Point::from(pk_d) * esk).to_affine();
-    if bool::from(shared.is_identity()) {
+    let shared = secret_curve_value((pallas::Point::from(pk_d.0) * esk.0).to_affine());
+    if bool::from(shared.0.is_identity()) {
         return Err(AssetOrchardError::new(
             "invalid_asset_orchard_note_shared_secret",
             "asset-orchard note encryption derived an identity shared secret",
@@ -73,14 +86,16 @@ fn encrypt_asset_orchard_wallet_note_with_rng<R: RngCore + CryptoRng>(
     }
 
     let epk_bytes = epk.to_bytes();
+    let pk_d_bytes = Zeroizing::new(pk_d.0.to_bytes());
+    let shared_bytes = Zeroizing::new(shared.0.to_bytes());
     let key = Zeroizing::new(note_encryption_key(
         chain_id,
         genesis_hash,
         protocol_version,
         note.output_commitment.as_hex(),
         &epk_bytes,
-        &pk_d.to_bytes(),
-        &shared.to_bytes(),
+        &pk_d_bytes,
+        &shared_bytes,
     ));
     let aad = note_encryption_aad(
         chain_id,
@@ -158,8 +173,8 @@ pub fn decrypt_asset_orchard_wallet_note(
         ));
     }
 
-    let ivk = asset_orchard_incoming_viewing_key_from_seed(note_seed_hex)?;
-    let shared = (pallas::Point::from(epk) * ivk).to_affine();
+    let ivk = secret_curve_value(asset_orchard_incoming_viewing_key_from_seed(note_seed_hex)?);
+    let shared = secret_curve_value((pallas::Point::from(epk) * ivk.0).to_affine());
     let pool_domain =
         AssetOrchardSwapAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
     let template = build_asset_orchard_wallet_note_with_rho(
@@ -171,15 +186,16 @@ pub fn decrypt_asset_orchard_wallet_note(
         note_seed_hex,
         pallas::Base::one(),
     )?;
-    let pk_d = template.note.pk_d.to_affine()?;
+    let pk_d_bytes = Zeroizing::new(template.note.pk_d.to_affine()?.to_bytes());
+    let shared_bytes = Zeroizing::new(shared.0.to_bytes());
     let key = Zeroizing::new(note_encryption_key(
         chain_id,
         genesis_hash,
         protocol_version,
         expected_output_commitment,
         &epk_bytes,
-        &pk_d.to_bytes(),
-        &shared.to_bytes(),
+        &pk_d_bytes,
+        &shared_bytes,
     ));
     let aad = note_encryption_aad(
         chain_id,
@@ -202,6 +218,7 @@ pub fn decrypt_asset_orchard_wallet_note(
         return Ok(None);
     };
     let plaintext = Zeroizing::new(plaintext);
+    // The typed copies (`note`, `template`, `expected`) wipe their opening and keys on drop.
     let note: AssetOrchardWalletNote = serde_json::from_slice(&plaintext).map_err(|error| {
         AssetOrchardError::new(
             "invalid_asset_orchard_note_plaintext",
@@ -215,7 +232,7 @@ pub fn decrypt_asset_orchard_wallet_note(
             "decrypted asset-orchard note does not match the chain output commitment",
         ));
     }
-    let rho = note.note.rho.to_field()?;
+    let rho = secret_curve_value(note.note.rho.to_field()?);
     let expected = build_asset_orchard_wallet_note_with_rho(
         chain_id,
         genesis_hash,
@@ -223,7 +240,7 @@ pub fn decrypt_asset_orchard_wallet_note(
         &note.asset_id,
         note.value,
         note_seed_hex,
-        rho,
+        rho.0,
     )?;
     if note != expected {
         return Err(AssetOrchardError::new(
@@ -372,5 +389,46 @@ mod tests {
         )
         .expect("tampered scan")
         .is_none());
+    }
+
+    #[test]
+    fn note_ciphertext_bytes_are_pinned() {
+        let chain_id = "postfiat-note-encryption-test";
+        let genesis_hash = [7u8; 32];
+        let seed = bytes_to_hex(&[11u8; 32]);
+        let note = crate::build_asset_orchard_wallet_note(
+            chain_id,
+            genesis_hash,
+            1,
+            "asset-secret-label",
+            42,
+            &seed,
+        )
+        .expect("build recipient note");
+        let encrypted = encrypt_asset_orchard_wallet_note_with_rng(
+            chain_id,
+            genesis_hash,
+            1,
+            &note,
+            &mut StdRng::from_seed([13u8; 32]),
+        )
+        .expect("encrypt recipient note")
+        .to_bytes()
+        .expect("ciphertext bytes");
+        assert_eq!(
+            bytes_to_hex(&Sha3_256::digest(&encrypted)),
+            "1df41ba0f38a66decb84814ec9c29f3088976b6a2f4b258693bf2c2df4d5c4d7"
+        );
+        let recovered = decrypt_asset_orchard_wallet_note(
+            chain_id,
+            genesis_hash,
+            1,
+            &seed,
+            note.output_commitment.as_hex(),
+            &encrypted,
+        )
+        .expect("scan ciphertext")
+        .expect("recipient match");
+        assert!(recovered == note);
     }
 }
