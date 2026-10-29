@@ -345,7 +345,9 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
         const node = report?.record;
         return report?.schema === NODE_RECORD_SCHEMA && node?.schema === NODE_RECORD_SCHEMA
             && bindingsMatch(node, record) && node.action_json === record.action_json
-            && JSON.stringify(node.domain) === JSON.stringify(nodeDomain(record)) && NODE_STATES.has(node.state);
+            // Field by field: rpc-serve returns objects with sorted keys.
+            && Object.entries(nodeDomain(record)).every(([key, value]) => node.domain?.[key] === value)
+            && Object.keys(node.domain || {}).length === 5 && NODE_STATES.has(node.state);
     }
 
     // One gateway state from the per-source views.
@@ -523,7 +525,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
         }
         const pinned = (report) => JSON.stringify([report.snapshot_token, report.finalized_height,
             report.finalized_block_hash, report.finalized_state_root, report.counts]);
-        if (!reports[0].snapshot_token || pinned(reports[0]) !== pinned(reports[1])) {
+        if (!reports[0].snapshot_token || reports.some((report) => pinned(report) !== pinned(reports[0]))) {
             throw refusal(503, 'private_snapshot_sources_diverged');
         }
         return reports[0];

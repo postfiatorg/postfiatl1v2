@@ -37,9 +37,14 @@ jobs:
         with:
           node-version: "20.20.2"
           cache: npm
-          cache-dependency-path: wallet-web/package-lock.json
+          cache-dependency-path: |
+            wallet-web/package-lock.json
+            wallet-proxy/package-lock.json
       - name: Install wallet test dependencies
-        run: npm ci --prefix wallet-web
+        # wallet-proxy's modules let crates/node/tests/private_actions_gateway.rs run the real proxy.
+        run: |
+          npm ci --prefix wallet-web
+          npm ci --prefix wallet-proxy
       - name: A666 recovery CI rejection policy
         run: |
           scripts/test-check-a666-recovery-ci-policy
