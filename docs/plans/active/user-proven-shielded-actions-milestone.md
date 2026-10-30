@@ -57,11 +57,12 @@ In `crates/node/tests/fixtures/private-actions-v1/`, shared types in `crates/typ
 ## S3 — the validator-owned admission and round service (2–4 days left)
 
 - [x] S3.1 *(this lane)* A validator-side service that accepts a verified atomic batch and runs proof, spend, retained-anchor, nullifier, pricing and policy checks before ordinary proposal, vote and apply (`968da908`, `d7de5ec7`): `crates/node/src/private_action_admission.rs` re-verifies each batch against the current state (`verify_private_batch`) and hands only the exact reserved batch to a round; `crates/node/src/private_action_rpc.rs` serves `private_action_submit` and `private_action_receipt` behind the operator switch.
-- [ ] S3.2 *(this lane)* Proposer routing, height ownership, quorum, catch-up and durable intent reconciliation.
+- [x] S3.2 *(this lane)* Proposer routing, height ownership, quorum, catch-up and durable intent reconciliation.
+  - Remaining: done. The proposer does not rotate on an idle chain, so the gateway submits to every source (`d9095797`, `unreservedSources` in `wallet-proxy/private-actions.js:372`).
   - [x] Proposer routing and durable reconciliation (`968da908`): a `dispatched` record is reconciled from the chain by batch id and never dispatched again, and only the local proposer dispatches.
   - [x] A certified round reaching quorum across two validators, with both sources reconciling the same record (`crates/node/tests/private_actions_gateway.rs`). A one-validator topology cannot commit a private action: the round needs at least one active peer.
   - [x] A stuck `unknown` record settles as accepted when its batch later lands (`e37d77fd`). An operator resolves one that does not land with `postfiat-node private-action-resolve` (`657ce706`): settle it from the chain, or abandon it so the wallet can resubmit the same bytes, with the abandoned record kept for audit. The wallet contract reports `abandoned` as itself (`ea2213d0`).
-  - [ ] Height ownership, quorum and catch-up across six validators, shown by S6.
+  - [x] Height ownership, quorum and catch-up across six validators, shown by S6 (`e37d77fd`, `e5f8f5b8`, `14c8e43e`): each validator holds the record until it is the proposer, every round is certified 5 of 6, and each receipt is checked against another validator's blocks. After a crash with the record `dispatched`, the next proposer lands the batch and the crashed validator settles from the chain (catch-up: a validator that misses rounds and syncs blocks before settling is not tested; every round runs with all six).
 - [ ] S3.3 *(this lane)* Retire the HTTP-side certification: `transport-peer-certified-batch-round --key-file` (`wallet-proxy/navswap-shielded.js:1421`), the `/asset-orchard/swap-batch` call (`:2292`) and the swap execution that certifies it (`:2386`).
   - The `shield_batch_*` builders (`crates/node/src/rpc_cli.rs:2086`) may be reused after review; a built batch is never reported as committed.
   - [x] The switch `WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION` (default `on`; `wallet-proxy/legacy-shielded-certification.js`). When `off`, the three legacy routes answer 410 `legacy_shielded_certification_retired` and the proxy reads no validator key file, data directory or local Asset-Orchard service; the user-proven routes work without them (`wallet-proxy/test_legacy_shielded_certification.js`). Cutover: the apps on `/api/private/v1/`, the switch `off` on the public deployment, then removal.
@@ -114,7 +115,8 @@ halt flag and the ratio within the band.
     - A stopped source refuses the snapshot with 503 `private_snapshot_unavailable` until it serves again.
     - Sources at different finalized heights refuse it with 503 `private_snapshot_sources_diverged`.
 - [ ] S6.4 *(this lane, wallet team)* Fresh-key full rescan and page boundaries.
-  - [x] Lane part: a fresh wallet that holds only its note seeds decrypts every retained output from `private_pool_page`, with a page limit of 2 below the total, and matches each asset's live total.
+  - [x] Lane part (`e37d77fd`, `110997f1`, `f8b9a838`): a fresh wallet that holds only its note seeds decrypts every retained output from `private_pool_page`, with an outputs limit of 2 and an assets limit of 1 below the totals, and matches each asset's live total. Retained snapshot points keep every page byte-identical across 15 later blocks, and the gateway pages every section to completeness.
+  - [ ] Wallet team part: the app's fresh-key rescan across page boundaries (S4.4).
 
 ## S7 — readiness and secret inspection (1–2 days left)
 
