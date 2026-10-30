@@ -63,7 +63,7 @@ Included only when ready and reviewed by the cut; none is promised.
 - [x] Full workspace suite at the cut commit (the release gate for the full suite; `rust-ci` `test` runs `cargo test --workspace --locked`). Green in rust-ci `40335966336` on `d728f895`.
 - [x] For `vote-records-20261030`: CI green at `ae70d66d` in all three workflows (docs-build `41032153113`, rust-ci `41032153158` with the full workspace suite, product-security-ci `41032153060`), read 2026-10-30T10:30Z.
 
-The release after `vote-records-20261030` has no skeleton yet. Its rules when it is written: not before this release is deployed on all six (done 2026-10-30), CI green and the full workspace suite at its cut, and its own qualification for a consensus or state change (the delayed-precommit fix, a W-1 activation).
+The release after `vote-records-20261030` has a [skeleton plan](next-validator-release-plan-20261115.md) (2026-10-30).
 
 ## Qualification and rollout
 

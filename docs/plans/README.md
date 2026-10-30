@@ -12,6 +12,7 @@ Only current execution plans and completed plans belong here.
 - [Next Validator Release Plan (after the conference)](active/next-validator-release-plan-20261005.md)
 - [Validator Release Plan after signer-rotation-20261007 (skeleton)](active/next-validator-release-plan-20261101.md)
 - [Validator Release Plan after exchange-readiness-20261023 (skeleton)](active/next-validator-release-plan-20261108.md)
+- [Validator Release Plan after vote-records-20261030 (skeleton)](active/next-validator-release-plan-20261115.md)
 - [G4 Regression on the Deployed Release `8bed9b90` (2026-10-19)](active/g4-regression-deployed-release-20261019.md) (evidence for the completed storage milestone)
 - [L1v2 Public Testnet Path](active/l1v2-public-testnet-path-milestone.md)
   - [Z2 Advisory Flag Execution Plan (2026-10-22)](active/z2-advisory-flag-execution-plan-20261022.md)
