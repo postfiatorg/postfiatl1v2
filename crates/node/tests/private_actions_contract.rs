@@ -451,6 +451,14 @@ fn manifest_matches_the_pinned_code_constants() {
         egress["public_instance_layout_hash"],
         aoc::ASSET_ORCHARD_PRIVATE_EGRESS_V1_PUBLIC_INSTANCE_LAYOUT_HASH
     );
+    // Recorded from the deployed release's private_readiness read; no longer null.
+    let revision = &manifest["l1_revision"]["source_commit"];
+    assert!(revision
+        .as_str()
+        .is_some_and(|commit| commit.len() == 8 && commit.bytes().all(|b| b.is_ascii_hexdigit())));
+    let batches = &manifest["atomic_shielded_batches"];
+    assert!(batches["activation_height"].as_u64().is_some());
+    assert_eq!(batches["active"], true);
     let assets = read_json(fixture("assets.json"));
     assert_eq!(assets["assets"]["A666"]["asset_id"]["value"], A666_ASSET_ID);
     assert_eq!(assets["assets"]["A666"]["issuer"]["value"], A666_ISSUER);

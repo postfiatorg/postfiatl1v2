@@ -19,14 +19,14 @@ to two weeks for what remains of S1 to S7, before the review and the ce22 run.
 
 Owners are marked *(this lane)* or *(wallet team)*.
 
-## S1 — the contract (done but for S1.3 and S1.5)
+## S1 — the contract (done but for S1.5)
 
 - [x] S1.1 *(this lane)* Versioned request and response fixtures for `snapshot`, `submit` and `receipt`, including a typed terminal rejection (`state: rejected` with its code and fee).
 - [x] S1.2 *(this lane)* Canonical vectors: an action of each kind, its intent id under `tasknode.private-intent.v1`, and its atomic batch id from `build_atomic_shielded_action_batch` (`crates/node/src/consensus_artifacts.rs:1591`).
   - The three accepted kinds are in `crates/types/src/shielded_bridge_governance.rs:369-536`; `asset_orchard_ingress_v1` and `asset_orchard_egress_v1` are refused.
-- [ ] S1.3 *(this lane)* The deployed identity, verifier and activation manifest: genesis, protocol, revision, proof system, circuit, parameters and verifying keys.
+- [x] S1.3 *(this lane)* The deployed identity, verifier and activation manifest: genesis, protocol, revision, proof system, circuit, parameters and verifying keys.
   - [x] Identity, release and the swap and egress verifier pins.
-  - [ ] The atomic-batch activation height: the deployed release has no read that reports it, so `manifest.json` holds `null`. The `private_readiness` read (`556cac38`) reports it once validator-0 runs a release that serves it.
+  - [x] Recorded from the deployed release (2026-10-30): `private_readiness` on all six at 1168 reports build `ae70d66d` (`release`), release `vote-records-20261030` (`87cfe797…`), both verifiers on their pins, and atomic batches active from height 483. `manifest.json` carries these values.
 - [x] S1.4 *(this lane)* The full A666 and pfUSDC profile: full asset ids, issuers, proof profiles and precision, replacing the retired a651/a652 registry (`wallet-proxy/navswap-config-bridge.js:963`).
   - The governed swap pair is `null`: it arrives with `ed89c916` behind a governed activation, after the deployed release.
 - [ ] S1.5 *(wallet team)* Their intent helper (`core/src/private_actions.rs:110`) reproduces the S1.2 vectors. To tick S1: the fixtures in the repository and both sides passing the vectors.
@@ -37,7 +37,7 @@ In `crates/node/tests/fixtures/private-actions-v1/`, shared types in `crates/typ
 
 - `schema.json`: schema `postfiat-private-actions-v1`, the three routes, admission states, refusal codes and examples.
 - `vectors.json`: generated and pinned byte for byte by `crates/node/tests/private_actions_contract.rs`. One action of each kind with its intent id (96 hex, SHA3-384), action hash and atomic batch id for the devnet genesis, and six refusals. The proofs and signatures are placeholders and never verify.
-- `manifest.json`: devnet identity, release `index-v3-20261027` (`d728f895`), verifier pins, atomic-batch activation (`null`).
+- `manifest.json`: devnet identity, release `vote-records-20261030` (`ae70d66d`), verifier pins, atomic-batch activation height 483, all from the deployed release's `private_readiness`.
 - `assets.json`: A666 and pfUSDC from live reads on 2026-10-29, each field with its source; the governed pair is `null`.
 
 ## S2 — the gateway entry points (1 day left)
@@ -120,7 +120,15 @@ halt flag and the ratio within the band.
 
 - [ ] S7.1 *(this lane)* Readiness published by the running service and the deployed manifest; no mock verifier, copied store, unsafe file signer or proxy-owned key satisfies it.
   - [x] The `private_readiness` read attests the deployed verifiers and governed activations (`556cac38`, `crates/node/src/private_readiness_read.rs`).
-  - [ ] Published from the deployed release on the devnet.
+  - [x] Published from the deployed release on the devnet (2026-10-30 11:31Z, `python -m postfiat_rpc --method private_readiness --pool-id asset-orchard-v1`). All six validators give the same answer at 1168 / `a20e406e…` / `39771b74…`:
+    - build `ae70d66d`, profile `release`;
+    - swap `asset_orchard.swap.pricing_bound.v4` and egress `asset_orchard.private_egress.v2` loaded, `matches_pin` true;
+    - atomic batches effective at 483, active at the next height;
+    - pricing enforcement and `pricing_max_nav_age_blocks` both `null`, inactive;
+    - `a666_pfusdc_route` `null`, admission switch `off`;
+    - `ready` false: `asset_orchard_pricing_enforcement_activation_absent`, `a666_pfusdc_route_absent`.
+    - The route reason does not mean `pftl_uniswap_routes` has no A666/pfUSDC route. It has two whose codes match: `pftl-a666-ethereum-wA666-usdc-v1` (base `A666` `521c6c63…`, the S1.4 asset) and `pftl-a666-ce22-sepolia-wA666-usdc-controlled-20260723-v1` (base `a666` `300bf48a…`). The read needs exactly one.
+  - S7.1 stays open until the governance records exist (the pricing activation and a single governed A666/pfUSDC route) and readiness reports `ready`.
 - [x] S7.2 *(this lane)* Logs and artifacts inspected for secrets; the gateway holds no wallet or validator key; no remote prover receives openings; no HTTP request or release setting turns off verification.
 
   **Secret inspection.** `crates/node/tests/private_actions_gateway.rs` runs two validators and the real proxy (native session, an ingress, a round, a receipt), then checks:
