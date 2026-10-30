@@ -122,6 +122,7 @@ nav:
           - Storage Scaling Research Specification: architecture/storage-scaling-research-spec.md
           - Storage Scaling Fix Specification: architecture/storage-scaling-fix-spec.md
           - Testnet Genesis And Launch Specification (locked): architecture/l1v2-testnet-genesis-and-launch-spec.md
+          - Genesis External Lanes: architecture/genesis-external-lanes.md
           - Genesis Registry Proposal Path: architecture/genesis-registry-proposal-path.md
           - Launch Topology Thresholds (proposal): architecture/launch-topology-thresholds.md
   - Network Status:
