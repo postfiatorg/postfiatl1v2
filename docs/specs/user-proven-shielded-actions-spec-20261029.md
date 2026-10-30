@@ -1,62 +1,44 @@
 # User-proven shielded actions (W-1): specification
 
-Date: 29 October 2026. Status: **draft, not locked**. The Text Improvement
-Harness full gate scored it, without this paragraph, at 85.13/100 (GPT-6 Astra
-Pro 87.00, Claude Fable 5.1 80.80, GLM 5.3 87.60; five runs per judge; run group
-`user-proven-shielded-actions-spec-20261029-r1`; scored content SHA-256
-`59bb690fa97b4754…`). It is below 86 and was not iterated; locking it is M1 of
-the [milestone](../plans/active/user-proven-shielded-actions-milestone.md). The
-same day, after one content pass bringing it up to date with main, the same
-gate scored 84.20/100 (GPT-6 Astra Pro 87.60, Claude Fable 5.1 81.00, GLM 5.3
-84.00; five runs per judge; run group
-`user-proven-shielded-actions-spec-20261029-r2`; scored content SHA-256
-`41ccab38ee41eef6…`). After one improvement pass on the r2 critiques through
-`openai/gpt-5.6-sol-pro` (AGENTS.md step 4) and a fact check against main, the
-same gate scored 85.40/100 (GPT-6 Astra Pro 86.20, Claude Fable 5.1 82.40,
-GLM 5.3 87.60; five runs per judge; run group
-`user-proven-shielded-actions-spec-20261029-r3`; scored content SHA-256
-`d2104b41ecf0c71a…`). It is below 86 and is not locked; no further pass was
-made. It authorizes no deployment and no transaction.
+Date: 29 October 2026. Status: **locked** on 30 October 2026 at the full gate, run group `user-proven-shielded-actions-spec-20261029-r4`. The Text Improvement Harness full gate scores it without this paragraph, five runs per judge. r1: 85.13/100 (GPT-6 Astra Pro 87.00, Claude Fable 5.1 80.80, GLM 5.3 87.60; run group `user-proven-shielded-actions-spec-20261029-r1`; scored content SHA-256 `59bb690fa97b4754…`). r2, after one content pass bringing it up to date with main: 84.20/100 (GPT-6 Astra Pro 87.60, Claude Fable 5.1 81.00, GLM 5.3 84.00; `-r2`; `41ccab38ee41eef6…`). r3, after one improvement pass on the r2 critiques through `openai/gpt-5.6-sol-pro` (AGENTS.md step 4) and a fact check against main: 85.40/100 (GPT-6 Astra Pro 86.20, Claude Fable 5.1 82.40, GLM 5.3 87.60; `-r3`; `d2104b41ecf0c71a…`). r4, after one improvement pass on the r3 critiques through `openai/gpt-5.6-sol-pro` and a fact check against main: 86.27/100 (GPT-6 Astra Pro 85.60, Claude Fable 5.1 84.60, GLM 5.3 88.60; `-r4`; `95077bcfff875093…`), at or above 86, so it is locked; this is M1 of the [milestone](../plans/active/user-proven-shielded-actions-milestone.md). Deployed state on 30 October 2026: release `vote-records-20261030` (source `ae70d66d`) runs on all six ce22 validators since 11:14Z with the whole private path present but switched off: `rpc-serve` runs without `--allow-private-action-admission`, and the pricing enforcement and the egress policy are ungoverned (sections 7 and 8). It authorizes no deployment and no transaction.
 
 ## 1. BLUF
 
-1. The wallet team's native Mac app proves shielded A666 and pfUSDC actions on
-   the device. Today the chain takes those actions only through a wallet proxy
-   that holds validator material and drives the certified round. W-1 replaces
-   that custody model: the gateway relays immutable public bytes, while
-   validators admit, verify, certify and apply them.
-2. The public contract remains the existing
-   `postfiat_types::ShieldedAction` serialization, restricted to
-   `asset_orchard_ingress_v2`, `shielded_swap_v1` and
-   `asset_orchard_private_egress_v1`. The legacy v1 ingress and egress
-   payloads expose note openings or spend material and remain refused.
-3. Normal admission is once-only: before transport, the gateway reserves the
-   intent, exact action bytes and canonical batch id; retries reuse that
-   reservation and never create another proof or round. An operator may
-   abandon only a `queued` or `unknown` record whose batch is not on chain and
-   that has no round in flight; a resubmission carries the same bytes, the same
-   action hash and the same canonical batch (section 5.1).
-4. Recovery uses finalized public reads pinned to one snapshot token. Pricing
-   and egress are governed consensus rules, not proxy policy. W-1 covers
-   user-proven admission, not a two-party exchange. W-2 is the completed native
-   session transport and is not part of this contract.
+1. The wallet team's native Mac app proves actions for the two action-profile assets, A666 and pfUSDC, on the device. The deployed chain currently accepts no private-action submissions because admission is switched off. The earlier custody path takes shielded actions through a wallet proxy that holds validator material and drives a certified consensus round. W-1 replaces that custody model: a gateway relays immutable public bytes, while validators admit, verify, certify and apply them.
+2. The public contract remains the existing `postfiat_types::ShieldedAction` serialization, restricted to `asset_orchard_ingress_v2`, `shielded_swap_v1` and `asset_orchard_private_egress_v1`. The legacy v1 ingress and egress payloads expose note openings or spend material and remain refused.
+3. Normal admission is once-only: before transport, the gateway reserves the intent, the exact action bytes and the canonical batch id; retries reuse that reservation and never create another proof or round for the live record. An operator may abandon, on one validator, only a `queued` or `unknown` record whose batch is not on chain and that has no round in flight; a resubmission carries the same bytes, the same action hash and the same canonical batch, and consensus applies that batch at most once. Section 5.1 is the single normative lifecycle for gateway records, per-validator records, abandonment and resubmission.
+4. Recovery uses finalized public reads pinned to one snapshot token, meaning one `{height, block_hash, state_root}` view. Pricing derives from consensus-finalized net asset value (NAV). Pricing and egress are governed consensus rules, not proxy policy. W-1 covers user-proven admission, not a two-party exchange. W-2, the completed native session transport, carries this contract but is not part of it.
 
 ### Terms used below
 
 | Term | Meaning in this document |
 | --- | --- |
 | **W-1** | User-proven admission of locally proved shielded actions without proxy custody. |
-| **W-2** | The native session used to transport this contract. |
+| **W-2** | The completed native authenticated session used to transport this contract. |
 | **W-4 / W-5** | Admission of outside money / backing reconciliation; both remain separate gates. |
-| **A666 / pfUSDC** | The two assets named by the action profiles, ingress tests, governed pricing pair and egress policy. The first live run is bounded at 1 pfUSDC. |
+| **A666 / pfUSDC** | The two assets named by the action profiles, ingress tests, governed pricing pair and egress policy. The first approved live run is bounded at 1 pfUSDC. |
 | **Asset-Orchard** | The shielded action, pool, pricing and egress-policy subsystem named by the payloads and reads below. |
 | **NAV** | The consensus-finalized pricing input from which an `AssetOrchardPricingClaim` is built. |
-| **ce22** | The controlled devnet `postfiat-wan-devnet-2`, named by its genesis hash prefix (`ce22ca8c…`), where the first approved live dust run takes place. A pre-height-608 NAV ratio is not a ce22 configuration. |
-| **Height 608** | `ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT`, where the NAV denominator changes units. |
-| **HOLD approval** | The wallet team's required approval before the ce22 run. |
-| **Gateway** | The W-2-authenticated relay that checks, durably reserves and forwards exact public bytes without wallet or validator keys. |
-| **Validator fleet** | The validators that verify, propose, vote, apply and certify the action. |
-| **`unknown` / `abandoned`** | An unresolved validator admission record / an operator-resolved record whose batch was not on chain and whose abandonment reason is retained. |
+| **ce22** | The controlled devnet `postfiat-wan-devnet-2`, named by genesis-hash prefix `ce22ca8c…`, where the first approved live dust run takes place. |
+| **Height 608** | `ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT`, where the NAV denominator changes units. A ratio using the pre-608 units is not a ce22 configuration. |
+| **HOLD approval** | The wallet team's required approval before the ce22 live run. |
+| **Gateway** | The W-2-authenticated relay that checks, durably reserves and forwards exact public bytes without wallet keys, validator keys or validator filesystem access. |
+| **Validator fleet** | The validators (six on ce22) that verify, propose, vote, apply and certify actions. |
+| **Gateway record** | The gateway's durable reservation and reconciled view of the configured validator sources. |
+| **Validator record** | One validator's admission-log record. Abandonment changes this record on that validator only. |
+| **Intent** | The domain-separated identity of an action submission, derived as specified in section 5.1. |
+| **Canonical atomic batch** | The deterministic, all-or-nothing batch built from one admitted action against the actual genesis. |
+| **Anchor** | A retained shielded-tree root against which a proof is verified. |
+| **Nullifier** | The public spent-note marker used by consensus to prevent a note from being spent twice. |
+| **Certification round** | Validator proposal, vote and certification for a batch. |
+| **Proposer height** | A block height at which a particular validator is designated to propose. |
+| **Quorum certificate** | Validator quorum evidence that certifies a block and its included receipt. |
+| **Session principal** | The authenticated identity established by the W-2 session and sent as `session_scope`. |
+| **Snapshot token** | The finalized `{height, block_hash, state_root}` tuple to which every recovery page is pinned. |
+| **a651 / a652** | Legacy NAV test assets whose proxy quote registry is retired; A666 and pfUSDC replace them. |
+| **FX-fix** | A negotiated swap path that settles at one public, governed foreign-exchange fix price. |
+| **`pftl_swapd`** | A custodial swap service: it holds the user's funds, so it is not user-proven admission. |
+| **`unknown` / `abandoned`** | An unresolved validator admission record / an operator-resolved validator record whose batch was not on chain and whose abandonment reason is retained. |
 
 ### Contract flow
 
@@ -65,40 +47,47 @@ made. It authorizes no deployment and no transaction.
 | 1. Submit | The wallet proves, signs and persists the action locally, then submits its exact serialization over the W-2 session. |
 | 2. Reserve | The gateway checks shape and size, recomputes the intent id, builds the canonical atomic batch and durably reserves the domain, intent, action hash, action bytes and batch id. |
 | 3. Relay | The gateway sends the identical reserved bytes to every configured validator source. |
-| 4. Certify | The responsible validator waits for its proposer height, performs the proof, authorization, anchor, nullifier, pricing and policy checks, then uses ordinary proposal, vote and apply. |
-| 5. Receipt and recovery | An HTTP acknowledgement remains pending. The wallet checks a read-only receipt for finality and rebuilds notes from finalized snapshot reads. |
+| 4. Certify | A validator waits for its proposer height, performs the proof, authorization, anchor, nullifier, pricing and policy checks, then uses ordinary proposal, vote and apply. |
+| 5. Receipt and recovery | The HTTP acknowledgement reports admission as pending. The wallet checks a read-only receipt for finality and rebuilds notes from finalized snapshot reads. |
 
 ## 2. Goal
 
-A wallet that holds its own keys submits a locally proven shielded action to
-any gateway, and the validator fleet alone accepts it, rejects it or leaves it
-pending. The gateway holds no wallet key, no validator key and no validator
-data directory. A crash, timeout or repeated request must never produce a
-second spend or a second round. Explicit abandonment and resubmission follow
-the rules in section 5.1. The wallet rebuilds its notes from finalized public reads alone,
-without sending a viewing key anywhere. The first live use is one approved
-dust run of 1 pfUSDC on ce22.
+A wallet that holds its own keys submits a locally proven shielded action to any
+gateway, and the validator fleet alone accepts it, rejects it or leaves it
+pending. The gateway holds no wallet key, validator key or validator data
+directory.
+
+A crash, timeout or repeated request must not create a second spend, a new
+gateway reservation or an independently rebuilt batch. A normal retry reuses
+the live records and bytes. Explicit per-validator abandonment and fresh
+resubmission follow section 5.1. Consensus batch and nullifier checks apply a
+batch at most once.
+
+The wallet rebuilds its notes from finalized public reads alone, without sending
+a viewing key anywhere. The first live use is one approved dust run of
+1 pfUSDC on ce22.
 
 Source: the wallet team's handoff
 [`docs/v3-w1-integration.md`](https://github.com/postfiatorg/tasknode-apple/blob/main/docs/v3-w1-integration.md)
-in the private repository `postfiatorg/tasknode-apple` (contract baseline
-`45ba2334`, against this repository at `48ecefef`), and section 3 of
+in the private repository `postfiatorg/tasknode-apple`, at the wallet contract
+baseline against this repository's corresponding baseline, and section 3 of
 [the wallet findings handoff](../handoffs/2026-10-29___goodalexander__tasknode_wallet_findings_for_the_l1.md).
-This document restates that contract with this repository's references.
+The baseline commits are listed in section 12. This document restates that
+contract with this repository's references.
 
 ## 3. The current custody model
 
 Shielded swaps on the wallet proxy are operator-run, not user-proven.
 
-| Where | What it does | Why it blocks W-1 |
-| --- | --- | --- |
-| `wallet-proxy/navswap-config-bridge.js:783` | Ingress configuration needs a node binary, a validator data directory, the topology and a validator key file. | The HTTP process reads validator state and holds a signing key. |
-| `wallet-proxy/navswap-config-bridge.js:858` | Swap availability depends on a local Asset-Orchard service. | A remote prover service is in the path; an on-device proof needs none. |
-| `wallet-proxy/navswap-config-bridge.js:996` | Builds a651/a652 quotes and the proxy's own liquidity policy. | The registry is retired; prices are proxy-derived, not validator-derived. |
-| `wallet-proxy/navswap-shielded.js:1421` | Runs `postfiat-node transport-peer-certified-batch-round` with `--key-file`. | The proxy drives the certified round with a validator key. |
-| `wallet-proxy/navswap-shielded.js:2292` | Posts the swap to `/asset-orchard/swap-batch` on the local service. | Batch construction depends on that service. |
-| `wallet-proxy/navswap-shielded.js:2386` | Executes and certifies the swap on the HTTP side. | Certification belongs to the validators. |
-| `crates/node/src/rpc_cli.rs:2086` | `shield_batch_orchard`, `shield_batch_orchard_deposit`, `shield_batch_orchard_withdraw` and `shield_batch_swap` build batches. | A built batch is not an admitted transaction: there is no durable admission, finality or receipt contract. |
+| Where | Named code surface | What it does | Why it blocks W-1 |
+| --- | --- | --- | --- |
+| `wallet-proxy/navswap-config-bridge.js` | `shieldedNavswapIngressConfig` | Ingress configuration needs a node binary, validator data directory, topology and validator key file. | The HTTP process reads validator state and holds a signing key. |
+| `wallet-proxy/navswap-config-bridge.js` | `shieldedNavswapSwapConfig` | Swap availability depends on a local Asset-Orchard service. | A remote prover service is in the path; an on-device proof needs none. |
+| `wallet-proxy/navswap-config-bridge.js` | `shieldedNavswapQuoteConfig` | Builds a651/a652 quotes and the proxy's own liquidity policy. | The registry is retired; prices are proxy-derived, not validator-derived. |
+| `wallet-proxy/navswap-shielded.js` | `buildShieldedCertifiedRoundArgs` | Runs `postfiat-node transport-peer-certified-batch-round` with `--key-file`. | The proxy drives the certified round with a validator key. |
+| `wallet-proxy/navswap-shielded.js` | `createShieldedSwapBatchViaLocalService` | Posts the swap to `/asset-orchard/swap-batch` on the local service. | Batch construction depends on that service. |
+| `wallet-proxy/navswap-shielded.js` | `executeShieldedNavswapSwap` | Executes and certifies the swap on the HTTP side. | Certification belongs to the validators. |
+| `crates/node/src/rpc_cli.rs` | `is_orchard_batch_create_method` and the `shield_batch_*` builders | `shield_batch_orchard`, `shield_batch_orchard_deposit`, `shield_batch_orchard_withdraw` and `shield_batch_swap` build batches. | A built batch is not an admitted transaction: there is no durable admission, finality or receipt contract. |
 
 The internals of the last row may be reused after review. A successful
 batch-build response is never reported as a committed action.
@@ -119,13 +108,18 @@ batch-build response is never reported as a committed action.
 
 The validator service exposes `private_action_submit` and
 `private_action_receipt` behind
-`rpc-serve --allow-private-action-admission`. A record waits until its
-validator is the proposer for the next height. A record left `unknown` by a
-crash settles as accepted when its batch lands.
+`rpc-serve --allow-private-action-admission`. A validator record waits until
+that validator is the proposer for the next height. A record left `unknown` by
+a crash settles as accepted when its batch lands.
 
 The gateway submits the reserved bytes to every configured validator source
-and reconciles their records. The reconciliation and abandonment rules are in
-section 5.1 and the boundaries in section 9.
+and reconciles their records. The gateway record and each validator record are
+separate. Their lifecycle and reconciliation rules are in section 5.1; the
+scope boundaries are in section 9.
+
+On the deployed release, no RPC unit passes
+`--allow-private-action-admission`. `private_action_submit` therefore returns
+`rpc_method_not_allowed`, and the readiness admission switch reports `off`.
 
 ## 5. The public action contract
 
@@ -137,7 +131,7 @@ listed in section 12.
 | Kind | Public content | Checks before the state change |
 | --- | --- | --- |
 | `asset_orchard_ingress_v2` | The locally signed burn transaction, pool id, full asset id, integer amount, output commitment and encrypted output. No note field. | Chain and genesis, source and owner, issuer, sequence, amount, fee and commitment binding. The burn and pool insertion are one atomic step. |
-| `shielded_swap_v1` | `swap_json`, the exact locally proven Asset-Orchard action: anchor, nullifiers, encrypted outputs, accounting commitments, pricing claim, proof and spend authorizations. | Both JSON levels decode strictly: no unknown fields, no supplied paths and no note openings. |
+| `shielded_swap_v1` | `swap_json`, the exact locally proven Asset-Orchard action: anchor, nullifiers, encrypted outputs, accounting commitments, pricing claim, proof and spend authorizations. | Both JSON levels decode strictly: no unknown fields, supplied paths or note openings. |
 | `asset_orchard_private_egress_v1` | The proof and spend signature with the public destination, asset, amount, fee, policy and disclosure binding, anchor and nullifier. | Verification completes before the note is consumed and the transparent account credited, atomically. |
 
 `asset_orchard_ingress_v1` and `asset_orchard_egress_v1` are refused on this
@@ -145,84 +139,109 @@ path. Registering A666 or pfUSDC never authorizes them.
 
 ### 5.1 The intent id and once-only admission
 
+This subsection is the normative source for retry, record ownership,
+abandonment and resubmission.
+
 The intent id is a domain-separated hash under the tag
 `tasknode.private-intent.v1` over the JSON pair `(domain, action_json)`. The
-wallet's domain, `PrivateDomain`, has exactly three fields: `chain_id`,
+wallet's domain type, `PrivateDomain`, has exactly three fields: `chain_id`,
 `genesis_hash` and `protocol_version`.
 
-The intent id therefore does not cover the address, pool or session. Those
-values cannot be verified from the intent id itself. The gateway binds the
-address to the native session principal and the pool to its route
-configuration. The gateway recomputes the id and refuses a mismatch. It then
-sends the validators the full domain: chain id, genesis hash, protocol
-version, pool id and session scope (the gateway's session principal). Each
-validator refuses a pool other than its configured one, and refuses the same
-intent under a different domain or different bytes as
-`private_intent_conflict`.
+The intent id does not cover the address, pool or session. Those values cannot
+be verified from the intent id itself. The gateway binds the address to the
+native session principal and the pool to its route configuration. It
+recomputes the id and refuses a mismatch. It then sends validators the full
+domain: chain id, genesis hash, protocol version, pool id and `session_scope`,
+which is the gateway's session principal. Each validator refuses a pool other
+than its configured pool and refuses the same intent under a different domain
+or different bytes as `private_intent_conflict`.
 
-The admission rules are:
+The admission invariants are:
 
 1. The original action text is retained byte for byte so the wallet can compare
    it with its persisted action.
-2. Different bytes under an existing intent id are refused. The canonical batch
-   and action are also deduplicated, so a new intent cannot replay a spend.
+2. Different bytes under an existing intent id are refused. The action and
+   canonical batch are also deduplicated, so a new intent cannot replay a
+   spend.
 3. The batch is built with `build_atomic_shielded_action_batch`, with
    `atomic: true`, and its id is checked against the actual genesis.
-4. Before any transport, the domain, intent, action hash, action bytes and batch
-   id are reserved durably. `queued`, `dispatched`, `accepted`, `rejected` and
-   `unknown` remain distinct states.
-5. A retry resends the identical reserved batch. The gateway never re-signs or
-   changes it, and a crash or duplicate request never starts another proof or
-   round for the live record.
+4. Before transport, the gateway durably reserves the domain, intent, action
+   hash, action bytes and batch id. `queued`, `dispatched`, `accepted`,
+   `rejected` and `unknown` remain distinct gateway states.
+5. A transport retry resends the identical reserved batch. It does not create
+   another gateway reservation, action proof or independently rebuilt batch.
 6. An HTTP acknowledgement means admitted and pending, nothing more.
    `receipt` is read-only. A missing or `unknown` receipt remains pending and
    never authorizes a replacement action.
 7. A receipt carries the action, batch and transaction bindings; inclusion
-   height, block hash and state root; outcome, code and fee; and finality
-   evidence the wallet can check. That evidence is either a validator quorum
-   certificate with receipt inclusion or an independently sourced validator
-   view. Terminal rejections are typed and include their fee and state effects.
+   height, block hash and state root; outcome, code and fee; and checkable
+   finality evidence. That evidence is a validator quorum block certificate
+   (`validator_quorum_block_certificate_v1`) for the inclusion block, and the
+   gateway reports a final outcome only when at least two configured validator
+   sources return the same one. Terminal rejections are typed and include their
+   fee and state effects.
+8. An `abandoned` validator record is the explicit exception to active-record
+   deduplication: the same intent and identical bytes may create a fresh
+   validator admission record after eligible abandonment. It still produces
+   the same action hash and canonical batch, and consensus replay protection
+   still applies.
 
 The lifecycle distinguishes four operations:
 
 | Operation | Meaning |
 | --- | --- |
-| Transport retry | Resend the identical reserved batch for the existing record. |
-| Fresh admission | Create a new record; this occurs only after the explicit abandonment path described below. |
+| Transport retry | Resend the identical reserved batch for the existing gateway and validator records. |
+| Fresh admission | Create a new validator admission record only after the explicit abandonment path below and an explicit wallet resubmission. |
 | Certification round | Validator proposal, vote and certification. The gateway does not drive it. |
 | State change | Atomic application after validator verification and certification. |
 
-The defined state transitions are:
+#### Gateway record
+
+The gateway record is the durable reservation and reconciliation view. It is
+not a validator admission-log record.
 
 | From | To | Authority and evidence | Retry or finality meaning |
 | --- | --- | --- | --- |
 | No record | `queued` | Before transport, the gateway durably reserves the domain, intent, action hash and bytes, and batch id. | Transport may use only that reservation. |
-| `queued` | `dispatched` | The gateway relays the identical reserved batch. | A repeated request remains tied to the same bytes and batch. |
-| `dispatched` | `accepted` | The validator fleet accepts the batch; a crashed `unknown` record also settles this way when the batch lands. | The receipt supplies the inclusion and finality bindings. |
+| `queued` | `dispatched` | The gateway relays the identical reserved batch to every configured validator source. | A repeated request remains tied to the same bytes and batch. |
+| `dispatched` | `accepted` | At least two configured sources return the same accepted outcome, with a block certificate for its inclusion block. | The receipt is final only after the wallet checks those bindings. |
+| `dispatched` | `rejected` | At least two configured sources return the same typed terminal rejection. | The receipt states the code, fee and state effects. |
+| `dispatched` | `unknown` | The sources disagree (`private_action_source_mismatch`) or a source reports its record `unknown`. | It remains pending; neither timeout nor a missing receipt authorizes replacement. |
+| Any non-final state | `abandoned` | A configured source reports its validator record `abandoned`. | Terminal until the wallet resubmits; the gateway notes the abandoning sources and never resends on its own. |
+| `abandoned` | `queued` | The wallet explicitly resubmits. The gateway reuses the same bytes, action hash and canonical batch and sends them to the abandoning sources. | The gateway never performs this reset autonomously. |
+
+When configured validator sources disagree, the gateway reports `unknown` with
+`private_action_source_mismatch`. When only one source reports a final
+outcome, the record stays pending with `private_receipt_unconfirmed`.
+
+#### Per-validator record
+
+Each validator keeps its own admission-log record. The command
+`postfiat-node private-action-resolve` changes only the record on the validator
+where it runs.
+
+| From | To | Authority and evidence | Retry or finality meaning |
+| --- | --- | --- | --- |
+| No record | `queued` | The validator admits the gateway's domain and reserved action and batch bindings. | A repeat submission returns the existing live record. |
+| `queued` | `dispatched` | At its proposer height, the validator starts handling the identical reserved batch through ordinary proposal, vote and apply. | The record remains bound to the same action and batch. |
+| `dispatched` | `accepted` | The validator fleet accepts the batch. A crashed `unknown` record also settles this way when the batch lands. | The receipt supplies the inclusion and finality bindings. |
 | `dispatched` | `rejected` | The validator fleet returns a typed terminal rejection. | The receipt states the code, fee and state effects. |
-| `dispatched` | `unknown` | A crash leaves the validator record unresolved. | It remains pending; neither timeout nor a missing receipt authorizes replacement. |
-| `unknown` | `accepted` | `postfiat-node private-action-resolve` finds that the batch landed on chain. | The existing record settles; no fresh record is created. |
-| `queued` or `unknown` | `abandoned` | The operator runs `private-action-resolve --abandon --reason` on that validator. It is refused if the batch is on chain (`private_action_on_chain`) or the record is `dispatched` (`private_action_round_in_flight`). | The receipt reports `abandoned` with code `private_action_abandoned`, the reason, no fee and no state effects; the record remains in the admission log. |
-| `abandoned` | New `queued` record | The wallet resubmits the same bytes under the same intent. | This is a fresh admission record, not a transport retry. |
+| `dispatched` | `unknown` | A crash leaves that validator's record unresolved. | It remains pending; a new submission returns the same record. |
+| `unknown` | `accepted` | `private-action-resolve` or service reconciliation finds that the batch landed on chain. | The existing record settles; no fresh record is created. |
+| `queued` or `unknown` | `abandoned` | The operator runs `private-action-resolve --abandon --reason` on that validator. The command holds that admission store's exclusive lock. It is refused if the batch is on chain (`private_action_on_chain`) or the record is `dispatched` (`private_action_round_in_flight`). | The receipt reports `abandoned` with code `private_action_abandoned`, the reason, no fee and no state effects. The record remains in that validator's admission log. |
+| `abandoned` | New `queued` record | The wallet resubmits the same bytes under the same intent. | This is a fresh validator admission record, not a transport retry. |
+
+The exclusive lock means no service step and no round runs on that validator
+while its operator decides. Abandonment changes only that validator's record:
+another validator keeps its own record, and if its round lands the batch, the
+batch applies once. The normal retry path creates no fresh admission and
+rebuilds no proof or batch. A second application of a spend is refused by
+consensus: a spent nullifier fails as `duplicate_nullifier`.
 
 The wallet compares the receipt's action with its byte-exact persisted action,
 then checks the batch, transaction, inclusion and finality bindings. A gateway
 cannot turn its acknowledgement into finality: validators alone verify and
-certify, and the gateway has no validator key. The finality evidence is a
-validator quorum block certificate (`validator_quorum_block_certificate_v1`).
-When the configured validator sources disagree, the gateway reports `unknown`
-with `private_action_source_mismatch`; when only some sources report a final
-outcome, it stays pending with `private_receipt_unconfirmed`.
-
-The normal retry path never creates a fresh admission or another round.
-Abandonment is the only path to a fresh record. The resolve command holds the
-admission store's exclusive lock, so no service step and no round runs while it
-decides, and it refuses a dispatched record or a batch already on chain. The
-fresh record carries the same bytes, so the same action hash and the same
-canonical batch; the gateway's own record returns to `queued` only on an
-explicit resubmission from the wallet, never on its own. A second application
-of a spend is refused by consensus: a spent nullifier fails as
-`duplicate_nullifier`.
+certify, and the gateway has no validator key.
 
 ## 6. Recovery reads
 
@@ -269,24 +288,25 @@ epoch, reserve-packet hash, ratio, mode and band, and both asset tags. Stale,
 halted or mismatched state is refused.
 
 The NAV denominator changes units at height 608,
-`ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT`. Consequently, a pre-608 ratio is
-not a ce22 configuration.
+`ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT`. A ratio calculated in the units
+used before height 608 is therefore not a valid ce22 configuration.
 
 The `asset_orchard_pricing_claim` read builds the claim with the function used
 by consensus. The `asset_orchard_private_egress_binding` read returns
-`ungoverned` because finalized state has no governed egress policy yet. A
-fixture policy or an all-zero disclosure hash is never a substitute.
+`ungoverned` when finalized state has no governed egress policy. A fixture
+policy or an all-zero disclosure hash is never a substitute.
 
 Consensus checks the epoch, reserve-packet hash, band, tags, halt flag and
-ratio within the band. Three additional rules apply behind the governed
+ratio within the band. Three additional rules apply behind governed
 activation. Their governance keys are
 `asset_orchard_pricing_enforcement_activation_height` and
 `asset_orchard_pricing_max_nav_age_blocks`.
 
 - **Staleness:** NAV older than the governed limit is refused as
   `asset_orchard_pricing_nav_stale`.
-- **Governed pair:** a pair without a route in `pftl_uniswap_routes` is refused
-  as `asset_orchard_pricing_pair_not_governed`. Governance must not activate
+- **Governed pair:** a pair without a route in the governance route table
+  `pftl_uniswap_routes` is refused as
+  `asset_orchard_pricing_pair_not_governed`. Governance must not activate
   these rules before the A666/pfUSDC route exists there.
 - **Mode label:** an at-NAV claim with another mode label is refused as
   `asset_orchard_pricing_mode_mismatch`.
@@ -309,6 +329,25 @@ Records and the switch are ratified with
 writes the A666 and pfUSDC records with an agreed disclosure schema, the
 egress-binding read remains `ungoverned`.
 
+On the deployed release:
+
+- pricing-enforcement activation and `pricing_max_nav_age_blocks` are both
+  `null`, so governed pricing enforcement is inactive;
+- `a666_pfusdc_route` is `null`;
+- `pftl_uniswap_routes` does contain A666/pfUSDC routes, but two routes match
+  the asset codes A666 and PFUSDC;
+- `a666_pfusdc_route` in
+  `crates/node/src/private_readiness_read.rs` selects a route only when exactly
+  one route matches, so the readiness reason does not mean that the route table
+  lacks an A666/pfUSDC route;
+- the egress policy remains ungoverned, and no W-1 pricing or egress activation
+  is ratified.
+
+Another implementation lane is working on the route ambiguity. The fix is not
+landed. The milestone tracks it under S7.1; S7.1 remains open until pricing is
+activated, exactly one governed A666/pfUSDC route is selected and readiness
+reports ready.
+
 ## 8. Readiness
 
 Before admission, the fleet attests the deployed genesis, protocol, L1
@@ -324,6 +363,36 @@ published by the running service and the deployed manifest.
 The `private_readiness` read reports the pinned and loaded verifier identities
 and governed activations. On `rpc-serve`, it also reports the server's own
 admission switch.
+
+A `private_readiness` read for pool `asset-orchard-v1` was taken from all six
+ce22 validators on 30 October 2026 at 11:31Z. The six responses were
+byte-identical at finalized height 1168 (block hash and state root in
+section 12). They reported:
+
+- the build revision for release `vote-records-20261030`, profile `release`;
+- swap verifier `asset_orchard.swap.pricing_bound.v4`, loaded and matching its
+  pin;
+- egress verifier `asset_orchard.private_egress.v2`, loaded and matching its
+  pin;
+- atomic shielded batches effective at height 483 and active at the next
+  height;
+- pricing-enforcement activation and `pricing_max_nav_age_blocks` both `null`;
+- `a666_pfusdc_route` `null`;
+- admission switch `off`;
+- `ready` false, with reasons
+  `asset_orchard_pricing_enforcement_activation_absent` and
+  `a666_pfusdc_route_absent`.
+
+The deployed release therefore carries the readiness read but is not ready for
+W-1 admission. The whole private path is installed and switched off.
+`private_action_submit` returns `rpc_method_not_allowed`.
+
+The contract manifest now records the deployed identity, release, both
+verifier pins and atomic-batch activation height 483 from this read. Milestone
+S1.3, the deployed identity, verifier and activation manifest, is ticked. The
+S7.1 sub-item “published from the deployed release” is also ticked, while S7.1
+itself remains open for the pricing activation and uniquely selected governed
+route.
 
 ## 9. Scope: admission, not exchange
 
@@ -345,19 +414,19 @@ The contract boundaries are consolidated here:
 
 | Surface | Rule on main | Open |
 | --- | --- | --- |
-| Abandonment and resubmission | Only a `queued` or `unknown` record whose batch is not on chain and that has no round in flight can be abandoned, under the store lock; the resubmission reuses the bytes, action hash and canonical batch. | Nothing beyond the operator command; the record is never re-dispatched by it. |
-| Gateway reconciliation | Every configured validator source receives the same reserved bytes; disagreement is `unknown` (`private_action_source_mismatch`); a final outcome from only some sources is pending (`private_receipt_unconfirmed`). | — |
-| Intent route binding | The intent id excludes address, pool and session; the validators record pool and session scope with the intent and refuse a different domain (`private_intent_conflict`). | — |
+| Abandonment and resubmission | Section 5.1 is normative. Abandonment is per validator, carries a reason and is allowed only under that validator's store lock for a `queued` or `unknown` record whose batch is not on chain; the resubmission reuses the bytes, action hash and canonical batch. | Nothing beyond the operator command; the record is never re-dispatched by it. |
+| Gateway reconciliation | Every configured validator source receives the same reserved bytes. Disagreement is `unknown` with `private_action_source_mismatch`; a final outcome from only some sources remains pending with `private_receipt_unconfirmed`. | — |
+| Intent route binding | The intent id excludes address, pool and session. Validators record pool and session scope with the intent and refuse a different domain as `private_intent_conflict`. | — |
 | Snapshot token | `{height, block_hash, state_root}` in `schema.json`; valid until the next finalized block. | — |
-| Gateway refusal taxonomy | The stable codes are listed under `refusals` in `schema.json`, for example `private_intent_mismatch`, `private_intent_conflict`, `private_action_duplicate` and `private_action_legacy_refused`. | — |
+| Gateway refusal taxonomy | The stable codes are listed under `refusals` in `schema.json`, including `private_intent_mismatch`, `private_intent_conflict`, `private_action_duplicate` and `private_action_legacy_refused`. | — |
 | Recovery scale | Current clients fail closed at the ceilings in section 6. | Production needs versioned paging and incremental tree, witness and scan support, not larger JSON limits. |
 
 ## 10. Acceptance
 
 1. **Fixtures and vectors.** Versioned request and response fixtures; canonical
-   action, intent and batch vectors; the deployed identity, verifier and
-   activation manifest; and the full A666 and pfUSDC profile with issuer, proof
-   profile and precision.
+   action, intent and batch vectors; the deployed identity, release, verifier
+   and activation manifest; and the full fixture profiles for A666 and pfUSDC,
+   including issuer, proof profile and precision.
 2. **Six-validator tests.** Both ingress assets, swap and egress. Invalid proof,
    stale anchor or NAV, wrong issuer, domain or recipient, replay or reused
    nullifier, inactive governance and a tampered receipt each fail with no
@@ -378,35 +447,40 @@ The contract boundaries are consolidated here:
 
 | Area | Current status and evidence |
 | --- | --- |
-| Native session | W-2 is done at `e037829f`. It is the transport for this contract, not part of it. |
-| Contract fixtures | The shared fixtures and pinned vectors are at `346c79e4`. |
-| Gateway and validator admission | The gateway routes are on main at `db9af4f2` and `d9095797`. The validators' admission store and round service are on main at `968da908` and `e37d77fd`; RPC exposure is also anchored at `d7de5ec7`. |
-| Unknown resolution and abandonment | Chain resolution is at `657ce706`. The `abandoned` receipt outcome and retained reason are at `ea2213d0`. |
-| Recovery reads | Snapshot, page and account reads are at `683a5b32`; receipt and market reads are at `0c396fc8`. Gateway paging to completeness and mixed-tip refusal are at `f8b9a838`. |
-| Pricing and egress | Pricing-claim and egress-binding reads are on main at `93454729`. Governed pricing enforcement is at `ed89c916`; the governed egress-policy registry is at `899b26f8`. |
-| Readiness | The readiness read is at `556cac38`, with the server admission switch also reported at `657ce706`. The release deployed on the devnet predates the read. |
+| Native session | W-2 is complete in the completed native-session transport change. It transports this contract but is not part of it. |
+| Contract fixtures | The shared fixtures and pinned vectors are in the private-action fixtures and vectors change. The deployed manifest values are in the deployed-manifest recording change. |
+| Gateway and validator admission | The gateway private-action route changes provide gateway routes, validator-source submission and record reconciliation. The validator admission and RPC changes provide the admission store, round service, RPC exposure and settlement of an `unknown` record when its batch lands. |
+| Unknown resolution and abandonment | The chain-resolution change provides chain resolution and readiness reporting of the admission switch. The abandonment-receipt change provides the `abandoned` outcome and retained reason. |
+| Recovery reads | The snapshot-read changes provide snapshot, page, account, receipt and market reads. The gateway completeness change provides paging to completeness, mixed-tip refusal and incomplete-history handling. |
+| Pricing and egress | The pricing and egress read change is on main. The governed pricing-enforcement change and governed egress-policy change provide the governed rules and registry. On the deployed release, neither pricing enforcement nor the egress policy is governed for W-1. |
+| Readiness | The readiness-read change reports pinned and loaded verifier identities and governed activations. The deployed release includes that read, reports the admission switch `off` and reports `ready` false for the two reasons in section 8. |
+| Deployed release | `vote-records-20261030` runs on all six ce22 validators, built from main at the deployed-release source commit. The rollout completed without rollback. |
 
 The following test evidence is on main:
 
 - The contract test.
-- A gateway-to-node integration test with two real validators, covering restart
-  and diverging-tip cases and a secret inspection of every file the proxy and
-  nodes wrote (`3747a2e7`, `46c5a956`, `c308b7af`;
-  `crates/node/tests/private_actions_gateway.rs`).
-- Six-validator tests with ingress actions and with real swap and egress proofs
-  (`e37d77fd`, `e5f8f5b8`), and a second release-only module with real swap
-  proofs for the stale-anchor and the three pricing-rule refusals
-  (`14c8e43e`).
+- A gateway-to-node integration test with two real validators, covering restart,
+  diverging-tip cases and secret inspection of every file written by the proxy
+  and nodes. Its evidence is the two-validator gateway integration changes in
+  section 12; the test is
+  `crates/node/tests/private_actions_gateway.rs`.
+- Six-validator tests with ingress actions and real swap and egress proofs,
+  provided by the validator admission and six-validator proof-test changes.
+- A second release-only module with real swap proofs for stale-anchor and the
+  three pricing-rule refusals, provided by the pricing-refusal test change.
+- `wallet-proxy/test_private_actions.js`, in the gateway completeness change,
+  refuses a mixed tip and clears completeness flags on incomplete node
+  history.
 
 Coverage maps to the acceptance criteria as follows:
 
 | Acceptance item | Evidence on main | Remaining coverage |
 | --- | --- | --- |
-| 1. Fixtures and vectors | Contract test, shared fixtures and pinned vectors. | The wallet team's helper reproducing the vectors. |
-| 2. Six-validator tests | Ingress actions, real swap and egress proofs, and the stale-anchor and pricing-rule refusals. | None; the wrong-issuer case is an asset/issuer binding mismatch, because no A666/pfUSDC issuer profile exists on the ingress path yet. |
-| 3. Crash and recovery | The two-validator integration test covers restart and diverging-tip cases. | The remaining crash, lost-response, full-rescan, page-boundary, incomplete-history, lock and cancel clauses remain acceptance requirements. |
+| 1. Fixtures and vectors | Contract test, shared fixtures, pinned vectors and the manifest populated from the deployed readiness read with identity, release, verifier pins and atomic-batch activation 483. | The wallet team's helper reproducing the vectors. |
+| 2. Six-validator tests | Ingress actions, real swap and egress proofs, invalid proof, stale-anchor and pricing-rule refusals, domain and recipient failures, replay and reused-nullifier failures, inactive governance and tampered-receipt handling. | None. The wrong-issuer case is covered as an asset/issuer binding mismatch (`asset_orchard_ingress_v2_bad_payload`), because no A666/pfUSDC issuer profile exists on the ingress path yet. |
+| 3. Crash and recovery | The six-validator suite kills the round service after `dispatched`; the record becomes `unknown`, a new submission returns the same record, and the next proposer lands the same reserved batch exactly once. It also kills the service after the certified send and settles the record as accepted from the chain. A fresh-key rescan reads outputs through `private_pool_page` with page limit 2, below the total, and matches the snapshot count. The two-validator gateway test kills the proxy after submit returns `queued`, restarts it on the same store, and confirms that repeat submit returns the same record and lands once. The gateway test refuses mixed tips and clears completeness flags for incomplete node history. | The app-side lock and cancel clauses, and versioned paging with incremental scan in the app, remain wallet-team acceptance requirements. |
 | 4. Secret inspection | The integration test inspects every file written by the proxy and nodes, checks that the proxy holds no validator key, and checks that no request or setting turns off verification. | — |
-| 5. The ce22 run | None stated. | The ce22 run is not yet covered. |
+| 5. The ce22 run | No live run has been made. | The run waits for review and the wallet team's HOLD approval. |
 
 ## 11. What does not change
 
@@ -431,40 +505,57 @@ Coverage maps to the acceptance criteria as follows:
 - Reads: `crates/node/src/private_pool_reads.rs`,
   `crates/node/src/private_pool_receipt_market_reads.rs`,
   `crates/node/src/private_readiness_read.rs`.
+- Pricing and egress reads:
+  `crates/node/src/asset_orchard_pricing_reads.rs`.
 - Integration and secret inspection:
   `crates/node/tests/private_actions_gateway.rs`.
+- Gateway tests: `wallet-proxy/test_private_actions.js`.
 - [Milestone](../plans/active/user-proven-shielded-actions-milestone.md).
 - [Private egress disclosure schema, version 1](asset-orchard-private-egress-disclosure-schema-v1.md):
-  the governed schema hash the egress policy records commit to.
+  the governed schema hash to which egress-policy records commit.
 
 ### Pinned code locations
 
-| Contract surface | Location |
+Line pins are review aids and may move as files change. Locate the named symbol
+first; use the line only to identify the reviewed revision.
+
+| Contract surface | Pinned location |
 | --- | --- |
-| Public shielded payloads | `crates/types/src/shielded_bridge_governance.rs:369-536`: `ShieldedSwapActionPayload` at 369, `AssetOrchardIngressV2ActionPayload` at 400, `AssetOrchardPrivateEgressActionPayload` at 427 and the `ShieldedAction` enum at 509. |
-| Wallet intent helper | `core/src/private_actions.rs:110` in the wallet repository. |
-| Atomic batch builder | `build_atomic_shielded_action_batch` at `crates/node/src/consensus_artifacts.rs:1591`. |
+| Public shielded payloads | `crates/types/src/shielded_bridge_governance.rs`: `ShieldedSwapActionPayload` at line 369, `AssetOrchardIngressV2ActionPayload` at line 400, `AssetOrchardPrivateEgressActionPayload` at line 427, `ShieldedAction` at line 509; the reviewed payload block ends at line 536. |
+| Wallet intent helper | `core/src/private_actions.rs` in the wallet repository, line 110. |
+| Atomic batch builder | `build_atomic_shielded_action_batch` in `crates/node/src/consensus_artifacts.rs`, line 1591. |
 | Recovery reads | `crates/node/src/private_pool_reads.rs` and `crates/node/src/private_pool_receipt_market_reads.rs`. |
-| Pricing and egress reads | `asset_orchard_pricing_claim` and `asset_orchard_private_egress_binding` at `crates/node/src/asset_orchard_pricing_reads.rs:368` and `:533`. |
-| NAV activation and pricing plan | `ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT` at `crates/node/src/execution_actions.rs:4386`; pricing plan at `:4426`. |
-| Atomic-batch activation refusal | `crates/node/src/execution_actions.rs:3245`. |
-| Readiness read | `crates/node/src/private_readiness_read.rs`. |
+| Pricing and egress reads | `asset_orchard_pricing_claim` at line 368 and `asset_orchard_private_egress_binding` at line 533 in `crates/node/src/asset_orchard_pricing_reads.rs`. |
+| NAV activation and pricing plan | `ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT` at line 4386 and `asset_orchard_swap_pricing_plan` at line 4426 in `crates/node/src/execution_actions.rs`. |
+| Atomic-batch activation refusal | `shielded_atomic_batch_not_active` in `crates/node/src/execution_actions.rs`, line 3245. |
+| Legacy batch builders | `is_orchard_batch_create_method` and the `shield_batch_*` builders in `crates/node/src/rpc_cli.rs`, line 2086. |
+| Legacy proxy configuration | `shieldedNavswapIngressConfig` at line 783, `shieldedNavswapSwapConfig` at line 858 and `shieldedNavswapQuoteConfig` at line 996 in `wallet-proxy/navswap-config-bridge.js`. |
+| Legacy proxy execution | `buildShieldedCertifiedRoundArgs` at line 1421, `createShieldedSwapBatchViaLocalService` at line 2292 and `executeShieldedNavswapSwap` at line 2386 in `wallet-proxy/navswap-shielded.js`. |
+| Readiness and route selection | `private_readiness` and `a666_pfusdc_route` in `crates/node/src/private_readiness_read.rs`. |
 
-### Commit anchors
+### Commit references
 
-| Anchor | Evidence carried by the anchor |
+| Named change | Commit | Evidence carried by the change |
+| --- | --- | --- |
+| Wallet contract baseline and repository corresponding baseline | `45ba2334`, `48ecefef` | Wallet handoff baseline and this repository's corresponding baseline. |
+| Completed native-session transport change | `e037829f` | Completed W-2 native session transport. |
+| Private-action fixtures and vectors change | `346c79e4` | Generated and pinned private-action contract fixtures and vectors. |
+| Gateway private-action route changes | `db9af4f2`, `d9095797` | Gateway routes, validator-source submission and gateway record reconciliation. |
+| Validator admission and RPC changes | `968da908`, `d7de5ec7`, `e37d77fd` | Validator admission store, round service, RPC exposure, `unknown` settlement when the batch lands, six-validator ingress tests and covered crash/recovery cases. |
+| Chain-resolution and abandonment-receipt changes | `657ce706`, `ea2213d0` | Chain resolution, readiness reporting of the admission switch, and the reason-bearing `abandoned` receipt outcome. |
+| Snapshot-read and gateway completeness changes | `683a5b32`, `0c396fc8`, `f8b9a838` | Finalized snapshot, page, account, receipt and market reads; paging to completeness; mixed-tip refusal; incomplete-history handling. |
+| Pricing and egress read change | `93454729` | Consensus-built pricing-claim and private-egress-binding reads. |
+| Governed pricing-enforcement change | `ed89c916` | Governed staleness, pair and mode-label pricing enforcement. |
+| Governed egress-policy change | `899b26f8` | Governed private-egress policy registry and activation. |
+| Readiness-read change | `556cac38` | `private_readiness` reporting of pinned and loaded verifier identities and governed activations. |
+| Two-validator gateway integration changes | `3747a2e7`, `46c5a956`, `c308b7af` | Gateway-to-node integration with two real validators, proxy restart, diverging-tip cases and inspection of written files. |
+| Six-validator proof-test change | `e5f8f5b8` | Six-validator testing with real swap and egress proofs. |
+| Pricing-refusal test change | `14c8e43e` | Six-validator stale-anchor and pricing-rule refusals with real swap proofs. |
+| Deployed-release source change | `ae70d66d` | Source for `vote-records-20261030`, equal to main at this commit and reported as the deployed build revision. |
+| Deployed-manifest recording change | `92425854` | Manifest values recorded from the deployed readiness read: identity, release, verifier pins and atomic-batch activation 483. |
+
+### Deployed observation
+
+| Observation | Values |
 | --- | --- |
-| `45ba2334`, `48ecefef` | Wallet contract baseline and this repository's corresponding baseline. |
-| `e037829f` | Completed W-2 native session transport. |
-| `346c79e4` | Generated and pinned private-action contract fixtures and vectors. |
-| `db9af4f2`, `d9095797` | Gateway private-action routes, validator-source submission and record reconciliation. |
-| `968da908`, `d7de5ec7`, `e37d77fd` | Validator admission store, round service, RPC exposure and settlement of an `unknown` record when its batch lands. |
-| `657ce706`, `ea2213d0` | Chain resolution, readiness reporting of the admission switch, and the reason-bearing `abandoned` receipt outcome. |
-| `683a5b32`, `0c396fc8`, `f8b9a838` | Finalized snapshot, page, account, receipt and market reads; paging to completeness; mixed-tip refusal. |
-| `93454729` | Consensus-built pricing-claim and private-egress-binding reads on main. |
-| `ed89c916` | Governed staleness, pair and mode-label pricing enforcement. |
-| `899b26f8` | Governed private-egress policy registry and activation. |
-| `556cac38` | `private_readiness` reporting of pinned and loaded verifier identities and governed activations. |
-| `3747a2e7`, `46c5a956`, `c308b7af` | Gateway-to-node integration with two real validators, restart and diverging-tip cases, and inspection of written files. |
-| `e5f8f5b8` | Six-validator testing with real swap and egress proofs. |
-| `14c8e43e` | Six-validator stale-anchor and pricing-rule refusals with real swap proofs. |
+| `private_readiness` on all six ce22 validators, 2026-10-30 11:31Z | Height 1168, block `a20e406e…`, state root `39771b74…`; build `ae70d66d`; release executable SHA-256 `87cfe797…`. |

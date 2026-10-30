@@ -2,7 +2,7 @@
 
 **Status:** Active from 2026-10-29. Authorizes no deployment and no transaction on ce22.
 **Date:** 2026-10-29
-**Source spec:** [User-proven shielded actions specification](../../specs/user-proven-shielded-actions-spec-20261029.md), Text Improvement Harness full gate 85.13 on 2026-10-29 (`-r1`), then 84.20 after one content pass (GPT-6 Astra Pro 87.60, Claude Fable 5.1 81.00, GLM 5.3 84.00; run group `user-proven-shielded-actions-spec-20261029-r2`), then 85.40 after one improvement pass through `openai/gpt-5.6-sol-pro` (GPT-6 Astra Pro 86.20, Claude Fable 5.1 82.40, GLM 5.3 87.60; run group `user-proven-shielded-actions-spec-20261029-r3`). Not locked (M1).
+**Source spec:** [User-proven shielded actions specification](../../specs/user-proven-shielded-actions-spec-20261029.md), Text Improvement Harness full gate 85.13 on 2026-10-29 (`-r1`), then 84.20 after one content pass (GPT-6 Astra Pro 87.60, Claude Fable 5.1 81.00, GLM 5.3 84.00; run group `user-proven-shielded-actions-spec-20261029-r2`), then 85.40 after one improvement pass through `openai/gpt-5.6-sol-pro` (GPT-6 Astra Pro 86.20, Claude Fable 5.1 82.40, GLM 5.3 87.60; run group `user-proven-shielded-actions-spec-20261029-r3`), then 86.27 after a second pass on the r3 critiques (GPT-6 Astra Pro 85.60, Claude Fable 5.1 84.60, GLM 5.3 88.60; run group `user-proven-shielded-actions-spec-20261029-r4`). Locked on 2026-10-30 (M1).
 **Basis:** the wallet team's [`docs/v3-w1-integration.md`](https://github.com/postfiatorg/tasknode-apple/blob/main/docs/v3-w1-integration.md) (private repository `postfiatorg/tasknode-apple`) and section 3 of [the wallet findings handoff](../../handoffs/2026-10-29___goodalexander__tasknode_wallet_findings_for_the_l1.md).
 
 ## BLUF
@@ -153,7 +153,7 @@ halt flag and the ratio within the band.
 
 ## Mandate deliverables (AGENTS.md)
 
-- [ ] M1 *(this lane)* Lock the source spec at 86 or above on the full gate, requested as a Task Node task. Third run 85.40 (`-r3`) after one improvement pass; not locked.
+- [x] M1 *(this lane)* Lock the source spec at 86 or above on the full gate, requested as a Task Node task. Third run 85.40 (`-r3`); fourth run 86.27 (`-r4`, GPT-6 Astra Pro 85.60, Claude Fable 5.1 84.60, GLM 5.3 88.60) after a second improvement pass; locked on 2026-10-30.
   - Full gate: 85.13 (`-r1`), then 84.20 (`-r2`) after one content pass on 2026-10-29. Not locked; not iterated.
 - [x] M2 *(this lane)* A Python CLI for the new public reads (S4), alongside the S5 commands.
   - `python -m postfiat_rpc --method` with `asset_orchard_pricing_claim`, `asset_orchard_private_egress_binding`, `private_pool_snapshot`, `private_pool_page`, `private_account_lines`, `private_pool_receipts`, `private_pool_market`, `private_readiness`, `private_action_submit` and `private_action_receipt` (`python/postfiat_rpc/__main__.py:146-153`, `:213-220`, `:224-225`; client methods in `python/postfiat_rpc/client.py`).
