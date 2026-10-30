@@ -4,6 +4,16 @@ Updated: `2026-10-27T12:14:30Z` (release `index-v3-20261027` deployed to all six
 
 Status: **canonical operational-state reference**
 
+!!! note "2026-10-30: vote-records candidate cut, not deployed"
+
+    On 2026-10-30 the next candidate, `vote-records-20261030` (`main` at `ae70d66d`, executable
+    `87cfe797…`), which carries the VR-01 fix of the proposer's vote outcome records, the wallet app's private
+    path switched off or ungoverned on the devnet, the Asset-Orchard secret wiping and the transport ack timeout
+    fix, was cut and qualified locally; it is cut, not deployed
+    ([release inputs](https://github.com/postfiatorg/postfiatl1v2/blob/release/vote-records-20261030/deployments/vote-records-20261030/README.md)).
+    It has no governance step and no index build; the rollout starts only when CI on `ae70d66d` is green in
+    all three workflows.
+
 !!! success "2026-10-27: index-v3 release deployed to all six validators"
 
     Release `index-v3-20261027` runs on all six validators: source `d728f895` on branch
