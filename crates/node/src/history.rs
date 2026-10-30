@@ -1358,10 +1358,55 @@ fn validate_history_checkpoint_state(
             ),
         ));
     }
+    validate_external_lane_set_matches_genesis(&genesis, &checkpoint.ledger, "history checkpoint")?;
     validate_validator_registry_for_count(
         &checkpoint.validator_registry,
         checkpoint.governance.active_validator_count,
     )
+}
+
+/// Genesis fixes the lane set for the life of the chain: a replay base must
+/// carry exactly the genesis lanes with their reserves. Released fields are
+/// live state and are not compared. The aggregate conservation check cannot
+/// see a lane whose atoms were moved to an account, so this rule is separate.
+pub(super) fn validate_external_lane_set_matches_genesis(
+    genesis: &Genesis,
+    ledger: &LedgerState,
+    label: &str,
+) -> io::Result<()> {
+    let refuse = |message: String| io::Error::new(io::ErrorKind::InvalidData, message);
+    let expected = genesis
+        .genesis_external_lane_states()
+        .into_iter()
+        .map(|lane| (lane.lane_id, lane.reserved_atoms))
+        .collect::<BTreeMap<_, _>>();
+    let mut seen = BTreeSet::new();
+    for lane in &ledger.external_lanes {
+        let Some(reserved) = expected.get(&lane.lane_id) else {
+            return Err(refuse(format!(
+                "{label} carries external lane `{}`, which genesis never configured",
+                lane.lane_id
+            )));
+        };
+        if !seen.insert(lane.lane_id.as_str()) {
+            return Err(refuse(format!(
+                "{label} carries external lane `{}` more than once",
+                lane.lane_id
+            )));
+        }
+        if lane.reserved_atoms != *reserved {
+            return Err(refuse(format!(
+                "{label} external lane `{}` reserves {} atoms, but genesis reserves {reserved}",
+                lane.lane_id, lane.reserved_atoms
+            )));
+        }
+    }
+    if let Some(missing) = expected.keys().find(|id| !seen.contains(id.as_str())) {
+        return Err(refuse(format!(
+            "{label} is missing genesis external lane `{missing}`"
+        )));
+    }
+    Ok(())
 }
 
 fn read_history_prune_pending_optional(

@@ -348,6 +348,11 @@ pub(super) fn init_with_genesis(
     node_id: String,
     genesis: Genesis,
 ) -> io::Result<StatusReport> {
+    // Refuse an invalid genesis (such as duplicate lane ids) before anything,
+    // including the data directory, is created.
+    genesis
+        .validate()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     let store = NodeStore::new(&data_dir);
     let state = NodeState::initialized(node_id);
     let faucet_key = create_dev_key_file()?;

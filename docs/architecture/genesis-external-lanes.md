@@ -64,7 +64,7 @@ At genesis the faucet receives the native supply minus the sum of the lanes, and
 - `released_lock_nonces`, the set of Lock nonces already paid, starting empty;
 - `window_index` and `window_released_atoms`, the current window and what it released, starting at 0.
 
-The records are omitted from the ledger JSON and from the state commitment when there are none, so a chain without lanes keeps its state root.
+The records are omitted from the ledger JSON and from the state commitment when there are none, so a chain without lanes keeps its state root. When there are records, they are committed at every height: unlike the NAV fields beside them they do not wait for the complete-NAV commitment, because they are native supply.
 Tests pin this: the deployed `postfiat-wan-devnet-2` genesis re-serialises byte for byte with its hash, and a populated lane-less ledger keeps the state root it had before lanes existed.
 
 ## What the conservation check counts
@@ -80,7 +80,7 @@ Tests pin this: the deployed `postfiat-wan-devnet-2` genesis re-serialises byte 
 - each block: live before minus fee burns equals live after;
 - each history checkpoint: live supply plus cumulative fee burns equals the genesis supply.
 
-A lane that has released more than it reserved, or a duplicated lane id, fails these checks. Where the genesis is at hand (height-zero replay, history checkpoints) the faucet must hold exactly the native supply minus the lanes; a faucet file read without the genesis is only bounded by the supply, and height-zero replay refuses a short one.
+A lane that has released more than it reserved, or a duplicated lane id, fails these checks. A history checkpoint or imported snapshot must also carry exactly the genesis lane set, each with its genesis `reserved_atoms`, so atoms cannot leave a lane for an account even when the totals still balance. Where the genesis is at hand (height-zero replay, history checkpoints) the faucet must hold exactly the native supply minus the lanes; a faucet file read without the genesis is only bounded by the supply, and height-zero replay refuses a short one.
 
 Snapshots, restores and history checkpoints carry the lane records unchanged; tests cover lanes with nothing released, and a checkpoint, snapshot or faucet that drops a lane is refused. The lifecycle test for a released lane comes with P2.4.
 
