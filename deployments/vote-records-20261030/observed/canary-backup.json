@@ -1,0 +1,74 @@
+{
+  "schema": "vote-records-20261030-canary-backup-v1",
+  "backup": {
+    "source_validator": "validator-1",
+    "height": 1161,
+    "tip": "a4d5bd8252569ef2c5e9ce26d441361677be3e5569dc92718a8f97e639950ae24493ba24ce91bc813132b8a5bad29946",
+    "state_root": "f3b091782937ebf085926ee9f6646e133677e04742afcfe8bff77af4b058298d9349bda556851ecc592d7513f56acabb",
+    "certificate_id": "ce33f6dc4cff2c38a89e590a13fdf5c481e063f642e64e5c2e3fb79e366bd9a367f36c8e603153008636024b94ef2218",
+    "signed_manifest_sha256": "9b68d2a1a6e2a1545c095955667a4c2e5ae5bee30d187def539a4bec628bdf5b",
+    "finalized_checkpoint_verification_sha256": "76fdd2028764c7a3501e2d805e1b93cbaaeaafba35534901f4ae2728c4d5568d",
+    "verification_basis": "consensus-v2-finalized-checkpoint",
+    "verified": true,
+    "candidate_binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+    "remote_unsigned_snapshot": "/var/lib/postfiat/pre-rollout-snapshots/vote-records-20261030-validator-1-finalized-checkpoint",
+    "created_unix": 1793355554
+  },
+  "validator_1_free_disk_bytes": {
+    "before": 16090214400,
+    "after": 15767388160
+  },
+  "validator_1_writes": [
+    "/var/lib/postfiat/pre-rollout-snapshots/vote-records-20261030-validator-1-finalized-checkpoint (export, 256834190 bytes)",
+    "/var/lib/postfiat/pre-rollout-snapshots/.vote-records-20261030-validator-1.candidate-postfiat-node (the backup command's staged copy of 87cfe797..., 65901656 bytes, not executed)"
+  ],
+  "reimport": {
+    "binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+    "data_dir": "~/.cache/deploy-vote-records-20261030/backup-reverify",
+    "import_exit": 0,
+    "verify_finalized_checkpoint": {
+      "verified": true,
+      "height": 1161,
+      "tip": "a4d5bd8252569ef2c5e9ce26d441361677be3e5569dc92718a8f97e639950ae24493ba24ce91bc813132b8a5bad29946",
+      "state_root": "f3b091782937ebf085926ee9f6646e133677e04742afcfe8bff77af4b058298d9349bda556851ecc592d7513f56acabb",
+      "certificate_id": "ce33f6dc4cff2c38a89e590a13fdf5c481e063f642e64e5c2e3fb79e366bd9a367f36c8e603153008636024b94ef2218"
+    },
+    "verify_state": {
+      "verified": true,
+      "block_log_verified": true,
+      "block_count": 1161,
+      "tip": "a4d5bd8252569ef2c5e9ce26d441361677be3e5569dc92718a8f97e639950ae24493ba24ce91bc813132b8a5bad29946",
+      "state_root": "f3b091782937ebf085926ee9f6646e133677e04742afcfe8bff77af4b058298d9349bda556851ecc592d7513f56acabb",
+      "governance_verified": true,
+      "shielded_verified": true
+    },
+    "import_state": {
+      "recipient_format_activation_height": 1153,
+      "rejected_tx_fee_activation_height": 1153,
+      "require_memo_activation_height": 1153,
+      "route_authority_epoch": {
+        "pftl-a666-ethereum-wA666-usdc-v1": 1,
+        "pftl-bmnrc-ethereum-wBMNRC-usdc-v1": 1
+      },
+      "asset_orchard_pricing_enforcement_activation_height": null,
+      "asset_orchard_egress_policy_activation_height": null,
+      "w1_inert": true
+    },
+    "import_state_note": "read-import-state.py prints result ATTENTION because its PASS rule still expects the three heights unset; the values match the sheet (1153 x3, both routes epoch 1, W-1 kinds null)."
+  },
+  "head_replay": {
+    "command": "run_replay_evidence.py --signed-archive-dir (scratch cp -a of backup-signed) --node-bin ~/.cache/release-vote-records-20261030/target-1/release/postfiat-node --expected-source-revision ae70d66d8a5083cc1a33aaf4a3e17f6901f7bc34, from the clean source-1 tree at ae70d66d",
+    "verdict": "PASS",
+    "exact_replay": true,
+    "full_replay_passed": true,
+    "network_contacted": false,
+    "matched": {
+      "height": true,
+      "root": true,
+      "tip": true
+    },
+    "receipt": "observed/head-replay-1161/receipts/height-1161.json",
+    "receipt_sha256": "8d61e40c6eaf839c6acab2236cd8b0340ae3edb7b6c27f79073709f27e26aead",
+    "archive_tree_sha256_before_after": "d2d034fa64c81332c3b749f2d9ee714ac9e5f9f20ebf33fc89c759ed603c2755 / d2d034fa64c81332c3b749f2d9ee714ac9e5f9f20ebf33fc89c759ed603c2755"
+  }
+}

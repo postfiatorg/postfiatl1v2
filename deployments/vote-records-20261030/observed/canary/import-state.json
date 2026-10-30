@@ -1,0 +1,13 @@
+{
+  "recipient_format_activation_height": 1153,
+  "rejected_tx_fee_activation_height": 1153,
+  "require_memo_activation_height": 1153,
+  "route_authority_epoch": {
+    "pftl-a666-ethereum-wA666-usdc-v1": 1,
+    "pftl-bmnrc-ethereum-wBMNRC-usdc-v1": 1
+  },
+  "asset_orchard_pricing_enforcement_activation_height": null,
+  "asset_orchard_egress_policy_activation_height": null,
+  "result": "ATTENTION",
+  "w1_inert": true
+}

@@ -1,0 +1,54 @@
+{
+  "block_count": 1161,
+  "chain_id": "postfiat-wan-devnet-2",
+  "commitment_version": "postfiat.replicated_state.v2",
+  "exact_replay": true,
+  "full_replay_passed": true,
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "harness_revision": "ae70d66d8a5083cc1a33aaf4a3e17f6901f7bc34",
+  "matched": {
+    "height": true,
+    "root": true,
+    "tip": true
+  },
+  "network_contacted": false,
+  "node_binary_build": {
+    "git_revision": "ae70d66d",
+    "profile": "release"
+  },
+  "node_binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+  "node_id": "validator-1",
+  "offline": true,
+  "protocol_version": 1,
+  "publisher": "pf4ebb800c5a985cfca61e3833c40ea60b6767644a",
+  "schema": "postfiat-storage-signed-archive-replay-receipt-v1",
+  "signed_manifest_sha256": "9b68d2a1a6e2a1545c095955667a4c2e5ae5bee30d187def539a4bec628bdf5b",
+  "source_height": 1161,
+  "source_kind": "signed_archive",
+  "source_revision": "ae70d66d8a5083cc1a33aaf4a3e17f6901f7bc34",
+  "source_tree_sha256": "d2d034fa64c81332c3b749f2d9ee714ac9e5f9f20ebf33fc89c759ed603c2755",
+  "source_tree_sha256_after": "d2d034fa64c81332c3b749f2d9ee714ac9e5f9f20ebf33fc89c759ed603c2755",
+  "state_root": "f3b091782937ebf085926ee9f6646e133677e04742afcfe8bff77af4b058298d9349bda556851ecc592d7513f56acabb",
+  "steps": {
+    "snapshot-import-signed-finalized-checkpoint": {
+      "path": "steps/snapshot-import-signed-finalized-checkpoint.json",
+      "sha256": "c652627f2c5bca06edb0ba1f81eceb0f3963cec95b7558ae940fa0bb3dc7ee78"
+    },
+    "status": {
+      "path": "steps/status.json",
+      "sha256": "c652627f2c5bca06edb0ba1f81eceb0f3963cec95b7558ae940fa0bb3dc7ee78"
+    },
+    "verify-finalized-checkpoint": {
+      "path": "steps/verify-finalized-checkpoint.json",
+      "sha256": "76fdd2028764c7a3501e2d805e1b93cbaaeaafba35534901f4ae2728c4d5568d"
+    },
+    "verify-state": {
+      "path": "steps/verify-state.json",
+      "sha256": "99d9f73d8b039acbc6f1a3b2d5828fd5bb2056fc0db79c988237c0cae92ba49a"
+    }
+  },
+  "storage_activation_height": 930,
+  "tip_hash": "a4d5bd8252569ef2c5e9ce26d441361677be3e5569dc92718a8f97e639950ae24493ba24ce91bc813132b8a5bad29946",
+  "trusted_publisher_file_sha256": "adb52f49537ec65cb417ca1a8cd3debff1eb0d318790bc2f40bb5837855cea20",
+  "verdict": "PASS"
+}
