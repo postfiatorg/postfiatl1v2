@@ -60,7 +60,7 @@ Cobalt linkedness and model classification.
 | 1 | **NOT RUNNABLE HERE** | `results/presence.json` (`a69a61f2…`) |
 | 2 | **NOT RUNNABLE HERE** | `results/presence.json` |
 | 3 | **NOT RUNNABLE HERE** | `results/presence.json` |
-| 4 | **PARTIAL**: L1 facts derived. The reliability source is defined (decision below), but its records do not exist yet. The rest NOT RUNNABLE HERE | `results/native-evidence.json` (`a9010949…`) |
+| 4 | **PARTIAL**: L1 facts derived. The reliability records are live on all six validators since 2026-10-30 (below); the fact over a window is not derived yet. The rest NOT RUNNABLE HERE | `results/native-evidence.json` (`a9010949…`); [1168 record](https://github.com/postfiatorg/postfiatl1v2/blob/release/vote-records-20261030/deployments/vote-records-20261030/observed/vote-record-1168.json) |
 | 5 | **PASS** (2026-10-23, after the runner change). First run: PASS for the native root and its certification, FAIL for the shadow binding | `item5/shadow-report-1137.json` (`6b2059a4…`); first run `results/native-evidence.json`, `results/native-root-shadow/run.stderr` (`2c925153…`) |
 
 The Task Node verifier suite passes on main (178 tests,
@@ -169,6 +169,31 @@ available**, and so does, for one validator, a record that does not list it
 height that disagree, such as two proposers, are refused and listed (exit 1).
 JSON is the default output. Until a release carries the records on the six
 validators, the fact stays not available.
+
+#### Live vote records (2026-10-30)
+
+Release `vote-records-20261030` (source `ae70d66d`, executable `87cfe797…`)
+runs on all six validators since 11:14Z, applied at 1162–1167, with the VR-01
+fix. Evidence: the release packet's `observed/` on branch
+`release/vote-records-20261030`, commit `d4b344be`.
+
+- [x] **The proposer writes the record live.** The 1168 record is validator-4's
+  `/var/lib/postfiat/validator-4/block-vote-records/height-00000000000000001168.json`,
+  SHA-256 `6618a82c…` ([check](https://github.com/postfiatorg/postfiatl1v2/blob/release/vote-records-20261030/deployments/vote-records-20261030/observed/vote-record-1168.json)). It has schema
+  `postfiat.block_vote_record.v1`, block `a20e406e…`, certificate `bdf9576e…`,
+  view 0, quorum 5 and a 60 s deadline. All six validators are `accepted`, each
+  with its vote ID. validator-2 is `answered_after_quorum`, so the 5-of-6
+  certificate omits it.
+- [x] **VR-01 fixed live.** At 1160 a vote accepted after the quorum was
+  recorded as `no_answer`. At 1168 the same case is `accepted` with its vote ID.
+- [x] **Rollout heights.** The records for 1164–1167 (proposers validator-0 to
+  validator-3, on the new build) name all six, and every certificate voter is
+  `accepted`. At 1166, validator-3 is `no_answer` and is not in the
+  certificate. Its own logs were not checked.
+- [ ] The fact over a window: needs every height's record from all six record
+  directories, collected by the operator. The first window fully on the fixed
+  build starts at 1164.
+- [ ] The records in the signed snapshot: this needs a new snapshot version.
 - **Cobalt linkedness: NOT RUNNABLE HERE.** The native trust state verifies,
   but linkedness is a property of a candidate's admission, and no candidate has
   a binding (item 1).
@@ -270,7 +295,7 @@ The re-run, with outputs under `~/.cache/sct08-20261023/item5/`:
 | 1 | Signed validator-to-wallet bindings for the six validators, published as ledger memos | Post Fiat as operator of the six validators, under a separate signing authorization |
 | 2 | Signed per-account work digests and the publishing-key record | Task Node maintainers |
 | 3 | The published exchange and Foundation funding exclusion list | Post Fiat |
-| 4 | The vote records of the reliability decision (a node change); accountability, ρ and domain-control inputs from items 1–3; operator manifests; model classification | This lane (vote records, next-release candidate); operators; the governance lane |
+| 4 | Reliability over a window from the live vote records (from 1164) and their signed-snapshot export; accountability, ρ and domain-control inputs from items 1–3; operator manifests; model classification | This lane and the operator (records and export); operators; the governance lane |
 | 5 | Done 2026-10-23 (runner change and 1137 re-run). A real non-empty derivation still needs items 1–3. | — |
 
 2026-10-29: PR #180 (`29589ab2`) added the [Task Node L1 validator binding](../runbooks/tasknode-l1-validator-binding.md) tool, in which the validator key alone signs a Task Node account challenge; it is not the dual-signed ledger-memo record item 1 needs, so item 1 stays open.
