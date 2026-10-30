@@ -55,7 +55,7 @@ Decided by the product owner 2026-10-28: total supply 100 billion PFT; the Base 
   - the Base lock contract;
   - the inbound release path on PFTL and its proof;
   - the Base checkpoint source, which nothing in the repository provides today (paper, section 7).
-- [ ] P2.2 *(this lane)* The genesis external lane. Genesis reserves exactly the ERC-20 slice there, and the native supply invariant counts it (today it counts only live custody and fee burns, `docs/status/OPEN-SOURCE-NATIVE-SUPPLY-INVENTORY-20260716.md:23`).
+- [x] P2.2 *(this lane)* The genesis external lane. Genesis reserves exactly the ERC-20 slice there, and the native supply invariant counts it: merged in `bfe44841`, described in [docs/architecture/genesis-external-lanes.md](../../architecture/genesis-external-lanes.md). `reserved_atoms` is a genesis parameter until the genesis plan fixes the slice; the check that it equals the slice is P2.5's build check. No lane is configured on any network. Next: P2.4, the release operation with the Base checkpoint proof.
 - [x] P2.3 *(this lane)* The Base lock contract, following `ERC20BridgeVaultL1` (`crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol:6-16`), with no holder snapshot and no closing date: `crates/pft-token-contracts/src/PFTLockV1.sol`, merged in `39bfb547`; `forge test` passes 123 tests (111 from the lock branch, 12 from main's deploy-script checks).
   - Its deployment on Base, the PFTL finality verifier first and then the lock, is a later step with its own record.
   - The lock deployment script exists: `crates/pft-token-contracts/script/DeployPFTLock.s.sol`, merged in `182b3f22`; the Base deployment waits for the PFTL finality verifier on Base.
