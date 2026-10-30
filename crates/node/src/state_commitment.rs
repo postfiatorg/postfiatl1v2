@@ -829,6 +829,7 @@ fn validate_issued_supply_custody_inventory(
         ethereum_arbitrum_finality_states: _,
         fast_ingress_campaigns: _,
         arc_finality_states: _,
+        external_lanes: _,
     } = ledger;
     let ShieldedState {
         next_note_position: _,
@@ -1621,6 +1622,18 @@ pub(super) fn append_ledger_state(
                 .map(|value| value.state_commitment_bytes()),
         )?;
     }
+    // Genesis external lanes exist only on chains whose genesis configures
+    // them, so a chain without lanes commits exactly the bytes it did before.
+    if !ledger.external_lanes.is_empty() {
+        append_sorted_canonical_commitments(
+            bytes,
+            "ledger.external_lane",
+            ledger
+                .external_lanes
+                .iter()
+                .map(|value| value.state_commitment_bytes()),
+        )?;
+    }
 
     let fastlane_state_present = commit_fastlane_state
         && (!ledger.fast_lane_reserves.is_empty()
@@ -1811,6 +1824,7 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
         ethereum_arbitrum_finality_states: _,
         fast_ingress_campaigns: _,
         arc_finality_states: _,
+        external_lanes: _,
     } = ledger;
 }
 
@@ -1830,6 +1844,8 @@ fn assert_genesis_commitment_inventory_complete(genesis: &Genesis) {
         pfusdc_source_series_activation_height: _,
         atomic_swap_activation_height: _,
         consensus_v2_activation_height: _,
+        // Committed through the genesis hash; the live records are ledger state.
+        external_lanes: _,
     } = genesis;
 }
 

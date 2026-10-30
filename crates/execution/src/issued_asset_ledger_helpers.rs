@@ -881,6 +881,7 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
         ethereum_arbitrum_finality_states: _,
         fast_ingress_campaigns: _,
         arc_finality_states: _,
+        external_lanes: _, // native PFT reserve, never issued-asset custody
     } = ledger;
 }
 

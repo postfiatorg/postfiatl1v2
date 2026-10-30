@@ -351,13 +351,16 @@ pub(super) fn init_with_genesis(
     let store = NodeStore::new(&data_dir);
     let state = NodeState::initialized(node_id);
     let faucet_key = create_dev_key_file()?;
+    let faucet_balance = genesis
+        .genesis_faucet_balance_atoms()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     let faucet_account = Account::new(
         faucet_key.address.clone(),
-        DEFAULT_FAUCET_BALANCE,
+        faucet_balance,
         Some(faucet_key.public_key_hex.clone()),
     );
     store.init(&genesis, &state)?;
-    store.write_ledger(&LedgerState::new(vec![faucet_account.clone()]))?;
+    store.write_ledger(&genesis_ledger_state(&genesis, faucet_account.clone())?)?;
     write_faucet_account_file(&data_dir.join(FAUCET_ACCOUNT_FILE), &faucet_account)?;
     write_key_file(&data_dir.join(FAUCET_KEY_FILE), &faucet_key)?;
     ensure_validator_keys(&store, genesis.validator_count)?;
@@ -398,6 +401,27 @@ pub(super) fn init_with_genesis(
         transactional.verify_and_mark_full_integrity()?;
     }
     status(NodeOptions { data_dir })
+}
+
+/// The height-zero ledger: the faucet holds the native supply minus the
+/// genesis external lanes, and each lane starts with nothing released.
+pub fn genesis_ledger_state(genesis: &Genesis, faucet_account: Account) -> io::Result<LedgerState> {
+    let expected = genesis
+        .genesis_faucet_balance_atoms()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    if faucet_account.balance != expected {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "genesis faucet balance {} does not equal genesis native supply {} minus external lanes",
+                faucet_account.balance,
+                genesis.expected_native_supply_atoms()
+            ),
+        ));
+    }
+    let mut ledger = LedgerState::new(vec![faucet_account]);
+    ledger.external_lanes = genesis.genesis_external_lane_states();
+    Ok(ledger)
 }
 
 pub fn validator_keys(options: ValidatorKeysOptions) -> io::Result<ValidatorKeyFile> {
