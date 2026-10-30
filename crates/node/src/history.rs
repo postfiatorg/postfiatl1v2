@@ -1586,7 +1586,7 @@ fn build_history_checkpoint_state_from_sources(
 
     let has_existing_checkpoint = existing_checkpoint.is_some();
 
-    let faucet_account = read_faucet_account_file(&store.data_dir().join(FAUCET_ACCOUNT_FILE))?;
+    let faucet_account = read_genesis_faucet_account_file(store.data_dir(), &genesis)?;
     let live_validator_registry =
         read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
     let mut validator_registry;

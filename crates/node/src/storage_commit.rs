@@ -1519,8 +1519,9 @@ pub(super) fn validate_faucet_account(account: &Account) -> io::Result<()> {
             "faucet account address is empty",
         ));
     }
-    // The exact balance (native supply minus genesis external lanes) is
-    // checked against the genesis in `genesis_ledger_state`.
+    // Without the genesis only the bound is known; callers that have it use
+    // `read_genesis_faucet_account_file` for the exact balance (native supply
+    // minus genesis external lanes), and height-zero replay checks it again.
     if account.balance == 0 || account.balance > DEFAULT_FAUCET_BALANCE {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,

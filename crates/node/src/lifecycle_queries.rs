@@ -406,22 +406,43 @@ pub(super) fn init_with_genesis(
 /// The height-zero ledger: the faucet holds the native supply minus the
 /// genesis external lanes, and each lane starts with nothing released.
 pub fn genesis_ledger_state(genesis: &Genesis, faucet_account: Account) -> io::Result<LedgerState> {
+    validate_genesis_faucet_balance(&faucet_account, genesis)?;
+    let mut ledger = LedgerState::new(vec![faucet_account]);
+    ledger.external_lanes = genesis.genesis_external_lane_states();
+    Ok(ledger)
+}
+
+/// The exact faucet balance a genesis gives: its native supply minus the
+/// genesis external lanes.
+pub(super) fn validate_genesis_faucet_balance(
+    account: &Account,
+    genesis: &Genesis,
+) -> io::Result<()> {
     let expected = genesis
         .genesis_faucet_balance_atoms()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    if faucet_account.balance != expected {
+    if account.balance != expected {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!(
                 "genesis faucet balance {} does not equal genesis native supply {} minus external lanes",
-                faucet_account.balance,
+                account.balance,
                 genesis.expected_native_supply_atoms()
             ),
         ));
     }
-    let mut ledger = LedgerState::new(vec![faucet_account]);
-    ledger.external_lanes = genesis.genesis_external_lane_states();
-    Ok(ledger)
+    Ok(())
+}
+
+/// Reads the faucet file where the genesis is at hand, so the exact balance
+/// is checked rather than only the bound of `validate_faucet_account`.
+pub(super) fn read_genesis_faucet_account_file(
+    data_dir: &Path,
+    genesis: &Genesis,
+) -> io::Result<Account> {
+    let account = read_faucet_account_file(&data_dir.join(FAUCET_ACCOUNT_FILE))?;
+    validate_genesis_faucet_balance(&account, genesis)?;
+    Ok(account)
 }
 
 pub fn validator_keys(options: ValidatorKeysOptions) -> io::Result<ValidatorKeyFile> {

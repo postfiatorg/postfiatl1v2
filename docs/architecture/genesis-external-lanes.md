@@ -25,27 +25,35 @@ The design is `docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md`, sect
         "lock_contract_address": "0x1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
         "token_address": "0x2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
         "token_runtime_code_hash": "0x3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
-        "lock_runtime_code_hash": "0x4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d"
+        "lock_runtime_code_hash": "0x4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d",
+        "committee_epoch": 2,
+        "committee_root": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+        "confirmation_depth": 64
       }
     }
   ]
 }
 ```
 
-The amounts are placeholders sized to today's devnet supply constant (`GENESIS_NATIVE_SUPPLY_ATOMS`, 1,000,000,000 atoms). The slice size is a genesis parameter, not a constant, and stays open until the token document fixes it.
+The amounts are placeholders sized to today's devnet supply constant (`GENESIS_NATIVE_SUPPLY_ATOMS`, 1,000,000,000 atoms). The slice size is a genesis parameter, not a constant, and stays open until the token document fixes it. A type test parses and validates this example.
+
+`reserved_atoms` must equal the ERC-20 slice fixed by the token document; the type validator cannot know that number, so the genesis plan's build check (milestone P2.5) compares the lane against the token document and the deployed token's total supply before any lane-bearing genesis is produced.
 
 | Field | Rule |
 |---|---|
 | `external_lanes` | Absent, or a non-empty list. A present empty list is refused. |
 | `id` | 1–32 bytes of `a-z`, `0-9` and `-`, starting with a letter; unique. |
-| `reserved_atoms` | Positive. The sum over all lanes must be below the native supply. |
+| `reserved_atoms` | Positive. The sum over all lanes must stay strictly below the native supply, so that the genesis allocation keeps a positive balance. |
 | `release_window_blocks` | Positive. The window index is the block height divided by it. |
 | `release_cap_bps` | 1 to 10,000: the share of `reserved_atoms` one window may release. |
-| `policy.chain_id` | Positive EVM chain id (Base mainnet is 8453). |
+| `policy.chain_id` | Positive EVM chain id, a parameter: Base mainnet is 8453, and a test network such as Base Sepolia (84532) is configurable. |
 | `policy.*_address` | `0x` and 40 lower-case hex digits. |
 | `policy.*_code_hash` | `0x` and 64 lower-case hex digits. |
+| `policy.committee_epoch` | The bridge committee epoch whose checkpoints prove a Lock. |
+| `policy.committee_root` | That committee's root: `0x` and 64 lower-case hex digits. |
+| `policy.confirmation_depth` | Positive: the Base confirmations a Lock needs before it can be proven. |
 
-Unknown fields are refused at every level. The policy values are checked for shape only; P2.4 verifies proofs against them.
+Unknown fields are refused at every level, so the policy cannot gain a field later without a schema change. The policy values are checked for shape only; P2.4 verifies proofs against them.
 
 ## Ledger and genesis state
 
@@ -57,6 +65,7 @@ At genesis the faucet receives the native supply minus the sum of the lanes, and
 - `window_index` and `window_released_atoms`, the current window and what it released, starting at 0.
 
 The records are omitted from the ledger JSON and from the state commitment when there are none, so a chain without lanes keeps its state root.
+Tests pin this: the deployed `postfiat-wan-devnet-2` genesis re-serialises byte for byte with its hash, and a populated lane-less ledger keeps the state root it had before lanes existed.
 
 ## What the conservation check counts
 
@@ -71,7 +80,9 @@ The records are omitted from the ledger JSON and from the state commitment when 
 - each block: live before minus fee burns equals live after;
 - each history checkpoint: live supply plus cumulative fee burns equals the genesis supply.
 
-A lane that has released more than it reserved, or a duplicated lane id, fails these checks. Snapshots, restores and history checkpoints carry the lane records unchanged.
+A lane that has released more than it reserved, or a duplicated lane id, fails these checks. Where the genesis is at hand (height-zero replay, history checkpoints) the faucet must hold exactly the native supply minus the lanes; a faucet file read without the genesis is only bounded by the supply, and height-zero replay refuses a short one.
+
+Snapshots, restores and history checkpoints carry the lane records unchanged; tests cover lanes with nothing released, and a checkpoint, snapshot or faucet that drops a lane is refused. The lifecycle test for a released lane comes with P2.4.
 
 ## What P2.4 adds
 
