@@ -4,11 +4,11 @@ This is a draft research specification, written on 2026-10-26 by operator dravli
 
 ## 1. BLUF
 
-1. Phase 2 builds an ownerless lock contract on Base, an "external" lane created at PFTL's mainnet genesis that holds native PFT equal to the whole ERC-20 supply, and a PFTL operation that releases native PFT from that lane one for one against a proven Lock on Base (`docs/whitepaper.md:66-70`, `docs/listings/coinbase/pft-erc20-representation-options-20261026.md:89-96`).
+1. Phase 2 builds an ownerless lock contract on Base, an "external" lane created at PFTL's mainnet genesis that holds native PFT equal to the whole ERC-20 supply, and a PFTL operation that releases native PFT from that lane one for one against a proven Lock on Base (`docs/whitepaper.md:66-70`, `docs/listings/coinbase/pft-erc20-representation-options-20261026.md:99-105`).
 2. The proof is a BFT checkpoint, as the lead developer decided on 2026-10-26: the bridge committee signs a Base block and PFTL checks the Lock event's receipt against it. Consensus already runs exactly this check for Ethereum events (`crates/execution/src/pftl_uniswap_ethereum_verification.rs:340-378`). The trustless route through Base's dispute games has no code here and waits days for each lock, so it stays a later upgrade.
 3. The bridge is therefore committee-trusted, not trustless. PFTL checks the quorum's signatures and the receipt's inclusion, not Base itself, so a colluding quorum could release native PFT with no Lock behind it. A release cap set at genesis bounds that to a fixed share of the lane per window (lean 2 % per window of one day's blocks), and the committee changes only by a governed epoch activation and halts, never releases, below its 5-of-6 quorum (sections 4.1, 5.1 and 9).
 4. Genesis changes from giving the faucet the whole supply to giving it the supply minus the lane (`crates/node/src/lifecycle_queries.rs:3`), and the lane counts as native supply that is not in circulation, so the per-block conservation check keeps its form (`crates/node/src/block_replay_wallet.rs:2841-2864`).
-5. My optimistic estimate is one to two weeks of engineering once the mainnet genesis plan exists, without audit time (`pft-erc20-representation-options-20261026.md:9`, `:89`).
+5. My optimistic estimate is one to two weeks of engineering once the mainnet genesis plan exists, without audit time (`pft-erc20-representation-options-20261026.md:19`, `:99`).
 6. The product owner still decides the supply number and the audit budget. The lead developer also decided on 2026-10-26 that the lock contract ships the dormant Phase 3 release path, bound at construction to an immutable PFTL finality verifier (section 10).
 
 ## 2. Terms
@@ -18,7 +18,7 @@ This is a draft research specification, written on 2026-10-26 by operator dravli
 - **The external lane** is a genesis-created state entry holding the native PFT whose claim currently lives outside PFTL as ERC-20 PFT, the $s_{\text{external}}$ term of the four-way partition (`docs/whitepaper.md:66-70`).
 - **The lock contract** is the Phase 2 contract on Base that takes ERC-20 PFT and records each Lock (section 3).
 - **Base** is Coinbase's Ethereum layer-2 network, where the ERC-20 PFT lives (`crates/pft-token-contracts/src/PFTToken.sol:7-8`); its chain id is 8453, and its testnet Base Sepolia, 84532, is the id the token's dry run uses (`crates/pft-token-contracts/README.md:39`).
-- **OP Stack** is the rollup software Base runs: Base posts commitments to its state on Ethereum, and Ethereum contracts settle disputes about them (`pft-erc20-representation-options-20261026.md:24`, docs.base.org).
+- **OP Stack** is the rollup software Base runs: Base posts commitments to its state on Ethereum, and Ethereum contracts settle disputes about them (`pft-erc20-representation-options-20261026.md:34`, docs.base.org).
 - **An output root** is a proposer's hash commitment to one Base block, covering its state root and block hash; **a dispute game** is the Ethereum contract in which that claim can be challenged until it resolves (docs.base.org, withdrawals page, 2026-10-26).
 - **A BFT checkpoint** is an EVM chain's block number, block hash and receipts or state root, signed by a quorum of a committee registered on PFTL (`crates/types/src/ethereum_bridge_types.rs:46-63`, `tools/nav-reserve-proof/README.md:31-40`).
 - **The SP1 ingress program** is the zero-knowledge program that proves a pfUSDC deposit on Ethereum Sepolia under beacon-chain finality; PFTL verifies it as a bounded SP1 Groth16 proof (`programs/pfusdc-eth-ingress/src/lib.rs:84-122`, `crates/execution/src/nav_vault_asset_execution.rs:7576-7628`).
@@ -173,7 +173,7 @@ The lead developer decided on 2026-10-28 how a false release is detected and ans
 
 ## 6. Phase 3 hooks kept open
 
-Phase 3 exports native PFT back to Base by releasing ERC-20 PFT that was bridged in, from this same lock contract (`pft-erc20-representation-options-20261026.md:98-104`).
+Phase 3 exports native PFT back to Base by releasing ERC-20 PFT that was bridged in, from this same lock contract (`pft-erc20-representation-options-20261026.md:108-114`).
 
 **Deployment order.** The lock contract has no admin, so a release path added later could never reach tokens locked before it. Phase 2 therefore deploys the release function now, dormant and bound at construction to a PFTL finality verifier on Base, as the lead developer decided on 2026-10-26. The contract ships it as `release(bytes publicValues, bytes proofBytes) returns (bytes32 withdrawalIdCommitment)`, which emits `Released(bytes32 indexed withdrawalIdCommitment, bytes32 indexed burnTxIdCommitment, bytes32 indexed packetDigest, address recipient, uint256 amount)`. The verifier's address is immutable, with no setter and no admin, so Phase 3 stays possible without any privileged role, and the verifier is deployed on Base before the lock contract. Because genesis names the lock contract's address, the lock contract is deployed before genesis.
 
@@ -191,7 +191,7 @@ A holder takes five steps.
 4. Submit `external_lane_release_v1`, or let a relayer submit it.
 5. See native PFT on PFTL under an accepted receipt.
 
-An exchange holding ERC-20 PFT for customers locks the customers' total in one transaction (one per window when the total exceeds the cap of section 5.1) to its own PFTL address, submits one release, and credits each customer natively one for one. Coinbase converted INJ balances 1:1 the same way when Injective moved to its native chain (`pft-erc20-representation-options-20261026.md:44`). The exchange may end ERC-20 deposits on its own schedule, while the bridge itself stays open with no closing date (`:96`). Committee members run Base observers and sign checkpoints. No single member can release PFT; a release needs a quorum checkpoint and a receipt proof against it.
+An exchange holding ERC-20 PFT for customers locks the customers' total in one transaction (one per window when the total exceeds the cap of section 5.1) to its own PFTL address, submits one release, and credits each customer natively one for one. Coinbase converted INJ balances 1:1 the same way when Injective moved to its native chain (`pft-erc20-representation-options-20261026.md:54`). The exchange may end ERC-20 deposits on its own schedule, while the bridge itself stays open with no closing date (`:106`). Committee members run Base observers and sign checkpoints. No single member can release PFT; a release needs a quorum checkpoint and a receipt proof against it.
 
 ## 8. Tests, qualification and "not before" rules
 
@@ -206,7 +206,7 @@ The tests are written before the code.
 
 The release changes a state result, so it needs its own qualification, as a consensus change did on 2026-10-08 (`docs/handoffs/2026-10-08___dravlic__conference_day_two_friday_ready.md:68`). That qualification repeats the native inventory's gates: genesis-to-tip replay, checkpoint, prune, and snapshot and restore (`OPEN-SOURCE-NATIVE-SUPPLY-INVENTORY-20260716.md:6-8`, `:77-80`).
 
-Three "not before" rules apply. No genesis code merges before the token document fixes the supply number (`docs/listings/coinbase/integration-plan.md:99-105`). No lane is configured before a mainnet genesis plan exists; the launch spec leaves token migration to a separate document that does not exist yet (`docs/architecture/l1v2-testnet-genesis-and-launch-spec.md:27`, `:402`). And the lock contract is not deployed on Base mainnet before its audit is complete (`pft-erc20-representation-options-20261026.md:87`).
+Three "not before" rules apply. No genesis code merges before the token document fixes the supply number (`docs/listings/coinbase/integration-plan.md:99-105`). No lane is configured before a mainnet genesis plan exists; the launch spec leaves token migration to a separate document that does not exist yet (`docs/architecture/l1v2-testnet-genesis-and-launch-spec.md:27`, `:402`). And the lock contract is not deployed on Base mainnet before its audit is complete (`pft-erc20-representation-options-20261026.md:97`).
 
 ## 9. Risks
 
