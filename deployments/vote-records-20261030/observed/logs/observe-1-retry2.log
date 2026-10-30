@@ -1,0 +1,3 @@
+PASS height=1162 tip=1329e7249e17 root=a725166ad881 validator-0=index-v3-20261027, validator-1=vote-records-20261030, validator-2=index-v3-20261027, validator-3=index-v3-20261027, validator-4=index-v3-20261027, validator-5=index-v3-20261027; deployments/vote-records-20261030/observed/after-validator-1.json
+PASS applied identity ['validator-1'] on 87cfe797 manifest verified on six []
+observe validator-1 PASS 2026-10-30T10:46:00Z

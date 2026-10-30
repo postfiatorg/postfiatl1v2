@@ -1,0 +1,1 @@
+safe rollout refused: Command '['ssh', '-o', 'BatchMode=yes', 'root@66.42.48.39', 'install', '-d', '-o', 'root', '-g', 'root', '-m', '0755', '/opt/postfiat/releases/vote-records-20261030', '/etc/postfiat/releases/vote-records-20261030']' returned non-zero exit status 255.

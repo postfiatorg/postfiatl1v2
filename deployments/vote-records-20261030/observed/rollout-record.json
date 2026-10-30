@@ -1,0 +1,270 @@
+{
+ "schema": "vote-records-20261030-rollout-record-v1",
+ "release_id": "vote-records-20261030",
+ "new_binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+ "grant": "one 1-PFT faucet grant (1000000 atoms) to the testing wallet pf6395ef7f43ffaa74ce178d320b9bbbfd45532b38 after each apply (StakeHub pft --json faucet testing --asset PFT --amount 1000000)",
+ "ssh_wrapper": "/tmp/vr/bin/ssh: /usr/bin/ssh -o ControlMaster=auto -o ControlPath=/tmp/vr/cm-%C -o ControlPersist=120 -o ServerAliveInterval=10 -o ServerAliveCountMax=3; /tmp/vr/bin/scp: /usr/bin/scp -S /tmp/vr/bin/ssh. Transport only; the commands are unchanged.",
+ "steps": [
+  {
+   "step": 1,
+   "validator": "validator-1",
+   "apply_start": "2026-10-30T10:31:21Z",
+   "apply_done": "2026-10-30T10:32:17Z",
+   "tries": 1,
+   "transport": "apply-next and faucet plain SSH; observation through /tmp/vr/bin/ssh (third try)",
+   "grant": {
+    "height": 1162,
+    "tx_id": "f8717d9e02c93e4ae47bcf18f70670ba6ae8f3ae61d104b9a534d54f73a1436e0a7633273bc971b3397d7eb6302d8930",
+    "proposer": "validator-4",
+    "view": 0,
+    "voters": [
+     "validator-0",
+     "validator-1",
+     "validator-2",
+     "validator-3",
+     "validator-4"
+    ],
+    "block_hash": "1329e7249e1779f91f82e4d3caac53068c3381c7df192322419f444ca75591b3a8882e79556dd2108bd9f601a92026dc",
+    "state_root": "a725166ad8818a335c501ed31e5e418a838aa0280b3823b2af8af976d94f4163c603398b47208645df78af13951cf056",
+    "pass": true
+   },
+   "observation": {
+    "file": "observed/after-validator-1.json",
+    "observed_at": "2026-10-30T10:46:00.282899+00:00",
+    "applied": [
+     "validator-1"
+    ],
+    "ledger_identity": {
+     "height": 1162,
+     "tip": "1329e7249e1779f91f82e4d3caac53068c3381c7df192322419f444ca75591b3a8882e79556dd2108bd9f601a92026dc",
+     "state_root": "a725166ad8818a335c501ed31e5e418a838aa0280b3823b2af8af976d94f4163c603398b47208645df78af13951cf056"
+    }
+   },
+   "observation_retries": [
+    "10:36Z: server_info read timed out (30 s) through a tunnel",
+    "10:41Z-10:45Z: ssh to 66.42.48.39 exit 255",
+    "10:45:36Z: PASS through /tmp/vr/bin/ssh"
+   ]
+  },
+  {
+   "step": 2,
+   "validator": "validator-0",
+   "apply_start": "2026-10-30T10:46:08Z",
+   "apply_done": "2026-10-30T10:47:21Z",
+   "tries": 1,
+   "transport": "apply-next and faucet plain SSH; observation through /tmp/vr/bin/ssh",
+   "grant": {
+    "height": 1163,
+    "tx_id": "8494dfa22e3aadecbc818d103a8b537d04845741ef0c6c81fc097715046a09e03466e7e2d8ed6fd2588e45bc59b49c6c",
+    "proposer": "validator-5",
+    "view": 0,
+    "voters": [
+     "validator-1",
+     "validator-2",
+     "validator-3",
+     "validator-4",
+     "validator-5"
+    ],
+    "block_hash": "644a532929dcd44dbe956a42a34ed2761b6e017a17f595b0b35c15d21669ca420488b658a524ccd4c87072cd0a841a46",
+    "state_root": "7c4e961c5cc60ddbe62e06f33dd5b5ab66060b1556e7c33323abeaa610e9634fbf055e956c42cb6b405771b8c15ffceb",
+    "pass": true
+   },
+   "observation": {
+    "file": "observed/after-validator-0.json",
+    "observed_at": "2026-10-30T10:50:56.158147+00:00",
+    "applied": [
+     "validator-1",
+     "validator-0"
+    ],
+    "ledger_identity": {
+     "height": 1163,
+     "tip": "644a532929dcd44dbe956a42a34ed2761b6e017a17f595b0b35c15d21669ca420488b658a524ccd4c87072cd0a841a46",
+     "state_root": "7c4e961c5cc60ddbe62e06f33dd5b5ab66060b1556e7c33323abeaa610e9634fbf055e956c42cb6b405771b8c15ffceb"
+    }
+   }
+  },
+  {
+   "step": 3,
+   "validator": "validator-2",
+   "apply_start": "2026-10-30T11:03:02Z",
+   "apply_done": "2026-10-30T11:04:48Z",
+   "tries": 2,
+   "transport": "apply-next (ssh and scp), faucet, grant check and observation through /tmp/vr/bin/ssh and /tmp/vr/bin/scp",
+   "grant": {
+    "height": 1164,
+    "tx_id": "18ca65e317cf7deead48754efd0f61377e20fa43b76edf9601be2d15bef41db97a3f2b3a0fc00c7cceea95feba377a27",
+    "proposer": "validator-0",
+    "view": 0,
+    "voters": [
+     "validator-0",
+     "validator-1",
+     "validator-2",
+     "validator-3",
+     "validator-4"
+    ],
+    "block_hash": "365448c0b564aec53ba2d820e45b3aa3c0d34f844b1c051ba5993f7b713cc8ab729053b5daa781fa8be375540b42c445",
+    "state_root": "cb0841d3cfa4072f19ddbd4af521aa0c0a69ab3dce3ef147850ed11b42ce12dd2a731830911c70853bce0dc91c77c2cc",
+    "pass": true
+   },
+   "observation": {
+    "file": "observed/after-validator-2.json",
+    "observed_at": "2026-10-30T11:06:46.883624+00:00",
+    "applied": [
+     "validator-1",
+     "validator-0",
+     "validator-2"
+    ],
+    "ledger_identity": {
+     "height": 1164,
+     "tip": "365448c0b564aec53ba2d820e45b3aa3c0d34f844b1c051ba5993f7b713cc8ab729053b5daa781fa8be375540b42c445",
+     "state_root": "cb0841d3cfa4072f19ddbd4af521aa0c0a69ab3dce3ef147850ed11b42ce12dd2a731830911c70853bce0dc91c77c2cc"
+    }
+   },
+   "failed_try": {
+    "at": "2026-10-30T10:50:58Z",
+    "result": "apply-next refused: ssh root@66.42.48.39 install -d hung 2m17s, exit 255 (10:53:15Z); sshd logged no connection; no release directory; units on index-v3-20261027",
+    "stderr": "observed/apply-3-validator-2-try1.stderr"
+   }
+  },
+  {
+   "step": 4,
+   "validator": "validator-3",
+   "apply_start": "2026-10-30T11:06:54Z",
+   "apply_done": "2026-10-30T11:07:37Z",
+   "tries": 1,
+   "transport": "apply-next (ssh and scp), faucet, grant check and observation through /tmp/vr/bin/ssh and /tmp/vr/bin/scp",
+   "grant": {
+    "height": 1165,
+    "tx_id": "9a5041ebbd205aec18fdb1a1a9c21eb28f99c3669b633cde5a62d20b6c9abe5878f80afc1eb72a726e9e45ae1a9abc21",
+    "proposer": "validator-1",
+    "view": 0,
+    "voters": [
+     "validator-0",
+     "validator-1",
+     "validator-2",
+     "validator-3",
+     "validator-4"
+    ],
+    "block_hash": "117d2497f5528aec1d53a8994a7060ca7351a14f96ec80f9ac0becb9f45b6ad8d8ad23d0a4e3c2b70bbf1c4a849499be",
+    "state_root": "78a23503d405e301a7e76a96d3927ae5f072368e06cb0d3c7f3e0be7d8f01e71775db4ad48b0f238cf3accbb8dfe079d",
+    "pass": true
+   },
+   "observation": {
+    "file": "observed/after-validator-3.json",
+    "observed_at": "2026-10-30T11:09:51.785047+00:00",
+    "applied": [
+     "validator-1",
+     "validator-0",
+     "validator-2",
+     "validator-3"
+    ],
+    "ledger_identity": {
+     "height": 1165,
+     "tip": "117d2497f5528aec1d53a8994a7060ca7351a14f96ec80f9ac0becb9f45b6ad8d8ad23d0a4e3c2b70bbf1c4a849499be",
+     "state_root": "78a23503d405e301a7e76a96d3927ae5f072368e06cb0d3c7f3e0be7d8f01e71775db4ad48b0f238cf3accbb8dfe079d"
+    }
+   }
+  },
+  {
+   "step": 5,
+   "validator": "validator-4",
+   "apply_start": "2026-10-30T11:09:51Z",
+   "apply_done": "2026-10-30T11:10:28Z",
+   "tries": 1,
+   "transport": "apply-next (ssh and scp), faucet, grant check and observation through /tmp/vr/bin/ssh and /tmp/vr/bin/scp",
+   "grant": {
+    "height": 1166,
+    "tx_id": "fdfb28675fc3bfe71f7b665d57c683d3761fd9304042c0e005a9829a87273de4773362cda3f2c2f3b9d8894d02eea087",
+    "proposer": "validator-2",
+    "view": 0,
+    "voters": [
+     "validator-0",
+     "validator-1",
+     "validator-2",
+     "validator-4",
+     "validator-5"
+    ],
+    "block_hash": "3888683f33d54efae82a593e018baf896ae0a54073d65161138d1014dfecd529f5bdce02aea383a5a4fb015b2784262a",
+    "state_root": "01c803a14780473b87aff78b6bccab3d475e92b851883d0c9b9eb774d6d1c138372058122f07e47037408445a7020246",
+    "pass": true
+   },
+   "observation": {
+    "file": "observed/after-validator-4.json",
+    "observed_at": "2026-10-30T11:13:00.769239+00:00",
+    "applied": [
+     "validator-1",
+     "validator-0",
+     "validator-2",
+     "validator-3",
+     "validator-4"
+    ],
+    "ledger_identity": {
+     "height": 1166,
+     "tip": "3888683f33d54efae82a593e018baf896ae0a54073d65161138d1014dfecd529f5bdce02aea383a5a4fb015b2784262a",
+     "state_root": "01c803a14780473b87aff78b6bccab3d475e92b851883d0c9b9eb774d6d1c138372058122f07e47037408445a7020246"
+    }
+   }
+  },
+  {
+   "step": 6,
+   "validator": "validator-5",
+   "apply_start": "2026-10-30T11:13:00Z",
+   "apply_done": "2026-10-30T11:14:21Z",
+   "tries": 1,
+   "transport": "apply-next (ssh and scp), faucet, grant check and observation through /tmp/vr/bin/ssh and /tmp/vr/bin/scp",
+   "grant": {
+    "height": 1167,
+    "tx_id": "d235ee29013dca2f4840ea9c7da44ee8beb1b1b1dde7ff537379dfdbdf4648f407f9de99fb1dfb2951f302839766bdbc",
+    "proposer": "validator-3",
+    "view": 0,
+    "voters": [
+     "validator-0",
+     "validator-1",
+     "validator-2",
+     "validator-3",
+     "validator-4"
+    ],
+    "block_hash": "94e10b63e3aabc1bb80f277715b6dc32d7c48ba31357673fd7bebec8c2ad81f1c788b2b25d38f9ab83826224ca6a2354",
+    "state_root": "344be44fa508bf25f69e82f2548c91da25d788f321526405065ed3c7b21dad0efdfc131600371f382c2519fdf20efc73",
+    "pass": true
+   },
+   "observation": {
+    "file": "observed/after-validator-5.json",
+    "observed_at": "2026-10-30T11:16:15.635750+00:00",
+    "applied": [
+     "validator-1",
+     "validator-0",
+     "validator-2",
+     "validator-3",
+     "validator-4",
+     "validator-5"
+    ],
+    "ledger_identity": {
+     "height": 1167,
+     "tip": "94e10b63e3aabc1bb80f277715b6dc32d7c48ba31357673fd7bebec8c2ad81f1c788b2b25d38f9ab83826224ca6a2354",
+     "state_root": "344be44fa508bf25f69e82f2548c91da25d788f321526405065ed3c7b21dad0efdfc131600371f382c2519fdf20efc73"
+    }
+   }
+  }
+ ],
+ "section_6": {
+  "file": "observed/after-checks.json",
+  "demo_preflight": "observed/demo-preflight-after.json (READY, 60 PASS)",
+  "fleet_observation": "observed/after.json"
+ },
+ "section_7": {
+  "grant": {
+   "height": 1168,
+   "tx_id": "8281859b5fb399ed6900a70c0eeafe1aabe1a1bafbaabf9cfbe12c6f86edb065ebcc9a77d9e08b00e6f422be109a9ce9",
+   "proposer": "validator-4",
+   "pass": true
+  },
+  "record": "observed/vote-record-1168.json",
+  "note": "StakeHub runs the grant round over SSH with ce22.runtime_binary; it pointed at index-v3-20261027 until 11:16:22Z, so the records for 1164-1167 (observed/vote-records-during-rollout/) were written by the old executable's round; 1168 is the first round of the new executable."
+ },
+ "section_8": {
+  "file": "observed/after-final.json"
+ },
+ "stakehub_config": "~/.pft/config.toml: local_node_binary -> ~/.local/lib/postfiat/releases/vote-records-20261030/postfiat-node before the first grant (10:31Z); runtime_binary -> /opt/postfiat/releases/vote-records-20261030/postfiat-node and topology_file -> /etc/postfiat/releases/vote-records-20261030/topology.json at 11:16:22Z, after the last apply",
+ "rollback": "not needed"
+}

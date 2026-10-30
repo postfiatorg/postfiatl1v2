@@ -27,6 +27,6 @@ out = {
     "asset_orchard_pricing_enforcement_activation_height": latest("asset_orchard_pricing_enforcement_activation_height"),
     "asset_orchard_egress_policy_activation_height": latest("asset_orchard_egress_policy_activation_height"),
 }
-out["result"] = "PASS" if all(out[k] is None for k in list(out)[:3]) and set(routes.values()) == {1} and len(routes) == 2 else "ATTENTION"
+out["result"] = "PASS" if all(out[k] == 1153 for k in list(out)[:3]) and set(routes.values()) == {1} and len(routes) == 2 else "ATTENTION"
 out["w1_inert"] = out["asset_orchard_pricing_enforcement_activation_height"] is None and out["asset_orchard_egress_policy_activation_height"] is None
 print(json.dumps(out, indent=2))

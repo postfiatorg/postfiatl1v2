@@ -5,15 +5,16 @@ no chain transaction was submitted and nothing was deployed. Tip: `main` `ae70d6
 `release/vote-records-20261030`. Tools: [tools/](tools/) (adapted from the `index-v3-20261027` packet; history
 checks run six at a time and the two exact replays in parallel).
 
-**Not done today: canary backup, fleet before-state, rollout** (release day, operator's go;
-[DEPLOY-SHEET.md](../DEPLOY-SHEET.md)).
+Canary backup, fleet before-state and rollout: done on release day, 2026-10-30, at the operator's go
+([DEPLOY-SHEET.md](../DEPLOY-SHEET.md)).
 
 ## CI at the tip
 
 `gh run list --branch main --limit 6` at the cut (2026-10-30T09:33Z), all for `ae70d66d` (pushed 09:15:52Z):
 docs-build `41032153113` **success**; rust-ci `41032153158` **in progress** (its `test` job is the full
 workspace suite, which was not run here); product-security-ci `41032153060` **in progress**. The rollout starts
-only when all three are green.
+only when all three are green. Read again by the operator at 2026-10-30T10:30Z: all three **success**
+(docs-build `41032153113`, rust-ci `41032153158`, product-security-ci `41032153060`).
 
 ## Builds
 

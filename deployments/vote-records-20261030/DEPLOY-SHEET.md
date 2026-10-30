@@ -5,8 +5,8 @@ The release-day sequence, run from the signing workstation. It follows the
 and the [rollout runbook](../../docs/runbooks/safe-validator-rollout.md). Keys are used by path only; no key
 material is printed, copied to a host or committed.
 
-**Status: cut and locally qualified on 2026-10-30, not deployed** ([packet](qualification/README.md)). Nothing
-below has run. Every live section (§0, §1, §3–§8) needs the operator's go of the day; each step marked **GO**
+**Status: deployed on all six validators on 2026-10-30** (applied 10:31–11:14Z at 1162–1167; after state 1168 /
+`a20e406e…` / `39771b74…`; [rollout record](observed/rollout-record.json), [packet](qualification/README.md)). Every live section (§0, §1, §3–§8) needs the operator's go of the day; each step marked **GO**
 needs that go. This release has **no governance step and no index build**: the three activation heights stay
 1153, the account_tx index stays v3, and the W-1 activation kinds stay absent.
 
@@ -23,10 +23,13 @@ Q=~/.cache/release-vote-records-20261030   # build trees: source-1 at ae70d66d, 
 
 ## 0. Go/no-go
 
-- [ ] **GO 0.** No other rollout or session is active on the fleet; `apt-daily-upgrade` is not running. CI on
+- [x] **GO 0.** No other rollout or session is active on the fleet; `apt-daily-upgrade` is not running. CI on
   `ae70d66d` is green in all three workflows: docs-build `41032153113` (success at the cut), rust-ci
   `41032153158` with the full workspace test job and product-security-ci `41032153060` (both in progress at
   the cut). The rollout does not start before all three are green.
+  2026-10-30: no other rollout or session on the fleet (10:06Z); `apt-daily-upgrade` inactive on six; all three
+  workflows green, read by the operator at 10:30Z (docs-build `41032153113`, rust-ci `41032153158`,
+  product-security-ci `41032153060`).
 
 ## 1. Before state (read-only)
 
@@ -40,7 +43,10 @@ since 2026-10-27 is read here), mempools empty. Read-only on each host: `account
 deployed executable reports v3 usable, lag 0; the vote-record state: `ls block-vote-records/` on each host
 (record which proposers have files; VR-01 makes some `no_answer` entries false).
 
-- [ ] **GO 1.** Before state matches. Otherwise stop.
+- [x] **GO 1.** Before state matches. Otherwise stop. 10:15Z: six on `b5cf3ce4…` at 1161 / `a4d5bd82…` / `f3b09178…`
+  (one block since 1160), mempools 0; v3 index usable to 1161, lag 0, on six; vote records: validator-2 1160
+  (validator-0 `no_answer`), validator-3 1161 (six `accepted`), none on 0, 1, 4, 5 ([before](observed/before.json),
+  [reads](observed/before-reads.json)).
 
 ## 2. Stage and local preflight (local)
 
@@ -68,11 +74,17 @@ Expected: six-way agreement, six signer rosters valid, 0 deletions, order 1, 0, 
 import (`read-import-state.py`): the three activation heights 1153 each, both W-1 kinds `null`
 (`w1_inert: true`), both routes `authority_epoch` 1.
 
-- [ ] **GO 3.** Preflight passes and the heights are as expected.
+- [x] **GO 3.** Preflight passes and the heights are as expected. 10:16Z: six-way agreement at 1161, six rosters
+  valid, 0 deletions, order 1, 0, 2, 3, 4, 5; import 1153 ×3, both routes epoch 1, W-1 kinds `null`. Local
+  preflight (§2): `PASS_SIGNED_LOCAL_INPUTS_ONLY`.
 
 ## 4. Fresh signed canary backup from validator-1 and its exact replay
 
-- [ ] **GO 4.** Take the backup (writes one export on validator-1; check its free disk first).
+- [x] **GO 4.** Take the backup (writes one export on validator-1; check its free disk first). 10:17–10:24Z:
+  validator-1 free 16.09 GB before, 15.77 GB after; the backup also stages the candidate executable there
+  (`.vote-records-20261030-validator-1.candidate-postfiat-node`, 65,901,656 bytes, the file the apply uses);
+  manifest `9b68d2a1…` at 1161; re-import, checkpoint and full replay PASS; head replay PASS, receipt
+  `8d61e40c…` ([record](observed/canary-backup.json)).
 
 ```bash
 scripts/postfiat-safe-rollout backup --state-file $E/rollout-state.json \
@@ -109,7 +121,12 @@ Order: validator-1 (canary), then 0, 2, 3, 4, 5. Before the first grant, point S
 `local_node_binary` at this release; point `runtime_binary` and `topology_file` at it only after the last
 validator is applied. The grant recipient is the `testing` wallet `pf6395ef7f43ffaa74ce178d320b9bbbfd45532b38`.
 
-- [ ] **GO 5.N** (one go per validator: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5).
+- [x] **GO 5.N** (one go per validator: validator-1, validator-0, validator-2, validator-3, validator-4, validator-5).
+  2026-10-30 10:31–11:16Z: all six applied in order; one 1-PFT grant to `testing` after each, at 1162–1167
+  (proposers validator-4, 5, 0, 1, 2, 3), each certified at view 0 with 5 of 6 votes and the same block, tip and
+  root on all six; no rollback. validator-2's first try (10:50Z) failed before any change: SSH to `66.42.48.39`
+  hung and exited 255. From its second try (11:03Z) on, apply-next, the grants, grant checks and observations
+  ran through a multiplexed SSH wrapper with keepalives (transport only; [rollout record](observed/rollout-record.json)).
 
 ```bash
 scripts/postfiat-safe-rollout apply-next --state-file $E/rollout-state.json > $E/apply-N.json
@@ -138,7 +155,12 @@ reasons `asset_orchard_pricing_enforcement_activation_absent` and `a666_pfusdc_r
 switch `off`. On each host after its first commit with the new executable:
 `/var/lib/postfiat/validator-N/private_pool_snapshot_points.json` exists.
 
-- [ ] **GO 6.** After checks pass; proceed to §7.
+- [x] **GO 6.** After checks pass; proceed to §7. 11:16–11:18Z at 1167: all six on `87cfe797…`, manifest verified,
+  build `ae70d66d`; RPC units `--max-requests 100000`, `RestartSec=1`, no `--allow-private-action-admission`;
+  `private_action_submit` `rpc_method_not_allowed` and `private_readiness` not ready (both reasons, switch `off`)
+  on six; snapshot points file present on six; v3 index usable, lag 0; only transparent blocks since 1161
+  (activation heights stay 1153, routes epoch 1); swap service epoch 2; demo preflight READY, 60 PASS
+  ([after checks](observed/after-checks.json)).
 
 ## 7. Vote-record check
 
@@ -157,7 +179,11 @@ the vote request is `accepted` (`answered_after_quorum` true when it came after 
 deadline stays `refused`, an answer after the deadline is `late_after_deadline`. A missing file or a wrong entry
 is recorded, not a rollback reason: consensus never reads the record.
 
-- [ ] **GO 7.** The record exists on the proposer, names the six validators and has no false `no_answer`.
+- [x] **GO 7.** The record exists on the proposer, names the six validators and has no false `no_answer`.
+  1168 (grant after StakeHub's `runtime_binary` moved to this release, 11:16Z): validator-4's
+  `height-00000000000000001168.json` names six, all `accepted` (validator-2 `answered_after_quorum`), the block
+  certified on six ([record](observed/vote-record-1168.json)). The rounds for 1162–1167 ran the previous
+  executable (`runtime_binary`), so their records are not this release's.
 
 ## 8. After state
 
@@ -171,6 +197,10 @@ python3 $PACKET/demo-preflight.py
 Expected: six on `87cfe797…` with six-way agreement; the three activation heights 1153; W-1 kinds absent; v3
 index usable on all six. Record the result in `RELEASE-ID.txt`, the plan and
 [Current State](../../docs/status/chain-state-current.md).
+
+- [x] 2026-10-30 11:21Z: six on `87cfe797…` at 1168 / `a20e406e…` / `39771b74…`, mempools 0; demo preflight
+  READY, 60 PASS ([after state](observed/after-final.json)). StakeHub `~/.pft/config.toml`: `local_node_binary`,
+  `runtime_binary` and `topology_file` on this release.
 
 ## Rollback (one validator, emergency only)
 

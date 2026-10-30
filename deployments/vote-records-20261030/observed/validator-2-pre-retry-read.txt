@@ -1,0 +1,6 @@
+2026-10-30T11:02:42Z read through /tmp/vr/bin/ssh (multiplexed, keepalives), read-only:
+postfiat-validator-2 active /opt/postfiat/releases/index-v3-20261027/postfiat-node
+postfiat-validator-2-rpc active /opt/postfiat/releases/index-v3-20261027/postfiat-node
+/opt/postfiat/releases/vote-records-20261030: absent; /etc/postfiat/releases/vote-records-20261030: absent
+unit sha256: postfiat-validator-2.service 0ced50f7d22f63ce6ef6b715bad438034c17e8aef0197e8d4807e2c614c75b26, postfiat-validator-2-rpc.service 24cac63a8ac081cc9412426b4c249f6556c17d2b5dfc4d7191fb62e846a52e64
+root fs avail 22012530688 bytes

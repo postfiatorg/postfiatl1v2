@@ -9,10 +9,12 @@ manifest `ee1df5b3…`, publisher `pfc531e0…` (key on this server). Rollback r
 
 ## Status
 
-**Cut and locally qualified on 2026-10-30, not deployed** ([packet](qualification/README.md)). Not done today:
-canary backup, fleet before-state, rollout ([DEPLOY-SHEET.md](DEPLOY-SHEET.md)). The rollout starts only when
-CI on `ae70d66d` is green in all three workflows (docs-build, rust-ci with the full workspace test job,
-product-security-ci). This release has no governance step and no index build.
+**Deployed on all six validators on 2026-10-30** ([DEPLOY-SHEET.md](DEPLOY-SHEET.md),
+[rollout record](observed/rollout-record.json)). CI on `ae70d66d` green in all three workflows (docs-build
+`41032153113`, rust-ci `41032153158`, product-security-ci `41032153060`). Before state 1161; canary `9b68d2a1…`
+and its head replay PASS; applied one validator at a time 10:31–11:14Z at 1162–1167; after checks PASS; the
+proposer's vote record for 1168 names six, all `accepted`; after state 1168 / `a20e406e…` / `39771b74…`. This
+release has no governance step and no index build.
 
 ## Scope since `d728f895`
 

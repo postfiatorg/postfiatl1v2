@@ -1,0 +1,79 @@
+{
+ "checked_at": "2026-10-30T11:20:14.123205+00:00",
+ "height": 1168,
+ "proposer": "validator-4",
+ "file": "/var/lib/postfiat/validator-4/block-vote-records/height-00000000000000001168.json",
+ "file_sha256": "6618a82cc4b04cae1f0857e3e382a4be107130e6e2617745a8db32a9e170cfb3",
+ "certificate_accepting_voters": [
+  "validator-0",
+  "validator-1",
+  "validator-3",
+  "validator-4",
+  "validator-5"
+ ],
+ "outcomes": {
+  "validator-0": "accepted",
+  "validator-1": "accepted",
+  "validator-2": "accepted",
+  "validator-3": "accepted",
+  "validator-4": "accepted",
+  "validator-5": "accepted"
+ },
+ "record": {
+  "schema": "postfiat.block_vote_record.v1",
+  "chain_id": "postfiat-wan-devnet-2",
+  "block_height": 1168,
+  "view": 0,
+  "block_hash": "a20e406e6e9f2dab00fd8a44182619e8b7c997fd40fd7da0ddd1156b403331ce5f8212d02b7650658ae39e8696f6aa9a",
+  "certificate_id": "bdf9576e56105a94821c5f3b58322418e415cea8c79895112629243b9b763e5fe00538554f9b1ee5830b4dce7fa2ffa5",
+  "proposer": "validator-4",
+  "quorum": 5,
+  "round_deadline_ms": 60000,
+  "entries": [
+   {
+    "validator": "validator-0",
+    "outcome": "accepted",
+    "vote_id": "c33c45509bb68d4ab6875f203a30ce5d4c7986067b35240428a1d2988ffd6b51cdf45fdcf2aba87c880106b68e88aef6",
+    "answered_after_quorum": false
+   },
+   {
+    "validator": "validator-1",
+    "outcome": "accepted",
+    "vote_id": "75e7b742df8900d5516a6195ba7ca41bccd56a7999f4803bc80cf326c64879299ecf520d860b721e05979a2f06d4f33e",
+    "answered_after_quorum": false
+   },
+   {
+    "validator": "validator-2",
+    "outcome": "accepted",
+    "vote_id": "f33657b8502ce71b163b5119f42063337a9d8595eaab7f28bae2137270692dd75479cdee31bb01129ca46c4c052e8e99",
+    "answered_after_quorum": true
+   },
+   {
+    "validator": "validator-3",
+    "outcome": "accepted",
+    "vote_id": "d9c7a400d456bb3a0fe9cd92c86b34d4907e15fa3f3b2a01a4aaec1db88c61401f59db96305c35f43a48bb9cc382dfdd",
+    "answered_after_quorum": false
+   },
+   {
+    "validator": "validator-4",
+    "outcome": "accepted",
+    "vote_id": "ff0ac98f08808ac81dbdae903f50e155a97f4ca4ccda19795da1bb1b2e3a62ce960af93ac6ea42d87ca45af47deba37d",
+    "answered_after_quorum": false
+   },
+   {
+    "validator": "validator-5",
+    "outcome": "accepted",
+    "vote_id": "984a6fd098dc446f09d19842bea965bc8b3583a0826c0ed401c5a60b9b9b37902387853ab928a9da41ed658e97bf4612",
+    "answered_after_quorum": false
+   }
+  ]
+ },
+ "checks": {
+  "proposer_on_new_build": true,
+  "record_exists": true,
+  "names_six_validators": true,
+  "matches_block": true,
+  "no_false_no_answer": true
+ },
+ "pass": true
+}

@@ -1,0 +1,4 @@
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', 'root@66.42.48.39', 'systemctl', 'show', '--property=MainPID', '--value', 'postfiat-cobalt-shadow.service']' returned non-zero exit status 255.
+FAIL observe-fleet

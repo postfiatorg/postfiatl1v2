@@ -1,0 +1,41 @@
+apply-1 validator-1 start 2026-10-30T10:31:21Z
+PASS apply validator-1 applied ['validator-1'] height 1161 a4d5bd825256 f3b091782937 convergence 1161 a4d5bd825256 f3b091782937
+apply-1 done 2026-10-30T10:32:17Z
+grant True 1162 validator-4 f8717d9e02c93e4a True {'balance': 35992724, 'sequence': 67} {'balance': 86073000, 'sequence': 0}
+grant done 2026-10-30T10:35:43Z
+PASS height=1162 proposer=validator-4 view=0 block=1329e7249e17 root=a725166ad881 voters=validator-0,validator-1,validator-2,validator-3,validator-4 {'identical_block_on_6': True, 'quorum_5_of_6': True, 'tip_is_grant_block_on_6': True, 'mempools_empty': True, 'receipt_verified_6_of_6': True, 'proposer_matches_receipt': True}
+Traceback (most recent call last):
+  File "/home/postfiatchad/repos/postfiatl1v2-rel20261030/deployments/vote-records-20261030/observe-fleet.py", line 160, in <module>
+    main()
+    ~~~~^^
+  File "/home/postfiatchad/repos/postfiatl1v2-rel20261030/deployments/vote-records-20261030/observe-fleet.py", line 144, in main
+    rows = list(pool.map(lambda pair: observe(*pair), entries))
+  File "/usr/lib/python3.14/concurrent/futures/_base.py", line 639, in result_iterator
+    yield _result_or_cancel(fs.pop())
+          ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/usr/lib/python3.14/concurrent/futures/_base.py", line 311, in _result_or_cancel
+    return fut.result(timeout)
+           ~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/concurrent/futures/_base.py", line 443, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/concurrent/futures/_base.py", line 395, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.14/concurrent/futures/thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "/usr/lib/python3.14/concurrent/futures/thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "/home/postfiatchad/repos/postfiatl1v2-rel20261030/deployments/vote-records-20261030/observe-fleet.py", line 144, in <lambda>
+    rows = list(pool.map(lambda pair: observe(*pair), entries))
+                                      ~~~~~~~^^^^^^^
+  File "/home/postfiatchad/repos/postfiatl1v2-rel20261030/deployments/vote-records-20261030/observe-fleet.py", line 85, in observe
+    status, info, mempool = rpc(port, "status"), rpc(port, "server_info"), rpc(port, "mempool_status")
+                                                 ~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/home/postfiatchad/repos/postfiatl1v2-rel20261030/deployments/vote-records-20261030/observe-fleet.py", line 52, in rpc
+    reply = json.loads(stream.readline(8 * 1024 * 1024))
+                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 725, in readinto
+    return self._sock.recv_into(b)
+           ~~~~~~~~~~~~~~~~~~~~^^^
+TimeoutError: timed out
+FAIL observe-fleet
