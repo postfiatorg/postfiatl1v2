@@ -49,7 +49,11 @@ Included only when ready and reviewed by the cut; none is promised.
 - [ ] Candidate, not promised: clear RUSTSEC-2026-0387 (crypto-bigint 0.5.5 timing variability). There is no fixed 0.5 release; the fix needs crypto-bigint 0.7.9 or later (0.7.3–0.7.8 are yanked), so the k256 0.14 / elliptic-curve 0.14 / ecdsa 0.17 family. Owner: this lane. Tooling and dependency change, no consensus change intended.
   - [x] The node no longer depends on k256. Done 2026-10-28 on main in the commit "Remove the unused k256 dependency from the node and restate the crypto-bigint advisory exception"; no source file used it. The root `Cargo.lock` still lists k256 0.13.4 and crypto-bigint 0.5.5, only as the optional, never-enabled `k256` of `alloy-primitives = "=1.5.7"` in `crates/arc-conformance`. The `deny.toml` ignore stays until CI reports it unused.
   - [ ] The k256 0.14 upgrade waits for upstream releases: Alloy (up to 2.5.0), SP1 (up to 6.10.0), near-vm-runner and dalek-ff-group-mirror (0.4.1 in the `tools/nav-reserve-proof` locks) all require the 0.13 family. 17 tool, contract and SP1 guest locks keep their own crypto-bigint 0.5.5. A guest rebuild changes the pinned verifying keys and is its own qualification.
-  - [ ] `tools/nav-reserve-proof/contracts/solana-stake-reader`: the lock-only `cargo update -p solana-secp256k1-recover --precise 3.3.1` does not resolve, because 3.3.1 needs solana-define-syscall ^5.3.0 and the lock holds 5.2.0 (via solana-address 2.2.0). Adding `-p solana-define-syscall@5.2.0` resolves in a scratch copy (crypto-bigint 0.7.10 only); not applied, it needs its own build and test pass.
+  - [ ] `tools/nav-reserve-proof/contracts/solana-stake-reader` is not a dependency row: it needs an identity re-pin, which is its own qualification (2026-10-30).
+    - The directory builds a program deployed immutably on Solana mainnet: program id `Gp2oTn6V…PF36`, executable hash `1e0290cc…ad62`. `program-identity.json` and nine other files pin it.
+    - `scripts/check-solana-stake-reader-identity`, run by `product-security-ci`, fails if `Cargo.lock` differs from source commit `ce9c6e0e`.
+    - In a scratch copy, `cargo update -p solana-secp256k1-recover --precise 3.3.1 -p solana-define-syscall@5.2.0` resolves to solana-define-syscall 5.3.0, k256 0.14.0 and crypto-bigint 0.7.10. `cargo check` and the 3 tests pass.
+    - This is not a lock-only change. It needs a new source commit, rebuilt hashes and a deployment decision for the immutable program. Not applied.
 
 ## Not before
 
