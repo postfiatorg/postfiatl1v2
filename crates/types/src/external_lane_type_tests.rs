@@ -10,6 +10,9 @@ fn sample_external_lane(id: &str, reserved_atoms: u64) -> GenesisExternalLane {
             token_address: format!("0x{}", "2b".repeat(20)),
             token_runtime_code_hash: format!("0x{}", "3c".repeat(32)),
             lock_runtime_code_hash: format!("0x{}", "4d".repeat(32)),
+            committee_epoch: 2,
+            committee_root: format!("0x{}", "5e".repeat(32)),
+            confirmation_depth: 64,
         },
     }
 }
@@ -229,4 +232,90 @@ fn external_lane_state_rejects_release_above_reserve() {
     state.released_atoms = 4;
     state.window_released_atoms = 5;
     assert!(state.validate().is_err());
+}
+
+fn lane_policy_json() -> serde_json::Value {
+    serde_json::to_value(&sample_external_lane("base-erc20", 1).policy).expect("policy json")
+}
+
+#[test]
+fn genesis_external_lane_policy_requires_proof_policy_pins() {
+    for field in ["committee_epoch", "committee_root", "confirmation_depth"] {
+        let mut policy = lane_policy_json();
+        policy.as_object_mut().expect("object").remove(field);
+        let error = serde_json::from_value::<GenesisExternalLanePolicy>(policy)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(&format!("missing field `{field}`")), "{error}");
+    }
+    let mut policy = lane_policy_json();
+    policy["committee_signers"] = serde_json::json!(5);
+    assert!(serde_json::from_value::<GenesisExternalLanePolicy>(policy)
+        .unwrap_err()
+        .to_string()
+        .contains("unknown field `committee_signers`"));
+    let mut policy = lane_policy_json();
+    policy["committee_epoch"] = serde_json::json!("2");
+    assert!(serde_json::from_value::<GenesisExternalLanePolicy>(policy).is_err());
+    let mut policy = lane_policy_json();
+    policy["confirmation_depth"] = serde_json::json!(-1);
+    assert!(serde_json::from_value::<GenesisExternalLanePolicy>(policy).is_err());
+
+    let mut cases: Vec<(GenesisExternalLanePolicy, &str)> = Vec::new();
+    for root in [
+        String::new(),
+        "5e".repeat(32),
+        format!("0x{}", "5E".repeat(32)),
+        format!("0x{}", "5e".repeat(31)),
+        format!("0x{}", "5e".repeat(48)),
+        format!("0x{}g", "5e".repeat(31)),
+    ] {
+        let mut policy = sample_external_lane("a", 1).policy;
+        policy.committee_root = root;
+        cases.push((policy, "committee_root"));
+    }
+    let mut policy = sample_external_lane("a", 1).policy;
+    policy.confirmation_depth = 0;
+    cases.push((policy, "confirmation_depth"));
+    for (policy, needle) in cases {
+        let error = policy.validate().unwrap_err();
+        assert!(error.contains(needle), "{policy:?}: {error}");
+    }
+    // chain_id is a parameter: Base Sepolia validates like Base mainnet.
+    let mut sepolia = sample_external_lane("a", 1);
+    sepolia.policy.chain_id = 84_532;
+    genesis_with_lanes(vec![sepolia]).validate().expect("Base Sepolia lane");
+}
+
+#[test]
+fn genesis_external_lane_docs_example_parses_and_validates() {
+    let page = include_str!("../../../docs/architecture/genesis-external-lanes.md");
+    let example = page
+        .split("```json\n")
+        .nth(1)
+        .and_then(|rest| rest.split("```").next())
+        .expect("docs page has a JSON example");
+    let genesis = Genesis::from_json(example).expect("docs example parses");
+    genesis.validate().expect("docs example validates");
+    let policy = &genesis.external_lanes()[0].policy;
+    assert_eq!(policy.chain_id, 8453);
+    assert!(policy.committee_epoch > 0 && policy.confirmation_depth > 0);
+}
+
+#[test]
+fn deployed_devnet_genesis_bytes_and_hash_are_unchanged() {
+    // The genesis of the deployed WAN devnet `postfiat-wan-devnet-2`, kept as
+    // crates/node/testdata/pfeth-reserve-replay/genesis.json; its hash is the
+    // one pinned by crates/node/tests/fixtures/private-actions-v1/manifest.json.
+    let deployed = include_str!("../../node/testdata/pfeth-reserve-replay/genesis.json");
+    let genesis = Genesis::from_json(deployed).expect("parse deployed devnet genesis");
+    assert_eq!(genesis.chain_id, "postfiat-wan-devnet-2");
+    assert_eq!(genesis.external_lanes, None);
+    genesis.validate().expect("deployed devnet genesis validates");
+    assert_eq!(genesis.to_json().expect("serialize devnet genesis"), deployed);
+    assert_eq!(
+        genesis_json_hash(&genesis),
+        "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9"
+    );
+    assert_eq!(genesis.genesis_faucet_balance_atoms(), Ok(GENESIS_NATIVE_SUPPLY_ATOMS));
 }

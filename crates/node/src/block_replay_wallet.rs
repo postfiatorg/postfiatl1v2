@@ -1811,7 +1811,7 @@ pub(super) fn verify_replayed_blocks(
         shielded = checkpoint.shielded;
         bridge = checkpoint.bridge;
     } else {
-        let faucet_account = read_faucet_account_file(&store.data_dir().join(FAUCET_ACCOUNT_FILE))?;
+        let faucet_account = read_genesis_faucet_account_file(store.data_dir(), genesis)?;
         validator_registry = read_validator_registry_replay_base(store)?;
         validate_validator_registry_for_count(&validator_registry, genesis.validator_count)?;
         governance = GovernanceState::new(genesis.validator_count);

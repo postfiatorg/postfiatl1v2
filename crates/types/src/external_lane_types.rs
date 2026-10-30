@@ -9,18 +9,27 @@ pub const EXTERNAL_LANE_ID_MAX_BYTES: usize = 32;
 pub const EXTERNAL_LANE_RELEASE_CAP_BPS_MAX: u32 = 10_000;
 const EXTERNAL_LANE_EVM_ADDRESS_HEX_LEN: usize = 40;
 const EXTERNAL_LANE_CODE_HASH_HEX_LEN: usize = 64;
+const EXTERNAL_LANE_COMMITTEE_ROOT_HEX_LEN: usize = 64;
 
 /// What the release operation of P2.4 verifies a proven Lock against.
-/// Shape-checked here; the values are pinned at genesis and never change.
+/// Shape-checked here; the values are pinned at genesis and the policy cannot
+/// gain a field later without a schema change.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GenesisExternalLanePolicy {
-    /// EVM chain id of the source chain (Base mainnet is 8453).
+    /// EVM chain id of the source chain: a parameter, so a test network such
+    /// as Base Sepolia (84532) is configurable; Base mainnet is 8453.
     pub chain_id: u64,
     pub lock_contract_address: String,
     pub token_address: String,
     pub token_runtime_code_hash: String,
     pub lock_runtime_code_hash: String,
+    /// Bridge committee epoch whose checkpoints prove a Lock.
+    pub committee_epoch: u64,
+    /// Root of that committee: `0x` and 64 lower-case hex digits.
+    pub committee_root: String,
+    /// Source-chain confirmations a Lock needs before it can be proven.
+    pub confirmation_depth: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,7 +66,16 @@ impl GenesisExternalLanePolicy {
             "lock_runtime_code_hash",
             &self.lock_runtime_code_hash,
             EXTERNAL_LANE_CODE_HASH_HEX_LEN,
-        )
+        )?;
+        validate_lane_hex(
+            "committee_root",
+            &self.committee_root,
+            EXTERNAL_LANE_COMMITTEE_ROOT_HEX_LEN,
+        )?;
+        if self.confirmation_depth == 0 {
+            return Err("external lane policy confirmation_depth must be positive".to_string());
+        }
+        Ok(())
     }
 }
 
