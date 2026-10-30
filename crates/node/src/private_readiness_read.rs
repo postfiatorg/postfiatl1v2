@@ -16,6 +16,13 @@ pub const PRIVATE_READINESS_SCHEMA: &str = "postfiat.private_readiness.v1";
 /// parameter, and it never makes `ready` true.
 pub const PRIVATE_ACTION_ADMISSION_SWITCH_KEYS: [&str; 1] = ["--allow-private-action-admission"];
 const PRIVATE_READINESS_MAX_ROUTES: usize = 16;
+/// The W-1 pair on the devnet, as the wallet contract pins it
+/// (`crates/node/tests/fixtures/private-actions-v1/assets.json`): the A666 NAV
+/// asset and pfUSDC. Readiness finds the governed route by these ids, as the
+/// pricing rule finds a claim's route (`enforce_asset_orchard_at_nav_pricing_rules`);
+/// asset codes are not unique and select nothing.
+pub const PRIVATE_READINESS_A666_ASSET_ID: &str = "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c";
+pub const PRIVATE_READINESS_PFUSDC_ASSET_ID: &str = "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrivateReadinessOptions {
@@ -69,6 +76,22 @@ pub struct PrivateGovernedRoute {
     pub paused: bool,
 }
 
+/// The NAV base and settlement quote asset ids a governed route must carry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PrivateAssetPair {
+    pub base_asset_id: String,
+    pub quote_asset_id: String,
+}
+
+impl PrivateAssetPair {
+    pub fn w1_a666_pfusdc() -> Self {
+        Self {
+            base_asset_id: PRIVATE_READINESS_A666_ASSET_ID.to_string(),
+            quote_asset_id: PRIVATE_READINESS_PFUSDC_ASSET_ID.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PrivateAdmissionSwitch {
     /// `on`, `off` or `unknown`.
@@ -100,6 +123,11 @@ pub struct PrivateReadinessReport {
     pub pricing_enforcement: PrivateActivationReadiness,
     pub pricing_max_nav_age_blocks: Option<u64>,
     pub governed_routes: Vec<PrivateGovernedRoute>,
+    /// The pair the route is matched by.
+    pub a666_pfusdc_pair: PrivateAssetPair,
+    /// Every governed route with that pair, by route id: one is the route,
+    /// none is `a666_pfusdc_route_absent`, more is `a666_pfusdc_route_ambiguous`.
+    pub a666_pfusdc_route_matches: Vec<String>,
     pub a666_pfusdc_route: Option<PrivateGovernedRoute>,
     pub admission_switch: PrivateAdmissionSwitch,
     pub ready: bool,
@@ -239,26 +267,27 @@ fn governed_routes(ledger: &LedgerState) -> Vec<PrivateGovernedRoute> {
     routes
 }
 
-/// The exactly-one governed route whose base is an A666 NAV asset and whose
-/// quote is a pfUSDC asset; codes only select it, the ids are what it binds.
-fn a666_pfusdc_route(routes: &[PrivateGovernedRoute]) -> Option<PrivateGovernedRoute> {
+/// The governed routes whose NAV base and settlement quote are exactly the
+/// pair's asset ids, the predicate of the pricing rule; the route is the
+/// single match.
+fn a666_pfusdc_route(
+    routes: &[PrivateGovernedRoute],
+    pair: &PrivateAssetPair,
+) -> (Option<PrivateGovernedRoute>, Vec<String>) {
     let matches = routes
         .iter()
         .filter(|route| {
-            route
-                .base_code
-                .as_deref()
-                .is_some_and(|code| code.eq_ignore_ascii_case("A666"))
-                && route
-                    .quote_code
-                    .as_deref()
-                    .is_some_and(|code| code.eq_ignore_ascii_case("PFUSDC"))
+            route.base_asset_id == pair.base_asset_id && route.quote_asset_id == pair.quote_asset_id
         })
         .collect::<Vec<_>>();
-    match matches.as_slice() {
+    let route = match matches.as_slice() {
         [route] => Some((*route).clone()),
         _ => None,
-    }
+    };
+    (
+        route,
+        matches.iter().map(|route| route.route_id.clone()).collect(),
+    )
 }
 
 pub fn private_readiness(options: PrivateReadinessOptions) -> io::Result<PrivateReadinessReport> {
@@ -268,6 +297,14 @@ pub fn private_readiness(options: PrivateReadinessOptions) -> io::Result<Private
 pub(super) fn private_readiness_with_probe(
     options: PrivateReadinessOptions,
     probe: &dyn PrivateVerifierProbe,
+) -> io::Result<PrivateReadinessReport> {
+    private_readiness_for_pair(options, probe, PrivateAssetPair::w1_a666_pfusdc())
+}
+
+pub(super) fn private_readiness_for_pair(
+    options: PrivateReadinessOptions,
+    probe: &dyn PrivateVerifierProbe,
+    pair: PrivateAssetPair,
 ) -> io::Result<PrivateReadinessReport> {
     let pool_id = options
         .pool_id
@@ -279,6 +316,7 @@ pub(super) fn private_readiness_with_probe(
         pool_id,
         probe,
         options.admission_switch,
+        pair,
     ))
 }
 
@@ -287,6 +325,7 @@ fn readiness_report(
     pool_id: String,
     probe: &dyn PrivateVerifierProbe,
     admission_switch: Option<bool>,
+    pair: PrivateAssetPair,
 ) -> PrivateReadinessReport {
     let next_height = snapshot.tip.height.saturating_add(1);
     let governance = &snapshot.governance;
@@ -306,7 +345,7 @@ fn readiness_report(
         next_height,
     );
     let mut routes = governed_routes(&snapshot.ledger);
-    let a666_pfusdc_route = a666_pfusdc_route(&routes);
+    let (a666_pfusdc_route, a666_pfusdc_route_matches) = a666_pfusdc_route(&routes, &pair);
     routes.truncate(PRIVATE_READINESS_MAX_ROUTES);
     let pool_present = snapshot
         .shielded
@@ -355,10 +394,11 @@ fn readiness_report(
             Some(_) => {}
         }
     }
-    match &a666_pfusdc_route {
-        None => reasons.push("a666_pfusdc_route_absent".to_string()),
-        Some(route) if route.paused => reasons.push("a666_pfusdc_route_paused".to_string()),
-        Some(_) => {}
+    match (&a666_pfusdc_route, a666_pfusdc_route_matches.len()) {
+        (Some(route), _) if route.paused => reasons.push("a666_pfusdc_route_paused".to_string()),
+        (Some(_), _) => {}
+        (None, 0) => reasons.push("a666_pfusdc_route_absent".to_string()),
+        (None, _) => reasons.push("a666_pfusdc_route_ambiguous".to_string()),
     }
 
     PrivateReadinessReport {
@@ -386,6 +426,8 @@ fn readiness_report(
         pricing_enforcement,
         pricing_max_nav_age_blocks: governance.asset_orchard_pricing_max_nav_age_blocks(),
         governed_routes: routes,
+        a666_pfusdc_pair: pair,
+        a666_pfusdc_route_matches,
         a666_pfusdc_route,
         admission_switch,
         ready: reasons.is_empty(),

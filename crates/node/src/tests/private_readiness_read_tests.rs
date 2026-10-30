@@ -30,20 +30,31 @@
         with_route: bool,
         route_paused: bool,
     ) -> PricingReadFixture {
-        pricing_read_fixture(700, move |ledger, governance| {
+        readiness_fixture_with_routes(atomic_height, move |ledger, base, quote| {
             if with_route {
-                let base = ledger.nav_assets[0].asset_id.clone();
-                let quote = ledger
-                    .asset_definitions
-                    .iter()
-                    .find(|asset| asset.code == "PFUSDC")
-                    .expect("quote")
-                    .asset_id
-                    .clone();
-                let mut route = governed_pricing_route(&base, &quote);
+                let mut route = governed_pricing_route(base, quote);
                 route.paused = route_paused;
                 ledger.pftl_uniswap_routes.push(route);
             }
+        })
+    }
+
+    /// As `readiness_fixture`, with `routes` given the ledger and the
+    /// fixture's NAV base and pfUSDC quote asset ids.
+    fn readiness_fixture_with_routes(
+        atomic_height: Option<u32>,
+        routes: impl FnOnce(&mut LedgerState, &str, &str),
+    ) -> PricingReadFixture {
+        pricing_read_fixture(700, move |ledger, governance| {
+            let base = ledger.nav_assets[0].asset_id.clone();
+            let quote = ledger
+                .asset_definitions
+                .iter()
+                .find(|asset| asset.code == "PFUSDC")
+                .expect("quote")
+                .asset_id
+                .clone();
+            routes(ledger, &base, &quote);
             governance.apply(pricing_enforcement_amendment(
                 GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT,
                 650,
@@ -65,13 +76,17 @@
         fixture: &PricingReadFixture,
         verifiers: &ReadinessTestVerifiers,
     ) -> PrivateReadinessReport {
-        super::private_readiness_read::private_readiness_with_probe(
+        super::private_readiness_read::private_readiness_for_pair(
             PrivateReadinessOptions {
                 data_dir: fixture.data_dir.clone(),
                 pool_id: None,
                 admission_switch: None,
             },
             verifiers,
+            PrivateAssetPair {
+                base_asset_id: fixture.base_asset_id.clone(),
+                quote_asset_id: fixture.quote_asset_id.clone(),
+            },
         )
         .expect("readiness")
     }
@@ -150,6 +165,9 @@
         let report = readiness_for(&absent, &ReadinessTestVerifiers::pinned());
         assert!(report.governed_routes.is_empty());
         assert_eq!(report.a666_pfusdc_route, None);
+        assert!(report.a666_pfusdc_route_matches.is_empty());
+        assert_eq!(report.a666_pfusdc_pair.base_asset_id, absent.base_asset_id);
+        assert_eq!(report.a666_pfusdc_pair.quote_asset_id, absent.quote_asset_id);
         assert_eq!(report.reasons, ["a666_pfusdc_route_absent"]);
         fs::remove_dir_all(&absent.data_dir).expect("cleanup");
 
@@ -170,6 +188,69 @@
         let report = readiness_for(&paused, &ReadinessTestVerifiers::pinned());
         assert_eq!(report.reasons, ["a666_pfusdc_route_paused"]);
         fs::remove_dir_all(&paused.data_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn private_readiness_matches_the_route_by_asset_id_when_codes_repeat() {
+        // The devnet's case: a second route whose base asset is coded `a666`
+        // under another asset id. Matching by code found two and reported
+        // the route absent; the pricing rule matches by asset id.
+        let fixture = readiness_fixture_with_routes(Some(701), |ledger, base, quote| {
+            let mut other_base = ledger
+                .asset_definitions
+                .iter()
+                .find(|asset| asset.asset_id == base)
+                .expect("base definition")
+                .clone();
+            other_base.asset_id = "33".repeat(48);
+            other_base.code = "a666".to_string();
+            let mut other = governed_pricing_route(&other_base.asset_id, quote);
+            other.route_id = "a666-sepolia-pfusdc-route".to_string();
+            ledger.asset_definitions.push(other_base);
+            ledger.pftl_uniswap_routes.push(other);
+            ledger
+                .pftl_uniswap_routes
+                .push(governed_pricing_route(base, quote));
+        });
+        let report = readiness_for(&fixture, &ReadinessTestVerifiers::pinned());
+        assert_eq!(report.governed_routes.len(), 2);
+        assert!(report.governed_routes.iter().all(|route| {
+            route
+                .base_code
+                .as_deref()
+                .is_some_and(|code| code.eq_ignore_ascii_case("A666"))
+                && route.quote_code.as_deref() == Some("PFUSDC")
+        }));
+        assert_eq!(report.a666_pfusdc_route_matches, ["a666-pfusdc-route"]);
+        let route = report.a666_pfusdc_route.clone().expect("route");
+        assert_eq!(route.route_id, "a666-pfusdc-route");
+        assert_eq!(route.base_asset_id, fixture.base_asset_id);
+        assert_eq!(route.quote_asset_id, fixture.quote_asset_id);
+        assert!(!route.paused);
+        assert!(report.reasons.is_empty(), "{:?}", report.reasons);
+        assert!(report.ready);
+        fs::remove_dir_all(&fixture.data_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn private_readiness_reports_two_routes_with_the_same_pair_as_ambiguous() {
+        let fixture = readiness_fixture_with_routes(Some(701), |ledger, base, quote| {
+            let mut second = governed_pricing_route(base, quote);
+            second.route_id = "a666-pfusdc-route-2".to_string();
+            ledger
+                .pftl_uniswap_routes
+                .push(governed_pricing_route(base, quote));
+            ledger.pftl_uniswap_routes.push(second);
+        });
+        let report = readiness_for(&fixture, &ReadinessTestVerifiers::pinned());
+        assert_eq!(report.a666_pfusdc_route, None);
+        assert_eq!(
+            report.a666_pfusdc_route_matches,
+            ["a666-pfusdc-route", "a666-pfusdc-route-2"]
+        );
+        assert_eq!(report.reasons, ["a666_pfusdc_route_ambiguous"]);
+        assert!(!report.ready);
+        fs::remove_dir_all(&fixture.data_dir).expect("cleanup");
     }
 
     #[test]
@@ -215,6 +296,9 @@
             assert!(verifier.matches_pin, "{verifier:?}");
             assert_eq!(verifier.loaded_identity.as_ref(), Some(&verifier.pinned));
         }
-        assert!(report.ready, "{report:?}");
+        // The served read matches the W-1 contract's devnet pair; the
+        // fixture's assets are not those, so only the route is missing.
+        assert_eq!(report.a666_pfusdc_pair, PrivateAssetPair::w1_a666_pfusdc());
+        assert_eq!(report.reasons, ["a666_pfusdc_route_absent"], "{report:?}");
         fs::remove_dir_all(&fixture.data_dir).expect("cleanup");
     }

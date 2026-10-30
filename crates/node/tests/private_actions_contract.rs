@@ -461,6 +461,14 @@ fn manifest_matches_the_pinned_code_constants() {
     assert_eq!(batches["active"], true);
     let assets = read_json(fixture("assets.json"));
     assert_eq!(assets["assets"]["A666"]["asset_id"]["value"], A666_ASSET_ID);
+    assert_eq!(
+        postfiat_node::PRIVATE_READINESS_A666_ASSET_ID,
+        A666_ASSET_ID
+    );
+    assert_eq!(
+        postfiat_node::PRIVATE_READINESS_PFUSDC_ASSET_ID,
+        PFUSDC_ASSET_ID
+    );
     assert_eq!(assets["assets"]["A666"]["issuer"]["value"], A666_ISSUER);
     assert_eq!(
         assets["assets"]["pfUSDC"]["asset_id"]["value"],

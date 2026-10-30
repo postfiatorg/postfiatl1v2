@@ -128,6 +128,7 @@ halt flag and the ratio within the band.
     - `a666_pfusdc_route` `null`, admission switch `off`;
     - `ready` false: `asset_orchard_pricing_enforcement_activation_absent`, `a666_pfusdc_route_absent`.
     - The route reason does not mean `pftl_uniswap_routes` has no A666/pfUSDC route. It has two whose codes match: `pftl-a666-ethereum-wA666-usdc-v1` (base `A666` `521c6c63…`, the S1.4 asset) and `pftl-a666-ce22-sepolia-wA666-usdc-controlled-20260723-v1` (base `a666` `300bf48a…`). The read needs exactly one.
+    - [x] Fixed on main in the commit "Match the governed A666/pfUSDC route by asset id in the private readiness read and report ambiguity". The read now matches by the S1.4 asset ids, as the pricing rule does, and reports `a666_pfusdc_route_ambiguous` when more than one route matches. The deployed read on validator-0 (11:56Z, `ae70d66d`) still reports `a666_pfusdc_route_absent` until the next release.
   - S7.1 stays open until the governance records exist (the pricing activation and a single governed A666/pfUSDC route) and readiness reports `ready`.
 - [x] S7.2 *(this lane)* Logs and artifacts inspected for secrets; the gateway holds no wallet or validator key; no remote prover receives openings; no HTTP request or release setting turns off verification.
 
