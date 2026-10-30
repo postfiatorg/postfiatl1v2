@@ -3,6 +3,8 @@
 - **Operator:** Domagoj Ravlić (`dravlic`)
 - **Date:** 2026-10-29 UTC
 
+Superseded on 2026-10-30: the devnet now runs `vote-records-20261030`; see [the 2026-10-30 handoff](2026-10-30___dravlic__vote_records_release_live_and_genesis_external_lane_merged.md).
+
 ## BLUF
 
 The wallet lane's [handoff of 2026-10-29](2026-10-29___goodalexander__tasknode_wallet_findings_for_the_l1.md) asked the L1 side for four things. All four were answered today on main:
