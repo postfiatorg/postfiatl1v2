@@ -262,6 +262,21 @@ fn external_lane_state_codec_and_commitment_cover_released_nonces() {
     other_nonce.external_lanes[0].released_lock_nonces = [3_u64, 8].into_iter().collect();
     assert_ne!(commit(&released_checkpoint.ledger), commit(&other_nonce));
     assert_ne!(commit(&checkpoint.ledger), commit(&released_checkpoint.ledger));
+
+    // The lane commitment is not gated by `commit_complete_nav_state`: the
+    // fixture carries no NAV state, so the lane-bearing bytes are the same
+    // with and without the gate, and still differ from the lane-less ledger's.
+    let commit_without_nav = |ledger: &LedgerState| {
+        let mut bytes = Vec::new();
+        append_ledger_state(&mut bytes, ledger, false, true, false, false, true, false, false)
+            .expect("ledger commitment without complete NAV state");
+        bytes
+    };
+    let mut laneless = checkpoint.ledger.clone();
+    laneless.external_lanes.clear();
+    assert_eq!(commit_without_nav(&checkpoint.ledger), commit(&checkpoint.ledger));
+    assert_ne!(commit_without_nav(&checkpoint.ledger), commit_without_nav(&laneless));
+    assert_ne!(commit(&checkpoint.ledger), commit(&laneless));
     fs::remove_dir_all(data_dir).expect("cleanup");
 }
 
@@ -356,7 +371,7 @@ fn checkpoint_without_lane_record_is_refused_by_checkpoint_conservation() {
 }
 
 #[test]
-fn snapshot_lane_tamper_is_refused_by_lane_set_and_state_root() {
+fn snapshot_lane_tamper_is_refused_by_the_lane_rule() {
     let data_dir = unique_test_dir("postfiat-external-lane-tamper-snapshot");
     init_with_genesis(
         data_dir.clone(),
@@ -402,11 +417,13 @@ fn snapshot_lane_tamper_is_refused_by_lane_set_and_state_root() {
         "{error}"
     );
 
-    // A changed live lane field passes the lane-set rule; import's block
-    // verification recomputes the root and refuses it against the block tip.
+    // A changed live lane field is refused by the same rule: until the
+    // release operation exists, the records must equal genesis exactly.
     let error = import_with(&|ledger| ledger.external_lanes[0].window_index += 1);
-    assert!(error.contains("snapshot block verification failed"), "{error}");
-    assert!(error.contains("does not match current state root"), "{error}");
+    assert!(
+        error.contains("snapshot ledger external lane `base-erc20` has window_index 1, but genesis has 0"),
+        "{error}"
+    );
     for dir in [data_dir, snapshot_dir] {
         let _ = fs::remove_dir_all(dir);
     }
@@ -649,6 +666,90 @@ fn checkpoint_with_a_lane_genesis_never_configured_is_refused() {
         "{error}"
     );
     fs::remove_dir_all(data_dir).expect("cleanup");
+}
+
+/// Lane atoms released to an account without a release operation: lane id
+/// and reserve kept, released fields forged, the account credited by 5.
+fn forge_release(ledger: &mut LedgerState) {
+    let lane = &mut ledger.external_lanes[0];
+    lane.released_atoms = 5;
+    lane.released_lock_nonces = [99_u64].into_iter().collect();
+    lane.window_released_atoms = 5;
+    ledger.accounts[0].balance += 5;
+}
+
+#[test]
+fn checkpoint_with_a_forged_release_is_refused() {
+    let (data_dir, checkpoint, _) = pruned_lane_node("forged-release");
+    let (result, tampered) = reread_tampered_checkpoint(&data_dir, &checkpoint, forge_release);
+    assert_aggregate_balances(&tampered);
+    let error = result.unwrap_err().to_string();
+    assert!(
+        error.contains(
+            "history checkpoint external lane `base-erc20` has released_atoms 5, but genesis has 0"
+        ),
+        "{error}"
+    );
+
+    // The same state in the live ledger: replay starts from the checkpoint and refuses it.
+    let store = NodeStore::new(&data_dir);
+    store.write_ledger(&tampered.ledger).expect("write forged ledger");
+    let error = verify_blocks(NodeOptions {
+        data_dir: data_dir.clone(),
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("has released_atoms 5, but genesis has 0"), "{error}");
+    fs::remove_dir_all(data_dir).expect("cleanup");
+}
+
+#[test]
+fn snapshot_with_a_forged_release_is_refused() {
+    let (data_dir, _, _) = pruned_lane_node("forged-release-snapshot");
+    let snapshot_dir = sibling_dir(&data_dir, "snapshot");
+    let restored_dir = sibling_dir(&data_dir, "restored");
+    export_snapshot(SnapshotExportOptions {
+        data_dir: data_dir.clone(),
+        snapshot_dir: snapshot_dir.clone(),
+    })
+    .expect("export snapshot");
+    let mut ledger: LedgerState =
+        serde_json::from_slice(&fs::read(snapshot_dir.join(LEDGER_FILE)).expect("read ledger"))
+            .expect("parse ledger");
+    forge_release(&mut ledger);
+    let shielded = NodeStore::new(&data_dir).read_shielded().expect("shielded");
+    let burns = read_history_checkpoint_state_optional(&NodeStore::new(&data_dir))
+        .expect("checkpoint")
+        .expect("checkpoint written")
+        .native_fee_burn_total
+        .expect("burns");
+    assert_eq!(
+        native_pft_live_total(&ledger, &shielded).expect("live") + burns,
+        u128::from(GENESIS_NATIVE_SUPPLY_ATOMS),
+        "the forged release keeps live + burns = supply"
+    );
+    rewrite_snapshot_file(
+        &snapshot_dir,
+        LEDGER_FILE,
+        serde_json::to_vec_pretty(&ledger).expect("encode ledger"),
+    );
+    let error = import_snapshot(SnapshotImportOptions {
+        data_dir: restored_dir.clone(),
+        snapshot_dir: snapshot_dir.clone(),
+        node_id: None,
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(!restored_dir.exists());
+    assert!(
+        error.contains(
+            "snapshot ledger external lane `base-erc20` has released_atoms 5, but genesis has 0"
+        ),
+        "{error}"
+    );
+    for dir in [data_dir, snapshot_dir] {
+        let _ = fs::remove_dir_all(dir);
+    }
 }
 
 #[test]

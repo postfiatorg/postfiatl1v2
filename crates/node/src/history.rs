@@ -1358,18 +1358,19 @@ fn validate_history_checkpoint_state(
             ),
         ));
     }
-    validate_external_lane_set_matches_genesis(&genesis, &checkpoint.ledger, "history checkpoint")?;
+    validate_external_lanes_match_genesis(&genesis, &checkpoint.ledger, "history checkpoint")?;
     validate_validator_registry_for_count(
         &checkpoint.validator_registry,
         checkpoint.governance.active_validator_count,
     )
 }
 
-/// Genesis fixes the lane set for the life of the chain: a replay base must
-/// carry exactly the genesis lanes with their reserves. Released fields are
-/// live state and are not compared. The aggregate conservation check cannot
-/// see a lane whose atoms were moved to an account, so this rule is separate.
-pub(super) fn validate_external_lane_set_matches_genesis(
+/// Genesis fixes the lane set for the life of the chain, and no operation can
+/// release yet, so a replay base must carry exactly the genesis lane records:
+/// released 0, no nonces, window fields 0. The aggregate conservation check
+/// cannot see lane atoms moved to an account, so this rule is separate.
+// P2.4 replaces full equality with released fields proven by the chain's receipts.
+pub(super) fn validate_external_lanes_match_genesis(
     genesis: &Genesis,
     ledger: &LedgerState,
     label: &str,
@@ -1378,11 +1379,11 @@ pub(super) fn validate_external_lane_set_matches_genesis(
     let expected = genesis
         .genesis_external_lane_states()
         .into_iter()
-        .map(|lane| (lane.lane_id, lane.reserved_atoms))
+        .map(|lane| (lane.lane_id.clone(), lane))
         .collect::<BTreeMap<_, _>>();
     let mut seen = BTreeSet::new();
     for lane in &ledger.external_lanes {
-        let Some(reserved) = expected.get(&lane.lane_id) else {
+        let Some(genesis_lane) = expected.get(&lane.lane_id) else {
             return Err(refuse(format!(
                 "{label} carries external lane `{}`, which genesis never configured",
                 lane.lane_id
@@ -1394,10 +1395,46 @@ pub(super) fn validate_external_lane_set_matches_genesis(
                 lane.lane_id
             )));
         }
-        if lane.reserved_atoms != *reserved {
+        if lane.reserved_atoms != genesis_lane.reserved_atoms {
             return Err(refuse(format!(
-                "{label} external lane `{}` reserves {} atoms, but genesis reserves {reserved}",
-                lane.lane_id, lane.reserved_atoms
+                "{label} external lane `{}` reserves {} atoms, but genesis reserves {}",
+                lane.lane_id, lane.reserved_atoms, genesis_lane.reserved_atoms
+            )));
+        }
+        let mismatch = [
+            (
+                "released_atoms",
+                lane.released_atoms.to_string(),
+                genesis_lane.released_atoms.to_string(),
+            ),
+            (
+                "released_lock_nonces",
+                format!("{:?}", lane.released_lock_nonces),
+                format!("{:?}", genesis_lane.released_lock_nonces),
+            ),
+            (
+                "window_index",
+                lane.window_index.to_string(),
+                genesis_lane.window_index.to_string(),
+            ),
+            (
+                "window_released_atoms",
+                lane.window_released_atoms.to_string(),
+                genesis_lane.window_released_atoms.to_string(),
+            ),
+        ]
+        .into_iter()
+        .find(|(_, actual, genesis_value)| actual != genesis_value);
+        if let Some((field, actual, genesis_value)) = mismatch {
+            return Err(refuse(format!(
+                "{label} external lane `{}` has {field} {actual}, but genesis has {genesis_value}",
+                lane.lane_id
+            )));
+        }
+        if lane != genesis_lane {
+            return Err(refuse(format!(
+                "{label} external lane `{}` differs from its genesis record",
+                lane.lane_id
             )));
         }
     }

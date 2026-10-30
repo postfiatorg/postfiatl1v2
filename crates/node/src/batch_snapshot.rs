@@ -3611,7 +3611,7 @@ fn import_snapshot_into_staging(
 
     let imported_store = NodeStore::new(data_dir);
     let imported_genesis = imported_store.read_genesis()?;
-    validate_external_lane_set_matches_genesis(
+    validate_external_lanes_match_genesis(
         &imported_genesis,
         &imported_store.read_ledger()?,
         "snapshot ledger",

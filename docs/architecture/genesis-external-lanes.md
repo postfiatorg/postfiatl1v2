@@ -80,7 +80,7 @@ Tests pin this: the deployed `postfiat-wan-devnet-2` genesis re-serialises byte 
 - each block: live before minus fee burns equals live after;
 - each history checkpoint: live supply plus cumulative fee burns equals the genesis supply.
 
-A lane that has released more than it reserved, or a duplicated lane id, fails these checks. A history checkpoint or imported snapshot must also carry exactly the genesis lane set, each with its genesis `reserved_atoms`, so atoms cannot leave a lane for an account even when the totals still balance. Where the genesis is at hand (height-zero replay, history checkpoints) the faucet must hold exactly the native supply minus the lanes; a faucet file read without the genesis is only bounded by the supply, and height-zero replay refuses a short one.
+A lane that has released more than it reserved, or a duplicated lane id, fails these checks. Until the release operation (P2.4) exists, a history checkpoint or imported snapshot must carry exactly the genesis lane records (genesis `reserved_atoms`, nothing released, no nonces, window fields 0), so atoms cannot leave a lane for an account even when the totals still balance. Where the genesis is at hand (height-zero replay, history checkpoints) the faucet must hold exactly the native supply minus the lanes; a faucet file read without the genesis is only bounded by the supply, and height-zero replay refuses a short one.
 
 Snapshots, restores and history checkpoints carry the lane records unchanged; tests cover lanes with nothing released, and a checkpoint, snapshot or faucet that drops a lane is refused. The lifecycle test for a released lane comes with P2.4.
 

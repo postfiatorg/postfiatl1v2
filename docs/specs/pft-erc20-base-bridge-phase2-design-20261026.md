@@ -206,7 +206,7 @@ The tests are written before the code.
 
 The release changes a state result, so it needs its own qualification, as a consensus change did on 2026-10-08 (`docs/handoffs/2026-10-08___dravlic__conference_day_two_friday_ready.md:68`). That qualification repeats the native inventory's gates: genesis-to-tip replay, checkpoint, prune, and snapshot and restore (`OPEN-SOURCE-NATIVE-SUPPLY-INVENTORY-20260716.md:6-8`, `:77-80`).
 
-Three "not before" rules apply. No genesis code merges before the token document fixes the supply number (`docs/listings/coinbase/integration-plan.md:99-105`). No lane is configured before a mainnet genesis plan exists; the launch spec leaves token migration to a separate document that does not exist yet (`docs/architecture/l1v2-testnet-genesis-and-launch-spec.md:27`, `:402`). And the lock contract is not deployed on Base mainnet before its audit is complete (`pft-erc20-representation-options-20261026.md:87`).
+Three "not before" rules apply. The genesis lane code may merge now that the total supply is fixed (100 billion PFT, 2026-10-28); no lane is configured before a mainnet genesis plan fixes the slice, and the type validator takes the amount as a parameter until then (`docs/listings/coinbase/pft-erc20-representation-options-20261026.md` sections 9 and 10). No lane is configured before a mainnet genesis plan exists; the launch spec leaves token migration to a separate document that does not exist yet (`docs/architecture/l1v2-testnet-genesis-and-launch-spec.md:27`, `:402`). And the lock contract is not deployed on Base mainnet before its audit is complete (`pft-erc20-representation-options-20261026.md:87`).
 
 ## 9. Risks
 
