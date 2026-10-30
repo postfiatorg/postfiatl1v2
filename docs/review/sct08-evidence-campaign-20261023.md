@@ -187,12 +187,17 @@ fix. Evidence: the release packet's `observed/` on branch
 - [x] **VR-01 fixed live.** At 1160 a vote accepted after the quorum was
   recorded as `no_answer`. At 1168 the same case is `accepted` with its vote ID.
 - [x] **Rollout heights.** The records for 1164–1167 (proposers validator-0 to
-  validator-3, on the new build) name all six, and every certificate voter is
-  `accepted`. At 1166, validator-3 is `no_answer` and is not in the
-  certificate. Its own logs were not checked.
+  validator-3) name all six, and every certificate voter is `accepted`. Their
+  rounds still ran the previous executable `b5cf3ce4…`, which has VR-01.
+- [x] **The 1166 `no_answer` is VR-01.** validator-2's record lists validator-3
+  as `no_answer`, and the 5-of-6 certificate `29004ce5…` omits it. validator-3's
+  event log shows two `block_vote_request` events from validator-2 for 1166,
+  both `accepted`, then the certified batch, applied. Its vote file
+  `1166.0.validator-3.block_vote.json` was written at 11:10:46Z. validator-3
+  voted after the quorum, and the old round wrote it as `no_answer`.
 - [ ] The fact over a window: needs every height's record from all six record
   directories, collected by the operator. The first window fully on the fixed
-  build starts at 1164.
+  build starts at 1168.
 - [ ] The records in the signed snapshot: this needs a new snapshot version.
 - **Cobalt linkedness: NOT RUNNABLE HERE.** The native trust state verifies,
   but linkedness is a property of a candidate's admission, and no candidate has
@@ -295,7 +300,7 @@ The re-run, with outputs under `~/.cache/sct08-20261023/item5/`:
 | 1 | Signed validator-to-wallet bindings for the six validators, published as ledger memos | Post Fiat as operator of the six validators, under a separate signing authorization |
 | 2 | Signed per-account work digests and the publishing-key record | Task Node maintainers |
 | 3 | The published exchange and Foundation funding exclusion list | Post Fiat |
-| 4 | Reliability over a window from the live vote records (from 1164) and their signed-snapshot export; accountability, ρ and domain-control inputs from items 1–3; operator manifests; model classification | This lane and the operator (records and export); operators; the governance lane |
+| 4 | Reliability over a window from the live vote records (from 1168) and their signed-snapshot export; accountability, ρ and domain-control inputs from items 1–3; operator manifests; model classification | This lane and the operator (records and export); operators; the governance lane |
 | 5 | Done 2026-10-23 (runner change and 1137 re-run). A real non-empty derivation still needs items 1–3. | — |
 
 2026-10-29: PR #180 (`29589ab2`) added the [Task Node L1 validator binding](../runbooks/tasknode-l1-validator-binding.md) tool, in which the validator key alone signs a Task Node account challenge; it is not the dual-signed ledger-memo record item 1 needs, so item 1 stays open.
