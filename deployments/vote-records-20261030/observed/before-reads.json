@@ -1,0 +1,114 @@
+{
+  "observed_at": "2026-10-30T10:11Z..10:14Z",
+  "method": "read-only: account_tx_index_status over each host's RPC tunnel (127.0.0.1:27650+N); ls and cat of /var/lib/postfiat/validator-N/block-vote-records/ over SSH",
+  "account_tx_index": {
+    "validator-0": {
+      "index_usable": true,
+      "disk_index_usable": true,
+      "index_lag_blocks": 0,
+      "disk_index_lag_blocks": 0,
+      "indexed_to_height": 1161,
+      "disk_indexed_to_height": 1161,
+      "tip_hash": "a4d5bd8252569ef2c5e9ce26d441361677be3e5569dc92718a8f97e639950ae24493ba24ce91bc813132b8a5bad29946",
+      "reason": null,
+      "disk_index_reason": null
+    },
+    "validator-1": {
+      "index_usable": true,
+      "disk_index_usable": true,
+      "index_lag_blocks": 0,
+      "disk_index_lag_blocks": 0,
+      "indexed_to_height": 1161,
+      "disk_indexed_to_height": 1161,
+      "tip_hash": "a4d5bd8252569ef2c5e9ce26d441361677be3e5569dc92718a8f97e639950ae24493ba24ce91bc813132b8a5bad29946",
+      "reason": null,
+      "disk_index_reason": null
+    },
+    "validator-2": {
+      "index_usable": true,
+      "disk_index_usable": true,
+      "index_lag_blocks": 0,
+      "disk_index_lag_blocks": 0,
+      "indexed_to_height": 1161,
+      "disk_indexed_to_height": 1161,
+      "tip_hash": "a4d5bd8252569ef2c5e9ce26d441361677be3e5569dc92718a8f97e639950ae24493ba24ce91bc813132b8a5bad29946",
+      "reason": null,
+      "disk_index_reason": null
+    },
+    "validator-3": {
+      "index_usable": true,
+      "disk_index_usable": true,
+      "index_lag_blocks": 0,
+      "disk_index_lag_blocks": 0,
+      "indexed_to_height": 1161,
+      "disk_indexed_to_height": 1161,
+      "tip_hash": "a4d5bd8252569ef2c5e9ce26d441361677be3e5569dc92718a8f97e639950ae24493ba24ce91bc813132b8a5bad29946",
+      "reason": null,
+      "disk_index_reason": null
+    },
+    "validator-4": {
+      "index_usable": true,
+      "disk_index_usable": true,
+      "index_lag_blocks": 0,
+      "disk_index_lag_blocks": 0,
+      "indexed_to_height": 1161,
+      "disk_indexed_to_height": 1161,
+      "tip_hash": "a4d5bd8252569ef2c5e9ce26d441361677be3e5569dc92718a8f97e639950ae24493ba24ce91bc813132b8a5bad29946",
+      "reason": null,
+      "disk_index_reason": null
+    },
+    "validator-5": {
+      "index_usable": true,
+      "disk_index_usable": true,
+      "index_lag_blocks": 0,
+      "disk_index_lag_blocks": 0,
+      "indexed_to_height": 1161,
+      "disk_indexed_to_height": 1161,
+      "tip_hash": "a4d5bd8252569ef2c5e9ce26d441361677be3e5569dc92718a8f97e639950ae24493ba24ce91bc813132b8a5bad29946",
+      "reason": null,
+      "disk_index_reason": null
+    }
+  },
+  "block_vote_records": {
+    "validator-0": [],
+    "validator-1": [],
+    "validator-2": [
+      {
+        "file": "height-00000000000000001160.json",
+        "sha256": "aec1a9e3b8747d31307f7cd9ab9be92362f49084d0493cb5d6d17677be7ca617",
+        "block_height": 1160,
+        "proposer": "validator-2",
+        "block_hash": "f65e6fac482e3817e5e1c1fad6143adb3e12fb8afd6d7808fc43e6112ac091afa02b3a971cff32757d4a4a7344c519cd",
+        "outcomes": {
+          "validator-0": "no_answer",
+          "validator-1": "accepted",
+          "validator-2": "accepted",
+          "validator-3": "accepted",
+          "validator-4": "accepted",
+          "validator-5": "accepted"
+        }
+      }
+    ],
+    "validator-3": [
+      {
+        "file": "height-00000000000000001161.json",
+        "sha256": "ec9e7d0aba61bd6070c5c02cf42b65c802ccb308bdd27113fdb27e934d7911d3",
+        "block_height": 1161,
+        "proposer": "validator-3",
+        "block_hash": "a4d5bd8252569ef2c5e9ce26d441361677be3e5569dc92718a8f97e639950ae24493ba24ce91bc813132b8a5bad29946",
+        "outcomes": {
+          "validator-0": "accepted",
+          "validator-1": "accepted",
+          "validator-2": "accepted",
+          "validator-3": "accepted",
+          "validator-4": "accepted",
+          "validator-5": "accepted"
+        }
+      }
+    ],
+    "validator-4": [],
+    "validator-5": []
+  },
+  "block_vote_records_note": "validator-0, 1, 4, 5 have no block-vote-records directory; validator-2's 1160 record lists validator-0 as no_answer (VR-01).",
+  "activation_heights_note": "No RPC exposes the governed activation heights; the live governance.json is a stale 2026-08-31 file, so the read comes from the signed validator-1 import at the before-state height (section 4, import-state.json)."
+}
