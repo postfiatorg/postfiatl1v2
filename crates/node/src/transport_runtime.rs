@@ -2433,12 +2433,22 @@ pub(super) fn transport_authenticated_peer_health(
     Ok((authenticated, required))
 }
 
+/// The pool is process-wide and test fleets run in parallel in one test
+/// binary, so a test closes only the streams to its own topology's peers.
 #[cfg(test)]
-pub(super) fn clear_transport_vote_stream_pool_for_test() -> Result<(), String> {
+pub(super) fn clear_transport_vote_stream_pool_for_test(
+    topology_file: &Path,
+) -> Result<(), String> {
+    let topology = read_topology_file(&topology_file.to_path_buf())?;
+    let peers = topology
+        .peers
+        .iter()
+        .map(|peer| socket_address(&peer.host, peer.p2p_port))
+        .collect::<BTreeSet<_>>();
     transport_vote_stream_pool()
         .lock()
         .map_err(|_| "transport vote stream pool lock poisoned".to_string())?
-        .clear();
+        .retain(|address, _| !peers.contains(address));
     Ok(())
 }
 

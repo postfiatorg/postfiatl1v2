@@ -176,7 +176,7 @@ mod transport_batch_payload_tests {
             required_parent: None,
         })
         .expect("consensus v2 transport round");
-        crate::transport_runtime::clear_transport_vote_stream_pool_for_test()
+        crate::transport_runtime::clear_transport_vote_stream_pool_for_test(topology_file)
             .expect("close persistent vote sessions");
         for handle in handles {
             let report = handle
@@ -523,7 +523,7 @@ mod transport_batch_payload_tests {
         recovery_rpc
             .join()
             .expect("join recovery RPC");
-        crate::transport_runtime::clear_transport_vote_stream_pool_for_test()
+        crate::transport_runtime::clear_transport_vote_stream_pool_for_test(&topology_file)
             .expect("close recovery persistent sessions");
         for handle in recovery_handles {
             let report = handle
@@ -1427,7 +1427,7 @@ mod transport_batch_payload_tests {
         );
         let processed_certificate = processed_dir.join("height-1.certificate.json");
         assert!(processed_certificate.exists());
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&topology_file).expect("close persistent streams");
         for (index, handle) in handles.into_iter().enumerate() {
             let node_index = if index < collector_index {
                 index
@@ -1561,7 +1561,7 @@ mod transport_batch_payload_tests {
                 required_parent: None,
             })
             .expect("default round must not depend on a send to its own validator");
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fleet.topology_file).expect("close persistent streams");
         for handle in handles {
             let service = handle
                 .join()
@@ -1852,7 +1852,7 @@ mod transport_batch_payload_tests {
             .expect("round with one refusing, one silent and one late validator");
         assert!(report.round_ok, "send_failures={:?}", report.send_failures);
         crate::transport_runtime::wait_for_pending_block_vote_records();
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fleet.topology_file).expect("close persistent streams");
         stop.store(true, std::sync::atomic::Ordering::SeqCst);
         for handle in handles {
             let _ = handle.join();
@@ -2081,7 +2081,7 @@ mod transport_batch_payload_tests {
         );
         let round_elapsed = round_start.elapsed();
         crate::transport_runtime::wait_for_pending_block_vote_records();
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fleet.topology_file).expect("close persistent streams");
         stop.store(true, std::sync::atomic::Ordering::SeqCst);
         for handle in handles {
             let _ = handle.join();

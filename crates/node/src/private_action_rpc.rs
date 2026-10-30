@@ -357,13 +357,12 @@ mod private_action_rpc_tests {
     }
 
     fn private_action_serve(root: &Path, allow: bool, requests: &[RpcRequest]) -> Vec<RpcResponse> {
-        let port = TcpListener::bind(("127.0.0.1", 0))
-            .expect("reserve port")
-            .local_addr()
-            .expect("port")
-            .port();
+        // Keep the port bound into the server: a released port can be taken
+        // by a parallel test's fleet, and the client would then talk to it.
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("reserve port");
+        let port = listener.local_addr().expect("port").port();
         let options = private_action_serve_options(root, allow, port, requests.len());
-        let server = thread::spawn(move || rpc_serve(options));
+        let server = thread::spawn(move || rpc_serve_inner(options, Some(listener)));
         let responses = requests
             .iter()
             .map(|request| {

@@ -625,7 +625,7 @@ mod private_action_six_validator_tests {
                 required_parent: None,
             })
             .expect("certified round");
-            crate::transport_runtime::clear_transport_vote_stream_pool_for_test()
+            crate::transport_runtime::clear_transport_vote_stream_pool_for_test(&self.topology_file)
                 .expect("close vote sessions");
             for handle in handles {
                 let report = handle.join().expect("validator thread").expect("validator service");
