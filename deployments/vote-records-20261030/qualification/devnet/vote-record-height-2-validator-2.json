@@ -1,0 +1,37 @@
+{
+  "schema": "postfiat.block_vote_record.v1",
+  "chain_id": "postfiat-local",
+  "block_height": 2,
+  "view": 0,
+  "block_hash": "47e1a4285f3dcf8096486c06aace5670a399f82f67dbe94e5e79be32ed4f646870ca24ed27cb2f29762c5431ceb3df84",
+  "certificate_id": "485b2ac6a7ed020997c5e8fa4d4028265ca32cef28a7b071105fb7853aa71fcbe9d42d5fdf76a0fa5de655736a7df289",
+  "proposer": "validator-2",
+  "quorum": 3,
+  "round_deadline_ms": 4000,
+  "entries": [
+    {
+      "validator": "validator-0",
+      "outcome": "accepted",
+      "vote_id": "fe21650c4c59bc837bd2904e677f173fd808c158481bce54dc506966452b80d6efa0be7dc859519a49c2381454a823c7",
+      "answered_after_quorum": false
+    },
+    {
+      "validator": "validator-1",
+      "outcome": "accepted",
+      "vote_id": "cf36e7f7316d573c5807bb99cd120e2af2c2d00612001db56a9b81d63f57f8c55596a045cbfd5cde4a5969a89951208e",
+      "answered_after_quorum": false
+    },
+    {
+      "validator": "validator-2",
+      "outcome": "accepted",
+      "vote_id": "474df0d27bb9a682eb33f1fb38909530218a434e8bc82797b81bf7580748859d0ab2ff8b4165f2b77d566433f070f040",
+      "answered_after_quorum": false
+    },
+    {
+      "validator": "validator-3",
+      "outcome": "refused",
+      "refusal_class": "block_proposal_does_not_match_local_batch_and_state",
+      "answered_after_quorum": false
+    }
+  ]
+}

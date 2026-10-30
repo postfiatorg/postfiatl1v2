@@ -1,0 +1,856 @@
+{
+  "source_commit": "ae70d66d8a5083cc1a33aaf4a3e17f6901f7bc34",
+  "binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+  "rollback_binary_sha256": "b5cf3ce4bc046e6338beca6d5ead6fd0343426ddb01ac2f461c31e2775f9c8eb",
+  "checks": [
+    {
+      "name": "copy-2026-09-28-working",
+      "command": [
+        "cp",
+        "-a",
+        "/home/postfiatchad/.cache/release-repair-20260928/working",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/working"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030",
+      "started_at": "2026-10-30T09:39:57.163882+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/copy-2026-09-28-working.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/copy-2026-09-28-working.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2341442,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:40:23.175343+00:00",
+      "elapsed_seconds": 26.0,
+      "minimum_available_memory_observed_bytes": 14518349824
+    },
+    {
+      "name": "canary-1153-import-signed",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "snapshot-import-signed-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1153/signed-import",
+        "--snapshot-dir",
+        "/home/postfiatchad/.postfiat/deployments/index-v3-20261027/evidence/pre-rollout-backup/backup-signed",
+        "--trusted-publisher-key-file",
+        "/home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json",
+        "--node-id",
+        "validator-1"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:39:57.167025+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1153-import-signed.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1153-import-signed.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2341443,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:40:42.182618+00:00",
+      "elapsed_seconds": 45.0,
+      "minimum_available_memory_observed_bytes": 9045413888
+    },
+    {
+      "name": "canary-1153-import-tampered-signature",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "snapshot-import-signed-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1153/tampered-import",
+        "--snapshot-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1153/tampered-signed",
+        "--trusted-publisher-key-file",
+        "/home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json",
+        "--node-id",
+        "validator-1"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:40:42.676616+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1153-import-tampered-signature.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1153-import-tampered-signature.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2342230,
+      "exit_code": 1,
+      "completed_at": "2026-10-30T09:40:43.677975+00:00",
+      "elapsed_seconds": 1.0,
+      "minimum_available_memory_observed_bytes": 11054899200,
+      "expected": "nonzero exit (rejection)"
+    },
+    {
+      "name": "rotated-1021-full-new-validator-5",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/working/validator-5"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:40:23.335885+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rotated-1021-full-new-validator-5.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rotated-1021-full-new-validator-5.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2342075,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:43:44.455127+00:00",
+      "elapsed_seconds": 201.1,
+      "minimum_available_memory_observed_bytes": 8850862080,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      }
+    },
+    {
+      "name": "rotated-1021-full-new-validator-3",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/working/validator-3"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:40:23.334502+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rotated-1021-full-new-validator-3.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rotated-1021-full-new-validator-3.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2342074,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:43:44.463680+00:00",
+      "elapsed_seconds": 201.1,
+      "minimum_available_memory_observed_bytes": 8850698240,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      }
+    },
+    {
+      "name": "rotated-1021-full-new-validator-1",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/working/validator-1"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:40:23.333350+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rotated-1021-full-new-validator-1.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rotated-1021-full-new-validator-1.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2342072,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:43:44.479023+00:00",
+      "elapsed_seconds": 201.1,
+      "minimum_available_memory_observed_bytes": 8850018304,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      }
+    },
+    {
+      "name": "rotated-1021-full-new-validator-2",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/working/validator-2"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:40:23.333719+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rotated-1021-full-new-validator-2.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rotated-1021-full-new-validator-2.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2342071,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:43:44.478721+00:00",
+      "elapsed_seconds": 201.1,
+      "minimum_available_memory_observed_bytes": 8849801216,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      }
+    },
+    {
+      "name": "rotated-1021-full-new-validator-0",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/working/validator-0"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:40:23.332856+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rotated-1021-full-new-validator-0.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rotated-1021-full-new-validator-0.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2342073,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:43:44.500586+00:00",
+      "elapsed_seconds": 201.2,
+      "minimum_available_memory_observed_bytes": 8850534400,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      }
+    },
+    {
+      "name": "rotated-1021-full-new-validator-4",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/working/validator-4"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:40:23.334953+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rotated-1021-full-new-validator-4.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rotated-1021-full-new-validator-4.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2342076,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:43:47.540026+00:00",
+      "elapsed_seconds": 204.2,
+      "minimum_available_memory_observed_bytes": 8850018304,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "35ab6fbc3546f1e1bf387d10e68d1e314c9ed0a90ec4940e5f41c0fcc79759456fc1f5d8718fbd734a41b779b876f535",
+        "state_root": "b01a98e539f8b101d10c22cf78efe6d205cdf291a44b47fbbed05cb315ad7518651b59959d3c38af8a71713030c63091"
+      }
+    },
+    {
+      "name": "canary-1153-checkpoint-new",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "verify-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1153/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:43:44.456349+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1153-checkpoint-new.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1153-checkpoint-new.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2349504,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:43:48.460098+00:00",
+      "elapsed_seconds": 4.0,
+      "minimum_available_memory_observed_bytes": 13222940672,
+      "verified": true,
+      "observed": {
+        "block_height": 1153,
+        "block_tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+        "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25"
+      },
+      "expected": {
+        "block_height": 1153,
+        "block_tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+        "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25"
+      }
+    },
+    {
+      "name": "canary-1153-checkpoint-rollback",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+        "verify-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1153/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:43:44.480311+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1153-checkpoint-rollback.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1153-checkpoint-rollback.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2349506,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:43:56.487667+00:00",
+      "elapsed_seconds": 12.0,
+      "minimum_available_memory_observed_bytes": 11546886144,
+      "verified": true,
+      "observed": {
+        "block_height": 1153,
+        "block_tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+        "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25"
+      },
+      "expected": {
+        "block_height": 1153,
+        "block_tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+        "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25"
+      }
+    },
+    {
+      "name": "new-build-services",
+      "command": [
+        "python3",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/tools/services_new.py"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/tools",
+      "started_at": "2026-10-30T09:43:47.656696+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/new-build-services.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/new-build-services.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2349559,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:44:18.677335+00:00",
+      "elapsed_seconds": 31.0,
+      "minimum_available_memory_observed_bytes": 10737053696
+    },
+    {
+      "name": "canary-1153-full-rollback",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1153/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:43:44.480069+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1153-full-rollback.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1153-full-rollback.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2349507,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:47:20.564433+00:00",
+      "elapsed_seconds": 216.1,
+      "minimum_available_memory_observed_bytes": 10750746624,
+      "verified": true,
+      "observed": {
+        "block_height": 1153,
+        "block_tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+        "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25"
+      },
+      "expected": {
+        "block_height": 1153,
+        "block_tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+        "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25"
+      }
+    },
+    {
+      "name": "canary-1153-full-new",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1153/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:43:44.464533+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1153-full-new.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1153-full-new.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2349505,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:47:21.563698+00:00",
+      "elapsed_seconds": 217.1,
+      "minimum_available_memory_observed_bytes": 10754134016,
+      "verified": true,
+      "observed": {
+        "block_height": 1153,
+        "block_tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+        "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25"
+      },
+      "expected": {
+        "block_height": 1153,
+        "block_tip_hash": "db8b87b65a5abb4791738c687de11d17349f2f505c3a726b8794d81409f90ecce44feaea3261fe9f0b46fe060aab3ee3",
+        "state_root": "7141956e778c533f401783d1542a271fc95a17d84ca1e3c5dc19bf9af96dcd8a9791563e4fcfb4caaa9021b852f32d25"
+      }
+    },
+    {
+      "name": "rollback-new-build-services",
+      "command": [
+        "python3",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/tools/rollback_new.py"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/tools",
+      "started_at": "2026-10-30T09:44:18.769756+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rollback-new-build-services.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/rollback-new-build-services.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2351136,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:48:01.859667+00:00",
+      "elapsed_seconds": 223.1,
+      "minimum_available_memory_observed_bytes": 10922745856
+    },
+    {
+      "name": "canary-1131-import-signed",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "snapshot-import-signed-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1131/signed-import",
+        "--snapshot-dir",
+        "/home/postfiatchad/.postfiat/deployments/store-handle-20261021/evidence/pre-rollout-backup/backup-signed",
+        "--trusted-publisher-key-file",
+        "/home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json",
+        "--node-id",
+        "validator-1"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:47:21.659403+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1131-import-signed.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1131-import-signed.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2355036,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:48:03.686009+00:00",
+      "elapsed_seconds": 42.0,
+      "minimum_available_memory_observed_bytes": 12866088960
+    },
+    {
+      "name": "canary-1131-checkpoint-new",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "verify-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1131/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:48:03.773227+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1131-checkpoint-new.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1131-checkpoint-new.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2356938,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:48:11.778597+00:00",
+      "elapsed_seconds": 8.0,
+      "minimum_available_memory_observed_bytes": 14351691776,
+      "verified": true,
+      "observed": {
+        "block_height": 1131,
+        "block_tip_hash": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+        "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341"
+      },
+      "expected": {
+        "block_height": 1131,
+        "block_tip_hash": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+        "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341"
+      }
+    },
+    {
+      "name": "canary-1131-full-new",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1131/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:48:03.773515+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1131-full-new.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1131-full-new.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2356937,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:51:25.856394+00:00",
+      "elapsed_seconds": 202.1,
+      "minimum_available_memory_observed_bytes": 14351691776,
+      "verified": true,
+      "observed": {
+        "block_height": 1131,
+        "block_tip_hash": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+        "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341"
+      },
+      "expected": {
+        "block_height": 1131,
+        "block_tip_hash": "9b054f091757c6297c2de91189337db640425b50e179bb8a157d2757ee59b8d381ebe041cbb7c2fcccce67a1e8220ddd",
+        "state_root": "a12e7c5f1ee521d576e366ece6d3c58d2c27ef1b517502958030d4ab41fd477c8146aad2a2621ff7302530b6e8c84341"
+      }
+    },
+    {
+      "name": "canary-1123-import-signed",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "snapshot-import-signed-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1123/signed-import",
+        "--snapshot-dir",
+        "/home/postfiatchad/.postfiat/deployments/fastlane-cap-20261014/evidence/pre-rollout-backup/backup-signed",
+        "--trusted-publisher-key-file",
+        "/home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json",
+        "--node-id",
+        "validator-1"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:51:25.977166+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1123-import-signed.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1123-import-signed.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2360467,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:52:07.994703+00:00",
+      "elapsed_seconds": 42.0,
+      "minimum_available_memory_observed_bytes": 14196367360
+    },
+    {
+      "name": "canary-1123-checkpoint-new",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "verify-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1123/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:52:08.111478+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1123-checkpoint-new.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1123-checkpoint-new.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2361055,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:52:12.116035+00:00",
+      "elapsed_seconds": 4.0,
+      "minimum_available_memory_observed_bytes": 15878373376,
+      "verified": true,
+      "observed": {
+        "block_height": 1123,
+        "block_tip_hash": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+        "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+      },
+      "expected": {
+        "block_height": 1123,
+        "block_tip_hash": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+        "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+      }
+    },
+    {
+      "name": "canary-1123-full-new",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/canary-1123/signed-import"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-vote-records-20261030/source-1",
+      "started_at": "2026-10-30T09:52:08.111979+00:00",
+      "status": "PASS",
+      "stdout": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1123-full-new.stdout",
+      "stderr": "/home/postfiatchad/.cache/release-vote-records-20261030/logs/canary-1123-full-new.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-vote-records-20261030/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2361054,
+      "exit_code": 0,
+      "completed_at": "2026-10-30T09:55:34.199687+00:00",
+      "elapsed_seconds": 206.1,
+      "minimum_available_memory_observed_bytes": 15012896768,
+      "verified": true,
+      "observed": {
+        "block_height": 1123,
+        "block_tip_hash": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+        "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+      },
+      "expected": {
+        "block_height": 1123,
+        "block_tip_hash": "bafcc6ef4acca1411097abe0bef4eb3b036940c1e998cdda50f8d86a1d19290c328733d12180b0334995486a535def64",
+        "state_root": "942d1fc2b663b19a5ca6e47dfc8e509759af8393459439181d6240306c6326b4c3d342c33d8585691d0fcb52dee41803"
+      }
+    }
+  ],
+  "live_mutations": false,
+  "updated_at": "2026-10-30T09:55:34.293109+00:00"
+}

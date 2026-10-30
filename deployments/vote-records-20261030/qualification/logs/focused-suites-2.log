@@ -1,0 +1,16 @@
+=== 09:47:11 cargo test -p postfiat-node --lib private_action_
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 501 filtered out; finished in 2.31s
+exit 0
+=== 09:47:24 cargo test -p postfiat-node --lib asset_orchard_pricing
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 502 filtered out; finished in 0.62s
+exit 0
+=== 09:47:35 cargo test -p postfiat-node --lib asset_orchard_egress
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 508 filtered out; finished in 0.96s
+exit 0
+=== 09:47:46 cargo test -p postfiat-node --lib asset_orchard_private_egress_binding
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 509 filtered out; finished in 0.37s
+exit 0
+=== 09:47:56 cargo test -p postfiat-node --lib private_pool
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 499 filtered out; finished in 15.57s
+exit 0
+=== DONE 09:48:21

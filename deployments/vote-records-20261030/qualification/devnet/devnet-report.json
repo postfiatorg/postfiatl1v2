@@ -1,0 +1,624 @@
+{
+  "scope": "local loopback devnet, four validators",
+  "new_binary": "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+  "old_binary": "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+  "steps": [
+    {
+      "name": "init-0",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "init-consensus-v2",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-0",
+        "--node-id",
+        "validator-0",
+        "--validators",
+        "4",
+        "--activation-height",
+        "2"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "init-1",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "init-consensus-v2",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-1",
+        "--node-id",
+        "validator-1",
+        "--validators",
+        "4",
+        "--activation-height",
+        "2"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "init-2",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "init-consensus-v2",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-2",
+        "--node-id",
+        "validator-2",
+        "--validators",
+        "4",
+        "--activation-height",
+        "2"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "init-3",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "init-consensus-v2",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-3",
+        "--node-id",
+        "validator-3",
+        "--validators",
+        "4",
+        "--activation-height",
+        "2"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "export-bootstrap",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "snapshot-export",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-0",
+        "--snapshot-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/bootstrap"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "import-1",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "snapshot-import",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-1",
+        "--snapshot-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/bootstrap",
+        "--node-id",
+        "validator-1"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "import-2",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "snapshot-import",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-2",
+        "--snapshot-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/bootstrap",
+        "--node-id",
+        "validator-2"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "import-3",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "snapshot-import",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-3",
+        "--snapshot-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/bootstrap",
+        "--node-id",
+        "validator-3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "topology",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "topology-consensus-v2",
+        "--validators",
+        "4",
+        "--base-port",
+        "36771",
+        "--hosts",
+        "127.0.0.1,127.0.0.1,127.0.0.1,127.0.0.1",
+        "--rpc-base-port",
+        "36871",
+        "--activation-height",
+        "2",
+        "--output",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/topology.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "batch-1",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "batch-transfer",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-1",
+        "--key-file",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-0/faucet_key.json",
+        "--to",
+        "pfffffffffffffffffffffffffffffffffffffffff",
+        "--amount",
+        "1000001",
+        "--batch-file",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/height-1.batch.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "round-1",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "transport-peer-certified-batch-round",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-1",
+        "--topology",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/topology.json",
+        "--batch-kind",
+        "transparent",
+        "--batch-file",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/height-1.batch.json",
+        "--key-file",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-1/validator_keys.json",
+        "--proposal-key-file",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-1/validator_keys.json",
+        "--require-local-proposer",
+        "--allow-peer-failures",
+        "--artifact-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/artifacts-1",
+        "--height",
+        "1",
+        "--view",
+        "0",
+        "--timeout-ms",
+        "4000"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "status-r1-new-0",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "status",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-0"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "status-r1-new-1",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "status",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-1"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "status-r1-new-2",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "status",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-2"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "status-r1-new-3",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "status",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "status-r1-old-0",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+        "status",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-0"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "status-r1-old-1",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+        "status",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-1"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "status-r1-old-2",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+        "status",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-2"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "status-r1-old-3",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+        "status",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "old-verify-finalized-checkpoint-validator-0",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+        "verify-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-0"
+      ],
+      "exit_code": 1
+    },
+    {
+      "name": "old-verify-state-validator-0",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-0"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "old-verify-finalized-checkpoint-validator-1",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+        "verify-finalized-checkpoint",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-1"
+      ],
+      "exit_code": 1
+    },
+    {
+      "name": "old-verify-state-validator-1",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-1"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "batch-2",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "batch-transfer",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-2",
+        "--key-file",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-0/faucet_key.json",
+        "--to",
+        "pfffffffffffffffffffffffffffffffffffffffff",
+        "--amount",
+        "1000002",
+        "--batch-file",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/height-2.batch.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "round-2",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "transport-peer-certified-batch-round",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-2",
+        "--topology",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/topology.json",
+        "--batch-kind",
+        "transparent",
+        "--batch-file",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/height-2.batch.json",
+        "--key-file",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-2/validator_keys.json",
+        "--proposal-key-file",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-2/validator_keys.json",
+        "--require-local-proposer",
+        "--allow-peer-failures",
+        "--artifact-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/artifacts-2",
+        "--height",
+        "2",
+        "--view",
+        "0",
+        "--timeout-ms",
+        "4000"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "status-r2-0",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+        "status",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-0"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "status-r2-1",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/rollback",
+        "status",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-1"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "status-r2-2",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "status",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-2"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "status-r2-3",
+      "command": [
+        "/home/postfiatchad/.cache/release-vote-records-20261030/binaries/candidate-1",
+        "status",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-3"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "round1": {
+    "exit_code": 0,
+    "elapsed_seconds": 1.06,
+    "stdout_tail": "igration_packet_root\": null,\n          \"read_transactions\": 0,\n          \"write_transactions\": 0,\n          \"committed_write_transactions\": 0,\n          \"records_read\": 0,\n          \"records_written\": 0,\n          \"bytes_read\": 0,\n          \"bytes_written\": 0,\n          \"pages_read\": null,\n          \"pages_written\": null,\n          \"full_history_scans\": 0,\n          \"full_history_records_read\": 0,\n          \"full_history_bytes_read\": 0,\n          \"fsync_count\": 0,\n          \"durable_commit_micros\": 0,\n          \"integrity_status\": \"legacy_authenticated\",\n          \"reason_code\": null\n        },\n        \"storage_work\": {\n          \"transactional\": null,\n          \"legacy\": {\n            \"jsonl_append_calls\": 4,\n            \"checkpoint_bytes_read\": 0,\n            \"crash_suffix_bytes_read\": 0,\n            \"crash_suffix_records_verified\": 0,\n            \"legacy_prefix_bytes_read\": 0,\n            \"legacy_prefix_records_verified\": 0,\n            \"ordered_history_bytes_read\": 2,\n            \"ordered_history_records_read\": 0,\n            \"ordered_index_bitmap_bytes_read\": 0,\n            \"ordered_index_bitmap_bytes_written\": 0,\n            \"ordered_index_slots_read\": 0,\n            \"ordered_index_slots_written\": 0\n          },\n          \"full_history_records_read\": 0,\n          \"full_history_bytes_read\": 2,\n          \"database_opens\": 0,\n          \"database_closes\": 0\n        }\n      }\n    ]\n  },\n  \"all_vote_requests_verified\": true,\n  \"all_sends_verified\": true,\n  \"round_ok\": true\n}\n",
+    "stderr_tail": "INFO peer certified batch round shielded verifier prewarm start requested=false\nINFO peer certified batch round shielded verifier prewarm complete requested=false total_ms=0.063\n"
+  },
+  "vote_record_file": "/home/postfiatchad/.cache/release-vote-records-20261030/devnet/validator-1/block-vote-records/height-1.json",
+  "snapshot_points_files": {
+    "validator-0": true,
+    "validator-1": true,
+    "validator-2": true,
+    "validator-3": false
+  },
+  "after_round1_new": {
+    "validator-0": {
+      "node_id": "validator-0",
+      "block_height": 1,
+      "block_tip_hash": "6653fd6960886dde7f9b1449f05a8eeaa9d9c9b678e0f4076a8aeae728140e03ef20d4c2816cff8500c9433ba46d2fae",
+      "state_root": "e4058cb750982400d78b7bac308027cec6526c30835b9936b3975c92248e2e724c38fd403874e42f34fda090b77e554b",
+      "mempool_pending": 0
+    },
+    "validator-1": {
+      "node_id": "validator-1",
+      "block_height": 1,
+      "block_tip_hash": "6653fd6960886dde7f9b1449f05a8eeaa9d9c9b678e0f4076a8aeae728140e03ef20d4c2816cff8500c9433ba46d2fae",
+      "state_root": "e4058cb750982400d78b7bac308027cec6526c30835b9936b3975c92248e2e724c38fd403874e42f34fda090b77e554b",
+      "mempool_pending": 0
+    },
+    "validator-2": {
+      "node_id": "validator-2",
+      "block_height": 1,
+      "block_tip_hash": "6653fd6960886dde7f9b1449f05a8eeaa9d9c9b678e0f4076a8aeae728140e03ef20d4c2816cff8500c9433ba46d2fae",
+      "state_root": "e4058cb750982400d78b7bac308027cec6526c30835b9936b3975c92248e2e724c38fd403874e42f34fda090b77e554b",
+      "mempool_pending": 0
+    },
+    "validator-3": {
+      "node_id": "validator-3",
+      "block_height": 0,
+      "block_tip_hash": "genesis",
+      "state_root": "eec54649f6ce6a96fa145d81a391d19d256374702c1d990d0eead2db6f23dd7c2f9328fb7fd3bbe0773352da474c7b1b",
+      "mempool_pending": 0
+    }
+  },
+  "after_round1_old": {
+    "validator-0": {
+      "node_id": "validator-0",
+      "block_height": 1,
+      "block_tip_hash": "6653fd6960886dde7f9b1449f05a8eeaa9d9c9b678e0f4076a8aeae728140e03ef20d4c2816cff8500c9433ba46d2fae",
+      "state_root": "e4058cb750982400d78b7bac308027cec6526c30835b9936b3975c92248e2e724c38fd403874e42f34fda090b77e554b",
+      "mempool_pending": 0
+    },
+    "validator-1": {
+      "node_id": "validator-1",
+      "block_height": 1,
+      "block_tip_hash": "6653fd6960886dde7f9b1449f05a8eeaa9d9c9b678e0f4076a8aeae728140e03ef20d4c2816cff8500c9433ba46d2fae",
+      "state_root": "e4058cb750982400d78b7bac308027cec6526c30835b9936b3975c92248e2e724c38fd403874e42f34fda090b77e554b",
+      "mempool_pending": 0
+    },
+    "validator-2": {
+      "node_id": "validator-2",
+      "block_height": 1,
+      "block_tip_hash": "6653fd6960886dde7f9b1449f05a8eeaa9d9c9b678e0f4076a8aeae728140e03ef20d4c2816cff8500c9433ba46d2fae",
+      "state_root": "e4058cb750982400d78b7bac308027cec6526c30835b9936b3975c92248e2e724c38fd403874e42f34fda090b77e554b",
+      "mempool_pending": 0
+    },
+    "validator-3": {
+      "node_id": "validator-3",
+      "block_height": 0,
+      "block_tip_hash": "genesis",
+      "state_root": "eec54649f6ce6a96fa145d81a391d19d256374702c1d990d0eead2db6f23dd7c2f9328fb7fd3bbe0773352da474c7b1b",
+      "mempool_pending": 0
+    }
+  },
+  "old_verify_finalized_checkpoint_validator_0": {
+    "exit_code": 1,
+    "verified": null,
+    "state_root": null,
+    "stderr_tail": "--now-unix N] [--validator-id ID --validator-bindings-file PATH] [--runtime-binary-file PATH --runtime-topology-file PATH --runtime-swap-circuit-metadata-file PATH --runtime-private-egress-circuit-metadata-file PATH]\n  postfiat-node rpc --method METHOD [--id ID] [--data-dir PATH] [method flags]\n  postfiat-node rpc --request-file PATH [--data-dir PATH]\n\nDirect state mutation commands require POSTFIAT_ALLOW_DIRECT_STATE=1 and are debug-only; ordered batch and mempool commands are the normal path.\n"
+  },
+  "old_verify_state_validator_0": {
+    "exit_code": 0,
+    "verified": true,
+    "state_root": "e4058cb750982400d78b7bac308027cec6526c30835b9936b3975c92248e2e724c38fd403874e42f34fda090b77e554b",
+    "stderr_tail": ""
+  },
+  "old_verify_finalized_checkpoint_validator_1": {
+    "exit_code": 1,
+    "verified": null,
+    "state_root": null,
+    "stderr_tail": "--now-unix N] [--validator-id ID --validator-bindings-file PATH] [--runtime-binary-file PATH --runtime-topology-file PATH --runtime-swap-circuit-metadata-file PATH --runtime-private-egress-circuit-metadata-file PATH]\n  postfiat-node rpc --method METHOD [--id ID] [--data-dir PATH] [method flags]\n  postfiat-node rpc --request-file PATH [--data-dir PATH]\n\nDirect state mutation commands require POSTFIAT_ALLOW_DIRECT_STATE=1 and are debug-only; ordered batch and mempool commands are the normal path.\n"
+  },
+  "old_verify_state_validator_1": {
+    "exit_code": 0,
+    "verified": true,
+    "state_root": "e4058cb750982400d78b7bac308027cec6526c30835b9936b3975c92248e2e724c38fd403874e42f34fda090b77e554b",
+    "stderr_tail": ""
+  },
+  "round2": {
+    "exit_code": 0,
+    "elapsed_seconds": 0.3,
+    "stdout_tail": "rite_transactions\": 0,\n          \"records_read\": 0,\n          \"records_written\": 0,\n          \"bytes_read\": 0,\n          \"bytes_written\": 0,\n          \"pages_read\": null,\n          \"pages_written\": null,\n          \"full_history_scans\": 0,\n          \"full_history_records_read\": 0,\n          \"full_history_bytes_read\": 0,\n          \"fsync_count\": 0,\n          \"durable_commit_micros\": 0,\n          \"integrity_status\": \"legacy_authenticated\",\n          \"reason_code\": null\n        },\n        \"storage_work\": {\n          \"transactional\": null,\n          \"legacy\": {\n            \"jsonl_append_calls\": 4,\n            \"checkpoint_bytes_read\": 3234,\n            \"crash_suffix_bytes_read\": 0,\n            \"crash_suffix_records_verified\": 0,\n            \"legacy_prefix_bytes_read\": 0,\n            \"legacy_prefix_records_verified\": 0,\n            \"ordered_history_bytes_read\": 100,\n            \"ordered_history_records_read\": 1,\n            \"ordered_index_bitmap_bytes_read\": 0,\n            \"ordered_index_bitmap_bytes_written\": 0,\n            \"ordered_index_slots_read\": 0,\n            \"ordered_index_slots_written\": 0\n          },\n          \"full_history_records_read\": 1,\n          \"full_history_bytes_read\": 3334,\n          \"database_opens\": 0,\n          \"database_closes\": 0\n        }\n      },\n      {\n        \"target\": \"validator-3\",\n        \"duration_ms\": 12.564222,\n        \"result\": \"failed\"\n      }\n    ]\n  },\n  \"all_vote_requests_verified\": true,\n  \"all_sends_verified\": false,\n  \"round_ok\": true\n}\n",
+    "stderr_tail": "INFO peer certified batch round shielded verifier prewarm start requested=false\nINFO peer certified batch round shielded verifier prewarm complete requested=false total_ms=0.050\n"
+  },
+  "after_round2": {
+    "validator-0": {
+      "node_id": "validator-0",
+      "block_height": 2,
+      "block_tip_hash": "47e1a4285f3dcf8096486c06aace5670a399f82f67dbe94e5e79be32ed4f646870ca24ed27cb2f29762c5431ceb3df84",
+      "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d",
+      "mempool_pending": 0
+    },
+    "validator-1": {
+      "node_id": "validator-1",
+      "block_height": 2,
+      "block_tip_hash": "47e1a4285f3dcf8096486c06aace5670a399f82f67dbe94e5e79be32ed4f646870ca24ed27cb2f29762c5431ceb3df84",
+      "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d",
+      "mempool_pending": 0
+    },
+    "validator-2": {
+      "node_id": "validator-2",
+      "block_height": 2,
+      "block_tip_hash": "47e1a4285f3dcf8096486c06aace5670a399f82f67dbe94e5e79be32ed4f646870ca24ed27cb2f29762c5431ceb3df84",
+      "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d",
+      "mempool_pending": 0
+    },
+    "validator-3": {
+      "node_id": "validator-3",
+      "block_height": 0,
+      "block_tip_hash": "genesis",
+      "state_root": "eec54649f6ce6a96fa145d81a391d19d256374702c1d990d0eead2db6f23dd7c2f9328fb7fd3bbe0773352da474c7b1b",
+      "mempool_pending": 0
+    }
+  },
+  "snapshot_points_after_round2": {
+    "validator-0": {
+      "schema": "postfiat.private_pool_snapshot_points.v1",
+      "points": [
+        {
+          "height": 1,
+          "block_hash": "6653fd6960886dde7f9b1449f05a8eeaa9d9c9b678e0f4076a8aeae728140e03ef20d4c2816cff8500c9433ba46d2fae",
+          "state_root": "e4058cb750982400d78b7bac308027cec6526c30835b9936b3975c92248e2e724c38fd403874e42f34fda090b77e554b",
+          "pool_id": null,
+          "counts": {
+            "commitments": 0,
+            "nullifiers": 0,
+            "accepted_anchors": 0,
+            "outputs": 0,
+            "assets": 0
+          },
+          "root_history": 0,
+          "fallback_anchor": null,
+          "encrypted_outputs": 0,
+          "asset_orchard_outputs": 0,
+          "assets": []
+        }
+      ]
+    },
+    "validator-1": {
+      "schema": "postfiat.private_pool_snapshot_points.v1",
+      "points": [
+        {
+          "height": 1,
+          "block_hash": "6653fd6960886dde7f9b1449f05a8eeaa9d9c9b678e0f4076a8aeae728140e03ef20d4c2816cff8500c9433ba46d2fae",
+          "state_root": "e4058cb750982400d78b7bac308027cec6526c30835b9936b3975c92248e2e724c38fd403874e42f34fda090b77e554b",
+          "pool_id": null,
+          "counts": {
+            "commitments": 0,
+            "nullifiers": 0,
+            "accepted_anchors": 0,
+            "outputs": 0,
+            "assets": 0
+          },
+          "root_history": 0,
+          "fallback_anchor": null,
+          "encrypted_outputs": 0,
+          "asset_orchard_outputs": 0,
+          "assets": []
+        }
+      ]
+    },
+    "validator-2": {
+      "schema": "postfiat.private_pool_snapshot_points.v1",
+      "points": [
+        {
+          "height": 1,
+          "block_hash": "6653fd6960886dde7f9b1449f05a8eeaa9d9c9b678e0f4076a8aeae728140e03ef20d4c2816cff8500c9433ba46d2fae",
+          "state_root": "e4058cb750982400d78b7bac308027cec6526c30835b9936b3975c92248e2e724c38fd403874e42f34fda090b77e554b",
+          "pool_id": null,
+          "counts": {
+            "commitments": 0,
+            "nullifiers": 0,
+            "accepted_anchors": 0,
+            "outputs": 0,
+            "assets": 0
+          },
+          "root_history": 0,
+          "fallback_anchor": null,
+          "encrypted_outputs": 0,
+          "asset_orchard_outputs": 0,
+          "assets": []
+        },
+        {
+          "height": 2,
+          "block_hash": "47e1a4285f3dcf8096486c06aace5670a399f82f67dbe94e5e79be32ed4f646870ca24ed27cb2f29762c5431ceb3df84",
+          "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d",
+          "pool_id": null,
+          "counts": {
+            "commitments": 0,
+            "nullifiers": 0,
+            "accepted_anchors": 0,
+            "outputs": 0,
+            "assets": 0
+          },
+          "root_history": 0,
+          "fallback_anchor": null,
+          "encrypted_outputs": 0,
+          "asset_orchard_outputs": 0,
+          "assets": []
+        }
+      ]
+    },
+    "validator-3": null
+  }
+}

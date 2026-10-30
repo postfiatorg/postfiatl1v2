@@ -1,0 +1,55 @@
+{
+  "chain_id": "postfiat-wan-devnet-2",
+  "commitment_mode": "legacy_below_storage_activation",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "harness_revision": "ae70d66d8a5083cc1a33aaf4a3e17f6901f7bc34",
+  "independent_verify_only": {
+    "clone_tree_sha256_after": "0cc0cf720c534b537dbb5de7a18860dc4b51989731563ac38e639f80b73a16f7",
+    "clone_tree_sha256_before": "0cc0cf720c534b537dbb5de7a18860dc4b51989731563ac38e639f80b73a16f7",
+    "output": {
+      "path": "verify-only.json",
+      "sha256": "2e449ff1dfab5eb1505b82c347ca16a5d262005551e20bab7765dd4e935e6eb9"
+    },
+    "target_tree_sha256_after": "53fd150f08621807bc9fde932c5f45336ce56d7d93e708a0cecf1aea6d0ce48e",
+    "target_tree_sha256_before": "53fd150f08621807bc9fde932c5f45336ce56d7d93e708a0cecf1aea6d0ce48e"
+  },
+  "matched": {
+    "archive_count": true,
+    "archive_root": true,
+    "block_count": true,
+    "blocks_root": true,
+    "chain": true,
+    "current_state_root": true,
+    "height": true,
+    "ordered_batch_count": true,
+    "ordered_batches_root": true,
+    "ordered_history_accumulator": true,
+    "receipt_count": true,
+    "receipts_root": true,
+    "root": true,
+    "tip": true
+  },
+  "network_contacted": false,
+  "node_binary_build": {
+    "git_revision": "ae70d66d",
+    "profile": "release"
+  },
+  "node_binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+  "offline": true,
+  "ordered_history_accumulator": "8d38f77986d3186fc2d60317512912eb3638e266f993f0511ab481bcd2670ff9a682aeb2943804c16d5239ba65132890",
+  "receipts": [
+    {
+      "path": "receipts/height-924.json",
+      "sha256": "61c4795204e50768cb43437c463f41787586446f03e6499518b07ce1773959d6"
+    }
+  ],
+  "recorded_manifest_sha256": "4119fb336ee6e3347563e79dad7a56de6e9428c00de07fa37b1bd72ea964edd9",
+  "schema": "postfiat-storage-legacy-replay-v1",
+  "source_height": 924,
+  "source_revision": "ae70d66d8a5083cc1a33aaf4a3e17f6901f7bc34",
+  "source_tree_sha256": "13ffe388f3ec5cfb80971cc6c5a8a7469a88d79ea5834d1495db0c44bf703046",
+  "source_tree_sha256_after": "13ffe388f3ec5cfb80971cc6c5a8a7469a88d79ea5834d1495db0c44bf703046",
+  "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+  "tip_hash": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+  "verdict": "PASS"
+}

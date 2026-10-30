@@ -1,0 +1,110 @@
+{
+  "rollback/verify-finalized-checkpoint/validator-0": {
+    "exit_code": 0,
+    "verified": true,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "rollback/verify-state/validator-0": {
+    "exit_code": 0,
+    "verified": true,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "rollback/status/validator-0": {
+    "exit_code": 0,
+    "verified": null,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "rollback/verify-finalized-checkpoint/validator-1": {
+    "exit_code": 0,
+    "verified": true,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "rollback/verify-state/validator-1": {
+    "exit_code": 0,
+    "verified": true,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "rollback/status/validator-1": {
+    "exit_code": 0,
+    "verified": null,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "rollback/verify-finalized-checkpoint/validator-2": {
+    "exit_code": 0,
+    "verified": true,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "rollback/verify-state/validator-2": {
+    "exit_code": 0,
+    "verified": true,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "rollback/status/validator-2": {
+    "exit_code": 0,
+    "verified": null,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "candidate-1/verify-finalized-checkpoint/validator-0": {
+    "exit_code": 0,
+    "verified": true,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "candidate-1/verify-state/validator-0": {
+    "exit_code": 0,
+    "verified": true,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "candidate-1/status/validator-0": {
+    "exit_code": 0,
+    "verified": null,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "candidate-1/verify-finalized-checkpoint/validator-1": {
+    "exit_code": 0,
+    "verified": true,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "candidate-1/verify-state/validator-1": {
+    "exit_code": 0,
+    "verified": true,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "candidate-1/status/validator-1": {
+    "exit_code": 0,
+    "verified": null,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "candidate-1/verify-finalized-checkpoint/validator-2": {
+    "exit_code": 0,
+    "verified": true,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "candidate-1/verify-state/validator-2": {
+    "exit_code": 0,
+    "verified": true,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  },
+  "candidate-1/status/validator-2": {
+    "exit_code": 0,
+    "verified": null,
+    "height": 2,
+    "state_root": "76895f4c04ac52dc03feb71889f2f5f32f8ad8f8673c9ab952f4907a7161c04d2f7376dea47d7f5bcb4ac7e75618f14d"
+  }
+}

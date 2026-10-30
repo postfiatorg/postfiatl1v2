@@ -1,0 +1,21 @@
+{
+ "round1": {
+  "exit_code": 0,
+  "elapsed_seconds": 1.06,
+  "stdout_tail": "igration_packet_root\": null,\n          \"read_transactions\": 0,\n          \"write_transactions\": 0,\n          \"committed_write_transactions\": 0,\n          \"records_read\": 0,\n          \"records_written\": 0,\n          \"bytes_read\": 0,\n          \"bytes_written\": 0,\n          \"pages_read\": null,\n          \"pages_written\": null,\n          \"full_history_scans\": 0,\n          \"full_history_records_read\": 0,\n          \"full_history_bytes_read\": 0,\n          \"fsync_count\": 0,\n          \"durable_commit_micros\": 0,\n          \"integrity_status\": \"legacy_authenticated\",\n          \"reason_code\": null\n        },\n        \"storage_work\": {\n          \"transactional\": null,\n          \"legacy\": {\n            \"jsonl_append_calls\": 4,\n            \"checkpoint_bytes_read\": 0,\n            \"crash_suffix_bytes_read\": 0,\n            \"crash_suffix_records_verified\": 0,\n            \"legacy_prefix_bytes_read\": 0,\n            \"legacy_prefix_records_verified\": 0,\n            \"ordered_history_bytes_read\": 2,\n            \"ordered_history_records_read\": 0,\n            \"ordered_index_bitmap_bytes_read\": 0,\n            \"ordered_index_bitmap_bytes_written\": 0,\n            \"ordered_index_slots_read\": 0,\n            \"ordered_index_slots_written\": 0\n          },\n          \"full_history_records_read\": 0,\n          \"full_history_bytes_read\": 2,\n          \"database_opens\": 0,\n          \"database_closes\": 0\n        }\n      }\n    ]\n  },\n  \"all_vote_requests_verified\": true,\n  \"all_sends_verified\": true,\n  \"round_ok\": true\n}\n",
+  "stderr_tail": "INFO peer certified batch round shielded verifier prewarm start requested=false\nINFO peer certified batch round shielded verifier prewarm complete requested=false total_ms=0.063\n"
+ },
+ "vote_record_check": null,
+ "snapshot_points_files": {
+  "validator-0": true,
+  "validator-1": true,
+  "validator-2": true,
+  "validator-3": false
+ },
+ "round2": {
+  "exit_code": 0,
+  "elapsed_seconds": 0.3,
+  "stdout_tail": "rite_transactions\": 0,\n          \"records_read\": 0,\n          \"records_written\": 0,\n          \"bytes_read\": 0,\n          \"bytes_written\": 0,\n          \"pages_read\": null,\n          \"pages_written\": null,\n          \"full_history_scans\": 0,\n          \"full_history_records_read\": 0,\n          \"full_history_bytes_read\": 0,\n          \"fsync_count\": 0,\n          \"durable_commit_micros\": 0,\n          \"integrity_status\": \"legacy_authenticated\",\n          \"reason_code\": null\n        },\n        \"storage_work\": {\n          \"transactional\": null,\n          \"legacy\": {\n            \"jsonl_append_calls\": 4,\n            \"checkpoint_bytes_read\": 3234,\n            \"crash_suffix_bytes_read\": 0,\n            \"crash_suffix_records_verified\": 0,\n            \"legacy_prefix_bytes_read\": 0,\n            \"legacy_prefix_records_verified\": 0,\n            \"ordered_history_bytes_read\": 100,\n            \"ordered_history_records_read\": 1,\n            \"ordered_index_bitmap_bytes_read\": 0,\n            \"ordered_index_bitmap_bytes_written\": 0,\n            \"ordered_index_slots_read\": 0,\n            \"ordered_index_slots_written\": 0\n          },\n          \"full_history_records_read\": 1,\n          \"full_history_bytes_read\": 3334,\n          \"database_opens\": 0,\n          \"database_closes\": 0\n        }\n      },\n      {\n        \"target\": \"validator-3\",\n        \"duration_ms\": 12.564222,\n        \"result\": \"failed\"\n      }\n    ]\n  },\n  \"all_vote_requests_verified\": true,\n  \"all_sends_verified\": false,\n  \"round_ok\": true\n}\n",
+  "stderr_tail": "INFO peer certified batch round shielded verifier prewarm start requested=false\nINFO peer certified batch round shielded verifier prewarm complete requested=false total_ms=0.050\n"
+ }
+}

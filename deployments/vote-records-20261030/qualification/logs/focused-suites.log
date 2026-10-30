@@ -1,0 +1,37 @@
+=== 09:36:38 cargo test -p postfiat-node --lib block_vote_records
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 508 filtered out; finished in 0.00s
+exit 0
+=== 09:37:32 cargo test -p postfiat-node --bin postfiat-node block_vote_records
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 240 filtered out; finished in 0.00s
+exit 0
+=== 09:37:51 cargo test -p postfiat-node --bin postfiat-node transport_batch_payload_tests
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 221 filtered out; finished in 251.95s
+exit 0
+=== 09:42:16 cargo test -p postfiat-node --lib private_action_admission
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 511 filtered out; finished in 0.05s
+exit 0
+=== 09:42:30 cargo test -p postfiat-node --bin postfiat-node rpc_serve_exposes_private_actions_only_with_the_switch
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 239 filtered out; finished in 0.18s
+exit 0
+=== 09:42:44 cargo test -p postfiat-node --bin postfiat-node private_action_methods_exist_only_behind_the_admission_switch
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 239 filtered out; finished in 0.00s
+exit 0
+=== 09:42:56 cargo test -p postfiat-node --lib asset_orchard_pricing_enforcement
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 511 filtered out; finished in 0.00s
+exit 0
+=== 09:43:07 cargo test -p postfiat-node --lib asset_orchard_egress_policy
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 510 filtered out; finished in 0.85s
+exit 0
+=== 09:43:17 cargo test -p postfiat-node --lib private_pool_snapshot_points
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 512 filtered out; finished in 0.00s
+exit 0
+=== 09:43:27 cargo test -p postfiat-node --lib private_pool_tokens_outlive_new_blocks
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 511 filtered out; finished in 5.56s
+exit 0
+=== 09:43:42 cargo test -p postfiat-node --lib private_pool_receipts_serve_a_retained_older_token
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 511 filtered out; finished in 0.20s
+exit 0
+=== 09:43:53 cargo test -p postfiat-node --lib account_tx
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 486 filtered out; finished in 31.06s
+exit 0
+=== DONE 09:44:35

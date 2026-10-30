@@ -1,0 +1,8 @@
+dracut-pre-udev.service: Failed to open /home/postfiatchad/.cache/release-vote-records-20261030/systemd-verify-root/usr/lib/systemd/system/dracut-pre-udev.service: No such file or directory
+dracut-pre-trigger.service: Failed to open /home/postfiatchad/.cache/release-vote-records-20261030/systemd-verify-root/usr/lib/systemd/system/dracut-pre-trigger.service: No such file or directory
+dracut-pre-pivot.service: Failed to open /home/postfiatchad/.cache/release-vote-records-20261030/systemd-verify-root/usr/lib/systemd/system/dracut-pre-pivot.service: No such file or directory
+dracut-pre-mount.service: Failed to open /home/postfiatchad/.cache/release-vote-records-20261030/systemd-verify-root/usr/lib/systemd/system/dracut-pre-mount.service: No such file or directory
+dracut-mount.service: Failed to open /home/postfiatchad/.cache/release-vote-records-20261030/systemd-verify-root/usr/lib/systemd/system/dracut-mount.service: No such file or directory
+dracut-initqueue.service: Failed to open /home/postfiatchad/.cache/release-vote-records-20261030/systemd-verify-root/usr/lib/systemd/system/dracut-initqueue.service: No such file or directory
+dracut-cmdline.service: Failed to open /home/postfiatchad/.cache/release-vote-records-20261030/systemd-verify-root/usr/lib/systemd/system/dracut-cmdline.service: No such file or directory
+dracut-shutdown.service: Failed to open /home/postfiatchad/.cache/release-vote-records-20261030/systemd-verify-root/usr/lib/systemd/system/dracut-shutdown.service: No such file or directory

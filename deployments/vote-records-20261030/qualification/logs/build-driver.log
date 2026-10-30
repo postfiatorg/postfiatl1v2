@@ -1,0 +1,7 @@
+Preparing worktree (detached HEAD ae70d66d)
+Preparing worktree (detached HEAD ae70d66d)
+Updating files:  90% (5939/6589)Updating files:  90% (5939/6589)Updating files:  91% (5996/6589)Updating files:  91% (5996/6589)Updating files:  92% (6062/6589)Updating files:  92% (6062/6589)Updating files:  93% (6128/6589)Updating files:  93% (6128/6589)Updating files:  94% (6194/6589)Updating files:  94% (6194/6589)Updating files:  95% (6260/6589)Updating files:  95% (6260/6589)Updating files:  96% (6326/6589)Updating files:  96% (6326/6589)Updating files:  97% (6392/6589)Updating files:  97% (6392/6589)Updating files:  98% (6458/6589)Updating files:  98% (6458/6589)Updating files:  99% (6524/6589)Updating files:  99% (6524/6589)Updating files: 100% (6589/6589)Updating files: 100% (6589/6589), done.
+Updating files: 100% (6589/6589)Updating files: 100% (6589/6589), done.
+HEAD is now at ae70d66d Stop parallel node tests from clearing each other's pooled vote streams and from taking the readiness test's released RPC port.
+HEAD is now at ae70d66d Stop parallel node tests from clearing each other's pooled vote streams and from taking the readiness test's released RPC port.
+{"result": "PASS", "hashes": ["87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7", "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7"]}

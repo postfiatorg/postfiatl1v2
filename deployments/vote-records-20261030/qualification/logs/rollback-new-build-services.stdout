@@ -1,0 +1,26 @@
+2026-10-30T09:44:18.812224+00:00 START rollback-checkpoint-new-build-services-validator-1
+2026-10-30T09:44:18.812275+00:00 START rollback-checkpoint-new-build-services-validator-0
+2026-10-30T09:44:18.812625+00:00 START rollback-checkpoint-new-build-services-validator-4
+2026-10-30T09:44:18.813982+00:00 START rollback-checkpoint-new-build-services-validator-2
+2026-10-30T09:44:18.815865+00:00 START rollback-checkpoint-new-build-services-validator-5
+2026-10-30T09:44:18.816772+00:00 START rollback-full-new-build-services-validator-0
+2026-10-30T09:44:18.816921+00:00 START rollback-checkpoint-new-build-services-validator-3
+2026-10-30T09:44:22.821984+00:00 PASS rollback-checkpoint-new-build-services-validator-4 (4.0s)
+2026-10-30T09:44:22.825230+00:00 PASS rollback-checkpoint-new-build-services-validator-5 (4.0s)
+2026-10-30T09:44:23.820877+00:00 PASS rollback-checkpoint-new-build-services-validator-1 (5.0s)
+2026-10-30T09:44:23.823217+00:00 PASS rollback-checkpoint-new-build-services-validator-2 (5.0s)
+2026-10-30T09:44:23.823441+00:00 PASS rollback-checkpoint-new-build-services-validator-3 (5.0s)
+2026-10-30T09:44:27.822456+00:00 PASS rollback-checkpoint-new-build-services-validator-0 (9.0s)
+2026-10-30T09:47:38.897873+00:00 PASS rollback-full-new-build-services-validator-0 (200.1s)
+2026-10-30T09:47:38.899807+00:00 START rollback-core
+2026-10-30T09:48:00.909771+00:00 PASS rollback-core (22.0s)
+{
+ "rollback-checkpoint-new-build-services-validator-4": "PASS",
+ "rollback-checkpoint-new-build-services-validator-5": "PASS",
+ "rollback-checkpoint-new-build-services-validator-1": "PASS",
+ "rollback-checkpoint-new-build-services-validator-2": "PASS",
+ "rollback-checkpoint-new-build-services-validator-3": "PASS",
+ "rollback-checkpoint-new-build-services-validator-0": "PASS",
+ "rollback-full-new-build-services-validator-0": "PASS",
+ "rollback-core": "PASS"
+}
