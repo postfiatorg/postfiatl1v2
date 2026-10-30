@@ -356,7 +356,7 @@ fn checkpoint_without_lane_record_is_refused_by_checkpoint_conservation() {
 }
 
 #[test]
-fn snapshot_without_lane_record_is_refused_by_state_root() {
+fn snapshot_lane_tamper_is_refused_by_lane_set_and_state_root() {
     let data_dir = unique_test_dir("postfiat-external-lane-tamper-snapshot");
     init_with_genesis(
         data_dir.clone(),
@@ -372,28 +372,41 @@ fn snapshot_without_lane_record_is_refused_by_state_root() {
         snapshot_dir: snapshot_dir.clone(),
     })
     .expect("export snapshot");
-    let mut ledger: LedgerState =
+    let ledger: LedgerState =
         serde_json::from_slice(&fs::read(snapshot_dir.join(LEDGER_FILE)).expect("read ledger"))
             .expect("parse ledger");
     assert_eq!(ledger.external_lanes.len(), 1);
-    ledger.external_lanes.clear();
-    rewrite_snapshot_file(
-        &snapshot_dir,
-        LEDGER_FILE,
-        serde_json::to_vec_pretty(&ledger).expect("encode ledger"),
+    let import_with = |edit: &dyn Fn(&mut LedgerState)| {
+        let mut tampered = ledger.clone();
+        edit(&mut tampered);
+        rewrite_snapshot_file(
+            &snapshot_dir,
+            LEDGER_FILE,
+            serde_json::to_vec_pretty(&tampered).expect("encode ledger"),
+        );
+        let error = import_snapshot(SnapshotImportOptions {
+            data_dir: restored_dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+            node_id: None,
+        })
+        .unwrap_err()
+        .to_string();
+        assert!(!restored_dir.exists());
+        error
+    };
+
+    // A dropped lane record is refused by the lane-set rule on import.
+    let error = import_with(&|ledger| ledger.external_lanes.clear());
+    assert!(
+        error.contains("snapshot ledger is missing genesis external lane `base-erc20`"),
+        "{error}"
     );
-    let error = import_snapshot(SnapshotImportOptions {
-        data_dir: restored_dir.clone(),
-        snapshot_dir: snapshot_dir.clone(),
-        node_id: None,
-    })
-    .unwrap_err();
-    // Import's block verification recomputes the root of the lane-less ledger
-    // and refuses it against the block tip, which replay reproduces with the lane.
-    let error = error.to_string();
+
+    // A changed live lane field passes the lane-set rule; import's block
+    // verification recomputes the root and refuses it against the block tip.
+    let error = import_with(&|ledger| ledger.external_lanes[0].window_index += 1);
     assert!(error.contains("snapshot block verification failed"), "{error}");
     assert!(error.contains("does not match current state root"), "{error}");
-    assert!(!restored_dir.exists());
     for dir in [data_dir, snapshot_dir] {
         let _ = fs::remove_dir_all(dir);
     }
@@ -560,4 +573,98 @@ fn populated_laneless_ledger_bytes_and_root_are_unchanged() {
         root,
         "c1edff6b30f85947c014054c19fb1bf91a2304dd22a17000cee0bd9ead6edf7a4a1ac2c37be163d6e6bc4794c0a3bc54"
     );
+}
+
+/// Rewrites the persisted checkpoint with `edit` applied to its ledger and
+/// its root and hash recomputed, then reads it back through validation.
+fn reread_tampered_checkpoint(
+    data_dir: &Path,
+    checkpoint: &HistoryCheckpointState,
+    edit: impl FnOnce(&mut LedgerState),
+) -> (io::Result<Option<HistoryCheckpointState>>, HistoryCheckpointState) {
+    let store = NodeStore::new(data_dir);
+    let genesis = store.read_genesis().expect("genesis");
+    let mut tampered = checkpoint.clone();
+    edit(&mut tampered.ledger);
+    rehash_checkpoint(&genesis, &mut tampered);
+    write_history_checkpoint_state_file(&data_dir.join(HISTORY_CHECKPOINT_FILE), &tampered)
+        .expect("write tampered checkpoint");
+    (read_history_checkpoint_state_optional(&store), tampered)
+}
+
+fn assert_aggregate_balances(checkpoint: &HistoryCheckpointState) {
+    assert_eq!(
+        native_pft_live_total(&checkpoint.ledger, &checkpoint.shielded).expect("live")
+            + checkpoint.native_fee_burn_total.expect("burns"),
+        u128::from(GENESIS_NATIVE_SUPPLY_ATOMS),
+        "the tamper keeps live + burns = supply, so only the lane-set rule can refuse it"
+    );
+}
+
+#[test]
+fn checkpoint_with_lane_atoms_moved_to_an_account_is_refused_by_lane_set_check() {
+    let (data_dir, checkpoint, _) = pruned_lane_node("lane-moved");
+    let (result, tampered) = reread_tampered_checkpoint(&data_dir, &checkpoint, |ledger| {
+        ledger.external_lanes.clear();
+        ledger.accounts[0].balance += LANE_RESERVED_ATOMS;
+    });
+    assert_aggregate_balances(&tampered);
+    let error = result.unwrap_err().to_string();
+    assert!(
+        error.contains("history checkpoint is missing genesis external lane `base-erc20`"),
+        "{error}"
+    );
+    fs::remove_dir_all(data_dir).expect("cleanup");
+}
+
+#[test]
+fn checkpoint_with_a_lane_genesis_never_configured_is_refused() {
+    let (data_dir, checkpoint, _) = pruned_lane_node("lane-unknown");
+    let (result, tampered) = reread_tampered_checkpoint(&data_dir, &checkpoint, |ledger| {
+        let mut rogue = ledger.external_lanes[0].clone();
+        rogue.lane_id = "rogue-lane".to_string();
+        rogue.reserved_atoms = 5;
+        ledger.external_lanes.push(rogue);
+        ledger.accounts[0].balance -= 5;
+    });
+    assert_aggregate_balances(&tampered);
+    let error = result.unwrap_err().to_string();
+    assert!(
+        error.contains("history checkpoint carries external lane `rogue-lane`, which genesis never configured"),
+        "{error}"
+    );
+
+    // A changed reserve on a configured lane is refused the same way.
+    let (result, tampered) = reread_tampered_checkpoint(&data_dir, &checkpoint, |ledger| {
+        ledger.external_lanes[0].reserved_atoms += 5;
+        ledger.accounts[0].balance -= 5;
+    });
+    assert_aggregate_balances(&tampered);
+    let error = result.unwrap_err().to_string();
+    assert!(
+        error.contains(&format!(
+            "history checkpoint external lane `base-erc20` reserves {} atoms, but genesis reserves {LANE_RESERVED_ATOMS}",
+            LANE_RESERVED_ATOMS + 5
+        )),
+        "{error}"
+    );
+    fs::remove_dir_all(data_dir).expect("cleanup");
+}
+
+#[test]
+fn init_refuses_genesis_with_duplicate_lane_ids() {
+    let data_dir = unique_test_dir("postfiat-external-lane-duplicate-init");
+    let mut genesis = lane_genesis("postfiat-lane-duplicate-init", 1);
+    let lanes = genesis.external_lanes.as_mut().expect("lanes");
+    lanes.push(lanes[0].clone());
+    let error = init_with_genesis(data_dir.clone(), "validator-0".to_string(), genesis)
+        .expect_err("init must validate the genesis");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidInput, "{error}");
+    assert!(
+        error
+            .to_string()
+            .contains("duplicate genesis external lane id `base-erc20`"),
+        "{error}"
+    );
+    assert!(!data_dir.exists(), "nothing is written for an invalid genesis");
 }

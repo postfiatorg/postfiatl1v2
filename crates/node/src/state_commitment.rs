@@ -1624,6 +1624,9 @@ pub(super) fn append_ledger_state(
     }
     // Genesis external lanes exist only on chains whose genesis configures
     // them, so a chain without lanes commits exactly the bytes it did before.
+    // Unlike its NAV siblings this section is deliberately not gated by
+    // `commit_complete_nav_state`: lane records are native supply, so they are
+    // committed whenever they exist, at every height.
     if !ledger.external_lanes.is_empty() {
         append_sorted_canonical_commitments(
             bytes,

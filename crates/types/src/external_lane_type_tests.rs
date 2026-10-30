@@ -94,23 +94,33 @@ fn genesis_external_lane_reserves_the_configured_amount() {
 }
 
 #[test]
-fn genesis_rejects_lanes_above_native_supply() {
-    let at_supply = genesis_with_lanes(vec![sample_external_lane(
-        "base-erc20",
-        GENESIS_NATIVE_SUPPLY_ATOMS,
-    )]);
-    assert!(at_supply
-        .validate()
-        .unwrap_err()
-        .contains("below the native supply"));
-    let split = genesis_with_lanes(vec![
-        sample_external_lane("a", GENESIS_NATIVE_SUPPLY_ATOMS / 2),
-        sample_external_lane("b", GENESIS_NATIVE_SUPPLY_ATOMS / 2),
-    ]);
-    assert!(split
-        .validate()
-        .unwrap_err()
-        .contains("below the native supply"));
+fn genesis_rejects_lanes_at_or_above_native_supply() {
+    let half = GENESIS_NATIVE_SUPPLY_ATOMS / 2;
+    let at_or_above = [
+        // One lane, sum == supply.
+        vec![sample_external_lane("base-erc20", GENESIS_NATIVE_SUPPLY_ATOMS)],
+        // Two lanes, sum == supply.
+        vec![
+            sample_external_lane("a", half),
+            sample_external_lane("b", GENESIS_NATIVE_SUPPLY_ATOMS - half),
+        ],
+        // Two lanes, ordinary sum == supply + 1 (far from u64 overflow).
+        vec![
+            sample_external_lane("a", half),
+            sample_external_lane("b", GENESIS_NATIVE_SUPPLY_ATOMS - half + 1),
+        ],
+    ];
+    for lanes in at_or_above {
+        let total: u64 = lanes.iter().map(|lane| lane.reserved_atoms).sum();
+        assert!(total >= GENESIS_NATIVE_SUPPLY_ATOMS);
+        let error = genesis_with_lanes(lanes).validate().unwrap_err();
+        assert_eq!(
+            error,
+            format!(
+                "genesis external lanes reserve {total} atoms, which must be below the native supply {GENESIS_NATIVE_SUPPLY_ATOMS}"
+            )
+        );
+    }
     let overflow = genesis_with_lanes(vec![
         sample_external_lane("a", u64::MAX),
         sample_external_lane("b", 1),
