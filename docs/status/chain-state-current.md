@@ -1,18 +1,40 @@
 # PostFiat L1 Current State
 
-Updated: `2026-10-27T12:14:30Z` (release `index-v3-20261027` deployed to all six, applied at blocks 1154–1159; account_tx v3 index built on all six to 1159 and following commits; vote outcome records partly live, defect VR-01; tip 1160); latest fleet observation `2026-10-27T12:14Z`
+Updated: `2026-10-30T11:21:09Z` (release `vote-records-20261030` deployed to all six, applied at blocks 1162–1167; vote outcome records live with the VR-01 fix from 1168; private path present but switched off and ungoverned; tip 1168); latest fleet observation `2026-10-30T11:21Z`
 
 Status: **canonical operational-state reference**
 
-!!! note "2026-10-30: vote-records candidate cut, not deployed"
+!!! success "2026-10-30: vote-records release deployed to all six validators"
 
-    On 2026-10-30 the next candidate, `vote-records-20261030` (`main` at `ae70d66d`, executable
-    `87cfe797…`), which carries the VR-01 fix of the proposer's vote outcome records, the wallet app's private
-    path switched off or ungoverned on the devnet, the Asset-Orchard secret wiping and the transport ack timeout
-    fix, was cut and qualified locally; it is cut, not deployed
-    ([release inputs](https://github.com/postfiatorg/postfiatl1v2/blob/release/vote-records-20261030/deployments/vote-records-20261030/README.md)).
-    It has no governance step and no index build; the rollout starts only when CI on `ae70d66d` is green in
-    all three workflows.
+    Release `vote-records-20261030` runs on all six validators: source `ae70d66d` on branch
+    `release/vote-records-20261030` (`main` `ae70d66d`), executable
+    `87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7`, signed manifest `ee1df5b3…`
+    (publisher `pfc531e0…`). It is `index-v3-20261027` plus the VR-01 fix of the proposer's vote outcome
+    records, the wallet app's private path (present but switched off and ungoverned), the kept snapshot points,
+    the Asset-Orchard secret wiping and the transport ack timeout fix; no governance step and no index build.
+    CI on `ae70d66d` green in all three workflows.
+
+    Before (`10:15Z`): six on `index-v3-20261027` at 1161 / `a4d5bd82…` / `f3b09178…`, mempools empty;
+    signed validator-1 canary backup `9b68d2a1…` at 1161, re-imported and replayed, and its current-head exact
+    replay through the new executable PASS (receipt `8d61e40c…`). Rollout with `scripts/postfiat-safe-rollout
+    apply-next` one validator at a time (validator-1, 0, 2, 3, 4, 5), 10:31–11:14Z, one 1-PFT faucet grant to the
+    `testing` wallet after each at 1162–1167, each certified at view 0 with 5 of 6 votes and the same block, tip
+    and root on all six; rollback was not needed. validator-2's first try failed before any change because the
+    SSH connection to its host hung; from its second try on, the rollout ran through a multiplexed SSH
+    connection with keepalives (transport only).
+
+    After checks (`11:18Z`): all six on `87cfe797…`, manifest verified, build `ae70d66d`; activation heights
+    still 1153, both routes `authority_epoch` 1, swap service committee epoch 2; `account_tx` v3 index lag 0 on
+    six; demo preflight READY (60 PASS). The private path is switched off on every host: no RPC unit passes
+    `--allow-private-action-admission`, `private_action_submit` answers `rpc_method_not_allowed`, and
+    `private_readiness` answers not ready (`asset_orchard_pricing_enforcement_activation_absent`,
+    `a666_pfusdc_route_absent`, admission switch `off`); no W-1 activation is ratified. Each data directory has
+    `private_pool_snapshot_points.json`. The vote outcome records are live with the fix: the proposer's record
+    for 1168 (validator-4, the first round run by the new executable) names all six as `accepted`, validator-2
+    with `answered_after_quorum`, where VR-01 wrote `no_answer`. After (`11:21Z`): six on
+    `vote-records-20261030` at 1168 / `a20e406e…` / `39771b74…`, mempools empty.
+    Records: [release README](https://github.com/postfiatorg/postfiatl1v2/blob/release/vote-records-20261030/deployments/vote-records-20261030/README.md),
+    [deploy sheet](https://github.com/postfiatorg/postfiatl1v2/blob/release/vote-records-20261030/deployments/vote-records-20261030/DEPLOY-SHEET.md).
 
 !!! success "2026-10-27: index-v3 release deployed to all six validators"
 
@@ -623,12 +645,12 @@ binary to the running services.
 
 | Plane | Recorded state | Exact identifier | Observed or updated at | Evidence and freshness |
 | --- | --- | --- | --- | --- |
-| Running devnet, latest recorded state | All six validators agree at height 1160. Blocks 1154–1159 are the index-v3 rollout's faucet grants (one after each apply); 1160 is the vote-record check grant. `demo-preflight.py` reported READY. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `f65e6fac…`; root `f06608d4…` on all six. | `2026-10-27T12:14Z` | 2026-10-27 entry above; [after state](https://github.com/postfiatorg/postfiatl1v2/blob/release/index-v3-20261027/deployments/index-v3-20261027/observed/after.json). Point in time. |
-| Deployed runtime | Release `index-v3-20261027` on all six validators: all 12 validator and RPC processes on one executable, `deployment_manifest_verified=true` and build `d728f895` on every host, RPC units with `--max-requests 100000` and `RestartSec=1`. Rolled out one validator at a time (validator-1 canary, then 0, 2, 3, 4, 5); rollback was not needed. Governed activation heights `recipient_format`, `rejected_tx_fee` and `require_memo` all 1153 (unchanged); `account_tx` v3 index built on all six (range 1–1159) and following commits. Vote outcome records partly live (VR-01). | Source `d728f895`; executable `b5cf3ce4…`; signed manifest `a61e290a…`; rollback release `exchange-readiness-20261023` (`4085ac70…`). | `2026-10-27T12:14Z` | 2026-10-27 entry above. |
+| Running devnet, latest recorded state | All six validators agree at height 1168. Blocks 1162–1167 are the vote-records rollout's faucet grants (one after each apply); 1168 is the vote-record check grant. `demo-preflight.py` reported READY. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `a20e406e…`; root `39771b74…` on all six. | `2026-10-30T11:21Z` | 2026-10-30 entry above; [after state](https://github.com/postfiatorg/postfiatl1v2/blob/release/vote-records-20261030/deployments/vote-records-20261030/observed/after-final.json). Point in time. |
+| Deployed runtime | Release `vote-records-20261030` on all six validators: all 12 validator and RPC processes on one executable, `deployment_manifest_verified=true` and build `ae70d66d` on every host, RPC units with `--max-requests 100000` and `RestartSec=1` and without `--allow-private-action-admission`. Rolled out one validator at a time (validator-1 canary, then 0, 2, 3, 4, 5); rollback was not needed. Governed activation heights `recipient_format`, `rejected_tx_fee` and `require_memo` all 1153 (unchanged); `account_tx` v3 index following commits. Vote outcome records live with the VR-01 fix. Private path present, switched off and ungoverned. | Source `ae70d66d`; executable `87cfe797…`; signed manifest `ee1df5b3…`; rollback release `index-v3-20261027` (`b5cf3ce4…`). | `2026-10-30T11:21Z` | 2026-10-30 entry above. |
 | Storage | Transactional `redb` storage has been the live store since height 930 (2026-08-31). This release carries the STO-07 store-handle fix (`8644f0af`); every batch the new executable accepted reports `storage_work.database_opens=0`. Storage is `OFFLINE QUALIFIED` (2026-10-23, packet-r3 `357f06ee…`); that is neither `CLONE QUALIFIED` nor a deployment decision. | Activation height 930; deployed binary `eea96ba6…` | 2026-10-21 deployment; 2026-10-23 storage note | [Storage-scaling implementation boundary](#storage-scaling-implementation-boundary) and the [storage milestone](../plans/completed/storage-scaling-milestone.md). The August `10dd9f20` canary and its rollback are in the [canary rollback report](../postmortems/devnet-storage-live-canary-rollback-2026-08-30.md). |
 | Swap and bridge committees | FastSwap committee epoch 2 on all six (`enabled: true`), migrated 2026-10-21. Bridge committee epoch 2 activated at height 1131 on 2026-10-15. The A666 and BMNRC routes stay on `authority_epoch` 1, so validators 0–4 still sign Ethereum checkpoints; neither issuer route update has been submitted. FastPay committee epoch 2 was installed at height 1123 for orders 10001–19990. | Epoch-2 committee root `72836827…`; route authority root `a2eebcba…` | 2026-10-21 | 2026-10-21, 2026-10-15 and 2026-10-12 entries above. |
 | Validator-trust authority | Cobalt remains active for validator-registry and trust-graph ratification. The final signed drill rollback committed at 922, return to Cobalt at 923, and legitimate validator-5 rotation at 924. Consensus v2 remains block finality. | Registry root `08a451e0…2b9b1d`; trust root `89f18aef…08f0307`; ratification anchor sequence 2, ID `5eada38d…c21153c8`. | Accepted history through height 924; fleet-audited through `2026-08-30T23:00:39Z`. | The recovery probe found authority mode 1 and identical registry/trust roots on all six. |
-| Repository | The deployed source is `d728f895` on `release/index-v3-20261027`; it equals `main` `d728f895`. A later `main` commit is not deployed until a fleet receipt binds its source and binary to the running services. | Deployed source `d728f895`; use `git rev-parse HEAD` for the checkout. | 2026-10-27 | Release records above. |
+| Repository | The deployed source is `ae70d66d` on `release/vote-records-20261030`; it equals `main` `ae70d66d`. A later `main` commit is not deployed until a fleet receipt binds its source and binary to the running services. | Deployed source `ae70d66d`; use `git rev-parse HEAD` for the checkout. | 2026-10-30 | Release records above. |
 | Adversarial campaign | E1–E6 passed their locked gates. The consolidated decision is `KEEP_ACTIVE` for Cobalt's bounded controlled-devnet validator-trust role. | E1 `495a59a2…4dfcd90`; E2 `8742d960…d7cba3`; E3 `9302b355…40b600`; E4 `93ba3db0…c14508`; E5 `0695284a…f3b3db`; E6 `ee6848f5…121be0b`. | Completed 2026-08-26 | [Completed milestone](../plans/completed/cobalt-adversarial-verification-milestone.md) and [results](../governance/cobalt-adversarial-verification-results.md). |
 | Operator boundary | The campaign proves protocol capability, not operator decentralization. Current proposals and authorizations originate from Foundation-administered validators. | E6 decision: independent-operator proposal path remains a mandatory follow-on milestone. | 2026-08-26 | No independent operators were recruited and no mainnet authority was granted. |
 
