@@ -1302,7 +1302,7 @@ fn owned_native_total(ledger: &LedgerState) -> u128 {
 }
 
 fn fuzz_native_supply_invariants(iterations: usize) -> Result<FuzzTargetReport, Box<dyn Error>> {
-    let cases_per_iteration = 9usize;
+    let cases_per_iteration = 11usize;
     let mut report = FuzzTargetReport::new(
         "native-supply-invariants",
         iterations,
@@ -1317,6 +1317,8 @@ fn fuzz_native_supply_invariants(iterations: usize) -> Result<FuzzTargetReport, 
         let owned_value = seed.saturating_mul(7).saturating_add(1);
         let reserve_value = u128::from(seed).saturating_mul(11).saturating_add(1);
         let orchard_value = seed.saturating_mul(13).saturating_add(1);
+        let lane_reserved = seed.saturating_mul(17).saturating_add(2);
+        let lane_released = seed % 2;
 
         let mut ledger = LedgerState::new(vec![Account::new(
             format!("native-account-{iteration}"),
@@ -1360,6 +1362,16 @@ fn fuzz_native_supply_invariants(iterations: usize) -> Result<FuzzTargetReport, 
                 asset_id: FastAssetIdV1::native_pft(),
                 amount_atoms: reserve_value,
             });
+        ledger
+            .external_lanes
+            .push(postfiat_types::ExternalLaneState {
+                lane_id: "base-erc20".to_string(),
+                reserved_atoms: lane_reserved,
+                released_atoms: lane_released,
+                released_lock_nonces: (lane_released > 0).then_some(seed).into_iter().collect(),
+                window_index: 0,
+                window_released_atoms: lane_released,
+            });
         let mut pool = OrchardPoolState::empty(format!("native-pool-{iteration}"));
         pool.turnstile_deposit_total = orchard_value;
         let mut shielded = ShieldedState::empty();
@@ -1371,12 +1383,13 @@ fn fuzz_native_supply_invariants(iterations: usize) -> Result<FuzzTargetReport, 
             .and_then(|value| value.checked_add(u128::from(owned_value)))
             .and_then(|value| value.checked_add(reserve_value))
             .and_then(|value| value.checked_add(u128::from(orchard_value)))
+            .and_then(|value| value.checked_add(u128::from(lane_reserved - lane_released)))
             .ok_or("native fuzz expected total overflow")?;
         let valid = native_pft_live_total(&ledger, &shielded);
         report.record_parse(valid.is_ok());
         report.assert_invariant(valid.as_ref().is_ok_and(|value| *value == expected));
 
-        for duplicate_lane in 0..5 {
+        for duplicate_lane in 0..6 {
             let mut duplicate = ledger.clone();
             match duplicate_lane {
                 0 => duplicate.accounts.push(duplicate.accounts[0].clone()),
@@ -1388,6 +1401,9 @@ fn fuzz_native_supply_invariants(iterations: usize) -> Result<FuzzTargetReport, 
                 4 => duplicate
                     .fast_lane_reserves
                     .push(duplicate.fast_lane_reserves[0].clone()),
+                5 => duplicate
+                    .external_lanes
+                    .push(duplicate.external_lanes[0].clone()),
                 _ => unreachable!(),
             }
             let duplicate_result = native_pft_live_total(&duplicate, &shielded);
@@ -1398,6 +1414,15 @@ fn fuzz_native_supply_invariants(iterations: usize) -> Result<FuzzTargetReport, 
                     .is_err_and(|error| error.to_string().contains("duplicate native custody")),
             );
         }
+
+        let mut over_released = ledger.clone();
+        over_released.external_lanes[0].released_atoms = lane_reserved.saturating_add(1);
+        over_released.external_lanes[0]
+            .released_lock_nonces
+            .insert(seed);
+        let over_released_result = native_pft_live_total(&over_released, &shielded);
+        report.record_parse(over_released_result.is_ok());
+        report.assert_invariant(over_released_result.is_err());
 
         let mut overflow = LedgerState::new(vec![Account::new("overflow", 1, None)]);
         overflow

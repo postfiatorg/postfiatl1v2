@@ -1,6 +1,7 @@
 #![allow(clippy::large_enum_variant, clippy::too_many_arguments)]
 
 include!("core_chain.rs");
+include!("external_lane_types.rs");
 include!("ledger_assets.rs");
 include!("fastswap_types.rs");
 include!("ethereum_bridge_types.rs");

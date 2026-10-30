@@ -318,6 +318,10 @@ pub struct Genesis {
     pub atomic_swap_activation_height: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consensus_v2_activation_height: Option<u64>,
+    /// Native PFT reserved at genesis for claims held outside PFTL. Absent on
+    /// every existing chain, so their genesis bytes and hash are unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_lanes: Option<Vec<GenesisExternalLane>>,
 }
 
 impl Genesis {
@@ -334,6 +338,7 @@ impl Genesis {
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             consensus_v2_activation_height: None,
+            external_lanes: None,
         }
     }
 
@@ -350,6 +355,7 @@ impl Genesis {
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             consensus_v2_activation_height: None,
+            external_lanes: None,
         }
     }
 
@@ -389,12 +395,44 @@ impl Genesis {
         if self.ordered_history_v2_activation_height == Some(0) {
             return Err("genesis ordered_history_v2_activation_height must be positive".to_string());
         }
+        if let Some(lanes) = &self.external_lanes {
+            validate_genesis_external_lanes(lanes, self.expected_native_supply_atoms())?;
+        }
         Ok(())
     }
 
     pub fn expected_native_supply_atoms(&self) -> u64 {
         self.native_supply_atoms
             .unwrap_or(GENESIS_NATIVE_SUPPLY_ATOMS)
+    }
+
+    pub fn external_lanes(&self) -> &[GenesisExternalLane] {
+        self.external_lanes.as_deref().unwrap_or_default()
+    }
+
+    /// Native atoms reserved by all external lanes. Validation keeps it below
+    /// the native supply.
+    pub fn external_lane_reserved_atoms(&self) -> Result<u64, String> {
+        self.external_lanes()
+            .iter()
+            .try_fold(0_u64, |total, lane| total.checked_add(lane.reserved_atoms))
+            .ok_or_else(|| "genesis external lane reserved total overflows".to_string())
+    }
+
+    /// The genesis faucet balance: the native supply minus the lanes.
+    pub fn genesis_faucet_balance_atoms(&self) -> Result<u64, String> {
+        self.expected_native_supply_atoms()
+            .checked_sub(self.external_lane_reserved_atoms()?)
+            .filter(|balance| *balance > 0)
+            .ok_or_else(|| "genesis external lanes leave no faucet balance".to_string())
+    }
+
+    /// The lane records `LedgerState` holds at height zero.
+    pub fn genesis_external_lane_states(&self) -> Vec<ExternalLaneState> {
+        self.external_lanes()
+            .iter()
+            .map(ExternalLaneState::genesis)
+            .collect()
     }
 
     pub fn to_json(&self) -> Result<String, ParseError> {

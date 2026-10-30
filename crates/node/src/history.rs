@@ -1623,7 +1623,7 @@ fn build_history_checkpoint_state_from_sources(
         native_fee_burn_total = 0;
         validator_registry = read_validator_registry_replay_base(store)?;
         governance = GovernanceState::new(genesis.validator_count);
-        ledger = LedgerState::new(vec![faucet_account]);
+        ledger = genesis_ledger_state(&genesis, faucet_account)?;
         ordered_batches = Vec::new();
         shielded = ShieldedState::empty();
         bridge = BridgeState::empty();

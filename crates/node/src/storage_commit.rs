@@ -1519,10 +1519,14 @@ pub(super) fn validate_faucet_account(account: &Account) -> io::Result<()> {
             "faucet account address is empty",
         ));
     }
-    if account.balance != DEFAULT_FAUCET_BALANCE {
+    // The exact balance (native supply minus genesis external lanes) is
+    // checked against the genesis in `genesis_ledger_state`.
+    if account.balance == 0 || account.balance > DEFAULT_FAUCET_BALANCE {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("genesis native supply must equal {DEFAULT_FAUCET_BALANCE} atoms"),
+            format!(
+                "genesis faucet balance must be positive and within the genesis native supply {DEFAULT_FAUCET_BALANCE} atoms"
+            ),
         ));
     }
     if account.sequence != 0 {

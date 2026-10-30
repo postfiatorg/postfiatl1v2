@@ -1816,7 +1816,7 @@ pub(super) fn verify_replayed_blocks(
         validate_validator_registry_for_count(&validator_registry, genesis.validator_count)?;
         governance = GovernanceState::new(genesis.validator_count);
         registry_update_ids = HashSet::new();
-        ledger = LedgerState::new(vec![faucet_account]);
+        ledger = genesis_ledger_state(genesis, faucet_account)?;
         ordered_batches = Vec::<String>::new();
         shielded = ShieldedState::empty();
         bridge = BridgeState::empty();
@@ -2661,7 +2661,24 @@ pub(super) fn validate_fastpay_pre_state_effects(
     Ok(())
 }
 
+/// Native PFT supply split into what circulates (native custody plus the
+/// Orchard pool) and what genesis external lanes still hold outside
+/// circulation. The conservation checks use `live_total_atoms`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativePftSupplyBreakdown {
+    pub circulating_atoms: u128,
+    pub external_lane_remainder_atoms: u128,
+    pub live_total_atoms: u128,
+}
+
 pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> io::Result<u128> {
+    native_pft_supply_breakdown(ledger, shielded).map(|supply| supply.live_total_atoms)
+}
+
+pub fn native_pft_supply_breakdown(
+    ledger: &LedgerState,
+    shielded: &ShieldedState,
+) -> io::Result<NativePftSupplyBreakdown> {
     fn add(total: &mut u128, amount: u128, lane: &str) -> io::Result<()> {
         *total = total.checked_add(amount).ok_or_else(|| {
             io::Error::new(
@@ -2718,6 +2735,7 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
         ethereum_arbitrum_finality_states: _,
         fast_ingress_campaigns: _,
         arc_finality_states: _,
+        external_lanes, // native PFT held outside circulation, counted below
     } = ledger;
     let ShieldedState {
         next_note_position: _,
@@ -2835,7 +2853,34 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
             "Orchard live native value",
         )?;
     }
-    Ok(total)
+    let mut external_lane_remainder = 0_u128;
+    let mut lane_ids = std::collections::BTreeSet::new();
+    for lane in external_lanes {
+        if !lane_ids.insert(lane.lane_id.as_str()) {
+            return Err(duplicate("external lane", &lane.lane_id));
+        }
+        lane.validate()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        add(
+            &mut external_lane_remainder,
+            u128::from(
+                lane.remainder_atoms()
+                    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?,
+            ),
+            "external lane remainder",
+        )?;
+    }
+    let mut live_total = total;
+    add(
+        &mut live_total,
+        external_lane_remainder,
+        "external lane remainder",
+    )?;
+    Ok(NativePftSupplyBreakdown {
+        circulating_atoms: total,
+        external_lane_remainder_atoms: external_lane_remainder,
+        live_total_atoms: live_total,
+    })
 }
 
 pub(super) fn verify_native_pft_transition(

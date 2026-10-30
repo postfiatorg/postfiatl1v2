@@ -5,6 +5,7 @@ include!("atomic_swap_batch_tests.rs");
 include!("pfusdc_tier4_type_tests.rs");
 include!("pfusdc_arc_type_tests.rs");
 include!("genesis_registry_tests.rs");
+include!("external_lane_type_tests.rs");
 
 #[test]
 fn genesis_round_trip() {

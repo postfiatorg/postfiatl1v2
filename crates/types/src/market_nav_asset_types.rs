@@ -3728,6 +3728,9 @@ pub struct LedgerState {
     pub arc_finality_states: Vec<PfUsdcArcFinalityStateV1>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fast_ingress_campaigns: Vec<FastIngressCampaignStateV1>,
+    /// Genesis external lane records; empty on every chain without lanes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub external_lanes: Vec<ExternalLaneState>,
 }
 
 impl LedgerState {
@@ -3841,6 +3844,7 @@ impl LedgerState {
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
+            external_lanes: Vec::new(),
         }
     }
 
@@ -3893,6 +3897,7 @@ impl LedgerState {
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
+            external_lanes: Vec::new(),
         }
     }
 
@@ -3946,6 +3951,7 @@ impl LedgerState {
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
+            external_lanes: Vec::new(),
         }
     }
 
@@ -3994,6 +4000,7 @@ impl LedgerState {
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
+            external_lanes: Vec::new(),
         }
     }
 
@@ -4047,6 +4054,7 @@ impl LedgerState {
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
+            external_lanes: Vec::new(),
         }
     }
 
@@ -4095,6 +4103,7 @@ impl LedgerState {
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
+            external_lanes: Vec::new(),
         }
     }
 
