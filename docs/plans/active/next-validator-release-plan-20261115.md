@@ -1,27 +1,42 @@
 # Next validator release plan (after vote-records-20261030)
 
-Skeleton written 2026-10-30. The date suffix is a name, not a date, and no date is promised
+Skeleton written 2026-10-30; pointed at the separately qualified next release on 2026-11-03. The date suffix is a name, not a date, and no date is promised
 ([previous plan](next-validator-release-plan-20261108.md)).
 
 ## Summary
 
-1. `vote-records-20261030` (main `ae70d66d`, executable `87cfe797…`) has run on all six validators since 2026-10-30 11:14Z. It was applied at 1162–1167, and the after state is 1168 / `a20e406e…` / `39771b74…`. It carries the VR-01 fix to the vote outcome records, live from 1168.
-2. Riding along were the wallet app's private path, the kept snapshot points, the public finalized private-pool reads, the Asset-Orchard secret wiping, the removed `k256` node dependency and the transport ack timeout fix. The private path is present but not usable: admission is off, the pricing rules and egress registry are inert, and `private_readiness` reports not ready.
-3. The rule is kept: a change that alters a consensus or state result gets its own qualification. Read-path and tooling changes ride along.
-4. Qualification and rollout follow the current plan. Nothing starts before the "Not before" rules hold.
+1. The next validator release is the one prepared on a private branch, with its own qualification. It is based on main at `7a91bb30` (2026-10-30), so it already carries everything on main up to that commit, including the genesis external lane. Its qualification and rollout are its own, not this plan's.
+2. `vote-records-20261030` (main `ae70d66d`, executable `87cfe797…`) has run on all six validators since 2026-10-30 11:14Z. It was applied at 1162–1167, and the after state is 1168 / `a20e406e…` / `39771b74…`. It carries the VR-01 fix to the vote outcome records, live from 1168. Riding along were the wallet app's private path, the kept snapshot points, the public finalized private-pool reads, the Asset-Orchard secret wiping, the removed `k256` node dependency and the transport ack timeout fix. The private path is present but not usable: admission is off, the pricing rules and egress registry are inert, and `private_readiness` reports not ready.
+3. The commits on main after `7a91bb30` are not on the release branch. They are to be rebased onto the release branch or to follow in the release after ([list](#on-main-after-7a91bb30)). None changes a consensus or state result.
+4. The other candidates move to the release after, unchanged. The rule is kept: a change that alters a consensus or state result gets its own qualification. Read-path and tooling changes ride along.
 
 ## Already on main past the cut
 
-`git log --oneline --first-parent ae70d66d..origin/main` on 2026-10-30. None changes the node binary.
+`git log --oneline --first-parent ae70d66d..origin/main` on 2026-10-30. None changes the node binary. All are before `7a91bb30`, so the next release carries them.
 
 - [x] Docs only: `76dd4f86` and `85051b2b` (the cut and the deployment of `vote-records-20261030`), `7dcc23eb` (the live vote records as SCT-08 item 4 evidence) and `059776e3` (the Solana stake reader row).
 - [x] `92425854`: the W-1 manifest and milestone record the deployed release's `private_readiness`. It changes a test fixture and a contract test only.
 
 ## Candidates
 
-Included only when ready and reviewed by the cut; none is promised.
+### In the next release
 
-- [ ] The genesis external lane (branch `token/genesis-external-lane`, not on main on 2026-10-30), once merged. It is inert until a lane is configured, so it rides along. The qualification's history replays must show no changed result.
+- [x] Everything on main up to `7a91bb30`. This includes the genesis external lane, merged at `bfe448416` on 2026-10-30 and previously a candidate here.
+
+### On main after 7a91bb30
+
+`git log --oneline --first-parent 7a91bb30..origin/main` on 2026-11-03. None is on the release branch; each is to be rebased onto it or to follow in the release after. None changes the node binary.
+
+- [ ] `ba0c58f32` (2026-11-02): the handoff on the release branch check and the rollout runbook. Docs only.
+- [ ] `f03dd41a8`: the readiness admission-switch test builds the verifying keys before its timed read. Test code in `crates/node/src/private_action_rpc.rs` only.
+- [ ] `1e2cc55f8` and `8ec313e19`: the lock deployment's anchor and binding checks and their ERC-20 milestone record. Contract tooling in `crates/pft-token-contracts`, not a node change.
+- [ ] `85340e84a`: the wallet proxy's certification goes through the validator-owned admission by default, with the W-1 S3.3 tick. Proxy, compose file and docs only.
+- [ ] `49aeca2be` and `fc6f9a061`: the ERC-20 options paper locked. Docs only.
+
+### For the release after
+
+Included only when ready and reviewed by its cut; none is promised.
+
 - [ ] The W-1 governance activations on the devnet: the pricing enforcement height, one governed A666/pfUSDC route, and the egress policy records and their switch. Each needs its own qualification. On 2026-10-30, `private_readiness` showed atomic batches active from 483, pricing enforcement absent, and two A666/pfUSDC routes where the read needs one ([milestone](user-proven-shielded-actions-milestone.md#s7-readiness-and-secret-inspection-12-days-left)).
 - [ ] The admission switch (`--allow-private-action-admission` on `rpc-serve`). This is an operator step on the units after the activations, not a release.
 - [ ] Remove the wallet proxy's legacy shielded certification (W-1 S3.3, [milestone](user-proven-shielded-actions-milestone.md#s3-the-validator-owned-admission-and-round-service-24-days-left)). Its switch defaults to `off` since S3.3; removal waits for the app on `/api/private/v1/` (S2.4) and the public deployment set to `off`. Proxy only, no node change.
@@ -34,12 +49,22 @@ Included only when ready and reviewed by the cut; none is promised.
 
 ## Not before
 
+The next release's qualification is the private branch's: CI green on its tip, the replay on copies of the validators' data, and the rehearsals. Its rollout follows its own runbook, a coordinated halt of all six validators, not this plan's rolling [Rollout](#qualification-and-rollout).
+
 - [x] `vote-records-20261030` deployed on all six validators. Done 2026-10-30 11:14Z.
+- [ ] The next release qualified on its private branch: CI green on its tip, the data-copy replay, the rehearsals.
+- [ ] The next release deployed on all six validators under its own runbook.
+
+For the release after:
+
+- [ ] The commits on main after `7a91bb30` rebased onto the release branch or taken into this cut.
 - [ ] CI green on main at the cut commit (`docs-build`, `rust-ci`, `product-security-ci`).
 - [ ] The full workspace suite at the cut commit (`rust-ci` `test` runs `cargo test --workspace --locked`).
 - [ ] Any consensus or state candidate, such as a W-1 activation or the delayed-precommit fix, has its own qualification before the cut.
 
 ## Qualification and rollout
+
+For the release after; once the next release is deployed, it replaces `vote-records-20261030` as the rollback target.
 
 As in the current plan: [Qualification](next-validator-release-plan-20261005.md#qualification) (~90 min after the suite) and [Rollout](next-validator-release-plan-20261005.md#rollout) (~60 min, one validator at a time, `rollback-one.sh` back to `vote-records-20261030`, `87cfe797…`). A consensus candidate adds its own qualification before the cut.
 
