@@ -1908,6 +1908,7 @@ module.exports = {
     buildNavswapQuoteResponse,
     buildNavswapRunResponse,
     buildShieldedCertifiedRoundArgs,
+    createShieldedSwapBatchViaLocalService,
     clearNavswapDevnetFundingUsageForTest,
     clearNavswapIdempotencyForTest,
     clearNavswapRunsForTest,

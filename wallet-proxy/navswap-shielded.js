@@ -1,6 +1,26 @@
 'use strict';
 
 const { parseBooleanEnv, parseBooleanValue } = require('./boolean-env');
+const {
+    RETIRED_CODE: LEGACY_CERTIFICATION_RETIRED,
+    REPLACEMENT: LEGACY_CERTIFICATION_REPLACEMENT,
+    legacyShieldedCertificationEnabled,
+    requireLegacyShieldedCertification,
+    shieldedCertificationPath,
+} = require('./legacy-shielded-certification');
+
+// The HTTP-side certifying executions answer this unless the legacy switch is on (S3.3).
+function legacyCertificationRefusal(schema) {
+    if (legacyShieldedCertificationEnabled()) return null;
+    return {
+        ok: false,
+        schema,
+        route: 'shielded_navswap',
+        code: LEGACY_CERTIFICATION_RETIRED,
+        message: `The proxy's HTTP-side certification is retired; submit user-proven actions to ${LEGACY_CERTIFICATION_REPLACEMENT}.`,
+        replacement: LEGACY_CERTIFICATION_REPLACEMENT,
+    };
+}
 
 function create(runtime) {
     const { execFileSync,
@@ -667,6 +687,7 @@ wss } = runtime;
             ok: true,
             schema: SHIELDED_NAVSWAP_STATUS_SCHEMA,
             route: 'shielded_navswap',
+            certification_path: shieldedCertificationPath(),
             status: egress.configured
                 ? 'step9_egress_ready'
                 : swap.configured
@@ -1419,6 +1440,7 @@ wss } = runtime;
     }
 
     function buildShieldedCertifiedRoundArgs(config, batchFile, artifactDir) {
+        requireLegacyShieldedCertification('transport-peer-certified-batch-round --key-file');
         const args = [
             'transport-peer-certified-batch-round',
             '--data-dir', config.data_dir,
@@ -1492,6 +1514,7 @@ wss } = runtime;
     function startShieldedCertifierLoop(config) {
         const loop = config.certifier_loop;
         if (!loop?.enabled) return null;
+        requireLegacyShieldedCertification('transport-peer-certified-batch-loop --key-file');
         if (shieldedCertifierLoopState?.finished) {
             shieldedCertifierLoopState = null;
         }
@@ -2160,6 +2183,8 @@ wss } = runtime;
     }
 
     async function executeShieldedNavswapIngress(body = {}) {
+        const retired = legacyCertificationRefusal(SHIELDED_NAVSWAP_INGRESS_SCHEMA);
+        if (retired) return retired;
         assertNoShieldedPrivateMaterial(body);
         const config = shieldedNavswapIngressConfig();
         if (!config.configured) {
@@ -2290,6 +2315,7 @@ wss } = runtime;
     }
 
     async function createShieldedSwapBatchViaLocalService(config, rawAction, batchFile) {
+        requireLegacyShieldedCertification('/asset-orchard/swap-batch');
         const service = config.asset_orchard_local_service || assetOrchardLocalServiceConfig();
         const endpoint = new URL('/asset-orchard/swap-batch', service.url).toString();
         const controller = new AbortController();
@@ -2384,6 +2410,8 @@ wss } = runtime;
     }
 
     async function executeShieldedNavswapSwap(body = {}) {
+        const retired = legacyCertificationRefusal(SHIELDED_NAVSWAP_SWAP_SCHEMA);
+        if (retired) return retired;
         const proxyStartedAtMs = Date.now();
         let batchStartedAtMs = null;
         let batchFinishedAtMs = null;
@@ -2582,6 +2610,8 @@ wss } = runtime;
     }
 
     async function executeShieldedNavswapEgress(body = {}) {
+        const retired = legacyCertificationRefusal(SHIELDED_NAVSWAP_EGRESS_SCHEMA);
+        if (retired) return retired;
         const config = shieldedNavswapEgressConfig();
         let validated;
         try {

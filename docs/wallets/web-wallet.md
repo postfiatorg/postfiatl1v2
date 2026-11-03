@@ -98,7 +98,7 @@ The optional HTTPS dev cert paths are controlled by:
 | `WALLET_PROXY_PRIVATE_ACTIONS_RPC_SOURCES` | all of `RPC_FLEET` | Two or more `validator-id=host:port` sources. A submission goes to every source, because a node holds a record until it proposes; answers are reconciled across all of them. |
 | `WALLET_PROXY_PRIVATE_ACTIONS_STORE` | `~/.local/share/postfiat/wallet-proxy/private-actions` | Directory of the durable intent records and their dedupe indexes. Must be writable. |
 | `WALLET_PROXY_PRIVATE_ACTIONS_RPC_TIMEOUT_MS` | `15000` | Timeout of each validator read or submission. |
-| `WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION` | `on` | `off` retires the proxy's legacy shielded certification. The legacy ingress, swap and egress routes answer 410 `legacy_shielded_certification_retired`, and no validator key file, data directory or local Asset-Orchard service is read. |
+| `WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION` | `off` | `off` (the default) retires the proxy's legacy shielded certification: submissions take the validator-owned admission at `/api/private/v1/`, the legacy ingress, swap and egress routes answer 410 `legacy_shielded_certification_retired`, and no validator key file, data directory or local Asset-Orchard service is read. `on` keeps the legacy path for one release. |
 | `WALLET_STATIC_DIR` | `wallet-web/dist` | Immutable production wallet build served same-origin by the hardened proxy. |
 | `INJECT_RPC_CAPS` | `true` | Injects RPC capability fields into `server_info` responses. Like every wallet-proxy on/off setting, it takes `true`/`false` (any case) or `1`/`0`; any other value stops startup, or fails the request for a setting read per request (`<NAME> must be true or false`). Exception: `PFUSDC_WITHDRAWAL_ENABLED` is on only for exactly `true`. |
 
@@ -218,21 +218,26 @@ The browser wallet's shielded swaps still use the proxy's legacy path. That
 path runs `transport-peer-certified-batch-round` with a validator key file,
 calls the local Asset-Orchard `/asset-orchard/swap-batch`, and certifies the
 ingress, swap and egress on the HTTP side. `WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION`
-(default `on`) controls it, and the proxy logs the active mode at startup.
+controls it. The default is `off`; `docker-compose.wallet-public.yml` sets `on`
+until the app moves. The proxy logs the active mode at startup, and
+`GET /api/shielded-nav-swap/status` reports it as `certification_path.active`:
+`validator_owned_admission` or `legacy_http_certification`.
 
+- **Off (default):** `/api/shielded-nav-swap/ingress`, `/swap` and `/egress`
+  answer 410 `legacy_shielded_certification_retired`, pointing to
+  `/api/private/v1/`. The legacy entry points themselves (the certified round
+  and loop with `--key-file`, the `/asset-orchard/swap-batch` call and the three
+  executions) refuse with the same code. The proxy starts with no key file,
+  data directory or local Asset-Orchard service.
 - **On:** if `NAVSWAP_ENABLE_SHIELDED_INGRESS`, `_SWAPS` or `_EGRESS` is set but
   the validator key file or data directory is missing, the proxy still starts.
   It logs one warning naming what is missing, and those routes answer 409 as
   before. Only an invalid switch value stops startup.
-- **Off:** `/api/shielded-nav-swap/ingress`, `/swap` and `/egress` answer 410
-  `legacy_shielded_certification_retired`, pointing to `/api/private/v1/`.
-  The proxy starts with no key file, data directory or local Asset-Orchard
-  service.
 
 The cutover:
 
 1. Move the apps to `/api/private/v1/`.
-2. Set the switch `off` on the public deployment.
+2. Set the switch `off` on the public deployment (the proxy's default is already `off`).
 3. Remove the legacy code in a later release.
 
 ## RPC Endpoints Used

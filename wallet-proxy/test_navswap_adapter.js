@@ -1,3 +1,5 @@
+// These cases cover the legacy HTTP-side certification, kept behind its switch for one release (W-1 S3.3).
+process.env.WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION = 'on';
 const assert = require('assert');
 const fs = require('fs');
 const http = require('http');
