@@ -62,6 +62,10 @@ Decided by the product owner 2026-10-28: total supply 100 billion PFT; the Base 
   - The script now refuses to deploy unless the finality verifier's stored anchor and its chain, genesis, route, asset and vault bindings equal operator-pinned values; it re-reads them after deployment, and the operator checks them once more from the mined chain: merged in `1e2cc55f`, `crates/pft-token-contracts/README.md`, "Deploy the lock contract".
   - Base Sepolia rehearsal (test mode, reverting stand-in verifier): `0xE36e7Fc384564419187546c19719A5654266dE0B`, record `crates/pft-token-contracts/deployments/pft-lock-base-84532/deployment.json`.
 - [ ] P2.4 *(this lane)* The inbound release path on PFTL and its proof. It extends the BFT-checkpoint ingress (`docs/status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md:391`) with a Base checkpoint source. The SP1 ingress program is pinned to Sepolia (`programs/pfusdc-eth-ingress/src/lib.rs:19`, `:91`).
+  - Built on branch `token/inbound-release-path`, under review: the release record and rules, the Base checkpoint source and `external_lane_release_v1`, described in [the release path section](../../architecture/genesis-external-lanes.md#the-release-path).
+  - [ ] The proof program's guest build for a Base source and its vkey pin.
+  - [ ] The proof inventory entry for that program.
+  - [ ] The Base checkpoint source's own qualification.
 - [ ] P2.5 *(this lane)* Its own qualification before genesis: tests, a devnet run, and an audit of the lock contract. To tick it: the qualification record.
 
 ## Phase 3 — the reverse export route (optional)

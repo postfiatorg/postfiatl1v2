@@ -106,11 +106,13 @@ Execution (`apply_external_lane_release`, rules on `ExternalLaneState`) checks, 
 | The window's released amount stays within the cap | `external_lane_window_cap_exceeded` |
 | A new recipient account reaches the account reserve | `below_account_reserve` |
 
+The Base checkpoint attestation adds no new schema. It reuses the existing Ethereum checkpoint (`EthereumFinalizedCheckpointV1`, `EthereumExternalEventProofV1`) and its public-values layout; the source chain id, the lock contract and its code hash, the token and its code hash, the committee and the confirmation depth are parameters taken from the lane's genesis policy. The pfUSDC SP1 ingress program is therefore unchanged and still pinned to Sepolia; a guest that proves a Base Lock, its vkey pin and its proof inventory entry are P2.5 work. Today the node returns the refusal codes of the table above: `external_lane_not_configured`, `external_lane_source_mismatch`, `external_lane_committee_missing`, `external_lane_proof_invalid`, `external_lane_checkpoint_mismatch`, `external_lane_lock_mismatch`, `external_lane_nonce_already_released`, `external_lane_remainder_exceeded`, `external_lane_window_cap_exceeded` and `below_account_reserve`.
+
 An accepted release credits the recipient, creating the account if needed, adds the nonce and the amount, moves the window when the height is in a new one, and appends a record (nonce, chain, lock contract, amount, recipient, Base block number and hash, PFTL height). The atoms move from the lane remainder into circulation, so every conservation check above holds unchanged.
 
 `external_lane_info` (public read RPC, and the `external-lane-info` node command, `--lane-id` optional) returns each lane's genesis configuration, live record with its release history, remainder, window cap, and what the next block's window may still release.
 
-Not built yet: cap amendments and their seven-window raise delay (section 5.1), the committee epoch move by governed amendment (section 4.1), the watcher (section 5.2), and the Python CLI and interface. The SP1 ingress program stays pinned to Sepolia for pfUSDC; the design keeps the SP1 route for Base (option (a)) as a later upgrade.
+Not built yet: cap amendments and their seven-window raise delay (section 5.1), the committee epoch move by governed amendment (section 4.1), the watcher (section 5.2), and the Python CLI and interface. The design keeps the SP1 route for Base through its dispute games (option (a)) as a later upgrade.
 
 ## Not before
 
