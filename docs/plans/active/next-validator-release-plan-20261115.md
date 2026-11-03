@@ -24,6 +24,7 @@ Included only when ready and reviewed by the cut; none is promised.
 - [ ] The genesis external lane (branch `token/genesis-external-lane`, not on main on 2026-10-30), once merged. It is inert until a lane is configured, so it rides along. The qualification's history replays must show no changed result.
 - [ ] The W-1 governance activations on the devnet: the pricing enforcement height, one governed A666/pfUSDC route, and the egress policy records and their switch. Each needs its own qualification. On 2026-10-30, `private_readiness` showed atomic batches active from 483, pricing enforcement absent, and two A666/pfUSDC routes where the read needs one ([milestone](user-proven-shielded-actions-milestone.md#s7-readiness-and-secret-inspection-12-days-left)).
 - [ ] The admission switch (`--allow-private-action-admission` on `rpc-serve`). This is an operator step on the units after the activations, not a release.
+- [ ] Remove the wallet proxy's legacy shielded certification (W-1 S3.3, [milestone](user-proven-shielded-actions-milestone.md#s3-the-validator-owned-admission-and-round-service-24-days-left)). Its switch defaults to `off` since S3.3; removal waits for the app on `/api/private/v1/` (S2.4) and the public deployment set to `off`. Proxy only, no node change.
 - [ ] Carried over from the previous plan, the crypto-bigint rows ([previous plan](next-validator-release-plan-20261108.md#candidates)):
   - the k256 0.14 upgrade waits for upstream releases;
   - the Solana stake reader's lock update needs an identity re-pin, which is its own qualification.
