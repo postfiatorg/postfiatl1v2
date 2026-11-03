@@ -63,6 +63,7 @@ Decided by the product owner 2026-10-28: total supply 100 billion PFT; the Base 
   - Base Sepolia rehearsal (test mode, reverting stand-in verifier): `0xE36e7Fc384564419187546c19719A5654266dE0B`, record `crates/pft-token-contracts/deployments/pft-lock-base-84532/deployment.json`.
 - [x] P2.4 *(this lane)* The inbound release path on PFTL and its proof: the release record and rules, the Base checkpoint source and `external_lane_release_v1`, described in [the release path section](../../architecture/genesis-external-lanes.md#the-release-path); merged in `8f29aaccb` (`fb204616b`, `aab72d1eb`, `e2df7a612`, `9cce9ff59`, `a2fa13d25`, `eed475656`, `de32f05da`, `5cb1310cf`, `2eee50c28`, `7ea92375a`, `e30668a6f`, `89db575cf`, `b1be6c6ce`). Next: P2.5, the qualification before genesis.
 - [ ] P2.5 *(this lane)* Its own qualification before genesis: tests, a devnet run, and an audit of the lock contract. To tick it: the qualification record.
+  - The tests, a six-validator devnet run of the release path with a fixture Base block, and the lock contract's public review trace: [the qualification run record](../../listings/coinbase/pft-erc20-release-path-qualification-20261103.md), 2026-11-03. The items below stay open.
   - [ ] The proof program's guest build for a Base source and its vkey pin; the SP1 ingress program is pinned to Sepolia (`programs/pfusdc-eth-ingress/src/lib.rs:19`, `:91`).
   - [ ] The proof inventory entry for that program.
   - [ ] The Base checkpoint source's own qualification.
