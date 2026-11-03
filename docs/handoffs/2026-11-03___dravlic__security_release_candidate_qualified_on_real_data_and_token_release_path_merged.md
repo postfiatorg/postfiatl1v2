@@ -132,3 +132,7 @@ On public main:
 - [Next validator release plan](../plans/active/next-validator-release-plan-20261115.md).
 - [Audit branch checked and rollout runbook written](2026-11-02___dravlic__audit_branch_checked_and_rollout_runbook_written.md) (2026-11-02).
 - [Current State](../status/chain-state-current.md), unchanged today.
+
+## End of session (13:20 UTC)
+
+After I wrote this handoff, the test-only fix for the intermittent node tests landed on the private branch in `c40856794`, together with the readiness-test fix from main; it corrects two test timeouts that assumed an idle CPU and a test lock that spread one failure to twelve more scenarios. I updated the release candidate packet (`62073e626`) with the day's later work and the five repair branches, and I added a fourth comment with the summary to private pull request #23. The test runs on these commits were still in progress at 13:20 UTC, so the run on `13bc85323` stays the fully green reference.
