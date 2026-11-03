@@ -2,7 +2,7 @@
 
 A genesis external lane is native PFT that genesis reserves for a claim held outside PFTL. The first use is the ERC-20 PFT on Base. The product owner decided on 2026-10-28 that the total supply is 100 billion PFT and that the Base ERC-20 is a slice of it; the lane holds that slice as native PFT that is not in circulation until a proven Lock on Base releases it. The lane is the $s_{\text{external}}$ term of the [whitepaper's four-way partition](../whitepaper.md#13-supply-perimeter-primary-operations-and-the-cash-leg).
 
-The design is `docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md`, sections 5 and 5.1. This page describes what the code does today (milestone item P2.2): genesis can reserve lanes, the ledger carries their records, and every supply check counts them. Nothing releases from a lane yet.
+The design is `docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md`, sections 4, 5 and 5.1. This page describes what the code does: genesis can reserve lanes, the ledger carries their records, every supply check counts them (milestone item P2.2), and `external_lane_release_v1` releases from a lane against a proven Base Lock (P2.4, on review).
 
 ## Genesis fields
 
@@ -53,7 +53,7 @@ The amounts are placeholders sized to today's devnet supply constant (`GENESIS_N
 | `policy.committee_root` | That committee's root (`FastSwapCommitteeV1::computed_root`, 48 bytes): `0x` and 96 lower-case hex digits. |
 | `policy.confirmation_depth` | Positive: the Base confirmations a Lock needs before it can be proven. |
 
-Unknown fields are refused at every level, so the policy cannot gain a field later without a schema change. The policy values are checked for shape only; P2.4 verifies proofs against them.
+Unknown fields are refused at every level, so the policy cannot gain a field later without a schema change. The policy values are checked for shape, and `chain_id` against the two Base sources; the release path verifies proofs against them.
 
 ## Ledger and genesis state
 
@@ -62,7 +62,8 @@ At genesis the faucet receives the native supply minus the sum of the lanes, and
 - `lane_id` and `reserved_atoms`, from genesis;
 - `released_atoms`, starting at 0;
 - `released_lock_nonces`, the set of Lock nonces already paid, starting empty;
-- `window_index` and `window_released_atoms`, the current window and what it released, starting at 0.
+- `window_index` and `window_released_atoms`, the current window and what it released, starting at 0;
+- `releases`, the release history, omitted while empty.
 
 The records are omitted from the ledger JSON and from the state commitment when there are none, so a chain without lanes keeps its state root. When there are records, they are committed at every height: unlike the NAV fields beside them they do not wait for the complete-NAV commitment, because they are native supply.
 Tests pin this: the deployed `postfiat-wan-devnet-2` genesis re-serialises byte for byte with its hash, and a populated lane-less ledger keeps the state root it had before lanes existed.
@@ -80,13 +81,36 @@ Tests pin this: the deployed `postfiat-wan-devnet-2` genesis re-serialises byte 
 - each block: live before minus fee burns equals live after;
 - each history checkpoint: live supply plus cumulative fee burns equals the genesis supply.
 
-A lane that has released more than it reserved, or a duplicated lane id, fails these checks. Until the release operation (P2.4) exists, a history checkpoint or imported snapshot must carry exactly the genesis lane records (genesis `reserved_atoms`, nothing released, no nonces, window fields 0), so atoms cannot leave a lane for an account even when the totals still balance. Where the genesis is at hand (height-zero replay, history checkpoints) the faucet must hold exactly the native supply minus the lanes; a faucet file read without the genesis is only bounded by the supply, and height-zero replay refuses a short one.
+A lane that has released more than it reserved, or a duplicated lane id, fails these checks. A history checkpoint or imported snapshot must carry each genesis lane once, with its genesis `reserved_atoms`, and with release fields that are exactly the sum of its recorded releases: `released_lock_nonces` is the set of recorded nonces, `released_atoms` the sum of their amounts, and the window fields follow from the recorded heights, no window above the cap. Release fields without a record behind them have no state commitment and no live total, so atoms cannot leave a lane for an account unrecorded even when the totals still balance. Where the genesis is at hand (height-zero replay, history checkpoints) the faucet must hold exactly the native supply minus the lanes; a faucet file read without the genesis is only bounded by the supply, and height-zero replay refuses a short one.
 
-Snapshots, restores and history checkpoints carry the lane records unchanged; tests cover lanes with nothing released, and a checkpoint, snapshot or faucet that drops a lane is refused. The lifecycle test for a released lane comes with P2.4.
+Snapshots, restores and history checkpoints carry the lane records unchanged; tests cover lanes with nothing released and checkpoints with recorded releases, and a checkpoint, snapshot or faucet that drops a lane is refused.
 
-## What P2.4 adds
+## The release path
 
-Milestone item P2.4 adds `external_lane_release_v1`: it verifies a proven Lock on Base against the lane's genesis policy, rejects a nonce already in `released_lock_nonces`, rejects amounts above the lane's remainder or past the window cap (`reserved_atoms × release_cap_bps / 10,000`, rounded down), credits the recipient, and updates the release fields. A release moves atoms from the lane remainder into circulation, so the checks above hold unchanged.
+`external_lane_release_v1` is an asset transaction operation (`crates/types/src/transactions_mempool_receipts.rs`, `ExternalLaneReleaseOperationV1`). It names the lane, the Lock (`source_chain_id`, `lock_contract_address`, `lock_nonce`), `amount_atoms`, the PFTL `recipient` and the `proof`. Any account may submit it and pays the fee; it is submitted with `mempool_submit_signed_asset_transaction`, and mempool admission and batch building refuse it when execution would.
+
+The proof is the design's option (b): an `EthereumExternalEventProofV1`, a Base block checkpoint signed by a quorum of the committee the lane's policy names, plus the receipt-inclusion proof of the lock contract's `Locked` event. For a lane the checkpoint's route fields carry the lane id, the lane's route-config digest (SHA3-384 over the genesis lane JSON), the lock contract and the token with their runtime code hashes, and the policy's `confirmation_depth` (`crates/execution/src/external_lane_release.rs`, `verify_external_lane_lock`).
+
+Execution (`apply_external_lane_release`, rules on `ExternalLaneState`) checks, in order, and refuses with no state change and no nonce consumed:
+
+| Check | Refusal code |
+|---|---|
+| Genesis configures the lane | `external_lane_not_configured` |
+| The Lock is from the lane's chain and lock contract | `external_lane_source_mismatch` |
+| A committee with the policy's epoch and root is registered | `external_lane_committee_missing` |
+| The certificate has a quorum of valid votes; the receipt and log verify | `external_lane_proof_invalid` |
+| The checkpoint binds the lane, chain, contracts, code hashes and depth | `external_lane_checkpoint_mismatch` |
+| The `Locked` nonce, amount, recipient and recipient hash equal the claim | `external_lane_lock_mismatch` |
+| The nonce was not released before | `external_lane_nonce_already_released` |
+| The amount fits `reserved_atoms - released_atoms` | `external_lane_remainder_exceeded` |
+| The window's released amount stays within the cap | `external_lane_window_cap_exceeded` |
+| A new recipient account reaches the account reserve | `below_account_reserve` |
+
+An accepted release credits the recipient, creating the account if needed, adds the nonce and the amount, moves the window when the height is in a new one, and appends a record (nonce, chain, lock contract, amount, recipient, Base block number and hash, PFTL height). The atoms move from the lane remainder into circulation, so every conservation check above holds unchanged.
+
+`external_lane_info` (public read RPC, and the `external-lane-info` node command, `--lane-id` optional) returns each lane's genesis configuration, live record with its release history, remainder, window cap, and what the next block's window may still release.
+
+Not built yet: cap amendments and their seven-window raise delay (section 5.1), the committee epoch move by governed amendment (section 4.1), the watcher (section 5.2), and the Python CLI and interface. The SP1 ingress program stays pinned to Sepolia for pfUSDC; the design keeps the SP1 route for Base (option (a)) as a later upgrade.
 
 ## Not before
 
