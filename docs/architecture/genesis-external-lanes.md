@@ -102,7 +102,7 @@ Execution (`apply_external_lane_release`, rules on `ExternalLaneState`) checks, 
 | The Lock is from the lane's chain and lock contract | `external_lane_source_mismatch` |
 | A committee with the policy's epoch and root is registered | `external_lane_committee_missing` |
 | The certificate has a quorum of valid votes; the receipt and log verify | `external_lane_proof_invalid` |
-| The checkpoint binds the lane, chain, contracts, code hashes and depth | `external_lane_checkpoint_mismatch` |
+| The checkpoint binds the lane, chain, contracts, code hashes and depth, and its observed head is at least `confirmation_depth` blocks past the Lock's block | `external_lane_checkpoint_mismatch` |
 | The `Locked` nonce, amount, recipient and recipient hash equal the claim | `external_lane_lock_mismatch` |
 | The nonce was not released before | `external_lane_nonce_already_released` |
 | The amount fits `reserved_atoms - released_atoms` | `external_lane_remainder_exceeded` |

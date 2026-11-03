@@ -165,6 +165,25 @@ pub(crate) fn verify_external_lane_lock(
 ) -> Result<VerifiedExternalLock, ExecutionError> {
     let lane = configured_lane(genesis, claim.lane_id)?;
     require_lane_source(lane, claim.source_chain_id, claim.lock_contract_address)?;
+    // The attested distance from the Lock's block to the observed head, not
+    // only the signed echo of the depth, must reach the policy's depth.
+    let attested = &proof.checkpoint_certificate.checkpoint;
+    if attested
+        .observed_head_number
+        .checked_sub(attested.block_number)
+        .is_none_or(|distance| distance < lane.policy.confirmation_depth)
+    {
+        return Err((
+            EXTERNAL_LANE_CHECKPOINT_MISMATCH,
+            format!(
+                "Base checkpoint observes head {} for block {}: fewer than the {} confirmations external lane `{}` requires",
+                attested.observed_head_number,
+                attested.block_number,
+                lane.policy.confirmation_depth,
+                lane.id
+            ),
+        ));
+    }
     proof.validate_bounds().map_err(|error| {
         (
             EXTERNAL_LANE_PROOF_INVALID,
@@ -803,6 +822,26 @@ mod proof_tests {
             message.contains("ethereum_event_emitter_mismatch"),
             "{message}"
         );
+    }
+
+    #[test]
+    fn external_lane_release_requires_the_attested_confirmation_distance() {
+        let fx = fixture_on(8453);
+        // Head exactly `confirmation_depth` (64) past the Lock's block.
+        let distant = proof_with(&fx, LOCK, 7, 1_000, |c| c.observed_head_number = 564, 5);
+        verify_external_lane_lock(&fx.genesis, &fx.ledger, &claim(&fx), &distant)
+            .expect("a checkpoint with the policy's distance");
+        // The depth is echoed but the head is at, one short of, or below the block.
+        for head in [500, 563, 499] {
+            let mut at_head = proof(&fx);
+            at_head
+                .checkpoint_certificate
+                .checkpoint
+                .observed_head_number = head;
+            let (code, message) = refusal(&fx, &claim(&fx), &at_head);
+            assert_eq!(code, EXTERNAL_LANE_CHECKPOINT_MISMATCH, "{message}");
+            assert!(message.contains("confirmations"), "{message}");
+        }
     }
 
     #[test]
