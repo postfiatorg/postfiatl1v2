@@ -337,7 +337,7 @@ refuses:
 
 | Check | Refusal |
 |---|---|
-| any input empty, blank, `replace...` or zero; the eight `PFT_LOCK_VERIFIER_EXPECTED_*` values and `PFT_LOCK_VERIFIER_CODEHASH` are refused as unset, blank or `replace...` when read without `PFT_LOCK_ALLOW_TEST_VERIFIER=1`, and with it a placeholder leaves them zero, refused inside the anchor check unless the stand-in skip applies | `PlaceholderValue(name)` |
+| a value that is empty, blank or `replace...` (any casing) is refused when read (an unset variable already fails forge's env read); under `PFT_LOCK_ALLOW_TEST_VERIFIER=1` the eight `PFT_LOCK_VERIFIER_EXPECTED_*` values and `PFT_LOCK_VERIFIER_CODEHASH` may be unset or a placeholder and read as zero. A zero hash, address, height, epoch or cap is refused inside its check (token, verifier, cap, or the anchor check, which the stand-in skip bypasses); a zero `PFT_LOCK_VERIFIER_CODEHASH` fails there as `VerifierCodeHashMismatch` unless the switch admits it. `PFT_LOCK_SOURCE_COMMIT` is checked for shape only (forty hexadecimal characters), so an all-zero commit is accepted | `PlaceholderValue(name)` |
 | `PFT_LOCK_CHAIN_ID` is 8453 or 84532 and equals the RPC's chain id | `UnsupportedChain`, `WrongChain(expected, actual)` |
 | on 84532, `PFT_LOCK_TOKEN` and `PFT_LOCK_TOKEN_CODEHASH` are the recorded test token and its code hash (`BASE_SEPOLIA_TEST_TOKEN`, `BASE_SEPOLIA_TEST_TOKEN_CODEHASH`) unless `PFT_LOCK_ALLOW_TEST_TOKEN=1` | `TokenNotTheTestToken(token)` |
 | `PFT_LOCK_TOKEN` has code whose keccak256 is `PFT_LOCK_TOKEN_CODEHASH`; `decimals()` is 6 and `totalSupply()` > 0 (checked staticcalls) | `TokenNotAContract`, `TokenCodeHashMismatch(expected, actual)`, `TokenUnreadable(field)`, `TokenDecimalsMismatch`, `TokenSupplyZero` |
@@ -365,12 +365,13 @@ code hash and this exact cap). `testTheProbeReadsTheRealVerifier` checks the
 match with a test recipe (`vm.etch` and a dedicated deployer), not the
 deployment procedure.
 
-After construction it re-reads `token()`, `finalityVerifier()`,
-`maxLockAmount()`, `nextNonce() == 0` and `totalLocked() == 0`
-(`LockStateMismatch(field)`), then the verifier's code hash, checkpoint and
-bindings again, its `vaultRuntimeCodeHash()` now against the deployed lock's
-`codehash`, and logs each expected value beside the one read from the
-verifier. This re-read runs in forge's simulation before submission, not
+The pre-check logs each expected value beside the one read from the verifier,
+before the broadcast. After construction `checkLock` re-reads and logs
+`token()`, `finalityVerifier()`, `maxLockAmount()`, `nextNonce() == 0` and
+`totalLocked() == 0` (`LockStateMismatch(field)`), then re-checks the
+verifier's code hash, checkpoint and bindings, its `vaultRuntimeCodeHash()` now
+against the deployed lock's `codehash`, silently: a mismatch reverts, no
+second log is printed. This re-read runs in forge's simulation before submission, not
 against the mined chain; the post-receipt check below is mandatory.
 
 Where the expected values come from, all pinned by the operator from the
