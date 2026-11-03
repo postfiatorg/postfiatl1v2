@@ -427,6 +427,28 @@ fn external_lane_release_refuses_amount_past_window_cap_without_mutation() {
 }
 
 #[test]
+fn external_lane_release_refuses_past_the_record_ceiling_without_mutation() {
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release_within(&lane, sample_release(0, 10, 5), 2)
+        .expect("first record");
+    state
+        .apply_release_within(&lane, sample_release(1, 10, 6), 2)
+        .expect("second record");
+    let before = state.clone();
+    let (code, message) = state
+        .apply_release_within(&lane, sample_release(2, 10, 7), 2)
+        .unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_RELEASE_RECORDS_FULL, "{message}");
+    assert_eq!(state, before, "a refused release leaves the lane untouched");
+    state
+        .apply_release(&lane, sample_release(2, 10, 7))
+        .expect("far below the ceiling");
+    state.validate_against_genesis(&lane).expect("three records");
+}
+
+#[test]
 fn external_lane_release_rejects_amount_above_lane_remainder() {
     let mut lane = release_test_lane();
     lane.release_cap_bps = 10_000;

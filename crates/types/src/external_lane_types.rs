@@ -8,6 +8,13 @@
 
 pub const EXTERNAL_LANE_ID_MAX_BYTES: usize = 32;
 pub const EXTERNAL_LANE_RELEASE_CAP_BPS_MAX: u32 = 10_000;
+/// Hard ceiling on the release records one lane stores: under 400 bytes of
+/// JSON each, so under 400 MB, and one SHA3-384 step each when a replay base
+/// is checked. It is far above any expected release volume (each record costs
+/// a Base Lock and a PFTL fee) but below `reserved_atoms` over the lock
+/// minimum for any realistic slice; pruning the records behind the finalized
+/// checkpoint (P2.5) keeps a lane below it.
+pub const EXTERNAL_LANE_MAX_RELEASE_RECORDS: usize = 1_000_000;
 const EXTERNAL_LANE_EVM_ADDRESS_HEX_LEN: usize = 40;
 const EXTERNAL_LANE_CODE_HASH_HEX_LEN: usize = 64;
 /// A `FastSwapCommitteeV1` root is 48 bytes (SHA3-384 over the roster).
@@ -36,6 +43,7 @@ pub const EXTERNAL_LANE_PROOF_INVALID: &str = "external_lane_proof_invalid";
 pub const EXTERNAL_LANE_CHECKPOINT_MISMATCH: &str = "external_lane_checkpoint_mismatch";
 pub const EXTERNAL_LANE_LOCK_MISMATCH: &str = "external_lane_lock_mismatch";
 pub const EXTERNAL_LANE_COMMITTEE_MISSING: &str = "external_lane_committee_missing";
+pub const EXTERNAL_LANE_RELEASE_RECORDS_FULL: &str = "external_lane_release_records_full";
 
 /// What the release operation of P2.4 verifies a proven Lock against.
 /// Shape-checked here; the values are pinned at genesis and the policy cannot
@@ -520,6 +528,23 @@ impl ExternalLaneState {
         amount_atoms: u64,
         height: u64,
     ) -> Result<(), (&'static str, String)> {
+        self.check_release_within(
+            lane,
+            lock_nonce,
+            amount_atoms,
+            height,
+            EXTERNAL_LANE_MAX_RELEASE_RECORDS,
+        )
+    }
+
+    fn check_release_within(
+        &self,
+        lane: &GenesisExternalLane,
+        lock_nonce: u64,
+        amount_atoms: u64,
+        height: u64,
+        max_records: usize,
+    ) -> Result<(), (&'static str, String)> {
         if self.released_lock_nonces.contains(&lock_nonce) {
             return Err((
                 EXTERNAL_LANE_NONCE_ALREADY_RELEASED,
@@ -569,22 +594,46 @@ impl ExternalLaneState {
                 ),
             ));
         }
+        if self.releases.len() >= max_records {
+            return Err((
+                EXTERNAL_LANE_RELEASE_RECORDS_FULL,
+                format!(
+                    "external lane `{}` stores {} release records, the ceiling {max_records}",
+                    self.lane_id,
+                    self.releases.len()
+                ),
+            ));
+        }
         Ok(())
     }
 
     /// Applies a checked release: records it, adds the nonce and the amount,
-    /// and moves the window. The caller credits the recipient.
+    /// and moves the window. The caller credits the recipient. Every fallible
+    /// step runs before the first mutation, so a refusal leaves the lane as it
+    /// was.
     pub fn apply_release(
         &mut self,
         lane: &GenesisExternalLane,
         record: ExternalLaneReleaseRecord,
     ) -> Result<(), (&'static str, String)> {
-        self.check_release(
+        self.apply_release_within(lane, record, EXTERNAL_LANE_MAX_RELEASE_RECORDS)
+    }
+
+    fn apply_release_within(
+        &mut self,
+        lane: &GenesisExternalLane,
+        record: ExternalLaneReleaseRecord,
+        max_records: usize,
+    ) -> Result<(), (&'static str, String)> {
+        self.check_release_within(
             lane,
             record.lock_nonce,
             record.amount_atoms,
             record.released_at_height,
+            max_records,
         )?;
+        let root = external_lane_release_history_root(self.release_history_root.as_deref(), &record)
+            .map_err(|error| (EXTERNAL_LANE_PROOF_INVALID, error))?;
         let window_index = lane.window_index_at(record.released_at_height);
         if window_index != self.window_index {
             self.window_index = window_index;
@@ -593,10 +642,7 @@ impl ExternalLaneState {
         self.window_released_atoms += record.amount_atoms;
         self.released_atoms += record.amount_atoms;
         self.released_lock_nonces.insert(record.lock_nonce);
-        self.release_history_root = Some(
-            external_lane_release_history_root(self.release_history_root.as_deref(), &record)
-                .map_err(|error| (EXTERNAL_LANE_PROOF_INVALID, error))?,
-        );
+        self.release_history_root = Some(root);
         self.releases.push(record);
         Ok(())
     }
