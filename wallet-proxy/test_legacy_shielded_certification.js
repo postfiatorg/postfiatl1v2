@@ -1,7 +1,8 @@
 'use strict';
 
-// W-1 S3.3: WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION retires the proxy's
-// legacy shielded certification paths; the user-proven route works without them.
+// W-1 S3.3: WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION (default off) retires the
+// proxy's legacy shielded certification paths; the user-proven route works
+// without them, and the legacy entry points refuse unless the switch is on.
 
 const assert = require('assert');
 const fs = require('fs');
@@ -12,7 +13,8 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const {
-    LEGACY_ROUTES, RETIRED_CODE, legacyShieldedCertificationEnabled,
+    LEGACY_HTTP, LEGACY_ROUTES, RETIRED_CODE, VALIDATOR_OWNED, legacyShieldedCertificationEnabled,
+    requireLegacyShieldedCertification, shieldedCertificationPath,
 } = require('./legacy-shielded-certification');
 const { batchIdFor, parsePublicAction } = require('./private-actions');
 
@@ -76,6 +78,17 @@ function post(port, pathname, body) {
     });
 }
 
+function get(port, pathname) {
+    return new Promise((resolve, reject) => {
+        http.get({ host: '127.0.0.1', port, path: pathname }, (res) => {
+            let text = '';
+            res.setEncoding('utf8');
+            res.on('data', (chunk) => { text += chunk; });
+            res.on('end', () => resolve({ statusCode: res.statusCode, body: text ? JSON.parse(text) : null }));
+        }).on('error', reject);
+    });
+}
+
 function freePort() {
     return new Promise((resolve) => {
         const server = net.createServer().listen(0, '127.0.0.1', () => {
@@ -125,9 +138,16 @@ const LEGACY_READER = /(VALIDATOR_KEY_FILE|SHIELDED_INGRESS_KEY_FILE|PROPOSAL_KE
 
 async function main() {
     // The switch value.
-    assert.strictEqual(legacyShieldedCertificationEnabled({}), true, 'default on');
+    const ON = { WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION: 'on' };
+    assert.strictEqual(legacyShieldedCertificationEnabled({}), false, 'default off');
     assert.strictEqual(legacyShieldedCertificationEnabled({ WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION: 'off' }), false);
     assert.strictEqual(legacyShieldedCertificationEnabled({ WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION: 'ON' }), true);
+    // The entry-point guard and the readiness field, both positions.
+    assert.throws(() => requireLegacyShieldedCertification('x', {}), (error) => error.code === RETIRED_CODE && error.statusCode === 410);
+    assert.doesNotThrow(() => requireLegacyShieldedCertification('x', ON));
+    assert.strictEqual(shieldedCertificationPath({}).active, VALIDATOR_OWNED);
+    assert.deepStrictEqual(shieldedCertificationPath({}).submit_route, ['/api/private/v1/submit']);
+    assert.strictEqual(shieldedCertificationPath(ON).active, LEGACY_HTTP);
     assert.throws(() => legacyShieldedCertificationEnabled({ WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION: 'maybe' }), /on or off/);
 
     // Repository scan: every wallet-proxy reader of a validator key file or data directory.
@@ -157,15 +177,21 @@ async function main() {
     assert.deepStrictEqual(catchUpCallers, ['executeShieldedNavswapIngress', 'executeShieldedNavswapSwap', 'executeShieldedNavswapEgress']);
     assert.ok(!/KEY_FILE|DATA_DIR|validator_keys/.test(fs.readFileSync(path.join(__dirname, 'private-actions.js'), 'utf8')));
 
-    // Real starts: off with nothing configured; default with nothing enabled; on, enabled and no key file.
+    // Real starts: off; the default (off, with the readiness read naming the path); on with
+    // nothing enabled; on, enabled and no key file.
     const off = await startProxy({ WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION: 'off' });
     assert.ok(off.listening, off.output);
-    assert.match(off.output, /Legacy shielded certification: off/);
-    const defaultStart = await startProxy({});
+    assert.match(off.output, /Legacy shielded certification: off; submissions take the validator-owned admission/);
+    const defaultStart = await startProxy({}, (port) => get(port, '/api/shielded-nav-swap/status'));
     assert.ok(defaultStart.listening, defaultStart.output);
-    assert.match(defaultStart.output, /Legacy shielded certification: on \(routes present, not enabled\)/);
+    assert.match(defaultStart.output, /Legacy shielded certification: off/);
+    assert.strictEqual(defaultStart.observed.body.certification_path.active, VALIDATOR_OWNED);
+    const onStart = await startProxy(ON, (port) => get(port, '/api/shielded-nav-swap/status'));
+    assert.ok(onStart.listening, onStart.output);
+    assert.match(onStart.output, /Legacy shielded certification: on \(routes present, not enabled\)/);
+    assert.strictEqual(onStart.observed.body.certification_path.active, LEGACY_HTTP);
     // On, enabled and no key file: starts with one warning and answers 409 as before.
-    const misconfigured = await startProxy({
+    const misconfigured = await startProxy({ ...ON,
         NAVSWAP_ENABLE_SHIELDED_INGRESS: 'true', NAVSWAP_SHIELDED_INGRESS_KEY_FILE: '/nonexistent/validator.key',
         NAVSWAP_SHIELDED_INGRESS_DATA_DIR: '/nonexistent/data', WALLET_PROXY_API_TOKEN: TOKEN, ALLOWED_ORIGINS: ORIGIN,
     }, (port) => post(port, '/api/shielded-nav-swap/ingress', {}));
@@ -179,20 +205,21 @@ async function main() {
     assert.ok(!invalid.listening && invalid.exitCode !== 0 && invalid.exitCode !== null, invalid.output);
     assert.match(invalid.output, /WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION must be on or off/);
     const offIgnoresThem = await startProxy({
-        WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION: 'off', NAVSWAP_ENABLE_SHIELDED_INGRESS: 'true',
+        NAVSWAP_ENABLE_SHIELDED_INGRESS: 'true',
         NAVSWAP_SHIELDED_INGRESS_KEY_FILE: '/nonexistent/validator.key', NAVSWAP_SHIELDED_INGRESS_DATA_DIR: '/nonexistent/data',
     });
     assert.ok(offIgnoresThem.listening, offIgnoresThem.output);
 
-    // In-process with the switch off: legacy routes answer 410, nothing legacy is configured,
-    // and the user-proven route admits a vector through two validator sources.
+    // In-process with the default (switch unset): legacy routes answer 410, the legacy entry
+    // points refuse, nothing legacy is configured, and the user-proven route admits a vector
+    // through two validator sources.
     const a = stub('validator-a');
     const b = stub('validator-b');
     await Promise.all([a, b].map((s) => new Promise((resolve) => s.server.listen(0, '127.0.0.1', resolve))));
     delete process.env.WALLET_PROXY_API_TOKENS_JSON;
     delete process.env.LISTEN_HOST;
+    delete process.env.WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION;
     Object.assign(process.env, {
-        WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION: 'off',
         NAVSWAP_ENABLE_SHIELDED_INGRESS: 'true',
         NAVSWAP_ENABLE_SHIELDED_SWAPS: 'true',
         NAVSWAP_SHIELDED_CERTIFIER_LOOP: 'true',
@@ -216,6 +243,17 @@ async function main() {
     await new Promise((resolve) => proxy.server.listen(0, '127.0.0.1', resolve));
     const port = proxy.server.address().port;
     try {
+        // Every legacy entry point refuses on the default path.
+        assert.throws(() => proxy.buildShieldedCertifiedRoundArgs(ingress, '/tmp/batch.json', '/tmp/artifacts'),
+            (error) => error.code === RETIRED_CODE);
+        await assert.rejects(proxy.createShieldedSwapBatchViaLocalService(swap, {}, '/tmp/batch.json'),
+            (error) => error.code === RETIRED_CODE);
+        for (const execute of ['executeShieldedNavswapIngress', 'executeShieldedNavswapSwap', 'executeShieldedNavswapEgress']) {
+            const refused = await proxy[execute]({});
+            assert.deepStrictEqual([refused.ok, refused.code, refused.replacement], [false, RETIRED_CODE, '/api/private/v1/'], execute);
+        }
+        assert.throws(() => proxy.startShieldedCertifierLoop({ ...swap, certifier_loop: { ...swap.certifier_loop, enabled: true } }),
+            (error) => error.code === RETIRED_CODE);
         for (const route of LEGACY_ROUTES) {
             const response = await post(port, route, {});
             assert.strictEqual(response.statusCode, 410, route);
@@ -228,6 +266,15 @@ async function main() {
         assert.strictEqual(submitted.statusCode, 202, JSON.stringify(submitted.body));
         assert.strictEqual(submitted.body.state, 'queued');
         assert.ok(a.records.has(vector.intent_id) && b.records.has(vector.intent_id));
+        // Switch on (in-process): the same entry points run again.
+        process.env.WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION = 'on';
+        const legacyArgs = proxy.buildShieldedCertifiedRoundArgs({
+            data_dir: '/d', topology: '/t', key_file: '/k', timeout_ms: 1,
+        }, '/tmp/batch.json', '/tmp/artifacts');
+        assert.strictEqual(legacyArgs[legacyArgs.indexOf('--key-file') + 1], '/k');
+        const legacyIngress = await proxy.executeShieldedNavswapIngress({});
+        assert.strictEqual(legacyIngress.code, 'shielded_ingress_configuration_required');
+        delete process.env.WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION;
         console.log('legacy shielded certification switch regression passed');
     } finally {
         await new Promise((resolve) => proxy.server.close(resolve));

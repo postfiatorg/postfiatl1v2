@@ -1,19 +1,25 @@
 'use strict';
 
 // W-1 S3.3: the proxy's legacy shielded certification paths behind one
-// operator switch, `WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION` (default on).
-// When off, the routes below answer 410 and the proxy reads no validator key
-// file, no validator data directory and no local Asset-Orchard service.
+// operator switch, `WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION` (default off:
+// submissions take the validator-owned admission at /api/private/v1/). Unless
+// the switch is on, the routes below answer 410, each entry point below
+// refuses, and the proxy reads no validator key file, no validator data
+// directory and no local Asset-Orchard service. The legacy code stays for one
+// release behind `on`.
 //   1. transport-peer-certified-batch-round with --key-file
 //      (navswap-shielded.js buildShieldedCertifiedRoundArgs)
 //   2. the local Asset-Orchard /asset-orchard/swap-batch call
 //      (navswap-shielded.js createShieldedSwapBatchViaLocalService)
 //   3. the HTTP-side certifying executions behind the routes below
-//      (navswap-shielded.js executeShieldedNavswapIngress/Swap/Egress)
+//      (navswap-shielded.js executeShieldedNavswapIngress/Swap/Egress), and the
+//      certifier loop's transport-peer-certified-batch-loop --key-file
 
 const SWITCH = 'WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION';
 const RETIRED_CODE = 'legacy_shielded_certification_retired';
 const REPLACEMENT = '/api/private/v1/';
+const VALIDATOR_OWNED = 'validator_owned_admission';
+const LEGACY_HTTP = 'legacy_http_certification';
 const LEGACY_ROUTES = new Set([
     '/api/shielded-nav-swap/ingress',
     '/api/shielded-nav-swap/swap',
@@ -22,8 +28,8 @@ const LEGACY_ROUTES = new Set([
 
 function legacyShieldedCertificationEnabled(env = process.env) {
     const raw = String(env[SWITCH] ?? '').trim().toLowerCase();
-    if (raw === '' || ['on', 'true', '1'].includes(raw)) return true;
-    if (['off', 'false', '0'].includes(raw)) return false;
+    if (['on', 'true', '1'].includes(raw)) return true;
+    if (raw === '' || ['off', 'false', '0'].includes(raw)) return false;
     throw new Error(`${SWITCH} must be on or off`);
 }
 
@@ -40,6 +46,28 @@ function handleRetiredLegacyRoute(req, res, url, env = process.env) {
     return true;
 }
 
+// Each legacy entry point calls this first: it throws 410 unless the switch is on.
+function requireLegacyShieldedCertification(entry, env = process.env) {
+    if (legacyShieldedCertificationEnabled(env)) return;
+    const error = new Error(`${entry} is the retired HTTP-side certification; submit to ${REPLACEMENT} or set ${SWITCH}=on.`);
+    error.code = RETIRED_CODE;
+    error.statusCode = 410;
+    error.replacement = REPLACEMENT;
+    throw error;
+}
+
+// The readiness field: which path a shielded submission takes.
+function shieldedCertificationPath(env = process.env) {
+    const legacy = legacyShieldedCertificationEnabled(env);
+    return {
+        active: legacy ? LEGACY_HTTP : VALIDATOR_OWNED,
+        switch: SWITCH,
+        switch_value: legacy ? 'on' : 'off',
+        submit_route: legacy ? [...LEGACY_ROUTES] : [`${REPLACEMENT}submit`],
+        legacy_routes: legacy ? 'enabled' : 'retired_410',
+    };
+}
+
 // Startup: the mode line, and a warning (never a refusal) when the switch is on,
 // a legacy path is enabled and its validator key file or data directory is
 // missing; those routes then answer 409 as before. Only an invalid switch
@@ -48,7 +76,8 @@ function legacyShieldedCertificationStartup(ingressConfig, env = process.env) {
     if (!legacyShieldedCertificationEnabled(env)) {
         return {
             ok: true,
-            line: `Legacy shielded certification: off (${[...LEGACY_ROUTES].join(', ')} answer 410; `
+            line: `Legacy shielded certification: off; submissions take the validator-owned admission at ${REPLACEMENT} `
+                + `(${[...LEGACY_ROUTES].join(', ')} answer 410; `
                 + 'no validator key file, data directory or local Asset-Orchard service is read).',
         };
     }
@@ -77,9 +106,13 @@ function legacyShieldedCertificationStartup(ingressConfig, env = process.env) {
 module.exports = {
     LEGACY_ROUTES,
     REPLACEMENT,
+    LEGACY_HTTP,
     RETIRED_CODE,
     SWITCH,
+    VALIDATOR_OWNED,
     handleRetiredLegacyRoute,
     legacyShieldedCertificationEnabled,
     legacyShieldedCertificationStartup,
+    requireLegacyShieldedCertification,
+    shieldedCertificationPath,
 };

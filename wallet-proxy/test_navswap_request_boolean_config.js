@@ -44,7 +44,8 @@ const timerGuard = () => {
 };
 
 try {
-    process.env = { ...vectors.fixed_environment };
+    // The builder vectors cover the legacy certification, kept behind its switch for one release (W-1 S3.3).
+    process.env = { ...vectors.fixed_environment, WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION: 'on' };
     global.fetch = forbidden('network');
     global.setTimeout = timerGuard;
     global.setInterval = timerGuard;
