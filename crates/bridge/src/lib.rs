@@ -3924,10 +3924,11 @@ pub use ethereum_checkpoint::{
     verify_ethereum_checkpoint_certificate, EthereumCheckpointVerificationError,
 };
 pub use ethereum_receipt::{
-    decode_packet_cancelled_event, decode_packet_consumed_event, decode_packet_consumed_event_v2,
-    decode_return_burned_event, decode_return_burned_event_v2, ethereum_keccak256,
-    verify_ethereum_receipt_log, verify_packet_cancelled_event, verify_packet_consumed_event,
-    verify_return_burned_event, EthereumLogV1, EthereumProofError, PacketCancelledEventV1,
-    PacketConsumedEventV1, PacketConsumedEventV2, ReturnBurnedEventV1, ReturnBurnedEventV2,
+    decode_locked_event, decode_packet_cancelled_event, decode_packet_consumed_event,
+    decode_packet_consumed_event_v2, decode_return_burned_event, decode_return_burned_event_v2,
+    ethereum_keccak256, verify_ethereum_receipt_log, verify_packet_cancelled_event,
+    verify_packet_consumed_event, verify_return_burned_event, EthereumLogV1, EthereumProofError,
+    LockedEventV1, PacketCancelledEventV1, PacketConsumedEventV1, PacketConsumedEventV2,
+    ReturnBurnedEventV1, ReturnBurnedEventV2,
 };
 pub use postfiat_types::EthereumReceiptProofV1;

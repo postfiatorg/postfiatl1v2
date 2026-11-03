@@ -11,7 +11,7 @@ fn sample_external_lane(id: &str, reserved_atoms: u64) -> GenesisExternalLane {
             token_runtime_code_hash: format!("0x{}", "3c".repeat(32)),
             lock_runtime_code_hash: format!("0x{}", "4d".repeat(32)),
             committee_epoch: 2,
-            committee_root: format!("0x{}", "5e".repeat(32)),
+            committee_root: format!("0x{}", "5e".repeat(48)),
             confirmation_depth: 64,
         },
     }
@@ -274,11 +274,12 @@ fn genesis_external_lane_policy_requires_proof_policy_pins() {
     let mut cases: Vec<(GenesisExternalLanePolicy, &str)> = Vec::new();
     for root in [
         String::new(),
-        "5e".repeat(32),
-        format!("0x{}", "5E".repeat(32)),
-        format!("0x{}", "5e".repeat(31)),
-        format!("0x{}", "5e".repeat(48)),
-        format!("0x{}g", "5e".repeat(31)),
+        "5e".repeat(48),
+        format!("0x{}", "5E".repeat(48)),
+        format!("0x{}", "5e".repeat(47)),
+        // 32 bytes, the width P2.2 allowed: no committee root has it.
+        format!("0x{}", "5e".repeat(32)),
+        format!("0x{}g", "5e".repeat(47)),
     ] {
         let mut policy = sample_external_lane("a", 1).policy;
         policy.committee_root = root;
@@ -348,6 +349,21 @@ fn release_test_lane() -> GenesisExternalLane {
     let mut lane = sample_external_lane("base-erc20", 10_000);
     lane.release_window_blocks = 100;
     lane
+}
+
+#[test]
+fn genesis_external_lane_source_must_be_base_mainnet_or_sepolia() {
+    for chain_id in [8453, 84_532] {
+        let mut lane = sample_external_lane("a", 1);
+        lane.policy.chain_id = chain_id;
+        lane.validate().expect("allowed Base source");
+    }
+    for chain_id in [1, 10, 11_155_111, 8454] {
+        let mut lane = sample_external_lane("a", 1);
+        lane.policy.chain_id = chain_id;
+        let error = lane.validate().unwrap_err();
+        assert!(error.contains("must be Base mainnet 8453 or Base Sepolia 84532"), "{error}");
+    }
 }
 
 #[test]

@@ -20,7 +20,7 @@ fn lane_genesis(chain_id: &str, validator_count: u32) -> Genesis {
             token_runtime_code_hash: format!("0x{}", "3c".repeat(32)),
             lock_runtime_code_hash: format!("0x{}", "4d".repeat(32)),
             committee_epoch: 2,
-            committee_root: format!("0x{}", "5e".repeat(32)),
+            committee_root: format!("0x{}", "5e".repeat(48)),
             confirmation_depth: 64,
         },
     }]);

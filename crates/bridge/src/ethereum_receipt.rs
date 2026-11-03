@@ -65,6 +65,19 @@ pub struct ReturnBurnedEventV1 {
     pub burn_height: u64,
 }
 
+/// `PFTLockV1.Locked(uint64 indexed nonce, address indexed holder,
+/// bytes32 indexed pftlRecipientHash, bytes pftlRecipient, uint64 amount)`
+/// (`crates/pft-token-contracts/src/PFTLockV1.sol`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LockedEventV1 {
+    pub lock_contract: [u8; 20],
+    pub nonce: u64,
+    pub holder: [u8; 20],
+    pub pftl_recipient_hash: [u8; 32],
+    pub pftl_recipient: Vec<u8>,
+    pub amount_atoms: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReturnBurnedEventV2 {
     pub controller: [u8; 20],
@@ -354,6 +367,41 @@ fn require_exact_event<T: PartialEq>(
             format!("{name} does not match the route-bound expected fields"),
         ))
     }
+}
+
+pub fn decode_locked_event(
+    log: &EthereumLogV1,
+    expected_lock_contract: [u8; 20],
+) -> Result<LockedEventV1, EthereumProofError> {
+    require_event_header(
+        log,
+        expected_lock_contract,
+        "Locked(uint64,address,bytes32,bytes,uint64)",
+        4,
+    )?;
+    const HEAD_WORDS: usize = 2;
+    require_abi_data_minimum(&log.data, HEAD_WORDS, "Locked")?;
+    let (recipient, recipient_end) = dynamic_bytes(
+        &log.data,
+        HEAD_WORDS,
+        0,
+        HEAD_WORDS * 32,
+        "Locked.pftlRecipient",
+    )?;
+    if recipient_end != log.data.len() {
+        return Err(EthereumProofError::new(
+            "ethereum_event_abi_noncanonical",
+            "Locked has trailing ABI bytes",
+        ));
+    }
+    Ok(LockedEventV1 {
+        lock_contract: log.emitter,
+        nonce: word_u64(&log.topics[1], "Locked.nonce")?,
+        holder: topic_address(&log.topics[2], "Locked.holder")?,
+        pftl_recipient_hash: log.topics[3],
+        pftl_recipient: recipient.to_vec(),
+        amount_atoms: data_head_u64(&log.data, 1, HEAD_WORDS, "Locked.amount")?,
+    })
 }
 
 fn require_event_header(

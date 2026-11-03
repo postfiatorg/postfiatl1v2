@@ -10,7 +10,15 @@ pub const EXTERNAL_LANE_ID_MAX_BYTES: usize = 32;
 pub const EXTERNAL_LANE_RELEASE_CAP_BPS_MAX: u32 = 10_000;
 const EXTERNAL_LANE_EVM_ADDRESS_HEX_LEN: usize = 40;
 const EXTERNAL_LANE_CODE_HASH_HEX_LEN: usize = 64;
-const EXTERNAL_LANE_COMMITTEE_ROOT_HEX_LEN: usize = 64;
+/// A `FastSwapCommitteeV1` root is 48 bytes (SHA3-384 over the roster).
+const EXTERNAL_LANE_COMMITTEE_ROOT_HEX_LEN: usize = 96;
+/// Base mainnet and Base Sepolia: the two source chains a lane may name.
+pub const EXTERNAL_LANE_BASE_MAINNET_CHAIN_ID: u64 = 8453;
+pub const EXTERNAL_LANE_BASE_SEPOLIA_CHAIN_ID: u64 = 84_532;
+pub const EXTERNAL_LANE_SOURCE_CHAIN_IDS: [u64; 2] = [
+    EXTERNAL_LANE_BASE_MAINNET_CHAIN_ID,
+    EXTERNAL_LANE_BASE_SEPOLIA_CHAIN_ID,
+];
 const EXTERNAL_LANE_ROUTE_CONFIG_DOMAIN: &[u8] = b"postfiat.external_lane.route_config.v1";
 
 // Refusal codes of `external_lane_release_v1`. A refused release changes no
@@ -40,7 +48,8 @@ pub struct GenesisExternalLanePolicy {
     pub lock_runtime_code_hash: String,
     /// Bridge committee epoch whose checkpoints prove a Lock.
     pub committee_epoch: u64,
-    /// Root of that committee: `0x` and 64 lower-case hex digits.
+    /// Root of that committee (`FastSwapCommitteeV1::computed_root`): `0x`
+    /// and 96 lower-case hex digits.
     pub committee_root: String,
     /// Source-chain confirmations a Lock needs before it can be proven.
     pub confirmation_depth: u64,
@@ -58,8 +67,11 @@ pub struct GenesisExternalLane {
 
 impl GenesisExternalLanePolicy {
     pub fn validate(&self) -> Result<(), String> {
-        if self.chain_id == 0 {
-            return Err("external lane policy chain_id must be nonzero".to_string());
+        if !EXTERNAL_LANE_SOURCE_CHAIN_IDS.contains(&self.chain_id) {
+            return Err(format!(
+                "external lane policy chain_id {} must be Base mainnet {EXTERNAL_LANE_BASE_MAINNET_CHAIN_ID} or Base Sepolia {EXTERNAL_LANE_BASE_SEPOLIA_CHAIN_ID}",
+                self.chain_id
+            ));
         }
         validate_lane_hex(
             "lock_contract_address",

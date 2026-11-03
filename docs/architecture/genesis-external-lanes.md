@@ -27,7 +27,7 @@ The design is `docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md`, sect
         "token_runtime_code_hash": "0x3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
         "lock_runtime_code_hash": "0x4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d",
         "committee_epoch": 2,
-        "committee_root": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+        "committee_root": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
         "confirmation_depth": 64
       }
     }
@@ -46,11 +46,11 @@ The amounts are placeholders sized to today's devnet supply constant (`GENESIS_N
 | `reserved_atoms` | Positive. The sum over all lanes must stay strictly below the native supply, so that the genesis allocation keeps a positive balance. |
 | `release_window_blocks` | Positive. The window index is the block height divided by it. |
 | `release_cap_bps` | 1 to 10,000: the share of `reserved_atoms` one window may release. |
-| `policy.chain_id` | Positive EVM chain id, a parameter: Base mainnet is 8453, and a test network such as Base Sepolia (84532) is configurable. |
+| `policy.chain_id` | The source chain, a parameter limited to Base mainnet (8453) and Base Sepolia (84532). |
 | `policy.*_address` | `0x` and 40 lower-case hex digits. |
 | `policy.*_code_hash` | `0x` and 64 lower-case hex digits. |
 | `policy.committee_epoch` | The bridge committee epoch whose checkpoints prove a Lock. |
-| `policy.committee_root` | That committee's root: `0x` and 64 lower-case hex digits. |
+| `policy.committee_root` | That committee's root (`FastSwapCommitteeV1::computed_root`, 48 bytes): `0x` and 96 lower-case hex digits. |
 | `policy.confirmation_depth` | Positive: the Base confirmations a Lock needs before it can be proven. |
 
 Unknown fields are refused at every level, so the policy cannot gain a field later without a schema change. The policy values are checked for shape only; P2.4 verifies proofs against them.
