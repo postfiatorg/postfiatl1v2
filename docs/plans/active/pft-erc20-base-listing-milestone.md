@@ -67,6 +67,7 @@ Decided by the product owner 2026-10-28: total supply 100 billion PFT; the Base 
   - [ ] The proof inventory entry for that program.
   - [ ] The Base checkpoint source's own qualification.
 - [ ] P2.5 *(this lane)* Its own qualification before genesis: tests, a devnet run, and an audit of the lock contract. To tick it: the qualification record.
+  - [ ] `PFTLockV1` enforces a minimum lock amount at or above the PFTL account reserve (`ACCOUNT_RESERVE`, 10 atoms, `crates/execution/src/entrypoints.rs:139`): a smaller Lock to a new PFTL account is final on Base but refused on PFTL with `below_account_reserve`. A contract change for the next lock round.
 
 ## Phase 3 — the reverse export route (optional)
 

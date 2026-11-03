@@ -84,7 +84,7 @@ method lacks an explicit posture.
 | bridge_transfer | operator_or_local_only | no | no | yes | no | no |  |
 | escrow_fee_quote | read_only_public | yes | no | yes | yes | yes |  |
 | escrow_info | read_only_public | yes | no | yes | yes | yes |  |
-| external_lane_info | read_only_public | yes | no | yes | no | yes | public genesis external lane config, live record and release history read |
+| external_lane_info | read_only_public | yes | no | yes | no | yes | public genesis external lane config, committed record and paged release history read |
 | fastlane_asset_control_apply | authorized_protocol_mutation_public | yes | no | no | yes | no |  |
 | fastlane_asset_control_catch_up | authorized_protocol_mutation_public | yes | no | no | yes | no |  |
 | fastlane_asset_control_prepare | authorized_protocol_mutation_public | yes | no | no | yes | no |  |

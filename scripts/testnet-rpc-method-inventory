@@ -53,7 +53,7 @@ POSTURE_NOTES = {
     "pfusdc_ingress_preflight": "read-only exact pfUSDC ingress transition simulation",
     "yolo_target_receipt": "public committed YOLO target metadata and finality read",
     "nav_reserve_proof_status": "provider-neutral NAV reserve proof and profile status read",
-    "external_lane_info": "public genesis external lane config, live record and release history read",
+    "external_lane_info": "public genesis external lane config, committed record and paged release history read",
     "fx_fix_list": "public fixed-rate FX market directory read",
     "fx_fix_info": "public fixed-rate FX market detail read",
     "fx_fix_reservation_info": "public fixed-rate FX reservation status read",
