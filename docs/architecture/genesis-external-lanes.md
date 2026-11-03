@@ -68,7 +68,7 @@ At genesis the faucet receives the native supply minus the sum of the lanes, and
 
 The state commitment covers every field but `releases` (`ExternalLaneState::state_commitment_bytes`), so a block commits the lane in bytes that grow by one nonce per release, not by the records. The records stay in the stored ledger for reads and replay; loading a replay base recomputes `release_history_root` from them and refuses a mismatch.
 
-The records are omitted from the ledger JSON and from the state commitment when there are none, so a chain without lanes keeps its state root. When there are records, they are committed at every height: unlike the NAV fields beside them they do not wait for the complete-NAV commitment, because they are native supply.
+The lane list is omitted from the ledger JSON and from the state commitment when there are no lanes, so a chain without lanes keeps its state root. When a lane exists, its committed fields are committed at every height, `release_history_root` included but never the release records: unlike the NAV fields beside them they do not wait for the complete-NAV commitment, because they are native supply.
 Tests pin this: the deployed `postfiat-wan-devnet-2` genesis re-serialises byte for byte with its hash, and a populated lane-less ledger keeps the state root it had before lanes existed.
 
 ## What the conservation check counts
