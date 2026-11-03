@@ -1,6 +1,6 @@
 use super::*;
 use postfiat_types::{
-    ExternalLaneState, FastAssetIdV1, FastLaneReserveBalanceV1, GenesisExternalLane,
+    ExternalLaneReleaseRecord, ExternalLaneState, FastAssetIdV1, FastLaneReserveBalanceV1, GenesisExternalLane,
     GenesisExternalLanePolicy, SnapshotManifest, GENESIS_NATIVE_SUPPLY_ATOMS,
 };
 
@@ -20,7 +20,7 @@ fn lane_genesis(chain_id: &str, validator_count: u32) -> Genesis {
             token_runtime_code_hash: format!("0x{}", "3c".repeat(32)),
             lock_runtime_code_hash: format!("0x{}", "4d".repeat(32)),
             committee_epoch: 2,
-            committee_root: format!("0x{}", "5e".repeat(32)),
+            committee_root: format!("0x{}", "5e".repeat(48)),
             confirmation_depth: 64,
         },
     }]);
@@ -48,12 +48,28 @@ fn apply_one_transfer(data_dir: &Path, to: &str) -> Receipt {
     receipts.into_iter().next().expect("one receipt")
 }
 
+fn lane_release_record(nonce: u64, amount_atoms: u64, height: u64) -> ExternalLaneReleaseRecord {
+    ExternalLaneReleaseRecord {
+        lock_nonce: nonce,
+        source_chain_id: 8453,
+        lock_contract_address: format!("0x{}", "1a".repeat(20)),
+        amount_atoms,
+        recipient: "pftl-recipient".to_string(),
+        source_block_number: 77,
+        source_block_hash: format!("0x{}", "6f".repeat(32)),
+        released_at_height: height,
+    }
+}
+
+/// The lane after two recorded releases (nonces 3 and 7, 10 atoms) in window 2.
 fn released_lane(ledger: &LedgerState) -> ExternalLaneState {
+    let genesis = lane_genesis("postfiat-lane-released", 1);
+    let genesis_lane = &genesis.external_lanes()[0];
     let mut lane = ledger.external_lanes[0].clone();
-    lane.released_atoms = 10;
-    lane.released_lock_nonces = [3_u64, 7].into_iter().collect();
-    lane.window_index = 2;
-    lane.window_released_atoms = 10;
+    for (nonce, amount) in [(3_u64, 4_u64), (7, 6)] {
+        lane.apply_release(genesis_lane, lane_release_record(nonce, amount, 2 * 86_400 + nonce))
+            .expect("recorded release");
+    }
     lane
 }
 
@@ -197,6 +213,8 @@ fn pruned_lane_node(label: &str) -> (PathBuf, HistoryCheckpointState, Receipt) {
     (data_dir, checkpoint, receipt)
 }
 
+/// Recomputes the root and hash as a tamperer would, so only the lane rule
+/// can refuse the tampered record.
 fn rehash_checkpoint(genesis: &Genesis, checkpoint: &mut HistoryCheckpointState) {
     checkpoint.checkpoint_state_root = replicated_state_root(
         genesis,
@@ -206,7 +224,7 @@ fn rehash_checkpoint(genesis: &Genesis, checkpoint: &mut HistoryCheckpointState)
         &checkpoint.shielded,
         &checkpoint.bridge,
     )
-    .expect("checkpoint state root");
+    .expect("a tampered lane record still has a state root");
     let mut canonical = checkpoint.clone();
     canonical.checkpoint_hash.clear();
     checkpoint.checkpoint_hash = hash_hex(
@@ -260,6 +278,7 @@ fn external_lane_state_codec_and_commitment_cover_released_nonces() {
     };
     let mut other_nonce = released_checkpoint.ledger.clone();
     other_nonce.external_lanes[0].released_lock_nonces = [3_u64, 8].into_iter().collect();
+    other_nonce.external_lanes[0].releases[1].lock_nonce = 8;
     assert_ne!(commit(&released_checkpoint.ledger), commit(&other_nonce));
     assert_ne!(commit(&checkpoint.ledger), commit(&released_checkpoint.ledger));
 
@@ -417,11 +436,11 @@ fn snapshot_lane_tamper_is_refused_by_the_lane_rule() {
         "{error}"
     );
 
-    // A changed live lane field is refused by the same rule: until the
-    // release operation exists, the records must equal genesis exactly.
+    // A changed live lane field is refused by the same rule: the window
+    // fields must follow from the recorded releases, and there are none.
     let error = import_with(&|ledger| ledger.external_lanes[0].window_index += 1);
     assert!(
-        error.contains("snapshot ledger external lane `base-erc20` has window_index 1, but genesis has 0"),
+        error.contains("snapshot ledger external lane `base-erc20` has window 1 with 0 atoms released, but its recorded releases give window 0 with 0"),
         "{error}"
     );
     for dir in [data_dir, snapshot_dir] {
@@ -668,7 +687,7 @@ fn checkpoint_with_a_lane_genesis_never_configured_is_refused() {
     fs::remove_dir_all(data_dir).expect("cleanup");
 }
 
-/// Lane atoms released to an account without a release operation: lane id
+/// Lane atoms released to an account without a recorded release: lane id
 /// and reserve kept, released fields forged, the account credited by 5.
 fn forge_release(ledger: &mut LedgerState) {
     let lane = &mut ledger.external_lanes[0];
@@ -686,7 +705,7 @@ fn checkpoint_with_a_forged_release_is_refused() {
     let error = result.unwrap_err().to_string();
     assert!(
         error.contains(
-            "history checkpoint external lane `base-erc20` has released_atoms 5, but genesis has 0"
+            "external lane `base-erc20` released Lock nonces {99} differ from its recorded releases {}"
         ),
         "{error}"
     );
@@ -699,7 +718,10 @@ fn checkpoint_with_a_forged_release_is_refused() {
     })
     .unwrap_err()
     .to_string();
-    assert!(error.contains("has released_atoms 5, but genesis has 0"), "{error}");
+    assert!(
+        error.contains("released Lock nonces {99} differ from its recorded releases {}"),
+        "{error}"
+    );
     fs::remove_dir_all(data_dir).expect("cleanup");
 }
 
@@ -723,10 +745,10 @@ fn snapshot_with_a_forged_release_is_refused() {
         .expect("checkpoint written")
         .native_fee_burn_total
         .expect("burns");
+    // The forgery keeps live + burns = supply, so only the lane rule refuses it.
     assert_eq!(
         native_pft_live_total(&ledger, &shielded).expect("live") + burns,
-        u128::from(GENESIS_NATIVE_SUPPLY_ATOMS),
-        "the forged release keeps live + burns = supply"
+        u128::from(GENESIS_NATIVE_SUPPLY_ATOMS)
     );
     rewrite_snapshot_file(
         &snapshot_dir,
@@ -743,7 +765,7 @@ fn snapshot_with_a_forged_release_is_refused() {
     assert!(!restored_dir.exists());
     assert!(
         error.contains(
-            "snapshot ledger external lane `base-erc20` has released_atoms 5, but genesis has 0"
+            "snapshot ledger external lane `base-erc20` released Lock nonces {99} differ from its recorded releases {}"
         ),
         "{error}"
     );
@@ -768,4 +790,705 @@ fn init_refuses_genesis_with_duplicate_lane_ids() {
         "{error}"
     );
     assert!(!data_dir.exists(), "nothing is written for an invalid genesis");
+}
+
+#[test]
+fn init_refuses_genesis_with_two_lanes_on_one_base_source() {
+    let data_dir = unique_test_dir("postfiat-external-lane-shared-source-init");
+    let mut genesis = lane_genesis("postfiat-lane-shared-source-init", 1);
+    let lanes = genesis.external_lanes.as_mut().expect("lanes");
+    let mut second = lanes[0].clone();
+    second.id = "base-erc20-b".to_string();
+    lanes.push(second);
+    let error = init_with_genesis(data_dir.clone(), "validator-0".to_string(), genesis)
+        .expect_err("init must validate the genesis");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidInput, "{error}");
+    assert!(
+        error.to_string().contains(
+            "genesis external lanes `base-erc20` and `base-erc20-b` both name Base source 8453"
+        ),
+        "{error}"
+    );
+    assert!(!data_dir.exists(), "nothing is written for an invalid genesis");
+}
+
+type LedgerEdit = fn(&mut LedgerState);
+
+/// A lane state with one recorded release of 5 atoms to the faucet account.
+fn record_release(ledger: &mut LedgerState) {
+    let genesis = lane_genesis("postfiat-lane-recorded", 1);
+    ledger.external_lanes[0]
+        .apply_release(&genesis.external_lanes()[0], lane_release_record(99, 5, 1))
+        .expect("recorded release");
+    ledger.accounts[0].balance += 5;
+}
+
+#[test]
+fn checkpoint_with_recorded_releases_is_accepted_and_tampering_them_is_refused() {
+    let (data_dir, checkpoint, _) = pruned_lane_node("recorded-release");
+    // Genesis reserve minus the recorded release: the checkpoint is accepted.
+    let (result, accepted) = reread_tampered_checkpoint(&data_dir, &checkpoint, record_release);
+    assert_aggregate_balances(&accepted);
+    let read = result.expect("recorded release passes").expect("checkpoint");
+    assert_eq!(read.ledger.external_lanes[0].released_atoms, 5);
+    assert_eq!(read.ledger.external_lanes[0].releases.len(), 1);
+
+    // Each tamper keeps live + burns = supply, so only the lane rule refuses it.
+    let cases: [(&str, LedgerEdit); 4] = [
+        ("recorded releases sum to 5", |ledger| {
+            record_release(ledger);
+            let lane = &mut ledger.external_lanes[0];
+            lane.released_atoms += 1;
+            lane.window_released_atoms += 1;
+            ledger.accounts[0].balance += 1;
+        }),
+        ("recorded releases sum to 6", |ledger| {
+            record_release(ledger);
+            ledger.external_lanes[0].releases[0].amount_atoms += 1;
+        }),
+        ("differ from its recorded releases", |ledger| {
+            record_release(ledger);
+            ledger.external_lanes[0].releases[0].lock_nonce = 98;
+        }),
+        ("from a source genesis did not configure", |ledger| {
+            record_release(ledger);
+            ledger.external_lanes[0].releases[0].source_chain_id = 84_532;
+        }),
+    ];
+    for (needle, edit) in cases {
+        let (result, tampered) = reread_tampered_checkpoint(&data_dir, &checkpoint, edit);
+        assert_aggregate_balances(&tampered);
+        let error = result.unwrap_err().to_string();
+        assert!(
+            error.contains("history checkpoint external lane `base-erc20`") && error.contains(needle),
+            "{needle}: {error}"
+        );
+    }
+    fs::remove_dir_all(data_dir).expect("cleanup");
+}
+
+// ---- P2.4: the release path on a local chain --------------------------------
+
+mod release_path {
+    use super::*;
+    use postfiat_crypto_provider::{
+        address_from_public_key, bytes_to_hex, hex_to_bytes, ml_dsa_65_keygen_from_seed,
+        ml_dsa_65_sign, ml_dsa_65_sign_with_context_seed, MlDsa65KeyPair, ML_DSA_65_ALGORITHM,
+    };
+    use postfiat_types::{
+        AssetTransactionOperation, EthereumCheckpointCertificateV1, EthereumCheckpointVoteV1,
+        EthereumExternalEventProofV1, EthereumFinalizedCheckpointV1, EthereumReceiptProofV1,
+        ExternalLaneReleaseOperationV1, FastSwapChainDomainV1, FastSwapCommitteeDomainV1,
+        FastSwapCommitteeRootV1, FastSwapCommitteeV1, FastSwapOpaqueHashV1, FastSwapValidatorV1,
+        SignedAssetTransaction, UnsignedAssetTransaction, ETHEREUM_CHECKPOINT_SCHEMA_V1,
+        ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1, EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1,
+        FASTSWAP_SCHEMA_VERSION_V1,
+    };
+
+    struct Chain {
+        data_dir: PathBuf,
+        genesis: Genesis,
+        keys: Vec<MlDsa65KeyPair>,
+        committee: FastSwapCommitteeV1,
+        recipient: String,
+    }
+
+    fn keccak(bytes: &[u8]) -> [u8; 32] {
+        postfiat_bridge::ethereum_keccak256(bytes)
+    }
+
+    fn rlp(base: u8, payload: &[u8]) -> Vec<u8> {
+        if base == 0x80 && payload.len() == 1 && payload[0] <= 0x7f {
+            return payload.to_vec();
+        }
+        let mut encoded = if payload.len() < 56 {
+            vec![base + payload.len() as u8]
+        } else {
+            let length = payload.len().to_be_bytes();
+            let first = length.iter().position(|byte| *byte != 0).unwrap_or(7);
+            let mut prefix = vec![base + 55 + (8 - first) as u8];
+            prefix.extend_from_slice(&length[first..]);
+            prefix
+        };
+        encoded.extend_from_slice(payload);
+        encoded
+    }
+
+    fn word(value: u64) -> [u8; 32] {
+        let mut word = [0_u8; 32];
+        word[24..].copy_from_slice(&value.to_be_bytes());
+        word
+    }
+
+    /// A four-validator local chain whose genesis lane names the epoch-one
+    /// committee (validator ids `validator-0..3`, deterministic checkpoint
+    /// keys). A signed FastSwap governance bootstrap registers it, so replay,
+    /// prune and snapshots reproduce it.
+    fn lane_chain(label: &str) -> Chain {
+        let keys: Vec<_> = (0..4_u8)
+            .map(|index| ml_dsa_65_keygen_from_seed(&[0x81 + index; 32]))
+            .collect();
+        let mut committee = FastSwapCommitteeV1 {
+            domain: FastSwapCommitteeDomainV1 {
+                chain: FastSwapChainDomainV1 {
+                    chain_id: String::new(),
+                    genesis_hash: FastSwapOpaqueHashV1([0; 48]),
+                    protocol_version: 1,
+                },
+                fastswap_schema_version: FASTSWAP_SCHEMA_VERSION_V1,
+                committee_epoch: 1,
+                committee_root: FastSwapCommitteeRootV1::ZERO,
+                validator_count: 4,
+                quorum: 3,
+            },
+            validators: keys
+                .iter()
+                .enumerate()
+                .map(|(index, key)| FastSwapValidatorV1 {
+                    validator_id: format!("validator-{index}"),
+                    public_key: key.public_key.clone(),
+                })
+                .collect(),
+        };
+        committee.domain.committee_root = committee.computed_root().expect("root");
+        let mut genesis = lane_genesis(&format!("postfiat-lane-{label}"), 4);
+        let policy = &mut genesis.external_lanes.as_mut().expect("lanes")[0].policy;
+        policy.committee_epoch = 1;
+        policy.committee_root = format!("0x{}", bytes_to_hex(&committee.domain.committee_root.0));
+        genesis.validate().expect("lane genesis");
+        committee.domain.chain = FastSwapChainDomainV1 {
+            chain_id: genesis.chain_id.clone(),
+            genesis_hash: FastSwapOpaqueHashV1(
+                hex_to_bytes(&genesis_hash(&genesis))
+                    .expect("hash hex")
+                    .try_into()
+                    .expect("48-byte hash"),
+            ),
+            protocol_version: genesis.protocol_version,
+        };
+        let data_dir = unique_test_dir(&format!("postfiat-external-lane-{label}"));
+        init_with_genesis(data_dir.clone(), "validator-0".to_string(), genesis.clone())
+            .expect("init lane genesis");
+        bootstrap_committee(&data_dir, &committee);
+        let recipient_key = ml_dsa_65_keygen_from_seed(&[0x99; 32]);
+        Chain {
+            data_dir,
+            genesis,
+            keys,
+            committee,
+            recipient: address_from_public_key(&recipient_key.public_key),
+        }
+    }
+
+    /// Registers `committee` through a governance batch signed by all four
+    /// validators, as `fastswap_epoch_one_bootstrap_is_governance_bound_and_canonically_committed` does.
+    fn bootstrap_committee(data_dir: &Path, committee: &FastSwapCommitteeV1) {
+        let validator_keys =
+            read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE)).expect("validator keys");
+        let payload = postfiat_types::FastSwapGovernanceBootstrapPayloadV1 {
+            committee: committee.clone(),
+            asset_rules: Vec::new(),
+            policies: Vec::new(),
+            activation_height: 10,
+        };
+        let payload_file = data_dir.join("fastswap-bootstrap-payload.json");
+        let amendment_file = data_dir.join("fastswap-bootstrap-amendment.unsigned.json");
+        let signed_amendment_file = data_dir.join("fastswap-bootstrap-amendment.signed.json");
+        let batch_file = data_dir.join("fastswap-bootstrap-batch.json");
+        fs::write(&payload_file, serde_json::to_vec_pretty(&payload).expect("payload json"))
+            .expect("write payload");
+        let validators = local_validator_ids(4).expect("validator ids");
+        create_fastswap_governance_bootstrap(FastSwapGovernanceBootstrapOptions {
+            data_dir: data_dir.to_path_buf(),
+            validators: validators.clone(),
+            support: validators,
+            activation_height: 0,
+            veto_until_height: 0,
+            paused: false,
+            payload_file: payload_file.clone(),
+            amendment_file: amendment_file.clone(),
+            batch_file: data_dir.join("fastswap-bootstrap-batch.unsigned.json"),
+        })
+        .expect("bootstrap proposal");
+        let authorization_files = write_split_validator_key_files(data_dir, &validator_keys)
+            .iter()
+            .map(|(validator, key_file)| {
+                let authorization_file =
+                    data_dir.join(format!("{validator}.fastswap-authorization.json"));
+                sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                    data_dir: data_dir.to_path_buf(),
+                    amendment_file: amendment_file.clone(),
+                    validator: validator.clone(),
+                    validator_key_file: key_file.clone(),
+                    proposal_slot: 1,
+                    expires_at_height: 8,
+                    authorization_file: authorization_file.clone(),
+                })
+                .expect("sign bootstrap");
+                authorization_file
+            })
+            .collect::<Vec<_>>();
+        assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
+            data_dir: data_dir.to_path_buf(),
+            amendment_file,
+            authorization_files,
+            proposal_slot: 1,
+            output_file: signed_amendment_file.clone(),
+        })
+        .expect("assemble amendment");
+        assemble_signed_fastswap_governance_bootstrap(SignedFastSwapGovernanceBootstrapOptions {
+            data_dir: data_dir.to_path_buf(),
+            payload_file,
+            signed_amendment_file,
+            proposal_slot: 1,
+            batch_file: batch_file.clone(),
+        })
+        .expect("assemble bootstrap");
+        let receipts = apply_governance_batch(ApplyBatchOptions {
+            data_dir: data_dir.to_path_buf(),
+            batch_file,
+            certificate_file: None,
+        })
+        .expect("apply bootstrap");
+        assert!(receipts[0].accepted, "{receipts:?}");
+        let ledger = NodeStore::new(data_dir).read_ledger().expect("ledger");
+        assert_eq!(ledger.fastswap_committees, vec![committee.clone()]);
+    }
+
+    /// A committee checkpoint of a Base block whose one receipt holds
+    /// `Locked(nonce, holder, keccak(recipient), recipient, amount)`.
+    fn lock_proof(chain: &Chain, nonce: u64, amount: u64) -> EthereumExternalEventProofV1 {
+        let lane = &chain.genesis.external_lanes()[0];
+        let lock_contract = [0x1a_u8; 20];
+        let mut holder = [0_u8; 32];
+        holder[12..].copy_from_slice(&[0x11; 20]);
+        let topics = [
+            keccak(b"Locked(uint64,address,bytes32,bytes,uint64)"),
+            word(nonce),
+            holder,
+            keccak(chain.recipient.as_bytes()),
+        ];
+        let mut data = word(0x40).to_vec();
+        data.extend_from_slice(&word(amount));
+        data.extend_from_slice(&word(chain.recipient.len() as u64));
+        data.extend_from_slice(chain.recipient.as_bytes());
+        data.resize(data.len().div_ceil(32) * 32, 0);
+        let topic_items: Vec<u8> = topics.iter().flat_map(|topic| rlp(0x80, topic)).collect();
+        let log = rlp(
+            0xc0,
+            &[rlp(0x80, &lock_contract), rlp(0xc0, &topic_items), rlp(0x80, &data)].concat(),
+        );
+        let receipt = rlp(
+            0xc0,
+            &[rlp(0x80, &[1]), rlp(0x80, &[1]), rlp(0x80, &[0; 256]), rlp(0xc0, &log)].concat(),
+        );
+        let leaf = rlp(0xc0, &[rlp(0x80, &[0x20, 0x80]), rlp(0x80, &receipt)].concat());
+        let checkpoint = EthereumFinalizedCheckpointV1 {
+            schema_version: ETHEREUM_CHECKPOINT_SCHEMA_V1,
+            pftl_domain: chain.committee.domain.chain.clone(),
+            route_id: lane.id.clone(),
+            route_config_digest: FastSwapOpaqueHashV1(lane.route_config_digest().expect("digest")),
+            ethereum_chain_id: lane.policy.chain_id,
+            block_number: 1_000 + nonce,
+            block_hash: [0x6f; 32],
+            receipts_root: keccak(&leaf),
+            observed_head_number: 2_000 + nonce,
+            minimum_confirmations: 64,
+            authority_epoch: chain.committee.domain.committee_epoch,
+            committee_root: chain.committee.domain.committee_root,
+            handoff_controller: lock_contract,
+            wrapped_navcoin_token: [0x2b; 20],
+            handoff_controller_code_hash: [0x4d; 32],
+            wrapped_navcoin_code_hash: [0x3c; 32],
+        };
+        let votes = chain
+            .keys
+            .iter()
+            .enumerate()
+            .take(usize::from(chain.committee.domain.quorum))
+            .map(|(index, key)| {
+                let mut vote = EthereumCheckpointVoteV1 {
+                    validator_id: format!("validator-{index}"),
+                    signature: Vec::new(),
+                };
+                vote.signature = ml_dsa_65_sign_with_context_seed(
+                    &key.private_key,
+                    &vote.signing_bytes(&checkpoint).expect("vote bytes"),
+                    ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1,
+                    &[0xc0 + index as u8; 32],
+                )
+                .expect("vote");
+                vote
+            })
+            .collect();
+        EthereumExternalEventProofV1 {
+            checkpoint_certificate: EthereumCheckpointCertificateV1 { checkpoint, votes },
+            receipt_proof: EthereumReceiptProofV1 {
+                transaction_index: 0,
+                receipt_rlp: receipt,
+                proof_nodes_rlp: vec![leaf],
+            },
+            log_index: 0,
+        }
+    }
+
+    fn release_tx(
+        chain: &Chain,
+        lane_id: &str,
+        nonce: u64,
+        amount: u64,
+        sequence: u64,
+    ) -> SignedAssetTransaction {
+        let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+        let unsigned = UnsignedAssetTransaction {
+            chain_id: chain.genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&chain.genesis),
+            protocol_version: chain.genesis.protocol_version,
+            address_namespace: postfiat_types::ADDRESS_NAMESPACE.to_string(),
+            transaction_kind: EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1.to_string(),
+            signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            source: faucet.address.clone(),
+            fee: 1_000,
+            sequence,
+            operation: AssetTransactionOperation::ExternalLaneReleaseV1(
+                ExternalLaneReleaseOperationV1 {
+                    submitter: faucet.address.clone(),
+                    lane_id: lane_id.to_string(),
+                    source_chain_id: 8453,
+                    lock_contract_address: format!("0x{}", "1a".repeat(20)),
+                    lock_nonce: nonce,
+                    amount_atoms: amount,
+                    recipient: chain.recipient.clone(),
+                    proof: lock_proof(chain, nonce, amount),
+                },
+            ),
+        };
+        let private_key = hex_to_bytes(&faucet.private_key_hex).expect("key bytes");
+        let signature = ml_dsa_65_sign(&private_key, &unsigned.signing_bytes()).expect("sign");
+        SignedAssetTransaction {
+            unsigned,
+            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            public_key_hex: faucet.public_key_hex.clone(),
+            signature_hex: bytes_to_hex(&signature),
+        }
+    }
+
+    /// Admits the transaction through the mempool, proposes a batch from the
+    /// mempool and applies it: the path a submitted release takes.
+    fn admit_and_apply(chain: &Chain, tx: &SignedAssetTransaction, label: &str) -> Receipt {
+        submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
+            data_dir: chain.data_dir.clone(),
+            signed_asset_transaction_json: serde_json::to_string(tx).expect("tx json"),
+        })
+        .expect("mempool admits the release");
+        let batch_file = chain.data_dir.join(format!("{label}.batch.json"));
+        create_mempool_batch(MempoolBatchOptions {
+            data_dir: chain.data_dir.clone(),
+            batch_file: batch_file.clone(),
+            max_transactions: 8,
+        })
+        .expect("mempool batch");
+        let receipts = apply_batch(ApplyBatchOptions {
+            data_dir: chain.data_dir.clone(),
+            batch_file,
+            certificate_file: None,
+        })
+        .expect("apply batch");
+        assert_eq!(receipts.len(), 1, "{receipts:?}");
+        receipts.into_iter().next().expect("receipt")
+    }
+
+    /// A refused release: mempool admission refuses it with `code`, and so
+    /// does the batch builder's dry run when it is handed the transaction
+    /// directly, so no block proposed by this node carries it.
+    fn refused_everywhere(chain: &Chain, tx: &SignedAssetTransaction, code: &str, label: &str) {
+        let error = submit_signed_asset_transaction_json_to_mempool(
+            SignedAssetTransactionJsonSubmitOptions {
+                data_dir: chain.data_dir.clone(),
+                signed_asset_transaction_json: serde_json::to_string(tx).expect("tx json"),
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains(&format!("mempool admission rejected `{code}`")), "{error}");
+        let tx_file = chain.data_dir.join(format!("{label}.tx.json"));
+        fs::write(&tx_file, serde_json::to_vec(tx).expect("tx json")).expect("write tx");
+        let error = create_signed_asset_transaction_batch(SignedAssetTransactionBatchOptions {
+            data_dir: chain.data_dir.clone(),
+            batch_file: chain.data_dir.join(format!("{label}.batch.json")),
+            signed_asset_transaction_files: vec![tx_file],
+        })
+        .unwrap_err()
+        .to_string();
+        assert!(
+            error.contains("rejected in batch dry-run at height") && error.contains(&format!(": {code} (")),
+            "{error}"
+        );
+    }
+
+    fn lane_page(data_dir: &Path, cursor: Option<u64>, limit: Option<usize>) -> io::Result<ExternalLaneInfoRow> {
+        let report = external_lane_info(ExternalLaneInfoOptions {
+            data_dir: data_dir.to_path_buf(),
+            lane_id: Some("base-erc20".to_string()),
+            release_cursor: cursor,
+            release_limit: limit,
+        })?;
+        assert_eq!(report.lane_count, 1);
+        Ok(report.lanes.into_iter().next().expect("lane"))
+    }
+
+    fn lane_info(data_dir: &Path) -> ExternalLaneInfoRow {
+        let row = lane_page(data_dir, None, None).expect("lane info");
+        assert!(row.state.releases.is_empty(), "records are paged, not in the state");
+        row
+    }
+
+    #[test]
+    fn external_lane_release_lifecycle_on_a_local_chain() {
+        let chain = lane_chain("release-lifecycle");
+        let store = NodeStore::new(&chain.data_dir);
+        let cap = chain.genesis.external_lanes()[0].window_cap_atoms();
+        let supply = |store: &NodeStore| {
+            native_pft_live_total(
+                &store.read_ledger().expect("ledger"),
+                &store.read_shielded().expect("shielded"),
+            )
+            .expect("live")
+        };
+        let live_before = supply(&store);
+
+        // 1. A proven Lock is released once, to the recipient it names.
+        let amount = ACCOUNT_RESERVE + 1_000;
+        let tx = release_tx(&chain, "base-erc20", 1, amount, 1);
+        // The recipient is a destination address and the amount is counted.
+        assert_eq!(
+            asset_transaction_destination_addresses(&tx),
+            vec![("external_lane_release_v1.recipient", chain.recipient.as_str())]
+        );
+        assert_eq!(crate::mempool_proposals::asset_transaction_amount(&tx), amount);
+        let receipt = admit_and_apply(&chain, &tx, "release");
+        assert!(receipt.accepted, "{receipt:?}");
+        let ledger = store.read_ledger().expect("ledger");
+        assert_eq!(ledger.account(&chain.recipient).expect("recipient").balance, amount);
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(info.state.released_atoms, amount);
+        assert_eq!(info.remainder_atoms, LANE_RESERVED_ATOMS - amount);
+        assert_eq!(info.release_count, 1);
+        assert_eq!(info.releases[0].sequence, 0);
+        assert_eq!(info.releases[0].record.lock_nonce, 1);
+        assert_eq!(info.releases[0].record.source_block_number, 1_001);
+        assert_eq!(info.next_release_cursor, None);
+        assert_eq!(info.next_window_available_atoms, cap - amount);
+        // Only the fee left the live supply: the release moved lane atoms to an account.
+        assert_eq!(supply(&store) + u128::from(receipt.fee_burned), live_before);
+
+        // 2. The same Lock again, 3. a Lock above the window cap and 4. a
+        // lane genesis never configured are refused without state change.
+        let refusals = [
+            (release_tx(&chain, "base-erc20", 1, amount, 2), "external_lane_nonce_already_released"),
+            (release_tx(&chain, "base-erc20", 2, cap, 2), "external_lane_window_cap_exceeded"),
+            (release_tx(&chain, "other-lane", 3, amount, 2), "external_lane_not_configured"),
+        ];
+        for (index, (tx, code)) in refusals.iter().enumerate() {
+            let lane_before = lane_info(&chain.data_dir).state;
+            refused_everywhere(&chain, tx, code, &format!("refused-{index}"));
+            assert_eq!(lane_info(&chain.data_dir).state, lane_before);
+        }
+
+        // The governed committee replays, so the released chain verifies from genesis.
+        verify_blocks(NodeOptions {
+            data_dir: chain.data_dir.clone(),
+        })
+        .expect("replay from genesis through the releases");
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    /// A lane chain with two applied releases (nonces 1 and 2).
+    fn released_chain(label: &str) -> (Chain, u64) {
+        let chain = lane_chain(label);
+        for (sequence, nonce) in [(1_u64, 1_u64), (2, 2)] {
+            let tx = release_tx(&chain, "base-erc20", nonce, ACCOUNT_RESERVE + 100 * nonce, sequence);
+            let receipt = admit_and_apply(&chain, &tx, &format!("release-{nonce}"));
+            assert!(receipt.accepted, "{receipt:?}");
+        }
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(info.state.released_lock_nonces, [1_u64, 2].into_iter().collect());
+        assert_eq!(info.release_count, 2);
+        let height = read_chain_tip_or_reconstruct_for_genesis(
+            &NodeStore::new(&chain.data_dir),
+            &chain.genesis,
+        )
+        .expect("tip")
+        .height;
+        (chain, height)
+    }
+
+    /// Exports `data_dir`, imports into a fresh directory, and checks that
+    /// the restored node has the same lane record and state root.
+    fn assert_snapshot_restores_lane(data_dir: &Path, label: &str) -> PathBuf {
+        let source = status(NodeOptions {
+            data_dir: data_dir.to_path_buf(),
+        })
+        .expect("source status");
+        let snapshot_dir = sibling_dir(data_dir, &format!("{label}-snapshot"));
+        let restored_dir = sibling_dir(data_dir, &format!("{label}-restored"));
+        let manifest = export_snapshot(SnapshotExportOptions {
+            data_dir: data_dir.to_path_buf(),
+            snapshot_dir: snapshot_dir.clone(),
+        })
+        .expect("export snapshot after releases");
+        assert_eq!(manifest.state_root, source.state_root);
+        let restored = import_snapshot(SnapshotImportOptions {
+            data_dir: restored_dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+            node_id: Some("validator-restored".to_string()),
+        })
+        .expect("import snapshot after releases");
+        assert_eq!(restored.state_root, source.state_root);
+        let source_lane = lane_info(data_dir);
+        let restored_lane = lane_info(&restored_dir);
+        assert_eq!(restored_lane.state.reserved_atoms, LANE_RESERVED_ATOMS);
+        assert_eq!(
+            restored_lane.state.released_lock_nonces,
+            [1_u64, 2].into_iter().collect()
+        );
+        assert_eq!(restored_lane, source_lane);
+        verify_blocks(NodeOptions {
+            data_dir: restored_dir.clone(),
+        })
+        .expect("restored node replays its blocks");
+        let _ = fs::remove_dir_all(&snapshot_dir);
+        restored_dir
+    }
+
+    #[test]
+    fn external_lane_info_pages_releases_newest_first() {
+        let (chain, _) = released_chain("release-paging");
+        let all = lane_info(&chain.data_dir);
+        let nonces = |row: &ExternalLaneInfoRow| {
+            row.releases
+                .iter()
+                .map(|entry| (entry.sequence, entry.record.lock_nonce))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(nonces(&all), vec![(1, 2), (0, 1)]);
+        assert_eq!(all.next_release_cursor, None);
+        let first = lane_page(&chain.data_dir, None, Some(1)).expect("first page");
+        assert_eq!(nonces(&first), vec![(1, 2)]);
+        assert_eq!(first.next_release_cursor, Some(1));
+        let second = lane_page(&chain.data_dir, first.next_release_cursor, Some(1)).expect("second page");
+        assert_eq!(nonces(&second), vec![(0, 1)]);
+        assert_eq!(second.next_release_cursor, None);
+        assert_eq!(first.state, second.state);
+        for limit in [0, EXTERNAL_LANE_RELEASE_PAGE_SIZE + 1] {
+            let error = lane_page(&chain.data_dir, None, Some(limit)).unwrap_err().to_string();
+            assert!(error.contains("release limit must be between 1 and"), "{error}");
+        }
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    #[test]
+    fn full_and_checkpoint_snapshots_restore_the_released_lane() {
+        let (chain, height) = released_chain("release-snapshot");
+        // A full snapshot replays from genesis through both releases.
+        let full = assert_snapshot_restores_lane(&chain.data_dir, "full");
+        // A checkpoint snapshot carries the released lane in its checkpoint.
+        let checkpoint = prune_through(&chain.data_dir, 1, height).expect("prune");
+        assert_eq!(checkpoint.ledger.external_lanes[0].releases.len(), 2);
+        let restored = assert_snapshot_restores_lane(&chain.data_dir, "checkpoint");
+        let restored_checkpoint = read_history_checkpoint_state_optional(&NodeStore::new(&restored))
+            .expect("restored checkpoint")
+            .expect("snapshot carries the checkpoint");
+        assert_eq!(restored_checkpoint.ledger.external_lanes, checkpoint.ledger.external_lanes);
+        for dir in [chain.data_dir, full, restored] {
+            let _ = fs::remove_dir_all(dir);
+        }
+    }
+
+    /// Tampers of a released lane that keep live + burns = supply: the reserve
+    /// raised against genesis, released atoms with no record behind them, and
+    /// the id set changed. Each pair is the edit and the refusal it must meet.
+    fn released_lane_tampers() -> [(&'static str, LedgerEdit); 5] {
+        [
+            // A record changed behind unchanged totals: only the root binds it.
+            ("release history root", |ledger| {
+                ledger.external_lanes[0].releases[0].recipient =
+                    "pfexternallane000000000000000000000009".to_string();
+            }),
+            ("reserves 300000005 atoms, but genesis reserves 300000000", |ledger| {
+                ledger.external_lanes[0].reserved_atoms += 5;
+                ledger.accounts[0].balance -= 5;
+            }),
+            ("but its recorded releases sum to", |ledger| {
+                let lane = &mut ledger.external_lanes[0];
+                lane.released_atoms += 5;
+                lane.window_released_atoms += 5;
+                ledger.accounts[0].balance += 5;
+            }),
+            ("differ from its recorded releases", |ledger| {
+                ledger.external_lanes[0].released_lock_nonces.insert(9);
+            }),
+            ("differ from its recorded releases", |ledger| {
+                let lane = &mut ledger.external_lanes[0];
+                lane.released_lock_nonces.remove(&2);
+                lane.released_lock_nonces.insert(3);
+            }),
+        ]
+    }
+
+    #[test]
+    fn history_checkpoint_refuses_tampered_released_lane() {
+        let (chain, height) = released_chain("release-tamper-checkpoint");
+        let checkpoint = prune_through(&chain.data_dir, 1, height).expect("prune");
+        for (needle, edit) in released_lane_tampers() {
+            let (result, tampered) = reread_tampered_checkpoint(&chain.data_dir, &checkpoint, edit);
+            assert_aggregate_balances(&tampered);
+            let error = result.unwrap_err().to_string();
+            assert!(
+                error.contains("external lane `base-erc20`") && error.contains(needle),
+                "{needle}: {error}"
+            );
+        }
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    #[test]
+    fn snapshot_import_refuses_tampered_released_lane() {
+        let (chain, height) = released_chain("release-tamper-snapshot");
+        prune_through(&chain.data_dir, 1, height).expect("prune");
+        let snapshot_dir = sibling_dir(&chain.data_dir, "snapshot");
+        let restored_dir = sibling_dir(&chain.data_dir, "restored");
+        export_snapshot(SnapshotExportOptions {
+            data_dir: chain.data_dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+        })
+        .expect("export snapshot");
+        let ledger: LedgerState =
+            serde_json::from_slice(&fs::read(snapshot_dir.join(LEDGER_FILE)).expect("ledger"))
+                .expect("parse ledger");
+        for (needle, edit) in released_lane_tampers() {
+            let mut tampered = ledger.clone();
+            edit(&mut tampered);
+            rewrite_snapshot_file(
+                &snapshot_dir,
+                LEDGER_FILE,
+                serde_json::to_vec_pretty(&tampered).expect("encode ledger"),
+            );
+            let error = import_snapshot(SnapshotImportOptions {
+                data_dir: restored_dir.clone(),
+                snapshot_dir: snapshot_dir.clone(),
+                node_id: None,
+            })
+            .unwrap_err()
+            .to_string();
+            assert!(!restored_dir.exists());
+            assert!(
+                error.contains("snapshot ledger external lane `base-erc20`") && error.contains(needle),
+                "{needle}: {error}"
+            );
+        }
+        for dir in [chain.data_dir, snapshot_dir] {
+            let _ = fs::remove_dir_all(dir);
+        }
+    }
 }

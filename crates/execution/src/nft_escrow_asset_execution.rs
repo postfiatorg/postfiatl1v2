@@ -3158,6 +3158,22 @@ fn apply_asset_operation(
             }
             apply_pftl_uniswap_route_bridge_policy_update(genesis, ledger, operation, block_height)
         }
+        AssetTransactionOperation::ExternalLaneReleaseV1(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "external_lane_release_v1 transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::external_lane_release::execute_external_lane_release(
+                genesis,
+                ledger,
+                operation,
+                block_height,
+            )
+        }
     }
 }
 

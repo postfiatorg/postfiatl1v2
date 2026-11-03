@@ -61,6 +61,10 @@ pub fn asset_transaction_destination_addresses(
             "pftl_uniswap_return_import.pftl_recipient",
             operation.pftl_recipient.as_str(),
         )],
+        AssetTransactionOperation::ExternalLaneReleaseV1(operation) => vec![(
+            "external_lane_release_v1.recipient",
+            operation.recipient.as_str(),
+        )],
         _ => Vec::new(),
     }
 }

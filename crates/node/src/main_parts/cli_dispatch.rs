@@ -82,7 +82,7 @@ use postfiat_node::{
     export_market_ops_replay_bundle, export_signed_snapshot,
     export_signed_snapshot_from_finalized_checkpoint, export_snapshot,
     export_snapshot_from_finalized_checkpoint, export_snapshot_publisher_public_key,
-    export_vault_bridge_reserve_replay_bundle, faucet_key, fx_fix_info, fx_fix_list, fx_fix_quote,
+    export_vault_bridge_reserve_replay_bundle, external_lane_info, faucet_key, fx_fix_info, fx_fix_list, fx_fix_quote,
     fx_fix_reservation_info, asset_orchard_action_status, asset_orchard_pricing_claim,
     asset_orchard_private_egress_binding, AssetOrchardPairReadOptions, private_account_lines,
     private_pool_page, private_pool_snapshot, PrivateAccountLinesOptions, PrivatePoolPageOptions,
@@ -195,7 +195,7 @@ use postfiat_node::{
     GovernanceAmendmentReplayVerifyOptions, GovernanceAuthorizationSignOptions,
     GovernanceBatchOptions, GovernanceGenesisBundleOptions, GovernanceGenesisVerifyOptions,
     GovernanceReplayBuildOptions, GovernanceReplayVerifyOptions, GovernanceVerifyOptions,
-    FxFixInfoOptions, FxFixListOptions, FxFixQuoteOptions, FxFixReservationInfoOptions,
+    ExternalLaneInfoOptions, FxFixInfoOptions, FxFixListOptions, FxFixQuoteOptions, FxFixReservationInfoOptions,
     HistoryArchiveHandoffCreateOptions, HistoryArchiveHandoffVerifyOptions,
     HistoryArchiveWindowBuildOptions, HistoryArchiveWindowBundle,
     HistoryArchiveWindowExportOptions, HistoryArchiveWindowImportOptions,
@@ -582,6 +582,8 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "asset_info"
         | "fx-fix-list"
         | "fx_fix_list"
+        | "external-lane-info"
+        | "external_lane_info"
         | "fx-fix-info"
         | "fx_fix_info"
         | "fx-fix-reservation-info"

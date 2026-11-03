@@ -3961,6 +3961,7 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "asset_info"
             | "yolo_target_receipt"
             | "nav_reserve_proof_status"
+            | "external_lane_info"
             | "fx_fix_list"
             | "fx_fix_info"
             | "fx_fix_reservation_info"
@@ -4354,6 +4355,7 @@ mod remote_method_policy_tests {
     #[test]
     fn fx_fix_discovery_and_quote_are_public_read_methods() {
         for method in [
+            "external_lane_info",
             "fx_fix_list",
             "fx_fix_info",
             "fx_fix_reservation_info",

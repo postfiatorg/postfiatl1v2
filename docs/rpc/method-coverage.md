@@ -38,6 +38,7 @@ A method being listed here does not authorize exposing it remotely.
 | `nav_reserve_proof_status` | public read | Returns the provider-neutral reserve-proof/profile status for an asset. |
 | `asset_orchard_action_status` | public read | Looks up finalized Asset-Orchard action elements by both nullifiers and both output commitments. |
 | `fx_fix_list` | public read | Returns a bounded fixed-rate FX market directory, optionally filtered by asset pair and active state. |
+| `external_lane_info` | public read | Returns each genesis external lane's configuration, committed record and a page of its release history (newest first, `release_cursor`, `release_limit`), or one lane by `lane_id`. |
 | `fx_fix_info` | public read | Returns fixed-rate FX market detail for an exact fix-packet hash. |
 | `fx_fix_reservation_info` | public read | Returns reservation status for an exact FX reservation ID. |
 | `fx_fix_quote` | public read | Computes a deterministic quote for an exact fix-packet hash and base-atom amount. |

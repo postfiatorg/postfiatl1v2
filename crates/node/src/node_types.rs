@@ -2604,6 +2604,60 @@ pub struct FxFixListOptions {
     pub limit: Option<usize>,
 }
 
+/// Release records `external_lane_info` returns per lane: the default page
+/// size and the largest one a caller may ask for.
+pub const EXTERNAL_LANE_RELEASE_PAGE_SIZE: usize = 100;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalLaneInfoOptions {
+    pub data_dir: PathBuf,
+    /// One lane, or every genesis lane when absent.
+    pub lane_id: Option<String>,
+    /// Page of release records strictly older than this sequence; the newest
+    /// page when absent.
+    pub release_cursor: Option<u64>,
+    /// Records per page, 1 to `EXTERNAL_LANE_RELEASE_PAGE_SIZE` (the default).
+    pub release_limit: Option<usize>,
+}
+
+/// `external_lane_info`: each genesis external lane's configuration, live
+/// record and a page of its release history, newest first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneInfoReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub current_height: u64,
+    pub lane_count: u64,
+    pub lanes: Vec<ExternalLaneInfoRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneInfoRow {
+    pub lane_id: String,
+    pub config: postfiat_types::GenesisExternalLane,
+    /// The committed record, without its release records (`releases`).
+    pub state: postfiat_types::ExternalLaneState,
+    pub remainder_atoms: u64,
+    pub window_cap_atoms: u64,
+    /// The window the next block falls in, and what it may still release.
+    pub next_window_index: u64,
+    pub next_window_available_atoms: u64,
+    pub release_count: u64,
+    /// One page of release records, newest first.
+    pub releases: Vec<ExternalLaneReleaseEntry>,
+    /// Cursor of the next older page; absent on the last page.
+    pub next_release_cursor: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneReleaseEntry {
+    /// Position in the lane's release history, from 0 in application order.
+    pub sequence: u64,
+    pub record: postfiat_types::ExternalLaneReleaseRecord,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FxFixInfoOptions {
     pub data_dir: PathBuf,

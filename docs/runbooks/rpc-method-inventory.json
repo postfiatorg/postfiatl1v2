@@ -13,9 +13,9 @@
     "operator_or_local_only": 42,
     "owned_lane_gated": 8,
     "privacy_alpha_gated": 4,
-    "read_only_public": 84,
+    "read_only_public": 85,
     "sdk_only_or_unknown": 0,
-    "total_methods": 165
+    "total_methods": 166
   },
   "gaps": [
     {
@@ -34,10 +34,10 @@
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-10-29T12:41:27Z",
+  "generated_utc": "2026-11-03T10:57:20Z",
   "git": {
     "dirty": true,
-    "revision": "403af19d0ac81916078591d32b84ca2f550fc19e"
+    "revision": "eed475656a88237e7a264a97d15cd6a493a7e3d1"
   },
   "methods": [
     {
@@ -564,6 +564,21 @@
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
       "sdk_constant": true
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "external_lane_info",
+      "node_dispatch": true,
+      "notes": "public genesis external lane config, committed record and paged release history read",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "sdk_constant": false
     },
     {
       "authorized_protocol_mutation_public": true,

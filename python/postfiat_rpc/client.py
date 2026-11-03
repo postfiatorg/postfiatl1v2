@@ -1733,6 +1733,25 @@ class PostFiatRpcClient:
             params["active_only"] = True
         return self._object_read("fx_fix_list", params)
 
+    def external_lane_info(
+        self,
+        lane_id: str | None = None,
+        *,
+        release_cursor: int | None = None,
+        release_limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Genesis external lanes: config, committed record and one page of
+        releases, newest first (public read, `--lane-id`, `--release-cursor`,
+        `--release-limit`). Pass `next_release_cursor` for the next older page."""
+        params: dict[str, Any] = {}
+        if lane_id is not None:
+            params["lane_id"] = self._required_text(lane_id, "lane_id")
+        if release_cursor is not None:
+            params["release_cursor"] = self._required_u64(release_cursor, "release_cursor")
+        if release_limit is not None:
+            params["release_limit"] = self._required_u64(release_limit, "release_limit")
+        return self._object_read("external_lane_info", params)
+
     def fx_fix_info(self, fix_packet_hash: str) -> dict[str, Any]:
         """One FX fix packet by hash (public read, `--fix-packet-hash`)."""
         return self._object_read(

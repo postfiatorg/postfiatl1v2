@@ -198,6 +198,20 @@ class RemainingReadWrapperTests(unittest.TestCase):
         # active_only=False is not sent (the node flag is presence-only); limit is bounded.
         call.assert_called_once_with("fx_fix_list", {"limit": 512})
 
+    def test_external_lane_info_sends_the_release_page_parameters(self) -> None:
+        client = _client()
+        with mock.patch.object(client, "_call", return_value={"lanes": []}) as call:
+            client.external_lane_info()
+        call.assert_called_once_with("external_lane_info", {})
+        with mock.patch.object(client, "_call", return_value={"lanes": []}) as call:
+            client.external_lane_info("base-erc20", release_cursor=40, release_limit=20)
+        call.assert_called_once_with(
+            "external_lane_info",
+            {"lane_id": "base-erc20", "release_cursor": 40, "release_limit": 20},
+        )
+        with self.assertRaisesRegex(ValueError, "release_cursor must be a non-negative integer"):
+            client.external_lane_info(release_cursor=-1)
+
     def test_quote_and_preflight_send_integer_amounts_with_the_node_names(self) -> None:
         client = _client()
         with mock.patch.object(client, "_call", return_value={"quote": 1}) as call:

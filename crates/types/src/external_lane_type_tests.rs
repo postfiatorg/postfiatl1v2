@@ -11,10 +11,17 @@ fn sample_external_lane(id: &str, reserved_atoms: u64) -> GenesisExternalLane {
             token_runtime_code_hash: format!("0x{}", "3c".repeat(32)),
             lock_runtime_code_hash: format!("0x{}", "4d".repeat(32)),
             committee_epoch: 2,
-            committee_root: format!("0x{}", "5e".repeat(32)),
+            committee_root: format!("0x{}", "5e".repeat(48)),
             confirmation_depth: 64,
         },
     }
+}
+
+/// A lane on its own Base source: genesis allows one lane per lock contract.
+fn sample_external_lane_on(id: &str, reserved_atoms: u64, lock_byte: &str) -> GenesisExternalLane {
+    let mut lane = sample_external_lane(id, reserved_atoms);
+    lane.policy.lock_contract_address = format!("0x{}", lock_byte.repeat(20));
+    lane
 }
 
 fn genesis_with_lanes(lanes: Vec<GenesisExternalLane>) -> Genesis {
@@ -74,7 +81,7 @@ fn ledger_state_without_lanes_serializes_as_before() {
 fn genesis_external_lane_reserves_the_configured_amount() {
     let genesis = genesis_with_lanes(vec![
         sample_external_lane("base-erc20", 250_000_000),
-        sample_external_lane("base-erc20-b", 50_000_000),
+        sample_external_lane_on("base-erc20-b", 50_000_000, "7b"),
     ]);
     genesis.validate().expect("valid lanes");
     let parsed = Genesis::from_json(&genesis.to_json().expect("serialize")).expect("parse");
@@ -102,12 +109,12 @@ fn genesis_rejects_lanes_at_or_above_native_supply() {
         // Two lanes, sum == supply.
         vec![
             sample_external_lane("a", half),
-            sample_external_lane("b", GENESIS_NATIVE_SUPPLY_ATOMS - half),
+            sample_external_lane_on("b", GENESIS_NATIVE_SUPPLY_ATOMS - half, "7b"),
         ],
         // Two lanes, ordinary sum == supply + 1 (far from u64 overflow).
         vec![
             sample_external_lane("a", half),
-            sample_external_lane("b", GENESIS_NATIVE_SUPPLY_ATOMS - half + 1),
+            sample_external_lane_on("b", GENESIS_NATIVE_SUPPLY_ATOMS - half + 1, "7b"),
         ],
     ];
     for lanes in at_or_above {
@@ -123,7 +130,7 @@ fn genesis_rejects_lanes_at_or_above_native_supply() {
     }
     let overflow = genesis_with_lanes(vec![
         sample_external_lane("a", u64::MAX),
-        sample_external_lane("b", 1),
+        sample_external_lane_on("b", 1, "7b"),
     ]);
     assert!(overflow.validate().unwrap_err().contains("overflows"));
     let just_below = genesis_with_lanes(vec![sample_external_lane(
@@ -274,11 +281,12 @@ fn genesis_external_lane_policy_requires_proof_policy_pins() {
     let mut cases: Vec<(GenesisExternalLanePolicy, &str)> = Vec::new();
     for root in [
         String::new(),
-        "5e".repeat(32),
-        format!("0x{}", "5E".repeat(32)),
-        format!("0x{}", "5e".repeat(31)),
-        format!("0x{}", "5e".repeat(48)),
-        format!("0x{}g", "5e".repeat(31)),
+        "5e".repeat(48),
+        format!("0x{}", "5E".repeat(48)),
+        format!("0x{}", "5e".repeat(47)),
+        // 32 bytes, the width P2.2 allowed: no committee root has it.
+        format!("0x{}", "5e".repeat(32)),
+        format!("0x{}g", "5e".repeat(47)),
     ] {
         let mut policy = sample_external_lane("a", 1).policy;
         policy.committee_root = root;
@@ -328,4 +336,379 @@ fn deployed_devnet_genesis_bytes_and_hash_are_unchanged() {
         "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9"
     );
     assert_eq!(genesis.genesis_faucet_balance_atoms(), Ok(GENESIS_NATIVE_SUPPLY_ATOMS));
+}
+
+fn sample_release(nonce: u64, amount_atoms: u64, height: u64) -> ExternalLaneReleaseRecord {
+    ExternalLaneReleaseRecord {
+        lock_nonce: nonce,
+        source_chain_id: 8453,
+        lock_contract_address: format!("0x{}", "1a".repeat(20)),
+        amount_atoms,
+        recipient: "pftl-recipient".to_string(),
+        source_block_number: 100,
+        source_block_hash: format!("0x{}", "6f".repeat(32)),
+        released_at_height: height,
+    }
+}
+
+/// A lane of 10,000 atoms at 200 bps: a window of 100 blocks may release 200.
+fn release_test_lane() -> GenesisExternalLane {
+    let mut lane = sample_external_lane("base-erc20", 10_000);
+    lane.release_window_blocks = 100;
+    lane
+}
+
+#[test]
+fn genesis_external_lane_source_must_be_base_mainnet_or_sepolia() {
+    for chain_id in [8453, 84_532] {
+        let mut lane = sample_external_lane("a", 1);
+        lane.policy.chain_id = chain_id;
+        lane.validate().expect("allowed Base source");
+    }
+    for chain_id in [1, 10, 11_155_111, 8454] {
+        let mut lane = sample_external_lane("a", 1);
+        lane.policy.chain_id = chain_id;
+        let error = lane.validate().unwrap_err();
+        assert!(error.contains("must be Base mainnet 8453 or Base Sepolia 84532"), "{error}");
+    }
+}
+
+#[test]
+fn external_lane_window_cap_rounds_down() {
+    let lane = release_test_lane();
+    assert_eq!(lane.window_cap_atoms(), 200);
+    let mut odd = sample_external_lane("a", 149);
+    odd.release_cap_bps = 100;
+    assert_eq!(odd.window_cap_atoms(), 1);
+    assert_eq!(lane.window_index_at(99), 0);
+    assert_eq!(lane.window_index_at(100), 1);
+}
+
+#[test]
+fn external_lane_release_credits_the_lane_record_once() {
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release(&lane, sample_release(0, 150, 5))
+        .expect("first release");
+    assert_eq!(state.released_atoms, 150);
+    assert_eq!(state.remainder_atoms().expect("remainder"), 9_850);
+    assert_eq!(state.released_lock_nonces, [0_u64].into_iter().collect());
+    assert_eq!((state.window_index, state.window_released_atoms), (0, 150));
+    state.validate_against_genesis(&lane).expect("recorded release");
+
+    let before = state.clone();
+    let (code, _) = state
+        .apply_release(&lane, sample_release(0, 1, 6))
+        .unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_NONCE_ALREADY_RELEASED);
+    assert_eq!(state, before, "a replayed nonce changes nothing");
+}
+
+#[test]
+fn external_lane_release_refuses_amount_past_window_cap_without_mutation() {
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release(&lane, sample_release(0, 150, 5))
+        .expect("first release");
+    let before = state.clone();
+    let (code, message) = state
+        .apply_release(&lane, sample_release(1, 51, 99))
+        .unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_WINDOW_CAP_EXCEEDED, "{message}");
+    assert_eq!(state, before);
+    // The same nonce fits in the next window: the refusal consumed nothing.
+    state
+        .apply_release(&lane, sample_release(1, 51, 100))
+        .expect("later window");
+    assert_eq!((state.window_index, state.window_released_atoms), (1, 51));
+    state.validate_against_genesis(&lane).expect("two windows");
+}
+
+#[test]
+fn external_lane_release_refuses_past_the_record_ceiling_without_mutation() {
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release_within(&lane, sample_release(0, 10, 5), 2)
+        .expect("first record");
+    state
+        .apply_release_within(&lane, sample_release(1, 10, 6), 2)
+        .expect("second record");
+    let before = state.clone();
+    let (code, message) = state
+        .apply_release_within(&lane, sample_release(2, 10, 7), 2)
+        .unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_RELEASE_RECORDS_FULL, "{message}");
+    assert_eq!(state, before, "a refused release leaves the lane untouched");
+    state
+        .apply_release(&lane, sample_release(2, 10, 7))
+        .expect("far below the ceiling");
+    state.validate_against_genesis(&lane).expect("three records");
+}
+
+#[test]
+fn external_lane_release_rejects_amount_above_lane_remainder() {
+    let mut lane = release_test_lane();
+    lane.release_cap_bps = 10_000;
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release(&lane, sample_release(0, 9_990, 1))
+        .expect("most of the lane");
+    let before = state.clone();
+    let (code, _) = state
+        .apply_release(&lane, sample_release(1, 11, 200))
+        .unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_REMAINDER_EXCEEDED);
+    assert_eq!(state, before);
+    state
+        .apply_release(&lane, sample_release(1, 10, 200))
+        .expect("exactly the remainder");
+    assert_eq!(state.remainder_atoms().expect("remainder"), 0);
+}
+
+#[test]
+fn external_lane_state_requires_release_fields_to_match_recorded_releases() {
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release(&lane, sample_release(3, 40, 10))
+        .expect("release");
+    state
+        .apply_release(&lane, sample_release(7, 60, 20))
+        .expect("release");
+    state.validate_against_genesis(&lane).expect("consistent");
+
+    let refuse = |edit: &dyn Fn(&mut ExternalLaneState), needle: &str| {
+        let mut tampered = state.clone();
+        edit(&mut tampered);
+        let error = tampered.validate_against_genesis(&lane).unwrap_err();
+        assert!(error.contains(needle), "{needle}: {error}");
+    };
+    // Atoms released with no record behind them.
+    refuse(
+        &|lane| {
+            lane.released_atoms += 5;
+            lane.window_released_atoms += 5;
+        },
+        "recorded releases sum to 100",
+    );
+    // A nonce added to the set without a record, or a record dropped.
+    refuse(&|lane| {
+        lane.released_lock_nonces.insert(9);
+    }, "differ from its recorded releases");
+    refuse(&|lane| {
+        lane.releases.pop();
+    }, "differ from its recorded releases");
+    // A record duplicated, an amount raised, a foreign source.
+    refuse(&|lane| {
+        let first = lane.releases[0].clone();
+        lane.releases.push(first);
+    }, "more than once");
+    refuse(&|lane| lane.releases[0].amount_atoms += 1, "recorded releases sum to 101");
+    refuse(&|lane| lane.releases[0].source_chain_id = 84_532, "source genesis did not configure");
+    refuse(
+        &|lane| lane.releases[1].lock_contract_address = format!("0x{}", "99".repeat(20)),
+        "source genesis did not configure",
+    );
+    // Window fields that do not follow from the recorded heights.
+    refuse(&|lane| lane.window_released_atoms = 60, "recorded releases give window 0 with 100");
+    refuse(&|lane| lane.window_index = 1, "recorded releases give window 0 with 100");
+    // Reserve changed against genesis.
+    refuse(&|lane| lane.reserved_atoms += 1, "but genesis reserves 10000");
+}
+
+#[test]
+fn external_lane_recorded_window_above_cap_is_refused() {
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    // Two records that fit the remainder but together pass one window's cap.
+    for (nonce, height) in [(0, 10), (1, 20)] {
+        let record = sample_release(nonce, 150, height);
+        state.released_atoms += record.amount_atoms;
+        state.released_lock_nonces.insert(nonce);
+        state.releases.push(record);
+    }
+    state.window_released_atoms = 300;
+    state.validate().expect("internally consistent");
+    let error = state.validate_against_genesis(&lane).unwrap_err();
+    assert!(error.contains("above the cap 200"), "{error}");
+}
+
+#[test]
+fn unreleased_external_lane_state_encodes_without_releases() {
+    let state = ExternalLaneState::genesis(&release_test_lane());
+    let json = serde_json::to_string(&state).expect("encode");
+    assert!(!json.contains("releases\""), "{json}");
+    assert_eq!(
+        json,
+        "{\"lane_id\":\"base-erc20\",\"reserved_atoms\":10000,\"released_atoms\":0,\"released_lock_nonces\":[],\"window_index\":0,\"window_released_atoms\":0}"
+    );
+}
+
+fn sample_release_operation() -> ExternalLaneReleaseOperationV1 {
+    let checkpoint = EthereumFinalizedCheckpointV1 {
+        schema_version: ETHEREUM_CHECKPOINT_SCHEMA_V1,
+        pftl_domain: FastSwapChainDomainV1 {
+            chain_id: "postfiat-local".to_string(),
+            genesis_hash: FastSwapOpaqueHashV1([7; 48]),
+            protocol_version: 1,
+        },
+        route_id: "base-erc20".to_string(),
+        route_config_digest: FastSwapOpaqueHashV1([8; 48]),
+        ethereum_chain_id: 8453,
+        block_number: 10,
+        block_hash: [9; 32],
+        receipts_root: [10; 32],
+        observed_head_number: 80,
+        minimum_confirmations: 64,
+        authority_epoch: 2,
+        committee_root: FastSwapCommitteeRootV1([11; 48]),
+        handoff_controller: [0x1a; 20],
+        wrapped_navcoin_token: [0x2b; 20],
+        handoff_controller_code_hash: [0x4d; 32],
+        wrapped_navcoin_code_hash: [0x3c; 32],
+    };
+    ExternalLaneReleaseOperationV1 {
+        submitter: "pf1111111111111111111111111111111111111111".to_string(),
+        lane_id: "base-erc20".to_string(),
+        source_chain_id: 8453,
+        lock_contract_address: format!("0x{}", "1a".repeat(20)),
+        lock_nonce: 0,
+        amount_atoms: 5,
+        recipient: "pf2222222222222222222222222222222222222222".to_string(),
+        proof: EthereumExternalEventProofV1 {
+            checkpoint_certificate: EthereumCheckpointCertificateV1 {
+                checkpoint,
+                votes: vec![EthereumCheckpointVoteV1 {
+                    validator_id: "validator-0".to_string(),
+                    signature: vec![1],
+                }],
+            },
+            receipt_proof: EthereumReceiptProofV1 {
+                transaction_index: 0,
+                receipt_rlp: vec![0xc0],
+                proof_nodes_rlp: vec![vec![0xc0]],
+            },
+            log_index: 0,
+        },
+    }
+}
+
+type OperationEdit = fn(&mut ExternalLaneReleaseOperationV1);
+
+#[test]
+fn external_lane_release_operation_validates_its_lock_key() {
+    let operation = sample_release_operation();
+    operation.validate().expect("valid release operation");
+    let wrapped = AssetTransactionOperation::ExternalLaneReleaseV1(operation.clone());
+    assert_eq!(wrapped.transaction_kind(), EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1);
+    let json = serde_json::to_value(&wrapped).expect("encode");
+    assert_eq!(json["operation"], "external_lane_release_v1");
+    let decoded: AssetTransactionOperation = serde_json::from_value(json.clone()).expect("decode");
+    assert_eq!(decoded, wrapped);
+    let mut unknown = json;
+    unknown["relayer_override"] = serde_json::json!("x");
+    assert!(serde_json::from_value::<AssetTransactionOperation>(unknown).is_err());
+
+    let cases: [(OperationEdit, &str); 6] = [
+        (|op| op.source_chain_id = 1, "source_chain_id"),
+        (|op| op.lock_contract_address = "1a".repeat(20), "lock_contract_address"),
+        (|op| op.amount_atoms = 0, "amount_atoms"),
+        (|op| op.recipient = String::new(), "recipient"),
+        (|op| op.lane_id = "Base".to_string(), "external lane id"),
+        (|op| op.proof.checkpoint_certificate.votes.clear(), "proof"),
+    ];
+    for (edit, needle) in cases {
+        let mut operation = sample_release_operation();
+        edit(&mut operation);
+        let error = operation.validate().unwrap_err();
+        assert!(error.contains(needle), "{needle}: {error}");
+    }
+}
+
+#[test]
+fn genesis_rejects_two_lanes_on_one_base_source() {
+    let mut other = sample_external_lane("b", 10);
+    let first = sample_external_lane("a", 10);
+    let error = validate_genesis_external_lanes(&[first.clone(), other.clone()], 1_000).unwrap_err();
+    assert!(
+        error.contains("genesis external lanes `a` and `b` both name Base source 8453"),
+        "{error}"
+    );
+    // A different lock contract or chain is a different source.
+    other.policy.lock_contract_address = format!("0x{}", "99".repeat(20));
+    validate_genesis_external_lanes(&[first.clone(), other.clone()], 1_000).expect("other contract");
+    other.policy.lock_contract_address = first.policy.lock_contract_address.clone();
+    other.policy.chain_id = 84_532;
+    validate_genesis_external_lanes(&[first, other], 1_000).expect("other chain");
+}
+
+#[test]
+fn external_lane_release_below_the_recorded_window_is_refused() {
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release(&lane, sample_release(0, 200, 250))
+        .expect("window 2 at its cap");
+    let before = state.clone();
+    let (code, message) = state
+        .apply_release(&lane, sample_release(1, 200, 150))
+        .unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_WINDOW_REGRESSED, "{message}");
+    assert!(message.contains("release window 1 is below its recorded window 2"), "{message}");
+    assert_eq!(state, before);
+}
+
+#[test]
+fn external_lane_commitment_is_independent_of_release_records() {
+    let lane = sample_external_lane("base-erc20", 1_000_000_000);
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release(&lane, sample_release(0, 7, 1))
+        .expect("first release");
+    let one = state.state_commitment_bytes().expect("commit one");
+    for nonce in 1..200 {
+        state
+            .apply_release(&lane, sample_release(nonce, 7, 1 + nonce))
+            .expect("release");
+    }
+    let many = state.state_commitment_bytes().expect("commit many");
+    // Only the design's fields grow: the nonce set, and the released and
+    // window totals by their digits. No release record is in the bytes.
+    let nonce_growth = serde_json::to_vec(&state.released_lock_nonces).expect("nonces").len()
+        - serde_json::to_vec(&[0_u64]).expect("one nonce").len();
+    let total_digits = 2 * (state.released_atoms.to_string().len() - 1);
+    assert_eq!(many.len() - one.len(), nonce_growth + total_digits);
+    let mut without_records = state.clone();
+    without_records.releases.clear();
+    assert_eq!(without_records.state_commitment_bytes().expect("commit"), many);
+    assert!(!String::from_utf8(many).expect("utf8").contains("pftl-recipient"));
+}
+
+#[test]
+fn external_lane_release_history_root_binds_every_record() {
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    assert_eq!(state.release_history_root, None);
+    state
+        .apply_release(&lane, sample_release(3, 40, 10))
+        .expect("release");
+    let first_root = state.release_history_root.clone().expect("root");
+    assert_eq!(first_root.len(), 2 + 96);
+    state
+        .apply_release(&lane, sample_release(7, 60, 20))
+        .expect("release");
+    assert_ne!(state.release_history_root.as_deref(), Some(first_root.as_str()));
+    state.validate_against_genesis(&lane).expect("consistent");
+    // A record changed without changing the totals: only the root sees it.
+    let mut tampered = state.clone();
+    tampered.releases[1].recipient = "someone-else".to_string();
+    assert_eq!(
+        tampered.state_commitment_bytes().expect("bounded commitment"),
+        state.state_commitment_bytes().expect("bounded commitment")
+    );
+    let error = tampered.validate_against_genesis(&lane).unwrap_err();
+    assert!(error.contains("release history root"), "{error}");
 }
