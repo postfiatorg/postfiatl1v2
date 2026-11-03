@@ -490,15 +490,31 @@ mod tests {
         let genesis = lane_genesis();
         let mut ledger = lane_ledger(&genesis);
         let before = ledger.clone();
-        let (code, _) = apply_external_lane_release(
-            &genesis,
-            &mut ledger,
-            lock(1, ACCOUNT_RESERVE - 1, "fresh"),
-            1,
-        )
-        .unwrap_err();
+        let small = ACCOUNT_RESERVE - 1;
+        let (code, _) =
+            apply_external_lane_release(&genesis, &mut ledger, lock(1, small, "fresh"), 1)
+                .unwrap_err();
         assert_eq!(code, "below_account_reserve");
-        assert_eq!(ledger, before);
+        assert_eq!(ledger, before, "the nonce stays unused");
+
+        // The same amount to an existing funded account is released.
+        ledger.ensure_account("funded").balance = ACCOUNT_RESERVE;
+        ledger.accounts[0].balance -= ACCOUNT_RESERVE;
+        apply_external_lane_release(&genesis, &mut ledger, lock(2, small, "funded"), 1)
+            .expect("release below the reserve to a funded account");
+        assert_eq!(
+            ledger.account("funded").expect("funded").balance,
+            ACCOUNT_RESERVE + small
+        );
+
+        // Once the fresh account exists, the refused Lock is retried and passes.
+        ledger.ensure_account("fresh").balance = ACCOUNT_RESERVE;
+        ledger.accounts[0].balance -= ACCOUNT_RESERVE;
+        apply_external_lane_release(&genesis, &mut ledger, lock(1, small, "fresh"), 2)
+            .expect("retry after the account exists");
+        ledger.external_lanes[0]
+            .validate_against_genesis(&genesis.external_lanes()[0])
+            .expect("recorded releases");
     }
 }
 

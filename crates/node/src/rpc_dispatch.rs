@@ -661,6 +661,20 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
             let report = external_lane_info(ExternalLaneInfoOptions {
                 data_dir,
                 lane_id: flag_value(flags, "--lane-id").map(str::to_string),
+                release_cursor: flag_value(flags, "--release-cursor")
+                    .map(|value| {
+                        value
+                            .parse::<u64>()
+                            .map_err(|_| "--release-cursor must be a u64".to_string())
+                    })
+                    .transpose()?,
+                release_limit: flag_value(flags, "--release-limit")
+                    .map(|value| {
+                        value
+                            .parse::<usize>()
+                            .map_err(|_| "--release-limit must be a usize".to_string())
+                    })
+                    .transpose()?,
             })
             .map_err(|error| format!("rpc external_lane_info failed: {error}"))?;
             print_rpc_success(

@@ -2470,12 +2470,13 @@ fn latest_tx_id_in_execution_order(tails: MempoolFamilyTails<'_>) -> Option<&str
     .next()
 }
 
-fn asset_transaction_amount(transaction: &SignedAssetTransaction) -> u64 {
+pub(crate) fn asset_transaction_amount(transaction: &SignedAssetTransaction) -> u64 {
     match &transaction.unsigned.operation {
         AssetTransactionOperation::IssuedPayment(operation) => operation.amount,
         AssetTransactionOperation::IssuedPaymentV2(operation) => operation.amount,
         AssetTransactionOperation::AssetBurn(operation) => operation.amount,
         AssetTransactionOperation::AssetClawback(operation) => operation.amount,
+        AssetTransactionOperation::ExternalLaneReleaseV1(operation) => operation.amount_atoms,
         _ => 0,
     }
 }

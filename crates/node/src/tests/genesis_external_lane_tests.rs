@@ -213,20 +213,18 @@ fn pruned_lane_node(label: &str) -> (PathBuf, HistoryCheckpointState, Receipt) {
     (data_dir, checkpoint, receipt)
 }
 
-/// Recomputes the root and hash as a tamperer would. A lane record whose
-/// release fields disagree with its recorded releases has no state root at
-/// all, so the old root is kept and the read refuses the record.
+/// Recomputes the root and hash as a tamperer would, so only the lane rule
+/// can refuse the tampered record.
 fn rehash_checkpoint(genesis: &Genesis, checkpoint: &mut HistoryCheckpointState) {
-    if let Ok(root) = replicated_state_root(
+    checkpoint.checkpoint_state_root = replicated_state_root(
         genesis,
         &checkpoint.governance,
         &checkpoint.ledger,
         &checkpoint.ordered_batches,
         &checkpoint.shielded,
         &checkpoint.bridge,
-    ) {
-        checkpoint.checkpoint_state_root = root;
-    }
+    )
+    .expect("a tampered lane record still has a state root");
     let mut canonical = checkpoint.clone();
     canonical.checkpoint_hash.clear();
     checkpoint.checkpoint_hash = hash_hex(
@@ -631,17 +629,6 @@ fn reread_tampered_checkpoint(
 }
 
 fn assert_aggregate_balances(checkpoint: &HistoryCheckpointState) {
-    if checkpoint
-        .ledger
-        .external_lanes
-        .iter()
-        .any(|lane| lane.validate().is_err())
-    {
-        // A release without a matching record is not even counted: the live
-        // total refuses it before any aggregate comparison.
-        assert!(native_pft_live_total(&checkpoint.ledger, &checkpoint.shielded).is_err());
-        return;
-    }
     assert_eq!(
         native_pft_live_total(&checkpoint.ledger, &checkpoint.shielded).expect("live")
             + checkpoint.native_fee_burn_total.expect("burns"),
@@ -758,12 +745,11 @@ fn snapshot_with_a_forged_release_is_refused() {
         .expect("checkpoint written")
         .native_fee_burn_total
         .expect("burns");
-    let _ = burns;
-    // The forged lane has no recorded release, so the live total refuses it.
-    assert!(native_pft_live_total(&ledger, &shielded)
-        .unwrap_err()
-        .to_string()
-        .contains("released Lock nonces {99} differ from its recorded releases {}"));
+    // The forgery keeps live + burns = supply, so only the lane rule refuses it.
+    assert_eq!(
+        native_pft_live_total(&ledger, &shielded).expect("live") + burns,
+        u128::from(GENESIS_NATIVE_SUPPLY_ATOMS)
+    );
     rewrite_snapshot_file(
         &snapshot_dir,
         LEDGER_FILE,
@@ -801,6 +787,26 @@ fn init_refuses_genesis_with_duplicate_lane_ids() {
         error
             .to_string()
             .contains("duplicate genesis external lane id `base-erc20`"),
+        "{error}"
+    );
+    assert!(!data_dir.exists(), "nothing is written for an invalid genesis");
+}
+
+#[test]
+fn init_refuses_genesis_with_two_lanes_on_one_base_source() {
+    let data_dir = unique_test_dir("postfiat-external-lane-shared-source-init");
+    let mut genesis = lane_genesis("postfiat-lane-shared-source-init", 1);
+    let lanes = genesis.external_lanes.as_mut().expect("lanes");
+    let mut second = lanes[0].clone();
+    second.id = "base-erc20-b".to_string();
+    lanes.push(second);
+    let error = init_with_genesis(data_dir.clone(), "validator-0".to_string(), genesis)
+        .expect_err("init must validate the genesis");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidInput, "{error}");
+    assert!(
+        error.to_string().contains(
+            "genesis external lanes `base-erc20` and `base-erc20-b` both name Base source 8453"
+        ),
         "{error}"
     );
     assert!(!data_dir.exists(), "nothing is written for an invalid genesis");
@@ -854,7 +860,7 @@ fn checkpoint_with_recorded_releases_is_accepted_and_tampering_them_is_refused()
         assert_aggregate_balances(&tampered);
         let error = result.unwrap_err().to_string();
         assert!(
-            error.contains("external lane `base-erc20`") && error.contains(needle),
+            error.contains("history checkpoint external lane `base-erc20`") && error.contains(needle),
             "{needle}: {error}"
         );
     }
@@ -1220,14 +1226,21 @@ mod release_path {
         );
     }
 
-    fn lane_info(data_dir: &Path) -> ExternalLaneInfoRow {
+    fn lane_page(data_dir: &Path, cursor: Option<u64>, limit: Option<usize>) -> io::Result<ExternalLaneInfoRow> {
         let report = external_lane_info(ExternalLaneInfoOptions {
             data_dir: data_dir.to_path_buf(),
             lane_id: Some("base-erc20".to_string()),
-        })
-        .expect("lane info");
+            release_cursor: cursor,
+            release_limit: limit,
+        })?;
         assert_eq!(report.lane_count, 1);
-        report.lanes.into_iter().next().expect("lane")
+        Ok(report.lanes.into_iter().next().expect("lane"))
+    }
+
+    fn lane_info(data_dir: &Path) -> ExternalLaneInfoRow {
+        let row = lane_page(data_dir, None, None).expect("lane info");
+        assert!(row.state.releases.is_empty(), "records are paged, not in the state");
+        row
     }
 
     #[test]
@@ -1246,16 +1259,25 @@ mod release_path {
 
         // 1. A proven Lock is released once, to the recipient it names.
         let amount = ACCOUNT_RESERVE + 1_000;
-        let receipt = admit_and_apply(&chain, &release_tx(&chain, "base-erc20", 1, amount, 1), "release");
+        let tx = release_tx(&chain, "base-erc20", 1, amount, 1);
+        // The recipient is a destination address and the amount is counted.
+        assert_eq!(
+            asset_transaction_destination_addresses(&tx),
+            vec![("external_lane_release_v1.recipient", chain.recipient.as_str())]
+        );
+        assert_eq!(crate::mempool_proposals::asset_transaction_amount(&tx), amount);
+        let receipt = admit_and_apply(&chain, &tx, "release");
         assert!(receipt.accepted, "{receipt:?}");
         let ledger = store.read_ledger().expect("ledger");
         assert_eq!(ledger.account(&chain.recipient).expect("recipient").balance, amount);
         let info = lane_info(&chain.data_dir);
         assert_eq!(info.state.released_atoms, amount);
         assert_eq!(info.remainder_atoms, LANE_RESERVED_ATOMS - amount);
-        assert_eq!(info.state.releases.len(), 1);
-        assert_eq!(info.state.releases[0].lock_nonce, 1);
-        assert_eq!(info.state.releases[0].source_block_number, 1_001);
+        assert_eq!(info.release_count, 1);
+        assert_eq!(info.releases[0].sequence, 0);
+        assert_eq!(info.releases[0].record.lock_nonce, 1);
+        assert_eq!(info.releases[0].record.source_block_number, 1_001);
+        assert_eq!(info.next_release_cursor, None);
         assert_eq!(info.next_window_available_atoms, cap - amount);
         // Only the fee left the live supply: the release moved lane atoms to an account.
         assert_eq!(supply(&store) + u128::from(receipt.fee_burned), live_before);
@@ -1289,9 +1311,9 @@ mod release_path {
             let receipt = admit_and_apply(&chain, &tx, &format!("release-{nonce}"));
             assert!(receipt.accepted, "{receipt:?}");
         }
-        let state = lane_info(&chain.data_dir).state;
-        assert_eq!(state.released_lock_nonces, [1_u64, 2].into_iter().collect());
-        assert_eq!(state.releases.len(), 2);
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(info.state.released_lock_nonces, [1_u64, 2].into_iter().collect());
+        assert_eq!(info.release_count, 2);
         let height = read_chain_tip_or_reconstruct_for_genesis(
             &NodeStore::new(&chain.data_dir),
             &chain.genesis,
@@ -1340,6 +1362,32 @@ mod release_path {
     }
 
     #[test]
+    fn external_lane_info_pages_releases_newest_first() {
+        let (chain, _) = released_chain("release-paging");
+        let all = lane_info(&chain.data_dir);
+        let nonces = |row: &ExternalLaneInfoRow| {
+            row.releases
+                .iter()
+                .map(|entry| (entry.sequence, entry.record.lock_nonce))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(nonces(&all), vec![(1, 2), (0, 1)]);
+        assert_eq!(all.next_release_cursor, None);
+        let first = lane_page(&chain.data_dir, None, Some(1)).expect("first page");
+        assert_eq!(nonces(&first), vec![(1, 2)]);
+        assert_eq!(first.next_release_cursor, Some(1));
+        let second = lane_page(&chain.data_dir, first.next_release_cursor, Some(1)).expect("second page");
+        assert_eq!(nonces(&second), vec![(0, 1)]);
+        assert_eq!(second.next_release_cursor, None);
+        assert_eq!(first.state, second.state);
+        for limit in [0, EXTERNAL_LANE_RELEASE_PAGE_SIZE + 1] {
+            let error = lane_page(&chain.data_dir, None, Some(limit)).unwrap_err().to_string();
+            assert!(error.contains("release limit must be between 1 and"), "{error}");
+        }
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    #[test]
     fn full_and_checkpoint_snapshots_restore_the_released_lane() {
         let (chain, height) = released_chain("release-snapshot");
         // A full snapshot replays from genesis through both releases.
@@ -1360,8 +1408,13 @@ mod release_path {
     /// Tampers of a released lane that keep live + burns = supply: the reserve
     /// raised against genesis, released atoms with no record behind them, and
     /// the id set changed. Each pair is the edit and the refusal it must meet.
-    fn released_lane_tampers() -> [(&'static str, LedgerEdit); 4] {
+    fn released_lane_tampers() -> [(&'static str, LedgerEdit); 5] {
         [
+            // A record changed behind unchanged totals: only the root binds it.
+            ("release history root", |ledger| {
+                ledger.external_lanes[0].releases[0].recipient =
+                    "pfexternallane000000000000000000000009".to_string();
+            }),
             ("reserves 300000005 atoms, but genesis reserves 300000000", |ledger| {
                 ledger.external_lanes[0].reserved_atoms += 5;
                 ledger.accounts[0].balance -= 5;

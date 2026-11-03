@@ -1542,6 +1542,20 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             let report = external_lane_info(ExternalLaneInfoOptions {
                 data_dir: PathBuf::from(data_dir),
                 lane_id: flag_value(flags, "--lane-id").map(str::to_string),
+                release_cursor: flag_value(flags, "--release-cursor")
+                    .map(|value| {
+                        value
+                            .parse::<u64>()
+                            .map_err(|_| "--release-cursor must be a u64".to_string())
+                    })
+                    .transpose()?,
+                release_limit: flag_value(flags, "--release-limit")
+                    .map(|value| {
+                        value
+                            .parse::<usize>()
+                            .map_err(|_| "--release-limit must be a usize".to_string())
+                    })
+                    .transpose()?,
             })
             .map_err(|error| format!("external-lane-info failed: {error}"))?;
             let json = serde_json::to_string_pretty(&report)
