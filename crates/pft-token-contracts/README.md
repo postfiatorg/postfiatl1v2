@@ -6,6 +6,10 @@ remappings, and with them the pinned A666 public reader build
 (`scripts/check-a666-public-reader-candidates`), stay unchanged. Same solc
 0.8.24 and optimizer settings (`foundry.toml`); CI's `evm-contracts` job runs
 `forge test` here after fetching the OpenZeppelin submodule.
+`include_paths = [".."]` makes the whole `crates/` tree a source search path
+(the lock deployment test imports the real finality verifier), and
+`allow_paths` does not restrict what a test may import; the deployed artifacts
+(`PFTLockV1`, `PFTToken`) are byte-identical with and without it.
 
 ## PFT token (Base)
 
@@ -333,22 +337,70 @@ refuses:
 
 | Check | Refusal |
 |---|---|
-| any input empty, blank, `replace...` or zero | `PlaceholderValue(name)` |
+| a value that is empty, blank or `replace...` (any casing) is refused when read (an unset variable already fails forge's env read); under `PFT_LOCK_ALLOW_TEST_VERIFIER=1` the eight `PFT_LOCK_VERIFIER_EXPECTED_*` values and `PFT_LOCK_VERIFIER_CODEHASH` may be unset or a placeholder and read as zero. A zero hash, address, height, epoch or cap is refused inside its check (token, verifier, cap, or the anchor check, which the stand-in skip bypasses); a zero `PFT_LOCK_VERIFIER_CODEHASH` fails there as `VerifierCodeHashMismatch` unless the switch admits it. `PFT_LOCK_SOURCE_COMMIT` is checked for shape only (forty hexadecimal characters), so an all-zero commit is accepted | `PlaceholderValue(name)` |
 | `PFT_LOCK_CHAIN_ID` is 8453 or 84532 and equals the RPC's chain id | `UnsupportedChain`, `WrongChain(expected, actual)` |
 | on 84532, `PFT_LOCK_TOKEN` and `PFT_LOCK_TOKEN_CODEHASH` are the recorded test token and its code hash (`BASE_SEPOLIA_TEST_TOKEN`, `BASE_SEPOLIA_TEST_TOKEN_CODEHASH`) unless `PFT_LOCK_ALLOW_TEST_TOKEN=1` | `TokenNotTheTestToken(token)` |
 | `PFT_LOCK_TOKEN` has code whose keccak256 is `PFT_LOCK_TOKEN_CODEHASH`; `decimals()` is 6 and `totalSupply()` > 0 (checked staticcalls) | `TokenNotAContract`, `TokenCodeHashMismatch(expected, actual)`, `TokenUnreadable(field)`, `TokenDecimalsMismatch`, `TokenSupplyZero` |
 | `PFT_LOCK_VERIFIER` has code whose keccak256 is `PFT_LOCK_VERIFIER_CODEHASH` | `VerifierNotAContract`, `VerifierCodeHashMismatch(expected, actual)` |
+| `PFT_LOCK_VERIFIER_EXPECTED_FINALIZED_HEIGHT` and `..._ROUTE_EPOCH` fit `uint64` | `ValueTooLarge(name, value)` |
+| the verifier's latest finalized checkpoint `latestCheckpointCommitment()`, `latestFinalizedHeight()`, `latestCommitteeRootCommitment()` equals `PFT_LOCK_VERIFIER_EXPECTED_CHECKPOINT_COMMITMENT`, `..._FINALIZED_HEIGHT`, `..._COMMITTEE_ROOT_COMMITMENT`; its `token()`, `tokenRuntimeCodeHash()` and `arbitrumChainId()` are the lock's token, its code hash and the RPC's chain id; its `pftlChainIdHash()`, `pftlGenesisHashCommitment()`, `routeProfileHashCommitment()`, `routeEpoch()` and `assetIdCommitment()` equal `..._PFTL_CHAIN_ID_HASH`, `..._GENESIS_HASH_COMMITMENT`, `..._ROUTE_PROFILE_HASH_COMMITMENT`, `..._ROUTE_EPOCH`, `..._ASSET_ID_COMMITMENT` | `VerifierUnreadable(field)`, `VerifierAnchorMismatch(field, expected, actual)`, `VerifierBindingMismatch(field, expected, actual)` |
+| the verifier's `vaultRuntimeCodeHash()` is the runtime code hash of the lock about to be deployed (below); every release would revert otherwise | `VaultRuntimeCodeHashMismatch(lock hash, verifier's)` |
 | `PFT_LOCK_MAX_LOCK_AMOUNT` (units) fits `uint64` and equals `PFT_LOCK_MAX_LOCK_AMOUNT_PFT` × 1,000,000 | `MaxLockAmountTooLarge`, `MaxLockAmountMismatch(units, pft)` |
 | the deployer's nonce is 0 | `DeployerAlreadyUsed(deployer, nonce)` |
 | `out/PFTLockV1.sol/PFTLockV1.json` (or under `$FOUNDRY_OUT`) is the deployed creation code with its IPFS metadata; its `deployedBytecode.object` exceeds its CBOR trailer by at least 512 bytes | `ArtifactMismatch`, `MetadataHashDisabled`, `ArtifactMetadataMismatch` |
 | a real deployment sets no test switch, sets `PFT_LOCK_SOURCE_COMMIT` to exactly 40 hexadecimal characters (either casing; the shape only, the value is the operator's statement) and has no record yet | `RealDeploymentWithTestSwitch`, `SourceCommitMissing`, `SourceCommitInvalid(value)`, `RecordExists(path)` |
 | right after the broadcast, the lock's code has the length and the CBOR trailer of `deployedBytecode.object` (the immutables make the rest differ) | `DeployedCodeMismatch(lock, code length, artifact length)` |
 
-After construction it re-reads `token()`, `finalityVerifier()`,
-`maxLockAmount()`, `nextNonce() == 0` and `totalLocked() == 0`
-(`LockStateMismatch(field)`), and logs every checked value and the lock's
-runtime code hash. `PFT_LOCK_ALLOW_TEST_VERIFIER=1` admits a verifier whose
-code hash is not pinned (`PFT_LOCK_VERIFIER_CODEHASH` may stay unset) and
+The lock's runtime code hash before the broadcast: the script creates a probe
+`PFTLockV1` from its own creation code (the artifact-bound code it deploys)
+with the same four constructor arguments, outside the broadcast (forge's
+simulation only, never sent), and takes its `codehash`. The immutables (token,
+verifier, token code hash, cap) are the only part the arguments change; the
+hash does not depend on the lock's own address. The verifier's deployer
+therefore computes it off-chain before deploying the verifier: the runtime code
+of the same `PFTLockV1` artifact (solc 0.8.24, the same optimizer, EVM and
+metadata settings, the same project-relative source layout) with the four
+constructor arguments (the token, the verifier's predicted address, the token
+code hash and this exact cap). `testTheProbeReadsTheRealVerifier` checks the
+match with a test recipe (`vm.etch` and a dedicated deployer), not the
+deployment procedure.
+
+The pre-check logs each expected value beside the one read from the verifier,
+before the broadcast. After construction `checkLock` re-reads and logs
+`token()`, `finalityVerifier()`, `maxLockAmount()`, `nextNonce() == 0` and
+`totalLocked() == 0` (`LockStateMismatch(field)`), then re-checks the
+verifier's code hash, checkpoint and bindings, its `vaultRuntimeCodeHash()` now
+against the deployed lock's `codehash`, silently: a mismatch reverts, no
+second log is printed. This re-read runs in forge's simulation before submission, not
+against the mined chain; the post-receipt check below is mandatory.
+
+Where the expected values come from, all pinned by the operator from the
+PFTL chain and the genesis plan, never read from the verifier:
+
+| Variable | Source |
+|---|---|
+| `..._CHECKPOINT_COMMITMENT`, `..._FINALIZED_HEIGHT`, `..._COMMITTEE_ROOT_COMMITMENT` | the current finalized checkpoint at the time of the deployment preflight, from the operator's own node (the construction anchor until a proof advances it) |
+| `..._PFTL_CHAIN_ID_HASH` | keccak256 of the PFTL chain id string |
+| `..._GENESIS_HASH_COMMITMENT` | keccak256 of the 48-byte genesis hash |
+| `..._ROUTE_PROFILE_HASH_COMMITMENT`, `..._ROUTE_EPOCH`, `..._ASSET_ID_COMMITMENT` | the route profile hash, route epoch and asset id commitment of the genesis plan |
+
+On a `VerifierAnchorMismatch`, never copy the error's actual values into the
+environment: re-pin all three checkpoint values together from the operator's
+own node, then rerun. If the rerun fails identically, the verifier's stored
+anchor is behind the chain (its storage advances only when a checkpoint proof
+is relayed): advance it with a checkpoint proof or deploy a new verifier; do
+not deploy the lock, and never pin the verifier's own values. Any other mismatch means the verifier was built for
+another chain, genesis, route, asset or lock: do not deploy against it.
+
+Not checked by the script, on the operator's checklist against the verifier's
+qualification record: `programVKey()`, `sp1Verifier()`,
+`pftlProtocolVersion()`, `maxProofBytes()` and `maxPublicValuesBytes()`.
+
+`PFT_LOCK_ALLOW_TEST_VERIFIER=1` admits a verifier whose
+code hash is not pinned (`PFT_LOCK_VERIFIER_CODEHASH` and the expected values
+may stay unset; the anchor check and every binding with it are skipped, with a
+printed warning, only for a stand-in answering none of the anchor getters,
+and the record's `finality_verifier_anchor_checked` is then false) and
 `PFT_LOCK_ALLOW_USED_DEPLOYER=1` a used deployer and `PFT_LOCK_ALLOW_TEST_TOKEN=1`
 a token other than the recorded test token; all three are refused on 8453
 (`TestSwitchOnMainnet`) and with `PFT_LOCK_REAL_DEPLOYMENT=1`.
@@ -371,7 +423,9 @@ as the token script's: the recorded test token rebuilt at its address, a dry run
 refusing an unpinned verifier without the switch, the switch with
 `PFT_LOCK_REAL_DEPLOYMENT=1` and another token without
 `PFT_LOCK_ALLOW_TEST_TOKEN`, then a broadcast with the switch and a stand-in
-verifier whose test record holds the five compiler settings and both code hashes.
+verifier without anchor getters (the anchor skip printed) whose test record holds the five compiler settings and both code hashes,
+and a pinned stand-in with every getter: refused for another route epoch, then
+deployed with all bindings matched.
 
 Dry run against a local anvil (no key, no broadcast; the token and a stand-in
 verifier deployed there first, e.g. `forge create` with `--unlocked`):
@@ -426,7 +480,12 @@ explorer showing no transaction is not, alone, proof that none was submitted.
 3. **Mined and successful.** Receipt status 1: copy `tx_hash` and
    `block_number` into the record, compare the lock's code hash on the chain
    (`cast keccak $(cast code <lock> --rpc-url <base-rpc-url>)`) with
-   `deployed_code_keccak256` and the explorer's; only then is the record final.
+   `deployed_code_keccak256`, `computed_vault_runtime_codehash` (computed by
+   the script, not pinned) and the
+   explorer's, and read each verifier getter from the mined chain
+   (`cast call <verifier> "latestCheckpointCommitment()(bytes32)" --rpc-url <base-rpc-url>`,
+   likewise every getter in the table above and `vaultRuntimeCodeHash()`)
+   against the record's `expected_*` values; only then is the record final.
 4. **Mined and reverted.** Receipt status 0: the nonce is consumed and no
    lock exists. Archive the record under a `failed-<tx hash>` name with the
    receipt (`cast receipt <tx hash> --json`) beside it; any retry uses a fresh
@@ -436,7 +495,10 @@ The Base mainnet run additionally needs:
 
 - [ ] the real PFTL finality verifier deployed and qualified on Base, its
       address and runtime code hash pinned in `PFT_LOCK_VERIFIER` and
-      `PFT_LOCK_VERIFIER_CODEHASH` (no test switch);
+      `PFT_LOCK_VERIFIER_CODEHASH` (no test switch), the current finalized
+      checkpoint and the genesis plan's chain, genesis, route and asset values
+      pinned in the eight `PFT_LOCK_VERIFIER_EXPECTED_*` values, and its
+      `vaultRuntimeCodeHash()` computed for this lock and cap;
 - [ ] the independent audit of the exact commit (design note, section 8);
 - [ ] `maxLockAmount` as the genesis plan fixes it (section 5.1);
 - [ ] the mainnet PFTToken and its code hash, a fresh deployer on a hardware
