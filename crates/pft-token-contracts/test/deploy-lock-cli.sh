@@ -201,7 +201,7 @@ grep -q "verifier vault runtime code hash $VAULT" <<<"$out" && ! grep -q "WARNIN
 LOCK="$(field lock)"
 # The post-receipt check: the getters and the lock's code hash read from the mined chain against the record.
 [ "$(field finality_verifier_anchor_checked)" = true ] && [ "$(codehash "$LOCK")" = "$VAULT" ] \
-  && [ "$(c call "$ANCHORED" "vaultRuntimeCodeHash()(bytes32)")" = "$(field expected_vault_runtime_codehash)" ] \
+  && [ "$(c call "$ANCHORED" "vaultRuntimeCodeHash()(bytes32)")" = "$(field computed_vault_runtime_codehash)" ] \
   && [ "$(c call "$ANCHORED" "routeEpoch()(uint64)")" = "$(field expected_route_epoch)" ] \
   && [ "$(c call "$ANCHORED" "pftlGenesisHashCommitment()(bytes32)")" = "$(field expected_genesis_hash_commitment)" ] \
   || { cat "$RECORD"; echo "FAIL: the mined lock or verifier differs from the record" >&2; exit 1; }

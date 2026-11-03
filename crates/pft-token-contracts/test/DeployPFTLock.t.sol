@@ -13,6 +13,7 @@ interface IDeployLockTestVm {
     function setNonce(address account, uint64 newNonce) external;
     function setNonceUnsafe(address account, uint64 newNonce) external;
     function getNonce(address account) external view returns (uint64);
+    function computeCreateAddress(address deployer, uint256 nonce) external pure returns (address);
     function etch(address target, bytes calldata code) external;
     function setEnv(string calldata name, string calldata value) external;
     function expectRevert(bytes calldata revertData) external;
@@ -176,6 +177,14 @@ contract NotAToken {
 }
 
 /// The broadcaster: a fresh account of its own, as in the token script's tests.
+/// Creates the real verifier from its own nonce, so the test predicts its
+/// address without depending on how forge counts the test contract's nonce.
+contract VerifierDeployer {
+    function deploy(PFTLFinalityVerifierV1.Config memory c) external returns (PFTLFinalityVerifierV1) {
+        return new PFTLFinalityVerifierV1(c);
+    }
+}
+
 contract LockBroadcaster {
     function deploy(DeployPFTLock script, DeployPFTLock.Config memory cfg) external returns (PFTLockV1) {
         return script.deploy(cfg);
@@ -837,11 +846,12 @@ contract DeployPFTLockTest {
 
     /// The probe's selectors against the real PFTLFinalityVerifierV1, then a
     /// deployment bound to it: its address predicted, the lock's runtime code
-    /// hash for that address computed first, as its deployment procedure must.
+    /// hash for that address computed first. A test recipe (vm.etch, a
+    /// dedicated deployer), not the deployment procedure (README).
     function testTheProbeReadsTheRealVerifier() public {
-        address predicted = _createAddress(address(this), uint8(VM.getNonce(address(this))));
+        VerifierDeployer deployer = new VerifierDeployer();
+        address predicted = VM.computeCreateAddress(address(deployer), VM.getNonce(address(deployer)));
         VM.etch(predicted, hex"00"); // the lock's constructor requires code at the verifier
-        VM.prank(address(0xB0B));
         bytes32 lockHash =
             address(new PFTLockV1(address(token), predicted, address(token).codehash, uint64(CAP))).codehash;
         VM.etch(predicted, "");
@@ -863,7 +873,7 @@ contract DeployPFTLockTest {
         c.initialCheckpointCommitment = CHECKPOINT;
         c.initialFinalizedHeight = HEIGHT;
         c.initialCommitteeRootCommitment = COMMITTEE_ROOT;
-        PFTLFinalityVerifierV1 real = new PFTLFinalityVerifierV1(c);
+        PFTLFinalityVerifierV1 real = deployer.deploy(c);
         _assertTrue(address(real) == predicted, "predicted verifier address");
 
         bytes4[12] memory selectors = [
@@ -1325,7 +1335,7 @@ contract DeployPFTLockTest {
         _assertEq(VM.parseJsonUint(json, ".expected_route_epoch"), ROUTE_EPOCH, "record route epoch");
         _assertTrue(VM.parseJsonBytes32(json, ".expected_asset_id_commitment") == ASSET_ID, "record asset id");
         _assertTrue(
-            VM.parseJsonBytes32(json, ".expected_vault_runtime_codehash") == address(lock).codehash,
+            VM.parseJsonBytes32(json, ".computed_vault_runtime_codehash") == address(lock).codehash,
             "record vault runtime code hash"
         );
         _assertEq(VM.parseJsonUint(json, ".max_lock_amount_units"), CAP, "record cap");

@@ -6,6 +6,10 @@ remappings, and with them the pinned A666 public reader build
 (`scripts/check-a666-public-reader-candidates`), stay unchanged. Same solc
 0.8.24 and optimizer settings (`foundry.toml`); CI's `evm-contracts` job runs
 `forge test` here after fetching the OpenZeppelin submodule.
+`include_paths = [".."]` makes the whole `crates/` tree a source search path
+(the lock deployment test imports the real finality verifier), and
+`allow_paths` does not restrict what a test may import; the deployed artifacts
+(`PFTLockV1`, `PFTToken`) are byte-identical with and without it.
 
 ## PFT token (Base)
 
@@ -351,9 +355,15 @@ The lock's runtime code hash before the broadcast: the script creates a probe
 `PFTLockV1` from its own creation code (the artifact-bound code it deploys)
 with the same four constructor arguments, outside the broadcast (forge's
 simulation only, never sent), and takes its `codehash`. The immutables (token,
-verifier, token code hash, cap) are the only part the arguments change, so the
-verifier's deployment must compute the same hash for its own (predicted)
-address and this exact cap, as `testTheProbeReadsTheRealVerifier` does.
+verifier, token code hash, cap) are the only part the arguments change; the
+hash does not depend on the lock's own address. The verifier's deployer
+therefore computes it off-chain before deploying the verifier: the runtime code
+of the same `PFTLockV1` artifact (solc 0.8.24, the same optimizer, EVM and
+metadata settings, the same project-relative source layout) with the four
+constructor arguments (the token, the verifier's predicted address, the token
+code hash and this exact cap). `testTheProbeReadsTheRealVerifier` checks the
+match with a test recipe (`vm.etch` and a dedicated deployer), not the
+deployment procedure.
 
 After construction it re-reads `token()`, `finalityVerifier()`,
 `maxLockAmount()`, `nextNonce() == 0` and `totalLocked() == 0`
@@ -375,7 +385,10 @@ PFTL chain and the genesis plan, never read from the verifier:
 
 On a `VerifierAnchorMismatch`, never copy the error's actual values into the
 environment: re-pin all three checkpoint values together from the operator's
-own node, then rerun. Any other mismatch means the verifier was built for
+own node, then rerun. If the rerun fails identically, the verifier's stored
+anchor is behind the chain (its storage advances only when a checkpoint proof
+is relayed): advance it with a checkpoint proof or deploy a new verifier; do
+not deploy the lock, and never pin the verifier's own values. Any other mismatch means the verifier was built for
 another chain, genesis, route, asset or lock: do not deploy against it.
 
 Not checked by the script, on the operator's checklist against the verifier's
@@ -466,7 +479,8 @@ explorer showing no transaction is not, alone, proof that none was submitted.
 3. **Mined and successful.** Receipt status 1: copy `tx_hash` and
    `block_number` into the record, compare the lock's code hash on the chain
    (`cast keccak $(cast code <lock> --rpc-url <base-rpc-url>)`) with
-   `deployed_code_keccak256`, `expected_vault_runtime_codehash` and the
+   `deployed_code_keccak256`, `computed_vault_runtime_codehash` (computed by
+   the script, not pinned) and the
    explorer's, and read each verifier getter from the mined chain
    (`cast call <verifier> "latestCheckpointCommitment()(bytes32)" --rpc-url <base-rpc-url>`,
    likewise every getter in the table above and `vaultRuntimeCodeHash()`)

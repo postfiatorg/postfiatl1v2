@@ -5,6 +5,9 @@ out = "out"
 cache_path = "cache"
 libs = ["lib"]
 # test/DeployPFTLock.t.sol deploys the real PFTLFinalityVerifierV1 to test the script's probe against it.
+# include_paths makes the whole crates/ tree a source search path; allow_paths
+# does not restrict what a test may import. The deployed artifacts (PFTLockV1,
+# PFTToken) are byte-identical with and without them.
 allow_paths = ["../ethereum-contracts/src"]
 include_paths = [".."]
 remappings = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"]

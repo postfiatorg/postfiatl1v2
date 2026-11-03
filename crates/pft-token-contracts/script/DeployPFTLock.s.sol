@@ -685,7 +685,7 @@ contract DeployPFTLock {
         VM.serializeBytes32(o, "expected_route_profile_hash_commitment", cfg.expectedRouteProfileHashCommitment);
         VM.serializeString(o, "expected_route_epoch", VM.toString(cfg.expectedRouteEpoch));
         VM.serializeBytes32(o, "expected_asset_id_commitment", cfg.expectedAssetIdCommitment);
-        VM.serializeBytes32(o, "expected_vault_runtime_codehash", checked.lockRuntimeCodeHash);
+        VM.serializeBytes32(o, "computed_vault_runtime_codehash", checked.lockRuntimeCodeHash);
     }
 
     /// Refuses an unset, empty, whitespace-only or `replace...` (any casing) value.
