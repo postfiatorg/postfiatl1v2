@@ -47,6 +47,18 @@ interface IPFTTokenProbe {
     function totalSupply() external view returns (uint256);
 }
 
+/// The PFTLFinalityVerifierV1 reads the script makes: its stored trust anchor
+/// (set at construction; every later checkpoint chains from it) and the route
+/// values the lock's releases depend on.
+interface IPFTLVerifierProbe {
+    function latestCheckpointCommitment() external view returns (bytes32);
+    function latestFinalizedHeight() external view returns (uint64);
+    function latestCommitteeRootCommitment() external view returns (bytes32);
+    function token() external view returns (address);
+    function tokenRuntimeCodeHash() external view returns (bytes32);
+    function arbitrumChainId() external view returns (uint64);
+}
+
 /// @notice Foundry deployment script for the Phase 2 lock contract `PFTLockV1` on Base.
 /// @dev The pattern and guards of `script/DeployPFTToken.s.sol`: no forge-std
 ///      dependency, values from the environment (`script/pft-lock.env.example`),
@@ -88,6 +100,12 @@ contract DeployPFTLock {
         bytes32 tokenCodeHash; // PFT_LOCK_TOKEN_CODEHASH: the token's runtime keccak256
         address verifier;
         bytes32 verifierCodeHash; // PFT_LOCK_VERIFIER_CODEHASH; optional only under the test verifier switch
+        // The verifier's stored trust anchor, pinned by the operator from the
+        // chain's finalized checkpoint (PFT_LOCK_VERIFIER_EXPECTED_*); optional
+        // only under the test verifier switch, for a stand-in without anchor getters.
+        bytes32 expectedCheckpointCommitment;
+        uint256 expectedFinalizedHeight;
+        bytes32 expectedCommitteeRootCommitment;
         uint256 maxLockAmount; // six-decimal units, at most type(uint64).max
         uint256 maxLockAmountPft; // whole PFT
         bool allowTestVerifier; // Base Sepolia only: admits a verifier whose code hash is not pinned
@@ -106,6 +124,7 @@ contract DeployPFTLock {
         uint256 tokenSupply;
         bytes32 verifierCodeHash; // the verifier's code hash on chain
         bool verifierPinned; // equals PFT_LOCK_VERIFIER_CODEHASH
+        bool verifierAnchorChecked; // false only for a test stand-in without anchor getters
     }
 
     error PlaceholderValue(string name);
@@ -123,6 +142,9 @@ contract DeployPFTLock {
     error TokenSupplyZero();
     error VerifierNotAContract(address verifier);
     error VerifierCodeHashMismatch(bytes32 expected, bytes32 actual);
+    error VerifierUnreadable(string field);
+    error VerifierAnchorMismatch(string field, bytes32 expected, bytes32 actual);
+    error VerifierBindingMismatch(string field, bytes32 expected, bytes32 actual);
     error MaxLockAmountTooLarge(uint256 units);
     error MaxLockAmountMismatch(uint256 units, uint256 pft);
     error DeployerAlreadyUsed(address deployer, uint256 nonce);
@@ -150,10 +172,12 @@ contract DeployPFTLock {
         cfg.tokenCodeHash = VM.parseBytes32(_required("PFT_LOCK_TOKEN_CODEHASH"));
         cfg.verifier = VM.parseAddress(_required("PFT_LOCK_VERIFIER"));
         cfg.allowTestVerifier = _switch("PFT_LOCK_ALLOW_TEST_VERIFIER");
-        string memory verifierHash = cfg.allowTestVerifier
-            ? VM.envOr("PFT_LOCK_VERIFIER_CODEHASH", string(""))
-            : _required("PFT_LOCK_VERIFIER_CODEHASH");
-        if (!_isPlaceholder(bytes(verifierHash))) cfg.verifierCodeHash = VM.parseBytes32(verifierHash);
+        cfg.verifierCodeHash = bytes32(_verifierValue(cfg, "PFT_LOCK_VERIFIER_CODEHASH", true));
+        cfg.expectedCheckpointCommitment =
+            bytes32(_verifierValue(cfg, "PFT_LOCK_VERIFIER_EXPECTED_CHECKPOINT_COMMITMENT", true));
+        cfg.expectedFinalizedHeight = _verifierValue(cfg, "PFT_LOCK_VERIFIER_EXPECTED_FINALIZED_HEIGHT", false);
+        cfg.expectedCommitteeRootCommitment =
+            bytes32(_verifierValue(cfg, "PFT_LOCK_VERIFIER_EXPECTED_COMMITTEE_ROOT_COMMITMENT", true));
         cfg.maxLockAmount = VM.parseUint(_required("PFT_LOCK_MAX_LOCK_AMOUNT"));
         cfg.maxLockAmountPft = VM.parseUint(_required("PFT_LOCK_MAX_LOCK_AMOUNT_PFT"));
         cfg.allowUsedDeployer = _switch("PFT_LOCK_ALLOW_USED_DEPLOYER");
@@ -175,6 +199,7 @@ contract DeployPFTLock {
         Checked memory checked;
         (checked.tokenDecimals, checked.tokenSupply) = _checkToken(cfg);
         (checked.verifierCodeHash, checked.verifierPinned) = _checkVerifier(cfg);
+        checked.verifierAnchorChecked = _checkVerifierAnchor(cfg);
         _checkCap(cfg);
         uint256 nonce = VM.getNonce(deployer);
         if (nonce != 0 && !cfg.allowUsedDeployer) revert DeployerAlreadyUsed(deployer, nonce);
@@ -195,6 +220,13 @@ contract DeployPFTLock {
         if (!checked.verifierPinned) {
             _log("WARNING: test-only PFT_LOCK_ALLOW_TEST_VERIFIER; the verifier's code hash is not pinned");
         }
+        if (checked.verifierAnchorChecked) {
+            _log("finality verifier checkpoint commitment", VM.toString(cfg.expectedCheckpointCommitment));
+            _log("finality verifier finalized height", cfg.expectedFinalizedHeight);
+            _log("finality verifier committee root commitment", VM.toString(cfg.expectedCommitteeRootCommitment));
+        } else {
+            _log("WARNING: test-only PFT_LOCK_ALLOW_TEST_VERIFIER; the stand-in has no anchor getters, not checked");
+        }
         _log("max lock amount (six-decimal units)", cfg.maxLockAmount);
         _log("max lock amount (whole PFT)", cfg.maxLockAmountPft);
         _log("lock artifact", cfg.artifact);
@@ -212,7 +244,8 @@ contract DeployPFTLock {
         if (cfg.writeRecord) _writeRecord(cfg, lock, deployer, checked, artifact, recordPath);
     }
 
-    /// The deployed lock must hold exactly what was checked, with nothing locked yet.
+    /// The deployed lock must hold exactly what was checked, with nothing locked
+    /// yet, and its verifier still the code and anchor checked before the broadcast.
     function checkLock(Config memory cfg, PFTLockV1 lock) public view {
         address token = lock.token();
         address verifier = lock.finalityVerifier();
@@ -229,6 +262,8 @@ contract DeployPFTLock {
         if (cap != cfg.maxLockAmount) revert LockStateMismatch("max_lock_amount");
         if (nextNonce != 0) revert LockStateMismatch("next_nonce");
         if (totalLocked != 0) revert LockStateMismatch("total_locked");
+        _checkVerifier(cfg);
+        _checkVerifierAnchor(cfg);
     }
 
     function _checkChain(Config memory cfg) private view {
@@ -288,6 +323,57 @@ contract DeployPFTLock {
         codehash = cfg.verifier.codehash;
         pinned = codehash == cfg.verifierCodeHash;
         if (!pinned && !cfg.allowTestVerifier) revert VerifierCodeHashMismatch(cfg.verifierCodeHash, codehash);
+    }
+
+    /// The verifier's stored anchor is the operator's independently pinned
+    /// checkpoint (PFT_LOCK_VERIFIER_EXPECTED_*), and its token, token code hash
+    /// and EVM chain id are the lock's. Skipped (false) only on 84532 under
+    /// PFT_LOCK_ALLOW_TEST_VERIFIER for a stand-in answering none of the anchor getters.
+    function _checkVerifierAnchor(Config memory cfg) private view returns (bool) {
+        (bool hasCheckpoint, bytes32 checkpoint) =
+            _readWord(cfg.verifier, IPFTLVerifierProbe.latestCheckpointCommitment.selector);
+        (bool hasHeight, bytes32 height) = _readWord(cfg.verifier, IPFTLVerifierProbe.latestFinalizedHeight.selector);
+        (bool hasRoot, bytes32 root) =
+            _readWord(cfg.verifier, IPFTLVerifierProbe.latestCommitteeRootCommitment.selector);
+        if (
+            !hasCheckpoint && !hasHeight && !hasRoot && cfg.allowTestVerifier && cfg.chainId == BASE_SEPOLIA
+                && block.chainid == BASE_SEPOLIA
+        ) return false;
+        if (!hasCheckpoint) revert VerifierUnreadable("checkpoint_commitment");
+        if (!hasHeight) revert VerifierUnreadable("finalized_height");
+        if (!hasRoot) revert VerifierUnreadable("committee_root_commitment");
+        if (cfg.expectedCheckpointCommitment == 0) {
+            revert PlaceholderValue("PFT_LOCK_VERIFIER_EXPECTED_CHECKPOINT_COMMITMENT");
+        }
+        if (cfg.expectedFinalizedHeight == 0) revert PlaceholderValue("PFT_LOCK_VERIFIER_EXPECTED_FINALIZED_HEIGHT");
+        if (cfg.expectedCommitteeRootCommitment == 0) {
+            revert PlaceholderValue("PFT_LOCK_VERIFIER_EXPECTED_COMMITTEE_ROOT_COMMITMENT");
+        }
+        _requireAnchor("checkpoint_commitment", cfg.expectedCheckpointCommitment, checkpoint);
+        _requireAnchor("finalized_height", bytes32(cfg.expectedFinalizedHeight), height);
+        _requireAnchor("committee_root_commitment", cfg.expectedCommitteeRootCommitment, root);
+        _requireBinding(cfg, "token", bytes32(uint256(uint160(cfg.token))), IPFTLVerifierProbe.token.selector);
+        _requireBinding(cfg, "token_code_hash", cfg.tokenCodeHash, IPFTLVerifierProbe.tokenRuntimeCodeHash.selector);
+        _requireBinding(cfg, "chain_id", bytes32(block.chainid), IPFTLVerifierProbe.arbitrumChainId.selector);
+        return true;
+    }
+
+    function _requireAnchor(string memory field, bytes32 expected, bytes32 actual) private pure {
+        if (actual != expected) revert VerifierAnchorMismatch(field, expected, actual);
+    }
+
+    function _requireBinding(Config memory cfg, string memory field, bytes32 expected, bytes4 selector) private view {
+        (bool ok, bytes32 actual) = _readWord(cfg.verifier, selector);
+        if (!ok) revert VerifierUnreadable(field);
+        if (actual != expected) revert VerifierBindingMismatch(field, expected, actual);
+    }
+
+    /// A staticcall returning one word; false if it reverts or returns another length.
+    function _readWord(address target, bytes4 selector) private view returns (bool ok, bytes32 word) {
+        bytes memory data;
+        (ok, data) = target.staticcall(abi.encodeWithSelector(selector));
+        ok = ok && data.length == 32;
+        if (ok) word = abi.decode(data, (bytes32));
     }
 
     function _checkCap(Config memory cfg) private pure {
@@ -458,6 +544,14 @@ contract DeployPFTLock {
     function _required(string memory name) private view returns (string memory value) {
         value = VM.envString(name);
         if (_isPlaceholder(bytes(value))) revert PlaceholderValue(name);
+    }
+
+    /// A verifier value: required, except under the test verifier switch, where
+    /// a placeholder leaves it zero. A 32-byte hash when `isHash`, else a number.
+    function _verifierValue(Config memory cfg, string memory name, bool isHash) private view returns (uint256) {
+        string memory value = cfg.allowTestVerifier ? VM.envOr(name, string("")) : _required(name);
+        if (_isPlaceholder(bytes(value))) return 0;
+        return isHash ? uint256(VM.parseBytes32(value)) : VM.parseUint(value);
     }
 
     /// A test-only switch is on only when set to exactly "1".

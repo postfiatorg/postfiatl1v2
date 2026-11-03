@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import {PFTToken} from "../src/PFTToken.sol";
 import {PFTLockV1, IPFTLockV1} from "../src/PFTLockV1.sol";
-import {DeployPFTLock} from "../script/DeployPFTLock.s.sol";
+import {DeployPFTLock, IPFTLVerifierProbe} from "../script/DeployPFTLock.s.sol";
 
 interface IDeployLockTestVm {
     function chainId(uint256 newChainId) external;
@@ -48,6 +48,73 @@ contract MockLockVerifier {
         returns (address, uint256, bytes32, bytes32, bytes32)
     {
         revert NotDeployed();
+    }
+}
+
+/// A stand-in with the anchor and route getters of PFTLFinalityVerifierV1.
+/// Its chain id is the current one unless set. Once `watch` has code (the lock
+/// deployed), the checkpoint reads as `swapped`.
+contract AnchoredLockVerifier {
+    bytes32 private checkpoint;
+    uint64 public latestFinalizedHeight;
+    bytes32 public latestCommitteeRootCommitment;
+    address public token;
+    bytes32 public tokenRuntimeCodeHash;
+    uint64 private chainId;
+    address private watch;
+    bytes32 private swapped;
+
+    constructor(address token_) {
+        token = token_;
+        tokenRuntimeCodeHash = token_.codehash;
+    }
+
+    function setAnchor(bytes32 checkpoint_, uint64 height, bytes32 committeeRoot) external {
+        checkpoint = checkpoint_;
+        latestFinalizedHeight = height;
+        latestCommitteeRootCommitment = committeeRoot;
+    }
+
+    function setRoute(address token_, bytes32 tokenHash, uint64 chainId_) external {
+        token = token_;
+        tokenRuntimeCodeHash = tokenHash;
+        chainId = chainId_;
+    }
+
+    function arbitrumChainId() external view returns (uint64) {
+        return chainId == 0 ? uint64(block.chainid) : chainId;
+    }
+
+    function swapOnceDeployed(address watch_, bytes32 swapped_) external {
+        watch = watch_;
+        swapped = swapped_;
+    }
+
+    function latestCheckpointCommitment() external view returns (bytes32) {
+        return watch != address(0) && watch.code.length != 0 ? swapped : checkpoint;
+    }
+
+    function verifyAndConsume(bytes calldata, bytes calldata)
+        external
+        pure
+        returns (address, uint256, bytes32, bytes32, bytes32)
+    {
+        revert MockLockVerifier.NotDeployed();
+    }
+}
+
+/// Answers exactly the getters it is given, each with one word.
+contract ScriptedVerifier {
+    mapping(bytes4 => bytes32) private answers;
+
+    function answer(bytes4 selector, bytes32 word) external {
+        answers[selector] = word;
+    }
+
+    fallback(bytes calldata data) external returns (bytes memory) {
+        bytes32 word = answers[bytes4(data)];
+        if (word == 0) revert();
+        return abi.encode(word);
     }
 }
 
@@ -103,11 +170,14 @@ contract DeployPFTLockTest {
     /// The one-time deployer of the Base Sepolia test token (nonce 0 then), from its record.
     address private constant TEST_TOKEN_DEPLOYER = 0xDEe78dB2bC6f5EFCcAB7A046997E5c413C26316D;
     address private constant TEST_TOKEN_TREASURY = 0x7424F4F4A620d37CFB54A4558a1Ec7f60b71A0CB;
+    bytes32 private constant CHECKPOINT = keccak256("finalized checkpoint");
+    uint64 private constant HEIGHT = 4_200;
+    bytes32 private constant COMMITTEE_ROOT = keccak256("committee root");
 
     DeployPFTLock private script;
     LockBroadcaster private broadcaster;
     PFTToken private token;
-    MockLockVerifier private verifier;
+    AnchoredLockVerifier private verifier;
     /// The output directory whose PFTLockV1 artifact is this build's lock contract.
     string private outDir = "out";
 
@@ -116,7 +186,8 @@ contract DeployPFTLockTest {
         script = new DeployPFTLock();
         broadcaster = new LockBroadcaster();
         token = new PFTToken("Post Fiat Token", "PFT", SUPPLY, TREASURY);
-        verifier = new MockLockVerifier();
+        verifier = new AnchoredLockVerifier(address(token));
+        verifier.setAnchor(CHECKPOINT, HEIGHT, COMMITTEE_ROOT);
         VM.setNonceUnsafe(address(broadcaster), 0);
         if (VM.isContext(COVERAGE)) outDir = _coverageOutDir();
     }
@@ -179,6 +250,7 @@ contract DeployPFTLockTest {
         DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
         cfg.token = address(testToken);
         cfg.tokenCodeHash = address(testToken).codehash;
+        verifier.setRoute(address(testToken), address(testToken).codehash, 0);
         cfg.allowTestVerifier = true;
         // The recorded token needs no switch; `forge coverage`'s build has another code hash.
         cfg.allowTestToken = VM.isContext(COVERAGE);
@@ -193,6 +265,9 @@ contract DeployPFTLockTest {
         VM.setEnv("PFT_LOCK_TOKEN_CODEHASH", VM.toString(address(token).codehash));
         VM.setEnv("PFT_LOCK_VERIFIER", VM.toString(address(verifier)));
         VM.setEnv("PFT_LOCK_VERIFIER_CODEHASH", VM.toString(address(verifier).codehash));
+        VM.setEnv("PFT_LOCK_VERIFIER_EXPECTED_CHECKPOINT_COMMITMENT", VM.toString(CHECKPOINT));
+        VM.setEnv("PFT_LOCK_VERIFIER_EXPECTED_FINALIZED_HEIGHT", "4200");
+        VM.setEnv("PFT_LOCK_VERIFIER_EXPECTED_COMMITTEE_ROOT_COMMITMENT", VM.toString(COMMITTEE_ROOT));
         VM.setEnv("PFT_LOCK_MAX_LOCK_AMOUNT", "2000000000000000");
         VM.setEnv("PFT_LOCK_MAX_LOCK_AMOUNT_PFT", "2000000000");
         VM.setEnv("PFT_LOCK_ALLOW_TEST_VERIFIER", "");
@@ -206,6 +281,9 @@ contract DeployPFTLockTest {
         _assertTrue(cfg.token == address(token) && cfg.tokenCodeHash == address(token).codehash, "token");
         _assertTrue(cfg.verifier == address(verifier), "verifier");
         _assertTrue(cfg.verifierCodeHash == address(verifier).codehash, "verifier code hash");
+        _assertTrue(cfg.expectedCheckpointCommitment == CHECKPOINT, "expected checkpoint");
+        _assertEq(cfg.expectedFinalizedHeight, HEIGHT, "expected height");
+        _assertTrue(cfg.expectedCommitteeRootCommitment == COMMITTEE_ROOT, "expected committee root");
         _assertEq(cfg.maxLockAmount, CAP, "cap");
         _assertEq(cfg.maxLockAmountPft, CAP_PFT, "cap in PFT");
         _assertTrue(
@@ -246,7 +324,12 @@ contract DeployPFTLockTest {
         _assertTrue(cfg.allowTestVerifier && cfg.allowUsedDeployer, "switches on");
         _assertTrue(cfg.verifierCodeHash == address(verifier).codehash, "pinned hash still read");
         VM.setEnv("PFT_LOCK_VERIFIER_CODEHASH", "0xreplace_with_the_verifier_runtime_codehash");
-        _assertTrue(script.readConfig().verifierCodeHash == 0, "placeholder hash unset under the switch");
+        VM.setEnv("PFT_LOCK_VERIFIER_EXPECTED_FINALIZED_HEIGHT", "replace_with_the_height");
+        cfg = script.readConfig();
+        _assertTrue(cfg.verifierCodeHash == 0, "placeholder hash unset under the switch");
+        _assertEq(cfg.expectedFinalizedHeight, 0, "placeholder height unset under the switch");
+        _assertTrue(cfg.expectedCheckpointCommitment == CHECKPOINT, "expected checkpoint still read");
+        VM.setEnv("PFT_LOCK_VERIFIER_EXPECTED_FINALIZED_HEIGHT", "4200");
         VM.expectRevert(
             abi.encodeWithSelector(DeployPFTLock.RealDeploymentWithTestSwitch.selector, "PFT_LOCK_ALLOW_TEST_VERIFIER")
         );
@@ -258,11 +341,14 @@ contract DeployPFTLockTest {
         broadcaster.run(script);
         VM.setEnv("PFT_LOCK_VERIFIER_CODEHASH", VM.toString(address(verifier).codehash));
 
-        string[6] memory names = [
+        string[9] memory names = [
             "PFT_LOCK_CHAIN_ID",
             "PFT_LOCK_TOKEN",
             "PFT_LOCK_TOKEN_CODEHASH",
             "PFT_LOCK_VERIFIER",
+            "PFT_LOCK_VERIFIER_EXPECTED_CHECKPOINT_COMMITMENT",
+            "PFT_LOCK_VERIFIER_EXPECTED_FINALIZED_HEIGHT",
+            "PFT_LOCK_VERIFIER_EXPECTED_COMMITTEE_ROOT_COMMITMENT",
             "PFT_LOCK_MAX_LOCK_AMOUNT",
             "PFT_LOCK_MAX_LOCK_AMOUNT_PFT"
         ];
@@ -447,6 +533,142 @@ contract DeployPFTLockTest {
     }
 
     // ------------------------------------------------------------------- cap
+
+    // ------------------------------------------------------- verifier anchor
+
+    function testRefusesAVerifierWithAnotherCheckpointCommitment() public {
+        verifier.setAnchor(keccak256("another chain's checkpoint"), HEIGHT, COMMITTEE_ROOT);
+        _expectAnchor("checkpoint_commitment", CHECKPOINT, keccak256("another chain's checkpoint"));
+        broadcaster.deploy(script, _config(BASE_SEPOLIA));
+    }
+
+    function testRefusesAVerifierWithAnotherFinalizedHeight() public {
+        verifier.setAnchor(CHECKPOINT, HEIGHT - 1, COMMITTEE_ROOT);
+        _expectAnchor("finalized_height", bytes32(uint256(HEIGHT)), bytes32(uint256(HEIGHT - 1)));
+        broadcaster.deploy(script, _config(BASE_SEPOLIA));
+    }
+
+    function testRefusesAVerifierWithAnotherCommitteeRoot() public {
+        verifier.setAnchor(CHECKPOINT, HEIGHT, keccak256("chosen committee"));
+        _expectAnchor("committee_root_commitment", COMMITTEE_ROOT, keccak256("chosen committee"));
+        broadcaster.deploy(script, _config(BASE_SEPOLIA));
+    }
+
+    function testRefusesAVerifierWhoseAnchorChangesAfterThePreCheck() public {
+        // The lock is the broadcaster's first creation; once it has code the
+        // verifier's anchor reads differently: only the post-deployment check sees it.
+        address lock = _createAddress(address(broadcaster), 0);
+        verifier.swapOnceDeployed(lock, keccak256("swapped"));
+        _expectAnchor("checkpoint_commitment", CHECKPOINT, keccak256("swapped"));
+        broadcaster.deploy(script, _config(BASE_SEPOLIA));
+        VM.chainId(BASE);
+        verifier.setRoute(address(token), address(token).codehash, uint64(BASE));
+        _expectAnchor("checkpoint_commitment", CHECKPOINT, keccak256("swapped"));
+        broadcaster.deploy(script, _config(BASE));
+    }
+
+    function testDeploysWhenTheVerifierAnchorMatches() public {
+        PFTLockV1 lock = broadcaster.deploy(script, _config(BASE_SEPOLIA));
+        _checkLock(lock);
+        script.checkLock(_config(BASE_SEPOLIA), lock);
+    }
+
+    function testRefusesAnUnsetExpectedAnchor() public {
+        DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
+        cfg.expectedCheckpointCommitment = 0;
+        VM.expectRevert(_placeholder("PFT_LOCK_VERIFIER_EXPECTED_CHECKPOINT_COMMITMENT"));
+        broadcaster.deploy(script, cfg);
+        cfg = _config(BASE_SEPOLIA);
+        cfg.expectedFinalizedHeight = 0;
+        cfg.allowTestVerifier = true; // a verifier with anchor getters is checked under the switch
+        VM.expectRevert(_placeholder("PFT_LOCK_VERIFIER_EXPECTED_FINALIZED_HEIGHT"));
+        broadcaster.deploy(script, cfg);
+        cfg = _config(BASE_SEPOLIA);
+        cfg.expectedCommitteeRootCommitment = 0;
+        VM.expectRevert(_placeholder("PFT_LOCK_VERIFIER_EXPECTED_COMMITTEE_ROOT_COMMITMENT"));
+        broadcaster.deploy(script, cfg);
+    }
+
+    function testRefusesAVerifierBoundToAnotherRoute() public {
+        address other = address(new MockLockToken(6, SUPPLY));
+        verifier.setRoute(other, address(token).codehash, uint64(BASE_SEPOLIA));
+        VM.expectRevert(
+            abi.encodeWithSelector(
+                DeployPFTLock.VerifierBindingMismatch.selector,
+                "token",
+                bytes32(uint256(uint160(address(token)))),
+                bytes32(uint256(uint160(other)))
+            )
+        );
+        broadcaster.deploy(script, _config(BASE_SEPOLIA));
+        verifier.setRoute(address(token), other.codehash, uint64(BASE_SEPOLIA));
+        VM.expectRevert(
+            abi.encodeWithSelector(
+                DeployPFTLock.VerifierBindingMismatch.selector,
+                "token_code_hash",
+                address(token).codehash,
+                other.codehash
+            )
+        );
+        broadcaster.deploy(script, _config(BASE_SEPOLIA));
+        verifier.setRoute(address(token), address(token).codehash, uint64(BASE));
+        VM.expectRevert(
+            abi.encodeWithSelector(
+                DeployPFTLock.VerifierBindingMismatch.selector,
+                "chain_id",
+                bytes32(uint256(BASE_SEPOLIA)),
+                bytes32(uint256(BASE))
+            )
+        );
+        broadcaster.deploy(script, _config(BASE_SEPOLIA));
+    }
+
+    function testTheTestSwitchSkipsTheAnchorOnlyForAStandInWithoutGetters() public {
+        MockLockVerifier standIn = new MockLockVerifier();
+        DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
+        cfg.verifier = address(standIn);
+        cfg.verifierCodeHash = address(standIn).codehash;
+        // Pinned but without the switch: the anchor must be readable.
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.VerifierUnreadable.selector, "checkpoint_commitment"));
+        broadcaster.deploy(script, cfg);
+        // The switch on 84532 skips it (and prints the skip), with or without expected values.
+        cfg.allowTestVerifier = true;
+        cfg.expectedCheckpointCommitment = 0;
+        PFTLockV1 lock = broadcaster.deploy(script, cfg);
+        _assertTrue(lock.finalityVerifier() == address(standIn), "stand-in verifier");
+        // A verifier answering only part of the anchor or none of the route is refused under the switch.
+        ScriptedVerifier scripted = new ScriptedVerifier();
+        cfg = _config(BASE_SEPOLIA);
+        cfg.allowTestVerifier = true;
+        cfg.verifier = address(scripted);
+        scripted.answer(IPFTLVerifierProbe.latestCheckpointCommitment.selector, CHECKPOINT);
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.VerifierUnreadable.selector, "finalized_height"));
+        broadcaster.deploy(script, cfg);
+        scripted.answer(IPFTLVerifierProbe.latestFinalizedHeight.selector, bytes32(uint256(HEIGHT)));
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.VerifierUnreadable.selector, "committee_root_commitment"));
+        broadcaster.deploy(script, cfg);
+        scripted.answer(IPFTLVerifierProbe.latestCommitteeRootCommitment.selector, COMMITTEE_ROOT);
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.VerifierUnreadable.selector, "token"));
+        broadcaster.deploy(script, cfg);
+        // A verifier with getters is checked under the switch.
+        verifier.setAnchor(keccak256("stale"), HEIGHT, COMMITTEE_ROOT);
+        cfg = _config(BASE_SEPOLIA);
+        cfg.allowTestVerifier = true;
+        _expectAnchor("checkpoint_commitment", CHECKPOINT, keccak256("stale"));
+        broadcaster.deploy(script, cfg);
+        // 8453: the stand-in is refused, pinned or not, and the switch is refused.
+        VM.chainId(BASE);
+        cfg = _config(BASE);
+        cfg.verifier = address(standIn);
+        cfg.verifierCodeHash = address(standIn).codehash;
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.VerifierUnreadable.selector, "checkpoint_commitment"));
+        broadcaster.deploy(script, cfg);
+        cfg.allowTestVerifier = true;
+        VM.expectRevert(
+            abi.encodeWithSelector(DeployPFTLock.TestSwitchOnMainnet.selector, "PFT_LOCK_ALLOW_TEST_VERIFIER")
+        );
+        broadcaster.deploy(script, cfg);
+    }
 
     function testRefusesACapPairMismatch() public {
         DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
@@ -741,6 +963,9 @@ contract DeployPFTLockTest {
         cfg.tokenCodeHash = address(token).codehash;
         cfg.verifier = address(verifier);
         cfg.verifierCodeHash = address(verifier).codehash;
+        cfg.expectedCheckpointCommitment = CHECKPOINT;
+        cfg.expectedFinalizedHeight = HEIGHT;
+        cfg.expectedCommitteeRootCommitment = COMMITTEE_ROOT;
         cfg.maxLockAmount = CAP;
         cfg.maxLockAmountPft = CAP_PFT;
         cfg.artifact = _artifact();
@@ -759,6 +984,9 @@ contract DeployPFTLockTest {
         if (_eq(name, "PFT_LOCK_TOKEN")) return VM.toString(address(token));
         if (_eq(name, "PFT_LOCK_TOKEN_CODEHASH")) return VM.toString(address(token).codehash);
         if (_eq(name, "PFT_LOCK_VERIFIER")) return VM.toString(address(verifier));
+        if (_eq(name, "PFT_LOCK_VERIFIER_EXPECTED_CHECKPOINT_COMMITMENT")) return VM.toString(CHECKPOINT);
+        if (_eq(name, "PFT_LOCK_VERIFIER_EXPECTED_FINALIZED_HEIGHT")) return "4200";
+        if (_eq(name, "PFT_LOCK_VERIFIER_EXPECTED_COMMITTEE_ROOT_COMMITMENT")) return VM.toString(COMMITTEE_ROOT);
         if (_eq(name, "PFT_LOCK_MAX_LOCK_AMOUNT")) return "2000000000000000";
         return "2000000000";
     }
@@ -839,6 +1067,16 @@ contract DeployPFTLockTest {
 
     function _artifact() private view returns (string memory) {
         return string.concat(outDir, "/PFTLockV1.sol/PFTLockV1.json");
+    }
+
+    function _expectAnchor(string memory field, bytes32 expected, bytes32 actual) private {
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.VerifierAnchorMismatch.selector, field, expected, actual));
+    }
+
+    /// The CREATE address of `deployer` at `nonce` (< 0x80).
+    function _createAddress(address deployer, uint8 nonce) private pure returns (address) {
+        bytes memory n = nonce == 0 ? bytes(hex"80") : abi.encodePacked(bytes1(nonce));
+        return address(uint160(uint256(keccak256(abi.encodePacked(hex"d694", deployer, n)))));
     }
 
     function _placeholder(string memory name) private pure returns (bytes memory) {

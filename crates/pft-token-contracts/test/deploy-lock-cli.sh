@@ -96,6 +96,8 @@ run_lock() {
   env -i PATH="$SAFE_PATH" HOME="$TMP_HOME" FOUNDRY_OFFLINE=true \
     PFT_LOCK_CHAIN_ID=84532 PFT_LOCK_TOKEN="$TEST_TOKEN" PFT_LOCK_TOKEN_CODEHASH="$TEST_TOKEN_HASH" \
     PFT_LOCK_VERIFIER="$VERIFIER" PFT_LOCK_VERIFIER_CODEHASH="$UNPINNED" \
+    PFT_LOCK_VERIFIER_EXPECTED_CHECKPOINT_COMMITMENT="$UNPINNED" PFT_LOCK_VERIFIER_EXPECTED_FINALIZED_HEIGHT=1 \
+    PFT_LOCK_VERIFIER_EXPECTED_COMMITTEE_ROOT_COMMITMENT="$UNPINNED" \
     PFT_LOCK_MAX_LOCK_AMOUNT=2000000000000000 PFT_LOCK_MAX_LOCK_AMOUNT_PFT=2000000000 "$@" \
     "$FORGE" script script/DeployPFTLock.s.sol:DeployPFTLock --rpc-url "$RPC" --sender "$DEPLOYER" --unlocked \
     --use "$SOLC" ${FORGE_ARGS[@]+"${FORGE_ARGS[@]}"} 2>&1 | redact
@@ -133,7 +135,9 @@ out="$(run_lock PFT_LOCK_ALLOW_TEST_VERIFIER=1)" \
   || { printf '%s\n' "$out"; echo "FAIL: the broadcast with the switch and a stand-in verifier" >&2; exit 1; }
 grep -q "WARNING: test-only PFT_LOCK_ALLOW_TEST_VERIFIER" <<<"$out" && [ -f "$RECORD" ] \
   || { printf '%s\n' "$out"; echo "FAIL: no test record" >&2; exit 1; }
-echo "ok: broadcast with PFT_LOCK_ALLOW_TEST_VERIFIER and a stand-in verifier deploys and writes the test record"
+grep -q "the stand-in has no anchor getters, not checked" <<<"$out" \
+  || { printf '%s\n' "$out"; echo "FAIL: the anchor skip was not printed" >&2; exit 1; }
+echo "ok: broadcast with PFT_LOCK_ALLOW_TEST_VERIFIER and a stand-in verifier deploys, prints the anchor skip and writes the test record"
 
 field() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1]))[sys.argv[2]]; print(str(v).lower() if isinstance(v,bool) else v)' "$RECORD" "$1"; }
 LOCK="$(field lock)"
