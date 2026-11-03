@@ -4,6 +4,9 @@ test = "test"
 out = "out"
 cache_path = "cache"
 libs = ["lib"]
+# test/DeployPFTLock.t.sol deploys the real PFTLFinalityVerifierV1 to test the script's probe against it.
+allow_paths = ["../ethereum-contracts/src"]
+include_paths = [".."]
 remappings = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"]
 solc_version = "0.8.24"
 optimizer = true

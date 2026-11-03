@@ -97,7 +97,9 @@ run_lock() {
     PFT_LOCK_CHAIN_ID=84532 PFT_LOCK_TOKEN="$TEST_TOKEN" PFT_LOCK_TOKEN_CODEHASH="$TEST_TOKEN_HASH" \
     PFT_LOCK_VERIFIER="$VERIFIER" PFT_LOCK_VERIFIER_CODEHASH="$UNPINNED" \
     PFT_LOCK_VERIFIER_EXPECTED_CHECKPOINT_COMMITMENT="$UNPINNED" PFT_LOCK_VERIFIER_EXPECTED_FINALIZED_HEIGHT=1 \
-    PFT_LOCK_VERIFIER_EXPECTED_COMMITTEE_ROOT_COMMITMENT="$UNPINNED" \
+    PFT_LOCK_VERIFIER_EXPECTED_COMMITTEE_ROOT_COMMITMENT="$UNPINNED" PFT_LOCK_VERIFIER_EXPECTED_PFTL_CHAIN_ID_HASH="$UNPINNED" \
+    PFT_LOCK_VERIFIER_EXPECTED_GENESIS_HASH_COMMITMENT="$UNPINNED" PFT_LOCK_VERIFIER_EXPECTED_ROUTE_EPOCH=1 \
+    PFT_LOCK_VERIFIER_EXPECTED_ROUTE_PROFILE_HASH_COMMITMENT="$UNPINNED" PFT_LOCK_VERIFIER_EXPECTED_ASSET_ID_COMMITMENT="$UNPINNED" \
     PFT_LOCK_MAX_LOCK_AMOUNT=2000000000000000 PFT_LOCK_MAX_LOCK_AMOUNT_PFT=2000000000 "$@" \
     "$FORGE" script script/DeployPFTLock.s.sol:DeployPFTLock --rpc-url "$RPC" --sender "$DEPLOYER" --unlocked \
     --use "$SOLC" ${FORGE_ARGS[@]+"${FORGE_ARGS[@]}"} 2>&1 | redact
@@ -135,7 +137,7 @@ out="$(run_lock PFT_LOCK_ALLOW_TEST_VERIFIER=1)" \
   || { printf '%s\n' "$out"; echo "FAIL: the broadcast with the switch and a stand-in verifier" >&2; exit 1; }
 grep -q "WARNING: test-only PFT_LOCK_ALLOW_TEST_VERIFIER" <<<"$out" && [ -f "$RECORD" ] \
   || { printf '%s\n' "$out"; echo "FAIL: no test record" >&2; exit 1; }
-grep -q "the stand-in has no anchor getters, not checked" <<<"$out" \
+grep -q "the stand-in has no anchor getters: its anchor, route, PFTL chain, genesis, asset and vault bindings are not checked" <<<"$out" \
   || { printf '%s\n' "$out"; echo "FAIL: the anchor skip was not printed" >&2; exit 1; }
 echo "ok: broadcast with PFT_LOCK_ALLOW_TEST_VERIFIER and a stand-in verifier deploys, prints the anchor skip and writes the test record"
 
@@ -149,3 +151,58 @@ RUNTIME_HASH="$(env -i PATH="$SAFE_PATH" HOME="$TMP_HOME" "$CAST" keccak "$(arti
   && [ "$(field deployed_code_keccak256)" = "$(codehash "$LOCK")" ] \
   || { cat "$RECORD"; echo "FAIL: the record's compiler settings or code hashes" >&2; exit 1; }
 echo "ok: record holds solc 0.8.24, optimizer true, 200 runs, cancun, ipfs and both code hashes"
+
+# A pinned stand-in with every getter of PFTLFinalityVerifierV1 (the tests'
+# AnchoredLockVerifier), its vaultRuntimeCodeHash() set to a probe lock's code
+# hash for this token, this stand-in and this cap; no test switch.
+create_init() {
+  env -i PATH="$SAFE_PATH" HOME="$TMP_HOME" "$CAST" send --rpc-url "$RPC" --unlocked --from "$1" --json --create "$2" \
+    | sed -E 's/.*"contractAddress":"(0x[0-9a-fA-F]{40})".*/\1/'
+}
+send() { env -i PATH="$SAFE_PATH" HOME="$TMP_HOME" "$CAST" send --rpc-url "$RPC" --unlocked --from "$OWNER" "$@" >/dev/null; }
+enc() { env -i PATH="$SAFE_PATH" HOME="$TMP_HOME" "$CAST" abi-encode "$@"; }
+OWNER=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+CAP=2000000000000000
+CP=0x1111111111111111111111111111111111111111111111111111111111111111
+ROOT=0x2222222222222222222222222222222222222222222222222222222222222222
+CHAIN_HASH=0x3333333333333333333333333333333333333333333333333333333333333333
+GENESIS=0x4444444444444444444444444444444444444444444444444444444444444444
+ROUTE=0x5555555555555555555555555555555555555555555555555555555555555555
+ASSET=0x6666666666666666666666666666666666666666666666666666666666666666
+args="$(enc "constructor(address)" "$TEST_TOKEN")"
+ANCHORED="$(create_init "$OWNER" "$(artifact out/DeployPFTLock.t.sol/AnchoredLockVerifier.json bytecode)${args#0x}")"
+send "$ANCHORED" "setAnchor(bytes32,uint64,bytes32)" "$CP" 4200 "$ROOT"
+send "$ANCHORED" "setPftl(bytes32,bytes32,bytes32,uint64,bytes32)" "$CHAIN_HASH" "$GENESIS" "$ROUTE" 7 "$ASSET"
+args="$(enc "constructor(address,address,bytes32,uint64)" "$TEST_TOKEN" "$ANCHORED" "$TEST_TOKEN_HASH" "$CAP")"
+PROBE="$(create_init "$OWNER" "$(artifact out/PFTLockV1.sol/PFTLockV1.json bytecode)${args#0x}")"
+VAULT="$(codehash "$PROBE")"
+send "$ANCHORED" "setVault(bytes32)" "$VAULT"
+DEPLOYER=0x90F79bf6EB2c4f870365E785982E1f101E93b906 # anvil's fourth dev account, at nonce 0
+anchored() {
+  run_lock PFT_LOCK_VERIFIER="$ANCHORED" PFT_LOCK_VERIFIER_CODEHASH="$(codehash "$ANCHORED")" \
+    PFT_LOCK_VERIFIER_EXPECTED_CHECKPOINT_COMMITMENT="$CP" PFT_LOCK_VERIFIER_EXPECTED_FINALIZED_HEIGHT=4200 \
+    PFT_LOCK_VERIFIER_EXPECTED_COMMITTEE_ROOT_COMMITMENT="$ROOT" PFT_LOCK_VERIFIER_EXPECTED_PFTL_CHAIN_ID_HASH="$CHAIN_HASH" \
+    PFT_LOCK_VERIFIER_EXPECTED_GENESIS_HASH_COMMITMENT="$GENESIS" \
+    PFT_LOCK_VERIFIER_EXPECTED_ROUTE_PROFILE_HASH_COMMITMENT="$ROUTE" PFT_LOCK_VERIFIER_EXPECTED_ROUTE_EPOCH=7 \
+    PFT_LOCK_VERIFIER_EXPECTED_ASSET_ID_COMMITMENT="$ASSET" "$@"
+}
+FORGE_ARGS=()
+if out="$(anchored PFT_LOCK_VERIFIER_EXPECTED_ROUTE_EPOCH=8)"; then
+  printf '%s\n' "$out"; echo "FAIL: the dry run accepted a verifier of another route epoch" >&2; exit 1
+fi
+grep -q 'VerifierBindingMismatch("route_epoch"' <<<"$out" || { printf '%s\n' "$out"; exit 1; }
+echo "ok: dry run refuses an anchored verifier of another route epoch"
+
+rm -f "$RECORD"
+FORGE_ARGS=(--broadcast)
+out="$(anchored)" || { printf '%s\n' "$out"; echo "FAIL: the broadcast against the anchored verifier" >&2; exit 1; }
+grep -q "verifier vault runtime code hash $VAULT" <<<"$out" && ! grep -q "WARNING" <<<"$out" \
+  || { printf '%s\n' "$out"; echo "FAIL: the bindings were not logged as read" >&2; exit 1; }
+LOCK="$(field lock)"
+# The post-receipt check: the getters and the lock's code hash read from the mined chain against the record.
+[ "$(field finality_verifier_anchor_checked)" = true ] && [ "$(codehash "$LOCK")" = "$VAULT" ] \
+  && [ "$(c call "$ANCHORED" "vaultRuntimeCodeHash()(bytes32)")" = "$(field expected_vault_runtime_codehash)" ] \
+  && [ "$(c call "$ANCHORED" "routeEpoch()(uint64)")" = "$(field expected_route_epoch)" ] \
+  && [ "$(c call "$ANCHORED" "pftlGenesisHashCommitment()(bytes32)")" = "$(field expected_genesis_hash_commitment)" ] \
+  || { cat "$RECORD"; echo "FAIL: the mined lock or verifier differs from the record" >&2; exit 1; }
+echo "ok: broadcast against an anchored verifier with every binding matched; mined code hash and getters equal the record"
