@@ -1686,6 +1686,9 @@ fn build_cobalt_safety_witness_report(
 }
 
 fn validate_amendment_kind(kind: &str) -> Result<(), String> {
+    if let Some((code, message)) = postfiat_types::external_lane_amendment_refusal(kind) {
+        return Err(format!("{code}: {message}"));
+    }
     for (prefix, label) in [
         (
             GOVERNANCE_KIND_STORAGE_COMMITMENT_ACTIVATION,

@@ -136,7 +136,23 @@ An accepted release credits the recipient, creating the account if needed, adds 
 
 `external_lane_info` (public read RPC, and the `external-lane-info` node command; `--lane-id`, `--release-cursor` and `--release-limit` optional) returns each lane's genesis configuration, committed record, remainder, window cap, what the next block's window may still release, `release_count`, and one page of release records newest first, each with its `sequence` in the history. A page holds at most `EXTERNAL_LANE_RELEASE_PAGE_SIZE` (100) records, the default; `next_release_cursor`, when present, is passed as `--release-cursor` for the next older page.
 
-Not built yet: cap amendments and their seven-window raise delay (section 5.1), the committee epoch move by governed amendment (section 4.1), the watcher (section 5.2), and the Python CLI and interface. The design keeps the SP1 route for Base through its dispute games (option (a)) as a later upgrade.
+## Governed lane amendments
+
+The design changes a configured lane only by governed amendment: the window cap in basis points (section 5.1) and the committee epoch and root the policy names (section 4.1). Their kinds are `external_lane_release_cap_v1:<lane_id>` and `external_lane_committee_epoch_v1:<lane_id>` (`external_lane_amendment_refusal`, `crates/types/src/external_lane_types.rs`). Neither is built: governance refuses both with `external_lane_amendment_not_supported`, signed or not, at ratification and signed-batch admission (`validate_amendment_kind`, `crates/consensus_cobalt/src/internal_validation.rs`) and again at block execution (`governance_amendment_lifecycle_rejection`, `crates/node/src/execution_actions.rs`). No lane record, cap or policy can change; tests: `crates/node/src/tests/external_lane_amendment_tests.rs`.
+
+Both need more than an amendment kind. Execution, mempool admission and the lane equality rule read only the genesis and the ledger, so the active cap or committee at a height must reach them from governance, and the equality rule must become "genesis plus the applied amendments". The committee root is 48 bytes and does not fit the amendment's `u32` value.
+
+Remaining P2.5 steps:
+
+- [ ] Cap amendment: value 0 to 10,000 bps; a lower cap applies from its activation height, a higher one seven windows after it commits; the latest applied amendment of a lane wins.
+- [ ] Pass the active cap to `apply_external_lane_release`, mempool admission and batch building; a release above the amended cap is refused with `external_lane_window_cap_exceeded`.
+- [ ] Extend `validate_external_lanes_match_genesis` to check each window against the cap active at its heights, keeping the forged-release and tamper refusals; replay and snapshots stay identical.
+- [ ] Committee epoch move: bind the new epoch and root by hash in the kind; apply only while that committee is the newest registered and unfenced; refuse checkpoints of the old epoch from the block after.
+- [ ] `external_lane_info` reports the active cap and committee with the amendment that set them.
+
+## Not built yet
+
+The cap amendment and the committee epoch move (above), the watcher (section 5.2), and the Python CLI and interface. The design keeps the SP1 route for Base through its dispute games (option (a)) as a later upgrade.
 
 ## Not before
 

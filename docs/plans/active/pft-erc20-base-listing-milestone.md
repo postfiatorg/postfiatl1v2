@@ -69,6 +69,9 @@ Decided by the product owner 2026-10-28: total supply 100 billion PFT; the Base 
   - [ ] The Base checkpoint source's own qualification.
   - [ ] `PFTLockV1` enforces a minimum lock amount at or above the PFTL account reserve (`ACCOUNT_RESERVE`, 10 atoms, `crates/execution/src/entrypoints.rs:139`): a smaller Lock to a new PFTL account is final on Base but refused on PFTL with `below_account_reserve`. A contract change for the next lock round.
   - [ ] Prune the release records behind the finalized checkpoint, keeping the root (`ExternalLaneState::releases`, `crates/types/src/external_lane_types.rs`), so a lane stays below `EXTERNAL_LANE_MAX_RELEASE_RECORDS` (1,000,000), past which a release is refused with `external_lane_release_records_full`.
+  - [x] The governed lane amendment kinds are recognised and refused with `external_lane_amendment_not_supported`, signed or not (`external_lane_amendment_refusal`, `crates/types/src/external_lane_types.rs`); [governed lane amendments](../../architecture/genesis-external-lanes.md#governed-lane-amendments).
+  - [ ] The cap amendment and its seven-window raise delay (design section 5.1), read by execution, admission and the lane equality rule; steps on the architecture page.
+  - [ ] The committee epoch move by governed amendment (design section 4.1); steps on the architecture page.
 
 ## Phase 3 — the reverse export route (optional)
 

@@ -26,6 +26,34 @@ pub const EXTERNAL_LANE_SOURCE_CHAIN_IDS: [u64; 2] = [
     EXTERNAL_LANE_BASE_MAINNET_CHAIN_ID,
     EXTERNAL_LANE_BASE_SEPOLIA_CHAIN_ID,
 ];
+/// Governed amendment kinds of a lane, `<prefix>:<lane_id>`: the per-window
+/// release cap (design section 5.1) and the committee epoch move (section
+/// 4.1). Neither is built yet; both are refused with
+/// [`EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED`] so that no signed amendment of
+/// either kind can enter governance before execution and the lane checks
+/// honour it.
+pub const GOVERNANCE_KIND_EXTERNAL_LANE_RELEASE_CAP_PREFIX_V1: &str =
+    "external_lane_release_cap_v1";
+pub const GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1: &str =
+    "external_lane_committee_epoch_v1";
+pub const EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED: &str = "external_lane_amendment_not_supported";
+
+/// The refusal of a governed lane amendment kind, `None` for any other kind.
+pub fn external_lane_amendment_refusal(kind: &str) -> Option<(&'static str, String)> {
+    let family = kind.split(':').next()?;
+    [
+        GOVERNANCE_KIND_EXTERNAL_LANE_RELEASE_CAP_PREFIX_V1,
+        GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1,
+    ]
+    .contains(&family)
+    .then(|| {
+        (
+            EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED,
+            format!("governed external lane amendment `{family}` is not supported yet"),
+        )
+    })
+}
+
 const EXTERNAL_LANE_ROUTE_CONFIG_DOMAIN: &[u8] = b"postfiat.external_lane.route_config.v1";
 const EXTERNAL_LANE_RELEASE_HISTORY_DOMAIN: &[u8] = b"postfiat.external_lane.release_history.v1";
 /// A release history root is 48 bytes (SHA3-384).

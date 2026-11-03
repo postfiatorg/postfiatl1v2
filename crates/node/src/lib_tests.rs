@@ -34,6 +34,7 @@ mod tests {
     mod recipient_format_activation;
     mod snapshot_deployment;
     mod genesis_external_lane_tests;
+    mod external_lane_amendment_tests;
     mod validator_registry_continuation_tests;
     mod vault_bridge_governed_route;
     use consensus_history::{dummy_block_record, write_split_validator_key_files};

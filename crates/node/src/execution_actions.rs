@@ -1911,6 +1911,9 @@ pub(super) fn governance_amendment_lifecycle_rejection(
     amendment: &GovernanceAmendment,
     block_height: u64,
 ) -> Option<(&'static str, String)> {
+    if let Some(refusal) = postfiat_types::external_lane_amendment_refusal(&amendment.kind) {
+        return Some(refusal);
+    }
     if amendment.kind == postfiat_types::GOVERNANCE_KIND_YOLO_TARGET_ACTIVATION_HEIGHT
         && u64::from(amendment.value) <= block_height
     {
