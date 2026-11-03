@@ -2,14 +2,28 @@
 // lives outside PFTL (the ERC-20 PFT on Base). Design:
 // `docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md` sections 5
 // and 5.1. Genesis pins the lane and its release policy; `LedgerState` carries
-// the live record. Nothing releases from a lane until the release operation
-// (`external_lane_release_v1`, milestone P2.4) exists.
+// the live record, and `external_lane_release_v1` (milestone P2.4) is its only
+// writer: it moves atoms from the lane remainder to a PFTL account against a
+// proven Base Lock, once per Lock nonce and within the per-window cap.
 
 pub const EXTERNAL_LANE_ID_MAX_BYTES: usize = 32;
 pub const EXTERNAL_LANE_RELEASE_CAP_BPS_MAX: u32 = 10_000;
 const EXTERNAL_LANE_EVM_ADDRESS_HEX_LEN: usize = 40;
 const EXTERNAL_LANE_CODE_HASH_HEX_LEN: usize = 64;
 const EXTERNAL_LANE_COMMITTEE_ROOT_HEX_LEN: usize = 64;
+const EXTERNAL_LANE_ROUTE_CONFIG_DOMAIN: &[u8] = b"postfiat.external_lane.route_config.v1";
+
+// Refusal codes of `external_lane_release_v1`. A refused release changes no
+// state and consumes no Lock nonce, so it can be retried.
+pub const EXTERNAL_LANE_NOT_CONFIGURED: &str = "external_lane_not_configured";
+pub const EXTERNAL_LANE_NONCE_ALREADY_RELEASED: &str = "external_lane_nonce_already_released";
+pub const EXTERNAL_LANE_REMAINDER_EXCEEDED: &str = "external_lane_remainder_exceeded";
+pub const EXTERNAL_LANE_WINDOW_CAP_EXCEEDED: &str = "external_lane_window_cap_exceeded";
+pub const EXTERNAL_LANE_SOURCE_MISMATCH: &str = "external_lane_source_mismatch";
+pub const EXTERNAL_LANE_PROOF_INVALID: &str = "external_lane_proof_invalid";
+pub const EXTERNAL_LANE_CHECKPOINT_MISMATCH: &str = "external_lane_checkpoint_mismatch";
+pub const EXTERNAL_LANE_LOCK_MISMATCH: &str = "external_lane_lock_mismatch";
+pub const EXTERNAL_LANE_COMMITTEE_MISSING: &str = "external_lane_committee_missing";
 
 /// What the release operation of P2.4 verifies a proven Lock against.
 /// Shape-checked here; the values are pinned at genesis and the policy cannot
@@ -80,6 +94,32 @@ impl GenesisExternalLanePolicy {
 }
 
 impl GenesisExternalLane {
+    /// Atoms one window may release: `reserved_atoms × release_cap_bps /
+    /// 10_000`, rounded down.
+    pub fn window_cap_atoms(&self) -> u64 {
+        let cap = u128::from(self.reserved_atoms) * u128::from(self.release_cap_bps)
+            / u128::from(EXTERNAL_LANE_RELEASE_CAP_BPS_MAX);
+        u64::try_from(cap).unwrap_or(u64::MAX)
+    }
+
+    /// Block headers carry no time, so a window is a run of
+    /// `release_window_blocks` heights.
+    pub fn window_index_at(&self, height: u64) -> u64 {
+        height / self.release_window_blocks.max(1)
+    }
+
+    /// Digest a checkpoint names as its `route_config_digest` for this lane:
+    /// SHA3-384 over a domain tag and the lane's genesis JSON.
+    pub fn route_config_digest(&self) -> Result<[u8; 48], String> {
+        let encoded = serde_json::to_vec(self)
+            .map_err(|error| format!("encode external lane `{}`: {error}", self.id))?;
+        let mut hasher = Sha3_384::new();
+        hasher.update(EXTERNAL_LANE_ROUTE_CONFIG_DOMAIN);
+        hasher.update([0_u8]);
+        hasher.update(encoded);
+        Ok(hasher.finalize().into())
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         validate_external_lane_id(&self.id)?;
         if self.reserved_atoms == 0 {
@@ -165,10 +205,53 @@ fn validate_lane_hex(field: &str, value: &str, digits: usize) -> Result<(), Stri
     }
 }
 
+/// One applied release, keyed by the Base Lock it consumed: the source chain,
+/// the lock contract and the Lock nonce, with the proven amount and recipient.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalLaneReleaseRecord {
+    pub lock_nonce: u64,
+    pub source_chain_id: u64,
+    pub lock_contract_address: String,
+    pub amount_atoms: u64,
+    pub recipient: String,
+    /// The Base block of the committee checkpoint that proved the Lock.
+    pub source_block_number: u64,
+    pub source_block_hash: String,
+    pub released_at_height: u64,
+}
+
+impl ExternalLaneReleaseRecord {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.amount_atoms == 0 {
+            return Err(format!(
+                "external lane release of Lock nonce {} has zero amount",
+                self.lock_nonce
+            ));
+        }
+        if self.recipient.is_empty() {
+            return Err(format!(
+                "external lane release of Lock nonce {} has no recipient",
+                self.lock_nonce
+            ));
+        }
+        validate_lane_hex(
+            "release lock_contract_address",
+            &self.lock_contract_address,
+            EXTERNAL_LANE_EVM_ADDRESS_HEX_LEN,
+        )?;
+        validate_lane_hex(
+            "release source_block_hash",
+            &self.source_block_hash,
+            EXTERNAL_LANE_CODE_HASH_HEX_LEN,
+        )
+    }
+}
+
 /// Live record of a genesis external lane. Its remainder
 /// (`reserved_atoms - released_atoms`) is native supply that is not in
-/// circulation; the release operation of P2.4 is the only writer of the
-/// release fields.
+/// circulation; `external_lane_release_v1` is the only writer of the release
+/// fields, and every released atom has a record in `releases`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExternalLaneState {
@@ -179,6 +262,10 @@ pub struct ExternalLaneState {
     pub released_lock_nonces: BTreeSet<u64>,
     pub window_index: u64,
     pub window_released_atoms: u64,
+    /// Release history in application order. Omitted while empty, so an
+    /// unreleased lane encodes and commits exactly as it did in P2.2.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub releases: Vec<ExternalLaneReleaseRecord>,
 }
 
 impl ExternalLaneState {
@@ -190,6 +277,7 @@ impl ExternalLaneState {
             released_lock_nonces: BTreeSet::new(),
             window_index: 0,
             window_released_atoms: 0,
+            releases: Vec::new(),
         }
     }
 
@@ -225,6 +313,179 @@ impl ExternalLaneState {
                 self.lane_id
             ));
         }
+        self.validate_recorded_releases()
+    }
+
+    /// The release fields must be exactly what the recorded releases add up
+    /// to: the nonce set is the records' nonces, each once, and
+    /// `released_atoms` is the sum of their amounts.
+    fn validate_recorded_releases(&self) -> Result<(), String> {
+        let mut nonces = BTreeSet::new();
+        let mut released = 0_u64;
+        for record in &self.releases {
+            record
+                .validate()
+                .map_err(|error| format!("external lane `{}`: {error}", self.lane_id))?;
+            if !nonces.insert(record.lock_nonce) {
+                return Err(format!(
+                    "external lane `{}` records Lock nonce {} more than once",
+                    self.lane_id, record.lock_nonce
+                ));
+            }
+            released = released.checked_add(record.amount_atoms).ok_or_else(|| {
+                format!("external lane `{}` recorded releases overflow", self.lane_id)
+            })?;
+        }
+        if nonces != self.released_lock_nonces {
+            return Err(format!(
+                "external lane `{}` released Lock nonces {:?} differ from its recorded releases {:?}",
+                self.lane_id, self.released_lock_nonces, nonces
+            ));
+        }
+        if released != self.released_atoms {
+            return Err(format!(
+                "external lane `{}` has released_atoms {}, but its recorded releases sum to {released}",
+                self.lane_id, self.released_atoms
+            ));
+        }
+        Ok(())
+    }
+
+    /// Checks the record against its genesis lane: same id and reserve,
+    /// releases only from the lane's configured source, and window fields that
+    /// follow from the recorded heights, no window above the cap.
+    pub fn validate_against_genesis(&self, lane: &GenesisExternalLane) -> Result<(), String> {
+        self.validate()?;
+        if self.lane_id != lane.id {
+            return Err(format!(
+                "external lane `{}` checked against genesis lane `{}`",
+                self.lane_id, lane.id
+            ));
+        }
+        if self.reserved_atoms != lane.reserved_atoms {
+            return Err(format!(
+                "external lane `{}` reserves {} atoms, but genesis reserves {}",
+                self.lane_id, self.reserved_atoms, lane.reserved_atoms
+            ));
+        }
+        let cap = lane.window_cap_atoms();
+        let mut per_window = BTreeMap::<u64, u64>::new();
+        let mut previous_height = 0_u64;
+        for record in &self.releases {
+            if record.source_chain_id != lane.policy.chain_id
+                || record.lock_contract_address != lane.policy.lock_contract_address
+            {
+                return Err(format!(
+                    "external lane `{}` records Lock nonce {} from a source genesis did not configure",
+                    self.lane_id, record.lock_nonce
+                ));
+            }
+            if record.released_at_height < previous_height {
+                return Err(format!(
+                    "external lane `{}` records releases out of height order",
+                    self.lane_id
+                ));
+            }
+            previous_height = record.released_at_height;
+            let window = per_window
+                .entry(lane.window_index_at(record.released_at_height))
+                .or_default();
+            *window = window.saturating_add(record.amount_atoms);
+            if *window > cap {
+                return Err(format!(
+                    "external lane `{}` records {} atoms in one window, above the cap {cap}",
+                    self.lane_id, window
+                ));
+            }
+        }
+        let (window_index, window_released) = per_window
+            .last_key_value()
+            .map(|(index, released)| (*index, *released))
+            .unwrap_or((0, 0));
+        if self.window_index != window_index || self.window_released_atoms != window_released {
+            return Err(format!(
+                "external lane `{}` has window {} with {} atoms released, but its recorded releases give window {window_index} with {window_released}",
+                self.lane_id, self.window_index, self.window_released_atoms
+            ));
+        }
+        Ok(())
+    }
+
+    /// The release rules, in the design's order: a nonce is paid once, the
+    /// amount fits the remainder, and the window stays within its cap. Returns
+    /// a refusal code and message; nothing is mutated.
+    pub fn check_release(
+        &self,
+        lane: &GenesisExternalLane,
+        lock_nonce: u64,
+        amount_atoms: u64,
+        height: u64,
+    ) -> Result<(), (&'static str, String)> {
+        if self.released_lock_nonces.contains(&lock_nonce) {
+            return Err((
+                EXTERNAL_LANE_NONCE_ALREADY_RELEASED,
+                format!(
+                    "external lane `{}` already released Lock nonce {lock_nonce}",
+                    self.lane_id
+                ),
+            ));
+        }
+        let remainder = self
+            .remainder_atoms()
+            .map_err(|error| (EXTERNAL_LANE_REMAINDER_EXCEEDED, error))?;
+        if amount_atoms > remainder {
+            return Err((
+                EXTERNAL_LANE_REMAINDER_EXCEEDED,
+                format!(
+                    "external lane `{}` holds {remainder} atoms, below the release of {amount_atoms}",
+                    self.lane_id
+                ),
+            ));
+        }
+        let window_index = lane.window_index_at(height);
+        let window_released = if window_index == self.window_index {
+            self.window_released_atoms
+        } else {
+            0
+        };
+        let cap = lane.window_cap_atoms();
+        if window_released
+            .checked_add(amount_atoms)
+            .is_none_or(|total| total > cap)
+        {
+            return Err((
+                EXTERNAL_LANE_WINDOW_CAP_EXCEEDED,
+                format!(
+                    "external lane `{}` window {window_index} has released {window_released} of its cap {cap}; {amount_atoms} more would exceed it",
+                    self.lane_id
+                ),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Applies a checked release: records it, adds the nonce and the amount,
+    /// and moves the window. The caller credits the recipient.
+    pub fn apply_release(
+        &mut self,
+        lane: &GenesisExternalLane,
+        record: ExternalLaneReleaseRecord,
+    ) -> Result<(), (&'static str, String)> {
+        self.check_release(
+            lane,
+            record.lock_nonce,
+            record.amount_atoms,
+            record.released_at_height,
+        )?;
+        let window_index = lane.window_index_at(record.released_at_height);
+        if window_index != self.window_index {
+            self.window_index = window_index;
+            self.window_released_atoms = 0;
+        }
+        self.window_released_atoms += record.amount_atoms;
+        self.released_atoms += record.amount_atoms;
+        self.released_lock_nonces.insert(record.lock_nonce);
+        self.releases.push(record);
         Ok(())
     }
 

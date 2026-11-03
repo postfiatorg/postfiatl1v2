@@ -329,3 +329,175 @@ fn deployed_devnet_genesis_bytes_and_hash_are_unchanged() {
     );
     assert_eq!(genesis.genesis_faucet_balance_atoms(), Ok(GENESIS_NATIVE_SUPPLY_ATOMS));
 }
+
+fn sample_release(nonce: u64, amount_atoms: u64, height: u64) -> ExternalLaneReleaseRecord {
+    ExternalLaneReleaseRecord {
+        lock_nonce: nonce,
+        source_chain_id: 8453,
+        lock_contract_address: format!("0x{}", "1a".repeat(20)),
+        amount_atoms,
+        recipient: "pftl-recipient".to_string(),
+        source_block_number: 100,
+        source_block_hash: format!("0x{}", "6f".repeat(32)),
+        released_at_height: height,
+    }
+}
+
+/// A lane of 10,000 atoms at 200 bps: a window of 100 blocks may release 200.
+fn release_test_lane() -> GenesisExternalLane {
+    let mut lane = sample_external_lane("base-erc20", 10_000);
+    lane.release_window_blocks = 100;
+    lane
+}
+
+#[test]
+fn external_lane_window_cap_rounds_down() {
+    let lane = release_test_lane();
+    assert_eq!(lane.window_cap_atoms(), 200);
+    let mut odd = sample_external_lane("a", 149);
+    odd.release_cap_bps = 100;
+    assert_eq!(odd.window_cap_atoms(), 1);
+    assert_eq!(lane.window_index_at(99), 0);
+    assert_eq!(lane.window_index_at(100), 1);
+}
+
+#[test]
+fn external_lane_release_credits_the_lane_record_once() {
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release(&lane, sample_release(0, 150, 5))
+        .expect("first release");
+    assert_eq!(state.released_atoms, 150);
+    assert_eq!(state.remainder_atoms().expect("remainder"), 9_850);
+    assert_eq!(state.released_lock_nonces, [0_u64].into_iter().collect());
+    assert_eq!((state.window_index, state.window_released_atoms), (0, 150));
+    state.validate_against_genesis(&lane).expect("recorded release");
+
+    let before = state.clone();
+    let (code, _) = state
+        .apply_release(&lane, sample_release(0, 1, 6))
+        .unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_NONCE_ALREADY_RELEASED);
+    assert_eq!(state, before, "a replayed nonce changes nothing");
+}
+
+#[test]
+fn external_lane_release_refuses_amount_past_window_cap_without_mutation() {
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release(&lane, sample_release(0, 150, 5))
+        .expect("first release");
+    let before = state.clone();
+    let (code, message) = state
+        .apply_release(&lane, sample_release(1, 51, 99))
+        .unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_WINDOW_CAP_EXCEEDED, "{message}");
+    assert_eq!(state, before);
+    // The same nonce fits in the next window: the refusal consumed nothing.
+    state
+        .apply_release(&lane, sample_release(1, 51, 100))
+        .expect("later window");
+    assert_eq!((state.window_index, state.window_released_atoms), (1, 51));
+    state.validate_against_genesis(&lane).expect("two windows");
+}
+
+#[test]
+fn external_lane_release_rejects_amount_above_lane_remainder() {
+    let mut lane = release_test_lane();
+    lane.release_cap_bps = 10_000;
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release(&lane, sample_release(0, 9_990, 1))
+        .expect("most of the lane");
+    let before = state.clone();
+    let (code, _) = state
+        .apply_release(&lane, sample_release(1, 11, 200))
+        .unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_REMAINDER_EXCEEDED);
+    assert_eq!(state, before);
+    state
+        .apply_release(&lane, sample_release(1, 10, 200))
+        .expect("exactly the remainder");
+    assert_eq!(state.remainder_atoms().expect("remainder"), 0);
+}
+
+#[test]
+fn external_lane_state_requires_release_fields_to_match_recorded_releases() {
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release(&lane, sample_release(3, 40, 10))
+        .expect("release");
+    state
+        .apply_release(&lane, sample_release(7, 60, 20))
+        .expect("release");
+    state.validate_against_genesis(&lane).expect("consistent");
+
+    let refuse = |edit: &dyn Fn(&mut ExternalLaneState), needle: &str| {
+        let mut tampered = state.clone();
+        edit(&mut tampered);
+        let error = tampered.validate_against_genesis(&lane).unwrap_err();
+        assert!(error.contains(needle), "{needle}: {error}");
+    };
+    // Atoms released with no record behind them.
+    refuse(
+        &|lane| {
+            lane.released_atoms += 5;
+            lane.window_released_atoms += 5;
+        },
+        "recorded releases sum to 100",
+    );
+    // A nonce added to the set without a record, or a record dropped.
+    refuse(&|lane| {
+        lane.released_lock_nonces.insert(9);
+    }, "differ from its recorded releases");
+    refuse(&|lane| {
+        lane.releases.pop();
+    }, "differ from its recorded releases");
+    // A record duplicated, an amount raised, a foreign source.
+    refuse(&|lane| {
+        let first = lane.releases[0].clone();
+        lane.releases.push(first);
+    }, "more than once");
+    refuse(&|lane| lane.releases[0].amount_atoms += 1, "recorded releases sum to 101");
+    refuse(&|lane| lane.releases[0].source_chain_id = 84_532, "source genesis did not configure");
+    refuse(
+        &|lane| lane.releases[1].lock_contract_address = format!("0x{}", "99".repeat(20)),
+        "source genesis did not configure",
+    );
+    // Window fields that do not follow from the recorded heights.
+    refuse(&|lane| lane.window_released_atoms = 60, "recorded releases give window 0 with 100");
+    refuse(&|lane| lane.window_index = 1, "recorded releases give window 0 with 100");
+    // Reserve changed against genesis.
+    refuse(&|lane| lane.reserved_atoms += 1, "but genesis reserves 10000");
+}
+
+#[test]
+fn external_lane_recorded_window_above_cap_is_refused() {
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    // Two records that fit the remainder but together pass one window's cap.
+    for (nonce, height) in [(0, 10), (1, 20)] {
+        let record = sample_release(nonce, 150, height);
+        state.released_atoms += record.amount_atoms;
+        state.released_lock_nonces.insert(nonce);
+        state.releases.push(record);
+    }
+    state.window_released_atoms = 300;
+    state.validate().expect("internally consistent");
+    let error = state.validate_against_genesis(&lane).unwrap_err();
+    assert!(error.contains("above the cap 200"), "{error}");
+}
+
+#[test]
+fn unreleased_external_lane_state_encodes_without_releases() {
+    let state = ExternalLaneState::genesis(&release_test_lane());
+    let json = serde_json::to_string(&state).expect("encode");
+    assert!(!json.contains("releases\""), "{json}");
+    assert_eq!(
+        json,
+        "{\"lane_id\":\"base-erc20\",\"reserved_atoms\":10000,\"released_atoms\":0,\"released_lock_nonces\":[],\"window_index\":0,\"window_released_atoms\":0}"
+    );
+}

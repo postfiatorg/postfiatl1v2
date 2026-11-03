@@ -1,6 +1,6 @@
 use super::*;
 use postfiat_types::{
-    ExternalLaneState, FastAssetIdV1, FastLaneReserveBalanceV1, GenesisExternalLane,
+    ExternalLaneReleaseRecord, ExternalLaneState, FastAssetIdV1, FastLaneReserveBalanceV1, GenesisExternalLane,
     GenesisExternalLanePolicy, SnapshotManifest, GENESIS_NATIVE_SUPPLY_ATOMS,
 };
 
@@ -48,12 +48,28 @@ fn apply_one_transfer(data_dir: &Path, to: &str) -> Receipt {
     receipts.into_iter().next().expect("one receipt")
 }
 
+fn lane_release_record(nonce: u64, amount_atoms: u64, height: u64) -> ExternalLaneReleaseRecord {
+    ExternalLaneReleaseRecord {
+        lock_nonce: nonce,
+        source_chain_id: 8453,
+        lock_contract_address: format!("0x{}", "1a".repeat(20)),
+        amount_atoms,
+        recipient: "pftl-recipient".to_string(),
+        source_block_number: 77,
+        source_block_hash: format!("0x{}", "6f".repeat(32)),
+        released_at_height: height,
+    }
+}
+
+/// The lane after two recorded releases (nonces 3 and 7, 10 atoms) in window 2.
 fn released_lane(ledger: &LedgerState) -> ExternalLaneState {
+    let genesis = lane_genesis("postfiat-lane-released", 1);
+    let genesis_lane = &genesis.external_lanes()[0];
     let mut lane = ledger.external_lanes[0].clone();
-    lane.released_atoms = 10;
-    lane.released_lock_nonces = [3_u64, 7].into_iter().collect();
-    lane.window_index = 2;
-    lane.window_released_atoms = 10;
+    for (nonce, amount) in [(3_u64, 4_u64), (7, 6)] {
+        lane.apply_release(genesis_lane, lane_release_record(nonce, amount, 2 * 86_400 + nonce))
+            .expect("recorded release");
+    }
     lane
 }
 
@@ -197,16 +213,20 @@ fn pruned_lane_node(label: &str) -> (PathBuf, HistoryCheckpointState, Receipt) {
     (data_dir, checkpoint, receipt)
 }
 
+/// Recomputes the root and hash as a tamperer would. A lane record whose
+/// release fields disagree with its recorded releases has no state root at
+/// all, so the old root is kept and the read refuses the record.
 fn rehash_checkpoint(genesis: &Genesis, checkpoint: &mut HistoryCheckpointState) {
-    checkpoint.checkpoint_state_root = replicated_state_root(
+    if let Ok(root) = replicated_state_root(
         genesis,
         &checkpoint.governance,
         &checkpoint.ledger,
         &checkpoint.ordered_batches,
         &checkpoint.shielded,
         &checkpoint.bridge,
-    )
-    .expect("checkpoint state root");
+    ) {
+        checkpoint.checkpoint_state_root = root;
+    }
     let mut canonical = checkpoint.clone();
     canonical.checkpoint_hash.clear();
     checkpoint.checkpoint_hash = hash_hex(
@@ -260,6 +280,7 @@ fn external_lane_state_codec_and_commitment_cover_released_nonces() {
     };
     let mut other_nonce = released_checkpoint.ledger.clone();
     other_nonce.external_lanes[0].released_lock_nonces = [3_u64, 8].into_iter().collect();
+    other_nonce.external_lanes[0].releases[1].lock_nonce = 8;
     assert_ne!(commit(&released_checkpoint.ledger), commit(&other_nonce));
     assert_ne!(commit(&checkpoint.ledger), commit(&released_checkpoint.ledger));
 
@@ -417,11 +438,11 @@ fn snapshot_lane_tamper_is_refused_by_the_lane_rule() {
         "{error}"
     );
 
-    // A changed live lane field is refused by the same rule: until the
-    // release operation exists, the records must equal genesis exactly.
+    // A changed live lane field is refused by the same rule: the window
+    // fields must follow from the recorded releases, and there are none.
     let error = import_with(&|ledger| ledger.external_lanes[0].window_index += 1);
     assert!(
-        error.contains("snapshot ledger external lane `base-erc20` has window_index 1, but genesis has 0"),
+        error.contains("snapshot ledger external lane `base-erc20` has window 1 with 0 atoms released, but its recorded releases give window 0 with 0"),
         "{error}"
     );
     for dir in [data_dir, snapshot_dir] {
@@ -610,6 +631,17 @@ fn reread_tampered_checkpoint(
 }
 
 fn assert_aggregate_balances(checkpoint: &HistoryCheckpointState) {
+    if checkpoint
+        .ledger
+        .external_lanes
+        .iter()
+        .any(|lane| lane.validate().is_err())
+    {
+        // A release without a matching record is not even counted: the live
+        // total refuses it before any aggregate comparison.
+        assert!(native_pft_live_total(&checkpoint.ledger, &checkpoint.shielded).is_err());
+        return;
+    }
     assert_eq!(
         native_pft_live_total(&checkpoint.ledger, &checkpoint.shielded).expect("live")
             + checkpoint.native_fee_burn_total.expect("burns"),
@@ -668,7 +700,7 @@ fn checkpoint_with_a_lane_genesis_never_configured_is_refused() {
     fs::remove_dir_all(data_dir).expect("cleanup");
 }
 
-/// Lane atoms released to an account without a release operation: lane id
+/// Lane atoms released to an account without a recorded release: lane id
 /// and reserve kept, released fields forged, the account credited by 5.
 fn forge_release(ledger: &mut LedgerState) {
     let lane = &mut ledger.external_lanes[0];
@@ -686,7 +718,7 @@ fn checkpoint_with_a_forged_release_is_refused() {
     let error = result.unwrap_err().to_string();
     assert!(
         error.contains(
-            "history checkpoint external lane `base-erc20` has released_atoms 5, but genesis has 0"
+            "external lane `base-erc20` released Lock nonces {99} differ from its recorded releases {}"
         ),
         "{error}"
     );
@@ -699,7 +731,10 @@ fn checkpoint_with_a_forged_release_is_refused() {
     })
     .unwrap_err()
     .to_string();
-    assert!(error.contains("has released_atoms 5, but genesis has 0"), "{error}");
+    assert!(
+        error.contains("released Lock nonces {99} differ from its recorded releases {}"),
+        "{error}"
+    );
     fs::remove_dir_all(data_dir).expect("cleanup");
 }
 
@@ -723,11 +758,12 @@ fn snapshot_with_a_forged_release_is_refused() {
         .expect("checkpoint written")
         .native_fee_burn_total
         .expect("burns");
-    assert_eq!(
-        native_pft_live_total(&ledger, &shielded).expect("live") + burns,
-        u128::from(GENESIS_NATIVE_SUPPLY_ATOMS),
-        "the forged release keeps live + burns = supply"
-    );
+    let _ = burns;
+    // The forged lane has no recorded release, so the live total refuses it.
+    assert!(native_pft_live_total(&ledger, &shielded)
+        .unwrap_err()
+        .to_string()
+        .contains("released Lock nonces {99} differ from its recorded releases {}"));
     rewrite_snapshot_file(
         &snapshot_dir,
         LEDGER_FILE,
@@ -743,7 +779,7 @@ fn snapshot_with_a_forged_release_is_refused() {
     assert!(!restored_dir.exists());
     assert!(
         error.contains(
-            "snapshot ledger external lane `base-erc20` has released_atoms 5, but genesis has 0"
+            "snapshot ledger external lane `base-erc20` released Lock nonces {99} differ from its recorded releases {}"
         ),
         "{error}"
     );
@@ -768,4 +804,59 @@ fn init_refuses_genesis_with_duplicate_lane_ids() {
         "{error}"
     );
     assert!(!data_dir.exists(), "nothing is written for an invalid genesis");
+}
+
+type LedgerEdit = fn(&mut LedgerState);
+
+/// A lane state with one recorded release of 5 atoms to the faucet account.
+fn record_release(ledger: &mut LedgerState) {
+    let genesis = lane_genesis("postfiat-lane-recorded", 1);
+    ledger.external_lanes[0]
+        .apply_release(&genesis.external_lanes()[0], lane_release_record(99, 5, 1))
+        .expect("recorded release");
+    ledger.accounts[0].balance += 5;
+}
+
+#[test]
+fn checkpoint_with_recorded_releases_is_accepted_and_tampering_them_is_refused() {
+    let (data_dir, checkpoint, _) = pruned_lane_node("recorded-release");
+    // Genesis reserve minus the recorded release: the checkpoint is accepted.
+    let (result, accepted) = reread_tampered_checkpoint(&data_dir, &checkpoint, record_release);
+    assert_aggregate_balances(&accepted);
+    let read = result.expect("recorded release passes").expect("checkpoint");
+    assert_eq!(read.ledger.external_lanes[0].released_atoms, 5);
+    assert_eq!(read.ledger.external_lanes[0].releases.len(), 1);
+
+    // Each tamper keeps live + burns = supply, so only the lane rule refuses it.
+    let cases: [(&str, LedgerEdit); 4] = [
+        ("recorded releases sum to 5", |ledger| {
+            record_release(ledger);
+            let lane = &mut ledger.external_lanes[0];
+            lane.released_atoms += 1;
+            lane.window_released_atoms += 1;
+            ledger.accounts[0].balance += 1;
+        }),
+        ("recorded releases sum to 6", |ledger| {
+            record_release(ledger);
+            ledger.external_lanes[0].releases[0].amount_atoms += 1;
+        }),
+        ("differ from its recorded releases", |ledger| {
+            record_release(ledger);
+            ledger.external_lanes[0].releases[0].lock_nonce = 98;
+        }),
+        ("from a source genesis did not configure", |ledger| {
+            record_release(ledger);
+            ledger.external_lanes[0].releases[0].source_chain_id = 84_532;
+        }),
+    ];
+    for (needle, edit) in cases {
+        let (result, tampered) = reread_tampered_checkpoint(&data_dir, &checkpoint, edit);
+        assert_aggregate_balances(&tampered);
+        let error = result.unwrap_err().to_string();
+        assert!(
+            error.contains("external lane `base-erc20`") && error.contains(needle),
+            "{needle}: {error}"
+        );
+    }
+    fs::remove_dir_all(data_dir).expect("cleanup");
 }
