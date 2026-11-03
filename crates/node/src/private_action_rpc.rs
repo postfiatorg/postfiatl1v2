@@ -461,6 +461,15 @@ mod private_action_rpc_tests {
         })
         .expect("init node");
         std::fs::write(root.join("topology.json"), "{}").expect("topology placeholder");
+        // The first readiness read in the process builds the pinned verifying
+        // keys, which takes several CPU-seconds and longer while parallel tests
+        // share the CPU. Build them here, outside the client's read timeout.
+        postfiat_node::private_readiness(postfiat_node::PrivateReadinessOptions {
+            data_dir: root.clone(),
+            pool_id: None,
+            admission_switch: None,
+        })
+        .expect("build the readiness verifying keys");
         let readiness = RpcRequest::new("readiness", "private_readiness", serde_json::json!({}));
         // A request cannot claim the switch: unknown parameters are refused.
         let claim = RpcRequest::new(
