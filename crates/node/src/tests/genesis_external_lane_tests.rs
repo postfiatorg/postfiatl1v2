@@ -914,10 +914,12 @@ mod release_path {
         word
     }
 
-    /// A local chain whose genesis lane names a six-member committee that is
-    /// registered in the ledger before the first block.
+    /// A four-validator local chain whose genesis lane names the epoch-one
+    /// committee (validator ids `validator-0..3`, deterministic checkpoint
+    /// keys). A signed FastSwap governance bootstrap registers it, so replay,
+    /// prune and snapshots reproduce it.
     fn lane_chain(label: &str) -> Chain {
-        let keys: Vec<_> = (0..6_u8)
+        let keys: Vec<_> = (0..4_u8)
             .map(|index| ml_dsa_65_keygen_from_seed(&[0x81 + index; 32]))
             .collect();
         let mut committee = FastSwapCommitteeV1 {
@@ -928,10 +930,10 @@ mod release_path {
                     protocol_version: 1,
                 },
                 fastswap_schema_version: FASTSWAP_SCHEMA_VERSION_V1,
-                committee_epoch: 2,
+                committee_epoch: 1,
                 committee_root: FastSwapCommitteeRootV1::ZERO,
-                validator_count: 6,
-                quorum: 5,
+                validator_count: 4,
+                quorum: 3,
             },
             validators: keys
                 .iter()
@@ -943,9 +945,10 @@ mod release_path {
                 .collect(),
         };
         committee.domain.committee_root = committee.computed_root().expect("root");
-        let mut genesis = lane_genesis(&format!("postfiat-lane-{label}"), 1);
-        genesis.external_lanes.as_mut().expect("lanes")[0].policy.committee_root =
-            format!("0x{}", bytes_to_hex(&committee.domain.committee_root.0));
+        let mut genesis = lane_genesis(&format!("postfiat-lane-{label}"), 4);
+        let policy = &mut genesis.external_lanes.as_mut().expect("lanes")[0].policy;
+        policy.committee_epoch = 1;
+        policy.committee_root = format!("0x{}", bytes_to_hex(&committee.domain.committee_root.0));
         genesis.validate().expect("lane genesis");
         committee.domain.chain = FastSwapChainDomainV1 {
             chain_id: genesis.chain_id.clone(),
@@ -960,10 +963,7 @@ mod release_path {
         let data_dir = unique_test_dir(&format!("postfiat-external-lane-{label}"));
         init_with_genesis(data_dir.clone(), "validator-0".to_string(), genesis.clone())
             .expect("init lane genesis");
-        let store = NodeStore::new(&data_dir);
-        let mut ledger = store.read_ledger().expect("ledger");
-        ledger.fastswap_committees.push(committee.clone());
-        store.write_ledger(&ledger).expect("seed committee");
+        bootstrap_committee(&data_dir, &committee);
         let recipient_key = ml_dsa_65_keygen_from_seed(&[0x99; 32]);
         Chain {
             data_dir,
@@ -972,6 +972,81 @@ mod release_path {
             committee,
             recipient: address_from_public_key(&recipient_key.public_key),
         }
+    }
+
+    /// Registers `committee` through a governance batch signed by all four
+    /// validators, as `fastswap_epoch_one_bootstrap_is_governance_bound_and_canonically_committed` does.
+    fn bootstrap_committee(data_dir: &Path, committee: &FastSwapCommitteeV1) {
+        let validator_keys =
+            read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE)).expect("validator keys");
+        let payload = postfiat_types::FastSwapGovernanceBootstrapPayloadV1 {
+            committee: committee.clone(),
+            asset_rules: Vec::new(),
+            policies: Vec::new(),
+            activation_height: 10,
+        };
+        let payload_file = data_dir.join("fastswap-bootstrap-payload.json");
+        let amendment_file = data_dir.join("fastswap-bootstrap-amendment.unsigned.json");
+        let signed_amendment_file = data_dir.join("fastswap-bootstrap-amendment.signed.json");
+        let batch_file = data_dir.join("fastswap-bootstrap-batch.json");
+        fs::write(&payload_file, serde_json::to_vec_pretty(&payload).expect("payload json"))
+            .expect("write payload");
+        let validators = local_validator_ids(4).expect("validator ids");
+        create_fastswap_governance_bootstrap(FastSwapGovernanceBootstrapOptions {
+            data_dir: data_dir.to_path_buf(),
+            validators: validators.clone(),
+            support: validators,
+            activation_height: 0,
+            veto_until_height: 0,
+            paused: false,
+            payload_file: payload_file.clone(),
+            amendment_file: amendment_file.clone(),
+            batch_file: data_dir.join("fastswap-bootstrap-batch.unsigned.json"),
+        })
+        .expect("bootstrap proposal");
+        let authorization_files = write_split_validator_key_files(data_dir, &validator_keys)
+            .iter()
+            .map(|(validator, key_file)| {
+                let authorization_file =
+                    data_dir.join(format!("{validator}.fastswap-authorization.json"));
+                sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                    data_dir: data_dir.to_path_buf(),
+                    amendment_file: amendment_file.clone(),
+                    validator: validator.clone(),
+                    validator_key_file: key_file.clone(),
+                    proposal_slot: 1,
+                    expires_at_height: 8,
+                    authorization_file: authorization_file.clone(),
+                })
+                .expect("sign bootstrap");
+                authorization_file
+            })
+            .collect::<Vec<_>>();
+        assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
+            data_dir: data_dir.to_path_buf(),
+            amendment_file,
+            authorization_files,
+            proposal_slot: 1,
+            output_file: signed_amendment_file.clone(),
+        })
+        .expect("assemble amendment");
+        assemble_signed_fastswap_governance_bootstrap(SignedFastSwapGovernanceBootstrapOptions {
+            data_dir: data_dir.to_path_buf(),
+            payload_file,
+            signed_amendment_file,
+            proposal_slot: 1,
+            batch_file: batch_file.clone(),
+        })
+        .expect("assemble bootstrap");
+        let receipts = apply_governance_batch(ApplyBatchOptions {
+            data_dir: data_dir.to_path_buf(),
+            batch_file,
+            certificate_file: None,
+        })
+        .expect("apply bootstrap");
+        assert!(receipts[0].accepted, "{receipts:?}");
+        let ledger = NodeStore::new(data_dir).read_ledger().expect("ledger");
+        assert_eq!(ledger.fastswap_committees, vec![committee.clone()]);
     }
 
     /// A committee checkpoint of a Base block whose one receipt holds
@@ -1013,7 +1088,7 @@ mod release_path {
             receipts_root: keccak(&leaf),
             observed_head_number: 2_000 + nonce,
             minimum_confirmations: 64,
-            authority_epoch: 2,
+            authority_epoch: chain.committee.domain.committee_epoch,
             committee_root: chain.committee.domain.committee_root,
             handoff_controller: lock_contract,
             wrapped_navcoin_token: [0x2b; 20],
@@ -1024,7 +1099,7 @@ mod release_path {
             .keys
             .iter()
             .enumerate()
-            .take(5)
+            .take(usize::from(chain.committee.domain.quorum))
             .map(|(index, key)| {
                 let mut vote = EthereumCheckpointVoteV1 {
                     validator_id: format!("validator-{index}"),
@@ -1139,7 +1214,10 @@ mod release_path {
         })
         .unwrap_err()
         .to_string();
-        assert!(error.contains(&format!("rejected in batch dry-run at height 2: {code}")), "{error}");
+        assert!(
+            error.contains("rejected in batch dry-run at height") && error.contains(&format!(": {code} (")),
+            "{error}"
+        );
     }
 
     fn lane_info(data_dir: &Path) -> ExternalLaneInfoRow {
@@ -1195,10 +1273,169 @@ mod release_path {
             assert_eq!(lane_info(&chain.data_dir).state, lane_before);
         }
 
-        // Snapshot export and import after releases is not exercised here:
-        // both replay from genesis, and this unit chain registers the lane's
-        // committee by writing the ledger, which replay cannot reproduce. It
-        // needs the governed committee bootstrap of the six-validator harness.
+        // The governed committee replays, so the released chain verifies from genesis.
+        verify_blocks(NodeOptions {
+            data_dir: chain.data_dir.clone(),
+        })
+        .expect("replay from genesis through the releases");
         let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    /// A lane chain with two applied releases (nonces 1 and 2).
+    fn released_chain(label: &str) -> (Chain, u64) {
+        let chain = lane_chain(label);
+        for (sequence, nonce) in [(1_u64, 1_u64), (2, 2)] {
+            let tx = release_tx(&chain, "base-erc20", nonce, ACCOUNT_RESERVE + 100 * nonce, sequence);
+            let receipt = admit_and_apply(&chain, &tx, &format!("release-{nonce}"));
+            assert!(receipt.accepted, "{receipt:?}");
+        }
+        let state = lane_info(&chain.data_dir).state;
+        assert_eq!(state.released_lock_nonces, [1_u64, 2].into_iter().collect());
+        assert_eq!(state.releases.len(), 2);
+        let height = read_chain_tip_or_reconstruct_for_genesis(
+            &NodeStore::new(&chain.data_dir),
+            &chain.genesis,
+        )
+        .expect("tip")
+        .height;
+        (chain, height)
+    }
+
+    /// Exports `data_dir`, imports into a fresh directory, and checks that
+    /// the restored node has the same lane record and state root.
+    fn assert_snapshot_restores_lane(data_dir: &Path, label: &str) -> PathBuf {
+        let source = status(NodeOptions {
+            data_dir: data_dir.to_path_buf(),
+        })
+        .expect("source status");
+        let snapshot_dir = sibling_dir(data_dir, &format!("{label}-snapshot"));
+        let restored_dir = sibling_dir(data_dir, &format!("{label}-restored"));
+        let manifest = export_snapshot(SnapshotExportOptions {
+            data_dir: data_dir.to_path_buf(),
+            snapshot_dir: snapshot_dir.clone(),
+        })
+        .expect("export snapshot after releases");
+        assert_eq!(manifest.state_root, source.state_root);
+        let restored = import_snapshot(SnapshotImportOptions {
+            data_dir: restored_dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+            node_id: Some("validator-restored".to_string()),
+        })
+        .expect("import snapshot after releases");
+        assert_eq!(restored.state_root, source.state_root);
+        let source_lane = lane_info(data_dir);
+        let restored_lane = lane_info(&restored_dir);
+        assert_eq!(restored_lane.state.reserved_atoms, LANE_RESERVED_ATOMS);
+        assert_eq!(
+            restored_lane.state.released_lock_nonces,
+            [1_u64, 2].into_iter().collect()
+        );
+        assert_eq!(restored_lane, source_lane);
+        verify_blocks(NodeOptions {
+            data_dir: restored_dir.clone(),
+        })
+        .expect("restored node replays its blocks");
+        let _ = fs::remove_dir_all(&snapshot_dir);
+        restored_dir
+    }
+
+    #[test]
+    fn full_and_checkpoint_snapshots_restore_the_released_lane() {
+        let (chain, height) = released_chain("release-snapshot");
+        // A full snapshot replays from genesis through both releases.
+        let full = assert_snapshot_restores_lane(&chain.data_dir, "full");
+        // A checkpoint snapshot carries the released lane in its checkpoint.
+        let checkpoint = prune_through(&chain.data_dir, 1, height).expect("prune");
+        assert_eq!(checkpoint.ledger.external_lanes[0].releases.len(), 2);
+        let restored = assert_snapshot_restores_lane(&chain.data_dir, "checkpoint");
+        let restored_checkpoint = read_history_checkpoint_state_optional(&NodeStore::new(&restored))
+            .expect("restored checkpoint")
+            .expect("snapshot carries the checkpoint");
+        assert_eq!(restored_checkpoint.ledger.external_lanes, checkpoint.ledger.external_lanes);
+        for dir in [chain.data_dir, full, restored] {
+            let _ = fs::remove_dir_all(dir);
+        }
+    }
+
+    /// Tampers of a released lane that keep live + burns = supply: the reserve
+    /// raised against genesis, released atoms with no record behind them, and
+    /// the id set changed. Each pair is the edit and the refusal it must meet.
+    fn released_lane_tampers() -> [(&'static str, LedgerEdit); 4] {
+        [
+            ("reserves 300000005 atoms, but genesis reserves 300000000", |ledger| {
+                ledger.external_lanes[0].reserved_atoms += 5;
+                ledger.accounts[0].balance -= 5;
+            }),
+            ("but its recorded releases sum to", |ledger| {
+                let lane = &mut ledger.external_lanes[0];
+                lane.released_atoms += 5;
+                lane.window_released_atoms += 5;
+                ledger.accounts[0].balance += 5;
+            }),
+            ("differ from its recorded releases", |ledger| {
+                ledger.external_lanes[0].released_lock_nonces.insert(9);
+            }),
+            ("differ from its recorded releases", |ledger| {
+                let lane = &mut ledger.external_lanes[0];
+                lane.released_lock_nonces.remove(&2);
+                lane.released_lock_nonces.insert(3);
+            }),
+        ]
+    }
+
+    #[test]
+    fn history_checkpoint_refuses_tampered_released_lane() {
+        let (chain, height) = released_chain("release-tamper-checkpoint");
+        let checkpoint = prune_through(&chain.data_dir, 1, height).expect("prune");
+        for (needle, edit) in released_lane_tampers() {
+            let (result, tampered) = reread_tampered_checkpoint(&chain.data_dir, &checkpoint, edit);
+            assert_aggregate_balances(&tampered);
+            let error = result.unwrap_err().to_string();
+            assert!(
+                error.contains("external lane `base-erc20`") && error.contains(needle),
+                "{needle}: {error}"
+            );
+        }
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    #[test]
+    fn snapshot_import_refuses_tampered_released_lane() {
+        let (chain, height) = released_chain("release-tamper-snapshot");
+        prune_through(&chain.data_dir, 1, height).expect("prune");
+        let snapshot_dir = sibling_dir(&chain.data_dir, "snapshot");
+        let restored_dir = sibling_dir(&chain.data_dir, "restored");
+        export_snapshot(SnapshotExportOptions {
+            data_dir: chain.data_dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+        })
+        .expect("export snapshot");
+        let ledger: LedgerState =
+            serde_json::from_slice(&fs::read(snapshot_dir.join(LEDGER_FILE)).expect("ledger"))
+                .expect("parse ledger");
+        for (needle, edit) in released_lane_tampers() {
+            let mut tampered = ledger.clone();
+            edit(&mut tampered);
+            rewrite_snapshot_file(
+                &snapshot_dir,
+                LEDGER_FILE,
+                serde_json::to_vec_pretty(&tampered).expect("encode ledger"),
+            );
+            let error = import_snapshot(SnapshotImportOptions {
+                data_dir: restored_dir.clone(),
+                snapshot_dir: snapshot_dir.clone(),
+                node_id: None,
+            })
+            .unwrap_err()
+            .to_string();
+            assert!(!restored_dir.exists());
+            assert!(
+                error.contains("snapshot ledger external lane `base-erc20`") && error.contains(needle),
+                "{needle}: {error}"
+            );
+        }
+        for dir in [chain.data_dir, snapshot_dir] {
+            let _ = fs::remove_dir_all(dir);
+        }
     }
 }
