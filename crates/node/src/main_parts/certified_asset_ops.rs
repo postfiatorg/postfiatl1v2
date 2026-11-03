@@ -382,6 +382,7 @@ fn certified_asset_op_source(
         postfiat_types::AssetTransactionOperation::PftlUniswapDestinationConsume(operation) => Ok(&operation.operator),
         postfiat_types::AssetTransactionOperation::PftlUniswapRefundSource(operation) => Ok(&operation.operator),
         postfiat_types::AssetTransactionOperation::PftlUniswapReturnImport(operation) => Ok(&operation.operator),
+        postfiat_types::AssetTransactionOperation::ExternalLaneReleaseV1(operation) => Ok(&operation.submitter),
     }
 }
 

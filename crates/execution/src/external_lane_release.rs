@@ -20,9 +20,9 @@ use postfiat_bridge::{
 };
 use postfiat_crypto_provider::{bytes_to_hex, hex_to_bytes};
 use postfiat_types::{
-    EthereumExternalEventProofV1, ExternalLaneReleaseRecord, FastSwapChainDomainV1,
-    FastSwapCommitteeRootV1, FastSwapCommitteeV1, FastSwapOpaqueHashV1, Genesis,
-    GenesisExternalLane, LedgerState, EXTERNAL_LANE_CHECKPOINT_MISMATCH,
+    EthereumExternalEventProofV1, ExternalLaneReleaseOperationV1, ExternalLaneReleaseRecord,
+    FastSwapChainDomainV1, FastSwapCommitteeRootV1, FastSwapCommitteeV1, FastSwapOpaqueHashV1,
+    Genesis, GenesisExternalLane, LedgerState, EXTERNAL_LANE_CHECKPOINT_MISMATCH,
     EXTERNAL_LANE_COMMITTEE_MISSING, EXTERNAL_LANE_LOCK_MISMATCH, EXTERNAL_LANE_NOT_CONFIGURED,
     EXTERNAL_LANE_PROOF_INVALID, EXTERNAL_LANE_SOURCE_MISMATCH,
 };
@@ -31,7 +31,6 @@ type ExecutionError = (&'static str, String);
 
 /// What a release claims: the Lock, keyed by source chain, lock contract and
 /// nonce, with its amount and PFTL recipient.
-#[cfg_attr(not(test), allow(dead_code))] // P2.4 part 3 dispatches it
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ExternalLockClaim<'a> {
     pub lane_id: &'a str,
@@ -43,7 +42,6 @@ pub(crate) struct ExternalLockClaim<'a> {
 }
 
 /// A Base Lock whose proof has been checked against the lane's policy.
-#[cfg_attr(not(test), allow(dead_code))] // P2.4 part 3 dispatches it
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VerifiedExternalLock {
     pub lane_id: String,
@@ -159,7 +157,6 @@ fn lane_committee<'a>(
 /// block of the configured Base chain, bound to the lane, the lock contract
 /// and the token with their code hashes, whose receipts include the lock
 /// contract's `Locked` event with the claimed nonce, amount and recipient.
-#[cfg_attr(not(test), allow(dead_code))] // P2.4 part 3 dispatches it
 pub(crate) fn verify_external_lane_lock(
     genesis: &Genesis,
     ledger: &LedgerState,
@@ -256,7 +253,26 @@ pub(crate) fn verify_external_lane_lock(
     })
 }
 
-#[cfg_attr(not(test), allow(dead_code))] // P2.4 part 3 dispatches it
+/// Verifies the operation's proof against the lane's genesis policy, then
+/// applies the release rules and credits the proven recipient.
+pub(crate) fn execute_external_lane_release(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    operation: &ExternalLaneReleaseOperationV1,
+    block_height: u64,
+) -> Result<(), ExecutionError> {
+    let claim = ExternalLockClaim {
+        lane_id: &operation.lane_id,
+        source_chain_id: operation.source_chain_id,
+        lock_contract_address: &operation.lock_contract_address,
+        lock_nonce: operation.lock_nonce,
+        amount_atoms: operation.amount_atoms,
+        recipient: &operation.recipient,
+    };
+    let lock = verify_external_lane_lock(genesis, ledger, &claim, &operation.proof)?;
+    apply_external_lane_release(genesis, ledger, lock, block_height)
+}
+
 pub(crate) fn apply_external_lane_release(
     genesis: &Genesis,
     ledger: &mut LedgerState,

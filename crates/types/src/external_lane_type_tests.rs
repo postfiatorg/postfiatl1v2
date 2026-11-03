@@ -517,3 +517,84 @@ fn unreleased_external_lane_state_encodes_without_releases() {
         "{\"lane_id\":\"base-erc20\",\"reserved_atoms\":10000,\"released_atoms\":0,\"released_lock_nonces\":[],\"window_index\":0,\"window_released_atoms\":0}"
     );
 }
+
+fn sample_release_operation() -> ExternalLaneReleaseOperationV1 {
+    let checkpoint = EthereumFinalizedCheckpointV1 {
+        schema_version: ETHEREUM_CHECKPOINT_SCHEMA_V1,
+        pftl_domain: FastSwapChainDomainV1 {
+            chain_id: "postfiat-local".to_string(),
+            genesis_hash: FastSwapOpaqueHashV1([7; 48]),
+            protocol_version: 1,
+        },
+        route_id: "base-erc20".to_string(),
+        route_config_digest: FastSwapOpaqueHashV1([8; 48]),
+        ethereum_chain_id: 8453,
+        block_number: 10,
+        block_hash: [9; 32],
+        receipts_root: [10; 32],
+        observed_head_number: 80,
+        minimum_confirmations: 64,
+        authority_epoch: 2,
+        committee_root: FastSwapCommitteeRootV1([11; 48]),
+        handoff_controller: [0x1a; 20],
+        wrapped_navcoin_token: [0x2b; 20],
+        handoff_controller_code_hash: [0x4d; 32],
+        wrapped_navcoin_code_hash: [0x3c; 32],
+    };
+    ExternalLaneReleaseOperationV1 {
+        submitter: "pf1111111111111111111111111111111111111111".to_string(),
+        lane_id: "base-erc20".to_string(),
+        source_chain_id: 8453,
+        lock_contract_address: format!("0x{}", "1a".repeat(20)),
+        lock_nonce: 0,
+        amount_atoms: 5,
+        recipient: "pf2222222222222222222222222222222222222222".to_string(),
+        proof: EthereumExternalEventProofV1 {
+            checkpoint_certificate: EthereumCheckpointCertificateV1 {
+                checkpoint,
+                votes: vec![EthereumCheckpointVoteV1 {
+                    validator_id: "validator-0".to_string(),
+                    signature: vec![1],
+                }],
+            },
+            receipt_proof: EthereumReceiptProofV1 {
+                transaction_index: 0,
+                receipt_rlp: vec![0xc0],
+                proof_nodes_rlp: vec![vec![0xc0]],
+            },
+            log_index: 0,
+        },
+    }
+}
+
+type OperationEdit = fn(&mut ExternalLaneReleaseOperationV1);
+
+#[test]
+fn external_lane_release_operation_validates_its_lock_key() {
+    let operation = sample_release_operation();
+    operation.validate().expect("valid release operation");
+    let wrapped = AssetTransactionOperation::ExternalLaneReleaseV1(operation.clone());
+    assert_eq!(wrapped.transaction_kind(), EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1);
+    let json = serde_json::to_value(&wrapped).expect("encode");
+    assert_eq!(json["operation"], "external_lane_release_v1");
+    let decoded: AssetTransactionOperation = serde_json::from_value(json.clone()).expect("decode");
+    assert_eq!(decoded, wrapped);
+    let mut unknown = json;
+    unknown["relayer_override"] = serde_json::json!("x");
+    assert!(serde_json::from_value::<AssetTransactionOperation>(unknown).is_err());
+
+    let cases: [(OperationEdit, &str); 6] = [
+        (|op| op.source_chain_id = 1, "source_chain_id"),
+        (|op| op.lock_contract_address = "1a".repeat(20), "lock_contract_address"),
+        (|op| op.amount_atoms = 0, "amount_atoms"),
+        (|op| op.recipient = String::new(), "recipient"),
+        (|op| op.lane_id = "Base".to_string(), "external lane id"),
+        (|op| op.proof.checkpoint_certificate.votes.clear(), "proof"),
+    ];
+    for (edit, needle) in cases {
+        let mut operation = sample_release_operation();
+        edit(&mut operation);
+        let error = operation.validate().unwrap_err();
+        assert!(error.contains(needle), "{needle}: {error}");
+    }
+}

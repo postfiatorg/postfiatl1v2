@@ -3843,7 +3843,8 @@ fn validate_asset_operation_fields(
         | PFTL_UNISWAP_REDEMPTION_FUND_TRANSACTION_KIND
         | PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND
         | PFTL_UNISWAP_ROUTE_EPOCH_ADVANCE_TRANSACTION_KIND
-        | PFTL_UNISWAP_ROUTE_PAUSE_TRANSACTION_KIND => {}
+        | PFTL_UNISWAP_ROUTE_PAUSE_TRANSACTION_KIND
+        | postfiat_types::EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1 => {}
         PFTL_UNISWAP_ROUTE_BRIDGE_POLICY_UPDATE_TRANSACTION_KIND => {
             clean_string_field(value, "issuer")?;
             clean_string_field(value, "route_id")?;
@@ -4116,6 +4117,7 @@ fn is_supported_asset_transaction_kind(kind: &str) -> bool {
             | PFTL_UNISWAP_REFUND_SOURCE_TRANSACTION_KIND
             | PFTL_UNISWAP_RETURN_IMPORT_TRANSACTION_KIND
             | PFTL_UNISWAP_ROUTE_BRIDGE_POLICY_UPDATE_TRANSACTION_KIND
+            | postfiat_types::EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1
     )
 }
 

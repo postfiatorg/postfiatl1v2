@@ -1371,6 +1371,20 @@ fn fuzz_native_supply_invariants(iterations: usize) -> Result<FuzzTargetReport, 
                 released_lock_nonces: (lane_released > 0).then_some(seed).into_iter().collect(),
                 window_index: 0,
                 window_released_atoms: lane_released,
+                // Every released atom has a recorded release behind it.
+                releases: (lane_released > 0)
+                    .then(|| postfiat_types::ExternalLaneReleaseRecord {
+                        lock_nonce: seed,
+                        source_chain_id: 8453,
+                        lock_contract_address: format!("0x{}", "1a".repeat(20)),
+                        amount_atoms: lane_released,
+                        recipient: "lane-recipient".to_string(),
+                        source_block_number: 1,
+                        source_block_hash: format!("0x{}", "6f".repeat(32)),
+                        released_at_height: 1,
+                    })
+                    .into_iter()
+                    .collect(),
             });
         let mut pool = OrchardPoolState::empty(format!("native-pool-{iteration}"));
         pool.turnstile_deposit_total = orchard_value;

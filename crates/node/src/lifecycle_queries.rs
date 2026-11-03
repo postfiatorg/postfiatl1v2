@@ -2539,6 +2539,59 @@ pub fn fx_fix_list(options: FxFixListOptions) -> io::Result<FxFixListReport> {
     })
 }
 
+pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<ExternalLaneInfoReport> {
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let ledger = store.read_ledger()?;
+    let current_height = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?.height;
+    let invalid = |error: String| io::Error::new(io::ErrorKind::InvalidData, error);
+    let mut lanes = Vec::new();
+    for config in genesis.external_lanes() {
+        if options.lane_id.as_ref().is_some_and(|id| id != &config.id) {
+            continue;
+        }
+        let state = ledger
+            .external_lanes
+            .iter()
+            .find(|state| state.lane_id == config.id)
+            .cloned()
+            .ok_or_else(|| {
+                invalid(format!(
+                    "ledger has no record for external lane `{}`",
+                    config.id
+                ))
+            })?;
+        let remainder_atoms = state.remainder_atoms().map_err(invalid)?;
+        let window_cap_atoms = config.window_cap_atoms();
+        let next_window_index = config.window_index_at(current_height.saturating_add(1));
+        let next_window_released = if next_window_index == state.window_index {
+            state.window_released_atoms
+        } else {
+            0
+        };
+        lanes.push(ExternalLaneInfoRow {
+            lane_id: config.id.clone(),
+            config: config.clone(),
+            remainder_atoms,
+            window_cap_atoms,
+            next_window_index,
+            next_window_available_atoms: window_cap_atoms
+                .saturating_sub(next_window_released)
+                .min(remainder_atoms),
+            state,
+        });
+    }
+    Ok(ExternalLaneInfoReport {
+        schema: "postfiat-external-lane-info-v1".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        current_height,
+        lane_count: lanes.len() as u64,
+        lanes,
+    })
+}
+
 pub fn fx_fix_info(options: FxFixInfoOptions) -> io::Result<FxFixInfoReport> {
     validate_lower_hex_len(
         "fix_packet_hash",

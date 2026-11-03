@@ -3625,6 +3625,66 @@ impl PftlUniswapReturnImportOperation {
     }
 }
 
+/// `external_lane_release_v1`: releases native PFT from a genesis external
+/// lane against a Base `Locked` event proven by a bridge-committee checkpoint
+/// (`docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md` section 5).
+/// The release is keyed by the Lock: source chain, lock contract and nonce.
+/// Any account may submit it and pays the fee; the recipient and the amount
+/// must equal the proven Lock's, so a submitter cannot redirect it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalLaneReleaseOperationV1 {
+    pub submitter: String,
+    pub lane_id: String,
+    pub source_chain_id: u64,
+    pub lock_contract_address: String,
+    pub lock_nonce: u64,
+    pub amount_atoms: u64,
+    pub recipient: String,
+    pub proof: EthereumExternalEventProofV1,
+}
+
+impl ExternalLaneReleaseOperationV1 {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_postfiat_address("external_lane_release_v1.submitter", &self.submitter)?;
+        validate_external_lane_id(&self.lane_id)?;
+        if !EXTERNAL_LANE_SOURCE_CHAIN_IDS.contains(&self.source_chain_id) {
+            return Err(format!(
+                "external_lane_release_v1.source_chain_id {} is not Base mainnet or Base Sepolia",
+                self.source_chain_id
+            ));
+        }
+        validate_lane_hex(
+            "external_lane_release_v1.lock_contract_address",
+            &self.lock_contract_address,
+            EXTERNAL_LANE_EVM_ADDRESS_HEX_LEN,
+        )?;
+        if self.amount_atoms == 0 {
+            return Err("external_lane_release_v1.amount_atoms must be positive".to_string());
+        }
+        validate_postfiat_address("external_lane_release_v1.recipient", &self.recipient)?;
+        self.proof
+            .validate_bounds()
+            .map_err(|error| format!("external_lane_release_v1 proof: {error:?}"))
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        let mut bytes = format!(
+            "submitter={}\nlane_id={}\nsource_chain_id={}\nlock_contract_address={}\nlock_nonce={}\namount_atoms={}\nrecipient={}\n",
+            self.submitter,
+            self.lane_id,
+            self.source_chain_id,
+            self.lock_contract_address,
+            self.lock_nonce,
+            self.amount_atoms,
+            self.recipient
+        )
+        .into_bytes();
+        append_external_event_proof_commitment(&mut bytes, Some(&self.proof));
+        bytes
+    }
+}
+
 fn append_external_event_proof_commitment(
     bytes: &mut Vec<u8>,
     proof: Option<&EthereumExternalEventProofV1>,
@@ -3755,6 +3815,8 @@ pub enum AssetTransactionOperation {
     PftlUniswapReturnImport(PftlUniswapReturnImportOperation),
     #[serde(rename = "pftl_uniswap_route_bridge_policy_update")]
     PftlUniswapRouteBridgePolicyUpdate(PftlUniswapRouteBridgePolicyUpdateOperation),
+    #[serde(rename = "external_lane_release_v1")]
+    ExternalLaneReleaseV1(ExternalLaneReleaseOperationV1),
 }
 
 impl<'de> Deserialize<'de> for AssetTransactionOperation {
@@ -3931,6 +3993,9 @@ impl<'de> Deserialize<'de> for AssetTransactionOperation {
                 PftlUniswapRouteBridgePolicyUpdateOperation,
                 PftlUniswapRouteBridgePolicyUpdate
             ),
+            "external_lane_release_v1" => {
+                decode_operation!(ExternalLaneReleaseOperationV1, ExternalLaneReleaseV1)
+            }
             other => Err(serde::de::Error::custom(format!(
                 "unknown asset operation `{other}`"
             ))),
@@ -4015,6 +4080,7 @@ impl AssetTransactionOperation {
             Self::PftlUniswapRouteBridgePolicyUpdate(_) => {
                 PFTL_UNISWAP_ROUTE_BRIDGE_POLICY_UPDATE_TRANSACTION_KIND
             }
+            Self::ExternalLaneReleaseV1(_) => EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1,
         }
     }
 
@@ -4074,6 +4140,7 @@ impl AssetTransactionOperation {
             Self::PftlUniswapRefundSource(operation) => operation.validate(),
             Self::PftlUniswapReturnImport(operation) => operation.validate(),
             Self::PftlUniswapRouteBridgePolicyUpdate(operation) => operation.validate(),
+            Self::ExternalLaneReleaseV1(operation) => operation.validate(),
         }
     }
 
@@ -4155,6 +4222,7 @@ impl AssetTransactionOperation {
             Self::PftlUniswapRefundSource(operation) => operation.operator == source,
             Self::PftlUniswapReturnImport(operation) => operation.operator == source,
             Self::PftlUniswapRouteBridgePolicyUpdate(operation) => operation.issuer == source,
+            Self::ExternalLaneReleaseV1(operation) => operation.submitter == source,
         }
     }
 
@@ -4297,6 +4365,9 @@ impl AssetTransactionOperation {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
             Self::PftlUniswapRouteBridgePolicyUpdate(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::ExternalLaneReleaseV1(operation) => {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
         }

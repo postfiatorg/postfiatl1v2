@@ -2605,6 +2605,39 @@ pub struct FxFixListOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalLaneInfoOptions {
+    pub data_dir: PathBuf,
+    /// One lane, or every genesis lane when absent.
+    pub lane_id: Option<String>,
+}
+
+/// `external_lane_info`: each genesis external lane's configuration, live
+/// record and release history.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneInfoReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub current_height: u64,
+    pub lane_count: u64,
+    pub lanes: Vec<ExternalLaneInfoRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneInfoRow {
+    pub lane_id: String,
+    pub config: postfiat_types::GenesisExternalLane,
+    /// The live record; `state.releases` is the release history.
+    pub state: postfiat_types::ExternalLaneState,
+    pub remainder_atoms: u64,
+    pub window_cap_atoms: u64,
+    /// The window the next block falls in, and what it may still release.
+    pub next_window_index: u64,
+    pub next_window_available_atoms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FxFixInfoOptions {
     pub data_dir: PathBuf,
     pub fix_packet_hash: String,

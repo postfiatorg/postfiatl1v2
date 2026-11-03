@@ -657,6 +657,22 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 )],
             )
         }
+        "external_lane_info" => {
+            let report = external_lane_info(ExternalLaneInfoOptions {
+                data_dir,
+                lane_id: flag_value(flags, "--lane-id").map(str::to_string),
+            })
+            .map_err(|error| format!("rpc external_lane_info failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "external_lane_info",
+                    report.chain_id.clone(),
+                    "external lanes queried",
+                )],
+            )
+        }
         "fx_fix_info" => {
             let fix_packet_hash =
                 flag_value(flags, "--fix-packet-hash").ok_or("missing --fix-packet-hash")?;
