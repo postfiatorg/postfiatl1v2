@@ -6,6 +6,15 @@ pub struct InitOptions {
     pub validator_count: u32,
 }
 
+/// `init --genesis-file`: the chain id, validator count, activation heights
+/// and external lanes all come from the genesis file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InitFromGenesisFileOptions {
+    pub data_dir: PathBuf,
+    pub node_id: String,
+    pub genesis_file: PathBuf,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InitConsensusV2Options {
     pub data_dir: PathBuf,

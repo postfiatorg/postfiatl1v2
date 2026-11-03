@@ -812,6 +812,117 @@ fn init_refuses_genesis_with_two_lanes_on_one_base_source() {
     assert!(!data_dir.exists(), "nothing is written for an invalid genesis");
 }
 
+const EXAMPLE_LANE_GENESIS: &str = include_str!("../../testdata/external-lane-genesis/genesis.json");
+const EXAMPLE_LANE_GENESIS_HASH: &str =
+    "03f36eb201cca42c932b04161ea058e3821fd1cb0948a775a2e4431d8cfd5960bf59c70ec3105f7e7dff502d1b1109b8";
+
+/// `lane_genesis` with the Base Sepolia rehearsal lock and token as its source,
+/// as `crates/pft-token-contracts/deployments/pft-lock-base-84532` records them.
+fn sepolia_rehearsal_lane_genesis() -> Genesis {
+    let mut genesis = lane_genesis("postfiat-lane-sepolia-example", 1);
+    let policy = &mut genesis.external_lanes.as_mut().expect("lanes")[0].policy;
+    policy.chain_id = 84_532;
+    policy.lock_contract_address = "0xe36e7fc384564419187546c19719a5654266de0b".to_string();
+    policy.token_address = "0x18fe4ca51a0ce042688d5a54917319d03b527d92".to_string();
+    policy.lock_runtime_code_hash =
+        "0x328a93e99cf9659bdb44807d60a9e0328e0ff867d0b584dc2eeed3b0d5442fb2".to_string();
+    policy.token_runtime_code_hash =
+        "0xb0939a2407cd571d158498ba0f405f4ddb3857e688d2bc5ada170dcc655903df".to_string();
+    genesis.validate().expect("valid rehearsal lane genesis");
+    genesis
+}
+
+#[test]
+fn init_from_lane_genesis_file_matches_the_in_code_lane_genesis() {
+    let expected = sepolia_rehearsal_lane_genesis();
+    // The example file is canonical, pinned by hash, and names the deployment records.
+    let genesis = Genesis::from_json(EXAMPLE_LANE_GENESIS).expect("parse example lane genesis");
+    assert_eq!(genesis, expected);
+    assert_eq!(genesis.to_json().expect("serialize"), EXAMPLE_LANE_GENESIS);
+    assert_eq!(genesis_hash(&genesis), EXAMPLE_LANE_GENESIS_HASH);
+    let record: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../pft-token-contracts/deployments/pft-lock-base-84532/deployment.json"
+    ))
+    .expect("lock deployment record");
+    let policy = &genesis.external_lanes()[0].policy;
+    let pinned = |key: &str| record[key].as_str().expect(key).to_ascii_lowercase();
+    assert_eq!(record["chain_id"].as_u64(), Some(policy.chain_id));
+    assert_eq!(policy.lock_contract_address, pinned("lock"));
+    assert_eq!(policy.token_address, pinned("token"));
+    assert_eq!(policy.lock_runtime_code_hash, pinned("lock_runtime_codehash"));
+    assert_eq!(policy.token_runtime_code_hash, pinned("token_codehash"));
+    assert_eq!(genesis.external_lanes()[0].release_cap_bps, 200);
+
+    let data_dir = unique_test_dir("postfiat-external-lane-genesis-file");
+    let report = init_from_genesis_file(InitFromGenesisFileOptions {
+        data_dir: data_dir.clone(),
+        node_id: "validator-0".to_string(),
+        genesis_file: Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("testdata/external-lane-genesis/genesis.json"),
+    })
+    .expect("init from the example lane genesis");
+    assert_eq!(report.genesis_hash, EXAMPLE_LANE_GENESIS_HASH);
+    let store = NodeStore::new(&data_dir);
+    assert_eq!(store.read_genesis().expect("genesis"), expected);
+    let ledger = store.read_ledger().expect("ledger");
+    let faucet = read_faucet_account_file(&data_dir.join(FAUCET_ACCOUNT_FILE)).expect("faucet");
+    assert_eq!(faucet.balance, GENESIS_NATIVE_SUPPLY_ATOMS - LANE_RESERVED_ATOMS);
+    let in_code = genesis_ledger_state(&expected, faucet).expect("in-code genesis ledger");
+    assert_eq!(ledger, in_code);
+    assert_eq!(ledger.external_lanes, expected.genesis_external_lane_states());
+    validate_external_lanes_match_genesis(&expected, &ledger, "init").expect("lane set rule");
+    let root = replicated_state_root(
+        &expected,
+        &GovernanceState::new(expected.validator_count),
+        &in_code,
+        &Vec::<String>::new(),
+        &ShieldedState::empty(),
+        &BridgeState::empty(),
+    )
+    .expect("in-code state root");
+    assert_eq!(report.state_root, root);
+    verify_blocks(NodeOptions {
+        data_dir: data_dir.clone(),
+    })
+    .expect("height-zero replay of the file genesis");
+    fs::remove_dir_all(data_dir).expect("cleanup");
+}
+
+#[test]
+fn init_from_genesis_file_refuses_invalid_lanes_before_writing() {
+    let file_dir = unique_test_dir("postfiat-external-lane-invalid-file");
+    fs::create_dir_all(&file_dir).expect("file dir");
+    // A second lane on the same Base source: with the same id, then another.
+    let cases = [
+        ("duplicate-id", "base-erc20", "duplicate genesis external lane id `base-erc20`"),
+        (
+            "shared-source",
+            "base-erc20-b",
+            "genesis external lanes `base-erc20` and `base-erc20-b` both name Base source 84532",
+        ),
+    ];
+    for (label, second_id, needle) in cases {
+        let mut genesis = sepolia_rehearsal_lane_genesis();
+        let lanes = genesis.external_lanes.as_mut().expect("lanes");
+        let mut second = lanes[0].clone();
+        second.id = second_id.to_string();
+        lanes.push(second);
+        let genesis_file = file_dir.join(format!("{label}.json"));
+        fs::write(&genesis_file, genesis.to_json().expect("serialize")).expect("write genesis");
+        let data_dir = unique_test_dir(&format!("postfiat-external-lane-{label}-file-init"));
+        let error = init_from_genesis_file(InitFromGenesisFileOptions {
+            data_dir: data_dir.clone(),
+            node_id: "validator-0".to_string(),
+            genesis_file,
+        })
+        .expect_err("init must refuse the lane genesis");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput, "{label}: {error}");
+        assert!(error.to_string().contains(needle), "{label}: {error}");
+        assert!(!data_dir.exists(), "{label}: nothing is written");
+    }
+    fs::remove_dir_all(file_dir).expect("cleanup");
+}
+
 type LedgerEdit = fn(&mut LedgerState);
 
 /// A lane state with one recorded release of 5 atoms to the faucet account.

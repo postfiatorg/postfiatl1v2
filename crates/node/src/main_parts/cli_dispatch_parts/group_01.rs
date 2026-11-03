@@ -2,18 +2,32 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
     match command {
         "init" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
-            let chain_id = flag_value(flags, "--chain-id").unwrap_or(DEFAULT_CHAIN_ID);
             let node_id = flag_value(flags, "--node-id").unwrap_or(DEFAULT_NODE_ID);
-            let validator_count = flag_value(flags, "--validators")
-                .unwrap_or("1")
-                .parse::<u32>()
-                .map_err(|_| "--validators must be a u32".to_string())?;
-            let report = init(InitOptions {
-                data_dir: PathBuf::from(data_dir),
-                chain_id: chain_id.to_string(),
-                node_id: node_id.to_string(),
-                validator_count,
-            })
+            let report = if let Some(genesis_file) = flag_value(flags, "--genesis-file") {
+                if flag_present(flags, "--chain-id") || flag_present(flags, "--validators") {
+                    return Err(
+                        "--genesis-file sets the chain id and validator count; drop --chain-id and --validators"
+                            .to_string(),
+                    );
+                }
+                init_from_genesis_file(InitFromGenesisFileOptions {
+                    data_dir: PathBuf::from(data_dir),
+                    node_id: node_id.to_string(),
+                    genesis_file: PathBuf::from(genesis_file),
+                })
+            } else {
+                let chain_id = flag_value(flags, "--chain-id").unwrap_or(DEFAULT_CHAIN_ID);
+                let validator_count = flag_value(flags, "--validators")
+                    .unwrap_or("1")
+                    .parse::<u32>()
+                    .map_err(|_| "--validators must be a u32".to_string())?;
+                init(InitOptions {
+                    data_dir: PathBuf::from(data_dir),
+                    chain_id: chain_id.to_string(),
+                    node_id: node_id.to_string(),
+                    validator_count,
+                })
+            }
             .map_err(|error| format!("init failed: {error}"))?;
             let json = report
                 .to_json()

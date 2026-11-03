@@ -325,6 +325,24 @@ pub fn init(options: InitOptions) -> io::Result<StatusReport> {
     init_with_genesis(options.data_dir, options.node_id, genesis)
 }
 
+/// Initialises a data directory from a genesis file, external lanes included.
+/// The file is parsed with unknown fields refused and validated (lane rules
+/// included) before anything is written.
+pub fn init_from_genesis_file(options: InitFromGenesisFileOptions) -> io::Result<StatusReport> {
+    let json = std::fs::read_to_string(&options.genesis_file).map_err(|error| {
+        io::Error::new(
+            error.kind(),
+            format!(
+                "read genesis file {}: {error}",
+                options.genesis_file.display()
+            ),
+        )
+    })?;
+    let genesis = Genesis::from_json(&json)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
+    init_with_genesis(options.data_dir, options.node_id, genesis)
+}
+
 pub fn init_consensus_v2(options: InitConsensusV2Options) -> io::Result<StatusReport> {
     if options.activation_height == 0 {
         return Err(io::Error::new(

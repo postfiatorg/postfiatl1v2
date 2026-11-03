@@ -601,6 +601,7 @@ fn print_usage() {
     eprintln!(
         r#"usage:
   postfiat-node init [--data-dir PATH] [--chain-id ID] [--node-id ID] [--validators N]
+  postfiat-node init --genesis-file PATH [--data-dir PATH] [--node-id ID]
   postfiat-node init-consensus-v2 [--data-dir PATH] [--chain-id ID] [--node-id ID] [--validators N] --activation-height N
   postfiat-node topology [--validators N] [--base-port PORT] [--hosts CSV --rpc-base-port PORT] [--output PATH]
   postfiat-node topology-consensus-v2 [--validators N] [--base-port PORT] [--hosts CSV --rpc-base-port PORT] --activation-height N [--storage-activation-height N] [--output PATH]

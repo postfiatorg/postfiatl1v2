@@ -79,4 +79,4 @@ Mempool admission reports ``mempool admission rejected `<code>` ``; the dry run 
 - The real Base source attestation path: checkpoint observation and votes for a lane, a lane receipt proof built from a Base block, and that source's own qualification. This run used committee-signed fixtures.
 - A minimum lock amount in `PFTLockV1` at or above the PFTL account reserve (10 atoms).
 - Pruning the release records behind the finalized checkpoint, keeping the root.
-- A genesis build path for lanes: a command that initialises from a genesis file with lanes and a topology bound to it.
+- A topology bound to a lane genesis: `topology-consensus-v2` derives its domain from a genesis without lanes (`init --genesis-file` now initialises from one).

@@ -71,6 +71,19 @@ The state commitment covers every field but `releases` (`ExternalLaneState::stat
 The lane list is omitted from the ledger JSON and from the state commitment when there are no lanes, so a chain without lanes keeps its state root. When a lane exists, its committed fields are committed at every height, `release_history_root` included but never the release records: unlike the NAV fields beside them they do not wait for the complete-NAV commitment, because they are native supply.
 Tests pin this: the deployed `postfiat-wan-devnet-2` genesis re-serialises byte for byte with its hash, and a populated lane-less ledger keeps the state root it had before lanes existed.
 
+## Starting a chain with a lane
+
+`init` takes the whole genesis from a file:
+
+```sh
+postfiat-node init --genesis-file crates/node/testdata/external-lane-genesis/genesis.json \
+  --data-dir ./data/validator-0 --node-id validator-0
+```
+
+The file sets the chain id, validator count, activation heights and lanes, so `--chain-id` and `--validators` are refused beside it. Unknown fields are refused, and the genesis is validated, lane rules included (one id and one Base source per lane), before anything is written; a refusal exits with `init failed: <rule>` and leaves no data directory. The data directory gets the lane records in the height-zero ledger and the faucet at the native supply minus the reserves; the report's `genesis_hash` and `state_root` are those of the file's genesis.
+
+The example file has one Base Sepolia lane: the rehearsal lock `0xe36e7fc384564419187546c19719a5654266de0b` and token `0x18fe4ca51a0ce042688d5a54917319d03b527d92`, with the code hashes of `crates/pft-token-contracts/deployments/pft-lock-base-84532/deployment.json`, 300,000,000 atoms reserved and a 200 bps cap; its committee root is a placeholder. A test pins its bytes and hash and checks that `init` gives the same ledger and state root as the in-code lane genesis (`init_from_lane_genesis_file_matches_the_in_code_lane_genesis`, `crates/node/src/tests/genesis_external_lane_tests.rs`). `topology-consensus-v2` still derives its domain from a genesis without lanes.
+
 ## What the conservation check counts
 
 `native_pft_supply_breakdown` (`crates/node/src/block_replay_wallet.rs`) reports two lines and their total:
