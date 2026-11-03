@@ -622,6 +622,59 @@
         fs::remove_dir_all(fixture.data_dir).ok();
     }
 
+    /// The counterpart: a batch that is invalid against a settled tip (signed
+    /// at a sequence another committed batch already used) is still rejected
+    /// terminally by a follower's pass, and stays rejected.
+    #[test]
+    fn private_action_service_rejects_an_invalid_batch_at_a_stable_tip_terminally() {
+        let fixture = private_action_fixture("postfiat-private-action-stable-reject");
+        let landed =
+            private_submit_request(&fixture, &private_ingress_action_json(&fixture, 2, 91));
+        let stale =
+            private_submit_request(&fixture, &private_ingress_action_json(&fixture, 3, 92));
+        private_action_submit(&fixture.data_dir, &landed).expect("reserve landed");
+        private_action_submit(&fixture.data_dir, &stale).expect("reserve stale");
+        let landed_record = PrivateActionAdmissionStore::open(&fixture.data_dir)
+            .unwrap()
+            .get(&landed.intent_id)
+            .unwrap()
+            .clone();
+        apply_reserved_batch(&fixture.data_dir, &landed_record);
+        let tip = NodeStore::new(&fixture.data_dir).read_chain_tip().unwrap();
+        let follower = || {
+            private_action_service_step(&fixture.data_dir, |_| Ok(false), |_, _| {
+                panic!("a follower never runs the round")
+            })
+            .expect("follower pass")
+        };
+        let first = follower();
+        let second = follower();
+        assert_eq!(
+            NodeStore::new(&fixture.data_dir).read_chain_tip().unwrap(),
+            tip,
+            "the tip is stable"
+        );
+        assert!(
+            first.iter().any(|step| step.intent_id == stale.intent_id
+                && step.to == PrivateActionState::Rejected),
+            "condition: invalid batch at a stable tip; observed: {first:?}; expected: rejected"
+        );
+        assert!(
+            second.iter().all(|step| step.intent_id != stale.intent_id),
+            "condition: a later pass; observed: {second:?}; expected: the rejection is terminal"
+        );
+        let receipt = private_action_receipt(&fixture.data_dir, &stale.intent_id).unwrap();
+        assert_eq!(receipt.state, "rejected");
+        assert!(receipt.record.unwrap().outcome.unwrap().inclusion.is_none());
+        assert_eq!(
+            private_action_receipt(&fixture.data_dir, &landed.intent_id)
+                .unwrap()
+                .state,
+            "accepted"
+        );
+        fs::remove_dir_all(fixture.data_dir).ok();
+    }
+
     #[test]
     fn private_action_store_tolerates_a_torn_tail_and_refuses_corruption() {
         let data_dir = unique_test_dir("postfiat-private-action-store");

@@ -375,6 +375,9 @@ struct FinalizedAdmissionState {
     bridge: BridgeState,
     ordered_batches: Vec<String>,
     tip_height: u64,
+    /// The tip read before the state parts; a verdict is terminal only while
+    /// it still holds (`admission_state_is_settled`).
+    tip: ChainTipState,
 }
 
 fn read_finalized_admission_state(data_dir: &Path) -> io::Result<FinalizedAdmissionState> {
@@ -388,8 +391,27 @@ fn read_finalized_admission_state(data_dir: &Path) -> io::Result<FinalizedAdmiss
         bridge: store.read_bridge()?,
         ordered_batches: store.read_ordered_batches()?,
         tip_height: tip.height,
+        tip,
         genesis,
     })
+}
+
+/// Whether a verdict taken against `state` may be terminal: the state files
+/// are the committed tip's (their replicated root is the tip's root) and the
+/// tip has not moved since `state` was read. A block commit writes the state
+/// files before the ordered batch, the block record and the tip
+/// (storage_commit.rs), so a read inside a commit sees state ahead of its tip.
+fn admission_state_is_settled(
+    data_dir: &Path,
+    state: &FinalizedAdmissionState,
+) -> io::Result<bool> {
+    let store = NodeStore::new(data_dir);
+    let root = lifecycle_queries::current_replicated_state_root(&store, &state.genesis)?;
+    let tip = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &state.genesis)?;
+    Ok(root == state.tip.state_root
+        && tip.height == state.tip.height
+        && tip.block_hash == state.tip.block_hash
+        && tip.state_root == state.tip.state_root)
 }
 
 /// Runs the execution path's verification for the next height against the
@@ -773,6 +795,23 @@ where
     let state = read_finalized_admission_state(data_dir)?;
     consensus_artifacts::verify_shielded_action_batch_id(&state.genesis, &batch)?;
     if let Err((code, message)) = verify_private_batch(&state, &batch)? {
+        // A batch a block commit is including fails against state that already
+        // holds its effects. Settle it from the chain if it is there; record a
+        // terminal rejection only against a settled tip, otherwise leave the
+        // record queued for the next pass.
+        if let Some((inclusion, receipts)) =
+            private_action_chain_inclusion(data_dir, &record.batch_id)?
+        {
+            steps.push(finish(
+                &mut store,
+                record,
+                included_outcome(inclusion, &receipts),
+            )?);
+            return Ok(steps);
+        }
+        if !admission_state_is_settled(data_dir, &state)? {
+            return Ok(steps);
+        }
         let outcome = refused_outcome(code, message);
         steps.push(finish(&mut store, record, outcome)?);
         return Ok(steps);
