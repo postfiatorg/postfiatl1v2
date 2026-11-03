@@ -2,7 +2,7 @@
 
 **Status:** Active. Priority one for this lane from 2026-10-26. Authorizes no Base mainnet deployment.
 **Date:** 2026-10-26
-**Source paper:** [ERC-20 options paper](../../listings/coinbase/pft-erc20-representation-options-20261026.md), Text Improvement Harness full gate 85.67 on 2026-10-26 after four passes, 82.60 on 2026-10-28 as it stood and 84.00 after one more pass. It is not yet locked as the research specification (M1).
+**Source paper:** [ERC-20 options paper](../../listings/coinbase/pft-erc20-representation-options-20261026.md), Text Improvement Harness full gate 85.67 on 2026-10-26 after four passes, 82.60 on 2026-10-28 as it stood and 84.00 after one more pass. Locked as the research specification on 2026-11-03 at 87.27 (M1).
 **Basis:** [Coinbase integration plan](../../listings/coinbase/integration-plan.md), interim path (`integration-plan.md:71-74`, `:719-739`)
 
 ## BLUF
@@ -70,7 +70,7 @@ Decided by the product owner 2026-10-28: total supply 100 billion PFT; the Base 
 
 ## Mandate deliverables (AGENTS.md)
 
-- [ ] M1 *(this lane)* Lock the source paper as the research specification at 86 or above on the full gate, requested as a Task Node task. It stood at 85.67 on 2026-10-26, then at 82.60 on 2026-10-28 and 84.00 after one more pass.
+- [x] M1 *(this lane)* Lock the source paper as the research specification at 86 or above on the full gate, requested as a Task Node task. It stood at 85.67 on 2026-10-26, then at 82.60 on 2026-10-28 and 84.00 after one more pass. Locked on 2026-11-03 at 87.27 (GPT-6 Astra Pro 85.00, Claude Fable 5.1 86.20, GLM 5.3 90.60; run group `pft-erc20-options-20261103-r11`), from 84.13 as it stood (`-r10`), after one `openai/gpt-5.6-sol-pro` pass and a fact check against main; Task Node `task_8c15b90660d7c39f5b939352a7781490`.
 - [x] M2 *(this lane)* A Python CLI that reads the token's state: address, total supply, decimals and treasury balance.
   - `python/postfiat_rpc/pft_token.py` (`--record` or `--token`/`--treasury`, JSON or `--table`, exit 2 on a chain-id mismatch, a token without code or a malformed answer); `python/tests/test_pft_token.py`: 10 tests. Documented in [RPC examples](../../rpc/examples.md#erc-20-pft-on-base).
 - [x] M3 *(this lane)* A user-facing interface that consumes the CLI output.
