@@ -20,6 +20,9 @@ pub const EXTERNAL_LANE_SOURCE_CHAIN_IDS: [u64; 2] = [
     EXTERNAL_LANE_BASE_SEPOLIA_CHAIN_ID,
 ];
 const EXTERNAL_LANE_ROUTE_CONFIG_DOMAIN: &[u8] = b"postfiat.external_lane.route_config.v1";
+const EXTERNAL_LANE_RELEASE_HISTORY_DOMAIN: &[u8] = b"postfiat.external_lane.release_history.v1";
+/// A release history root is 48 bytes (SHA3-384).
+const EXTERNAL_LANE_RELEASE_HISTORY_ROOT_HEX_LEN: usize = 96;
 
 // Refusal codes of `external_lane_release_v1`. A refused release changes no
 // state and consumes no Lock nonce, so it can be retried.
@@ -27,6 +30,7 @@ pub const EXTERNAL_LANE_NOT_CONFIGURED: &str = "external_lane_not_configured";
 pub const EXTERNAL_LANE_NONCE_ALREADY_RELEASED: &str = "external_lane_nonce_already_released";
 pub const EXTERNAL_LANE_REMAINDER_EXCEEDED: &str = "external_lane_remainder_exceeded";
 pub const EXTERNAL_LANE_WINDOW_CAP_EXCEEDED: &str = "external_lane_window_cap_exceeded";
+pub const EXTERNAL_LANE_WINDOW_REGRESSED: &str = "external_lane_window_regressed";
 pub const EXTERNAL_LANE_SOURCE_MISMATCH: &str = "external_lane_source_mismatch";
 pub const EXTERNAL_LANE_PROOF_INVALID: &str = "external_lane_proof_invalid";
 pub const EXTERNAL_LANE_CHECKPOINT_MISMATCH: &str = "external_lane_checkpoint_mismatch";
@@ -158,8 +162,10 @@ impl GenesisExternalLane {
     }
 }
 
-/// Validates a genesis lane list: non-empty, unique ids, and a reserved total
-/// strictly below the native supply so the faucet keeps a positive balance.
+/// Validates a genesis lane list: non-empty, unique ids, one lane per Base
+/// source (chain id and lock contract, so a Lock is released by one lane
+/// only), and a reserved total strictly below the native supply so the faucet
+/// keeps a positive balance.
 pub fn validate_genesis_external_lanes(
     lanes: &[GenesisExternalLane],
     native_supply_atoms: u64,
@@ -168,11 +174,22 @@ pub fn validate_genesis_external_lanes(
         return Err("genesis external_lanes must be absent or non-empty".to_string());
     }
     let mut ids = BTreeSet::new();
+    let mut sources = BTreeMap::new();
     let mut reserved_total = 0_u64;
     for lane in lanes {
         lane.validate()?;
         if !ids.insert(lane.id.as_str()) {
             return Err(format!("duplicate genesis external lane id `{}`", lane.id));
+        }
+        let source = (
+            lane.policy.chain_id,
+            lane.policy.lock_contract_address.as_str(),
+        );
+        if let Some(first) = sources.insert(source, lane.id.as_str()) {
+            return Err(format!(
+                "genesis external lanes `{first}` and `{}` both name Base source {} lock contract {}",
+                lane.id, source.0, source.1
+            ));
         }
         reserved_total = reserved_total
             .checked_add(lane.reserved_atoms)
@@ -264,6 +281,12 @@ impl ExternalLaneReleaseRecord {
 /// (`reserved_atoms - released_atoms`) is native supply that is not in
 /// circulation; `external_lane_release_v1` is the only writer of the release
 /// fields, and every released atom has a record in `releases`.
+///
+/// The state commitment covers the release fields and
+/// `release_history_root`, a SHA3-384 hash chain over the records in
+/// application order; the records themselves stay in the stored ledger for
+/// reads and replay and are checked against the root when a replay base is
+/// loaded, so the per-block commitment does not grow with them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExternalLaneState {
@@ -274,10 +297,50 @@ pub struct ExternalLaneState {
     pub released_lock_nonces: BTreeSet<u64>,
     pub window_index: u64,
     pub window_released_atoms: u64,
-    /// Release history in application order. Omitted while empty, so an
+    /// Hash chain over `releases`. Omitted while there is none, so an
     /// unreleased lane encodes and commits exactly as it did in P2.2.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_history_root: Option<String>,
+    /// Release history in application order; not in the state commitment.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub releases: Vec<ExternalLaneReleaseRecord>,
+}
+
+/// The committed part of an `ExternalLaneState`: every field but the records.
+#[derive(Serialize)]
+struct ExternalLaneCommitment<'a> {
+    lane_id: &'a str,
+    reserved_atoms: u64,
+    released_atoms: u64,
+    released_lock_nonces: &'a BTreeSet<u64>,
+    window_index: u64,
+    window_released_atoms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    release_history_root: Option<&'a str>,
+}
+
+/// The release history root after `record`: SHA3-384 over a domain tag, the
+/// previous root (empty for the first record) and the record's JSON.
+pub fn external_lane_release_history_root(
+    previous: Option<&str>,
+    record: &ExternalLaneReleaseRecord,
+) -> Result<String, String> {
+    let encoded = serde_json::to_vec(record)
+        .map_err(|error| format!("encode external lane release: {error}"))?;
+    let mut hasher = Sha3_384::new();
+    hasher.update(EXTERNAL_LANE_RELEASE_HISTORY_DOMAIN);
+    hasher.update([0_u8]);
+    hasher.update(previous.unwrap_or_default().as_bytes());
+    hasher.update([0_u8]);
+    hasher.update(encoded);
+    let digest: [u8; 48] = hasher.finalize().into();
+    Ok(format!(
+        "0x{}",
+        digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    ))
 }
 
 impl ExternalLaneState {
@@ -289,6 +352,7 @@ impl ExternalLaneState {
             released_lock_nonces: BTreeSet::new(),
             window_index: 0,
             window_released_atoms: 0,
+            release_history_root: None,
             releases: Vec::new(),
         }
     }
@@ -325,12 +389,26 @@ impl ExternalLaneState {
                 self.lane_id
             ));
         }
-        self.validate_recorded_releases()
+        if self.released_lock_nonces.len() as u64 > self.released_atoms {
+            return Err(format!(
+                "external lane `{}` has more Lock nonces than released atoms",
+                self.lane_id
+            ));
+        }
+        if let Some(root) = &self.release_history_root {
+            validate_lane_hex(
+                "release_history_root",
+                root,
+                EXTERNAL_LANE_RELEASE_HISTORY_ROOT_HEX_LEN,
+            )?;
+        }
+        Ok(())
     }
 
     /// The release fields must be exactly what the recorded releases add up
     /// to: the nonce set is the records' nonces, each once, and
-    /// `released_atoms` is the sum of their amounts.
+    /// `released_atoms` is the sum of their amounts. Walks every record, so
+    /// it runs when a replay base is loaded, not per block.
     fn validate_recorded_releases(&self) -> Result<(), String> {
         let mut nonces = BTreeSet::new();
         let mut released = 0_u64;
@@ -368,6 +446,7 @@ impl ExternalLaneState {
     /// follow from the recorded heights, no window above the cap.
     pub fn validate_against_genesis(&self, lane: &GenesisExternalLane) -> Result<(), String> {
         self.validate()?;
+        self.validate_recorded_releases()?;
         if self.lane_id != lane.id {
             return Err(format!(
                 "external lane `{}` checked against genesis lane `{}`",
@@ -383,7 +462,9 @@ impl ExternalLaneState {
         let cap = lane.window_cap_atoms();
         let mut per_window = BTreeMap::<u64, u64>::new();
         let mut previous_height = 0_u64;
+        let mut root = None;
         for record in &self.releases {
+            root = Some(external_lane_release_history_root(root.as_deref(), record)?);
             if record.source_chain_id != lane.policy.chain_id
                 || record.lock_contract_address != lane.policy.lock_contract_address
             {
@@ -418,6 +499,12 @@ impl ExternalLaneState {
             return Err(format!(
                 "external lane `{}` has window {} with {} atoms released, but its recorded releases give window {window_index} with {window_released}",
                 self.lane_id, self.window_index, self.window_released_atoms
+            ));
+        }
+        if self.release_history_root != root {
+            return Err(format!(
+                "external lane `{}` release history root {:?} does not match its recorded releases {:?}",
+                self.lane_id, self.release_history_root, root
             ));
         }
         Ok(())
@@ -455,6 +542,15 @@ impl ExternalLaneState {
             ));
         }
         let window_index = lane.window_index_at(height);
+        if window_index < self.window_index {
+            return Err((
+                EXTERNAL_LANE_WINDOW_REGRESSED,
+                format!(
+                    "external lane `{}` release window {window_index} is below its recorded window {}",
+                    self.lane_id, self.window_index
+                ),
+            ));
+        }
         let window_released = if window_index == self.window_index {
             self.window_released_atoms
         } else {
@@ -497,12 +593,27 @@ impl ExternalLaneState {
         self.window_released_atoms += record.amount_atoms;
         self.released_atoms += record.amount_atoms;
         self.released_lock_nonces.insert(record.lock_nonce);
+        self.release_history_root = Some(
+            external_lane_release_history_root(self.release_history_root.as_deref(), &record)
+                .map_err(|error| (EXTERNAL_LANE_PROOF_INVALID, error))?,
+        );
         self.releases.push(record);
         Ok(())
     }
 
+    /// The committed fields, without the release records: bounded per
+    /// release by one nonce, whatever the records hold.
     pub fn state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
         self.validate()?;
-        serde_json::to_vec(self).map_err(|error| format!("encode external lane state: {error}"))
+        serde_json::to_vec(&ExternalLaneCommitment {
+            lane_id: &self.lane_id,
+            reserved_atoms: self.reserved_atoms,
+            released_atoms: self.released_atoms,
+            released_lock_nonces: &self.released_lock_nonces,
+            window_index: self.window_index,
+            window_released_atoms: self.window_released_atoms,
+            release_history_root: self.release_history_root.as_deref(),
+        })
+        .map_err(|error| format!("encode external lane state: {error}"))
     }
 }
