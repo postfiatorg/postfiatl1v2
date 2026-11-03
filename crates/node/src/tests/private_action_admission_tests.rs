@@ -551,6 +551,77 @@
         fs::remove_dir_all(fixture.data_dir).ok();
     }
 
+    /// A follower's pass that runs while its transport is committing the
+    /// block carrying the batch. The commit writes the ledger, governance,
+    /// shielded and bridge files first and the ordered batch, block record and
+    /// chain tip after them (storage_commit.rs), so the pass finds no
+    /// inclusion yet re-verifies the batch against a state that already holds
+    /// its effects. The batch is on chain; its record must not end as a final
+    /// rejection that disagrees with the proposer's accepted receipt.
+    #[test]
+    fn private_action_service_pass_during_the_block_commit_does_not_reject_the_included_batch() {
+        let fixture = private_action_fixture("postfiat-private-action-mid-commit");
+        let request =
+            private_submit_request(&fixture, &private_ingress_action_json(&fixture, 2, 81));
+        private_action_submit(&fixture.data_dir, &request).expect("reserve");
+        let record = PrivateActionAdmissionStore::open(&fixture.data_dir)
+            .unwrap()
+            .get(&request.intent_id)
+            .unwrap()
+            .clone();
+        let snapshot = || {
+            fs::read_dir(&fixture.data_dir)
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .filter(|path| path.is_file())
+                .map(|path| (path.clone(), fs::read(&path).unwrap()))
+                .collect::<BTreeMap<_, _>>()
+        };
+        let restore = |files: &BTreeMap<PathBuf, Vec<u8>>, keep: &[&str]| {
+            for (path, _) in snapshot() {
+                if !files.contains_key(&path) {
+                    fs::remove_file(&path).unwrap();
+                }
+            }
+            for (path, bytes) in files {
+                let name = path.file_name().unwrap().to_str().unwrap();
+                if !keep.contains(&name) {
+                    fs::write(path, bytes).unwrap();
+                }
+            }
+        };
+        let before = snapshot();
+        apply_reserved_batch(&fixture.data_dir, &record);
+        let after = snapshot();
+        // The commit's window: the state files are written, the rest is not.
+        restore(
+            &before,
+            &[
+                postfiat_storage::LEDGER_FILE,
+                postfiat_storage::GOVERNANCE_FILE,
+                postfiat_storage::SHIELDED_FILE,
+                postfiat_storage::BRIDGE_FILE,
+            ],
+        );
+        let follower = |label: &str| {
+            private_action_service_step(&fixture.data_dir, |_| Ok(false), |_, _| {
+                panic!("a follower never runs the round")
+            })
+            .unwrap_or_else(|error| panic!("{label}: {error}"))
+        };
+        let mid_commit = follower("follower pass mid-commit");
+        restore(&after, &[]);
+        follower("follower pass after the commit");
+        let receipt = private_action_receipt(&fixture.data_dir, &request.intent_id).unwrap();
+        assert_eq!(
+            receipt.state,
+            "accepted",
+            "condition: the batch is on chain; observed: mid-commit steps {mid_commit:?}, outcome {:?}; expected: accepted from the chain",
+            receipt.record.and_then(|record| record.outcome)
+        );
+        fs::remove_dir_all(fixture.data_dir).ok();
+    }
+
     #[test]
     fn private_action_store_tolerates_a_torn_tail_and_refuses_corruption() {
         let data_dir = unique_test_dir("postfiat-private-action-store");
