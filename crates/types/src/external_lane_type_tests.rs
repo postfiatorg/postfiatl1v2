@@ -799,6 +799,28 @@ fn external_lane_releases_past_the_record_ceiling_with_pruning_are_admitted() {
 }
 
 #[test]
+fn external_lane_release_of_zero_atoms_is_refused_before_a_release_can_prune_it() {
+    // A zero-amount release followed by a release one window later that would
+    // prune it: the writer's own state must still pass the lane rule.
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    let zero = state.apply_release(&lane, sample_release(0, 0, 5));
+    state
+        .apply_release(&lane, sample_release(1, 10, 105))
+        .expect("positive release");
+    state
+        .validate_against_genesis(&lane)
+        .expect("the writer's own state passes the lane rule");
+    let (code, error) = zero.unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_PROOF_INVALID);
+    assert!(error.contains("zero amount"), "{error}");
+    let (code, _) = state.check_release(&lane, 2, 0, 106).unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_PROOF_INVALID);
+    assert_eq!((state.release_count(), state.pruned_release_count), (1, 0));
+    assert_eq!(state.released_lock_nonces, [1_u64].into_iter().collect());
+}
+
+#[test]
 fn pruned_external_lane_refuses_forged_records_tampered_roots_and_removed_ids() {
     let lane = release_test_lane();
     let state = lane_after_releases(&lane, &[5, 105, 106]);

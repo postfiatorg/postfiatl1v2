@@ -324,13 +324,16 @@ impl ExternalLaneReleaseRecord {
 /// Live record of a genesis external lane. Its remainder
 /// (`reserved_atoms - released_atoms`) is native supply that is not in
 /// circulation; `external_lane_release_v1` is the only writer of the release
-/// fields, and every released atom has a record in `releases`.
+/// fields, and every released atom has a stored record in `releases` or is in
+/// the committed pruned aggregate (`pruned_released_atoms`) and root
+/// (`pruned_release_history_root`).
 ///
-/// The state commitment covers the release fields and
+/// The state commitment covers the release fields, the pruned fields and
 /// `release_history_root`, a SHA3-384 hash chain over the records in
-/// application order; the records themselves stay in the stored ledger for
-/// reads and replay and are checked against the root when a replay base is
-/// loaded, so the per-block commitment does not grow with them.
+/// application order; the stored records stay in the ledger for reads and
+/// replay and, when a replay base is loaded, are chained from the pruned root
+/// (or from nothing when unpruned) to `release_history_root`, so the per-block
+/// commitment does not grow with them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExternalLaneState {
@@ -441,7 +444,8 @@ impl ExternalLaneState {
 
     /// The leading records that pruning at `finalized_height` removes: those
     /// released at or below `finalized_height` minus the retention window and
-    /// in a window before `open_window`, whose records the cap accounting and
+    /// in a window before `open_window`. The records retained are the
+    /// retention window's and the open window's, which the cap accounting and
     /// the window check still need. Records are in height order, so the
     /// prunable ones are a prefix.
     fn release_prune(
@@ -539,9 +543,10 @@ impl ExternalLaneState {
             self.pruned_released_atoms == 0 && self.pruned_release_history_root.is_none()
         } else {
             // Pruning keeps the open window's records, so a pruned lane still
-            // stores its latest release.
-            self.pruned_released_atoms >= pruned
-                && self.pruned_release_history_root.is_some()
+            // stores its latest release. The pruned atoms are checked by the
+            // exact sum below, the pruned count by the nonce count and the
+            // pruned root by the chain to `release_history_root`.
+            self.pruned_release_history_root.is_some()
                 && !self.releases.is_empty()
         };
         if !pruned_fields_consistent {
@@ -690,6 +695,17 @@ impl ExternalLaneState {
         height: u64,
         max_records: usize,
     ) -> Result<(), (&'static str, String)> {
+        // The operation's own validation refuses a zero amount first; the
+        // lane refuses it too, so no API caller can store a zero record.
+        if amount_atoms == 0 {
+            return Err((
+                EXTERNAL_LANE_PROOF_INVALID,
+                format!(
+                    "external lane `{}` release of Lock nonce {lock_nonce} has zero amount",
+                    self.lane_id
+                ),
+            ));
+        }
         if self.released_lock_nonces.contains(&lock_nonce) {
             return Err((
                 EXTERNAL_LANE_NONCE_ALREADY_RELEASED,
@@ -760,8 +776,8 @@ impl ExternalLaneState {
 
     /// Applies a checked release: records it, adds the nonce and the amount,
     /// moves the window, and prunes the records behind the finalized height.
-    /// PFTL blocks are final when committed, so the release's own height is
-    /// the finalized height; a release is the only writer of records, so the
+    /// The node has no rollback path for a committed PFTL block, so the
+    /// release's own height is the finalized height; a release is the only writer of records, so the
     /// stored count can only cross the ceiling here. The caller credits the
     /// recipient. Every fallible step runs before the first mutation, so a
     /// refusal leaves the lane as it was.
