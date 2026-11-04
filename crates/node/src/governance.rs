@@ -61,6 +61,23 @@ pub fn ratify_governance(options: RatifyGovernanceOptions) -> io::Result<Governa
             ));
         }
     }
+    if postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind).is_some() {
+        let active = active_validator_ids(&store.read_governance()?)?;
+        let refusal = postfiat_types::external_lane_release_cap_lane_refusal(
+            &amendment.kind,
+            genesis.external_lanes().iter().map(|lane| lane.id.as_str()),
+        )
+        .or_else(|| {
+            postfiat_types::external_lane_release_cap_authority_refusal(&amendment, Some(&active))
+        })
+        .or_else(|| postfiat_types::external_lane_release_cap_slot_refusal(&amendment, None));
+        if let Some((code, message)) = refusal {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("{code}: {message}"),
+            ));
+        }
+    }
     write_amendment_file(&options.amendment_file, &amendment)?;
     Ok(amendment)
 }

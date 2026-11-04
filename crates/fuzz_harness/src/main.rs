@@ -1344,6 +1344,29 @@ fn fuzz_pruned_external_lane(
             )
             .map_err(|(code, message)| format!("{code}: {message}"))?;
     }
+    // Up to three governed cap amendments drawn from the seed: the stored
+    // records validate exactly when each one-atom window fits the cap active
+    // at its release height.
+    let amendments: Vec<_> = (0..seed % 4)
+        .map(|index| postfiat_types::ExternalLaneReleaseCapAmendment {
+            amendment_id: format!("fuzz-cap-{seed}-{index}"),
+            cap_bps: [0, 1, 5_000, 10_000][usize::try_from((seed / 4 + index) % 4).unwrap_or(0)],
+            committed_height: seed.wrapping_add(index * 3) % 9,
+        })
+        .collect();
+    let expected = state.releases.iter().all(|record| {
+        let cap_bps = lane
+            .release_cap_schedule_at(&amendments, record.released_at_height)
+            .active_cap_bps;
+        lane.window_cap_atoms_for_bps(cap_bps) >= record.amount_atoms
+    });
+    let result = state.validate_against_genesis_with_caps(&lane, &amendments);
+    if result.is_ok() != expected {
+        return Err(format!(
+            "governed cap validation {result:?} disagrees with the schedule for {amendments:?}"
+        )
+        .into());
+    }
     state.validate_against_genesis(&lane)?;
     Ok((state, releases))
 }

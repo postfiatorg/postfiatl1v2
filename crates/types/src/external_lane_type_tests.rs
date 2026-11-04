@@ -1183,3 +1183,98 @@ fn recorded_releases_name_the_committee_active_at_their_heights() {
     early.apply_release(&lane, release(0, 50, Some(3))).expect("forged early");
     assert!(early.validate_against_genesis_governed(&lane, &[], &moves).is_err());
 }
+
+#[test]
+fn cap_table_halts_a_lane_it_cannot_hold() {
+    let lane = release_test_lane();
+    let caps = ExternalLaneReleaseCaps::genesis();
+    assert_eq!(caps.cap_bps_at(EXTERNAL_LANE_MAX_LANES - 1, &lane, 10), 200);
+    assert_eq!(caps.cap_bps_at(EXTERNAL_LANE_MAX_LANES, &lane, 10), 0);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "exceed the cap table")]
+fn cap_table_refuses_more_lanes_than_it_holds() {
+    let lanes = (0..=EXTERNAL_LANE_MAX_LANES)
+        .map(|index| sample_external_lane_on(&format!("lane-{index}"), 1_000, &format!("{:02x}", 0x10 + index)))
+        .collect::<Vec<_>>();
+    let _ = ExternalLaneReleaseCaps::from_amendments(&lanes, |_| Vec::new());
+}
+
+fn cap_amendment_by(validators: &[&str], quorum: usize, support: &[&str], slot: u64) -> GovernanceAmendment {
+    let ids = |names: &[&str]| names.iter().map(|name| name.to_string()).collect::<Vec<_>>();
+    GovernanceAmendment {
+        amendment_id: "cap".to_string(),
+        chain_id: "chain".to_string(),
+        genesis_hash: "hash".to_string(),
+        protocol_version: 1,
+        instance_id: "instance".to_string(),
+        proposal_id: "proposal".to_string(),
+        certificate_id: "certificate".to_string(),
+        proposer: validators[0].to_string(),
+        validators: ids(validators),
+        quorum,
+        kind: external_lane_release_cap_amendment_kind("base-erc20"),
+        value: 0,
+        activation_height: slot,
+        veto_until_height: 0,
+        paused: false,
+        support: ids(support),
+        votes: Vec::new(),
+        signed_authorizations: Vec::new(),
+    }
+}
+
+#[test]
+fn cap_amendment_needs_the_registry_threshold_of_the_active_set() {
+    let six = ["v0", "v1", "v2", "v3", "v4", "v5"];
+    let active = six.iter().map(|name| name.to_string()).collect::<Vec<_>>();
+    assert_eq!(external_lane_release_cap_threshold(6), 5);
+    assert_eq!(external_lane_release_cap_threshold(4), 3);
+    let refusal = |amendment: &GovernanceAmendment| {
+        external_lane_release_cap_authority_refusal(amendment, Some(&active)).map(|(code, _)| code)
+    };
+    let authority = Some(EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID);
+    assert_eq!(refusal(&cap_amendment_by(&six, 1, &six[..1], 9)), authority, "quorum 1");
+    assert_eq!(refusal(&cap_amendment_by(&six, 4, &six[..4], 9)), authority, "below the threshold");
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..4], 9)), authority, "support below");
+    assert_eq!(refusal(&cap_amendment_by(&six[..5], 5, &six[..5], 9)), authority, "an active validator omitted");
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 9)), None, "the threshold");
+    assert_eq!(refusal(&cap_amendment_by(&six, 6, &six, 9)), None, "all six");
+    // Without a registry the declared set is the reference.
+    let declared = cap_amendment_by(&six[..3], 3, &six[..3], 9);
+    assert_eq!(external_lane_release_cap_authority_refusal(&declared, None), None);
+    let mut other = declared.clone();
+    other.kind = "orchard_pool_pause".to_string();
+    other.quorum = 1;
+    assert_eq!(external_lane_release_cap_authority_refusal(&other, Some(&active)), None);
+}
+
+#[test]
+fn cap_amendment_names_its_proposal_slot() {
+    let six = ["v0", "v1", "v2", "v3", "v4", "v5"];
+    let refusal = |amendment: &GovernanceAmendment, slot| {
+        external_lane_release_cap_slot_refusal(amendment, slot).map(|(code, _)| code)
+    };
+    let invalid = Some(EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID);
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 9), Some(9)), None);
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 9), None), None);
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 0), None), invalid, "immediate lifecycle");
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 8), Some(9)), invalid, "another slot");
+    let mut paused = cap_amendment_by(&six, 5, &six[..5], 9);
+    paused.paused = true;
+    assert_eq!(refusal(&paused, Some(9)), invalid, "paused");
+}
+
+#[test]
+fn cap_amendment_for_a_lane_genesis_does_not_configure_is_refused() {
+    let lanes = ["base-erc20"];
+    let refusal = |kind: &str| external_lane_release_cap_lane_refusal(kind, lanes.into_iter()).map(|(code, _)| code);
+    assert_eq!(
+        refusal(&external_lane_release_cap_amendment_kind("not-a-lane")),
+        Some(EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED)
+    );
+    assert_eq!(refusal(&external_lane_release_cap_amendment_kind("base-erc20")), None);
+    assert_eq!(refusal("orchard_pool_pause"), None);
+}

@@ -156,6 +156,86 @@ pub fn external_lane_amendment_refusal(kind: &str, value: u32) -> Option<(&'stat
     })
 }
 
+/// A cap amendment for a lane id genesis does not configure.
+pub const EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED: &str =
+    "external_lane_release_cap_lane_not_configured";
+/// A cap amendment not declared by the active validator set at the
+/// registry threshold.
+pub const EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID: &str =
+    "external_lane_release_cap_authority_invalid";
+/// A cap amendment whose activation height is not its proposal slot.
+pub const EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID: &str = "external_lane_release_cap_slot_invalid";
+
+/// Validators of `validator_count` whose signatures a cap amendment needs:
+/// the registry threshold ⌊2n/3⌋ + 1 (design sections 5.1 and 5.2).
+pub fn external_lane_release_cap_threshold(validator_count: usize) -> usize {
+    validator_count.saturating_mul(2) / 3 + 1
+}
+
+/// The refusal of a cap amendment for a lane none of `lane_ids` names, `None`
+/// for a configured lane or any other kind.
+pub fn external_lane_release_cap_lane_refusal<'a>(
+    kind: &str,
+    mut lane_ids: impl Iterator<Item = &'a str>,
+) -> Option<(&'static str, String)> {
+    let lane_id = external_lane_release_cap_amendment_lane(kind)?;
+    (!lane_ids.any(|configured| configured == lane_id)).then(|| {
+        (
+            EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED,
+            format!("release cap amendment `{kind}` names a lane genesis does not configure"),
+        )
+    })
+}
+
+/// The refusal of a cap amendment's authority, `None` for any other kind:
+/// it must be declared by `active_validators` (its own set when the caller
+/// has no registry), with a quorum and support of at least the registry
+/// threshold.
+pub fn external_lane_release_cap_authority_refusal(
+    amendment: &crate::GovernanceAmendment,
+    active_validators: Option<&[String]>,
+) -> Option<(&'static str, String)> {
+    external_lane_release_cap_amendment_lane(&amendment.kind)?;
+    let validators = active_validators.unwrap_or(&amendment.validators);
+    let threshold = external_lane_release_cap_threshold(validators.len());
+    if amendment.validators != validators {
+        return Some((
+            EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
+            "release cap amendment must declare the active validator set".to_string(),
+        ));
+    }
+    (amendment.quorum < threshold || amendment.support.len() < threshold).then(|| {
+        (
+            EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
+            format!(
+                "release cap amendment needs quorum and support of at least the registry threshold {threshold} of {}",
+                validators.len()
+            ),
+        )
+    })
+}
+
+/// The refusal of a cap amendment's lifecycle, `None` for any other kind:
+/// it carries its proposal slot as its activation height (`slot` when the
+/// caller knows it) and is not paused. The slot gives each request its own
+/// id, so a repeated halt is a new amendment.
+pub fn external_lane_release_cap_slot_refusal(
+    amendment: &crate::GovernanceAmendment,
+    slot: Option<u64>,
+) -> Option<(&'static str, String)> {
+    external_lane_release_cap_amendment_lane(&amendment.kind)?;
+    (amendment.paused
+        || amendment.activation_height == 0
+        || slot.is_some_and(|slot| amendment.activation_height != slot))
+    .then(|| {
+        (
+            EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID,
+            "release cap amendment must name its proposal slot as its activation height and not be paused"
+                .to_string(),
+        )
+    })
+}
+
 const EXTERNAL_LANE_ROUTE_CONFIG_DOMAIN: &[u8] = b"postfiat.external_lane.route_config.v1";
 const EXTERNAL_LANE_RELEASE_HISTORY_DOMAIN: &[u8] = b"postfiat.external_lane.release_history.v1";
 /// A release history root is 48 bytes (SHA3-384).
@@ -316,11 +396,18 @@ impl ExternalLaneReleaseCaps {
     }
 
     /// The table for `lanes` under `amendments_of(lane_id)`, each lane's
-    /// committed cap amendments in commit order.
+    /// committed cap amendments in commit order. Genesis parse refuses more
+    /// than [`EXTERNAL_LANE_MAX_LANES`] lanes; a lane past the table is
+    /// halted by [`Self::cap_bps_at`] rather than left at its genesis cap.
     pub fn from_amendments(
         lanes: &[GenesisExternalLane],
         amendments_of: impl Fn(&str) -> Vec<ExternalLaneReleaseCapAmendment>,
     ) -> Self {
+        debug_assert!(
+            lanes.len() <= EXTERNAL_LANE_MAX_LANES,
+            "{} external lanes exceed the cap table of {EXTERNAL_LANE_MAX_LANES}",
+            lanes.len()
+        );
         let mut caps = Self::genesis();
         for (slot, lane) in caps.rules.iter_mut().zip(lanes) {
             let amendments = amendments_of(&lane.id);
@@ -331,13 +418,12 @@ impl ExternalLaneReleaseCaps {
         caps
     }
 
-    /// The cap of the lane at `lane_index` at `height`.
+    /// The cap of the lane at `lane_index` at `height`; 0 for an index the
+    /// table cannot hold, so such a lane releases nothing.
     pub fn cap_bps_at(&self, lane_index: usize, lane: &GenesisExternalLane, height: u64) -> u32 {
-        self.rules
-            .get(lane_index)
-            .copied()
-            .flatten()
-            .map_or(lane.release_cap_bps, |rule| rule.cap_bps_at(height))
+        self.rules.get(lane_index).map_or(0, |rule| {
+            rule.map_or(lane.release_cap_bps, |rule| rule.cap_bps_at(height))
+        })
     }
 }
 

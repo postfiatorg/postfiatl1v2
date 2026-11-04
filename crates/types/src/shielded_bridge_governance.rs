@@ -1568,6 +1568,9 @@ impl GovernanceState {
 
     /// The committed cap amendments of an external lane, in commit order,
     /// each with the height governance applied it (its activation record).
+    /// Execution writes the record with the amendment, so one without a
+    /// record was not committed by execution and is skipped, not dated at
+    /// height 0.
     pub fn external_lane_release_cap_amendments(
         &self,
         lane_id: &str,
@@ -1577,14 +1580,16 @@ impl GovernanceState {
             .filter(|amendment| {
                 crate::external_lane_release_cap_amendment_lane(&amendment.kind) == Some(lane_id)
             })
-            .map(|amendment| crate::ExternalLaneReleaseCapAmendment {
-                amendment_id: amendment.amendment_id.clone(),
-                cap_bps: amendment.value,
-                committed_height: self
+            .filter_map(|amendment| {
+                let record = self
                     .amendment_activation_records
                     .iter()
-                    .find(|record| record.amendment_id == amendment.amendment_id)
-                    .map_or(0, |record| record.activated_height),
+                    .find(|record| record.amendment_id == amendment.amendment_id)?;
+                Some(crate::ExternalLaneReleaseCapAmendment {
+                    amendment_id: amendment.amendment_id.clone(),
+                    cap_bps: amendment.value,
+                    committed_height: record.activated_height,
+                })
             })
             .collect()
     }
@@ -2836,5 +2841,43 @@ mod shielded_bridge_governance_tests {
         let mut route = vault_route(1, 110);
         route.expires_at_height = route.activation_height;
         assert!(route.validate().is_err());
+    }
+
+    fn activation_record(amendment: &GovernanceAmendment, height: u64) -> GovernanceAmendmentActivationRecord {
+        GovernanceAmendmentActivationRecord {
+            schema: "test".to_string(),
+            activation_record_id: format!("record-{}", amendment.amendment_id),
+            amendment_id: amendment.amendment_id.clone(),
+            chain_id: amendment.chain_id.clone(),
+            genesis_hash: amendment.genesis_hash.clone(),
+            protocol_version: amendment.protocol_version,
+            batch_id: "batch".to_string(),
+            kind: amendment.kind.clone(),
+            value: amendment.value,
+            previous_value: 0,
+            new_value: amendment.value,
+            activation_height: amendment.activation_height,
+            veto_until_height: amendment.veto_until_height,
+            activated_height: height,
+        }
+    }
+
+    #[test]
+    fn cap_amendment_without_an_activation_record_is_skipped_not_dated_at_genesis() {
+        let kind = crate::external_lane_release_cap_amendment_kind("base-erc20");
+        let mut governance = GovernanceState::new(6);
+        let dated = amendment(&kind, 50);
+        let undated = amendment(&kind, 0);
+        governance.apply(dated.clone());
+        governance.amendment_activation_records.push(activation_record(&dated, 40));
+        governance.apply(undated);
+        assert_eq!(
+            governance.external_lane_release_cap_amendments("base-erc20"),
+            vec![crate::ExternalLaneReleaseCapAmendment {
+                amendment_id: dated.amendment_id,
+                cap_bps: 50,
+                committed_height: 40,
+            }]
+        );
     }
 }

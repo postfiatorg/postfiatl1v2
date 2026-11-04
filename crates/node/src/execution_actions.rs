@@ -1224,6 +1224,14 @@ fn execute_governance_batch_with_replay(
                     ledger.as_deref(),
                     amendment,
                 )
+                .or_else(|| {
+                    external_lane_release_cap_rejection(
+                        governance,
+                        ledger.as_deref(),
+                        amendment,
+                        block_height,
+                    )
+                })
             })
         {
             receipts.push(Receipt::rejected(
@@ -1941,6 +1949,44 @@ pub(super) fn external_lane_committee_amendment_rejection(
     )
 }
 
+/// The refusal of a release cap amendment at block execution: its lane
+/// must be one the ledger (that is, genesis) configures, and it must be
+/// declared by the active validator set at the registry threshold with this
+/// block as its activation height (design section 5.1). A governance-only
+/// replay carries no ledger and checks the authority alone; a cap amendment
+/// for an unknown lane is inert there, as the cap table reads genesis lanes.
+pub(super) fn external_lane_release_cap_rejection(
+    governance: &GovernanceState,
+    ledger: Option<&LedgerState>,
+    amendment: &GovernanceAmendment,
+    block_height: u64,
+) -> Option<(&'static str, String)> {
+    postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind)?;
+    if let Some(ledger) = ledger {
+        if let Some(refusal) = postfiat_types::external_lane_release_cap_lane_refusal(
+            &amendment.kind,
+            ledger
+                .external_lanes
+                .iter()
+                .map(|lane| lane.lane_id.as_str()),
+        ) {
+            return Some(refusal);
+        }
+    }
+    let active = match active_validator_ids(governance) {
+        Ok(active) => active,
+        Err(error) => {
+            return Some((
+                postfiat_types::EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
+                format!("release cap amendment has no active validator set: {error}"),
+            ))
+        }
+    };
+    postfiat_types::external_lane_release_cap_authority_refusal(amendment, Some(&active)).or_else(
+        || postfiat_types::external_lane_release_cap_slot_refusal(amendment, Some(block_height)),
+    )
+}
+
 pub(super) fn governance_amendment_lifecycle_rejection(
     amendment: &GovernanceAmendment,
     block_height: u64,
@@ -2187,6 +2233,10 @@ pub(super) fn apply_governance_amendment_with_lifecycle_records(
     }
 }
 
+/// A release cap amendment has no arm and records 0: the cap in force at
+/// its commit height needs the genesis lane (its cap and window), which the
+/// governance-only replay paths do not carry. `external_lane_info` reports
+/// the cap in force (`release_cap_schedule_at`).
 pub(super) fn governance_amendment_current_value(governance: &GovernanceState, kind: &str) -> u32 {
     match kind {
         GOVERNANCE_KIND_VALIDATOR_SET => governance.active_validator_count,
