@@ -1136,15 +1136,18 @@ mod release_path {
     }
 
     fn lane_chain_with_window(label: &str, release_window_blocks: u64) -> Chain {
-        lane_chain_with(label, release_window_blocks, None)
+        lane_chain_with(label, release_window_blocks, None, 4)
     }
 
+    /// `validator_count` sizes the validator set and the lane committee,
+    /// which the FastSwap bootstrap binds to it, at quorum ⌊2n/3⌋ + 1.
     fn lane_chain_with(
         label: &str,
         release_window_blocks: u64,
         consensus_v2_activation_height: Option<u64>,
+        validator_count: u32,
     ) -> Chain {
-        let keys: Vec<_> = (0..4_u8)
+        let keys: Vec<_> = (0..u8::try_from(validator_count).expect("count"))
             .map(|index| ml_dsa_65_keygen_from_seed(&[0x81 + index; 32]))
             .collect();
         let mut committee = FastSwapCommitteeV1 {
@@ -1157,8 +1160,8 @@ mod release_path {
                 fastswap_schema_version: FASTSWAP_SCHEMA_VERSION_V1,
                 committee_epoch: 1,
                 committee_root: FastSwapCommitteeRootV1::ZERO,
-                validator_count: 4,
-                quorum: 3,
+                validator_count: u16::try_from(validator_count).expect("count"),
+                quorum: u16::try_from(2 * validator_count / 3 + 1).expect("quorum"),
             },
             validators: keys
                 .iter()
@@ -1170,7 +1173,7 @@ mod release_path {
                 .collect(),
         };
         committee.domain.committee_root = committee.computed_root().expect("root");
-        let mut genesis = lane_genesis(&format!("postfiat-lane-{label}"), 4);
+        let mut genesis = lane_genesis(&format!("postfiat-lane-{label}"), validator_count);
         genesis.external_lanes.as_mut().expect("lanes")[0].release_window_blocks =
             release_window_blocks;
         genesis.consensus_v2_activation_height = consensus_v2_activation_height;
@@ -1191,7 +1194,7 @@ mod release_path {
         let data_dir = unique_test_dir(&format!("postfiat-external-lane-{label}"));
         init_with_genesis(data_dir.clone(), "validator-0".to_string(), genesis.clone())
             .expect("init lane genesis");
-        bootstrap_committee(&data_dir, &committee);
+        bootstrap_committee(&data_dir, &committee, validator_count);
         let recipient_key = ml_dsa_65_keygen_from_seed(&[0x99; 32]);
         Chain {
             data_dir,
@@ -1202,9 +1205,9 @@ mod release_path {
         }
     }
 
-    /// Registers `committee` through a governance batch signed by all four
-    /// validators, as `fastswap_epoch_one_bootstrap_is_governance_bound_and_canonically_committed` does.
-    fn bootstrap_committee(data_dir: &Path, committee: &FastSwapCommitteeV1) {
+    /// Registers `committee` through a governance batch signed by all
+    /// `validator_count` validators, as `fastswap_epoch_one_bootstrap_is_governance_bound_and_canonically_committed` does.
+    fn bootstrap_committee(data_dir: &Path, committee: &FastSwapCommitteeV1, validator_count: u32) {
         let validator_keys =
             read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE)).expect("validator keys");
         let payload = postfiat_types::FastSwapGovernanceBootstrapPayloadV1 {
@@ -1219,7 +1222,7 @@ mod release_path {
         let batch_file = data_dir.join("fastswap-bootstrap-batch.json");
         fs::write(&payload_file, serde_json::to_vec_pretty(&payload).expect("payload json"))
             .expect("write payload");
-        let validators = local_validator_ids(4).expect("validator ids");
+        let validators = local_validator_ids(validator_count).expect("validator ids");
         create_fastswap_governance_bootstrap(FastSwapGovernanceBootstrapOptions {
             data_dir: data_dir.to_path_buf(),
             validators: validators.clone(),
@@ -1747,7 +1750,7 @@ mod release_path {
     #[test]
     fn pruned_lane_restores_from_a_finalized_checkpoint_snapshot() {
         // The committee bootstrap is block 1, the releases blocks 2 to 6.
-        let chain = lane_chain_with("checkpoint-prune", 2, Some(6));
+        let chain = lane_chain_with("checkpoint-prune", 2, Some(6), 4);
         for nonce in 1..=5_u64 {
             let tx = release_tx(&chain, "base-erc20", nonce, ACCOUNT_RESERVE + 100 * nonce, nonce);
             let receipt = admit_and_apply_with(&chain, &tx, &format!("prune-{nonce}"), nonce == 5);
@@ -2131,6 +2134,60 @@ mod release_path {
         assert!(receipts[0].accepted, "{receipts:?}");
         assert_eq!((amendment.quorum, amendment.support.len()), (3, 3));
         assert_eq!(lane_info(&chain.data_dir).release_cap.active_cap_bps, 0);
+        let _ = fs::remove_dir_all(chain.data_dir);
+    }
+
+    /// The devnet's size: six validators, threshold five. Four signatures at
+    /// quorum 4 are refused, five at quorum 5 lower the cap, and a zero cap
+    /// signed by five of six, one validator offline, halts the next block's
+    /// release.
+    #[test]
+    fn release_cap_amendment_on_six_validators_needs_five_signatures() {
+        const THRESHOLD: usize = 5;
+        let chain = lane_chain_with("release-cap-six", 4, None, 6);
+        let validators = local_validator_ids(6).expect("validator ids");
+        let lane = chain.genesis.external_lanes()[0].clone();
+
+        // Quorum 4, four signatures: refused, the cap does not change.
+        let below = THRESHOLD - 1;
+        match try_govern_release_cap(&chain, 100, &validators, below, &validators[..below]) {
+            Err(error) => {
+                assert!(error.to_string().contains("external_lane_release_cap_authority_invalid"), "{error}")
+            }
+            Ok((_, receipts)) => panic!("quorum {below} reached the block: {receipts:?}"),
+        }
+        let info = lane_info(&chain.data_dir);
+        assert_eq!((info.release_cap.active_cap_bps, info.release_cap.active), (200, None));
+
+        // Quorum 5, five signatures: accepted, the lower cap applies at once.
+        let (amendment, receipts) =
+            try_govern_release_cap(&chain, 100, &validators, THRESHOLD, &validators[..THRESHOLD])
+                .expect("five of six admitted");
+        assert!(receipts[0].accepted, "{receipts:?}");
+        assert_eq!((amendment.quorum, amendment.support.len()), (5, 5));
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(
+            info.release_cap.active,
+            Some(ExternalLaneReleaseCapChange {
+                amendment_id: amendment.amendment_id,
+                cap_bps: 100,
+                effective_height: tip_height(&chain),
+            })
+        );
+        assert_eq!(info.window_cap_atoms, lane.window_cap_atoms_for_bps(100));
+
+        // Emergency halt by five of six, validator-0 offline: the next block
+        // refuses a release, and the lane does not change.
+        let (halt, receipts) =
+            try_govern_release_cap(&chain, 0, &validators, THRESHOLD, &validators[1..]).expect("halt admitted");
+        assert!(receipts[0].accepted, "{receipts:?}");
+        assert!(!halt.support.contains(&validators[0]));
+        let info = lane_info(&chain.data_dir);
+        assert_eq!((info.release_cap.active_cap_bps, info.window_cap_atoms), (0, 0));
+        let release = release_tx(&chain, "base-erc20", 1, ACCOUNT_RESERVE + 100, faucet_sequence(&chain));
+        refused_everywhere(&chain, &release, "external_lane_window_cap_exceeded", "six-halt");
+        assert_eq!(lane_info(&chain.data_dir).state, info.state);
+        assert_eq!(postfiat_types::external_lane_release_cap_threshold(validators.len()), THRESHOLD);
         let _ = fs::remove_dir_all(chain.data_dir);
     }
 
