@@ -28,28 +28,58 @@ pub const EXTERNAL_LANE_SOURCE_CHAIN_IDS: [u64; 2] = [
 ];
 /// Governed amendment kinds of a lane, `<prefix>:<lane_id>`: the per-window
 /// release cap (design section 5.1) and the committee epoch move (section
-/// 4.1). Neither is built yet; both are refused with
-/// [`EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED`] so that no signed amendment of
-/// either kind can enter governance before execution and the lane checks
-/// honour it.
+/// 4.1). The cap amendment's value is the new `release_cap_bps`, 0 to
+/// [`EXTERNAL_LANE_RELEASE_CAP_BPS_MAX`]; the committee epoch move is not
+/// built and is refused with [`EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED`].
 pub const GOVERNANCE_KIND_EXTERNAL_LANE_RELEASE_CAP_PREFIX_V1: &str =
     "external_lane_release_cap_v1";
 pub const GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1: &str =
     "external_lane_committee_epoch_v1";
 pub const EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED: &str = "external_lane_amendment_not_supported";
+pub const EXTERNAL_LANE_RELEASE_CAP_INVALID: &str = "invalid_external_lane_release_cap";
+/// A cap amendment that raises the cap takes effect this many windows after
+/// it commits (design section 5.1).
+pub const EXTERNAL_LANE_RELEASE_CAP_RAISE_DELAY_WINDOWS: u64 = 7;
 
-/// The refusal of a governed lane amendment kind, `None` for any other kind.
-pub fn external_lane_amendment_refusal(kind: &str) -> Option<(&'static str, String)> {
+/// The cap amendment kind of `lane_id`.
+pub fn external_lane_release_cap_amendment_kind(lane_id: &str) -> String {
+    format!("{GOVERNANCE_KIND_EXTERNAL_LANE_RELEASE_CAP_PREFIX_V1}:{lane_id}")
+}
+
+/// The lane a cap amendment kind names, `None` for any other kind.
+pub fn external_lane_release_cap_amendment_lane(kind: &str) -> Option<&str> {
+    kind.strip_prefix(GOVERNANCE_KIND_EXTERNAL_LANE_RELEASE_CAP_PREFIX_V1)?
+        .strip_prefix(':')
+}
+
+/// The refusal of a governed lane amendment, `None` when it is accepted or
+/// is of any other kind: the committee epoch move is not supported, and a
+/// cap amendment must name a well-formed lane id and a value of at most
+/// 10,000 basis points.
+pub fn external_lane_amendment_refusal(kind: &str, value: u32) -> Option<(&'static str, String)> {
     let family = kind.split(':').next()?;
-    [
-        GOVERNANCE_KIND_EXTERNAL_LANE_RELEASE_CAP_PREFIX_V1,
-        GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1,
-    ]
-    .contains(&family)
-    .then(|| {
-        (
+    if family == GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1 {
+        return Some((
             EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED,
             format!("governed external lane amendment `{family}` is not supported yet"),
+        ));
+    }
+    if family != GOVERNANCE_KIND_EXTERNAL_LANE_RELEASE_CAP_PREFIX_V1 {
+        return None;
+    }
+    let lane_id = external_lane_release_cap_amendment_lane(kind).unwrap_or_default();
+    if let Err(error) = validate_external_lane_id(lane_id) {
+        return Some((
+            EXTERNAL_LANE_RELEASE_CAP_INVALID,
+            format!("release cap amendment `{kind}` must name one lane: {error}"),
+        ));
+    }
+    (value > EXTERNAL_LANE_RELEASE_CAP_BPS_MAX).then(|| {
+        (
+            EXTERNAL_LANE_RELEASE_CAP_INVALID,
+            format!(
+                "release cap amendment value {value} must be between 0 and {EXTERNAL_LANE_RELEASE_CAP_BPS_MAX} basis points"
+            ),
         )
     })
 }

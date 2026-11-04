@@ -1,15 +1,24 @@
-//! Governed changes to a genesis external lane (design sections 4.1 and 5.1)
-//! are recognised and refused with a typed code until they are built.
+//! Governed changes to a genesis external lane (design sections 4.1 and 5.1):
+//! the release cap amendment is accepted with its value range checked, and
+//! the committee epoch move is refused with a typed code until it is built.
 
 use super::*;
 
-const LANE_KINDS: [&str; 2] = [
-    "external_lane_release_cap_v1:base-erc20",
-    "external_lane_committee_epoch_v1:base-erc20",
-];
+const CAP_KIND: &str = "external_lane_release_cap_v1:base-erc20";
+const LANE_KINDS: [&str; 1] = ["external_lane_committee_epoch_v1:base-erc20"];
 const NOT_SUPPORTED: &str = "external_lane_amendment_not_supported";
+const INVALID_CAP: &str = "invalid_external_lane_release_cap";
 
 fn lane_amendment(genesis: &Genesis, kind: &str, signed: bool) -> GovernanceAmendment {
+    lane_amendment_with_value(genesis, kind, 100, signed)
+}
+
+fn lane_amendment_with_value(
+    genesis: &Genesis,
+    kind: &str,
+    value: u32,
+    signed: bool,
+) -> GovernanceAmendment {
     let validators = local_validator_ids(4).expect("validators");
     let signed_authorizations = if signed {
         validators
@@ -41,7 +50,7 @@ fn lane_amendment(genesis: &Genesis, kind: &str, signed: bool) -> GovernanceAmen
         validators: validators.clone(),
         quorum: 3,
         kind: kind.to_string(),
-        value: 100,
+        value,
         activation_height: 0,
         veto_until_height: 0,
         paused: false,
@@ -120,6 +129,7 @@ fn only_the_lane_amendment_families_are_refused_as_not_supported() {
     let genesis = Genesis::new_with_validator_count("external-lane-amendment", 4);
     for kind in [
         "external_lane_release_cap_v1x:base-erc20",
+        CAP_KIND,
         GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT,
     ] {
         let rejection =
@@ -129,4 +139,75 @@ fn only_the_lane_amendment_families_are_refused_as_not_supported() {
             "{kind}: {rejection:?}"
         );
     }
+}
+
+fn ratify_cap(data_dir: &Path, kind: &str, value: u32) -> io::Result<GovernanceAmendment> {
+    let amendment_file = data_dir.join(format!("cap-{value}.json"));
+    ratify_governance(RatifyGovernanceOptions {
+        data_dir: data_dir.to_path_buf(),
+        validators: local_validator_ids(4).expect("validators"),
+        support: local_validator_ids(4).expect("validators"),
+        kind: kind.to_string(),
+        value,
+        activation_height: 0,
+        veto_until_height: 0,
+        paused: false,
+        amendment_file,
+    })
+}
+
+#[test]
+fn release_cap_amendment_ratifies_within_its_value_range() {
+    let data_dir = lane_amendment_node("external-lane-cap-ratify");
+    for value in [0, 200, 10_000] {
+        let amendment = ratify_cap(&data_dir, CAP_KIND, value).expect("cap amendment ratified");
+        assert_eq!((amendment.kind.as_str(), amendment.value), (CAP_KIND, value));
+    }
+    for (kind, value) in [
+        (CAP_KIND, 10_001),
+        (CAP_KIND, u32::MAX),
+        ("external_lane_release_cap_v1", 100),
+        ("external_lane_release_cap_v1:", 100),
+        ("external_lane_release_cap_v1:Base-ERC20", 100),
+        ("external_lane_release_cap_v1:base-erc20:extra", 100),
+    ] {
+        let error = ratify_cap(&data_dir, kind, value).expect_err("invalid cap ratified");
+        assert!(error.to_string().contains(INVALID_CAP), "{kind} {value}: {error}");
+    }
+    let _ = fs::remove_dir_all(data_dir);
+}
+
+#[test]
+fn release_cap_amendment_passes_admission_and_execution_checks_within_range() {
+    let data_dir = lane_amendment_node("external-lane-cap-signed");
+    let store = NodeStore::new(&data_dir);
+    let genesis = store.read_genesis().expect("genesis");
+    let governance = store.read_governance().expect("governance");
+    let registry =
+        read_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE)).expect("registry");
+    for value in [0, 10_000] {
+        let amendment = lane_amendment_with_value(&genesis, CAP_KIND, value, false);
+        assert_eq!(governance_amendment_lifecycle_rejection(&amendment, 10), None);
+        let batch = GovernanceActionBatch::new("lane-cap", vec![amendment]);
+        if let Err(error) =
+            verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, 1)
+        {
+            let error = error.to_string();
+            assert!(
+                !error.contains(INVALID_CAP) && !error.contains(NOT_SUPPORTED),
+                "{value}: {error}"
+            );
+        }
+    }
+    for signed in [false, true] {
+        let amendment = lane_amendment_with_value(&genesis, CAP_KIND, 10_001, signed);
+        let batch = GovernanceActionBatch::new("lane-cap", vec![amendment.clone()]);
+        let error = verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, 1)
+            .expect_err("out-of-range cap admitted");
+        assert!(error.to_string().contains(INVALID_CAP), "{error}");
+        let (code, _) = governance_amendment_lifecycle_rejection(&amendment, 10)
+            .expect("out-of-range cap applied");
+        assert_eq!(code, INVALID_CAP);
+    }
+    let _ = fs::remove_dir_all(data_dir);
 }
