@@ -203,6 +203,8 @@ contract DeployPFTLockTest {
     uint256 private constant SUPPLY = 100_000_000_000 * 1_000_000;
     uint256 private constant CAP_PFT = 2_000_000_000;
     uint256 private constant CAP = CAP_PFT * 1_000_000;
+    /// The PFTL account reserve; the env example pins the same value.
+    uint256 private constant MINIMUM = 10;
     address private constant TREASURY = address(0x7EA5);
     string private constant COMMIT = "0123456789abcdef0123456789abcdef01234567";
     string private constant ARTIFACT = "out/PFTLockV1.sol/PFTLockV1.json";
@@ -249,7 +251,10 @@ contract DeployPFTLockTest {
         VM.writeFile(path, VM.readFile(ARTIFACT));
         VM.writeJson(string.concat('"', VM.toString(type(PFTLockV1).creationCode), '"'), path, ".bytecode.object");
         bytes memory runtime =
-            address(new PFTLockV1(address(token), address(verifier), address(token).codehash, uint64(CAP))).code;
+            address(
+            new PFTLockV1(address(token), address(verifier), address(token).codehash, uint64(CAP), uint64(MINIMUM))
+        )
+        .code;
         VM.writeJson(string.concat('"', VM.toString(runtime), '"'), path, ".deployedBytecode.object");
     }
 
@@ -324,6 +329,7 @@ contract DeployPFTLockTest {
         VM.setEnv("PFT_LOCK_VERIFIER_EXPECTED_ASSET_ID_COMMITMENT", VM.toString(ASSET_ID));
         VM.setEnv("PFT_LOCK_MAX_LOCK_AMOUNT", "2000000000000000");
         VM.setEnv("PFT_LOCK_MAX_LOCK_AMOUNT_PFT", "2000000000");
+        VM.setEnv("PFT_LOCK_MINIMUM_LOCK_AMOUNT", "10");
         VM.setEnv("PFT_LOCK_ALLOW_TEST_VERIFIER", "");
         VM.setEnv("PFT_LOCK_ALLOW_USED_DEPLOYER", "0");
         VM.setEnv("PFT_LOCK_ALLOW_TEST_TOKEN", "");
@@ -345,6 +351,7 @@ contract DeployPFTLockTest {
         _assertTrue(cfg.expectedAssetIdCommitment == ASSET_ID, "expected asset id");
         _assertEq(cfg.maxLockAmount, CAP, "cap");
         _assertEq(cfg.maxLockAmountPft, CAP_PFT, "cap in PFT");
+        _assertEq(cfg.minimumLockAmount, MINIMUM, "minimum");
         _assertTrue(
             !cfg.allowTestVerifier && !cfg.allowUsedDeployer && !cfg.allowTestToken && !cfg.realDeployment,
             "switches off"
@@ -400,7 +407,7 @@ contract DeployPFTLockTest {
         broadcaster.run(script);
         VM.setEnv("PFT_LOCK_VERIFIER_CODEHASH", VM.toString(address(verifier).codehash));
 
-        string[14] memory names = [
+        string[15] memory names = [
             "PFT_LOCK_CHAIN_ID",
             "PFT_LOCK_TOKEN",
             "PFT_LOCK_TOKEN_CODEHASH",
@@ -414,7 +421,8 @@ contract DeployPFTLockTest {
             "PFT_LOCK_VERIFIER_EXPECTED_ROUTE_EPOCH",
             "PFT_LOCK_VERIFIER_EXPECTED_ASSET_ID_COMMITMENT",
             "PFT_LOCK_MAX_LOCK_AMOUNT",
-            "PFT_LOCK_MAX_LOCK_AMOUNT_PFT"
+            "PFT_LOCK_MAX_LOCK_AMOUNT_PFT",
+            "PFT_LOCK_MINIMUM_LOCK_AMOUNT"
         ];
         for (uint256 i = 0; i < names.length; i++) {
             string memory value = _envValue(names[i]);
@@ -513,6 +521,17 @@ contract DeployPFTLockTest {
         cfg = _config(BASE_SEPOLIA);
         cfg.maxLockAmount = 0;
         VM.expectRevert(_placeholder("PFT_LOCK_MAX_LOCK_AMOUNT"));
+        broadcaster.deploy(script, cfg);
+        cfg = _config(BASE_SEPOLIA);
+        cfg.minimumLockAmount = 0;
+        VM.expectRevert(_placeholder("PFT_LOCK_MINIMUM_LOCK_AMOUNT"));
+        broadcaster.deploy(script, cfg);
+    }
+
+    function testRefusesAMinimumAboveTheCap() public {
+        DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
+        cfg.minimumLockAmount = CAP + 1;
+        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.MinimumLockAmountAboveMax.selector, CAP + 1, CAP));
         broadcaster.deploy(script, cfg);
     }
 
@@ -853,7 +872,8 @@ contract DeployPFTLockTest {
         address predicted = VM.computeCreateAddress(address(deployer), VM.getNonce(address(deployer)));
         VM.etch(predicted, hex"00"); // the lock's constructor requires code at the verifier
         bytes32 lockHash =
-            address(new PFTLockV1(address(token), predicted, address(token).codehash, uint64(CAP))).codehash;
+            address(new PFTLockV1(address(token), predicted, address(token).codehash, uint64(CAP), uint64(MINIMUM)))
+        .codehash;
         VM.etch(predicted, "");
         PFTLFinalityVerifierV1.Config memory c;
         c.sp1Verifier = ISP1Verifier(address(0x5B1));
@@ -1115,16 +1135,19 @@ contract DeployPFTLockTest {
         DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
         PFTLockV1 lock = broadcaster.deploy(script, cfg);
         script.checkLock(cfg, lock);
-        bytes[5] memory calls = [
+        bytes[6] memory calls = [
             abi.encodeCall(IPFTLockV1.token, ()),
             abi.encodeCall(IPFTLockV1.finalityVerifier, ()),
             abi.encodeCall(IPFTLockV1.maxLockAmount, ()),
+            abi.encodeCall(IPFTLockV1.minimumLockAmount, ()),
             abi.encodeCall(IPFTLockV1.nextNonce, ()),
             abi.encodeCall(IPFTLockV1.totalLocked, ())
         ];
-        string[5] memory fields = ["token", "finality_verifier", "max_lock_amount", "next_nonce", "total_locked"];
+        string[6] memory fields =
+            ["token", "finality_verifier", "max_lock_amount", "minimum_lock_amount", "next_nonce", "total_locked"];
         for (uint256 i = 0; i < calls.length; i++) {
-            PFTLockV1 other = new PFTLockV1(address(token), address(verifier), address(token).codehash, uint64(CAP));
+            PFTLockV1 other =
+                new PFTLockV1(address(token), address(verifier), address(token).codehash, uint64(CAP), uint64(MINIMUM));
             VM.mockCall(address(other), calls[i], abi.encode(uint256(1)));
             VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.LockStateMismatch.selector, fields[i]));
             script.checkLock(cfg, other);
@@ -1267,6 +1290,7 @@ contract DeployPFTLockTest {
         cfg.expectedAssetIdCommitment = ASSET_ID;
         cfg.maxLockAmount = CAP;
         cfg.maxLockAmountPft = CAP_PFT;
+        cfg.minimumLockAmount = MINIMUM;
         cfg.artifact = _artifact();
         // The tests' token is not the recorded Base Sepolia test token.
         cfg.allowTestToken = chainId == BASE_SEPOLIA;
@@ -1291,6 +1315,7 @@ contract DeployPFTLockTest {
         if (_eq(name, "PFT_LOCK_VERIFIER_EXPECTED_ROUTE_PROFILE_HASH_COMMITMENT")) return VM.toString(ROUTE_PROFILE);
         if (_eq(name, "PFT_LOCK_VERIFIER_EXPECTED_ROUTE_EPOCH")) return "7";
         if (_eq(name, "PFT_LOCK_VERIFIER_EXPECTED_ASSET_ID_COMMITMENT")) return VM.toString(ASSET_ID);
+        if (_eq(name, "PFT_LOCK_MINIMUM_LOCK_AMOUNT")) return "10";
         if (_eq(name, "PFT_LOCK_MAX_LOCK_AMOUNT")) return "2000000000000000";
         return "2000000000";
     }
@@ -1340,7 +1365,8 @@ contract DeployPFTLockTest {
         );
         _assertEq(VM.parseJsonUint(json, ".max_lock_amount_units"), CAP, "record cap");
         _assertEq(VM.parseJsonUint(json, ".max_lock_amount_pft"), CAP_PFT, "record cap in PFT");
-        bytes memory args = abi.encode(address(token), address(verifier), address(token).codehash, uint64(CAP));
+        bytes memory args =
+            abi.encode(address(token), address(verifier), address(token).codehash, uint64(CAP), uint64(MINIMUM));
         _assertTrue(_eq(VM.parseJsonString(json, ".constructor_args"), VM.toString(args)), "record constructor args");
         _assertTrue(VM.parseJsonAddress(json, ".deployer") == address(broadcaster), "record deployer");
         _assertTrue(_eq(VM.parseJsonString(json, ".artifact"), _artifact()), "record artifact");
@@ -1390,7 +1416,7 @@ contract DeployPFTLockTest {
 
     /// The runtime code hash of a lock on `t` with cap `cap` and the test verifier, computed here.
     function _lockHash(address t, uint256 cap) private returns (bytes32) {
-        return address(new PFTLockV1(t, address(verifier), t.codehash, uint64(cap))).codehash;
+        return address(new PFTLockV1(t, address(verifier), t.codehash, uint64(cap), uint64(MINIMUM))).codehash;
     }
 
     function _expectBinding(string memory field, bytes32 expected, bytes32 actual) private {

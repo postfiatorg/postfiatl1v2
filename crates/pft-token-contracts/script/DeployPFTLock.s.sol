@@ -122,6 +122,7 @@ contract DeployPFTLock {
         bytes32 expectedAssetIdCommitment;
         uint256 maxLockAmount; // six-decimal units, at most type(uint64).max
         uint256 maxLockAmountPft; // whole PFT
+        uint256 minimumLockAmount; // six-decimal units: the PFTL account reserve, at most maxLockAmount
         bool allowTestVerifier; // Base Sepolia only: admits a verifier whose code hash is not pinned
         bool allowUsedDeployer; // Base Sepolia only
         bool allowTestToken; // Base Sepolia only: admits a token other than the recorded test token
@@ -164,6 +165,7 @@ contract DeployPFTLock {
     error ValueTooLarge(string name, uint256 value);
     error MaxLockAmountTooLarge(uint256 units);
     error MaxLockAmountMismatch(uint256 units, uint256 pft);
+    error MinimumLockAmountAboveMax(uint256 minimum, uint256 maxLockAmount);
     error DeployerAlreadyUsed(address deployer, uint256 nonce);
     error RecordExists(string path);
     error ArtifactMismatch(string path, bytes32 artifactCodeHash, bytes32 compiledCodeHash);
@@ -206,6 +208,7 @@ contract DeployPFTLock {
             bytes32(_verifierValue(cfg, "PFT_LOCK_VERIFIER_EXPECTED_ASSET_ID_COMMITMENT", true));
         cfg.maxLockAmount = VM.parseUint(_required("PFT_LOCK_MAX_LOCK_AMOUNT"));
         cfg.maxLockAmountPft = VM.parseUint(_required("PFT_LOCK_MAX_LOCK_AMOUNT_PFT"));
+        cfg.minimumLockAmount = VM.parseUint(_required("PFT_LOCK_MINIMUM_LOCK_AMOUNT"));
         cfg.allowUsedDeployer = _switch("PFT_LOCK_ALLOW_USED_DEPLOYER");
         cfg.allowTestToken = _switch("PFT_LOCK_ALLOW_TEST_TOKEN");
         cfg.realDeployment = _switch("PFT_LOCK_REAL_DEPLOYMENT");
@@ -238,7 +241,9 @@ contract DeployPFTLock {
         _logChecks(cfg, checked, deployer, nonce);
 
         VM.startBroadcast(deployer);
-        lock = new PFTLockV1(cfg.token, cfg.verifier, cfg.tokenCodeHash, uint64(cfg.maxLockAmount));
+        lock = new PFTLockV1(
+            cfg.token, cfg.verifier, cfg.tokenCodeHash, uint64(cfg.maxLockAmount), uint64(cfg.minimumLockAmount)
+        );
         VM.stopBroadcast();
         checkDeployedCode(address(lock), VM.parseJsonBytes(artifact, ".deployedBytecode.object"));
 
@@ -253,10 +258,15 @@ contract DeployPFTLock {
     /// verifier's vaultRuntimeCodeHash() must hold: a probe of this script's
     /// PFTLockV1 creation code with the same constructor arguments, created by
     /// this contract outside the broadcast (forge's simulation only, never sent).
-    /// The four immutables are the only part of the runtime code the arguments
+    /// The five immutables are the only part of the runtime code the arguments
     /// change; the lock's own address is not among them.
     function lockRuntimeCodeHash(Config memory cfg) public returns (bytes32) {
-        return address(new PFTLockV1(cfg.token, cfg.verifier, cfg.tokenCodeHash, uint64(cfg.maxLockAmount))).codehash;
+        return address(
+            new PFTLockV1(
+                cfg.token, cfg.verifier, cfg.tokenCodeHash, uint64(cfg.maxLockAmount), uint64(cfg.minimumLockAmount)
+            )
+        )
+        .codehash;
     }
 
     function _logChecks(Config memory cfg, Checked memory checked, address deployer, uint256 nonce) private view {
@@ -324,6 +334,7 @@ contract DeployPFTLock {
         }
         _log("max lock amount (six-decimal units)", cfg.maxLockAmount);
         _log("max lock amount (whole PFT)", cfg.maxLockAmountPft);
+        _log("minimum lock amount (six-decimal units, the PFTL account reserve)", cfg.minimumLockAmount);
         _log("lock artifact", cfg.artifact);
         _log("deployment record", cfg.realDeployment ? "real" : "test");
     }
@@ -341,16 +352,19 @@ contract DeployPFTLock {
         address token = lock.token();
         address verifier = lock.finalityVerifier();
         uint64 cap = lock.maxLockAmount();
+        uint64 minimum = lock.minimumLockAmount();
         uint64 nextNonce = lock.nextNonce();
         uint256 totalLocked = lock.totalLocked();
         _log("lock token()", token);
         _log("lock finalityVerifier()", verifier);
         _log("lock maxLockAmount()", cap);
+        _log("lock minimumLockAmount()", minimum);
         _log("lock nextNonce()", nextNonce);
         _log("lock totalLocked()", totalLocked);
         if (token != cfg.token) revert LockStateMismatch("token");
         if (verifier != cfg.verifier) revert LockStateMismatch("finality_verifier");
         if (cap != cfg.maxLockAmount) revert LockStateMismatch("max_lock_amount");
+        if (minimum != cfg.minimumLockAmount) revert LockStateMismatch("minimum_lock_amount");
         if (nextNonce != 0) revert LockStateMismatch("next_nonce");
         if (totalLocked != 0) revert LockStateMismatch("total_locked");
         _checkVerifier(cfg);
@@ -517,6 +531,10 @@ contract DeployPFTLock {
         ) {
             revert MaxLockAmountMismatch(cfg.maxLockAmount, cfg.maxLockAmountPft);
         }
+        if (cfg.minimumLockAmount == 0) revert PlaceholderValue("PFT_LOCK_MINIMUM_LOCK_AMOUNT");
+        if (cfg.minimumLockAmount > cfg.maxLockAmount) {
+            revert MinimumLockAmountAboveMax(cfg.minimumLockAmount, cfg.maxLockAmount);
+        }
     }
 
     /// A checked staticcall returning one word.
@@ -648,10 +666,15 @@ contract DeployPFTLock {
         _writeBindings(o, cfg, checked);
         VM.serializeString(o, "max_lock_amount_units", VM.toString(cfg.maxLockAmount));
         VM.serializeString(o, "max_lock_amount_pft", VM.toString(cfg.maxLockAmountPft));
+        VM.serializeString(o, "minimum_lock_amount_units", VM.toString(cfg.minimumLockAmount));
         VM.serializeString(
             o,
             "constructor_args",
-            VM.toString(abi.encode(cfg.token, cfg.verifier, cfg.tokenCodeHash, uint64(cfg.maxLockAmount)))
+            VM.toString(
+                abi.encode(
+                    cfg.token, cfg.verifier, cfg.tokenCodeHash, uint64(cfg.maxLockAmount), uint64(cfg.minimumLockAmount)
+                )
+            )
         );
         VM.serializeAddress(o, "deployer", deployer);
         VM.serializeString(o, "artifact", cfg.artifact);
