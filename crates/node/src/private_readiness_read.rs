@@ -63,7 +63,7 @@ pub struct PrivateReadinessService {
 
 /// The validator signer of the serving process. A plaintext key file is the
 /// only signer built today (`--finality-key-file`, the same exportable file
-/// that `--unsafe-devnet-file-signer` acknowledges), so a release build never
+/// that the devnet file-signer flag acknowledges), so a release build never
 /// reports custody satisfied. `NoSigningRole` is a server that admits
 /// nothing for finality and so signs with no key. The hardened signer is
 /// test-only until a remote signer exists.
