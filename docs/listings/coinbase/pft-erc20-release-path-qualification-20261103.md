@@ -1,6 +1,6 @@
 # ERC-20 release path qualification run, 2026-11-03
 
-The qualification record for milestone item P2.5 ([milestone](../../plans/active/pft-erc20-base-listing-milestone.md)): the lane tests on main, a devnet run of the release path, and the public trace of the lock contract's review. It does not tick P2.5; the open items are listed at the end.
+The qualification record for milestone item P2.5 ([milestone](../../plans/active/pft-erc20-base-listing-milestone.md)): the lane tests on main, a devnet run of the release path, and the public trace of the lock contract's review. It does not tick P2.5; the open items are listed at the end. The amendment rounds were rehearsed on 2026-11-04 ([below](#six-validator-rehearsal-of-the-amendment-rounds-2026-11-04)).
 
 Source: `main` at `9ae46a531`. Binary: `cargo build --release --locked -p postfiat-node` (`build_git_revision` `9ae46a53`). Everything ran on one work server: no live devnet, no Base transaction.
 
@@ -72,11 +72,57 @@ Mempool admission reports ``mempool admission rejected `<code>` ``; the dry run 
 - The deploy-script checks merged in `1e2cc55f8` (anchor and binding pins, re-read after deployment; `crates/pft-token-contracts/README.md`, "Deploy the lock contract") added 22 of the 59 `DeployPFTLockTest` tests; CI also runs `test/deploy-lock-cli.sh`.
 - The Base Sepolia rehearsal: `crates/pft-token-contracts/deployments/pft-lock-base-84532/deployment.json` (test mode, reverting stand-in verifier) and [the dry-run record](pft-token-dry-run-20261026.md), "Base Sepolia lock rehearsal".
 
+## Six-validator rehearsal of the amendment rounds, 2026-11-04
+
+Both lane amendment kinds through their real CLI rounds at five of six, on a local fleet. Source: `main` at `7527df06a` (`build_git_revision` `7527df06`), `cargo build --release --locked -p postfiat-node`. One work server, loopback only, local keys: no live network, no Base transaction.
+
+**Fleet.** Chain `postfiat-p25-amendment-devnet`, six validators served by `transport-validator-serve --unsafe-devnet-file-signer --unsafe-devnet-json-storage`. The genesis is the `init-consensus-v2 --validators 6 --activation-height 2` genesis plus the lane of the 2026-11-03 run, with `release_window_blocks` 1 so seven windows are seven blocks (`release_cap_bps` 200, window cap 6,000,000 atoms; committee epoch 1, root `0x7b36042f…947a6f7d`, the six validators' keys, quorum 5). validator-0 ran `init --genesis-file` on it with the six validator keys in place; validators 1–5 ran `snapshot-import`. Genesis hash `cfb1026d…1ed9df69`, height-zero state root `e73fbae2…4a600c81af`; `verify-state` and `verify-blocks` pass at height 0. Every block went through `transport-peer-certified-batch-round` with 5 of 6 votes, and all six reported the same tip and state root after each round.
+
+| Height | Round | Commands | Receipt and lane read |
+|---|---|---|---|
+| 1 | Committee | `fastswap-governance-bootstrap`, six `governance-authorization-sign`, `governance-amendment-assemble`, `fastswap-governance-bootstrap-assemble` | `accepted`, committee epoch 1 (6 validators, quorum 5) on all six |
+| 2 | Release | `wallet-sign-asset-transaction` with `external_lane_release_v1` (nonce 1, 1,000,000), `mempool-submit-signed-asset-transaction`, `mempool-batch` | `accepted`, `released_atoms` 1,000,000 |
+| 3 | Cap 200 → 100 bps | `ratify-external-lane-release-cap --lane-id base-erc20 --cap-bps 100 --activation-height 3 --validators <all six> --support <five>`, five `governance-authorization-sign`, `governance-amendment-assemble`, `governance-batch` | `governance amendment applied` (`eeac1e2b…`); quorum 5, support 5, 6 declared, 5 signatures, validator-4 absent; `release_cap`: `active_cap_bps` 100, effective 3 |
+| 3 → 4 | Above the new cap | nonce 2, 3,000,001 atoms, on all six | refused (below) |
+| 4 | Below it | nonce 2, 2,000,000 atoms | `accepted`, `released_atoms` 3,000,000 |
+| 5 | Halt, cap 0 | as at height 3, validator-0 absent | `governance amendment applied` (`f7024e4b…`); `active_cap_bps` 0 |
+| 5 → 6 | Release while halted | nonce 3, 1,000,000 atoms, on all six | refused: `window 6 has released 0 of its cap 0` |
+| 6 | Raise to 100 bps | as at height 3, validator-1 absent | `governance amendment applied` (`dca91e52…`); `active_cap_bps` 0, `pending` cap 100 at `effective_height` 13 (6 + 7 × 1) |
+| 6 → 7 | Release in the delay | nonce 3, 1,000,000 atoms, on all six | refused: `window 7 has released 0 of its cap 0` |
+| 7–13 | Filler | `batch-transfer` | at height 13 `active_cap_bps` 100, `pending` null; at tip 12 every validator admitted the nonce-3 release for height 13 |
+| 14 | Release after the delay | nonce 3, 1,000,000 atoms | `accepted`, `released_atoms` 4,000,000 |
+| 15 | Final checkpoint | epoch 1's drained final FastLane checkpoint, 5 of 6 votes, as `AnchorCheckpoint`; `rpc --method mempool_submit_fastlane_primary`, `mempool-batch` | `fastlane_checkpoint_anchored` |
+| 16 | Epoch 2 registered | `fastswap-control-prepare --kind activate-committee --epoch 2`, five `fastswap-control-vote-sign` (validator-5 absent), `fastswap-control-assemble`; the certificate as a `control` primary transaction through the same RPC | `fastlane_control_applied`; committees 1 and 2 registered; the lane still names epoch 1 |
+| 17 | Committee move | `external-lane-committee-binding` (binding `6a43ccaa…473e8f52`), `ratify-external-lane-committee-epoch --committee-epoch 2 --committee-root 0x7b36042f… --activation-height 17` with five supporters, five signatures (validator-0 absent), `governance-amendment-assemble`, `governance-batch` | `governance amendment applied` (`18f9308a…`); `committee`: epoch 2, `effective_height` 18 |
+| 17 → 18 | Epoch-1 checkpoint | nonce 4, 1,000,000 atoms, Base block 1004, on all six | refused (below) |
+| 18 | Same Lock, epoch 2 | nonce 4, same Base block and hash, checkpoint `authority_epoch` 2 | `accepted`, nonces `[1, 2, 3, 4]`, `released_atoms` 5,000,000 |
+
+Refusals, each on all six validators at mempool admission and in the batch builder's dry run (`signed-asset-batch`):
+
+| Case | Code and message |
+|---|---|
+| Above the new cap | ``mempool admission rejected `external_lane_window_cap_exceeded`: external lane `base-erc20` window 4 has released 0 of its cap 3000000; 3000001 more would exceed it`` |
+| Epoch-1 checkpoint after the move | ``mempool admission rejected `external_lane_committee_inactive`: Base checkpoint of committee epoch 1 is not from the committee epoch 2 external lane `base-erc20` names at this height``; dry run: `rejected in batch dry-run at height 18: external_lane_committee_inactive` |
+| Cap ratify with four supporters | `ratify-external-lane-release-cap failed: insufficient support: got 4, need 5`; no amendment file written |
+| Move ratify with four supporters | `ratify-external-lane-committee-epoch failed: insufficient support: got 4, need 5` |
+| A second move to epoch 2 | ``ratify-external-lane-committee-epoch failed: external_lane_committee_epoch_not_advanced: external lane `base-erc20` already names committee epoch 2; a move must advance it`` |
+| Quorum 1, one supporter | `governance-authorization-sign failed: external_lane_release_cap_authority_invalid: release cap amendment needs quorum and support of at least the registry threshold 5 of 6`. The batch was then assembled by hand (a valid five-of-six batch with its amendment replaced by the quorum-1 one, unsigned since no signer would sign it) and proposed for height 15: `peer certified batch round proposal failed: external_lane_release_cap_authority_invalid: release cap amendment needs quorum and support of at least the registry threshold 5 of 6`; no block, tip unchanged |
+
+**End state.** All six stopped at height 18, tip `5e7e155d…61f5c332b5`, state root `e1794693…2c36a987`. `verify-state`, `verify-blocks`, `verify-governance`, `verify-bridge`, `verify-mempool`, `verify-shielded` and `verify-finalized-checkpoint`: 42 of 42 exit 0, each report byte-identical across the six. `external-lane-info` byte-identical on all six (SHA-256 `f9420674…45b7292d`): remainder 295,000,000, cap 100 bps from height 13, committee epoch 2 from height 18, 4 releases of which 3 pruned behind the finalized height.
+
+**Real and harness.** Real: the binary, the fleet and its certified rounds, every node command named above, admission, the batch dry runs, execution and the verifiers. Harness (local, not in this repository, the 2026-11-03 one extended): the lane added to the genesis body before `init --genesis-file`; the topology bound to the lane genesis hash; the Base checkpoint certificates and receipt proofs (fixture block, signed with five validator keys under epoch 1 or epoch 2); and the drained final FastLane checkpoint and its five votes. Not as the docs say, or not covered by a command:
+
+- `topology-consensus-v2` still writes the lane-less genesis hash (`e9264ea4…` against `cfb1026d…`; `write_consensus_v2_topology`, `crates/node/src/lifecycle_queries.rs:624`), so the harness rebinds it.
+- No command builds or signs the drained final FastLane checkpoint that `fastswap-control-prepare --kind activate-committee` requires (`crates/node/src/fastswap_control_signing.rs:183`), and `fastswap-control-assemble` writes a certificate, not the primary transaction; both went in through `rpc --method mempool_submit_fastlane_primary` (`crates/node/src/rpc_dispatch.rs:2042`).
+- Epoch 2 is the registry's committee (`registry_committee`, `crates/node/src/fastswap_control_signing.rs:252`): with no key rotation it has epoch 1's keys and the same root, which does not cover the epoch. The move changed only the epoch, and the old checkpoint was refused by its epoch alone; a new root needs a registry key rotation first.
+- `governance-authorization-sign` refuses an under-threshold lane amendment. The architecture page lists ratification, signed-batch admission and execution only.
+- A harness slip, not the chain's: the release probed at tip 12 was admitted on all six, then a filler used the faucet sequence, and admission was blocked by ``mempool admission blocked by stale pending `3ff77890…`: expected sequence 10, got 9`` until `mempool-batch` dropped the stale entry on each validator.
+
 ## Open before genesis
 
 - Corrected 2026-11-04: no proof program is needed. The lane's proof is the committee-signed Base checkpoint plus the receipt proof (design option (b)), so it has no SP1 guest, vkey pin or proof inventory entry; an SP1 guest for Base is the design's option (a) upgrade.
 - The real Base source attestation path: checkpoint observation and votes for a lane, a lane receipt proof built from a Base block, and that source's own qualification. This run used committee-signed fixtures.
 - A minimum lock amount in `PFTLockV1` at or above the PFTL account reserve (10 atoms).
 - Pruning the release records behind the finalized checkpoint, keeping the root.
-- A six-validator operational rehearsal of the release cap amendment round with the real CLI (`ratify-external-lane-release-cap`, signing, assembly and the governance batch) with one validator absent, since the command accepts the registry threshold of five, before P2.5 closes.
+- [x] Done 2026-11-04, for both kinds ([the rehearsal](#six-validator-rehearsal-of-the-amendment-rounds-2026-11-04)): a six-validator operational rehearsal of the release cap amendment round with the real CLI (`ratify-external-lane-release-cap`, signing, assembly and the governance batch) with one validator absent, since the command accepts the registry threshold of five, before P2.5 closes.
 - A topology bound to a lane genesis: `topology-consensus-v2` derives its domain from a genesis without lanes (`init --genesis-file` now initialises from one).
