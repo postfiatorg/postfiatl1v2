@@ -175,13 +175,145 @@ impl GenesisExternalLanePolicy {
     }
 }
 
+/// A committed cap amendment of one lane: its id, value and the height at
+/// which governance applied it, in commit order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneReleaseCapAmendment {
+    pub amendment_id: String,
+    pub cap_bps: u32,
+    pub committed_height: u64,
+}
+
+/// A cap set by an amendment and the height from which it holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneReleaseCapChange {
+    pub amendment_id: String,
+    pub cap_bps: u32,
+    pub effective_height: u64,
+}
+
+/// The cap in force at a height, the amendment that set it (`None` while
+/// the genesis cap holds), and a committed raise still in its delay.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneReleaseCapSchedule {
+    pub active_cap_bps: u32,
+    pub active: Option<ExternalLaneReleaseCapChange>,
+    pub pending: Option<ExternalLaneReleaseCapChange>,
+}
+
+/// The cap of one lane for every height from its last committed cap
+/// amendment on: `cap_bps`, or `pending_cap_bps` from
+/// `pending_from_height`. `Copy`, so execution rules can carry it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExternalLaneReleaseCapRule {
+    pub cap_bps: u32,
+    pub pending_cap_bps: u32,
+    pub pending_from_height: u64,
+}
+
+impl ExternalLaneReleaseCapRule {
+    pub fn cap_bps_at(&self, height: u64) -> u32 {
+        if height >= self.pending_from_height {
+            self.pending_cap_bps
+        } else {
+            self.cap_bps
+        }
+    }
+}
+
 impl GenesisExternalLane {
     /// Atoms one window may release: `reserved_atoms × release_cap_bps /
     /// 10_000`, rounded down.
     pub fn window_cap_atoms(&self) -> u64 {
-        let cap = u128::from(self.reserved_atoms) * u128::from(self.release_cap_bps)
+        self.window_cap_atoms_for_bps(self.release_cap_bps)
+    }
+
+    /// Atoms one window may release under a cap of `cap_bps`.
+    pub fn window_cap_atoms_for_bps(&self, cap_bps: u32) -> u64 {
+        let cap = u128::from(self.reserved_atoms) * u128::from(cap_bps)
             / u128::from(EXTERNAL_LANE_RELEASE_CAP_BPS_MAX);
         u64::try_from(cap).unwrap_or(u64::MAX)
+    }
+
+    /// The cap in force at `height` under the lane's committed cap
+    /// amendments, in commit order (design section 5.1). Amendments
+    /// committed above `height` are not yet known there. An amendment at or
+    /// below the cap in force when it commits applies from its commit height;
+    /// one above it applies `EXTERNAL_LANE_RELEASE_CAP_RAISE_DELAY_WINDOWS`
+    /// windows of `release_window_blocks` later. Each committed amendment
+    /// replaces a raise still in its delay, so a zero cap committed during a
+    /// pending raise holds; ties at one height follow commit order.
+    pub fn release_cap_schedule_at(
+        &self,
+        amendments: &[ExternalLaneReleaseCapAmendment],
+        height: u64,
+    ) -> ExternalLaneReleaseCapSchedule {
+        let delay = self
+            .release_window_blocks
+            .saturating_mul(EXTERNAL_LANE_RELEASE_CAP_RAISE_DELAY_WINDOWS);
+        let mut active_cap_bps = self.release_cap_bps;
+        let mut active = None;
+        let mut pending: Option<ExternalLaneReleaseCapChange> = None;
+        for amendment in amendments
+            .iter()
+            .filter(|amendment| amendment.committed_height <= height)
+        {
+            if let Some(raise) = pending.take() {
+                if raise.effective_height <= amendment.committed_height {
+                    active_cap_bps = raise.cap_bps;
+                    active = Some(raise);
+                }
+            }
+            let lowers = amendment.cap_bps <= active_cap_bps;
+            let change = ExternalLaneReleaseCapChange {
+                amendment_id: amendment.amendment_id.clone(),
+                cap_bps: amendment.cap_bps,
+                effective_height: if lowers {
+                    amendment.committed_height
+                } else {
+                    amendment.committed_height.saturating_add(delay)
+                },
+            };
+            if lowers {
+                active_cap_bps = change.cap_bps;
+                active = Some(change);
+            } else {
+                pending = Some(change);
+            }
+        }
+        if let Some(raise) = pending.take_if(|raise| raise.effective_height <= height) {
+            active_cap_bps = raise.cap_bps;
+            active = Some(raise);
+        }
+        ExternalLaneReleaseCapSchedule {
+            active_cap_bps,
+            active,
+            pending,
+        }
+    }
+
+    /// The cap for every height from the last committed amendment on, which
+    /// is every height a block can still execute at.
+    pub fn release_cap_rule(
+        &self,
+        amendments: &[ExternalLaneReleaseCapAmendment],
+    ) -> ExternalLaneReleaseCapRule {
+        let last = amendments
+            .iter()
+            .map(|amendment| amendment.committed_height)
+            .max()
+            .unwrap_or(0);
+        let schedule = self.release_cap_schedule_at(amendments, last);
+        let (pending_cap_bps, pending_from_height) = schedule
+            .pending
+            .map_or((schedule.active_cap_bps, u64::MAX), |raise| {
+                (raise.cap_bps, raise.effective_height)
+            });
+        ExternalLaneReleaseCapRule {
+            cap_bps: schedule.active_cap_bps,
+            pending_cap_bps,
+            pending_from_height,
+        }
     }
 
     /// Block headers carry no time, so a window is a run of

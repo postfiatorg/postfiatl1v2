@@ -712,3 +712,138 @@ fn external_lane_release_history_root_binds_every_record() {
     let error = tampered.validate_against_genesis(&lane).unwrap_err();
     assert!(error.contains("release history root"), "{error}");
 }
+
+fn cap_amendment(id: &str, cap_bps: u32, committed_height: u64) -> ExternalLaneReleaseCapAmendment {
+    ExternalLaneReleaseCapAmendment {
+        amendment_id: id.to_string(),
+        cap_bps,
+        committed_height,
+    }
+}
+
+/// The cap in force at `height` (window 100 blocks, genesis cap 200 bps).
+fn cap_at(amendments: &[ExternalLaneReleaseCapAmendment], height: u64) -> u32 {
+    release_test_lane()
+        .release_cap_schedule_at(amendments, height)
+        .active_cap_bps
+}
+
+#[test]
+fn release_cap_without_amendments_is_the_genesis_cap() {
+    let lane = release_test_lane();
+    let schedule = lane.release_cap_schedule_at(&[], 1_000_000);
+    assert_eq!(schedule.active_cap_bps, 200);
+    assert_eq!((schedule.active, schedule.pending), (None, None));
+    assert_eq!(lane.window_cap_atoms_for_bps(schedule.active_cap_bps), 200);
+    assert_eq!(lane.window_cap_atoms_for_bps(0), 0);
+}
+
+#[test]
+fn lower_release_cap_applies_from_its_activation_height() {
+    let lower = [cap_amendment("lower", 50, 250)];
+    assert_eq!(cap_at(&lower, 249), 200);
+    assert_eq!(cap_at(&lower, 250), 50);
+    assert_eq!(cap_at(&lower, 251), 50);
+    let schedule = release_test_lane().release_cap_schedule_at(&lower, 250);
+    assert_eq!(
+        schedule.active,
+        Some(ExternalLaneReleaseCapChange {
+            amendment_id: "lower".to_string(),
+            cap_bps: 50,
+            effective_height: 250,
+        })
+    );
+    assert_eq!(schedule.pending, None);
+    // A zero cap halts every window from its activation height.
+    let zero = [cap_amendment("zero", 0, 250)];
+    assert_eq!(cap_at(&zero, 250), 0);
+    assert_eq!(cap_at(&zero, 10_000), 0);
+}
+
+#[test]
+fn higher_release_cap_applies_seven_windows_after_it_commits() {
+    // Committed at 250, the raise takes effect at 250 + 7 × 100 = 950.
+    let raise = [cap_amendment("raise", 500, 250)];
+    assert_eq!(EXTERNAL_LANE_RELEASE_CAP_RAISE_DELAY_WINDOWS, 7);
+    assert_eq!(cap_at(&raise, 250), 200);
+    assert_eq!(cap_at(&raise, 949), 200);
+    assert_eq!(cap_at(&raise, 950), 500);
+    let lane = release_test_lane();
+    // The window before the delay ends still holds the old cap.
+    assert_eq!(lane.window_index_at(949), 9);
+    let pending = lane.release_cap_schedule_at(&raise, 949);
+    assert_eq!((pending.active_cap_bps, pending.active), (200, None));
+    assert_eq!(
+        pending.pending,
+        Some(ExternalLaneReleaseCapChange {
+            amendment_id: "raise".to_string(),
+            cap_bps: 500,
+            effective_height: 950,
+        })
+    );
+    let applied = lane.release_cap_schedule_at(&raise, 950);
+    assert_eq!(applied.active_cap_bps, 500);
+    assert_eq!(applied.active.map(|change| change.effective_height), Some(950));
+    assert_eq!(applied.pending, None);
+    // Before the amendment commits, nothing of it shows.
+    assert_eq!(lane.release_cap_schedule_at(&raise, 249).pending, None);
+}
+
+#[test]
+fn latest_applied_release_cap_amendment_wins() {
+    // Two lowers in one window: the later one holds from its height.
+    let two_lowers = [cap_amendment("a", 150, 210), cap_amendment("b", 100, 260)];
+    assert_eq!(cap_at(&two_lowers, 209), 200);
+    assert_eq!(cap_at(&two_lowers, 210), 150);
+    assert_eq!(cap_at(&two_lowers, 260), 100);
+    // A later amendment back up is a raise against the cap in force.
+    let lower_then_raise = [cap_amendment("a", 50, 210), cap_amendment("b", 150, 260)];
+    assert_eq!(cap_at(&lower_then_raise, 959), 50);
+    assert_eq!(cap_at(&lower_then_raise, 960), 150);
+    // Ties at one height follow commit order.
+    let tie = [cap_amendment("a", 50, 300), cap_amendment("b", 120, 300)];
+    assert_eq!(cap_at(&tie, 300), 50, "b raises against a, so it waits");
+    assert_eq!(cap_at(&tie, 1_000), 120);
+    let tie = [cap_amendment("a", 120, 300), cap_amendment("b", 50, 300)];
+    assert_eq!(cap_at(&tie, 300), 50);
+    assert_eq!(cap_at(&tie, 1_000), 50);
+}
+
+#[test]
+fn lower_release_cap_after_a_pending_raise_cancels_the_raise() {
+    // The raise commits at 250 (effective 950); a zero cap commits at 400,
+    // before the raise took effect, and holds past 950.
+    let amendments = [cap_amendment("raise", 500, 250), cap_amendment("halt", 0, 400)];
+    assert_eq!(cap_at(&amendments, 399), 200);
+    assert_eq!(cap_at(&amendments, 400), 0);
+    assert_eq!(cap_at(&amendments, 950), 0);
+    let schedule = release_test_lane().release_cap_schedule_at(&amendments, 950);
+    assert_eq!(schedule.active.map(|change| change.amendment_id), Some("halt".to_string()));
+    assert_eq!(schedule.pending, None);
+    // A second raise while one is pending replaces it and restarts the delay.
+    let two_raises = [cap_amendment("r1", 500, 250), cap_amendment("r2", 300, 400)];
+    assert_eq!(cap_at(&two_raises, 950), 200);
+    assert_eq!(cap_at(&two_raises, 1_099), 200);
+    assert_eq!(cap_at(&two_raises, 1_100), 300);
+    // A raise already in effect is not cancelled by a later amendment.
+    let applied_then_lower = [cap_amendment("r1", 500, 250), cap_amendment("l", 300, 960)];
+    assert_eq!(cap_at(&applied_then_lower, 959), 500);
+    assert_eq!(cap_at(&applied_then_lower, 960), 300);
+}
+
+#[test]
+fn release_cap_rule_matches_the_schedule_past_the_last_commit() {
+    let lane = release_test_lane();
+    let amendments = [cap_amendment("lower", 50, 210), cap_amendment("raise", 400, 300)];
+    let rule = lane.release_cap_rule(&amendments);
+    for height in [300, 999, 1_000, 5_000] {
+        assert_eq!(
+            rule.cap_bps_at(height),
+            lane.release_cap_schedule_at(&amendments, height).active_cap_bps,
+            "{height}"
+        );
+    }
+    assert_eq!(rule.cap_bps_at(999), 50);
+    assert_eq!(rule.cap_bps_at(1_000), 400);
+    assert_eq!(lane.release_cap_rule(&[]).cap_bps_at(0), 200);
+}
