@@ -114,6 +114,9 @@ contract PFTLockV1Test {
     // Test amounts only; the product owner has not decided the real supply or cap.
     uint256 private constant SUPPLY = 1_000_000_000_000;
     uint64 private constant MAX_LOCK = 20_000_000_000;
+    /// The general tests use the smallest minimum the constructor admits; the
+    /// reserve minimum has its own tests below.
+    uint64 private constant MIN_LOCK = 1;
     uint256 private constant HOLDING = 100_000_000_000;
     address private constant TREASURY = address(0x7EA5);
     address private constant BOB = address(0xB0B);
@@ -130,7 +133,7 @@ contract PFTLockV1Test {
     function setUp() public {
         token = new PFTToken("Post Fiat Token", "PFT", SUPPLY, TREASURY);
         verifier = new MockFinalityVerifier();
-        lockC = new PFTLockV1(address(token), address(verifier), address(token).codehash, MAX_LOCK);
+        lockC = new PFTLockV1(address(token), address(verifier), address(token).codehash, MAX_LOCK, MIN_LOCK);
         holder = VM.addr(HOLDER_KEY);
         VM.prank(TREASURY);
         _assertTrue(token.transfer(holder, HOLDING), "fund holder");
@@ -195,7 +198,8 @@ contract PFTLockV1Test {
         _assertUnchanged();
 
         PFTToken big = new PFTToken("Post Fiat Token", "PFT", tooLarge, TREASURY);
-        PFTLockV1 wide = new PFTLockV1(address(big), address(verifier), address(big).codehash, type(uint64).max);
+        PFTLockV1 wide =
+            new PFTLockV1(address(big), address(verifier), address(big).codehash, type(uint64).max, MIN_LOCK);
         VM.prank(TREASURY);
         _assertTrue(big.approve(address(wide), type(uint64).max), "approve");
         VM.prank(TREASURY);
@@ -311,7 +315,7 @@ contract PFTLockV1Test {
 
         // The constructor refuses a missing verifier; no setter exists (see the ABI test).
         VM.expectRevert(abi.encodeWithSelector(PFTLockV1.ZeroAddress.selector, bytes32("finality_verifier")));
-        new PFTLockV1(address(token), address(0), address(token).codehash, MAX_LOCK);
+        new PFTLockV1(address(token), address(0), address(token).codehash, MAX_LOCK, MIN_LOCK);
     }
 
     function test_lock_rejects_amount_above_max_lock_amount() public {
@@ -325,13 +329,14 @@ contract PFTLockV1Test {
         _assertEq(lockC.totalLocked(), MAX_LOCK, "the cap itself is accepted");
     }
 
-    /// The deployed dispatcher answers exactly the ten functions of IPFTLockV1;
+    /// The deployed dispatcher answers exactly the eleven functions of IPFTLockV1;
     /// typical admin entry points revert and move nothing.
     function test_contract_has_no_owner_pause_or_withdraw() public {
-        bytes4[10] memory expected = [
+        bytes4[11] memory expected = [
             IPFTLockV1.token.selector,
             IPFTLockV1.finalityVerifier.selector,
             IPFTLockV1.maxLockAmount.selector,
+            IPFTLockV1.minimumLockAmount.selector,
             IPFTLockV1.nextNonce.selector,
             IPFTLockV1.totalLocked.selector,
             IPFTLockV1.totalReleased.selector,
@@ -440,28 +445,28 @@ contract PFTLockV1Test {
 
     function test_constructor_rejects_zero_token() public {
         VM.expectRevert(abi.encodeWithSelector(PFTLockV1.ZeroAddress.selector, bytes32("token")));
-        new PFTLockV1(address(0), address(verifier), address(token).codehash, MAX_LOCK);
+        new PFTLockV1(address(0), address(verifier), address(token).codehash, MAX_LOCK, MIN_LOCK);
     }
 
     function test_constructor_rejects_token_without_code() public {
         VM.expectRevert(abi.encodeWithSelector(PFTLockV1.NoCode.selector, bytes32("token")));
-        new PFTLockV1(BOB, address(verifier), keccak256(""), MAX_LOCK);
+        new PFTLockV1(BOB, address(verifier), keccak256(""), MAX_LOCK, MIN_LOCK);
     }
 
     function test_constructor_rejects_verifier_without_code() public {
         VM.expectRevert(abi.encodeWithSelector(PFTLockV1.NoCode.selector, bytes32("finality_verifier")));
-        new PFTLockV1(address(token), BOB, address(token).codehash, MAX_LOCK);
+        new PFTLockV1(address(token), BOB, address(token).codehash, MAX_LOCK, MIN_LOCK);
     }
 
     function test_constructor_rejects_wrong_token_code_hash() public {
         bytes32 hash = address(token).codehash;
         VM.expectRevert(abi.encodeWithSelector(PFTLockV1.TokenCodeHashMismatch.selector, bytes32(uint256(1)), hash));
-        new PFTLockV1(address(token), address(verifier), bytes32(uint256(1)), MAX_LOCK);
+        new PFTLockV1(address(token), address(verifier), bytes32(uint256(1)), MAX_LOCK, MIN_LOCK);
     }
 
     function test_constructor_rejects_zero_max_lock_amount() public {
         VM.expectRevert(abi.encodeWithSelector(PFTLockV1.ZeroMaxLockAmount.selector));
-        new PFTLockV1(address(token), address(verifier), address(token).codehash, 0);
+        new PFTLockV1(address(token), address(verifier), address(token).codehash, 0, MIN_LOCK);
     }
 
     function test_lock_and_release_refuse_changed_token_code() public {
@@ -486,7 +491,8 @@ contract PFTLockV1Test {
 
     function test_lock_and_release_check_balance_deltas() public {
         MockQuirkyToken quirky = new MockQuirkyToken(1_000_000);
-        PFTLockV1 qlock = new PFTLockV1(address(quirky), address(verifier), address(quirky).codehash, MAX_LOCK);
+        PFTLockV1 qlock =
+            new PFTLockV1(address(quirky), address(verifier), address(quirky).codehash, MAX_LOCK, MIN_LOCK);
         _assertTrue(quirky.approve(address(qlock), type(uint256).max), "approve");
         qlock.lock(1_000, RECIPIENT);
 
@@ -510,7 +516,8 @@ contract PFTLockV1Test {
 
     function test_lock_and_release_are_non_reentrant() public {
         MockQuirkyToken quirky = new MockQuirkyToken(1_000_000);
-        PFTLockV1 qlock = new PFTLockV1(address(quirky), address(verifier), address(quirky).codehash, MAX_LOCK);
+        PFTLockV1 qlock =
+            new PFTLockV1(address(quirky), address(verifier), address(quirky).codehash, MAX_LOCK, MIN_LOCK);
         _assertTrue(quirky.approve(address(qlock), type(uint256).max), "approve");
         qlock.lock(1_000, RECIPIENT);
 
@@ -577,6 +584,105 @@ contract PFTLockV1Test {
         _assertTrue(token.approve(address(lockC), amount), "approve");
     }
 
+    // ------------------------------------------------ the minimum lock amount
+
+    /// The PFTL account reserve (`ACCOUNT_RESERVE`, `crates/execution/src/entrypoints.rs`):
+    /// a smaller Lock to a new PFTL account could never be released there.
+    uint64 private constant RESERVE_MIN = 10;
+
+    function _reserveLock() private returns (PFTLockV1) {
+        return new PFTLockV1(address(token), address(verifier), address(token).codehash, MAX_LOCK, RESERVE_MIN);
+    }
+
+    function test_minimum_lock_amount_is_fixed_at_construction() public {
+        PFTLockV1 minLock = _reserveLock();
+        _assertEq(minLock.minimumLockAmount(), RESERVE_MIN, "minimum getter");
+        _assertEq(lockC.minimumLockAmount(), MIN_LOCK, "fixture minimum");
+    }
+
+    function test_constructor_rejects_zero_minimum_lock_amount() public {
+        VM.expectRevert(abi.encodeWithSelector(PFTLockV1.ZeroMinimumLockAmount.selector));
+        new PFTLockV1(address(token), address(verifier), address(token).codehash, MAX_LOCK, 0);
+    }
+
+    function test_constructor_rejects_minimum_above_max_lock_amount() public {
+        VM.expectRevert(abi.encodeWithSelector(PFTLockV1.MinimumAboveMaxLock.selector, MAX_LOCK + 1, MAX_LOCK));
+        new PFTLockV1(address(token), address(verifier), address(token).codehash, MAX_LOCK, MAX_LOCK + 1);
+    }
+
+    function test_lock_refuses_amount_below_minimum() public {
+        PFTLockV1 minLock = _reserveLock();
+        VM.prank(holder);
+        _assertTrue(token.approve(address(minLock), RESERVE_MIN), "approve");
+        VM.expectRevert(abi.encodeWithSelector(PFTLockV1.LockBelowMinimum.selector, RESERVE_MIN - 1, RESERVE_MIN));
+        VM.prank(holder);
+        minLock.lock(RESERVE_MIN - 1, RECIPIENT);
+        _assertUnchangedLock(minLock);
+    }
+
+    function test_lock_with_permit_refuses_amount_below_minimum() public {
+        PFTLockV1 minLock = _reserveLock();
+        uint256 deadline = block.timestamp + 1 hours;
+        (uint8 v, bytes32 r, bytes32 s) = _signPermitFor(address(minLock), RESERVE_MIN - 1, deadline);
+        VM.expectRevert(abi.encodeWithSelector(PFTLockV1.LockBelowMinimum.selector, RESERVE_MIN - 1, RESERVE_MIN));
+        VM.prank(holder);
+        minLock.lockWithPermit(RESERVE_MIN - 1, RECIPIENT, deadline, v, r, s);
+        _assertEq(token.nonces(holder), 0, "permit not consumed");
+        _assertUnchangedLock(minLock);
+    }
+
+    function test_lock_accepts_exactly_the_minimum() public {
+        PFTLockV1 minLock = _reserveLock();
+        VM.prank(holder);
+        _assertTrue(token.approve(address(minLock), RESERVE_MIN), "approve");
+        VM.expectEmit(true, true, true, true, address(minLock));
+        emit IPFTLockV1.Locked(0, holder, keccak256(RECIPIENT), RECIPIENT, RESERVE_MIN);
+        VM.prank(holder);
+        _assertEq(minLock.lock(RESERVE_MIN, RECIPIENT), 0, "nonce");
+        _assertEq(minLock.totalLocked(), RESERVE_MIN, "total locked");
+        _assertEq(token.balanceOf(address(minLock)), RESERVE_MIN, "lock balance");
+    }
+
+    function test_lock_with_permit_accepts_exactly_the_minimum() public {
+        PFTLockV1 minLock = _reserveLock();
+        uint256 deadline = block.timestamp + 1 hours;
+        (uint8 v, bytes32 r, bytes32 s) = _signPermitFor(address(minLock), RESERVE_MIN, deadline);
+        VM.expectEmit(true, true, true, true, address(minLock));
+        emit IPFTLockV1.Locked(0, holder, keccak256(RECIPIENT), RECIPIENT, RESERVE_MIN);
+        VM.prank(holder);
+        _assertEq(minLock.lockWithPermit(RESERVE_MIN, RECIPIENT, deadline, v, r, s), 0, "nonce");
+        _assertEq(token.nonces(holder), 1, "permit consumed");
+        _assertEq(minLock.totalLocked(), RESERVE_MIN, "total locked");
+    }
+
+    /// Every amount in 1..MAX_LOCK is refused below the minimum and recorded at or above it.
+    function testFuzz_minimum_decides_every_amount(uint64 seed) public {
+        PFTLockV1 minLock = _reserveLock();
+        // Half the runs near the boundary, half across the whole range.
+        uint64 amount = seed % 2 == 0 ? 1 + (seed / 2) % (2 * RESERVE_MIN) : 1 + (seed / 2) % MAX_LOCK;
+        VM.prank(holder);
+        _assertTrue(token.approve(address(minLock), amount), "approve");
+        if (amount < RESERVE_MIN) {
+            VM.expectRevert(abi.encodeWithSelector(PFTLockV1.LockBelowMinimum.selector, amount, RESERVE_MIN));
+            VM.prank(holder);
+            minLock.lock(amount, RECIPIENT);
+            _assertUnchangedLock(minLock);
+        } else {
+            VM.prank(holder);
+            _assertEq(minLock.lock(amount, RECIPIENT), 0, "nonce");
+            (, uint64 recorded,) = minLock.lockRecord(0);
+            _assertEq(recorded, amount, "recorded amount");
+            _assertEq(minLock.totalLocked(), amount, "total locked");
+        }
+    }
+
+    function _assertUnchangedLock(PFTLockV1 minLock) private view {
+        _assertEq(minLock.nextNonce(), 0, "nonce moved");
+        _assertEq(minLock.totalLocked(), 0, "total moved");
+        _assertEq(token.balanceOf(address(minLock)), 0, "balance moved");
+        _assertEq(token.balanceOf(holder), HOLDING, "holder balance moved");
+    }
+
     function _lock(address from, uint64 amount, bytes memory recipient) private {
         _approve(from, amount);
         VM.prank(from);
@@ -592,8 +698,16 @@ contract PFTLockV1Test {
     }
 
     function _signPermit(uint256 value, uint256 deadline) private view returns (uint8, bytes32, bytes32) {
+        return _signPermitFor(address(lockC), value, deadline);
+    }
+
+    function _signPermitFor(address spender, uint256 value, uint256 deadline)
+        private
+        view
+        returns (uint8, bytes32, bytes32)
+    {
         bytes32 structHash =
-            keccak256(abi.encode(PERMIT_TYPEHASH, holder, address(lockC), value, token.nonces(holder), deadline));
+            keccak256(abi.encode(PERMIT_TYPEHASH, holder, spender, value, token.nonces(holder), deadline));
         return VM.sign(HOLDER_KEY, keccak256(abi.encodePacked("\x19\x01", token.DOMAIN_SEPARATOR(), structHash)));
     }
 

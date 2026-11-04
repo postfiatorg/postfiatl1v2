@@ -42,6 +42,7 @@ interface IPFTLockV1 {
     function token() external view returns (address);
     function finalityVerifier() external view returns (address);
     function maxLockAmount() external view returns (uint64);
+    function minimumLockAmount() external view returns (uint64);
     function nextNonce() external view returns (uint64);
     function totalLocked() external view returns (uint256);
     function totalReleased() external view returns (uint256);
@@ -66,8 +67,12 @@ interface IPFTLockV1 {
 ///         record, emits one `Locked` event and keeps the tokens.
 ///
 ///         No privileged role: there is no owner, admin, pause, setter, sweep or
-///         upgrade path. The token, its runtime code hash, the finality verifier
-///         and `maxLockAmount` are fixed at construction.
+///         upgrade path. The token, its runtime code hash, the finality verifier,
+///         `maxLockAmount` and `minimumLockAmount` are fixed at construction.
+///
+///         `minimumLockAmount` is the PFTL account reserve: PFTL refuses to
+///         create an account below it (`below_account_reserve`), so a smaller
+///         Lock to a new PFTL account could never be released there.
 ///
 ///         Invariants (design note, section 3):
 ///         1. `totalLocked - totalReleased` is the sum of `Locked` amounts minus
@@ -98,7 +103,10 @@ contract PFTLockV1 is IPFTLockV1, ReentrancyGuard {
     error NoCode(bytes32 field);
     error TokenCodeHashMismatch(bytes32 expected, bytes32 actual);
     error ZeroMaxLockAmount();
+    error ZeroMinimumLockAmount();
+    error MinimumAboveMaxLock(uint64 minimumLockAmount, uint64 maxLockAmount);
     error ZeroAmount();
+    error LockBelowMinimum(uint64 amount, uint64 minimum);
     error AmountAboveMaxLock(uint256 amount, uint256 maxLockAmount);
     error RecipientEmpty();
     error RecipientTooLong(uint256 length);
@@ -127,13 +135,21 @@ contract PFTLockV1 is IPFTLockV1, ReentrancyGuard {
     address public immutable token;
     address public immutable finalityVerifier;
     uint64 public immutable maxLockAmount;
+    uint64 public immutable minimumLockAmount;
     bytes32 private immutable _tokenRuntimeCodeHash;
 
     /// @param token_ The PFTToken on this chain.
     /// @param finalityVerifier_ The PFTL finality verifier, deployed before this contract.
     /// @param tokenRuntimeCodeHash_ The token's runtime code hash; must equal its code on chain.
     /// @param maxLockAmount_ The genesis per-window release cap (design note, section 5.1).
-    constructor(address token_, address finalityVerifier_, bytes32 tokenRuntimeCodeHash_, uint64 maxLockAmount_) {
+    /// @param minimumLockAmount_ The smallest Lock: the PFTL account reserve, at most `maxLockAmount_`.
+    constructor(
+        address token_,
+        address finalityVerifier_,
+        bytes32 tokenRuntimeCodeHash_,
+        uint64 maxLockAmount_,
+        uint64 minimumLockAmount_
+    ) {
         if (token_ == address(0)) revert ZeroAddress("token");
         if (finalityVerifier_ == address(0)) revert ZeroAddress("finality_verifier");
         if (token_.code.length == 0) revert NoCode("token");
@@ -142,10 +158,13 @@ contract PFTLockV1 is IPFTLockV1, ReentrancyGuard {
             revert TokenCodeHashMismatch(tokenRuntimeCodeHash_, token_.codehash);
         }
         if (maxLockAmount_ == 0) revert ZeroMaxLockAmount();
+        if (minimumLockAmount_ == 0) revert ZeroMinimumLockAmount();
+        if (minimumLockAmount_ > maxLockAmount_) revert MinimumAboveMaxLock(minimumLockAmount_, maxLockAmount_);
         token = token_;
         finalityVerifier = finalityVerifier_;
         _tokenRuntimeCodeHash = tokenRuntimeCodeHash_;
         maxLockAmount = maxLockAmount_;
+        minimumLockAmount = minimumLockAmount_;
     }
 
     function lockRecord(uint64 nonce) external view returns (address holder, uint64 amount, bytes32 pftlRecipientHash) {
@@ -226,6 +245,7 @@ contract PFTLockV1 is IPFTLockV1, ReentrancyGuard {
 
     function _checkLock(uint64 amount, bytes calldata pftlRecipient) private view returns (bytes32) {
         if (amount == 0) revert ZeroAmount();
+        if (amount < minimumLockAmount) revert LockBelowMinimum(amount, minimumLockAmount);
         if (amount > maxLockAmount) revert AmountAboveMaxLock(amount, maxLockAmount);
         if (pftlRecipient.length == 0) revert RecipientEmpty();
         if (pftlRecipient.length > MAX_PFTL_RECIPIENT_BYTES) revert RecipientTooLong(pftlRecipient.length);

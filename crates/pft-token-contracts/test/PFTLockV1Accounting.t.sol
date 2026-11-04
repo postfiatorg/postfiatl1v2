@@ -60,6 +60,7 @@ contract PFTLockV1AccountingTest {
     // Test amounts only; the product owner has not decided the real supply or cap.
     uint256 private constant SUPPLY = 1_000_000_000_000;
     uint64 private constant MAX_LOCK = 20_000_000_000;
+    uint64 private constant MIN_LOCK = 1;
     uint256 private constant HOLDING = 100_000_000_000;
     uint64 private constant AMOUNT = 3_000_000;
     address private constant TREASURY = address(0x7EA5);
@@ -78,7 +79,7 @@ contract PFTLockV1AccountingTest {
     function setUp() public {
         token = new PFTToken("Post Fiat Token", "PFT", SUPPLY, TREASURY);
         verifier = new MockFinalityVerifier();
-        lockC = new PFTLockV1(address(token), address(verifier), address(token).codehash, MAX_LOCK);
+        lockC = new PFTLockV1(address(token), address(verifier), address(token).codehash, MAX_LOCK, MIN_LOCK);
         holder = VM.addr(HOLDER_KEY);
         VM.warp(1_000_000);
     }
@@ -124,7 +125,7 @@ contract PFTLockV1AccountingTest {
         uint64 max = type(uint64).max;
         uint256 count = 3;
         PFTToken big = new PFTToken("Post Fiat Token", "PFT", count * max, TREASURY);
-        PFTLockV1 wide = new PFTLockV1(address(big), address(verifier), address(big).codehash, max);
+        PFTLockV1 wide = new PFTLockV1(address(big), address(verifier), address(big).codehash, max, MIN_LOCK);
         VM.prank(TREASURY);
         _assertTrue(big.approve(address(wide), type(uint256).max), "approve");
 
@@ -323,7 +324,7 @@ contract PFTLockV1AccountingTest {
 
     /// A lock bound to `verifier_`, holding 1_000 locked units.
     function _lockWith(address verifier_) private returns (PFTLockV1 bound) {
-        bound = new PFTLockV1(address(token), verifier_, address(token).codehash, MAX_LOCK);
+        bound = new PFTLockV1(address(token), verifier_, address(token).codehash, MAX_LOCK, MIN_LOCK);
         _approve(TREASURY, bound, 1_000);
         VM.prank(TREASURY);
         bound.lock(1_000, RECIPIENT);
