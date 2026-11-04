@@ -100,7 +100,8 @@ run_lock() {
     PFT_LOCK_VERIFIER_EXPECTED_COMMITTEE_ROOT_COMMITMENT="$UNPINNED" PFT_LOCK_VERIFIER_EXPECTED_PFTL_CHAIN_ID_HASH="$UNPINNED" \
     PFT_LOCK_VERIFIER_EXPECTED_GENESIS_HASH_COMMITMENT="$UNPINNED" PFT_LOCK_VERIFIER_EXPECTED_ROUTE_EPOCH=1 \
     PFT_LOCK_VERIFIER_EXPECTED_ROUTE_PROFILE_HASH_COMMITMENT="$UNPINNED" PFT_LOCK_VERIFIER_EXPECTED_ASSET_ID_COMMITMENT="$UNPINNED" \
-    PFT_LOCK_MAX_LOCK_AMOUNT=2000000000000000 PFT_LOCK_MAX_LOCK_AMOUNT_PFT=2000000000 "$@" \
+    PFT_LOCK_MAX_LOCK_AMOUNT=2000000000000000 PFT_LOCK_MAX_LOCK_AMOUNT_PFT=2000000000 \
+    PFT_LOCK_MINIMUM_LOCK_AMOUNT="$(sed -n 's/^PFT_LOCK_MINIMUM_LOCK_AMOUNT=//p' script/pft-lock.env.example)" "$@" \
     "$FORGE" script script/DeployPFTLock.s.sol:DeployPFTLock --rpc-url "$RPC" --sender "$DEPLOYER" --unlocked \
     --use "$SOLC" ${FORGE_ARGS[@]+"${FORGE_ARGS[@]}"} 2>&1 | redact
   return "${PIPESTATUS[0]}"
@@ -125,10 +126,23 @@ fi
 grep -q "TokenNotTheTestToken" <<<"$out" || { printf '%s\n' "$out"; exit 1; }
 echo "ok: dry run refuses a token other than the recorded test token without PFT_LOCK_ALLOW_TEST_TOKEN"
 
+if out="$(run_lock PFT_LOCK_ALLOW_TEST_VERIFIER=1 PFT_LOCK_MINIMUM_LOCK_AMOUNT=replace_with_the_minimum)"; then
+  printf '%s\n' "$out"; echo "FAIL: the dry run accepted a placeholder minimum lock amount" >&2; exit 1
+fi
+grep -q 'PlaceholderValue("PFT_LOCK_MINIMUM_LOCK_AMOUNT")' <<<"$out" || { printf '%s\n' "$out"; exit 1; }
+echo "ok: dry run refuses a placeholder PFT_LOCK_MINIMUM_LOCK_AMOUNT"
+
+if out="$(run_lock PFT_LOCK_ALLOW_TEST_VERIFIER=1 PFT_LOCK_MINIMUM_LOCK_AMOUNT=9)"; then
+  printf '%s\n' "$out"; echo "FAIL: the dry run accepted a minimum lock amount other than the account reserve" >&2; exit 1
+fi
+grep -q 'MinimumLockAmountNotTheAccountReserve(9, 10)' <<<"$out" || { printf '%s\n' "$out"; exit 1; }
+echo "ok: dry run refuses a PFT_LOCK_MINIMUM_LOCK_AMOUNT other than the PFTL account reserve, even with a test switch"
+
 out="$(run_lock PFT_LOCK_ALLOW_TEST_VERIFIER=1 PFT_LOCK_ALLOW_TEST_TOKEN=1 PFT_LOCK_TOKEN="$OTHER_TOKEN" \
   PFT_LOCK_TOKEN_CODEHASH="$OTHER_HASH")" || { printf '%s\n' "$out"; echo "FAIL: the test-token switch" >&2; exit 1; }
-grep -q "PFTLockV1 deployed at" <<<"$out" || { printf '%s\n' "$out"; exit 1; }
-echo "ok: dry run admits the other token with PFT_LOCK_ALLOW_TEST_TOKEN=1"
+grep -q "PFTLockV1 deployed at" <<<"$out" && grep -q "minimum lock amount (six-decimal units, the PFTL account reserve) 10" <<<"$out" \
+  && grep -q "lock minimumLockAmount() 10" <<<"$out" || { printf '%s\n' "$out"; exit 1; }
+echo "ok: dry run admits the other token with PFT_LOCK_ALLOW_TEST_TOKEN=1 and prints the checked and re-read minimum"
 
 RECORD=cache/deploy-test/pft-lock-base-84532/deployment.json
 rm -f "$RECORD"
@@ -147,7 +161,7 @@ RUNTIME_HASH="$(env -i PATH="$SAFE_PATH" HOME="$TMP_HOME" "$CAST" keccak "$(arti
 [ "$(field mode)" = test ] && [ "$(field token)" = "$TEST_TOKEN" ] \
   && [ "$(field solc_version)" = "0.8.24+commit.e11b9ed9" ] && [ "$(field optimizer)" = true ] \
   && [ "$(field optimizer_runs)" = 200 ] && [ "$(field evm_version)" = cancun ] && [ "$(field bytecode_hash)" = ipfs ] \
-  && [ "$(field runtime_code_keccak256)" = "$RUNTIME_HASH" ] \
+  && [ "$(field runtime_code_keccak256)" = "$RUNTIME_HASH" ] && [ "$(field minimum_lock_amount_units)" = 10 ] \
   && [ "$(field deployed_code_keccak256)" = "$(codehash "$LOCK")" ] \
   || { cat "$RECORD"; echo "FAIL: the record's compiler settings or code hashes" >&2; exit 1; }
 echo "ok: record holds solc 0.8.24, optimizer true, 200 runs, cancun, ipfs and both code hashes"
@@ -173,7 +187,7 @@ args="$(enc "constructor(address)" "$TEST_TOKEN")"
 ANCHORED="$(create_init "$OWNER" "$(artifact out/DeployPFTLock.t.sol/AnchoredLockVerifier.json bytecode)${args#0x}")"
 send "$ANCHORED" "setAnchor(bytes32,uint64,bytes32)" "$CP" 4200 "$ROOT"
 send "$ANCHORED" "setPftl(bytes32,bytes32,bytes32,uint64,bytes32)" "$CHAIN_HASH" "$GENESIS" "$ROUTE" 7 "$ASSET"
-args="$(enc "constructor(address,address,bytes32,uint64)" "$TEST_TOKEN" "$ANCHORED" "$TEST_TOKEN_HASH" "$CAP")"
+args="$(enc "constructor(address,address,bytes32,uint64,uint64)" "$TEST_TOKEN" "$ANCHORED" "$TEST_TOKEN_HASH" "$CAP" 10)"
 PROBE="$(create_init "$OWNER" "$(artifact out/PFTLockV1.sol/PFTLockV1.json bytecode)${args#0x}")"
 VAULT="$(codehash "$PROBE")"
 send "$ANCHORED" "setVault(bytes32)" "$VAULT"
@@ -203,6 +217,7 @@ LOCK="$(field lock)"
 [ "$(field finality_verifier_anchor_checked)" = true ] && [ "$(codehash "$LOCK")" = "$VAULT" ] \
   && [ "$(c call "$ANCHORED" "vaultRuntimeCodeHash()(bytes32)")" = "$(field computed_vault_runtime_codehash)" ] \
   && [ "$(c call "$ANCHORED" "routeEpoch()(uint64)")" = "$(field expected_route_epoch)" ] \
+  && [ "$(c call "$LOCK" "minimumLockAmount()(uint64)")" = "$(field minimum_lock_amount_units)" ] \
   && [ "$(c call "$ANCHORED" "pftlGenesisHashCommitment()(bytes32)")" = "$(field expected_genesis_hash_commitment)" ] \
   || { cat "$RECORD"; echo "FAIL: the mined lock or verifier differs from the record" >&2; exit 1; }
 echo "ok: broadcast against an anchored verifier with every binding matched; mined code hash and getters equal the record"

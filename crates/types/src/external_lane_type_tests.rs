@@ -910,3 +910,175 @@ fn recorded_windows_are_checked_against_the_cap_active_at_their_heights() {
         .expect("forged past the lowered cap");
     assert!(split.validate_against_genesis_with_caps(&lane, &mid).is_err());
 }
+
+/// The lane of `release_test_lane` after one release per height, nonce `i`
+/// for the `i`-th height, 10 atoms each.
+fn lane_after_releases(lane: &GenesisExternalLane, heights: &[u64]) -> ExternalLaneState {
+    let mut state = ExternalLaneState::genesis(lane);
+    for (nonce, height) in heights.iter().enumerate() {
+        state
+            .apply_release(lane, sample_release(nonce as u64, 10, *height))
+            .expect("release");
+    }
+    state
+}
+
+fn unpruned_history_root(heights: &[u64]) -> Option<String> {
+    heights.iter().enumerate().fold(None, |root, (nonce, height)| {
+        Some(
+            external_lane_release_history_root(
+                root.as_deref(),
+                &sample_release(nonce as u64, 10, *height),
+            )
+            .expect("root"),
+        )
+    })
+}
+
+#[test]
+fn external_lane_release_prunes_records_behind_the_finalized_height_at_the_boundary() {
+    // Window 100 blocks, retention one window: a release at height H prunes
+    // the records released at or below H - 100.
+    let lane = release_test_lane();
+    let kept = lane_after_releases(&lane, &[5, 104]);
+    assert_eq!(kept.releases.len(), 2, "height 5 is above 104 - 100");
+    let pruned = lane_after_releases(&lane, &[5, 105]);
+    assert_eq!(pruned.releases.len(), 1, "height 5 is at 105 - 100");
+    assert_eq!(pruned.releases[0].lock_nonce, 1);
+    // The root, the counters and the nonce set keep the pruned release.
+    assert_eq!(pruned.release_history_root, unpruned_history_root(&[5, 105]));
+    assert_eq!(pruned.released_atoms, 20);
+    assert_eq!(pruned.released_lock_nonces, [0_u64, 1].into_iter().collect());
+    assert_eq!(pruned.pruned_release_count, 1);
+    assert_eq!(pruned.pruned_released_atoms, 10);
+    assert_eq!(pruned.pruned_release_history_root, unpruned_history_root(&[5]));
+    assert_eq!(pruned.release_count(), 2);
+    pruned.validate_against_genesis(&lane).expect("pruned lane");
+    kept.validate_against_genesis(&lane).expect("unpruned lane");
+    // The pruned nonce stays paid.
+    let mut replay = pruned.clone();
+    let (code, _) = replay
+        .apply_release(&lane, sample_release(0, 10, 106))
+        .unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_NONCE_ALREADY_RELEASED);
+    assert_eq!(replay, pruned);
+}
+
+#[test]
+fn external_lane_release_keeps_the_open_window_records() {
+    // Three releases in window 1, then one in window 2 more than a window
+    // later: the open window's records stay until a later window opens.
+    let lane = release_test_lane();
+    let state = lane_after_releases(&lane, &[100, 150, 199]);
+    assert_eq!(state.releases.len(), 3);
+    assert_eq!((state.window_index, state.window_released_atoms), (1, 30));
+    let state = lane_after_releases(&lane, &[100, 150, 199, 298]);
+    assert_eq!(state.releases.len(), 2, "heights 100 and 150 are at or below 298 - 100");
+    assert_eq!((state.window_index, state.window_released_atoms), (2, 10));
+    state.validate_against_genesis(&lane).expect("pruned lane");
+}
+
+#[test]
+fn external_lane_releases_past_the_record_ceiling_with_pruning_are_admitted() {
+    // A ceiling of 2 records: one release per window prunes the older ones,
+    // so the ceiling is never reached.
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    for nonce in 0..20_u64 {
+        state
+            .apply_release_within(&lane, sample_release(nonce, 10, 5 + nonce * 100), lane.window_cap_atoms(), 2)
+            .expect("pruning keeps the lane below the ceiling");
+        assert!(state.releases.len() <= 2);
+    }
+    assert_eq!(state.released_atoms, 200);
+    assert_eq!(state.released_lock_nonces.len(), 20);
+    assert_eq!(state.release_count(), 20);
+    state.validate_against_genesis(&lane).expect("pruned lane");
+}
+
+#[test]
+fn external_lane_release_of_zero_atoms_is_refused_before_a_release_can_prune_it() {
+    // A zero-amount release followed by a release one window later that would
+    // prune it: the writer's own state must still pass the lane rule.
+    let lane = release_test_lane();
+    let mut state = ExternalLaneState::genesis(&lane);
+    let zero = state.apply_release(&lane, sample_release(0, 0, 5));
+    state
+        .apply_release(&lane, sample_release(1, 10, 105))
+        .expect("positive release");
+    state
+        .validate_against_genesis(&lane)
+        .expect("the writer's own state passes the lane rule");
+    let (code, error) = zero.unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_PROOF_INVALID);
+    assert!(error.contains("zero amount"), "{error}");
+    let (code, _) = state.check_release(&lane, 2, 0, 106).unwrap_err();
+    assert_eq!(code, EXTERNAL_LANE_PROOF_INVALID);
+    assert_eq!((state.release_count(), state.pruned_release_count), (1, 0));
+    assert_eq!(state.released_lock_nonces, [1_u64].into_iter().collect());
+}
+
+#[test]
+fn pruned_external_lane_refuses_forged_records_tampered_roots_and_removed_ids() {
+    let lane = release_test_lane();
+    let state = lane_after_releases(&lane, &[5, 105, 106]);
+    assert_eq!(state.pruned_release_count, 1);
+    state.validate_against_genesis(&lane).expect("pruned lane");
+    let refuse = |edit: &dyn Fn(&mut ExternalLaneState), needle: &str| {
+        let mut tampered = state.clone();
+        edit(&mut tampered);
+        let error = tampered.validate_against_genesis(&lane).unwrap_err();
+        assert!(error.contains(needle), "{needle}: {error}");
+    };
+    refuse(
+        &|lane| lane.releases[0].recipient = "pftl-forged".to_string(),
+        "does not match its recorded releases",
+    );
+    refuse(
+        &|lane| lane.release_history_root = unpruned_history_root(&[5]),
+        "does not match its recorded releases",
+    );
+    refuse(
+        &|lane| lane.pruned_release_history_root = unpruned_history_root(&[105]),
+        "does not match its recorded releases",
+    );
+    refuse(
+        &|lane| {
+            lane.released_lock_nonces.remove(&0);
+        },
+        "differ from its recorded releases",
+    );
+    // A pruned nonce swapped for another keeps the count; the lane alone
+    // cannot see it, but the nonce set is committed, so the state root moves
+    // and the checkpoint and snapshot root checks refuse it.
+    let mut swapped = state.clone();
+    swapped.released_lock_nonces.remove(&0);
+    swapped.released_lock_nonces.insert(9);
+    assert_ne!(
+        swapped.state_commitment_bytes().expect("commit"),
+        state.state_commitment_bytes().expect("commit")
+    );
+    refuse(&|lane| lane.pruned_released_atoms += 1, "recorded releases sum to 31");
+    refuse(&|lane| lane.pruned_release_count = 0, "inconsistent pruned release fields");
+    refuse(
+        &|lane| {
+            lane.releases.clear();
+            lane.pruned_release_count = 3;
+        },
+        "inconsistent pruned release fields",
+    );
+}
+
+#[test]
+fn pruned_external_lane_commits_its_pruned_fields() {
+    let lane = release_test_lane();
+    let unpruned = lane_after_releases(&lane, &[5, 104]);
+    let bytes = String::from_utf8(unpruned.state_commitment_bytes().expect("commit")).expect("utf8");
+    assert!(!bytes.contains("pruned"), "an unpruned lane commits as before: {bytes}");
+    let pruned = lane_after_releases(&lane, &[5, 105]);
+    let bytes = String::from_utf8(pruned.state_commitment_bytes().expect("commit")).expect("utf8");
+    assert!(bytes.contains("\"pruned_release_count\":1"), "{bytes}");
+    let json = serde_json::to_string(&pruned).expect("json");
+    let decoded: ExternalLaneState = serde_json::from_str(&json).expect("decode");
+    assert_eq!(decoded, pruned);
+}

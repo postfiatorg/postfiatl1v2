@@ -2602,9 +2602,13 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
         } else {
             0
         };
+        // Sequences count every release; the stored records follow the
+        // pruned ones, so a cursor at or below the pruned count is empty.
+        let pruned = state.pruned_release_count;
+        let release_count = state.release_count();
         let records = std::mem::take(&mut state.releases);
         let end = options.release_cursor.map_or(records.len(), |cursor| {
-            usize::try_from(cursor)
+            usize::try_from(cursor.saturating_sub(pruned))
                 .unwrap_or(usize::MAX)
                 .min(records.len())
         });
@@ -2614,7 +2618,7 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
             .enumerate()
             .rev()
             .map(|(offset, record)| ExternalLaneReleaseEntry {
-                sequence: (start + offset) as u64,
+                sequence: pruned + (start + offset) as u64,
                 record: record.clone(),
             })
             .collect();
@@ -2628,10 +2632,12 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
             next_window_available_atoms: window_cap_atoms
                 .saturating_sub(next_window_released)
                 .min(remainder_atoms),
+            release_history_root: state.release_history_root.clone(),
             state,
-            release_count: records.len() as u64,
+            release_count,
+            pruned_release_count: pruned,
             releases,
-            next_release_cursor: (start > 0).then_some(start as u64),
+            next_release_cursor: (start > 0).then_some(pruned + start as u64),
         });
     }
     Ok(ExternalLaneInfoReport {

@@ -40,6 +40,8 @@ One detail differs. The vault takes a caller-chosen nonce and hashes it into a d
 
 The lock contract also refuses a Lock above `maxLockAmount`, fixed at construction to the per-window release cap of section 5.1, so every Lock fits into one window (lean of the lead developer, 2026-10-26).
 
+The constructor's fifth argument is `minimumLockAmount`, and a Lock below it is refused (`LockBelowMinimum`); the constructor refuses a minimum below `PFTL_ACCOUNT_RESERVE` (10 atoms, the PFTL account reserve, `MinimumBelowAccountReserve`) or above `maxLockAmount` (`MinimumAboveMaxLock`).
+
 ```solidity
 interface IPFTLockV1 {
     event Locked(uint64 indexed nonce, address indexed holder,
@@ -47,6 +49,7 @@ interface IPFTLockV1 {
     function token() external view returns (address);          // immutable PFTToken
     function finalityVerifier() external view returns (address); // immutable, no setter
     function maxLockAmount() external view returns (uint64);    // immutable: the genesis per-window cap
+    function minimumLockAmount() external view returns (uint64); // immutable: at least PFTL_ACCOUNT_RESERVE
     function nextNonce() external view returns (uint64);
     function totalLocked() external view returns (uint256);    // sum of all Lock amounts
     function totalReleased() external view returns (uint256);  // Phase 3 only; zero in Phase 2
@@ -57,6 +60,7 @@ interface IPFTLockV1 {
                             uint8 v, bytes32 r, bytes32 s) external returns (uint64 nonce);
     // plus the dormant Phase 3 release function of section 6, checked by finalityVerifier()
 }
+// PFTLockV1 also has the getter of its constant PFTL_ACCOUNT_RESERVE (uint64, 10, the PFTL account reserve).
 ```
 
 `lockWithPermit` exists because the token supports EIP-2612 permits (`crates/pft-token-contracts/src/PFTToken.sol:15-16`), which saves the holder a separate approval transaction.
@@ -197,7 +201,7 @@ An exchange holding ERC-20 PFT for customers locks the customers' total in one t
 
 The tests are written before the code.
 
-- The Foundry tests for the lock contract are `test_lock_pulls_tokens_and_records_nonce`, `test_lock_nonces_are_sequential`, `test_lock_rejects_zero_amount`, `test_lock_rejects_amount_above_uint64`, `test_lock_rejects_empty_or_oversized_recipient`, `test_lock_with_permit_matches_lock`, `test_total_locked_equals_sum_of_lock_events`, `test_plain_transfer_is_not_a_lock`, `test_release_is_bound_to_immutable_finality_verifier`, `test_lock_rejects_amount_above_max_lock_amount` and `test_contract_has_no_owner_pause_or_withdraw`.
+- The Foundry tests for the lock contract are `test_lock_pulls_tokens_and_records_nonce`, `test_lock_nonces_are_sequential`, `test_lock_rejects_zero_amount`, `test_lock_rejects_amount_above_uint64`, `test_lock_rejects_empty_or_oversized_recipient`, `test_lock_with_permit_matches_lock`, `test_total_locked_equals_sum_of_lock_events`, `test_plain_transfer_is_not_a_lock`, `test_release_is_bound_to_immutable_finality_verifier`, `test_lock_rejects_amount_above_max_lock_amount`, `test_contract_has_no_owner_pause_or_withdraw`, and for the minimum `test_minimum_lock_amount_is_fixed_at_construction`, `test_constructor_rejects_zero_minimum_lock_amount`, `test_constructor_rejects_a_minimum_of_one`, `test_constructor_rejects_a_minimum_just_below_the_reserve`, `test_constructor_rejects_minimum_above_max_lock_amount`, `test_lock_refuses_amount_below_minimum`, `test_lock_with_permit_refuses_amount_below_minimum`, `test_lock_accepts_exactly_the_minimum`, `test_lock_with_permit_accepts_exactly_the_minimum` and `testFuzz_minimum_decides_every_amount`.
 - The type tests are `genesis_external_lane_requires_reserved_equal_to_erc20_supply` (deferred to P2.5 with the genesis plan), `genesis_rejects_lanes_at_or_above_native_supply`, `genesis_faucet_holds_supply_minus_lanes`, `genesis_rejects_unknown_lane_fields` and `genesis_rejects_release_cap_outside_one_to_ten_thousand_bps`.
 - The execution tests are `external_lane_release_credits_recipient_once`, `external_lane_release_rejects_replayed_nonce_without_mutation`, `external_lane_release_rejects_wrong_chain_contract_or_token`, `external_lane_release_rejects_checkpoint_below_quorum`, `external_lane_release_rejects_amount_above_lane_remainder`, `external_lane_release_creates_missing_recipient_account` and `rejected_release_in_accepted_block_leaves_supply_unchanged`.
 - The cap tests are `external_lane_release_refuses_amount_past_window_cap_without_mutation`, `external_lane_window_released_amount_resets_in_next_window`, `external_lane_release_refused_by_cap_succeeds_in_later_window_with_same_proof`, `external_lane_cap_amendment_latest_value_wins`, `external_lane_cap_lowering_takes_effect_immediately`, `external_lane_cap_raise_waits_seven_windows`, `watcher_flags_release_without_matching_lock` and `watcher_flags_release_with_mismatched_amount_or_recipient`.

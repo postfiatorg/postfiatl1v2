@@ -198,6 +198,32 @@ class RemainingReadWrapperTests(unittest.TestCase):
         # active_only=False is not sent (the node flag is presence-only); limit is bounded.
         call.assert_called_once_with("fx_fix_list", {"limit": 512})
 
+    def test_external_lane_release_coverage_separates_pruned_from_stored(self) -> None:
+        row = {
+            "lane_id": "base-erc20",
+            "release_count": 120,
+            "pruned_release_count": 100,
+            "release_history_root": "0x" + "ab" * 48,
+        }
+        self.assertEqual(
+            PostFiatRpcClient.external_lane_release_coverage(row),
+            {
+                "lane_id": "base-erc20",
+                "release_count": 120,
+                "pruned_release_count": 100,
+                "stored_release_count": 20,
+                "release_history_root": "0x" + "ab" * 48,
+            },
+        )
+        unpruned = PostFiatRpcClient.external_lane_release_coverage({"release_count": 3})
+        self.assertEqual((unpruned["pruned_release_count"], unpruned["stored_release_count"]), (0, 3))
+        with self.assertRaises(RpcProtocolError):
+            PostFiatRpcClient.external_lane_release_coverage(
+                {"release_count": 1, "pruned_release_count": 2}
+            )
+        with self.assertRaises(RpcProtocolError):
+            PostFiatRpcClient.external_lane_release_coverage({"pruned_release_count": 0})
+
     def test_external_lane_info_sends_the_release_page_parameters(self) -> None:
         client = _client()
         with mock.patch.object(client, "_call", return_value={"lanes": []}) as call:

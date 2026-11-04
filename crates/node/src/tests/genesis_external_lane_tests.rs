@@ -978,6 +978,102 @@ fn checkpoint_with_recorded_releases_is_accepted_and_tampering_them_is_refused()
     fs::remove_dir_all(data_dir).expect("cleanup");
 }
 
+/// Three releases of 5 atoms to the faucet account: heights 1 and 2 in
+/// window 0, then one at 86,402, a window past height 2, which prunes both
+/// earlier records behind the finalized height.
+fn record_pruned_releases(ledger: &mut LedgerState) {
+    let genesis = lane_genesis("postfiat-lane-recorded", 1);
+    for (nonce, height) in [(90_u64, 1_u64), (91, 2), (92, 86_402)] {
+        ledger.external_lanes[0]
+            .apply_release(&genesis.external_lanes()[0], lane_release_record(nonce, 5, height))
+            .expect("recorded release");
+    }
+    ledger.accounts[0].balance += 15;
+}
+
+#[test]
+fn checkpoint_with_a_pruned_lane_is_accepted_and_tampering_it_is_refused() {
+    let (data_dir, checkpoint, _) = pruned_lane_node("pruned-release-records");
+    let (result, accepted) =
+        reread_tampered_checkpoint(&data_dir, &checkpoint, record_pruned_releases);
+    assert_aggregate_balances(&accepted);
+    let read = result.expect("pruned lane passes").expect("checkpoint");
+    let lane = &read.ledger.external_lanes[0];
+    assert_eq!(lane.released_atoms, 15);
+    assert_eq!(lane.releases.len(), 1);
+    assert_eq!(lane.pruned_release_count, 2);
+    assert_eq!(lane.released_lock_nonces.len(), 3);
+
+    let cases: [(&str, LedgerEdit); 4] = [
+        // A forged stored record.
+        ("does not match its recorded releases", |ledger| {
+            record_pruned_releases(ledger);
+            ledger.external_lanes[0].releases[0].recipient = "pftl-forged".to_string();
+        }),
+        // A tampered root.
+        ("does not match its recorded releases", |ledger| {
+            record_pruned_releases(ledger);
+            ledger.external_lanes[0].pruned_release_history_root =
+                ledger.external_lanes[0].release_history_root.clone();
+        }),
+        // A paid nonce removed from the replay set.
+        ("differ from its recorded releases", |ledger| {
+            record_pruned_releases(ledger);
+            ledger.external_lanes[0].released_lock_nonces.remove(&90);
+        }),
+        // Pruned atoms raised with the balance moved to an account.
+        ("recorded releases sum to 15", |ledger| {
+            record_pruned_releases(ledger);
+            let lane = &mut ledger.external_lanes[0];
+            lane.released_atoms += 1;
+            lane.window_released_atoms += 1;
+            ledger.accounts[0].balance += 1;
+        }),
+    ];
+    for (needle, edit) in cases {
+        let (result, tampered) = reread_tampered_checkpoint(&data_dir, &checkpoint, edit);
+        assert_aggregate_balances(&tampered);
+        let error = result.unwrap_err().to_string();
+        assert!(
+            error.contains("history checkpoint external lane `base-erc20`") && error.contains(needle),
+            "{needle}: {error}"
+        );
+    }
+    fs::remove_dir_all(data_dir).expect("cleanup");
+}
+
+#[test]
+fn pruned_lane_record_round_trips_and_replays_to_the_same_state() {
+    let genesis = lane_genesis("postfiat-lane-recorded", 1);
+    let mut ledger = LedgerState::new(Vec::new());
+    ledger.external_lanes = genesis.genesis_external_lane_states();
+    let mut replayed = ledger.clone();
+    let genesis_lane = &genesis.external_lanes()[0];
+    for (nonce, height) in [(90_u64, 1_u64), (91, 2), (92, 86_402)] {
+        ledger.external_lanes[0]
+            .apply_release(genesis_lane, lane_release_record(nonce, 5, height))
+            .expect("release");
+        replayed.external_lanes[0]
+            .apply_release(genesis_lane, lane_release_record(nonce, 5, height))
+            .expect("replayed release");
+    }
+    // Replaying the same releases from genesis prunes to the same state.
+    assert_eq!(replayed.external_lanes, ledger.external_lanes);
+    let lane = &ledger.external_lanes[0];
+    assert_eq!(lane.pruned_release_count, 2);
+    // The stored ledger encoding restores the same lane and commitment.
+    let bytes = serde_json::to_vec(&ledger).expect("encode");
+    let restored: LedgerState = serde_json::from_slice(&bytes).expect("decode");
+    assert_eq!(restored.external_lanes, ledger.external_lanes);
+    assert_eq!(
+        restored.external_lanes[0].state_commitment_bytes().expect("commit"),
+        lane.state_commitment_bytes().expect("commit")
+    );
+    restored.external_lanes[0]
+        .validate_against_genesis(genesis_lane)
+        .expect("restored pruned lane");
+}
+
 // ---- P2.4: the release path on a local chain --------------------------------
 
 mod release_path {
@@ -1036,11 +1132,18 @@ mod release_path {
     /// keys). A signed FastSwap governance bootstrap registers it, so replay,
     /// prune and snapshots reproduce it.
     fn lane_chain(label: &str) -> Chain {
-        lane_chain_with_window(label, None)
+        lane_chain_with_window(label, 86_400)
     }
 
-    /// [`lane_chain`] with the lane's `release_window_blocks` replaced.
-    fn lane_chain_with_window(label: &str, release_window_blocks: Option<u64>) -> Chain {
+    fn lane_chain_with_window(label: &str, release_window_blocks: u64) -> Chain {
+        lane_chain_with(label, release_window_blocks, None)
+    }
+
+    fn lane_chain_with(
+        label: &str,
+        release_window_blocks: u64,
+        consensus_v2_activation_height: Option<u64>,
+    ) -> Chain {
         let keys: Vec<_> = (0..4_u8)
             .map(|index| ml_dsa_65_keygen_from_seed(&[0x81 + index; 32]))
             .collect();
@@ -1068,9 +1171,9 @@ mod release_path {
         };
         committee.domain.committee_root = committee.computed_root().expect("root");
         let mut genesis = lane_genesis(&format!("postfiat-lane-{label}"), 4);
-        if let Some(window) = release_window_blocks {
-            genesis.external_lanes.as_mut().expect("lanes")[0].release_window_blocks = window;
-        }
+        genesis.external_lanes.as_mut().expect("lanes")[0].release_window_blocks =
+            release_window_blocks;
+        genesis.consensus_v2_activation_height = consensus_v2_activation_height;
         let policy = &mut genesis.external_lanes.as_mut().expect("lanes")[0].policy;
         policy.committee_epoch = 1;
         policy.committee_root = format!("0x{}", bytes_to_hex(&committee.domain.committee_root.0));
@@ -1295,6 +1398,18 @@ mod release_path {
     /// Admits the transaction through the mempool, proposes a batch from the
     /// mempool and applies it: the path a submitted release takes.
     fn admit_and_apply(chain: &Chain, tx: &SignedAssetTransaction, label: &str) -> Receipt {
+        admit_and_apply_with(chain, tx, label, false)
+    }
+
+    /// With `consensus_v2`, the block carries a block certificate and a
+    /// consensus v2 commit signed by all four validators, so it can be a
+    /// finalized checkpoint.
+    fn admit_and_apply_with(
+        chain: &Chain,
+        tx: &SignedAssetTransaction,
+        label: &str,
+        consensus_v2: bool,
+    ) -> Receipt {
         submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
             data_dir: chain.data_dir.clone(),
             signed_asset_transaction_json: serde_json::to_string(tx).expect("tx json"),
@@ -1307,14 +1422,137 @@ mod release_path {
             max_transactions: 8,
         })
         .expect("mempool batch");
+        let certificate_file =
+            consensus_v2.then(|| consensus_v2_certificate(&chain.data_dir, &batch_file, label));
         let receipts = apply_batch(ApplyBatchOptions {
             data_dir: chain.data_dir.clone(),
             batch_file,
-            certificate_file: None,
+            certificate_file,
         })
         .expect("apply batch");
         assert_eq!(receipts.len(), 1, "{receipts:?}");
         receipts.into_iter().next().expect("receipt")
+    }
+
+    /// A block certificate with a consensus v2 commit for the next block, as
+    /// `active_fastpay_certify` builds it: the fixture holds every validator
+    /// key, so it signs every vote directly.
+    fn consensus_v2_certificate(data_dir: &Path, batch_file: &Path, label: &str) -> PathBuf {
+        let data_dir = data_dir.to_path_buf();
+        let key_file = data_dir.join(VALIDATOR_KEYS_FILE);
+        let height = NodeStore::new(&data_dir).read_chain_tip().expect("tip").height + 1;
+        let proposer = block_proposer(BlockProposerOptions {
+            data_dir: data_dir.clone(),
+            block_height: height,
+            view: 0,
+        })
+        .expect("proposer")
+        .proposer;
+        let proposal_file = data_dir.join(format!("{label}.proposal.json"));
+        let proposal = propose_batch(BatchProposalOptions {
+            data_dir: data_dir.clone(),
+            verify_block_log: false,
+            batch_kind: None,
+            batch_file: batch_file.to_path_buf(),
+            proposal_file: proposal_file.clone(),
+            view: Some(0),
+            timeout_certificate_file: None,
+            key_file: Some(key_file.clone()),
+            validator_id: Some(proposer),
+        })
+        .expect("proposal");
+        let vote_files = local_validator_ids(4)
+            .expect("validator ids")
+            .into_iter()
+            .map(|validator| {
+                let vote_file = data_dir.join(format!("{label}.{validator}.vote.json"));
+                create_block_vote(BlockVoteOptions {
+                    data_dir: data_dir.clone(),
+                    verify_block_log: false,
+                    key_file: key_file.clone(),
+                    validator_id: Some(validator),
+                    batch_file: Some(batch_file.to_path_buf()),
+                    proposal_file: Some(proposal_file.clone()),
+                    timeout_certificate_file: None,
+                    block_height: Some(proposal.block_height),
+                    vote_file: vote_file.clone(),
+                })
+                .expect("block vote");
+                vote_file
+            })
+            .collect();
+        let certificate_file = data_dir.join(format!("{label}.certificate.json"));
+        let mut certificate = aggregate_block_certificate(BlockCertificateOptions {
+            data_dir: data_dir.clone(),
+            verify_block_log: false,
+            batch_file: Some(batch_file.to_path_buf()),
+            proposal_file: Some(proposal_file),
+            timeout_certificate_file: None,
+            block_height: Some(proposal.block_height),
+            vote_files,
+            certificate_file: certificate_file.clone(),
+        })
+        .expect("block certificate");
+        let consensus_proposal =
+            create_consensus_v2_proposal_for_block(&data_dir, &proposal, None, &key_file)
+                .expect("consensus v2 proposal");
+        let keys = read_validator_key_file(&key_file).expect("validator keys");
+        let sign_votes = |phase| {
+            keys.validators
+                .iter()
+                .map(|key| {
+                    let mut vote = postfiat_types::ConsensusV2Vote {
+                        schema: postfiat_types::CONSENSUS_V2_VOTE_SCHEMA.into(),
+                        domain: consensus_proposal.domain.clone(),
+                        round: consensus_proposal.round,
+                        phase,
+                        block: Some(consensus_proposal.block.clone()),
+                        validator: key.node_id.clone(),
+                        signature: postfiat_types::ConsensusV2Signature {
+                            algorithm_id: ML_DSA_65_ALGORITHM.into(),
+                            signer: key.node_id.clone(),
+                            public_key_hex: key.public_key_hex.clone(),
+                            signature_hex: "00".into(),
+                        },
+                    };
+                    vote.signature.signature_hex = bytes_to_hex(
+                        &postfiat_crypto_provider::ml_dsa_65_sign_with_context(
+                            &hex_to_bytes(&key.private_key_hex).expect("key hex"),
+                            &postfiat_ordering_fast::consensus_v2_vote_signing_bytes(&vote)
+                                .expect("vote bytes"),
+                            postfiat_ordering_fast::CONSENSUS_V2_VOTE_CONTEXT,
+                        )
+                        .expect("vote signature"),
+                    );
+                    vote
+                })
+                .collect()
+        };
+        let qc = |phase| {
+            certify_and_persist_consensus_v2_votes(
+                &data_dir,
+                consensus_proposal.round,
+                phase,
+                Some(consensus_proposal.block.clone()),
+                sign_votes(phase),
+            )
+            .expect("consensus v2 QC")
+        };
+        let prepare_qc = qc(postfiat_types::ConsensusV2Phase::Prepare);
+        let precommit_qc = qc(postfiat_types::ConsensusV2Phase::Precommit);
+        certificate.consensus_v2_commit = Some(
+            assemble_consensus_v2_commit(
+                &data_dir,
+                &proposal,
+                consensus_proposal,
+                None,
+                prepare_qc,
+                precommit_qc,
+            )
+            .expect("consensus v2 commit"),
+        );
+        write_block_certificate_file(&certificate_file, &certificate).expect("write certificate");
+        certificate_file
     }
 
     /// A refused release: mempool admission refuses it with `code`, and so
@@ -1420,6 +1658,155 @@ mod release_path {
         })
         .expect("replay from genesis through the releases");
         let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    /// Five releases in two-block windows on a local chain, one block each,
+    /// so later releases prune the earlier records. A full snapshot export
+    /// and import into a fresh directory restores the same lane, pruned
+    /// fields and state root; the block and state verifiers pass on both
+    /// nodes, and the replay from genesis reproduces every committed state
+    /// root, the pruned fields among them.
+    #[test]
+    fn pruned_lane_survives_a_snapshot_round_trip_and_a_replay() {
+        let chain = lane_chain_with_window("release-prune", 2);
+        let amounts: Vec<u64> = (1..=5_u64).map(|nonce| ACCOUNT_RESERVE + 100 * nonce).collect();
+        for (index, amount) in amounts.iter().enumerate() {
+            let nonce = index as u64 + 1;
+            let tx = release_tx(&chain, "base-erc20", nonce, *amount, nonce);
+            let receipt = admit_and_apply(&chain, &tx, &format!("prune-{nonce}"));
+            assert!(receipt.accepted, "{receipt:?}");
+        }
+        let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
+        let lane = ledger.external_lanes[0].clone();
+        assert!(lane.pruned_release_count > 0, "{lane:?}");
+        assert_eq!(lane.release_count(), 5);
+        assert_eq!(lane.released_lock_nonces, (1..=5_u64).collect());
+        assert_eq!(lane.released_atoms, amounts.iter().sum::<u64>());
+        assert_eq!(
+            lane.pruned_released_atoms,
+            amounts[..lane.pruned_release_count as usize].iter().sum::<u64>()
+        );
+        lane.validate_against_genesis(&chain.genesis.external_lanes()[0])
+            .expect("pruned lane");
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(info.release_count, 5);
+        assert_eq!(info.pruned_release_count, lane.pruned_release_count);
+        assert_eq!(info.release_history_root, lane.release_history_root);
+        assert_eq!(info.releases.len() as u64, 5 - lane.pruned_release_count);
+        assert_eq!(
+            info.releases.last().expect("oldest stored").sequence,
+            lane.pruned_release_count
+        );
+        assert_eq!(info.next_release_cursor, None);
+
+        let source = status(NodeOptions {
+            data_dir: chain.data_dir.clone(),
+        })
+        .expect("source status");
+        let snapshot_dir = sibling_dir(&chain.data_dir, "prune-snapshot");
+        let restored_dir = sibling_dir(&chain.data_dir, "prune-restored");
+        let manifest = export_snapshot(SnapshotExportOptions {
+            data_dir: chain.data_dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+        })
+        .expect("export snapshot of the pruned lane");
+        assert_eq!(manifest.state_root, source.state_root);
+        let restored = import_snapshot(SnapshotImportOptions {
+            data_dir: restored_dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+            node_id: Some("validator-restored".to_string()),
+        })
+        .expect("import snapshot of the pruned lane");
+        assert_eq!(restored.state_root, source.state_root);
+        let restored_ledger = NodeStore::new(&restored_dir).read_ledger().expect("ledger");
+        assert_eq!(restored_ledger.external_lanes, ledger.external_lanes);
+        assert_eq!(lane_info(&restored_dir), info);
+        for data_dir in [&chain.data_dir, &restored_dir] {
+            let blocks = verify_blocks(NodeOptions {
+                data_dir: data_dir.clone(),
+            })
+            .expect("replay from genesis through the pruning releases");
+            assert_eq!(blocks.state_root, source.state_root);
+            let state = verify_state(NodeOptions {
+                data_dir: data_dir.clone(),
+            })
+            .expect("state verifiers");
+            assert!(state.verified, "{state:?}");
+        }
+        for dir in [chain.data_dir, snapshot_dir, restored_dir] {
+            let _ = fs::remove_dir_all(dir);
+        }
+    }
+
+    /// The same pruned lane exported from its finalized checkpoint rather
+    /// than its full history: consensus v2 activates at the last release, so
+    /// that block is a certified checkpoint. The import into a fresh
+    /// directory restores the same lane, pruned fields included, the same
+    /// state root and the same read report, and the checkpoint and state
+    /// verifiers pass on the restored node.
+    #[test]
+    fn pruned_lane_restores_from_a_finalized_checkpoint_snapshot() {
+        // The committee bootstrap is block 1, the releases blocks 2 to 6.
+        let chain = lane_chain_with("checkpoint-prune", 2, Some(6));
+        for nonce in 1..=5_u64 {
+            let tx = release_tx(&chain, "base-erc20", nonce, ACCOUNT_RESERVE + 100 * nonce, nonce);
+            let receipt = admit_and_apply_with(&chain, &tx, &format!("prune-{nonce}"), nonce == 5);
+            assert!(receipt.accepted, "{receipt:?}");
+        }
+        let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
+        let lane = ledger.external_lanes[0].clone();
+        assert!(lane.pruned_release_count > 0, "{lane:?}");
+        assert!(lane.pruned_release_history_root.is_some(), "{lane:?}");
+        assert_eq!(lane.release_count(), 5);
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(info.pruned_release_count, lane.pruned_release_count);
+
+        let source = status(NodeOptions {
+            data_dir: chain.data_dir.clone(),
+        })
+        .expect("source status");
+        assert_eq!(source.block_height, 6);
+        let checkpoint = verify_finalized_checkpoint(NodeOptions {
+            data_dir: chain.data_dir.clone(),
+        })
+        .expect("source checkpoint");
+        assert!(checkpoint.verified);
+        assert_eq!(checkpoint.checkpoint_state_root, source.state_root);
+        let snapshot_dir = sibling_dir(&chain.data_dir, "checkpoint-snapshot");
+        let restored_dir = sibling_dir(&chain.data_dir, "checkpoint-restored");
+        let manifest = export_snapshot_from_finalized_checkpoint(SnapshotExportOptions {
+            data_dir: chain.data_dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+        })
+        .expect("export checkpoint snapshot of the pruned lane");
+        assert_eq!(manifest.state_root, source.state_root);
+        let restored = import_snapshot_from_finalized_checkpoint(SnapshotImportOptions {
+            data_dir: restored_dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+            node_id: Some("validator-restored".to_string()),
+        })
+        .expect("import checkpoint snapshot of the pruned lane");
+        assert_eq!(restored.state_root, source.state_root);
+        let restored_ledger = NodeStore::new(&restored_dir).read_ledger().expect("ledger");
+        assert_eq!(restored_ledger.external_lanes, ledger.external_lanes);
+        restored_ledger.external_lanes[0]
+            .validate_against_genesis(&chain.genesis.external_lanes()[0])
+            .expect("restored pruned lane");
+        assert_eq!(lane_info(&restored_dir), info);
+        let restored_checkpoint = verify_finalized_checkpoint(NodeOptions {
+            data_dir: restored_dir.clone(),
+        })
+        .expect("restored checkpoint");
+        assert!(restored_checkpoint.verified);
+        assert_eq!(restored_checkpoint.checkpoint_state_root, source.state_root);
+        let state = verify_state(NodeOptions {
+            data_dir: restored_dir.clone(),
+        })
+        .expect("restored state verifiers");
+        assert!(state.verified, "{state:?}");
+        for dir in [chain.data_dir, snapshot_dir, restored_dir] {
+            let _ = fs::remove_dir_all(dir);
+        }
     }
 
     /// A lane chain with two applied releases (nonces 1 and 2).
@@ -1695,7 +2082,7 @@ mod release_path {
     #[test]
     fn governed_release_cap_lowers_at_once_and_raises_after_seven_windows() {
         // Windows of 4 blocks: a raise waits 7 × 4 = 28 blocks.
-        let chain = lane_chain_with_window("release-cap", Some(4));
+        let chain = lane_chain_with_window("release-cap", 4);
         let lane = chain.genesis.external_lanes()[0].clone();
         let lowered = lane.window_cap_atoms_for_bps(100);
         let raised = lane.window_cap_atoms_for_bps(200);
