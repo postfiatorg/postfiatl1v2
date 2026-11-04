@@ -989,7 +989,7 @@ mod release_path {
     use postfiat_types::{
         AssetTransactionOperation, EthereumCheckpointCertificateV1, EthereumCheckpointVoteV1,
         EthereumExternalEventProofV1, EthereumFinalizedCheckpointV1, EthereumReceiptProofV1,
-        ExternalLaneReleaseOperationV1, FastSwapChainDomainV1, FastSwapCommitteeDomainV1,
+        ExternalLaneReleaseCapChange, ExternalLaneReleaseOperationV1, FastSwapChainDomainV1, FastSwapCommitteeDomainV1,
         FastSwapCommitteeRootV1, FastSwapCommitteeV1, FastSwapOpaqueHashV1, FastSwapValidatorV1,
         SignedAssetTransaction, UnsignedAssetTransaction, ETHEREUM_CHECKPOINT_SCHEMA_V1,
         ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1, EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1,
@@ -1036,6 +1036,11 @@ mod release_path {
     /// keys). A signed FastSwap governance bootstrap registers it, so replay,
     /// prune and snapshots reproduce it.
     fn lane_chain(label: &str) -> Chain {
+        lane_chain_with_window(label, None)
+    }
+
+    /// [`lane_chain`] with the lane's `release_window_blocks` replaced.
+    fn lane_chain_with_window(label: &str, release_window_blocks: Option<u64>) -> Chain {
         let keys: Vec<_> = (0..4_u8)
             .map(|index| ml_dsa_65_keygen_from_seed(&[0x81 + index; 32]))
             .collect();
@@ -1063,6 +1068,9 @@ mod release_path {
         };
         committee.domain.committee_root = committee.computed_root().expect("root");
         let mut genesis = lane_genesis(&format!("postfiat-lane-{label}"), 4);
+        if let Some(window) = release_window_blocks {
+            genesis.external_lanes.as_mut().expect("lanes")[0].release_window_blocks = window;
+        }
         let policy = &mut genesis.external_lanes.as_mut().expect("lanes")[0].policy;
         policy.committee_epoch = 1;
         policy.committee_root = format!("0x{}", bytes_to_hex(&committee.domain.committee_root.0));
@@ -1599,6 +1607,178 @@ mod release_path {
             );
         }
         for dir in [chain.data_dir, snapshot_dir] {
+            let _ = fs::remove_dir_all(dir);
+        }
+    }
+
+    // ---- P2.5: the governed release cap on a local chain -------------------
+
+    fn tip_height(chain: &Chain) -> u64 {
+        read_chain_tip_or_reconstruct_for_genesis(&NodeStore::new(&chain.data_dir), &chain.genesis)
+            .expect("tip")
+            .height
+    }
+
+    fn faucet_sequence(chain: &Chain) -> u64 {
+        let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+        let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
+        ledger.account(&faucet.address).expect("faucet").sequence + 1
+    }
+
+    /// Ratifies, signs by all four validators, and applies a cap amendment
+    /// through the governance round in the next block; returns its id and
+    /// commit height.
+    fn govern_release_cap(chain: &Chain, cap_bps: u32) -> (String, u64) {
+        let data_dir = &chain.data_dir;
+        let slot = tip_height(chain) + 1;
+        let amendment_file = data_dir.join(format!("cap-{slot}.unsigned.json"));
+        let validators = local_validator_ids(4).expect("validator ids");
+        let amendment = ratify_governance(RatifyGovernanceOptions {
+            data_dir: data_dir.clone(),
+            validators: validators.clone(),
+            support: validators,
+            kind: postfiat_types::external_lane_release_cap_amendment_kind("base-erc20"),
+            value: cap_bps,
+            activation_height: 0,
+            veto_until_height: 0,
+            paused: false,
+            amendment_file: amendment_file.clone(),
+        })
+        .expect("ratify cap amendment");
+        let validator_keys =
+            read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE)).expect("validator keys");
+        let expires_at_height = tip_height(chain) + 20;
+        let authorization_files = write_split_validator_key_files(data_dir, &validator_keys)
+            .iter()
+            .map(|(validator, key_file)| {
+                let authorization_file = data_dir.join(format!("{validator}.cap-{slot}.json"));
+                sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                    data_dir: data_dir.clone(),
+                    amendment_file: amendment_file.clone(),
+                    validator: validator.clone(),
+                    validator_key_file: key_file.clone(),
+                    proposal_slot: slot,
+                    expires_at_height,
+                    authorization_file: authorization_file.clone(),
+                })
+                .expect("sign cap amendment");
+                authorization_file
+            })
+            .collect::<Vec<_>>();
+        let signed_file = data_dir.join(format!("cap-{slot}.signed.json"));
+        assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
+            data_dir: data_dir.clone(),
+            amendment_file,
+            authorization_files,
+            proposal_slot: slot,
+            output_file: signed_file.clone(),
+        })
+        .expect("assemble cap amendment");
+        let batch_file = data_dir.join(format!("cap-{slot}.batch.json"));
+        create_governance_batch(GovernanceBatchOptions {
+            data_dir: data_dir.clone(),
+            amendment_file: Some(signed_file),
+            registry_update_file: None,
+            batch_file: batch_file.clone(),
+        })
+        .expect("cap governance batch");
+        let receipts = apply_governance_batch(ApplyBatchOptions {
+            data_dir: data_dir.clone(),
+            batch_file,
+            certificate_file: None,
+        })
+        .expect("apply cap amendment");
+        assert!(receipts[0].accepted, "{receipts:?}");
+        (amendment.amendment_id, tip_height(chain))
+    }
+
+    #[test]
+    fn governed_release_cap_lowers_at_once_and_raises_after_seven_windows() {
+        // Windows of 4 blocks: a raise waits 7 × 4 = 28 blocks.
+        let chain = lane_chain_with_window("release-cap", Some(4));
+        let lane = chain.genesis.external_lanes()[0].clone();
+        let lowered = lane.window_cap_atoms_for_bps(100);
+        let raised = lane.window_cap_atoms_for_bps(200);
+        assert_eq!(lane.window_cap_atoms(), raised);
+
+        // 1. Lowered to 100 bps: above it is refused, below it released.
+        let (lower_id, lower_height) = govern_release_cap(&chain, 100);
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(info.release_cap.active_cap_bps, 100);
+        assert_eq!(
+            info.release_cap.active,
+            Some(ExternalLaneReleaseCapChange {
+                amendment_id: lower_id.clone(),
+                cap_bps: 100,
+                effective_height: lower_height,
+            })
+        );
+        assert_eq!(info.release_cap.pending, None);
+        assert_eq!(info.window_cap_atoms, lowered);
+        let lane_before = info.state;
+        let over = release_tx(&chain, "base-erc20", 1, lowered + 1, faucet_sequence(&chain));
+        refused_everywhere(&chain, &over, "external_lane_window_cap_exceeded", "cap-over");
+        assert_eq!(lane_info(&chain.data_dir).state, lane_before);
+        let below = release_tx(&chain, "base-erc20", 1, ACCOUNT_RESERVE + 100, faucet_sequence(&chain));
+        let receipt = admit_and_apply(&chain, &below, "cap-below");
+        assert!(receipt.accepted, "{receipt:?}");
+
+        // 2. Raised back to 200 bps: a release at the raised cap waits.
+        let (raise_id, raise_height) = govern_release_cap(&chain, 200);
+        let effective = raise_height + 7 * 4;
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(info.release_cap.active_cap_bps, 100);
+        assert_eq!(info.release_cap.active.as_ref().map(|c| c.amendment_id.as_str()), Some(lower_id.as_str()));
+        assert_eq!(
+            info.release_cap.pending,
+            Some(ExternalLaneReleaseCapChange {
+                amendment_id: raise_id.clone(),
+                cap_bps: 200,
+                effective_height: effective,
+            })
+        );
+        let at_raised = |chain: &Chain| release_tx(chain, "base-erc20", 2, raised, faucet_sequence(chain));
+        refused_everywhere(&chain, &at_raised(&chain), "external_lane_window_cap_exceeded", "cap-early");
+        let mut filler = 0;
+        while tip_height(&chain) + 1 < effective {
+            if tip_height(&chain) + 2 == effective {
+                // The last block before the delay ends holds the lowered cap.
+                refused_everywhere(&chain, &at_raised(&chain), "external_lane_window_cap_exceeded", "cap-last");
+            }
+            filler += 1;
+            apply_one_transfer(&chain.data_dir, &format!("pfexternallanecap{filler:020}"));
+        }
+        // The next block is the first under the raised cap.
+        assert_eq!(tip_height(&chain) + 1, effective);
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(info.release_cap.active_cap_bps, 200);
+        assert_eq!(info.release_cap.active.map(|c| c.amendment_id), Some(raise_id));
+        assert_eq!(info.release_cap.pending, None);
+        let receipt = admit_and_apply(&chain, &at_raised(&chain), "cap-after");
+        assert!(receipt.accepted, "{receipt:?}");
+
+        // Replay from genesis and snapshot export/import reproduce the lane.
+        verify_blocks(NodeOptions {
+            data_dir: chain.data_dir.clone(),
+        })
+        .expect("replay from genesis through the amended caps");
+        let restored = assert_snapshot_restores_lane(&chain.data_dir, "release-cap");
+        assert_eq!(lane_info(&restored).release_cap, lane_info(&chain.data_dir).release_cap);
+
+        // The lane rule reads the amendments: without the raise, the last
+        // window is above the lowered cap.
+        let store = NodeStore::new(&chain.data_dir);
+        let ledger = store.read_ledger().expect("ledger");
+        let mut governance = store.read_governance().expect("governance");
+        validate_external_lanes_match_genesis(&chain.genesis, &ledger, &governance, "governed")
+            .expect("windows within the governed caps");
+        governance.amendments.retain(|amendment| amendment.value != 200);
+        let error =
+            validate_external_lanes_match_genesis(&chain.genesis, &ledger, &governance, "unraised")
+                .unwrap_err()
+                .to_string();
+        assert!(error.contains(&format!("above the cap {lowered}")), "{error}");
+        for dir in [chain.data_dir, restored] {
             let _ = fs::remove_dir_all(dir);
         }
     }
