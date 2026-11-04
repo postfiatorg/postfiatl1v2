@@ -2630,7 +2630,7 @@ pub struct ExternalLaneInfoOptions {
 }
 
 /// `external_lane_info`: each genesis external lane's configuration, live
-/// record and a page of its release history, newest first.
+/// record and one page of its stored release records, newest first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExternalLaneInfoReport {
     pub schema: String,
@@ -2653,10 +2653,17 @@ pub struct ExternalLaneInfoRow {
     /// The window the next block falls in, and what it may still release.
     pub next_window_index: u64,
     pub next_window_available_atoms: u64,
+    /// Every release ever applied, pruned or stored.
     pub release_count: u64,
-    /// One page of release records, newest first.
+    /// Releases pruned behind the finalized height: sequences below this
+    /// count are no longer stored, but they stay in `release_history_root`,
+    /// in `released_atoms` and in `released_lock_nonces`.
+    pub pruned_release_count: u64,
+    /// The hash chain over every release, pruned or stored.
+    pub release_history_root: Option<String>,
+    /// One page of stored release records, newest first.
     pub releases: Vec<ExternalLaneReleaseEntry>,
-    /// Cursor of the next older page; absent on the last page.
+    /// Cursor of the next older page; absent on the last stored page.
     pub next_release_cursor: Option<u64>,
 }
 

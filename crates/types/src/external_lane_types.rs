@@ -12,9 +12,18 @@ pub const EXTERNAL_LANE_RELEASE_CAP_BPS_MAX: u32 = 10_000;
 /// JSON each, so under 400 MB, and one SHA3-384 step each when a replay base
 /// is checked. It is far above any expected release volume (each record costs
 /// a Base Lock and a PFTL fee) but below `reserved_atoms` over the lock
-/// minimum for any realistic slice; pruning the records behind the finalized
-/// checkpoint (P2.5) keeps a lane below it.
+/// minimum for any realistic slice. Pruning the records behind the finalized
+/// height keeps the records a lane stores at most this many: only the
+/// releases of the retention window and of the lane's open window stay stored.
 pub const EXTERNAL_LANE_MAX_RELEASE_RECORDS: usize = 1_000_000;
+/// Release windows a record stays stored behind the finalized height before
+/// it is pruned. One window is this change's own retention, not a rule of
+/// design section 5.2; it is justified by 5.2's loss bound of one window's
+/// cap, which assumes the watcher sees each release and the zero-cap
+/// amendment lands before the next window releases. A record becomes
+/// prunable one window after its height and is removed by the next
+/// qualifying release.
+pub const EXTERNAL_LANE_RELEASE_RETENTION_WINDOWS: u64 = 1;
 const EXTERNAL_LANE_EVM_ADDRESS_HEX_LEN: usize = 40;
 const EXTERNAL_LANE_CODE_HASH_HEX_LEN: usize = 64;
 /// A `FastSwapCommitteeV1` root is 48 bytes (SHA3-384 over the roster).
@@ -316,13 +325,16 @@ impl ExternalLaneReleaseRecord {
 /// Live record of a genesis external lane. Its remainder
 /// (`reserved_atoms - released_atoms`) is native supply that is not in
 /// circulation; `external_lane_release_v1` is the only writer of the release
-/// fields, and every released atom has a record in `releases`.
+/// fields, and every released atom has a stored record in `releases` or is in
+/// the committed pruned aggregate (`pruned_released_atoms`) and root
+/// (`pruned_release_history_root`).
 ///
-/// The state commitment covers the release fields and
+/// The state commitment covers the release fields, the pruned fields and
 /// `release_history_root`, a SHA3-384 hash chain over the records in
-/// application order; the records themselves stay in the stored ledger for
-/// reads and replay and are checked against the root when a replay base is
-/// loaded, so the per-block commitment does not grow with them.
+/// application order; the stored records stay in the ledger for reads and
+/// replay and, when a replay base is loaded, are chained from the pruned root
+/// (or from nothing when unpruned) to `release_history_root`, so the per-block
+/// commitment does not grow with them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExternalLaneState {
@@ -337,9 +349,32 @@ pub struct ExternalLaneState {
     /// unreleased lane encodes and commits exactly as it did in P2.2.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release_history_root: Option<String>,
-    /// Release history in application order; not in the state commitment.
+    /// Records pruned behind the finalized height: how many, the atoms they
+    /// released, and the history root after the last of them, from which the
+    /// stored `releases` chain to `release_history_root`. Omitted while
+    /// nothing is pruned, so an unpruned lane encodes and commits as before.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub pruned_release_count: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub pruned_released_atoms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pruned_release_history_root: Option<String>,
+    /// Release history in application order, after the pruned records; not
+    /// in the state commitment.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub releases: Vec<ExternalLaneReleaseRecord>,
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
+
+/// What pruning at a finalized height removes: the leading records, their
+/// atoms and the history root after the last of them.
+struct ExternalLaneReleasePrune {
+    count: usize,
+    atoms: u64,
+    root: Option<String>,
 }
 
 /// The committed part of an `ExternalLaneState`: every field but the records.
@@ -353,6 +388,12 @@ struct ExternalLaneCommitment<'a> {
     window_released_atoms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     release_history_root: Option<&'a str>,
+    #[serde(skip_serializing_if = "is_zero")]
+    pruned_release_count: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pruned_released_atoms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pruned_release_history_root: Option<&'a str>,
 }
 
 /// The release history root after `record`: SHA3-384 over a domain tag, the
@@ -389,8 +430,53 @@ impl ExternalLaneState {
             window_index: 0,
             window_released_atoms: 0,
             release_history_root: None,
+            pruned_release_count: 0,
+            pruned_released_atoms: 0,
+            pruned_release_history_root: None,
             releases: Vec::new(),
         }
+    }
+
+    /// Every release ever applied, pruned or stored.
+    pub fn release_count(&self) -> u64 {
+        self.pruned_release_count
+            .saturating_add(self.releases.len() as u64)
+    }
+
+    /// The leading records that pruning at `finalized_height` removes: those
+    /// released at or below `finalized_height` minus the retention window and
+    /// in a window before `open_window`. The records retained are the
+    /// retention window's and the open window's, which the cap accounting and
+    /// the window check still need. Records are in height order, so the
+    /// prunable ones are a prefix.
+    fn release_prune(
+        &self,
+        lane: &GenesisExternalLane,
+        finalized_height: u64,
+        open_window: u64,
+    ) -> Result<ExternalLaneReleasePrune, String> {
+        let retention = lane
+            .release_window_blocks
+            .max(1)
+            .saturating_mul(EXTERNAL_LANE_RELEASE_RETENTION_WINDOWS);
+        let count = finalized_height.checked_sub(retention).map_or(0, |cutoff| {
+            self.releases
+                .iter()
+                .take_while(|record| {
+                    record.released_at_height <= cutoff
+                        && lane.window_index_at(record.released_at_height) < open_window
+                })
+                .count()
+        });
+        let mut root = self.pruned_release_history_root.clone();
+        let mut atoms = self.pruned_released_atoms;
+        for record in &self.releases[..count] {
+            root = Some(external_lane_release_history_root(root.as_deref(), record)?);
+            atoms = atoms.checked_add(record.amount_atoms).ok_or_else(|| {
+                format!("external lane `{}` pruned releases overflow", self.lane_id)
+            })?;
+        }
+        Ok(ExternalLaneReleasePrune { count, atoms, root })
     }
 
     pub fn remainder_atoms(&self) -> Result<u64, String> {
@@ -438,6 +524,13 @@ impl ExternalLaneState {
                 EXTERNAL_LANE_RELEASE_HISTORY_ROOT_HEX_LEN,
             )?;
         }
+        if let Some(root) = &self.pruned_release_history_root {
+            validate_lane_hex(
+                "pruned_release_history_root",
+                root,
+                EXTERNAL_LANE_RELEASE_HISTORY_ROOT_HEX_LEN,
+            )?;
+        }
         Ok(())
     }
 
@@ -446,8 +539,25 @@ impl ExternalLaneState {
     /// `released_atoms` is the sum of their amounts. Walks every record, so
     /// it runs when a replay base is loaded, not per block.
     fn validate_recorded_releases(&self) -> Result<(), String> {
+        let pruned = self.pruned_release_count;
+        let pruned_fields_consistent = if pruned == 0 {
+            self.pruned_released_atoms == 0 && self.pruned_release_history_root.is_none()
+        } else {
+            // Pruning keeps the open window's records, so a pruned lane still
+            // stores its latest release. The pruned atoms are checked by the
+            // exact sum below, the pruned count by the nonce count and the
+            // pruned root by the chain to `release_history_root`.
+            self.pruned_release_history_root.is_some()
+                && !self.releases.is_empty()
+        };
+        if !pruned_fields_consistent {
+            return Err(format!(
+                "external lane `{}` has inconsistent pruned release fields",
+                self.lane_id
+            ));
+        }
         let mut nonces = BTreeSet::new();
-        let mut released = 0_u64;
+        let mut released = self.pruned_released_atoms;
         for record in &self.releases {
             record
                 .validate()
@@ -462,10 +572,23 @@ impl ExternalLaneState {
                 format!("external lane `{}` recorded releases overflow", self.lane_id)
             })?;
         }
-        if nonces != self.released_lock_nonces {
+        if pruned == 0 && nonces != self.released_lock_nonces {
             return Err(format!(
                 "external lane `{}` released Lock nonces {:?} differ from its recorded releases {:?}",
                 self.lane_id, self.released_lock_nonces, nonces
+            ));
+        }
+        // Replay protection never prunes: the set keeps every paid nonce, one
+        // per release, the stored ones among them.
+        if pruned > 0
+            && (!nonces.is_subset(&self.released_lock_nonces)
+                || self.released_lock_nonces.len() as u64 != self.release_count())
+        {
+            return Err(format!(
+                "external lane `{}` released Lock nonces ({}) differ from its recorded releases ({} stored, {pruned} pruned)",
+                self.lane_id,
+                self.released_lock_nonces.len(),
+                nonces.len()
             ));
         }
         if released != self.released_atoms {
@@ -498,7 +621,7 @@ impl ExternalLaneState {
         let cap = lane.window_cap_atoms();
         let mut per_window = BTreeMap::<u64, u64>::new();
         let mut previous_height = 0_u64;
-        let mut root = None;
+        let mut root = self.pruned_release_history_root.clone();
         for record in &self.releases {
             root = Some(external_lane_release_history_root(root.as_deref(), record)?);
             if record.source_chain_id != lane.policy.chain_id
@@ -573,6 +696,17 @@ impl ExternalLaneState {
         height: u64,
         max_records: usize,
     ) -> Result<(), (&'static str, String)> {
+        // The operation's own validation refuses a zero amount first; the
+        // lane refuses it too, so no API caller can store a zero record.
+        if amount_atoms == 0 {
+            return Err((
+                EXTERNAL_LANE_PROOF_INVALID,
+                format!(
+                    "external lane `{}` release of Lock nonce {lock_nonce} has zero amount",
+                    self.lane_id
+                ),
+            ));
+        }
         if self.released_lock_nonces.contains(&lock_nonce) {
             return Err((
                 EXTERNAL_LANE_NONCE_ALREADY_RELEASED,
@@ -622,13 +756,19 @@ impl ExternalLaneState {
                 ),
             ));
         }
-        if self.releases.len() >= max_records {
+        // The release prunes before it stores, so the ceiling counts the
+        // records that stay.
+        let prunable = self
+            .release_prune(lane, height, window_index)
+            .map_err(|error| (EXTERNAL_LANE_PROOF_INVALID, error))?
+            .count;
+        let stored = self.releases.len() - prunable;
+        if stored >= max_records {
             return Err((
                 EXTERNAL_LANE_RELEASE_RECORDS_FULL,
                 format!(
-                    "external lane `{}` stores {} release records, the ceiling {max_records}",
-                    self.lane_id,
-                    self.releases.len()
+                    "external lane `{}` stores {stored} release records, the ceiling {max_records}",
+                    self.lane_id
                 ),
             ));
         }
@@ -636,9 +776,12 @@ impl ExternalLaneState {
     }
 
     /// Applies a checked release: records it, adds the nonce and the amount,
-    /// and moves the window. The caller credits the recipient. Every fallible
-    /// step runs before the first mutation, so a refusal leaves the lane as it
-    /// was.
+    /// moves the window, and prunes the records behind the finalized height.
+    /// The node has no rollback path for a committed PFTL block, so the
+    /// release's own height is the finalized height; a release is the only writer of records, so the
+    /// stored count can only cross the ceiling here. The caller credits the
+    /// recipient. Every fallible step runs before the first mutation, so a
+    /// refusal leaves the lane as it was.
     pub fn apply_release(
         &mut self,
         lane: &GenesisExternalLane,
@@ -663,6 +806,9 @@ impl ExternalLaneState {
         let root = external_lane_release_history_root(self.release_history_root.as_deref(), &record)
             .map_err(|error| (EXTERNAL_LANE_PROOF_INVALID, error))?;
         let window_index = lane.window_index_at(record.released_at_height);
+        let prune = self
+            .release_prune(lane, record.released_at_height, window_index)
+            .map_err(|error| (EXTERNAL_LANE_PROOF_INVALID, error))?;
         if window_index != self.window_index {
             self.window_index = window_index;
             self.window_released_atoms = 0;
@@ -671,6 +817,12 @@ impl ExternalLaneState {
         self.released_atoms += record.amount_atoms;
         self.released_lock_nonces.insert(record.lock_nonce);
         self.release_history_root = Some(root);
+        if prune.count > 0 {
+            self.releases.drain(..prune.count);
+            self.pruned_release_count += prune.count as u64;
+            self.pruned_released_atoms = prune.atoms;
+            self.pruned_release_history_root = prune.root;
+        }
         self.releases.push(record);
         Ok(())
     }
@@ -687,6 +839,9 @@ impl ExternalLaneState {
             window_index: self.window_index,
             window_released_atoms: self.window_released_atoms,
             release_history_root: self.release_history_root.as_deref(),
+            pruned_release_count: self.pruned_release_count,
+            pruned_released_atoms: self.pruned_released_atoms,
+            pruned_release_history_root: self.pruned_release_history_root.as_deref(),
         })
         .map_err(|error| format!("encode external lane state: {error}"))
     }

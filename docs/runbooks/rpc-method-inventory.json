@@ -34,10 +34,10 @@
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-11-03T10:57:20Z",
+  "generated_utc": "2026-11-04T08:06:29Z",
   "git": {
     "dirty": true,
-    "revision": "eed475656a88237e7a264a97d15cd6a493a7e3d1"
+    "revision": "db4c46708a205acb3f0149fc353a83f45e0a868a"
   },
   "methods": [
     {
@@ -570,7 +570,7 @@
       "controlled_write_allowed_when_enabled": false,
       "method": "external_lane_info",
       "node_dispatch": true,
-      "notes": "public genesis external lane config, committed record and paged release history read",
+      "notes": "public genesis external lane config, committed record, release_count, pruned_release_count, release_history_root and one page of stored release records; sequences below pruned_release_count are pruned and no page returns them",
       "owned_lane_allowed_when_enabled": false,
       "posture": "read_only_public",
       "privacy_alpha_allowed_when_enabled": false,
