@@ -2126,7 +2126,7 @@ mod release_path {
     fn release_cap_amendment_needs_the_registry_threshold_of_the_active_set() {
         let chain = lane_chain_with_window("release-cap-threshold", 4);
         let validators = local_validator_ids(4).expect("validator ids");
-        let threshold = postfiat_types::external_lane_release_cap_threshold(validators.len());
+        let threshold = postfiat_types::external_lane_amendment_threshold(validators.len());
         assert_eq!(threshold, 3, "⌊2 × 4 / 3⌋ + 1");
         let without_last = validators[..3].to_vec();
         for (label, declared, quorum, signers) in [
@@ -2368,7 +2368,8 @@ mod release_path {
             quorum: 3,
             kind: postfiat_types::external_lane_committee_amendment_kind(lane_id, epoch, root),
             value,
-            activation_height: 0,
+            // The proposal slot: these moves execute at height 5.
+            activation_height: 5,
             veto_until_height: 0,
             paused: false,
             support: local_validator_ids(4).expect("validators"),
@@ -2436,9 +2437,68 @@ mod release_path {
     }
 
     #[test]
+    fn committee_move_needs_the_active_set_its_slot_and_a_configured_lane_at_admission_and_execution() {
+        let chain = lane_chain("committee-move-authority");
+        let store = NodeStore::new(&chain.data_dir);
+        let mut governance = store.read_governance().expect("governance");
+        let mut ledger = store.read_ledger().expect("ledger");
+        let (epoch2, _) = second_committee(&chain);
+        ledger.fastswap_committees.push(epoch2.clone());
+        let root2 = epoch2.domain.committee_root.0;
+        let active = local_validator_ids(4).expect("validators");
+        let valid = committee_move(&chain, "base-erc20", 2, &root2, 2);
+        let admit = |amendment: &GovernanceAmendment, slot: u64| {
+            verify_external_lane_amendment_admission(&chain.genesis, &active, amendment, slot)
+                .err()
+                .map(|error| error.to_string())
+        };
+        let one_signer = GovernanceAmendment { quorum: 1, support: active[..1].to_vec(), ..valid.clone() };
+        let three_of_three = GovernanceAmendment {
+            validators: active[..3].to_vec(),
+            support: active[..3].to_vec(),
+            ..valid.clone()
+        };
+        let other_slot = GovernanceAmendment { activation_height: 4, ..valid.clone() };
+        let other_lane = committee_move(&chain, "other-lane", 2, &root2, 2);
+        for (amendment, expected) in [
+            (&one_signer, "external_lane_committee_move_authority_invalid"),
+            (&three_of_three, "external_lane_committee_move_authority_invalid"),
+            (&other_slot, "external_lane_committee_move_slot_invalid"),
+            (&other_lane, "external_lane_not_configured"),
+        ] {
+            let error = admit(amendment, 5).expect("admission refuses");
+            assert!(error.contains(expected), "admission {expected}: {error}");
+        }
+        assert_eq!(admit(&valid, 5), None);
+        for (amendment, expected) in [
+            (&one_signer, "external_lane_committee_move_authority_invalid"),
+            (&three_of_three, "external_lane_committee_move_authority_invalid"),
+            (&other_slot, "external_lane_committee_move_slot_invalid"),
+            (&other_lane, "external_lane_not_configured"),
+        ] {
+            let receipts = execute_governance_batch(
+                &mut governance.clone(),
+                Some(&mut ledger.clone()),
+                &GovernanceActionBatch::new("refused-move", vec![amendment.clone()]),
+                5,
+            );
+            assert_eq!(receipts[0].code, expected, "{receipts:?}");
+        }
+        let receipts = execute_governance_batch(
+            &mut governance,
+            Some(&mut ledger),
+            &GovernanceActionBatch::new("move", vec![valid]),
+            5,
+        );
+        assert!(receipts[0].accepted, "{receipts:?}");
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    #[test]
     fn committee_move_ratification_checks_the_registered_committees() {
         let chain = lane_chain("committee-move-ratify");
-        let ratify = |kind: String, value: u32| {
+        let slot = tip_height(&chain) + 1;
+        let ratify_at = |kind: String, value: u32, activation_height: u64| {
             let validators = local_validator_ids(4).expect("validators");
             ratify_governance(RatifyGovernanceOptions {
                 data_dir: chain.data_dir.clone(),
@@ -2446,7 +2506,7 @@ mod release_path {
                 support: validators,
                 kind,
                 value,
-                activation_height: 0,
+                activation_height,
                 veto_until_height: 0,
                 paused: false,
                 amendment_file: chain.data_dir.join("move.json"),
@@ -2460,9 +2520,19 @@ mod release_path {
             // The genesis policy already names epoch 1.
             (postfiat_types::external_lane_committee_amendment_kind("base-erc20", 1, &root1), 1, "external_lane_committee_epoch_not_advanced"),
         ] {
-            let error = ratify(kind.clone(), value).expect_err("move ratified").to_string();
+            let error = ratify_at(kind.clone(), value, slot).expect_err("move ratified").to_string();
             assert!(error.contains(expected), "{kind}: {error}");
         }
+        // The immediate lifecycle names no proposal slot.
+        activate_committee(&chain, &epoch2);
+        let kind = postfiat_types::external_lane_committee_amendment_kind("base-erc20", 2, &epoch2.domain.committee_root.0);
+        let error = ratify_at(kind.clone(), 2, 0).expect_err("immediate move ratified").to_string();
+        assert!(error.contains("external_lane_committee_move_slot_invalid"), "{error}");
+        let amendment = ratify_at(kind.clone(), 2, tip_height(&chain) + 1).expect("move at its slot");
+        assert_eq!(amendment.activation_height, tip_height(&chain) + 1);
+        // The same move requested for a later slot is a new amendment.
+        let later = ratify_at(kind, 2, tip_height(&chain) + 2).expect("move at a later slot");
+        assert_ne!(later.amendment_id, amendment.amendment_id);
         let _ = fs::remove_dir_all(&chain.data_dir);
     }
 
@@ -2597,7 +2667,7 @@ mod release_path {
                 &next.domain.committee_root.0,
             ),
             value: u32::try_from(next.domain.committee_epoch).expect("epoch"),
-            activation_height: 0,
+            activation_height: slot,
             veto_until_height: 0,
             paused: false,
             amendment_file: amendment_file.clone(),
@@ -2648,6 +2718,119 @@ mod release_path {
         .expect("apply committee move");
         assert!(receipts[0].accepted, "{receipts:?}");
         (amendment.amendment_id, tip_height(chain))
+    }
+
+    /// Ratifies a committee move to `next` declared by `validators` at
+    /// `quorum`, supported and signed by `signers`, with `activation_height`
+    /// (the next block's slot when `None`), and submits it through that
+    /// block's governance round: the ratification, signing, assembly or
+    /// admission error, or the block's receipts.
+    fn try_govern_committee_move(
+        chain: &Chain,
+        next: &FastSwapCommitteeV1,
+        validators: &[String],
+        quorum: usize,
+        signers: &[String],
+        activation_height: Option<u64>,
+    ) -> io::Result<(GovernanceAmendment, Vec<Receipt>)> {
+        let data_dir = &chain.data_dir;
+        let slot = tip_height(chain) + 1;
+        let tag = format!("{slot}-{quorum}-{}-{}", signers.len(), validators.len());
+        let amendment_file = data_dir.join(format!("move-{tag}.unsigned.json"));
+        let amendment = postfiat_consensus_cobalt::ratify_governance_amendment_with_lifecycle(
+            &cobalt_domain(&chain.genesis),
+            &EssentialSubsetConfig {
+                validators: validators.to_vec(),
+                quorum,
+            },
+            &postfiat_types::external_lane_committee_amendment_kind(
+                "base-erc20",
+                next.domain.committee_epoch,
+                &next.domain.committee_root.0,
+            ),
+            u32::try_from(next.domain.committee_epoch).expect("epoch"),
+            signers.to_vec(),
+            GovernanceAmendmentLifecycle {
+                activation_height: activation_height.unwrap_or(slot),
+                veto_until_height: 0,
+                paused: false,
+            },
+        )
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        fs::write(&amendment_file, serde_json::to_vec_pretty(&amendment)?)?;
+        let validator_keys =
+            read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE)).expect("validator keys");
+        let mut authorization_files = Vec::new();
+        for (validator, key_file) in write_split_validator_key_files(data_dir, &validator_keys) {
+            if !signers.contains(&validator) {
+                continue;
+            }
+            let authorization_file = data_dir.join(format!("{validator}.move-{tag}.json"));
+            sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                data_dir: data_dir.clone(),
+                amendment_file: amendment_file.clone(),
+                validator: validator.clone(),
+                validator_key_file: key_file.clone(),
+                proposal_slot: slot,
+                expires_at_height: slot + 20,
+                authorization_file: authorization_file.clone(),
+            })?;
+            authorization_files.push(authorization_file);
+        }
+        let signed_file = data_dir.join(format!("move-{tag}.signed.json"));
+        assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
+            data_dir: data_dir.clone(),
+            amendment_file,
+            authorization_files,
+            proposal_slot: slot,
+            output_file: signed_file.clone(),
+        })?;
+        let batch_file = data_dir.join(format!("move-{tag}.batch.json"));
+        create_governance_batch(GovernanceBatchOptions {
+            data_dir: data_dir.clone(),
+            amendment_file: Some(signed_file),
+            registry_update_file: None,
+            batch_file: batch_file.clone(),
+        })?;
+        let receipts = apply_governance_batch(ApplyBatchOptions {
+            data_dir: data_dir.clone(),
+            batch_file,
+            certificate_file: None,
+        })?;
+        Ok((amendment, receipts))
+    }
+
+    #[test]
+    fn committee_move_needs_the_registry_threshold_of_the_active_set() {
+        let chain = lane_chain("committee-move-threshold");
+        let (epoch2, _) = second_committee(&chain);
+        activate_committee(&chain, &epoch2);
+        let validators = local_validator_ids(4).expect("validator ids");
+        let without_last = validators[..3].to_vec();
+        for (label, declared, quorum, signers, activation_height, expected) in [
+            ("quorum 1, one signature", validators.clone(), 1, validators[..1].to_vec(), None, "external_lane_committee_move_authority_invalid"),
+            ("quorum below the threshold", validators.clone(), 2, validators[..2].to_vec(), None, "external_lane_committee_move_authority_invalid"),
+            ("a set without an active validator", without_last.clone(), 3, without_last.clone(), None, "external_lane_committee_move_authority_invalid"),
+            ("the immediate lifecycle", validators.clone(), 3, validators[..3].to_vec(), Some(0), "external_lane_committee_move_slot_invalid"),
+        ] {
+            match try_govern_committee_move(&chain, &epoch2, &declared, quorum, &signers, activation_height) {
+                Err(error) => assert!(
+                    error.to_string().contains(expected)
+                        || error.to_string().contains("does not match the old active registry"),
+                    "{label}: {error}"
+                ),
+                Ok((_, receipts)) => panic!("{label}: committee move reached the block: {receipts:?}"),
+            }
+            assert_eq!(lane_info(&chain.data_dir).committee.committee_epoch, 1, "{label}: lane moved");
+        }
+        let (amendment, receipts) =
+            try_govern_committee_move(&chain, &epoch2, &validators, 3, &validators[..3], None)
+                .expect("threshold admitted");
+        assert!(receipts[0].accepted, "{receipts:?}");
+        assert_eq!((amendment.quorum, amendment.support.len()), (3, 3));
+        assert_eq!(amendment.activation_height, tip_height(&chain), "the proposal slot");
+        assert_eq!(lane_info(&chain.data_dir).committee.committee_epoch, 2);
+        let _ = fs::remove_dir_all(&chain.data_dir);
     }
 
     #[test]

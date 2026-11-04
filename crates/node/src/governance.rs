@@ -39,6 +39,25 @@ pub fn ratify_governance(options: RatifyGovernanceOptions) -> io::Result<Governa
         lifecycle,
     )
     .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    if postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind).is_some()
+        || postfiat_types::external_lane_committee_amendment_parts(&amendment.kind).is_some()
+    {
+        let active = active_validator_ids(&store.read_governance()?)?;
+        let refusal = postfiat_types::external_lane_amendment_lane_refusal(
+            &amendment.kind,
+            genesis.external_lanes().iter().map(|lane| lane.id.as_str()),
+        )
+        .or_else(|| {
+            postfiat_types::external_lane_amendment_authority_refusal(&amendment, Some(&active))
+        })
+        .or_else(|| postfiat_types::external_lane_amendment_slot_refusal(&amendment, None));
+        if let Some((code, message)) = refusal {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("{code}: {message}"),
+            ));
+        }
+    }
     if let Some((lane_id, _)) =
         postfiat_types::external_lane_committee_amendment_parts(&amendment.kind)
     {
@@ -55,23 +74,6 @@ pub fn ratify_governance(options: RatifyGovernanceOptions) -> io::Result<Governa
             &amendment.kind,
             amendment.value,
         ) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("{code}: {message}"),
-            ));
-        }
-    }
-    if postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind).is_some() {
-        let active = active_validator_ids(&store.read_governance()?)?;
-        let refusal = postfiat_types::external_lane_release_cap_lane_refusal(
-            &amendment.kind,
-            genesis.external_lanes().iter().map(|lane| lane.id.as_str()),
-        )
-        .or_else(|| {
-            postfiat_types::external_lane_release_cap_authority_refusal(&amendment, Some(&active))
-        })
-        .or_else(|| postfiat_types::external_lane_release_cap_slot_refusal(&amendment, None));
-        if let Some((code, message)) = refusal {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!("{code}: {message}"),

@@ -1225,7 +1225,7 @@ fn execute_governance_batch_with_replay(
                     amendment,
                 )
                 .or_else(|| {
-                    external_lane_release_cap_rejection(
+                    external_lane_amendment_authority_rejection(
                         governance,
                         ledger.as_deref(),
                         amendment,
@@ -1949,21 +1949,27 @@ pub(super) fn external_lane_committee_amendment_rejection(
     )
 }
 
-/// The refusal of a release cap amendment at block execution: its lane
-/// must be one the ledger (that is, genesis) configures, and it must be
-/// declared by the active validator set at the registry threshold with this
-/// block as its activation height (design section 5.1). A governance-only
-/// replay carries no ledger and checks the authority alone; a cap amendment
-/// for an unknown lane is inert there, as the cap table reads genesis lanes.
-pub(super) fn external_lane_release_cap_rejection(
+/// The refusal of a release cap amendment or committee move at block
+/// execution: its lane must be one the ledger (that is, genesis) configures,
+/// and it must be declared by the active validator set at the registry
+/// threshold with this block as its activation height (design sections 4.1
+/// and 5.1). A governance-only replay carries no ledger and checks the
+/// authority alone; a cap amendment for an unknown lane is inert there, as
+/// the cap table reads genesis lanes, and a committee move is refused there
+/// by its ledger rule.
+pub(super) fn external_lane_amendment_authority_rejection(
     governance: &GovernanceState,
     ledger: Option<&LedgerState>,
     amendment: &GovernanceAmendment,
     block_height: u64,
 ) -> Option<(&'static str, String)> {
-    postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind)?;
+    if postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind).is_none()
+        && postfiat_types::external_lane_committee_amendment_parts(&amendment.kind).is_none()
+    {
+        return None;
+    }
     if let Some(ledger) = ledger {
-        if let Some(refusal) = postfiat_types::external_lane_release_cap_lane_refusal(
+        if let Some(refusal) = postfiat_types::external_lane_amendment_lane_refusal(
             &amendment.kind,
             ledger
                 .external_lanes
@@ -1976,14 +1982,21 @@ pub(super) fn external_lane_release_cap_rejection(
     let active = match active_validator_ids(governance) {
         Ok(active) => active,
         Err(error) => {
+            let code = if postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind)
+                .is_some()
+            {
+                postfiat_types::EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID
+            } else {
+                postfiat_types::EXTERNAL_LANE_COMMITTEE_MOVE_AUTHORITY_INVALID
+            };
             return Some((
-                postfiat_types::EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
-                format!("release cap amendment has no active validator set: {error}"),
-            ))
+                code,
+                format!("governed lane amendment has no active validator set: {error}"),
+            ));
         }
     };
-    postfiat_types::external_lane_release_cap_authority_refusal(amendment, Some(&active)).or_else(
-        || postfiat_types::external_lane_release_cap_slot_refusal(amendment, Some(block_height)),
+    postfiat_types::external_lane_amendment_authority_refusal(amendment, Some(&active)).or_else(
+        || postfiat_types::external_lane_amendment_slot_refusal(amendment, Some(block_height)),
     )
 }
 

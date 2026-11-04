@@ -1230,10 +1230,10 @@ fn cap_amendment_by(validators: &[&str], quorum: usize, support: &[&str], slot: 
 fn cap_amendment_needs_the_registry_threshold_of_the_active_set() {
     let six = ["v0", "v1", "v2", "v3", "v4", "v5"];
     let active = six.iter().map(|name| name.to_string()).collect::<Vec<_>>();
-    assert_eq!(external_lane_release_cap_threshold(6), 5);
-    assert_eq!(external_lane_release_cap_threshold(4), 3);
+    assert_eq!(external_lane_amendment_threshold(6), 5);
+    assert_eq!(external_lane_amendment_threshold(4), 3);
     let refusal = |amendment: &GovernanceAmendment| {
-        external_lane_release_cap_authority_refusal(amendment, Some(&active)).map(|(code, _)| code)
+        external_lane_amendment_authority_refusal(amendment, Some(&active)).map(|(code, _)| code)
     };
     let authority = Some(EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID);
     assert_eq!(refusal(&cap_amendment_by(&six, 1, &six[..1], 9)), authority, "quorum 1");
@@ -1244,18 +1244,46 @@ fn cap_amendment_needs_the_registry_threshold_of_the_active_set() {
     assert_eq!(refusal(&cap_amendment_by(&six, 6, &six, 9)), None, "all six");
     // Without a registry the declared set is the reference.
     let declared = cap_amendment_by(&six[..3], 3, &six[..3], 9);
-    assert_eq!(external_lane_release_cap_authority_refusal(&declared, None), None);
+    assert_eq!(external_lane_amendment_authority_refusal(&declared, None), None);
     let mut other = declared.clone();
     other.kind = "orchard_pool_pause".to_string();
     other.quorum = 1;
-    assert_eq!(external_lane_release_cap_authority_refusal(&other, Some(&active)), None);
+    assert_eq!(external_lane_amendment_authority_refusal(&other, Some(&active)), None);
+}
+
+#[test]
+fn committee_move_needs_the_registry_threshold_and_its_proposal_slot() {
+    let six = ["v0", "v1", "v2", "v3", "v4", "v5"];
+    let active = six.iter().map(|name| name.to_string()).collect::<Vec<_>>();
+    let by = |validators: &[&str], quorum, support: &[&str], slot| GovernanceAmendment {
+        kind: external_lane_committee_amendment_kind("base-erc20", 3, &[3; 48]),
+        ..cap_amendment_by(validators, quorum, support, slot)
+    };
+    let authority = |amendment: &GovernanceAmendment| {
+        external_lane_amendment_authority_refusal(amendment, Some(&active)).map(|(code, _)| code)
+    };
+    let invalid = Some(EXTERNAL_LANE_COMMITTEE_MOVE_AUTHORITY_INVALID);
+    assert_eq!(authority(&by(&six, 1, &six[..1], 9)), invalid, "quorum 1");
+    assert_eq!(authority(&by(&six, 5, &six[..4], 9)), invalid, "support below");
+    assert_eq!(authority(&by(&six[..5], 5, &six[..5], 9)), invalid, "an active validator omitted");
+    assert_eq!(authority(&by(&six, 5, &six[..5], 9)), None, "the threshold");
+    let slot = |amendment: &GovernanceAmendment, at| {
+        external_lane_amendment_slot_refusal(amendment, at).map(|(code, _)| code)
+    };
+    let invalid = Some(EXTERNAL_LANE_COMMITTEE_MOVE_SLOT_INVALID);
+    assert_eq!(slot(&by(&six, 5, &six[..5], 0), None), invalid, "immediate lifecycle");
+    assert_eq!(slot(&by(&six, 5, &six[..5], 8), Some(9)), invalid, "another slot");
+    assert_eq!(slot(&by(&six, 5, &six[..5], 9), Some(9)), None);
+    let lane = |kind: &str| external_lane_amendment_lane_refusal(kind, ["base-erc20"].into_iter()).map(|(code, _)| code);
+    assert_eq!(lane(&external_lane_committee_amendment_kind("not-a-lane", 3, &[3; 48])), Some(EXTERNAL_LANE_NOT_CONFIGURED));
+    assert_eq!(lane(&external_lane_committee_amendment_kind("base-erc20", 3, &[3; 48])), None);
 }
 
 #[test]
 fn cap_amendment_names_its_proposal_slot() {
     let six = ["v0", "v1", "v2", "v3", "v4", "v5"];
     let refusal = |amendment: &GovernanceAmendment, slot| {
-        external_lane_release_cap_slot_refusal(amendment, slot).map(|(code, _)| code)
+        external_lane_amendment_slot_refusal(amendment, slot).map(|(code, _)| code)
     };
     let invalid = Some(EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID);
     assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 9), Some(9)), None);
@@ -1270,7 +1298,7 @@ fn cap_amendment_names_its_proposal_slot() {
 #[test]
 fn cap_amendment_for_a_lane_genesis_does_not_configure_is_refused() {
     let lanes = ["base-erc20"];
-    let refusal = |kind: &str| external_lane_release_cap_lane_refusal(kind, lanes.into_iter()).map(|(code, _)| code);
+    let refusal = |kind: &str| external_lane_amendment_lane_refusal(kind, lanes.into_iter()).map(|(code, _)| code);
     assert_eq!(
         refusal(&external_lane_release_cap_amendment_kind("not-a-lane")),
         Some(EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED)

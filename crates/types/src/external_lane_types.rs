@@ -165,73 +165,105 @@ pub const EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID: &str =
     "external_lane_release_cap_authority_invalid";
 /// A cap amendment whose activation height is not its proposal slot.
 pub const EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID: &str = "external_lane_release_cap_slot_invalid";
+/// A committee move not declared by the active validator set at the
+/// registry threshold.
+pub const EXTERNAL_LANE_COMMITTEE_MOVE_AUTHORITY_INVALID: &str =
+    "external_lane_committee_move_authority_invalid";
+/// A committee move whose activation height is not its proposal slot.
+pub const EXTERNAL_LANE_COMMITTEE_MOVE_SLOT_INVALID: &str =
+    "external_lane_committee_move_slot_invalid";
 
-/// Validators of `validator_count` whose signatures a cap amendment needs:
-/// the registry threshold ⌊2n/3⌋ + 1 (design sections 5.1 and 5.2).
-pub fn external_lane_release_cap_threshold(validator_count: usize) -> usize {
+/// The governed lane amendment `kind` names, `None` for any other kind:
+/// its lane, its label, and its lane, authority and slot refusal codes.
+fn governed_lane_amendment(
+    kind: &str,
+) -> Option<(&str, &'static str, [&'static str; 3])> {
+    if let Some(lane_id) = external_lane_release_cap_amendment_lane(kind) {
+        return Some((
+            lane_id,
+            "release cap amendment",
+            [
+                EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED,
+                EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
+                EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID,
+            ],
+        ));
+    }
+    let (lane_id, _) = external_lane_committee_amendment_parts(kind)?;
+    Some((
+        lane_id,
+        "committee move",
+        [
+            EXTERNAL_LANE_NOT_CONFIGURED,
+            EXTERNAL_LANE_COMMITTEE_MOVE_AUTHORITY_INVALID,
+            EXTERNAL_LANE_COMMITTEE_MOVE_SLOT_INVALID,
+        ],
+    ))
+}
+
+/// Validators of `validator_count` whose signatures a governed lane
+/// amendment needs: the registry threshold ⌊2n/3⌋ + 1 (design sections 4.1,
+/// 5.1 and 5.2).
+pub fn external_lane_amendment_threshold(validator_count: usize) -> usize {
     validator_count.saturating_mul(2) / 3 + 1
 }
 
-/// The refusal of a cap amendment for a lane none of `lane_ids` names, `None`
-/// for a configured lane or any other kind.
-pub fn external_lane_release_cap_lane_refusal<'a>(
+/// The refusal of a cap amendment or committee move for a lane none of
+/// `lane_ids` names, `None` for a configured lane or any other kind.
+pub fn external_lane_amendment_lane_refusal<'a>(
     kind: &str,
     mut lane_ids: impl Iterator<Item = &'a str>,
 ) -> Option<(&'static str, String)> {
-    let lane_id = external_lane_release_cap_amendment_lane(kind)?;
+    let (lane_id, label, [code, _, _]) = governed_lane_amendment(kind)?;
     (!lane_ids.any(|configured| configured == lane_id)).then(|| {
         (
-            EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED,
-            format!("release cap amendment `{kind}` names a lane genesis does not configure"),
+            code,
+            format!("{label} `{kind}` names a lane genesis does not configure"),
         )
     })
 }
 
-/// The refusal of a cap amendment's authority, `None` for any other kind:
-/// it must be declared by `active_validators` (its own set when the caller
-/// has no registry), with a quorum and support of at least the registry
-/// threshold.
-pub fn external_lane_release_cap_authority_refusal(
+/// The refusal of a cap amendment's or committee move's authority, `None`
+/// for any other kind: it must be declared by `active_validators` (its own
+/// set when the caller has no registry), with a quorum and support of at
+/// least the registry threshold.
+pub fn external_lane_amendment_authority_refusal(
     amendment: &crate::GovernanceAmendment,
     active_validators: Option<&[String]>,
 ) -> Option<(&'static str, String)> {
-    external_lane_release_cap_amendment_lane(&amendment.kind)?;
+    let (_, label, [_, code, _]) = governed_lane_amendment(&amendment.kind)?;
     let validators = active_validators.unwrap_or(&amendment.validators);
-    let threshold = external_lane_release_cap_threshold(validators.len());
+    let threshold = external_lane_amendment_threshold(validators.len());
     if amendment.validators != validators {
-        return Some((
-            EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
-            "release cap amendment must declare the active validator set".to_string(),
-        ));
+        return Some((code, format!("{label} must declare the active validator set")));
     }
     (amendment.quorum < threshold || amendment.support.len() < threshold).then(|| {
         (
-            EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
+            code,
             format!(
-                "release cap amendment needs quorum and support of at least the registry threshold {threshold} of {}",
+                "{label} needs quorum and support of at least the registry threshold {threshold} of {}",
                 validators.len()
             ),
         )
     })
 }
 
-/// The refusal of a cap amendment's lifecycle, `None` for any other kind:
-/// it carries its proposal slot as its activation height (`slot` when the
-/// caller knows it) and is not paused. The slot gives each request its own
-/// id, so a repeated halt is a new amendment.
-pub fn external_lane_release_cap_slot_refusal(
+/// The refusal of a cap amendment's or committee move's lifecycle, `None`
+/// for any other kind: it carries its proposal slot as its activation
+/// height (`slot` when the caller knows it) and is not paused. The slot
+/// gives each request its own id, so a repeated request is a new amendment.
+pub fn external_lane_amendment_slot_refusal(
     amendment: &crate::GovernanceAmendment,
     slot: Option<u64>,
 ) -> Option<(&'static str, String)> {
-    external_lane_release_cap_amendment_lane(&amendment.kind)?;
+    let (_, label, [_, _, code]) = governed_lane_amendment(&amendment.kind)?;
     (amendment.paused
         || amendment.activation_height == 0
         || slot.is_some_and(|slot| amendment.activation_height != slot))
     .then(|| {
         (
-            EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID,
-            "release cap amendment must name its proposal slot as its activation height and not be paused"
-                .to_string(),
+            code,
+            format!("{label} must name its proposal slot as its activation height and not be paused"),
         )
     })
 }

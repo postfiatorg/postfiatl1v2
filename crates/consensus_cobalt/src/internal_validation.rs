@@ -1504,12 +1504,13 @@ pub fn verify_governance_amendment(
     if amendment.support.len() < amendment.quorum {
         return Err("governance amendment support is below quorum".to_string());
     }
-    // A release cap amendment needs the registry threshold of its declared
-    // set (design section 5.1); admission and execution bind that set to
-    // the active registry and the lifecycle to the proposal slot.
+    // A release cap amendment or committee move needs the registry
+    // threshold of its declared set (design sections 4.1 and 5.1);
+    // admission and execution bind that set to the active registry and the
+    // lifecycle to the proposal slot.
     if let Some((code, message)) =
-        postfiat_types::external_lane_release_cap_authority_refusal(amendment, None)
-            .or_else(|| postfiat_types::external_lane_release_cap_slot_refusal(amendment, None))
+        postfiat_types::external_lane_amendment_authority_refusal(amendment, None)
+            .or_else(|| postfiat_types::external_lane_amendment_slot_refusal(amendment, None))
     {
         return Err(format!("{code}: {message}"));
     }

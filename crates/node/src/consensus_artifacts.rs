@@ -2925,27 +2925,28 @@ where
     Ok(())
 }
 
-/// A release cap amendment admitted at `proposal_slot` names a lane genesis
-/// configures, is declared by the active set at the registry threshold, and
-/// names the slot as its activation height (design section 5.1).
-pub(super) fn verify_external_lane_release_cap_admission(
+/// A release cap amendment or committee move admitted at `proposal_slot`
+/// names a lane genesis configures, is declared by the active set at the
+/// registry threshold, and names the slot as its activation height (design
+/// sections 4.1 and 5.1).
+pub(super) fn verify_external_lane_amendment_admission(
     genesis: &Genesis,
     active_validators: &[String],
     amendment: &GovernanceAmendment,
     proposal_slot: u64,
 ) -> io::Result<()> {
-    let refusal = postfiat_types::external_lane_release_cap_lane_refusal(
+    let refusal = postfiat_types::external_lane_amendment_lane_refusal(
         &amendment.kind,
         genesis.external_lanes().iter().map(|lane| lane.id.as_str()),
     )
     .or_else(|| {
-        postfiat_types::external_lane_release_cap_authority_refusal(
+        postfiat_types::external_lane_amendment_authority_refusal(
             amendment,
             Some(active_validators),
         )
     })
     .or_else(|| {
-        postfiat_types::external_lane_release_cap_slot_refusal(amendment, Some(proposal_slot))
+        postfiat_types::external_lane_amendment_slot_refusal(amendment, Some(proposal_slot))
     });
     match refusal {
         Some((code, message)) => Err(io::Error::new(
@@ -3001,7 +3002,7 @@ pub(super) fn verify_live_signed_governance_batch(
         .filter(|update| update.activation_height < proposal_slot)
         .count() as u64;
     for amendment in &batch.amendments {
-        verify_external_lane_release_cap_admission(genesis, &validators, amendment, proposal_slot)?;
+        verify_external_lane_amendment_admission(genesis, &validators, amendment, proposal_slot)?;
         verify_governance_amendment_evidence(genesis, amendment)?;
         if amendment.validators != validators {
             return Err(io::Error::new(
