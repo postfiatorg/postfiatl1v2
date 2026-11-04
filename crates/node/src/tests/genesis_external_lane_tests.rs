@@ -2134,6 +2134,54 @@ mod release_path {
         let _ = fs::remove_dir_all(chain.data_dir);
     }
 
+    /// A release above the cap that reaches a block: before the rejected
+    /// transaction fee activates it changes nothing; after it, the lane and
+    /// the Lock nonce still do not change, but the payer's fee is burned and
+    /// its sequence consumed, under the `tec_` code.
+    #[test]
+    fn release_above_the_cap_in_a_block_burns_the_fee_only_after_fee_activation() {
+        let chain = lane_chain("release-cap-fee");
+        let lane = chain.genesis.external_lanes()[0].clone();
+        let store = NodeStore::new(&chain.data_dir);
+        let ledger = store.read_ledger().expect("ledger");
+        let height = tip_height(&chain) + 1;
+        let over = release_tx(&chain, "base-erc20", 1, lane.window_cap_atoms() + 1, faucet_sequence(&chain));
+        let payer = over.unsigned.source.clone();
+        let mut batch = TransactionBatch::new("release-cap-fee", Vec::new());
+        batch.asset_transactions.push(over);
+        let unactivated = store.read_governance().expect("governance");
+        let mut activated = unactivated.clone();
+        let template = activated.amendments[0].clone();
+        activated.apply(GovernanceAmendment {
+            amendment_id: "rejected-fee-activation".to_string(),
+            kind: GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT.to_string(),
+            value: u32::try_from(height).expect("height"),
+            ..template
+        });
+        for (governance, code, burned) in [
+            (unactivated, "external_lane_window_cap_exceeded", 0),
+            (activated, "tec_external_lane_window_cap_exceeded", 1_000),
+        ] {
+            let compatibility =
+                asset_execution_compatibility_for_genesis_and_governance(&chain.genesis, &governance);
+            let mut after = ledger.clone();
+            let receipts = execute_transparent_batch(
+                &chain.genesis,
+                &governance,
+                &mut after,
+                &batch,
+                height,
+                compatibility,
+            );
+            assert_eq!((receipts[0].code.as_str(), receipts[0].fee_burned), (code, burned), "{receipts:?}");
+            assert_eq!(after.external_lanes, ledger.external_lanes, "{code}: lane or Lock nonce changed");
+            let (was, now) = (ledger.account(&payer).expect("payer"), after.account(&payer).expect("payer"));
+            assert_eq!(now.balance, was.balance - burned, "{code}");
+            assert_eq!(now.sequence, was.sequence + u64::from(burned > 0), "{code}");
+        }
+        let _ = fs::remove_dir_all(chain.data_dir);
+    }
+
     #[test]
     fn a_fresh_halt_after_a_pending_restore_is_applied_and_cancels_the_raise() {
         // Windows of 4 blocks: a raise waits 7 × 4 = 28 blocks.
