@@ -348,6 +348,7 @@ fn sample_release(nonce: u64, amount_atoms: u64, height: u64) -> ExternalLaneRel
         source_block_number: 100,
         source_block_hash: format!("0x{}", "6f".repeat(32)),
         released_at_height: height,
+        committee_epoch: None,
     }
 }
 

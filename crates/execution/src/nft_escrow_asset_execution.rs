@@ -3203,6 +3203,7 @@ fn apply_asset_operation(
                 operation,
                 block_height,
                 compatibility.external_lane_release_caps,
+                compatibility.external_lane_committees,
             )
         }
     }

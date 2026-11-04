@@ -58,6 +58,7 @@ fn lane_release_record(nonce: u64, amount_atoms: u64, height: u64) -> ExternalLa
         source_block_number: 77,
         source_block_hash: format!("0x{}", "6f".repeat(32)),
         released_at_height: height,
+        committee_epoch: None,
     }
 }
 

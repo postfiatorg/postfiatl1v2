@@ -1339,6 +1339,7 @@ fn fuzz_pruned_external_lane(
                     source_block_number: 1,
                     source_block_hash: format!("0x{}", "6f".repeat(32)),
                     released_at_height: 1 + 2 * index,
+                    committee_epoch: None,
                 },
             )
             .map_err(|(code, message)| format!("{code}: {message}"))?;
@@ -1419,6 +1420,7 @@ fn fuzz_native_supply_invariants(iterations: usize) -> Result<FuzzTargetReport, 
                 source_block_number: 1,
                 source_block_hash: format!("0x{}", "6f".repeat(32)),
                 released_at_height: 1,
+                committee_epoch: None,
             })
             .into_iter()
             .collect();

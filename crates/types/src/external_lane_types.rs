@@ -832,6 +832,11 @@ pub struct ExternalLaneReleaseRecord {
     pub source_block_number: u64,
     pub source_block_hash: String,
     pub released_at_height: u64,
+    /// The committee epoch a governed move named when this release was
+    /// proven; absent while the lane's genesis committee held, so a lane
+    /// that never moved records as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub committee_epoch: Option<u64>,
 }
 
 impl ExternalLaneReleaseRecord {
