@@ -238,17 +238,28 @@ class RemainingReadWrapperTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "release_cursor must be a non-negative integer"):
             client.external_lane_info(release_cursor=-1)
 
-    def test_external_lane_info_returns_the_governed_release_cap(self) -> None:
+    def test_external_lane_info_returns_the_governed_cap_and_committee(self) -> None:
         client = _client()
         release_cap = {
             "active_cap_bps": 100,
             "active": {"amendment_id": "ab" * 48, "cap_bps": 100, "effective_height": 4},
             "pending": {"amendment_id": "cd" * 48, "cap_bps": 200, "effective_height": 36},
         }
-        lane = {"lane_id": "base-erc20", "window_cap_atoms": 3_000_000, "release_cap": release_cap}
+        committee = {
+            "committee_epoch": 2,
+            "committee_root": "0x" + "ef" * 48,
+            "active": {"amendment_id": "12" * 48, "committee_epoch": 2, "binding": "34" * 48, "effective_height": 9},
+        }
+        lane = {
+            "lane_id": "base-erc20",
+            "window_cap_atoms": 3_000_000,
+            "release_cap": release_cap,
+            "committee": committee,
+        }
         with mock.patch.object(client, "_call", return_value={"lanes": [lane]}):
             report = client.external_lane_info("base-erc20")
         self.assertEqual(report["lanes"][0]["release_cap"], release_cap)
+        self.assertEqual(report["lanes"][0]["committee"], committee)
 
     def test_quote_and_preflight_send_integer_amounts_with_the_node_names(self) -> None:
         client = _client()

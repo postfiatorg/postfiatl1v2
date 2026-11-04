@@ -1742,7 +1742,9 @@ class PostFiatRpcClient:
     ) -> dict[str, Any]:
         """Genesis external lanes: config, committed record, the release cap at
         the next block (`release_cap`: `active_cap_bps`, the amendment that set
-        it in `active`, a raise in its seven-window delay in `pending`) and one
+        it in `active`, a raise in its seven-window delay in `pending`), the
+        committee whose checkpoints it accepts (`committee`: `committee_epoch`,
+        `committee_root`, the committee move that set it in `active`) and one
         page of stored releases, newest first (public read, `--lane-id`,
         `--release-cursor`, `--release-limit`). Pass `next_release_cursor` for
         the next older page. Each lane row also reports `release_count` (every
