@@ -528,11 +528,32 @@ contract DeployPFTLockTest {
         broadcaster.deploy(script, cfg);
     }
 
-    function testRefusesAMinimumAboveTheCap() public {
-        DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
-        cfg.minimumLockAmount = CAP + 1;
-        VM.expectRevert(abi.encodeWithSelector(DeployPFTLock.MinimumLockAmountAboveMax.selector, CAP + 1, CAP));
-        broadcaster.deploy(script, cfg);
+    /// The minimum is the PFTL account reserve, not an operator choice: any other
+    /// value is refused with the test switches and without them, so a Base
+    /// Sepolia rehearsal deploys what the real deployment will.
+    function testRefusesAMinimumOtherThanTheAccountReserve() public {
+        _assertEq(script.PFTL_ACCOUNT_RESERVE_UNITS(), MINIMUM, "script constant");
+        uint256[4] memory values = [uint256(1), 9, 11, CAP + 1];
+        for (uint256 i = 0; i < values.length; i++) {
+            DeployPFTLock.Config memory cfg = _config(BASE_SEPOLIA);
+            cfg.allowTestVerifier = true;
+            cfg.allowUsedDeployer = true;
+            cfg.minimumLockAmount = values[i];
+            VM.expectRevert(_notTheReserve(values[i]));
+            broadcaster.deploy(script, cfg);
+            VM.chainId(BASE);
+            cfg = _config(BASE);
+            cfg.realDeployment = true;
+            cfg.sourceCommit = COMMIT;
+            cfg.minimumLockAmount = values[i];
+            VM.expectRevert(_notTheReserve(values[i]));
+            broadcaster.deploy(script, cfg);
+            VM.chainId(BASE_SEPOLIA);
+        }
+    }
+
+    function _notTheReserve(uint256 value) private pure returns (bytes memory) {
+        return abi.encodeWithSelector(DeployPFTLock.MinimumLockAmountNotTheAccountReserve.selector, value, MINIMUM);
     }
 
     function testRefusesATokenWithoutCode() public {
@@ -1368,6 +1389,7 @@ contract DeployPFTLockTest {
         bytes memory args =
             abi.encode(address(token), address(verifier), address(token).codehash, uint64(CAP), uint64(MINIMUM));
         _assertTrue(_eq(VM.parseJsonString(json, ".constructor_args"), VM.toString(args)), "record constructor args");
+        _assertEq(VM.parseJsonUint(json, ".minimum_lock_amount_units"), MINIMUM, "record minimum");
         _assertTrue(VM.parseJsonAddress(json, ".deployer") == address(broadcaster), "record deployer");
         _assertTrue(_eq(VM.parseJsonString(json, ".artifact"), _artifact()), "record artifact");
         _assertTrue(

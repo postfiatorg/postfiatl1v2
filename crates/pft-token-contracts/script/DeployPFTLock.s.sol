@@ -100,6 +100,12 @@ contract DeployPFTLock {
     string public constant LOCK_ARTIFACT = "/PFTLockV1.sol/PFTLockV1.json";
     /// The artifact's runtime code must exceed its CBOR trailer by at least this many bytes.
     uint256 public constant MIN_RUNTIME_CODE_BEYOND_TRAILER = 512;
+    /// The PFTL account reserve in six-decimal units (`ACCOUNT_RESERVE`,
+    /// crates/execution/src/entrypoints.rs): the only minimum Lock this script
+    /// deploys, with or without a test switch, so a rehearsal deploys what the
+    /// real deployment will. `lock_minimum_binding_tests` in crates/execution
+    /// fails if it and `ACCOUNT_RESERVE` differ.
+    uint256 public constant PFTL_ACCOUNT_RESERVE_UNITS = 10;
 
     struct Config {
         uint256 chainId;
@@ -122,7 +128,7 @@ contract DeployPFTLock {
         bytes32 expectedAssetIdCommitment;
         uint256 maxLockAmount; // six-decimal units, at most type(uint64).max
         uint256 maxLockAmountPft; // whole PFT
-        uint256 minimumLockAmount; // six-decimal units: the PFTL account reserve, at most maxLockAmount
+        uint256 minimumLockAmount; // six-decimal units: must equal PFTL_ACCOUNT_RESERVE_UNITS
         bool allowTestVerifier; // Base Sepolia only: admits a verifier whose code hash is not pinned
         bool allowUsedDeployer; // Base Sepolia only
         bool allowTestToken; // Base Sepolia only: admits a token other than the recorded test token
@@ -165,7 +171,7 @@ contract DeployPFTLock {
     error ValueTooLarge(string name, uint256 value);
     error MaxLockAmountTooLarge(uint256 units);
     error MaxLockAmountMismatch(uint256 units, uint256 pft);
-    error MinimumLockAmountAboveMax(uint256 minimum, uint256 maxLockAmount);
+    error MinimumLockAmountNotTheAccountReserve(uint256 value, uint256 expected);
     error DeployerAlreadyUsed(address deployer, uint256 nonce);
     error RecordExists(string path);
     error ArtifactMismatch(string path, bytes32 artifactCodeHash, bytes32 compiledCodeHash);
@@ -532,8 +538,9 @@ contract DeployPFTLock {
             revert MaxLockAmountMismatch(cfg.maxLockAmount, cfg.maxLockAmountPft);
         }
         if (cfg.minimumLockAmount == 0) revert PlaceholderValue("PFT_LOCK_MINIMUM_LOCK_AMOUNT");
-        if (cfg.minimumLockAmount > cfg.maxLockAmount) {
-            revert MinimumLockAmountAboveMax(cfg.minimumLockAmount, cfg.maxLockAmount);
+        // The cap is a nonzero whole number of PFT, so the reserve is below it.
+        if (cfg.minimumLockAmount != PFTL_ACCOUNT_RESERVE_UNITS) {
+            revert MinimumLockAmountNotTheAccountReserve(cfg.minimumLockAmount, PFTL_ACCOUNT_RESERVE_UNITS);
         }
     }
 

@@ -132,11 +132,17 @@ fi
 grep -q 'PlaceholderValue("PFT_LOCK_MINIMUM_LOCK_AMOUNT")' <<<"$out" || { printf '%s\n' "$out"; exit 1; }
 echo "ok: dry run refuses a placeholder PFT_LOCK_MINIMUM_LOCK_AMOUNT"
 
+if out="$(run_lock PFT_LOCK_ALLOW_TEST_VERIFIER=1 PFT_LOCK_MINIMUM_LOCK_AMOUNT=9)"; then
+  printf '%s\n' "$out"; echo "FAIL: the dry run accepted a minimum lock amount other than the account reserve" >&2; exit 1
+fi
+grep -q 'MinimumLockAmountNotTheAccountReserve(9, 10)' <<<"$out" || { printf '%s\n' "$out"; exit 1; }
+echo "ok: dry run refuses a PFT_LOCK_MINIMUM_LOCK_AMOUNT other than the PFTL account reserve, even with a test switch"
+
 out="$(run_lock PFT_LOCK_ALLOW_TEST_VERIFIER=1 PFT_LOCK_ALLOW_TEST_TOKEN=1 PFT_LOCK_TOKEN="$OTHER_TOKEN" \
   PFT_LOCK_TOKEN_CODEHASH="$OTHER_HASH")" || { printf '%s\n' "$out"; echo "FAIL: the test-token switch" >&2; exit 1; }
 grep -q "PFTLockV1 deployed at" <<<"$out" && grep -q "minimum lock amount (six-decimal units, the PFTL account reserve) 10" <<<"$out" \
   && grep -q "lock minimumLockAmount() 10" <<<"$out" || { printf '%s\n' "$out"; exit 1; }
-echo "ok: dry run admits the other token with PFT_LOCK_ALLOW_TEST_TOKEN=1 and prints the pinned and re-read minimum"
+echo "ok: dry run admits the other token with PFT_LOCK_ALLOW_TEST_TOKEN=1 and prints the checked and re-read minimum"
 
 RECORD=cache/deploy-test/pft-lock-base-84532/deployment.json
 rm -f "$RECORD"
