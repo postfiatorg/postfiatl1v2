@@ -221,6 +221,8 @@ class RemainingReadWrapperTests(unittest.TestCase):
             PostFiatRpcClient.external_lane_release_coverage(
                 {"release_count": 1, "pruned_release_count": 2}
             )
+        with self.assertRaises(RpcProtocolError):
+            PostFiatRpcClient.external_lane_release_coverage({"pruned_release_count": 0})
 
     def test_external_lane_info_sends_the_release_page_parameters(self) -> None:
         client = _client()

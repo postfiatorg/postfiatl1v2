@@ -1761,6 +1761,8 @@ class PostFiatRpcClient:
         """What an `external_lane_info` lane row's pages can still show: every
         release (`release_count`), the pruned ones that no page returns, the
         stored ones, and the root that covers all of them."""
+        if "release_count" not in row:
+            raise RpcProtocolError("external lane row has no release_count")
         release_count = int(row["release_count"])
         pruned = int(row.get("pruned_release_count", 0))
         if not 0 <= pruned <= release_count:
