@@ -151,7 +151,7 @@ The lead developer decided on 2026-10-26 that releases are capped per window; th
 
 **Honest traffic.** The cap also limits honest traffic: no window releases more than 2 % of the lane, so a large conversion spreads over several windows.
 
-A cap change is a governed amendment, as the three activation heights of 2026-10-23 were: one amendment each, signed by the six validators (`docs/status/chain-state-current.md:41-46`). An amendment names its kind and a `u32` value with the validators and quorum that signed it (`crates/types/src/shielded_bridge_governance.rs:1722-1735`), and the latest committed amendment of a kind wins (`:1548-1556`). A cap of zero stops releases without touching the lane or any Lock.
+A cap change is a governed amendment, as the three activation heights of 2026-10-23 were: one amendment each (`docs/status/chain-state-current.md:41-46`). Decided 2026-11-04: it is signed by the registry threshold ⌊2n/3⌋ + 1 of the active validator set, five of six on the devnet, with the full active set declared (`external_lane_release_cap_threshold`, `crates/types/src/external_lane_types.rs`), because that is the registry's own BFT rule and a raise still waits seven windows, so a threshold quorum gains nothing quickly. An amendment names its kind and a `u32` value with the validators and quorum that signed it (`crates/types/src/shielded_bridge_governance.rs:1722-1735`), and the latest committed amendment of a kind wins (`:1548-1556`). A cap of zero stops releases without touching the lane or any Lock.
 
 **Lowering and raising the cap.** The lead developer decided on 2026-10-28 that the two directions differ.
 
@@ -169,7 +169,7 @@ The lead developer decided on 2026-10-28 how a false release is detected and ans
 
 **Response.** The response is three governed steps, in this order.
 
-1. One governed amendment sets the cap to zero: six signatures, with immediate effect (section 5.1).
+1. One governed amendment sets the cap to zero, with immediate effect (section 5.1): decided 2026-11-04, it is signed by the registry threshold of the active set, five of six on the devnet, with the full active set declared, so that one offline validator cannot block the halt.
 2. A new epoch rotates the committee (section 4.1).
 3. The amendment that restores the cap takes effect after the seven-window delay of section 5.1.
 
