@@ -145,7 +145,7 @@ The lead developer decided on 2026-10-26 that releases are capped per window; th
 
 **Window accounting.** The window is counted in blocks because block headers carry no time (`crates/types/src/core_chain.rs:623-643`): the window index is the block height divided by `release_window_blocks`, and the cap is `reserved_atoms × release_cap_bps / 10_000`, rounded down. The released amount resets to zero when a release lands in a new window.
 
-**Rejection and retry.** A release that would exceed the cap is refused without any state change, like every rejected release (`OPEN-SOURCE-NATIVE-SUPPLY-INVENTORY-20260716.md:71-73`). Its nonce is not consumed, so anyone retries it in a later window with the same proof.
+**Rejection and retry.** A release that would exceed the cap is refused without any state change, like every rejected release (`OPEN-SOURCE-NATIVE-SUPPLY-INVENTORY-20260716.md:71-73`). Its nonce is not consumed, so anyone retries it in a later window with the same proof. As implemented (2026-11-04), once the rejected-transaction fee is active (`rejected_tx_fee_activation_height`), such a release that reaches a certified block still leaves the lane and the Lock nonce unchanged, but the payer's fee is burned and its sequence consumed, with code `tec_external_lane_window_cap_exceeded`.
 
 **Security effect under the lean.** Under the lean, a colluding quorum takes at most 2 % of the lane in one window, 20 million PFT of a hypothetical 1-billion-PFT lane. 50 consecutive windows, about 50 days, reach the whole of it. Over a year the cap does not protect the lane. What the cap buys is time, about 50 days between the first false release and an empty lane, in which validators can see the releases and stop them.
 
@@ -157,6 +157,8 @@ A cap change is a governed amendment, as the three activation heights of 2026-10
 
 - An amendment that lowers the cap takes effect immediately. A cap of zero halts releases at once and moves no PFT.
 - An amendment that raises the cap takes effect only seven windows after it commits, so a quorum that could sign false checkpoints cannot also lift the cap in the same week.
+- As implemented (2026-11-04), a raise committed at height `h` takes effect at `h + 7 × release_window_blocks`: inside the seventh window after the commit, never earlier than seven windows.
+- As implemented (2026-11-04), genesis configures at most eight lanes (`EXTERNAL_LANE_MAX_LANES`), the size of the cap table execution carries.
 - The lock contract's `maxLockAmount` is fixed at construction and is not changed by the amendment: a larger cap on PFTL does not enlarge single Locks on Base.
 
 ### 5.2 Detecting and answering a false release
