@@ -237,6 +237,9 @@ pub fn external_lane_amendment_authority_refusal(
     if amendment.validators != validators {
         return Some((code, format!("{label} must declare the active validator set")));
     }
+    // `support.len()` alone is compared with the threshold: distinct in-set
+    // support is enforced by the set equality above and by the
+    // signed-authorization verification at admission.
     (amendment.quorum < threshold || amendment.support.len() < threshold).then(|| {
         (
             code,

@@ -1155,7 +1155,7 @@ pub(super) fn execute_governance_batch(
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(governance, ledger, batch, block_height, false)
+    execute_governance_batch_with_replay(governance, ledger, None, batch, block_height, false)
 }
 
 pub(super) fn execute_archived_governance_batch(
@@ -1164,12 +1164,33 @@ pub(super) fn execute_archived_governance_batch(
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(governance, ledger, batch, block_height, true)
+    execute_governance_batch_with_replay(governance, ledger, None, batch, block_height, true)
+}
+
+/// An archived governance batch executed with no ledger, as the certificate
+/// replay does: `genesis_lanes` stand in for the ledger's lanes, so a release
+/// cap amendment for a lane genesis does not configure is refused as at block
+/// execution and both governance states agree.
+pub(super) fn execute_ledgerless_archived_governance_batch(
+    governance: &mut GovernanceState,
+    genesis_lanes: &[postfiat_types::GenesisExternalLane],
+    batch: &GovernanceActionBatch,
+    block_height: u64,
+) -> Vec<Receipt> {
+    execute_governance_batch_with_replay(
+        governance,
+        None,
+        Some(genesis_lanes),
+        batch,
+        block_height,
+        true,
+    )
 }
 
 fn execute_governance_batch_with_replay(
     governance: &mut GovernanceState,
     mut ledger: Option<&mut LedgerState>,
+    genesis_lanes: Option<&[postfiat_types::GenesisExternalLane]>,
     batch: &GovernanceActionBatch,
     block_height: u64,
     historical_replay: bool,
@@ -1228,6 +1249,7 @@ fn execute_governance_batch_with_replay(
                     external_lane_amendment_authority_rejection(
                         governance,
                         ledger.as_deref(),
+                        genesis_lanes,
                         amendment,
                         block_height,
                     )
@@ -1953,13 +1975,14 @@ pub(super) fn external_lane_committee_amendment_rejection(
 /// execution: its lane must be one the ledger (that is, genesis) configures,
 /// and it must be declared by the active validator set at the registry
 /// threshold with this block as its activation height (design sections 4.1
-/// and 5.1). A governance-only replay carries no ledger and checks the
-/// authority alone; a cap amendment for an unknown lane is inert there, as
-/// the cap table reads genesis lanes, and a committee move is refused there
-/// by its ledger rule.
+/// and 5.1). The ledger-less certificate replay passes the genesis lanes
+/// instead, so it refuses the same cap amendments; a caller with neither
+/// checks the authority alone, and a committee move is refused without a
+/// ledger by its ledger rule.
 pub(super) fn external_lane_amendment_authority_rejection(
     governance: &GovernanceState,
     ledger: Option<&LedgerState>,
+    genesis_lanes: Option<&[postfiat_types::GenesisExternalLane]>,
     amendment: &GovernanceAmendment,
     block_height: u64,
 ) -> Option<(&'static str, String)> {
@@ -1968,16 +1991,22 @@ pub(super) fn external_lane_amendment_authority_rejection(
     {
         return None;
     }
-    if let Some(ledger) = ledger {
-        if let Some(refusal) = postfiat_types::external_lane_amendment_lane_refusal(
+    let lane_refusal = match (ledger, genesis_lanes) {
+        (Some(ledger), _) => postfiat_types::external_lane_amendment_lane_refusal(
             &amendment.kind,
             ledger
                 .external_lanes
                 .iter()
                 .map(|lane| lane.lane_id.as_str()),
-        ) {
-            return Some(refusal);
-        }
+        ),
+        (None, Some(lanes)) => postfiat_types::external_lane_amendment_lane_refusal(
+            &amendment.kind,
+            lanes.iter().map(|lane| lane.id.as_str()),
+        ),
+        (None, None) => None,
+    };
+    if lane_refusal.is_some() {
+        return lane_refusal;
     }
     let active = match active_validator_ids(governance) {
         Ok(active) => active,
