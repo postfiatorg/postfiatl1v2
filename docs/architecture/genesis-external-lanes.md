@@ -111,16 +111,19 @@ Snapshots, restores and history checkpoints carry the lane records unchanged; te
 
 The proof is the design's option (b): an `EthereumExternalEventProofV1`, a Base block checkpoint signed by a quorum of the committee the lane's policy names, plus the receipt-inclusion proof of the lock contract's `Locked` event. For a lane the checkpoint's route fields carry the lane id, the lane's route-config digest (SHA3-384 over the genesis lane JSON), the lock contract and the token with their runtime code hashes, and the policy's `confirmation_depth` (`crates/execution/src/external_lane_release.rs`, `verify_external_lane_lock`).
 
-Execution (`apply_external_lane_release`, rules on `ExternalLaneState`) checks, in order, and refuses with no state change and no nonce consumed:
+Execution checks, in order, and refuses with no state change and no nonce consumed: the proof first (`verify_external_lane_lock`), then the lane rules (`apply_external_lane_release`, rules on `ExternalLaneState`):
 
 | Check | Refusal code |
 |---|---|
 | Genesis configures the lane | `external_lane_not_configured` |
 | The Lock is from the lane's chain and lock contract | `external_lane_source_mismatch` |
+| The checkpoint's observed head is at least `confirmation_depth` blocks past the Lock's block | `external_lane_checkpoint_mismatch` |
+| The certificate's votes are in canonical order and the receipt proof is within its size bounds (`validate_bounds`) | `external_lane_proof_invalid` |
 | A committee with the epoch and root the lane names at the height (genesis policy or governed move) is registered | `external_lane_committee_missing` |
 | The checkpoint carries that committee's epoch and root | `external_lane_committee_inactive` |
-| The certificate has a quorum of valid votes; the receipt and log verify | `external_lane_proof_invalid` |
-| The checkpoint binds the lane, chain, contracts, code hashes and depth, and its observed head is at least `confirmation_depth` blocks past the Lock's block | `external_lane_checkpoint_mismatch` |
+| The certificate has a quorum of valid votes | `external_lane_proof_invalid` |
+| The checkpoint binds the lane, chain, digest, contracts, code hashes and depth | `external_lane_checkpoint_mismatch` |
+| The receipt and the `Locked` log verify | `external_lane_proof_invalid` |
 | The `Locked` nonce, amount, recipient and recipient hash equal the claim | `external_lane_lock_mismatch` |
 | The nonce was not released before | `external_lane_nonce_already_released` |
 | The amount fits `reserved_atoms - released_atoms` | `external_lane_remainder_exceeded` |

@@ -1411,9 +1411,10 @@ impl ExternalLaneState {
         Ok(())
     }
 
-    /// The release rules, in the design's order: a nonce is paid once, the
-    /// amount fits the remainder, and the window stays within its cap. Returns
-    /// a refusal code and message; nothing is mutated.
+    /// The release rules, in order: the amount is positive, a nonce is paid
+    /// once, the amount fits the remainder, the window does not regress, the
+    /// window stays within its cap, and the lane stays under the release
+    /// record ceiling. Returns a refusal code and message; nothing is mutated.
     pub fn check_release(
         &self,
         lane: &GenesisExternalLane,
