@@ -574,8 +574,8 @@ impl GenesisExternalLane {
     ) -> ExternalLaneCommitteeSchedule {
         let active = amendments
             .iter()
-            .filter(|amendment| amendment.committed_height.saturating_add(1) <= height)
-            .last()
+            .rev()
+            .find(|amendment| amendment.committed_height.saturating_add(1) <= height)
             .map(|amendment| ExternalLaneCommitteeChange {
                 amendment_id: amendment.amendment_id.clone(),
                 committee_epoch: amendment.committee_epoch,
