@@ -23,9 +23,13 @@ READINESS = {
     "swap_verifier": {"loaded": True, "matches_pin": True, "error": None},
     "atomic_shielded_batches": {"effective_height": None, "active_at_next_height": False},
     "a666_pfusdc_route": {"route_id": "a666-pfusdc-route", "base_asset_id": BASE, "quote_asset_id": QUOTE},
-    "admission_switch": {"state": "unknown", "looked_for": ["--allow-private-action-admission"]},
+    "admission_switch": {"state": "off", "looked_for": ["--allow-private-action-admission"]},
+    "custody": {"published_by": "rpc_serve", "store_backend": "transactional",
+                "transactional_active": True, "validator_signer": "plaintext_key_file",
+                "key_files": ["owner_only"]},
     "ready": False,
-    "reasons": ["shielded_atomic_batch_activation_absent", "asset_orchard_pricing_enforcement_activation_absent"],
+    "reasons": ["validator_signer_unsafe_file", "shielded_atomic_batch_activation_absent",
+                "asset_orchard_pricing_enforcement_activation_absent"],
 }
 SNAPSHOT = {
     "schema": "postfiat.private_pool_snapshot.v1",
@@ -101,7 +105,9 @@ class PrivatePathStateTests(unittest.TestCase):
         labels = {label for label, _ in readiness["rows"]}
         for label in ("chain_id", "finalized_height", "swap_verifier.loaded",
                       "atomic_shielded_batches.effective_height", "a666_pfusdc_route.route_id",
-                      "admission_switch.state", "admission_switch.looked_for[0]"):
+                      "admission_switch.state", "admission_switch.looked_for[0]",
+                      "custody.published_by", "custody.transactional_active", "custody.validator_signer",
+                      "custody.key_files[0]"):
             self.assertIn(label, labels)
         ready = sections(private_path_ui.read_private_path_state(
             fake_client(private_readiness={**READINESS, "ready": True, "reasons": []})

@@ -798,8 +798,10 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
             let report = private_readiness(PrivateReadinessOptions {
                 data_dir,
                 pool_id: flag_value(flags, "--pool-id").map(str::to_string),
-                // A local read has no server whose switch it could report.
+                // A local read has no server whose switch it could report,
+                // and its data directory may be a copy: custody is unmet.
                 admission_switch: None,
+                service: None,
             })
             .map_err(|error| format!("rpc {method} failed: {error}"))?;
             let subject = if report.ready { "ready" } else { "not_ready" };
