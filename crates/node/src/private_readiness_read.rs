@@ -1,8 +1,11 @@
 //! Readiness of this node for user-proven private actions, attested from one
 //! committed chain-tip state and the running binary: the pinned verifier
 //! identities and whether each verifier is actually built in this process,
-//! the governed activations, and the governed A666/pfUSDC swap route.
-//! Configuration alone can never make `ready` true.
+//! the governed activations, the governed A666/pfUSDC swap route, and the
+//! serving process's custody of its store and validator key. Configuration
+//! alone can never make `ready` true, and neither can a local read of a data
+//! directory, a comparison store, a plaintext key-file signer or a key file
+//! another local user can read.
 
 use super::asset_orchard_pricing_reads::{read_finalized_pair_snapshot, FinalizedPairSnapshot};
 use super::*;
@@ -15,6 +18,14 @@ pub const PRIVATE_READINESS_SCHEMA: &str = "postfiat.private_readiness.v1";
 /// receive. It is reported `unknown` rather than taken from a caller-supplied
 /// parameter, and it never makes `ready` true.
 pub const PRIVATE_ACTION_ADMISSION_SWITCH_KEYS: [&str; 1] = ["--allow-private-action-admission"];
+/// The custody refusals, in report order. The W-1 manifest lists the same.
+pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 5] = [
+    "readiness_not_published_by_running_service",
+    "store_not_transactional",
+    "validator_signer_unsafe_file",
+    "validator_key_file_missing",
+    "validator_key_file_not_owner_only",
+];
 const PRIVATE_READINESS_MAX_ROUTES: usize = 16;
 /// The W-1 pair on the devnet, as the wallet contract pins it
 /// (`crates/node/tests/fixtures/private-actions-v1/assets.json`): the A666 NAV
@@ -32,6 +43,54 @@ pub struct PrivateReadinessOptions {
     /// `None` (a local read with no server) reports `unknown`. Never taken
     /// from request parameters.
     pub admission_switch: Option<bool>,
+    /// The running service's own custody, supplied only by `rpc-serve`;
+    /// `None` is a local read of `data_dir`, which may be a copy.
+    pub service: Option<PrivateReadinessService>,
+}
+
+/// How the serving process signs as its validator: the facts `rpc-serve`
+/// knows about itself, never request parameters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrivateReadinessService {
+    pub key_file: PathBuf,
+    pub signer: PrivateValidatorSigner,
+}
+
+/// The validator signer of the serving process. A plaintext key file is the
+/// only signer built today (`--finality-key-file`, the same exportable file
+/// that `--unsafe-devnet-file-signer` acknowledges), so a release build never
+/// reports custody satisfied. The hardened signer is test-only until a
+/// remote signer exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrivateValidatorSigner {
+    PlaintextKeyFile,
+    #[cfg(test)]
+    TestHardened,
+}
+
+impl PrivateValidatorSigner {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::PlaintextKeyFile => "plaintext_key_file",
+            #[cfg(test)]
+            Self::TestHardened => "hardened",
+        }
+    }
+}
+
+/// Who published the report and what custody the publisher has.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PrivateReadinessCustody {
+    /// `rpc_serve` when the running service published it, else `local_read`.
+    pub published_by: String,
+    /// The backend of the store read: `transactional`, or a JSONL
+    /// comparison backend (`bounded-jsonl`, `legacy-jsonl`).
+    pub store_backend: String,
+    /// `plaintext_key_file`, or `none` for a local read.
+    pub validator_signer: String,
+    /// Whether the validator key file grants no group or other access;
+    /// `None` when there is no key file to inspect.
+    pub key_file_owner_only: Option<bool>,
 }
 
 /// The identity a verifier proves it was built with.
@@ -130,6 +189,7 @@ pub struct PrivateReadinessReport {
     pub a666_pfusdc_route_matches: Vec<String>,
     pub a666_pfusdc_route: Option<PrivateGovernedRoute>,
     pub admission_switch: PrivateAdmissionSwitch,
+    pub custody: PrivateReadinessCustody,
     pub ready: bool,
     pub reasons: Vec<String>,
 }
@@ -311,13 +371,62 @@ pub(super) fn private_readiness_for_pair(
         .clone()
         .unwrap_or_else(|| ao::ASSET_ORCHARD_POOL_ID_V1.to_string());
     let snapshot = read_finalized_pair_snapshot(&options.data_dir)?;
+    let custody = readiness_custody(&options.data_dir, options.service.as_ref())?;
     Ok(readiness_report(
         &snapshot,
         pool_id,
         probe,
         options.admission_switch,
         pair,
+        custody,
     ))
+}
+
+fn readiness_custody(
+    data_dir: &Path,
+    service: Option<&PrivateReadinessService>,
+) -> io::Result<PrivateReadinessCustody> {
+    use std::os::unix::fs::PermissionsExt;
+    let store_backend = NodeStore::new(data_dir).storage_backend_mode()?;
+    let key_file_owner_only = match service {
+        None => None,
+        Some(service) => match std::fs::metadata(&service.key_file) {
+            Ok(metadata) => Some(metadata.is_file() && metadata.permissions().mode() & 0o077 == 0),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error),
+        },
+    };
+    Ok(PrivateReadinessCustody {
+        published_by: if service.is_some() {
+            "rpc_serve"
+        } else {
+            "local_read"
+        }
+        .to_string(),
+        store_backend: store_backend.as_str().to_string(),
+        validator_signer: service
+            .map_or("none", |service| service.signer.as_str())
+            .to_string(),
+        key_file_owner_only,
+    })
+}
+
+/// The typed refusals for a publisher's custody, in a fixed order.
+pub(super) fn custody_reasons(custody: &PrivateReadinessCustody) -> Vec<String> {
+    let served = custody.published_by == "rpc_serve";
+    let unmet = [
+        !served,
+        custody.store_backend != postfiat_storage::StorageBackendMode::Transactional.as_str(),
+        served && custody.validator_signer == PrivateValidatorSigner::PlaintextKeyFile.as_str(),
+        served && custody.key_file_owner_only.is_none(),
+        served && custody.key_file_owner_only == Some(false),
+    ];
+    PRIVATE_READINESS_CUSTODY_REASONS
+        .into_iter()
+        .zip(unmet)
+        .filter(|(_, unmet)| *unmet)
+        .map(|(reason, _)| reason.to_string())
+        .collect()
 }
 
 fn readiness_report(
@@ -326,6 +435,7 @@ fn readiness_report(
     probe: &dyn PrivateVerifierProbe,
     admission_switch: Option<bool>,
     pair: PrivateAssetPair,
+    custody: PrivateReadinessCustody,
 ) -> PrivateReadinessReport {
     let next_height = snapshot.tip.height.saturating_add(1);
     let governance = &snapshot.governance;
@@ -365,7 +475,7 @@ fn readiness_report(
             .collect(),
     };
 
-    let mut reasons = Vec::new();
+    let mut reasons = custody_reasons(&custody);
     for (label, verifier) in [
         ("swap", &swap_verifier),
         ("private_egress", &private_egress_verifier),
@@ -430,6 +540,7 @@ fn readiness_report(
         a666_pfusdc_route_matches,
         a666_pfusdc_route,
         admission_switch,
+        custody,
         ready: reasons.is_empty(),
         reasons,
     }

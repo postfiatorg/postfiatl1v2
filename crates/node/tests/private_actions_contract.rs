@@ -459,6 +459,15 @@ fn manifest_matches_the_pinned_code_constants() {
     let batches = &manifest["atomic_shielded_batches"];
     assert!(batches["activation_height"].as_u64().is_some());
     assert_eq!(batches["active"], true);
+    // The manifest names the running service as the publisher and lists
+    // exactly the custody refusals the readiness read applies.
+    let readiness = &manifest["readiness"];
+    assert_eq!(readiness["read"], "private_readiness");
+    assert_eq!(readiness["published_by"], "rpc_serve");
+    assert_eq!(
+        readiness["custody_reasons"],
+        json!(postfiat_node::PRIVATE_READINESS_CUSTODY_REASONS)
+    );
     let assets = read_json(fixture("assets.json"));
     assert_eq!(assets["assets"]["A666"]["asset_id"]["value"], A666_ASSET_ID);
     assert_eq!(

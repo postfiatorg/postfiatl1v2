@@ -72,6 +72,23 @@
         })
     }
 
+    /// The running service's custody with the test-only hardened signer and
+    /// an owner-only key file: the one combination that satisfies custody.
+    fn hardened_test_service(data_dir: &Path) -> PrivateReadinessService {
+        PrivateReadinessService {
+            key_file: owner_only_key_file(data_dir, "hardened-test-key.json"),
+            signer: PrivateValidatorSigner::TestHardened,
+        }
+    }
+
+    fn owner_only_key_file(data_dir: &Path, name: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let path = data_dir.join(name);
+        fs::write(&path, b"{}").expect("key file");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("key file mode");
+        path
+    }
+
     fn readiness_for(
         fixture: &PricingReadFixture,
         verifiers: &ReadinessTestVerifiers,
@@ -81,6 +98,7 @@
                 data_dir: fixture.data_dir.clone(),
                 pool_id: None,
                 admission_switch: None,
+                service: Some(hardened_test_service(&fixture.data_dir)),
             },
             verifiers,
             PrivateAssetPair {
@@ -274,6 +292,7 @@
                 data_dir: fixture.data_dir.clone(),
                 pool_id: None,
                 admission_switch: None,
+                service: None,
             },
             &verifiers,
         )
@@ -289,6 +308,7 @@
             data_dir: fixture.data_dir.clone(),
             pool_id: None,
             admission_switch: None,
+            service: None,
         })
         .expect("readiness");
         for verifier in [&report.swap_verifier, &report.private_egress_verifier] {
@@ -299,6 +319,99 @@
         // The served read matches the W-1 contract's devnet pair; the
         // fixture's assets are not those, so only the route is missing.
         assert_eq!(report.a666_pfusdc_pair, PrivateAssetPair::w1_a666_pfusdc());
-        assert_eq!(report.reasons, ["a666_pfusdc_route_absent"], "{report:?}");
+        assert_eq!(
+            report.reasons,
+            ["readiness_not_published_by_running_service", "a666_pfusdc_route_absent"],
+            "{report:?}"
+        );
         fs::remove_dir_all(&fixture.data_dir).expect("cleanup");
     }
+
+    #[test]
+    fn private_readiness_custody_refuses_a_local_read_a_file_signer_and_a_shared_key() {
+        use std::os::unix::fs::PermissionsExt;
+        let fixture = readiness_fixture(Some(701), true, false);
+        let verifiers = ReadinessTestVerifiers::pinned();
+        let pair = PrivateAssetPair {
+            base_asset_id: fixture.base_asset_id.clone(),
+            quote_asset_id: fixture.quote_asset_id.clone(),
+        };
+        let read = |service: Option<PrivateReadinessService>| {
+            super::private_readiness_read::private_readiness_for_pair(
+                PrivateReadinessOptions {
+                    data_dir: fixture.data_dir.clone(),
+                    pool_id: None,
+                    admission_switch: Some(false),
+                    service,
+                },
+                &verifiers,
+                pair.clone(),
+            )
+            .expect("readiness")
+        };
+
+        // Only the running service satisfies custody, and only with a
+        // hardened signer over an owner-only key file.
+        let hardened = read(Some(hardened_test_service(&fixture.data_dir)));
+        assert!(hardened.ready, "{hardened:?}");
+        assert_eq!(hardened.custody.published_by, "rpc_serve");
+        assert_eq!(hardened.custody.store_backend, "transactional");
+        assert_eq!(hardened.custody.key_file_owner_only, Some(true));
+
+        // A local read of a data directory, which may be a copy, never does.
+        let local = read(None);
+        assert!(!local.ready);
+        assert_eq!(local.custody.published_by, "local_read");
+        assert_eq!(local.custody.validator_signer, "none");
+        assert_eq!(local.custody.key_file_owner_only, None);
+        assert_eq!(local.reasons, ["readiness_not_published_by_running_service"]);
+
+        // The plaintext key file every validator signs with today never does.
+        let key_file = owner_only_key_file(&fixture.data_dir, "validator-file-key.json");
+        let file_signer = read(Some(PrivateReadinessService {
+            key_file: key_file.clone(),
+            signer: PrivateValidatorSigner::PlaintextKeyFile,
+        }));
+        assert!(!file_signer.ready);
+        assert_eq!(file_signer.custody.validator_signer, "plaintext_key_file");
+        assert_eq!(file_signer.reasons, ["validator_signer_unsafe_file"]);
+
+        // A key file another local user can read, or no key file, never does.
+        fs::set_permissions(&key_file, fs::Permissions::from_mode(0o640)).expect("mode");
+        let shared = read(Some(PrivateReadinessService {
+            key_file: key_file.clone(),
+            signer: PrivateValidatorSigner::TestHardened,
+        }));
+        assert_eq!(shared.custody.key_file_owner_only, Some(false));
+        assert_eq!(shared.reasons, ["validator_key_file_not_owner_only"]);
+        let missing = read(Some(PrivateReadinessService {
+            key_file: fixture.data_dir.join("no-such-key.json"),
+            signer: PrivateValidatorSigner::TestHardened,
+        }));
+        assert_eq!(missing.custody.key_file_owner_only, None);
+        assert_eq!(missing.reasons, ["validator_key_file_missing"]);
+        fs::remove_dir_all(&fixture.data_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn private_readiness_custody_refuses_a_comparison_store() {
+        for (backend, refused) in [
+            (postfiat_storage::StorageBackendMode::Transactional, false),
+            (postfiat_storage::StorageBackendMode::BoundedJsonl, true),
+            (postfiat_storage::StorageBackendMode::LegacyJsonl, true),
+        ] {
+            let custody = PrivateReadinessCustody {
+                published_by: "rpc_serve".to_string(),
+                store_backend: backend.as_str().to_string(),
+                validator_signer: "hardened".to_string(),
+                key_file_owner_only: Some(true),
+            };
+            let reasons = super::private_readiness_read::custody_reasons(&custody);
+            assert_eq!(
+                reasons.iter().any(|reason| reason == "store_not_transactional"),
+                refused,
+                "{backend:?}: {reasons:?}"
+            );
+        }
+    }
+
