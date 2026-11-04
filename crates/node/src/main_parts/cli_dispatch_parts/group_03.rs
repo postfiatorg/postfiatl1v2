@@ -2030,6 +2030,37 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "external-lane-committee-binding" => {
+            // Read-only: the committee move kind and binding of a lane,
+            // epoch and root, as `ratify-external-lane-committee-epoch`
+            // computes them.
+            let lane_id = flag_value(flags, "--lane-id").ok_or("missing --lane-id")?;
+            let epoch = flag_value(flags, "--committee-epoch")
+                .ok_or("missing --committee-epoch")?
+                .parse::<u32>()
+                .map_err(|_| "--committee-epoch must be a u32".to_string())?;
+            let root_hex = flag_value(flags, "--committee-root").ok_or("missing --committee-root")?;
+            let root: [u8; 48] = hex_to_bytes(root_hex.trim_start_matches("0x"))
+                .map_err(|error| format!("--committee-root hex invalid: {error}"))?
+                .try_into()
+                .map_err(|_| "--committee-root must be exactly 48 bytes".to_string())?;
+            let json = serde_json::to_string_pretty(&serde_json::json!({
+                "kind": postfiat_types::external_lane_committee_amendment_kind(
+                    lane_id,
+                    u64::from(epoch),
+                    &root,
+                ),
+                "binding": postfiat_types::external_lane_committee_binding(
+                    lane_id,
+                    u64::from(epoch),
+                    &root,
+                ),
+                "value": epoch,
+            }))
+            .map_err(|error| format!("binding serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "ratify-external-lane-committee-epoch" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let validators =

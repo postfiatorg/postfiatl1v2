@@ -500,6 +500,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ratify-asset-orchard-egress-policy"
         | "ratify-external-lane-release-cap"
         | "ratify-external-lane-committee-epoch"
+        | "external-lane-committee-binding"
         | "governance-authorization-sign"
         | "governance-amendment-assemble"
         | "ethereum-checkpoint-observe"
