@@ -96,6 +96,24 @@ pub fn external_lane_amendment_refusal(kind: &str, value: u32) -> Option<(&'stat
     })
 }
 
+/// A cap amendment for a lane id genesis does not configure.
+pub const EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED: &str =
+    "external_lane_release_cap_lane_not_configured";
+/// The refusal of a cap amendment for a lane none of `lane_ids` names, `None`
+/// for a configured lane or any other kind.
+pub fn external_lane_release_cap_lane_refusal<'a>(
+    kind: &str,
+    mut lane_ids: impl Iterator<Item = &'a str>,
+) -> Option<(&'static str, String)> {
+    let lane_id = external_lane_release_cap_amendment_lane(kind)?;
+    (!lane_ids.any(|configured| configured == lane_id)).then(|| {
+        (
+            EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED,
+            format!("release cap amendment `{kind}` names a lane genesis does not configure"),
+        )
+    })
+}
+
 const EXTERNAL_LANE_ROUTE_CONFIG_DOMAIN: &[u8] = b"postfiat.external_lane.route_config.v1";
 const EXTERNAL_LANE_RELEASE_HISTORY_DOMAIN: &[u8] = b"postfiat.external_lane.release_history.v1";
 /// A release history root is 48 bytes (SHA3-384).

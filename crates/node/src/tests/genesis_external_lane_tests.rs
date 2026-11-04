@@ -6,7 +6,7 @@ use postfiat_types::{
 
 const LANE_RESERVED_ATOMS: u64 = 300_000_000;
 
-fn lane_genesis(chain_id: &str, validator_count: u32) -> Genesis {
+pub(super) fn lane_genesis(chain_id: &str, validator_count: u32) -> Genesis {
     let mut genesis = Genesis::new_with_validator_count(chain_id, validator_count);
     genesis.external_lanes = Some(vec![GenesisExternalLane {
         id: "base-erc20".to_string(),

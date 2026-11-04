@@ -1100,3 +1100,15 @@ fn cap_table_refuses_more_lanes_than_it_holds() {
         .collect::<Vec<_>>();
     let _ = ExternalLaneReleaseCaps::from_amendments(&lanes, |_| Vec::new());
 }
+
+#[test]
+fn cap_amendment_for_a_lane_genesis_does_not_configure_is_refused() {
+    let lanes = ["base-erc20"];
+    let refusal = |kind: &str| external_lane_release_cap_lane_refusal(kind, lanes.into_iter()).map(|(code, _)| code);
+    assert_eq!(
+        refusal(&external_lane_release_cap_amendment_kind("not-a-lane")),
+        Some(EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED)
+    );
+    assert_eq!(refusal(&external_lane_release_cap_amendment_kind("base-erc20")), None);
+    assert_eq!(refusal("orchard_pool_pause"), None);
+}

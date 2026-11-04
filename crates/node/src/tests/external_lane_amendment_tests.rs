@@ -60,15 +60,11 @@ fn lane_amendment_with_value(
     }
 }
 
+/// A four-validator node whose genesis configures the lane `base-erc20`.
 fn lane_amendment_node(label: &str) -> PathBuf {
     let data_dir = unique_test_dir(label);
-    init(InitOptions {
-        data_dir: data_dir.clone(),
-        chain_id: "external-lane-amendment".into(),
-        node_id: "validator-0".into(),
-        validator_count: 4,
-    })
-    .expect("init");
+    let genesis = super::genesis_external_lane_tests::lane_genesis("external-lane-amendment", 4);
+    init_with_genesis(data_dir.clone(), "validator-0".to_string(), genesis).expect("init");
     data_dir
 }
 
@@ -209,5 +205,39 @@ fn release_cap_amendment_passes_admission_and_execution_checks_within_range() {
             .expect("out-of-range cap applied");
         assert_eq!(code, INVALID_CAP);
     }
+    let _ = fs::remove_dir_all(data_dir);
+}
+
+const LANE_NOT_CONFIGURED: &str = "external_lane_release_cap_lane_not_configured";
+
+#[test]
+fn release_cap_amendment_for_a_lane_genesis_does_not_configure_is_refused() {
+    let data_dir = lane_amendment_node("external-lane-cap-unknown-lane");
+    let store = NodeStore::new(&data_dir);
+    let genesis = store.read_genesis().expect("genesis");
+    let mut governance = store.read_governance().expect("governance");
+    let mut ledger = store.read_ledger().expect("ledger");
+    let registry =
+        read_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE)).expect("registry");
+    let kind = "external_lane_release_cap_v1:not-a-lane";
+
+    let error = ratify_cap(&data_dir, kind, 0).expect_err("unknown lane ratified");
+    assert!(error.to_string().starts_with(LANE_NOT_CONFIGURED), "{error}");
+
+    let amendment = lane_amendment_with_value(&genesis, kind, 0, false);
+    let batch = GovernanceActionBatch::new("lane-cap-unknown", vec![amendment]);
+    let error = verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, 1)
+        .expect_err("unknown lane admitted");
+    assert!(error.to_string().contains(LANE_NOT_CONFIGURED), "{error}");
+
+    let receipts = crate::execution_actions::execute_governance_batch(
+        &mut governance,
+        Some(&mut ledger),
+        &batch,
+        1,
+    );
+    assert!(!receipts[0].accepted, "{receipts:?}");
+    assert_eq!(receipts[0].code, LANE_NOT_CONFIGURED, "{receipts:?}");
+    assert!(governance.external_lane_release_cap_amendments("not-a-lane").is_empty());
     let _ = fs::remove_dir_all(data_dir);
 }

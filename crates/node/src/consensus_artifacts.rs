@@ -2925,6 +2925,25 @@ where
     Ok(())
 }
 
+/// A release cap amendment admitted to a block names a lane genesis
+/// configures (design section 5.1).
+pub(super) fn verify_external_lane_release_cap_admission(
+    genesis: &Genesis,
+    amendment: &GovernanceAmendment,
+) -> io::Result<()> {
+    let refusal = postfiat_types::external_lane_release_cap_lane_refusal(
+        &amendment.kind,
+        genesis.external_lanes().iter().map(|lane| lane.id.as_str()),
+    );
+    match refusal {
+        Some((code, message)) => Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!("{code}: {message}"),
+        )),
+        None => Ok(()),
+    }
+}
+
 pub(super) fn verify_live_signed_governance_batch(
     genesis: &Genesis,
     governance: &GovernanceState,
@@ -2970,6 +2989,7 @@ pub(super) fn verify_live_signed_governance_batch(
         .filter(|update| update.activation_height < proposal_slot)
         .count() as u64;
     for amendment in &batch.amendments {
+        verify_external_lane_release_cap_admission(genesis, amendment)?;
         verify_governance_amendment_evidence(genesis, amendment)?;
         if amendment.validators != validators {
             return Err(io::Error::new(

@@ -1217,6 +1217,7 @@ fn execute_governance_batch_with_replay(
         }
         if let Some((code, message)) =
             governance_amendment_lifecycle_rejection(amendment, block_height)
+                .or_else(|| external_lane_release_cap_rejection(ledger.as_deref(), amendment))
         {
             receipts.push(Receipt::rejected(
                 amendment.amendment_id.clone(),
@@ -1907,6 +1908,29 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
         );
     }
     Ok(())
+}
+
+/// The refusal of a release cap amendment at block execution: its lane
+/// must be one the ledger (that is, genesis) configures (design section
+/// 5.1). A governance-only replay carries no ledger; a cap amendment for an
+/// unknown lane is inert there, as the cap table reads genesis lanes.
+pub(super) fn external_lane_release_cap_rejection(
+    ledger: Option<&LedgerState>,
+    amendment: &GovernanceAmendment,
+) -> Option<(&'static str, String)> {
+    postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind)?;
+    if let Some(ledger) = ledger {
+        if let Some(refusal) = postfiat_types::external_lane_release_cap_lane_refusal(
+            &amendment.kind,
+            ledger
+                .external_lanes
+                .iter()
+                .map(|lane| lane.lane_id.as_str()),
+        ) {
+            return Some(refusal);
+        }
+    }
+    None
 }
 
 pub(super) fn governance_amendment_lifecycle_rejection(
