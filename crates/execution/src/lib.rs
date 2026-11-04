@@ -39,4 +39,7 @@ mod tests {
     include!("tests.rs");
 }
 
+#[cfg(test)]
+mod lock_minimum_binding_tests;
+
 include!("pftl_source_settlement.rs");

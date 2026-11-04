@@ -20,6 +20,8 @@ contract PFTLockV1Handler {
     bytes32 private constant PERMIT_TYPEHASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
     uint64 public constant MAX_LOCK = 20_000_000_000;
+    /// The PFTL account reserve, the deployed minimum (`ACCOUNT_RESERVE`).
+    uint64 public constant MIN_LOCK = 10;
 
     PFTToken public immutable token;
     MockFinalityVerifier public immutable verifier;
@@ -49,7 +51,7 @@ contract PFTLockV1Handler {
         }
         token = new PFTToken("Post Fiat Token", "PFT", supply, actors[0]);
         verifier = new MockFinalityVerifier();
-        lockC = new PFTLockV1(address(token), address(verifier), address(token).codehash, MAX_LOCK);
+        lockC = new PFTLockV1(address(token), address(verifier), address(token).codehash, MAX_LOCK, MIN_LOCK);
         for (uint256 i = 1; i < actors.length; i++) {
             VM.prank(actors[0]);
             require(token.transfer(actors[i], supply / 10), "fund");
@@ -99,8 +101,28 @@ contract PFTLockV1Handler {
     function _bound(address holder, uint256 amount) private view returns (uint64) {
         uint256 limit = token.balanceOf(holder);
         if (limit > MAX_LOCK) limit = MAX_LOCK;
-        if (limit == 0) return 0;
-        return uint64(1 + amount % limit);
+        if (limit < MIN_LOCK) return 0;
+        return uint64(MIN_LOCK + amount % (limit - MIN_LOCK + 1));
+    }
+
+    /// A Lock below the minimum must revert and change nothing.
+    function lockBelowMinimum(uint256 actorSeed, uint256 amount) external counted {
+        address holder = actors[actorSeed % actors.length];
+        uint64 small = uint64(1 + amount % (MIN_LOCK - 1));
+        VM.prank(holder);
+        require(token.approve(address(lockC), small), "approve");
+        uint64 before = lockC.nextNonce();
+        VM.prank(holder);
+        try lockC.lock(small, "r") {
+            revert("a Lock below the minimum was accepted");
+        } catch (bytes memory reason) {
+            require(
+                keccak256(reason)
+                    == keccak256(abi.encodeWithSelector(PFTLockV1.LockBelowMinimum.selector, small, MIN_LOCK)),
+                "wrong refusal"
+            );
+        }
+        require(lockC.nextNonce() == before, "nonce moved");
     }
 
     function _recipient(uint256 length) private pure returns (bytes memory recipient) {
@@ -163,6 +185,7 @@ abstract contract PFTLockV1InvariantBase {
         for (uint64 nonce = 0; nonce < next; nonce++) {
             (address holder, uint64 amount,) = lockC.lockRecord(nonce);
             _assertTrue(holder != address(0) && amount != 0, "nonce without a record");
+            _assertTrue(amount >= lockC.minimumLockAmount(), "a record below the minimum");
             sum += amount;
         }
         (address none,,) = lockC.lockRecord(next);
