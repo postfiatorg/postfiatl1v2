@@ -117,6 +117,7 @@ report, and fails closed when method-specific checks fail.
   `--output-commitment-1/2`) with the arguments validated client-side
 - `nav_reserve_proof_status(asset_id)`, `vault_bridge_status(asset_id)`,
   `fx_fix_list(base_asset_id=None, quote_asset_id=None, active_only=False, limit=None)`,
+  `external_lane_info(lane_id=None, release_cursor=None, release_limit=None)`,
   `fx_fix_info(fix_packet_hash)`, `fx_fix_reservation_info(reservation_id)`,
   `fx_fix_quote(fix_packet_hash, base_atoms)`,
   `pfusdc_ingress_preflight(asset_id, recipient=..., depositor=..., amount_atoms=...)`,
@@ -132,6 +133,7 @@ public read as a `--method` value, with the node's parameter names as flags
 (`--from-height`/`--to-height`/`--archive-uri`, `--owner`, `--note-id`,
 `--asset-id`, `--epoch`, `--nullifier-1/2`, `--output-commitment-1/2`,
 `--base-asset-id`/`--quote-asset-id`/`--active-only`/`--limit`,
+`--lane-id`/`--release-cursor`/`--release-limit`,
 `--fix-packet-hash`, `--reservation-id`, `--base-atoms`, `--recipient`,
 `--depositor`, `--amount-atoms`, `--withdrawal-id`, `--prior-checkpoint`,
 `--registration-id`); the report records an `<method>_is_object` (or

@@ -140,6 +140,7 @@ PUBLIC_READ_OBJECT_METHODS = frozenset(
         "asset_orchard_action_status",
         "nav_reserve_proof_status",
         "fx_fix_list",
+        "external_lane_info",
         "fx_fix_info",
         "fx_fix_reservation_info",
         "fx_fix_quote",
@@ -207,6 +208,7 @@ CLI_METHODS: tuple[str, ...] = (
     "asset_orchard_action_status",
     "nav_reserve_proof_status",
     "fx_fix_list",
+    "external_lane_info",
     "fx_fix_info",
     "fx_fix_reservation_info",
     "fx_fix_quote",
@@ -392,6 +394,12 @@ def call_method(client: PostFiatRpcClient, args: argparse.Namespace) -> Any:
             active_only=args.active_only,
             limit=args.limit,
         )
+    if method == "external_lane_info":
+        return client.external_lane_info(
+            args.lane_id,
+            release_cursor=args.release_cursor,
+            release_limit=args.release_limit,
+        )
     if method == "fx_fix_info":
         return client.fx_fix_info(require_arg(args, "fix_packet_hash", method))
     if method == "fx_fix_reservation_info":
@@ -540,6 +548,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-asset-id")
     parser.add_argument("--quote-asset-id")
     parser.add_argument("--active-only", action="store_true")
+    parser.add_argument("--lane-id")
+    parser.add_argument("--release-cursor", type=int)
+    parser.add_argument("--release-limit", type=int)
     parser.add_argument("--fix-packet-hash")
     parser.add_argument("--reservation-id")
     parser.add_argument("--base-atoms", type=int)

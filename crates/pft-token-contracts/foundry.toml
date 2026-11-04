@@ -37,6 +37,14 @@ fs_permissions = [
 base = { key = "${BASESCAN_API_KEY}", chain = 8453 }
 base-sepolia = { key = "${BASESCAN_API_KEY}", chain = 84532 }
 
+# forge build lints with solar. The linter of the Foundry release CI pins
+# (v1.7.1) does not use include_paths, so it cannot resolve
+# test/DeployPFTLock.t.sol's import from ../ethereum-contracts and fails the
+# build; solc compiles it and forge test runs it. A remapping would change the
+# metadata, hence the bytecode, of PFTToken and PFTLockV1.
+[lint]
+ignore = ["test/DeployPFTLock.t.sol"]
+
 [fuzz]
 runs = 1000
 
