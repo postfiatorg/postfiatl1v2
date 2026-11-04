@@ -863,3 +863,50 @@ fn genesis_refuses_more_external_lanes_than_the_cap_table_holds() {
     assert!(error.contains("above the maximum 8"), "{error}");
 }
 
+#[test]
+fn recorded_windows_are_checked_against_the_cap_active_at_their_heights() {
+    let lane = release_test_lane();
+    // Lowered to 50 bps (50 atoms) at 120; raised to 400 bps (400 atoms) at
+    // 300, effective at 1_000.
+    let amendments = [cap_amendment("lower", 50, 120), cap_amendment("raise", 400, 300)];
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release_capped(&lane, sample_release(0, 150, 110), 200)
+        .expect("genesis cap before the lowering");
+    state
+        .apply_release_capped(&lane, sample_release(1, 50, 250), 50)
+        .expect("lowered cap");
+    state
+        .apply_release_capped(&lane, sample_release(2, 400, 1_000), 400)
+        .expect("raised cap after the delay");
+    state
+        .validate_against_genesis_with_caps(&lane, &amendments)
+        .expect("each window within the cap active at its heights");
+    // Without the raise the window of height 1_000 is above the cap.
+    let error = state
+        .validate_against_genesis_with_caps(&lane, &amendments[..1])
+        .unwrap_err();
+    assert!(error.contains("above the cap 50"), "{error}");
+    // A window above the lowered cap is refused even though the genesis cap holds it.
+    let mut over = ExternalLaneState::genesis(&lane);
+    over.apply_release_capped(&lane, sample_release(0, 60, 130), 200)
+        .expect("written past the lowered cap");
+    over.validate_against_genesis(&lane).expect("within the genesis cap");
+    let error = over
+        .validate_against_genesis_with_caps(&lane, &amendments)
+        .unwrap_err();
+    assert!(error.contains("above the cap 50"), "{error}");
+    // A lowering in the middle of a window: releases before it count under the old cap.
+    let mid = [cap_amendment("mid", 50, 150)];
+    let mut split = ExternalLaneState::genesis(&lane);
+    split
+        .apply_release_capped(&lane, sample_release(0, 100, 140), 200)
+        .expect("before the lowering");
+    split
+        .validate_against_genesis_with_caps(&lane, &mid)
+        .expect("released before the lowering");
+    split
+        .apply_release_capped(&lane, sample_release(1, 1, 150), 200)
+        .expect("forged past the lowered cap");
+    assert!(split.validate_against_genesis_with_caps(&lane, &mid).is_err());
+}

@@ -870,7 +870,7 @@ fn init_from_lane_genesis_file_matches_the_in_code_lane_genesis() {
     let in_code = genesis_ledger_state(&expected, faucet).expect("in-code genesis ledger");
     assert_eq!(ledger, in_code);
     assert_eq!(ledger.external_lanes, expected.genesis_external_lane_states());
-    validate_external_lanes_match_genesis(&expected, &ledger, "init").expect("lane set rule");
+    validate_external_lanes_match_genesis(&expected, &ledger, &GovernanceState::new(4), "init").expect("lane set rule");
     let root = replicated_state_root(
         &expected,
         &GovernanceState::new(expected.validator_count),

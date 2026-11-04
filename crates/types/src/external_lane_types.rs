@@ -700,6 +700,17 @@ impl ExternalLaneState {
     /// releases only from the lane's configured source, and window fields that
     /// follow from the recorded heights, no window above the cap.
     pub fn validate_against_genesis(&self, lane: &GenesisExternalLane) -> Result<(), String> {
+        self.validate_against_genesis_with_caps(lane, &[])
+    }
+
+    /// [`Self::validate_against_genesis`] with each window checked against
+    /// the cap active at the height of each of its releases, under the lane's
+    /// committed cap amendments.
+    pub fn validate_against_genesis_with_caps(
+        &self,
+        lane: &GenesisExternalLane,
+        cap_amendments: &[ExternalLaneReleaseCapAmendment],
+    ) -> Result<(), String> {
         self.validate()?;
         self.validate_recorded_releases()?;
         if self.lane_id != lane.id {
@@ -714,7 +725,6 @@ impl ExternalLaneState {
                 self.lane_id, self.reserved_atoms, lane.reserved_atoms
             ));
         }
-        let cap = lane.window_cap_atoms();
         let mut per_window = BTreeMap::<u64, u64>::new();
         let mut previous_height = 0_u64;
         let mut root = None;
@@ -739,6 +749,10 @@ impl ExternalLaneState {
                 .entry(lane.window_index_at(record.released_at_height))
                 .or_default();
             *window = window.saturating_add(record.amount_atoms);
+            let cap = lane.window_cap_atoms_for_bps(
+                lane.release_cap_schedule_at(cap_amendments, record.released_at_height)
+                    .active_cap_bps,
+            );
             if *window > cap {
                 return Err(format!(
                     "external lane `{}` records {} atoms in one window, above the cap {cap}",
