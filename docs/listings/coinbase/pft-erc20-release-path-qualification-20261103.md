@@ -74,8 +74,7 @@ Mempool admission reports ``mempool admission rejected `<code>` ``; the dry run 
 
 ## Open before genesis
 
-- The proof program's guest build for a Base source and its vkey pin (the SP1 ingress program is pinned to Sepolia).
-- The proof inventory entry for that program.
+- Corrected 2026-11-04: no proof program is needed. The lane's proof is the committee-signed Base checkpoint plus the receipt proof (design option (b)), so it has no SP1 guest, vkey pin or proof inventory entry; an SP1 guest for Base is the design's option (a) upgrade.
 - The real Base source attestation path: checkpoint observation and votes for a lane, a lane receipt proof built from a Base block, and that source's own qualification. This run used committee-signed fixtures.
 - A minimum lock amount in `PFTLockV1` at or above the PFTL account reserve (10 atoms).
 - Pruning the release records behind the finalized checkpoint, keeping the root.
