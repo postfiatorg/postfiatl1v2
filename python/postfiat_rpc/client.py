@@ -1741,8 +1741,12 @@ class PostFiatRpcClient:
         release_limit: int | None = None,
     ) -> dict[str, Any]:
         """Genesis external lanes: config, committed record and one page of
-        releases, newest first (public read, `--lane-id`, `--release-cursor`,
-        `--release-limit`). Pass `next_release_cursor` for the next older page."""
+        stored releases, newest first (public read, `--lane-id`,
+        `--release-cursor`, `--release-limit`). Pass `next_release_cursor` for
+        the next older page. Each lane row also reports `release_count` (every
+        release), `pruned_release_count` (releases pruned behind the finalized
+        height, no longer paged) and `release_history_root` (the hash chain
+        over all of them); `external_lane_release_coverage` summarises them."""
         params: dict[str, Any] = {}
         if lane_id is not None:
             params["lane_id"] = self._required_text(lane_id, "lane_id")
@@ -1751,6 +1755,25 @@ class PostFiatRpcClient:
         if release_limit is not None:
             params["release_limit"] = self._required_u64(release_limit, "release_limit")
         return self._object_read("external_lane_info", params)
+
+    @staticmethod
+    def external_lane_release_coverage(row: dict[str, Any]) -> dict[str, Any]:
+        """What an `external_lane_info` lane row's pages can still show: every
+        release (`release_count`), the pruned ones that no page returns, the
+        stored ones, and the root that covers all of them."""
+        release_count = int(row["release_count"])
+        pruned = int(row.get("pruned_release_count", 0))
+        if not 0 <= pruned <= release_count:
+            raise RpcProtocolError(
+                f"external lane row reports {pruned} pruned of {release_count} releases"
+            )
+        return {
+            "lane_id": row.get("lane_id"),
+            "release_count": release_count,
+            "pruned_release_count": pruned,
+            "stored_release_count": release_count - pruned,
+            "release_history_root": row.get("release_history_root"),
+        }
 
     def fx_fix_info(self, fix_packet_hash: str) -> dict[str, Any]:
         """One FX fix packet by hash (public read, `--fix-packet-hash`)."""

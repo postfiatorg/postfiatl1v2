@@ -64,7 +64,8 @@ At genesis the faucet receives the native supply minus the sum of the lanes, and
 - `released_lock_nonces`, the set of Lock nonces already paid, starting empty;
 - `window_index` and `window_released_atoms`, the current window and what it released, starting at 0;
 - `release_history_root`, a SHA3-384 hash chain over the release records in application order, omitted while there is none;
-- `releases`, the release records, omitted while empty.
+- `pruned_release_count`, `pruned_released_atoms` and `pruned_release_history_root`, the records pruned behind the finalized height (below), omitted while none is;
+- `releases`, the stored release records, omitted while empty.
 
 The state commitment covers every field but `releases` (`ExternalLaneState::state_commitment_bytes`), so a block commits the lane in bytes that grow by one nonce per release, not by the records. The records stay in the stored ledger for reads and replay; loading a replay base recomputes `release_history_root` from them and refuses a mismatch.
 
@@ -121,7 +122,7 @@ Execution (`apply_external_lane_release`, rules on `ExternalLaneState`) checks, 
 | The amount fits `reserved_atoms - released_atoms` | `external_lane_remainder_exceeded` |
 | The release's window is not below the lane's recorded window | `external_lane_window_regressed` |
 | The window's released amount stays within the cap | `external_lane_window_cap_exceeded` |
-| The lane stores fewer than `EXTERNAL_LANE_MAX_RELEASE_RECORDS` records | `external_lane_release_records_full` |
+| The lane stores fewer than `EXTERNAL_LANE_MAX_RELEASE_RECORDS` records after this release prunes | `external_lane_release_records_full` |
 | A new recipient account reaches the account reserve | `below_account_reserve` |
 
 The Base checkpoint attestation adds no new schema. It reuses the existing Ethereum checkpoint (`EthereumFinalizedCheckpointV1`, `EthereumExternalEventProofV1`) and its public-values layout; the source chain id, the lock contract and its code hash, the token and its code hash, the committee and the confirmation depth are parameters taken from the lane's genesis policy. The pfUSDC SP1 ingress program is therefore unchanged and still pinned to Sepolia; a guest that proves a Base Lock, its vkey pin and its proof inventory entry are P2.5 work. Today the node returns the refusal codes of the table above: `external_lane_not_configured`, `external_lane_source_mismatch`, `external_lane_committee_missing`, `external_lane_proof_invalid`, `external_lane_checkpoint_mismatch`, `external_lane_lock_mismatch`, `external_lane_nonce_already_released`, `external_lane_remainder_exceeded`, `external_lane_window_regressed`, `external_lane_window_cap_exceeded`, `external_lane_release_records_full` and `below_account_reserve`.
@@ -130,11 +131,24 @@ Genesis allows one lane per Base source: two lanes naming the same `chain_id` an
 
 A release to a new PFTL account below the account reserve (`ACCOUNT_RESERVE`, 10 atoms, `crates/execution/src/entrypoints.rs`) is refused with `below_account_reserve` while its Base Lock is already final; the nonce stays unused, and a later retry passes once the recipient account exists. `PFTLockV1` must therefore enforce a minimum lock amount at or above the PFTL account reserve, 10 atoms; this is a contract change for the next lock round (P2.5).
 
-The accepted bound on the stored release records is the lane's reserve divided by the minimum lock amount, since each release takes at least the minimum from the remainder. It does not bound storage: at the planned 10-atom minimum, a slice strictly below the 100-billion-PFT supply (10^17 atoms) allows up to 10^16 records, and the design's hypothetical 1-billion-PFT lane (10^15 atoms) 10^14. `EXTERNAL_LANE_MAX_RELEASE_RECORDS` (1,000,000, `crates/types/src/external_lane_types.rs`) is therefore a hard ceiling: a record is under 400 bytes of JSON, so a lane's list stays under 400 MB and its replay-base check under a million SHA3-384 steps, far above any expected volume since each record costs a Base Lock and a PFTL fee. A release past it is refused with `external_lane_release_records_full` and changes nothing. Pruning the records behind the finalized checkpoint, keeping the root, is P2.5 work.
+The accepted bound on the stored release records is the lane's reserve divided by the minimum lock amount, since each release takes at least the minimum from the remainder. It does not bound storage: at the planned 10-atom minimum, a slice strictly below the 100-billion-PFT supply (10^17 atoms) allows up to 10^16 records, and the design's hypothetical 1-billion-PFT lane (10^15 atoms) 10^14. `EXTERNAL_LANE_MAX_RELEASE_RECORDS` (1,000,000, `crates/types/src/external_lane_types.rs`) is therefore a hard ceiling: a record is under 400 bytes of JSON, so a lane's list stays under 400 MB and its replay-base check under a million SHA3-384 steps, far above any expected volume since each record costs a Base Lock and a PFTL fee. A release past it is refused with `external_lane_release_records_full` and changes nothing; pruning (below) keeps a lane under it.
 
 An accepted release credits the recipient, creating the account if needed, adds the nonce and the amount, moves the window when the height is in a new one, and appends a record (nonce, chain, lock contract, amount, recipient, Base block number and hash, PFTL height) and advances `release_history_root`. The atoms move from the lane remainder into circulation, so every conservation check above holds unchanged. The recorded Base block number and hash are the committee's attestation in the checkpoint; only the checkpoint's receipts root is bound to the `Locked` log by the receipt proof, which is what the watcher of design section 5.2 reads them as.
 
-`external_lane_info` (public read RPC, and the `external-lane-info` node command; `--lane-id`, `--release-cursor` and `--release-limit` optional) returns each lane's genesis configuration, committed record, remainder, window cap, what the next block's window may still release, `release_count`, and one page of release records newest first, each with its `sequence` in the history. A page holds at most `EXTERNAL_LANE_RELEASE_PAGE_SIZE` (100) records, the default; `next_release_cursor`, when present, is passed as `--release-cursor` for the next older page.
+### Pruning the release records
+
+A release also prunes, in the same state transition, so every validator and every replay prunes identically (`ExternalLaneState::apply_release`, `crates/types/src/external_lane_types.rs`). PFTL blocks are final when committed, so the release's height is the finalized height. The records released at or below that height minus `EXTERNAL_LANE_RELEASE_RETENTION_WINDOWS` (1) windows of `release_window_blocks`, and in a window before the lane's open one, leave `releases`.
+
+- One window is the smallest retention design section 5.2 allows: its answer bounds the loss to one window's cap because the watcher sees each release and the zero-cap amendment lands before the next window releases, so a release in the last block of its window stays readable through the following window. The block receipts keep every release regardless.
+- `release_history_root`, `released_atoms` and the release count keep advancing; `pruned_release_history_root` is the root after the last pruned record, and the stored records chain from it to `release_history_root`.
+- `released_lock_nonces` is never pruned, so a pruned nonce stays paid: 8 bytes per nonce in memory (a `BTreeSet<u64>`, about 8 MB per million plus the tree's overhead) and up to 20 bytes of JSON each.
+- The open window's records stay, so the window fields still follow from the stored heights.
+- The pruned fields are in the state commitment, omitted while nothing is pruned, so an unpruned lane commits as before.
+- The history and snapshot lane rule holds on a pruned lane: the stored records must chain from the pruned root to `release_history_root`, `released_atoms` must equal the pruned atoms plus the stored amounts, and the nonce set must hold the stored nonces and exactly one nonce per release. A forged record, a tampered root and a removed nonce are refused; a nonce swapped for another changes the committed state root.
+
+The records stay below the ceiling unless more than `EXTERNAL_LANE_MAX_RELEASE_RECORDS` releases land within the retention window and the open window.
+
+`external_lane_info` (public read RPC, and the `external-lane-info` node command; `--lane-id`, `--release-cursor` and `--release-limit` optional) returns each lane's genesis configuration, committed record, remainder, window cap, what the next block's window may still release, `release_count` (every release), `pruned_release_count`, `release_history_root`, and one page of stored release records newest first, each with its `sequence` in the history; sequences below `pruned_release_count` are pruned and no page returns them. A page holds at most `EXTERNAL_LANE_RELEASE_PAGE_SIZE` (100) records, the default; `next_release_cursor`, when present, is passed as `--release-cursor` for the next older page.
 
 ## Governed lane amendments
 
