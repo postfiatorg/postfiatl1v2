@@ -133,7 +133,7 @@ fn assert_transactional_logical_equivalence(
     );
 }
 
-fn activation_test_journal<T: serde::Serialize>(
+pub(super) fn activation_test_journal<T: serde::Serialize>(
     store: &NodeStore,
     genesis: &Genesis,
     governance: &GovernanceState,
@@ -343,7 +343,7 @@ fn assert_activation_journal_recovers_every_prefix(
     }
 }
 
-fn apply_activation_journal(store: &NodeStore, journal: &OrderedCommitDeltaJournal) {
+pub(super) fn apply_activation_journal(store: &NodeStore, journal: &OrderedCommitDeltaJournal) {
     store
         .write_ordered_commit_journal(journal)
         .expect("write complete activation journal");

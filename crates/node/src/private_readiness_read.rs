@@ -4,8 +4,9 @@
 //! the governed activations, the governed A666/pfUSDC swap route, and the
 //! serving process's custody of its store and validator key. Configuration
 //! alone can never make `ready` true, and neither can a local read of a data
-//! directory, a comparison store, a plaintext key-file signer or a key file
-//! another local user can read.
+//! directory, a store whose transactional storage is not active, a server
+//! with no signing role, a plaintext key-file signer or a key file the
+//! serving user does not own alone.
 
 use super::asset_orchard_pricing_reads::{read_finalized_pair_snapshot, FinalizedPairSnapshot};
 use super::*;
@@ -19,11 +20,13 @@ pub const PRIVATE_READINESS_SCHEMA: &str = "postfiat.private_readiness.v1";
 /// parameter, and it never makes `ready` true.
 pub const PRIVATE_ACTION_ADMISSION_SWITCH_KEYS: [&str; 1] = ["--allow-private-action-admission"];
 /// The custody refusals, in report order. The W-1 manifest lists the same.
-pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 5] = [
+pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 7] = [
     "readiness_not_published_by_running_service",
     "store_not_transactional",
+    "validator_signer_none",
     "validator_signer_unsafe_file",
     "validator_key_file_missing",
+    "validator_key_file_unreadable",
     "validator_key_file_not_owner_only",
 ];
 const PRIVATE_READINESS_MAX_ROUTES: usize = 16;
@@ -52,17 +55,21 @@ pub struct PrivateReadinessOptions {
 /// knows about itself, never request parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrivateReadinessService {
-    pub key_file: PathBuf,
+    /// Every key file the signer signs with (`--finality-key-file` and a
+    /// different `--finality-proposal-key-file`); unread with no signer.
+    pub key_files: Vec<PathBuf>,
     pub signer: PrivateValidatorSigner,
 }
 
 /// The validator signer of the serving process. A plaintext key file is the
 /// only signer built today (`--finality-key-file`, the same exportable file
 /// that `--unsafe-devnet-file-signer` acknowledges), so a release build never
-/// reports custody satisfied. The hardened signer is test-only until a
-/// remote signer exists.
+/// reports custody satisfied. `NoSigningRole` is a server that admits
+/// nothing for finality and so signs with no key. The hardened signer is
+/// test-only until a remote signer exists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrivateValidatorSigner {
+    NoSigningRole,
     PlaintextKeyFile,
     #[cfg(test)]
     TestHardened,
@@ -71,6 +78,7 @@ pub enum PrivateValidatorSigner {
 impl PrivateValidatorSigner {
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::NoSigningRole => "none",
             Self::PlaintextKeyFile => "plaintext_key_file",
             #[cfg(test)]
             Self::TestHardened => "hardened",
@@ -83,14 +91,21 @@ impl PrivateValidatorSigner {
 pub struct PrivateReadinessCustody {
     /// `rpc_serve` when the running service published it, else `local_read`.
     pub published_by: String,
-    /// The backend of the store read: `transactional`, or a JSONL
-    /// comparison backend (`bounded-jsonl`, `legacy-jsonl`).
+    /// The store's backend-mode record: `transactional` (also the default
+    /// with no record), or a JSONL comparison backend (`bounded-jsonl`,
+    /// `legacy-jsonl`).
     pub store_backend: String,
-    /// `plaintext_key_file`, or `none` for a local read.
+    /// Whether the transactional store is serving, as the node decides it
+    /// (`NodeStore::transactional_storage_active`): the mode, a database and
+    /// its activation height reached.
+    pub transactional_active: bool,
+    /// `plaintext_key_file`, or `none` for a local read or a server with no
+    /// signing role.
     pub validator_signer: String,
-    /// Whether the validator key file grants no group or other access;
-    /// `None` when there is no key file to inspect.
-    pub key_file_owner_only: Option<bool>,
+    /// The state of each key file the signer uses, in order: `owner_only`
+    /// (a regular file owned by the serving user with no group or other
+    /// access), `not_owner_only`, `missing` or `unreadable`.
+    pub key_files: Vec<String>,
 }
 
 /// The identity a verifier proves it was built with.
@@ -386,15 +401,18 @@ fn readiness_custody(
     data_dir: &Path,
     service: Option<&PrivateReadinessService>,
 ) -> io::Result<PrivateReadinessCustody> {
-    use std::os::unix::fs::PermissionsExt;
-    let store_backend = NodeStore::new(data_dir).storage_backend_mode()?;
-    let key_file_owner_only = match service {
-        None => None,
-        Some(service) => match std::fs::metadata(&service.key_file) {
-            Ok(metadata) => Some(metadata.is_file() && metadata.permissions().mode() & 0o077 == 0),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
-            Err(error) => return Err(error),
-        },
+    let store = NodeStore::new(data_dir);
+    let store_backend = store.storage_backend_mode()?;
+    let transactional_active = store.transactional_storage_active()?;
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    let euid = unsafe { libc::geteuid() };
+    let key_files = match service {
+        Some(service) if service.signer != PrivateValidatorSigner::NoSigningRole => service
+            .key_files
+            .iter()
+            .map(|path| key_file_state(path, euid).to_string())
+            .collect(),
+        _ => Vec::new(),
     };
     Ok(PrivateReadinessCustody {
         published_by: if service.is_some() {
@@ -404,22 +422,50 @@ fn readiness_custody(
         }
         .to_string(),
         store_backend: store_backend.as_str().to_string(),
+        transactional_active,
         validator_signer: service
-            .map_or("none", |service| service.signer.as_str())
+            .map_or(PrivateValidatorSigner::NoSigningRole, |service| {
+                service.signer
+            })
+            .as_str()
             .to_string(),
-        key_file_owner_only,
+        key_files,
     })
+}
+
+/// A key file is `owner_only` when it is a regular file (after symlinks)
+/// owned by `euid` with no group or other access. A stat error other than
+/// NotFound is `unreadable`, never a failed read.
+pub(super) fn key_file_state(path: &Path, euid: u32) -> &'static str {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    match std::fs::metadata(path) {
+        Ok(metadata)
+            if metadata.is_file()
+                && metadata.uid() == euid
+                && metadata.permissions().mode() & 0o077 == 0 =>
+        {
+            "owner_only"
+        }
+        Ok(_) => "not_owner_only",
+        Err(error) if error.kind() == io::ErrorKind::NotFound => "missing",
+        Err(_) => "unreadable",
+    }
 }
 
 /// The typed refusals for a publisher's custody, in a fixed order.
 pub(super) fn custody_reasons(custody: &PrivateReadinessCustody) -> Vec<String> {
     let served = custody.published_by == "rpc_serve";
+    let no_signer = custody.validator_signer == PrivateValidatorSigner::NoSigningRole.as_str();
+    let signing = served && !no_signer;
+    let any_key_file = |state: &str| signing && custody.key_files.iter().any(|file| file == state);
     let unmet = [
         !served,
-        custody.store_backend != postfiat_storage::StorageBackendMode::Transactional.as_str(),
-        served && custody.validator_signer == PrivateValidatorSigner::PlaintextKeyFile.as_str(),
-        served && custody.key_file_owner_only.is_none(),
-        served && custody.key_file_owner_only == Some(false),
+        !custody.transactional_active,
+        served && no_signer,
+        signing && custody.validator_signer == PrivateValidatorSigner::PlaintextKeyFile.as_str(),
+        any_key_file("missing") || (signing && custody.key_files.is_empty()),
+        any_key_file("unreadable"),
+        any_key_file("not_owner_only"),
     ];
     PRIVATE_READINESS_CUSTODY_REASONS
         .into_iter()

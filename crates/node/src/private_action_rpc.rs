@@ -147,10 +147,35 @@ fn run_rpc_serve_private_action(
     }
 }
 
+/// The server signs as its validator only when it admits for finality
+/// (`--allow-mempool-submit-finality` or `--allow-private-action-admission`),
+/// with `--finality-key-file` and, when it differs,
+/// `--finality-proposal-key-file`; otherwise it has no signer.
+fn rpc_serve_readiness_service(
+    context: &RpcServeConnectionContext,
+) -> postfiat_node::PrivateReadinessService {
+    if !(context.allow_mempool_submit_finality || context.allow_private_action_admission) {
+        return postfiat_node::PrivateReadinessService {
+            key_files: Vec::new(),
+            signer: postfiat_node::PrivateValidatorSigner::NoSigningRole,
+        };
+    }
+    let mut key_files = vec![context.finality_key_file.clone()];
+    if let Some(proposal) = &context.finality_proposal_key_file {
+        if proposal != &context.finality_key_file {
+            key_files.push(proposal.clone());
+        }
+    }
+    postfiat_node::PrivateReadinessService {
+        key_files,
+        signer: postfiat_node::PrivateValidatorSigner::PlaintextKeyFile,
+    }
+}
+
 /// `private_readiness` served by rpc-serve: the admission switch is this
 /// server's own `--allow-private-action-admission` setting and the custody is
-/// its own store and `--finality-key-file` signer, never request parameters
-/// (the only parameter is the optional `pool_id`).
+/// its own store and signer, never request parameters (the only parameter is
+/// the optional `pool_id`).
 fn run_rpc_serve_private_readiness(
     request: &RpcRequest,
     context: &RpcServeConnectionContext,
@@ -178,10 +203,7 @@ fn run_rpc_serve_private_readiness(
         data_dir: context.data_dir.clone(),
         pool_id,
         admission_switch: Some(context.allow_private_action_admission),
-        service: Some(postfiat_node::PrivateReadinessService {
-            key_file: context.finality_key_file.clone(),
-            signer: postfiat_node::PrivateValidatorSigner::PlaintextKeyFile,
-        }),
+        service: Some(rpc_serve_readiness_service(context)),
     }) {
         Ok(report) => {
             let subject = if report.ready { "ready" } else { "not_ready" };
@@ -493,17 +515,36 @@ mod private_action_rpc_tests {
         assert_eq!(report["admission_switch"]["state"], "on");
         // The switch never gates readiness: `ready` is identical either way.
         assert_eq!(report["ready"], off[0].result.as_ref().unwrap()["ready"]);
-        // The served report carries the server's own custody: its store and
-        // its plaintext `--finality-key-file` signer, which never satisfies it.
+        // The served report carries the server's own custody: its plain
+        // `init` store, which is not an active transactional store, and its
+        // plaintext `--finality-key-file` signer, which never satisfies it.
+        let reasons = |report: &serde_json::Value| {
+            report["reasons"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|reason| reason.as_str().map(str::to_string))
+                .collect::<Vec<_>>()
+        };
         assert_eq!(report["custody"]["published_by"], "rpc_serve");
         assert_eq!(report["custody"]["store_backend"], "transactional");
+        assert_eq!(report["custody"]["transactional_active"], false);
         assert_eq!(report["custody"]["validator_signer"], "plaintext_key_file");
+        assert_eq!(report["custody"]["key_files"], serde_json::json!(["owner_only"]));
         assert_eq!(report["ready"], false);
-        assert!(report["reasons"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|reason| reason == "validator_signer_unsafe_file"));
+        assert_eq!(
+            reasons(report)[..2],
+            ["store_not_transactional", "validator_signer_unsafe_file"]
+        );
+        // With no finality admission flag the server signs with nothing: the
+        // signer is `none` and its key file is not read.
+        let off = off[0].result.as_ref().unwrap();
+        assert_eq!(off["custody"]["validator_signer"], "none");
+        assert_eq!(off["custody"]["key_files"], serde_json::json!([]));
+        assert_eq!(
+            reasons(off)[..2],
+            ["store_not_transactional", "validator_signer_none"]
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 
