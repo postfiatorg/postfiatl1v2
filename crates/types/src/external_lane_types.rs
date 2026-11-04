@@ -144,6 +144,9 @@ pub fn external_lane_release_cap_authority_refusal(
             "release cap amendment must declare the active validator set".to_string(),
         ));
     }
+    // `support.len()` alone is compared with the threshold: distinct in-set
+    // support is enforced by the set equality above and by the
+    // signed-authorization verification at admission.
     (amendment.quorum < threshold || amendment.support.len() < threshold).then(|| {
         (
             EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
