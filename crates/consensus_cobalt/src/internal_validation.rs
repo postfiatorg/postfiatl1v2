@@ -1504,6 +1504,15 @@ pub fn verify_governance_amendment(
     if amendment.support.len() < amendment.quorum {
         return Err("governance amendment support is below quorum".to_string());
     }
+    // A release cap amendment needs the registry threshold of its declared
+    // set (design section 5.1); admission and execution bind that set to
+    // the active registry and the lifecycle to the proposal slot.
+    if let Some((code, message)) =
+        postfiat_types::external_lane_release_cap_authority_refusal(amendment, None)
+            .or_else(|| postfiat_types::external_lane_release_cap_slot_refusal(amendment, None))
+    {
+        return Err(format!("{code}: {message}"));
+    }
 
     let expected_instance_id = governance_instance_id(
         domain,
@@ -1686,8 +1695,13 @@ fn build_cobalt_safety_witness_report(
 }
 
 fn validate_amendment_kind(kind: &str) -> Result<(), String> {
-    if let Some((code, message)) = postfiat_types::external_lane_amendment_refusal(kind) {
+    // Value 0 is in range, so this checks the kind alone; the value is
+    // checked by `validate_amendment_value`.
+    if let Some((code, message)) = postfiat_types::external_lane_amendment_refusal(kind, 0) {
         return Err(format!("{code}: {message}"));
+    }
+    if postfiat_types::external_lane_release_cap_amendment_lane(kind).is_some() {
+        return Ok(());
     }
     for (prefix, label) in [
         (
@@ -1798,6 +1812,13 @@ fn validate_amendment_kind(kind: &str) -> Result<(), String> {
 }
 
 fn validate_amendment_value(kind: &str, value: u32) -> Result<(), String> {
+    if let Some((code, message)) = postfiat_types::external_lane_amendment_refusal(kind, value) {
+        return Err(format!("{code}: {message}"));
+    }
+    if postfiat_types::external_lane_release_cap_amendment_lane(kind).is_some() {
+        // A cap of zero halts the lane's releases (design section 5.1).
+        return Ok(());
+    }
     if kind.starts_with(FASTPAY_RECOVERY_GOVERNANCE_KIND_PREFIX_V1) {
         return if value == FASTPAY_RECOVERY_GOVERNANCE_VERSION_V1 {
             Ok(())

@@ -1148,6 +1148,14 @@ pub fn ratify_governance_amendment_with_lifecycle(
             .collect(),
         signed_authorizations: Vec::new(),
     })
+    .and_then(|amendment| {
+        match postfiat_types::external_lane_release_cap_authority_refusal(&amendment, None)
+            .or_else(|| postfiat_types::external_lane_release_cap_slot_refusal(&amendment, None))
+        {
+            Some((code, message)) => Err(format!("{code}: {message}")),
+            None => Ok(amendment),
+        }
+    })
 }
 
 pub fn certify_validator_set(

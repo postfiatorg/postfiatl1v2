@@ -20,11 +20,12 @@ use postfiat_bridge::{
 };
 use postfiat_crypto_provider::{bytes_to_hex, hex_to_bytes};
 use postfiat_types::{
-    EthereumExternalEventProofV1, ExternalLaneReleaseOperationV1, ExternalLaneReleaseRecord,
-    FastSwapChainDomainV1, FastSwapCommitteeRootV1, FastSwapCommitteeV1, FastSwapOpaqueHashV1,
-    Genesis, GenesisExternalLane, LedgerState, EXTERNAL_LANE_CHECKPOINT_MISMATCH,
-    EXTERNAL_LANE_COMMITTEE_MISSING, EXTERNAL_LANE_LOCK_MISMATCH, EXTERNAL_LANE_NOT_CONFIGURED,
-    EXTERNAL_LANE_PROOF_INVALID, EXTERNAL_LANE_SOURCE_MISMATCH,
+    EthereumExternalEventProofV1, ExternalLaneReleaseCaps, ExternalLaneReleaseOperationV1,
+    ExternalLaneReleaseRecord, FastSwapChainDomainV1, FastSwapCommitteeRootV1, FastSwapCommitteeV1,
+    FastSwapOpaqueHashV1, Genesis, GenesisExternalLane, LedgerState,
+    EXTERNAL_LANE_CHECKPOINT_MISMATCH, EXTERNAL_LANE_COMMITTEE_MISSING,
+    EXTERNAL_LANE_LOCK_MISMATCH, EXTERNAL_LANE_NOT_CONFIGURED, EXTERNAL_LANE_PROOF_INVALID,
+    EXTERNAL_LANE_SOURCE_MISMATCH,
 };
 
 type ExecutionError = (&'static str, String);
@@ -279,6 +280,7 @@ pub(crate) fn execute_external_lane_release(
     ledger: &mut LedgerState,
     operation: &ExternalLaneReleaseOperationV1,
     block_height: u64,
+    caps: ExternalLaneReleaseCaps,
 ) -> Result<(), ExecutionError> {
     let claim = ExternalLockClaim {
         lane_id: &operation.lane_id,
@@ -289,14 +291,17 @@ pub(crate) fn execute_external_lane_release(
         recipient: &operation.recipient,
     };
     let lock = verify_external_lane_lock(genesis, ledger, &claim, &operation.proof)?;
-    apply_external_lane_release(genesis, ledger, lock, block_height)
+    apply_external_lane_release(genesis, ledger, lock, block_height, caps)
 }
 
+/// Applies a verified Lock under the lane's window cap at `block_height`: the
+/// genesis cap, or the one its committed cap amendments set (`caps`).
 pub(crate) fn apply_external_lane_release(
     genesis: &Genesis,
     ledger: &mut LedgerState,
     lock: VerifiedExternalLock,
     block_height: u64,
+    caps: ExternalLaneReleaseCaps,
 ) -> Result<(), ExecutionError> {
     let lane = configured_lane(genesis, &lock.lane_id)?;
     let state_index = ledger
@@ -310,11 +315,18 @@ pub(crate) fn apply_external_lane_release(
             )
         })?;
     require_lane_source(lane, lock.source_chain_id, &lock.lock_contract_address)?;
-    ledger.external_lanes[state_index].check_release(
+    let lane_index = genesis
+        .external_lanes()
+        .iter()
+        .position(|configured| configured.id == lane.id)
+        .unwrap_or(usize::MAX);
+    let cap_atoms = lane.window_cap_atoms_for_bps(caps.cap_bps_at(lane_index, lane, block_height));
+    ledger.external_lanes[state_index].check_release_capped(
         lane,
         lock.lock_nonce,
         lock.amount_atoms,
         block_height,
+        cap_atoms,
     )?;
     let recipient_balance = ledger
         .account(&lock.recipient)
@@ -329,7 +341,7 @@ pub(crate) fn apply_external_lane_release(
     if let Some(message) = crate::account_reserve_violation(&lock.recipient, recipient_balance) {
         return Err(("below_account_reserve", message));
     }
-    ledger.external_lanes[state_index].apply_release(
+    ledger.external_lanes[state_index].apply_release_capped(
         lane,
         ExternalLaneReleaseRecord {
             lock_nonce: lock.lock_nonce,
@@ -341,6 +353,7 @@ pub(crate) fn apply_external_lane_release(
             source_block_hash: lock.source_block_hash,
             released_at_height: block_height,
         },
+        cap_atoms,
     )?;
     ledger.ensure_account(&lock.recipient).balance = recipient_balance;
     Ok(())
@@ -351,7 +364,7 @@ mod tests {
     use super::*;
     use crate::ACCOUNT_RESERVE;
     use postfiat_types::{
-        Account, GenesisExternalLane, GenesisExternalLanePolicy,
+        Account, ExternalLaneReleaseCapAmendment, GenesisExternalLane, GenesisExternalLanePolicy,
         EXTERNAL_LANE_NONCE_ALREADY_RELEASED, EXTERNAL_LANE_REMAINDER_EXCEEDED,
         EXTERNAL_LANE_WINDOW_CAP_EXCEEDED,
     };
@@ -421,8 +434,14 @@ mod tests {
         let mut ledger = lane_ledger(&genesis);
         let supply = live_native(&ledger);
         let amount = ACCOUNT_RESERVE + 1_000;
-        apply_external_lane_release(&genesis, &mut ledger, lock(4, amount, "holder"), 10)
-            .expect("release");
+        apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(4, amount, "holder"),
+            10,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .expect("release");
         assert_eq!(ledger.account("holder").expect("created").balance, amount);
         let lane = &ledger.external_lanes[0];
         assert_eq!(lane.released_atoms, amount);
@@ -436,9 +455,14 @@ mod tests {
             .expect("recorded release");
 
         let before = ledger.clone();
-        let (code, _) =
-            apply_external_lane_release(&genesis, &mut ledger, lock(4, amount, "holder"), 11)
-                .unwrap_err();
+        let (code, _) = apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(4, amount, "holder"),
+            11,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .unwrap_err();
         assert_eq!(code, EXTERNAL_LANE_NONCE_ALREADY_RELEASED);
         assert_eq!(ledger, before);
     }
@@ -450,7 +474,14 @@ mod tests {
         let before = ledger.clone();
         let mut other = lock(1, ACCOUNT_RESERVE, "holder");
         other.lane_id = "other-lane".to_string();
-        let (code, _) = apply_external_lane_release(&genesis, &mut ledger, other, 1).unwrap_err();
+        let (code, _) = apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            other,
+            1,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .unwrap_err();
         assert_eq!(code, EXTERNAL_LANE_NOT_CONFIGURED);
         // A chain whose genesis has no lanes refuses every release.
         let laneless = Genesis::new("postfiat-laneless");
@@ -459,6 +490,7 @@ mod tests {
             &mut ledger,
             lock(1, ACCOUNT_RESERVE, "holder"),
             1,
+            ExternalLaneReleaseCaps::genesis(),
         )
         .unwrap_err();
         assert_eq!(code, EXTERNAL_LANE_NOT_CONFIGURED);
@@ -470,8 +502,14 @@ mod tests {
         ] {
             let mut foreign = lock(1, ACCOUNT_RESERVE, "holder");
             edit(&mut foreign);
-            let (code, _) =
-                apply_external_lane_release(&genesis, &mut ledger, foreign, 1).unwrap_err();
+            let (code, _) = apply_external_lane_release(
+                &genesis,
+                &mut ledger,
+                foreign,
+                1,
+                ExternalLaneReleaseCaps::genesis(),
+            )
+            .unwrap_err();
             assert_eq!(code, EXTERNAL_LANE_SOURCE_MISMATCH);
         }
         assert_eq!(ledger, before);
@@ -483,25 +521,130 @@ mod tests {
         let cap = genesis.external_lanes()[0].window_cap_atoms();
         let mut ledger = lane_ledger(&genesis);
         let before = ledger.clone();
-        let (code, _) =
-            apply_external_lane_release(&genesis, &mut ledger, lock(1, cap + 1, "holder"), 5)
-                .unwrap_err();
+        let (code, _) = apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(1, cap + 1, "holder"),
+            5,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .unwrap_err();
         assert_eq!(code, EXTERNAL_LANE_WINDOW_CAP_EXCEEDED);
         assert_eq!(ledger, before);
-        let (code, _) =
-            apply_external_lane_release(&genesis, &mut ledger, lock(1, RESERVED, "holder"), 5)
-                .unwrap_err();
+        let (code, _) = apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(1, RESERVED, "holder"),
+            5,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .unwrap_err();
         assert_eq!(code, EXTERNAL_LANE_REMAINDER_EXCEEDED);
         assert_eq!(ledger, before);
         // The capped nonce is released later in a fresh window, in two parts.
-        apply_external_lane_release(&genesis, &mut ledger, lock(1, cap, "holder"), 5)
-            .expect("full window");
-        let (code, _) =
-            apply_external_lane_release(&genesis, &mut ledger, lock(2, 1, "holder"), 99)
-                .unwrap_err();
+        apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(1, cap, "holder"),
+            5,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .expect("full window");
+        let (code, _) = apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(2, 1, "holder"),
+            99,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .unwrap_err();
         assert_eq!(code, EXTERNAL_LANE_WINDOW_CAP_EXCEEDED);
-        apply_external_lane_release(&genesis, &mut ledger, lock(2, 1, "holder"), 100)
-            .expect("next window");
+        apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(2, 1, "holder"),
+            100,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .expect("next window");
+    }
+
+    /// Caps of the test lane under `amendments` (window 100 blocks, genesis
+    /// cap 200 bps of `RESERVED / 2`).
+    fn amended_caps(genesis: &Genesis, amendments: &[(u32, u64)]) -> ExternalLaneReleaseCaps {
+        let amendments = amendments
+            .iter()
+            .enumerate()
+            .map(
+                |(index, (cap_bps, committed_height))| ExternalLaneReleaseCapAmendment {
+                    amendment_id: format!("cap-{index}"),
+                    cap_bps: *cap_bps,
+                    committed_height: *committed_height,
+                },
+            )
+            .collect::<Vec<_>>();
+        ExternalLaneReleaseCaps::from_amendments(genesis.external_lanes(), |_| amendments.clone())
+    }
+
+    #[test]
+    fn external_lane_release_applies_the_amended_cap() {
+        let genesis = lane_genesis();
+        let lane = &genesis.external_lanes()[0];
+        let lower = lane.window_cap_atoms_for_bps(50);
+        let mut ledger = lane_ledger(&genesis);
+        // Lowered to 50 bps at height 10: above it is refused, unchanged.
+        let caps = amended_caps(&genesis, &[(50, 10)]);
+        let before = ledger.clone();
+        let (code, _) = apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(1, lower + 1, "holder"),
+            10,
+            caps,
+        )
+        .unwrap_err();
+        assert_eq!(code, EXTERNAL_LANE_WINDOW_CAP_EXCEEDED);
+        assert_eq!(ledger, before);
+        apply_external_lane_release(&genesis, &mut ledger, lock(1, lower, "holder"), 10, caps)
+            .expect("release at the lowered cap");
+
+        // Raised to 400 bps at height 150: the lowered cap holds until 850.
+        let caps = amended_caps(&genesis, &[(50, 10), (400, 150)]);
+        let raised = lane.window_cap_atoms_for_bps(400);
+        let before = ledger.clone();
+        let (code, _) = apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(2, lower + 1, "holder"),
+            849,
+            caps,
+        )
+        .unwrap_err();
+        assert_eq!(code, EXTERNAL_LANE_WINDOW_CAP_EXCEEDED);
+        assert_eq!(ledger, before);
+        apply_external_lane_release(&genesis, &mut ledger, lock(2, raised, "holder"), 850, caps)
+            .expect("release at the raised cap");
+    }
+
+    #[test]
+    fn external_lane_release_cap_of_zero_refuses_every_release() {
+        let genesis = lane_genesis();
+        let mut ledger = lane_ledger(&genesis);
+        let caps = amended_caps(&genesis, &[(0, 1)]);
+        let before = ledger.clone();
+        for (nonce, amount, height) in [(1, ACCOUNT_RESERVE, 1), (2, 1, 500), (3, 1, 100_000)] {
+            let (code, _) = apply_external_lane_release(
+                &genesis,
+                &mut ledger,
+                lock(nonce, amount, "holder"),
+                height,
+                caps,
+            )
+            .unwrap_err();
+            assert_eq!(code, EXTERNAL_LANE_WINDOW_CAP_EXCEEDED);
+        }
+        assert_eq!(ledger, before);
+        assert_eq!(live_native(&ledger), live_native(&before));
     }
 
     #[test]
@@ -510,17 +653,28 @@ mod tests {
         let mut ledger = lane_ledger(&genesis);
         let before = ledger.clone();
         let small = ACCOUNT_RESERVE - 1;
-        let (code, _) =
-            apply_external_lane_release(&genesis, &mut ledger, lock(1, small, "fresh"), 1)
-                .unwrap_err();
+        let (code, _) = apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(1, small, "fresh"),
+            1,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .unwrap_err();
         assert_eq!(code, "below_account_reserve");
         assert_eq!(ledger, before, "the nonce stays unused");
 
         // The same amount to an existing funded account is released.
         ledger.ensure_account("funded").balance = ACCOUNT_RESERVE;
         ledger.accounts[0].balance -= ACCOUNT_RESERVE;
-        apply_external_lane_release(&genesis, &mut ledger, lock(2, small, "funded"), 1)
-            .expect("release below the reserve to a funded account");
+        apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(2, small, "funded"),
+            1,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .expect("release below the reserve to a funded account");
         assert_eq!(
             ledger.account("funded").expect("funded").balance,
             ACCOUNT_RESERVE + small
@@ -529,8 +683,14 @@ mod tests {
         // Once the fresh account exists, the refused Lock is retried and passes.
         ledger.ensure_account("fresh").balance = ACCOUNT_RESERVE;
         ledger.accounts[0].balance -= ACCOUNT_RESERVE;
-        apply_external_lane_release(&genesis, &mut ledger, lock(1, small, "fresh"), 2)
-            .expect("retry after the account exists");
+        apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(1, small, "fresh"),
+            2,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .expect("retry after the account exists");
         ledger.external_lanes[0]
             .validate_against_genesis(&genesis.external_lanes()[0])
             .expect("recorded releases");
@@ -784,7 +944,14 @@ mod proof_tests {
             assert_eq!(verified.source_block_number, 500);
             assert_eq!(verified.source_block_hash, format!("0x{}", "6f".repeat(32)));
             let mut ledger = fx.ledger.clone();
-            apply_external_lane_release(&fx.genesis, &mut ledger, verified, 3).expect("release");
+            apply_external_lane_release(
+                &fx.genesis,
+                &mut ledger,
+                verified,
+                3,
+                ExternalLaneReleaseCaps::genesis(),
+            )
+            .expect("release");
             assert_eq!(ledger.account(RECIPIENT).expect("recipient").balance, 1_000);
         }
     }

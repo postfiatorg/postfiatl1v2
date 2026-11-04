@@ -1358,7 +1358,12 @@ fn validate_history_checkpoint_state(
             ),
         ));
     }
-    validate_external_lanes_match_genesis(&genesis, &checkpoint.ledger, "history checkpoint")?;
+    validate_external_lanes_match_genesis(
+        &genesis,
+        &checkpoint.ledger,
+        &checkpoint.governance,
+        "history checkpoint",
+    )?;
     validate_validator_registry_for_count(
         &checkpoint.validator_registry,
         checkpoint.governance.active_validator_count,
@@ -1372,9 +1377,13 @@ fn validate_history_checkpoint_state(
 /// window fields follow from the recorded heights within the cap. The
 /// aggregate conservation check cannot see lane atoms moved to an account,
 /// so this rule is separate.
+/// Each ledger lane must be its genesis lane plus its recorded releases, with
+/// every window within the cap active at its heights under `governance`'s
+/// committed cap amendments.
 pub(super) fn validate_external_lanes_match_genesis(
     genesis: &Genesis,
     ledger: &LedgerState,
+    governance: &GovernanceState,
     label: &str,
 ) -> io::Result<()> {
     let refuse = |message: String| io::Error::new(io::ErrorKind::InvalidData, message);
@@ -1397,8 +1406,11 @@ pub(super) fn validate_external_lanes_match_genesis(
                 lane.lane_id
             )));
         }
-        lane.validate_against_genesis(genesis_lane)
-            .map_err(|error| refuse(format!("{label} {error}")))?;
+        lane.validate_against_genesis_with_caps(
+            genesis_lane,
+            &governance.external_lane_release_cap_amendments(&lane.lane_id),
+        )
+        .map_err(|error| refuse(format!("{label} {error}")))?;
     }
     if let Some(missing) = expected.keys().find(|id| !seen.contains(id.as_str())) {
         return Err(refuse(format!(

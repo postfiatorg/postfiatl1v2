@@ -431,14 +431,14 @@ fn external_lane_release_refuses_past_the_record_ceiling_without_mutation() {
     let lane = release_test_lane();
     let mut state = ExternalLaneState::genesis(&lane);
     state
-        .apply_release_within(&lane, sample_release(0, 10, 5), 2)
+        .apply_release_within(&lane, sample_release(0, 10, 5), lane.window_cap_atoms(), 2)
         .expect("first record");
     state
-        .apply_release_within(&lane, sample_release(1, 10, 6), 2)
+        .apply_release_within(&lane, sample_release(1, 10, 6), lane.window_cap_atoms(), 2)
         .expect("second record");
     let before = state.clone();
     let (code, message) = state
-        .apply_release_within(&lane, sample_release(2, 10, 7), 2)
+        .apply_release_within(&lane, sample_release(2, 10, 7), lane.window_cap_atoms(), 2)
         .unwrap_err();
     assert_eq!(code, EXTERNAL_LANE_RELEASE_RECORDS_FULL, "{message}");
     assert_eq!(state, before, "a refused release leaves the lane untouched");
@@ -713,6 +713,204 @@ fn external_lane_release_history_root_binds_every_record() {
     assert!(error.contains("release history root"), "{error}");
 }
 
+fn cap_amendment(id: &str, cap_bps: u32, committed_height: u64) -> ExternalLaneReleaseCapAmendment {
+    ExternalLaneReleaseCapAmendment {
+        amendment_id: id.to_string(),
+        cap_bps,
+        committed_height,
+    }
+}
+
+/// The cap in force at `height` (window 100 blocks, genesis cap 200 bps).
+fn cap_at(amendments: &[ExternalLaneReleaseCapAmendment], height: u64) -> u32 {
+    release_test_lane()
+        .release_cap_schedule_at(amendments, height)
+        .active_cap_bps
+}
+
+#[test]
+fn release_cap_without_amendments_is_the_genesis_cap() {
+    let lane = release_test_lane();
+    let schedule = lane.release_cap_schedule_at(&[], 1_000_000);
+    assert_eq!(schedule.active_cap_bps, 200);
+    assert_eq!((schedule.active, schedule.pending), (None, None));
+    assert_eq!(lane.window_cap_atoms_for_bps(schedule.active_cap_bps), 200);
+    assert_eq!(lane.window_cap_atoms_for_bps(0), 0);
+}
+
+#[test]
+fn lower_release_cap_applies_from_its_activation_height() {
+    let lower = [cap_amendment("lower", 50, 250)];
+    assert_eq!(cap_at(&lower, 249), 200);
+    assert_eq!(cap_at(&lower, 250), 50);
+    assert_eq!(cap_at(&lower, 251), 50);
+    let schedule = release_test_lane().release_cap_schedule_at(&lower, 250);
+    assert_eq!(
+        schedule.active,
+        Some(ExternalLaneReleaseCapChange {
+            amendment_id: "lower".to_string(),
+            cap_bps: 50,
+            effective_height: 250,
+        })
+    );
+    assert_eq!(schedule.pending, None);
+    // A zero cap halts every window from its activation height.
+    let zero = [cap_amendment("zero", 0, 250)];
+    assert_eq!(cap_at(&zero, 250), 0);
+    assert_eq!(cap_at(&zero, 10_000), 0);
+}
+
+#[test]
+fn higher_release_cap_applies_seven_windows_after_it_commits() {
+    // Committed at 250, the raise takes effect at 250 + 7 × 100 = 950.
+    let raise = [cap_amendment("raise", 500, 250)];
+    assert_eq!(EXTERNAL_LANE_RELEASE_CAP_RAISE_DELAY_WINDOWS, 7);
+    assert_eq!(cap_at(&raise, 250), 200);
+    assert_eq!(cap_at(&raise, 949), 200);
+    assert_eq!(cap_at(&raise, 950), 500);
+    let lane = release_test_lane();
+    // The window before the delay ends still holds the old cap.
+    assert_eq!(lane.window_index_at(949), 9);
+    let pending = lane.release_cap_schedule_at(&raise, 949);
+    assert_eq!((pending.active_cap_bps, pending.active), (200, None));
+    assert_eq!(
+        pending.pending,
+        Some(ExternalLaneReleaseCapChange {
+            amendment_id: "raise".to_string(),
+            cap_bps: 500,
+            effective_height: 950,
+        })
+    );
+    let applied = lane.release_cap_schedule_at(&raise, 950);
+    assert_eq!(applied.active_cap_bps, 500);
+    assert_eq!(applied.active.map(|change| change.effective_height), Some(950));
+    assert_eq!(applied.pending, None);
+    // Before the amendment commits, nothing of it shows.
+    assert_eq!(lane.release_cap_schedule_at(&raise, 249).pending, None);
+}
+
+#[test]
+fn latest_applied_release_cap_amendment_wins() {
+    // Two lowers in one window: the later one holds from its height.
+    let two_lowers = [cap_amendment("a", 150, 210), cap_amendment("b", 100, 260)];
+    assert_eq!(cap_at(&two_lowers, 209), 200);
+    assert_eq!(cap_at(&two_lowers, 210), 150);
+    assert_eq!(cap_at(&two_lowers, 260), 100);
+    // A later amendment back up is a raise against the cap in force.
+    let lower_then_raise = [cap_amendment("a", 50, 210), cap_amendment("b", 150, 260)];
+    assert_eq!(cap_at(&lower_then_raise, 959), 50);
+    assert_eq!(cap_at(&lower_then_raise, 960), 150);
+    // Ties at one height follow commit order.
+    let tie = [cap_amendment("a", 50, 300), cap_amendment("b", 120, 300)];
+    assert_eq!(cap_at(&tie, 300), 50, "b raises against a, so it waits");
+    assert_eq!(cap_at(&tie, 1_000), 120);
+    let tie = [cap_amendment("a", 120, 300), cap_amendment("b", 50, 300)];
+    assert_eq!(cap_at(&tie, 300), 50);
+    assert_eq!(cap_at(&tie, 1_000), 50);
+}
+
+#[test]
+fn lower_release_cap_after_a_pending_raise_cancels_the_raise() {
+    // The raise commits at 250 (effective 950); a zero cap commits at 400,
+    // before the raise took effect, and holds past 950.
+    let amendments = [cap_amendment("raise", 500, 250), cap_amendment("halt", 0, 400)];
+    assert_eq!(cap_at(&amendments, 399), 200);
+    assert_eq!(cap_at(&amendments, 400), 0);
+    assert_eq!(cap_at(&amendments, 950), 0);
+    let schedule = release_test_lane().release_cap_schedule_at(&amendments, 950);
+    assert_eq!(schedule.active.map(|change| change.amendment_id), Some("halt".to_string()));
+    assert_eq!(schedule.pending, None);
+    // A second raise while one is pending replaces it and restarts the delay.
+    let two_raises = [cap_amendment("r1", 500, 250), cap_amendment("r2", 300, 400)];
+    assert_eq!(cap_at(&two_raises, 950), 200);
+    assert_eq!(cap_at(&two_raises, 1_099), 200);
+    assert_eq!(cap_at(&two_raises, 1_100), 300);
+    // A raise already in effect is not cancelled by a later amendment.
+    let applied_then_lower = [cap_amendment("r1", 500, 250), cap_amendment("l", 300, 960)];
+    assert_eq!(cap_at(&applied_then_lower, 959), 500);
+    assert_eq!(cap_at(&applied_then_lower, 960), 300);
+}
+
+#[test]
+fn release_cap_rule_matches_the_schedule_past_the_last_commit() {
+    let lane = release_test_lane();
+    let amendments = [cap_amendment("lower", 50, 210), cap_amendment("raise", 400, 300)];
+    let rule = lane.release_cap_rule(&amendments);
+    for height in [300, 999, 1_000, 5_000] {
+        assert_eq!(
+            rule.cap_bps_at(height),
+            lane.release_cap_schedule_at(&amendments, height).active_cap_bps,
+            "{height}"
+        );
+    }
+    assert_eq!(rule.cap_bps_at(999), 50);
+    assert_eq!(rule.cap_bps_at(1_000), 400);
+    assert_eq!(lane.release_cap_rule(&[]).cap_bps_at(0), 200);
+}
+
+#[test]
+fn genesis_refuses_more_external_lanes_than_the_cap_table_holds() {
+    let lanes = |count: usize| {
+        (0..count)
+            .map(|index| sample_external_lane_on(&format!("lane-{index}"), 1_000, &format!("{:02x}", 0x10 + index)))
+            .collect::<Vec<_>>()
+    };
+    validate_genesis_external_lanes(&lanes(EXTERNAL_LANE_MAX_LANES), GENESIS_NATIVE_SUPPLY_ATOMS)
+        .expect("eight lanes");
+    let error =
+        validate_genesis_external_lanes(&lanes(EXTERNAL_LANE_MAX_LANES + 1), GENESIS_NATIVE_SUPPLY_ATOMS)
+            .unwrap_err();
+    assert!(error.contains("above the maximum 8"), "{error}");
+}
+
+#[test]
+fn recorded_windows_are_checked_against_the_cap_active_at_their_heights() {
+    let lane = release_test_lane();
+    // Lowered to 50 bps (50 atoms) at 120; raised to 400 bps (400 atoms) at
+    // 300, effective at 1_000.
+    let amendments = [cap_amendment("lower", 50, 120), cap_amendment("raise", 400, 300)];
+    let mut state = ExternalLaneState::genesis(&lane);
+    state
+        .apply_release_capped(&lane, sample_release(0, 150, 110), 200)
+        .expect("genesis cap before the lowering");
+    state
+        .apply_release_capped(&lane, sample_release(1, 50, 250), 50)
+        .expect("lowered cap");
+    state
+        .apply_release_capped(&lane, sample_release(2, 400, 1_000), 400)
+        .expect("raised cap after the delay");
+    state
+        .validate_against_genesis_with_caps(&lane, &amendments)
+        .expect("each window within the cap active at its heights");
+    // Without the raise the window of height 1_000 is above the cap.
+    let error = state
+        .validate_against_genesis_with_caps(&lane, &amendments[..1])
+        .unwrap_err();
+    assert!(error.contains("above the cap 50"), "{error}");
+    // A window above the lowered cap is refused even though the genesis cap holds it.
+    let mut over = ExternalLaneState::genesis(&lane);
+    over.apply_release_capped(&lane, sample_release(0, 60, 130), 200)
+        .expect("written past the lowered cap");
+    over.validate_against_genesis(&lane).expect("within the genesis cap");
+    let error = over
+        .validate_against_genesis_with_caps(&lane, &amendments)
+        .unwrap_err();
+    assert!(error.contains("above the cap 50"), "{error}");
+    // A lowering in the middle of a window: releases before it count under the old cap.
+    let mid = [cap_amendment("mid", 50, 150)];
+    let mut split = ExternalLaneState::genesis(&lane);
+    split
+        .apply_release_capped(&lane, sample_release(0, 100, 140), 200)
+        .expect("before the lowering");
+    split
+        .validate_against_genesis_with_caps(&lane, &mid)
+        .expect("released before the lowering");
+    split
+        .apply_release_capped(&lane, sample_release(1, 1, 150), 200)
+        .expect("forged past the lowered cap");
+    assert!(split.validate_against_genesis_with_caps(&lane, &mid).is_err());
+}
+
 /// The lane of `release_test_lane` after one release per height, nonce `i`
 /// for the `i`-th height, 10 atoms each.
 fn lane_after_releases(lane: &GenesisExternalLane, heights: &[u64]) -> ExternalLaneState {
@@ -788,7 +986,7 @@ fn external_lane_releases_past_the_record_ceiling_with_pruning_are_admitted() {
     let mut state = ExternalLaneState::genesis(&lane);
     for nonce in 0..20_u64 {
         state
-            .apply_release_within(&lane, sample_release(nonce, 10, 5 + nonce * 100), 2)
+            .apply_release_within(&lane, sample_release(nonce, 10, 5 + nonce * 100), lane.window_cap_atoms(), 2)
             .expect("pruning keeps the lane below the ceiling");
         assert!(state.releases.len() <= 2);
     }
@@ -883,4 +1081,99 @@ fn pruned_external_lane_commits_its_pruned_fields() {
     let json = serde_json::to_string(&pruned).expect("json");
     let decoded: ExternalLaneState = serde_json::from_str(&json).expect("decode");
     assert_eq!(decoded, pruned);
+}
+
+#[test]
+fn cap_table_halts_a_lane_it_cannot_hold() {
+    let lane = release_test_lane();
+    let caps = ExternalLaneReleaseCaps::genesis();
+    assert_eq!(caps.cap_bps_at(EXTERNAL_LANE_MAX_LANES - 1, &lane, 10), 200);
+    assert_eq!(caps.cap_bps_at(EXTERNAL_LANE_MAX_LANES, &lane, 10), 0);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "exceed the cap table")]
+fn cap_table_refuses_more_lanes_than_it_holds() {
+    let lanes = (0..=EXTERNAL_LANE_MAX_LANES)
+        .map(|index| sample_external_lane_on(&format!("lane-{index}"), 1_000, &format!("{:02x}", 0x10 + index)))
+        .collect::<Vec<_>>();
+    let _ = ExternalLaneReleaseCaps::from_amendments(&lanes, |_| Vec::new());
+}
+
+fn cap_amendment_by(validators: &[&str], quorum: usize, support: &[&str], slot: u64) -> GovernanceAmendment {
+    let ids = |names: &[&str]| names.iter().map(|name| name.to_string()).collect::<Vec<_>>();
+    GovernanceAmendment {
+        amendment_id: "cap".to_string(),
+        chain_id: "chain".to_string(),
+        genesis_hash: "hash".to_string(),
+        protocol_version: 1,
+        instance_id: "instance".to_string(),
+        proposal_id: "proposal".to_string(),
+        certificate_id: "certificate".to_string(),
+        proposer: validators[0].to_string(),
+        validators: ids(validators),
+        quorum,
+        kind: external_lane_release_cap_amendment_kind("base-erc20"),
+        value: 0,
+        activation_height: slot,
+        veto_until_height: 0,
+        paused: false,
+        support: ids(support),
+        votes: Vec::new(),
+        signed_authorizations: Vec::new(),
+    }
+}
+
+#[test]
+fn cap_amendment_needs_the_registry_threshold_of_the_active_set() {
+    let six = ["v0", "v1", "v2", "v3", "v4", "v5"];
+    let active = six.iter().map(|name| name.to_string()).collect::<Vec<_>>();
+    assert_eq!(external_lane_release_cap_threshold(6), 5);
+    assert_eq!(external_lane_release_cap_threshold(4), 3);
+    let refusal = |amendment: &GovernanceAmendment| {
+        external_lane_release_cap_authority_refusal(amendment, Some(&active)).map(|(code, _)| code)
+    };
+    let authority = Some(EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID);
+    assert_eq!(refusal(&cap_amendment_by(&six, 1, &six[..1], 9)), authority, "quorum 1");
+    assert_eq!(refusal(&cap_amendment_by(&six, 4, &six[..4], 9)), authority, "below the threshold");
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..4], 9)), authority, "support below");
+    assert_eq!(refusal(&cap_amendment_by(&six[..5], 5, &six[..5], 9)), authority, "an active validator omitted");
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 9)), None, "the threshold");
+    assert_eq!(refusal(&cap_amendment_by(&six, 6, &six, 9)), None, "all six");
+    // Without a registry the declared set is the reference.
+    let declared = cap_amendment_by(&six[..3], 3, &six[..3], 9);
+    assert_eq!(external_lane_release_cap_authority_refusal(&declared, None), None);
+    let mut other = declared.clone();
+    other.kind = "orchard_pool_pause".to_string();
+    other.quorum = 1;
+    assert_eq!(external_lane_release_cap_authority_refusal(&other, Some(&active)), None);
+}
+
+#[test]
+fn cap_amendment_names_its_proposal_slot() {
+    let six = ["v0", "v1", "v2", "v3", "v4", "v5"];
+    let refusal = |amendment: &GovernanceAmendment, slot| {
+        external_lane_release_cap_slot_refusal(amendment, slot).map(|(code, _)| code)
+    };
+    let invalid = Some(EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID);
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 9), Some(9)), None);
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 9), None), None);
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 0), None), invalid, "immediate lifecycle");
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 8), Some(9)), invalid, "another slot");
+    let mut paused = cap_amendment_by(&six, 5, &six[..5], 9);
+    paused.paused = true;
+    assert_eq!(refusal(&paused, Some(9)), invalid, "paused");
+}
+
+#[test]
+fn cap_amendment_for_a_lane_genesis_does_not_configure_is_refused() {
+    let lanes = ["base-erc20"];
+    let refusal = |kind: &str| external_lane_release_cap_lane_refusal(kind, lanes.into_iter()).map(|(code, _)| code);
+    assert_eq!(
+        refusal(&external_lane_release_cap_amendment_kind("not-a-lane")),
+        Some(EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED)
+    );
+    assert_eq!(refusal(&external_lane_release_cap_amendment_kind("base-erc20")), None);
+    assert_eq!(refusal("orchard_pool_pause"), None);
 }
