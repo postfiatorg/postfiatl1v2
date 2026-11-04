@@ -502,6 +502,7 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
             governance.asset_orchard_pricing_enforcement_activation_height(),
             governance.asset_orchard_pricing_max_nav_age_blocks(),
         )
+        .with_external_lane_release_caps(governance.external_lane_release_caps(genesis))
 }
 
 pub(super) fn asset_execution_compatibility_with_chain_activation(
@@ -530,6 +531,7 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
             governance.asset_orchard_pricing_enforcement_activation_height(),
             governance.asset_orchard_pricing_max_nav_age_blocks(),
         )
+        .with_external_lane_release_caps(governance.external_lane_release_caps(genesis))
 }
 
 pub(super) fn ensure_atomic_swap_batch_allowed(

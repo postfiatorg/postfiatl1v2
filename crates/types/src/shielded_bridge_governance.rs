@@ -1566,6 +1566,36 @@ impl GovernanceState {
         Ok(amendment)
     }
 
+    /// The committed cap amendments of an external lane, in commit order,
+    /// each with the height governance applied it (its activation record).
+    pub fn external_lane_release_cap_amendments(
+        &self,
+        lane_id: &str,
+    ) -> Vec<crate::ExternalLaneReleaseCapAmendment> {
+        self.amendments
+            .iter()
+            .filter(|amendment| {
+                crate::external_lane_release_cap_amendment_lane(&amendment.kind) == Some(lane_id)
+            })
+            .map(|amendment| crate::ExternalLaneReleaseCapAmendment {
+                amendment_id: amendment.amendment_id.clone(),
+                cap_bps: amendment.value,
+                committed_height: self
+                    .amendment_activation_records
+                    .iter()
+                    .find(|record| record.amendment_id == amendment.amendment_id)
+                    .map_or(0, |record| record.activated_height),
+            })
+            .collect()
+    }
+
+    /// The governed release cap table of `genesis`'s external lanes.
+    pub fn external_lane_release_caps(&self, genesis: &crate::Genesis) -> crate::ExternalLaneReleaseCaps {
+        crate::ExternalLaneReleaseCaps::from_amendments(genesis.external_lanes(), |lane_id| {
+            self.external_lane_release_cap_amendments(lane_id)
+        })
+    }
+
     pub fn yolo_target_activation_height(&self) -> Option<u64> {
         self.amendments.iter().rev()
             .find(|a| a.kind == GOVERNANCE_KIND_YOLO_TARGET_ACTIVATION_HEIGHT)

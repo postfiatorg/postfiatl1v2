@@ -8,6 +8,9 @@
 
 pub const EXTERNAL_LANE_ID_MAX_BYTES: usize = 32;
 pub const EXTERNAL_LANE_RELEASE_CAP_BPS_MAX: u32 = 10_000;
+/// Lanes one genesis may configure: execution rules carry each lane's
+/// governed release cap in a fixed table of this size.
+pub const EXTERNAL_LANE_MAX_LANES: usize = 8;
 /// Hard ceiling on the release records one lane stores: under 400 bytes of
 /// JSON each, so under 400 MB, and one SHA3-384 step each when a replay base
 /// is checked. It is far above any expected release volume (each record costs
@@ -221,6 +224,54 @@ impl ExternalLaneReleaseCapRule {
     }
 }
 
+/// The governed release cap of each genesis lane, by its index in the
+/// genesis list; a lane without a committed cap amendment keeps its genesis
+/// cap. Built from governance, carried by the execution rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExternalLaneReleaseCaps {
+    rules: [Option<ExternalLaneReleaseCapRule>; EXTERNAL_LANE_MAX_LANES],
+}
+
+impl Default for ExternalLaneReleaseCaps {
+    fn default() -> Self {
+        Self::genesis()
+    }
+}
+
+impl ExternalLaneReleaseCaps {
+    /// Every lane at its genesis cap.
+    pub const fn genesis() -> Self {
+        Self {
+            rules: [None; EXTERNAL_LANE_MAX_LANES],
+        }
+    }
+
+    /// The table for `lanes` under `amendments_of(lane_id)`, each lane's
+    /// committed cap amendments in commit order.
+    pub fn from_amendments(
+        lanes: &[GenesisExternalLane],
+        amendments_of: impl Fn(&str) -> Vec<ExternalLaneReleaseCapAmendment>,
+    ) -> Self {
+        let mut caps = Self::genesis();
+        for (slot, lane) in caps.rules.iter_mut().zip(lanes) {
+            let amendments = amendments_of(&lane.id);
+            if !amendments.is_empty() {
+                *slot = Some(lane.release_cap_rule(&amendments));
+            }
+        }
+        caps
+    }
+
+    /// The cap of the lane at `lane_index` at `height`.
+    pub fn cap_bps_at(&self, lane_index: usize, lane: &GenesisExternalLane, height: u64) -> u32 {
+        self.rules
+            .get(lane_index)
+            .copied()
+            .flatten()
+            .map_or(lane.release_cap_bps, |rule| rule.cap_bps_at(height))
+    }
+}
+
 impl GenesisExternalLane {
     /// Atoms one window may release: `reserved_atoms × release_cap_bps /
     /// 10_000`, rounded down.
@@ -370,6 +421,12 @@ pub fn validate_genesis_external_lanes(
 ) -> Result<u64, String> {
     if lanes.is_empty() {
         return Err("genesis external_lanes must be absent or non-empty".to_string());
+    }
+    if lanes.len() > EXTERNAL_LANE_MAX_LANES {
+        return Err(format!(
+            "genesis configures {} external lanes, above the maximum {EXTERNAL_LANE_MAX_LANES}",
+            lanes.len()
+        ));
     }
     let mut ids = BTreeSet::new();
     let mut sources = BTreeMap::new();
@@ -718,11 +775,25 @@ impl ExternalLaneState {
         amount_atoms: u64,
         height: u64,
     ) -> Result<(), (&'static str, String)> {
+        self.check_release_capped(lane, lock_nonce, amount_atoms, height, lane.window_cap_atoms())
+    }
+
+    /// [`Self::check_release`] under a window cap of `cap_atoms`, the cap a
+    /// governed amendment set for the release's height.
+    pub fn check_release_capped(
+        &self,
+        lane: &GenesisExternalLane,
+        lock_nonce: u64,
+        amount_atoms: u64,
+        height: u64,
+        cap_atoms: u64,
+    ) -> Result<(), (&'static str, String)> {
         self.check_release_within(
             lane,
             lock_nonce,
             amount_atoms,
             height,
+            cap_atoms,
             EXTERNAL_LANE_MAX_RELEASE_RECORDS,
         )
     }
@@ -733,6 +804,7 @@ impl ExternalLaneState {
         lock_nonce: u64,
         amount_atoms: u64,
         height: u64,
+        cap: u64,
         max_records: usize,
     ) -> Result<(), (&'static str, String)> {
         if self.released_lock_nonces.contains(&lock_nonce) {
@@ -771,7 +843,6 @@ impl ExternalLaneState {
         } else {
             0
         };
-        let cap = lane.window_cap_atoms();
         if window_released
             .checked_add(amount_atoms)
             .is_none_or(|total| total > cap)
@@ -806,13 +877,24 @@ impl ExternalLaneState {
         lane: &GenesisExternalLane,
         record: ExternalLaneReleaseRecord,
     ) -> Result<(), (&'static str, String)> {
-        self.apply_release_within(lane, record, EXTERNAL_LANE_MAX_RELEASE_RECORDS)
+        self.apply_release_capped(lane, record, lane.window_cap_atoms())
+    }
+
+    /// [`Self::apply_release`] under a window cap of `cap_atoms`.
+    pub fn apply_release_capped(
+        &mut self,
+        lane: &GenesisExternalLane,
+        record: ExternalLaneReleaseRecord,
+        cap_atoms: u64,
+    ) -> Result<(), (&'static str, String)> {
+        self.apply_release_within(lane, record, cap_atoms, EXTERNAL_LANE_MAX_RELEASE_RECORDS)
     }
 
     fn apply_release_within(
         &mut self,
         lane: &GenesisExternalLane,
         record: ExternalLaneReleaseRecord,
+        cap: u64,
         max_records: usize,
     ) -> Result<(), (&'static str, String)> {
         self.check_release_within(
@@ -820,6 +902,7 @@ impl ExternalLaneState {
             record.lock_nonce,
             record.amount_atoms,
             record.released_at_height,
+            cap,
             max_records,
         )?;
         let root = external_lane_release_history_root(self.release_history_root.as_deref(), &record)

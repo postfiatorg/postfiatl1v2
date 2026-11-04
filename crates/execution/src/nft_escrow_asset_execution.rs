@@ -642,9 +642,19 @@ pub struct AssetExecutionCompatibility {
     /// Governance `asset_orchard_pricing_max_nav_age_blocks`; `None` uses the
     /// NAV proof profile's `max_epoch_gap_blocks`.
     pub asset_orchard_pricing_max_nav_age_blocks: Option<u64>,
+    /// The governed release cap of each genesis external lane.
+    pub external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps,
 }
 
 impl AssetExecutionCompatibility {
+    pub const fn with_external_lane_release_caps(
+        mut self,
+        caps: postfiat_types::ExternalLaneReleaseCaps,
+    ) -> Self {
+        self.external_lane_release_caps = caps;
+        self
+    }
+
     pub const fn with_yolo_target_activation_height(mut self, height: Option<u64>) -> Self {
         self.yolo_target_activation_height = height;
         self
@@ -672,6 +682,7 @@ impl AssetExecutionCompatibility {
             require_memo_activation_height: None,
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
+            external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
         }
     }
 
@@ -697,6 +708,7 @@ impl AssetExecutionCompatibility {
             require_memo_activation_height: None,
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
+            external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
         }
     }
 
@@ -722,6 +734,7 @@ impl AssetExecutionCompatibility {
             require_memo_activation_height: None,
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
+            external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
         }
     }
 
@@ -747,6 +760,7 @@ impl AssetExecutionCompatibility {
             require_memo_activation_height: None,
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
+            external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
         }
     }
 
@@ -772,6 +786,7 @@ impl AssetExecutionCompatibility {
             require_memo_activation_height: None,
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
+            external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
         }
     }
 
@@ -3172,6 +3187,7 @@ fn apply_asset_operation(
                 ledger,
                 operation,
                 block_height,
+                compatibility.external_lane_release_caps,
             )
         }
     }

@@ -431,14 +431,14 @@ fn external_lane_release_refuses_past_the_record_ceiling_without_mutation() {
     let lane = release_test_lane();
     let mut state = ExternalLaneState::genesis(&lane);
     state
-        .apply_release_within(&lane, sample_release(0, 10, 5), 2)
+        .apply_release_within(&lane, sample_release(0, 10, 5), lane.window_cap_atoms(), 2)
         .expect("first record");
     state
-        .apply_release_within(&lane, sample_release(1, 10, 6), 2)
+        .apply_release_within(&lane, sample_release(1, 10, 6), lane.window_cap_atoms(), 2)
         .expect("second record");
     let before = state.clone();
     let (code, message) = state
-        .apply_release_within(&lane, sample_release(2, 10, 7), 2)
+        .apply_release_within(&lane, sample_release(2, 10, 7), lane.window_cap_atoms(), 2)
         .unwrap_err();
     assert_eq!(code, EXTERNAL_LANE_RELEASE_RECORDS_FULL, "{message}");
     assert_eq!(state, before, "a refused release leaves the lane untouched");
@@ -847,3 +847,19 @@ fn release_cap_rule_matches_the_schedule_past_the_last_commit() {
     assert_eq!(rule.cap_bps_at(1_000), 400);
     assert_eq!(lane.release_cap_rule(&[]).cap_bps_at(0), 200);
 }
+
+#[test]
+fn genesis_refuses_more_external_lanes_than_the_cap_table_holds() {
+    let lanes = |count: usize| {
+        (0..count)
+            .map(|index| sample_external_lane_on(&format!("lane-{index}"), 1_000, &format!("{:02x}", 0x10 + index)))
+            .collect::<Vec<_>>()
+    };
+    validate_genesis_external_lanes(&lanes(EXTERNAL_LANE_MAX_LANES), GENESIS_NATIVE_SUPPLY_ATOMS)
+        .expect("eight lanes");
+    let error =
+        validate_genesis_external_lanes(&lanes(EXTERNAL_LANE_MAX_LANES + 1), GENESIS_NATIVE_SUPPLY_ATOMS)
+            .unwrap_err();
+    assert!(error.contains("above the maximum 8"), "{error}");
+}
+
