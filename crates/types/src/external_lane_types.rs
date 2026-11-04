@@ -13,15 +13,16 @@ pub const EXTERNAL_LANE_RELEASE_CAP_BPS_MAX: u32 = 10_000;
 /// is checked. It is far above any expected release volume (each record costs
 /// a Base Lock and a PFTL fee) but below `reserved_atoms` over the lock
 /// minimum for any realistic slice. Pruning the records behind the finalized
-/// height keeps a lane below it: only the releases of the retention window
-/// and of the lane's open window stay stored.
+/// height keeps the records a lane stores at most this many: only the
+/// releases of the retention window and of the lane's open window stay stored.
 pub const EXTERNAL_LANE_MAX_RELEASE_RECORDS: usize = 1_000_000;
 /// Release windows a record stays stored behind the finalized height before
-/// it is pruned. One window is the smallest that design section 5.2 allows:
-/// its answer to a false release bounds the loss to one window's cap because
-/// the watcher sees each release and the zero-cap amendment lands before the
-/// next window releases, so a release in the last block of its window must
-/// stay readable through the whole following window.
+/// it is pruned. One window is this change's own retention, not a rule of
+/// design section 5.2; it is justified by 5.2's loss bound of one window's
+/// cap, which assumes the watcher sees each release and the zero-cap
+/// amendment lands before the next window releases. A record becomes
+/// prunable one window after its height and is removed by the next
+/// qualifying release.
 pub const EXTERNAL_LANE_RELEASE_RETENTION_WINDOWS: u64 = 1;
 const EXTERNAL_LANE_EVM_ADDRESS_HEX_LEN: usize = 40;
 const EXTERNAL_LANE_CODE_HASH_HEX_LEN: usize = 64;
