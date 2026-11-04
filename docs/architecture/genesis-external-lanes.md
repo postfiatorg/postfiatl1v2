@@ -97,7 +97,7 @@ The example file has one Base Sepolia lane: the rehearsal lock `0xe36e7fc3845644
 - each block: live before minus fee burns equals live after;
 - each history checkpoint: live supply plus cumulative fee burns equals the genesis supply.
 
-A lane that has released more than it reserved, or a duplicated lane id, fails these checks. A history checkpoint or imported snapshot must carry each genesis lane once, with its genesis `reserved_atoms`, and with release fields that are exactly the sum of its recorded releases: `released_lock_nonces` is the set of recorded nonces, `released_atoms` the sum of their amounts, the window fields follow from the recorded heights, no window above the cap, and `release_history_root` is the hash chain over the records (`validate_external_lanes_match_genesis`, `crates/node/src/history.rs`). This rule, not the conservation checks, refuses atoms moved from a lane to an account without a record, since the totals still balance. Where the genesis is at hand (height-zero replay, history checkpoints) the faucet must hold exactly the native supply minus the lanes; a faucet file read without the genesis is only bounded by the supply, and height-zero replay refuses a short one.
+A lane that has released more than it reserved, or a duplicated lane id, fails these checks. A history checkpoint or imported snapshot must carry each genesis lane once, with its genesis `reserved_atoms`, and with release fields that are exactly the sum of its recorded releases: `released_lock_nonces` is the set of recorded nonces, `released_atoms` the sum of their amounts, the window fields follow from the recorded heights, no window above the cap active at its heights (genesis plus the applied cap amendments, [below](#governed-lane-amendments)), and `release_history_root` is the hash chain over the records (`validate_external_lanes_match_genesis`, `crates/node/src/history.rs`). This rule, not the conservation checks, refuses atoms moved from a lane to an account without a record, since the totals still balance. Where the genesis is at hand (height-zero replay, history checkpoints) the faucet must hold exactly the native supply minus the lanes; a faucet file read without the genesis is only bounded by the supply, and height-zero replay refuses a short one.
 
 Snapshots, restores and history checkpoints carry the lane records unchanged; tests cover lanes with nothing released and checkpoints with recorded releases, and a checkpoint, snapshot or faucet that drops a lane is refused.
 
@@ -120,7 +120,7 @@ Execution (`apply_external_lane_release`, rules on `ExternalLaneState`) checks, 
 | The nonce was not released before | `external_lane_nonce_already_released` |
 | The amount fits `reserved_atoms - released_atoms` | `external_lane_remainder_exceeded` |
 | The release's window is not below the lane's recorded window | `external_lane_window_regressed` |
-| The window's released amount stays within the cap | `external_lane_window_cap_exceeded` |
+| The window's released amount stays within the cap active at the height (genesis or governed) | `external_lane_window_cap_exceeded` |
 | The lane stores fewer than `EXTERNAL_LANE_MAX_RELEASE_RECORDS` records | `external_lane_release_records_full` |
 | A new recipient account reaches the account reserve | `below_account_reserve` |
 
@@ -134,25 +134,34 @@ The accepted bound on the stored release records is the lane's reserve divided b
 
 An accepted release credits the recipient, creating the account if needed, adds the nonce and the amount, moves the window when the height is in a new one, and appends a record (nonce, chain, lock contract, amount, recipient, Base block number and hash, PFTL height) and advances `release_history_root`. The atoms move from the lane remainder into circulation, so every conservation check above holds unchanged. The recorded Base block number and hash are the committee's attestation in the checkpoint; only the checkpoint's receipts root is bound to the `Locked` log by the receipt proof, which is what the watcher of design section 5.2 reads them as.
 
-`external_lane_info` (public read RPC, and the `external-lane-info` node command; `--lane-id`, `--release-cursor` and `--release-limit` optional) returns each lane's genesis configuration, committed record, remainder, window cap, what the next block's window may still release, `release_count`, and one page of release records newest first, each with its `sequence` in the history. A page holds at most `EXTERNAL_LANE_RELEASE_PAGE_SIZE` (100) records, the default; `next_release_cursor`, when present, is passed as `--release-cursor` for the next older page.
+`external_lane_info` (public read RPC, and the `external-lane-info` node command; `--lane-id`, `--release-cursor` and `--release-limit` optional) returns each lane's genesis configuration, committed record, remainder, the release cap at the next block (`release_cap`: the active cap, the amendment that set it, a pending raise and its height) with its window cap, what the next block's window may still release, `release_count`, and one page of release records newest first, each with its `sequence` in the history. A page holds at most `EXTERNAL_LANE_RELEASE_PAGE_SIZE` (100) records, the default; `next_release_cursor`, when present, is passed as `--release-cursor` for the next older page.
 
 ## Governed lane amendments
 
-The design changes a configured lane only by governed amendment: the window cap in basis points (section 5.1) and the committee epoch and root the policy names (section 4.1). Their kinds are `external_lane_release_cap_v1:<lane_id>` and `external_lane_committee_epoch_v1:<lane_id>` (`external_lane_amendment_refusal`, `crates/types/src/external_lane_types.rs`). Neither is built: governance refuses both with `external_lane_amendment_not_supported`, signed or not, at ratification and signed-batch admission (`validate_amendment_kind`, `crates/consensus_cobalt/src/internal_validation.rs`) and again at block execution (`governance_amendment_lifecycle_rejection`, `crates/node/src/execution_actions.rs`). No lane record, cap or policy can change; tests: `crates/node/src/tests/external_lane_amendment_tests.rs`.
+The design changes a configured lane only by governed amendment: the window cap in basis points (section 5.1) and the committee epoch and root the policy names (section 4.1). Their kinds are `external_lane_release_cap_v1:<lane_id>` and `external_lane_committee_epoch_v1:<lane_id>` (`external_lane_amendment_refusal`, `crates/types/src/external_lane_types.rs`), checked at ratification and signed-batch admission (`validate_amendment_kind`, `validate_amendment_value`, `crates/consensus_cobalt/src/internal_validation.rs`) and again at block execution (`governance_amendment_lifecycle_rejection`, `crates/node/src/execution_actions.rs`).
 
-Both need more than an amendment kind. Execution, mempool admission and the lane equality rule read only the genesis and the ledger, so the active cap or committee at a height must reach them from governance, and the equality rule must become "genesis plus the applied amendments". The committee root is 48 bytes and does not fit the amendment's `u32` value.
+**Release cap.** The amendment's value is the new `release_cap_bps`, 0 to 10,000; a larger value, or a kind without one well-formed lane id, is refused with `invalid_external_lane_release_cap`. The cap in force at a height (`GenesisExternalLane::release_cap_schedule_at`) follows the lane's committed cap amendments in commit order, each at the height governance applied it:
+
+- an amendment at or below the cap in force applies from that height; a cap of zero refuses every release and moves no PFT;
+- an amendment above it applies seven windows later, `release_window_blocks` × 7 blocks (`EXTERNAL_LANE_RELEASE_CAP_RAISE_DELAY_WINDOWS`);
+- each committed amendment replaces a raise still in its delay, so a zero cap committed during a pending raise holds; amendments at one height apply in commit order.
+
+Execution, mempool admission and batch building take the cap from governance (`GovernanceState::external_lane_release_caps`, carried in `AssetExecutionCompatibility`) and refuse a release above it with `external_lane_window_cap_exceeded`, with no state change. The lane rule of history checkpoints and snapshot import checks each window against the cap active at the height of each of its releases (`validate_against_genesis_with_caps`). Genesis configures at most eight lanes (`EXTERNAL_LANE_MAX_LANES`), the size of that cap table. The lock contract's `maxLockAmount` is not changed by the amendment. Tests: `crates/types/src/external_lane_type_tests.rs`, `crates/execution/src/external_lane_release.rs`, `crates/node/src/tests/external_lane_amendment_tests.rs`, and `governed_release_cap_lowers_at_once_and_raises_after_seven_windows` in `crates/node/src/tests/genesis_external_lane_tests.rs` (governance round, admission, replay from genesis and a snapshot restore on a local chain).
+
+**Committee epoch.** Not built: governance refuses it with `external_lane_amendment_not_supported`, signed or not. The active committee at a height must reach execution from governance, and the committee root is 48 bytes, which does not fit the amendment's `u32` value.
 
 Remaining P2.5 steps:
 
-- [ ] Cap amendment: value 0 to 10,000 bps; a lower cap applies from its activation height, a higher one seven windows after it commits; the latest applied amendment of a lane wins.
-- [ ] Pass the active cap to `apply_external_lane_release`, mempool admission and batch building; a release above the amended cap is refused with `external_lane_window_cap_exceeded`.
-- [ ] Extend `validate_external_lanes_match_genesis` to check each window against the cap active at its heights, keeping the forged-release and tamper refusals; replay and snapshots stay identical.
+- [x] Cap amendment: value 0 to 10,000 bps; a lower cap applies from its activation height, a higher one seven windows after it commits; the latest applied amendment of a lane wins.
+- [x] Pass the active cap to `apply_external_lane_release`, mempool admission and batch building; a release above the amended cap is refused with `external_lane_window_cap_exceeded`.
+- [x] Extend `validate_external_lanes_match_genesis` to check each window against the cap active at its heights, keeping the forged-release and tamper refusals; replay and snapshots stay identical.
 - [ ] Committee epoch move: bind the new epoch and root by hash in the kind; apply only while that committee is the newest registered and unfenced; refuse checkpoints of the old epoch from the block after.
-- [ ] `external_lane_info` reports the active cap and committee with the amendment that set them.
+- [x] `external_lane_info` reports the active cap with the amendment that set it, and a pending raise with its height (`release_cap`).
+- [ ] `external_lane_info` reports the active committee with the amendment that set it.
 
 ## Not built yet
 
-The cap amendment and the committee epoch move (above), the watcher (section 5.2), and the Python CLI and interface. The design keeps the SP1 route for Base through its dispute games (option (a)) as a later upgrade.
+The committee epoch move (above), the watcher (section 5.2), and the Python CLI and interface. The design keeps the SP1 route for Base through its dispute games (option (a)) as a later upgrade.
 
 ## Not before
 
