@@ -1390,6 +1390,9 @@ fn fuzz_native_supply_invariants(iterations: usize) -> Result<FuzzTargetReport, 
                 window_index: 0,
                 window_released_atoms: lane_released,
                 release_history_root,
+                pruned_release_count: 0,
+                pruned_released_atoms: 0,
+                pruned_release_history_root: None,
                 releases: lane_releases,
             });
         let mut pool = OrchardPoolState::empty(format!("native-pool-{iteration}"));
