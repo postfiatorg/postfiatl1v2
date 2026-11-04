@@ -1281,6 +1281,17 @@ mod release_path {
     /// A committee checkpoint of a Base block whose one receipt holds
     /// `Locked(nonce, holder, keccak(recipient), recipient, amount)`.
     fn lock_proof(chain: &Chain, nonce: u64, amount: u64) -> EthereumExternalEventProofV1 {
+        lock_proof_by(chain, &chain.committee, &chain.keys, nonce, amount)
+    }
+
+    /// [`lock_proof`] attested by `committee`, whose members hold `keys`.
+    fn lock_proof_by(
+        chain: &Chain,
+        committee: &FastSwapCommitteeV1,
+        keys: &[MlDsa65KeyPair],
+        nonce: u64,
+        amount: u64,
+    ) -> EthereumExternalEventProofV1 {
         let lane = &chain.genesis.external_lanes()[0];
         let lock_contract = [0x1a_u8; 20];
         let mut holder = [0_u8; 32];
@@ -1308,7 +1319,7 @@ mod release_path {
         let leaf = rlp(0xc0, &[rlp(0x80, &[0x20, 0x80]), rlp(0x80, &receipt)].concat());
         let checkpoint = EthereumFinalizedCheckpointV1 {
             schema_version: ETHEREUM_CHECKPOINT_SCHEMA_V1,
-            pftl_domain: chain.committee.domain.chain.clone(),
+            pftl_domain: committee.domain.chain.clone(),
             route_id: lane.id.clone(),
             route_config_digest: FastSwapOpaqueHashV1(lane.route_config_digest().expect("digest")),
             ethereum_chain_id: lane.policy.chain_id,
@@ -1317,18 +1328,17 @@ mod release_path {
             receipts_root: keccak(&leaf),
             observed_head_number: 2_000 + nonce,
             minimum_confirmations: 64,
-            authority_epoch: chain.committee.domain.committee_epoch,
-            committee_root: chain.committee.domain.committee_root,
+            authority_epoch: committee.domain.committee_epoch,
+            committee_root: committee.domain.committee_root,
             handoff_controller: lock_contract,
             wrapped_navcoin_token: [0x2b; 20],
             handoff_controller_code_hash: [0x4d; 32],
             wrapped_navcoin_code_hash: [0x3c; 32],
         };
-        let votes = chain
-            .keys
+        let votes = keys
             .iter()
             .enumerate()
-            .take(usize::from(chain.committee.domain.quorum))
+            .take(usize::from(committee.domain.quorum))
             .map(|(index, key)| {
                 let mut vote = EthereumCheckpointVoteV1 {
                     validator_id: format!("validator-{index}"),
@@ -1362,6 +1372,17 @@ mod release_path {
         amount: u64,
         sequence: u64,
     ) -> SignedAssetTransaction {
+        release_tx_with(chain, lane_id, nonce, amount, sequence, lock_proof(chain, nonce, amount))
+    }
+
+    fn release_tx_with(
+        chain: &Chain,
+        lane_id: &str,
+        nonce: u64,
+        amount: u64,
+        sequence: u64,
+        proof: EthereumExternalEventProofV1,
+    ) -> SignedAssetTransaction {
         let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
         let unsigned = UnsignedAssetTransaction {
             chain_id: chain.genesis.chain_id.clone(),
@@ -1382,7 +1403,7 @@ mod release_path {
                     lock_nonce: nonce,
                     amount_atoms: amount,
                     recipient: chain.recipient.clone(),
-                    proof: lock_proof(chain, nonce, amount),
+                    proof,
                 },
             ),
         };
@@ -2303,5 +2324,269 @@ mod release_path {
             assert!(error.contains(expected), "{kind}: {error}");
         }
         let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    fn apply_fastlane_primary(chain: &Chain, operation: postfiat_types::FastLanePrimaryOperationV1, label: &str) {
+        crate::mempool_proposals::admit_fastlane_primary_to_mempool(
+            &chain.data_dir,
+            postfiat_types::FastLanePrimaryTransactionV1 { operation },
+        )
+        .expect("mempool admits the FastLane primary transaction");
+        let batch_file = chain.data_dir.join(format!("{label}.batch.json"));
+        create_mempool_batch(MempoolBatchOptions {
+            data_dir: chain.data_dir.clone(),
+            batch_file: batch_file.clone(),
+            max_transactions: 8,
+        })
+        .expect("mempool batch");
+        let receipts = apply_batch(ApplyBatchOptions {
+            data_dir: chain.data_dir.clone(),
+            batch_file,
+            certificate_file: None,
+        })
+        .expect("apply FastLane primary batch");
+        assert!(receipts.iter().all(|receipt| receipt.accepted), "{label}: {receipts:?}");
+    }
+
+    /// Registers `next` through the committee lifecycle in blocks: the
+    /// epoch-1 committee's drained final FastLane checkpoint is anchored, then
+    /// an ActivateCommittee control signed by epoch 1.
+    fn activate_committee(chain: &Chain, next: &FastSwapCommitteeV1) {
+        let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
+        let state = postfiat_types::FastLaneStateV1 {
+            schema_version: 1,
+            committee: chain.committee.domain.clone(),
+            objects: Default::default(),
+            reservations: Default::default(),
+            swaps: Default::default(),
+            imported_deposits: Default::default(),
+            exit_claims: Default::default(),
+            terminal_tombstones: Default::default(),
+            asset_rules: Default::default(),
+            holder_permits: Default::default(),
+            policy_snapshots: Default::default(),
+            prepare_fences: Default::default(),
+            pending_fee_burns: Default::default(),
+            anchored_checkpoints: Default::default(),
+        };
+        let checkpoint =
+            postfiat_execution::fastswap_checkpoint::build_fastlane_checkpoint(&state, &ledger, None, 1)
+                .expect("final checkpoint");
+        assert!(checkpoint.drain_ready, "{checkpoint:?}");
+        let quorum = usize::from(chain.committee.domain.quorum);
+        let final_checkpoint = postfiat_types::FastLaneCheckpointCertificateV1 {
+            votes: chain
+                .keys
+                .iter()
+                .enumerate()
+                .take(quorum)
+                .map(|(index, key)| {
+                    let mut vote = postfiat_types::FastLaneCheckpointVoteV1 {
+                        checkpoint: checkpoint.clone(),
+                        validator_id: format!("validator-{index}"),
+                        signature: Vec::new(),
+                    };
+                    vote.signature = postfiat_crypto_provider::ml_dsa_65_sign_with_context(
+                        &key.private_key,
+                        &vote.signing_bytes().expect("vote bytes"),
+                        postfiat_types::FASTLANE_CHECKPOINT_CONTEXT_V1,
+                    )
+                    .expect("checkpoint vote");
+                    vote
+                })
+                .collect(),
+        };
+        apply_fastlane_primary(
+            chain,
+            postfiat_types::FastLanePrimaryOperationV1::AnchorCheckpoint {
+                certificate: final_checkpoint.clone(),
+            },
+            "anchor-final",
+        );
+        let action = postfiat_types::FastLaneControlActionV1::ActivateCommittee {
+            committee: next.clone(),
+            final_checkpoint,
+        };
+        let digest = action.digest().expect("action digest");
+        let votes = chain
+            .keys
+            .iter()
+            .enumerate()
+            .take(quorum)
+            .map(|(index, key)| {
+                let mut vote = postfiat_types::FastLaneControlVoteV1 {
+                    committee: chain.committee.domain.clone(),
+                    action_digest: digest,
+                    validator_id: format!("validator-{index}"),
+                    signature: Vec::new(),
+                };
+                vote.signature = postfiat_crypto_provider::ml_dsa_65_sign_with_context(
+                    &key.private_key,
+                    &vote.signing_bytes().expect("vote bytes"),
+                    postfiat_types::FASTLANE_CONTROL_CONTEXT_V1,
+                )
+                .expect("control vote");
+                vote
+            })
+            .collect();
+        apply_fastlane_primary(
+            chain,
+            postfiat_types::FastLanePrimaryOperationV1::Control {
+                certificate: postfiat_types::FastLaneControlCertificateV1 { action, votes },
+            },
+            "activate-committee",
+        );
+        let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
+        assert_eq!(ledger.fastswap_committees.last(), Some(next));
+    }
+
+    /// Ratifies, signs and applies a committee move through the governance
+    /// round in the next block; returns its id and commit height.
+    fn govern_committee_move(chain: &Chain, next: &FastSwapCommitteeV1) -> (String, u64) {
+        let data_dir = &chain.data_dir;
+        let slot = tip_height(chain) + 1;
+        let amendment_file = data_dir.join(format!("move-{slot}.unsigned.json"));
+        let validators = local_validator_ids(4).expect("validator ids");
+        let amendment = ratify_governance(RatifyGovernanceOptions {
+            data_dir: data_dir.clone(),
+            validators: validators.clone(),
+            support: validators,
+            kind: postfiat_types::external_lane_committee_amendment_kind(
+                "base-erc20",
+                next.domain.committee_epoch,
+                &next.domain.committee_root.0,
+            ),
+            value: u32::try_from(next.domain.committee_epoch).expect("epoch"),
+            activation_height: 0,
+            veto_until_height: 0,
+            paused: false,
+            amendment_file: amendment_file.clone(),
+        })
+        .expect("ratify committee move");
+        let validator_keys =
+            read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE)).expect("validator keys");
+        let expires_at_height = slot + 20;
+        let authorization_files = write_split_validator_key_files(data_dir, &validator_keys)
+            .iter()
+            .map(|(validator, key_file)| {
+                let authorization_file = data_dir.join(format!("{validator}.move-{slot}.json"));
+                sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                    data_dir: data_dir.clone(),
+                    amendment_file: amendment_file.clone(),
+                    validator: validator.clone(),
+                    validator_key_file: key_file.clone(),
+                    proposal_slot: slot,
+                    expires_at_height,
+                    authorization_file: authorization_file.clone(),
+                })
+                .expect("sign committee move");
+                authorization_file
+            })
+            .collect::<Vec<_>>();
+        let signed_file = data_dir.join(format!("move-{slot}.signed.json"));
+        assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
+            data_dir: data_dir.clone(),
+            amendment_file,
+            authorization_files,
+            proposal_slot: slot,
+            output_file: signed_file.clone(),
+        })
+        .expect("assemble committee move");
+        let batch_file = data_dir.join(format!("move-{slot}.batch.json"));
+        create_governance_batch(GovernanceBatchOptions {
+            data_dir: data_dir.clone(),
+            amendment_file: Some(signed_file),
+            registry_update_file: None,
+            batch_file: batch_file.clone(),
+        })
+        .expect("committee move batch");
+        let receipts = apply_governance_batch(ApplyBatchOptions {
+            data_dir: data_dir.clone(),
+            batch_file,
+            certificate_file: None,
+        })
+        .expect("apply committee move");
+        assert!(receipts[0].accepted, "{receipts:?}");
+        (amendment.amendment_id, tip_height(chain))
+    }
+
+    #[test]
+    fn governed_committee_move_refuses_the_old_epoch_and_releases_the_lock_re_proven() {
+        let chain = lane_chain("committee-move");
+        let (epoch2, keys2) = second_committee(&chain);
+        // A release under epoch 1 before the move.
+        let amount = ACCOUNT_RESERVE + 100;
+        let first = release_tx(&chain, "base-erc20", 1, amount, faucet_sequence(&chain));
+        assert!(admit_and_apply(&chain, &first, "move-first").accepted);
+
+        activate_committee(&chain, &epoch2);
+        // Registering epoch 2 alone does not move the lane.
+        assert_eq!(lane_info(&chain.data_dir).committee.committee_epoch, 1);
+        let (move_id, move_height) = govern_committee_move(&chain, &epoch2);
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(info.committee.committee_epoch, 2);
+        assert_eq!(
+            info.committee.committee_root,
+            format!("0x{}", bytes_to_hex(&epoch2.domain.committee_root.0))
+        );
+        assert_eq!(info.committee.active.as_ref().map(|change| change.amendment_id.as_str()), Some(move_id.as_str()));
+        assert_eq!(info.committee.active.as_ref().map(|change| change.effective_height), Some(move_height + 1));
+
+        // From the block after the move, the epoch-1 checkpoint is refused.
+        let lane_before = info.state;
+        let old = release_tx(&chain, "base-erc20", 2, amount, faucet_sequence(&chain));
+        refused_everywhere(&chain, &old, "external_lane_committee_inactive", "move-old");
+        assert_eq!(lane_info(&chain.data_dir).state, lane_before);
+        // The same Lock, re-proven by epoch 2 from the same Base block, is released.
+        let reproven = release_tx_with(
+            &chain,
+            "base-erc20",
+            2,
+            amount,
+            faucet_sequence(&chain),
+            lock_proof_by(&chain, &epoch2, &keys2, 2, amount),
+        );
+        let ExternalLaneReleaseOperationV1 { proof: old_proof, .. } = match &old.unsigned.operation {
+            AssetTransactionOperation::ExternalLaneReleaseV1(operation) => operation.clone(),
+            _ => unreachable!(),
+        };
+        let ExternalLaneReleaseOperationV1 { proof: new_proof, .. } = match &reproven.unsigned.operation {
+            AssetTransactionOperation::ExternalLaneReleaseV1(operation) => operation.clone(),
+            _ => unreachable!(),
+        };
+        assert_eq!(
+            new_proof.checkpoint_certificate.checkpoint.block_hash,
+            old_proof.checkpoint_certificate.checkpoint.block_hash
+        );
+        let receipt = admit_and_apply(&chain, &reproven, "move-reproven");
+        assert!(receipt.accepted, "{receipt:?}");
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(info.state.released_lock_nonces, [1_u64, 2].into_iter().collect());
+        let page = lane_page(&chain.data_dir, None, None).expect("page");
+        assert_eq!(page.releases[0].record.committee_epoch, Some(2));
+        assert_eq!(page.releases[1].record.committee_epoch, None);
+
+        // Replay from genesis and snapshot export/import reproduce the lane.
+        verify_blocks(NodeOptions {
+            data_dir: chain.data_dir.clone(),
+        })
+        .expect("replay from genesis through the committee move");
+        let restored = assert_snapshot_restores_lane(&chain.data_dir, "committee-move");
+        assert_eq!(lane_info(&restored).committee, lane_info(&chain.data_dir).committee);
+
+        // The lane rule reads the move: without it, the epoch-2 record is refused.
+        let store = NodeStore::new(&chain.data_dir);
+        let ledger = store.read_ledger().expect("ledger");
+        let mut governance = store.read_governance().expect("governance");
+        validate_external_lanes_match_genesis(&chain.genesis, &ledger, &governance, "moved")
+            .expect("records name the committees active at their heights");
+        governance.amendments.retain(|amendment| amendment.amendment_id != move_id);
+        let error = validate_external_lanes_match_genesis(&chain.genesis, &ledger, &governance, "unmoved")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("committee epoch"), "{error}");
+        for dir in [chain.data_dir, restored] {
+            let _ = fs::remove_dir_all(dir);
+        }
     }
 }
