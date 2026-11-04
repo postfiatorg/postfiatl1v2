@@ -1506,9 +1506,10 @@ pub fn verify_governance_amendment(
     }
     // A release cap amendment needs the registry threshold of its declared
     // set (design section 5.1); admission and execution bind that set to
-    // the active registry.
+    // the active registry and the lifecycle to the proposal slot.
     if let Some((code, message)) =
         postfiat_types::external_lane_release_cap_authority_refusal(amendment, None)
+            .or_else(|| postfiat_types::external_lane_release_cap_slot_refusal(amendment, None))
     {
         return Err(format!("{code}: {message}"));
     }

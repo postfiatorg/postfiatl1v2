@@ -103,6 +103,9 @@ pub const EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED: &str =
 /// registry threshold.
 pub const EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID: &str =
     "external_lane_release_cap_authority_invalid";
+/// A cap amendment whose activation height is not its proposal slot.
+pub const EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID: &str = "external_lane_release_cap_slot_invalid";
+
 /// Validators of `validator_count` whose signatures a cap amendment needs:
 /// the registry threshold ⌊2n/3⌋ + 1 (design sections 5.1 and 5.2).
 pub fn external_lane_release_cap_threshold(validator_count: usize) -> usize {
@@ -148,6 +151,27 @@ pub fn external_lane_release_cap_authority_refusal(
                 "release cap amendment needs quorum and support of at least the registry threshold {threshold} of {}",
                 validators.len()
             ),
+        )
+    })
+}
+
+/// The refusal of a cap amendment's lifecycle, `None` for any other kind:
+/// it carries its proposal slot as its activation height (`slot` when the
+/// caller knows it) and is not paused. The slot gives each request its own
+/// id, so a repeated halt is a new amendment.
+pub fn external_lane_release_cap_slot_refusal(
+    amendment: &crate::GovernanceAmendment,
+    slot: Option<u64>,
+) -> Option<(&'static str, String)> {
+    external_lane_release_cap_amendment_lane(&amendment.kind)?;
+    (amendment.paused
+        || amendment.activation_height == 0
+        || slot.is_some_and(|slot| amendment.activation_height != slot))
+    .then(|| {
+        (
+            EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID,
+            "release cap amendment must name its proposal slot as its activation height and not be paused"
+                .to_string(),
         )
     })
 }

@@ -2925,13 +2925,14 @@ where
     Ok(())
 }
 
-/// A release cap amendment admitted to a block names a lane genesis
-/// configures and is declared by the active set at the registry threshold
-/// (design section 5.1).
+/// A release cap amendment admitted at `proposal_slot` names a lane genesis
+/// configures, is declared by the active set at the registry threshold, and
+/// names the slot as its activation height (design section 5.1).
 pub(super) fn verify_external_lane_release_cap_admission(
     genesis: &Genesis,
     active_validators: &[String],
     amendment: &GovernanceAmendment,
+    proposal_slot: u64,
 ) -> io::Result<()> {
     let refusal = postfiat_types::external_lane_release_cap_lane_refusal(
         &amendment.kind,
@@ -2942,6 +2943,9 @@ pub(super) fn verify_external_lane_release_cap_admission(
             amendment,
             Some(active_validators),
         )
+    })
+    .or_else(|| {
+        postfiat_types::external_lane_release_cap_slot_refusal(amendment, Some(proposal_slot))
     });
     match refusal {
         Some((code, message)) => Err(io::Error::new(
@@ -2997,7 +3001,7 @@ pub(super) fn verify_live_signed_governance_batch(
         .filter(|update| update.activation_height < proposal_slot)
         .count() as u64;
     for amendment in &batch.amendments {
-        verify_external_lane_release_cap_admission(genesis, &validators, amendment)?;
+        verify_external_lane_release_cap_admission(genesis, &validators, amendment, proposal_slot)?;
         verify_governance_amendment_evidence(genesis, amendment)?;
         if amendment.validators != validators {
             return Err(io::Error::new(

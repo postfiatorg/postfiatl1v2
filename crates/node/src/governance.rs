@@ -47,7 +47,8 @@ pub fn ratify_governance(options: RatifyGovernanceOptions) -> io::Result<Governa
         )
         .or_else(|| {
             postfiat_types::external_lane_release_cap_authority_refusal(&amendment, Some(&active))
-        });
+        })
+        .or_else(|| postfiat_types::external_lane_release_cap_slot_refusal(&amendment, None));
         if let Some((code, message)) = refusal {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,

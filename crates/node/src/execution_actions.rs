@@ -1217,7 +1217,12 @@ fn execute_governance_batch_with_replay(
         }
         if let Some((code, message)) =
             governance_amendment_lifecycle_rejection(amendment, block_height).or_else(|| {
-                external_lane_release_cap_rejection(governance, ledger.as_deref(), amendment)
+                external_lane_release_cap_rejection(
+                    governance,
+                    ledger.as_deref(),
+                    amendment,
+                    block_height,
+                )
             })
         {
             receipts.push(Receipt::rejected(
@@ -1913,14 +1918,15 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
 
 /// The refusal of a release cap amendment at block execution: its lane
 /// must be one the ledger (that is, genesis) configures, and it must be
-/// declared by the active validator set at the registry threshold (design
-/// section 5.1). A governance-only replay carries no ledger and checks the
-/// authority alone; a cap amendment for an unknown lane is inert there, as
-/// the cap table reads genesis lanes.
+/// declared by the active validator set at the registry threshold with this
+/// block as its activation height (design section 5.1). A governance-only
+/// replay carries no ledger and checks the authority alone; a cap amendment
+/// for an unknown lane is inert there, as the cap table reads genesis lanes.
 pub(super) fn external_lane_release_cap_rejection(
     governance: &GovernanceState,
     ledger: Option<&LedgerState>,
     amendment: &GovernanceAmendment,
+    block_height: u64,
 ) -> Option<(&'static str, String)> {
     postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind)?;
     if let Some(ledger) = ledger {
@@ -1943,7 +1949,9 @@ pub(super) fn external_lane_release_cap_rejection(
             ))
         }
     };
-    postfiat_types::external_lane_release_cap_authority_refusal(amendment, Some(&active))
+    postfiat_types::external_lane_release_cap_authority_refusal(amendment, Some(&active)).or_else(
+        || postfiat_types::external_lane_release_cap_slot_refusal(amendment, Some(block_height)),
+    )
 }
 
 pub(super) fn governance_amendment_lifecycle_rejection(

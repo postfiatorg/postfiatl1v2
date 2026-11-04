@@ -1151,6 +1151,22 @@ fn cap_amendment_needs_the_registry_threshold_of_the_active_set() {
 }
 
 #[test]
+fn cap_amendment_names_its_proposal_slot() {
+    let six = ["v0", "v1", "v2", "v3", "v4", "v5"];
+    let refusal = |amendment: &GovernanceAmendment, slot| {
+        external_lane_release_cap_slot_refusal(amendment, slot).map(|(code, _)| code)
+    };
+    let invalid = Some(EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID);
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 9), Some(9)), None);
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 9), None), None);
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 0), None), invalid, "immediate lifecycle");
+    assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 8), Some(9)), invalid, "another slot");
+    let mut paused = cap_amendment_by(&six, 5, &six[..5], 9);
+    paused.paused = true;
+    assert_eq!(refusal(&paused, Some(9)), invalid, "paused");
+}
+
+#[test]
 fn cap_amendment_for_a_lane_genesis_does_not_configure_is_refused() {
     let lanes = ["base-erc20"];
     let refusal = |kind: &str| external_lane_release_cap_lane_refusal(kind, lanes.into_iter()).map(|(code, _)| code);

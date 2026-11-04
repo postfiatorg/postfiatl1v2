@@ -498,6 +498,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ratify-asset-orchard-pricing-max-nav-age-blocks"
         | "ratify-asset-orchard-egress-policy-activation-height"
         | "ratify-asset-orchard-egress-policy"
+        | "ratify-external-lane-release-cap"
         | "governance-authorization-sign"
         | "governance-amendment-assemble"
         | "ethereum-checkpoint-observe"

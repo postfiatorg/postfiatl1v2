@@ -2025,8 +2025,9 @@ mod release_path {
     }
 
     /// Ratifies a cap amendment declared by `validators` at `quorum`,
-    /// supported and signed by `signers`, and submits it through the
-    /// governance round of the next block: the ratification, signing, assembly or admission error, or the
+    /// supported and signed by `signers`, with the next block's slot as its
+    /// activation height, and submits it through that block's governance
+    /// round: the ratification, signing, assembly or admission error, or the
     /// block's receipts.
     fn try_govern_release_cap(
         chain: &Chain,
@@ -2049,7 +2050,7 @@ mod release_path {
             cap_bps,
             signers.to_vec(),
             GovernanceAmendmentLifecycle {
-                activation_height: 0,
+                activation_height: slot,
                 veto_until_height: 0,
                 paused: false,
             },
@@ -2130,6 +2131,43 @@ mod release_path {
         assert!(receipts[0].accepted, "{receipts:?}");
         assert_eq!((amendment.quorum, amendment.support.len()), (3, 3));
         assert_eq!(lane_info(&chain.data_dir).release_cap.active_cap_bps, 0);
+        let _ = fs::remove_dir_all(chain.data_dir);
+    }
+
+    #[test]
+    fn a_fresh_halt_after_a_pending_restore_is_applied_and_cancels_the_raise() {
+        // Windows of 4 blocks: a raise waits 7 × 4 = 28 blocks.
+        let chain = lane_chain_with_window("release-cap-halt", 4);
+        let (halt_id, _) = govern_release_cap(&chain, 0);
+        assert_eq!(lane_info(&chain.data_dir).release_cap.active_cap_bps, 0);
+        let (restore_id, restore_height) = govern_release_cap(&chain, 200);
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(info.release_cap.active_cap_bps, 0);
+        assert_eq!(info.release_cap.pending.map(|change| change.amendment_id), Some(restore_id));
+
+        // The same halt again, in a later slot: a new amendment.
+        let (fresh_id, fresh_height) = govern_release_cap(&chain, 0);
+        assert_ne!(fresh_id, halt_id);
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(
+            info.release_cap.active,
+            Some(ExternalLaneReleaseCapChange {
+                amendment_id: fresh_id,
+                cap_bps: 0,
+                effective_height: fresh_height,
+            })
+        );
+        assert_eq!(info.release_cap.pending, None);
+
+        // Past the cancelled raise's effective height the lane stays halted.
+        let mut filler = 0;
+        while tip_height(&chain) < restore_height + 7 * 4 {
+            filler += 1;
+            apply_one_transfer(&chain.data_dir, &format!("pfexternallanehalt{filler:020}"));
+        }
+        assert_eq!(lane_info(&chain.data_dir).release_cap.active_cap_bps, 0);
+        let release = release_tx(&chain, "base-erc20", 1, ACCOUNT_RESERVE + 100, faucet_sequence(&chain));
+        refused_everywhere(&chain, &release, "external_lane_window_cap_exceeded", "halt-held");
         let _ = fs::remove_dir_all(chain.data_dir);
     }
 
