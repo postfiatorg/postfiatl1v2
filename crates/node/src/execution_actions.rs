@@ -2200,6 +2200,10 @@ pub(super) fn apply_governance_amendment_with_lifecycle_records(
     }
 }
 
+/// A release cap amendment has no arm and records 0: the cap in force at
+/// its commit height needs the genesis lane (its cap and window), which the
+/// governance-only replay paths do not carry. `external_lane_info` reports
+/// the cap in force (`release_cap_schedule_at`).
 pub(super) fn governance_amendment_current_value(governance: &GovernanceState, kind: &str) -> u32 {
     match kind {
         GOVERNANCE_KIND_VALIDATOR_SET => governance.active_validator_count,
