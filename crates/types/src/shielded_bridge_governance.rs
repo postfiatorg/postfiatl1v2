@@ -1614,6 +1614,13 @@ impl GovernanceState {
             .collect()
     }
 
+    /// The governed committee table of `genesis`'s external lanes.
+    pub fn external_lane_committees(&self, genesis: &crate::Genesis) -> crate::ExternalLaneCommittees {
+        crate::ExternalLaneCommittees::from_amendments(genesis.external_lanes(), |lane_id| {
+            self.external_lane_committee_amendments(lane_id)
+        })
+    }
+
     /// The governed release cap table of `genesis`'s external lanes.
     pub fn external_lane_release_caps(&self, genesis: &crate::Genesis) -> crate::ExternalLaneReleaseCaps {
         crate::ExternalLaneReleaseCaps::from_amendments(genesis.external_lanes(), |lane_id| {

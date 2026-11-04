@@ -352,6 +352,125 @@ pub struct ExternalLaneCommitteeAmendment {
     pub committed_height: u64,
 }
 
+/// A committee set by a move and the height from which it holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneCommitteeChange {
+    pub amendment_id: String,
+    pub committee_epoch: u64,
+    pub binding: String,
+    pub effective_height: u64,
+}
+
+/// The committee epoch in force at a height and the move that set it
+/// (`None` while the genesis policy's committee holds).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneCommitteeSchedule {
+    pub committee_epoch: u64,
+    pub active: Option<ExternalLaneCommitteeChange>,
+}
+
+/// Which registered committee a lane's checkpoints must carry: the genesis
+/// policy's, or the one a move bound by epoch and binding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExternalLaneCommitteeSelector {
+    Genesis,
+    Moved { epoch: u64, binding: [u8; 48] },
+}
+
+impl ExternalLaneCommitteeSelector {
+    pub fn matches(&self, lane: &GenesisExternalLane, committee: &FastSwapCommitteeV1) -> bool {
+        let epoch = committee.domain.committee_epoch;
+        let root = &committee.domain.committee_root.0;
+        match self {
+            Self::Genesis => {
+                epoch == lane.policy.committee_epoch
+                    && lane_hex_bytes::<48>(&lane.policy.committee_root).as_ref() == Some(root)
+            }
+            Self::Moved {
+                epoch: moved,
+                binding,
+            } => {
+                epoch == *moved
+                    && lane_hex_bytes::<48>(&external_lane_committee_binding(&lane.id, epoch, root))
+                        .as_ref()
+                        == Some(binding)
+            }
+        }
+    }
+
+    /// The committee epoch a release record names: `None` for the genesis
+    /// committee, so a lane that never moved records as before.
+    pub fn recorded_epoch(&self) -> Option<u64> {
+        match self {
+            Self::Genesis => None,
+            Self::Moved { epoch, .. } => Some(*epoch),
+        }
+    }
+}
+
+/// The committee of one lane for every height from its last committed move
+/// on: `before`, then `after` from `from_height`. `Copy`, so execution rules
+/// can carry it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExternalLaneCommitteeRule {
+    pub before: ExternalLaneCommitteeSelector,
+    pub after: ExternalLaneCommitteeSelector,
+    pub from_height: u64,
+}
+
+/// The governed committee of each genesis lane, by its index in the genesis
+/// list; a lane without a committed move keeps its genesis committee.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExternalLaneCommittees {
+    rules: [Option<ExternalLaneCommitteeRule>; EXTERNAL_LANE_MAX_LANES],
+}
+
+impl Default for ExternalLaneCommittees {
+    fn default() -> Self {
+        Self::genesis()
+    }
+}
+
+impl ExternalLaneCommittees {
+    /// Every lane on its genesis committee.
+    pub const fn genesis() -> Self {
+        Self {
+            rules: [None; EXTERNAL_LANE_MAX_LANES],
+        }
+    }
+
+    /// The table for `lanes` under `amendments_of(lane_id)`, each lane's
+    /// committed committee moves in commit order.
+    pub fn from_amendments(
+        lanes: &[GenesisExternalLane],
+        amendments_of: impl Fn(&str) -> Vec<ExternalLaneCommitteeAmendment>,
+    ) -> Self {
+        let mut committees = Self::genesis();
+        for (slot, lane) in committees.rules.iter_mut().zip(lanes) {
+            let amendments = amendments_of(&lane.id);
+            if !amendments.is_empty() {
+                *slot = Some(lane.committee_rule(&amendments));
+            }
+        }
+        committees
+    }
+
+    /// The committee the lane at `lane_index` requires at `height`.
+    pub fn selector_at(&self, lane_index: usize, height: u64) -> ExternalLaneCommitteeSelector {
+        self.rules
+            .get(lane_index)
+            .copied()
+            .flatten()
+            .map_or(ExternalLaneCommitteeSelector::Genesis, |rule| {
+                if height >= rule.from_height {
+                    rule.after
+                } else {
+                    rule.before
+                }
+            })
+    }
+}
+
 /// The refusal of a committee move against the ledger and the lane's
 /// committed moves (design section 4.1), `None` for any other kind: the lane
 /// must be configured; the kind's binding must hash the lane, the value's
@@ -418,6 +537,18 @@ pub fn external_lane_committee_move_refusal(
     None
 }
 
+fn lane_hex_bytes<const N: usize>(value: &str) -> Option<[u8; N]> {
+    let digits = value.strip_prefix("0x").unwrap_or(value);
+    if digits.len() != N * 2 {
+        return None;
+    }
+    let mut bytes = [0_u8; N];
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(digits.get(index * 2..index * 2 + 2)?, 16).ok()?;
+    }
+    Some(bytes)
+}
+
 impl GenesisExternalLane {
     /// Atoms one window may release: `reserved_atoms × release_cap_bps /
     /// 10_000`, rounded down.
@@ -430,6 +561,58 @@ impl GenesisExternalLane {
         let cap = u128::from(self.reserved_atoms) * u128::from(cap_bps)
             / u128::from(EXTERNAL_LANE_RELEASE_CAP_BPS_MAX);
         u64::try_from(cap).unwrap_or(u64::MAX)
+    }
+
+    /// The committee in force at `height` under the lane's committed
+    /// committee moves, in commit order (design section 4.1): each move
+    /// holds from the block after it commits, and the latest one in force
+    /// wins.
+    pub fn committee_schedule_at(
+        &self,
+        amendments: &[ExternalLaneCommitteeAmendment],
+        height: u64,
+    ) -> ExternalLaneCommitteeSchedule {
+        let active = amendments
+            .iter()
+            .filter(|amendment| amendment.committed_height.saturating_add(1) <= height)
+            .last()
+            .map(|amendment| ExternalLaneCommitteeChange {
+                amendment_id: amendment.amendment_id.clone(),
+                committee_epoch: amendment.committee_epoch,
+                binding: amendment.binding.clone(),
+                effective_height: amendment.committed_height.saturating_add(1),
+            });
+        ExternalLaneCommitteeSchedule {
+            committee_epoch: active
+                .as_ref()
+                .map_or(self.policy.committee_epoch, |change| change.committee_epoch),
+            active,
+        }
+    }
+
+    /// The committee for every height from the last committed move on.
+    pub fn committee_rule(
+        &self,
+        amendments: &[ExternalLaneCommitteeAmendment],
+    ) -> ExternalLaneCommitteeRule {
+        let last = amendments
+            .iter()
+            .map(|amendment| amendment.committed_height)
+            .max()
+            .unwrap_or(0);
+        let selector = |schedule: ExternalLaneCommitteeSchedule| {
+            schedule.active.map_or(ExternalLaneCommitteeSelector::Genesis, |change| {
+                ExternalLaneCommitteeSelector::Moved {
+                    epoch: change.committee_epoch,
+                    binding: lane_hex_bytes::<48>(&change.binding).unwrap_or([0; 48]),
+                }
+            })
+        };
+        ExternalLaneCommitteeRule {
+            before: selector(self.committee_schedule_at(amendments, last)),
+            after: selector(self.committee_schedule_at(amendments, last.saturating_add(1))),
+            from_height: last.saturating_add(1),
+        }
     }
 
     /// The cap in force at `height` under the lane's committed cap

@@ -644,9 +644,19 @@ pub struct AssetExecutionCompatibility {
     pub asset_orchard_pricing_max_nav_age_blocks: Option<u64>,
     /// The governed release cap of each genesis external lane.
     pub external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps,
+    /// The governed committee of each genesis external lane.
+    pub external_lane_committees: postfiat_types::ExternalLaneCommittees,
 }
 
 impl AssetExecutionCompatibility {
+    pub const fn with_external_lane_committees(
+        mut self,
+        committees: postfiat_types::ExternalLaneCommittees,
+    ) -> Self {
+        self.external_lane_committees = committees;
+        self
+    }
+
     pub const fn with_external_lane_release_caps(
         mut self,
         caps: postfiat_types::ExternalLaneReleaseCaps,
@@ -683,6 +693,7 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
+            external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
         }
     }
 
@@ -709,6 +720,7 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
+            external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
         }
     }
 
@@ -735,6 +747,7 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
+            external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
         }
     }
 
@@ -761,6 +774,7 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
+            external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
         }
     }
 
@@ -787,6 +801,7 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
+            external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
         }
     }
 

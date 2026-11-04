@@ -1082,3 +1082,75 @@ fn pruned_external_lane_commits_its_pruned_fields() {
     let decoded: ExternalLaneState = serde_json::from_str(&json).expect("decode");
     assert_eq!(decoded, pruned);
 }
+
+fn committee_move_record(id: &str, epoch: u64, committed_height: u64) -> ExternalLaneCommitteeAmendment {
+    ExternalLaneCommitteeAmendment {
+        amendment_id: id.to_string(),
+        committee_epoch: epoch,
+        binding: external_lane_committee_binding("base-erc20", epoch, &[epoch as u8; 48]),
+        committed_height,
+    }
+}
+
+#[test]
+fn committee_move_holds_from_the_block_after_it_commits() {
+    let lane = release_test_lane();
+    assert_eq!(lane.policy.committee_epoch, 2);
+    let moves = [committee_move_record("to-3", 3, 50)];
+    let at = |height| lane.committee_schedule_at(&moves, height);
+    assert_eq!((at(50).committee_epoch, at(50).active), (2, None));
+    let applied = at(51);
+    assert_eq!(applied.committee_epoch, 3);
+    assert_eq!(
+        applied.active,
+        Some(ExternalLaneCommitteeChange {
+            amendment_id: "to-3".to_string(),
+            committee_epoch: 3,
+            binding: moves[0].binding.clone(),
+            effective_height: 51,
+        })
+    );
+    // The latest move in force wins; one committed at the same height as
+    // another follows commit order.
+    let two = [committee_move_record("to-3", 3, 50), committee_move_record("to-4", 4, 80)];
+    assert_eq!(lane.committee_schedule_at(&two, 80).committee_epoch, 3);
+    assert_eq!(lane.committee_schedule_at(&two, 81).committee_epoch, 4);
+    let tie = [committee_move_record("to-3", 3, 50), committee_move_record("to-4", 4, 50)];
+    assert_eq!(lane.committee_schedule_at(&tie, 51).committee_epoch, 4);
+}
+
+#[test]
+fn committee_rule_selects_the_committee_by_epoch_and_binding() {
+    let lane = release_test_lane();
+    let moves = [committee_move_record("to-3", 3, 50)];
+    let committees = ExternalLaneCommittees::from_amendments(std::slice::from_ref(&lane), |_| moves.to_vec());
+    assert_eq!(committees.selector_at(0, 50), ExternalLaneCommitteeSelector::Genesis);
+    let moved = committees.selector_at(0, 51);
+    assert_eq!(moved.recorded_epoch(), Some(3));
+    assert_eq!(ExternalLaneCommittees::genesis().selector_at(0, 51), ExternalLaneCommitteeSelector::Genesis);
+    assert_eq!(ExternalLaneCommitteeSelector::Genesis.recorded_epoch(), None);
+    let committee = |epoch: u64, root: [u8; 48]| {
+        let mut committee = FastSwapCommitteeV1 {
+            domain: FastSwapCommitteeDomainV1 {
+                chain: FastSwapChainDomainV1 {
+                    chain_id: "postfiat-local".to_string(),
+                    genesis_hash: FastSwapOpaqueHashV1([0; 48]),
+                    protocol_version: 1,
+                },
+                fastswap_schema_version: FASTSWAP_SCHEMA_VERSION_V1,
+                committee_epoch: epoch,
+                committee_root: FastSwapCommitteeRootV1(root),
+                validator_count: 4,
+                quorum: 3,
+            },
+            validators: Vec::new(),
+        };
+        committee.domain.committee_root = FastSwapCommitteeRootV1(root);
+        committee
+    };
+    assert!(moved.matches(&lane, &committee(3, [3; 48])));
+    assert!(!moved.matches(&lane, &committee(3, [4; 48])), "another root");
+    assert!(!moved.matches(&lane, &committee(2, [3; 48])), "another epoch");
+    assert!(ExternalLaneCommitteeSelector::Genesis.matches(&lane, &committee(2, [0x5e; 48])));
+    assert!(!ExternalLaneCommitteeSelector::Genesis.matches(&lane, &committee(3, [3; 48])));
+}
