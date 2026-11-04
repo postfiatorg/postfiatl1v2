@@ -99,6 +99,16 @@ pub fn external_lane_amendment_refusal(kind: &str, value: u32) -> Option<(&'stat
 /// A cap amendment for a lane id genesis does not configure.
 pub const EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED: &str =
     "external_lane_release_cap_lane_not_configured";
+/// A cap amendment not declared by the active validator set at the
+/// registry threshold.
+pub const EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID: &str =
+    "external_lane_release_cap_authority_invalid";
+/// Validators of `validator_count` whose signatures a cap amendment needs:
+/// the registry threshold ⌊2n/3⌋ + 1 (design sections 5.1 and 5.2).
+pub fn external_lane_release_cap_threshold(validator_count: usize) -> usize {
+    validator_count.saturating_mul(2) / 3 + 1
+}
+
 /// The refusal of a cap amendment for a lane none of `lane_ids` names, `None`
 /// for a configured lane or any other kind.
 pub fn external_lane_release_cap_lane_refusal<'a>(
@@ -110,6 +120,34 @@ pub fn external_lane_release_cap_lane_refusal<'a>(
         (
             EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED,
             format!("release cap amendment `{kind}` names a lane genesis does not configure"),
+        )
+    })
+}
+
+/// The refusal of a cap amendment's authority, `None` for any other kind:
+/// it must be declared by `active_validators` (its own set when the caller
+/// has no registry), with a quorum and support of at least the registry
+/// threshold.
+pub fn external_lane_release_cap_authority_refusal(
+    amendment: &crate::GovernanceAmendment,
+    active_validators: Option<&[String]>,
+) -> Option<(&'static str, String)> {
+    external_lane_release_cap_amendment_lane(&amendment.kind)?;
+    let validators = active_validators.unwrap_or(&amendment.validators);
+    let threshold = external_lane_release_cap_threshold(validators.len());
+    if amendment.validators != validators {
+        return Some((
+            EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
+            "release cap amendment must declare the active validator set".to_string(),
+        ));
+    }
+    (amendment.quorum < threshold || amendment.support.len() < threshold).then(|| {
+        (
+            EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
+            format!(
+                "release cap amendment needs quorum and support of at least the registry threshold {threshold} of {}",
+                validators.len()
+            ),
         )
     })
 }

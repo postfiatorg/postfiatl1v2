@@ -2016,67 +2016,121 @@ mod release_path {
     /// through the governance round in the next block; returns its id and
     /// commit height.
     fn govern_release_cap(chain: &Chain, cap_bps: u32) -> (String, u64) {
+        let validators = local_validator_ids(4).expect("validator ids");
+        let (amendment, receipts) =
+            try_govern_release_cap(chain, cap_bps, &validators, validators.len(), &validators)
+                .expect("cap amendment admitted");
+        assert!(receipts[0].accepted, "{receipts:?}");
+        (amendment.amendment_id, tip_height(chain))
+    }
+
+    /// Ratifies a cap amendment declared by `validators` at `quorum`,
+    /// supported and signed by `signers`, and submits it through the
+    /// governance round of the next block: the ratification, signing, assembly or admission error, or the
+    /// block's receipts.
+    fn try_govern_release_cap(
+        chain: &Chain,
+        cap_bps: u32,
+        validators: &[String],
+        quorum: usize,
+        signers: &[String],
+    ) -> io::Result<(GovernanceAmendment, Vec<Receipt>)> {
         let data_dir = &chain.data_dir;
         let slot = tip_height(chain) + 1;
-        let amendment_file = data_dir.join(format!("cap-{slot}.unsigned.json"));
-        let validators = local_validator_ids(4).expect("validator ids");
-        let amendment = ratify_governance(RatifyGovernanceOptions {
-            data_dir: data_dir.clone(),
-            validators: validators.clone(),
-            support: validators,
-            kind: postfiat_types::external_lane_release_cap_amendment_kind("base-erc20"),
-            value: cap_bps,
-            activation_height: 0,
-            veto_until_height: 0,
-            paused: false,
-            amendment_file: amendment_file.clone(),
-        })
-        .expect("ratify cap amendment");
+        let tag = format!("{slot}-{cap_bps}-{quorum}-{}", signers.len());
+        let amendment_file = data_dir.join(format!("cap-{tag}.unsigned.json"));
+        let amendment = postfiat_consensus_cobalt::ratify_governance_amendment_with_lifecycle(
+            &cobalt_domain(&chain.genesis),
+            &EssentialSubsetConfig {
+                validators: validators.to_vec(),
+                quorum,
+            },
+            &postfiat_types::external_lane_release_cap_amendment_kind("base-erc20"),
+            cap_bps,
+            signers.to_vec(),
+            GovernanceAmendmentLifecycle {
+                activation_height: 0,
+                veto_until_height: 0,
+                paused: false,
+            },
+        )
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        fs::write(&amendment_file, serde_json::to_vec_pretty(&amendment)?)?;
         let validator_keys =
             read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE)).expect("validator keys");
         let expires_at_height = tip_height(chain) + 20;
-        let authorization_files = write_split_validator_key_files(data_dir, &validator_keys)
-            .iter()
-            .map(|(validator, key_file)| {
-                let authorization_file = data_dir.join(format!("{validator}.cap-{slot}.json"));
-                sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
-                    data_dir: data_dir.clone(),
-                    amendment_file: amendment_file.clone(),
-                    validator: validator.clone(),
-                    validator_key_file: key_file.clone(),
-                    proposal_slot: slot,
-                    expires_at_height,
-                    authorization_file: authorization_file.clone(),
-                })
-                .expect("sign cap amendment");
-                authorization_file
-            })
-            .collect::<Vec<_>>();
-        let signed_file = data_dir.join(format!("cap-{slot}.signed.json"));
+        let mut authorization_files = Vec::new();
+        for (validator, key_file) in write_split_validator_key_files(data_dir, &validator_keys) {
+            if !signers.contains(&validator) {
+                continue;
+            }
+            let authorization_file = data_dir.join(format!("{validator}.cap-{tag}.json"));
+            sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                data_dir: data_dir.clone(),
+                amendment_file: amendment_file.clone(),
+                validator: validator.clone(),
+                validator_key_file: key_file.clone(),
+                proposal_slot: slot,
+                expires_at_height,
+                authorization_file: authorization_file.clone(),
+            })?;
+            authorization_files.push(authorization_file);
+        }
+        let signed_file = data_dir.join(format!("cap-{tag}.signed.json"));
         assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
             data_dir: data_dir.clone(),
             amendment_file,
             authorization_files,
             proposal_slot: slot,
             output_file: signed_file.clone(),
-        })
-        .expect("assemble cap amendment");
-        let batch_file = data_dir.join(format!("cap-{slot}.batch.json"));
+        })?;
+        let batch_file = data_dir.join(format!("cap-{tag}.batch.json"));
         create_governance_batch(GovernanceBatchOptions {
             data_dir: data_dir.clone(),
             amendment_file: Some(signed_file),
             registry_update_file: None,
             batch_file: batch_file.clone(),
-        })
-        .expect("cap governance batch");
+        })?;
         let receipts = apply_governance_batch(ApplyBatchOptions {
             data_dir: data_dir.clone(),
             batch_file,
             certificate_file: None,
-        })
-        .expect("apply cap amendment");
+        })?;
+        Ok((amendment, receipts))
+    }
+
+    #[test]
+    fn release_cap_amendment_needs_the_registry_threshold_of_the_active_set() {
+        let chain = lane_chain_with_window("release-cap-threshold", 4);
+        let validators = local_validator_ids(4).expect("validator ids");
+        let threshold = postfiat_types::external_lane_release_cap_threshold(validators.len());
+        assert_eq!(threshold, 3, "⌊2 × 4 / 3⌋ + 1");
+        let without_last = validators[..3].to_vec();
+        for (label, declared, quorum, signers) in [
+            ("quorum 1, one signature", validators.clone(), 1, validators[..1].to_vec()),
+            ("quorum below the threshold", validators.clone(), 2, validators[..2].to_vec()),
+            ("a set without an active validator", without_last.clone(), 3, without_last.clone()),
+        ] {
+            let outcome = try_govern_release_cap(&chain, 0, &declared, quorum, &signers);
+            match &outcome {
+                Err(error) => assert!(
+                    error.to_string().contains("external_lane_release_cap_authority_invalid")
+                        || error.to_string().contains("does not match the old active registry"),
+                    "{label}: {error}"
+                ),
+                Ok((_, receipts)) => panic!("{label}: cap amendment reached the block: {receipts:?}"),
+            }
+            let info = lane_info(&chain.data_dir);
+            assert_eq!(info.release_cap.active_cap_bps, 200, "{label}: cap changed");
+            assert_eq!(info.release_cap.active, None, "{label}");
+        }
+        let (amendment, receipts) =
+            try_govern_release_cap(&chain, 0, &validators, threshold, &validators[..3])
+                .expect("threshold admitted");
         assert!(receipts[0].accepted, "{receipts:?}");
-        (amendment.amendment_id, tip_height(chain))
+        assert_eq!((amendment.quorum, amendment.support.len()), (3, 3));
+        assert_eq!(lane_info(&chain.data_dir).release_cap.active_cap_bps, 0);
+        let _ = fs::remove_dir_all(chain.data_dir);
     }
 
     #[test]

@@ -40,10 +40,14 @@ pub fn ratify_governance(options: RatifyGovernanceOptions) -> io::Result<Governa
     )
     .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     if postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind).is_some() {
+        let active = active_validator_ids(&store.read_governance()?)?;
         let refusal = postfiat_types::external_lane_release_cap_lane_refusal(
             &amendment.kind,
             genesis.external_lanes().iter().map(|lane| lane.id.as_str()),
-        );
+        )
+        .or_else(|| {
+            postfiat_types::external_lane_release_cap_authority_refusal(&amendment, Some(&active))
+        });
         if let Some((code, message)) = refusal {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,

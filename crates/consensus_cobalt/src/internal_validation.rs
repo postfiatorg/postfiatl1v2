@@ -1504,6 +1504,14 @@ pub fn verify_governance_amendment(
     if amendment.support.len() < amendment.quorum {
         return Err("governance amendment support is below quorum".to_string());
     }
+    // A release cap amendment needs the registry threshold of its declared
+    // set (design section 5.1); admission and execution bind that set to
+    // the active registry.
+    if let Some((code, message)) =
+        postfiat_types::external_lane_release_cap_authority_refusal(amendment, None)
+    {
+        return Err(format!("{code}: {message}"));
+    }
 
     let expected_instance_id = governance_instance_id(
         domain,

@@ -1216,8 +1216,9 @@ fn execute_governance_batch_with_replay(
             continue;
         }
         if let Some((code, message)) =
-            governance_amendment_lifecycle_rejection(amendment, block_height)
-                .or_else(|| external_lane_release_cap_rejection(ledger.as_deref(), amendment))
+            governance_amendment_lifecycle_rejection(amendment, block_height).or_else(|| {
+                external_lane_release_cap_rejection(governance, ledger.as_deref(), amendment)
+            })
         {
             receipts.push(Receipt::rejected(
                 amendment.amendment_id.clone(),
@@ -1911,10 +1912,13 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
 }
 
 /// The refusal of a release cap amendment at block execution: its lane
-/// must be one the ledger (that is, genesis) configures (design section
-/// 5.1). A governance-only replay carries no ledger; a cap amendment for an
-/// unknown lane is inert there, as the cap table reads genesis lanes.
+/// must be one the ledger (that is, genesis) configures, and it must be
+/// declared by the active validator set at the registry threshold (design
+/// section 5.1). A governance-only replay carries no ledger and checks the
+/// authority alone; a cap amendment for an unknown lane is inert there, as
+/// the cap table reads genesis lanes.
 pub(super) fn external_lane_release_cap_rejection(
+    governance: &GovernanceState,
     ledger: Option<&LedgerState>,
     amendment: &GovernanceAmendment,
 ) -> Option<(&'static str, String)> {
@@ -1930,7 +1934,16 @@ pub(super) fn external_lane_release_cap_rejection(
             return Some(refusal);
         }
     }
-    None
+    let active = match active_validator_ids(governance) {
+        Ok(active) => active,
+        Err(error) => {
+            return Some((
+                postfiat_types::EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
+                format!("release cap amendment has no active validator set: {error}"),
+            ))
+        }
+    };
+    postfiat_types::external_lane_release_cap_authority_refusal(amendment, Some(&active))
 }
 
 pub(super) fn governance_amendment_lifecycle_rejection(
