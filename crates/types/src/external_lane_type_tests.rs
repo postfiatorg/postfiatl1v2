@@ -130,7 +130,7 @@ fn genesis_rejects_lanes_at_or_above_native_supply() {
     }
     let overflow = genesis_with_lanes(vec![
         sample_external_lane("a", u64::MAX),
-        sample_external_lane_on("b", 1, "7b"),
+        sample_external_lane_on("b", 10_000, "7b"),
     ]);
     assert!(overflow.validate().unwrap_err().contains("overflows"));
     let just_below = genesis_with_lanes(vec![sample_external_lane(
@@ -187,7 +187,7 @@ fn genesis_rejects_unknown_lane_fields() {
 #[test]
 fn genesis_rejects_release_cap_outside_one_to_ten_thousand_bps() {
     for (bps, ok) in [(0, false), (1, true), (10_000, true), (10_001, false)] {
-        let mut lane = sample_external_lane("base-erc20", 1);
+        let mut lane = sample_external_lane("base-erc20", 10_000);
         lane.release_cap_bps = bps;
         let result = genesis_with_lanes(vec![lane]).validate();
         assert_eq!(result.is_ok(), ok, "release_cap_bps {bps}: {result:?}");
@@ -202,8 +202,8 @@ fn genesis_rejects_malformed_external_lanes() {
         .unwrap_err()
         .contains("absent or non-empty"));
     let duplicate = genesis_with_lanes(vec![
-        sample_external_lane("base-erc20", 1),
-        sample_external_lane("base-erc20", 2),
+        sample_external_lane("base-erc20", 10_000),
+        sample_external_lane("base-erc20", 20_000),
     ]);
     assert!(duplicate.validate().unwrap_err().contains("duplicate"));
     let mut cases: Vec<(GenesisExternalLane, &str)> = Vec::new();
@@ -215,19 +215,19 @@ fn genesis_rejects_malformed_external_lanes() {
     lane.reserved_atoms = 1;
     lane.release_window_blocks = 0;
     cases.push((lane, "release_window_blocks"));
-    let mut lane = sample_external_lane("a", 1);
+    let mut lane = sample_external_lane("a", 10_000);
     lane.policy.chain_id = 0;
     cases.push((lane, "chain_id"));
-    let mut lane = sample_external_lane("a", 1);
+    let mut lane = sample_external_lane("a", 10_000);
     lane.policy.token_address = format!("0x{}", "AB".repeat(20));
     cases.push((lane, "token_address"));
-    let mut lane = sample_external_lane("a", 1);
+    let mut lane = sample_external_lane("a", 10_000);
     lane.policy.lock_contract_address = "1a".repeat(21);
     cases.push((lane, "lock_contract_address"));
-    let mut lane = sample_external_lane("a", 1);
+    let mut lane = sample_external_lane("a", 10_000);
     lane.policy.lock_runtime_code_hash = format!("0x{}", "4d".repeat(20));
     cases.push((lane, "lock_runtime_code_hash"));
-    let mut lane = sample_external_lane("a", 1);
+    let mut lane = sample_external_lane("a", 10_000);
     lane.policy.token_runtime_code_hash = format!("0x{}", "zz".repeat(32));
     cases.push((lane, "token_runtime_code_hash"));
     for (lane, needle) in cases {
@@ -288,11 +288,11 @@ fn genesis_external_lane_policy_requires_proof_policy_pins() {
         format!("0x{}", "5e".repeat(32)),
         format!("0x{}g", "5e".repeat(47)),
     ] {
-        let mut policy = sample_external_lane("a", 1).policy;
+        let mut policy = sample_external_lane("a", 10_000).policy;
         policy.committee_root = root;
         cases.push((policy, "committee_root"));
     }
-    let mut policy = sample_external_lane("a", 1).policy;
+    let mut policy = sample_external_lane("a", 10_000).policy;
     policy.confirmation_depth = 0;
     cases.push((policy, "confirmation_depth"));
     for (policy, needle) in cases {
@@ -300,7 +300,7 @@ fn genesis_external_lane_policy_requires_proof_policy_pins() {
         assert!(error.contains(needle), "{policy:?}: {error}");
     }
     // chain_id is a parameter: Base Sepolia validates like Base mainnet.
-    let mut sepolia = sample_external_lane("a", 1);
+    let mut sepolia = sample_external_lane("a", 10_000);
     sepolia.policy.chain_id = 84_532;
     genesis_with_lanes(vec![sepolia]).validate().expect("Base Sepolia lane");
 }
@@ -362,12 +362,12 @@ fn release_test_lane() -> GenesisExternalLane {
 #[test]
 fn genesis_external_lane_source_must_be_base_mainnet_or_sepolia() {
     for chain_id in [8453, 84_532] {
-        let mut lane = sample_external_lane("a", 1);
+        let mut lane = sample_external_lane("a", 10_000);
         lane.policy.chain_id = chain_id;
         lane.validate().expect("allowed Base source");
     }
     for chain_id in [1, 10, 11_155_111, 8454] {
-        let mut lane = sample_external_lane("a", 1);
+        let mut lane = sample_external_lane("a", 10_000);
         lane.policy.chain_id = chain_id;
         let error = lane.validate().unwrap_err();
         assert!(error.contains("must be Base mainnet 8453 or Base Sepolia 84532"), "{error}");
@@ -631,8 +631,8 @@ fn external_lane_release_operation_validates_its_lock_key() {
 
 #[test]
 fn genesis_rejects_two_lanes_on_one_base_source() {
-    let mut other = sample_external_lane("b", 10);
-    let first = sample_external_lane("a", 10);
+    let mut other = sample_external_lane("b", 100);
+    let first = sample_external_lane("a", 100);
     let error = validate_genesis_external_lanes(&[first.clone(), other.clone()], 1_000).unwrap_err();
     assert!(
         error.contains("genesis external lanes `a` and `b` both name Base source 8453"),
@@ -1305,4 +1305,71 @@ fn cap_amendment_for_a_lane_genesis_does_not_configure_is_refused() {
     );
     assert_eq!(refusal(&external_lane_release_cap_amendment_kind("base-erc20")), None);
     assert_eq!(refusal("orchard_pool_pause"), None);
+}
+
+// Issue #184: a genesis lane whose window cap rounds down to 0 atoms must be
+// refused at validation instead of accepting genesis and then refusing every
+// release. A zero cap is a governed halt (design 5.1), not a genesis state.
+#[test]
+fn genesis_refuses_a_lane_whose_window_cap_rounds_to_zero() {
+    let mut lane = sample_external_lane("base-erc20", 99);
+    lane.release_cap_bps = 100;
+    assert_eq!(lane.window_cap_atoms(), 0);
+    let mut state = ExternalLaneState::genesis(&lane);
+    let refused = state.apply_release(&lane, sample_release(0, 1, 5));
+    assert!(refused.is_err(), "zero-cap lane can never release");
+    let error = lane.validate().unwrap_err();
+    assert!(error.contains("rounds down to 0 atoms"), "{error}");
+}
+
+/// The smallest lane that clears the zero cap: 100 atoms at 100 bps is exactly
+/// one atom per window, and one atom is releasable.
+#[test]
+fn genesis_accepts_the_smallest_lane_whose_window_cap_rounds_to_one_atom() {
+    let mut lane = sample_external_lane("base-erc20", 100);
+    lane.release_cap_bps = 100;
+    lane.release_window_blocks = 100;
+    assert_eq!(lane.window_cap_atoms(), 1);
+    assert!(lane.validate().is_ok());
+
+    let mut state = ExternalLaneState::genesis(&lane);
+    assert!(state.apply_release(&lane, sample_release(0, 1, 5)).is_ok());
+
+    // One atom is the whole window: a two-atom release still overruns it.
+    let mut fresh = ExternalLaneState::genesis(&lane);
+    let refused = fresh
+        .apply_release(&lane, sample_release(0, 2, 5))
+        .unwrap_err();
+    assert_eq!(refused.0, EXTERNAL_LANE_WINDOW_CAP_EXCEEDED);
+}
+
+/// A zero cap set by governed amendment must still halt releases; the genesis
+/// check above must not narrow the amendment path.
+#[test]
+fn governed_zero_cap_amendment_still_halts_releases() {
+    let lane = release_test_lane();
+    assert!(lane.validate().is_ok());
+    let halt = [cap_amendment("halt", 0, 250)];
+    let cap = lane.release_cap_schedule_at(&halt, 250).active_cap_bps;
+    assert_eq!(cap, 0);
+    let cap_atoms = lane.window_cap_atoms_for_bps(cap);
+    assert_eq!(cap_atoms, 0);
+
+    let mut state = ExternalLaneState::genesis(&lane);
+    let refused = state
+        .apply_release_capped(&lane, sample_release(0, 1, 250), cap_atoms)
+        .unwrap_err();
+    assert_eq!(refused.0, EXTERNAL_LANE_WINDOW_CAP_EXCEEDED);
+}
+
+/// Documented, not fixed here: a cap below the execution layer's
+/// `ACCOUNT_RESERVE` (10 atoms) cannot fund a brand-new account, but refusing
+/// that lane is a policy change that needs maintainer agreement and would
+/// couple this crate to execution state. Recorded so the boundary is explicit.
+#[test]
+fn genesis_still_accepts_a_lane_whose_cap_is_below_the_account_reserve() {
+    let mut lane = sample_external_lane("base-erc20", 500);
+    lane.release_cap_bps = 100;
+    assert_eq!(lane.window_cap_atoms(), 5);
+    assert!(lane.validate().is_ok());
 }

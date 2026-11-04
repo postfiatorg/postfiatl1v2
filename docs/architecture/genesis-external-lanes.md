@@ -45,7 +45,7 @@ The amounts are placeholders sized to today's devnet supply constant (`GENESIS_N
 | `id` | 1–32 bytes of `a-z`, `0-9` and `-`, starting with a letter; unique. |
 | `reserved_atoms` | Positive. The sum over all lanes must stay strictly below the native supply, so that the genesis allocation keeps a positive balance. |
 | `release_window_blocks` | Positive. The window index is the block height divided by it. |
-| `release_cap_bps` | 1 to 10,000: the share of `reserved_atoms` one window may release. |
+| `release_cap_bps` | 1 to 10,000: the share of `reserved_atoms` one window may release. The rounded window cap, `reserved_atoms × release_cap_bps / 10,000`, must be positive: a lane that could release nothing is refused, because a zero cap is a governed halt (design section 5.1), not a genesis state. |
 | `policy.chain_id` | The source chain, a parameter limited to Base mainnet (8453) and Base Sepolia (84532). |
 | `policy.*_address` | `0x` and 40 lower-case hex digits. |
 | `policy.*_code_hash` | `0x` and 64 lower-case hex digits. |
