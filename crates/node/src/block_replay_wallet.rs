@@ -336,6 +336,7 @@ fn verify_blocks_from_store(store: &NodeStore) -> io::Result<BlockVerificationRe
         verify_archived_payload(&genesis, block, archive_entry)?;
         update_governance_for_certificate_replay(
             &mut certificate_governance,
+            &genesis,
             block,
             archive_entry,
         )?;
@@ -1255,6 +1256,7 @@ pub(super) fn parse_archived_payload<T: DeserializeOwned>(
 
 pub(super) fn update_governance_for_certificate_replay(
     governance: &mut GovernanceState,
+    genesis: &Genesis,
     block: &BlockRecord,
     archive_entry: &BatchArchiveEntry,
 ) -> io::Result<()> {
@@ -1262,9 +1264,9 @@ pub(super) fn update_governance_for_certificate_replay(
         return Ok(());
     }
     let batch: GovernanceActionBatch = parse_archived_payload(block, archive_entry)?;
-    let _ = crate::execution_actions::execute_archived_governance_batch(
+    let _ = crate::execution_actions::execute_ledgerless_archived_governance_batch(
         governance,
-        None,
+        genesis.external_lanes(),
         &batch,
         block.header.height,
     );

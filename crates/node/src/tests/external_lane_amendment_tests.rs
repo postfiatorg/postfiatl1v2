@@ -278,3 +278,58 @@ fn release_cap_amendment_must_name_its_proposal_slot() {
     assert_eq!(receipts[0].code, CAP_SLOT_INVALID, "{receipts:?}");
     let _ = fs::remove_dir_all(data_dir);
 }
+
+#[test]
+fn certificate_replay_refuses_a_release_cap_amendment_for_an_unconfigured_lane() {
+    let data_dir = lane_amendment_node("external-lane-cap-certificate-replay");
+    let store = NodeStore::new(&data_dir);
+    let genesis = store.read_genesis().expect("genesis");
+    let governance = store.read_governance().expect("governance");
+    let kind = "external_lane_release_cap_v1:not-a-lane";
+    let amendment = lane_amendment_with_value(&genesis, kind, 0, false);
+    let batch = GovernanceActionBatch::new("lane-cap-replay-unknown", vec![amendment]);
+    let archive_entry = BatchArchiveEntry {
+        batch_kind: "governance".to_string(),
+        batch_id: batch.batch_id.clone(),
+        payload_hash: String::new(),
+        payload_json: serde_json::to_string(&batch).expect("batch json"),
+    };
+    let block = BlockRecord {
+        header: BlockHeader {
+            height: 1,
+            view: 0,
+            parent_hash: String::new(),
+            proposer: String::new(),
+            batch_kind: "governance".to_string(),
+            batch_id: batch.batch_id.clone(),
+            state_root: String::new(),
+            bridge_exit_root: None,
+            pftl_uniswap_receipt_root: None,
+            receipt_count: 1,
+            certificate_id: String::new(),
+            certificate: BlockCertificate {
+                validators: Vec::new(),
+                quorum: 0,
+                registry_root: String::new(),
+                votes: Vec::new(),
+            },
+            consensus_v2_commit: None,
+            block_hash: String::new(),
+        },
+        receipt_ids: Vec::new(),
+        fastpay_pre_state_effects: Vec::new(),
+    };
+
+    let mut live = governance.clone();
+    let mut ledger = store.read_ledger().expect("ledger");
+    let receipts =
+        crate::execution_actions::execute_governance_batch(&mut live, Some(&mut ledger), &batch, 1);
+    assert_eq!(receipts[0].code, LANE_NOT_CONFIGURED, "{receipts:?}");
+
+    let mut replayed = governance;
+    update_governance_for_certificate_replay(&mut replayed, &genesis, &block, &archive_entry)
+        .expect("certificate replay");
+    assert!(replayed.external_lane_release_cap_amendments("not-a-lane").is_empty());
+    assert_eq!(replayed, live);
+    let _ = fs::remove_dir_all(data_dir);
+}
