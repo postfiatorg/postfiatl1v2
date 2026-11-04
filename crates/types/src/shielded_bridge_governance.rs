@@ -1589,6 +1589,31 @@ impl GovernanceState {
             .collect()
     }
 
+    /// The committed committee moves of an external lane, in commit order,
+    /// each with the height governance applied it (its activation record).
+    pub fn external_lane_committee_amendments(
+        &self,
+        lane_id: &str,
+    ) -> Vec<crate::ExternalLaneCommitteeAmendment> {
+        self.amendments
+            .iter()
+            .filter_map(|amendment| {
+                let (lane, binding) =
+                    crate::external_lane_committee_amendment_parts(&amendment.kind)?;
+                (lane == lane_id).then(|| crate::ExternalLaneCommitteeAmendment {
+                    amendment_id: amendment.amendment_id.clone(),
+                    committee_epoch: u64::from(amendment.value),
+                    binding: binding.to_string(),
+                    committed_height: self
+                        .amendment_activation_records
+                        .iter()
+                        .find(|record| record.amendment_id == amendment.amendment_id)
+                        .map_or(0, |record| record.activated_height),
+                })
+            })
+            .collect()
+    }
+
     /// The governed release cap table of `genesis`'s external lanes.
     pub fn external_lane_release_caps(&self, genesis: &crate::Genesis) -> crate::ExternalLaneReleaseCaps {
         crate::ExternalLaneReleaseCaps::from_amendments(genesis.external_lanes(), |lane_id| {

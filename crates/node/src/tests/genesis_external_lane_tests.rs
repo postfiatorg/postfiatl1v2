@@ -2169,4 +2169,138 @@ mod release_path {
             let _ = fs::remove_dir_all(dir);
         }
     }
+
+    // ---- P2.5: the governed committee epoch move -----------------------------
+
+    /// The epoch-2 committee of `chain`: the same validator ids with fresh
+    /// checkpoint keys.
+    fn second_committee(chain: &Chain) -> (FastSwapCommitteeV1, Vec<MlDsa65KeyPair>) {
+        let keys: Vec<_> = (0..4_u8)
+            .map(|index| ml_dsa_65_keygen_from_seed(&[0x91 + index; 32]))
+            .collect();
+        let mut committee = chain.committee.clone();
+        committee.domain.committee_epoch = 2;
+        committee.validators = keys
+            .iter()
+            .enumerate()
+            .map(|(index, key)| FastSwapValidatorV1 {
+                validator_id: format!("validator-{index}"),
+                public_key: key.public_key.clone(),
+            })
+            .collect();
+        committee.domain.committee_root = committee.computed_root().expect("root");
+        (committee, keys)
+    }
+
+    fn committee_move(chain: &Chain, lane_id: &str, epoch: u64, root: &[u8; 48], value: u32) -> GovernanceAmendment {
+        GovernanceAmendment {
+            amendment_id: format!("move-{lane_id}-{epoch}-{value}-{}", bytes_to_hex(&root[..4])),
+            chain_id: chain.genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&chain.genesis),
+            protocol_version: chain.genesis.protocol_version,
+            instance_id: "move-instance".to_string(),
+            proposal_id: "move-proposal".to_string(),
+            certificate_id: "move-certificate".to_string(),
+            proposer: "validator-0".to_string(),
+            validators: local_validator_ids(4).expect("validators"),
+            quorum: 3,
+            kind: postfiat_types::external_lane_committee_amendment_kind(lane_id, epoch, root),
+            value,
+            activation_height: 0,
+            veto_until_height: 0,
+            paused: false,
+            support: local_validator_ids(4).expect("validators"),
+            votes: Vec::new(),
+            signed_authorizations: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn committee_move_binds_the_newest_unfenced_registered_committee() {
+        let chain = lane_chain("committee-move-rules");
+        let store = NodeStore::new(&chain.data_dir);
+        let mut governance = store.read_governance().expect("governance");
+        let mut ledger = store.read_ledger().expect("ledger");
+        let (epoch2, _) = second_committee(&chain);
+        let root1 = chain.committee.domain.committee_root.0;
+        let root2 = epoch2.domain.committee_root.0;
+        let code = |governance: &GovernanceState, ledger: Option<&LedgerState>, amendment: &GovernanceAmendment| {
+            external_lane_committee_amendment_rejection(governance, ledger, amendment).map(|(code, _)| code)
+        };
+        let valid = committee_move(&chain, "base-erc20", 2, &root2, 2);
+        // Before epoch 2 is registered, the move binds no committee.
+        assert_eq!(code(&governance, Some(&ledger), &valid), Some("external_lane_committee_binding_mismatch"));
+        ledger.fastswap_committees.push(epoch2.clone());
+        assert_eq!(code(&governance, Some(&ledger), &valid), None);
+        for (amendment, expected) in [
+            // A forged root, or a value naming another epoch than the binding.
+            (committee_move(&chain, "base-erc20", 2, &[0x55; 48], 2), "external_lane_committee_binding_mismatch"),
+            (committee_move(&chain, "base-erc20", 2, &root2, 3), "external_lane_committee_binding_mismatch"),
+            (committee_move(&chain, "other-lane", 2, &root2, 2), "external_lane_not_configured"),
+            // Epoch 1 is registered but no longer the newest committee.
+            (committee_move(&chain, "base-erc20", 1, &root1, 1), "external_lane_committee_not_current"),
+        ] {
+            assert_eq!(code(&governance, Some(&ledger), &amendment), Some(expected), "{}", amendment.kind);
+        }
+        assert_eq!(code(&governance, None, &valid), Some("external_lane_committee_ledger_unavailable"));
+        let mut fenced = ledger.clone();
+        fenced.fast_lane_prepare_fences.push(postfiat_types::FastLanePrepareFenceV1 {
+            committee_epoch: 2,
+            policy_epoch: 1,
+            finalized_primary_height: 1,
+        });
+        assert_eq!(code(&governance, Some(&fenced), &valid), Some("external_lane_committee_not_current"));
+        // Block execution refuses a forged move with the same code.
+        let forged = committee_move(&chain, "base-erc20", 2, &[0x55; 48], 2);
+        let receipts = execute_governance_batch(
+            &mut governance.clone(),
+            Some(&mut ledger.clone()),
+            &GovernanceActionBatch::new("forged-move", vec![forged]),
+            5,
+        );
+        assert_eq!(receipts[0].code, "external_lane_committee_binding_mismatch", "{receipts:?}");
+        // A second move to the same epoch is refused.
+        let receipts = execute_governance_batch(
+            &mut governance,
+            Some(&mut ledger),
+            &GovernanceActionBatch::new("move", vec![valid.clone()]),
+            5,
+        );
+        assert!(receipts[0].accepted, "{receipts:?}");
+        let again = committee_move(&chain, "base-erc20", 2, &root2, 2);
+        let again = GovernanceAmendment { amendment_id: "again".to_string(), ..again };
+        assert_eq!(code(&governance, Some(&ledger), &again), Some("external_lane_committee_epoch_not_advanced"));
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    #[test]
+    fn committee_move_ratification_checks_the_registered_committees() {
+        let chain = lane_chain("committee-move-ratify");
+        let ratify = |kind: String, value: u32| {
+            let validators = local_validator_ids(4).expect("validators");
+            ratify_governance(RatifyGovernanceOptions {
+                data_dir: chain.data_dir.clone(),
+                validators: validators.clone(),
+                support: validators,
+                kind,
+                value,
+                activation_height: 0,
+                veto_until_height: 0,
+                paused: false,
+                amendment_file: chain.data_dir.join("move.json"),
+            })
+        };
+        let (epoch2, _) = second_committee(&chain);
+        let root1 = chain.committee.domain.committee_root.0;
+        for (kind, value, expected) in [
+            ("external_lane_committee_epoch_v1:base-erc20".to_string(), 2, "invalid_external_lane_committee_move"),
+            (postfiat_types::external_lane_committee_amendment_kind("base-erc20", 2, &epoch2.domain.committee_root.0), 2, "external_lane_committee_binding_mismatch"),
+            // The genesis policy already names epoch 1.
+            (postfiat_types::external_lane_committee_amendment_kind("base-erc20", 1, &root1), 1, "external_lane_committee_epoch_not_advanced"),
+        ] {
+            let error = ratify(kind.clone(), value).expect_err("move ratified").to_string();
+            assert!(error.contains(expected), "{kind}: {error}");
+        }
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
 }

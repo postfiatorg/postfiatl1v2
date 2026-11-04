@@ -1691,7 +1691,9 @@ fn validate_amendment_kind(kind: &str) -> Result<(), String> {
     if let Some((code, message)) = postfiat_types::external_lane_amendment_refusal(kind, 0) {
         return Err(format!("{code}: {message}"));
     }
-    if postfiat_types::external_lane_release_cap_amendment_lane(kind).is_some() {
+    if postfiat_types::external_lane_release_cap_amendment_lane(kind).is_some()
+        || postfiat_types::external_lane_committee_amendment_parts(kind).is_some()
+    {
         return Ok(());
     }
     for (prefix, label) in [

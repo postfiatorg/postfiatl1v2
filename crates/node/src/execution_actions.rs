@@ -1216,7 +1216,13 @@ fn execute_governance_batch_with_replay(
             continue;
         }
         if let Some((code, message)) =
-            governance_amendment_lifecycle_rejection(amendment, block_height)
+            governance_amendment_lifecycle_rejection(amendment, block_height).or_else(|| {
+                external_lane_committee_amendment_rejection(
+                    governance,
+                    ledger.as_deref(),
+                    amendment,
+                )
+            })
         {
             receipts.push(Receipt::rejected(
                 amendment.amendment_id.clone(),
@@ -1907,6 +1913,30 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
         );
     }
     Ok(())
+}
+
+/// The ledger-bound refusal of a committee move of an external lane
+/// (`external_lane_committee_move_refusal`), `None` for any other kind. The
+/// move needs the canonical ledger, as the FastSwap bootstrap does.
+pub(super) fn external_lane_committee_amendment_rejection(
+    governance: &GovernanceState,
+    ledger: Option<&LedgerState>,
+    amendment: &GovernanceAmendment,
+) -> Option<(&'static str, String)> {
+    let (lane_id, _) = postfiat_types::external_lane_committee_amendment_parts(&amendment.kind)?;
+    let Some(ledger) = ledger else {
+        return Some((
+            postfiat_types::EXTERNAL_LANE_COMMITTEE_LEDGER_UNAVAILABLE,
+            "external lane committee move requires canonical ledger context".to_string(),
+        ));
+    };
+    postfiat_types::external_lane_committee_move_refusal(
+        ledger,
+        &governance.external_lane_committee_amendments(lane_id),
+        None,
+        &amendment.kind,
+        amendment.value,
+    )
 }
 
 pub(super) fn governance_amendment_lifecycle_rejection(

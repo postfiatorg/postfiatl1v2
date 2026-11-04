@@ -39,6 +39,28 @@ pub fn ratify_governance(options: RatifyGovernanceOptions) -> io::Result<Governa
         lifecycle,
     )
     .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    if let Some((lane_id, _)) =
+        postfiat_types::external_lane_committee_amendment_parts(&amendment.kind)
+    {
+        let governance = store.read_governance()?;
+        let genesis_epoch = genesis
+            .external_lanes()
+            .iter()
+            .find(|lane| lane.id == lane_id)
+            .map(|lane| lane.policy.committee_epoch);
+        if let Some((code, message)) = postfiat_types::external_lane_committee_move_refusal(
+            &store.read_ledger()?,
+            &governance.external_lane_committee_amendments(lane_id),
+            genesis_epoch,
+            &amendment.kind,
+            amendment.value,
+        ) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("{code}: {message}"),
+            ));
+        }
+    }
     write_amendment_file(&options.amendment_file, &amendment)?;
     Ok(amendment)
 }

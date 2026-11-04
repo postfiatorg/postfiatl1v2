@@ -38,20 +38,65 @@ pub const EXTERNAL_LANE_SOURCE_CHAIN_IDS: [u64; 2] = [
     EXTERNAL_LANE_BASE_MAINNET_CHAIN_ID,
     EXTERNAL_LANE_BASE_SEPOLIA_CHAIN_ID,
 ];
-/// Governed amendment kinds of a lane, `<prefix>:<lane_id>`: the per-window
-/// release cap (design section 5.1) and the committee epoch move (section
-/// 4.1). The cap amendment's value is the new `release_cap_bps`, 0 to
-/// [`EXTERNAL_LANE_RELEASE_CAP_BPS_MAX`]; the committee epoch move is not
-/// built and is refused with [`EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED`].
+/// Governed amendment kinds of a lane: the per-window release cap,
+/// `<prefix>:<lane_id>` (design section 5.1), whose value is the new
+/// `release_cap_bps`, 0 to [`EXTERNAL_LANE_RELEASE_CAP_BPS_MAX`]; and the
+/// committee epoch move, `<prefix>:<lane_id>:<binding>` (section 4.1), whose
+/// value is the new committee epoch and whose binding
+/// ([`external_lane_committee_binding`]) hashes the lane, that epoch and the
+/// registered committee root, which does not fit the `u32` value.
 pub const GOVERNANCE_KIND_EXTERNAL_LANE_RELEASE_CAP_PREFIX_V1: &str =
     "external_lane_release_cap_v1";
 pub const GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1: &str =
     "external_lane_committee_epoch_v1";
-pub const EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED: &str = "external_lane_amendment_not_supported";
 pub const EXTERNAL_LANE_RELEASE_CAP_INVALID: &str = "invalid_external_lane_release_cap";
 /// A cap amendment that raises the cap takes effect this many windows after
 /// it commits (design section 5.1).
 pub const EXTERNAL_LANE_RELEASE_CAP_RAISE_DELAY_WINDOWS: u64 = 7;
+// Refusal codes of the committee epoch move.
+pub const EXTERNAL_LANE_COMMITTEE_MOVE_INVALID: &str = "invalid_external_lane_committee_move";
+pub const EXTERNAL_LANE_COMMITTEE_BINDING_MISMATCH: &str =
+    "external_lane_committee_binding_mismatch";
+pub const EXTERNAL_LANE_COMMITTEE_NOT_CURRENT: &str = "external_lane_committee_not_current";
+pub const EXTERNAL_LANE_COMMITTEE_EPOCH_NOT_ADVANCED: &str =
+    "external_lane_committee_epoch_not_advanced";
+pub const EXTERNAL_LANE_COMMITTEE_LEDGER_UNAVAILABLE: &str =
+    "external_lane_committee_ledger_unavailable";
+/// A release whose checkpoint names a committee other than the lane's active
+/// one at the release's height.
+pub const EXTERNAL_LANE_COMMITTEE_INACTIVE: &str = "external_lane_committee_inactive";
+const EXTERNAL_LANE_COMMITTEE_BINDING_DOMAIN: &[u8] = b"postfiat.external_lane.committee_move.v1";
+
+/// The binding a committee move names: SHA3-384 over a domain tag, the lane
+/// id, the epoch and the committee root, in lowercase hex.
+pub fn external_lane_committee_binding(lane_id: &str, epoch: u64, root: &[u8; 48]) -> String {
+    let mut hasher = Sha3_384::new();
+    hasher.update(EXTERNAL_LANE_COMMITTEE_BINDING_DOMAIN);
+    hasher.update([0_u8]);
+    hasher.update(lane_id.as_bytes());
+    hasher.update([0_u8]);
+    hasher.update(epoch.to_be_bytes());
+    hasher.update(root);
+    let digest: [u8; 48] = hasher.finalize().into();
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// The committee move kind of `lane_id` to the committee of `epoch` and
+/// `root`; its amendment value is `epoch`.
+pub fn external_lane_committee_amendment_kind(lane_id: &str, epoch: u64, root: &[u8; 48]) -> String {
+    format!(
+        "{GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1}:{lane_id}:{}",
+        external_lane_committee_binding(lane_id, epoch, root)
+    )
+}
+
+/// The lane and binding a committee move kind names, `None` for any other
+/// kind.
+pub fn external_lane_committee_amendment_parts(kind: &str) -> Option<(&str, &str)> {
+    kind.strip_prefix(GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1)?
+        .strip_prefix(':')?
+        .split_once(':')
+}
 
 /// The cap amendment kind of `lane_id`.
 pub fn external_lane_release_cap_amendment_kind(lane_id: &str) -> String {
@@ -64,17 +109,32 @@ pub fn external_lane_release_cap_amendment_lane(kind: &str) -> Option<&str> {
         .strip_prefix(':')
 }
 
-/// The refusal of a governed lane amendment, `None` when it is accepted or
-/// is of any other kind: the committee epoch move is not supported, and a
-/// cap amendment must name a well-formed lane id and a value of at most
-/// 10,000 basis points.
+/// The refusal of a governed lane amendment's shape, `None` when it is
+/// well formed or of any other kind: a cap amendment names one lane id and a
+/// value of at most 10,000 basis points; a committee move names one lane id
+/// and a lowercase 48-byte binding. Whether a committee move binds a
+/// registered committee is checked against the ledger
+/// ([`external_lane_committee_move_refusal`]).
 pub fn external_lane_amendment_refusal(kind: &str, value: u32) -> Option<(&'static str, String)> {
     let family = kind.split(':').next()?;
     if family == GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1 {
-        return Some((
-            EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED,
-            format!("governed external lane amendment `{family}` is not supported yet"),
-        ));
+        let well_formed = external_lane_committee_amendment_parts(kind).is_some_and(
+            |(lane_id, binding)| {
+                validate_external_lane_id(lane_id).is_ok()
+                    && binding.len() == EXTERNAL_LANE_COMMITTEE_ROOT_HEX_LEN
+                    && binding
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            },
+        );
+        return (!well_formed).then(|| {
+            (
+                EXTERNAL_LANE_COMMITTEE_MOVE_INVALID,
+                format!(
+                    "committee move `{kind}` must name one lane and a lowercase 48-byte binding of its epoch and committee root"
+                ),
+            )
+        });
     }
     if family != GOVERNANCE_KIND_EXTERNAL_LANE_RELEASE_CAP_PREFIX_V1 {
         return None;
@@ -279,6 +339,83 @@ impl ExternalLaneReleaseCaps {
             .flatten()
             .map_or(lane.release_cap_bps, |rule| rule.cap_bps_at(height))
     }
+}
+
+/// A committed committee move of one lane: its id, the new epoch, the
+/// binding its kind names and the height governance applied it, in commit
+/// order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneCommitteeAmendment {
+    pub amendment_id: String,
+    pub committee_epoch: u64,
+    pub binding: String,
+    pub committed_height: u64,
+}
+
+/// The refusal of a committee move against the ledger and the lane's
+/// committed moves (design section 4.1), `None` for any other kind: the lane
+/// must be configured; the kind's binding must hash the lane, the value's
+/// epoch and the root of the registered committee of that epoch; that
+/// committee must be the newest registered and not fenced; and the epoch
+/// must be above the lane's genesis epoch (when known) and every epoch it
+/// moved to before.
+pub fn external_lane_committee_move_refusal(
+    ledger: &LedgerState,
+    committed: &[ExternalLaneCommitteeAmendment],
+    genesis_epoch: Option<u64>,
+    kind: &str,
+    value: u32,
+) -> Option<(&'static str, String)> {
+    let (lane_id, binding) = external_lane_committee_amendment_parts(kind)?;
+    if let Some(refusal) = external_lane_amendment_refusal(kind, value) {
+        return Some(refusal);
+    }
+    if !ledger.external_lanes.iter().any(|lane| lane.lane_id == lane_id) {
+        return Some((
+            EXTERNAL_LANE_NOT_CONFIGURED,
+            format!("committee move names external lane `{lane_id}`, which genesis never configured"),
+        ));
+    }
+    let epoch = u64::from(value);
+    let Some(committee) = ledger.fastswap_committees.iter().find(|committee| {
+        committee.domain.committee_epoch == epoch
+            && external_lane_committee_binding(lane_id, epoch, &committee.domain.committee_root.0)
+                == binding
+    }) else {
+        return Some((
+            EXTERNAL_LANE_COMMITTEE_BINDING_MISMATCH,
+            format!(
+                "committee move of external lane `{lane_id}` binds no registered committee of epoch {epoch}"
+            ),
+        ));
+    };
+    let current = committee.validate().is_ok()
+        && ledger.fastswap_committees.last() == Some(committee)
+        && !ledger
+            .fast_lane_prepare_fences
+            .iter()
+            .any(|fence| fence.committee_epoch == epoch);
+    if !current {
+        return Some((
+            EXTERNAL_LANE_COMMITTEE_NOT_CURRENT,
+            format!("committee epoch {epoch} must be the newest registered committee and not fenced"),
+        ));
+    }
+    let previous = committed
+        .iter()
+        .map(|amendment| amendment.committee_epoch)
+        .chain(genesis_epoch)
+        .max();
+    if previous.is_some_and(|previous| epoch <= previous) {
+        return Some((
+            EXTERNAL_LANE_COMMITTEE_EPOCH_NOT_ADVANCED,
+            format!(
+                "external lane `{lane_id}` already names committee epoch {}; a move must advance it",
+                previous.unwrap_or_default()
+            ),
+        ));
+    }
+    None
 }
 
 impl GenesisExternalLane {

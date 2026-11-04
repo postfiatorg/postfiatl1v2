@@ -1,12 +1,13 @@
 //! Governed changes to a genesis external lane (design sections 4.1 and 5.1):
-//! the release cap amendment is accepted with its value range checked, and
-//! the committee epoch move is refused with a typed code until it is built.
+//! the release cap amendment is accepted with its value range checked, and a
+//! committee epoch move must name one lane and a 48-byte binding. Its ledger
+//! checks are in `genesis_external_lane_tests.rs`.
 
 use super::*;
 
 const CAP_KIND: &str = "external_lane_release_cap_v1:base-erc20";
 const LANE_KINDS: [&str; 1] = ["external_lane_committee_epoch_v1:base-erc20"];
-const NOT_SUPPORTED: &str = "external_lane_amendment_not_supported";
+const NOT_SUPPORTED: &str = "invalid_external_lane_committee_move";
 const INVALID_CAP: &str = "invalid_external_lane_release_cap";
 
 fn lane_amendment(genesis: &Genesis, kind: &str, signed: bool) -> GovernanceAmendment {
