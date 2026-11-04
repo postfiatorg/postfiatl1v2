@@ -53,13 +53,15 @@ is a reason that keeps `ready` false:
 | Field | Source | Reason when unmet |
 | --- | --- | --- |
 | `published_by` | `rpc_serve` from the running server; `local_read` from `postfiat-node rpc`, whose `--data-dir` may be a copy | `readiness_not_published_by_running_service` |
-| `store_backend` | the backend of the server's own `--data-dir` | `store_not_transactional` (a JSONL comparison store) |
-| `validator_signer` | the server's `--finality-key-file` signer: `plaintext_key_file` is the only signer built | `validator_signer_unsafe_file` |
-| `key_file_owner_only` | the key file's mode grants no group or other access | `validator_key_file_not_owner_only`, `validator_key_file_missing` |
+| `store_backend`, `transactional_active` | the backend-mode record of the server's own `--data-dir` (`transactional` when absent) and whether its transactional store is active, as the node decides it | `store_not_transactional` (a JSONL store, a plain `init` store or a transactional store before its activation height) |
+| `validator_signer` | `none` with neither `--allow-mempool-submit-finality` nor `--allow-private-action-admission`; otherwise the server's key-file signer: `plaintext_key_file` is the only signer built | `validator_signer_none`, `validator_signer_unsafe_file` |
+| `key_files` | per key file the signer uses (`--finality-key-file`, and `--finality-proposal-key-file` when it differs): `owner_only` when owned by the serving user with no group or other access | `validator_key_file_not_owner_only`, `validator_key_file_missing`, `validator_key_file_unreadable` |
 
 No release build reports `ready` true until a hardened validator signer
-exists. A key file with mode `0600` read by a gateway running as the same
-user is not detected; separate users are a deployment check.
+exists. Two cases are not detected by the node and are deployment checks:
+an owner-only key file read by a gateway running as the same user (run
+separate users), and an rpc-serve over a copied data directory (serve from
+the validator's live store).
 
 ### Resolving a stuck private action record
 
