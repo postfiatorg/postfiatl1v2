@@ -1740,9 +1740,12 @@ class PostFiatRpcClient:
         release_cursor: int | None = None,
         release_limit: int | None = None,
     ) -> dict[str, Any]:
-        """Genesis external lanes: config, committed record and one page of
-        releases, newest first (public read, `--lane-id`, `--release-cursor`,
-        `--release-limit`). Pass `next_release_cursor` for the next older page."""
+        """Genesis external lanes: config, committed record, the release cap at
+        the next block (`release_cap`: `active_cap_bps`, the amendment that set
+        it in `active`, a raise in its seven-window delay in `pending`) and one
+        page of releases, newest first (public read, `--lane-id`,
+        `--release-cursor`, `--release-limit`). Pass `next_release_cursor` for
+        the next older page."""
         params: dict[str, Any] = {}
         if lane_id is not None:
             params["lane_id"] = self._required_text(lane_id, "lane_id")

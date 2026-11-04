@@ -212,6 +212,18 @@ class RemainingReadWrapperTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "release_cursor must be a non-negative integer"):
             client.external_lane_info(release_cursor=-1)
 
+    def test_external_lane_info_returns_the_governed_release_cap(self) -> None:
+        client = _client()
+        release_cap = {
+            "active_cap_bps": 100,
+            "active": {"amendment_id": "ab" * 48, "cap_bps": 100, "effective_height": 4},
+            "pending": {"amendment_id": "cd" * 48, "cap_bps": 200, "effective_height": 36},
+        }
+        lane = {"lane_id": "base-erc20", "window_cap_atoms": 3_000_000, "release_cap": release_cap}
+        with mock.patch.object(client, "_call", return_value={"lanes": [lane]}):
+            report = client.external_lane_info("base-erc20")
+        self.assertEqual(report["lanes"][0]["release_cap"], release_cap)
+
     def test_quote_and_preflight_send_integer_amounts_with_the_node_names(self) -> None:
         client = _client()
         with mock.patch.object(client, "_call", return_value={"quote": 1}) as call:

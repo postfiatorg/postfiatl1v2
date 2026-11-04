@@ -2649,7 +2649,12 @@ pub struct ExternalLaneInfoRow {
     /// The committed record, without its release records (`releases`).
     pub state: postfiat_types::ExternalLaneState,
     pub remainder_atoms: u64,
+    /// The window cap at the next block's height, under `release_cap`.
     pub window_cap_atoms: u64,
+    /// The release cap at the next block's height: the active cap in basis
+    /// points, the amendment that set it (absent while the genesis cap
+    /// holds) and a committed raise still in its seven-window delay.
+    pub release_cap: postfiat_types::ExternalLaneReleaseCapSchedule,
     /// The window the next block falls in, and what it may still release.
     pub next_window_index: u64,
     pub next_window_available_atoms: u64,

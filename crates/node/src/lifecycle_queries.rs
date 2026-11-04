@@ -2561,6 +2561,7 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
     let ledger = store.read_ledger()?;
+    let governance = store.read_governance()?;
     let current_height = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?.height;
     let invalid = |error: String| io::Error::new(io::ErrorKind::InvalidData, error);
     let limit = options
@@ -2589,8 +2590,13 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
                 ))
             })?;
         let remainder_atoms = state.remainder_atoms().map_err(invalid)?;
-        let window_cap_atoms = config.window_cap_atoms();
-        let next_window_index = config.window_index_at(current_height.saturating_add(1));
+        let next_height = current_height.saturating_add(1);
+        let release_cap = config.release_cap_schedule_at(
+            &governance.external_lane_release_cap_amendments(&config.id),
+            next_height,
+        );
+        let window_cap_atoms = config.window_cap_atoms_for_bps(release_cap.active_cap_bps);
+        let next_window_index = config.window_index_at(next_height);
         let next_window_released = if next_window_index == state.window_index {
             state.window_released_atoms
         } else {
@@ -2617,6 +2623,7 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
             config: config.clone(),
             remainder_atoms,
             window_cap_atoms,
+            release_cap,
             next_window_index,
             next_window_available_atoms: window_cap_atoms
                 .saturating_sub(next_window_released)
