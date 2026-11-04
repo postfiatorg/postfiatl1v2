@@ -2030,6 +2030,55 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "ratify-external-lane-committee-epoch" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let validators =
+                split_csv(flag_value(flags, "--validators").ok_or("missing --validators")?);
+            let support = split_csv(flag_value(flags, "--support").unwrap_or(""));
+            let support = if support.is_empty() {
+                validators.clone()
+            } else {
+                support
+            };
+            let lane_id = flag_value(flags, "--lane-id").ok_or("missing --lane-id")?;
+            let epoch = flag_value(flags, "--committee-epoch")
+                .ok_or("missing --committee-epoch")?
+                .parse::<u32>()
+                .map_err(|_| "--committee-epoch must be a u32".to_string())?;
+            let root_hex = flag_value(flags, "--committee-root").ok_or("missing --committee-root")?;
+            let root: [u8; 48] = hex_to_bytes(root_hex.trim_start_matches("0x"))
+                .map_err(|error| format!("--committee-root hex invalid: {error}"))?
+                .try_into()
+                .map_err(|_| "--committee-root must be exactly 48 bytes".to_string())?;
+            // The proposal slot the move is signed for: it gives each
+            // request its own id, so a repeated move is a new amendment.
+            let activation_height = flag_value(flags, "--activation-height")
+                .ok_or("missing --activation-height (the proposal slot)")?
+                .parse::<u64>()
+                .map_err(|_| "--activation-height must be a u64".to_string())?;
+            let amendment_file =
+                flag_value(flags, "--amendment-file").ok_or("missing --amendment-file")?;
+            let amendment = ratify_governance(RatifyGovernanceOptions {
+                data_dir: PathBuf::from(data_dir),
+                validators,
+                support,
+                kind: postfiat_types::external_lane_committee_amendment_kind(
+                    lane_id,
+                    u64::from(epoch),
+                    &root,
+                ),
+                value: epoch,
+                activation_height,
+                veto_until_height: 0,
+                paused: false,
+                amendment_file: PathBuf::from(amendment_file),
+            })
+            .map_err(|error| format!("{command} failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&amendment)
+                .map_err(|error| format!("amendment serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "ratify-asset-orchard-egress-policy" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let validators =
