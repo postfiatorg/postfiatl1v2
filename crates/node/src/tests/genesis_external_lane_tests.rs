@@ -1132,6 +1132,10 @@ mod release_path {
     /// keys). A signed FastSwap governance bootstrap registers it, so replay,
     /// prune and snapshots reproduce it.
     fn lane_chain(label: &str) -> Chain {
+        lane_chain_with_window(label, 86_400)
+    }
+
+    fn lane_chain_with_window(label: &str, release_window_blocks: u64) -> Chain {
         let keys: Vec<_> = (0..4_u8)
             .map(|index| ml_dsa_65_keygen_from_seed(&[0x81 + index; 32]))
             .collect();
@@ -1159,6 +1163,8 @@ mod release_path {
         };
         committee.domain.committee_root = committee.computed_root().expect("root");
         let mut genesis = lane_genesis(&format!("postfiat-lane-{label}"), 4);
+        genesis.external_lanes.as_mut().expect("lanes")[0].release_window_blocks =
+            release_window_blocks;
         let policy = &mut genesis.external_lanes.as_mut().expect("lanes")[0].policy;
         policy.committee_epoch = 1;
         policy.committee_root = format!("0x{}", bytes_to_hex(&committee.domain.committee_root.0));
@@ -1508,6 +1514,84 @@ mod release_path {
         })
         .expect("replay from genesis through the releases");
         let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    /// Five releases in two-block windows on a local chain, one block each,
+    /// so later releases prune the earlier records. A full snapshot export
+    /// and import into a fresh directory restores the same lane, pruned
+    /// fields and state root; the block and state verifiers pass on both
+    /// nodes, and the replay from genesis reproduces every committed state
+    /// root, the pruned fields among them.
+    #[test]
+    fn pruned_lane_survives_a_snapshot_round_trip_and_a_replay() {
+        let chain = lane_chain_with_window("release-prune", 2);
+        let amounts: Vec<u64> = (1..=5_u64).map(|nonce| ACCOUNT_RESERVE + 100 * nonce).collect();
+        for (index, amount) in amounts.iter().enumerate() {
+            let nonce = index as u64 + 1;
+            let tx = release_tx(&chain, "base-erc20", nonce, *amount, nonce);
+            let receipt = admit_and_apply(&chain, &tx, &format!("prune-{nonce}"));
+            assert!(receipt.accepted, "{receipt:?}");
+        }
+        let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
+        let lane = ledger.external_lanes[0].clone();
+        assert!(lane.pruned_release_count > 0, "{lane:?}");
+        assert_eq!(lane.release_count(), 5);
+        assert_eq!(lane.released_lock_nonces, (1..=5_u64).collect());
+        assert_eq!(lane.released_atoms, amounts.iter().sum::<u64>());
+        assert_eq!(
+            lane.pruned_released_atoms,
+            amounts[..lane.pruned_release_count as usize].iter().sum::<u64>()
+        );
+        lane.validate_against_genesis(&chain.genesis.external_lanes()[0])
+            .expect("pruned lane");
+        let info = lane_info(&chain.data_dir);
+        assert_eq!(info.release_count, 5);
+        assert_eq!(info.pruned_release_count, lane.pruned_release_count);
+        assert_eq!(info.release_history_root, lane.release_history_root);
+        assert_eq!(info.releases.len() as u64, 5 - lane.pruned_release_count);
+        assert_eq!(
+            info.releases.last().expect("oldest stored").sequence,
+            lane.pruned_release_count
+        );
+        assert_eq!(info.next_release_cursor, None);
+
+        let source = status(NodeOptions {
+            data_dir: chain.data_dir.clone(),
+        })
+        .expect("source status");
+        let snapshot_dir = sibling_dir(&chain.data_dir, "prune-snapshot");
+        let restored_dir = sibling_dir(&chain.data_dir, "prune-restored");
+        let manifest = export_snapshot(SnapshotExportOptions {
+            data_dir: chain.data_dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+        })
+        .expect("export snapshot of the pruned lane");
+        assert_eq!(manifest.state_root, source.state_root);
+        let restored = import_snapshot(SnapshotImportOptions {
+            data_dir: restored_dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+            node_id: Some("validator-restored".to_string()),
+        })
+        .expect("import snapshot of the pruned lane");
+        assert_eq!(restored.state_root, source.state_root);
+        let restored_ledger = NodeStore::new(&restored_dir).read_ledger().expect("ledger");
+        assert_eq!(restored_ledger.external_lanes, ledger.external_lanes);
+        assert_eq!(lane_info(&restored_dir), info);
+        for data_dir in [&chain.data_dir, &restored_dir] {
+            let blocks = verify_blocks(NodeOptions {
+                data_dir: data_dir.clone(),
+            })
+            .expect("replay from genesis through the pruning releases");
+            assert_eq!(blocks.state_root, source.state_root);
+            let state = verify_state(NodeOptions {
+                data_dir: data_dir.clone(),
+            })
+            .expect("state verifiers");
+            assert!(state.verified, "{state:?}");
+        }
+        for dir in [chain.data_dir, snapshot_dir, restored_dir] {
+            let _ = fs::remove_dir_all(dir);
+        }
     }
 
     /// A lane chain with two applied releases (nonces 1 and 2).

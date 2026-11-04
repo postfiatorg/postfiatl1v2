@@ -1301,8 +1301,54 @@ fn owned_native_total(ledger: &LedgerState) -> u128 {
         .sum()
 }
 
+/// A lane of `reserved` atoms after one-atom releases at heights 1, 3, 5 and
+/// 7 in two-block windows, so the later releases prune the earlier records.
+/// Returns the lane and its released atoms.
+fn fuzz_pruned_external_lane(
+    seed: u64,
+    reserved: u64,
+) -> Result<(postfiat_types::ExternalLaneState, u64), Box<dyn Error>> {
+    let lane = postfiat_types::GenesisExternalLane {
+        id: "base-erc20".to_string(),
+        reserved_atoms: reserved,
+        release_window_blocks: 2,
+        release_cap_bps: 10_000,
+        policy: postfiat_types::GenesisExternalLanePolicy {
+            chain_id: 8453,
+            lock_contract_address: format!("0x{}", "1a".repeat(20)),
+            token_address: format!("0x{}", "2b".repeat(20)),
+            token_runtime_code_hash: format!("0x{}", "3c".repeat(32)),
+            lock_runtime_code_hash: format!("0x{}", "4d".repeat(32)),
+            committee_epoch: 1,
+            committee_root: format!("0x{}", "5e".repeat(48)),
+            confirmation_depth: 1,
+        },
+    };
+    let mut state = postfiat_types::ExternalLaneState::genesis(&lane);
+    let releases = reserved.min(4);
+    for index in 0..releases {
+        state
+            .apply_release(
+                &lane,
+                postfiat_types::ExternalLaneReleaseRecord {
+                    lock_nonce: seed.wrapping_mul(4).wrapping_add(index),
+                    source_chain_id: 8453,
+                    lock_contract_address: format!("0x{}", "1a".repeat(20)),
+                    amount_atoms: 1,
+                    recipient: "lane-recipient".to_string(),
+                    source_block_number: 1,
+                    source_block_hash: format!("0x{}", "6f".repeat(32)),
+                    released_at_height: 1 + 2 * index,
+                },
+            )
+            .map_err(|(code, message)| format!("{code}: {message}"))?;
+    }
+    state.validate_against_genesis(&lane)?;
+    Ok((state, releases))
+}
+
 fn fuzz_native_supply_invariants(iterations: usize) -> Result<FuzzTargetReport, Box<dyn Error>> {
-    let cases_per_iteration = 11usize;
+    let cases_per_iteration = 12usize;
     let mut report = FuzzTargetReport::new(
         "native-supply-invariants",
         iterations,
@@ -1437,6 +1483,22 @@ fn fuzz_native_supply_invariants(iterations: usize) -> Result<FuzzTargetReport, 
                     .is_err_and(|error| error.to_string().contains("duplicate native custody")),
             );
         }
+
+        // A lane whose release records were pruned behind the finalized
+        // height still counts its whole remainder: pruning moves no atoms.
+        let pruned_lane = fuzz_pruned_external_lane(seed, lane_reserved)?;
+        let mut pruned = ledger.clone();
+        pruned.external_lanes[0] = pruned_lane.0;
+        let pruned_expected = expected - u128::from(lane_reserved - lane_released)
+            + u128::from(lane_reserved - pruned_lane.1);
+        let pruned_result = native_pft_live_total(&pruned, &shielded);
+        report.record_parse(pruned_result.is_ok());
+        report.assert_invariant(
+            pruned.external_lanes[0].pruned_release_count > 0
+                && pruned_result
+                    .as_ref()
+                    .is_ok_and(|value| *value == pruned_expected),
+        );
 
         let mut over_released = ledger.clone();
         over_released.external_lanes[0].released_atoms = lane_reserved.saturating_add(1);
