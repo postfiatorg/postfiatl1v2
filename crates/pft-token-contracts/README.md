@@ -279,7 +279,7 @@ and otherwise refused (`PermitFailed`); the deadline bounds the permit, not
 the lock.
 
 A Lock is refused for a zero amount, an amount below `minimumLockAmount`
-(`LockBelowMinimum(amount, minimum)`; the PFTL account reserve, so that no Lock
+(`LockBelowMinimum(amount, minimum)`; at least the PFTL account reserve, so that no Lock
 to a new PFTL account is final on Base but unreleasable on PFTL), an amount
 above `maxLockAmount` (the genesis per-window release cap, `uint64`), an empty or over-256-byte
 recipient, a token whose runtime code hash differs from the one fixed at
@@ -473,9 +473,11 @@ from `broadcast/DeployPFTLock.s.sol/<chain id>/run-latest.json`.
 
 The Base Sepolia rehearsal lock `0xE36e7Fc384564419187546c19719A5654266dE0B`
 (`deployments/pft-lock-base-84532/deployment.json`) predates the minimum: it
-accepts 1-atom Locks. The next rehearsal deploys a new lock with a new record
-path and a fresh deployer, since the script refuses an existing record
-(`RecordExists`) and a used deployer (`DeployerAlreadyUsed`).
+accepts 1-atom Locks. The record path is fixed per chain id, so the next
+rehearsal first archives the existing record under a name of its own (as for a
+reverted run below) to free that path, and deploys a new lock from a fresh
+deployer, since the script refuses an existing record (`RecordExists`) and a
+used deployer (`DeployerAlreadyUsed`).
 
 If the broadcast fails or its outcome is unclear (a timeout, a dropped
 connection, an unknown receipt), remember that the record and its code checks (`DeployedCodeMismatch`, `LockStateMismatch`) are
