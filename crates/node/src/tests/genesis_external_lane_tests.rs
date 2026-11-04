@@ -2082,6 +2082,21 @@ mod release_path {
         )
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
         fs::write(&amendment_file, serde_json::to_vec_pretty(&amendment)?)?;
+        let receipts = sign_and_apply_governance(chain, amendment_file, signers, &format!("cap-{tag}"))?;
+        Ok((amendment, receipts))
+    }
+
+    /// Signs the amendment in `amendment_file` by `signers` for the next
+    /// block's slot, assembles it and applies it in that block's governance
+    /// batch: the signing, assembly or admission error, or the receipts.
+    fn sign_and_apply_governance(
+        chain: &Chain,
+        amendment_file: PathBuf,
+        signers: &[String],
+        tag: &str,
+    ) -> io::Result<Vec<Receipt>> {
+        let data_dir = &chain.data_dir;
+        let slot = tip_height(chain) + 1;
         let validator_keys =
             read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE)).expect("validator keys");
         let expires_at_height = tip_height(chain) + 20;
@@ -2090,7 +2105,7 @@ mod release_path {
             if !signers.contains(&validator) {
                 continue;
             }
-            let authorization_file = data_dir.join(format!("{validator}.cap-{tag}.json"));
+            let authorization_file = data_dir.join(format!("{validator}.{tag}.json"));
             sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
                 data_dir: data_dir.clone(),
                 amendment_file: amendment_file.clone(),
@@ -2102,7 +2117,7 @@ mod release_path {
             })?;
             authorization_files.push(authorization_file);
         }
-        let signed_file = data_dir.join(format!("cap-{tag}.signed.json"));
+        let signed_file = data_dir.join(format!("{tag}.signed.json"));
         assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
             data_dir: data_dir.clone(),
             amendment_file,
@@ -2110,7 +2125,7 @@ mod release_path {
             proposal_slot: slot,
             output_file: signed_file.clone(),
         })?;
-        let batch_file = data_dir.join(format!("cap-{tag}.batch.json"));
+        let batch_file = data_dir.join(format!("{tag}.batch.json"));
         create_governance_batch(GovernanceBatchOptions {
             data_dir: data_dir.clone(),
             amendment_file: Some(signed_file),
@@ -2122,7 +2137,7 @@ mod release_path {
             batch_file,
             certificate_file: None,
         })?;
-        Ok((amendment, receipts))
+        Ok(receipts)
     }
 
     #[test]
@@ -2445,7 +2460,8 @@ mod release_path {
         let root1 = chain.committee.domain.committee_root.0;
         let root2 = epoch2.domain.committee_root.0;
         let code = |governance: &GovernanceState, ledger: Option<&LedgerState>, amendment: &GovernanceAmendment| {
-            external_lane_committee_amendment_rejection(governance, ledger, amendment).map(|(code, _)| code)
+            external_lane_committee_amendment_rejection(governance, ledger, Some(chain.genesis.external_lanes()), amendment)
+                .map(|(code, _)| code)
         };
         let valid = committee_move(&chain, "base-erc20", 2, &root2, 2);
         // Before epoch 2 is registered, the move binds no committee.
@@ -2475,6 +2491,7 @@ mod release_path {
         let receipts = execute_governance_batch(
             &mut governance.clone(),
             Some(&mut ledger.clone()),
+            Some(chain.genesis.external_lanes()),
             &GovernanceActionBatch::new("forged-move", vec![forged]),
             5,
         );
@@ -2483,6 +2500,7 @@ mod release_path {
         let receipts = execute_governance_batch(
             &mut governance,
             Some(&mut ledger),
+            Some(chain.genesis.external_lanes()),
             &GovernanceActionBatch::new("move", vec![valid.clone()]),
             5,
         );
@@ -2505,7 +2523,7 @@ mod release_path {
         let active = local_validator_ids(4).expect("validators");
         let valid = committee_move(&chain, "base-erc20", 2, &root2, 2);
         let admit = |amendment: &GovernanceAmendment, slot: u64| {
-            verify_external_lane_amendment_admission(&chain.genesis, &active, amendment, slot)
+            verify_external_lane_amendment_admission(&chain.genesis, &governance, &active, amendment, slot)
                 .err()
                 .map(|error| error.to_string())
         };
@@ -2536,6 +2554,7 @@ mod release_path {
             let receipts = execute_governance_batch(
                 &mut governance.clone(),
                 Some(&mut ledger.clone()),
+                Some(chain.genesis.external_lanes()),
                 &GovernanceActionBatch::new("refused-move", vec![amendment.clone()]),
                 5,
             );
@@ -2544,6 +2563,7 @@ mod release_path {
         let receipts = execute_governance_batch(
             &mut governance,
             Some(&mut ledger),
+            Some(chain.genesis.external_lanes()),
             &GovernanceActionBatch::new("move", vec![valid]),
             5,
         );
@@ -2968,5 +2988,175 @@ mod release_path {
         for dir in [chain.data_dir, restored] {
             let _ = fs::remove_dir_all(dir);
         }
+    }
+
+    /// A threshold-valid move back to the lane's genesis committee, epoch 1
+    /// with its root, while that committee is still the newest and no move
+    /// committed: refused at block execution, live and archived, and at
+    /// signed-batch admission of a hand-assembled signed batch.
+    #[test]
+    fn committee_move_to_the_genesis_epoch_is_refused_at_admission_and_execution() {
+        let chain = lane_chain("committee-move-genesis");
+        let store = NodeStore::new(&chain.data_dir);
+        let governance = store.read_governance().expect("governance");
+        let ledger = store.read_ledger().expect("ledger");
+        let root1 = chain.committee.domain.committee_root.0;
+        assert_eq!(chain.genesis.external_lanes()[0].policy.committee_epoch, 1);
+        let batch = GovernanceActionBatch::new("genesis-move", vec![committee_move(&chain, "base-erc20", 1, &root1, 1)]);
+        let live = execute_governance_batch(&mut governance.clone(), Some(&mut ledger.clone()), Some(chain.genesis.external_lanes()), &batch, 5);
+        let archived = crate::execution_actions::execute_archived_governance_batch(
+            &mut governance.clone(),
+            Some(&mut ledger.clone()),
+            Some(chain.genesis.external_lanes()),
+            &batch,
+            5,
+        );
+        for receipts in [live, archived] {
+            assert_eq!(receipts[0].code, "external_lane_committee_epoch_not_advanced", "{receipts:?}");
+        }
+        let validators = local_validator_ids(4).expect("validator ids");
+        match try_govern_committee_move(&chain, &chain.committee, &validators, 3, &validators[..3], None) {
+            Err(error) => {
+                assert!(error.to_string().contains("external_lane_committee_epoch_not_advanced"), "{error}")
+            }
+            Ok((_, receipts)) => panic!("genesis-epoch move reached the block: {receipts:?}"),
+        }
+        let info = lane_info(&chain.data_dir);
+        assert_eq!((info.committee.committee_epoch, info.committee.active), (1, None));
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    /// A committee kind without its binding, or the bare prefix, is refused
+    /// by the ledger rule and at block execution, live and archived.
+    #[test]
+    fn committee_kind_without_a_binding_is_refused_at_execution() {
+        let chain = lane_chain("committee-move-malformed");
+        let store = NodeStore::new(&chain.data_dir);
+        let governance = store.read_governance().expect("governance");
+        let ledger = store.read_ledger().expect("ledger");
+        let (epoch2, _) = second_committee(&chain);
+        let valid = committee_move(&chain, "base-erc20", 2, &epoch2.domain.committee_root.0, 2);
+        for kind in ["external_lane_committee_epoch_v1:base-erc20", "external_lane_committee_epoch_v1"] {
+            let amendment = GovernanceAmendment { amendment_id: format!("malformed-{kind}"), kind: kind.to_string(), ..valid.clone() };
+            assert_eq!(
+                external_lane_committee_amendment_rejection(
+                    &governance,
+                    Some(&ledger),
+                    Some(chain.genesis.external_lanes()),
+                    &amendment,
+                )
+                .map(|(code, _)| code),
+                Some("invalid_external_lane_committee_move"),
+                "{kind}"
+            );
+            let batch = GovernanceActionBatch::new("malformed-move", vec![amendment]);
+            let live = execute_governance_batch(&mut governance.clone(), Some(&mut ledger.clone()), Some(chain.genesis.external_lanes()), &batch, 5);
+            let archived = crate::execution_actions::execute_archived_governance_batch(
+                &mut governance.clone(),
+                Some(&mut ledger.clone()),
+                Some(chain.genesis.external_lanes()),
+                &batch,
+                5,
+            );
+            for receipts in [live, archived] {
+                assert_eq!(receipts[0].code, "invalid_external_lane_committee_move", "{kind}: {receipts:?}");
+            }
+        }
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    /// The node's ratify command for a lane amendment on six validators with
+    /// one absent: five of six, the registry threshold, ratify and reach the
+    /// block; four do not; another governance kind still needs all six.
+    #[test]
+    fn lane_amendment_ratify_command_on_six_validators_accepts_the_registry_threshold() {
+        let chain = lane_chain_with("ratify-six", 4, None, 6);
+        let validators = local_validator_ids(6).expect("validator ids");
+        let present = validators[1..].to_vec();
+        let slot = tip_height(&chain) + 1;
+        let amendment_file = chain.data_dir.join("cap-cli-six.unsigned.json");
+        let ratify = |kind: String, value: u32, support: Vec<String>| {
+            ratify_governance(RatifyGovernanceOptions {
+                data_dir: chain.data_dir.clone(),
+                validators: validators.clone(),
+                support,
+                kind,
+                value,
+                activation_height: slot,
+                veto_until_height: 0,
+                paused: false,
+                amendment_file: amendment_file.clone(),
+            })
+        };
+        let cap_kind = postfiat_types::external_lane_release_cap_amendment_kind("base-erc20");
+        let error = ratify(cap_kind.clone(), 0, validators[2..].to_vec()).expect_err("four of six").to_string();
+        assert!(error.contains("need 5"), "{error}");
+        let other = ratify(GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT.to_string(), 1_000, present.clone())
+            .expect_err("another kind with five of six")
+            .to_string();
+        assert!(other.contains("need 6"), "{other}");
+        // The committee command passes the quorum step too and meets its ledger rule.
+        let genesis_move =
+            postfiat_types::external_lane_committee_amendment_kind("base-erc20", 1, &chain.committee.domain.committee_root.0);
+        let error = ratify(genesis_move, 1, present.clone()).expect_err("genesis-epoch move").to_string();
+        assert!(error.contains("external_lane_committee_epoch_not_advanced"), "{error}");
+        let amendment = ratify(cap_kind, 0, present.clone()).expect("five of six ratified");
+        assert_eq!((amendment.validators.len(), amendment.quorum, amendment.support.len()), (6, 5, 5));
+        let receipts =
+            sign_and_apply_governance(&chain, amendment_file, &present, "cap-cli-six").expect("five signatures admitted");
+        assert!(receipts[0].accepted, "{receipts:?}");
+        let info = lane_info(&chain.data_dir);
+        assert_eq!((info.release_cap.active_cap_bps, info.window_cap_atoms), (0, 0));
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+
+    /// An old-committee release that reaches a block after a committee move:
+    /// before the rejected transaction fee activates it changes nothing;
+    /// after it, the lane and the Lock nonce still do not change, but the
+    /// payer's fee is burned and its sequence consumed, under the `tec_` code.
+    #[test]
+    fn old_committee_release_in_a_block_burns_the_fee_only_after_fee_activation() {
+        let chain = lane_chain("committee-inactive-fee");
+        let (epoch2, _) = second_committee(&chain);
+        activate_committee(&chain, &epoch2);
+        govern_committee_move(&chain, &epoch2);
+        let store = NodeStore::new(&chain.data_dir);
+        let ledger = store.read_ledger().expect("ledger");
+        let height = tip_height(&chain) + 1;
+        let old = release_tx(&chain, "base-erc20", 1, ACCOUNT_RESERVE + 100, faucet_sequence(&chain));
+        let payer = old.unsigned.source.clone();
+        let mut batch = TransactionBatch::new("committee-inactive-fee", Vec::new());
+        batch.asset_transactions.push(old);
+        let unactivated = store.read_governance().expect("governance");
+        let mut activated = unactivated.clone();
+        let template = activated.amendments[0].clone();
+        activated.apply(GovernanceAmendment {
+            amendment_id: "rejected-fee-activation".to_string(),
+            kind: GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT.to_string(),
+            value: u32::try_from(height).expect("height"),
+            ..template
+        });
+        for (governance, code, burned) in [
+            (unactivated, "external_lane_committee_inactive", 0),
+            (activated, "tec_external_lane_committee_inactive", 1_000),
+        ] {
+            let compatibility =
+                asset_execution_compatibility_for_genesis_and_governance(&chain.genesis, &governance);
+            let mut after = ledger.clone();
+            let receipts = execute_transparent_batch(
+                &chain.genesis,
+                &governance,
+                &mut after,
+                &batch,
+                height,
+                compatibility,
+            );
+            assert_eq!((receipts[0].code.as_str(), receipts[0].fee_burned), (code, burned), "{receipts:?}");
+            assert_eq!(after.external_lanes, ledger.external_lanes, "{code}: lane or Lock nonce changed");
+            let (was, now) = (ledger.account(&payer).expect("payer"), after.account(&payer).expect("payer"));
+            assert_eq!(now.balance, was.balance - burned, "{code}");
+            assert_eq!(now.sequence, was.sequence + u64::from(burned > 0), "{code}");
+        }
+        let _ = fs::remove_dir_all(chain.data_dir);
     }
 }

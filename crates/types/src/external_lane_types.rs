@@ -531,7 +531,10 @@ impl ExternalLaneCommitteeSelector {
 
 /// The committee of one lane for every height from its last committed move
 /// on: `before`, then `after` from `from_height`. `Copy`, so execution rules
-/// can carry it.
+/// can carry it. As the cap rule (`release_cap_rule`), it is correct for
+/// every height from the last committed move on, which is every height a
+/// block can still execute at; earlier heights read
+/// `GenesisExternalLane::committee_schedule_at`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExternalLaneCommitteeRule {
     pub before: ExternalLaneCommitteeSelector,
@@ -592,24 +595,71 @@ impl ExternalLaneCommittees {
     }
 }
 
-/// The refusal of a committee move against the ledger and the lane's
-/// committed moves (design section 4.1), `None` for any other kind: the lane
-/// must be configured; the kind's binding must hash the lane, the value's
-/// epoch and the root of the registered committee of that epoch; that
-/// committee must be the newest registered and not fenced; and the epoch
-/// must be above the lane's genesis epoch (when known) and every epoch it
-/// moved to before.
-pub fn external_lane_committee_move_refusal(
-    ledger: &LedgerState,
+/// Whether `kind` is of the committee move family, well formed or not.
+pub fn is_external_lane_committee_amendment_kind(kind: &str) -> bool {
+    kind.split(':').next() == Some(GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1)
+}
+
+/// The refusal of a committee move whose epoch does not advance the lane's
+/// committee (design section 4.1), `None` for any other kind: the lane must
+/// be one of `genesis_lanes`, and the epoch must be above that lane's
+/// genesis policy epoch and every epoch `committed` moved it to. It needs no
+/// ledger, so signed-batch admission checks it too.
+pub fn external_lane_committee_epoch_refusal(
+    genesis_lanes: &[GenesisExternalLane],
     committed: &[ExternalLaneCommitteeAmendment],
-    genesis_epoch: Option<u64>,
     kind: &str,
     value: u32,
 ) -> Option<(&'static str, String)> {
-    let (lane_id, binding) = external_lane_committee_amendment_parts(kind)?;
+    if !is_external_lane_committee_amendment_kind(kind) {
+        return None;
+    }
     if let Some(refusal) = external_lane_amendment_refusal(kind, value) {
         return Some(refusal);
     }
+    let (lane_id, _) = external_lane_committee_amendment_parts(kind)?;
+    let Some(lane) = genesis_lanes.iter().find(|lane| lane.id == lane_id) else {
+        return Some((
+            EXTERNAL_LANE_NOT_CONFIGURED,
+            format!("committee move names external lane `{lane_id}`, which genesis never configured"),
+        ));
+    };
+    let epoch = u64::from(value);
+    let previous = committed
+        .iter()
+        .map(|amendment| amendment.committee_epoch)
+        .fold(lane.policy.committee_epoch, u64::max);
+    (epoch <= previous).then(|| {
+        (
+            EXTERNAL_LANE_COMMITTEE_EPOCH_NOT_ADVANCED,
+            format!(
+                "external lane `{lane_id}` already names committee epoch {previous}; a move must advance it"
+            ),
+        )
+    })
+}
+
+/// The refusal of a committee move against the ledger, the genesis lanes and
+/// the lane's committed moves (design section 4.1), `None` for any other
+/// kind; a kind of the family without one well-formed lane id and binding is
+/// refused: the lane must be configured; the kind's binding must hash the
+/// lane, the value's epoch and the root of the registered committee of that
+/// epoch; that committee must be the newest registered and not fenced; and
+/// the epoch must advance (`external_lane_committee_epoch_refusal`).
+pub fn external_lane_committee_move_refusal(
+    ledger: &LedgerState,
+    genesis_lanes: &[GenesisExternalLane],
+    committed: &[ExternalLaneCommitteeAmendment],
+    kind: &str,
+    value: u32,
+) -> Option<(&'static str, String)> {
+    if !is_external_lane_committee_amendment_kind(kind) {
+        return None;
+    }
+    if let Some(refusal) = external_lane_amendment_refusal(kind, value) {
+        return Some(refusal);
+    }
+    let (lane_id, binding) = external_lane_committee_amendment_parts(kind)?;
     if !ledger.external_lanes.iter().any(|lane| lane.lane_id == lane_id) {
         return Some((
             EXTERNAL_LANE_NOT_CONFIGURED,
@@ -641,21 +691,7 @@ pub fn external_lane_committee_move_refusal(
             format!("committee epoch {epoch} must be the newest registered committee and not fenced"),
         ));
     }
-    let previous = committed
-        .iter()
-        .map(|amendment| amendment.committee_epoch)
-        .chain(genesis_epoch)
-        .max();
-    if previous.is_some_and(|previous| epoch <= previous) {
-        return Some((
-            EXTERNAL_LANE_COMMITTEE_EPOCH_NOT_ADVANCED,
-            format!(
-                "external lane `{lane_id}` already names committee epoch {}; a move must advance it",
-                previous.unwrap_or_default()
-            ),
-        ));
-    }
-    None
+    external_lane_committee_epoch_refusal(genesis_lanes, committed, kind, value)
 }
 
 fn lane_hex_bytes<const N: usize>(value: &str) -> Option<[u8; N]> {
@@ -725,6 +761,10 @@ impl GenesisExternalLane {
             schedule.active.map_or(ExternalLaneCommitteeSelector::Genesis, |change| {
                 ExternalLaneCommitteeSelector::Moved {
                     epoch: change.committee_epoch,
+                    // Fail closed: a committed binding is 96 lowercase hex
+                    // digits (`external_lane_amendment_refusal`); one that did
+                    // not parse would become the all-zero binding, which no
+                    // committee root hashes to, so every release is refused.
                     binding: lane_hex_bytes::<48>(&change.binding).unwrap_or([0; 48]),
                 }
             })

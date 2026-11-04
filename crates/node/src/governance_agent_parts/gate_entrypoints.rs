@@ -679,7 +679,7 @@ pub fn governance_agent_gate_8_5(
     )?;
     verify_governance_action_batch_id(&genesis, &batch)?;
     let mut governance = GovernanceState::new(genesis.validator_count);
-    let receipts = execute_governance_batch(&mut governance, None, &batch, 1);
+    let receipts = execute_governance_batch(&mut governance, None, None, &batch, 1);
     let dry_run_recorded = receipts
         .iter()
         .any(|receipt| receipt.tx_id == dry_run.dry_run_id && receipt.accepted);
@@ -858,7 +858,7 @@ pub fn governance_agent_gate_9_5(
     verify_governance_action_batch_id(&genesis, &cobalt_batch)?;
     let mut governance = GovernanceState::new(genesis.validator_count);
     let pre_cobalt_registry_root = validator_registry_root(&registry, &initial_validators)?;
-    let cobalt_receipts = execute_governance_batch(&mut governance, None, &cobalt_batch, 1);
+    let cobalt_receipts = execute_governance_batch(&mut governance, None, None, &cobalt_batch, 1);
     let cobalt_acceptance_verified = cobalt_receipts
         .iter()
         .any(|receipt| receipt.tx_id == admit_update.update_id && receipt.accepted)
@@ -909,7 +909,7 @@ pub fn governance_agent_gate_9_5(
         Vec::new(),
     )?;
     verify_governance_action_batch_id(&genesis, &rollback_batch)?;
-    let rollback_receipts = execute_governance_batch(&mut governance, None, &rollback_batch, 2);
+    let rollback_receipts = execute_governance_batch(&mut governance, None, None, &rollback_batch, 2);
     let rollback_cobalt_acceptance_verified = rollback_receipts
         .iter()
         .any(|receipt| receipt.tx_id == rollback_update.update_id && receipt.accepted)

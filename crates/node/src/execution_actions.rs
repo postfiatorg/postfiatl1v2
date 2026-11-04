@@ -1149,22 +1149,40 @@ pub(super) fn archived_wan_devnet2_orchard_aware_bridge_claim_identity_allowed(
             })
 }
 
+/// `genesis_lanes` give the lane rules their genesis policies: a block
+/// executes with them and the ledger.
 pub(super) fn execute_governance_batch(
     governance: &mut GovernanceState,
     ledger: Option<&mut LedgerState>,
+    genesis_lanes: Option<&[postfiat_types::GenesisExternalLane]>,
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(governance, ledger, None, batch, block_height, false)
+    execute_governance_batch_with_replay(
+        governance,
+        ledger,
+        genesis_lanes,
+        batch,
+        block_height,
+        false,
+    )
 }
 
 pub(super) fn execute_archived_governance_batch(
     governance: &mut GovernanceState,
     ledger: Option<&mut LedgerState>,
+    genesis_lanes: Option<&[postfiat_types::GenesisExternalLane]>,
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(governance, ledger, None, batch, block_height, true)
+    execute_governance_batch_with_replay(
+        governance,
+        ledger,
+        genesis_lanes,
+        batch,
+        block_height,
+        true,
+    )
 }
 
 /// An archived governance batch executed with no ledger, as the certificate
@@ -1243,6 +1261,7 @@ fn execute_governance_batch_with_replay(
                 external_lane_committee_amendment_rejection(
                     governance,
                     ledger.as_deref(),
+                    genesis_lanes,
                     amendment,
                 )
                 .or_else(|| {
@@ -1948,24 +1967,37 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
 }
 
 /// The ledger-bound refusal of a committee move of an external lane
-/// (`external_lane_committee_move_refusal`), `None` for any other kind. The
-/// move needs the canonical ledger, as the FastSwap bootstrap does.
+/// (`external_lane_committee_move_refusal`), `None` for any other kind. Every
+/// kind of the family is matched by its prefix, so a kind without its
+/// binding is refused here too. The move needs the canonical ledger, as the
+/// FastSwap bootstrap does, and the genesis lanes, whose policy epoch it
+/// must advance over.
 pub(super) fn external_lane_committee_amendment_rejection(
     governance: &GovernanceState,
     ledger: Option<&LedgerState>,
+    genesis_lanes: Option<&[postfiat_types::GenesisExternalLane]>,
     amendment: &GovernanceAmendment,
 ) -> Option<(&'static str, String)> {
-    let (lane_id, _) = postfiat_types::external_lane_committee_amendment_parts(&amendment.kind)?;
-    let Some(ledger) = ledger else {
+    if !postfiat_types::is_external_lane_committee_amendment_kind(&amendment.kind) {
+        return None;
+    }
+    if let Some(refusal) =
+        postfiat_types::external_lane_amendment_refusal(&amendment.kind, amendment.value)
+    {
+        return Some(refusal);
+    }
+    let (Some(ledger), Some(genesis_lanes)) = (ledger, genesis_lanes) else {
         return Some((
             postfiat_types::EXTERNAL_LANE_COMMITTEE_LEDGER_UNAVAILABLE,
-            "external lane committee move requires canonical ledger context".to_string(),
+            "external lane committee move requires canonical ledger and genesis lane context"
+                .to_string(),
         ));
     };
+    let (lane_id, _) = postfiat_types::external_lane_committee_amendment_parts(&amendment.kind)?;
     postfiat_types::external_lane_committee_move_refusal(
         ledger,
+        genesis_lanes,
         &governance.external_lane_committee_amendments(lane_id),
-        None,
         &amendment.kind,
         amendment.value,
     )

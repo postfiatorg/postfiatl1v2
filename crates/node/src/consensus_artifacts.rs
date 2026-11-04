@@ -2928,9 +2928,14 @@ where
 /// A release cap amendment or committee move admitted at `proposal_slot`
 /// names a lane genesis configures, is declared by the active set at the
 /// registry threshold, and names the slot as its activation height (design
-/// sections 4.1 and 5.1).
+/// sections 4.1 and 5.1); a committee move's epoch advances over the lane's
+/// genesis epoch and its committed moves. Admission has no ledger: whether a
+/// move binds the newest unfenced registered committee is checked at
+/// ratification and again at block execution, which refuses it in the
+/// block's receipt.
 pub(super) fn verify_external_lane_amendment_admission(
     genesis: &Genesis,
+    governance: &GovernanceState,
     active_validators: &[String],
     amendment: &GovernanceAmendment,
     proposal_slot: u64,
@@ -2947,6 +2952,16 @@ pub(super) fn verify_external_lane_amendment_admission(
     })
     .or_else(|| {
         postfiat_types::external_lane_amendment_slot_refusal(amendment, Some(proposal_slot))
+    })
+    .or_else(|| {
+        let (lane_id, _) =
+            postfiat_types::external_lane_committee_amendment_parts(&amendment.kind)?;
+        postfiat_types::external_lane_committee_epoch_refusal(
+            genesis.external_lanes(),
+            &governance.external_lane_committee_amendments(lane_id),
+            &amendment.kind,
+            amendment.value,
+        )
     });
     match refusal {
         Some((code, message)) => Err(io::Error::new(
@@ -3002,7 +3017,13 @@ pub(super) fn verify_live_signed_governance_batch(
         .filter(|update| update.activation_height < proposal_slot)
         .count() as u64;
     for amendment in &batch.amendments {
-        verify_external_lane_amendment_admission(genesis, &validators, amendment, proposal_slot)?;
+        verify_external_lane_amendment_admission(
+            genesis,
+            governance,
+            &validators,
+            amendment,
+            proposal_slot,
+        )?;
         verify_governance_amendment_evidence(genesis, amendment)?;
         if amendment.validators != validators {
             return Err(io::Error::new(

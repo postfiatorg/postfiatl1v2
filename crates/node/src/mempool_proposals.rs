@@ -3251,8 +3251,13 @@ fn build_governance_batch_proposal(
 
     verify_storage_commitment_action_readiness(store, &genesis, &batch, &chain_tip)?;
     ensure_governance_batch_lifecycle_ready(&batch, block_height)?;
-    let receipts =
-        execute_governance_batch(&mut governance, Some(&mut ledger), &batch, block_height);
+    let receipts = execute_governance_batch(
+        &mut governance,
+        Some(&mut ledger),
+        Some(genesis.external_lanes()),
+        &batch,
+        block_height,
+    );
     let (proposed_ordered_batches, ordered_history) =
         proposed_ordered_state(store, &genesis, &batch.batch_id, block_height)?;
     build_block_proposal_from_state(BlockProposalPlan {

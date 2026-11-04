@@ -4370,6 +4370,7 @@
         let governance_receipts = execute_governance_batch(
             &mut governance,
             None,
+            None,
             &GovernanceActionBatch::new("orchard-pause-batch", vec![pause]),
             1,
         );
@@ -4422,6 +4423,7 @@
         let invalid_receipts = execute_governance_batch(
             &mut governance,
             None,
+            None,
             &GovernanceActionBatch::new("orchard-pause-invalid-batch", vec![invalid]),
             3,
         );
@@ -4436,6 +4438,7 @@
         resume.value = 0;
         let resume_receipts = execute_governance_batch(
             &mut governance,
+            None,
             None,
             &GovernanceActionBatch::new("orchard-resume-batch", vec![resume]),
             4,

@@ -1264,6 +1264,12 @@ pub(super) fn update_governance_for_certificate_replay(
         return Ok(());
     }
     let batch: GovernanceActionBatch = parse_archived_payload(block, archive_entry)?;
+    // Without a ledger a committee move is refused here
+    // (`external_lane_committee_ledger_unavailable`), so this certificate copy
+    // of governance drops a move that the state-replay copy, which executes
+    // with the ledger, keeps. That is harmless: this copy only checks the
+    // certificates and registry of later blocks, which a lane move does not
+    // change, and the state root check reads the state-replay copy.
     let _ = crate::execution_actions::execute_ledgerless_archived_governance_batch(
         governance,
         genesis.external_lanes(),
@@ -3063,6 +3069,7 @@ pub(super) fn replay_archived_payload(
             Ok(crate::execution_actions::execute_archived_governance_batch(
                 state.governance,
                 Some(state.ledger),
+                Some(genesis.external_lanes()),
                 &batch,
                 block.header.height,
             ))
