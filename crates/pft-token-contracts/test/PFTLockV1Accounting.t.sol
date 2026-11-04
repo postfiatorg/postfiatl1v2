@@ -60,7 +60,8 @@ contract PFTLockV1AccountingTest {
     // Test amounts only; the product owner has not decided the real supply or cap.
     uint256 private constant SUPPLY = 1_000_000_000_000;
     uint64 private constant MAX_LOCK = 20_000_000_000;
-    uint64 private constant MIN_LOCK = 1;
+    /// The PFTL account reserve, the smallest minimum the constructor admits.
+    uint64 private constant MIN_LOCK = 10;
     uint256 private constant HOLDING = 100_000_000_000;
     uint64 private constant AMOUNT = 3_000_000;
     address private constant TREASURY = address(0x7EA5);
