@@ -1155,3 +1155,31 @@ fn committee_rule_selects_the_committee_by_epoch_and_binding() {
     assert!(ExternalLaneCommitteeSelector::Genesis.matches(&lane, &committee(2, [0x5e; 48])));
     assert!(!ExternalLaneCommitteeSelector::Genesis.matches(&lane, &committee(3, [3; 48])));
 }
+
+#[test]
+fn recorded_releases_name_the_committee_active_at_their_heights() {
+    let lane = release_test_lane();
+    let moves = [committee_move_record("to-3", 3, 50)];
+    let release = |nonce: u64, height: u64, committee_epoch: Option<u64>| ExternalLaneReleaseRecord {
+        committee_epoch,
+        ..sample_release(nonce, 10, height)
+    };
+    let mut state = ExternalLaneState::genesis(&lane);
+    state.apply_release(&lane, release(0, 50, None)).expect("genesis committee");
+    state.apply_release(&lane, release(1, 51, Some(3))).expect("moved committee");
+    state
+        .validate_against_genesis_governed(&lane, &[], &moves)
+        .expect("each release names the committee active at its height");
+    // Without the move, the record of height 51 names a committee genesis never named.
+    let error = state.validate_against_genesis_governed(&lane, &[], &[]).unwrap_err();
+    assert!(error.contains("committee epoch"), "{error}");
+    // A record of the old committee after the move is refused.
+    let mut stale = ExternalLaneState::genesis(&lane);
+    stale.apply_release(&lane, release(0, 51, None)).expect("forged under the old committee");
+    let error = stale.validate_against_genesis_governed(&lane, &[], &moves).unwrap_err();
+    assert!(error.contains("committee epoch"), "{error}");
+    // A record naming the moved epoch before the move took effect is refused.
+    let mut early = ExternalLaneState::genesis(&lane);
+    early.apply_release(&lane, release(0, 50, Some(3))).expect("forged early");
+    assert!(early.validate_against_genesis_governed(&lane, &[], &moves).is_err());
+}

@@ -1159,6 +1159,19 @@ impl ExternalLaneState {
         lane: &GenesisExternalLane,
         cap_amendments: &[ExternalLaneReleaseCapAmendment],
     ) -> Result<(), String> {
+        self.validate_against_genesis_governed(lane, cap_amendments, &[])
+    }
+
+    /// [`Self::validate_against_genesis_with_caps`] with each stored release
+    /// also naming the committee active at its height under the lane's
+    /// committed committee moves.
+    pub fn validate_against_genesis_governed(
+        &self,
+        lane: &GenesisExternalLane,
+        cap_amendments: &[ExternalLaneReleaseCapAmendment],
+        committee_amendments: &[ExternalLaneCommitteeAmendment],
+    ) -> Result<(), String> {
+
         self.validate()?;
         self.validate_recorded_releases()?;
         if self.lane_id != lane.id {
@@ -1184,6 +1197,16 @@ impl ExternalLaneState {
                 return Err(format!(
                     "external lane `{}` records Lock nonce {} from a source genesis did not configure",
                     self.lane_id, record.lock_nonce
+                ));
+            }
+            let committee_epoch = lane
+                .committee_schedule_at(committee_amendments, record.released_at_height)
+                .active
+                .map(|change| change.committee_epoch);
+            if record.committee_epoch != committee_epoch {
+                return Err(format!(
+                    "external lane `{}` records Lock nonce {} under committee epoch {:?}, but the committee active at height {} is epoch {:?} (`None` for the genesis committee)",
+                    self.lane_id, record.lock_nonce, record.committee_epoch, record.released_at_height, committee_epoch
                 ));
             }
             if record.released_at_height < previous_height {

@@ -1378,8 +1378,9 @@ fn validate_history_checkpoint_state(
 /// aggregate conservation check cannot see lane atoms moved to an account,
 /// so this rule is separate.
 /// Each ledger lane must be its genesis lane plus its recorded releases, with
-/// every window within the cap active at its heights under `governance`'s
-/// committed cap amendments.
+/// every window within the cap active at its heights and every stored
+/// release naming the committee active at its height, under `governance`'s
+/// committed cap amendments and committee moves.
 pub(super) fn validate_external_lanes_match_genesis(
     genesis: &Genesis,
     ledger: &LedgerState,
@@ -1406,9 +1407,10 @@ pub(super) fn validate_external_lanes_match_genesis(
                 lane.lane_id
             )));
         }
-        lane.validate_against_genesis_with_caps(
+        lane.validate_against_genesis_governed(
             genesis_lane,
             &governance.external_lane_release_cap_amendments(&lane.lane_id),
+            &governance.external_lane_committee_amendments(&lane.lane_id),
         )
         .map_err(|error| refuse(format!("{label} {error}")))?;
     }
