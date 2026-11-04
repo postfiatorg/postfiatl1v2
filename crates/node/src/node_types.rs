@@ -2630,7 +2630,7 @@ pub struct ExternalLaneInfoOptions {
 }
 
 /// `external_lane_info`: each genesis external lane's configuration, live
-/// record and a page of its release history, newest first.
+/// record and one page of its stored release records, newest first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExternalLaneInfoReport {
     pub schema: String,
