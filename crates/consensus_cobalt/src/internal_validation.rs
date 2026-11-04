@@ -1504,12 +1504,13 @@ pub fn verify_governance_amendment(
     if amendment.support.len() < amendment.quorum {
         return Err("governance amendment support is below quorum".to_string());
     }
-    // A release cap amendment needs the registry threshold of its declared
-    // set (design section 5.1); admission and execution bind that set to
-    // the active registry and the lifecycle to the proposal slot.
+    // A release cap amendment or committee move needs the registry
+    // threshold of its declared set (design sections 4.1 and 5.1);
+    // admission and execution bind that set to the active registry and the
+    // lifecycle to the proposal slot.
     if let Some((code, message)) =
-        postfiat_types::external_lane_release_cap_authority_refusal(amendment, None)
-            .or_else(|| postfiat_types::external_lane_release_cap_slot_refusal(amendment, None))
+        postfiat_types::external_lane_amendment_authority_refusal(amendment, None)
+            .or_else(|| postfiat_types::external_lane_amendment_slot_refusal(amendment, None))
     {
         return Err(format!("{code}: {message}"));
     }
@@ -1700,7 +1701,9 @@ fn validate_amendment_kind(kind: &str) -> Result<(), String> {
     if let Some((code, message)) = postfiat_types::external_lane_amendment_refusal(kind, 0) {
         return Err(format!("{code}: {message}"));
     }
-    if postfiat_types::external_lane_release_cap_amendment_lane(kind).is_some() {
+    if postfiat_types::external_lane_release_cap_amendment_lane(kind).is_some()
+        || postfiat_types::external_lane_committee_amendment_parts(kind).is_some()
+    {
         return Ok(());
     }
     for (prefix, label) in [

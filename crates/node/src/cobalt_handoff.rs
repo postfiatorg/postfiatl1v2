@@ -2279,7 +2279,7 @@ mod tests {
 
         let mut before = Vec::new();
         append_governance_state(&mut before, &governance);
-        let receipts = execute_governance_batch(&mut governance, None, &batch, 10);
+        let receipts = execute_governance_batch(&mut governance, None, None, &batch, 10);
         assert_eq!(receipts.len(), 1);
         assert!(receipts[0].accepted);
         assert_eq!(receipts[0].tx_id, transition.transition_id);
@@ -2302,7 +2302,7 @@ mod tests {
         let mut restored_commitment = Vec::new();
         append_governance_state(&mut restored_commitment, &restored);
         assert_eq!(after, restored_commitment);
-        let replay = execute_governance_batch(&mut restored, None, &batch, 10);
+        let replay = execute_governance_batch(&mut restored, None, None, &batch, 10);
         assert_eq!(replay.len(), 1);
         assert!(!replay[0].accepted);
         assert_eq!(replay[0].code, "cobalt_authority_transition_rejected");
@@ -2434,7 +2434,7 @@ mod tests {
             verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, 4,)
                 .is_err()
         );
-        let receipts = execute_governance_batch(&mut governance, None, &batch, 5);
+        let receipts = execute_governance_batch(&mut governance, None, None, &batch, 5);
         assert_eq!(receipts.len(), 1);
         assert!(receipts[0].accepted, "{receipts:?}");
         assert_eq!(

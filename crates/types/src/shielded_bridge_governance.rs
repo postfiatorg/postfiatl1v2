@@ -1594,6 +1594,43 @@ impl GovernanceState {
             .collect()
     }
 
+    /// The committed committee moves of an external lane, in commit order,
+    /// each with the height governance applied it (its activation record).
+    /// As for cap amendments, one without a record was not committed by
+    /// execution and is skipped, not dated at height 0.
+    pub fn external_lane_committee_amendments(
+        &self,
+        lane_id: &str,
+    ) -> Vec<crate::ExternalLaneCommitteeAmendment> {
+        self.amendments
+            .iter()
+            .filter_map(|amendment| {
+                let (lane, binding) =
+                    crate::external_lane_committee_amendment_parts(&amendment.kind)?;
+                if lane != lane_id {
+                    return None;
+                }
+                let record = self
+                    .amendment_activation_records
+                    .iter()
+                    .find(|record| record.amendment_id == amendment.amendment_id)?;
+                Some(crate::ExternalLaneCommitteeAmendment {
+                    amendment_id: amendment.amendment_id.clone(),
+                    committee_epoch: u64::from(amendment.value),
+                    binding: binding.to_string(),
+                    committed_height: record.activated_height,
+                })
+            })
+            .collect()
+    }
+
+    /// The governed committee table of `genesis`'s external lanes.
+    pub fn external_lane_committees(&self, genesis: &crate::Genesis) -> crate::ExternalLaneCommittees {
+        crate::ExternalLaneCommittees::from_amendments(genesis.external_lanes(), |lane_id| {
+            self.external_lane_committee_amendments(lane_id)
+        })
+    }
+
     /// The governed release cap table of `genesis`'s external lanes.
     pub fn external_lane_release_caps(&self, genesis: &crate::Genesis) -> crate::ExternalLaneReleaseCaps {
         crate::ExternalLaneReleaseCaps::from_amendments(genesis.external_lanes(), |lane_id| {
@@ -2844,6 +2881,26 @@ mod shielded_bridge_governance_tests {
             vec![crate::ExternalLaneReleaseCapAmendment {
                 amendment_id: dated.amendment_id,
                 cap_bps: 50,
+                committed_height: 40,
+            }]
+        );
+    }
+
+    #[test]
+    fn committee_amendment_without_an_activation_record_is_skipped_not_dated_at_genesis() {
+        let root = [7_u8; 48];
+        let mut governance = GovernanceState::new(6);
+        let dated = amendment(&crate::external_lane_committee_amendment_kind("base-erc20", 2, &root), 2);
+        let undated = amendment(&crate::external_lane_committee_amendment_kind("base-erc20", 3, &root), 3);
+        governance.apply(dated.clone());
+        governance.amendment_activation_records.push(activation_record(&dated, 40));
+        governance.apply(undated);
+        assert_eq!(
+            governance.external_lane_committee_amendments("base-erc20"),
+            vec![crate::ExternalLaneCommitteeAmendment {
+                amendment_id: dated.amendment_id,
+                committee_epoch: 2,
+                binding: crate::external_lane_committee_binding("base-erc20", 2, &root),
                 committed_height: 40,
             }]
         );

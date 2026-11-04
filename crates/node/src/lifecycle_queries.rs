@@ -2596,6 +2596,32 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
             next_height,
         );
         let window_cap_atoms = config.window_cap_atoms_for_bps(release_cap.active_cap_bps);
+        let committee_schedule = config.committee_schedule_at(
+            &governance.external_lane_committee_amendments(&config.id),
+            next_height,
+        );
+        let selector = config
+            .committee_rule(&governance.external_lane_committee_amendments(&config.id))
+            .after;
+        let committee_root = match (&committee_schedule.active, selector) {
+            (None, _) => config.policy.committee_root.clone(),
+            (Some(_), selector) => ledger
+                .fastswap_committees
+                .iter()
+                .find(|committee| selector.matches(config, committee))
+                .map(|committee| format!("0x{}", bytes_to_hex(&committee.domain.committee_root.0)))
+                .ok_or_else(|| {
+                    invalid(format!(
+                        "external lane `{}` names committee epoch {} that no registered committee matches",
+                        config.id, committee_schedule.committee_epoch
+                    ))
+                })?,
+        };
+        let committee = ExternalLaneCommitteeInfo {
+            committee_epoch: committee_schedule.committee_epoch,
+            committee_root,
+            active: committee_schedule.active,
+        };
         let next_window_index = config.window_index_at(next_height);
         let next_window_released = if next_window_index == state.window_index {
             state.window_released_atoms
@@ -2628,6 +2654,7 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
             remainder_atoms,
             window_cap_atoms,
             release_cap,
+            committee,
             next_window_index,
             next_window_available_atoms: window_cap_atoms
                 .saturating_sub(next_window_released)

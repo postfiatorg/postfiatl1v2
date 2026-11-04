@@ -24,7 +24,16 @@ pub fn ratify_governance(options: RatifyGovernanceOptions) -> io::Result<Governa
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
     let domain = cobalt_domain(&genesis);
-    let config = EssentialSubsetConfig::all_of(options.validators);
+    let mut config = EssentialSubsetConfig::all_of(options.validators);
+    // A lane amendment (cap or committee move) declares the full set but
+    // needs only the registry threshold ⌊2n/3⌋ + 1 of it (design sections
+    // 4.1, 5.1 and 5.2), so one offline validator cannot block a halt or a
+    // move; every other kind still needs each declared validator.
+    if postfiat_types::external_lane_release_cap_amendment_lane(&options.kind).is_some()
+        || postfiat_types::external_lane_committee_amendment_parts(&options.kind).is_some()
+    {
+        config.quorum = postfiat_types::external_lane_amendment_threshold(config.validators.len());
+    }
     let lifecycle = GovernanceAmendmentLifecycle {
         activation_height: options.activation_height,
         veto_until_height: options.veto_until_height,
@@ -39,17 +48,36 @@ pub fn ratify_governance(options: RatifyGovernanceOptions) -> io::Result<Governa
         lifecycle,
     )
     .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-    if postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind).is_some() {
+    if postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind).is_some()
+        || postfiat_types::external_lane_committee_amendment_parts(&amendment.kind).is_some()
+    {
         let active = active_validator_ids(&store.read_governance()?)?;
-        let refusal = postfiat_types::external_lane_release_cap_lane_refusal(
+        let refusal = postfiat_types::external_lane_amendment_lane_refusal(
             &amendment.kind,
             genesis.external_lanes().iter().map(|lane| lane.id.as_str()),
         )
         .or_else(|| {
-            postfiat_types::external_lane_release_cap_authority_refusal(&amendment, Some(&active))
+            postfiat_types::external_lane_amendment_authority_refusal(&amendment, Some(&active))
         })
-        .or_else(|| postfiat_types::external_lane_release_cap_slot_refusal(&amendment, None));
+        .or_else(|| postfiat_types::external_lane_amendment_slot_refusal(&amendment, None));
         if let Some((code, message)) = refusal {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("{code}: {message}"),
+            ));
+        }
+    }
+    if let Some((lane_id, _)) =
+        postfiat_types::external_lane_committee_amendment_parts(&amendment.kind)
+    {
+        let governance = store.read_governance()?;
+        if let Some((code, message)) = postfiat_types::external_lane_committee_move_refusal(
+            &store.read_ledger()?,
+            genesis.external_lanes(),
+            &governance.external_lane_committee_amendments(lane_id),
+            &amendment.kind,
+            amendment.value,
+        ) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!("{code}: {message}"),
@@ -2620,6 +2648,7 @@ fn apply_governance_batch_internal(
     let receipts = execute_governance_batch(
         &mut governance,
         Some(&mut ledger),
+        Some(genesis.external_lanes()),
         &batch,
         block_height,
     );

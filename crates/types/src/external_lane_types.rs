@@ -38,20 +38,65 @@ pub const EXTERNAL_LANE_SOURCE_CHAIN_IDS: [u64; 2] = [
     EXTERNAL_LANE_BASE_MAINNET_CHAIN_ID,
     EXTERNAL_LANE_BASE_SEPOLIA_CHAIN_ID,
 ];
-/// Governed amendment kinds of a lane, `<prefix>:<lane_id>`: the per-window
-/// release cap (design section 5.1) and the committee epoch move (section
-/// 4.1). The cap amendment's value is the new `release_cap_bps`, 0 to
-/// [`EXTERNAL_LANE_RELEASE_CAP_BPS_MAX`]; the committee epoch move is not
-/// built and is refused with [`EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED`].
+/// Governed amendment kinds of a lane: the per-window release cap,
+/// `<prefix>:<lane_id>` (design section 5.1), whose value is the new
+/// `release_cap_bps`, 0 to [`EXTERNAL_LANE_RELEASE_CAP_BPS_MAX`]; and the
+/// committee epoch move, `<prefix>:<lane_id>:<binding>` (section 4.1), whose
+/// value is the new committee epoch and whose binding
+/// ([`external_lane_committee_binding`]) hashes the lane, that epoch and the
+/// registered committee root, which does not fit the `u32` value.
 pub const GOVERNANCE_KIND_EXTERNAL_LANE_RELEASE_CAP_PREFIX_V1: &str =
     "external_lane_release_cap_v1";
 pub const GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1: &str =
     "external_lane_committee_epoch_v1";
-pub const EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED: &str = "external_lane_amendment_not_supported";
 pub const EXTERNAL_LANE_RELEASE_CAP_INVALID: &str = "invalid_external_lane_release_cap";
 /// A cap amendment that raises the cap takes effect this many windows after
 /// it commits (design section 5.1).
 pub const EXTERNAL_LANE_RELEASE_CAP_RAISE_DELAY_WINDOWS: u64 = 7;
+// Refusal codes of the committee epoch move.
+pub const EXTERNAL_LANE_COMMITTEE_MOVE_INVALID: &str = "invalid_external_lane_committee_move";
+pub const EXTERNAL_LANE_COMMITTEE_BINDING_MISMATCH: &str =
+    "external_lane_committee_binding_mismatch";
+pub const EXTERNAL_LANE_COMMITTEE_NOT_CURRENT: &str = "external_lane_committee_not_current";
+pub const EXTERNAL_LANE_COMMITTEE_EPOCH_NOT_ADVANCED: &str =
+    "external_lane_committee_epoch_not_advanced";
+pub const EXTERNAL_LANE_COMMITTEE_LEDGER_UNAVAILABLE: &str =
+    "external_lane_committee_ledger_unavailable";
+/// A release whose checkpoint names a committee other than the lane's active
+/// one at the release's height.
+pub const EXTERNAL_LANE_COMMITTEE_INACTIVE: &str = "external_lane_committee_inactive";
+const EXTERNAL_LANE_COMMITTEE_BINDING_DOMAIN: &[u8] = b"postfiat.external_lane.committee_move.v1";
+
+/// The binding a committee move names: SHA3-384 over a domain tag, the lane
+/// id, the epoch and the committee root, in lowercase hex.
+pub fn external_lane_committee_binding(lane_id: &str, epoch: u64, root: &[u8; 48]) -> String {
+    let mut hasher = Sha3_384::new();
+    hasher.update(EXTERNAL_LANE_COMMITTEE_BINDING_DOMAIN);
+    hasher.update([0_u8]);
+    hasher.update(lane_id.as_bytes());
+    hasher.update([0_u8]);
+    hasher.update(epoch.to_be_bytes());
+    hasher.update(root);
+    let digest: [u8; 48] = hasher.finalize().into();
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// The committee move kind of `lane_id` to the committee of `epoch` and
+/// `root`; its amendment value is `epoch`.
+pub fn external_lane_committee_amendment_kind(lane_id: &str, epoch: u64, root: &[u8; 48]) -> String {
+    format!(
+        "{GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1}:{lane_id}:{}",
+        external_lane_committee_binding(lane_id, epoch, root)
+    )
+}
+
+/// The lane and binding a committee move kind names, `None` for any other
+/// kind.
+pub fn external_lane_committee_amendment_parts(kind: &str) -> Option<(&str, &str)> {
+    kind.strip_prefix(GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1)?
+        .strip_prefix(':')?
+        .split_once(':')
+}
 
 /// The cap amendment kind of `lane_id`.
 pub fn external_lane_release_cap_amendment_kind(lane_id: &str) -> String {
@@ -64,17 +109,32 @@ pub fn external_lane_release_cap_amendment_lane(kind: &str) -> Option<&str> {
         .strip_prefix(':')
 }
 
-/// The refusal of a governed lane amendment, `None` when it is accepted or
-/// is of any other kind: the committee epoch move is not supported, and a
-/// cap amendment must name a well-formed lane id and a value of at most
-/// 10,000 basis points.
+/// The refusal of a governed lane amendment's shape, `None` when it is
+/// well formed or of any other kind: a cap amendment names one lane id and a
+/// value of at most 10,000 basis points; a committee move names one lane id
+/// and a lowercase 48-byte binding. Whether a committee move binds a
+/// registered committee is checked against the ledger
+/// ([`external_lane_committee_move_refusal`]).
 pub fn external_lane_amendment_refusal(kind: &str, value: u32) -> Option<(&'static str, String)> {
     let family = kind.split(':').next()?;
     if family == GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1 {
-        return Some((
-            EXTERNAL_LANE_AMENDMENT_NOT_SUPPORTED,
-            format!("governed external lane amendment `{family}` is not supported yet"),
-        ));
+        let well_formed = external_lane_committee_amendment_parts(kind).is_some_and(
+            |(lane_id, binding)| {
+                validate_external_lane_id(lane_id).is_ok()
+                    && binding.len() == EXTERNAL_LANE_COMMITTEE_ROOT_HEX_LEN
+                    && binding
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            },
+        );
+        return (!well_formed).then(|| {
+            (
+                EXTERNAL_LANE_COMMITTEE_MOVE_INVALID,
+                format!(
+                    "committee move `{kind}` must name one lane and a lowercase 48-byte binding of its epoch and committee root"
+                ),
+            )
+        });
     }
     if family != GOVERNANCE_KIND_EXTERNAL_LANE_RELEASE_CAP_PREFIX_V1 {
         return None;
@@ -105,76 +165,108 @@ pub const EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID: &str =
     "external_lane_release_cap_authority_invalid";
 /// A cap amendment whose activation height is not its proposal slot.
 pub const EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID: &str = "external_lane_release_cap_slot_invalid";
+/// A committee move not declared by the active validator set at the
+/// registry threshold.
+pub const EXTERNAL_LANE_COMMITTEE_MOVE_AUTHORITY_INVALID: &str =
+    "external_lane_committee_move_authority_invalid";
+/// A committee move whose activation height is not its proposal slot.
+pub const EXTERNAL_LANE_COMMITTEE_MOVE_SLOT_INVALID: &str =
+    "external_lane_committee_move_slot_invalid";
 
-/// Validators of `validator_count` whose signatures a cap amendment needs:
-/// the registry threshold ⌊2n/3⌋ + 1 (design sections 5.1 and 5.2).
-pub fn external_lane_release_cap_threshold(validator_count: usize) -> usize {
+/// The governed lane amendment `kind` names, `None` for any other kind:
+/// its lane, its label, and its lane, authority and slot refusal codes.
+fn governed_lane_amendment(
+    kind: &str,
+) -> Option<(&str, &'static str, [&'static str; 3])> {
+    if let Some(lane_id) = external_lane_release_cap_amendment_lane(kind) {
+        return Some((
+            lane_id,
+            "release cap amendment",
+            [
+                EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED,
+                EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
+                EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID,
+            ],
+        ));
+    }
+    let (lane_id, _) = external_lane_committee_amendment_parts(kind)?;
+    Some((
+        lane_id,
+        "committee move",
+        [
+            EXTERNAL_LANE_NOT_CONFIGURED,
+            EXTERNAL_LANE_COMMITTEE_MOVE_AUTHORITY_INVALID,
+            EXTERNAL_LANE_COMMITTEE_MOVE_SLOT_INVALID,
+        ],
+    ))
+}
+
+/// Validators of `validator_count` whose signatures a governed lane
+/// amendment needs: the registry threshold ⌊2n/3⌋ + 1 (design sections 4.1,
+/// 5.1 and 5.2).
+pub fn external_lane_amendment_threshold(validator_count: usize) -> usize {
     validator_count.saturating_mul(2) / 3 + 1
 }
 
-/// The refusal of a cap amendment for a lane none of `lane_ids` names, `None`
-/// for a configured lane or any other kind.
-pub fn external_lane_release_cap_lane_refusal<'a>(
+/// The refusal of a cap amendment or committee move for a lane none of
+/// `lane_ids` names, `None` for a configured lane or any other kind.
+pub fn external_lane_amendment_lane_refusal<'a>(
     kind: &str,
     mut lane_ids: impl Iterator<Item = &'a str>,
 ) -> Option<(&'static str, String)> {
-    let lane_id = external_lane_release_cap_amendment_lane(kind)?;
+    let (lane_id, label, [code, _, _]) = governed_lane_amendment(kind)?;
     (!lane_ids.any(|configured| configured == lane_id)).then(|| {
         (
-            EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED,
-            format!("release cap amendment `{kind}` names a lane genesis does not configure"),
+            code,
+            format!("{label} `{kind}` names a lane genesis does not configure"),
         )
     })
 }
 
-/// The refusal of a cap amendment's authority, `None` for any other kind:
-/// it must be declared by `active_validators` (its own set when the caller
-/// has no registry), with a quorum and support of at least the registry
-/// threshold.
-pub fn external_lane_release_cap_authority_refusal(
+/// The refusal of a cap amendment's or committee move's authority, `None`
+/// for any other kind: it must be declared by `active_validators` (its own
+/// set when the caller has no registry), with a quorum and support of at
+/// least the registry threshold.
+pub fn external_lane_amendment_authority_refusal(
     amendment: &crate::GovernanceAmendment,
     active_validators: Option<&[String]>,
 ) -> Option<(&'static str, String)> {
-    external_lane_release_cap_amendment_lane(&amendment.kind)?;
+    let (_, label, [_, code, _]) = governed_lane_amendment(&amendment.kind)?;
     let validators = active_validators.unwrap_or(&amendment.validators);
-    let threshold = external_lane_release_cap_threshold(validators.len());
+    let threshold = external_lane_amendment_threshold(validators.len());
     if amendment.validators != validators {
-        return Some((
-            EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
-            "release cap amendment must declare the active validator set".to_string(),
-        ));
+        return Some((code, format!("{label} must declare the active validator set")));
     }
     // `support.len()` alone is compared with the threshold: distinct in-set
     // support is enforced by the set equality above and by the
     // signed-authorization verification at admission.
     (amendment.quorum < threshold || amendment.support.len() < threshold).then(|| {
         (
-            EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
+            code,
             format!(
-                "release cap amendment needs quorum and support of at least the registry threshold {threshold} of {}",
+                "{label} needs quorum and support of at least the registry threshold {threshold} of {}",
                 validators.len()
             ),
         )
     })
 }
 
-/// The refusal of a cap amendment's lifecycle, `None` for any other kind:
-/// it carries its proposal slot as its activation height (`slot` when the
-/// caller knows it) and is not paused. The slot gives each request its own
-/// id, so a repeated halt is a new amendment.
-pub fn external_lane_release_cap_slot_refusal(
+/// The refusal of a cap amendment's or committee move's lifecycle, `None`
+/// for any other kind: it carries its proposal slot as its activation
+/// height (`slot` when the caller knows it) and is not paused. The slot
+/// gives each request its own id, so a repeated request is a new amendment.
+pub fn external_lane_amendment_slot_refusal(
     amendment: &crate::GovernanceAmendment,
     slot: Option<u64>,
 ) -> Option<(&'static str, String)> {
-    external_lane_release_cap_amendment_lane(&amendment.kind)?;
+    let (_, label, [_, _, code]) = governed_lane_amendment(&amendment.kind)?;
     (amendment.paused
         || amendment.activation_height == 0
         || slot.is_some_and(|slot| amendment.activation_height != slot))
     .then(|| {
         (
-            EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID,
-            "release cap amendment must name its proposal slot as its activation height and not be paused"
-                .to_string(),
+            code,
+            format!("{label} must name its proposal slot as its activation height and not be paused"),
         )
     })
 }
@@ -370,6 +462,250 @@ impl ExternalLaneReleaseCaps {
     }
 }
 
+/// A committed committee move of one lane: its id, the new epoch, the
+/// binding its kind names and the height governance applied it, in commit
+/// order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneCommitteeAmendment {
+    pub amendment_id: String,
+    pub committee_epoch: u64,
+    pub binding: String,
+    pub committed_height: u64,
+}
+
+/// A committee set by a move and the height from which it holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneCommitteeChange {
+    pub amendment_id: String,
+    pub committee_epoch: u64,
+    pub binding: String,
+    pub effective_height: u64,
+}
+
+/// The committee epoch in force at a height and the move that set it
+/// (`None` while the genesis policy's committee holds).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneCommitteeSchedule {
+    pub committee_epoch: u64,
+    pub active: Option<ExternalLaneCommitteeChange>,
+}
+
+/// Which registered committee a lane's checkpoints must carry: the genesis
+/// policy's, or the one a move bound by epoch and binding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExternalLaneCommitteeSelector {
+    Genesis,
+    Moved { epoch: u64, binding: [u8; 48] },
+}
+
+impl ExternalLaneCommitteeSelector {
+    pub fn matches(&self, lane: &GenesisExternalLane, committee: &FastSwapCommitteeV1) -> bool {
+        let epoch = committee.domain.committee_epoch;
+        let root = &committee.domain.committee_root.0;
+        match self {
+            Self::Genesis => {
+                epoch == lane.policy.committee_epoch
+                    && lane_hex_bytes::<48>(&lane.policy.committee_root).as_ref() == Some(root)
+            }
+            Self::Moved {
+                epoch: moved,
+                binding,
+            } => {
+                epoch == *moved
+                    && lane_hex_bytes::<48>(&external_lane_committee_binding(&lane.id, epoch, root))
+                        .as_ref()
+                        == Some(binding)
+            }
+        }
+    }
+
+    /// The committee epoch a release record names: `None` for the genesis
+    /// committee, so a lane that never moved records as before.
+    pub fn recorded_epoch(&self) -> Option<u64> {
+        match self {
+            Self::Genesis => None,
+            Self::Moved { epoch, .. } => Some(*epoch),
+        }
+    }
+}
+
+/// The committee of one lane for every height from its last committed move
+/// on: `before`, then `after` from `from_height`. `Copy`, so execution rules
+/// can carry it. As the cap rule (`release_cap_rule`), it is correct for
+/// every height from the last committed move on, which is every height a
+/// block can still execute at; earlier heights read
+/// `GenesisExternalLane::committee_schedule_at`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExternalLaneCommitteeRule {
+    pub before: ExternalLaneCommitteeSelector,
+    pub after: ExternalLaneCommitteeSelector,
+    pub from_height: u64,
+}
+
+/// The governed committee of each genesis lane, by its index in the genesis
+/// list; a lane without a committed move keeps its genesis committee.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExternalLaneCommittees {
+    rules: [Option<ExternalLaneCommitteeRule>; EXTERNAL_LANE_MAX_LANES],
+}
+
+impl Default for ExternalLaneCommittees {
+    fn default() -> Self {
+        Self::genesis()
+    }
+}
+
+impl ExternalLaneCommittees {
+    /// Every lane on its genesis committee.
+    pub const fn genesis() -> Self {
+        Self {
+            rules: [None; EXTERNAL_LANE_MAX_LANES],
+        }
+    }
+
+    /// The table for `lanes` under `amendments_of(lane_id)`, each lane's
+    /// committed committee moves in commit order.
+    pub fn from_amendments(
+        lanes: &[GenesisExternalLane],
+        amendments_of: impl Fn(&str) -> Vec<ExternalLaneCommitteeAmendment>,
+    ) -> Self {
+        let mut committees = Self::genesis();
+        for (slot, lane) in committees.rules.iter_mut().zip(lanes) {
+            let amendments = amendments_of(&lane.id);
+            if !amendments.is_empty() {
+                *slot = Some(lane.committee_rule(&amendments));
+            }
+        }
+        committees
+    }
+
+    /// The committee the lane at `lane_index` requires at `height`.
+    pub fn selector_at(&self, lane_index: usize, height: u64) -> ExternalLaneCommitteeSelector {
+        self.rules
+            .get(lane_index)
+            .copied()
+            .flatten()
+            .map_or(ExternalLaneCommitteeSelector::Genesis, |rule| {
+                if height >= rule.from_height {
+                    rule.after
+                } else {
+                    rule.before
+                }
+            })
+    }
+}
+
+/// Whether `kind` is of the committee move family, well formed or not.
+pub fn is_external_lane_committee_amendment_kind(kind: &str) -> bool {
+    kind.split(':').next() == Some(GOVERNANCE_KIND_EXTERNAL_LANE_COMMITTEE_EPOCH_PREFIX_V1)
+}
+
+/// The refusal of a committee move whose epoch does not advance the lane's
+/// committee (design section 4.1), `None` for any other kind: the lane must
+/// be one of `genesis_lanes`, and the epoch must be above that lane's
+/// genesis policy epoch and every epoch `committed` moved it to. It needs no
+/// ledger, so signed-batch admission checks it too.
+pub fn external_lane_committee_epoch_refusal(
+    genesis_lanes: &[GenesisExternalLane],
+    committed: &[ExternalLaneCommitteeAmendment],
+    kind: &str,
+    value: u32,
+) -> Option<(&'static str, String)> {
+    if !is_external_lane_committee_amendment_kind(kind) {
+        return None;
+    }
+    if let Some(refusal) = external_lane_amendment_refusal(kind, value) {
+        return Some(refusal);
+    }
+    let (lane_id, _) = external_lane_committee_amendment_parts(kind)?;
+    let Some(lane) = genesis_lanes.iter().find(|lane| lane.id == lane_id) else {
+        return Some((
+            EXTERNAL_LANE_NOT_CONFIGURED,
+            format!("committee move names external lane `{lane_id}`, which genesis never configured"),
+        ));
+    };
+    let epoch = u64::from(value);
+    let previous = committed
+        .iter()
+        .map(|amendment| amendment.committee_epoch)
+        .fold(lane.policy.committee_epoch, u64::max);
+    (epoch <= previous).then(|| {
+        (
+            EXTERNAL_LANE_COMMITTEE_EPOCH_NOT_ADVANCED,
+            format!(
+                "external lane `{lane_id}` already names committee epoch {previous}; a move must advance it"
+            ),
+        )
+    })
+}
+
+/// The refusal of a committee move against the ledger, the genesis lanes and
+/// the lane's committed moves (design section 4.1), `None` for any other
+/// kind; a kind of the family without one well-formed lane id and binding is
+/// refused: the lane must be configured; the kind's binding must hash the
+/// lane, the value's epoch and the root of the registered committee of that
+/// epoch; that committee must be the newest registered and not fenced; and
+/// the epoch must advance (`external_lane_committee_epoch_refusal`).
+pub fn external_lane_committee_move_refusal(
+    ledger: &LedgerState,
+    genesis_lanes: &[GenesisExternalLane],
+    committed: &[ExternalLaneCommitteeAmendment],
+    kind: &str,
+    value: u32,
+) -> Option<(&'static str, String)> {
+    if !is_external_lane_committee_amendment_kind(kind) {
+        return None;
+    }
+    if let Some(refusal) = external_lane_amendment_refusal(kind, value) {
+        return Some(refusal);
+    }
+    let (lane_id, binding) = external_lane_committee_amendment_parts(kind)?;
+    if !ledger.external_lanes.iter().any(|lane| lane.lane_id == lane_id) {
+        return Some((
+            EXTERNAL_LANE_NOT_CONFIGURED,
+            format!("committee move names external lane `{lane_id}`, which genesis never configured"),
+        ));
+    }
+    let epoch = u64::from(value);
+    let Some(committee) = ledger.fastswap_committees.iter().find(|committee| {
+        committee.domain.committee_epoch == epoch
+            && external_lane_committee_binding(lane_id, epoch, &committee.domain.committee_root.0)
+                == binding
+    }) else {
+        return Some((
+            EXTERNAL_LANE_COMMITTEE_BINDING_MISMATCH,
+            format!(
+                "committee move of external lane `{lane_id}` binds no registered committee of epoch {epoch}"
+            ),
+        ));
+    };
+    let current = committee.validate().is_ok()
+        && ledger.fastswap_committees.last() == Some(committee)
+        && !ledger
+            .fast_lane_prepare_fences
+            .iter()
+            .any(|fence| fence.committee_epoch == epoch);
+    if !current {
+        return Some((
+            EXTERNAL_LANE_COMMITTEE_NOT_CURRENT,
+            format!("committee epoch {epoch} must be the newest registered committee and not fenced"),
+        ));
+    }
+    external_lane_committee_epoch_refusal(genesis_lanes, committed, kind, value)
+}
+
+fn lane_hex_bytes<const N: usize>(value: &str) -> Option<[u8; N]> {
+    let digits = value.strip_prefix("0x").unwrap_or(value);
+    if digits.len() != N * 2 {
+        return None;
+    }
+    let mut bytes = [0_u8; N];
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(digits.get(index * 2..index * 2 + 2)?, 16).ok()?;
+    }
+    Some(bytes)
+}
+
 impl GenesisExternalLane {
     /// Atoms one window may release: `reserved_atoms × release_cap_bps /
     /// 10_000`, rounded down.
@@ -382,6 +718,62 @@ impl GenesisExternalLane {
         let cap = u128::from(self.reserved_atoms) * u128::from(cap_bps)
             / u128::from(EXTERNAL_LANE_RELEASE_CAP_BPS_MAX);
         u64::try_from(cap).unwrap_or(u64::MAX)
+    }
+
+    /// The committee in force at `height` under the lane's committed
+    /// committee moves, in commit order (design section 4.1): each move
+    /// holds from the block after it commits, and the latest one in force
+    /// wins.
+    pub fn committee_schedule_at(
+        &self,
+        amendments: &[ExternalLaneCommitteeAmendment],
+        height: u64,
+    ) -> ExternalLaneCommitteeSchedule {
+        let active = amendments
+            .iter()
+            .rev()
+            .find(|amendment| amendment.committed_height.saturating_add(1) <= height)
+            .map(|amendment| ExternalLaneCommitteeChange {
+                amendment_id: amendment.amendment_id.clone(),
+                committee_epoch: amendment.committee_epoch,
+                binding: amendment.binding.clone(),
+                effective_height: amendment.committed_height.saturating_add(1),
+            });
+        ExternalLaneCommitteeSchedule {
+            committee_epoch: active
+                .as_ref()
+                .map_or(self.policy.committee_epoch, |change| change.committee_epoch),
+            active,
+        }
+    }
+
+    /// The committee for every height from the last committed move on.
+    pub fn committee_rule(
+        &self,
+        amendments: &[ExternalLaneCommitteeAmendment],
+    ) -> ExternalLaneCommitteeRule {
+        let last = amendments
+            .iter()
+            .map(|amendment| amendment.committed_height)
+            .max()
+            .unwrap_or(0);
+        let selector = |schedule: ExternalLaneCommitteeSchedule| {
+            schedule.active.map_or(ExternalLaneCommitteeSelector::Genesis, |change| {
+                ExternalLaneCommitteeSelector::Moved {
+                    epoch: change.committee_epoch,
+                    // Fail closed: a committed binding is 96 lowercase hex
+                    // digits (`external_lane_amendment_refusal`); one that did
+                    // not parse would become the all-zero binding, which no
+                    // committee root hashes to, so every release is refused.
+                    binding: lane_hex_bytes::<48>(&change.binding).unwrap_or([0; 48]),
+                }
+            })
+        };
+        ExternalLaneCommitteeRule {
+            before: selector(self.committee_schedule_at(amendments, last)),
+            after: selector(self.committee_schedule_at(amendments, last.saturating_add(1))),
+            from_height: last.saturating_add(1),
+        }
     }
 
     /// The cap in force at `height` under the lane's committed cap
@@ -601,6 +993,11 @@ pub struct ExternalLaneReleaseRecord {
     pub source_block_number: u64,
     pub source_block_hash: String,
     pub released_at_height: u64,
+    /// The committee epoch a governed move named when this release was
+    /// proven; absent while the lane's genesis committee held, so a lane
+    /// that never moved records as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub committee_epoch: Option<u64>,
 }
 
 impl ExternalLaneReleaseRecord {
@@ -923,6 +1320,19 @@ impl ExternalLaneState {
         lane: &GenesisExternalLane,
         cap_amendments: &[ExternalLaneReleaseCapAmendment],
     ) -> Result<(), String> {
+        self.validate_against_genesis_governed(lane, cap_amendments, &[])
+    }
+
+    /// [`Self::validate_against_genesis_with_caps`] with each stored release
+    /// also naming the committee active at its height under the lane's
+    /// committed committee moves.
+    pub fn validate_against_genesis_governed(
+        &self,
+        lane: &GenesisExternalLane,
+        cap_amendments: &[ExternalLaneReleaseCapAmendment],
+        committee_amendments: &[ExternalLaneCommitteeAmendment],
+    ) -> Result<(), String> {
+
         self.validate()?;
         self.validate_recorded_releases()?;
         if self.lane_id != lane.id {
@@ -948,6 +1358,16 @@ impl ExternalLaneState {
                 return Err(format!(
                     "external lane `{}` records Lock nonce {} from a source genesis did not configure",
                     self.lane_id, record.lock_nonce
+                ));
+            }
+            let committee_epoch = lane
+                .committee_schedule_at(committee_amendments, record.released_at_height)
+                .active
+                .map(|change| change.committee_epoch);
+            if record.committee_epoch != committee_epoch {
+                return Err(format!(
+                    "external lane `{}` records Lock nonce {} under committee epoch {:?}, but the committee active at height {} is epoch {:?} (`None` for the genesis committee)",
+                    self.lane_id, record.lock_nonce, record.committee_epoch, record.released_at_height, committee_epoch
                 ));
             }
             if record.released_at_height < previous_height {

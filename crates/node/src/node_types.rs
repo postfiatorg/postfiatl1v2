@@ -2655,6 +2655,8 @@ pub struct ExternalLaneInfoRow {
     /// points, the amendment that set it (absent while the genesis cap
     /// holds) and a committed raise still in its seven-window delay.
     pub release_cap: postfiat_types::ExternalLaneReleaseCapSchedule,
+    /// The committee whose checkpoints the next block accepts.
+    pub committee: ExternalLaneCommitteeInfo,
     /// The window the next block falls in, and what it may still release.
     pub next_window_index: u64,
     pub next_window_available_atoms: u64,
@@ -2670,6 +2672,16 @@ pub struct ExternalLaneInfoRow {
     pub releases: Vec<ExternalLaneReleaseEntry>,
     /// Cursor of the next older page; absent on the last stored page.
     pub next_release_cursor: Option<u64>,
+}
+
+/// The committee a lane names at the next block: its epoch and registered
+/// root, and the committee move that set it (absent while the genesis
+/// policy's committee holds).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneCommitteeInfo {
+    pub committee_epoch: u64,
+    pub committee_root: String,
+    pub active: Option<postfiat_types::ExternalLaneCommitteeChange>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

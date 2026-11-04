@@ -503,6 +503,7 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
             governance.asset_orchard_pricing_max_nav_age_blocks(),
         )
         .with_external_lane_release_caps(governance.external_lane_release_caps(genesis))
+        .with_external_lane_committees(governance.external_lane_committees(genesis))
 }
 
 pub(super) fn asset_execution_compatibility_with_chain_activation(
@@ -532,6 +533,7 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
             governance.asset_orchard_pricing_max_nav_age_blocks(),
         )
         .with_external_lane_release_caps(governance.external_lane_release_caps(genesis))
+        .with_external_lane_committees(governance.external_lane_committees(genesis))
 }
 
 pub(super) fn ensure_atomic_swap_batch_allowed(
@@ -1147,22 +1149,40 @@ pub(super) fn archived_wan_devnet2_orchard_aware_bridge_claim_identity_allowed(
             })
 }
 
+/// `genesis_lanes` give the lane rules their genesis policies: a block
+/// executes with them and the ledger.
 pub(super) fn execute_governance_batch(
     governance: &mut GovernanceState,
     ledger: Option<&mut LedgerState>,
+    genesis_lanes: Option<&[postfiat_types::GenesisExternalLane]>,
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(governance, ledger, None, batch, block_height, false)
+    execute_governance_batch_with_replay(
+        governance,
+        ledger,
+        genesis_lanes,
+        batch,
+        block_height,
+        false,
+    )
 }
 
 pub(super) fn execute_archived_governance_batch(
     governance: &mut GovernanceState,
     ledger: Option<&mut LedgerState>,
+    genesis_lanes: Option<&[postfiat_types::GenesisExternalLane]>,
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(governance, ledger, None, batch, block_height, true)
+    execute_governance_batch_with_replay(
+        governance,
+        ledger,
+        genesis_lanes,
+        batch,
+        block_height,
+        true,
+    )
 }
 
 /// An archived governance batch executed with no ledger, as the certificate
@@ -1238,13 +1258,21 @@ fn execute_governance_batch_with_replay(
         }
         if let Some((code, message)) =
             governance_amendment_lifecycle_rejection(amendment, block_height).or_else(|| {
-                external_lane_release_cap_rejection(
+                external_lane_committee_amendment_rejection(
                     governance,
                     ledger.as_deref(),
                     genesis_lanes,
                     amendment,
-                    block_height,
                 )
+                .or_else(|| {
+                    external_lane_amendment_authority_rejection(
+                        governance,
+                        ledger.as_deref(),
+                        genesis_lanes,
+                        amendment,
+                        block_height,
+                    )
+                })
             })
         {
             receipts.push(Receipt::rejected(
@@ -1938,29 +1966,72 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
     Ok(())
 }
 
-/// The refusal of a release cap amendment at block execution: its lane
-/// must be one the ledger (that is, genesis) configures, and it must be
-/// declared by the active validator set at the registry threshold with this
-/// block as its activation height (design section 5.1). The ledger-less
-/// certificate replay passes the genesis lanes instead, so it refuses the
-/// same amendments; a caller with neither checks the authority alone.
-pub(super) fn external_lane_release_cap_rejection(
+/// The ledger-bound refusal of a committee move of an external lane
+/// (`external_lane_committee_move_refusal`), `None` for any other kind. Every
+/// kind of the family is matched by its prefix, so a kind without its
+/// binding is refused here too. The move needs the canonical ledger, as the
+/// FastSwap bootstrap does, and the genesis lanes, whose policy epoch it
+/// must advance over.
+pub(super) fn external_lane_committee_amendment_rejection(
+    governance: &GovernanceState,
+    ledger: Option<&LedgerState>,
+    genesis_lanes: Option<&[postfiat_types::GenesisExternalLane]>,
+    amendment: &GovernanceAmendment,
+) -> Option<(&'static str, String)> {
+    if !postfiat_types::is_external_lane_committee_amendment_kind(&amendment.kind) {
+        return None;
+    }
+    if let Some(refusal) =
+        postfiat_types::external_lane_amendment_refusal(&amendment.kind, amendment.value)
+    {
+        return Some(refusal);
+    }
+    let (Some(ledger), Some(genesis_lanes)) = (ledger, genesis_lanes) else {
+        return Some((
+            postfiat_types::EXTERNAL_LANE_COMMITTEE_LEDGER_UNAVAILABLE,
+            "external lane committee move requires canonical ledger and genesis lane context"
+                .to_string(),
+        ));
+    };
+    let (lane_id, _) = postfiat_types::external_lane_committee_amendment_parts(&amendment.kind)?;
+    postfiat_types::external_lane_committee_move_refusal(
+        ledger,
+        genesis_lanes,
+        &governance.external_lane_committee_amendments(lane_id),
+        &amendment.kind,
+        amendment.value,
+    )
+}
+
+/// The refusal of a release cap amendment or committee move at block
+/// execution: its lane must be one the ledger (that is, genesis) configures,
+/// and it must be declared by the active validator set at the registry
+/// threshold with this block as its activation height (design sections 4.1
+/// and 5.1). The ledger-less certificate replay passes the genesis lanes
+/// instead, so it refuses the same cap amendments; a caller with neither
+/// checks the authority alone, and a committee move is refused without a
+/// ledger by its ledger rule.
+pub(super) fn external_lane_amendment_authority_rejection(
     governance: &GovernanceState,
     ledger: Option<&LedgerState>,
     genesis_lanes: Option<&[postfiat_types::GenesisExternalLane]>,
     amendment: &GovernanceAmendment,
     block_height: u64,
 ) -> Option<(&'static str, String)> {
-    postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind)?;
+    if postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind).is_none()
+        && postfiat_types::external_lane_committee_amendment_parts(&amendment.kind).is_none()
+    {
+        return None;
+    }
     let lane_refusal = match (ledger, genesis_lanes) {
-        (Some(ledger), _) => postfiat_types::external_lane_release_cap_lane_refusal(
+        (Some(ledger), _) => postfiat_types::external_lane_amendment_lane_refusal(
             &amendment.kind,
             ledger
                 .external_lanes
                 .iter()
                 .map(|lane| lane.lane_id.as_str()),
         ),
-        (None, Some(lanes)) => postfiat_types::external_lane_release_cap_lane_refusal(
+        (None, Some(lanes)) => postfiat_types::external_lane_amendment_lane_refusal(
             &amendment.kind,
             lanes.iter().map(|lane| lane.id.as_str()),
         ),
@@ -1972,14 +2043,21 @@ pub(super) fn external_lane_release_cap_rejection(
     let active = match active_validator_ids(governance) {
         Ok(active) => active,
         Err(error) => {
+            let code = if postfiat_types::external_lane_release_cap_amendment_lane(&amendment.kind)
+                .is_some()
+            {
+                postfiat_types::EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID
+            } else {
+                postfiat_types::EXTERNAL_LANE_COMMITTEE_MOVE_AUTHORITY_INVALID
+            };
             return Some((
-                postfiat_types::EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID,
-                format!("release cap amendment has no active validator set: {error}"),
-            ))
+                code,
+                format!("governed lane amendment has no active validator set: {error}"),
+            ));
         }
     };
-    postfiat_types::external_lane_release_cap_authority_refusal(amendment, Some(&active)).or_else(
-        || postfiat_types::external_lane_release_cap_slot_refusal(amendment, Some(block_height)),
+    postfiat_types::external_lane_amendment_authority_refusal(amendment, Some(&active)).or_else(
+        || postfiat_types::external_lane_amendment_slot_refusal(amendment, Some(block_height)),
     )
 }
 

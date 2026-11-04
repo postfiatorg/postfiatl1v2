@@ -348,6 +348,7 @@ fn sample_release(nonce: u64, amount_atoms: u64, height: u64) -> ExternalLaneRel
         source_block_number: 100,
         source_block_hash: format!("0x{}", "6f".repeat(32)),
         released_at_height: height,
+        committee_epoch: None,
     }
 }
 
@@ -1083,6 +1084,106 @@ fn pruned_external_lane_commits_its_pruned_fields() {
     assert_eq!(decoded, pruned);
 }
 
+fn committee_move_record(id: &str, epoch: u64, committed_height: u64) -> ExternalLaneCommitteeAmendment {
+    ExternalLaneCommitteeAmendment {
+        amendment_id: id.to_string(),
+        committee_epoch: epoch,
+        binding: external_lane_committee_binding("base-erc20", epoch, &[epoch as u8; 48]),
+        committed_height,
+    }
+}
+
+#[test]
+fn committee_move_holds_from_the_block_after_it_commits() {
+    let lane = release_test_lane();
+    assert_eq!(lane.policy.committee_epoch, 2);
+    let moves = [committee_move_record("to-3", 3, 50)];
+    let at = |height| lane.committee_schedule_at(&moves, height);
+    assert_eq!((at(50).committee_epoch, at(50).active), (2, None));
+    let applied = at(51);
+    assert_eq!(applied.committee_epoch, 3);
+    assert_eq!(
+        applied.active,
+        Some(ExternalLaneCommitteeChange {
+            amendment_id: "to-3".to_string(),
+            committee_epoch: 3,
+            binding: moves[0].binding.clone(),
+            effective_height: 51,
+        })
+    );
+    // The latest move in force wins; one committed at the same height as
+    // another follows commit order.
+    let two = [committee_move_record("to-3", 3, 50), committee_move_record("to-4", 4, 80)];
+    assert_eq!(lane.committee_schedule_at(&two, 80).committee_epoch, 3);
+    assert_eq!(lane.committee_schedule_at(&two, 81).committee_epoch, 4);
+    let tie = [committee_move_record("to-3", 3, 50), committee_move_record("to-4", 4, 50)];
+    assert_eq!(lane.committee_schedule_at(&tie, 51).committee_epoch, 4);
+}
+
+#[test]
+fn committee_rule_selects_the_committee_by_epoch_and_binding() {
+    let lane = release_test_lane();
+    let moves = [committee_move_record("to-3", 3, 50)];
+    let committees = ExternalLaneCommittees::from_amendments(std::slice::from_ref(&lane), |_| moves.to_vec());
+    assert_eq!(committees.selector_at(0, 50), ExternalLaneCommitteeSelector::Genesis);
+    let moved = committees.selector_at(0, 51);
+    assert_eq!(moved.recorded_epoch(), Some(3));
+    assert_eq!(ExternalLaneCommittees::genesis().selector_at(0, 51), ExternalLaneCommitteeSelector::Genesis);
+    assert_eq!(ExternalLaneCommitteeSelector::Genesis.recorded_epoch(), None);
+    let committee = |epoch: u64, root: [u8; 48]| {
+        let mut committee = FastSwapCommitteeV1 {
+            domain: FastSwapCommitteeDomainV1 {
+                chain: FastSwapChainDomainV1 {
+                    chain_id: "postfiat-local".to_string(),
+                    genesis_hash: FastSwapOpaqueHashV1([0; 48]),
+                    protocol_version: 1,
+                },
+                fastswap_schema_version: FASTSWAP_SCHEMA_VERSION_V1,
+                committee_epoch: epoch,
+                committee_root: FastSwapCommitteeRootV1(root),
+                validator_count: 4,
+                quorum: 3,
+            },
+            validators: Vec::new(),
+        };
+        committee.domain.committee_root = FastSwapCommitteeRootV1(root);
+        committee
+    };
+    assert!(moved.matches(&lane, &committee(3, [3; 48])));
+    assert!(!moved.matches(&lane, &committee(3, [4; 48])), "another root");
+    assert!(!moved.matches(&lane, &committee(2, [3; 48])), "another epoch");
+    assert!(ExternalLaneCommitteeSelector::Genesis.matches(&lane, &committee(2, [0x5e; 48])));
+    assert!(!ExternalLaneCommitteeSelector::Genesis.matches(&lane, &committee(3, [3; 48])));
+}
+
+#[test]
+fn recorded_releases_name_the_committee_active_at_their_heights() {
+    let lane = release_test_lane();
+    let moves = [committee_move_record("to-3", 3, 50)];
+    let release = |nonce: u64, height: u64, committee_epoch: Option<u64>| ExternalLaneReleaseRecord {
+        committee_epoch,
+        ..sample_release(nonce, 10, height)
+    };
+    let mut state = ExternalLaneState::genesis(&lane);
+    state.apply_release(&lane, release(0, 50, None)).expect("genesis committee");
+    state.apply_release(&lane, release(1, 51, Some(3))).expect("moved committee");
+    state
+        .validate_against_genesis_governed(&lane, &[], &moves)
+        .expect("each release names the committee active at its height");
+    // Without the move, the record of height 51 names a committee genesis never named.
+    let error = state.validate_against_genesis_governed(&lane, &[], &[]).unwrap_err();
+    assert!(error.contains("committee epoch"), "{error}");
+    // A record of the old committee after the move is refused.
+    let mut stale = ExternalLaneState::genesis(&lane);
+    stale.apply_release(&lane, release(0, 51, None)).expect("forged under the old committee");
+    let error = stale.validate_against_genesis_governed(&lane, &[], &moves).unwrap_err();
+    assert!(error.contains("committee epoch"), "{error}");
+    // A record naming the moved epoch before the move took effect is refused.
+    let mut early = ExternalLaneState::genesis(&lane);
+    early.apply_release(&lane, release(0, 50, Some(3))).expect("forged early");
+    assert!(early.validate_against_genesis_governed(&lane, &[], &moves).is_err());
+}
+
 #[test]
 fn cap_table_halts_a_lane_it_cannot_hold() {
     let lane = release_test_lane();
@@ -1129,10 +1230,10 @@ fn cap_amendment_by(validators: &[&str], quorum: usize, support: &[&str], slot: 
 fn cap_amendment_needs_the_registry_threshold_of_the_active_set() {
     let six = ["v0", "v1", "v2", "v3", "v4", "v5"];
     let active = six.iter().map(|name| name.to_string()).collect::<Vec<_>>();
-    assert_eq!(external_lane_release_cap_threshold(6), 5);
-    assert_eq!(external_lane_release_cap_threshold(4), 3);
+    assert_eq!(external_lane_amendment_threshold(6), 5);
+    assert_eq!(external_lane_amendment_threshold(4), 3);
     let refusal = |amendment: &GovernanceAmendment| {
-        external_lane_release_cap_authority_refusal(amendment, Some(&active)).map(|(code, _)| code)
+        external_lane_amendment_authority_refusal(amendment, Some(&active)).map(|(code, _)| code)
     };
     let authority = Some(EXTERNAL_LANE_RELEASE_CAP_AUTHORITY_INVALID);
     assert_eq!(refusal(&cap_amendment_by(&six, 1, &six[..1], 9)), authority, "quorum 1");
@@ -1143,18 +1244,46 @@ fn cap_amendment_needs_the_registry_threshold_of_the_active_set() {
     assert_eq!(refusal(&cap_amendment_by(&six, 6, &six, 9)), None, "all six");
     // Without a registry the declared set is the reference.
     let declared = cap_amendment_by(&six[..3], 3, &six[..3], 9);
-    assert_eq!(external_lane_release_cap_authority_refusal(&declared, None), None);
+    assert_eq!(external_lane_amendment_authority_refusal(&declared, None), None);
     let mut other = declared.clone();
     other.kind = "orchard_pool_pause".to_string();
     other.quorum = 1;
-    assert_eq!(external_lane_release_cap_authority_refusal(&other, Some(&active)), None);
+    assert_eq!(external_lane_amendment_authority_refusal(&other, Some(&active)), None);
+}
+
+#[test]
+fn committee_move_needs_the_registry_threshold_and_its_proposal_slot() {
+    let six = ["v0", "v1", "v2", "v3", "v4", "v5"];
+    let active = six.iter().map(|name| name.to_string()).collect::<Vec<_>>();
+    let by = |validators: &[&str], quorum, support: &[&str], slot| GovernanceAmendment {
+        kind: external_lane_committee_amendment_kind("base-erc20", 3, &[3; 48]),
+        ..cap_amendment_by(validators, quorum, support, slot)
+    };
+    let authority = |amendment: &GovernanceAmendment| {
+        external_lane_amendment_authority_refusal(amendment, Some(&active)).map(|(code, _)| code)
+    };
+    let invalid = Some(EXTERNAL_LANE_COMMITTEE_MOVE_AUTHORITY_INVALID);
+    assert_eq!(authority(&by(&six, 1, &six[..1], 9)), invalid, "quorum 1");
+    assert_eq!(authority(&by(&six, 5, &six[..4], 9)), invalid, "support below");
+    assert_eq!(authority(&by(&six[..5], 5, &six[..5], 9)), invalid, "an active validator omitted");
+    assert_eq!(authority(&by(&six, 5, &six[..5], 9)), None, "the threshold");
+    let slot = |amendment: &GovernanceAmendment, at| {
+        external_lane_amendment_slot_refusal(amendment, at).map(|(code, _)| code)
+    };
+    let invalid = Some(EXTERNAL_LANE_COMMITTEE_MOVE_SLOT_INVALID);
+    assert_eq!(slot(&by(&six, 5, &six[..5], 0), None), invalid, "immediate lifecycle");
+    assert_eq!(slot(&by(&six, 5, &six[..5], 8), Some(9)), invalid, "another slot");
+    assert_eq!(slot(&by(&six, 5, &six[..5], 9), Some(9)), None);
+    let lane = |kind: &str| external_lane_amendment_lane_refusal(kind, ["base-erc20"].into_iter()).map(|(code, _)| code);
+    assert_eq!(lane(&external_lane_committee_amendment_kind("not-a-lane", 3, &[3; 48])), Some(EXTERNAL_LANE_NOT_CONFIGURED));
+    assert_eq!(lane(&external_lane_committee_amendment_kind("base-erc20", 3, &[3; 48])), None);
 }
 
 #[test]
 fn cap_amendment_names_its_proposal_slot() {
     let six = ["v0", "v1", "v2", "v3", "v4", "v5"];
     let refusal = |amendment: &GovernanceAmendment, slot| {
-        external_lane_release_cap_slot_refusal(amendment, slot).map(|(code, _)| code)
+        external_lane_amendment_slot_refusal(amendment, slot).map(|(code, _)| code)
     };
     let invalid = Some(EXTERNAL_LANE_RELEASE_CAP_SLOT_INVALID);
     assert_eq!(refusal(&cap_amendment_by(&six, 5, &six[..5], 9), Some(9)), None);
@@ -1169,7 +1298,7 @@ fn cap_amendment_names_its_proposal_slot() {
 #[test]
 fn cap_amendment_for_a_lane_genesis_does_not_configure_is_refused() {
     let lanes = ["base-erc20"];
-    let refusal = |kind: &str| external_lane_release_cap_lane_refusal(kind, lanes.into_iter()).map(|(code, _)| code);
+    let refusal = |kind: &str| external_lane_amendment_lane_refusal(kind, lanes.into_iter()).map(|(code, _)| code);
     assert_eq!(
         refusal(&external_lane_release_cap_amendment_kind("not-a-lane")),
         Some(EXTERNAL_LANE_RELEASE_CAP_LANE_NOT_CONFIGURED)

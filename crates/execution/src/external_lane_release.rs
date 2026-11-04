@@ -20,12 +20,12 @@ use postfiat_bridge::{
 };
 use postfiat_crypto_provider::{bytes_to_hex, hex_to_bytes};
 use postfiat_types::{
-    EthereumExternalEventProofV1, ExternalLaneReleaseCaps, ExternalLaneReleaseOperationV1,
-    ExternalLaneReleaseRecord, FastSwapChainDomainV1, FastSwapCommitteeRootV1, FastSwapCommitteeV1,
-    FastSwapOpaqueHashV1, Genesis, GenesisExternalLane, LedgerState,
-    EXTERNAL_LANE_CHECKPOINT_MISMATCH, EXTERNAL_LANE_COMMITTEE_MISSING,
-    EXTERNAL_LANE_LOCK_MISMATCH, EXTERNAL_LANE_NOT_CONFIGURED, EXTERNAL_LANE_PROOF_INVALID,
-    EXTERNAL_LANE_SOURCE_MISMATCH,
+    EthereumExternalEventProofV1, ExternalLaneCommitteeSelector, ExternalLaneCommittees,
+    ExternalLaneReleaseCaps, ExternalLaneReleaseOperationV1, ExternalLaneReleaseRecord,
+    FastSwapChainDomainV1, FastSwapCommitteeV1, FastSwapOpaqueHashV1, Genesis, GenesisExternalLane,
+    LedgerState, EXTERNAL_LANE_CHECKPOINT_MISMATCH, EXTERNAL_LANE_COMMITTEE_INACTIVE,
+    EXTERNAL_LANE_COMMITTEE_MISSING, EXTERNAL_LANE_LOCK_MISMATCH, EXTERNAL_LANE_NOT_CONFIGURED,
+    EXTERNAL_LANE_PROOF_INVALID, EXTERNAL_LANE_SOURCE_MISMATCH,
 };
 
 type ExecutionError = (&'static str, String);
@@ -53,6 +53,9 @@ pub(crate) struct VerifiedExternalLock {
     pub recipient: String,
     pub source_block_number: u64,
     pub source_block_hash: String,
+    /// The committee epoch a governed move named, `None` for the genesis
+    /// committee.
+    pub committee_epoch: Option<u64>,
 }
 
 fn configured_lane<'a>(
@@ -123,31 +126,26 @@ fn genesis_chain_domain(genesis: &Genesis) -> Result<FastSwapChainDomainV1, Exec
     })
 }
 
-/// The governed committee the lane's policy names, on this chain.
+/// The governed committee the lane names at the release's height
+/// (`selector`: its genesis policy's, or the one a committee move bound), on
+/// this chain.
 fn lane_committee<'a>(
     genesis: &Genesis,
     ledger: &'a LedgerState,
     lane: &GenesisExternalLane,
+    selector: ExternalLaneCommitteeSelector,
 ) -> Result<&'a FastSwapCommitteeV1, ExecutionError> {
-    let root = FastSwapCommitteeRootV1(policy_bytes::<48>(
-        "committee_root",
-        &lane.policy.committee_root,
-    )?);
     let chain = genesis_chain_domain(genesis)?;
     ledger
         .fastswap_committees
         .iter()
-        .find(|committee| {
-            committee.domain.committee_epoch == lane.policy.committee_epoch
-                && committee.domain.committee_root == root
-                && committee.domain.chain == chain
-        })
+        .find(|committee| committee.domain.chain == chain && selector.matches(lane, committee))
         .ok_or_else(|| {
             (
                 EXTERNAL_LANE_COMMITTEE_MISSING,
                 format!(
-                    "no governed committee matches external lane `{}` epoch {} root {}",
-                    lane.id, lane.policy.committee_epoch, lane.policy.committee_root
+                    "no governed committee matches the committee external lane `{}` names at this height",
+                    lane.id
                 ),
             )
         })
@@ -163,6 +161,7 @@ pub(crate) fn verify_external_lane_lock(
     ledger: &LedgerState,
     claim: &ExternalLockClaim<'_>,
     proof: &EthereumExternalEventProofV1,
+    selector: ExternalLaneCommitteeSelector,
 ) -> Result<VerifiedExternalLock, ExecutionError> {
     let lane = configured_lane(genesis, claim.lane_id)?;
     require_lane_source(lane, claim.source_chain_id, claim.lock_contract_address)?;
@@ -191,7 +190,21 @@ pub(crate) fn verify_external_lane_lock(
             format!("external lane proof is malformed: {error:?}"),
         )
     })?;
-    let committee = lane_committee(genesis, ledger, lane)?;
+    let committee = lane_committee(genesis, ledger, lane, selector)?;
+    // A checkpoint must name the committee the lane names at this height:
+    // from the block after a move, the previous epoch's checkpoints are
+    // refused, and the Lock is re-proven by the new committee.
+    if attested.authority_epoch != committee.domain.committee_epoch
+        || attested.committee_root != committee.domain.committee_root
+    {
+        return Err((
+            EXTERNAL_LANE_COMMITTEE_INACTIVE,
+            format!(
+                "Base checkpoint of committee epoch {} is not from the committee epoch {} external lane `{}` names at this height",
+                attested.authority_epoch, committee.domain.committee_epoch, lane.id
+            ),
+        ));
+    }
     let (checkpoint, _) =
         verify_ethereum_checkpoint_certificate(committee, &proof.checkpoint_certificate).map_err(
             |error| {
@@ -270,6 +283,7 @@ pub(crate) fn verify_external_lane_lock(
         recipient: claim.recipient.to_string(),
         source_block_number: checkpoint.block_number,
         source_block_hash: format!("0x{}", bytes_to_hex(&checkpoint.block_hash)),
+        committee_epoch: selector.recorded_epoch(),
     })
 }
 
@@ -281,7 +295,14 @@ pub(crate) fn execute_external_lane_release(
     operation: &ExternalLaneReleaseOperationV1,
     block_height: u64,
     caps: ExternalLaneReleaseCaps,
+    committees: ExternalLaneCommittees,
 ) -> Result<(), ExecutionError> {
+    let lane_index = genesis
+        .external_lanes()
+        .iter()
+        .position(|lane| lane.id == operation.lane_id)
+        .unwrap_or(usize::MAX);
+    let selector = committees.selector_at(lane_index, block_height);
     let claim = ExternalLockClaim {
         lane_id: &operation.lane_id,
         source_chain_id: operation.source_chain_id,
@@ -290,7 +311,7 @@ pub(crate) fn execute_external_lane_release(
         amount_atoms: operation.amount_atoms,
         recipient: &operation.recipient,
     };
-    let lock = verify_external_lane_lock(genesis, ledger, &claim, &operation.proof)?;
+    let lock = verify_external_lane_lock(genesis, ledger, &claim, &operation.proof, selector)?;
     apply_external_lane_release(genesis, ledger, lock, block_height, caps)
 }
 
@@ -352,6 +373,7 @@ pub(crate) fn apply_external_lane_release(
             source_block_number: lock.source_block_number,
             source_block_hash: lock.source_block_hash,
             released_at_height: block_height,
+            committee_epoch: lock.committee_epoch,
         },
         cap_atoms,
     )?;
@@ -415,6 +437,7 @@ mod tests {
             recipient: recipient.to_string(),
             source_block_number: 500,
             source_block_hash: format!("0x{}", "6f".repeat(32)),
+            committee_epoch: None,
         }
     }
 
@@ -730,7 +753,7 @@ mod proof_tests {
                 chain: genesis_chain_domain(&lane_genesis()).expect("domain"),
                 fastswap_schema_version: FASTSWAP_SCHEMA_VERSION_V1,
                 committee_epoch: 2,
-                committee_root: FastSwapCommitteeRootV1::ZERO,
+                committee_root: postfiat_types::FastSwapCommitteeRootV1::ZERO,
                 validator_count: 6,
                 quorum: 5,
             },
@@ -929,16 +952,28 @@ mod proof_tests {
         claim: &ExternalLockClaim<'_>,
         proof: &EthereumExternalEventProofV1,
     ) -> (&'static str, String) {
-        verify_external_lane_lock(&fx.genesis, &fx.ledger, claim, proof).unwrap_err()
+        verify_external_lane_lock(
+            &fx.genesis,
+            &fx.ledger,
+            claim,
+            proof,
+            ExternalLaneCommitteeSelector::Genesis,
+        )
+        .unwrap_err()
     }
 
     #[test]
     fn external_lane_lock_proof_of_either_base_source_verifies() {
         for chain_id in [8453, 84_532] {
             let fx = fixture_on(chain_id);
-            let verified =
-                verify_external_lane_lock(&fx.genesis, &fx.ledger, &claim(&fx), &proof(&fx))
-                    .expect("quorum checkpoint of a Base Lock");
+            let verified = verify_external_lane_lock(
+                &fx.genesis,
+                &fx.ledger,
+                &claim(&fx),
+                &proof(&fx),
+                ExternalLaneCommitteeSelector::Genesis,
+            )
+            .expect("quorum checkpoint of a Base Lock");
             assert_eq!(verified.source_chain_id, chain_id);
             assert_eq!(verified.lock_nonce, 7);
             assert_eq!(verified.source_block_number, 500);
@@ -996,8 +1031,14 @@ mod proof_tests {
         let fx = fixture_on(8453);
         // Head exactly `confirmation_depth` (64) past the Lock's block.
         let distant = proof_with(&fx, LOCK, 7, 1_000, |c| c.observed_head_number = 564, 5);
-        verify_external_lane_lock(&fx.genesis, &fx.ledger, &claim(&fx), &distant)
-            .expect("a checkpoint with the policy's distance");
+        verify_external_lane_lock(
+            &fx.genesis,
+            &fx.ledger,
+            &claim(&fx),
+            &distant,
+            ExternalLaneCommitteeSelector::Genesis,
+        )
+        .expect("a checkpoint with the policy's distance");
         // The depth is echoed but the head is at, one short of, or below the block.
         for head in [500, 563, 499] {
             let mut at_head = proof(&fx);
@@ -1043,5 +1084,115 @@ mod proof_tests {
         for claim in [amount, nonce, recipient] {
             assert_eq!(refusal(&fx, &claim, &proof).0, EXTERNAL_LANE_LOCK_MISMATCH);
         }
+    }
+
+    fn release_operation(
+        fx: &Fixture,
+        proof: EthereumExternalEventProofV1,
+    ) -> ExternalLaneReleaseOperationV1 {
+        let policy = &fx.genesis.external_lanes()[0].policy;
+        ExternalLaneReleaseOperationV1 {
+            submitter: "faucet".to_string(),
+            lane_id: LANE_ID.to_string(),
+            source_chain_id: policy.chain_id,
+            lock_contract_address: policy.lock_contract_address.clone(),
+            lock_nonce: 7,
+            amount_atoms: 1_000,
+            recipient: RECIPIENT.to_string(),
+            proof,
+        }
+    }
+
+    #[test]
+    fn external_lane_release_after_a_committee_move_needs_the_new_committee() {
+        let fx = fixture_on(8453);
+        // Epoch 3: the same members with new keys, registered on the ledger.
+        let keys: Vec<_> = (0..6_u8)
+            .map(|index| ml_dsa_65_keygen_from_seed(&[0x61 + index; 32]))
+            .collect();
+        let mut committee = fx.committee.clone();
+        committee.domain.committee_epoch = 3;
+        for (validator, key) in committee.validators.iter_mut().zip(&keys) {
+            validator.public_key = key.public_key.clone();
+        }
+        committee.domain.committee_root = committee.computed_root().expect("root");
+        let mut ledger = fx.ledger.clone();
+        ledger.fastswap_committees.push(committee.clone());
+        let binding = postfiat_types::external_lane_committee_binding(
+            LANE_ID,
+            3,
+            &committee.domain.committee_root.0,
+        );
+        let committees =
+            ExternalLaneCommittees::from_amendments(fx.genesis.external_lanes(), |_| {
+                vec![postfiat_types::ExternalLaneCommitteeAmendment {
+                    amendment_id: "move".to_string(),
+                    committee_epoch: 3,
+                    binding: binding.clone(),
+                    committed_height: 10,
+                }]
+            });
+        let moved = Fixture {
+            genesis: fx.genesis.clone(),
+            ledger: ledger.clone(),
+            keys,
+            committee,
+        };
+        let old = proof(&fx);
+        let new = proof_with(
+            &moved,
+            LOCK,
+            7,
+            1_000,
+            |checkpoint| checkpoint.authority_epoch = 3,
+            5,
+        );
+        // The same Base block, attested by the new committee.
+        assert_eq!(
+            (
+                new.checkpoint_certificate.checkpoint.block_number,
+                new.checkpoint_certificate.checkpoint.block_hash
+            ),
+            (
+                old.checkpoint_certificate.checkpoint.block_number,
+                old.checkpoint_certificate.checkpoint.block_hash
+            )
+        );
+        let release =
+            |ledger: &mut LedgerState, proof: &EthereumExternalEventProofV1, height: u64| {
+                execute_external_lane_release(
+                    &fx.genesis,
+                    ledger,
+                    &release_operation(&fx, proof.clone()),
+                    height,
+                    ExternalLaneReleaseCaps::genesis(),
+                    committees,
+                )
+            };
+        // Up to the move's block the old committee holds and the new one is refused.
+        assert_eq!(
+            release(&mut ledger.clone(), &new, 10).unwrap_err().0,
+            EXTERNAL_LANE_COMMITTEE_INACTIVE
+        );
+        release(&mut ledger.clone(), &old, 10).expect("old committee before the move");
+        // From the block after, the old committee's checkpoint is refused and changes nothing.
+        let before = ledger.clone();
+        assert_eq!(
+            release(&mut ledger, &old, 11).unwrap_err().0,
+            EXTERNAL_LANE_COMMITTEE_INACTIVE
+        );
+        assert_eq!(ledger, before);
+        // The same Lock, re-proven by the new committee, is released once.
+        release(&mut ledger, &new, 11).expect("re-proven by the new committee");
+        let lane = &ledger.external_lanes[0];
+        assert!(lane.released_lock_nonces.contains(&7));
+        assert_eq!(
+            lane.releases.last().expect("record").committee_epoch,
+            Some(3)
+        );
+        assert_eq!(
+            release(&mut ledger, &new, 12).unwrap_err().0,
+            postfiat_types::EXTERNAL_LANE_NONCE_ALREADY_RELEASED
+        );
     }
 }

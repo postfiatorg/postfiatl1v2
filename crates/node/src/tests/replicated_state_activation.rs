@@ -515,7 +515,7 @@ fn replicated_state_v2_activation_journal_recovers_every_persist_prefix() {
         build_governance_action_batch(&genesis, vec![amendment], Vec::new())
             .expect("build activation amendment batch");
     let amendment_receipts =
-        execute_governance_batch(&mut governance, Some(&mut ledger), &amendment_batch, 1);
+        execute_governance_batch(&mut governance, Some(&mut ledger), None, &amendment_batch, 1);
     assert_eq!(amendment_receipts.len(), 1);
     assert!(amendment_receipts[0].accepted, "{amendment_receipts:?}");
     let amendment_journal = activation_test_journal(
@@ -1819,7 +1819,7 @@ fn transactional_verify_only_rejects_a_valid_but_stale_generation_without_mutati
     let first_batch = build_governance_action_batch(&genesis, vec![first_amendment], Vec::new())
         .expect("build first stale-generation batch");
     let first_receipts =
-        execute_governance_batch(&mut governance, Some(&mut ledger), &first_batch, 1);
+        execute_governance_batch(&mut governance, Some(&mut ledger), None, &first_batch, 1);
     assert!(first_receipts[0].accepted, "{first_receipts:?}");
     let first = activation_test_journal(
         &store,
@@ -1965,7 +1965,7 @@ fn existing_chain_governance_schedule_switches_only_at_the_recorded_height() {
     let seed_batch = build_governance_action_batch(&genesis, vec![seed_amendment], Vec::new())
         .expect("build existing-chain seed batch");
     let seed_receipts =
-        execute_governance_batch(&mut governance, Some(&mut ledger), &seed_batch, 1);
+        execute_governance_batch(&mut governance, Some(&mut ledger), None, &seed_batch, 1);
     assert!(seed_receipts[0].accepted, "{seed_receipts:?}");
     let seed = activation_test_journal(
         &store,
@@ -2017,6 +2017,7 @@ fn existing_chain_governance_schedule_switches_only_at_the_recorded_height() {
     let receipts = execute_governance_batch(
         &mut governance,
         Some(&mut ledger),
+        None,
         &activation_batch,
         2,
     );
@@ -2187,7 +2188,7 @@ fn existing_chain_governance_schedule_switches_only_at_the_recorded_height() {
     )
     .expect("build late cancellation batch");
     let late_receipts =
-        execute_governance_batch(&mut governance, Some(&mut ledger), &late_batch, 4);
+        execute_governance_batch(&mut governance, Some(&mut ledger), None, &late_batch, 4);
     assert_eq!(late_receipts.len(), 1);
     assert!(!late_receipts[0].accepted, "{late_receipts:?}");
     assert_eq!(
@@ -2235,7 +2236,7 @@ fn existing_chain_storage_activation_can_cancel_only_before_cutover() {
     let seed_batch = build_governance_action_batch(&genesis, vec![seed_amendment], Vec::new())
         .expect("build cancellation seed batch");
     let seed_receipts =
-        execute_governance_batch(&mut governance, Some(&mut ledger), &seed_batch, 1);
+        execute_governance_batch(&mut governance, Some(&mut ledger), None, &seed_batch, 1);
     assert!(seed_receipts[0].accepted, "{seed_receipts:?}");
     let seed = activation_test_journal(
         &store,
@@ -2289,6 +2290,7 @@ fn existing_chain_storage_activation_can_cancel_only_before_cutover() {
     let activation_receipts = execute_governance_batch(
         &mut governance,
         Some(&mut ledger),
+        None,
         &activation_batch,
         2,
     );
@@ -2342,6 +2344,7 @@ fn existing_chain_storage_activation_can_cancel_only_before_cutover() {
     let cancellation_receipts = execute_governance_batch(
         &mut governance,
         Some(&mut ledger),
+        None,
         &cancellation_batch,
         3,
     );

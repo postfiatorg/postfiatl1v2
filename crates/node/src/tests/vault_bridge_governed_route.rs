@@ -285,7 +285,7 @@ fn activate_route(
         format!("route-activation-{}", route.route_epoch),
         activation,
     );
-    execute_governance_batch(governance, Some(ledger), &batch, route.activation_height)
+    execute_governance_batch(governance, Some(ledger), None, &batch, route.activation_height)
         .into_iter()
         .next()
         .expect("route activation receipt")
@@ -317,7 +317,7 @@ fn route_profile_may_commit_late_but_never_before_scheduled_activation() {
         0,
     ));
     let mut early_ledger = route_ledger(&profile);
-    let early = execute_governance_batch(&mut early_governance, Some(&mut early_ledger), &batch, 1)
+    let early = execute_governance_batch(&mut early_governance, Some(&mut early_ledger), None, &batch, 1)
         .into_iter()
         .next()
         .expect("early receipt");
@@ -330,7 +330,7 @@ fn route_profile_may_commit_late_but_never_before_scheduled_activation() {
         0,
     ));
     let mut late_ledger = route_ledger(&profile);
-    let late = execute_governance_batch(&mut late_governance, Some(&mut late_ledger), &batch, 3)
+    let late = execute_governance_batch(&mut late_governance, Some(&mut late_ledger), None, &batch, 3)
         .into_iter()
         .next()
         .expect("late receipt");
@@ -477,7 +477,7 @@ fn governed_fast_ingress_verifier_update_preserves_route_and_finality() {
         "initial-tier4-route",
         initial_activation,
     );
-    let initial = execute_governance_batch(&mut governance, Some(&mut ledger), &initial_batch, 2);
+    let initial = execute_governance_batch(&mut governance, Some(&mut ledger), None, &initial_batch, 2);
     assert!(initial[0].accepted, "{:?}", initial[0]);
 
     let mut replacement = tier4_state(&profile, &"02".repeat(32));
@@ -500,7 +500,7 @@ fn governed_fast_ingress_verifier_update_preserves_route_and_finality() {
         "update-tier4-verifier",
         update,
     );
-    let receipt = execute_governance_batch(&mut governance, Some(&mut ledger), &update_batch, 3)
+    let receipt = execute_governance_batch(&mut governance, Some(&mut ledger), None, &update_batch, 3)
         .into_iter()
         .next()
         .expect("update receipt");
@@ -549,7 +549,7 @@ fn governed_age_release_enablement_preserves_existing_escrow_and_cap() {
         initial_activation,
     );
     assert!(
-        execute_governance_batch(&mut governance, Some(&mut ledger), &initial_batch, 2,)[0]
+        execute_governance_batch(&mut governance, Some(&mut ledger), None, &initial_batch, 2,)[0]
             .accepted
     );
     ledger
@@ -611,6 +611,7 @@ fn governed_age_release_enablement_preserves_existing_escrow_and_cap() {
     let receipt = execute_governance_batch(
         &mut governance,
         Some(&mut ledger),
+        None,
         &GovernanceActionBatch::with_vault_bridge_route_profile_activation(
             "enable-age-release",
             update,
@@ -1725,7 +1726,7 @@ fn arc_bootstrap_authorization_rejects_substitution_without_ledger_mutation() {
     let ledger = route_ledger(&profile);
     let mut accepted_ledger = ledger.clone();
     let mut accepted_governance = governance.clone();
-    let receipts = execute_governance_batch(&mut accepted_governance, Some(&mut accepted_ledger), &batch, profile.activation_height);
+    let receipts = execute_governance_batch(&mut accepted_governance, Some(&mut accepted_ledger), None, &batch, profile.activation_height);
     assert!(receipts[0].accepted, "{:?}", receipts[0]);
     assert_eq!(accepted_ledger.arc_finality_states, vec![bootstrap]);
     accepted_governance.active_vault_bridge_route_policy_hash(&profile.asset_id, profile.activation_height)
@@ -1744,7 +1745,7 @@ fn arc_bootstrap_authorization_rejects_substitution_without_ledger_mutation() {
         assert!(verify_live_signed_governance_batch(&genesis, &signing_governance, &registry, &changed, 1).is_err(), "{field}");
         let mut rejected_ledger = ledger.clone();
         let mut rejected_governance = governance.clone();
-        let receipts = execute_governance_batch(&mut rejected_governance, Some(&mut rejected_ledger), &changed, profile.activation_height);
+        let receipts = execute_governance_batch(&mut rejected_governance, Some(&mut rejected_ledger), None, &changed, profile.activation_height);
         assert!(!receipts[0].accepted, "{field}");
         assert_eq!(rejected_ledger, ledger, "{field}");
         assert_eq!(rejected_governance, governance, "{field}");
