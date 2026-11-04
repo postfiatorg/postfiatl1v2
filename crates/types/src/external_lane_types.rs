@@ -256,11 +256,18 @@ impl ExternalLaneReleaseCaps {
     }
 
     /// The table for `lanes` under `amendments_of(lane_id)`, each lane's
-    /// committed cap amendments in commit order.
+    /// committed cap amendments in commit order. Genesis parse refuses more
+    /// than [`EXTERNAL_LANE_MAX_LANES`] lanes; a lane past the table is
+    /// halted by [`Self::cap_bps_at`] rather than left at its genesis cap.
     pub fn from_amendments(
         lanes: &[GenesisExternalLane],
         amendments_of: impl Fn(&str) -> Vec<ExternalLaneReleaseCapAmendment>,
     ) -> Self {
+        debug_assert!(
+            lanes.len() <= EXTERNAL_LANE_MAX_LANES,
+            "{} external lanes exceed the cap table of {EXTERNAL_LANE_MAX_LANES}",
+            lanes.len()
+        );
         let mut caps = Self::genesis();
         for (slot, lane) in caps.rules.iter_mut().zip(lanes) {
             let amendments = amendments_of(&lane.id);
@@ -271,13 +278,12 @@ impl ExternalLaneReleaseCaps {
         caps
     }
 
-    /// The cap of the lane at `lane_index` at `height`.
+    /// The cap of the lane at `lane_index` at `height`; 0 for an index the
+    /// table cannot hold, so such a lane releases nothing.
     pub fn cap_bps_at(&self, lane_index: usize, lane: &GenesisExternalLane, height: u64) -> u32 {
-        self.rules
-            .get(lane_index)
-            .copied()
-            .flatten()
-            .map_or(lane.release_cap_bps, |rule| rule.cap_bps_at(height))
+        self.rules.get(lane_index).map_or(0, |rule| {
+            rule.map_or(lane.release_cap_bps, |rule| rule.cap_bps_at(height))
+        })
     }
 }
 

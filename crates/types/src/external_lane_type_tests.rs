@@ -1082,3 +1082,21 @@ fn pruned_external_lane_commits_its_pruned_fields() {
     let decoded: ExternalLaneState = serde_json::from_str(&json).expect("decode");
     assert_eq!(decoded, pruned);
 }
+
+#[test]
+fn cap_table_halts_a_lane_it_cannot_hold() {
+    let lane = release_test_lane();
+    let caps = ExternalLaneReleaseCaps::genesis();
+    assert_eq!(caps.cap_bps_at(EXTERNAL_LANE_MAX_LANES - 1, &lane, 10), 200);
+    assert_eq!(caps.cap_bps_at(EXTERNAL_LANE_MAX_LANES, &lane, 10), 0);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "exceed the cap table")]
+fn cap_table_refuses_more_lanes_than_it_holds() {
+    let lanes = (0..=EXTERNAL_LANE_MAX_LANES)
+        .map(|index| sample_external_lane_on(&format!("lane-{index}"), 1_000, &format!("{:02x}", 0x10 + index)))
+        .collect::<Vec<_>>();
+    let _ = ExternalLaneReleaseCaps::from_amendments(&lanes, |_| Vec::new());
+}
