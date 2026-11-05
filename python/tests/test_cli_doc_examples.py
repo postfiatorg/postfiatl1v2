@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from typing import Callable
 
-from postfiat_rpc import Endpoint, pft_token, pft_token_ui, private_path_ui
+from postfiat_rpc import Endpoint, external_lane_watcher, pft_token, pft_token_ui, private_path_ui
 from postfiat_rpc.__main__ import build_parser, parse_endpoint_ref
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -93,6 +93,14 @@ class CliDocExampleTests(unittest.TestCase):
         self.assertEqual(len(commands), 1)
         args = self.parse(relative, private_path_ui.build_parser().parse_args, commands[0])
         self.assertEqual(parse_endpoint_ref(args.endpoint)[1].port, VALIDATOR_RPC_PORT)
+
+    def test_documented_external_lane_watcher_command_parses(self) -> None:
+        relative = "docs/rpc/examples.md"
+        commands = documented_commands(relative, "python -m postfiat_rpc.external_lane_watcher")
+        self.assertEqual(len(commands), 1)
+        args = self.parse(relative, external_lane_watcher.build_parser().parse_args, commands[0])
+        self.assertEqual(Endpoint.parse(args.pftl_rpc).port, VALIDATOR_RPC_PORT)
+        self.assertTrue(args.lane_id and args.base_rpc and args.state_file)
 
     def test_python_examples_target_the_validator_rpc_port(self) -> None:
         relative = "docs/python/examples.md"
