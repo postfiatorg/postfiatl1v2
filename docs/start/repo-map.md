@@ -18,7 +18,22 @@ crates/
   network/            validator transport
   node/               node, CLI, RPC, wallet, operations
   rpc_sdk/            Rust RPC SDK
+  bridge/             external checkpoint and receipt-proof verification
+  pft-token-contracts/ PFT ERC-20 token and Base lock contracts
+  ethereum-contracts/ Ethereum bridge/controller contracts
 ```
+
+## Clients and external-lane tooling
+
+| Path | Role | Guide |
+| --- | --- | --- |
+| `python/postfiat_rpc/` | RPC client, PFT token reader/UI and external-lane release watcher | [Python](../python/quickstart.md), [PFT On Base](../architecture/pft-token-on-base.md) |
+| `wallet-web/`, `wallet-extension/`, `wallet-proxy/` | Wallet clients and gateway | [Web Wallet](../wallets/web-wallet.md), [Shielded Wallet](../wallets/shielded-wallet.md) |
+| `crates/node/src/external_lane_checkpoint_source.rs` | Observe, sign and assemble Base checkpoints; construct a Lock receipt proof | [Genesis External Lanes](../architecture/genesis-external-lanes.md) |
+| `crates/node/src/validator_signer.rs` | Separate software signer process and socket client | [Signer Policy](../runbooks/public-rpc-operator-policy.md#validator-signer-process) |
+
+These paths describe implemented source. See [Network Status](../status/network-status.md)
+for dated deployment records and the existing milestones for qualification gaps.
 
 ## Scripts
 

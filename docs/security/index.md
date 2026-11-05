@@ -33,9 +33,12 @@ These documents define review scope. None records a completed review.
 ## Release gates
 
 The [Release Gate Inventory](../status/release-gate-inventory.md) (dated
-2026-09-01) lists 21 non-storage gates before a public testnet:
+2026-09-01) recorded 21 non-storage gates before a public testnet:
 **4 DONE, 16 OPEN, 1 UNKNOWN.** Storage gates (G0–G7) are tracked separately in
 the [storage scaling milestone](../plans/completed/storage-scaling-milestone.md).
+The table below preserves that dated inventory; it is not a recomputed total
+for today's source or release candidate. Current milestones are linked from
+[Testnet Path](../status/testnet-path.md).
 
 | State | Gates |
 | --- | --- |
@@ -58,11 +61,17 @@ deployed.
 From the [security policy](https://github.com/postfiatorg/postfiatl1v2/blob/main/SECURITY.md)
 ("Current Security Limitations"):
 
-- Validator keys are plaintext software key files protected by filesystem
-  permissions; HSM or remote-signer custody is not implemented.
-- Validator services refuse to start without the `--unsafe-devnet-file-signer`
-  acknowledgement, and long-running validator and RPC services without
-  `--unsafe-devnet-json-storage`.
+- Validator keys remain software key files. Main implements a separate signer
+  process with Unix-socket peer-UID checks and no key-file fallback in socket
+  mode. Its own double-sign guard and deployment qualification remain open;
+  HSM custody is not implemented. The recorded fleet still uses file signers.
+  See the [signer policy](../runbooks/public-rpc-operator-policy.md#validator-signer-process).
+- File-signer mode needs `--unsafe-devnet-file-signer`. Long-running validator
+  and RPC services on JSON/JSONL or not-yet-activated storage need
+  `--unsafe-devnet-json-storage`; that flag does not select the storage backend.
+  The devnet uses transactional `redb`. G5 offline qualification passed for
+  the October 21 binary on October 23; G6 remains open
+  ([State And Storage](../architecture/state-and-storage.md)).
 - Public RPC requires an authenticated TLS edge; the node rejects public and
   wildcard plaintext binds.
 - The policy "is not an external audit report or a mainnet-readiness claim."

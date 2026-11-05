@@ -33,6 +33,10 @@ Codenames such as A666, BMNRC, Z3 or G4 are defined in the
 
 ## What exists now
 
+Reviewed against main on 2026-11-05. Implementation and local qualification
+below do not imply deployment; fleet observations retain their own dates on
+[Network Status](status/network-status.md).
+
 | Area | State | Read |
 | --- | --- | --- |
 | Core chain | Accounts, signed transfers, fees, blocks, receipts, deterministic replay and state roots. | [Architecture Overview](architecture/overview.md) |
@@ -41,12 +45,13 @@ Codenames such as A666, BMNRC, Z3 or G4 are defined in the
 | Settlement lanes | Consensus transactions, W6 atomic swaps, FastPay, FastSwap and Asset-Orchard, each with its own finality and recovery rules. | [Settlement Lanes](architecture/settlement-lanes.md) |
 | Privacy | Orchard/Halo2 deposit, spend, withdraw, scan and selective disclosure. The shielded stack is not post-quantum. | [Privacy](privacy/overview.md) |
 | Post-quantum authorization | ML-DSA-65 for accounts and validators; larger certificates accepted as a design cost. | [Quantum Authorization](quantum/authorization.md) |
-| Storage | Transactional `redb` storage active on the devnet since height 930; the storage-scaling offline qualification packet (G5) is not yet assembled. | [Network Status](status/network-status.md), [State And Storage](architecture/state-and-storage.md) |
+| Storage | Transactional `redb` storage active since height 930; G5 offline qualified on 2026-10-23 for the October 21 binary. G6 remains open; later binaries need their own qualification. | [Network Status](status/network-status.md), [State And Storage](architecture/state-and-storage.md) |
 | NAVCoins | A666 v2 is the deployed NAVCoin lineage (public general availability closed); BMNRC was created on the devnet on 2026-10-02. | [NAVCoins](navcoins/index.md) |
 | YOLO target receipts | Implemented and disabled by default; activation needs a future governance amendment. Receipts confer no trading, minting or reserve authority. | [YOLO Target Receipt v1](yolo/target-receipt-v1.md) |
 | RPC and clients | Newline-delimited JSON over TCP; read methods, controlled write methods, account history; Python client and Rust SDK. | [RPC](rpc/overview.md), [Python](python/quickstart.md) |
-| Wallets | Transparent, issued-asset, FastPay, swap, memo and shielded flows in the web wallet and tools. | [Web Wallet](wallets/web-wallet.md), [Shielded Wallet](wallets/shielded-wallet.md) |
-| Validators | Launch packets, service layout, history retention, monitors, signed rollout, key rotation. | [Validators](validators/overview.md) |
+| Wallets | Transparent, issued-asset, FastPay, swap, memo and shielded flows in source and tools. The private path was off and ungoverned at the last fleet observation. | [Web Wallet](wallets/web-wallet.md), [Shielded Wallet](wallets/shielded-wallet.md), [Network Status](status/network-status.md) |
+| Validators | Launch packets, service layout, history retention, monitors, signed rollout, key rotation. A separate software signer process is implemented; its own double-sign guard and deployment qualification remain open. | [Validators](validators/overview.md), [Signer Policy](runbooks/public-rpc-operator-policy.md#validator-signer-process) |
+| PFT on Base | Token/lock contracts, native-PFT release path, checkpoint CLI and watcher implemented. Real Lock-to-PFT rehearsal and outside audit remain open; reverse export is refused until built. | [PFT Token On Base](architecture/pft-token-on-base.md), [Genesis External Lanes](architecture/genesis-external-lanes.md) |
 
 What remains before public launch is listed in the
 [Release Gate Inventory](status/release-gate-inventory.md), the
