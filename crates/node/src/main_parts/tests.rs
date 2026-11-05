@@ -1,5 +1,6 @@
 include!("tests/transport_batch_payload_tests.rs");
 include!("tests/rpc_serve_request_tests.rs");
+include!("tests/validator_signer_socket_tests.rs");
 include!("tests/rpc_child_exe_tests.rs");
 include!("tests/private_action_six_validator_tests.rs");
 include!("tests/private_action_proof_six_validator_tests.rs");

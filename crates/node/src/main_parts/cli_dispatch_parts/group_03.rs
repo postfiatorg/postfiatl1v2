@@ -335,8 +335,19 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             let finality_topology_file = flag_value(flags, "--finality-topology")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("remote-topology.json"));
+            // The signer socket replaces both key files; the signing sites
+            // then resolve the socket by the path they are given.
+            let finality_signer_socket =
+                flag_value(flags, "--finality-signer-socket").map(PathBuf::from);
+            if finality_signer_socket.is_some()
+                && (flag_present(flags, "--finality-key-file")
+                    || flag_present(flags, "--finality-proposal-key-file"))
+            {
+                return Err("validator_signer_flags_conflict: --finality-signer-socket replaces --finality-key-file and --finality-proposal-key-file".to_string());
+            }
             let finality_key_file = flag_value(flags, "--finality-key-file")
                 .map(PathBuf::from)
+                .or_else(|| finality_signer_socket.clone())
                 .unwrap_or_else(|| data_dir.join(VALIDATOR_KEYS_FILE));
             let finality_proposal_key_file = flag_value(flags, "--finality-proposal-key-file")
                 .map(PathBuf::from)
@@ -449,6 +460,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                     finality_topology_file,
                     finality_key_file,
                     finality_proposal_key_file,
+                    finality_signer_socket,
                     finality_artifact_root,
                     finality_timeout_ms,
                     finality_send_retries,

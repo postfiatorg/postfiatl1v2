@@ -367,6 +367,7 @@ mod private_action_rpc_tests {
             finality_topology_file: root.join("topology.json"),
             finality_key_file: root.join(VALIDATOR_KEYS_FILE),
             finality_proposal_key_file: None,
+            finality_signer_socket: None,
             finality_artifact_root: root.join("finality-artifacts"),
             finality_timeout_ms: 2_000,
             finality_send_retries: 0,

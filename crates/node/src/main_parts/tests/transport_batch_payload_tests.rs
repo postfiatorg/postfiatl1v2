@@ -457,6 +457,7 @@ mod transport_batch_payload_tests {
                 finality_topology_file: recovery_topology,
                 finality_key_file: recovery_data_dir.join(VALIDATOR_KEYS_FILE),
                 finality_proposal_key_file: Some(recovery_data_dir.join(VALIDATOR_KEYS_FILE)),
+                finality_signer_socket: None,
                 finality_artifact_root: recovery_data_dir.join("finality-artifacts"),
                 finality_timeout_ms: 15_000,
                 finality_send_retries: 2,

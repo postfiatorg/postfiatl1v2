@@ -99,6 +99,9 @@ struct RpcServeOptions {
     finality_topology_file: PathBuf,
     finality_key_file: PathBuf,
     finality_proposal_key_file: Option<PathBuf>,
+    /// `--finality-signer-socket`: the signer process that signs in place
+    /// of the key files, which then name this socket.
+    finality_signer_socket: Option<PathBuf>,
     finality_artifact_root: PathBuf,
     finality_timeout_ms: u64,
     finality_send_retries: usize,
@@ -129,6 +132,9 @@ struct RpcServeConnectionContext {
     finality_topology_file: PathBuf,
     finality_key_file: PathBuf,
     finality_proposal_key_file: Option<PathBuf>,
+    /// `--finality-signer-socket`: the signer process that signs in place
+    /// of the key files, which then name this socket.
+    finality_signer_socket: Option<PathBuf>,
     finality_artifact_root: PathBuf,
     finality_timeout_ms: u64,
     finality_send_retries: usize,
@@ -5443,6 +5449,7 @@ mod child_dispatch_limit_tests {
             finality_topology_file: PathBuf::from("child-dispatch-test"),
             finality_key_file: PathBuf::from("child-dispatch-test"),
             finality_proposal_key_file: None,
+            finality_signer_socket: None,
             finality_artifact_root: PathBuf::from("child-dispatch-test"),
             finality_timeout_ms: 1_000,
             finality_send_retries: 0,

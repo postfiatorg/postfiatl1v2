@@ -65,6 +65,11 @@ pub(super) fn sign_transport_envelope_auth(
             frame.from
         ));
     }
+    // `rpc-serve --finality-signer-socket` signs its envelopes through the
+    // signer process too; it never reads the data directory's key file.
+    if let Some(socket_signer) = postfiat_node::registered_validator_signer_for_data_dir(data_dir) {
+        return sign_transport_envelope_auth_with(data_dir, topology, signer, frame, &*socket_signer);
+    }
     let key_path = data_dir.join(VALIDATOR_KEYS_FILE);
     validate_transport_private_file_permissions(&key_path, "validator key file")?;
     let key_file: ValidatorKeyFile = read_transport_json_file(&key_path, "validator key file")?;
@@ -98,6 +103,38 @@ pub(super) fn sign_transport_envelope_auth(
         signer: signer.to_string(),
         algorithm_id: key_record.algorithm_id.clone(),
         public_key_hex: key_record.public_key_hex.clone(),
+        signature_hex: bytes_to_hex(&signature),
+    })
+}
+
+fn sign_transport_envelope_auth_with(
+    data_dir: &Path,
+    topology: &NetworkTopology,
+    signer: &str,
+    frame: &FramedMessage,
+    validator_signer: &dyn postfiat_node::ValidatorSigner,
+) -> Result<TransportEnvelopeAuth, String> {
+    let key = validator_signer
+        .validator_key(TRANSPORT_AUTH_CONTEXT, Some(signer))
+        .map_err(|error| format!("transport auth signer `{signer}` failed: {error}"))?;
+    let registry = read_transport_validator_registry(data_dir)?;
+    let registry_record = transport_validator_registry_record(&registry, signer)?;
+    if key.algorithm_id != registry_record.algorithm_id
+        || key.public_key_hex != registry_record.public_key_hex
+    {
+        return Err(format!(
+            "transport auth signer `{signer}` key does not match validator registry"
+        ));
+    }
+    let message = transport_auth_message(topology, frame)?;
+    let signature = validator_signer
+        .sign(signer, TRANSPORT_AUTH_CONTEXT, &message)
+        .map_err(|error| format!("transport auth signing failed: {error}"))?;
+    Ok(TransportEnvelopeAuth {
+        schema: TRANSPORT_AUTH_SCHEMA.to_string(),
+        signer: signer.to_string(),
+        algorithm_id: key.algorithm_id,
+        public_key_hex: key.public_key_hex,
         signature_hex: bytes_to_hex(&signature),
     })
 }
