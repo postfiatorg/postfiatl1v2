@@ -238,6 +238,19 @@ class RemainingReadWrapperTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "release_cursor must be a non-negative integer"):
             client.external_lane_info(release_cursor=-1)
 
+    def test_external_lane_info_bounds_the_release_limit_like_the_other_list_reads(self) -> None:
+        client = _client()
+        with mock.patch.object(client, "_call", return_value={"lanes": []}) as call:
+            with self.assertRaisesRegex(ValueError, "release_limit must be positive"):
+                client.external_lane_info(release_limit=0)
+            with self.assertRaisesRegex(ValueError, "release_limit must be a non-negative integer"):
+                client.external_lane_info(release_limit=True)  # type: ignore[arg-type]
+        call.assert_not_called()
+        for asked, sent in ((1, 1), (100, 100), (101, 100), (500, 100)):
+            with mock.patch.object(client, "_call", return_value={"lanes": []}) as call:
+                client.external_lane_info(release_limit=asked)
+            call.assert_called_once_with("external_lane_info", {"release_limit": sent})
+
     def test_external_lane_info_returns_the_governed_cap_and_committee(self) -> None:
         client = _client()
         release_cap = {
