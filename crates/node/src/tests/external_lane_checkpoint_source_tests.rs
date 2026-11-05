@@ -291,6 +291,10 @@ fn base_state(recipient: &str, amount: u64, block_hash_byte: u8) -> BaseState {
     }
 }
 
+fn lock_tx(index: u64) -> String {
+    format!("0x{:02x}{}", BLOCK % 256, format!("{index:02x}").repeat(31))
+}
+
 /// A six-validator lane chain (committee quorum 5) whose policy pins the
 /// mock's runtime code hashes.
 fn source_chain(label: &str) -> Chain {
@@ -374,6 +378,55 @@ fn assemble(chain: &Chain, checkpoint_file: &Path, vote_files: Vec<PathBuf>, nam
         certificate_file: certificate_file.clone(),
     })?;
     Ok(certificate_file)
+}
+
+fn lock_proof(
+    chain: &Chain,
+    rpc: &MockBase,
+    certificate_file: &Path,
+    transaction_hash: &str,
+    log_index: Option<u32>,
+    name: &str,
+) -> io::Result<PathBuf> {
+    let operation_file = chain.data_dir.join(format!("{name}.operation.json"));
+    build_external_lane_lock_proof(ExternalLaneLockProofOptions {
+        data_dir: chain.data_dir.clone(),
+        lane_id: "base-erc20".to_string(),
+        base_rpc: rpc.url.clone(),
+        transaction_hash: transaction_hash.to_string(),
+        certificate_file: certificate_file.to_path_buf(),
+        submitter: read_transfer_key_file(&chain.data_dir, None).expect("faucet").address,
+        log_index,
+        operation_file: operation_file.clone(),
+    })?;
+    Ok(operation_file)
+}
+
+/// The faucet's signed release of the operation in `operation_file`.
+fn signed_release(chain: &Chain, operation_file: &Path) -> SignedAssetTransaction {
+    let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    let operation: AssetTransactionOperation =
+        serde_json::from_slice(&fs::read(operation_file).expect("operation")).expect("operation json");
+    let unsigned = UnsignedAssetTransaction {
+        chain_id: chain.genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&chain.genesis),
+        protocol_version: chain.genesis.protocol_version,
+        address_namespace: postfiat_types::ADDRESS_NAMESPACE.to_string(),
+        transaction_kind: EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1.to_string(),
+        signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        source: faucet.address.clone(),
+        fee: 1_000,
+        sequence: faucet_sequence(chain),
+        operation,
+    };
+    let private_key = hex_to_bytes(&faucet.private_key_hex).expect("key bytes");
+    let signature = ml_dsa_65_sign(&private_key, &unsigned.signing_bytes()).expect("sign");
+    SignedAssetTransaction {
+        unsigned,
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        public_key_hex: faucet.public_key_hex.clone(),
+        signature_hex: bytes_to_hex(&signature),
+    }
 }
 
 fn amount() -> u64 {
@@ -521,6 +574,91 @@ fn assemble_keeps_exactly_the_quorum_of_distinct_member_votes() {
 }
 
 #[test]
+fn checkpoint_source_releases_a_base_lock_end_to_end_at_the_five_of_six_quorum() {
+    let chain = source_chain("e2e");
+    assert_eq!((chain.committee.domain.validator_count, chain.committee.domain.quorum), (6, 5));
+    let rpc = MockBase::serve(base_state(&chain.recipient, amount(), 0xa0));
+    let fork = MockBase::serve(base_state(&chain.recipient, amount(), 0xf0));
+
+    // Observe, then five members sign from their own RPC.
+    let checkpoint = observe(&chain, &rpc, None, "release").expect("observe");
+    let votes: Vec<PathBuf> = (0..5).map(|index| sign(&chain, &checkpoint, &rpc, index, "release").expect("vote")).collect();
+    // The sixth member observes another hash at the block and votes for it.
+    let forked = observe(&chain, &fork, None, "fork").expect("observe the fork");
+    let sixth = sign(&chain, &forked, &fork, 5, "fork").expect("the sixth vote");
+
+    // Assembly refuses four votes and the vote on the other block hash.
+    let refused = |files: Vec<PathBuf>, name: &str| {
+        refusal(assemble(&chain, &checkpoint, files, name).unwrap_err())
+    };
+    assert_eq!(
+        refused(votes[..4].to_vec(), "four"),
+        ExternalLaneCheckpointRefusal::BelowQuorum
+    );
+    assert_eq!(
+        refused([&votes[..], &[sixth]].concat(), "sixth"),
+        ExternalLaneCheckpointRefusal::VoteOnOtherCheckpoint
+    );
+    let certificate = assemble(&chain, &checkpoint, votes.clone(), "release").expect("assemble five");
+    let parsed: EthereumCheckpointCertificateV1 = read_json_file(&certificate, "certificate").expect("certificate");
+    assert_eq!(parsed.votes.len(), 5);
+
+    // The receipt proof of the Lock, twice: byte-identical operations.
+    let operation = lock_proof(&chain, &rpc, &certificate, &lock_tx(1), None, "release").expect("lock proof");
+    let repeat = lock_proof(&chain, &rpc, &certificate, &lock_tx(1), Some(0), "repeat").expect("lock proof again");
+    assert_eq!(fs::read(&operation).expect("operation"), fs::read(&repeat).expect("operation"));
+    let AssetTransactionOperation::ExternalLaneReleaseV1(release) =
+        serde_json::from_slice(&fs::read(&operation).expect("operation")).expect("operation json")
+    else {
+        panic!("not an external lane release");
+    };
+    assert_eq!(
+        (release.lane_id.as_str(), release.lock_nonce, release.amount_atoms, release.recipient.as_str()),
+        ("base-erc20", LOCK_NONCE, amount(), chain.recipient.as_str())
+    );
+    assert_eq!((release.source_chain_id, release.lock_contract_address.as_str()), (8453, LOCK));
+    assert_eq!((release.proof.receipt_proof.transaction_index, release.proof.log_index), (1, 0));
+
+    // The chain verifies the Lock and credits the recipient once.
+    let receipt = admit_and_apply(&chain, &signed_release(&chain, &operation), "release");
+    assert!(receipt.accepted, "{receipt:?}");
+    let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
+    assert_eq!(ledger.account(&chain.recipient).expect("recipient").balance, amount());
+    refused_everywhere(
+        &chain,
+        &signed_release(&chain, &operation),
+        "external_lane_nonce_already_released",
+        "again",
+    );
+    let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
+    assert_eq!(ledger.account(&chain.recipient).expect("recipient").balance, amount());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn lock_proof_refuses_another_block_contract_event_or_token() {
+    let chain = source_chain("proof-refusals");
+    let rpc = MockBase::serve(base_state(&chain.recipient, amount(), 0xa0));
+    let checkpoint = observe(&chain, &rpc, Some(BLOCK), "proof").expect("observe");
+    let votes = (0..5).map(|index| sign(&chain, &checkpoint, &rpc, index, "proof").expect("vote")).collect();
+    let certificate = assemble(&chain, &checkpoint, votes, "proof").expect("assemble");
+    let next_block_lock = format!("0x{:02x}{}", (BLOCK + 1) % 256, "01".repeat(31));
+    let cases = [
+        ("other-block", next_block_lock, None, ExternalLaneCheckpointRefusal::ReceiptBlockMismatch),
+        ("other-contract", lock_tx(1), Some(1), ExternalLaneCheckpointRefusal::LogOfAnotherContract),
+        ("other-event", lock_tx(2), Some(0), ExternalLaneCheckpointRefusal::LogOfAnotherEvent),
+        ("no-locked", lock_tx(2), None, ExternalLaneCheckpointRefusal::LockedLogMissing),
+        ("other-token", lock_tx(3), None, ExternalLaneCheckpointRefusal::TokenMismatch),
+    ];
+    for (name, tx, log_index, expected) in cases {
+        let error = lock_proof(&chain, &rpc, &certificate, &tx, log_index, name).unwrap_err();
+        assert_eq!(refusal(error), expected, "{name}");
+        assert!(!chain.data_dir.join(format!("{name}.operation.json")).exists(), "{name}");
+    }
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
 fn observe_and_sign_follow_a_governed_committee_move() {
     let chain = source_chain_of("move", 4);
     let (epoch2, keys2) = second_committee(&chain);
@@ -551,5 +689,77 @@ fn observe_and_sign_follow_a_governed_committee_move() {
         recipient: chain.recipient.clone(),
     };
     sign(&moved, &after, &rpc, 0, "new-key").expect("the epoch-2 member signs");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// Read-only qualification against a real Base Sepolia RPC at the http URL
+/// in `POSTFIAT_LIVE_BASE_RPC`: the rehearsal lock and token code hashes,
+/// the `finalized` block, five votes and the certificate, and the receipt
+/// trie of that block (OP Stack deposit receipts included) rebuilt to its
+/// `receiptsRoot` for its first and last transaction.
+#[test]
+#[ignore = "needs POSTFIAT_LIVE_BASE_RPC"]
+fn live_base_sepolia_checkpoint_of_the_rehearsal_lock() {
+    let rpc = std::env::var("POSTFIAT_LIVE_BASE_RPC").expect("POSTFIAT_LIVE_BASE_RPC");
+    let chain = lane_chain_configured("cs-live", 86_400, None, 6, |policy| {
+        policy.chain_id = 84_532;
+        policy.lock_contract_address = "0xe36e7fc384564419187546c19719a5654266de0b".to_string();
+        policy.token_address = "0x18fe4ca51a0ce042688d5a54917319d03b527d92".to_string();
+        policy.lock_runtime_code_hash =
+            "0x328a93e99cf9659bdb44807d60a9e0328e0ff867d0b584dc2eeed3b0d5442fb2".to_string();
+        policy.token_runtime_code_hash =
+            "0xb0939a2407cd571d158498ba0f405f4ddb3857e688d2bc5ada170dcc655903df".to_string();
+    });
+    let checkpoint_file = chain.data_dir.join("live.checkpoint.json");
+    let checkpoint = observe_external_lane_checkpoint(ExternalLaneCheckpointObserveOptions {
+        data_dir: chain.data_dir.clone(),
+        lane_id: "base-erc20".to_string(),
+        base_rpc: rpc.clone(),
+        block_number: None,
+        checkpoint_file: checkpoint_file.clone(),
+    })
+    .expect("observe the finalized Base Sepolia block");
+    let votes = (0..5)
+        .map(|index| {
+            let vote_file = chain.data_dir.join(format!("live.vote-{index}.json"));
+            sign_external_lane_checkpoint_vote(ExternalLaneCheckpointSignOptions {
+                data_dir: chain.data_dir.clone(),
+                checkpoint_file: checkpoint_file.clone(),
+                base_rpc: rpc.clone(),
+                validator: format!("validator-{index}"),
+                validator_key_file: committee_key_file(&chain, index, index),
+                vote_file: vote_file.clone(),
+            })
+            .expect("re-observe and sign");
+            vote_file
+        })
+        .collect();
+    assemble(&chain, &checkpoint_file, votes, "live").expect("certificate");
+    let endpoint = crate::ethereum_checkpoint_signing::EthereumRpcEndpoint::parse(&rpc).expect("endpoint");
+    let block = crate::ethereum_checkpoint_signing::ethereum_rpc_call(
+        &endpoint,
+        "eth_getBlockByNumber",
+        json!([format!("0x{:x}", checkpoint.block_number), false]),
+    )
+    .expect("block");
+    let transactions = block["transactions"].as_array().expect("transactions").clone();
+    for transaction in [transactions.first(), transactions.last()].into_iter().flatten() {
+        let built = crate::ethereum_receipt_proof_builder::receipt_proof_from_rpc(
+            &endpoint,
+            84_532,
+            transaction.as_str().expect("hash"),
+        )
+        .expect("the rebuilt receipt trie matches the block's receiptsRoot");
+        assert_eq!(built.receipts_root, checkpoint.receipts_root);
+        assert_eq!(built.block_number, checkpoint.block_number);
+    }
+    eprintln!(
+        "live Base Sepolia checkpoint: block {} hash 0x{} head {} receipts {} epoch {}",
+        checkpoint.block_number,
+        bytes_to_hex(&checkpoint.block_hash),
+        checkpoint.observed_head_number,
+        transactions.len(),
+        checkpoint.authority_epoch
+    );
     let _ = fs::remove_dir_all(&chain.data_dir);
 }

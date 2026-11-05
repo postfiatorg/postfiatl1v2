@@ -2370,6 +2370,35 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             );
             Ok(())
         }
+        "external-lane-lock-proof" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let log_index = flag_value(flags, "--log-index")
+                .map(|value| value.parse::<u32>().map_err(|_| "invalid --log-index"))
+                .transpose()?;
+            let operation = build_external_lane_lock_proof(ExternalLaneLockProofOptions {
+                data_dir: PathBuf::from(data_dir),
+                lane_id: flag_value(flags, "--lane-id").ok_or("missing --lane-id")?.to_string(),
+                base_rpc: flag_value(flags, "--base-rpc").ok_or("missing --base-rpc")?.to_string(),
+                transaction_hash: flag_value(flags, "--transaction-hash")
+                    .ok_or("missing --transaction-hash")?
+                    .to_string(),
+                certificate_file: PathBuf::from(
+                    flag_value(flags, "--certificate-file").ok_or("missing --certificate-file")?,
+                ),
+                submitter: flag_value(flags, "--submitter").ok_or("missing --submitter")?.to_string(),
+                log_index,
+                operation_file: PathBuf::from(
+                    flag_value(flags, "--operation-file").ok_or("missing --operation-file")?,
+                ),
+            })
+            .map_err(|error| format!("{command} failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&operation)
+                    .map_err(|error| format!("operation serialization failed: {error}"))?
+            );
+            Ok(())
+        }
         "fastswap-control-prepare" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let control_file =

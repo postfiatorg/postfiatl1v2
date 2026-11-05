@@ -15,13 +15,17 @@ use std::collections::BTreeSet;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use postfiat_bridge::{ethereum_keccak256, verify_ethereum_checkpoint_certificate};
+use postfiat_bridge::{
+    decode_locked_event, ethereum_keccak256, verify_ethereum_checkpoint_certificate,
+    verify_ethereum_receipt_log, EthereumLogV1,
+};
 use postfiat_crypto_provider::{
     hex_to_bytes, ml_dsa_65_sign_with_context, ml_dsa_65_verify_with_context, ML_DSA_65_ALGORITHM,
 };
 use postfiat_storage::NodeStore;
 use postfiat_types::{
-    EthereumCheckpointCertificateV1, EthereumCheckpointVoteV1, EthereumFinalizedCheckpointV1,
+    AssetTransactionOperation, EthereumCheckpointCertificateV1, EthereumCheckpointVoteV1,
+    EthereumExternalEventProofV1, EthereumFinalizedCheckpointV1, ExternalLaneReleaseOperationV1,
     FastSwapChainDomainV1, FastSwapCommitteeV1, FastSwapOpaqueHashV1, GenesisExternalLane,
     ETHEREUM_CHECKPOINT_SCHEMA_V1, ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1,
 };
@@ -35,9 +39,13 @@ use crate::ethereum_checkpoint_signing::{
     write_private_json, EthereumCheckpointSigningStateV1, EthereumRpcEndpoint,
     ETHEREUM_CHECKPOINT_SIGNING_STATE_SCHEMA_V1,
 };
+use crate::ethereum_receipt_proof_builder::receipt_proof_from_rpc;
 use crate::{read_json_file, read_validator_key_file, validator_key_record};
 
 const EXTERNAL_LANE_CHECKPOINT_SIGNING_STATE_DIR: &str = "external-lane-checkpoint-signing";
+const LOCKED_EVENT_SIGNATURE: &[u8] = b"Locked(uint64,address,bytes32,bytes,uint64)";
+const TRANSFER_EVENT_SIGNATURE: &[u8] = b"Transfer(address,address,uint256)";
+const RECEIPT_LOG_INDEX_INVALID: &str = "ethereum_receipt_log_index_invalid";
 
 /// Why a Base checkpoint source command refused. Carried inside the returned
 /// `io::Error`; [`external_lane_checkpoint_refusal`] reads it back.
@@ -60,6 +68,13 @@ pub enum ExternalLaneCheckpointRefusal {
     VoteOnOtherCheckpoint,
     BelowQuorum,
     CertificateInvalid,
+    ReceiptBlockMismatch,
+    LockedLogMissing,
+    LockedLogAmbiguous,
+    LogOfAnotherContract,
+    LogOfAnotherEvent,
+    LockedEventInvalid,
+    TokenMismatch,
 }
 
 impl ExternalLaneCheckpointRefusal {
@@ -82,6 +97,13 @@ impl ExternalLaneCheckpointRefusal {
             Self::VoteOnOtherCheckpoint => "checkpoint_vote_other_checkpoint",
             Self::BelowQuorum => "checkpoint_votes_below_quorum",
             Self::CertificateInvalid => "checkpoint_certificate_invalid",
+            Self::ReceiptBlockMismatch => "lock_receipt_block_mismatch",
+            Self::LockedLogMissing => "lock_receipt_locked_log_missing",
+            Self::LockedLogAmbiguous => "lock_receipt_locked_log_ambiguous",
+            Self::LogOfAnotherContract => "lock_receipt_log_other_contract",
+            Self::LogOfAnotherEvent => "lock_receipt_log_other_event",
+            Self::LockedEventInvalid => "lock_receipt_locked_event_invalid",
+            Self::TokenMismatch => "lock_receipt_token_mismatch",
         }
     }
 }
@@ -145,6 +167,20 @@ pub struct ExternalLaneCheckpointAssembleOptions {
     pub checkpoint_file: PathBuf,
     pub vote_files: Vec<PathBuf>,
     pub certificate_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalLaneLockProofOptions {
+    pub data_dir: PathBuf,
+    pub lane_id: String,
+    pub base_rpc: String,
+    pub transaction_hash: String,
+    pub certificate_file: PathBuf,
+    pub submitter: String,
+    /// The `Locked` log's index in its receipt; `None` picks the receipt's
+    /// one `Locked` log of the lane's lock contract.
+    pub log_index: Option<u32>,
+    pub operation_file: PathBuf,
 }
 
 /// A lane's genesis policy decoded, with the committee it names at the next
@@ -576,4 +612,176 @@ pub fn assemble_external_lane_checkpoint_certificate(
     })?;
     write_json(&options.certificate_file, &certificate)?;
     Ok(certificate)
+}
+
+/// `external-lane-lock-proof`: the `external_lane_release_v1` operation of a
+/// Base Lock transaction under a lane checkpoint certificate, written to
+/// `operation_file` as the asset operation `wallet-sign-asset-transaction`
+/// takes.
+pub fn build_external_lane_lock_proof(
+    options: ExternalLaneLockProofOptions,
+) -> io::Result<AssetTransactionOperation> {
+    let lane = active_lane(&options.data_dir, &options.lane_id)?;
+    let certificate: EthereumCheckpointCertificateV1 = read_json_file(
+        &options.certificate_file,
+        "external lane checkpoint certificate",
+    )?;
+    let checkpoint = &certificate.checkpoint;
+    lane.require_checkpoint(checkpoint)?;
+    verify_ethereum_checkpoint_certificate(&lane.committee, &certificate).map_err(|error| {
+        refuse(
+            ExternalLaneCheckpointRefusal::CertificateInvalid,
+            format!("{error:?}"),
+        )
+    })?;
+    let endpoint = EthereumRpcEndpoint::parse(&options.base_rpc)?;
+    lane.require_chain_id(&endpoint)?;
+    let built = receipt_proof_from_rpc(
+        &endpoint,
+        lane.lane.policy.chain_id,
+        &options.transaction_hash,
+    )?;
+    if built.block_number != checkpoint.block_number
+        || exact_hex::<32>("receipt block hash", &built.block_hash)? != checkpoint.block_hash
+        || built.receipts_root != checkpoint.receipts_root
+    {
+        return Err(refuse(
+            ExternalLaneCheckpointRefusal::ReceiptBlockMismatch,
+            format!(
+                "the Lock transaction is in block {} {}, not the checkpoint's block {}",
+                built.block_number, built.block_hash, checkpoint.block_number
+            ),
+        ));
+    }
+
+    let logs = receipt_logs(&built.receipts_root, &built.proof)?;
+    let locked_topic = ethereum_keccak256(LOCKED_EVENT_SIGNATURE);
+    let is_locked = |log: &EthereumLogV1| {
+        log.emitter == lane.lock_contract && log.topics.first() == Some(&locked_topic)
+    };
+    let log_index = match options.log_index {
+        Some(index) => {
+            let log = usize::try_from(index)
+                .ok()
+                .and_then(|index| logs.get(index))
+                .ok_or_else(|| {
+                    refuse(
+                        ExternalLaneCheckpointRefusal::LockedLogMissing,
+                        format!("the receipt has no log {index}"),
+                    )
+                })?;
+            if log.emitter != lane.lock_contract {
+                return Err(refuse(
+                    ExternalLaneCheckpointRefusal::LogOfAnotherContract,
+                    format!("log {index} is not emitted by the lane's lock contract"),
+                ));
+            }
+            if !is_locked(log) {
+                return Err(refuse(
+                    ExternalLaneCheckpointRefusal::LogOfAnotherEvent,
+                    format!("log {index} is not a `Locked` event"),
+                ));
+            }
+            index
+        }
+        None => {
+            let mut candidates = logs
+                .iter()
+                .enumerate()
+                .filter(|(_, log)| is_locked(log))
+                .map(|(index, _)| index);
+            let first = candidates.next().ok_or_else(|| {
+                refuse(
+                    ExternalLaneCheckpointRefusal::LockedLogMissing,
+                    "the receipt has no `Locked` event of the lane's lock contract",
+                )
+            })?;
+            if candidates.next().is_some() {
+                return Err(refuse(
+                    ExternalLaneCheckpointRefusal::LockedLogAmbiguous,
+                    "the receipt has several `Locked` events; name one with --log-index",
+                ));
+            }
+            u32::try_from(first).map_err(invalid_data)?
+        }
+    };
+    let log = &logs[usize::try_from(log_index).map_err(invalid_data)?];
+    let event = decode_locked_event(log, lane.lock_contract).map_err(|error| {
+        refuse(
+            ExternalLaneCheckpointRefusal::LockedEventInvalid,
+            format!("{error}"),
+        )
+    })?;
+    let recipient = String::from_utf8(event.pftl_recipient.clone())
+        .ok()
+        .filter(|recipient| ethereum_keccak256(recipient.as_bytes()) == event.pftl_recipient_hash)
+        .ok_or_else(|| {
+            refuse(
+                ExternalLaneCheckpointRefusal::LockedEventInvalid,
+                "the Locked recipient is not UTF-8 text matching its indexed hash",
+            )
+        })?;
+    // The token the Lock pulled: the ERC-20 `Transfer` of the amount from
+    // the holder to the lock contract in the same receipt.
+    let transfer_topic = ethereum_keccak256(TRANSFER_EVENT_SIGNATURE);
+    let mut amount_word = [0_u8; 32];
+    amount_word[24..].copy_from_slice(&event.amount_atoms.to_be_bytes());
+    let pulled_by = logs
+        .iter()
+        .filter(|log| {
+            log.topics.len() == 3
+                && log.topics[0] == transfer_topic
+                && log.topics[1][12..] == event.holder
+                && log.topics[1][..12] == [0; 12]
+                && log.topics[2][12..] == lane.lock_contract
+                && log.topics[2][..12] == [0; 12]
+                && log.data == amount_word
+        })
+        .map(|log| log.emitter)
+        .collect::<Vec<_>>();
+    if pulled_by.as_slice() != [lane.token] {
+        return Err(refuse(
+            ExternalLaneCheckpointRefusal::TokenMismatch,
+            "the Lock receipt does not hold exactly one transfer of the amount in the lane's token to the lock contract",
+        ));
+    }
+
+    let operation = ExternalLaneReleaseOperationV1 {
+        submitter: options.submitter,
+        lane_id: lane.lane.id.clone(),
+        source_chain_id: lane.lane.policy.chain_id,
+        lock_contract_address: lane.lane.policy.lock_contract_address.clone(),
+        lock_nonce: event.nonce,
+        amount_atoms: event.amount_atoms,
+        recipient,
+        proof: EthereumExternalEventProofV1 {
+            checkpoint_certificate: certificate,
+            receipt_proof: built.proof,
+            log_index,
+        },
+    };
+    operation.validate().map_err(invalid_data)?;
+    let operation = AssetTransactionOperation::ExternalLaneReleaseV1(operation);
+    write_json(&options.operation_file, &operation)?;
+    Ok(operation)
+}
+
+/// Every log of the proven receipt, in order, read through the verifier.
+fn receipt_logs(
+    receipts_root: &[u8; 32],
+    proof: &postfiat_types::EthereumReceiptProofV1,
+) -> io::Result<Vec<EthereumLogV1>> {
+    let mut logs = Vec::new();
+    loop {
+        match verify_ethereum_receipt_log(*receipts_root, proof, logs.len()) {
+            Ok(log) => logs.push(log),
+            Err(error) if error.code() == RECEIPT_LOG_INDEX_INVALID => return Ok(logs),
+            Err(error) => {
+                return Err(refuse(
+                    ExternalLaneCheckpointRefusal::LockedEventInvalid,
+                    format!("the Lock receipt does not verify: {error}"),
+                ))
+            }
+        }
+    }
 }
