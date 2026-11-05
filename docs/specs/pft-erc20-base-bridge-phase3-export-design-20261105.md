@@ -7,7 +7,7 @@ This is a draft design note, written on 2026-11-05 for milestone item P3.1 of `d
 1. Phase 3 lets a PFTL holder send native PFT back to Base as ERC-20 PFT. The new PFTL operation `external_lane_export_v1` debits the sender and credits the external lane. The ERC-20 PFT then comes out of the Phase 2 lock contract, through its dormant `release` and the PFTL finality verifier on Base (`crates/pft-token-contracts/src/PFTLockV1.sol:213-250`). No ERC-20 PFT is minted.
 2. The lane grows back by exactly the exported atoms. The lane's remainder becomes reserved − released + exported, so the per-block conservation check keeps its form (section 4).
 3. PFTL does not read the lock's balance. It refuses an export that would make the lane's exported atoms exceed its released atoms. Every released atom is a Lock the lock contract still holds, so every accepted export stays payable on Base (section 4).
-4. Base needs the PFTL finality verifier and a relay. The verifier must be deployed before the lock contract, because the lock fixes the verifier's address at construction (Phase 2, section 6). The verifier binds the lock's runtime code hash, so the deployment computes that hash from the verifier's predicted address (section 5).
+4. Base needs the PFTL finality verifier and a relay. The verifier must be deployed before the lock contract, because the lock fixes the verifier's address at construction (Phase 2, section 6). It can be deployed only after the first finalized PFTL checkpoint, because its constructor needs that checkpoint. Genesis therefore pins the lock's predicted address and its code hash, which is computed from the verifier's predicted address (section 5).
 5. Today the operation is recognised and refused. Mempool admission, batch building and execution all refuse it with `external_lane_export_not_supported` and change no state (section 7).
 
 ## 2. Terms
@@ -50,17 +50,17 @@ The withdrawal-id commitment covers the lane, the export nonce and the packet. T
 **State refusals:**
 
 - **Lane not configured.** The lane is not in genesis: `external_lane_not_configured`, the release's code (`crates/types/src/external_lane_types.rs:281`).
-- **Recipient is the lock contract.** The `base_recipient` is the lane's `lock_contract_address`. A release to the lock itself can never pay out: the lock's balance does not change, so the delta check reverts (`PFTLockV1.sol:243-249`). The zero address is already refused by shape, and on Base by `PFTLockV1.sol:227` and `PFTLFinalityVerifierV1.sol:286`.
+- **Recipient is the lock contract.** The `base_recipient` is the lane's `lock_contract_address`. This check runs after the lane check, so an unknown lane reports `external_lane_not_configured` first (`crates/execution/src/external_lane_release.rs:298-319`). A release to the lock itself can never pay out: the lock's balance does not change, so the delta check reverts (`PFTLockV1.sol:243-249`). The zero address is already refused by shape, and on Base by `PFTLockV1.sol:227` and `PFTLFinalityVerifierV1.sol:286`.
 - **Above released.** `exported_atoms + amount_atoms > released_atoms` (section 4).
 - **Not enough balance.** The usual balance and reserve refusals.
 
-**No minimum beyond one atom.** The lock's `release` has no minimum; it refuses only zero (`PFTLockV1.sol:226`). `minimumLockAmount` binds Locks, not releases (`:254-256`), and PFTL does not hold it: the lane policy has no such field (`external_lane_types.rs:298-313`). An exported amount below the lock minimum is still paid. The holder only cannot lock that exact amount back in one Lock. Section 9 lists whether to add a minimum.
+**No minimum beyond one atom.** The lock's `release` has no minimum; it refuses only zero (`PFTLockV1.sol:226`). `minimumLockAmount` binds Locks, not releases (`:254-256`), and PFTL does not hold it: the lane policy has no such field (`external_lane_types.rs:305-320`). An exported amount below the lock minimum is still paid. The holder only cannot lock that exact amount back in one Lock. Section 9 lists whether to add a minimum.
 
 **No per-window cap on exports.** The Phase 2 cap bounds what a colluding committee can release from the lane per window, because a release creates circulating native PFT from a claim PFTL cannot see (Phase 2, section 5.1). An export creates nothing on PFTL: it moves PFT the sender already holds out of circulation. The Base side is bounded by the verifier's proof and by the lock's balance (`PFTLockV1.sol:232-233`), not by PFTL. A cap on exports would delay honest holders and protect nothing on PFTL.
 
 ## 4. Accounting on PFTL
 
-The lane state today holds `reserved_atoms`, `released_atoms`, the released Lock nonces and the window fields. Its remainder is reserved − released (`external_lane_types.rs:1041-1075`).
+The lane state today holds `reserved_atoms`, `released_atoms`, the released Lock nonces and the window fields. Its remainder is reserved − released (`external_lane_types.rs:1048-1082`).
 
 **The new field.** Phase 3 adds `exported_atoms` and an export nonce counter, so the remainder becomes reserved − released + exported. Phase 2 required released and exported atoms to be recorded separately so the lane can grow again (Phase 2, section 6). These fields arrive with the implementation, with the state-commitment change and their own qualification. The skeleton adds no ledger field.
 
@@ -72,8 +72,11 @@ The lane state today holds `reserved_atoms`, `released_atoms`, the released Lock
 - **Released side.** Every Base release consumes one export packet's commitments, once. So the lock's `totalReleased` is at most `exported_atoms`.
 - **Rule.** Refusing any export that would make `exported_atoms > released_atoms` keeps `totalLocked − totalReleased ≥ released − exported ≥ 0`. Every accepted export is then payable whenever it is relayed.
 - **Wait, not refund.** A release that has not been relayed yet waits: the packet stays valid and anyone can relay it. Nothing is refunded on PFTL.
+- **Committee moves and unreleased Locks.** A Lock proven after a committee move still counts once, because the released Lock nonce set refuses a second release of the same nonce (`external_lane_types.rs:1068`). Locks made on Base but not yet released on PFTL raise `totalLocked` without raising `released_atoms`, so they only make the bound more conservative.
 
-**Nonces.** Lock nonces are the lock's `nextNonce` sequence. PFTL tracks them in `released_lock_nonces` (`external_lane_types.rs:1061`). Export nonces are a separate per-lane counter on PFTL. They appear on Base only inside the withdrawal-id commitment, never as a Lock nonce, so the two spaces cannot collide.
+**The in-flight stage.** The whitepaper's in-flight stage (`docs/whitepaper.md:68-70`) has no ledger term of its own. An accepted export is external from the PFTL block that debits it, and the lane's remainder holds its packet until Base pays it.
+
+**Nonces.** Lock nonces are the lock's `nextNonce` sequence. PFTL tracks them in `released_lock_nonces` (`external_lane_types.rs:1068`). Export nonces are a separate per-lane counter on PFTL. They appear on Base only inside the withdrawal-id commitment, never as a Lock nonce, so the two spaces cannot collide.
 
 ## 5. Proof on Base
 
@@ -88,20 +91,34 @@ The lane state today holds `reserved_atoms`, `released_atoms`, the released Lock
 
 For Phase 3 the "vault" is the lock contract and the token is the ERC-20 PFT.
 
-**Deployment order.** The two contracts reference each other:
+**Deployment order.** The constructors fix the order:
 
-- The lock fixes the verifier's address at construction, with no setter (Phase 2, section 6). Solidity places immutables in runtime code, so the lock's runtime code hash depends on the verifier's address.
-- The verifier fixes the lock's runtime code hash at construction (`PFTLFinalityVerifierV1.sol:122`, `:160`).
+- **The lock binds the verifier.** The lock fixes the verifier's address at construction, with no setter (Phase 2, section 6). Its constructor refuses a verifier address without code (`crates/pft-token-contracts/src/PFTLockV1.sol:151-160`). Solidity places immutables in runtime code, so the lock's runtime code hash depends on the verifier's address.
+- **The verifier binds the lock.** The verifier fixes the lock's runtime code hash at construction (`PFTLFinalityVerifierV1.sol:122`, `:160`).
+- **The verifier needs a finalized checkpoint.** Its constructor refuses a zero `initialCheckpointCommitment`, a zero `initialFinalizedHeight` and a zero `initialCommitteeRootCommitment`, as well as a zero PFTL genesis-hash commitment (`PFTLFinalityVerifierV1.sol:136-148`). Before PFTL genesis no finalized PFTL block exists, so the verifier cannot be deployed before the chain starts.
+- **Genesis needs the lock.** Genesis must already name the lock's address and runtime code hash (`external_lane_types.rs:307-312`).
 
-The deployment therefore takes these steps:
+This supersedes the Phase 2 sentence that the lock contract is deployed before genesis. An operator follows these steps:
 
-1. Fix the verifier's deployer and nonce, and compute its CREATE address. That address depends only on the deployer and nonce, not on constructor arguments.
-2. Compute the lock's runtime code hash with that address and the lock's other constructor values.
-3. Deploy the verifier at that nonce, with the code hash.
-4. Deploy the lock.
-5. Check both immutables on chain.
+1. Pick two fresh deployer accounts on Base, one for the verifier and one for the lock. Predict both CREATE addresses from each deployer's next nonce; a CREATE address depends only on the deployer and its nonce.
+2. Compute the lock's runtime code hash from the predicted verifier address and the lock's other constructor values: the token, its runtime code hash, `maxLockAmount` and `minimumLockAmount`.
+3. Write the predicted lock address and that code hash into the lane policy of PFTL genesis.
+4. Start the chain.
+5. Take the first finalized PFTL checkpoint. It gives the verifier's `initialCheckpointCommitment`, `initialFinalizedHeight` and `initialCommitteeRootCommitment`.
+6. Deploy the verifier from its deployer at the predicted nonce, with the lock's code hash as `vaultRuntimeCodeHash` and those initial values.
+7. Deploy the lock from its deployer at its predicted nonce.
+8. Check on chain that the lock's `finalityVerifier` and the verifier's `vaultRuntimeCodeHash`, `token` and `tokenRuntimeCodeHash` are the expected values, and that the lock's address and code hash equal the genesis pins.
 
-All of this happens before PFTL genesis, because genesis names the lock's address and code hash (Phase 2, section 6). The record follows the existing relay deployment record (`deployments/a666-export-relay-mainnet-20260731/README.md:7-12`): the route, both addresses, the program verifying key and the code hashes.
+**Deployer nonces.** Nothing else may be sent from either deployer before its deployment:
+
+- A stray transaction from the verifier's deployer changes the verifier's address, and with it the lock's code hash.
+- A stray transaction from the lock's deployer changes the lock's address.
+
+Either way the genesis pins can never be met. No Lock is possible between genesis and step 7, because the lock does not exist yet.
+
+**Dry run.** On Base Sepolia, the dry run deploys both contracts in this order. The first real proof must chain from the verifier's initial values, and one `release` must succeed.
+
+The record follows the existing relay deployment record (`deployments/a666-export-relay-mainnet-20260731/README.md:7-12`). It holds the route, both deployers with their nonces, both addresses, the program verifying key, the code hashes and the initial checkpoint values.
 
 **The relay.** The relay follows the A666 export relay (`deployments/a666-export-relay-mainnet-20260731/README.md`, user flow):
 
@@ -116,7 +133,7 @@ Any party can relay, because `release` is permissionless and pays the packet's r
 
 ## 6. Operator and user flow
 
-1. The holder submits `external_lane_export_v1` with the amount and its own Base address. The Python CLI checks the address before signing.
+1. The holder submits `external_lane_export_v1` with the amount and its own Base address. The wallet signer (`wallet-sign-asset-transaction --operation-json`) runs the operation's `validate()` and so checks the address before signing (`crates/node/src/block_replay_wallet.rs:3300-3303`); a future dedicated CLI can do the same. No export CLI exists today.
 2. PFTL accepts it, and the holder sees the export packet in the receipt.
 3. The relay proves the packet and calls `release` on Base. The holder can also relay it.
 4. The ERC-20 PFT arrives at the Base address, with a `Released` event naming the packet.
@@ -146,7 +163,7 @@ An exchange can export its customers' total in one operation and credit them on 
 
 - **Verifier soundness.** A false proof accepted on Base pays from the lock. The lock's balance bounds the loss, not PFTL: with no admin there is nothing to pause. The same holds for the NAV vaults today.
 - **Prover and relay liveness.** If no prover runs, exports stay unpaid on Base while the PFT has already left circulation on PFTL. Nothing is lost, but holders wait. Section 9 asks whether to add a refund after a deadline, as the NAV route's refund-source operation does (`transactions_mempool_receipts.rs:3493`).
-- **Deployment order.** A wrong predicted verifier address or a wrong code hash leaves the release path dead forever, because the lock has no admin. The dry run on Base Sepolia must deploy both contracts and complete one release before mainnet.
+- **Deployment order.** A wrong predicted address, a wrong code hash or a spent deployer nonce leaves the lane's lock or its release path dead forever, because the lock has no admin (section 5). The dry run on Base Sepolia must follow the steps of section 5 and complete one release before mainnet.
 - **The chain-id field name.** `arbitrumChainId` is a generic chain-id check (`PFTLFinalityVerifierV1.sol:275-277`). A Base deployment must set 8453, not an Arbitrum id.
 
 ## 9. Decisions
@@ -157,19 +174,20 @@ The product owner decides:
 2. Whether exports have a minimum above one atom, for example the lock's `minimumLockAmount`. Enforcing it needs a new lane policy field and a genesis change.
 3. Whether an unpaid export can be refunded on PFTL after a deadline. The refund needs the verifier to refuse the refunded packet. Without a refund, an export waits for the relay indefinitely.
 4. The prover program and its audit budget, and who runs the relay.
-5. The verifier's route profile and asset id for PFT on Base.
+5. How the relay is funded: self-relay only, a relay fee carried inside the export, or an operator-funded service.
+6. The verifier's route profile and asset id for PFT on Base.
 
 ## 10. Sources
 
 - `docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md`, sections 5.1, 6 and 7.
 - `docs/plans/active/pft-erc20-base-listing-milestone.md`, P3.1.
 - `docs/whitepaper.md:68-70`.
-- `crates/pft-token-contracts/src/PFTLockV1.sol:11-20`, `:79-92`, `:128`, `:213-256`.
-- `crates/ethereum-contracts/src/PFTLFinalityVerifierV1.sol:118-160`, `:173-220`, `:270-290`.
+- `crates/pft-token-contracts/src/PFTLockV1.sol:11-20`, `:79-92`, `:128`, `:151-160`, `:213-256`.
+- `crates/ethereum-contracts/src/PFTLFinalityVerifierV1.sol:118-172`, `:173-220`, `:270-290`.
 - `crates/ethereum-contracts/src/ERC20BridgeVaultV2.sol:10-20`.
-- `crates/types/src/external_lane_types.rs:281`, `:298-313`, `:1041-1075`.
+- `crates/types/src/external_lane_types.rs:281`, `:305-320`, `:1048-1082`.
 - `crates/types/src/transactions_mempool_receipts.rs:3333-3350`, `:3440`, `:3493`, `:3818-3819`.
 - `crates/execution/src/external_lane_release.rs:158-275`.
 - `crates/execution/src/nav_vault_asset_execution.rs:5744`, `:6470-6477`.
-- `crates/node/src/block_replay_wallet.rs:2682`, `:2864-2884`.
+- `crates/node/src/block_replay_wallet.rs:2682`, `:2864-2884`, `:3300-3303`.
 - `deployments/a666-export-relay-mainnet-20260731/README.md`.
