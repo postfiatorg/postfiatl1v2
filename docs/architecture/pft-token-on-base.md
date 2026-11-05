@@ -1,0 +1,73 @@
+# The PFT Token On Base
+
+PFT is to list first as an ERC-20 on Base, with a one-for-one path into native PFT at PFTL's mainnet genesis ([milestone](../plans/active/pft-erc20-base-listing-milestone.md)). This page says what the token is, what exists today and how a Lock on Base becomes native PFT. Each fact links its source; the source is authoritative.
+
+## The token
+
+`PFTToken` is a fixed-supply ERC-20 for Base ([contracts README, "PFT token (Base)"](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/README.md#pft-token-base)):
+
+- The constructor mints the whole supply once to the treasury, a Safe multisig. No function mints, burns or changes the supply later.
+- `decimals()` is fixed at 6: one token unit is one atom of native PFT, so 1 PFT is 1,000,000 units.
+- It has no owner, admin, pause, blacklist, hook or upgrade path. It is built only from OpenZeppelin `ERC20` and `ERC20Permit`, so approvals by signed message (EIP-2612) work.
+- OpenZeppelin is the submodule `crates/pft-token-contracts/lib/openzeppelin-contracts` at tag v5.7.0, commit `cab19933c33c2ad1d4c7a84864a3601dddfd16f3`; `foundry.toml` pins solc 0.8.24, 200 optimizer runs, `cancun` and the IPFS metadata hash ([README, "Deployment"](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/README.md#deployment)).
+
+The total supply is 100 billion PFT, fixed, decided 2026-10-28. The Base ERC-20 is a slice of it, not additional supply; the rest is native PFT at genesis, and the slice size is open ([milestone, Phase 2](../plans/active/pft-erc20-base-listing-milestone.md#phase-2-the-genesis-bridge); [options paper, "Decided"](../listings/coinbase/pft-erc20-representation-options-20261026.md#decided)).
+
+The token is its own Foundry project, `crates/pft-token-contracts`, and the CI `evm-contracts` job runs `forge test` there ([README](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/README.md); [milestone P1.2](../plans/active/pft-erc20-base-listing-milestone.md#phase-1-the-token-on-base)):
+
+| What | Where |
+|---|---|
+| Contract | [`src/PFTToken.sol`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/src/PFTToken.sol) |
+| Tests | [`test/PFTToken.t.sol`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/test/PFTToken.t.sol), [`test/PFTTokenBoundary.t.sol`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/test/PFTTokenBoundary.t.sol), [`test/PFTTokenInvariant.t.sol`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/test/PFTTokenInvariant.t.sol) |
+| Deploy script | [`script/DeployPFTToken.s.sol`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/script/DeployPFTToken.s.sol) with placeholders in `script/pft-token.env.example`; its tests are `test/DeployPFTToken.t.sol` and `test/deploy-script-cli.sh`, and its refusals (chain, supply, Safe treasury, artifact, one-time deployer) are listed in [README, "Deployment"](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/README.md#deployment) |
+| Reader CLI and page | `python/postfiat_rpc/pft_token.py` and `python/postfiat_rpc/pft_token_ui.py` ([RPC examples](../rpc/examples.md#erc-20-pft-on-base); milestone M2, M3) |
+
+## What exists on Base today
+
+Base Sepolia (chain id 84532) holds test deployments with no value ([dry-run record](../listings/coinbase/pft-token-dry-run-20261026.md#base-sepolia-test-deployment-2026-10-28)):
+
+| Contract | Address | Record | Source verified |
+|---|---|---|---|
+| Test token `PFTToken` (`Post Fiat Token`, `PFT`, 6 decimals) | `0x18fE4ca51A0cE042688D5A54917319d03B527D92` | [`deployments/pft-token-base-84532/deployment.json`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/deployments/pft-token-base-84532/deployment.json): mode `real`, block 51305977 | [Sourcify](https://repo.sourcify.dev/84532/0x18fE4ca51A0cE042688D5A54917319d03B527D92) (exact match), [Blockscout](https://base-sepolia.blockscout.com/address/0x18fE4ca51A0cE042688D5A54917319d03B527D92?tab=contract) |
+| Test treasury, Safe 1.4.1 | `0x7424F4F4A620d37CFB54A4558a1Ec7f60b71A0CB` | two owners, threshold 2, no module, no guard (same record) | — |
+| Rehearsal lock `PFTLockV1` | `0xE36e7Fc384564419187546c19719A5654266dE0B` | [`deployments/pft-lock-base-84532/deployment.json`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/deployments/pft-lock-base-84532/deployment.json): mode `test`, block 51352801 | [Sourcify](https://repo.sourcify.dev/84532/0xE36e7Fc384564419187546c19719A5654266dE0B) (exact match), [Blockscout](https://base-sepolia.blockscout.com/address/0xE36e7Fc384564419187546c19719A5654266dE0B?tab=contract) |
+
+- The Safe holds the whole test supply, 100,000,000,000 PFT; that figure is a test value, not the slice ([dry-run record](../listings/coinbase/pft-token-dry-run-20261026.md#base-sepolia-test-deployment-2026-10-28)).
+- The rehearsal lock's finality verifier is a stand-in whose `verifyAndConsume` always reverts, so nothing can be released from it; its `maxLockAmount` is 2,000,000,000 PFT ([lock rehearsal](../listings/coinbase/pft-token-dry-run-20261026.md#base-sepolia-lock-rehearsal-2026-10-28)). It predates the minimum lock amount and accepts 1-atom Locks ([milestone P2.5](../plans/active/pft-erc20-base-listing-milestone.md#phase-2-the-genesis-bridge)).
+- Basescan has not verified either source (both records).
+- Nothing is deployed on Base mainnet ([milestone P1.7 and "Not before"](../plans/active/pft-erc20-base-listing-milestone.md#not-before)).
+
+## The genesis external lane
+
+A genesis external lane is native PFT that genesis reserves for the ERC-20 slice: genesis gives the faucet the native supply minus the lanes' `reserved_atoms`, and the ledger keeps one record per lane with what it has released ([lanes page, "Ledger and genesis state"](genesis-external-lanes.md#ledger-and-genesis-state)). The conservation checks count the lane remainder, `reserved_atoms - released_atoms`, as native supply that is not in circulation, so a release moves atoms from the lane into circulation and every block still satisfies "live before minus fee burns equals live after" ([lanes page, "What the conservation check counts"](genesis-external-lanes.md#what-the-conservation-check-counts)); across both chains, circulating Base PFT plus circulating native PFT stays 100 billion ([options paper, "Supply accounting"](../listings/coinbase/pft-erc20-representation-options-20261026.md#supply-accounting)). `reserved_atoms` must equal the slice, which the genesis plan's build check compares before any lane-bearing genesis is produced ([lanes page, "Genesis fields"](genesis-external-lanes.md#genesis-fields)). No lane is configured on any network ([milestone P2.2](../plans/active/pft-erc20-base-listing-milestone.md#phase-2-the-genesis-bridge)).
+
+## From a Lock on Base to native PFT
+
+**The lock contract.** A holder calls `PFTLockV1.lock(amount, pftlRecipient)`. The lock pulls the tokens with `transferFrom`, takes the next nonce from 0, writes a permanent record, emits one `Locked` event and keeps the tokens. It refuses an amount below `minimumLockAmount` (at least the PFTL account reserve, 10 atoms) or above `maxLockAmount`, and a recipient that is empty or over 256 bytes; it checks the recipient only for length. It has no owner, admin, pause, setter, sweep or upgrade path, and its `release` path stays dormant until Phase 3, paying only what its immutable finality verifier accepts ([README, "Lock contract (Phase 2, Base)"](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/README.md#lock-contract-phase-2-base); [design note, section 3](../specs/pft-erc20-base-bridge-phase2-design-20261026.md#3-the-lock-contract-on-base)).
+
+**The committee checkpoint.** The bridge committee the lane's genesis policy names, a `FastSwapCommitteeV1` registered on PFTL, signs a checkpoint of one Base block: its number, hash and receipts root, the observed head, and the lane, chain, lock contract, token, code hashes and confirmation depth. A certificate needs the committee quorum, ⌊2n/3⌋ + 1, which is 5 of 6, and the observed head must be at least `confirmation_depth` blocks past the Lock's block ([lanes page, "The release path"](genesis-external-lanes.md#the-release-path); [design note, section 4.1](../specs/pft-erc20-base-bridge-phase2-design-20261026.md#41-the-bridge-committee-and-its-lifecycle)). The design signs only Base blocks derived from finalized Ethereum data, and the bridge is committee-trusted: a colluding quorum could release native PFT with no Lock behind it ([design note, section 4](../specs/pft-erc20-base-bridge-phase2-design-20261026.md#4-proving-a-base-lock-on-pftl) and [section 9](../specs/pft-erc20-base-bridge-phase2-design-20261026.md#9-risks)). Members observe Base, sign and assemble checkpoints with the node commands of the section "The Base checkpoint source" of the [lanes page](genesis-external-lanes.md).
+
+**The receipt proof.** The proof carries, beside the certificate, the receipt-inclusion proof of the lock contract's `Locked` log under the checkpoint's receipts root. Execution decodes the log's nonce, amount and recipient and requires them to equal the claim; there is no SP1 program for Base ([lanes page, "The release path"](genesis-external-lanes.md#the-release-path); `verify_external_lane_lock` in [`crates/execution/src/external_lane_release.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/execution/src/external_lane_release.rs)).
+
+**The release operation.** `external_lane_release_v1` names the lane, the Lock (chain, lock contract, nonce), the amount, the PFTL recipient and the proof. Any account may submit it and pay the fee. Execution checks it in a fixed order and refuses with no state change; an accepted release credits the recipient, marks the Lock nonce released so it is never paid twice, and appends a release record. A release to a new account below the account reserve is refused and can be retried later ([lanes page, "The release path"](genesis-external-lanes.md#the-release-path)).
+
+**The window cap.** Each lane has `release_window_blocks` and `release_cap_bps`; one window may release `reserved_atoms × release_cap_bps / 10,000` atoms, rounded down, and that cap must be positive at genesis. The design's lean is 200 bps, 2 % of the lane, per window of one day's blocks, so a quorum that nobody stops needs about 50 windows to empty the lane ([lanes page, "Genesis fields"](genesis-external-lanes.md#genesis-fields); [design note, section 5.1](../specs/pft-erc20-base-bridge-phase2-design-20261026.md#51-the-per-window-release-cap)).
+
+**The governed amendments.** Two amendment kinds change a configured lane, each signed by the registry threshold of the active validator set, 5 of 6. A cap amendment that lowers the cap applies at once, and a cap of zero halts releases and moves no PFT; a raise applies seven windows after it commits. A committee epoch move holds from the block after it commits; from then on checkpoints of the old epoch are refused, and a Lock is re-proven by the new committee from the same Base block ([lanes page, "Governed lane amendments"](genesis-external-lanes.md#governed-lane-amendments)). Both rounds were rehearsed on a six-validator fleet with the node CLI on 2026-11-04 ([qualification record](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md#six-validator-rehearsal-of-the-amendment-rounds-2026-11-04)).
+
+## Not built or not decided
+
+- **The audit** of the token, with its budget and vendor, and the audit of the lock contract ([milestone P1.4 and P2.5](../plans/active/pft-erc20-base-listing-milestone.md#phase-1-the-token-on-base)).
+- **The token document's open decisions:** the split at launch between the ERC-20 slice and genesis, which also sets `reserved_atoms`; the treatment of PFT already paid on the PFT Ledger; and the treasury signers and threshold ([milestone P1.5](../plans/active/pft-erc20-base-listing-milestone.md#phase-1-the-token-on-base); [options paper, "Open items"](../listings/coinbase/pft-erc20-representation-options-20261026.md#open-items)).
+- **The Base mainnet deployment:** the production Safe, the token deployment and its source verification ([milestone P1.6–P1.8](../plans/active/pft-erc20-base-listing-milestone.md#phase-1-the-token-on-base)), and for the lock, a PFTL finality verifier on Base first ([README, "Deploy the lock contract"](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/README.md#deploy-the-lock-contract)).
+- **The Base checkpoint source's own qualification** ([milestone P2.5](../plans/active/pft-erc20-base-listing-milestone.md#phase-2-the-genesis-bridge); [qualification record, "Open before genesis"](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md#open-before-genesis)).
+- **The reverse route, Phase 3:** exporting native PFT back to Base needs the export route generalised beyond NAV assets and a PFTL finality verifier and relay on Base ([milestone P3.1](../plans/active/pft-erc20-base-listing-milestone.md#phase-3-the-reverse-export-route-optional); [design note, section 6](../specs/pft-erc20-base-bridge-phase2-design-20261026.md#6-phase-3-hooks-kept-open)).
+- **The watcher** that compares released nonces on PFTL with `Locked` events on Base and raises an alarm on a false release ([design note, section 5.2](../specs/pft-erc20-base-bridge-phase2-design-20261026.md#52-detecting-and-answering-a-false-release); [lanes page, "Not built yet"](genesis-external-lanes.md#not-built-yet)).
+
+## Read more
+
+- [The ERC-20 milestone](../plans/active/pft-erc20-base-listing-milestone.md): every step, its owner and its state.
+- [The options paper](../listings/coinbase/pft-erc20-representation-options-20261026.md): why an ERC-20 on Base first, the decisions and the open items.
+- [The Phase 2 design note](../specs/pft-erc20-base-bridge-phase2-design-20261026.md): the lock contract, the proof, the lane, the cap and the risks.
+- [The Coinbase one-pager](../listings/coinbase/pft-erc20-one-pager.md): the token in a page for Coinbase.
+- [Genesis External Lanes](genesis-external-lanes.md): what the lane and release code do, in detail.
