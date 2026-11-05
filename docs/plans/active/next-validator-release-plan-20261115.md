@@ -30,6 +30,8 @@ Skeleton written 2026-10-30; pointed at the separately qualified next release on
 - [x] `5fc1e2374`, `264d0f6e7`, `7527df06a`, `739d49527`, `db2de7c0b`, `c43eaa27a`, `d4a1f42b7`, `a7347213f`, `6d9aa57cd` and this plan's update: the release plan, milestone ticks, the amendment rehearsal record, a handoff and the qualification records. Docs only.
 - [x] `84b4ea41c`: a pull merge commit with nothing of its own.
 - [x] `7a968007e`: the Phase 3 export design and the refused export operation (branch commits `edc74bbc6` to `e5caa1a54`). The node now parses `external_lane_export_v1` and refuses it at admission, batch building and execution with a typed code; an older binary refuses it at decode as an unknown operation. Both refuse, no state result changes and no network configures a lane: rides along. The parse set grows by one refused kind.
+- [x] `313cf3926`: the crypto call-site policy script records the validator signer's seeded signing sites. CI script only, rides along.
+- [x] `41bde8b8a`: the external lane watcher (branch commits `cea372c1b` to `ddd1713f9`). Python (`python/postfiat_rpc/external_lane_watcher.py` and its tests) and docs only; no node change, rides along.
 
 ## Candidates
 

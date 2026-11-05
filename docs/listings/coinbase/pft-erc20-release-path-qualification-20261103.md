@@ -145,6 +145,25 @@ Requests forwarded: `eth_chainId` 8, `eth_blockNumber` 6, `eth_getBlockByNumber`
 
 **Limit.** No Lock exists on the rehearsal lock yet, so `external-lane-lock-proof` has run only against the mock RPC. A real Lock needs Base Sepolia test ETH on the deployer, and it is the next rehearsal.
 
+## The watcher (2026-11-05)
+
+`python/postfiat_rpc/external_lane_watcher.py`, merged in `41bde8b8a`, matches each release on PFTL against its Lock on Base and raises a typed alarm on a release that no Lock backs ([the watcher](../../architecture/genesis-external-lanes.md#the-watcher), design section 5.2).
+
+**Tests.** `python/tests/test_external_lane_watcher.py`, against mocked PFTL and Base RPCs: 32 passed, 45 subtests. With the CLI method and documented-command tests (`test_cli_public_reads.py`, `test_cli_doc_examples.py`): 41 passed, 104 subtests (`PYTHONPATH=python python3 -m pytest -q`).
+
+**Live check.** Once, 2026-11-05 13:02:12Z, read-only: a local `rpc-serve` with no finality flags on `init --genesis-file crates/node/testdata/external-lane-genesis/genesis.json`, which names the Base Sepolia rehearsal lock `0xE36e7Fc384564419187546c19719A5654266dE0B` and its runtime code hash, and the watcher with `--lane-id base-erc20 --base-rpc https://sepolia.base.org --once`. The node binary was built from the branch, whose node code is `e7749f414`.
+
+| Fact | Value |
+|---|---|
+| Exit | 0, one `summary` line, no alarm |
+| Releases checked | 0 (`release_count` 0: the lane has no release) |
+| PFTL height | 0 |
+| Base chain id | 84532 |
+| Finalized block | 54,803,494 |
+| Lock code hash at that block | `0x328a93e99cf9659bdb44807d60a9e0328e0ff867d0b584dc2eeed3b0d5442fb2`, equal to the genesis pin |
+
+It shows that the watcher reads a real node's `external_lane_info` (chain id, genesis hash, the lane row and its policy) and, over Base's real JSON-RPC, the finalized block and the lock contract's code. It sent only read methods. Matching a release against `lockRecord` has run only against the mocked RPC: no Lock and no release exist yet.
+
 ## Open before genesis
 
 - Corrected 2026-11-04: no proof program is needed. The lane's proof is the committee-signed Base checkpoint plus the receipt proof (design option (b)), so it has no SP1 guest, vkey pin or proof inventory entry; an SP1 guest for Base is the design's option (a) upgrade.
