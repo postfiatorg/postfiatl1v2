@@ -928,6 +928,34 @@ fn observe_sign_assemble_and_proof_refuse_a_lane_whose_committee_is_not_register
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
+#[test]
+fn lock_proof_accepts_an_unrelated_same_shaped_transfer_beside_the_policy_token_transfer() {
+    let chain = source_chain("unrelated-transfer");
+    // A smart-contract wallet or batch: another contract's `Transfer` of the
+    // same amount from the holder to the lock, beside the token's own.
+    let logs = vec![
+        locked_log(LOCK_NONCE, &chain.recipient, amount()),
+        transfer_log(OTHER_TOKEN, amount()),
+        transfer_log(TOKEN, amount()),
+    ];
+    let rpc = MockBase::serve(with_lock_logs(base_state(&chain.recipient, amount(), 0xa0), logs));
+    let certificate = certificate_of(&chain, &rpc, "unrelated");
+    let operation =
+        lock_proof(&chain, &rpc, &certificate, &lock_tx(1), None, "unrelated").expect("the policy token's transfer suffices");
+    let AssetTransactionOperation::ExternalLaneReleaseV1(release) =
+        serde_json::from_slice(&fs::read(&operation).expect("operation")).expect("operation json")
+    else {
+        panic!("not an external lane release");
+    };
+    assert_eq!((release.lock_nonce, release.amount_atoms), (LOCK_NONCE, amount()));
+    // A Lock receipt whose only matching transfer is another contract's is
+    // still refused.
+    let error = lock_proof(&chain, &rpc, &certificate, &lock_tx(3), None, "only-other").unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::TokenMismatch);
+    assert!(!chain.data_dir.join("only-other.operation.json").exists());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
 /// Read-only qualification against a real Base Sepolia RPC at the http URL
 /// in `POSTFIAT_LIVE_BASE_RPC`: the rehearsal lock and token code hashes,
 /// the `finalized` block, five votes and the certificate, and the receipt

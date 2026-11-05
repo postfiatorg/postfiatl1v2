@@ -779,28 +779,28 @@ pub fn build_external_lane_lock_proof(
                 "the Locked recipient is not UTF-8 text matching its indexed hash",
             )
         })?;
-    // The token the Lock pulled: the ERC-20 `Transfer` of the amount from
-    // the holder to the lock contract in the same receipt.
+    // The token the Lock pulled: an ERC-20 `Transfer` of the amount from the
+    // holder to the lock contract, emitted by the lane's token, in the same
+    // receipt. Same-shaped transfers of other contracts (a smart-contract
+    // wallet, a batch) are ignored: consensus binds the lock's address and
+    // code hash, and the lock's token is immutable.
     let transfer_topic = ethereum_keccak256(TRANSFER_EVENT_SIGNATURE);
     let mut amount_word = [0_u8; 32];
     amount_word[24..].copy_from_slice(&event.amount_atoms.to_be_bytes());
-    let pulled_by = logs
-        .iter()
-        .filter(|log| {
-            log.topics.len() == 3
-                && log.topics[0] == transfer_topic
-                && log.topics[1][12..] == event.holder
-                && log.topics[1][..12] == [0; 12]
-                && log.topics[2][12..] == lane.lock_contract
-                && log.topics[2][..12] == [0; 12]
-                && log.data == amount_word
-        })
-        .map(|log| log.emitter)
-        .collect::<Vec<_>>();
-    if pulled_by.as_slice() != [lane.token] {
+    let pulled_by_token = logs.iter().any(|log| {
+        log.emitter == lane.token
+            && log.topics.len() == 3
+            && log.topics[0] == transfer_topic
+            && log.topics[1][12..] == event.holder
+            && log.topics[1][..12] == [0; 12]
+            && log.topics[2][12..] == lane.lock_contract
+            && log.topics[2][..12] == [0; 12]
+            && log.data == amount_word
+    });
+    if !pulled_by_token {
         return Err(refuse(
             ExternalLaneCheckpointRefusal::TokenMismatch,
-            "the Lock receipt does not hold exactly one transfer of the amount in the lane's token to the lock contract",
+            "the Lock receipt holds no transfer of the amount in the lane's token from the holder to the lock contract",
         ));
     }
 
