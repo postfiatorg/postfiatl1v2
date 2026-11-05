@@ -802,7 +802,11 @@ fn strict_http_content_length(headers: &str) -> io::Result<Option<usize>> {
     Ok(length)
 }
 
-fn rpc_hex_u64(endpoint: &EthereumRpcEndpoint, method: &str, params: Value) -> io::Result<u64> {
+pub(crate) fn rpc_hex_u64(
+    endpoint: &EthereumRpcEndpoint,
+    method: &str,
+    params: Value,
+) -> io::Result<u64> {
     let result = ethereum_rpc_call(endpoint, method, params)?;
     parse_hex_u64(result.as_str().ok_or_else(|| {
         io::Error::new(
@@ -812,7 +816,7 @@ fn rpc_hex_u64(endpoint: &EthereumRpcEndpoint, method: &str, params: Value) -> i
     })?)
 }
 
-fn ethereum_rpc_hex_bytes(
+pub(crate) fn ethereum_rpc_hex_bytes(
     endpoint: &EthereumRpcEndpoint,
     method: &str,
     params: Value,
@@ -827,7 +831,7 @@ fn ethereum_rpc_hex_bytes(
     hex_to_bytes(encoded.strip_prefix("0x").unwrap_or(encoded)).map_err(invalid_data)
 }
 
-fn value_hex_u64(value: &Value, field: &'static str) -> io::Result<u64> {
+pub(crate) fn value_hex_u64(value: &Value, field: &'static str) -> io::Result<u64> {
     parse_hex_u64(value.get(field).and_then(Value::as_str).ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
@@ -836,7 +840,10 @@ fn value_hex_u64(value: &Value, field: &'static str) -> io::Result<u64> {
     })?)
 }
 
-fn value_hex_array<const N: usize>(value: &Value, field: &'static str) -> io::Result<[u8; N]> {
+pub(crate) fn value_hex_array<const N: usize>(
+    value: &Value,
+    field: &'static str,
+) -> io::Result<[u8; N]> {
     exact_hex(
         field,
         value.get(field).and_then(Value::as_str).ok_or_else(|| {
@@ -864,11 +871,11 @@ fn parse_hex_u64(value: &str) -> io::Result<u64> {
     u64::from_str_radix(digits, 16).map_err(invalid_data)
 }
 
-fn exact_evm_address(field: &'static str, value: &str) -> io::Result<[u8; 20]> {
+pub(crate) fn exact_evm_address(field: &'static str, value: &str) -> io::Result<[u8; 20]> {
     exact_hex(field, value.strip_prefix("0x").unwrap_or(value))
 }
 
-fn exact_hex<const N: usize>(field: &'static str, value: &str) -> io::Result<[u8; N]> {
+pub(crate) fn exact_hex<const N: usize>(field: &'static str, value: &str) -> io::Result<[u8; N]> {
     hex_to_bytes(value.strip_prefix("0x").unwrap_or(value))
         .map_err(invalid_data)?
         .try_into()
@@ -880,12 +887,12 @@ fn exact_hex<const N: usize>(field: &'static str, value: &str) -> io::Result<[u8
         })
 }
 
-fn write_json(path: &std::path::Path, value: &impl serde::Serialize) -> io::Result<()> {
+pub(crate) fn write_json(path: &std::path::Path, value: &impl serde::Serialize) -> io::Result<()> {
     let json = serde_json::to_string_pretty(value).map_err(invalid_data)?;
     atomic_write(path, format!("{json}\n"))
 }
 
-fn invalid_data(error: impl std::fmt::Debug) -> io::Error {
+pub(crate) fn invalid_data(error: impl std::fmt::Debug) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, format!("{error:?}"))
 }
 

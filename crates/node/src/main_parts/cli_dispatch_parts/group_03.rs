@@ -2296,6 +2296,28 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             );
             Ok(())
         }
+        "external-lane-checkpoint-observe" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let block_number = flag_value(flags, "--block-number")
+                .map(|value| value.parse::<u64>().map_err(|_| "invalid --block-number"))
+                .transpose()?;
+            let checkpoint = observe_external_lane_checkpoint(ExternalLaneCheckpointObserveOptions {
+                data_dir: PathBuf::from(data_dir),
+                lane_id: flag_value(flags, "--lane-id").ok_or("missing --lane-id")?.to_string(),
+                base_rpc: flag_value(flags, "--base-rpc").ok_or("missing --base-rpc")?.to_string(),
+                block_number,
+                checkpoint_file: PathBuf::from(
+                    flag_value(flags, "--checkpoint-file").ok_or("missing --checkpoint-file")?,
+                ),
+            })
+            .map_err(|error| format!("{command} failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&checkpoint)
+                    .map_err(|error| format!("checkpoint serialization failed: {error}"))?
+            );
+            Ok(())
+        }
         "fastswap-control-prepare" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let control_file =

@@ -1148,6 +1148,18 @@ mod release_path {
         consensus_v2_activation_height: Option<u64>,
         validator_count: u32,
     ) -> Chain {
+        lane_chain_configured(label, release_window_blocks, consensus_v2_activation_height, validator_count, |_| {})
+    }
+
+    /// [`lane_chain_with`] whose lane policy `edit_policy` changes before
+    /// the genesis is written.
+    fn lane_chain_configured(
+        label: &str,
+        release_window_blocks: u64,
+        consensus_v2_activation_height: Option<u64>,
+        validator_count: u32,
+        edit_policy: impl FnOnce(&mut GenesisExternalLanePolicy),
+    ) -> Chain {
         let keys: Vec<_> = (0..u8::try_from(validator_count).expect("count"))
             .map(|index| ml_dsa_65_keygen_from_seed(&[0x81 + index; 32]))
             .collect();
@@ -1181,6 +1193,7 @@ mod release_path {
         let policy = &mut genesis.external_lanes.as_mut().expect("lanes")[0].policy;
         policy.committee_epoch = 1;
         policy.committee_root = format!("0x{}", bytes_to_hex(&committee.domain.committee_root.0));
+        edit_policy(policy);
         genesis.validate().expect("lane genesis");
         committee.domain.chain = FastSwapChainDomainV1 {
             chain_id: genesis.chain_id.clone(),
@@ -3158,5 +3171,11 @@ mod release_path {
             assert_eq!(now.sequence, was.sequence + u64::from(burned > 0), "{code}");
         }
         let _ = fs::remove_dir_all(chain.data_dir);
+    }
+
+    /// The Base checkpoint source commands against a mock Base RPC.
+    mod checkpoint_source {
+        use super::*;
+        include!("external_lane_checkpoint_source_tests.rs");
     }
 }

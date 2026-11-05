@@ -262,6 +262,26 @@ pub fn build_ethereum_receipt_proof(
     Ok(artifact)
 }
 
+/// The receipts root of `receipts` (RPC JSON, in transaction order), for
+/// test fixtures of whole blocks.
+#[cfg(test)]
+pub(crate) fn receipts_root_of(receipts: &[Value]) -> io::Result<[u8; 32]> {
+    let entries = receipts
+        .iter()
+        .enumerate()
+        .map(|(index, receipt)| {
+            Ok(TrieEntry {
+                key: bytes_to_nibbles(&rlp_u64(u64::try_from(index).map_err(invalid_data)?)),
+                value: encode_receipt(receipt)?,
+            })
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+    let entry_refs = entries.iter().collect::<Vec<_>>();
+    Ok(postfiat_bridge::ethereum_keccak256(
+        &build_trie(&entry_refs, 0)?.encoded,
+    ))
+}
+
 #[derive(Debug, Clone)]
 struct TrieEntry {
     key: Vec<u8>,
