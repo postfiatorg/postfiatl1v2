@@ -17,6 +17,7 @@ LOCK = "0x1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
 HOLDER = "0x" + "11" * 20
 LOCK_CODE = b"\x60\x80PFTLockV1 runtime"
 FINALIZED = 1_000
+SOURCE_BLOCK_HASH = "0x" + "6f" * 32
 
 
 def recipient(index: int) -> str:
@@ -38,7 +39,7 @@ def release(sequence: int, *, nonce: int | None = None, amount: int = 5_000, hei
             "amount_atoms": amount,
             "recipient": recipient(sequence) if to is None else to,
             "source_block_number": source_block,
-            "source_block_hash": "0x" + "6f" * 32,
+            "source_block_hash": SOURCE_BLOCK_HASH,
             "released_at_height": 10 + sequence if height is None else height,
         },
     }
@@ -99,12 +100,19 @@ class FakeBase:
     every state read."""
 
     def __init__(self, locks: dict[int, tuple[str, int, str]], *, chain_id: int = 8453,
-                 code: bytes = LOCK_CODE, finalized: int = FINALIZED) -> None:
+                 code: bytes = LOCK_CODE, finalized: int = FINALIZED,
+                 block_hashes: dict[int, str] | None = None, lock_from: dict[int, int] | None = None) -> None:
         self.locks = locks
         self.chain_id = chain_id
         self.code = code
         self.finalized = finalized
+        # The canonical hash of each Base block (default: the release records'),
+        # and the first block at which each Lock exists (default: block 0).
+        self.block_hashes = block_hashes or {}
+        self.lock_from = lock_from or {}
         self.state_read_tags: list[str] = []
+        self.lock_read_tags: list[str] = []
+        self.block_reads: list[str] = []
         self.methods: list[str] = []
 
     def call(self, method: str, params: list[Any]) -> Any:
@@ -112,8 +120,14 @@ class FakeBase:
         if method == "eth_chainId":
             return hex(self.chain_id)
         if method == "eth_getBlockByNumber":
-            assert params == ["finalized", False], params
-            return {"number": hex(self.finalized), "hash": "0x" + "ab" * 32}
+            tag, full = params
+            assert full is False, params
+            self.block_reads.append(tag)
+            if tag == "finalized":
+                return {"number": hex(self.finalized), "hash": "0x" + "ab" * 32}
+            number = int(tag, 16)
+            assert number <= self.finalized, "only finalized blocks are read by number"
+            return {"number": tag, "hash": self.block_hashes.get(number, SOURCE_BLOCK_HASH)}
         if method == "eth_getCode":
             assert params[0].lower() == LOCK
             self.state_read_tags.append(params[1])
@@ -121,11 +135,14 @@ class FakeBase:
         if method == "eth_call":
             call, tag = params
             self.state_read_tags.append(tag)
+            self.lock_read_tags.append(tag)
             assert call["to"].lower() == LOCK
             data = call["data"]
             assert data[:10] == "0x" + watcher.LOCK_RECORD_SELECTOR, data
             nonce = int(data[10:], 16)
-            holder, amount, recipient_hash = self.locks.get(nonce, ("0x" + "00" * 20, 0, "0x" + "00" * 32))
+            absent = ("0x" + "00" * 20, 0, "0x" + "00" * 32)
+            exists = nonce in self.locks and int(tag, 16) >= self.lock_from.get(nonce, 0)
+            holder, amount, recipient_hash = self.locks[nonce] if exists else absent
             words = holder[2:].rjust(64, "0") + f"{amount:064x}" + recipient_hash[2:]
             return "0x" + words
         raise AssertionError(f"the watcher called a non-read method {method}")
@@ -164,7 +181,7 @@ class KeccakTests(unittest.TestCase):
 
 
 class WatcherTests(unittest.TestCase):
-    def test_every_backed_release_is_checked_at_the_finalized_block(self) -> None:
+    def test_every_backed_release_is_checked_at_its_own_source_block(self) -> None:
         releases = [release(0), release(1), release(2)]
         base = FakeBase(backed(*releases))
         code, lines, _ = run(FakePftl(releases), base)
@@ -177,7 +194,11 @@ class WatcherTests(unittest.TestCase):
         self.assertEqual(summary["kind"], "summary")
         self.assertEqual((summary["releases_checked"], summary["alarms"]), (3, 0))
         self.assertEqual(summary["finalized_block"], FINALIZED)
-        self.assertEqual(set(base.state_read_tags), {hex(FINALIZED)}, "every state read at the finalized block")
+        # The code hash at the finalized block; each Lock at its release's own
+        # source block, whose hash was read and matched first.
+        self.assertEqual(base.state_read_tags[0], hex(FINALIZED))
+        self.assertEqual(base.lock_read_tags, [hex(900)] * 3)
+        self.assertEqual(base.block_reads, ["finalized"] + [hex(900)] * 3)
         self.assertTrue(set(base.methods) <= {"eth_chainId", "eth_getBlockByNumber", "eth_getCode", "eth_call"})
 
     def test_each_false_release_is_a_typed_alarm(self) -> None:
@@ -198,6 +219,36 @@ class WatcherTests(unittest.TestCase):
                 statuses = {line["sequence"]: line["status"] for line in lines if line["kind"] == "release"}
                 self.assertEqual(statuses, {0: "backed", 1: "alarm"})
                 self.assertEqual(lines[-1]["alarms"], 1)
+
+    def test_a_lock_made_after_the_release_does_not_back_it(self) -> None:
+        # The Lock exists at the finalized head but not at the release's own
+        # source block 900: it was made later and cannot back the release.
+        false_release = release(0)
+        base = FakeBase(backed(false_release), lock_from={0: 950})
+        code, lines, _ = run(FakePftl([false_release]), base)
+        self.assertEqual(code, 2)
+        self.assertEqual(alarm_codes(lines), ["release_without_lock"])
+        self.assertEqual(base.lock_read_tags, [hex(900)], "the Lock is read at the source block")
+
+    def test_a_source_block_whose_hash_differs_is_an_alarm(self) -> None:
+        good, false_release = release(0, source_block=800), release(1)
+        base = FakeBase(backed(good, false_release), block_hashes={900: "0x" + "77" * 32})
+        code, lines, _ = run(FakePftl([good, false_release]), base)
+        self.assertEqual(code, 2)
+        self.assertEqual(alarm_codes(lines), ["release_source_block_mismatch"])
+        alarm = next(line for line in lines if line["kind"] == "alarm")
+        self.assertEqual((alarm["sequence"], alarm["source_block_number"]), (1, 900))
+        self.assertEqual((alarm["source_block_hash"], alarm["canonical_block_hash"]),
+                         (SOURCE_BLOCK_HASH, "0x" + "77" * 32))
+        # The mismatched block's Lock is not read.
+        self.assertEqual(base.lock_read_tags, [hex(800)])
+
+    def test_a_not_yet_final_release_is_left_for_a_later_run(self) -> None:
+        pending = release(0, source_block=FINALIZED + 1)
+        base = FakeBase({})
+        code, lines, _ = run(FakePftl([pending]), base)
+        self.assertEqual((code, alarm_codes(lines)), (2, ["release_block_not_finalized"]))
+        self.assertEqual((base.block_reads, base.lock_read_tags), (["finalized"], []))
 
     def test_a_release_whose_amount_and_recipient_both_differ_raises_both(self) -> None:
         false_release = release(0)
@@ -296,6 +347,8 @@ class WatcherTests(unittest.TestCase):
             "recipient not text": lambda entry: entry["record"].update(recipient=7),
             "another lock contract": lambda entry: entry["record"].update(lock_contract_address="0x" + "99" * 20),
             "another source chain": lambda entry: entry["record"].update(source_chain_id=1),
+            "source block hash missing": lambda entry: entry["record"].pop("source_block_hash"),
+            "source block hash short": lambda entry: entry["record"].update(source_block_hash="0x" + "6f" * 31),
         }
         for name, corrupt in cases.items():
             with self.subTest(name):

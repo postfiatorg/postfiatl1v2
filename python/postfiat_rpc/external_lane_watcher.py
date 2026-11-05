@@ -6,8 +6,10 @@ raises an alarm for a release whose nonce has no Lock, whose amount differs
 from the Lock's, or whose recipient hash differs from the Lock's
 ``pftlRecipientHash``. It pages the lane's release records from a PFTL node
 (``external_lane_info``), reads the lane policy from the same read, and checks
-each release on Base at the ``finalized`` block through the lock contract's
-``lockRecord(nonce)`` view (``crates/pft-token-contracts/src/PFTLockV1.sol``).
+each release on Base through the lock contract's ``lockRecord(nonce)`` view
+(``crates/pft-token-contracts/src/PFTLockV1.sol``) at the release's own source
+block, once that block is final and its hash is the one the release names; a
+Lock made later cannot back an earlier release.
 
 It only reads, on both chains: no key, no signature, no transaction.
 
@@ -49,6 +51,7 @@ ALARM_CODES = (
     "release_amount_mismatch",
     "release_recipient_mismatch",
     "release_block_not_finalized",
+    "release_source_block_mismatch",
     "lock_code_hash_mismatch",
     "release_pruned_before_check",
 )
@@ -160,12 +163,16 @@ def _release(entry: Any, policy: dict[str, Any]) -> dict[str, Any]:
         raise WatcherError("release_record_malformed", "the record names another lock contract")
     if record.get("source_chain_id") != policy["chain_id"]:
         raise WatcherError("release_record_malformed", "the record names another source chain")
+    source_hash = record.get("source_block_hash")
+    if not isinstance(source_hash, str) or not HASH32.match(source_hash):
+        raise WatcherError("release_record_malformed", "source_block_hash is not 32 bytes")
     return {
         "sequence": _u64(entry.get("sequence"), "sequence"),
         "lock_nonce": _u64(record.get("lock_nonce"), "lock_nonce"),
         "amount_atoms": _u64(record.get("amount_atoms"), "amount_atoms"),
         "recipient": recipient,
         "source_block_number": _u64(record.get("source_block_number"), "source_block_number"),
+        "source_block_hash": source_hash.lower(),
         "released_at_height": _u64(record.get("released_at_height"), "released_at_height"),
     }
 
@@ -217,6 +224,16 @@ def _base(base: Any, method: str, params: list[Any]) -> Any:
         return base.call(method, params)
     except pft_token.PftTokenError as error:
         raise WatcherRpcError("base_rpc_failed", str(error)) from None
+
+
+def _block_hash(base: Any, number: int) -> str:
+    """The canonical hash of Base block `number`."""
+
+    block = _base(base, "eth_getBlockByNumber", [hex(number), False])
+    found = (block or {}).get("hash") if isinstance(block, dict) else None
+    if not isinstance(found, str) or not HASH32.match(found):
+        raise WatcherError("base_answer_malformed", f"block {number} has no 32-byte hash")
+    return found.lower()
 
 
 def _lock_record(base: Any, lock: str, nonce: int, block: str) -> tuple[str, int, str]:
@@ -323,10 +340,18 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
         result = {"schema": LINE_SCHEMA, "kind": "release", "lane_id": lane_id, **entry}
         codes: list[str] = []
         holder = None
+        canonical_hash = None
         if entry["source_block_number"] > finalized:
+            # Not final yet: re-checked by a later run, not judged now.
             codes.append("release_block_not_finalized")
+        elif (canonical_hash := _block_hash(base, entry["source_block_number"])) != entry["source_block_hash"]:
+            codes.append("release_source_block_mismatch")
+            result["canonical_block_hash"] = canonical_hash
         else:
-            holder, amount, recipient_hash = _lock_record(base, policy["lock"], entry["lock_nonce"], finalized_tag)
+            # The Lock as it stood at the release's own source block: a Lock
+            # made after it cannot back it.
+            holder, amount, recipient_hash = _lock_record(
+                base, policy["lock"], entry["lock_nonce"], hex(entry["source_block_number"]))
             expected_hash = "0x" + keccak256(entry["recipient"].encode("utf-8")).hex()
             if holder == ZERO_ADDRESS:
                 codes.append("release_without_lock")
@@ -342,10 +367,12 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
         result["status"] = "alarm" if codes else "backed"
         lines.append(result)
         for code_ in codes:
+            extra = {"canonical_block_hash": canonical_hash} if code_ == "release_source_block_mismatch" else {}
             alarm(code_, sequence=entry["sequence"], lock_nonce=entry["lock_nonce"],
                   amount_atoms=entry["amount_atoms"], recipient=entry["recipient"],
                   released_at_height=entry["released_at_height"],
-                  source_block_number=entry["source_block_number"], finalized_block=finalized)
+                  source_block_number=entry["source_block_number"],
+                  source_block_hash=entry["source_block_hash"], finalized_block=finalized, **extra)
 
     alarms = sum(1 for line in lines if line["kind"] == "alarm")
     lines.append({
