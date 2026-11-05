@@ -796,6 +796,61 @@ fn the_node_selects_locked_logs_by_the_bridge_decoders_topic() {
     assert!(postfiat_bridge::decode_locked_event(&log, [0x1a; 20]).is_err());
 }
 
+#[test]
+fn sign_refuses_a_key_file_whose_private_key_is_not_its_public_key() {
+    let chain = source_chain("key-halves");
+    let rpc = MockBase::serve(base_state(&chain.recipient, amount(), 0xa0));
+    let checkpoint = observe(&chain, &rpc, Some(BLOCK), "halves").expect("observe");
+    // validator-0's committee public key with validator-1's private key.
+    let key_file = chain.data_dir.join("mixed-halves.key.json");
+    fs::write(
+        &key_file,
+        serde_json::to_vec_pretty(&ValidatorKeyFile {
+            validators: vec![ValidatorKeyRecord {
+                node_id: "validator-0".to_string(),
+                algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+                public_key_hex: bytes_to_hex(&chain.keys[0].public_key),
+                private_key_hex: bytes_to_hex(&chain.keys[1].private_key),
+            }],
+        })
+        .expect("key json"),
+    )
+    .expect("write key");
+    crate::set_private_file_permissions(&key_file).expect("protect key");
+    let vote_file = chain.data_dir.join("halves.vote-0.json");
+    let error = sign_external_lane_checkpoint_vote(ExternalLaneCheckpointSignOptions {
+        data_dir: chain.data_dir.clone(),
+        checkpoint_file: checkpoint.clone(),
+        base_rpc: rpc.url.clone(),
+        validator: "validator-0".to_string(),
+        validator_key_file: key_file,
+        vote_file: vote_file.clone(),
+    })
+    .unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::SigningKeyMismatch);
+    assert!(!vote_file.exists());
+    // Nothing durable was written: the member's own key file still signs.
+    assert!(!signing_state_path(&chain, &checkpoint, 0).exists());
+    sign(&chain, &checkpoint, &rpc, 0, "halves-fixed").expect("the correct key signs");
+
+    // The signature check after signing, below the loader's self-check.
+    let signing_bytes = b"checkpoint vote signing bytes";
+    let error = crate::external_lane_checkpoint_source::verified_vote_signature(
+        &chain.keys[1].private_key,
+        &chain.keys[0].public_key,
+        signing_bytes,
+    )
+    .unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::SigningKeyMismatch);
+    crate::external_lane_checkpoint_source::verified_vote_signature(
+        &chain.keys[0].private_key,
+        &chain.keys[0].public_key,
+        signing_bytes,
+    )
+    .expect("matching halves");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
 /// Read-only qualification against a real Base Sepolia RPC at the http URL
 /// in `POSTFIAT_LIVE_BASE_RPC`: the rehearsal lock and token code hashes,
 /// the `finalized` block, five votes and the certificate, and the receipt

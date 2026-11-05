@@ -462,7 +462,21 @@ pub fn sign_external_lane_checkpoint_vote(
                 ),
             )
         })?;
-    let key_file = read_validator_key_file(&options.validator_key_file)?;
+    // The loader refuses a key file whose private key does not sign for its
+    // public key; that refusal is this command's key mismatch.
+    let key_file = read_validator_key_file(&options.validator_key_file).map_err(|error| {
+        if error.kind() == io::ErrorKind::InvalidData {
+            refuse(
+                ExternalLaneCheckpointRefusal::SigningKeyMismatch,
+                format!(
+                    "the key file of `{}` is unusable: {error}",
+                    options.validator
+                ),
+            )
+        } else {
+            error
+        }
+    })?;
     let key_record = validator_key_record(&key_file, &options.validator)?;
     if key_record.algorithm_id != ML_DSA_65_ALGORITHM
         || hex_to_bytes(&key_record.public_key_hex).map_err(invalid_data)? != member.public_key
@@ -547,16 +561,40 @@ pub fn sign_external_lane_checkpoint_vote(
     let signing_bytes = vote.signing_bytes(&checkpoint).map_err(invalid_data)?;
     let private_key =
         Zeroizing::new(hex_to_bytes(&key_record.private_key_hex).map_err(invalid_data)?);
-    vote.signature = ml_dsa_65_sign_with_context(
-        &private_key,
-        &signing_bytes,
-        ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1,
-    )
-    .map_err(invalid_data)?;
+    vote.signature = verified_vote_signature(&private_key, &member.public_key, &signing_bytes)?;
     state.vote = Some(vote.clone());
     write_private_json(&state_path, &state)?;
     write_json(&options.vote_file, &vote)?;
     Ok(vote)
+}
+
+/// A vote signature by `private_key`, verified under the member's committee
+/// `public_key` before the caller writes the signing state or the vote: a
+/// signature that cannot verify would leave a durable vote that can never
+/// assemble.
+pub(crate) fn verified_vote_signature(
+    private_key: &[u8],
+    public_key: &[u8],
+    signing_bytes: &[u8],
+) -> io::Result<Vec<u8>> {
+    let signature = ml_dsa_65_sign_with_context(
+        private_key,
+        signing_bytes,
+        ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1,
+    )
+    .map_err(invalid_data)?;
+    if !ml_dsa_65_verify_with_context(
+        public_key,
+        signing_bytes,
+        &signature,
+        ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1,
+    ) {
+        return Err(refuse(
+            ExternalLaneCheckpointRefusal::SigningKeyMismatch,
+            "the new vote does not verify under the member's committee public key",
+        ));
+    }
+    Ok(signature)
 }
 
 /// `external-lane-checkpoint-assemble`: the certificate of exactly the
