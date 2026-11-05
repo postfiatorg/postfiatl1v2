@@ -68,6 +68,13 @@ PYTHONPATH=python python -m postfiat_rpc.pft_token_ui \
   --record crates/pft-token-contracts/deployments/pft-token-base-84532/deployment.json
 ```
 
+`postfiat_rpc.external_lane_watcher` matches each release of a genesis external lane against its Lock on Base and exits 2 on an alarm ([the watcher](../architecture/genesis-external-lanes.md#the-watcher)):
+
+```bash
+PYTHONPATH=python python -m postfiat_rpc.external_lane_watcher \
+  --pftl-rpc 127.0.0.1:27650 --lane-id base-erc20 --base-rpc https://sepolia.base.org --state-file watcher.json --once
+```
+
 ## Private Path State
 
 `postfiat_rpc.private_path_ui` serves a read-only page on `127.0.0.1`
@@ -96,6 +103,7 @@ governed route.
 
 - `python/postfiat_rpc/__main__.py`
 - `python/postfiat_rpc/client.py`
+- `python/postfiat_rpc/external_lane_watcher.py`
 - `python/postfiat_rpc/pft_token.py`
 - `python/postfiat_rpc/pft_token_ui.py`
 - `python/postfiat_rpc/private_path_ui.py`
