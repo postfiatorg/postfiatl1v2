@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -59,7 +60,8 @@ class FakePftl:
         self.chain_id = chain_id
         self.pftl_chain_id = "postfiat-local"
         self.genesis_hash = GENESIS_HASH
-        self.history_root: str | None = "ab" * 48 if releases else None
+        self.history_root: str | None = "0x" + "ab" * 48 if releases else None
+        self.protocol_version: Any = 1
         self.calls: list[tuple[str | None, int | None, int | None]] = []
 
     def external_lane_info(self, lane_id: str | None = None, *, release_cursor: int | None = None,
@@ -97,7 +99,7 @@ class FakePftl:
             row["next_release_cursor"] = start
         row["release_history_root"] = self.history_root
         return {"schema": "postfiat-external-lane-info-v1", "chain_id": self.pftl_chain_id,
-                "genesis_hash": self.genesis_hash, "protocol_version": 1,
+                "genesis_hash": self.genesis_hash, "protocol_version": self.protocol_version,
                 "current_height": self.current_height, "lane_count": 1, "lanes": [row]}
 
 
@@ -385,7 +387,7 @@ class WatcherTests(unittest.TestCase):
 
         for name, change in {
             "height": lambda pftl: setattr(pftl, "current_height", pftl.current_height + 1),
-            "history root": lambda pftl: setattr(pftl, "history_root", "cd" * 48),
+            "history root": lambda pftl: setattr(pftl, "history_root", "0x" + "cd" * 48),
             "genesis": lambda pftl: setattr(pftl, "genesis_hash", "dd" * 48),
         }.items():
             with self.subTest(name):
@@ -428,7 +430,7 @@ class WatcherTests(unittest.TestCase):
 
     def test_nonces_and_amounts_at_their_u64_boundaries(self) -> None:
         top = (1 << 64) - 1
-        for nonce, amount in ((0, 0), (0, top), (top, 1), (top, top)):
+        for nonce, amount in ((0, 1), (0, top), (top, 1), (top, top)):
             with self.subTest(nonce=nonce, amount=amount):
                 entry = release(0, nonce=nonce, amount=amount)
                 base = FakeBase(backed(entry))
@@ -436,6 +438,116 @@ class WatcherTests(unittest.TestCase):
                 self.assertEqual((code, alarm_codes(lines)), (0, []))
                 checked = next(line for line in lines if line["kind"] == "release")
                 self.assertEqual((checked["lock_nonce"], checked["amount_atoms"]), (nonce, amount))
+
+    def test_a_zero_amount_record_is_malformed(self) -> None:
+        # Committed records refuse a zero amount and the lock cannot make a
+        # zero Lock, so a zero amount is a malformed read, never `backed`.
+        entry = release(0, amount=0)
+        code, lines, stderr = run(FakePftl([entry]), FakeBase(backed(entry)))
+        self.assertEqual((code, [line for line in lines if line["kind"] == "release"]), (1, []))
+        self.assertEqual(json.loads(stderr)["code"], "release_record_malformed")
+
+    def test_malformed_snapshot_fields_are_refused_even_when_every_page_agrees(self) -> None:
+        releases = [release(sequence) for sequence in range(150)]
+        for name, field, value in (
+            ("protocol version zero", "protocol_version", 0),
+            ("protocol version boolean", "protocol_version", True),
+            ("protocol version text", "protocol_version", "1"),
+            ("root without 0x", "history_root", "ab" * 48),
+            ("root upper case", "history_root", "0x" + "AB" * 48),
+            ("root short", "history_root", "0x" + "ab" * 47),
+            ("root not text", "history_root", 7),
+        ):
+            with self.subTest(name):
+                pftl = FakePftl(releases)
+                setattr(pftl, field, value)
+                code, lines, stderr = run(pftl, FakeBase(backed(*releases)))
+                self.assertEqual((code, lines), (1, []))
+                self.assertEqual(json.loads(stderr)["code"], "external_lane_info_malformed")
+
+    def test_a_source_block_answer_must_name_the_block_and_exist(self) -> None:
+        entry = release(0)
+        for name, answer, words in (
+            ("another block", {"number": hex(901), "hash": SOURCE_BLOCK_HASH}, "is block 901"),
+            ("no block", None, "does not serve block 900"),
+        ):
+            with self.subTest(name):
+                class Answering(FakeBase):
+                    def call(self, method: str, params: list[Any]) -> Any:
+                        if method == "eth_getBlockByNumber" and params[0] != "finalized":
+                            return answer
+                        return super().call(method, params)
+
+                code, lines, stderr = run(FakePftl([entry]), Answering(backed(entry)))
+                self.assertEqual((code, [line for line in lines if line["kind"] == "summary"]), (1, []))
+                error = json.loads(stderr)
+                self.assertEqual(error["code"], "base_answer_malformed")
+                self.assertIn(words, error["message"])
+
+    def test_every_emitted_alarm_code_is_declared_and_counted(self) -> None:
+        source = Path(watcher.__file__).read_text(encoding="utf-8")
+        emitted = set(re.findall(r'(?:alarm|codes\.append)\("([a-z_]+)"', source))
+        self.assertEqual(emitted, set(watcher.ALARM_CODES))
+        good, false_release = release(0), release(1)
+        code, lines, _ = run(FakePftl([good, false_release]), FakeBase(backed(good)))
+        self.assertEqual(code, 2)
+        counts = lines[-1]["alarm_codes"]
+        self.assertEqual(set(counts), set(watcher.ALARM_CODES))
+        self.assertEqual({code_: count for code_, count in counts.items() if count},
+                         {"release_without_lock": 1})
+
+    def test_a_state_file_that_cannot_be_written_fails_the_run_before_its_summary(self) -> None:
+        releases = [release(0)]
+        with tempfile.TemporaryDirectory() as root:
+            locked = Path(root) / "locked"
+            locked.mkdir()
+            locked.chmod(0o500)
+            try:
+                for name, state_file in (
+                    ("missing parent", Path(root) / "absent" / "watcher.json"),
+                    ("read-only directory", locked / "watcher.json"),
+                ):
+                    with self.subTest(name):
+                        code, lines, stderr = run(FakePftl(releases), FakeBase(backed(*releases)),
+                                                  "--state-file", str(state_file))
+                        self.assertEqual((code, lines), (1, []), "no summary without saved progress")
+                        self.assertEqual(json.loads(stderr)["code"], "state_file_write_failed")
+                        self.assertFalse(state_file.exists())
+                # Under --interval the write is retried.
+                sleeps: list[float] = []
+                stdout, stderr = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    code = watcher.main(["--pftl-rpc", "127.0.0.1:27650", "--lane-id", LANE, "--base-rpc",
+                                         "http://127.0.0.1:8545", "--interval", "5", "--state-file",
+                                         str(locked / "watcher.json")],
+                                        pftl=FakePftl(releases), base=FakeBase(backed(*releases)),
+                                        sleep=sleeps.append, max_runs=2)
+                self.assertEqual((code, sleeps), (0, [5.0]))
+                self.assertEqual([json.loads(line)["code"] for line in stderr.getvalue().splitlines()],
+                                 ["state_file_write_failed"] * 2)
+                self.assertEqual(stdout.getvalue(), "")
+            finally:
+                locked.chmod(0o700)
+
+    def test_interval_mode_keeps_running_after_an_alarm_and_keeps_the_state(self) -> None:
+        releases = [release(0)]
+        with tempfile.TemporaryDirectory() as root:
+            state_file = Path(root) / "watcher.json"
+            sleeps: list[float] = []
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+                code = watcher.main(["--pftl-rpc", "127.0.0.1:27650", "--lane-id", LANE, "--base-rpc",
+                                     "http://127.0.0.1:8545", "--interval", "7", "--state-file", str(state_file)],
+                                    pftl=FakePftl(releases), base=FakeBase({}),
+                                    sleep=sleeps.append, max_runs=2)
+            lines = [json.loads(line) for line in stdout.getvalue().splitlines()]
+            # The alarm line is emitted on every run; the loop continues and
+            # the state does not advance.
+            self.assertEqual(code, 0)
+            self.assertEqual(sleeps, [7.0])
+            self.assertEqual(alarm_codes(lines), ["release_without_lock"] * 2)
+            self.assertEqual(len([line for line in lines if line["kind"] == "summary"]), 2)
+            self.assertFalse(state_file.exists())
 
     def test_an_over_wide_amount_word_is_a_malformed_answer(self) -> None:
         entry = release(0)

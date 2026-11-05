@@ -46,6 +46,8 @@ ZERO_ADDRESS = "0x" + "00" * 20
 ADDRESS = re.compile(r"^0x[0-9a-fA-F]{40}$")
 HASH32 = re.compile(r"^0x[0-9a-fA-F]{64}$")
 GENESIS_HASH = re.compile(r"^[0-9a-f]{96}$")
+HISTORY_ROOT = re.compile(r"^0x[0-9a-f]{96}$")
+U32 = 1 << 32
 
 ALARM_CODES = (
     "release_without_lock",
@@ -169,13 +171,17 @@ def _release(entry: Any, policy: dict[str, Any]) -> dict[str, Any]:
         raise WatcherError("release_record_malformed", "the record names another lock contract")
     if record.get("source_chain_id") != policy["chain_id"]:
         raise WatcherError("release_record_malformed", "the record names another source chain")
+    amount = _u64(record.get("amount_atoms"), "amount_atoms")
+    if amount == 0:
+        # Committed records refuse a zero amount and the lock makes no zero Lock.
+        raise WatcherError("release_record_malformed", "amount_atoms is zero")
     source_hash = record.get("source_block_hash")
     if not isinstance(source_hash, str) or not HASH32.match(source_hash):
         raise WatcherError("release_record_malformed", "source_block_hash is not 32 bytes")
     return {
         "sequence": _u64(entry.get("sequence"), "sequence"),
         "lock_nonce": _u64(record.get("lock_nonce"), "lock_nonce"),
-        "amount_atoms": _u64(record.get("amount_atoms"), "amount_atoms"),
+        "amount_atoms": amount,
         "recipient": recipient,
         "source_block_number": _u64(record.get("source_block_number"), "source_block_number"),
         "source_block_hash": source_hash.lower(),
@@ -204,9 +210,13 @@ def _lane_page(pftl: Any, lane_id: str, cursor: int | None) -> tuple[dict[str, A
     chain_id, genesis = info.get("chain_id"), info.get("genesis_hash")
     if not isinstance(chain_id, str) or not chain_id or not isinstance(genesis, str) or not GENESIS_HASH.match(genesis):
         raise WatcherError("external_lane_info_malformed", "external_lane_info has no chain id or genesis hash")
+    version = info.get("protocol_version")
+    if not isinstance(version, int) or isinstance(version, bool) or not 0 < version < U32:
+        raise WatcherError("external_lane_info_malformed", "protocol_version is not a positive integer")
     root = row.get("release_history_root")
-    if root is not None and not isinstance(root, str):
-        raise WatcherError("external_lane_info_malformed", "release_history_root is not text")
+    if root is not None and (not isinstance(root, str) or not HISTORY_ROOT.match(root)):
+        raise WatcherError("external_lane_info_malformed",
+                           "release_history_root is not 0x and 96 lower-case hex digits")
     try:
         count = _u64(row.get("release_count"), "release_count")
         pruned = _u64(row.get("pruned_release_count", 0), "pruned_release_count")
@@ -217,7 +227,7 @@ def _lane_page(pftl: Any, lane_id: str, cursor: int | None) -> tuple[dict[str, A
     snapshot = {
         "chain_id": chain_id,
         "genesis_hash": genesis,
-        "protocol_version": info.get("protocol_version"),
+        "protocol_version": version,
         "current_height": height,
         "release_count": count,
         "pruned_release_count": pruned,
@@ -278,7 +288,19 @@ def _block_hash(base: Any, number: int) -> str:
     """The canonical hash of Base block `number`."""
 
     block = _base(base, "eth_getBlockByNumber", [hex(number), False])
-    found = (block or {}).get("hash") if isinstance(block, dict) else None
+    if block is None:
+        raise WatcherError("base_answer_malformed",
+                           f"the Base node does not serve block {number}, the release's source block; "
+                           "use a node that keeps it or an archive node")
+    if not isinstance(block, dict):
+        raise WatcherError("base_answer_malformed", f"block {number} is not an object")
+    try:
+        answered = pft_token.hex_quantity(block.get("number"), f"block {number} number")
+    except pft_token.PftTokenRefused as error:
+        raise WatcherError("base_answer_malformed", str(error)) from None
+    if answered != number:
+        raise WatcherError("base_answer_malformed", f"the answer for block {number} is block {answered}")
+    found = block.get("hash")
     if not isinstance(found, str) or not HASH32.match(found):
         raise WatcherError("base_answer_malformed", f"block {number} has no 32-byte hash")
     return found.lower()
@@ -339,8 +361,13 @@ def _check_state(state: dict[str, Any], snapshot: dict[str, Any], policy: dict[s
 
 def _save_state(path: Path, state: dict[str, Any]) -> None:
     temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps(state, sort_keys=True) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    try:
+        temporary.write_text(json.dumps(state, sort_keys=True) + "\n", encoding="utf-8")
+        temporary.replace(path)
+    except OSError as error:
+        if temporary.parent.is_dir():
+            temporary.unlink(missing_ok=True)
+        raise WatcherTransientError("state_file_write_failed", f"`{path}`: {error}") from None
 
 
 def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = None,
@@ -372,6 +399,8 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
     lines: list[dict[str, Any]] = []
 
     def alarm(code: str, **fields: Any) -> None:
+        if code not in ALARM_CODES:
+            raise AssertionError(f"undeclared alarm code {code}")
         lines.append({"schema": LINE_SCHEMA, "kind": "alarm", "code": code, "lane_id": lane_id, **fields})
 
     try:
@@ -458,6 +487,8 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
         "pruned_release_count": pruned,
         "releases_checked": len(releases),
         "alarms": alarms,
+        "alarm_codes": {code_: sum(1 for line in lines if line["kind"] == "alarm" and line["code"] == code_)
+                        for code_ in ALARM_CODES},
     })
     new_state = None if alarms else {
         "schema": STATE_SCHEMA,
@@ -523,6 +554,10 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
         try:
             state = _load_state(state_path, args.lane_id) if state_path is not None else memory_state
             lines, alarms, new_state = watch_once(pftl, base, args.lane_id, from_height=from_height, state=state)
+            # Progress is saved before the run's lines are emitted, so a clean
+            # summary always means the state advanced.
+            if new_state is not None and state_path is not None:
+                _save_state(state_path, new_state)
         except WatcherTransientError as error:
             _error_line(error)
             if args.interval is None:
@@ -536,8 +571,6 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
             if new_state is not None:
                 from_height = None  # a clean run moves the start to the kept height
                 memory_state = new_state
-                if state_path is not None:
-                    _save_state(state_path, new_state)
             if args.interval is None:
                 return 2 if alarms else 0
         if max_runs is not None and runs >= max_runs:
