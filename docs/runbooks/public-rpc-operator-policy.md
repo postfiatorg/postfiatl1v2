@@ -75,11 +75,20 @@ request is read. On Linux a connect to a Unix socket needs write permission
 on the socket file, so the serving user reaches it through the group; the uid
 allow-list is the real gate. Each request is one length-prefixed JSON
 frame (at most 9 MiB, the hex of a 4 MiB transport frame) with a deadline
-(`--deadline-ms`, default 5000). It signs only what rpc-serve signs as the
-validator: block certificate, block timeout and consensus-v2 votes and the
-transport envelopes that carry them with the vote key, and block and
-consensus-v2 proposals with the proposal key. `describe` returns the public
-keys and the signer's uid; no answer contains key material.
+(`--deadline-ms`, default 5000). It signs under the contexts rpc-serve
+signs with as the validator: block certificate, block timeout and
+consensus-v2 votes and the transport envelopes that carry them with the vote
+key, and block and consensus-v2 proposals with the proposal key; any other
+context is refused. `describe` returns the public keys and the signer's uid;
+no answer contains key material.
+
+What it protects and what it does not: the key cannot be exported, and the
+serving process never reads or holds it. The signer checks only the context,
+not the message, and keeps no record of what it signed, so a process with an
+allowed uid can still obtain any signature under those contexts while the
+signer runs, including two different votes for one slot. A compromised
+rpc-serve can therefore still equivocate until it is stopped. A durable
+double-sign guard inside the signer is the next step (W-1 milestone S7.1).
 
 rpc-serve takes `--finality-signer-socket <path>` instead of
 `--finality-key-file` and `--finality-proposal-key-file`; passing both is
