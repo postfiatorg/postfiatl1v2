@@ -151,3 +151,59 @@ fn external_lane_export_shape_refusals_reach_mempool_admission() {
     assert_eq!(tip(), tip_before);
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
+
+/// In a certified transparent block the refused export follows the ordinary
+/// rejected-transaction fee rule, as the release does
+/// (`release_above_the_cap_in_a_block_burns_the_fee_only_after_fee_activation`):
+/// before `rejected_tx_fee_activation_height` nothing changes; from it the fee
+/// is burned and the sequence consumed, and no lane or other state changes.
+#[test]
+fn external_lane_export_in_a_block_burns_the_fee_only_after_fee_activation() {
+    let chain = lane_chain("export-fee");
+    let store = NodeStore::new(&chain.data_dir);
+    let ledger = store.read_ledger().expect("ledger");
+    let height = tip_height(&chain) + 1;
+    let export = export_tx(&chain, "base-erc20", ACCOUNT_RESERVE + 1_000, &base_recipient());
+    let payer = export.unsigned.source.clone();
+    let mut batch = TransactionBatch::new("export-fee", Vec::new());
+    batch.asset_transactions.push(export);
+    let unactivated = store.read_governance().expect("governance");
+    let mut activated = unactivated.clone();
+    let template = activated.amendments[0].clone();
+    activated.apply(GovernanceAmendment {
+        amendment_id: "rejected-fee-activation".to_string(),
+        kind: GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT.to_string(),
+        value: u32::try_from(height).expect("height"),
+        ..template
+    });
+    for (governance, code, burned) in [
+        (unactivated, "external_lane_export_not_supported", 0),
+        (activated, "tec_external_lane_export_not_supported", 1_000),
+    ] {
+        let compatibility =
+            asset_execution_compatibility_for_genesis_and_governance(&chain.genesis, &governance);
+        let mut after = ledger.clone();
+        let receipts =
+            execute_transparent_batch(&chain.genesis, &governance, &mut after, &batch, height, compatibility);
+        assert_eq!(
+            (receipts[0].code.as_str(), receipts[0].fee_burned),
+            (code, burned),
+            "{receipts:?}"
+        );
+        let (was, now) = (ledger.account(&payer).expect("payer"), after.account(&payer).expect("payer"));
+        assert_eq!(now.balance, was.balance - burned, "{code}");
+        assert_eq!(now.sequence, was.sequence + u64::from(burned > 0), "{code}");
+        // Only the payer's account moved; the lanes and everything else are
+        // as before.
+        assert_eq!(after.external_lanes, ledger.external_lanes, "{code}: lane changed");
+        let mut expected = ledger.clone();
+        let index = expected
+            .accounts
+            .iter()
+            .position(|account| account.address == payer)
+            .expect("payer index");
+        expected.accounts[index] = now.clone();
+        assert_eq!(after, expected, "{code}: state beyond the payer changed");
+    }
+    let _ = fs::remove_dir_all(chain.data_dir);
+}
