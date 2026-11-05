@@ -2,7 +2,7 @@
 
 A genesis external lane is native PFT that genesis reserves for a claim held outside PFTL. The first use is the ERC-20 PFT on Base. The product owner decided on 2026-10-28 that the total supply is 100 billion PFT and that the Base ERC-20 is a slice of it; the lane holds that slice as native PFT that is not in circulation until a proven Lock on Base releases it. The lane is the $s_{\text{external}}$ term of the [whitepaper's four-way partition](../whitepaper.md#13-supply-perimeter-primary-operations-and-the-cash-leg).
 
-The design is `docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md`, sections 4, 5 and 5.1. This page describes what the code does: genesis can reserve lanes, the ledger carries their records, every supply check counts them (milestone item P2.2), and `external_lane_release_v1` releases from a lane against a proven Base Lock (P2.4).
+The design is `docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md`, sections 4, 5 and 5.1. This page describes what the code does: genesis can reserve lanes, the ledger carries their records, every supply check counts them (milestone item P2.2), and `external_lane_release_v1` releases from a lane against a proven Base Lock (P2.4), whose proof committee members build with [the Base checkpoint source](#the-base-checkpoint-source) commands.
 
 ## Genesis fields
 
@@ -190,6 +190,47 @@ Remaining P2.5 steps:
 - [x] Committee epoch move: bind the new epoch and root by hash in the kind; apply only while that committee is the newest registered and unfenced; refuse checkpoints of the old epoch from the block after.
 - [x] `external_lane_info` reports the active cap with the amendment that set it, and a pending raise with its height (`release_cap`).
 - [x] `external_lane_info` reports the active committee (epoch and root) with the move that set it (`committee`).
+
+## The Base checkpoint source
+
+Committee members observe Base and sign lane checkpoints with four node commands (`crates/node/src/external_lane_checkpoint_source.rs`). Each takes `--data-dir` and reads the lane's genesis policy and the committee the lane names at the next PFTL block: the genesis policy's, or the one the last committed committee move binds, the selector `execute_external_lane_release` uses. The Base RPC is an `http://` endpoint. What a member trusts is its own, independently operated Base node and that node's `finalized` tag: the state derived from finalized Ethereum data, as that node reports it. The commands do not verify Base finality against Ethereum. If five members use one shared RPC, the quorum's independence collapses into trust in that RPC, which the design's committee-trust model (section 4 (b)) does not cover. A refusal carries a typed code (`ExternalLaneCheckpointRefusal`).
+
+| Command | What it does | Refusals |
+|---|---|---|
+| `external-lane-checkpoint-observe --lane-id ID --base-rpc URL [--block-number N] --checkpoint-file PATH` | Reads the block that this member's Base node reports under the `finalized` tag, or block N at or below it. Writes the lane checkpoint (`EthereumFinalizedCheckpointV1`): block number, hash, receipts root, observed head, lane id and route-config digest, chain id, lock contract, token, their code hashes, depth, and the active committee's epoch and root. | `base_chain_id_mismatch`, `base_block_not_finalized`, `base_confirmation_depth_not_reached` (head minus block below `confirmation_depth`), `base_lock_code_hash_mismatch`, `base_token_code_hash_mismatch` (keccak-256 of `eth_getCode` at the block), `external_lane_not_configured`, `external_lane_committee_missing` |
+| `external-lane-checkpoint-sign --checkpoint-file PATH --base-rpc URL --validator ID --validator-key-file PATH --vote-file PATH` | Signs one vote with the member's FastSwap committee key after observing the same block from its own RPC, and verifies the vote under the committee public key before writing it. The signing state lives under `--data-dir`, in `external-lane-checkpoint-signing/`. It keeps one checkpoint per lane, committee epoch and block number: the same checkpoint again returns the same vote. | `external_lane_not_configured`, `external_lane_committee_missing`, `external_lane_checkpoint_mismatch` (not the lane's or not the active committee's), `base_confirmation_depth_not_reached`, `checkpoint_signer_not_member`, `checkpoint_signing_key_mismatch` (not the committee key, an unusable key file or one without the member's record, or a new vote that does not verify), the observe refusals of its own RPC (`base_chain_id_mismatch`, `base_block_not_finalized`, `base_lock_code_hash_mismatch`, `base_token_code_hash_mismatch`), `base_observation_mismatch`, `checkpoint_signing_state_invalid` (a corrupt or foreign signing state), `checkpoint_conflicting_vote` |
+| `external-lane-checkpoint-assemble --checkpoint-file PATH --vote-files CSV --certificate-file PATH` | Writes the certificate with exactly the quorum of votes (5 of 6 for a six-member committee; with more valid votes, the lowest validator ids), verified with `verify_ethereum_checkpoint_certificate` first. | `external_lane_not_configured`, `external_lane_committee_missing`, `external_lane_checkpoint_mismatch`, `base_confirmation_depth_not_reached`, `checkpoint_vote_duplicate`, `checkpoint_vote_not_member`, `checkpoint_vote_other_checkpoint` (a vote that does not sign this checkpoint), `checkpoint_votes_below_quorum`, `checkpoint_certificate_invalid` |
+| `external-lane-lock-proof --lane-id ID --base-rpc URL --transaction-hash 0xHASH --certificate-file PATH --submitter ADDRESS [--log-index N] --operation-file PATH` | Fetches the Lock's receipt, its block and every receipt of the block, rebuilds the receipt trie to the block's receipts root (OP Stack deposit receipts included) and builds the receipt proof. The Base RPC must serve full receipts through `eth_getBlockReceipts`, with each deposit receipt's `depositNonce` and `depositReceiptVersion`; without them every Base block's rebuild fails closed, because the rebuilt root does not match the block's receipts root. Takes the receipt's one `Locked` log of the lane's lock contract (or log N) and decodes nonce, amount and recipient. As an extra check of this command, not a consensus rule, requires the receipt to hold an ERC-20 `Transfer` of the amount from the holder to the lock contract emitted by the policy's token, and ignores same-shaped transfers of other contracts; consensus binds the lock's address and runtime code hash, and the lock's token is immutable. Writes the `external_lane_release_v1` operation. | `external_lane_not_configured`, `external_lane_committee_missing`, `external_lane_checkpoint_mismatch`, `base_confirmation_depth_not_reached`, `checkpoint_certificate_invalid`, `base_chain_id_mismatch`, `lock_receipt_block_mismatch` (not the certificate's block), `lock_receipt_log_other_contract`, `lock_receipt_log_other_event`, `lock_receipt_locked_log_missing`, `lock_receipt_locked_log_ambiguous`, `lock_receipt_locked_event_invalid`, `lock_receipt_token_mismatch`, `external_lane_release_operation_invalid` (a submitter or recipient that is not a PFTL address) |
+
+One release, step by step:
+
+1. One member runs `external-lane-checkpoint-observe --data-dir DIR` once the Lock's block is finalized and at least `confirmation_depth` blocks deep, and shares the checkpoint file.
+2. Five of the six members run `external-lane-checkpoint-sign --data-dir DIR`, each with its own data directory and its own Base RPC, and share their vote files.
+3. Anyone runs `external-lane-checkpoint-assemble --data-dir DIR` with the five votes.
+4. Anyone runs `external-lane-lock-proof --data-dir DIR` with the Lock's transaction hash and the certificate. The same inputs give byte-identical operation JSON.
+5. The submitter signs it: `wallet-sign-asset-transaction --key-file PATH --chain-id ID --genesis-hash HASH --protocol-version N --fee F --sequence S --operation-json "$(cat operation.json)"`.
+6. The signed transaction goes to `mempool_submit_signed_asset_transaction`; execution checks it as [the release path](#the-release-path) describes.
+
+The signing-state directory `external-lane-checkpoint-signing/` is signing-safety state: it is what stops a member from signing two checkpoints of one block. Never restore or recreate a validator's data directory without it, and keep it with the key backups for the life of the committee key.
+
+Tests (`crates/node/src/tests/external_lane_checkpoint_source_tests.rs`, against a mock Base JSON-RPC) cover:
+
+- **Observe:** every observe refusal.
+- **Sign:** a member that observes another block, a non-member, a key that is not the committee key, a key file whose private key is another key's, a key file without the member's record, a conflicting checkpoint, a corrupt or foreign signing state, a checkpoint of the committee before a governed move, and the active committee after it.
+- **Assemble:** duplicate, non-member and other-checkpoint votes, and too few votes.
+- **Lock proof:** another block, contract or event; a receipt with no `Locked` log or two; a recipient that does not match its indexed hash; the wrong token, and the token's transfer accepted beside another contract's same-shaped transfer; a forged certificate; an invalid submitter or recipient; and the decoded fields at their boundaries (nonce and amount at 0, 1 and `u64::MAX`, a 65-bit word, the recipient at 0, 41, 42, 43 and 256 bytes, and one token unit per atom, unscaled).
+- **Committee missing:** all four commands refuse when the lane's committee is not on the ledger.
+- **End to end:** on a six-member lane chain: observe, five votes, certificate, proof, then the chain releases the Lock once and refuses it again. Four votes, and a sixth vote on another block hash, are refused at assembly.
+
+The tests do not exercise these refusals:
+
+- `external_lane_not_configured` and `base_confirmation_depth_not_reached` on sign, assemble or proof.
+- `external_lane_checkpoint_mismatch` on assemble or proof.
+- The observe refusals of sign's own RPC.
+- `base_chain_id_mismatch` on proof.
+- `checkpoint_certificate_invalid` on assemble.
+
+ `live_base_sepolia_checkpoint_of_the_rehearsal_lock` (ignored; `POSTFIAT_LIVE_BASE_RPC`) runs observe, five signatures and assembly against Base Sepolia with the rehearsal lock and token. It also rebuilds that block's receipt trie; on 2026-11-05 the rebuilt root matched the block's receipts root (the run record is the section 'Base checkpoint source (2026-11-05)' of [the qualification record](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md)).
 
 ## Not built yet
 

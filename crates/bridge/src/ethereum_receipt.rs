@@ -369,16 +369,20 @@ fn require_exact_event<T: PartialEq>(
     }
 }
 
+/// The `PFTLockV1.Locked` event signature that [`decode_locked_event`] accepts.
+pub const LOCKED_EVENT_SIGNATURE: &str = "Locked(uint64,address,bytes32,bytes,uint64)";
+
+/// Topic 0 of a `PFTLockV1.Locked` log: the keccak-256 of
+/// [`LOCKED_EVENT_SIGNATURE`].
+pub fn locked_event_topic() -> [u8; ETHEREUM_TOPIC_BYTES] {
+    ethereum_keccak256(LOCKED_EVENT_SIGNATURE.as_bytes())
+}
+
 pub fn decode_locked_event(
     log: &EthereumLogV1,
     expected_lock_contract: [u8; 20],
 ) -> Result<LockedEventV1, EthereumProofError> {
-    require_event_header(
-        log,
-        expected_lock_contract,
-        "Locked(uint64,address,bytes32,bytes,uint64)",
-        4,
-    )?;
+    require_event_header(log, expected_lock_contract, LOCKED_EVENT_SIGNATURE, 4)?;
     const HEAD_WORDS: usize = 2;
     require_abi_data_minimum(&log.data, HEAD_WORDS, "Locked")?;
     let (recipient, recipient_end) = dynamic_bytes(

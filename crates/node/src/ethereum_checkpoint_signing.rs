@@ -25,17 +25,17 @@ use zeroize::Zeroizing;
 
 use crate::{read_json_file, read_validator_key_file, validator_key_record};
 
-const ETHEREUM_CHECKPOINT_SIGNING_STATE_SCHEMA_V1: &str =
+pub(crate) const ETHEREUM_CHECKPOINT_SIGNING_STATE_SCHEMA_V1: &str =
     "postfiat-ethereum-checkpoint-signing-state-v1";
 const ETHEREUM_CHECKPOINT_SIGNING_STATE_DIR: &str = "ethereum-checkpoint-signing";
 static SIGNING_STATE_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct EthereumCheckpointSigningStateV1 {
-    schema: String,
-    validator_id: String,
-    checkpoint: EthereumFinalizedCheckpointV1,
-    vote: Option<EthereumCheckpointVoteV1>,
+pub(crate) struct EthereumCheckpointSigningStateV1 {
+    pub(crate) schema: String,
+    pub(crate) validator_id: String,
+    pub(crate) checkpoint: EthereumFinalizedCheckpointV1,
+    pub(crate) vote: Option<EthereumCheckpointVoteV1>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -231,8 +231,11 @@ pub fn sign_ethereum_checkpoint_vote(
         ));
     }
 
-    let signing_state_path =
-        ethereum_checkpoint_signing_state_path(&options.data_dir, &checkpoint, &options.validator);
+    let signing_state_path = ethereum_checkpoint_signing_state_path(
+        &options.data_dir.join(ETHEREUM_CHECKPOINT_SIGNING_STATE_DIR),
+        &checkpoint,
+        &options.validator,
+    );
     let mut signing_state = load_or_create_checkpoint_signing_state(
         &signing_state_path,
         EthereumCheckpointSigningStateV1 {
@@ -358,8 +361,10 @@ pub fn assemble_ethereum_checkpoint_certificate(
     Ok(certificate)
 }
 
-fn ethereum_checkpoint_signing_state_path(
-    data_dir: &Path,
+/// The signing-state file of `validator_id` for the checkpoint's route (or
+/// lane), committee epoch and height under `state_dir`.
+pub(crate) fn ethereum_checkpoint_signing_state_path(
+    state_dir: &Path,
     checkpoint: &EthereumFinalizedCheckpointV1,
     validator_id: &str,
 ) -> PathBuf {
@@ -372,12 +377,10 @@ fn ethereum_checkpoint_signing_state_path(
     hasher.update(checkpoint.block_number.to_be_bytes());
     hasher.update((validator_id.len() as u64).to_be_bytes());
     hasher.update(validator_id.as_bytes());
-    data_dir
-        .join(ETHEREUM_CHECKPOINT_SIGNING_STATE_DIR)
-        .join(format!("{}.json", bytes_to_hex(&hasher.finalize())))
+    state_dir.join(format!("{}.json", bytes_to_hex(&hasher.finalize())))
 }
 
-fn load_or_create_checkpoint_signing_state(
+pub(crate) fn load_or_create_checkpoint_signing_state(
     path: &Path,
     intended: EthereumCheckpointSigningStateV1,
 ) -> io::Result<EthereumCheckpointSigningStateV1> {
@@ -443,7 +446,7 @@ fn sync_directory(path: &Path) -> io::Result<()> {
     }
 }
 
-fn validate_checkpoint_signing_state(
+pub(crate) fn validate_checkpoint_signing_state(
     state: &EthereumCheckpointSigningStateV1,
     checkpoint: &EthereumFinalizedCheckpointV1,
     validator_id: &str,
@@ -481,7 +484,7 @@ fn validate_checkpoint_signing_state(
     Ok(())
 }
 
-fn write_private_json(path: &Path, value: &impl Serialize) -> io::Result<()> {
+pub(crate) fn write_private_json(path: &Path, value: &impl Serialize) -> io::Result<()> {
     write_json(path, value)?;
     crate::set_private_file_permissions(path)
 }
@@ -802,7 +805,11 @@ fn strict_http_content_length(headers: &str) -> io::Result<Option<usize>> {
     Ok(length)
 }
 
-fn rpc_hex_u64(endpoint: &EthereumRpcEndpoint, method: &str, params: Value) -> io::Result<u64> {
+pub(crate) fn rpc_hex_u64(
+    endpoint: &EthereumRpcEndpoint,
+    method: &str,
+    params: Value,
+) -> io::Result<u64> {
     let result = ethereum_rpc_call(endpoint, method, params)?;
     parse_hex_u64(result.as_str().ok_or_else(|| {
         io::Error::new(
@@ -812,7 +819,7 @@ fn rpc_hex_u64(endpoint: &EthereumRpcEndpoint, method: &str, params: Value) -> i
     })?)
 }
 
-fn ethereum_rpc_hex_bytes(
+pub(crate) fn ethereum_rpc_hex_bytes(
     endpoint: &EthereumRpcEndpoint,
     method: &str,
     params: Value,
@@ -827,7 +834,7 @@ fn ethereum_rpc_hex_bytes(
     hex_to_bytes(encoded.strip_prefix("0x").unwrap_or(encoded)).map_err(invalid_data)
 }
 
-fn value_hex_u64(value: &Value, field: &'static str) -> io::Result<u64> {
+pub(crate) fn value_hex_u64(value: &Value, field: &'static str) -> io::Result<u64> {
     parse_hex_u64(value.get(field).and_then(Value::as_str).ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
@@ -836,7 +843,10 @@ fn value_hex_u64(value: &Value, field: &'static str) -> io::Result<u64> {
     })?)
 }
 
-fn value_hex_array<const N: usize>(value: &Value, field: &'static str) -> io::Result<[u8; N]> {
+pub(crate) fn value_hex_array<const N: usize>(
+    value: &Value,
+    field: &'static str,
+) -> io::Result<[u8; N]> {
     exact_hex(
         field,
         value.get(field).and_then(Value::as_str).ok_or_else(|| {
@@ -864,11 +874,11 @@ fn parse_hex_u64(value: &str) -> io::Result<u64> {
     u64::from_str_radix(digits, 16).map_err(invalid_data)
 }
 
-fn exact_evm_address(field: &'static str, value: &str) -> io::Result<[u8; 20]> {
+pub(crate) fn exact_evm_address(field: &'static str, value: &str) -> io::Result<[u8; 20]> {
     exact_hex(field, value.strip_prefix("0x").unwrap_or(value))
 }
 
-fn exact_hex<const N: usize>(field: &'static str, value: &str) -> io::Result<[u8; N]> {
+pub(crate) fn exact_hex<const N: usize>(field: &'static str, value: &str) -> io::Result<[u8; N]> {
     hex_to_bytes(value.strip_prefix("0x").unwrap_or(value))
         .map_err(invalid_data)?
         .try_into()
@@ -880,12 +890,12 @@ fn exact_hex<const N: usize>(field: &'static str, value: &str) -> io::Result<[u8
         })
 }
 
-fn write_json(path: &std::path::Path, value: &impl serde::Serialize) -> io::Result<()> {
+pub(crate) fn write_json(path: &std::path::Path, value: &impl serde::Serialize) -> io::Result<()> {
     let json = serde_json::to_string_pretty(value).map_err(invalid_data)?;
     atomic_write(path, format!("{json}\n"))
 }
 
-fn invalid_data(error: impl std::fmt::Debug) -> io::Error {
+pub(crate) fn invalid_data(error: impl std::fmt::Debug) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, format!("{error:?}"))
 }
 
@@ -1231,8 +1241,12 @@ mod tests {
         assert!(unobserved_vote.is_err());
         assert!(!unobserved_vote_file.exists());
         assert!(
-            !ethereum_checkpoint_signing_state_path(&root, &conflicting_checkpoint, "validator-3")
-                .exists(),
+            !ethereum_checkpoint_signing_state_path(
+                &root.join(ETHEREUM_CHECKPOINT_SIGNING_STATE_DIR),
+                &conflicting_checkpoint,
+                "validator-3"
+            )
+            .exists(),
             "an RPC-mismatched candidate must not create durable signing intent"
         );
 

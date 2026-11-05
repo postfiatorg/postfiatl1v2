@@ -17,6 +17,7 @@ const ETHEREUM_RECEIPT_PROOF_ARTIFACT_SCHEMA_V1: &str =
 const MAX_BLOCK_RECEIPTS: usize = 8_192;
 const MAX_LOGS_PER_RECEIPT: usize = 4_096;
 const MAX_BLOCK_RECEIPTS_RPC_BYTES: usize = 32 * 1024 * 1024;
+const OP_STACK_DEPOSIT_RECEIPT_TYPE: u64 = 0x7e;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EthereumReceiptProofBuildOptions {
@@ -59,10 +60,48 @@ pub fn build_ethereum_receipt_proof(
         ));
     }
 
-    let transaction_hash = canonical_hash("transaction hash", &options.transaction_hash)?;
     let endpoint = EthereumRpcEndpoint::parse(&options.ethereum_rpc)?;
-    let chain_id = rpc_quantity(&endpoint, "eth_chainId", serde_json::json!([]))?;
-    if chain_id != route.ethereum_chain_id {
+    let built = receipt_proof_from_rpc(
+        &endpoint,
+        route.ethereum_chain_id,
+        &options.transaction_hash,
+    )?;
+    let artifact = EthereumReceiptProofArtifactV1 {
+        schema: ETHEREUM_RECEIPT_PROOF_ARTIFACT_SCHEMA_V1.to_string(),
+        route_id: route.route_id.clone(),
+        ethereum_chain_id: route.ethereum_chain_id,
+        transaction_hash: built.transaction_hash,
+        block_number: built.block_number,
+        block_hash: built.block_hash,
+        receipts_root: format!("0x{}", bytes_to_hex(&built.receipts_root)),
+        proof: built.proof,
+    };
+    write_json(&options.proof_file, &artifact)?;
+    Ok(artifact)
+}
+
+/// The receipt-inclusion proof of one transaction, rebuilt from every
+/// receipt of its block and checked against the block's receipts root.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RpcReceiptProof {
+    pub transaction_hash: String,
+    pub block_number: u64,
+    pub block_hash: String,
+    pub receipts_root: [u8; 32],
+    pub proof: EthereumReceiptProofV1,
+}
+
+/// Fetches the receipt of `transaction_hash`, its block and every receipt of
+/// that block from `endpoint`, rebuilds the receipt trie, requires its root
+/// to equal the block's `receiptsRoot` and returns the target's proof.
+pub(crate) fn receipt_proof_from_rpc(
+    endpoint: &EthereumRpcEndpoint,
+    expected_chain_id: u64,
+    transaction_hash: &str,
+) -> io::Result<RpcReceiptProof> {
+    let transaction_hash = canonical_hash("transaction hash", transaction_hash)?;
+    let chain_id = rpc_quantity(endpoint, "eth_chainId", serde_json::json!([]))?;
+    if chain_id != expected_chain_id {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             "Ethereum RPC chain ID does not match the governed route",
@@ -70,7 +109,7 @@ pub fn build_ethereum_receipt_proof(
     }
 
     let target_receipt = ethereum_rpc_call(
-        &endpoint,
+        endpoint,
         "eth_getTransactionReceipt",
         serde_json::json!([transaction_hash]),
     )?;
@@ -88,7 +127,7 @@ pub fn build_ethereum_receipt_proof(
     let target_index = quantity_field(&target_receipt, "transactionIndex")?;
 
     let block = ethereum_rpc_call(
-        &endpoint,
+        endpoint,
         "eth_getBlockByHash",
         serde_json::json!([block_hash, false]),
     )?;
@@ -127,7 +166,7 @@ pub fn build_ethereum_receipt_proof(
     }
 
     let block_receipts = ethereum_rpc_call_with_limit(
-        &endpoint,
+        endpoint,
         "eth_getBlockReceipts",
         serde_json::json!([format!("0x{block_number:x}")]),
         MAX_BLOCK_RECEIPTS_RPC_BYTES,
@@ -247,19 +286,33 @@ pub fn build_ethereum_receipt_proof(
         proof_nodes_rlp,
     };
     proof.validate_bounds().map_err(invalid_data)?;
-
-    let artifact = EthereumReceiptProofArtifactV1 {
-        schema: ETHEREUM_RECEIPT_PROOF_ARTIFACT_SCHEMA_V1.to_string(),
-        route_id: route.route_id.clone(),
-        ethereum_chain_id: chain_id,
+    Ok(RpcReceiptProof {
         transaction_hash,
         block_number,
         block_hash,
-        receipts_root: format!("0x{}", bytes_to_hex(&receipts_root)),
+        receipts_root,
         proof,
-    };
-    write_json(&options.proof_file, &artifact)?;
-    Ok(artifact)
+    })
+}
+
+/// The receipts root of `receipts` (RPC JSON, in transaction order), for
+/// test fixtures of whole blocks.
+#[cfg(test)]
+pub(crate) fn receipts_root_of(receipts: &[Value]) -> io::Result<[u8; 32]> {
+    let entries = receipts
+        .iter()
+        .enumerate()
+        .map(|(index, receipt)| {
+            Ok(TrieEntry {
+                key: bytes_to_nibbles(&rlp_u64(u64::try_from(index).map_err(invalid_data)?)),
+                value: encode_receipt(receipt)?,
+            })
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+    let entry_refs = entries.iter().collect::<Vec<_>>();
+    Ok(postfiat_bridge::ethereum_keccak256(
+        &build_trie(&entry_refs, 0)?.encoded,
+    ))
 }
 
 #[derive(Debug, Clone)]
@@ -545,18 +598,38 @@ fn encode_receipt(receipt: &Value) -> io::Result<Vec<u8>> {
             ]))
         })
         .collect::<io::Result<Vec<_>>>()?;
-    let payload = rlp_list(&[
-        rlp_bytes(&outcome),
-        rlp_bytes(&cumulative_gas),
-        rlp_bytes(&bloom),
-        rlp_list(&logs),
-    ]);
     let receipt_type = receipt
         .get("type")
         .and_then(Value::as_str)
         .map(parse_quantity)
         .transpose()?
         .unwrap_or(0);
+    let mut fields = vec![
+        rlp_bytes(&outcome),
+        rlp_bytes(&cumulative_gas),
+        rlp_bytes(&bloom),
+        rlp_list(&logs),
+    ];
+    // An OP Stack deposit receipt (Base) appends its optional deposit nonce
+    // (from Regolith) and receipt version (from Canyon) to the four fields.
+    // Only the RPC's `depositNonce` and `depositReceiptVersion` fields carry
+    // them: an `eth_getBlockReceipts` that omits them rebuilds another
+    // receipt, so every Base block (each starts with a deposit) fails closed
+    // with the receipts-root mismatch.
+    if receipt_type == OP_STACK_DEPOSIT_RECEIPT_TYPE {
+        let nonce = receipt.get("depositNonce").and_then(Value::as_str);
+        let version = receipt.get("depositReceiptVersion").and_then(Value::as_str);
+        if version.is_some() && nonce.is_none() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "deposit receipt has a receipt version without a deposit nonce",
+            ));
+        }
+        for value in [nonce, version].into_iter().flatten() {
+            fields.push(rlp_bytes(&quantity_bytes(value)?));
+        }
+    }
+    let payload = rlp_list(&fields);
     let encoded = if receipt_type == 0 {
         payload
     } else {

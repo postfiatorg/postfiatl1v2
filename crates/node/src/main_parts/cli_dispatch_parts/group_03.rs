@@ -2296,6 +2296,109 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             );
             Ok(())
         }
+        "external-lane-checkpoint-observe" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let block_number = flag_value(flags, "--block-number")
+                .map(|value| value.parse::<u64>().map_err(|_| "invalid --block-number"))
+                .transpose()?;
+            let checkpoint = observe_external_lane_checkpoint(ExternalLaneCheckpointObserveOptions {
+                data_dir: PathBuf::from(data_dir),
+                lane_id: flag_value(flags, "--lane-id").ok_or("missing --lane-id")?.to_string(),
+                base_rpc: flag_value(flags, "--base-rpc").ok_or("missing --base-rpc")?.to_string(),
+                block_number,
+                checkpoint_file: PathBuf::from(
+                    flag_value(flags, "--checkpoint-file").ok_or("missing --checkpoint-file")?,
+                ),
+            })
+            .map_err(|error| format!("{command} failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&checkpoint)
+                    .map_err(|error| format!("checkpoint serialization failed: {error}"))?
+            );
+            Ok(())
+        }
+        "external-lane-checkpoint-sign" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let vote = sign_external_lane_checkpoint_vote(ExternalLaneCheckpointSignOptions {
+                data_dir: PathBuf::from(data_dir),
+                checkpoint_file: PathBuf::from(
+                    flag_value(flags, "--checkpoint-file").ok_or("missing --checkpoint-file")?,
+                ),
+                base_rpc: flag_value(flags, "--base-rpc").ok_or("missing --base-rpc")?.to_string(),
+                validator: flag_value(flags, "--validator").ok_or("missing --validator")?.to_string(),
+                validator_key_file: PathBuf::from(
+                    flag_value(flags, "--validator-key-file")
+                        .ok_or("missing --validator-key-file")?,
+                ),
+                vote_file: PathBuf::from(
+                    flag_value(flags, "--vote-file").ok_or("missing --vote-file")?,
+                ),
+            })
+            .map_err(|error| format!("{command} failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&vote)
+                    .map_err(|error| format!("vote serialization failed: {error}"))?
+            );
+            Ok(())
+        }
+        "external-lane-checkpoint-assemble" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let vote_files =
+                split_csv(flag_value(flags, "--vote-files").ok_or("missing --vote-files")?)
+                    .into_iter()
+                    .map(PathBuf::from)
+                    .collect::<Vec<_>>();
+            let certificate =
+                assemble_external_lane_checkpoint_certificate(ExternalLaneCheckpointAssembleOptions {
+                    data_dir: PathBuf::from(data_dir),
+                    checkpoint_file: PathBuf::from(
+                        flag_value(flags, "--checkpoint-file").ok_or("missing --checkpoint-file")?,
+                    ),
+                    vote_files,
+                    certificate_file: PathBuf::from(
+                        flag_value(flags, "--certificate-file")
+                            .ok_or("missing --certificate-file")?,
+                    ),
+                })
+                .map_err(|error| format!("{command} failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&certificate)
+                    .map_err(|error| format!("certificate serialization failed: {error}"))?
+            );
+            Ok(())
+        }
+        "external-lane-lock-proof" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let log_index = flag_value(flags, "--log-index")
+                .map(|value| value.parse::<u32>().map_err(|_| "invalid --log-index"))
+                .transpose()?;
+            let operation = build_external_lane_lock_proof(ExternalLaneLockProofOptions {
+                data_dir: PathBuf::from(data_dir),
+                lane_id: flag_value(flags, "--lane-id").ok_or("missing --lane-id")?.to_string(),
+                base_rpc: flag_value(flags, "--base-rpc").ok_or("missing --base-rpc")?.to_string(),
+                transaction_hash: flag_value(flags, "--transaction-hash")
+                    .ok_or("missing --transaction-hash")?
+                    .to_string(),
+                certificate_file: PathBuf::from(
+                    flag_value(flags, "--certificate-file").ok_or("missing --certificate-file")?,
+                ),
+                submitter: flag_value(flags, "--submitter").ok_or("missing --submitter")?.to_string(),
+                log_index,
+                operation_file: PathBuf::from(
+                    flag_value(flags, "--operation-file").ok_or("missing --operation-file")?,
+                ),
+            })
+            .map_err(|error| format!("{command} failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&operation)
+                    .map_err(|error| format!("operation serialization failed: {error}"))?
+            );
+            Ok(())
+        }
         "fastswap-control-prepare" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let control_file =
