@@ -384,7 +384,11 @@ impl HeldKeys {
             pid: std::process::id(),
             vote_keys: public(&self.vote),
             proposal_keys: public(&self.proposal),
-            durable_double_sign_protection: self.guard.lock().map(|guard| guard.available()).unwrap_or(false),
+            durable_double_sign_protection: self
+                .guard
+                .lock()
+                .map(|guard| guard.available())
+                .unwrap_or(false),
         }
     }
 
@@ -432,8 +436,15 @@ impl HeldKeys {
                 let signed = signer
                     .validator_key(context.as_bytes(), Some(validator_id))
                     .and_then(|public| {
-                        self.guard.lock().map_err(|_| signer_error(io::ErrorKind::Other,
-                            "validator_signer_state_unavailable", "guard lock poisoned"))?
+                        self.guard
+                            .lock()
+                            .map_err(|_| {
+                                signer_error(
+                                    io::ErrorKind::Other,
+                                    "validator_signer_state_unavailable",
+                                    "guard lock poisoned",
+                                )
+                            })?
                             .reserve(&public, context.as_bytes(), &message)?;
                         signer
                             .sign(validator_id, context.as_bytes(), &message)
@@ -548,11 +559,27 @@ pub fn validator_signer_serve(
             .as_deref()
             .unwrap_or(&options.key_file),
     )?;
-    let fingerprints = vote.keys.validators.iter().chain(&proposal.keys.validators)
-        .map(|key| hex_to_bytes(&key.public_key_hex).map(|bytes| hash_hex("postfiat.validator-signer.key.v1", &bytes)).map_err(invalid_data))
+    let fingerprints = vote
+        .keys
+        .validators
+        .iter()
+        .chain(&proposal.keys.validators)
+        .map(|key| {
+            hex_to_bytes(&key.public_key_hex)
+                .map(|bytes| hash_hex("postfiat.validator-signer.key.v1", &bytes))
+                .map_err(invalid_data)
+        })
         .collect::<io::Result<Vec<_>>>()?;
-    let guard = crate::validator_signer_guard::SignerGuard::open(&options.state_dir, options.initialize_state, fingerprints)?;
-    let keys = Arc::new(HeldKeys { vote, proposal, guard: Mutex::new(guard) });
+    let guard = crate::validator_signer_guard::SignerGuard::open(
+        &options.state_dir,
+        options.initialize_state,
+        fingerprints,
+    )?;
+    let keys = Arc::new(HeldKeys {
+        vote,
+        proposal,
+        guard: Mutex::new(guard),
+    });
     let group = options
         .socket_group
         .as_deref()
@@ -696,7 +723,11 @@ impl SocketSigner {
     pub fn connect(socket: &Path, deadline: Duration) -> io::Result<Self> {
         let (description, peer_uid) = describe_validator_signer(socket, deadline)?;
         if !description.durable_double_sign_protection {
-            return Err(signer_error(io::ErrorKind::Other, "validator_signer_guard_unavailable", "signer does not attest an available durable guard"));
+            return Err(signer_error(
+                io::ErrorKind::Other,
+                "validator_signer_guard_unavailable",
+                "signer does not attest an available durable guard",
+            ));
         }
         Ok(Self {
             socket: socket.to_path_buf(),
@@ -1374,9 +1405,21 @@ mod validator_signer_tests {
         let signer = SocketSigner::connect(&socket, Duration::from_secs(5)).expect("connect");
         let file = KeyFileSigner::open(&root.join("vote.json")).expect("file signer");
         let encoded = serde_json::to_vec(&serde_json::json!([
-            "signer-test", "a".repeat(96), 1, 1, 0, "b".repeat(96),
-            "validator-0", "transparent", "c".repeat(96), "d".repeat(96), [], "validator-0", true
-        ])).expect("legacy message");
+            "signer-test",
+            "a".repeat(96),
+            1,
+            1,
+            0,
+            "b".repeat(96),
+            "validator-0",
+            "transparent",
+            "c".repeat(96),
+            "d".repeat(96),
+            [],
+            "validator-0",
+            true
+        ]))
+        .expect("legacy message");
         let message = encoded.as_slice();
         let signature = signer
             .sign("validator-0", BLOCK_CERTIFICATE_SIGNATURE_CONTEXT, message)
@@ -1397,10 +1440,21 @@ mod validator_signer_tests {
         let mut conflict: serde_json::Value = serde_json::from_slice(message).expect("tuple");
         conflict[12] = false.into();
         let conflict = serde_json::to_vec(&conflict).expect("tuple");
-        assert!(signer.sign("validator-0", BLOCK_CERTIFICATE_SIGNATURE_CONTEXT, &conflict)
-            .expect_err("conflicting vote refused").to_string().contains("validator_signer_double_sign"));
-        assert_eq!(signature, signer.sign("validator-0", BLOCK_CERTIFICATE_SIGNATURE_CONTEXT, message)
-            .expect("identical retry"));
+        assert!(signer
+            .sign(
+                "validator-0",
+                BLOCK_CERTIFICATE_SIGNATURE_CONTEXT,
+                &conflict
+            )
+            .expect_err("conflicting vote refused")
+            .to_string()
+            .contains("validator_signer_double_sign"));
+        assert_eq!(
+            signature,
+            signer
+                .sign("validator-0", BLOCK_CERTIFICATE_SIGNATURE_CONTEXT, message)
+                .expect("identical retry")
+        );
         let refused = raw_request(
             &socket,
             serde_json::to_vec(&ValidatorSignerRequest {

@@ -460,7 +460,8 @@ fn readiness_custody(
     };
     let signer_socket = service.and_then(|service| service.signer_socket.as_ref());
     Ok(PrivateReadinessCustody {
-        signer_double_sign_protection: signer_socket.and_then(|socket| socket.double_sign_protection),
+        signer_double_sign_protection: signer_socket
+            .and_then(|socket| socket.double_sign_protection),
         published_by: if service.is_some() {
             "rpc_serve"
         } else {
@@ -523,7 +524,9 @@ pub(super) fn custody_reasons(custody: &PrivateReadinessCustody) -> Vec<String> 
         socket && custody.signer_uid.is_none(),
         socket && custody.signer_key_matches == Some(false),
         socket && custody.validator_registry_readable == Some(false),
-        socket && custody.signer_uid.is_some() && custody.signer_double_sign_protection != Some(true),
+        socket
+            && custody.signer_uid.is_some()
+            && custody.signer_double_sign_protection != Some(true),
         any_key_file("missing") || (file_signer && custody.key_files.is_empty()),
         any_key_file("unreadable"),
         any_key_file("not_owner_only"),
