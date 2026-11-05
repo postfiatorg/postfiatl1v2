@@ -320,11 +320,13 @@ replayed withdrawal or burn commitment and an amount above
 only as long as the finality verifier accepts no export proof, so the
 verifier's deployment and qualification on Base decide when Phase 3 opens.
 
-Not deployed: no lock contract exists on Base Sepolia or Base mainnet, and no
-PFTL finality verifier is deployed on Base, which must come first. The
-genesis lane and the PFTL release operation (P2.2, P2.4) are not built, and
-mainnet deployment waits for the audit (design note, section 8). The tests
-use a mock verifier.
+On Base Sepolia the rehearsal lock `0xE36e7Fc384564419187546c19719A5654266dE0B`
+runs in test mode against a stand-in verifier, the tests' `MockLockVerifier`,
+whose `verifyAndConsume` always reverts, so its release path cannot pay; it
+predates the minimum lock amount, and the next rehearsal archives it (below,
+`deployments/pft-lock-base-84532/deployment.json`). No lock contract and no
+PFTL finality verifier are deployed on Base mainnet, and mainnet deployment
+waits for the audit (design note, section 8).
 
 ## Deploy the lock contract
 
