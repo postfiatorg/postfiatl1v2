@@ -293,6 +293,9 @@ class WatcherTests(unittest.TestCase):
             state = json.loads(Path(state_file).read_text())
             self.assertEqual((state["lane_id"], state["checked_through_height"], state["release_count"]),
                              (LANE, 100, 2))
+            # Bound to the chain, the genesis and the lane policy.
+            self.assertEqual((state["pftl_chain_id"], state["genesis_hash"], state["lock_contract_address"],
+                              state["source_chain_id"]), ("postfiat-local", GENESIS_HASH, LOCK, 8453))
             # A new release lands above the checked height: only it is checked.
             releases.append(release(2, height=150))
             pftl = FakePftl(releases, current_height=200)
@@ -313,6 +316,37 @@ class WatcherTests(unittest.TestCase):
                                  "--from-height", "251")
             self.assertEqual(code, 0)
             self.assertEqual(json.loads(Path(state_file).read_text())["checked_through_height"], 300)
+
+    def test_a_state_file_of_another_network_or_out_of_range_is_refused(self) -> None:
+        good = {"schema": watcher.STATE_SCHEMA, "lane_id": LANE, "pftl_chain_id": "postfiat-local",
+                "genesis_hash": GENESIS_HASH, "lock_contract_address": LOCK, "source_chain_id": 8453,
+                "checked_through_height": 100, "release_count": 2}
+        releases = [release(0), release(1)]
+        cases = {
+            "another genesis": {"genesis_hash": "dd" * 48},
+            "another PFTL chain": {"pftl_chain_id": "postfiat-other"},
+            "another lock contract": {"lock_contract_address": "0x" + "99" * 20},
+            "another source chain": {"source_chain_id": 84532},
+            "height ahead of the node": {"checked_through_height": 501},
+            "count ahead of the node": {"release_count": 3},
+            "negative height": {"checked_through_height": -1},
+            "boolean height": {"checked_through_height": True},
+            "boolean count": {"release_count": False},
+            "height above u64": {"checked_through_height": 1 << 64},
+        }
+        with tempfile.TemporaryDirectory() as root:
+            state_file = Path(root) / "watcher.json"
+            state_file.write_text(json.dumps(good))
+            code, _, _ = run(FakePftl(releases, current_height=500), FakeBase(backed(*releases)),
+                             "--state-file", str(state_file))
+            self.assertEqual(code, 0, "the control state is accepted")
+            for name, change in cases.items():
+                with self.subTest(name):
+                    state_file.write_text(json.dumps({**good, **change}))
+                    code, lines, stderr = run(FakePftl(releases, current_height=500), FakeBase(backed(*releases)),
+                                              "--state-file", str(state_file))
+                    self.assertEqual((code, lines), (1, []))
+                    self.assertEqual(json.loads(stderr)["code"], "state_file_invalid")
 
     def test_a_state_file_of_another_lane_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as root:

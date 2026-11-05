@@ -37,7 +37,7 @@ from typing import Any, Callable, Sequence
 from . import pft_token
 from .client import PostFiatRpcClient, RpcClientError
 
-STATE_SCHEMA = "postfiat.external_lane_watcher.state.v1"
+STATE_SCHEMA = "postfiat.external_lane_watcher.state.v2"
 LINE_SCHEMA = "postfiat.external_lane_watcher.v1"
 PAGE_SIZE = 100
 MAX_STATE_BYTES = 64 * 1024
@@ -308,15 +308,33 @@ def _load_state(path: Path | None, lane_id: str) -> dict[str, Any] | None:
         state = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise WatcherError("state_file_invalid", f"`{path}`: {error}") from None
+    def u64(value: Any) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool) and 0 <= value < U64
+
     if (
         not isinstance(state, dict)
         or state.get("schema") != STATE_SCHEMA
         or state.get("lane_id") != lane_id
-        or not isinstance(state.get("checked_through_height"), int)
-        or not isinstance(state.get("release_count"), int)
+        or not all(isinstance(state.get(key), str) for key in ("pftl_chain_id", "genesis_hash",
+                                                              "lock_contract_address"))
+        or not all(u64(state.get(key)) for key in ("source_chain_id", "checked_through_height",
+                                                   "release_count"))
     ):
         raise WatcherError("state_file_invalid", f"`{path}` is not this lane's watcher state")
     return state
+
+
+def _check_state(state: dict[str, Any], snapshot: dict[str, Any], policy: dict[str, Any]) -> None:
+    """The kept state must be this network's and lane's, and not ahead of the
+    node: a regression means another network or a corrupt file."""
+
+    if (state["pftl_chain_id"], state["genesis_hash"], state["lock_contract_address"].lower(),
+            state["source_chain_id"]) != (snapshot["chain_id"], snapshot["genesis_hash"], policy["lock"],
+                                          policy["chain_id"]):
+        raise WatcherError("state_file_invalid", "the state file belongs to another chain, genesis or lane policy")
+    if state["checked_through_height"] > snapshot["current_height"] or state["release_count"] > snapshot["release_count"]:
+        raise WatcherError("state_file_invalid",
+                           "the state file is ahead of the PFTL node: another network or a corrupt file")
 
 
 def _save_state(path: Path, state: dict[str, Any]) -> None:
@@ -365,6 +383,8 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
         alarm("lock_code_hash_mismatch", lock_contract_address=policy["lock"], finalized_block=finalized,
               expected=policy["code_hash"], observed=observed_code_hash)
 
+    if state is not None:
+        _check_state(state, snapshot, policy)
     if from_height is not None:
         start_height, checked_count = from_height, 0
     elif state is not None:
@@ -442,6 +462,10 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
     new_state = None if alarms else {
         "schema": STATE_SCHEMA,
         "lane_id": lane_id,
+        "pftl_chain_id": snapshot["chain_id"],
+        "genesis_hash": snapshot["genesis_hash"],
+        "lock_contract_address": policy["lock"],
+        "source_chain_id": policy["chain_id"],
         "checked_through_height": current_height,
         "release_count": release_count,
     }
