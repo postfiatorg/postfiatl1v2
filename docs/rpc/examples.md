@@ -68,7 +68,7 @@ PYTHONPATH=python python -m postfiat_rpc.pft_token_ui \
   --record crates/pft-token-contracts/deployments/pft-token-base-84532/deployment.json
 ```
 
-`postfiat_rpc.external_lane_watcher` matches each release of a genesis external lane against its Lock on Base and exits 2 on an alarm ([the watcher](../architecture/genesis-external-lanes.md#the-watcher)):
+`postfiat_rpc.external_lane_watcher` matches each release of a genesis external lane against its Lock on Base. A one-shot run exits 2 on an alarm; under `--interval` the alarm is a JSON `alarm` line and the watcher keeps running ([the watcher](../architecture/genesis-external-lanes.md#the-watcher)):
 
 ```bash
 PYTHONPATH=python python -m postfiat_rpc.external_lane_watcher \

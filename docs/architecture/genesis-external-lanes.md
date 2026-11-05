@@ -243,7 +243,7 @@ Each run reads the lane's row from a PFTL node (`external_lane_info`: the lane p
 3. Each release in range is checked, oldest first:
    - A release whose `source_block_number` is above the finalized block is not judged. It is reported as `release_block_not_finalized`, nothing else is checked for it in that run, and a later run checks it again.
    - Otherwise the Base block at `source_block_number` must have the release record's `source_block_hash`.
-   - `lockRecord(lock_nonce)`, read at that same source block and not at the head, must return a holder, the release's `amount_atoms` and the keccak-256 of its UTF-8 `recipient`. A Lock made after the release therefore cannot back it.
+   - `lockRecord(lock_nonce)`, read at that same source block and not at the head, must return a holder, the release's `amount_atoms` and the keccak-256 of its UTF-8 `recipient`. A Lock made after the release therefore cannot back it. This is the lock's `LockRecord` storage entry, which carries the same three fields as the `Locked` event the design names.
    - One token base unit is compared as one atom, with no scaling.
 
 The run fails closed when the node's lane report changes under it. Every page must carry the first page's chain id, genesis hash, `current_height`, `release_count`, `pruned_release_count` and `release_history_root`. Any difference stops the run (`external_lane_info_inconsistent`, exit 1, retried under `--interval`). The sequences must run without a gap from `release_count − 1` down to the pruned count; a gap is `external_lane_info_malformed`.
@@ -258,7 +258,26 @@ The run fails closed when the node's lane report changes under it. Every page mu
 | `lock_code_hash_mismatch` | The lock contract's code at the finalized block is not the pinned code. |
 | `release_pruned_before_check` | Release records were pruned before a run checked them, so they cannot be matched. |
 
-Output is JSON lines: one `release` line per release checked (`status` `backed` or `alarm`), one `alarm` line per alarm and one `summary` line per run. The exit code is 0 for a clean run, 2 for any alarm and 1 for an input or RPC error, reported as one `error` line on stderr (a malformed release record is `release_record_malformed`, a malformed lane report `external_lane_info_malformed`, a report that changed while it was paged `external_lane_info_inconsistent`, and a malformed Base answer `base_answer_malformed`). `--state-file` keeps the PFTL height checked through and the release count. It is bound to the PFTL chain id, the genesis hash and the lane policy's lock contract and chain id. A state file of another network, with a counter that is not a u64, or ahead of the live node is refused (`state_file_invalid`). The state advances only after a clean run, so an alarm is raised again on every run until an operator starts past it with `--from-height`.
+The summary line counts each of these codes (`alarm_codes`).
+
+| Run error (exit 1) | Meaning |
+|---|---|
+| `input_invalid` | A bad `--base-rpc` or `--pftl-rpc` value. |
+| `pftl_rpc_failed` | The PFTL `external_lane_info` read failed; retried under `--interval`. |
+| `base_rpc_failed` | A Base read failed or answered an error object; retried under `--interval`. |
+| `external_lane_not_reported` | The PFTL node reports no lane with `--lane-id`. |
+| `external_lane_policy_malformed` | The lane's policy (chain id, lock contract, code hash) is not well formed. |
+| `external_lane_info_malformed` | The lane report is not well formed: a counter, the protocol version, the history root, or a gap in the release sequences. |
+| `external_lane_info_inconsistent` | The lane report changed while it was paged; retried under `--interval`. |
+| `release_record_malformed` | A release record is not well formed, including a zero amount. |
+| `base_chain_id_mismatch` | The Base RPC is on another chain than the policy names. |
+| `base_answer_malformed` | A Base answer is malformed, names another block than asked, or the node does not serve the release's source block. |
+| `state_file_invalid` | The state file is malformed, of an earlier schema, of another network or lane policy, or ahead of the node. |
+| `state_file_write_failed` | The state file could not be written; nothing of the run is printed, and the run is retried under `--interval`. |
+
+Output is JSON lines: one `release` line per release checked (`status` `backed` or `alarm`), one `alarm` line per alarm and one `summary` line per run. A one-shot run (`--once`, the default) exits 0 when clean, 2 on any alarm and 1 on a run error, reported as one `error` line on stderr. `--interval` keeps running after an alarm: the alert signal is the `alarm` line, which is printed at once, and the loop continues.
+
+`--state-file` keeps the PFTL height checked through and the release count. It is bound to the PFTL chain id, the genesis hash and the lane policy's lock contract and chain id, and it is written before the run's lines are printed, so a clean summary always means the state advanced. The state advances only after a clean run, so an alarm is raised again on every run until an operator starts past it with `--from-height`. A lost or deleted state file means the next run starts from height 0 and re-checks every stored release. A state file of an earlier schema is refused; delete it or pass `--from-height`.
 
 An operator runs it beside a validator, against that validator's RPC and an independently operated Base node, either as a timer with `--once` or as a service with `--interval`, which keeps running and retries after an RPC error:
 
@@ -268,12 +287,13 @@ PYTHONPATH=python python -m postfiat_rpc.external_lane_watcher \
   --base-rpc http://127.0.0.1:8545 --state-file /var/lib/postfiat-watcher/base-erc20.json --interval 60
 ```
 
-It must run at least once per release window: a release record becomes prunable one window after its height ([pruning the release records](#pruning-the-release-records)), and a release pruned before a run checked it is only reported as `release_pruned_before_check`.
+It must run at least once per release window: a release record becomes prunable one window after its height ([pruning the release records](#pruning-the-release-records)), and a release pruned before a run checked it is only reported as `release_pruned_before_check`. The Base node must also serve each release's source block. A node that has pruned it fails the run (exit 1, retried under `--interval`), so run the watcher at least once per release window or point it at an archive node.
 
 What it does not do:
 
 - A Lock made on Base but never released is not an alarm: its PFT waits in the lane.
 - It trusts its own Base node's `finalized` tag, as each committee member does.
+- It trusts the lane read of the PFTL node it is pointed at, and the Lock answers of its Base node. So it runs beside the operator's own validator and against an independently operated Base node.
 - It answers nothing. The response of section 5.2 is governed: a zero-cap amendment (`ratify-external-lane-release-cap --cap-bps 0`, signed by the registry threshold), then a committee rotation, then the delayed restore of the cap. The watcher only prompts them.
 
 ## Not built yet

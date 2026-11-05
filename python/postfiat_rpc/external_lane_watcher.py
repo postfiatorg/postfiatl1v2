@@ -18,10 +18,18 @@ It only reads, on both chains: no key, no signature, no transaction.
         --base-rpc http://127.0.0.1:8545 --state-file watcher-state.json --once
 
 Output is JSON lines on stdout: one ``release`` line per release checked, one
-``alarm`` line per alarm, and a ``summary`` line per run. Exit 0 when a run is
-clean, 2 on any alarm, 1 on an input or RPC error (one ``error`` line on
-stderr). With ``--interval`` it runs until stopped and retries after an RPC
-error.
+``alarm`` line per alarm, and a ``summary`` line per run. A one-shot run exits
+0 when clean, 2 on any alarm and 1 on an input or RPC error (one ``error`` line
+on stderr). With ``--interval`` it runs until stopped: it keeps running after
+an alarm, so the alert signal is the ``alarm`` line itself, and it retries
+after an RPC error or a failed state write.
+
+The state file is written before a run's lines are printed. Without it (lost
+or deleted), the next run starts from height 0 and re-checks every stored
+release; a state file of an earlier schema is refused (delete it or pass
+``--from-height``). The Base node must serve each release's source block: a
+node that has pruned it fails the run, so run the watcher at least once per
+release window or point it at an archive node.
 """
 
 from __future__ import annotations
@@ -516,10 +524,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-rpc", required=True, metavar="URL", help="a Base JSON-RPC URL (http or https)")
     parser.add_argument("--from-height", type=int, metavar="N",
                         help="check releases at or above this PFTL height (overrides the state file)")
-    parser.add_argument("--state-file", metavar="PATH", help="keeps the last checked height between runs")
+    parser.add_argument("--state-file", metavar="PATH",
+                        help="keeps the last checked height between runs; without it a run re-checks every "
+                             "stored release")
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--once", action="store_true", help="one run, then exit (the default)")
-    mode.add_argument("--interval", type=float, metavar="SECONDS", help="run every SECONDS until stopped")
+    mode.add_argument("--once", action="store_true",
+                      help="one run, then exit 0 (clean), 2 (alarm) or 1 (error); the default")
+    mode.add_argument("--interval", type=float, metavar="SECONDS",
+                      help="run every SECONDS until stopped; an alarm is reported as an alarm line and the "
+                           "loop continues")
     parser.add_argument("--timeout", type=float, default=pft_token.TIMEOUT_SECONDS, help="seconds per RPC request")
     return parser
 
