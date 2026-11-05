@@ -158,7 +158,8 @@ fn genesis_faucet_holds_supply_minus_lanes() {
 
 #[test]
 fn genesis_rejects_unknown_lane_fields() {
-    let genesis = genesis_with_lanes(vec![sample_external_lane("base-erc20", 1)]);
+    let genesis = genesis_with_lanes(vec![sample_external_lane("base-erc20", 10_000)]);
+    genesis.validate().expect("the lane is valid apart from the unknown fields");
     let json = genesis.to_json().expect("serialize");
     let lane_extra = json.replacen(
         "\"release_cap_bps\": 200,",
@@ -208,11 +209,11 @@ fn genesis_rejects_malformed_external_lanes() {
     assert!(duplicate.validate().unwrap_err().contains("duplicate"));
     let mut cases: Vec<(GenesisExternalLane, &str)> = Vec::new();
     for id in ["", "Base", "9lane", "lane_1", &"a".repeat(33)] {
-        cases.push((sample_external_lane(id, 1), "external lane id"));
+        cases.push((sample_external_lane(id, 10_000), "external lane id"));
     }
     let mut lane = sample_external_lane("a", 0);
     cases.push((lane.clone(), "reserved_atoms"));
-    lane.reserved_atoms = 1;
+    lane.reserved_atoms = 10_000;
     lane.release_window_blocks = 0;
     cases.push((lane, "release_window_blocks"));
     let mut lane = sample_external_lane("a", 10_000);
@@ -1316,8 +1317,8 @@ fn genesis_refuses_a_lane_whose_window_cap_rounds_to_zero() {
     lane.release_cap_bps = 100;
     assert_eq!(lane.window_cap_atoms(), 0);
     let mut state = ExternalLaneState::genesis(&lane);
-    let refused = state.apply_release(&lane, sample_release(0, 1, 5));
-    assert!(refused.is_err(), "zero-cap lane can never release");
+    let refused = state.apply_release(&lane, sample_release(0, 1, 5)).unwrap_err();
+    assert_eq!(refused.0, EXTERNAL_LANE_WINDOW_CAP_EXCEEDED, "a zero-cap lane releases nothing");
     let error = lane.validate().unwrap_err();
     assert!(error.contains("rounds down to 0 atoms"), "{error}");
 }
@@ -1345,6 +1346,10 @@ fn genesis_accepts_the_smallest_lane_whose_window_cap_rounds_to_one_atom() {
 
 /// A zero cap set by governed amendment must still halt releases; the genesis
 /// check above must not narrow the amendment path.
+///
+/// Open boundary, not decided here: a genesis cap above zero but below the
+/// execution layer's `ACCOUNT_RESERVE` validates, yet cannot fund a new
+/// account in one window.
 #[test]
 fn governed_zero_cap_amendment_still_halts_releases() {
     let lane = release_test_lane();
@@ -1360,16 +1365,4 @@ fn governed_zero_cap_amendment_still_halts_releases() {
         .apply_release_capped(&lane, sample_release(0, 1, 250), cap_atoms)
         .unwrap_err();
     assert_eq!(refused.0, EXTERNAL_LANE_WINDOW_CAP_EXCEEDED);
-}
-
-/// Documented, not fixed here: a cap below the execution layer's
-/// `ACCOUNT_RESERVE` (10 atoms) cannot fund a brand-new account, but refusing
-/// that lane is a policy change that needs maintainer agreement and would
-/// couple this crate to execution state. Recorded so the boundary is explicit.
-#[test]
-fn genesis_still_accepts_a_lane_whose_cap_is_below_the_account_reserve() {
-    let mut lane = sample_external_lane("base-erc20", 500);
-    lane.release_cap_bps = 100;
-    assert_eq!(lane.window_cap_atoms(), 5);
-    assert!(lane.validate().is_ok());
 }

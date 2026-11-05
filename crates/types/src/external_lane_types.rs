@@ -897,11 +897,12 @@ impl GenesisExternalLane {
         }
         // A cap of zero is a governed halt, which only an amendment may set
         // (design 5.1). Rounding must not produce one at genesis: the lane would
-        // accept every release proof and refuse every release, and nothing at
-        // runtime could undo it.
+        // accept every release proof and refuse every release; only a governed
+        // cap amendment can raise it, and a raise waits seven windows (design
+        // 5.1).
         if self.window_cap_atoms() == 0 {
             return Err(format!(
-                "external lane `{}` reserves {} atoms at {} bps, so its window cap rounds down to 0 atoms and no release can ever fit it",
+                "external lane `{}` reserves {} atoms at {} bps, so its window cap rounds down to 0 atoms, so the lane could release nothing",
                 self.id, self.reserved_atoms, self.release_cap_bps
             ));
         }
