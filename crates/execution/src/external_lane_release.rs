@@ -291,8 +291,6 @@ pub(crate) fn verify_external_lane_lock(
     })
 }
 
-/// Verifies the operation's proof against the lane's genesis policy, then
-/// applies the release rules and credits the proven recipient.
 /// `external_lane_export_v1` is refused until it is built: an unknown lane,
 /// the lane's own lock contract as the Base recipient, and otherwise
 /// `external_lane_export_not_supported`. Nothing is read beyond genesis and
@@ -320,6 +318,8 @@ pub(crate) fn refuse_external_lane_export<T>(
     ))
 }
 
+/// Verifies the operation's proof against the lane's genesis policy, then
+/// applies the release rules and credits the proven recipient.
 pub(crate) fn execute_external_lane_release(
     genesis: &Genesis,
     ledger: &mut LedgerState,

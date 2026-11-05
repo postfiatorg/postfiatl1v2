@@ -103,7 +103,18 @@ fn external_lane_export_refuses_an_unknown_lane_and_the_lock_as_recipient() {
 fn external_lane_export_shape_refusals_reach_mempool_admission() {
     let chain = lane_chain("export-shape");
     let store = NodeStore::new(&chain.data_dir);
+    let sender = read_transfer_key_file(&chain.data_dir, None).expect("faucet key").address;
+    let sequence = |ledger: &LedgerState| ledger.account(&sender).expect("sender account").sequence;
+    let tip = || {
+        let status = crate::status(NodeOptions {
+            data_dir: chain.data_dir.clone(),
+        })
+        .expect("status");
+        (status.block_height, status.state_root)
+    };
+    let ledger_before = store.read_ledger().expect("ledger");
     let mempool_before = store.read_mempool().expect("mempool");
+    let tip_before = tip();
     for (label, tx, expected) in [
         (
             "zero-amount",
@@ -131,6 +142,12 @@ fn external_lane_export_shape_refusals_reach_mempool_admission() {
         .to_string();
         assert!(error.contains(expected), "{label}: {error}");
     }
+    // Nothing changed: the ledger, the sender's sequence, the mempool and
+    // the tip are as before the refused submissions.
+    let ledger_after = store.read_ledger().expect("ledger");
+    assert_eq!(sequence(&ledger_after), sequence(&ledger_before));
+    assert_eq!(ledger_after, ledger_before);
     assert_eq!(store.read_mempool().expect("mempool"), mempool_before);
+    assert_eq!(tip(), tip_before);
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
