@@ -74,7 +74,8 @@ primary group), and answers only peers whose kernel-reported uid is in
 request is read. On Linux a connect to a Unix socket needs write permission
 on the socket file, so the serving user reaches it through the group; the uid
 allow-list is the real gate. Each request is one length-prefixed JSON
-frame (at most 9 MiB, the hex of a 4 MiB transport frame) with a deadline
+frame (at most 1 MiB: the largest message signed is a proposal, about 100 KB
+at the batch cap and at most 6.2 KB on devnet-2 so far, sent as hex) with a deadline
 (`--deadline-ms`, default 5000). It signs under the contexts rpc-serve
 signs with as the validator: block certificate, block timeout and
 consensus-v2 votes and the transport envelopes that carry them with the vote

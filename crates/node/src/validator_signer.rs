@@ -28,8 +28,16 @@ use std::time::{Duration, Instant};
 
 pub const VALIDATOR_SIGNER_REQUEST_SCHEMA: &str = "postfiat.validator_signer.request.v1";
 pub const VALIDATOR_SIGNER_RESPONSE_SCHEMA: &str = "postfiat.validator_signer.response.v1";
-/// A transport envelope signs its whole frame (at most 4 MiB), hex-encoded.
-pub const VALIDATOR_SIGNER_MAX_REQUEST_BYTES: usize = 9 * 1024 * 1024;
+/// The largest messages signed are proposals. Measured on the 1,168 blocks of
+/// devnet-2: a consensus-v2 proposal is at most 6.2 KB of JSON without its
+/// signature and a block proposal's receipt ids at most 298 bytes. At the
+/// batch cap (`MAX_BATCH_TRANSACTIONS`, 1,024 receipt ids of 96 hex
+/// characters) a block proposal message is about 100 KB. Votes and the
+/// transport authentication message (`transport_auth_message`: the frame's
+/// metadata and payload hash, not its payload) are under 1 KB. The request
+/// carries the message as hex inside JSON, so 1 MiB leaves about five times
+/// the worst case.
+pub const VALIDATOR_SIGNER_MAX_REQUEST_BYTES: usize = 1024 * 1024;
 pub const VALIDATOR_SIGNER_MAX_RESPONSE_BYTES: usize = 64 * 1024;
 pub const VALIDATOR_SIGNER_DEFAULT_DEADLINE_MS: u64 = 5_000;
 const VALIDATOR_SIGNER_MAX_CONNECTIONS: usize = 32;
