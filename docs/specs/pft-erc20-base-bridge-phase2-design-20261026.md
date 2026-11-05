@@ -84,7 +84,7 @@ The repository has two working proof styles for EVM events and one signature pat
 
 **Trust and latency.** The trust base is a quorum of the PFTL committee, which is already the trust base of any later export (`docs/listings/coinbase/integration-plan.md:733-734`). The latency is the confirmation policy plus one signing round, minutes rather than days, provided the policy signs only Base blocks derived from finalized Ethereum data.
 
-**New work.** The work is a lock-route checkpoint schema in place of the Uniswap-specific fields, a Base observer for committee members, and the release operation.
+**New work.** The work is a lock-route checkpoint schema in place of the Uniswap-specific fields, a Base observer for committee members, and the release operation. Built 2026-11-05: the Base observer, the vote signing and assembly and the receipt-proof builder are the node commands described on the external lanes page.
 
 **(c) Threshold-signed statement.** `PFTLWithdrawalVerifier` lets anyone relay a packet signed by a threshold of approved signers and lets a challenge authority freeze it before a delay closes (`crates/ethereum-contracts/src/PFTLWithdrawalVerifier.sol:4-7`, `:159-198`). An owner manages the signers and the threshold (`:78-87`, `:140-149`). Mirrored onto PFTL, the committee would sign "Lock n of amount x to recipient r happened" and PFTL would check only the signatures. The trust base is the committee and whoever manages it, with no Merkle link to Base state. Latency is minutes plus any challenge delay. The work is small, but option (b) costs little more and binds every Lock to a signed Base block.
 

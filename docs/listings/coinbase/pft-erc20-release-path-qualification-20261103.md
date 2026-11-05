@@ -118,10 +118,37 @@ Refusals, each on all six validators at mempool admission and in the batch build
 - `governance-authorization-sign` refuses an under-threshold lane amendment. The architecture page lists ratification, signed-batch admission and execution only.
 - A harness slip, not the chain's: the release probed at tip 12 was admitted on all six, then a filler used the faucet sequence, and admission was blocked by ``mempool admission blocked by stale pending `3ff77890…`: expected sequence 10, got 9`` until `mempool-batch` dropped the stale entry on each validator.
 
+## Base checkpoint source (2026-11-05)
+
+The committee's Base observer and the lane's receipt proof, merged in `08d6e03f6` ([the page](../../architecture/genesis-external-lanes.md#the-base-checkpoint-source), `crates/node/src/external_lane_checkpoint_source.rs`). Four node commands:
+
+- `external-lane-checkpoint-observe` writes the lane checkpoint of the Base block the member's node reports as `finalized`, bound to the lane's genesis policy and its active committee.
+- `external-lane-checkpoint-sign` re-observes the same block from the member's own Base RPC and signs one vote with its committee key, never two for one block.
+- `external-lane-checkpoint-assemble` writes the certificate of exactly the committee quorum (5 of 6) from distinct members' votes on that checkpoint.
+- `external-lane-lock-proof` rebuilds the Lock block's receipt trie to its receipts root and writes the `external_lane_release_v1` operation of the receipt's `Locked` event.
+
+**Tests.** `cargo test --locked -p postfiat-node --lib checkpoint_source` on the merge: 16 passed, 1 ignored (`crates/node/src/tests/external_lane_checkpoint_source_tests.rs`, against a mock Base JSON-RPC): `observe_reads_the_finalized_block_and_names_the_active_committee`, `observe_refuses_chain_finality_depth_code_and_lane_mismatches`, `sign_re_observes_refuses_non_members_and_never_signs_two_checkpoints_of_one_block`, `sign_refuses_a_corrupt_or_foreign_signing_state_as_a_typed_refusal`, `sign_refuses_a_key_file_whose_private_key_is_not_its_public_key`, `sign_refuses_a_key_file_without_the_members_record_as_a_key_mismatch`, `assemble_keeps_exactly_the_quorum_of_distinct_member_votes`, `observe_and_sign_follow_a_governed_committee_move`, `observe_sign_assemble_and_proof_refuse_a_lane_whose_committee_is_not_registered`, `lock_proof_refuses_another_block_contract_event_or_token`, `lock_proof_refuses_two_locked_logs_a_mismatched_recipient_hash_or_a_forged_certificate`, `lock_proof_refuses_an_invalid_submitter_or_recipient_as_a_typed_refusal`, `lock_proof_accepts_an_unrelated_same_shaped_transfer_beside_the_policy_token_transfer`, `lock_proof_decodes_nonce_amount_and_recipient_at_their_boundaries`, `the_node_selects_locked_logs_by_the_bridge_decoders_topic` and `checkpoint_source_releases_a_base_lock_end_to_end_at_the_five_of_six_quorum` (observe, five votes, certificate, proof, then a six-validator lane chain releases the Lock once and refuses it again). The ignored one is the live run below.
+
+**Live Base Sepolia run.** `live_base_sepolia_checkpoint_of_the_rehearsal_lock`, once, 2026-11-05 10:58:53–10:59:12Z, on the branch tip `4da5f4d61` (merged unchanged as the second parent of `08d6e03f6`), against `https://sepolia.base.org` through a local forwarder that passed only read methods. The lane policy named chain 84532, the rehearsal lock `0xE36e7Fc384564419187546c19719A5654266dE0B` and the token `0x18fE4ca51A0cE042688D5A54917319d03B527D92` with their runtime code hashes, confirmation depth 64, and a local six-member committee (epoch 1, quorum 5).
+
+| Fact | Value |
+|---|---|
+| Finalized block observed | 54,766,144 |
+| Block hash | `0x2611dc7efc546bdf2b3f4468e504ebcbc64fdfe1348534cb4bea56a098a08cc1` |
+| Head at observation | 54,772,391 (6,247 blocks past the block) |
+| Code hashes at the block | both equal to the policy's pins |
+| Votes | five, by `validator-0` to `validator-4`, each after its own re-observation of the block |
+| Certificate | 5 votes, the quorum of 6, verified by `verify_ethereum_checkpoint_certificate` before it was written |
+| Receipt trie | the block's 3 receipts, the first an OP Stack deposit receipt, rebuilt to the block's `receiptsRoot` for its first and last transaction |
+
+Requests forwarded: `eth_chainId` 8, `eth_blockNumber` 6, `eth_getBlockByNumber` 12, `eth_getCode` 12, `eth_getTransactionReceipt` 2, `eth_getBlockByHash` 2, `eth_getBlockReceipts` 2; no other method, and no transaction of any kind.
+
+**Limit.** No Lock exists on the rehearsal lock yet, so `external-lane-lock-proof` has run only against the mock RPC. A real Lock needs Base Sepolia test ETH on the deployer, and it is the next rehearsal.
+
 ## Open before genesis
 
 - Corrected 2026-11-04: no proof program is needed. The lane's proof is the committee-signed Base checkpoint plus the receipt proof (design option (b)), so it has no SP1 guest, vkey pin or proof inventory entry; an SP1 guest for Base is the design's option (a) upgrade.
-- The real Base source attestation path: checkpoint observation and votes for a lane, a lane receipt proof built from a Base block, and that source's own qualification. This run used committee-signed fixtures.
+- [x] Done 2026-11-05 ([the Base checkpoint source](#base-checkpoint-source-2026-11-05)): the real Base source attestation path, checkpoint observation and votes for a lane and a lane receipt proof built from a Base block, with its own qualification. A real Lock's proof waits for the next rehearsal.
 - A minimum lock amount in `PFTLockV1` at or above the PFTL account reserve (10 atoms).
 - Pruning the release records behind the finalized checkpoint, keeping the root.
 - [x] Done 2026-11-04, for both kinds ([the rehearsal](#six-validator-rehearsal-of-the-amendment-rounds-2026-11-04)): a six-validator operational rehearsal of the release cap amendment round with the real CLI (`ratify-external-lane-release-cap`, signing, assembly and the governance batch) with one validator absent, since the command accepts the registry threshold of five, before P2.5 closes.
