@@ -3625,6 +3625,50 @@ impl PftlUniswapReturnImportOperation {
     }
 }
 
+/// `external_lane_export_v1`: exports native PFT from the sender into a
+/// genesis external lane, payable on Base by the lock contract's `release`
+/// (`docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md`).
+/// Recognised and refused with `external_lane_export_not_supported` until
+/// the export accounting and the Base path are built.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalLaneExportOperationV1 {
+    pub sender: String,
+    pub lane_id: String,
+    pub amount_atoms: u64,
+    /// The Base address paid: `0x` and 40 lower-case hex digits, not zero.
+    pub base_recipient: String,
+}
+
+impl ExternalLaneExportOperationV1 {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_postfiat_address("external_lane_export_v1.sender", &self.sender)?;
+        validate_external_lane_id(&self.lane_id)?;
+        if self.amount_atoms == 0 {
+            return Err("external_lane_export_v1.amount_atoms must be positive".to_string());
+        }
+        validate_lane_hex(
+            "external_lane_export_v1.base_recipient",
+            &self.base_recipient,
+            EXTERNAL_LANE_EVM_ADDRESS_HEX_LEN,
+        )?;
+        if self.base_recipient[2..].bytes().all(|byte| byte == b'0') {
+            return Err(
+                "external_lane_export_v1.base_recipient must not be the zero address".to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "sender={}\nlane_id={}\namount_atoms={}\nbase_recipient={}\n",
+            self.sender, self.lane_id, self.amount_atoms, self.base_recipient
+        )
+        .into_bytes()
+    }
+}
+
 /// `external_lane_release_v1`: releases native PFT from a genesis external
 /// lane against a Base `Locked` event proven by a bridge-committee checkpoint
 /// (`docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md` section 5).
@@ -3817,6 +3861,8 @@ pub enum AssetTransactionOperation {
     PftlUniswapRouteBridgePolicyUpdate(PftlUniswapRouteBridgePolicyUpdateOperation),
     #[serde(rename = "external_lane_release_v1")]
     ExternalLaneReleaseV1(ExternalLaneReleaseOperationV1),
+    #[serde(rename = "external_lane_export_v1")]
+    ExternalLaneExportV1(ExternalLaneExportOperationV1),
 }
 
 impl<'de> Deserialize<'de> for AssetTransactionOperation {
@@ -3996,6 +4042,9 @@ impl<'de> Deserialize<'de> for AssetTransactionOperation {
             "external_lane_release_v1" => {
                 decode_operation!(ExternalLaneReleaseOperationV1, ExternalLaneReleaseV1)
             }
+            "external_lane_export_v1" => {
+                decode_operation!(ExternalLaneExportOperationV1, ExternalLaneExportV1)
+            }
             other => Err(serde::de::Error::custom(format!(
                 "unknown asset operation `{other}`"
             ))),
@@ -4081,6 +4130,7 @@ impl AssetTransactionOperation {
                 PFTL_UNISWAP_ROUTE_BRIDGE_POLICY_UPDATE_TRANSACTION_KIND
             }
             Self::ExternalLaneReleaseV1(_) => EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1,
+            Self::ExternalLaneExportV1(_) => EXTERNAL_LANE_EXPORT_TRANSACTION_KIND_V1,
         }
     }
 
@@ -4141,6 +4191,7 @@ impl AssetTransactionOperation {
             Self::PftlUniswapReturnImport(operation) => operation.validate(),
             Self::PftlUniswapRouteBridgePolicyUpdate(operation) => operation.validate(),
             Self::ExternalLaneReleaseV1(operation) => operation.validate(),
+            Self::ExternalLaneExportV1(operation) => operation.validate(),
         }
     }
 
@@ -4223,6 +4274,7 @@ impl AssetTransactionOperation {
             Self::PftlUniswapReturnImport(operation) => operation.operator == source,
             Self::PftlUniswapRouteBridgePolicyUpdate(operation) => operation.issuer == source,
             Self::ExternalLaneReleaseV1(operation) => operation.submitter == source,
+            Self::ExternalLaneExportV1(operation) => operation.sender == source,
         }
     }
 
@@ -4368,6 +4420,9 @@ impl AssetTransactionOperation {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
             Self::ExternalLaneReleaseV1(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::ExternalLaneExportV1(operation) => {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
         }

@@ -279,6 +279,13 @@ const EXTERNAL_LANE_RELEASE_HISTORY_ROOT_HEX_LEN: usize = 96;
 // Refusal codes of `external_lane_release_v1`. A refused release changes no
 // state and consumes no Lock nonce, so it can be retried.
 pub const EXTERNAL_LANE_NOT_CONFIGURED: &str = "external_lane_not_configured";
+/// `external_lane_export_v1` is recognised and refused until the export
+/// accounting and the Base release path are built
+/// (`docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md`).
+pub const EXTERNAL_LANE_EXPORT_NOT_SUPPORTED: &str = "external_lane_export_not_supported";
+/// An export whose Base recipient is the lane's own lock contract, which a
+/// release can never pay.
+pub const EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK: &str = "external_lane_export_recipient_is_lock";
 pub const EXTERNAL_LANE_NONCE_ALREADY_RELEASED: &str = "external_lane_nonce_already_released";
 pub const EXTERNAL_LANE_REMAINDER_EXCEEDED: &str = "external_lane_remainder_exceeded";
 pub const EXTERNAL_LANE_WINDOW_CAP_EXCEEDED: &str = "external_lane_window_cap_exceeded";

@@ -3159,4 +3159,9 @@ mod release_path {
         }
         let _ = fs::remove_dir_all(chain.data_dir);
     }
+
+    mod export_path {
+        use super::*;
+        include!("external_lane_export_tests.rs");
+    }
 }
