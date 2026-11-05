@@ -218,7 +218,7 @@ Tests (`crates/node/src/tests/external_lane_checkpoint_source_tests.rs`, against
 - **Observe:** every observe refusal.
 - **Sign:** a member that observes another block, a non-member, a key that is not the committee key, a key file whose private key is another key's, a key file without the member's record, a conflicting checkpoint, a corrupt or foreign signing state, a checkpoint of the committee before a governed move, and the active committee after it.
 - **Assemble:** duplicate, non-member and other-checkpoint votes, and too few votes.
-- **Lock proof:** another block, contract or event; a receipt with no `Locked` log or two; a recipient that does not match its indexed hash; the wrong token, and the token's transfer accepted beside another contract's same-shaped transfer; a forged certificate; and an invalid submitter or recipient.
+- **Lock proof:** another block, contract or event; a receipt with no `Locked` log or two; a recipient that does not match its indexed hash; the wrong token, and the token's transfer accepted beside another contract's same-shaped transfer; a forged certificate; an invalid submitter or recipient; and the decoded fields at their boundaries (nonce and amount at 0, 1 and `u64::MAX`, a 65-bit word, the recipient at 0, 41, 42, 43 and 256 bytes, and one token unit per atom, unscaled).
 - **Committee missing:** all four commands refuse when the lane's committee is not on the ledger.
 - **End to end:** on a six-member lane chain: observe, five votes, certificate, proof, then the chain releases the Lock once and refuses it again. Four votes, and a sixth vote on another block hash, are refused at assembly.
 

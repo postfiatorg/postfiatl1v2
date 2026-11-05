@@ -172,18 +172,23 @@ fn log(address: &str, topics: Vec<String>, data: Vec<u8>) -> Value {
 
 /// `PFTLockV1.Locked(nonce, holder, keccak(recipient), recipient, amount)`.
 fn locked_log(nonce: u64, recipient: &str, amount: u64) -> Value {
+    locked_log_words(word(nonce), word(amount), recipient.as_bytes())
+}
+
+/// [`locked_log`] with the raw 32-byte nonce topic and amount word.
+fn locked_log_words(nonce: [u8; 32], amount: [u8; 32], recipient: &[u8]) -> Value {
     let mut data = word(0x40).to_vec();
-    data.extend_from_slice(&word(amount));
+    data.extend_from_slice(&amount);
     data.extend_from_slice(&word(recipient.len() as u64));
-    data.extend_from_slice(recipient.as_bytes());
+    data.extend_from_slice(recipient);
     data.resize(data.len().div_ceil(32) * 32, 0);
     log(
         LOCK,
         vec![
             format!("0x{}", bytes_to_hex(&keccak(b"Locked(uint64,address,bytes32,bytes,uint64)"))),
-            format!("0x{}", bytes_to_hex(&word(nonce))),
+            format!("0x{}", bytes_to_hex(&nonce)),
             topic_address(&HOLDER),
-            format!("0x{}", bytes_to_hex(&keccak(recipient.as_bytes()))),
+            format!("0x{}", bytes_to_hex(&keccak(recipient))),
         ],
         data,
     )
@@ -976,6 +981,98 @@ fn sign_refuses_a_key_file_without_the_members_record_as_a_key_mismatch() {
     assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::SigningKeyMismatch);
     assert!(!vote_file.exists());
     assert!(!signing_state_path(&chain, &checkpoint, 0).exists());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// Adds block `number` to `state`: Base's deposit at index 0 and a Lock
+/// transaction carrying `logs` at index 1. Returns the Lock's hash.
+fn with_lock_block(state: &mut BaseState, number: u64, logs: Vec<Value>) -> String {
+    let hash = format!("0x{number:064x}");
+    let tx = |index: u64| format!("0x{number:060x}{index:04x}");
+    let receipts = vec![
+        receipt(0, &tx(0), &hash, number, "0x7e", Vec::new()),
+        receipt(1, &tx(1), &hash, number, "0x2", logs),
+    ];
+    let root = crate::ethereum_receipt_proof_builder::receipts_root_of(&receipts).expect("root");
+    state.blocks.insert(
+        number,
+        json!({
+            "number": format!("0x{number:x}"),
+            "hash": hash,
+            "receiptsRoot": format!("0x{}", bytes_to_hex(&root)),
+            "transactions": receipts.iter().map(|r| r["transactionHash"].clone()).collect::<Vec<_>>(),
+        }),
+    );
+    state.receipts.insert(number, receipts);
+    state.finalized = state.finalized.max(number);
+    tx(1)
+}
+
+/// The decoded fields at their boundaries: `Locked.nonce` and
+/// `Locked.amount` at 0, 1 and `u64::MAX`, a 65-bit word, the recipient at
+/// the PFTL address length and the lock contract's bounds, and one token
+/// unit per atom (the `Transfer` value is the amount, unscaled).
+#[test]
+fn lock_proof_decodes_nonce_amount_and_recipient_at_their_boundaries() {
+    use ExternalLaneCheckpointRefusal::{LockedEventInvalid, OperationInvalid, TokenMismatch};
+    let chain = source_chain("boundaries");
+    let valid = chain.recipient.clone();
+    assert_eq!(valid.len(), 42, "a PFTL address is `pf` and 40 hex digits");
+    let mut over_u64 = word(0);
+    over_u64[23] = 1; // 2^64: a 65-bit word
+    let transfer = |amount: u64| transfer_log(TOKEN, amount);
+    // (name, nonce topic, amount word, recipient, transfer, (nonce, amount) or refusal)
+    type Case<'a> = (&'a str, [u8; 32], [u8; 32], Vec<u8>, Value, Result<(u64, u64), ExternalLaneCheckpointRefusal>);
+    let cases: Vec<Case> = vec![
+        ("nonce-0", word(0), word(amount()), valid.clone().into_bytes(), transfer(amount()), Ok((0, amount()))),
+        ("nonce-1", word(1), word(amount()), valid.clone().into_bytes(), transfer(amount()), Ok((1, amount()))),
+        ("nonce-max", word(u64::MAX), word(amount()), valid.clone().into_bytes(), transfer(amount()), Ok((u64::MAX, amount()))),
+        ("nonce-65-bit", over_u64, word(amount()), valid.clone().into_bytes(), transfer(amount()), Err(LockedEventInvalid)),
+        ("amount-0", word(LOCK_NONCE), word(0), valid.clone().into_bytes(), transfer(0), Err(OperationInvalid)),
+        ("amount-1", word(LOCK_NONCE), word(1), valid.clone().into_bytes(), transfer(1), Ok((LOCK_NONCE, 1))),
+        ("amount-max", word(LOCK_NONCE), word(u64::MAX), valid.clone().into_bytes(), transfer(u64::MAX), Ok((LOCK_NONCE, u64::MAX))),
+        ("amount-65-bit", word(LOCK_NONCE), over_u64, valid.clone().into_bytes(), transfer(amount()), Err(LockedEventInvalid)),
+        // One token unit is one atom: a Transfer scaled to 18 decimals is not the Lock's.
+        ("amount-scaled", word(LOCK_NONCE), word(5), valid.clone().into_bytes(), transfer(5_000_000_000_000), Err(TokenMismatch)),
+        ("recipient-empty", word(LOCK_NONCE), word(amount()), Vec::new(), transfer(amount()), Err(OperationInvalid)),
+        ("recipient-41", word(LOCK_NONCE), word(amount()), valid.as_bytes()[..41].to_vec(), transfer(amount()), Err(OperationInvalid)),
+        ("recipient-43", word(LOCK_NONCE), word(amount()), format!("{valid}0").into_bytes(), transfer(amount()), Err(OperationInvalid)),
+        ("recipient-256", word(LOCK_NONCE), word(amount()), [valid.as_bytes(), &[b'0'; 214]].concat(), transfer(amount()), Err(OperationInvalid)),
+    ];
+    let mut state = base_state(&valid, amount(), 0xa0);
+    let transactions: Vec<String> = cases
+        .iter()
+        .enumerate()
+        .map(|(index, (_, nonce, amount, recipient, transfer, _))| {
+            let number = BLOCK + 2 + u64::try_from(index).expect("index");
+            with_lock_block(&mut state, number, vec![locked_log_words(*nonce, *amount, recipient), transfer.clone()])
+        })
+        .collect();
+    assert!(state.finalized + 64 <= HEAD, "every case block is confirmation_depth deep");
+    let rpc = MockBase::serve(state);
+    for (index, ((name, _, _, recipient, _, expected), transaction)) in cases.iter().zip(&transactions).enumerate() {
+        let number = BLOCK + 2 + u64::try_from(index).expect("index");
+        let checkpoint = observe(&chain, &rpc, Some(number), name).expect("observe");
+        let votes = (0..5).map(|member| sign(&chain, &checkpoint, &rpc, member, name).expect("vote")).collect();
+        let certificate = assemble(&chain, &checkpoint, votes, name).expect("assemble");
+        let result = lock_proof(&chain, &rpc, &certificate, transaction, None, name);
+        match expected {
+            Ok((nonce, amount)) => {
+                let operation = result.unwrap_or_else(|error| panic!("{name}: {error}"));
+                let AssetTransactionOperation::ExternalLaneReleaseV1(release) =
+                    serde_json::from_slice(&fs::read(&operation).expect("operation")).expect("operation json")
+                else {
+                    panic!("{name}: not an external lane release");
+                };
+                assert_eq!((release.lock_nonce, release.amount_atoms), (*nonce, *amount), "{name}");
+                assert_eq!(release.recipient.as_bytes(), recipient.as_slice(), "{name}");
+            }
+            Err(code) => {
+                assert_eq!(refusal(result.unwrap_err()), *code, "{name}");
+                assert!(!chain.data_dir.join(format!("{name}.operation.json")).exists(), "{name}");
+            }
+        }
+    }
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
