@@ -159,6 +159,9 @@ pub(super) fn ensure_validator_keys_for_validators(
 ) -> io::Result<ValidatorKeyFile> {
     validate_active_validator_ids(validators, "required validator keys")?;
     let path = store.data_dir().join(VALIDATOR_KEYS_FILE);
+    // A local certificate signs with every validator key in the data
+    // directory; with a validator signer socket no key file is read.
+    crate::validator_signer::refuse_key_file_in_socket_mode(&path)?;
     let registry_path = store.data_dir().join(VALIDATOR_REGISTRY_FILE);
     let registry_exists = registry_path.exists();
     let existing_registry = if registry_exists {

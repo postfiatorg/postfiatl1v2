@@ -2225,15 +2225,14 @@ fn create_block_vote_for_target_with_timings(
         Some(&target.evidence.parent_hash),
     )?;
     let stage_start = std::time::Instant::now();
-    let key_file = read_validator_key_file(key_file_path)?;
+    let signer = validator_signer_for(key_file_path)?;
     timings.key_read_ms = node_timing_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
-    validate_validator_key_file(&key_file)?;
+    let key_record = signer.validator_key(BLOCK_CERTIFICATE_SIGNATURE_CONTEXT, validator_id)?;
     timings.key_validation_ms = node_timing_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
-    let key_record = select_validator_key_record(&key_file, validator_id)?;
     if !target
         .validators
         .iter()
@@ -2296,18 +2295,14 @@ fn create_block_vote_for_target_with_timings(
     timings.message_build_ms = node_timing_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
-    let private_key = Zeroizing::new(hex_to_bytes(&key_record.private_key_hex).map_err(invalid_data)?);
-    let signature_seed = block_certificate_signature_seed(&message)?;
     timings.private_key_decode_ms = node_timing_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
-    let signature = ml_dsa_65_sign_with_context_seed(
-        &private_key,
-        &message,
+    let signature = signer.sign(
+        &key_record.node_id,
         BLOCK_CERTIFICATE_SIGNATURE_CONTEXT,
-        &signature_seed,
-    )
-    .map_err(invalid_data)?;
+        &message,
+    )?;
     timings.mldsa_signing_ms = node_timing_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
@@ -2643,9 +2638,9 @@ pub fn create_block_timeout_vote(
     let genesis = store.read_genesis()?;
     let governance = store.read_governance()?;
     let validators = active_validator_ids(&governance)?;
-    let key_file = read_validator_key_file(&options.key_file)?;
-    validate_validator_key_file(&key_file)?;
-    let key_record = select_validator_key_record(&key_file, options.validator_id.as_deref())?;
+    let signer = validator_signer_for(&options.key_file)?;
+    let key_record =
+        signer.validator_key(BLOCK_TIMEOUT_SIGNATURE_CONTEXT, options.validator_id.as_deref())?;
     if !validators
         .iter()
         .any(|validator| validator == &key_record.node_id)
@@ -2689,15 +2684,7 @@ pub fn create_block_timeout_vote(
         &key_record.node_id,
         &registry_root,
     )?;
-    let private_key = Zeroizing::new(hex_to_bytes(&key_record.private_key_hex).map_err(invalid_data)?);
-    let signature_seed = block_timeout_signature_seed(&message)?;
-    let signature = ml_dsa_65_sign_with_context_seed(
-        &private_key,
-        &message,
-        BLOCK_TIMEOUT_SIGNATURE_CONTEXT,
-        &signature_seed,
-    )
-    .map_err(invalid_data)?;
+    let signature = signer.sign(&key_record.node_id, BLOCK_TIMEOUT_SIGNATURE_CONTEXT, &message)?;
     let consensus_v2_vote = if consensus_v2_active_at(&genesis, options.block_height) {
         Some(create_consensus_v2_timeout_vote(
             &options.data_dir,
@@ -3967,9 +3954,8 @@ fn sign_block_proposal_file(
         proposal.block_height,
         Some(&proposal.parent_hash),
     )?;
-    let key_file = read_validator_key_file(key_file)?;
-    validate_validator_key_file(&key_file)?;
-    let key_record = select_validator_key_record(&key_file, validator_id)?;
+    let signer = validator_signer_for(key_file)?;
+    let key_record = signer.validator_key(BLOCK_PROPOSAL_SIGNATURE_CONTEXT, validator_id)?;
     if key_record.node_id != proposal.proposer {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -4019,15 +4005,7 @@ fn sign_block_proposal_file(
     reserve_block_proposal_vote_lock(store, &genesis, &target, &key_record.node_id)?;
 
     let message = block_proposal_signature_message(proposal)?;
-    let private_key = Zeroizing::new(hex_to_bytes(&key_record.private_key_hex).map_err(invalid_data)?);
-    let signature_seed = block_proposal_signature_seed(&message)?;
-    let signature = ml_dsa_65_sign_with_context_seed(
-        &private_key,
-        &message,
-        BLOCK_PROPOSAL_SIGNATURE_CONTEXT,
-        &signature_seed,
-    )
-    .map_err(invalid_data)?;
+    let signature = signer.sign(&key_record.node_id, BLOCK_PROPOSAL_SIGNATURE_CONTEXT, &message)?;
     proposal.signature = Some(BlockProposalSignature {
         signer: key_record.node_id.clone(),
         algorithm_id: key_record.algorithm_id.clone(),

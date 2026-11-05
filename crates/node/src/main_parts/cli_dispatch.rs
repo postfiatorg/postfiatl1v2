@@ -321,7 +321,7 @@ const DEFAULT_RPC_ORCHARD_BATCH_CREATE_CONCURRENT: u64 = 1;
 const DEFAULT_RUN_PEER_CERTIFIED_MAX_ROUNDS: usize = 1_000_000;
 const DIRECT_STATE_ENV: &str = "POSTFIAT_ALLOW_DIRECT_STATE";
 const TRANSPORT_AUTH_SCHEMA: &str = "postfiat-transport-auth-v1";
-const TRANSPORT_AUTH_CONTEXT: &[u8] = b"postfiat-l1-v2/transport-auth/v1";
+use postfiat_node::TRANSPORT_AUTH_CONTEXT;
 const MAX_RPC_SERVE_ACTIVE_CONNECTIONS: usize = 64;
 const TRANSPORT_BLOCK_VOTE_LISTEN_MAX_IN_FLIGHT: usize = 16;
 const TRANSPORT_VALIDATOR_MAX_IN_FLIGHT: usize = 16;
@@ -431,6 +431,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "rpc-serve"
         | "rpc-probe"
         | "validator-keys"
+        | "validator-signer-serve"
         | "validator-key-stage"
         | "validate-local-keys"
         | "run"

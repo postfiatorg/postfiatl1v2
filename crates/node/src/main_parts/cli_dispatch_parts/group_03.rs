@@ -335,8 +335,22 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             let finality_topology_file = flag_value(flags, "--finality-topology")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("remote-topology.json"));
+            // The signer socket replaces both key files; the signing sites
+            // then resolve the socket by the path they are given.
+            let finality_signer_socket =
+                flag_value(flags, "--finality-signer-socket").map(PathBuf::from);
+            if finality_signer_socket.is_some()
+                && (flag_present(flags, "--finality-key-file")
+                    || flag_present(flags, "--finality-proposal-key-file"))
+            {
+                return Err("validator_signer_flags_conflict: --finality-signer-socket replaces --finality-key-file and --finality-proposal-key-file".to_string());
+            }
+            if finality_signer_socket.is_some() {
+                postfiat_node::enter_validator_signer_socket_mode();
+            }
             let finality_key_file = flag_value(flags, "--finality-key-file")
                 .map(PathBuf::from)
+                .or_else(|| finality_signer_socket.clone())
                 .unwrap_or_else(|| data_dir.join(VALIDATOR_KEYS_FILE));
             let finality_proposal_key_file = flag_value(flags, "--finality-proposal-key-file")
                 .map(PathBuf::from)
@@ -449,6 +463,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                     finality_topology_file,
                     finality_key_file,
                     finality_proposal_key_file,
+                    finality_signer_socket,
                     finality_artifact_root,
                     finality_timeout_ms,
                     finality_send_retries,
@@ -465,6 +480,48 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 },
                 &mut std::io::stdout().lock(),
             )
+        }
+        "validator-signer-serve" => {
+            let key_file = flag_value(flags, "--key-file")
+                .map(PathBuf::from)
+                .ok_or_else(|| "validator-signer-serve requires --key-file".to_string())?;
+            let socket = flag_value(flags, "--socket")
+                .map(PathBuf::from)
+                .ok_or_else(|| "validator-signer-serve requires --socket".to_string())?;
+            let allowed_peer_uids = flags
+                .windows(2)
+                .filter(|window| window[0] == "--allow-peer-uid")
+                .map(|window| {
+                    window[1]
+                        .parse::<u32>()
+                        .map_err(|_| "--allow-peer-uid must be a u32".to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let deadline_ms = flag_value(flags, "--deadline-ms")
+                .map(str::parse::<u64>)
+                .transpose()
+                .map_err(|_| "--deadline-ms must be a u64".to_string())?
+                .unwrap_or(postfiat_node::VALIDATOR_SIGNER_DEFAULT_DEADLINE_MS);
+            postfiat_node::validator_signer_serve(
+                postfiat_node::ValidatorSignerServeOptions {
+                    key_file,
+                    proposal_key_file: flag_value(flags, "--proposal-key-file").map(PathBuf::from),
+                    socket: socket.clone(),
+                    allowed_peer_uids,
+                    socket_group: flag_value(flags, "--socket-group").map(str::to_string),
+                    deadline_ms,
+                    max_connections: None,
+                },
+                |description| {
+                    let ready = serde_json::json!({
+                        "schema": "postfiat.validator_signer.ready.v1",
+                        "socket": socket.display().to_string(),
+                        "describe": description,
+                    });
+                    println!("{ready}");
+                },
+            )
+            .map_err(|error| format!("validator-signer-serve failed: {error}"))
         }
         "validator-keys" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);

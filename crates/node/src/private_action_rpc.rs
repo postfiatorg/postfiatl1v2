@@ -150,7 +150,8 @@ fn run_rpc_serve_private_action(
 /// The server signs as its validator only when it admits for finality
 /// (`--allow-mempool-submit-finality` or `--allow-private-action-admission`),
 /// with `--finality-key-file` and, when it differs,
-/// `--finality-proposal-key-file`; otherwise it has no signer.
+/// `--finality-proposal-key-file`, or with `--finality-signer-socket`, asked
+/// to describe itself on every read; otherwise it has no signer.
 fn rpc_serve_readiness_service(
     context: &RpcServeConnectionContext,
 ) -> postfiat_node::PrivateReadinessService {
@@ -158,6 +159,38 @@ fn rpc_serve_readiness_service(
         return postfiat_node::PrivateReadinessService {
             key_files: Vec::new(),
             signer: postfiat_node::PrivateValidatorSigner::NoSigningRole,
+            signer_socket: None,
+        };
+    }
+    if let Some(socket) = &context.finality_signer_socket {
+        let described = postfiat_node::describe_validator_signer(
+            socket,
+            Duration::from_millis(postfiat_node::VALIDATOR_SIGNER_DEFAULT_DEADLINE_MS),
+        )
+        .ok();
+        let peer_uid = described.as_ref().map(|(_, peer_uid)| *peer_uid);
+        // The startup comparison again: both roles hold the registry's key.
+        // An unreadable registry leaves the comparison unknown, not false.
+        let key_check = described.as_ref().map(|(description, _)| {
+            postfiat_node::validator_signer_key_matches_registry(
+                description,
+                &context.data_dir,
+                &context.node_id,
+            )
+        });
+        let key_matches = key_check
+            .as_ref()
+            .and_then(|check| check.as_ref().ok().copied());
+        let registry_readable = key_check.as_ref().map(Result::is_ok);
+        return postfiat_node::PrivateReadinessService {
+            key_files: Vec::new(),
+            signer: postfiat_node::PrivateValidatorSigner::Socket,
+            signer_socket: Some(postfiat_node::PrivateReadinessSignerSocket {
+                path: socket.clone(),
+                peer_uid,
+                key_matches,
+                registry_readable,
+            }),
         };
     }
     let mut key_files = vec![context.finality_key_file.clone()];
@@ -169,6 +202,7 @@ fn rpc_serve_readiness_service(
     postfiat_node::PrivateReadinessService {
         key_files,
         signer: postfiat_node::PrivateValidatorSigner::PlaintextKeyFile,
+        signer_socket: None,
     }
 }
 
@@ -367,6 +401,7 @@ mod private_action_rpc_tests {
             finality_topology_file: root.join("topology.json"),
             finality_key_file: root.join(VALIDATOR_KEYS_FILE),
             finality_proposal_key_file: None,
+            finality_signer_socket: None,
             finality_artifact_root: root.join("finality-artifacts"),
             finality_timeout_ms: 2_000,
             finality_send_retries: 0,

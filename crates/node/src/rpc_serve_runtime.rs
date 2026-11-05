@@ -70,15 +70,41 @@ fn rpc_serve_drain(
         .as_ref()
         .map(|path| open_transport_event_log(path))
         .transpose()?;
+    // `--finality-signer-socket`: the signer must answer and hold the
+    // validator's registered key before the server accepts anything, and the
+    // key paths name only the socket, so no signing site falls back to a file.
+    let signer_registration = match &options.finality_signer_socket {
+        Some(socket) => {
+            if &options.finality_key_file != socket
+                || options
+                    .finality_proposal_key_file
+                    .as_ref()
+                    .is_some_and(|proposal| proposal != socket)
+            {
+                return Err("validator_signer_flags_conflict: --finality-signer-socket replaces --finality-key-file and --finality-proposal-key-file".to_string());
+            }
+            Some(
+                postfiat_node::register_validator_signer_socket(
+                    socket,
+                    &options.data_dir,
+                    &local_status.node_id,
+                    Duration::from_millis(postfiat_node::VALIDATOR_SIGNER_DEFAULT_DEADLINE_MS),
+                )
+                .map_err(|error| format!("rpc serve validator signer refused: {error}"))?,
+            )
+        }
+        None => None,
+    };
+    let finality_signer_available =
+        signer_registration.is_some() || options.finality_key_file.is_file();
     let finality_topology_available = !options.allow_mempool_submit_finality
         || options.finality_topology_file.is_file();
-    let finality_key_available = !options.allow_mempool_submit_finality
-        || options.finality_key_file.is_file();
+    let finality_key_available = !options.allow_mempool_submit_finality || finality_signer_available;
     if !finality_topology_available || !finality_key_available {
         return Err("rpc serve finality configuration files are unavailable".to_string());
     }
     if options.allow_private_action_admission
-        && (!options.finality_topology_file.is_file() || !options.finality_key_file.is_file())
+        && (!options.finality_topology_file.is_file() || !finality_signer_available)
     {
         return Err(
             "--allow-private-action-admission needs the finality topology and validator key files"
@@ -148,6 +174,7 @@ fn rpc_serve_drain(
         finality_topology_file: options.finality_topology_file.clone(),
         finality_key_file: options.finality_key_file.clone(),
         finality_proposal_key_file: options.finality_proposal_key_file.clone(),
+        finality_signer_socket: options.finality_signer_socket.clone(),
         finality_artifact_root: options.finality_artifact_root.clone(),
         finality_timeout_ms: options.finality_timeout_ms,
         finality_send_retries: options.finality_send_retries,

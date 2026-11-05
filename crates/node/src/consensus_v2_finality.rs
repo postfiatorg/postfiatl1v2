@@ -1,9 +1,7 @@
 use std::io;
 use std::path::Path;
 
-use postfiat_crypto_provider::{
-    bytes_to_hex, hex_to_bytes, ml_dsa_65_sign_with_context, ML_DSA_65_ALGORITHM,
-};
+use postfiat_crypto_provider::{bytes_to_hex, ML_DSA_65_ALGORITHM};
 use postfiat_ordering_fast::{
     certify_consensus_v2_votes, consensus_v2_block_ref,
     consensus_v2_block_ref_with_bridge_exit_root, consensus_v2_block_ref_with_commitment_roots,
@@ -19,15 +17,13 @@ use postfiat_types::{
     ConsensusV2Vote, Genesis, CONSENSUS_V2_COMMIT_SCHEMA, CONSENSUS_V2_PROPOSAL_SCHEMA,
     CONSENSUS_V2_TIMEOUT_VOTE_SCHEMA, CONSENSUS_V2_VOTE_SCHEMA,
 };
-use zeroize::Zeroizing;
 
 use crate::{
     live_consensus_v2_context, persist_consensus_v2_current_timeout_authorization_with,
     persist_consensus_v2_precommit_authorization_with,
     persist_consensus_v2_prepare_authorization_with, persist_consensus_v2_qc,
-    read_consensus_v2_qc_graph_for_view, read_validator_key_file, select_validator_key_record,
-    validate_validator_key_file, write_block_certificate_file, BlockCertificateFile,
-    BlockProposalFile,
+    read_consensus_v2_qc_graph_for_view, validator_signer_for, write_block_certificate_file,
+    BlockCertificateFile, BlockProposalFile,
 };
 
 #[cfg(test)]
@@ -87,9 +83,11 @@ pub fn create_consensus_v2_proposal_for_block(
         }
     }
     .map_err(ordering_error)?;
-    let keys = read_validator_key_file(key_file)?;
-    validate_validator_key_file(&keys)?;
-    let key = select_validator_key_record(&keys, Some(&block_proposal.proposer))?;
+    let signer = validator_signer_for(key_file)?;
+    let key = signer.validator_key(
+        CONSENSUS_V2_PROPOSAL_CONTEXT,
+        Some(&block_proposal.proposer),
+    )?;
     let mut proposal = ConsensusV2Proposal {
         schema: CONSENSUS_V2_PROPOSAL_SCHEMA.to_string(),
         domain: domain.clone(),
@@ -104,11 +102,8 @@ pub fn create_consensus_v2_proposal_for_block(
         signature: signature_shell(&key.node_id, &key.public_key_hex),
     };
     let message = consensus_v2_proposal_signing_bytes(&proposal).map_err(ordering_error)?;
-    proposal.signature.signature_hex = sign_message(
-        &key.private_key_hex,
-        &message,
-        CONSENSUS_V2_PROPOSAL_CONTEXT,
-    )?;
+    proposal.signature.signature_hex =
+        bytes_to_hex(&signer.sign(&key.node_id, CONSENSUS_V2_PROPOSAL_CONTEXT, &message)?);
     verify_consensus_v2_proposal(&domain, &validators, &proposal, timeout_certificate, &graph)
         .map_err(ordering_error)?;
     verify_consensus_v2_proposal_matches_block(block_proposal, &proposal)?;
@@ -190,9 +185,9 @@ pub fn create_consensus_v2_timeout_vote(
         data_dir,
         round,
         |authorized_domain, authorized_validators, graph, high_qc, _| {
-            let keys = read_validator_key_file(key_file)?;
-            validate_validator_key_file(&keys)?;
-            let key = select_validator_key_record(&keys, Some(validator_id))?;
+            let signer = validator_signer_for(key_file)?;
+            let key =
+                signer.validator_key(CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT, Some(validator_id))?;
             let mut vote = ConsensusV2TimeoutVote {
                 schema: CONSENSUS_V2_TIMEOUT_VOTE_SCHEMA.to_string(),
                 domain: authorized_domain.clone(),
@@ -203,11 +198,11 @@ pub fn create_consensus_v2_timeout_vote(
                 signature: signature_shell(validator_id, &key.public_key_hex),
             };
             let message = consensus_v2_timeout_vote_signing_bytes(&vote).map_err(ordering_error)?;
-            vote.signature.signature_hex = sign_message(
-                &key.private_key_hex,
-                &message,
+            vote.signature.signature_hex = bytes_to_hex(&signer.sign(
+                validator_id,
                 CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT,
-            )?;
+                &message,
+            )?);
             verify_consensus_v2_timeout_vote(
                 authorized_domain,
                 authorized_validators,
@@ -350,9 +345,8 @@ fn sign_consensus_v2_vote(
     phase: ConsensusV2Phase,
     block: Option<postfiat_types::ConsensusV2BlockRef>,
 ) -> io::Result<ConsensusV2Vote> {
-    let keys = read_validator_key_file(key_file)?;
-    validate_validator_key_file(&keys)?;
-    let key = select_validator_key_record(&keys, Some(validator_id))?;
+    let signer = validator_signer_for(key_file)?;
+    let key = signer.validator_key(CONSENSUS_V2_VOTE_CONTEXT, Some(validator_id))?;
     let mut vote = ConsensusV2Vote {
         schema: CONSENSUS_V2_VOTE_SCHEMA.to_string(),
         domain,
@@ -364,7 +358,7 @@ fn sign_consensus_v2_vote(
     };
     let message = consensus_v2_vote_signing_bytes(&vote).map_err(ordering_error)?;
     vote.signature.signature_hex =
-        sign_message(&key.private_key_hex, &message, CONSENSUS_V2_VOTE_CONTEXT)?;
+        bytes_to_hex(&signer.sign(&key.node_id, CONSENSUS_V2_VOTE_CONTEXT, &message)?);
     verify_consensus_v2_vote(&vote.domain, validators, &vote).map_err(ordering_error)?;
     Ok(vote)
 }
@@ -408,13 +402,6 @@ fn signature_shell(signer: &str, public_key_hex: &str) -> ConsensusV2Signature {
         public_key_hex: public_key_hex.to_string(),
         signature_hex: "00".to_string(),
     }
-}
-
-fn sign_message(private_key_hex: &str, message: &[u8], context: &[u8]) -> io::Result<String> {
-    let private_key = Zeroizing::new(hex_to_bytes(private_key_hex).map_err(invalid_data)?);
-    let signature =
-        ml_dsa_65_sign_with_context(&private_key, message, context).map_err(invalid_data)?;
-    Ok(bytes_to_hex(&signature))
 }
 
 fn ordering_error(error: impl std::fmt::Display) -> io::Error {

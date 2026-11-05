@@ -20,11 +20,15 @@ pub const PRIVATE_READINESS_SCHEMA: &str = "postfiat.private_readiness.v1";
 /// parameter, and it never makes `ready` true.
 pub const PRIVATE_ACTION_ADMISSION_SWITCH_KEYS: [&str; 1] = ["--allow-private-action-admission"];
 /// The custody refusals, in report order. The W-1 manifest lists the same.
-pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 7] = [
+pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 11] = [
     "readiness_not_published_by_running_service",
     "store_not_transactional",
     "validator_signer_none",
     "validator_signer_unsafe_file",
+    "validator_signer_same_user",
+    "validator_signer_unreachable",
+    "validator_signer_key_mismatch",
+    "validator_registry_unreadable",
     "validator_key_file_missing",
     "validator_key_file_unreadable",
     "validator_key_file_not_owner_only",
@@ -59,18 +63,37 @@ pub struct PrivateReadinessService {
     /// different `--finality-proposal-key-file`); unread with no signer.
     pub key_files: Vec<PathBuf>,
     pub signer: PrivateValidatorSigner,
+    /// With `PrivateValidatorSigner::Socket`: the socket and the uid the
+    /// kernel reported for the signer process when it answered `describe`
+    /// for this read (`None` when it did not answer).
+    pub signer_socket: Option<PrivateReadinessSignerSocket>,
 }
 
-/// The validator signer of the serving process. A plaintext key file is the
-/// only signer built today (`--finality-key-file`, the same exportable file
-/// that the devnet file-signer flag acknowledges), so a release build never
-/// reports custody satisfied. `NoSigningRole` is a server that admits
-/// nothing for finality and so signs with no key. The hardened signer is
-/// test-only until a remote signer exists.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrivateReadinessSignerSocket {
+    pub path: PathBuf,
+    pub peer_uid: Option<u32>,
+    /// Whether the keys the signer described for this read, for both roles,
+    /// are the keys the validator registry records; `None` when it did not
+    /// answer or the registry could not be read.
+    pub key_matches: Option<bool>,
+    /// Whether the validator registry could be read for that comparison;
+    /// `None` when the signer did not answer.
+    pub registry_readable: Option<bool>,
+}
+
+/// The validator signer of the serving process. `PlaintextKeyFile` is
+/// `--finality-key-file`, the same exportable file that
+/// the devnet file-signer flag acknowledges, and never satisfies custody.
+/// `Socket` is `--finality-signer-socket`: a `validator-signer-serve` process
+/// holds the key, and custody needs it to run as another user.
+/// `NoSigningRole` is a server that admits nothing for finality and so signs
+/// with no key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrivateValidatorSigner {
     NoSigningRole,
     PlaintextKeyFile,
+    Socket,
     #[cfg(test)]
     TestHardened,
 }
@@ -80,6 +103,7 @@ impl PrivateValidatorSigner {
         match self {
             Self::NoSigningRole => "none",
             Self::PlaintextKeyFile => "plaintext_key_file",
+            Self::Socket => "socket",
             #[cfg(test)]
             Self::TestHardened => "hardened",
         }
@@ -99,13 +123,29 @@ pub struct PrivateReadinessCustody {
     /// (`NodeStore::transactional_storage_active`): the mode, a database and
     /// its activation height reached.
     pub transactional_active: bool,
-    /// `plaintext_key_file`, or `none` for a local read or a server with no
-    /// signing role.
+    /// `plaintext_key_file`, `socket`, or `none` for a local read or a
+    /// server with no signing role.
     pub validator_signer: String,
     /// The state of each key file the signer uses, in order: `owner_only`
     /// (a regular file owned by the serving user with no group or other
-    /// access), `not_owner_only`, `missing` or `unreadable`.
+    /// access), `not_owner_only`, `missing` or `unreadable`. Empty for the
+    /// socket signer, which reads no key file in the serving process.
     pub key_files: Vec<String>,
+    /// The socket signer's `--finality-signer-socket` path.
+    pub signer_socket: Option<String>,
+    /// The uid the kernel reported for the socket signer process during this
+    /// read; `null` when it did not answer.
+    pub signer_uid: Option<u32>,
+    /// The serving process's effective uid.
+    pub serving_uid: u32,
+    /// Whether the socket signer holds, for both roles, the key the
+    /// validator registry records; `null` when it did not answer, the
+    /// registry could not be read, or there is no socket signer.
+    pub signer_key_matches: Option<bool>,
+    /// Whether the validator registry could be read to compare the socket
+    /// signer's keys; `null` when the signer did not answer or there is no
+    /// socket signer.
+    pub validator_registry_readable: Option<bool>,
 }
 
 /// The identity a verifier proves it was built with.
@@ -414,6 +454,7 @@ fn readiness_custody(
             .collect(),
         _ => Vec::new(),
     };
+    let signer_socket = service.and_then(|service| service.signer_socket.as_ref());
     Ok(PrivateReadinessCustody {
         published_by: if service.is_some() {
             "rpc_serve"
@@ -430,6 +471,11 @@ fn readiness_custody(
             .as_str()
             .to_string(),
         key_files,
+        signer_socket: signer_socket.map(|socket| socket.path.display().to_string()),
+        signer_uid: signer_socket.and_then(|socket| socket.peer_uid),
+        serving_uid: euid,
+        signer_key_matches: signer_socket.and_then(|socket| socket.key_matches),
+        validator_registry_readable: signer_socket.and_then(|socket| socket.registry_readable),
     })
 }
 
@@ -457,13 +503,22 @@ pub(super) fn custody_reasons(custody: &PrivateReadinessCustody) -> Vec<String> 
     let served = custody.published_by == "rpc_serve";
     let no_signer = custody.validator_signer == PrivateValidatorSigner::NoSigningRole.as_str();
     let signing = served && !no_signer;
-    let any_key_file = |state: &str| signing && custody.key_files.iter().any(|file| file == state);
+    // The socket signer reads no key file in the serving process; its
+    // custody is the signer process running as another user.
+    let socket = signing && custody.validator_signer == PrivateValidatorSigner::Socket.as_str();
+    let file_signer = signing && !socket;
+    let any_key_file =
+        |state: &str| file_signer && custody.key_files.iter().any(|file| file == state);
     let unmet = [
         !served,
         !custody.transactional_active,
         served && no_signer,
         signing && custody.validator_signer == PrivateValidatorSigner::PlaintextKeyFile.as_str(),
-        any_key_file("missing") || (signing && custody.key_files.is_empty()),
+        socket && custody.signer_uid == Some(custody.serving_uid),
+        socket && custody.signer_uid.is_none(),
+        socket && custody.signer_key_matches == Some(false),
+        socket && custody.validator_registry_readable == Some(false),
+        any_key_file("missing") || (file_signer && custody.key_files.is_empty()),
         any_key_file("unreadable"),
         any_key_file("not_owner_only"),
     ];

@@ -79,6 +79,7 @@
         PrivateReadinessService {
             key_files: vec![owner_only_key_file(data_dir, "hardened-test-key.json")],
             signer: PrivateValidatorSigner::TestHardened,
+            signer_socket: None,
         }
     }
 
@@ -403,6 +404,7 @@
             Some(PrivateReadinessService {
                 key_files,
                 signer: PrivateValidatorSigner::TestHardened,
+                signer_socket: None,
             })
         };
 
@@ -428,6 +430,7 @@
         let (unsigned, reasons) = read(Some(PrivateReadinessService {
             key_files: vec![data_dir.join("no-such-key.json")],
             signer: PrivateValidatorSigner::NoSigningRole,
+            signer_socket: None,
         }));
         assert_eq!(unsigned.custody.validator_signer, "none");
         assert!(unsigned.custody.key_files.is_empty());
@@ -438,6 +441,7 @@
         let (file_signer, reasons) = read(Some(PrivateReadinessService {
             key_files: vec![key_file.clone()],
             signer: PrivateValidatorSigner::PlaintextKeyFile,
+            signer_socket: None,
         }));
         assert_eq!(file_signer.custody.validator_signer, "plaintext_key_file");
         assert_eq!(reasons, ["validator_signer_unsafe_file"]);
@@ -505,6 +509,11 @@
                 transactional_active: active,
                 validator_signer: "hardened".to_string(),
                 key_files: vec!["owner_only".to_string()],
+                signer_socket: None,
+                signer_uid: None,
+                serving_uid: 1000,
+                signer_key_matches: None,
+                validator_registry_readable: None,
             };
             let reasons = super::private_readiness_read::custody_reasons(&custody);
             assert_eq!(
@@ -513,6 +522,58 @@
                 "{backend:?} active {active}: {reasons:?}"
             );
         }
+    }
+
+    #[test]
+    fn private_readiness_socket_signer_needs_another_user_and_no_key_file() {
+        let custody = |signer_uid: Option<u32>,
+                       signer_key_matches: Option<bool>,
+                       validator_registry_readable: Option<bool>| PrivateReadinessCustody {
+            published_by: "rpc_serve".to_string(),
+            store_backend: "transactional".to_string(),
+            transactional_active: true,
+            validator_signer: "socket".to_string(),
+            key_files: Vec::new(),
+            signer_socket: Some("/run/postfiat-signer/validator-0.sock".to_string()),
+            signer_uid,
+            serving_uid: 1000,
+            signer_key_matches,
+            validator_registry_readable,
+        };
+        let reasons = |uid, keys, registry| {
+            super::private_readiness_read::custody_reasons(&custody(uid, keys, registry))
+        };
+        // A signer under another user, with no key file in the serving
+        // process, satisfies custody: none of the file reasons apply.
+        assert_eq!(reasons(Some(1001), Some(true), Some(true)), Vec::<String>::new());
+        assert_eq!(reasons(Some(1000), Some(true), Some(true)), ["validator_signer_same_user"]);
+        assert_eq!(reasons(None, None, None), ["validator_signer_unreachable"]);
+        // A signer that answers with keys other than the registry's.
+        assert_eq!(reasons(Some(1001), Some(false), Some(true)), ["validator_signer_key_mismatch"]);
+    }
+
+    #[test]
+    fn private_readiness_reports_an_unreadable_registry_apart_from_a_key_mismatch() {
+        let custody = PrivateReadinessCustody {
+            published_by: "rpc_serve".to_string(),
+            store_backend: "transactional".to_string(),
+            transactional_active: true,
+            validator_signer: "socket".to_string(),
+            key_files: Vec::new(),
+            signer_socket: Some("/run/postfiat-signer/validator-0.sock".to_string()),
+            signer_uid: Some(1001),
+            serving_uid: 1000,
+            // The signer answered, but the registry could not be read, so
+            // the comparison is unknown rather than false.
+            signer_key_matches: None,
+            validator_registry_readable: Some(false),
+        };
+        assert_eq!(
+            super::private_readiness_read::custody_reasons(&custody),
+            ["validator_registry_unreadable"]
+        );
+        assert!(super::private_readiness_read::PRIVATE_READINESS_CUSTODY_REASONS
+            .contains(&"validator_registry_unreadable"));
     }
 
     #[test]
@@ -563,6 +624,7 @@
                 service: Some(PrivateReadinessService {
                     key_files: vec![not_a_directory.join("validator_keys.json")],
                     signer: PrivateValidatorSigner::TestHardened,
+                    signer_socket: None,
                 }),
             },
             &ReadinessTestVerifiers::pinned(),

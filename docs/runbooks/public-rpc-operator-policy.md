@@ -54,14 +54,103 @@ is a reason that keeps `ready` false:
 | --- | --- | --- |
 | `published_by` | `rpc_serve` from the running server; `local_read` from `postfiat-node rpc`, whose `--data-dir` may be a copy | `readiness_not_published_by_running_service` |
 | `store_backend`, `transactional_active` | the backend-mode record of the server's own `--data-dir` (`transactional` when absent) and whether its transactional store is active, as the node decides it | `store_not_transactional` (a JSONL store, a plain `init` store or a transactional store before its activation height) |
-| `validator_signer` | `none` with neither `--allow-mempool-submit-finality` nor `--allow-private-action-admission`; otherwise the server's key-file signer: `plaintext_key_file` is the only signer built | `validator_signer_none`, `validator_signer_unsafe_file` |
-| `key_files` | per key file the signer uses (`--finality-key-file`, and `--finality-proposal-key-file` when it differs): `owner_only` when owned by the serving user with no group or other access | `validator_key_file_not_owner_only`, `validator_key_file_missing`, `validator_key_file_unreadable` |
+| `validator_signer` | `none` with neither `--allow-mempool-submit-finality` nor `--allow-private-action-admission`; otherwise `plaintext_key_file` (`--finality-key-file`) or `socket` (`--finality-signer-socket`, a [validator signer process](#validator-signer-process)), with `signer_socket` and `signer_uid`, the uid the kernel reports for the signer when it answers during the read, beside the server's own `serving_uid`, `signer_key_matches`, whether the keys the signer describes for both roles are the ones the validator registry records (`null` when the registry cannot be read), and `validator_registry_readable`, whether the registry could be read for that comparison | `validator_signer_none`, `validator_signer_unsafe_file`; for `socket`, `validator_signer_same_user` when `signer_uid` equals `serving_uid`, `validator_signer_unreachable` when the signer does not answer, `validator_signer_key_mismatch` when `signer_key_matches` is false, and `validator_registry_unreadable` when `validator_registry_readable` is false |
+| `key_files` | per key file the key-file signer uses (none for `socket`) (`--finality-key-file`, and `--finality-proposal-key-file` when it differs): `owner_only` when owned by the serving user with no group or other access | `validator_key_file_not_owner_only`, `validator_key_file_missing`, `validator_key_file_unreadable` |
 
-No release build reports `ready` true until a hardened validator signer
-exists. Two cases are not detected by the node and are deployment checks:
+Only the socket signer under its own user can satisfy the signer facts;
+`plaintext_key_file` never does. Two cases are not detected by the node and are deployment checks:
 an owner-only key file read by a gateway running as the same user (run
 separate users), and an rpc-serve over a copied data directory (serve from
 the validator's live store).
+
+### Validator signer process
+
+`postfiat-node validator-signer-serve` holds the validator key so rpc-serve
+does not. It loads `--key-file` (and `--proposal-key-file`, default the
+same), listens on `--socket` with mode `0660` (with `--socket-group <name or gid>`,
+the socket's group is set to that group; without it the group is the signer's
+primary group), and answers only peers whose kernel-reported uid is in
+`--allow-peer-uid` (repeatable); any other peer is refused before its
+request is read. On Linux a connect to a Unix socket needs write permission
+on the socket file, so the serving user reaches it through the group; the uid
+allow-list is the real gate. Each request is one length-prefixed JSON
+frame (at most 1 MiB: the largest message signed is a proposal, about 100 KB
+at the batch cap and at most 6.2 KB on devnet-2 so far, sent as hex) with a deadline
+(`--deadline-ms`, default 5000). It signs under the contexts rpc-serve
+signs with as the validator: block certificate, block timeout and
+consensus-v2 votes and the transport envelopes that carry them with the vote
+key, and block and consensus-v2 proposals with the proposal key; any other
+context is refused. `describe` returns the public keys and the signer's uid;
+no answer contains key material.
+
+What it protects and what it does not: the key cannot be exported, and the
+serving process never reads or holds it. The signer checks only the context,
+not the message, and keeps no record of what it signed, so a process with an
+allowed uid can still obtain any signature under those contexts while the
+signer runs, including two different votes for one slot. A compromised
+rpc-serve can therefore still equivocate until it is stopped. A durable
+double-sign guard inside the signer is the next step (W-1 milestone S7.1).
+
+rpc-serve takes `--finality-signer-socket <path>` instead of
+`--finality-key-file` and `--finality-proposal-key-file`; passing both is
+refused. At startup the signer must answer and hold, for both roles, the key
+the validator registry records for this node, or rpc-serve does not start
+(`validator_signer_key_mismatch`, `validator_signer_unreachable`). A signer
+that later stops answering or times out fails that request
+(`validator_signer_unreachable`, `validator_signer_timeout`); nothing falls
+back to a key file, and rpc-serve does not read `<data-dir>/validator_keys.json`.
+
+Deployment shape: two units and two users. The signer unit runs as its own
+user (for example `postfiat-signer`) and owns the key file (`0600`) and a
+socket directory such as `/run/postfiat-signer` (`0750`, group
+`postfiat-signer-clients`, which the serving user is a member of). It passes
+`--socket-group postfiat-signer-clients`, so the socket is `0660` in that
+group, and `--allow-peer-uid` with the rpc-serve user's uid. The rpc-serve unit runs as `postfiat`, cannot read
+the key file, and passes `--finality-signer-socket
+/run/postfiat-signer/<validator>.sock`. Start the signer first. Readiness
+reports `validator_signer_same_user` when both units run as one user.
+
+The generated release rpc unit (`batch_snapshot.rs`, the `rpc.service` it
+writes) still runs as `User=postfiat` and passes `--finality-key-file
+{data_dir}/validator_keys.json` and `--finality-proposal-key-file`. A
+two-user deployment therefore needs a signer unit and an edited rpc unit: no
+key-file flags, `--finality-signer-socket <socket>`, and the socket
+directory reachable from the rpc unit (listed in `ReadWritePaths` or
+otherwise not hidden by its sandboxing). The key file moves out of the data
+directory to the signer's user.
+
+At start the signer probes an existing file at `--socket`. If something
+still listens on it, the signer refuses to start
+(`validator_signer_socket_in_use`). A stale socket file is replaced, and
+anything that is not a socket is never replaced
+(`validator_signer_socket_path_not_a_socket`). An accept error does not stop
+the signer: it logs the first error and then at most one line per second,
+and retries after 50 ms.
+
+In socket mode rpc-serve, and every child process it starts, refuses to
+read any key file (`validator_signer_file_refused_in_socket_mode`). The
+signer is looked up by the canonical path of the socket and the data
+directory.
+
+Typed codes:
+
+| Code | Meaning |
+|---|---|
+| `validator_signer_unreachable` | The signer does not accept the connection, or writing the request fails. |
+| `validator_signer_timeout` | The request passed its deadline (`--deadline-ms` on the signer, 5 s on rpc-serve). |
+| `validator_signer_peer_refused` | The peer's uid is not in `--allow-peer-uid`; the request was not read. |
+| `validator_signer_busy` | The signer already serves 32 connections. |
+| `validator_signer_request_too_large` | The request frame exceeds 1 MiB. |
+| `validator_signer_protocol` | A malformed frame, schema, method or field. |
+| `validator_signer_context_refused` | The signer does not sign under that context. |
+| `validator_signer_key_missing` | The signer holds no key for that validator. |
+| `validator_signer_sign_failed` | Signing failed inside the signer. |
+| `validator_signer_key_mismatch` | The signer's key is not the registry's: at startup, on a signature, or in readiness. |
+| `validator_signer_bad_signature` | The answered signature does not verify under the described key. |
+| `validator_signer_flags_conflict` | `--finality-signer-socket` was given with a key-file flag. |
+| `validator_signer_file_refused_in_socket_mode` | A key file read was refused in socket mode. |
+| `validator_signer_socket_in_use` | A live signer already listens on `--socket`. |
+| `validator_signer_socket_path_not_a_socket` | `--socket` names a file that is not a socket; it is left as it is. |
 
 ### Resolving a stuck private action record
 

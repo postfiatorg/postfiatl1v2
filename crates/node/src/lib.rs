@@ -296,6 +296,8 @@ mod private_action_admission;
 pub use private_action_admission::*;
 mod private_readiness_read;
 pub use private_readiness_read::*;
+mod validator_signer;
+pub use validator_signer::*;
 mod atomic_swap_rpc;
 pub use atomic_swap_rpc::*;
 #[allow(unused_imports)]

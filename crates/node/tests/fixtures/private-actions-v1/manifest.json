@@ -62,11 +62,15 @@
       "store_not_transactional",
       "validator_signer_none",
       "validator_signer_unsafe_file",
+      "validator_signer_same_user",
+      "validator_signer_unreachable",
+      "validator_signer_key_mismatch",
+      "validator_registry_unreadable",
       "validator_key_file_missing",
       "validator_key_file_unreadable",
       "validator_key_file_not_owner_only"
     ],
-    "deployed": "Release vote-records-20261030 (ae70d66d) publishes no custody section. A release with it reports validator_signer_unsafe_file on every validator that admits for finality (rpc-serve signs with its plaintext --finality-key-file, and no hardened validator signer is built) and validator_signer_none on one that does not.",
+    "deployed": "Release vote-records-20261030 (ae70d66d) publishes no custody section. A release with it reports validator_signer_unsafe_file on every validator that admits for finality (rpc-serve signs with its plaintext --finality-key-file; the validator-signer-serve socket signer is not deployed) and validator_signer_none on one that does not.",
     "source": "crates/node/src/private_readiness_read.rs (custody_reasons); docs/runbooks/public-rpc-operator-policy.md"
   }
 }
