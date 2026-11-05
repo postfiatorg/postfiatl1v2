@@ -160,10 +160,49 @@ mod validator_signer_socket_tests {
         start_signer(&key_file, &socket, None);
         let (listener, port) = reserved_port();
         write_topology(&root, port);
-        let options = socket_serve_options(&root, &socket, port, 1);
+        // The first readiness read builds the pinned verifying keys; build
+        // them outside the client's read timeout.
+        postfiat_node::private_readiness(postfiat_node::PrivateReadinessOptions {
+            data_dir: root.join("node"),
+            pool_id: None,
+            admission_switch: None,
+            service: None,
+        })
+        .expect("build the readiness verifying keys");
+        let options = socket_serve_options(&root, &socket, port, 2);
         let server = thread::spawn(move || rpc_serve_inner(options, Some(listener)));
         let response = send(port, &timeout_vote_request(&local, 0));
         assert!(response.ok, "{:?}", response.error);
+        // Readiness reports the socket signer and the uid it answered with;
+        // in one test process that is this user, so custody is refused as
+        // `validator_signer_same_user`, never as an unsafe or missing file.
+        let readiness = send(
+            port,
+            &RpcRequest::new("readiness", "private_readiness", serde_json::json!({})),
+        );
+        assert!(readiness.ok, "{:?}", readiness.error);
+        let report = readiness.result.expect("readiness");
+        assert_eq!(report["custody"]["validator_signer"], "socket");
+        assert_eq!(report["custody"]["signer_socket"], socket.display().to_string());
+        assert_eq!(report["custody"]["signer_uid"], euid());
+        assert_eq!(report["custody"]["serving_uid"], euid());
+        assert_eq!(report["custody"]["key_files"], serde_json::json!([]));
+        let reasons: Vec<String> = report["reasons"]
+            .as_array()
+            .expect("reasons")
+            .iter()
+            .filter_map(|reason| reason.as_str().map(str::to_string))
+            .collect();
+        assert!(reasons.iter().any(|reason| reason == "validator_signer_same_user"), "{reasons:?}");
+        for absent in [
+            "validator_signer_unsafe_file",
+            "validator_signer_unreachable",
+            "validator_key_file_missing",
+            "validator_key_file_unreadable",
+            "validator_key_file_not_owner_only",
+        ] {
+            assert!(!reasons.iter().any(|reason| reason == absent), "{absent}: {reasons:?}");
+        }
         let vote = response
             .result_as::<BlockTimeoutVoteFile>()
             .expect("timeout vote");

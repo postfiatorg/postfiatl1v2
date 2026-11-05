@@ -150,7 +150,8 @@ fn run_rpc_serve_private_action(
 /// The server signs as its validator only when it admits for finality
 /// (`--allow-mempool-submit-finality` or `--allow-private-action-admission`),
 /// with `--finality-key-file` and, when it differs,
-/// `--finality-proposal-key-file`; otherwise it has no signer.
+/// `--finality-proposal-key-file`, or with `--finality-signer-socket`, asked
+/// to describe itself on every read; otherwise it has no signer.
 fn rpc_serve_readiness_service(
     context: &RpcServeConnectionContext,
 ) -> postfiat_node::PrivateReadinessService {
@@ -158,6 +159,23 @@ fn rpc_serve_readiness_service(
         return postfiat_node::PrivateReadinessService {
             key_files: Vec::new(),
             signer: postfiat_node::PrivateValidatorSigner::NoSigningRole,
+            signer_socket: None,
+        };
+    }
+    if let Some(socket) = &context.finality_signer_socket {
+        let peer_uid = postfiat_node::describe_validator_signer(
+            socket,
+            Duration::from_millis(postfiat_node::VALIDATOR_SIGNER_DEFAULT_DEADLINE_MS),
+        )
+        .ok()
+        .map(|(_, peer_uid)| peer_uid);
+        return postfiat_node::PrivateReadinessService {
+            key_files: Vec::new(),
+            signer: postfiat_node::PrivateValidatorSigner::Socket,
+            signer_socket: Some(postfiat_node::PrivateReadinessSignerSocket {
+                path: socket.clone(),
+                peer_uid,
+            }),
         };
     }
     let mut key_files = vec![context.finality_key_file.clone()];
@@ -169,6 +187,7 @@ fn rpc_serve_readiness_service(
     postfiat_node::PrivateReadinessService {
         key_files,
         signer: postfiat_node::PrivateValidatorSigner::PlaintextKeyFile,
+        signer_socket: None,
     }
 }
 
