@@ -26,8 +26,9 @@ after an RPC error or a failed state write.
 
 The state file is written before a run's lines are printed. Without it (lost
 or deleted), the next run starts from height 0 and re-checks every stored
-release; a state file of an earlier schema is refused (delete it or pass
-``--from-height``). The Base node must serve each release's source block: a
+release; a state file of an earlier schema is refused (delete it, or pass
+``--from-height``, which does not read the file and replaces it after a clean
+run). The Base node must serve each release's source block: a
 node that has pruned it fails the run, so run the watcher at least once per
 release window or point it at an archive node.
 """
@@ -232,6 +233,11 @@ def _lane_page(pftl: Any, lane_id: str, cursor: int | None) -> tuple[dict[str, A
         raise WatcherError("external_lane_info_malformed", str(error)) from None
     if pruned > count:
         raise WatcherError("external_lane_info_malformed", "more releases pruned than released")
+    # The root chains every release, so it exists exactly when one does; a
+    # lane with releases and no root would leave paging unbound by it.
+    if (root is None) != (count == 0):
+        raise WatcherError("external_lane_info_malformed",
+                           "release_history_root must be present exactly when release_count is positive")
     snapshot = {
         "chain_id": chain_id,
         "genesis_hash": genesis,
@@ -565,7 +571,14 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
     while True:
         runs += 1
         try:
-            state = _load_state(state_path, args.lane_id) if state_path is not None else memory_state
+            # --from-height overrides the kept state, so the file is not read:
+            # a clean run replaces it, whatever its schema.
+            if from_height is not None:
+                state = None
+            elif state_path is not None:
+                state = _load_state(state_path, args.lane_id)
+            else:
+                state = memory_state
             lines, alarms, new_state = watch_once(pftl, base, args.lane_id, from_height=from_height, state=state)
             # Progress is saved before the run's lines are emitted, so a clean
             # summary always means the state advanced.

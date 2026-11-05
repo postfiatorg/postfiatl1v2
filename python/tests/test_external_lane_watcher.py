@@ -465,6 +465,45 @@ class WatcherTests(unittest.TestCase):
                 self.assertEqual((code, lines), (1, []))
                 self.assertEqual(json.loads(stderr)["code"], "external_lane_info_malformed")
 
+    def test_the_history_root_is_present_exactly_when_releases_exist(self) -> None:
+        # Releases without a root: paging would not be bound by it.
+        releases = [release(0), release(1)]
+        pftl = FakePftl(releases)
+        pftl.history_root = None
+        code, lines, stderr = run(pftl, FakeBase(backed(*releases)))
+        self.assertEqual((code, lines), (1, []))
+        self.assertEqual(json.loads(stderr)["code"], "external_lane_info_malformed")
+        # A root with no release behind it.
+        pftl = FakePftl([])
+        pftl.history_root = "0x" + "ab" * 48
+        code, lines, stderr = run(pftl, FakeBase({}))
+        self.assertEqual((code, lines), (1, []))
+        self.assertEqual(json.loads(stderr)["code"], "external_lane_info_malformed")
+        # A lane with no release and no root is clean.
+        code, lines, _ = run(FakePftl([]), FakeBase({}))
+        self.assertEqual((code, lines[-1]["releases_checked"]), (0, 0))
+
+    def test_from_height_replaces_a_state_file_of_an_earlier_schema(self) -> None:
+        releases = [release(0), release(1, height=150)]
+        with tempfile.TemporaryDirectory() as root:
+            state_file = Path(root) / "watcher.json"
+            old = {"schema": "postfiat.external_lane_watcher.state.v1", "lane_id": LANE,
+                   "checked_through_height": 50, "release_count": 1}
+            state_file.write_text(json.dumps(old))
+            # Without --from-height the old schema is refused, and the file kept.
+            code, lines, stderr = run(FakePftl(releases, current_height=200), FakeBase(backed(*releases)),
+                                      "--state-file", str(state_file))
+            self.assertEqual((code, lines), (1, []))
+            self.assertEqual(json.loads(stderr)["code"], "state_file_invalid")
+            self.assertEqual(json.loads(state_file.read_text()), old)
+            # With --from-height the run starts there and a clean run replaces the file.
+            code, lines, _ = run(FakePftl(releases, current_height=200), FakeBase(backed(*releases)),
+                                 "--state-file", str(state_file), "--from-height", "100")
+            self.assertEqual(code, 0)
+            self.assertEqual([line["sequence"] for line in lines if line["kind"] == "release"], [1])
+            state = json.loads(state_file.read_text())
+            self.assertEqual((state["schema"], state["checked_through_height"]), (watcher.STATE_SCHEMA, 200))
+
     def test_a_source_block_answer_must_name_the_block_and_exist(self) -> None:
         entry = release(0)
         for name, answer, words in (
