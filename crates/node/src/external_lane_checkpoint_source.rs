@@ -16,8 +16,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use postfiat_bridge::{
-    decode_locked_event, ethereum_keccak256, verify_ethereum_checkpoint_certificate,
-    verify_ethereum_receipt_log, EthereumLogV1,
+    decode_locked_event, ethereum_keccak256, locked_event_topic,
+    verify_ethereum_checkpoint_certificate, verify_ethereum_receipt_log, EthereumLogV1,
 };
 use postfiat_crypto_provider::{
     hex_to_bytes, ml_dsa_65_sign_with_context, ml_dsa_65_verify_with_context, ML_DSA_65_ALGORITHM,
@@ -43,7 +43,6 @@ use crate::ethereum_receipt_proof_builder::receipt_proof_from_rpc;
 use crate::{read_json_file, read_validator_key_file, validator_key_record};
 
 const EXTERNAL_LANE_CHECKPOINT_SIGNING_STATE_DIR: &str = "external-lane-checkpoint-signing";
-const LOCKED_EVENT_SIGNATURE: &[u8] = b"Locked(uint64,address,bytes32,bytes,uint64)";
 const TRANSFER_EVENT_SIGNATURE: &[u8] = b"Transfer(address,address,uint256)";
 const RECEIPT_LOG_INDEX_INVALID: &str = "ethereum_receipt_log_index_invalid";
 
@@ -676,7 +675,7 @@ pub fn build_external_lane_lock_proof(
     }
 
     let logs = receipt_logs(&built.receipts_root, &built.proof)?;
-    let locked_topic = ethereum_keccak256(LOCKED_EVENT_SIGNATURE);
+    let locked_topic = locked_event_topic();
     let is_locked = |log: &EthereumLogV1| {
         log.emitter == lane.lock_contract && log.topics.first() == Some(&locked_topic)
     };

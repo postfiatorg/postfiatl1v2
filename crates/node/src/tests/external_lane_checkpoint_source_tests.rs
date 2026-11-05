@@ -772,6 +772,30 @@ fn sign_refuses_a_corrupt_or_foreign_signing_state_as_a_typed_refusal() {
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
+#[test]
+fn the_node_selects_locked_logs_by_the_bridge_decoders_topic() {
+    let topic = postfiat_bridge::locked_event_topic();
+    assert_eq!(topic, keccak(b"Locked(uint64,address,bytes32,bytes,uint64)"));
+    // The topic the node selects is the one the bridge decoder accepts.
+    let recipient = b"pftl-recipient";
+    let mut data = word(0x40).to_vec();
+    data.extend_from_slice(&word(5));
+    data.extend_from_slice(&word(recipient.len() as u64));
+    data.extend_from_slice(recipient);
+    data.resize(data.len().div_ceil(32) * 32, 0);
+    let mut holder = [0_u8; 32];
+    holder[12..].copy_from_slice(&HOLDER);
+    let mut log = postfiat_bridge::EthereumLogV1 {
+        emitter: [0x1a; 20],
+        topics: vec![topic, word(LOCK_NONCE), holder, keccak(recipient)],
+        data,
+    };
+    let event = postfiat_bridge::decode_locked_event(&log, [0x1a; 20]).expect("decode");
+    assert_eq!((event.nonce, event.amount_atoms), (LOCK_NONCE, 5));
+    log.topics[0] = keccak(b"Locked(uint64,address,bytes32,bytes,uint256)");
+    assert!(postfiat_bridge::decode_locked_event(&log, [0x1a; 20]).is_err());
+}
+
 /// Read-only qualification against a real Base Sepolia RPC at the http URL
 /// in `POSTFIAT_LIVE_BASE_RPC`: the rehearsal lock and token code hashes,
 /// the `finalized` block, five votes and the certificate, and the receipt
