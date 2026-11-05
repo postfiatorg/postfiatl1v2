@@ -1,0 +1,27 @@
+{
+  "amount_atoms": 4331,
+  "blocks_replayed": true,
+  "checkpoint_votes": 5,
+  "data_dir": "/tmp/postfiat-external-lane-local-evm-1989250-1793909742329620985",
+  "lock_block": 5,
+  "lock_transaction_hash": "0x6931fd06890195b26718cad8d1854ab5248610d82f20a47e0c239bfe6876c088",
+  "passed": true,
+  "phase3_verifier": "test stand-in; export path untested",
+  "public_testnet_transaction": false,
+  "recipient": "pfda42e6fdcf262ece2aae622f61c7b40003e1975b",
+  "recipient_balance": 4331,
+  "release_receipt": {
+    "accepted": true,
+    "account_reserve": 10,
+    "code": "accepted",
+    "fee_burned": 1000,
+    "fee_charged": 1000,
+    "message": "asset transaction applied; fee burned",
+    "minimum_fee": 23,
+    "state_expansion_fee": 0,
+    "tx_id": "142a099dd8ca73095cc4660e18c72ff0dac1b3b198562126288a43f710cc6f606977cdbdd3a358270729e86f3151ab01"
+  },
+  "replay_refused": true,
+  "scope": "disposable local Anvil and generated six-validator PFT chain",
+  "state_replayed": true
+}

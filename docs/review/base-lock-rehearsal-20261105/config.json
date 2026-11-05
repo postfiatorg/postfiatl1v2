@@ -1,0 +1,9 @@
+{
+  "rpc": "http://127.0.0.1:50497",
+  "output": "/home/postfiatchad/.cache/postfiatl1v2-priorities-20261105/base-local-3",
+  "holder": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "token": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+  "lock": "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
+  "token_code_hash": "0x9d4da9962de5375dcb932a3e275ad613161e4a5c98f2cd286e120889afaaa3e7",
+  "lock_code_hash": "0xe2398e007f95b1fc18de5b13dcd9cdf72ca62957a005740d5c51aa6ed7a79e8d"
+}

@@ -1,0 +1,26 @@
+   Compiling postfiat-node v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-base-rehearsal-20261105/crates/node)
+    Finished `test` profile [unoptimized] target(s) in 43.03s
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/postfiatl1v2-priorities-20261105/target/debug/deps/postfiat_node-bda8e2350670215f)
+
+running 18 tests
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::live_base_sepolia_checkpoint_of_the_rehearsal_lock ... ignored, needs POSTFIAT_LIVE_BASE_RPC
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::local_evm_lock_checkpoint_release_and_replay_refusal ... ignored, requires scripts/rehearse-base-lock.py and disposable Anvil contracts
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::the_node_selects_locked_logs_by_the_bridge_decoders_topic ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::observe_reads_the_finalized_block_and_names_the_active_committee ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::sign_refuses_a_key_file_without_the_members_record_as_a_key_mismatch ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::sign_refuses_a_key_file_whose_private_key_is_not_its_public_key ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::sign_refuses_a_corrupt_or_foreign_signing_state_as_a_typed_refusal ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::observe_refuses_chain_finality_depth_code_and_lane_mismatches ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::lock_proof_accepts_an_unrelated_same_shaped_transfer_beside_the_policy_token_transfer ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::observe_sign_assemble_and_proof_refuse_a_lane_whose_committee_is_not_registered ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::sign_re_observes_refuses_non_members_and_never_signs_two_checkpoints_of_one_block ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::assemble_keeps_exactly_the_quorum_of_distinct_member_votes ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::lock_proof_refuses_another_block_contract_event_or_token ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::checkpoint_source_releases_a_base_lock_end_to_end_at_the_five_of_six_quorum ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::lock_proof_refuses_an_invalid_submitter_or_recipient_as_a_typed_refusal ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::observe_and_sign_follow_a_governed_committee_move ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::lock_proof_refuses_two_locked_logs_a_mismatched_recipient_hash_or_a_forged_certificate ... ok
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::lock_proof_decodes_nonce_amount_and_recipient_at_their_boundaries ... ok
+
+test result: ok. 16 passed; 0 failed; 2 ignored; 0 measured; 587 filtered out; finished in 16.01s
+

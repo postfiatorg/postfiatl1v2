@@ -1,0 +1,6 @@
+
+running 1 test
+test tests::genesis_external_lane_tests::release_path::checkpoint_source::local_evm_lock_checkpoint_release_and_replay_refusal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 14.91s
+

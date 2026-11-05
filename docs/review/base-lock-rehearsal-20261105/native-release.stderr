@@ -1,0 +1,3 @@
+   Compiling postfiat-node v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-base-rehearsal-20261105/crates/node)
+    Finished `test` profile [unoptimized] target(s) in 42.19s
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/postfiatl1v2-priorities-20261105/target/debug/deps/postfiat_node-bda8e2350670215f)
