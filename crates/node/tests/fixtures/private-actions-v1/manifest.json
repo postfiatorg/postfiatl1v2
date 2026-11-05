@@ -64,6 +64,7 @@
       "validator_signer_unsafe_file",
       "validator_signer_same_user",
       "validator_signer_unreachable",
+      "validator_signer_key_mismatch",
       "validator_key_file_missing",
       "validator_key_file_unreadable",
       "validator_key_file_not_owner_only"

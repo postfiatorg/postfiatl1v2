@@ -163,18 +163,28 @@ fn rpc_serve_readiness_service(
         };
     }
     if let Some(socket) = &context.finality_signer_socket {
-        let peer_uid = postfiat_node::describe_validator_signer(
+        let described = postfiat_node::describe_validator_signer(
             socket,
             Duration::from_millis(postfiat_node::VALIDATOR_SIGNER_DEFAULT_DEADLINE_MS),
         )
-        .ok()
-        .map(|(_, peer_uid)| peer_uid);
+        .ok();
+        let peer_uid = described.as_ref().map(|(_, peer_uid)| *peer_uid);
+        // The startup comparison again: both roles hold the registry's key.
+        let key_matches = described.as_ref().map(|(description, _)| {
+            postfiat_node::validator_signer_holds_registered_key(
+                description,
+                &context.data_dir,
+                &context.node_id,
+            )
+            .is_ok()
+        });
         return postfiat_node::PrivateReadinessService {
             key_files: Vec::new(),
             signer: postfiat_node::PrivateValidatorSigner::Socket,
             signer_socket: Some(postfiat_node::PrivateReadinessSignerSocket {
                 path: socket.clone(),
                 peer_uid,
+                key_matches,
             }),
         };
     }

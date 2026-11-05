@@ -512,6 +512,7 @@
                 signer_socket: None,
                 signer_uid: None,
                 serving_uid: 1000,
+                signer_key_matches: None,
             };
             let reasons = super::private_readiness_read::custody_reasons(&custody);
             assert_eq!(
@@ -524,7 +525,7 @@
 
     #[test]
     fn private_readiness_socket_signer_needs_another_user_and_no_key_file() {
-        let custody = |signer_uid: Option<u32>| PrivateReadinessCustody {
+        let custody = |signer_uid: Option<u32>, signer_key_matches: Option<bool>| PrivateReadinessCustody {
             published_by: "rpc_serve".to_string(),
             store_backend: "transactional".to_string(),
             transactional_active: true,
@@ -533,13 +534,16 @@
             signer_socket: Some("/run/postfiat-signer/validator-0.sock".to_string()),
             signer_uid,
             serving_uid: 1000,
+            signer_key_matches,
         };
-        let reasons = |uid| super::private_readiness_read::custody_reasons(&custody(uid));
+        let reasons = |uid, keys| super::private_readiness_read::custody_reasons(&custody(uid, keys));
         // A signer under another user, with no key file in the serving
         // process, satisfies custody: none of the file reasons apply.
-        assert_eq!(reasons(Some(1001)), Vec::<String>::new());
-        assert_eq!(reasons(Some(1000)), ["validator_signer_same_user"]);
-        assert_eq!(reasons(None), ["validator_signer_unreachable"]);
+        assert_eq!(reasons(Some(1001), Some(true)), Vec::<String>::new());
+        assert_eq!(reasons(Some(1000), Some(true)), ["validator_signer_same_user"]);
+        assert_eq!(reasons(None, None), ["validator_signer_unreachable"]);
+        // A signer that answers with keys other than the registry's.
+        assert_eq!(reasons(Some(1001), Some(false)), ["validator_signer_key_mismatch"]);
     }
 
     #[test]

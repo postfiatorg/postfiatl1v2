@@ -314,6 +314,69 @@ mod validator_signer_socket_tests {
         let _ = fs::remove_dir_all(root);
     }
 
+    /// A key file for `validator-0` holding a key that is not the registry's.
+    fn other_key_file(root: &Path, name: &str) -> PathBuf {
+        let other = root.join("signer").join(name);
+        let pair = postfiat_crypto_provider::ml_dsa_65_keygen_from_seed(&[7u8; 32]);
+        fs::write(
+            &other,
+            serde_json::to_vec_pretty(&serde_json::json!({ "validators": [{
+                "node_id": "validator-0",
+                "algorithm_id": ML_DSA_65_ALGORITHM,
+                "public_key_hex": bytes_to_hex(&pair.public_key),
+                "private_key_hex": bytes_to_hex(&pair.private_key),
+            }]}))
+            .expect("json"),
+        )
+        .expect("write other key");
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&other, fs::Permissions::from_mode(0o600)).expect("mode");
+        other
+    }
+
+    #[test]
+    fn readiness_reports_a_signer_that_holds_another_key() {
+        let root = signer_root("readiness-key");
+        let (key_file, _) = chain_with_key_moved_out(&root);
+        let other = other_key_file(&root, "readiness-other.json");
+        let socket = root.join("signer/swap.sock");
+        // The validator's signer answers rpc-serve's startup check and exits.
+        start_signer(&key_file, &socket, Some(1));
+        let (listener, port) = reserved_port();
+        write_topology(&root, port);
+        postfiat_node::private_readiness(postfiat_node::PrivateReadinessOptions {
+            data_dir: root.join("node"),
+            pool_id: None,
+            admission_switch: None,
+            service: None,
+        })
+        .expect("build the readiness verifying keys");
+        let options = socket_serve_options(&root, &socket, port, 1);
+        let server = thread::spawn(move || rpc_serve_inner(options, Some(listener)));
+        let started = std::time::Instant::now();
+        while postfiat_node::registered_validator_signer_for_data_dir(&root.join("node")).is_none() {
+            assert!(started.elapsed() < Duration::from_secs(20), "rpc-serve did not register the signer");
+            thread::sleep(Duration::from_millis(20));
+        }
+        while std::os::unix::net::UnixStream::connect(&socket).is_ok() {
+            assert!(started.elapsed() < Duration::from_secs(20), "first signer still serving");
+            thread::sleep(Duration::from_millis(20));
+        }
+        // A signer with another key now answers at the same socket.
+        start_signer(&other, &socket, None);
+        let readiness = send(
+            port,
+            &RpcRequest::new("readiness", "private_readiness", serde_json::json!({})),
+        );
+        assert!(readiness.ok, "{:?}", readiness.error);
+        let report = readiness.result.expect("readiness");
+        assert_eq!(report["custody"]["signer_key_matches"], false);
+        let reasons = report["reasons"].to_string();
+        assert!(reasons.contains("validator_signer_key_mismatch"), "{reasons}");
+        server.join().expect("server").expect("rpc serve");
+        let _ = fs::remove_dir_all(root);
+    }
+
     #[test]
     fn rpc_serve_refuses_a_signer_whose_key_is_not_the_validators() {
         let root = signer_root("mismatch");

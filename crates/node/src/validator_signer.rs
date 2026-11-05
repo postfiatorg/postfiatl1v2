@@ -886,20 +886,21 @@ impl Drop for SocketSignerRegistration {
     }
 }
 
-/// Connects `rpc-serve` over `data_dir` to the signer at `socket`: the signer
-/// must answer `describe` and hold, for both roles, the key the validator
-/// registry records for `node_id`. Nothing is registered on a refusal.
-pub fn register_validator_signer_socket(
-    socket: &Path,
+/// Whether a signer that described itself as `description` holds, for both
+/// roles, the key the validator registry in `data_dir` records for
+/// `node_id`. rpc-serve checks it at startup and on every readiness read.
+pub fn validator_signer_holds_registered_key(
+    description: &ValidatorSignerDescription,
     data_dir: &Path,
     node_id: &str,
-    deadline: Duration,
-) -> io::Result<SocketSignerRegistration> {
-    let signer = SocketSigner::connect(socket, deadline)?;
+) -> io::Result<()> {
     let registry = read_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE))?;
     let registered = validator_registry_record(&registry, node_id)?;
-    for key in [ValidatorSignerKey::Vote, ValidatorSignerKey::Proposal] {
-        let held = select_public_key(signer.keys(key), Some(node_id))?;
+    for (key, held) in [
+        (ValidatorSignerKey::Vote, &description.vote_keys),
+        (ValidatorSignerKey::Proposal, &description.proposal_keys),
+    ] {
+        let held = select_public_key(held, Some(node_id))?;
         if held.algorithm_id != registered.algorithm_id
             || held.public_key_hex != registered.public_key_hex
         {
@@ -910,6 +911,20 @@ pub fn register_validator_signer_socket(
             ));
         }
     }
+    Ok(())
+}
+
+/// Connects `rpc-serve` over `data_dir` to the signer at `socket`: the signer
+/// must answer `describe` and hold, for both roles, the key the validator
+/// registry records for `node_id`. Nothing is registered on a refusal.
+pub fn register_validator_signer_socket(
+    socket: &Path,
+    data_dir: &Path,
+    node_id: &str,
+    deadline: Duration,
+) -> io::Result<SocketSignerRegistration> {
+    let signer = SocketSigner::connect(socket, deadline)?;
+    validator_signer_holds_registered_key(signer.description(), data_dir, node_id)?;
     let signer = Arc::new(signer);
     let (socket, data_dir) = (canonical(socket), canonical(data_dir));
     registry_lock(socket_signers()).insert(socket.clone(), signer.clone());
