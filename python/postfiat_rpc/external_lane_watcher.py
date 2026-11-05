@@ -45,6 +45,7 @@ U64 = 1 << 64
 ZERO_ADDRESS = "0x" + "00" * 20
 ADDRESS = re.compile(r"^0x[0-9a-fA-F]{40}$")
 HASH32 = re.compile(r"^0x[0-9a-fA-F]{64}$")
+GENESIS_HASH = re.compile(r"^[0-9a-f]{96}$")
 
 ALARM_CODES = (
     "release_without_lock",
@@ -123,7 +124,12 @@ class WatcherError(ValueError):
         self.code = code
 
 
-class WatcherRpcError(WatcherError):
+class WatcherTransientError(WatcherError):
+    """A run that cannot finish now but may on retry: exit 1, or retried with
+    ``--interval``."""
+
+
+class WatcherRpcError(WatcherTransientError):
     """An RPC request that failed: exit 1, or retried with ``--interval``."""
 
 
@@ -180,7 +186,10 @@ def _release(entry: Any, policy: dict[str, Any]) -> dict[str, Any]:
 # --- PFTL and Base reads. ---
 
 
-def _lane_page(pftl: Any, lane_id: str, cursor: int | None) -> tuple[dict[str, Any], int]:
+def _lane_page(pftl: Any, lane_id: str, cursor: int | None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """One page of the lane read and the snapshot it was served from: the
+    chain identity, the height and the lane's release counters and root."""
+
     try:
         info = pftl.external_lane_info(lane_id, release_cursor=cursor, release_limit=PAGE_SIZE)
     except RpcClientError as error:
@@ -188,34 +197,73 @@ def _lane_page(pftl: Any, lane_id: str, cursor: int | None) -> tuple[dict[str, A
     rows = [row for row in info.get("lanes") or [] if isinstance(row, dict) and row.get("lane_id") == lane_id]
     if len(rows) != 1:
         raise WatcherError("external_lane_not_reported", f"the PFTL node reports no lane `{lane_id}`")
+    row = rows[0]
     height = info.get("current_height")
-    if not isinstance(height, int) or isinstance(height, bool) or height < 0:
+    if not isinstance(height, int) or isinstance(height, bool) or not 0 <= height < U64:
         raise WatcherError("external_lane_info_malformed", "external_lane_info has no current_height")
-    return rows[0], height
+    chain_id, genesis = info.get("chain_id"), info.get("genesis_hash")
+    if not isinstance(chain_id, str) or not chain_id or not isinstance(genesis, str) or not GENESIS_HASH.match(genesis):
+        raise WatcherError("external_lane_info_malformed", "external_lane_info has no chain id or genesis hash")
+    root = row.get("release_history_root")
+    if root is not None and not isinstance(root, str):
+        raise WatcherError("external_lane_info_malformed", "release_history_root is not text")
+    try:
+        count = _u64(row.get("release_count"), "release_count")
+        pruned = _u64(row.get("pruned_release_count", 0), "pruned_release_count")
+    except WatcherError as error:
+        raise WatcherError("external_lane_info_malformed", str(error)) from None
+    if pruned > count:
+        raise WatcherError("external_lane_info_malformed", "more releases pruned than released")
+    snapshot = {
+        "chain_id": chain_id,
+        "genesis_hash": genesis,
+        "protocol_version": info.get("protocol_version"),
+        "current_height": height,
+        "release_count": count,
+        "pruned_release_count": pruned,
+        "release_history_root": root,
+    }
+    return row, snapshot
 
 
-def _releases_from(pftl: Any, lane_id: str, first_row: dict[str, Any], start_height: int,
-                   policy: dict[str, Any]) -> tuple[list[dict[str, Any]], bool]:
+def _releases_from(pftl: Any, lane_id: str, first_row: dict[str, Any], first: dict[str, Any],
+                   start_height: int, policy: dict[str, Any]) -> tuple[list[dict[str, Any]], bool]:
     """Every stored release at or above `start_height`, oldest first, and
-    whether the stored records reach below `start_height`."""
+    whether the stored records reach below `start_height`.
+
+    Every page must come from the first page's snapshot, and the sequences
+    must run contiguously from `release_count - 1` down to the pruned count.
+    """
 
     releases: list[dict[str, Any]] = []
+    expected = first["release_count"] - 1  # the next sequence, newest first
     row = first_row
     while True:
         page = [_release(entry, policy) for entry in row.get("releases") or []]
-        if any(later["sequence"] <= earlier["sequence"] for earlier, later in zip(page[1:], page)):
-            raise WatcherError("external_lane_info_malformed", "a release page is not newest first")
-        if releases and page and page[0]["sequence"] >= releases[-1]["sequence"]:
-            raise WatcherError("external_lane_info_malformed", "a release page does not continue the last one")
+        for entry in page:
+            if entry["sequence"] != expected:
+                raise WatcherError("external_lane_info_malformed",
+                                   f"release sequence {entry['sequence']} where {expected} was due")
+            expected -= 1
         releases.extend(page)
         if page and page[-1]["released_at_height"] < start_height:
             reaches_below = True
             break
         cursor = row.get("next_release_cursor")
         if cursor is None or not page:
+            if expected != first["pruned_release_count"] - 1:
+                raise WatcherError("external_lane_info_malformed",
+                                   f"the stored releases end at {expected + 1}, not at the pruned count "
+                                   f"{first['pruned_release_count']}")
             reaches_below = False
             break
-        row, _ = _lane_page(pftl, lane_id, _u64(cursor, "next_release_cursor"))
+        if _u64(cursor, "next_release_cursor") != page[-1]["sequence"]:
+            raise WatcherError("external_lane_info_malformed", "next_release_cursor is not the page's oldest sequence")
+        row, snapshot = _lane_page(pftl, lane_id, cursor)
+        if snapshot != first:
+            changed = sorted(key for key in first if first[key] != snapshot.get(key))
+            raise WatcherTransientError("external_lane_info_inconsistent",
+                                        f"the lane report changed while it was paged: {', '.join(changed)}")
     return [entry for entry in reversed(releases) if entry["released_at_height"] >= start_height], reaches_below
 
 
@@ -285,10 +333,10 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
     every run until an operator starts past it with `from_height`.
     """
 
-    row, current_height = _lane_page(pftl, lane_id, None)
+    row, snapshot = _lane_page(pftl, lane_id, None)
+    current_height = snapshot["current_height"]
     policy = _lane_policy(row)
-    release_count = _u64(row.get("release_count"), "release_count")
-    pruned = _u64(row.get("pruned_release_count", 0), "pruned_release_count")
+    release_count, pruned = snapshot["release_count"], snapshot["pruned_release_count"]
     try:
         chain_id = pft_token.hex_quantity(_base(base, "eth_chainId", []), "eth_chainId")
     except pft_token.PftTokenRefused as error:
@@ -323,7 +371,7 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
         start_height, checked_count = state["checked_through_height"] + 1, state["release_count"]
     else:
         start_height, checked_count = 0, 0
-    releases, reaches_below = _releases_from(pftl, lane_id, row, start_height, policy)
+    releases, reaches_below = _releases_from(pftl, lane_id, row, snapshot, start_height, policy)
     releases = [entry for entry in releases if entry["released_at_height"] <= current_height]
     # Pruned records are no longer paged: releases pruned before a run
     # checked them cannot be matched against their Locks. With a state file
@@ -451,7 +499,7 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
         try:
             state = _load_state(state_path, args.lane_id) if state_path is not None else memory_state
             lines, alarms, new_state = watch_once(pftl, base, args.lane_id, from_height=from_height, state=state)
-        except WatcherRpcError as error:
+        except WatcherTransientError as error:
             _error_line(error)
             if args.interval is None:
                 return 1

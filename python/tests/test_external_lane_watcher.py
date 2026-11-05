@@ -18,6 +18,7 @@ HOLDER = "0x" + "11" * 20
 LOCK_CODE = b"\x60\x80PFTLockV1 runtime"
 FINALIZED = 1_000
 SOURCE_BLOCK_HASH = "0x" + "6f" * 32
+GENESIS_HASH = "ce" * 48
 
 
 def recipient(index: int) -> str:
@@ -56,6 +57,9 @@ class FakePftl:
         self.current_height = current_height
         self.code_hash = code_hash or keccak_hex(LOCK_CODE)
         self.chain_id = chain_id
+        self.pftl_chain_id = "postfiat-local"
+        self.genesis_hash = GENESIS_HASH
+        self.history_root: str | None = "ab" * 48 if releases else None
         self.calls: list[tuple[str | None, int | None, int | None]] = []
 
     def external_lane_info(self, lane_id: str | None = None, *, release_cursor: int | None = None,
@@ -91,8 +95,10 @@ class FakePftl:
         }
         if start > self.pruned:
             row["next_release_cursor"] = start
-        return {"schema": "postfiat-external-lane-info-v1", "current_height": self.current_height,
-                "lane_count": 1, "lanes": [row]}
+        row["release_history_root"] = self.history_root
+        return {"schema": "postfiat-external-lane-info-v1", "chain_id": self.pftl_chain_id,
+                "genesis_hash": self.genesis_hash, "protocol_version": 1,
+                "current_height": self.current_height, "lane_count": 1, "lanes": [row]}
 
 
 class FakeBase:
@@ -330,6 +336,54 @@ class WatcherTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual([line["sequence"] for line in lines if line["kind"] == "release"], list(range(200, 250)))
         self.assertEqual([cursor for _, cursor, _ in pftl.calls], [None])
+
+    def test_a_lane_report_that_changes_between_pages_fails_the_run(self) -> None:
+        releases = [release(sequence) for sequence in range(250)]
+
+        class MovingPftl(FakePftl):
+            """The second page is served from a later state of the chain."""
+
+            def external_lane_info(self, lane_id: str | None = None, **kwargs: Any) -> dict[str, Any]:
+                answer = super().external_lane_info(lane_id, **kwargs)
+                if len(self.calls) == 1:
+                    self.current_height += 1
+                return answer
+
+        for name, change in {
+            "height": lambda pftl: setattr(pftl, "current_height", pftl.current_height + 1),
+            "history root": lambda pftl: setattr(pftl, "history_root", "cd" * 48),
+            "genesis": lambda pftl: setattr(pftl, "genesis_hash", "dd" * 48),
+        }.items():
+            with self.subTest(name):
+                class Changing(FakePftl):
+                    def external_lane_info(self, lane_id: str | None = None, **kwargs: Any) -> dict[str, Any]:
+                        if len(self.calls) == 1:
+                            change(self)
+                        return super().external_lane_info(lane_id, **kwargs)
+
+                code, lines, stderr = run(Changing(releases), FakeBase(backed(*releases)))
+                self.assertEqual((code, [line for line in lines if line["kind"] == "summary"]), (1, []))
+                self.assertEqual(json.loads(stderr)["code"], "external_lane_info_inconsistent")
+        # Under --interval the run is retried; the next scan is consistent.
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = watcher.main(["--pftl-rpc", "127.0.0.1:27650", "--lane-id", LANE, "--base-rpc",
+                                 "http://127.0.0.1:8545", "--interval", "5"],
+                                pftl=MovingPftl(releases), base=FakeBase(backed(*releases)),
+                                sleep=lambda _: None, max_runs=2)
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(stderr.getvalue())["code"], "external_lane_info_inconsistent")
+        self.assertEqual(len([line for line in stdout.getvalue().splitlines() if '"summary"' in line]), 1)
+
+    def test_a_sequence_gap_is_malformed(self) -> None:
+        releases = [release(sequence) for sequence in range(250) if sequence != 120]
+        code, lines, stderr = run(FakePftl(releases), FakeBase(backed(*releases)))
+        self.assertEqual((code, [line for line in lines if line["kind"] == "summary"]), (1, []))
+        self.assertEqual(json.loads(stderr)["code"], "external_lane_info_malformed")
+        # A last page that stops above the pruned boundary is a gap too.
+        releases = [release(sequence) for sequence in range(1, 4)]
+        code, _, stderr = run(FakePftl(releases, pruned=0), FakeBase(backed(*releases)))
+        self.assertEqual((code, json.loads(stderr)["code"]), (1, "external_lane_info_malformed"))
 
     def test_releases_pruned_before_they_were_checked_are_an_alarm(self) -> None:
         releases = [release(sequence) for sequence in range(3, 5)]
