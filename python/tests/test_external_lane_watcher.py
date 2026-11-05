@@ -426,6 +426,42 @@ class WatcherTests(unittest.TestCase):
         self.assertEqual(alarm_codes(lines), ["release_pruned_before_check"])
         self.assertEqual(lines[0]["count"], 3)
 
+    def test_nonces_and_amounts_at_their_u64_boundaries(self) -> None:
+        top = (1 << 64) - 1
+        for nonce, amount in ((0, 0), (0, top), (top, 1), (top, top)):
+            with self.subTest(nonce=nonce, amount=amount):
+                entry = release(0, nonce=nonce, amount=amount)
+                base = FakeBase(backed(entry))
+                code, lines, _ = run(FakePftl([entry]), base)
+                self.assertEqual((code, alarm_codes(lines)), (0, []))
+                checked = next(line for line in lines if line["kind"] == "release")
+                self.assertEqual((checked["lock_nonce"], checked["amount_atoms"]), (nonce, amount))
+
+    def test_an_over_wide_amount_word_is_a_malformed_answer(self) -> None:
+        entry = release(0)
+        # 65 bits: a uint64 field cannot hold it, whatever the low bits say.
+        base = FakeBase({0: (HOLDER, (1 << 64) | 5_000, keccak_hex(recipient(0).encode()))})
+        code, lines, stderr = run(FakePftl([entry]), base)
+        self.assertEqual((code, [line for line in lines if line["kind"] == "summary"]), (1, []))
+        self.assertEqual(json.loads(stderr)["code"], "base_answer_malformed")
+
+    def test_a_zero_holder_is_no_lock_even_when_amount_and_hash_match(self) -> None:
+        entry = release(0)
+        base = FakeBase({0: ("0x" + "00" * 20, 5_000, keccak_hex(recipient(0).encode()))})
+        code, lines, _ = run(FakePftl([entry]), base)
+        self.assertEqual((code, alarm_codes(lines)), (2, ["release_without_lock"]))
+
+    def test_one_token_base_unit_is_one_atom(self) -> None:
+        entry = release(0, amount=1)
+        code, lines, _ = run(FakePftl([entry]), FakeBase(backed(entry)))
+        self.assertEqual((code, alarm_codes(lines)), (0, []))
+        # No six-decimal scaling: a Lock of 10**6 base units is not 1 atom.
+        base = FakeBase({0: (HOLDER, 10**6, keccak_hex(recipient(0).encode()))})
+        code, lines, _ = run(FakePftl([entry]), base)
+        self.assertEqual((code, alarm_codes(lines)), (2, ["release_amount_mismatch"]))
+        alarm = next(line for line in lines if line["kind"] == "release")
+        self.assertEqual((alarm["amount_atoms"], alarm["lock_amount_atoms"]), (1, 10**6))
+
     def test_a_malformed_release_record_is_refused(self) -> None:
         cases = {
             "missing amount": lambda entry: entry["record"].pop("amount_atoms"),
