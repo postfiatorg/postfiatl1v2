@@ -534,7 +534,9 @@ pub fn validator_signer_serve(
     let deadline = Duration::from_millis(options.deadline_ms);
     let mut handles = Vec::new();
     for (served, stream) in listener.incoming().enumerate() {
-        let mut stream = stream?;
+        let Some(mut stream) = accepted_or_back_off(stream) else {
+            continue;
+        };
         if active.fetch_add(1, Ordering::SeqCst) >= VALIDATOR_SIGNER_MAX_CONNECTIONS {
             active.fetch_sub(1, Ordering::SeqCst);
             let refusal =
@@ -556,6 +558,20 @@ pub fn validator_signer_serve(
         let _ = handle.join();
     }
     Ok(())
+}
+
+/// The accepted stream, or `None` after logging an accept error and a short
+/// back-off: an accept error (`EMFILE`, `ECONNABORTED`, ...) never ends the
+/// serve loop.
+fn accepted_or_back_off(accepted: io::Result<UnixStream>) -> Option<UnixStream> {
+    match accepted {
+        Ok(stream) => Some(stream),
+        Err(error) => {
+            eprintln!("validator-signer-serve: accept failed: {error}; retrying");
+            std::thread::sleep(Duration::from_millis(50));
+            None
+        }
+    }
 }
 
 /// Answers one request. A peer whose uid is not allowed gets
@@ -1088,6 +1104,17 @@ mod validator_signer_tests {
         assert!(!data_dir.join(VALIDATOR_KEYS_FILE).exists());
         registry_lock(data_dir_signers()).remove(&canonical(&data_dir));
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn an_accept_error_backs_off_and_keeps_serving() {
+        for errno in [libc::EMFILE, libc::ECONNABORTED, libc::ENFILE] {
+            let started = Instant::now();
+            assert!(accepted_or_back_off(Err(io::Error::from_raw_os_error(errno))).is_none());
+            assert!(started.elapsed() >= Duration::from_millis(50));
+        }
+        let (stream, _peer) = UnixStream::pair().expect("pair");
+        assert!(accepted_or_back_off(Ok(stream)).is_some());
     }
 
     #[test]
