@@ -45,10 +45,11 @@ EXPECTED = {
     # validator/artifact signatures; expansion requires cryptographic review.
     "ml_dsa_65_sign_with_context_seed": {
         "crates/node/src/batch_snapshot.rs": 1,
-        "crates/node/src/block_finality.rs": 3,
         "crates/node/src/block_replay_wallet.rs": 1,
         "crates/node/src/consensus_artifacts.rs": 1,
         "crates/node/src/storage_commit.rs": 2,
+        # The validator signer: the key-file signer's seeded block certificate, timeout and proposal signatures, moved from block_finality.rs on 2026-11-05.
+        "crates/node/src/validator_signer.rs": 1,
     },
     # Deterministic key generation is limited to wallet derivation and
     # explicitly audited non-live drill or harness evidence paths.
