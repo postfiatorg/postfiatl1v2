@@ -110,6 +110,44 @@ the key file, and passes `--finality-signer-socket
 /run/postfiat-signer/<validator>.sock`. Start the signer first. Readiness
 reports `validator_signer_same_user` when both units run as one user.
 
+The generated release rpc unit (`batch_snapshot.rs`, the `rpc.service` it
+writes) still runs as `User=postfiat` and passes `--finality-key-file
+{data_dir}/validator_keys.json` and `--finality-proposal-key-file`. A
+two-user deployment therefore needs a signer unit and an edited rpc unit: no
+key-file flags, `--finality-signer-socket <socket>`, and the socket
+directory reachable from the rpc unit (listed in `ReadWritePaths` or
+otherwise not hidden by its sandboxing). The key file moves out of the data
+directory to the signer's user.
+
+At start the signer probes an existing file at `--socket`. If something
+still listens on it, the signer refuses to start
+(`validator_signer_socket_in_use`). A stale socket file is replaced, and
+anything that is not a socket is never replaced.
+
+In socket mode rpc-serve, and every child process it starts, refuses to
+read any key file (`validator_signer_file_refused_in_socket_mode`). The
+signer is looked up by the canonical path of the socket and the data
+directory.
+
+Typed codes:
+
+| Code | Meaning |
+|---|---|
+| `validator_signer_unreachable` | The signer does not accept the connection, or writing the request fails. |
+| `validator_signer_timeout` | The request passed its deadline (`--deadline-ms` on the signer, 5 s on rpc-serve). |
+| `validator_signer_peer_refused` | The peer's uid is not in `--allow-peer-uid`; the request was not read. |
+| `validator_signer_busy` | The signer already serves 32 connections. |
+| `validator_signer_request_too_large` | The request frame exceeds 1 MiB. |
+| `validator_signer_protocol` | A malformed frame, schema, method or field. |
+| `validator_signer_context_refused` | The signer does not sign under that context. |
+| `validator_signer_key_missing` | The signer holds no key for that validator. |
+| `validator_signer_sign_failed` | Signing failed inside the signer. |
+| `validator_signer_key_mismatch` | The signer's key is not the registry's: at startup, on a signature, or in readiness. |
+| `validator_signer_bad_signature` | The answered signature does not verify under the described key. |
+| `validator_signer_flags_conflict` | `--finality-signer-socket` was given with a key-file flag. |
+| `validator_signer_file_refused_in_socket_mode` | A key file read was refused in socket mode. |
+| `validator_signer_socket_in_use` | A live signer already listens on `--socket`. |
+
 ### Resolving a stuck private action record
 
 A crash between dispatch and the certified send leaves an admission record

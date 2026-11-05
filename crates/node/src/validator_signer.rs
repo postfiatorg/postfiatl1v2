@@ -472,11 +472,26 @@ fn resolve_socket_group(group: &str) -> io::Result<u32> {
 }
 
 /// Binds `socket` with mode `VALIDATOR_SIGNER_SOCKET_MODE` and, with
-/// `group`, that group, refusing to replace anything but a stale socket.
+/// `group`, that group. An existing socket is replaced only when stale; a
+/// live one is `validator_signer_socket_in_use`, and anything else is kept.
 fn bind_signer_socket(socket: &Path, group: Option<u32>) -> io::Result<UnixListener> {
     use std::os::unix::fs::{FileTypeExt, PermissionsExt};
     match std::fs::symlink_metadata(socket) {
-        Ok(metadata) if metadata.file_type().is_socket() => std::fs::remove_file(socket)?,
+        // Probe before unlinking: a socket something still listens on
+        // belongs to a live signer; only a stale file is replaced.
+        Ok(metadata) if metadata.file_type().is_socket() => match UnixStream::connect(socket) {
+            Ok(_) => {
+                return Err(signer_error(
+                    io::ErrorKind::AddrInUse,
+                    "validator_signer_socket_in_use",
+                    format!("a live signer answers on {}", socket.display()),
+                ))
+            }
+            Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => {
+                std::fs::remove_file(socket)?
+            }
+            Err(error) => return Err(error),
+        },
         Ok(_) => {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
@@ -1115,6 +1130,37 @@ mod validator_signer_tests {
         }
         let (stream, _peer) = UnixStream::pair().expect("pair");
         assert!(accepted_or_back_off(Ok(stream)).is_some());
+    }
+
+    #[test]
+    fn a_live_signer_keeps_its_socket_and_a_stale_socket_is_replaced() {
+        let root = temp_root("in-use");
+        let (socket, _) = serve(&root, vec![current_euid()], 5_000);
+        let (key, _) = key_file(&root, "second.json", "validator-0");
+        let second = ValidatorSignerServeOptions {
+            key_file: key.clone(),
+            proposal_key_file: None,
+            socket: socket.clone(),
+            allowed_peer_uids: vec![current_euid()],
+            socket_group: None,
+            deadline_ms: 5_000,
+            max_connections: Some(1),
+        };
+        let error = validator_signer_serve(second, |_| {}).expect_err("the socket is in use");
+        assert!(
+            error
+                .to_string()
+                .starts_with("validator_signer_socket_in_use"),
+            "{error}"
+        );
+        describe_validator_signer(&socket, Duration::from_secs(5))
+            .expect("the first signer still answers");
+        // A socket file with no listener is stale and is replaced.
+        let stale = root.join("stale.sock");
+        drop(UnixListener::bind(&stale).expect("stale listener"));
+        assert!(stale.exists());
+        let _listener = bind_signer_socket(&stale, None).expect("replace the stale socket");
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
