@@ -427,6 +427,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "rpc-serve"
         | "rpc-probe"
         | "validator-keys"
+        | "validator-signer-serve"
         | "validator-key-stage"
         | "validate-local-keys"
         | "run"

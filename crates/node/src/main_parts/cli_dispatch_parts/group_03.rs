@@ -466,6 +466,47 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 &mut std::io::stdout().lock(),
             )
         }
+        "validator-signer-serve" => {
+            let key_file = flag_value(flags, "--key-file")
+                .map(PathBuf::from)
+                .ok_or_else(|| "validator-signer-serve requires --key-file".to_string())?;
+            let socket = flag_value(flags, "--socket")
+                .map(PathBuf::from)
+                .ok_or_else(|| "validator-signer-serve requires --socket".to_string())?;
+            let allowed_peer_uids = flags
+                .windows(2)
+                .filter(|window| window[0] == "--allow-peer-uid")
+                .map(|window| {
+                    window[1]
+                        .parse::<u32>()
+                        .map_err(|_| "--allow-peer-uid must be a u32".to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let deadline_ms = flag_value(flags, "--deadline-ms")
+                .map(str::parse::<u64>)
+                .transpose()
+                .map_err(|_| "--deadline-ms must be a u64".to_string())?
+                .unwrap_or(postfiat_node::VALIDATOR_SIGNER_DEFAULT_DEADLINE_MS);
+            postfiat_node::validator_signer_serve(
+                postfiat_node::ValidatorSignerServeOptions {
+                    key_file,
+                    proposal_key_file: flag_value(flags, "--proposal-key-file").map(PathBuf::from),
+                    socket: socket.clone(),
+                    allowed_peer_uids,
+                    deadline_ms,
+                    max_connections: None,
+                },
+                |description| {
+                    let ready = serde_json::json!({
+                        "schema": "postfiat.validator_signer.ready.v1",
+                        "socket": socket.display().to_string(),
+                        "describe": description,
+                    });
+                    println!("{ready}");
+                },
+            )
+            .map_err(|error| format!("validator-signer-serve failed: {error}"))
+        }
         "validator-keys" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let validators = flag_value(flags, "--validators")
