@@ -85,7 +85,7 @@ Decided by the product owner 2026-10-28: total supply 100 billion PFT; the Base 
   - `python/postfiat_rpc/pft_token.py` (`--record` or `--token`/`--treasury`, JSON or `--table`, exit 2 on a chain-id mismatch, a token without code or a malformed answer); `python/tests/test_pft_token.py`: 10 tests. Documented in [RPC examples](../../rpc/examples.md#erc-20-pft-on-base).
 - [x] M3 *(this lane)* A user-facing interface that consumes the CLI output.
   - `python/postfiat_rpc/pft_token_ui.py` with `pft_token_ui_assets/`: a read-only page on 127.0.0.1 whose `/api/state` runs the `pft_token` reader; GET only, unknown paths 404. `python/tests/test_pft_token_ui.py`: 7 tests.
-- [ ] M4 *(this lane)* Retire this document into `docs/plans/completed/` and document the token in the existing documentation.
+- [ ] M4 *(this lane)* Retire this document into `docs/plans/completed/` and document the token in the existing documentation; started: [the reader's page](../../architecture/pft-token-on-base.md).
 
 ## Not before
 
