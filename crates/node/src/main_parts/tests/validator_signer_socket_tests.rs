@@ -278,6 +278,37 @@ mod validator_signer_socket_tests {
             &frame,
         )
         .expect("the envelope verifies");
+        // A corrupt decoy key file in the data directory and another form of
+        // the data directory's path: the envelope still signs through the
+        // signer, so nothing read the file, and a key file path inside the
+        // data directory is refused.
+        fs::write(data_dir.join(VALIDATOR_KEYS_FILE), b"{ decoy, not a key file").expect("decoy");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(data_dir.join(VALIDATOR_KEYS_FILE), fs::Permissions::from_mode(0o600)).expect("decoy mode");
+        }
+        let other_form = data_dir.join(".");
+        let auth = transport_protocol::sign_transport_envelope_auth(
+            &other_form,
+            &topology,
+            "validator-0",
+            &frame,
+        )
+        .expect("sign through the signer by another path form");
+        transport_protocol::validate_transport_envelope_auth(
+            Some(&auth),
+            &data_dir,
+            &topology,
+            &frame,
+        )
+        .expect("the envelope verifies");
+        let error = postfiat_node::validator_signer_for(&data_dir.join(VALIDATOR_KEYS_FILE))
+            .err()
+            .expect("a key file in a socket signer's data directory is refused");
+        assert!(
+            error.to_string().starts_with("validator_signer_file_refused_in_socket_mode"),
+            "{error}"
+        );
         drop(registration);
         assert!(postfiat_node::registered_validator_signer_for_data_dir(&data_dir).is_none());
         let _ = fs::remove_dir_all(root);

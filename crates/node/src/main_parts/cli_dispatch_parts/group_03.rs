@@ -345,6 +345,9 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             {
                 return Err("validator_signer_flags_conflict: --finality-signer-socket replaces --finality-key-file and --finality-proposal-key-file".to_string());
             }
+            if finality_signer_socket.is_some() {
+                postfiat_node::enter_validator_signer_socket_mode();
+            }
             let finality_key_file = flag_value(flags, "--finality-key-file")
                 .map(PathBuf::from)
                 .or_else(|| finality_signer_socket.clone())

@@ -71,6 +71,7 @@ pub(super) fn sign_transport_envelope_auth(
         return sign_transport_envelope_auth_with(data_dir, topology, signer, frame, &*socket_signer);
     }
     let key_path = data_dir.join(VALIDATOR_KEYS_FILE);
+    postfiat_node::refuse_key_file_in_socket_mode(&key_path).map_err(|error| error.to_string())?;
     validate_transport_private_file_permissions(&key_path, "validator key file")?;
     let key_file: ValidatorKeyFile = read_transport_json_file(&key_path, "validator key file")?;
     validate_transport_validator_key_file(&key_file)?;

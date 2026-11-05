@@ -93,6 +93,14 @@ fn rpc_serve_signs_a_finality_vote_through_the_signer_process() {
         data_dir: data_dir.clone(),
     })
     .expect("status");
+    // A corrupt decoy key file in the data directory: rpc-serve in socket
+    // mode must sign without reading it.
+    let decoy = data_dir.join(VALIDATOR_KEYS_FILE);
+    fs::write(&decoy, b"{ decoy, not a key file").expect("decoy");
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&decoy, fs::Permissions::from_mode(0o600)).expect("decoy mode");
+    }
 
     // SAFETY: geteuid has no preconditions and cannot fail.
     let euid = unsafe { libc::geteuid() };
@@ -180,7 +188,7 @@ fn rpc_serve_signs_a_finality_vote_through_the_signer_process() {
         vote["result"]["consensus_v2_vote"]["validator"],
         "validator-0"
     );
-    assert!(!data_dir.join(VALIDATOR_KEYS_FILE).exists());
+    assert_eq!(fs::read(&decoy).expect("decoy"), b"{ decoy, not a key file");
 
     let readiness = rpc(
         port,

@@ -805,23 +805,70 @@ fn registry_lock(
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// The environment variable that carries socket mode to child processes.
+pub const VALIDATOR_SIGNER_SOCKET_MODE_ENV: &str = "POSTFIAT_VALIDATOR_SIGNER_SOCKET_MODE";
+static SOCKET_SIGNER_MODE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Puts this process, and the child processes it starts, in socket mode:
+/// from now on no signing path reads a key file. `rpc-serve
+/// --finality-signer-socket` enters it before it serves.
+pub fn enter_validator_signer_socket_mode() {
+    SOCKET_SIGNER_MODE.store(true, Ordering::SeqCst);
+    // Called from the CLI before rpc-serve starts its threads.
+    std::env::set_var(VALIDATOR_SIGNER_SOCKET_MODE_ENV, "1");
+}
+
+/// `path` with symlinks and `.`/`..` resolved when it exists, else as given.
+fn canonical(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// Refuses to read the key file at `path` in socket mode: the process (or
+/// its parent rpc-serve) is in socket mode, or `path` lies inside the data
+/// directory of a registered socket signer.
+pub fn refuse_key_file_in_socket_mode(path: &Path) -> io::Result<()> {
+    let process_mode = SOCKET_SIGNER_MODE.load(Ordering::SeqCst)
+        || std::env::var_os(VALIDATOR_SIGNER_SOCKET_MODE_ENV).is_some();
+    let resolved = canonical(path);
+    let in_registered_data_dir = registry_lock(data_dir_signers())
+        .keys()
+        .any(|data_dir| resolved.starts_with(data_dir));
+    if process_mode || in_registered_data_dir {
+        return Err(signer_error(
+            io::ErrorKind::PermissionDenied,
+            "validator_signer_file_refused_in_socket_mode",
+            format!(
+                "a validator signer socket is in use; the key file {} is not read",
+                path.display()
+            ),
+        ));
+    }
+    Ok(())
+}
+
 /// The signer behind a key path: the socket signer registered for it, else
-/// the key file at that path.
+/// the key file at that path, which socket mode refuses.
 pub fn validator_signer_for(key_file: &Path) -> io::Result<Arc<dyn ValidatorSigner>> {
-    if let Some(signer) = registry_lock(socket_signers()).get(key_file) {
+    if let Some(signer) = registry_lock(socket_signers()).get(&canonical(key_file)) {
         return Ok(signer.clone());
     }
+    refuse_key_file_in_socket_mode(key_file)?;
     Ok(Arc::new(KeyFileSigner::open(key_file)?))
 }
 
 /// The socket signer registered for `rpc-serve` over `data_dir`, which also
 /// signs its transport envelopes.
 pub fn registered_validator_signer_for_data_dir(data_dir: &Path) -> Option<Arc<SocketSigner>> {
-    registry_lock(data_dir_signers()).get(data_dir).cloned()
+    registry_lock(data_dir_signers())
+        .get(&canonical(data_dir))
+        .cloned()
 }
 
 pub fn registered_socket_signer(socket: &Path) -> Option<Arc<SocketSigner>> {
-    registry_lock(socket_signers()).get(socket).cloned()
+    registry_lock(socket_signers())
+        .get(&canonical(socket))
+        .cloned()
 }
 
 /// Keeps a socket signer registered while `rpc-serve` runs.
@@ -833,6 +880,7 @@ pub struct SocketSignerRegistration {
 
 impl Drop for SocketSignerRegistration {
     fn drop(&mut self) {
+        // `socket` and `data_dir` are the canonical paths registered.
         registry_lock(socket_signers()).remove(&self.socket);
         registry_lock(data_dir_signers()).remove(&self.data_dir);
     }
@@ -863,12 +911,10 @@ pub fn register_validator_signer_socket(
         }
     }
     let signer = Arc::new(signer);
-    registry_lock(socket_signers()).insert(socket.to_path_buf(), signer.clone());
-    registry_lock(data_dir_signers()).insert(data_dir.to_path_buf(), signer);
-    Ok(SocketSignerRegistration {
-        socket: socket.to_path_buf(),
-        data_dir: data_dir.to_path_buf(),
-    })
+    let (socket, data_dir) = (canonical(socket), canonical(data_dir));
+    registry_lock(socket_signers()).insert(socket.clone(), signer.clone());
+    registry_lock(data_dir_signers()).insert(data_dir.clone(), signer);
+    Ok(SocketSignerRegistration { socket, data_dir })
 }
 
 #[cfg(test)]
@@ -977,6 +1023,47 @@ mod validator_signer_tests {
             "describe leaked the key"
         );
         assert!(!raw.contains("private_key"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_registered_data_directory_refuses_every_key_file_read() {
+        let root = temp_root("socket-mode");
+        let (socket, _) = serve(&root, vec![current_euid()], 5_000);
+        let data_dir = root.join("node");
+        std::fs::create_dir_all(&data_dir).expect("data dir");
+        let signer =
+            Arc::new(SocketSigner::connect(&socket, Duration::from_secs(5)).expect("connect"));
+        registry_lock(data_dir_signers()).insert(canonical(&data_dir), signer);
+        let refused = |error: io::Error| {
+            assert!(
+                error
+                    .to_string()
+                    .starts_with("validator_signer_file_refused_in_socket_mode"),
+                "{error}"
+            )
+        };
+        refused(
+            validator_signer_for(&data_dir.join(VALIDATOR_KEYS_FILE))
+                .err()
+                .expect("refused"),
+        );
+        refused(
+            validator_signer_for(&data_dir.join(".").join(VALIDATOR_KEYS_FILE))
+                .err()
+                .expect("refused"),
+        );
+        // The local-certificate path that reads or creates every validator
+        // key in the data directory.
+        refused(
+            crate::storage_commit::ensure_validator_keys_for_validators(
+                &NodeStore::new(&data_dir),
+                &["validator-0".to_string()],
+            )
+            .expect_err("refused"),
+        );
+        assert!(!data_dir.join(VALIDATOR_KEYS_FILE).exists());
+        registry_lock(data_dir_signers()).remove(&canonical(&data_dir));
         let _ = std::fs::remove_dir_all(root);
     }
 
