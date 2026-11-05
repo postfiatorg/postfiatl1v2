@@ -505,6 +505,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                     proposal_key_file: flag_value(flags, "--proposal-key-file").map(PathBuf::from),
                     socket: socket.clone(),
                     allowed_peer_uids,
+                    socket_group: flag_value(flags, "--socket-group").map(str::to_string),
                     deadline_ms,
                     max_connections: None,
                 },

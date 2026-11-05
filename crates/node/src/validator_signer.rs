@@ -33,6 +33,10 @@ pub const VALIDATOR_SIGNER_MAX_REQUEST_BYTES: usize = 9 * 1024 * 1024;
 pub const VALIDATOR_SIGNER_MAX_RESPONSE_BYTES: usize = 64 * 1024;
 pub const VALIDATOR_SIGNER_DEFAULT_DEADLINE_MS: u64 = 5_000;
 const VALIDATOR_SIGNER_MAX_CONNECTIONS: usize = 32;
+/// The socket's mode after bind. On Linux a connect to a Unix stream socket
+/// needs write permission on the socket file, so the serving user reaches it
+/// through the socket's group; the peer-uid allow-list is the real gate.
+pub const VALIDATOR_SIGNER_SOCKET_MODE: u32 = 0o660;
 /// The context of the authentication on every transport envelope a node
 /// sends its peers (`sign_transport_envelope_auth`).
 pub const TRANSPORT_AUTH_CONTEXT: &[u8] = b"postfiat-l1-v2/transport-auth/v1";
@@ -329,6 +333,9 @@ pub struct ValidatorSignerServeOptions {
     pub proposal_key_file: Option<PathBuf>,
     pub socket: PathBuf,
     pub allowed_peer_uids: Vec<u32>,
+    /// `--socket-group`: the group, by name or gid, the socket is given so
+    /// the serving user can connect; `None` keeps the signer's primary group.
+    pub socket_group: Option<String>,
     pub deadline_ms: u64,
     /// Stop after this many connections (tests); `None` serves forever.
     pub max_connections: Option<usize>,
@@ -437,8 +444,28 @@ impl HeldKeys {
     }
 }
 
-/// Binds `socket` owner-only, refusing to replace anything but a stale socket.
-fn bind_owner_only_socket(socket: &Path) -> io::Result<UnixListener> {
+/// The gid of `group`: a number, or a name looked up in the group database.
+fn resolve_socket_group(group: &str) -> io::Result<u32> {
+    if let Ok(gid) = group.parse::<u32>() {
+        return Ok(gid);
+    }
+    let name = std::ffi::CString::new(group).map_err(invalid_data)?;
+    // SAFETY: `name` is a NUL-terminated string; the returned record is read
+    // before any other group-database call on this thread.
+    let record = unsafe { libc::getgrnam(name.as_ptr()) };
+    if record.is_null() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("--socket-group `{group}` is not a known group"),
+        ));
+    }
+    // SAFETY: `record` is non-null and points to a valid `group`.
+    Ok(unsafe { (*record).gr_gid })
+}
+
+/// Binds `socket` with mode `VALIDATOR_SIGNER_SOCKET_MODE` and, with
+/// `group`, that group, refusing to replace anything but a stale socket.
+fn bind_signer_socket(socket: &Path, group: Option<u32>) -> io::Result<UnixListener> {
     use std::os::unix::fs::{FileTypeExt, PermissionsExt};
     match std::fs::symlink_metadata(socket) {
         Ok(metadata) if metadata.file_type().is_socket() => std::fs::remove_file(socket)?,
@@ -452,7 +479,13 @@ fn bind_owner_only_socket(socket: &Path) -> io::Result<UnixListener> {
         Err(error) => return Err(error),
     }
     let listener = UnixListener::bind(socket)?;
-    std::fs::set_permissions(socket, std::fs::Permissions::from_mode(0o600))?;
+    if let Some(gid) = group {
+        std::os::unix::fs::chown(socket, None, Some(gid))?;
+    }
+    std::fs::set_permissions(
+        socket,
+        std::fs::Permissions::from_mode(VALIDATOR_SIGNER_SOCKET_MODE),
+    )?;
     Ok(listener)
 }
 
@@ -481,7 +514,12 @@ pub fn validator_signer_serve(
             .unwrap_or(&options.key_file),
     )?;
     let keys = Arc::new(HeldKeys { vote, proposal });
-    let listener = bind_owner_only_socket(&options.socket)?;
+    let group = options
+        .socket_group
+        .as_deref()
+        .map(resolve_socket_group)
+        .transpose()?;
+    let listener = bind_signer_socket(&options.socket, group)?;
     on_ready(&keys.describe());
     let active = Arc::new(AtomicUsize::new(0));
     let allowed = Arc::new(options.allowed_peer_uids.clone());
@@ -878,6 +916,7 @@ mod validator_signer_tests {
             proposal_key_file: None,
             socket: socket.clone(),
             allowed_peer_uids: allowed,
+            socket_group: None,
             deadline_ms,
             max_connections: None,
         };
@@ -912,7 +951,10 @@ mod validator_signer_tests {
             .expect("socket")
             .permissions()
             .mode();
-        assert_eq!(mode & 0o077, 0, "socket must be owner-only");
+        // Owner and group read-write: a peer of another user needs write
+        // permission on the socket to connect.
+        assert_eq!(mode & 0o777, 0o660, "socket mode {:o}", mode & 0o777);
+        assert_eq!(VALIDATOR_SIGNER_SOCKET_MODE, 0o660);
         let (description, peer_uid) =
             describe_validator_signer(&socket, Duration::from_secs(5)).expect("describe");
         assert_eq!(peer_uid, current_euid());
@@ -935,6 +977,22 @@ mod validator_signer_tests {
             "describe leaked the key"
         );
         assert!(!raw.contains("private_key"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn signer_socket_takes_the_named_group() {
+        use std::os::unix::fs::MetadataExt;
+        let root = temp_root("group");
+        // SAFETY: getegid has no preconditions and cannot fail.
+        let egid = unsafe { libc::getegid() };
+        let gid = resolve_socket_group(&egid.to_string()).expect("numeric group");
+        let socket = root.join("group.sock");
+        let _listener = bind_signer_socket(&socket, Some(gid)).expect("bind");
+        let metadata = std::fs::metadata(&socket).expect("socket");
+        assert_eq!((metadata.gid(), metadata.mode() & 0o777), (egid, 0o660));
+        let error = resolve_socket_group("pf-no-such-group").expect_err("unknown group");
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
         let _ = std::fs::remove_dir_all(root);
     }
 

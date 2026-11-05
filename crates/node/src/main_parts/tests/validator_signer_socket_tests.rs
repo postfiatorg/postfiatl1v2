@@ -49,6 +49,7 @@ mod validator_signer_socket_tests {
             proposal_key_file: None,
             socket: socket.to_path_buf(),
             allowed_peer_uids: vec![euid()],
+            socket_group: None,
             deadline_ms: 5_000,
             max_connections,
         };

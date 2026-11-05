@@ -67,9 +67,13 @@ the validator's live store).
 
 `postfiat-node validator-signer-serve` holds the validator key so rpc-serve
 does not. It loads `--key-file` (and `--proposal-key-file`, default the
-same), listens on `--socket` with mode `0600`, and answers only peers whose
-kernel-reported uid is in `--allow-peer-uid` (repeatable); any other peer is
-refused before its request is read. Each request is one length-prefixed JSON
+same), listens on `--socket` with mode `0660` (with `--socket-group <name or gid>`,
+the socket's group is set to that group; without it the group is the signer's
+primary group), and answers only peers whose kernel-reported uid is in
+`--allow-peer-uid` (repeatable); any other peer is refused before its
+request is read. On Linux a connect to a Unix socket needs write permission
+on the socket file, so the serving user reaches it through the group; the uid
+allow-list is the real gate. Each request is one length-prefixed JSON
 frame (at most 9 MiB, the hex of a 4 MiB transport frame) with a deadline
 (`--deadline-ms`, default 5000). It signs only what rpc-serve signs as the
 validator: block certificate, block timeout and consensus-v2 votes and the
@@ -87,10 +91,11 @@ that later stops answering or times out fails that request
 back to a key file, and rpc-serve does not read `<data-dir>/validator_keys.json`.
 
 Deployment shape: two units and two users. The signer unit runs as its own
-user (for example `postfiat-signer`), owns the key file (`0600`) and a socket
-directory such as `/run/postfiat-signer` (`0750`, group shared with the
-serving user so it can reach the socket), and passes `--allow-peer-uid` with
-the rpc-serve user's uid. The rpc-serve unit runs as `postfiat`, cannot read
+user (for example `postfiat-signer`) and owns the key file (`0600`) and a
+socket directory such as `/run/postfiat-signer` (`0750`, group
+`postfiat-signer-clients`, which the serving user is a member of). It passes
+`--socket-group postfiat-signer-clients`, so the socket is `0660` in that
+group, and `--allow-peer-uid` with the rpc-serve user's uid. The rpc-serve unit runs as `postfiat`, cannot read
 the key file, and passes `--finality-signer-socket
 /run/postfiat-signer/<validator>.sock`. Start the signer first. Readiness
 reports `validator_signer_same_user` when both units run as one user.
