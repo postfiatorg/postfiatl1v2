@@ -236,22 +236,29 @@ The tests do not exercise these refusals:
 
 `python/postfiat_rpc/external_lane_watcher.py` is the watcher of design section 5.2: it matches every release on PFTL against its Lock on Base and raises an alarm on the first release that no Lock backs. It only reads, on both chains, and holds no key.
 
-Each run reads the lane's row from a PFTL node (`external_lane_info`: the lane policy and the stored release records, paged) and, on Base, the block with the `finalized` tag. Every Base read is pinned to that block:
+Each run reads the lane's row from a PFTL node (`external_lane_info`: the lane policy and the stored release records, paged) and, on Base, the block with the `finalized` tag. Then:
 
 1. The Base RPC's chain id must be the policy's `chain_id`; otherwise the run stops (`base_chain_id_mismatch`, exit 1).
-2. The lock contract's runtime code (`eth_getCode`) must hash (keccak-256) to the policy's `lock_runtime_code_hash`.
-3. Each release in range, oldest first: its `source_block_number` must be at or below the finalized block, and `lockRecord(lock_nonce)` must return a holder, the release's `amount_atoms` and the keccak-256 of its UTF-8 `recipient`.
+2. The lock contract's runtime code (`eth_getCode`, at the finalized block) must hash (keccak-256) to the policy's `lock_runtime_code_hash`.
+3. Each release in range is checked, oldest first:
+   - A release whose `source_block_number` is above the finalized block is not judged. It is reported as `release_block_not_finalized`, nothing else is checked for it in that run, and a later run checks it again.
+   - Otherwise the Base block at `source_block_number` must have the release record's `source_block_hash`.
+   - `lockRecord(lock_nonce)`, read at that same source block and not at the head, must return a holder, the release's `amount_atoms` and the keccak-256 of its UTF-8 `recipient`. A Lock made after the release therefore cannot back it.
+   - One token base unit is compared as one atom, with no scaling.
+
+The run fails closed when the node's lane report changes under it. Every page must carry the first page's chain id, genesis hash, `current_height`, `release_count`, `pruned_release_count` and `release_history_root`. Any difference stops the run (`external_lane_info_inconsistent`, exit 1, retried under `--interval`). The sequences must run without a gap from `release_count − 1` down to the pruned count; a gap is `external_lane_info_malformed`.
 
 | Alarm | Meaning |
 |---|---|
 | `release_without_lock` | `lockRecord` returns no holder: no Lock has this nonce. |
 | `release_amount_mismatch` | The Lock's amount is not the release's. |
 | `release_recipient_mismatch` | The Lock's `pftlRecipientHash` is not the hash of the release's recipient. |
-| `release_block_not_finalized` | The release's source block is above Base's finalized block. |
+| `release_block_not_finalized` | The release's source block is above Base's finalized block; a later run checks it again. |
+| `release_source_block_mismatch` | The Base block at the release's source block number has another hash than the release names. |
 | `lock_code_hash_mismatch` | The lock contract's code at the finalized block is not the pinned code. |
 | `release_pruned_before_check` | Release records were pruned before a run checked them, so they cannot be matched. |
 
-Output is JSON lines: one `release` line per release checked (`status` `backed` or `alarm`), one `alarm` line per alarm and one `summary` line per run. The exit code is 0 for a clean run, 2 for any alarm and 1 for an input or RPC error, reported as one `error` line on stderr (a malformed release record is `release_record_malformed`). `--state-file` keeps the PFTL height checked through and the release count. It advances only after a clean run, so an alarm is raised again on every run until an operator starts past it with `--from-height`.
+Output is JSON lines: one `release` line per release checked (`status` `backed` or `alarm`), one `alarm` line per alarm and one `summary` line per run. The exit code is 0 for a clean run, 2 for any alarm and 1 for an input or RPC error, reported as one `error` line on stderr (a malformed release record is `release_record_malformed`, a malformed lane report `external_lane_info_malformed`, a report that changed while it was paged `external_lane_info_inconsistent`, and a malformed Base answer `base_answer_malformed`). `--state-file` keeps the PFTL height checked through and the release count. It is bound to the PFTL chain id, the genesis hash and the lane policy's lock contract and chain id. A state file of another network, with a counter that is not a u64, or ahead of the live node is refused (`state_file_invalid`). The state advances only after a clean run, so an alarm is raised again on every run until an operator starts past it with `--from-height`.
 
 An operator runs it beside a validator, against that validator's RPC and an independently operated Base node, either as a timer with `--once` or as a service with `--interval`, which keeps running and retries after an RPC error:
 
