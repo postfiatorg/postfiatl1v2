@@ -27,6 +27,10 @@ use postfiat_types::{
     EXTERNAL_LANE_COMMITTEE_MISSING, EXTERNAL_LANE_LOCK_MISMATCH, EXTERNAL_LANE_NOT_CONFIGURED,
     EXTERNAL_LANE_PROOF_INVALID, EXTERNAL_LANE_SOURCE_MISMATCH,
 };
+use postfiat_types::{
+    ExternalLaneExportOperationV1, EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
+    EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK,
+};
 
 type ExecutionError = (&'static str, String);
 
@@ -285,6 +289,33 @@ pub(crate) fn verify_external_lane_lock(
         source_block_hash: format!("0x{}", bytes_to_hex(&checkpoint.block_hash)),
         committee_epoch: selector.recorded_epoch(),
     })
+}
+
+/// `external_lane_export_v1` is refused until it is built: an unknown lane,
+/// the lane's own lock contract as the Base recipient, and otherwise
+/// `external_lane_export_not_supported`. Nothing is read beyond genesis and
+/// nothing is written.
+pub(crate) fn refuse_external_lane_export<T>(
+    genesis: &Genesis,
+    operation: &ExternalLaneExportOperationV1,
+) -> Result<T, ExecutionError> {
+    let lane = configured_lane(genesis, &operation.lane_id)?;
+    if operation.base_recipient == lane.policy.lock_contract_address {
+        return Err((
+            EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK,
+            format!(
+                "the Base recipient is external lane `{}`'s lock contract, which a release can never pay",
+                lane.id
+            ),
+        ));
+    }
+    Err((
+        EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
+        format!(
+            "external_lane_export_v1 on external lane `{}` is not built yet",
+            lane.id
+        ),
+    ))
 }
 
 /// Verifies the operation's proof against the lane's genesis policy, then

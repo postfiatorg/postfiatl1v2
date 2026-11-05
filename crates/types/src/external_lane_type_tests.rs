@@ -1366,3 +1366,41 @@ fn governed_zero_cap_amendment_still_halts_releases() {
         .unwrap_err();
     assert_eq!(refused.0, EXTERNAL_LANE_WINDOW_CAP_EXCEEDED);
 }
+
+fn sample_export_operation() -> ExternalLaneExportOperationV1 {
+    ExternalLaneExportOperationV1 {
+        sender: "pf1111111111111111111111111111111111111111".to_string(),
+        lane_id: "base-erc20".to_string(),
+        amount_atoms: 1_000,
+        base_recipient: format!("0x{}", "2c".repeat(20)),
+    }
+}
+
+#[test]
+fn external_lane_export_operation_validates_its_shape() {
+    let operation = sample_export_operation();
+    operation.validate().expect("valid export operation");
+    let wrapped = AssetTransactionOperation::ExternalLaneExportV1(operation.clone());
+    assert_eq!(wrapped.transaction_kind(), EXTERNAL_LANE_EXPORT_TRANSACTION_KIND_V1);
+    let json = serde_json::to_value(&wrapped).expect("encode");
+    assert_eq!(json["operation"], "external_lane_export_v1");
+    let decoded: AssetTransactionOperation = serde_json::from_value(json.clone()).expect("decode");
+    assert_eq!(decoded, wrapped);
+    let mut unknown = json;
+    unknown["exported_atoms"] = serde_json::json!(1);
+    assert!(serde_json::from_value::<AssetTransactionOperation>(unknown).is_err());
+
+    let refused = |edit: fn(&mut ExternalLaneExportOperationV1), expected: &str| {
+        let mut operation = sample_export_operation();
+        edit(&mut operation);
+        let error = operation.validate().expect_err(expected);
+        assert!(error.contains(expected), "{expected}: {error}");
+    };
+    refused(|op| op.amount_atoms = 0, "amount_atoms must be positive");
+    refused(|op| op.base_recipient = format!("0x{}", "00".repeat(20)), "zero address");
+    refused(|op| op.base_recipient = format!("0x{}", "2C".repeat(20)), "base_recipient");
+    refused(|op| op.base_recipient = "0x2c2c".to_string(), "base_recipient");
+    refused(|op| op.base_recipient = "2c".repeat(21), "base_recipient");
+    refused(|op| op.lane_id = "Base ERC20".to_string(), "lane");
+    refused(|op| op.sender = "not-an-address".to_string(), "sender");
+}

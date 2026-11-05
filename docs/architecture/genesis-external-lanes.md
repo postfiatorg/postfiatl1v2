@@ -236,6 +236,8 @@ The tests do not exercise these refusals:
 
 The watcher (section 5.2) and the Python CLI and interface. The design keeps the SP1 route for Base through its dispute games (option (a)) as a later upgrade.
 
+The Phase 3 export, `external_lane_export_v1`, is designed in `docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md`. It debits the sender into the lane, and the Base lock contract's `release` pays it against the PFTL finality verifier on Base. Today the operation is recognised and refused. An unknown lane is refused with `external_lane_not_configured`, and the lane's own lock contract as the Base recipient with `external_lane_export_recipient_is_lock`. Every other export is refused with `external_lane_export_not_supported`, at mempool admission, batch building and execution. No lane or export state changes; in a certified block the ordinary rejected-transaction fee rule applies (`crates/execution/src/rejected_fee_claim.rs`), as for a refused release. The lane records no exported atoms yet.
+
 ## Not before
 
 The design note sets three "not before" rules:

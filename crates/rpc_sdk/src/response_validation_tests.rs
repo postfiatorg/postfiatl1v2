@@ -628,6 +628,59 @@
     }
 
     #[test]
+    fn asset_fee_quote_accepts_the_external_lane_operations() {
+        // Both lane kinds are asset transaction kinds the node recognises;
+        // the export is refused by the node until it is built, but a response
+        // that carries one must still validate as a known kind.
+        for kind in [
+            postfiat_types::EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1,
+            postfiat_types::EXTERNAL_LANE_EXPORT_TRANSACTION_KIND_V1,
+        ] {
+            assert!(is_supported_asset_transaction_kind(kind), "{kind}");
+        }
+        let response = success_response(
+            "lane-export-quote",
+            &json!({
+                "schema": ASSET_FEE_QUOTE_SCHEMA,
+                "transaction_kind": postfiat_types::EXTERNAL_LANE_EXPORT_TRANSACTION_KIND_V1,
+                "chain_id": "postfiat-local",
+                "genesis_hash": "ef".repeat(48),
+                "protocol_version": 1,
+                "source": "pf1111111111111111111111111111111111111111",
+                "sequence": 8,
+                "sequence_source": "ledger_mempool",
+                "sender_balance": 100,
+                "sender_sequence": 7,
+                "mempool_pending_for_sender": 0,
+                "base_asset_fee": 22,
+                "state_expansion_fee": 0,
+                "minimum_fee": 22,
+                "account_reserve": 10,
+                "transfer_fee_byte_quantum": 512,
+                "transfer_fee_per_quantum": 1,
+                "asset_weight_bytes": 11000,
+                "sender_balance_after_fee": 78,
+                "sender_meets_reserve_after_fee": true,
+                "operation": {
+                    "operation": postfiat_types::EXTERNAL_LANE_EXPORT_TRANSACTION_KIND_V1,
+                    "sender": "pf1111111111111111111111111111111111111111",
+                    "lane_id": "base-erc20",
+                    "amount_atoms": 1_000,
+                    "base_recipient": format!("0x{}", "2c".repeat(20))
+                }
+            }),
+            vec![],
+        )
+        .expect("external lane export asset fee quote response");
+        let summary = decode_asset_fee_quote_summary(&response)
+            .expect("decode external lane export asset fee quote");
+        assert_eq!(
+            summary.transaction_kind,
+            postfiat_types::EXTERNAL_LANE_EXPORT_TRANSACTION_KIND_V1
+        );
+    }
+
+    #[test]
     fn public_reserve_product_asset_fee_quotes_accept_current_protocol_operations() {
         let current_kinds = [
             MARKET_OPS_POLICY_REGISTER_TRANSACTION_KIND,

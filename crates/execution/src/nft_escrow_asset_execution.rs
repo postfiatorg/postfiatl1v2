@@ -3206,6 +3206,17 @@ fn apply_asset_operation(
                 compatibility.external_lane_committees,
             )
         }
+        AssetTransactionOperation::ExternalLaneExportV1(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::EXTERNAL_LANE_EXPORT_TRANSACTION_KIND_V1
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "external_lane_export_v1 transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::external_lane_release::refuse_external_lane_export(genesis, operation)
+        }
     }
 }
 

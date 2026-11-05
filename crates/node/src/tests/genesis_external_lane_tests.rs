@@ -3178,4 +3178,9 @@ mod release_path {
         use super::*;
         include!("external_lane_checkpoint_source_tests.rs");
     }
+
+    mod export_path {
+        use super::*;
+        include!("external_lane_export_tests.rs");
+    }
 }

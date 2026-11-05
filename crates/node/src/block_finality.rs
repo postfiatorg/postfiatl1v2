@@ -1453,6 +1453,15 @@ fn account_tx_rows_for_transparent_batch(
                 None,
                 None,
             ),
+            AssetTransactionOperation::ExternalLaneExportV1(operation) => (
+                operation.sender.clone(),
+                operation.base_recipient.clone(),
+                operation.amount_atoms,
+                None,
+                None,
+                None,
+                None,
+            ),
         };
         let (memo_hash, memo_count, memo_bytes) = match &unsigned.operation {
             AssetTransactionOperation::IssuedPaymentV2(operation) => (
