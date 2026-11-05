@@ -11,21 +11,33 @@
 //! lane's route-config digest, the lock contract and the token with their
 //! runtime code hashes, and it names the lane's active committee.
 
+use std::collections::BTreeSet;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use postfiat_bridge::ethereum_keccak256;
+use postfiat_bridge::{ethereum_keccak256, verify_ethereum_checkpoint_certificate};
+use postfiat_crypto_provider::{
+    hex_to_bytes, ml_dsa_65_sign_with_context, ml_dsa_65_verify_with_context, ML_DSA_65_ALGORITHM,
+};
 use postfiat_storage::NodeStore;
 use postfiat_types::{
-    EthereumFinalizedCheckpointV1, FastSwapChainDomainV1, FastSwapCommitteeV1,
-    FastSwapOpaqueHashV1, GenesisExternalLane, ETHEREUM_CHECKPOINT_SCHEMA_V1,
+    EthereumCheckpointCertificateV1, EthereumCheckpointVoteV1, EthereumFinalizedCheckpointV1,
+    FastSwapChainDomainV1, FastSwapCommitteeV1, FastSwapOpaqueHashV1, GenesisExternalLane,
+    ETHEREUM_CHECKPOINT_SCHEMA_V1, ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1,
 };
 use serde_json::Value;
+use zeroize::Zeroizing;
 
 use crate::ethereum_checkpoint_signing::{
-    ethereum_rpc_call, ethereum_rpc_hex_bytes, exact_evm_address, exact_hex, invalid_data,
-    rpc_hex_u64, value_hex_array, value_hex_u64, write_json, EthereumRpcEndpoint,
+    ethereum_checkpoint_signing_state_path, ethereum_rpc_call, ethereum_rpc_hex_bytes,
+    exact_evm_address, exact_hex, invalid_data, load_or_create_checkpoint_signing_state,
+    rpc_hex_u64, validate_checkpoint_signing_state, value_hex_array, value_hex_u64, write_json,
+    write_private_json, EthereumCheckpointSigningStateV1, EthereumRpcEndpoint,
+    ETHEREUM_CHECKPOINT_SIGNING_STATE_SCHEMA_V1,
 };
+use crate::{read_json_file, read_validator_key_file, validator_key_record};
+
+const EXTERNAL_LANE_CHECKPOINT_SIGNING_STATE_DIR: &str = "external-lane-checkpoint-signing";
 
 /// Why a Base checkpoint source command refused. Carried inside the returned
 /// `io::Error`; [`external_lane_checkpoint_refusal`] reads it back.
@@ -39,6 +51,15 @@ pub enum ExternalLaneCheckpointRefusal {
     LockCodeHashMismatch,
     TokenCodeHashMismatch,
     CheckpointNotForLane,
+    ObservationMismatch,
+    NotCommitteeMember,
+    SigningKeyMismatch,
+    ConflictingCheckpoint,
+    DuplicateVote,
+    VoteNotMember,
+    VoteOnOtherCheckpoint,
+    BelowQuorum,
+    CertificateInvalid,
 }
 
 impl ExternalLaneCheckpointRefusal {
@@ -52,6 +73,15 @@ impl ExternalLaneCheckpointRefusal {
             Self::LockCodeHashMismatch => "base_lock_code_hash_mismatch",
             Self::TokenCodeHashMismatch => "base_token_code_hash_mismatch",
             Self::CheckpointNotForLane => "external_lane_checkpoint_mismatch",
+            Self::ObservationMismatch => "base_observation_mismatch",
+            Self::NotCommitteeMember => "checkpoint_signer_not_member",
+            Self::SigningKeyMismatch => "checkpoint_signing_key_mismatch",
+            Self::ConflictingCheckpoint => "checkpoint_conflicting_vote",
+            Self::DuplicateVote => "checkpoint_vote_duplicate",
+            Self::VoteNotMember => "checkpoint_vote_not_member",
+            Self::VoteOnOtherCheckpoint => "checkpoint_vote_other_checkpoint",
+            Self::BelowQuorum => "checkpoint_votes_below_quorum",
+            Self::CertificateInvalid => "checkpoint_certificate_invalid",
         }
     }
 }
@@ -97,6 +127,24 @@ pub struct ExternalLaneCheckpointObserveOptions {
     pub base_rpc: String,
     pub block_number: Option<u64>,
     pub checkpoint_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalLaneCheckpointSignOptions {
+    pub data_dir: PathBuf,
+    pub checkpoint_file: PathBuf,
+    pub base_rpc: String,
+    pub validator: String,
+    pub validator_key_file: PathBuf,
+    pub vote_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalLaneCheckpointAssembleOptions {
+    pub data_dir: PathBuf,
+    pub checkpoint_file: PathBuf,
+    pub vote_files: Vec<PathBuf>,
+    pub certificate_file: PathBuf,
 }
 
 /// A lane's genesis policy decoded, with the committee it names at the next
@@ -348,4 +396,184 @@ pub fn observe_external_lane_checkpoint(
     let checkpoint = lane.observe(&endpoint, options.block_number)?;
     write_json(&options.checkpoint_file, &checkpoint)?;
     Ok(checkpoint)
+}
+
+/// `external-lane-checkpoint-sign`: one committee member's vote. The member
+/// re-observes the block from its own RPC and signs only a checkpoint equal
+/// to its observation; its signing state holds one checkpoint per lane,
+/// committee epoch and block number, so it never signs two.
+pub fn sign_external_lane_checkpoint_vote(
+    options: ExternalLaneCheckpointSignOptions,
+) -> io::Result<EthereumCheckpointVoteV1> {
+    let checkpoint: EthereumFinalizedCheckpointV1 =
+        read_json_file(&options.checkpoint_file, "external lane checkpoint")?;
+    let lane = active_lane(&options.data_dir, &checkpoint.route_id)?;
+    lane.require_checkpoint(&checkpoint)?;
+    let member = lane
+        .committee
+        .validators
+        .iter()
+        .find(|validator| validator.validator_id == options.validator)
+        .ok_or_else(|| {
+            refuse(
+                ExternalLaneCheckpointRefusal::NotCommitteeMember,
+                format!(
+                    "`{}` is not a member of the active committee of external lane `{}`",
+                    options.validator, lane.lane.id
+                ),
+            )
+        })?;
+    let key_file = read_validator_key_file(&options.validator_key_file)?;
+    let key_record = validator_key_record(&key_file, &options.validator)?;
+    if key_record.algorithm_id != ML_DSA_65_ALGORITHM
+        || hex_to_bytes(&key_record.public_key_hex).map_err(invalid_data)? != member.public_key
+    {
+        return Err(refuse(
+            ExternalLaneCheckpointRefusal::SigningKeyMismatch,
+            format!(
+                "the key file's key for `{}` is not its committee key",
+                options.validator
+            ),
+        ));
+    }
+
+    let endpoint = EthereumRpcEndpoint::parse(&options.base_rpc)?;
+    let observed = lane.observe(&endpoint, Some(checkpoint.block_number))?;
+    if observed.observed_head_number < checkpoint.observed_head_number
+        || (EthereumFinalizedCheckpointV1 {
+            observed_head_number: checkpoint.observed_head_number,
+            ..observed
+        }) != checkpoint
+    {
+        return Err(refuse(
+            ExternalLaneCheckpointRefusal::ObservationMismatch,
+            format!(
+                "this validator's Base RPC does not observe the checkpoint of block {}",
+                checkpoint.block_number
+            ),
+        ));
+    }
+
+    let state_path = ethereum_checkpoint_signing_state_path(
+        &options
+            .data_dir
+            .join(EXTERNAL_LANE_CHECKPOINT_SIGNING_STATE_DIR),
+        &checkpoint,
+        &options.validator,
+    );
+    let mut state = load_or_create_checkpoint_signing_state(
+        &state_path,
+        EthereumCheckpointSigningStateV1 {
+            schema: ETHEREUM_CHECKPOINT_SIGNING_STATE_SCHEMA_V1.to_string(),
+            validator_id: options.validator.clone(),
+            checkpoint: checkpoint.clone(),
+            vote: None,
+        },
+    )?;
+    if state.checkpoint != checkpoint {
+        return Err(refuse(
+            ExternalLaneCheckpointRefusal::ConflictingCheckpoint,
+            format!(
+                "`{}` already holds a different checkpoint of external lane `{}` block {}",
+                options.validator, lane.lane.id, checkpoint.block_number
+            ),
+        ));
+    }
+    validate_checkpoint_signing_state(&state, &checkpoint, &options.validator, &member.public_key)?;
+    if let Some(vote) = state.vote {
+        write_json(&options.vote_file, &vote)?;
+        return Ok(vote);
+    }
+    let mut vote = EthereumCheckpointVoteV1 {
+        validator_id: options.validator,
+        signature: Vec::new(),
+    };
+    let signing_bytes = vote.signing_bytes(&checkpoint).map_err(invalid_data)?;
+    let private_key =
+        Zeroizing::new(hex_to_bytes(&key_record.private_key_hex).map_err(invalid_data)?);
+    vote.signature = ml_dsa_65_sign_with_context(
+        &private_key,
+        &signing_bytes,
+        ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1,
+    )
+    .map_err(invalid_data)?;
+    state.vote = Some(vote.clone());
+    write_private_json(&state_path, &state)?;
+    write_json(&options.vote_file, &vote)?;
+    Ok(vote)
+}
+
+/// `external-lane-checkpoint-assemble`: the certificate of exactly the
+/// committee quorum, from votes of distinct active members on this
+/// checkpoint, verified with `verify_ethereum_checkpoint_certificate` before
+/// it is written. With more valid votes than the quorum it keeps the quorum
+/// lowest validator ids.
+pub fn assemble_external_lane_checkpoint_certificate(
+    options: ExternalLaneCheckpointAssembleOptions,
+) -> io::Result<EthereumCheckpointCertificateV1> {
+    let checkpoint: EthereumFinalizedCheckpointV1 =
+        read_json_file(&options.checkpoint_file, "external lane checkpoint")?;
+    let lane = active_lane(&options.data_dir, &checkpoint.route_id)?;
+    lane.require_checkpoint(&checkpoint)?;
+    let quorum = usize::from(lane.committee.domain.quorum);
+    let mut seen = BTreeSet::new();
+    let mut votes = Vec::with_capacity(options.vote_files.len());
+    for path in &options.vote_files {
+        let vote: EthereumCheckpointVoteV1 = read_json_file(path, "external lane checkpoint vote")?;
+        if !seen.insert(vote.validator_id.clone()) {
+            return Err(refuse(
+                ExternalLaneCheckpointRefusal::DuplicateVote,
+                format!("two votes of `{}`", vote.validator_id),
+            ));
+        }
+        let member = lane
+            .committee
+            .validators
+            .iter()
+            .find(|validator| validator.validator_id == vote.validator_id)
+            .ok_or_else(|| {
+                refuse(
+                    ExternalLaneCheckpointRefusal::VoteNotMember,
+                    format!(
+                        "`{}` is not a member of the lane's active committee",
+                        vote.validator_id
+                    ),
+                )
+            })?;
+        let signs_checkpoint = vote.signing_bytes(&checkpoint).is_ok_and(|bytes| {
+            ml_dsa_65_verify_with_context(
+                &member.public_key,
+                &bytes,
+                &vote.signature,
+                ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1,
+            )
+        });
+        if !signs_checkpoint {
+            return Err(refuse(
+                ExternalLaneCheckpointRefusal::VoteOnOtherCheckpoint,
+                format!(
+                    "the vote of `{}` does not sign this checkpoint",
+                    vote.validator_id
+                ),
+            ));
+        }
+        votes.push(vote);
+    }
+    if votes.len() < quorum {
+        return Err(refuse(
+            ExternalLaneCheckpointRefusal::BelowQuorum,
+            format!("{} votes; the committee quorum is {quorum}", votes.len()),
+        ));
+    }
+    votes.sort_by(|left, right| left.validator_id.cmp(&right.validator_id));
+    votes.truncate(quorum);
+    let certificate = EthereumCheckpointCertificateV1 { checkpoint, votes };
+    verify_ethereum_checkpoint_certificate(&lane.committee, &certificate).map_err(|error| {
+        refuse(
+            ExternalLaneCheckpointRefusal::CertificateInvalid,
+            format!("{error:?}"),
+        )
+    })?;
+    write_json(&options.certificate_file, &certificate)?;
+    Ok(certificate)
 }

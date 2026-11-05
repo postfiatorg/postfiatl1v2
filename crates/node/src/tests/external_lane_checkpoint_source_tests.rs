@@ -320,6 +320,62 @@ fn observe(chain: &Chain, rpc: &MockBase, block_number: Option<u64>, name: &str)
     Ok(checkpoint_file)
 }
 
+/// The committee key of `validator-{index}` in its own private key file.
+fn committee_key_file(chain: &Chain, index: usize, key_index: usize) -> PathBuf {
+    let key = &chain.keys[key_index];
+    let path = chain.data_dir.join(format!("committee-{index}-{key_index}.key.json"));
+    fs::write(
+        &path,
+        serde_json::to_vec_pretty(&ValidatorKeyFile {
+            validators: vec![ValidatorKeyRecord {
+                node_id: format!("validator-{index}"),
+                algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+                public_key_hex: bytes_to_hex(&key.public_key),
+                private_key_hex: bytes_to_hex(&key.private_key),
+            }],
+        })
+        .expect("key json"),
+    )
+    .expect("write committee key");
+    crate::set_private_file_permissions(&path).expect("protect committee key");
+    path
+}
+
+fn sign(chain: &Chain, checkpoint_file: &Path, rpc: &MockBase, index: usize, name: &str) -> io::Result<PathBuf> {
+    sign_as(chain, checkpoint_file, rpc, index, index, name)
+}
+
+fn sign_as(
+    chain: &Chain,
+    checkpoint_file: &Path,
+    rpc: &MockBase,
+    index: usize,
+    key_index: usize,
+    name: &str,
+) -> io::Result<PathBuf> {
+    let vote_file = chain.data_dir.join(format!("{name}.vote-{index}.json"));
+    sign_external_lane_checkpoint_vote(ExternalLaneCheckpointSignOptions {
+        data_dir: chain.data_dir.clone(),
+        checkpoint_file: checkpoint_file.to_path_buf(),
+        base_rpc: rpc.url.clone(),
+        validator: format!("validator-{index}"),
+        validator_key_file: committee_key_file(chain, index, key_index),
+        vote_file: vote_file.clone(),
+    })?;
+    Ok(vote_file)
+}
+
+fn assemble(chain: &Chain, checkpoint_file: &Path, vote_files: Vec<PathBuf>, name: &str) -> io::Result<PathBuf> {
+    let certificate_file = chain.data_dir.join(format!("{name}.certificate.json"));
+    assemble_external_lane_checkpoint_certificate(ExternalLaneCheckpointAssembleOptions {
+        data_dir: chain.data_dir.clone(),
+        checkpoint_file: checkpoint_file.to_path_buf(),
+        vote_files,
+        certificate_file: certificate_file.clone(),
+    })?;
+    Ok(certificate_file)
+}
+
 fn amount() -> u64 {
     ACCOUNT_RESERVE + 4_321
 }
@@ -396,5 +452,104 @@ fn observe_refuses_chain_finality_depth_code_and_lane_mismatches() {
     })
     .unwrap_err();
     assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::LaneNotConfigured);
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn sign_re_observes_refuses_non_members_and_never_signs_two_checkpoints_of_one_block() {
+    let chain = source_chain("sign");
+    let rpc = MockBase::serve(base_state(&chain.recipient, amount(), 0xa0));
+    let fork = MockBase::serve(base_state(&chain.recipient, amount(), 0xf0));
+    let checkpoint = observe(&chain, &rpc, Some(BLOCK), "a").expect("observe");
+    let forked = observe(&chain, &fork, Some(BLOCK), "b").expect("observe the fork");
+
+    // A member whose own RPC observes another block refuses to sign.
+    let error = sign(&chain, &checkpoint, &fork, 1, "mismatch").unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::ObservationMismatch);
+    // Not a member of the active committee, or not its committee key.
+    let error = sign_as(&chain, &checkpoint, &rpc, 6, 0, "outsider").unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::NotCommitteeMember);
+    let error = sign_as(&chain, &checkpoint, &rpc, 2, 3, "wrong-key").unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::SigningKeyMismatch);
+
+    // One vote per lane and block: the same checkpoint again returns the
+    // same vote; a different checkpoint of the block is refused.
+    let first = sign(&chain, &checkpoint, &rpc, 0, "first").expect("sign");
+    let again = sign(&chain, &checkpoint, &rpc, 0, "again").expect("sign again");
+    assert_eq!(fs::read(&first).expect("vote"), fs::read(&again).expect("vote"));
+    let error = sign(&chain, &forked, &fork, 0, "conflict").unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::ConflictingCheckpoint);
+    assert!(!chain.data_dir.join("conflict.vote-0.json").exists());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn assemble_keeps_exactly_the_quorum_of_distinct_member_votes() {
+    let chain = source_chain("assemble");
+    let rpc = MockBase::serve(base_state(&chain.recipient, amount(), 0xa0));
+    let checkpoint = observe(&chain, &rpc, None, "assemble").expect("observe");
+    let votes: Vec<PathBuf> = (0..6)
+        .map(|index| sign(&chain, &checkpoint, &rpc, index, "assemble").expect("vote"))
+        .collect();
+    let refused = |files: Vec<PathBuf>, name: &str| {
+        refusal(assemble(&chain, &checkpoint, files, name).unwrap_err())
+    };
+    assert_eq!(
+        refused([&votes[..4], &votes[..1]].concat(), "duplicate"),
+        ExternalLaneCheckpointRefusal::DuplicateVote
+    );
+    let mut outsider: EthereumCheckpointVoteV1 = read_json_file(&votes[5], "vote").expect("vote");
+    outsider.validator_id = "validator-9".to_string();
+    let outsider_file = chain.data_dir.join("outsider.vote.json");
+    fs::write(&outsider_file, serde_json::to_vec(&outsider).expect("vote json")).expect("write vote");
+    assert_eq!(
+        refused([&votes[..4], &[outsider_file]].concat(), "outsider"),
+        ExternalLaneCheckpointRefusal::VoteNotMember
+    );
+    assert_eq!(refused(Vec::new(), "none"), ExternalLaneCheckpointRefusal::BelowQuorum);
+    // Six valid votes give the certificate of the quorum's five lowest ids,
+    // in any input order.
+    let reversed: Vec<PathBuf> = votes.iter().rev().cloned().collect();
+    let certificate = assemble(&chain, &checkpoint, reversed, "six").expect("assemble six");
+    let parsed: EthereumCheckpointCertificateV1 =
+        read_json_file(&certificate, "certificate").expect("certificate");
+    let ids: Vec<&str> = parsed.votes.iter().map(|vote| vote.validator_id.as_str()).collect();
+    assert_eq!(ids, ["validator-0", "validator-1", "validator-2", "validator-3", "validator-4"]);
+    postfiat_bridge::verify_ethereum_checkpoint_certificate(&chain.committee, &parsed)
+        .expect("the bridge verifier accepts the certificate");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn observe_and_sign_follow_a_governed_committee_move() {
+    let chain = source_chain_of("move", 4);
+    let (epoch2, keys2) = second_committee(&chain);
+    let rpc = MockBase::serve(base_state(&chain.recipient, amount(), 0xa0));
+    activate_committee(&chain, &epoch2);
+    let before = observe(&chain, &rpc, Some(BLOCK), "before").expect("observe before the move");
+    let parsed: EthereumFinalizedCheckpointV1 = read_json_file(&before, "checkpoint").expect("read");
+    assert_eq!(parsed.authority_epoch, 1, "registering epoch 2 alone does not move the lane");
+    govern_committee_move(&chain, &epoch2);
+
+    let after = observe(&chain, &rpc, Some(BLOCK), "after").expect("observe after the move");
+    let parsed: EthereumFinalizedCheckpointV1 = read_json_file(&after, "checkpoint").expect("read");
+    assert_eq!(
+        (parsed.authority_epoch, parsed.committee_root),
+        (2, epoch2.domain.committee_root)
+    );
+    // The epoch-1 checkpoint and the epoch-1 key are refused; the epoch-2
+    // key signs.
+    let error = sign(&chain, &before, &rpc, 0, "old-checkpoint").unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::CheckpointNotForLane);
+    let error = sign(&chain, &after, &rpc, 0, "old-key").unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::SigningKeyMismatch);
+    let moved = Chain {
+        data_dir: chain.data_dir.clone(),
+        genesis: chain.genesis.clone(),
+        keys: keys2,
+        committee: epoch2,
+        recipient: chain.recipient.clone(),
+    };
+    sign(&moved, &after, &rpc, 0, "new-key").expect("the epoch-2 member signs");
     let _ = fs::remove_dir_all(&chain.data_dir);
 }

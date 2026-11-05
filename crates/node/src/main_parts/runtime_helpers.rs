@@ -758,6 +758,10 @@ fn print_usage() {
   postfiat-node ethereum-checkpoint-certificate-assemble [--data-dir PATH] --checkpoint-file PATH --vote-files CSV --certificate-file PATH
   postfiat-node external-lane-checkpoint-observe [--data-dir PATH] --lane-id ID --base-rpc http://HOST:PORT[/PATH] [--block-number N] --checkpoint-file PATH
       (the lane checkpoint of the Base `finalized` block, or of block N at or below it: chain id, confirmation depth and pinned runtime code hashes of the lane policy, the lane's active committee)
+  postfiat-node external-lane-checkpoint-sign [--data-dir PATH] --checkpoint-file PATH --base-rpc http://HOST:PORT[/PATH] --validator NODE_ID --validator-key-file PATH --vote-file PATH
+      (an active committee member's vote after re-observing the block from its own Base RPC; one checkpoint per lane, committee epoch and block number)
+  postfiat-node external-lane-checkpoint-assemble [--data-dir PATH] --checkpoint-file PATH --vote-files CSV --certificate-file PATH
+      (the certificate of exactly the committee quorum; every vote must be a distinct active member's on this checkpoint)
   postfiat-node fastswap-control-prepare [--data-dir PATH] --kind activate-committee --epoch N --committee-root HEX --control-file PATH
   postfiat-node fastswap-control-prepare [--data-dir PATH] --kind stop-prepare --policy-epoch N --control-file PATH
   postfiat-node fastswap-control-vote-sign [--data-dir PATH] --control-file PATH --validator NODE_ID --validator-key-file PATH --vote-file PATH

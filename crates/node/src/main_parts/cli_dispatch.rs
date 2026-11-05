@@ -40,7 +40,9 @@ use postfiat_node::{
     apply_shielded_batch, apply_shielded_batch_with_replay, apply_validator_registry_update,
     assemble_cobalt_authority_transition, assemble_consensus_v2_commit,
     assemble_ethereum_checkpoint_certificate,
-    observe_external_lane_checkpoint, ExternalLaneCheckpointObserveOptions,
+    assemble_external_lane_checkpoint_certificate, observe_external_lane_checkpoint,
+    sign_external_lane_checkpoint_vote, ExternalLaneCheckpointAssembleOptions,
+    ExternalLaneCheckpointObserveOptions, ExternalLaneCheckpointSignOptions,
     assemble_signed_fastpay_recovery_governance_bootstrap,
     assemble_signed_fastswap_governance_bootstrap, assemble_signed_governance_amendment,
     assemble_signed_validator_registry_update,
@@ -509,6 +511,8 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ethereum-checkpoint-vote-sign"
         | "ethereum-checkpoint-certificate-assemble"
         | "external-lane-checkpoint-observe"
+        | "external-lane-checkpoint-sign"
+        | "external-lane-checkpoint-assemble"
         | "fastswap-control-prepare"
         | "fastswap-control-vote-sign"
         | "fastswap-control-assemble"

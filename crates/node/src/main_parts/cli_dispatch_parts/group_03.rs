@@ -2318,6 +2318,58 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             );
             Ok(())
         }
+        "external-lane-checkpoint-sign" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let vote = sign_external_lane_checkpoint_vote(ExternalLaneCheckpointSignOptions {
+                data_dir: PathBuf::from(data_dir),
+                checkpoint_file: PathBuf::from(
+                    flag_value(flags, "--checkpoint-file").ok_or("missing --checkpoint-file")?,
+                ),
+                base_rpc: flag_value(flags, "--base-rpc").ok_or("missing --base-rpc")?.to_string(),
+                validator: flag_value(flags, "--validator").ok_or("missing --validator")?.to_string(),
+                validator_key_file: PathBuf::from(
+                    flag_value(flags, "--validator-key-file")
+                        .ok_or("missing --validator-key-file")?,
+                ),
+                vote_file: PathBuf::from(
+                    flag_value(flags, "--vote-file").ok_or("missing --vote-file")?,
+                ),
+            })
+            .map_err(|error| format!("{command} failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&vote)
+                    .map_err(|error| format!("vote serialization failed: {error}"))?
+            );
+            Ok(())
+        }
+        "external-lane-checkpoint-assemble" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let vote_files =
+                split_csv(flag_value(flags, "--vote-files").ok_or("missing --vote-files")?)
+                    .into_iter()
+                    .map(PathBuf::from)
+                    .collect::<Vec<_>>();
+            let certificate =
+                assemble_external_lane_checkpoint_certificate(ExternalLaneCheckpointAssembleOptions {
+                    data_dir: PathBuf::from(data_dir),
+                    checkpoint_file: PathBuf::from(
+                        flag_value(flags, "--checkpoint-file").ok_or("missing --checkpoint-file")?,
+                    ),
+                    vote_files,
+                    certificate_file: PathBuf::from(
+                        flag_value(flags, "--certificate-file")
+                            .ok_or("missing --certificate-file")?,
+                    ),
+                })
+                .map_err(|error| format!("{command} failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&certificate)
+                    .map_err(|error| format!("certificate serialization failed: {error}"))?
+            );
+            Ok(())
+        }
         "fastswap-control-prepare" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let control_file =
