@@ -54,7 +54,7 @@ is a reason that keeps `ready` false:
 | --- | --- | --- |
 | `published_by` | `rpc_serve` from the running server; `local_read` from `postfiat-node rpc`, whose `--data-dir` may be a copy | `readiness_not_published_by_running_service` |
 | `store_backend`, `transactional_active` | the backend-mode record of the server's own `--data-dir` (`transactional` when absent) and whether its transactional store is active, as the node decides it | `store_not_transactional` (a JSONL store, a plain `init` store or a transactional store before its activation height) |
-| `validator_signer` | `none` with neither `--allow-mempool-submit-finality` nor `--allow-private-action-admission`; otherwise `plaintext_key_file` (`--finality-key-file`) or `socket` (`--finality-signer-socket`, a [validator signer process](#validator-signer-process)), with `signer_socket` and `signer_uid`, the uid the kernel reports for the signer when it answers during the read, beside the server's own `serving_uid`, and `signer_key_matches`, whether the keys the signer describes for both roles are the ones the validator registry records | `validator_signer_none`, `validator_signer_unsafe_file`; for `socket`, `validator_signer_same_user` when `signer_uid` equals `serving_uid`, `validator_signer_unreachable` when the signer does not answer, and `validator_signer_key_mismatch` when `signer_key_matches` is false |
+| `validator_signer` | `none` with neither `--allow-mempool-submit-finality` nor `--allow-private-action-admission`; otherwise `plaintext_key_file` (`--finality-key-file`) or `socket` (`--finality-signer-socket`, a [validator signer process](#validator-signer-process)), with `signer_socket` and `signer_uid`, the uid the kernel reports for the signer when it answers during the read, beside the server's own `serving_uid`, `signer_key_matches`, whether the keys the signer describes for both roles are the ones the validator registry records (`null` when the registry cannot be read), and `validator_registry_readable`, whether the registry could be read for that comparison | `validator_signer_none`, `validator_signer_unsafe_file`; for `socket`, `validator_signer_same_user` when `signer_uid` equals `serving_uid`, `validator_signer_unreachable` when the signer does not answer, `validator_signer_key_mismatch` when `signer_key_matches` is false, and `validator_registry_unreadable` when `validator_registry_readable` is false |
 | `key_files` | per key file the key-file signer uses (none for `socket`) (`--finality-key-file`, and `--finality-proposal-key-file` when it differs): `owner_only` when owned by the serving user with no group or other access | `validator_key_file_not_owner_only`, `validator_key_file_missing`, `validator_key_file_unreadable` |
 
 Only the socket signer under its own user can satisfy the signer facts;
@@ -122,7 +122,10 @@ directory to the signer's user.
 At start the signer probes an existing file at `--socket`. If something
 still listens on it, the signer refuses to start
 (`validator_signer_socket_in_use`). A stale socket file is replaced, and
-anything that is not a socket is never replaced.
+anything that is not a socket is never replaced
+(`validator_signer_socket_path_not_a_socket`). An accept error does not stop
+the signer: it logs the first error and then at most one line per second,
+and retries after 50 ms.
 
 In socket mode rpc-serve, and every child process it starts, refuses to
 read any key file (`validator_signer_file_refused_in_socket_mode`). The
@@ -147,6 +150,7 @@ Typed codes:
 | `validator_signer_flags_conflict` | `--finality-signer-socket` was given with a key-file flag. |
 | `validator_signer_file_refused_in_socket_mode` | A key file read was refused in socket mode. |
 | `validator_signer_socket_in_use` | A live signer already listens on `--socket`. |
+| `validator_signer_socket_path_not_a_socket` | `--socket` names a file that is not a socket; it is left as it is. |
 
 ### Resolving a stuck private action record
 

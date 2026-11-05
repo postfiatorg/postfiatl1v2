@@ -170,14 +170,18 @@ fn rpc_serve_readiness_service(
         .ok();
         let peer_uid = described.as_ref().map(|(_, peer_uid)| *peer_uid);
         // The startup comparison again: both roles hold the registry's key.
-        let key_matches = described.as_ref().map(|(description, _)| {
-            postfiat_node::validator_signer_holds_registered_key(
+        // An unreadable registry leaves the comparison unknown, not false.
+        let key_check = described.as_ref().map(|(description, _)| {
+            postfiat_node::validator_signer_key_matches_registry(
                 description,
                 &context.data_dir,
                 &context.node_id,
             )
-            .is_ok()
         });
+        let key_matches = key_check
+            .as_ref()
+            .and_then(|check| check.as_ref().ok().copied());
+        let registry_readable = key_check.as_ref().map(Result::is_ok);
         return postfiat_node::PrivateReadinessService {
             key_files: Vec::new(),
             signer: postfiat_node::PrivateValidatorSigner::Socket,
@@ -185,6 +189,7 @@ fn rpc_serve_readiness_service(
                 path: socket.clone(),
                 peer_uid,
                 key_matches,
+                registry_readable,
             }),
         };
     }

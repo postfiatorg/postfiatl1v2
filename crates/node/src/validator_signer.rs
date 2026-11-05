@@ -493,8 +493,9 @@ fn bind_signer_socket(socket: &Path, group: Option<u32>) -> io::Result<UnixListe
             Err(error) => return Err(error),
         },
         Ok(_) => {
-            return Err(io::Error::new(
+            return Err(signer_error(
                 io::ErrorKind::AlreadyExists,
+                "validator_signer_socket_path_not_a_socket",
                 format!("{} exists and is not a socket", socket.display()),
             ))
         }
@@ -548,8 +549,13 @@ pub fn validator_signer_serve(
     let allowed = Arc::new(options.allowed_peer_uids.clone());
     let deadline = Duration::from_millis(options.deadline_ms);
     let mut handles = Vec::new();
+    let mut accept_errors = AcceptErrorLog::default();
     for (served, stream) in listener.incoming().enumerate() {
-        let Some(mut stream) = accepted_or_back_off(stream) else {
+        let Some(mut stream) =
+            accepted_or_back_off(stream, &mut accept_errors, Instant::now(), &mut |line| {
+                eprintln!("{line}")
+            })
+        else {
             continue;
         };
         if active.fetch_add(1, Ordering::SeqCst) >= VALIDATOR_SIGNER_MAX_CONNECTIONS {
@@ -575,14 +581,45 @@ pub fn validator_signer_serve(
     Ok(())
 }
 
-/// The accepted stream, or `None` after logging an accept error and a short
+/// The accept error log's rate: the first error, then at most one line per
+/// `ACCEPT_ERROR_LOG_INTERVAL`, which counts the errors it did not log.
+const ACCEPT_ERROR_LOG_INTERVAL: Duration = Duration::from_secs(1);
+
+#[derive(Debug, Default)]
+struct AcceptErrorLog {
+    last_logged: Option<Instant>,
+    unlogged: u64,
+}
+
+/// The accepted stream, or `None` after an accept error and a 50 ms
 /// back-off: an accept error (`EMFILE`, `ECONNABORTED`, ...) never ends the
-/// serve loop.
-fn accepted_or_back_off(accepted: io::Result<UnixStream>) -> Option<UnixStream> {
+/// serve loop. `emit` receives the first error and then at most one line per
+/// second, so a sustained error does not flood the log.
+fn accepted_or_back_off(
+    accepted: io::Result<UnixStream>,
+    log: &mut AcceptErrorLog,
+    now: Instant,
+    emit: &mut dyn FnMut(&str),
+) -> Option<UnixStream> {
     match accepted {
         Ok(stream) => Some(stream),
         Err(error) => {
-            eprintln!("validator-signer-serve: accept failed: {error}; retrying");
+            let due = log
+                .last_logged
+                .is_none_or(|last| now.duration_since(last) >= ACCEPT_ERROR_LOG_INTERVAL);
+            if due {
+                let unlogged = std::mem::take(&mut log.unlogged);
+                emit(&if unlogged == 0 {
+                    format!("validator-signer-serve: accept failed: {error}; retrying")
+                } else {
+                    format!(
+                        "validator-signer-serve: accept failed: {error}; retrying ({unlogged} more since the last line)"
+                    )
+                });
+                log.last_logged = Some(now);
+            } else {
+                log.unlogged += 1;
+            }
             std::thread::sleep(Duration::from_millis(50));
             None
         }
@@ -934,7 +971,33 @@ pub fn validator_signer_holds_registered_key(
     node_id: &str,
 ) -> io::Result<()> {
     let registry = read_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE))?;
+    description_holds_key(
+        description,
+        validator_registry_record(&registry, node_id)?,
+        node_id,
+    )
+}
+
+/// The readiness form of [`validator_signer_holds_registered_key`]:
+/// `Ok(false)` when the signer holds another key (or none) for `node_id`,
+/// and an error only when the registry cannot be read or does not record
+/// `node_id`, so an unreadable registry is never reported as a key mismatch.
+pub fn validator_signer_key_matches_registry(
+    description: &ValidatorSignerDescription,
+    data_dir: &Path,
+    node_id: &str,
+) -> io::Result<bool> {
+    let registry = read_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE))?;
     let registered = validator_registry_record(&registry, node_id)?;
+    Ok(description_holds_key(description, registered, node_id).is_ok())
+}
+
+/// Whether `description` holds, for both roles, exactly `registered`.
+fn description_holds_key(
+    description: &ValidatorSignerDescription,
+    registered: &ValidatorRegistryRecord,
+    node_id: &str,
+) -> io::Result<()> {
     for (key, held) in [
         (ValidatorSignerKey::Vote, &description.vote_keys),
         (ValidatorSignerKey::Proposal, &description.proposal_keys),
@@ -1123,13 +1186,97 @@ mod validator_signer_tests {
 
     #[test]
     fn an_accept_error_backs_off_and_keeps_serving() {
+        let mut log = AcceptErrorLog::default();
+        let mut lines = Vec::new();
         for errno in [libc::EMFILE, libc::ECONNABORTED, libc::ENFILE] {
             let started = Instant::now();
-            assert!(accepted_or_back_off(Err(io::Error::from_raw_os_error(errno))).is_none());
+            let accepted = accepted_or_back_off(
+                Err(io::Error::from_raw_os_error(errno)),
+                &mut log,
+                started,
+                &mut |line| lines.push(line.to_string()),
+            );
+            assert!(accepted.is_none());
             assert!(started.elapsed() >= Duration::from_millis(50));
         }
+        assert_eq!(
+            lines.len(),
+            1,
+            "three errors within a second log one line: {lines:?}"
+        );
         let (stream, _peer) = UnixStream::pair().expect("pair");
-        assert!(accepted_or_back_off(Ok(stream)).is_some());
+        assert!(accepted_or_back_off(Ok(stream), &mut log, Instant::now(), &mut |_| {}).is_some());
+    }
+
+    #[test]
+    fn a_sustained_accept_error_logs_the_first_line_and_then_one_per_second() {
+        let mut log = AcceptErrorLog::default();
+        let mut lines = Vec::new();
+        let start = Instant::now();
+        // 45 EMFILE errors 50 ms apart, as the back-off spaces them: 2.2 s.
+        for step in 0..45 {
+            let now = start + Duration::from_millis(50 * step);
+            let accepted = accepted_or_back_off(
+                Err(io::Error::from_raw_os_error(libc::EMFILE)),
+                &mut log,
+                now,
+                &mut |line| lines.push(line.to_string()),
+            );
+            assert!(accepted.is_none());
+        }
+        // At 0 s, 1 s and 2 s: three lines, not 45.
+        assert_eq!(lines.len(), 3, "{lines:?}");
+        assert!(!lines[0].contains("more since"), "{}", lines[0]);
+        assert!(
+            lines[1].ends_with("(19 more since the last line)"),
+            "{}",
+            lines[1]
+        );
+        assert!(
+            lines[2].ends_with("(19 more since the last line)"),
+            "{}",
+            lines[2]
+        );
+        assert_eq!(log.unlogged, 4);
+    }
+
+    #[test]
+    fn readiness_separates_an_unreadable_registry_from_a_key_mismatch() {
+        let root = temp_root("registry");
+        let (_, record) = key_file(&root, "vote.json", "validator-0");
+        let (_, other) = key_file(&root, "another.json", "validator-0");
+        let describe = |key: &ValidatorKeyRecord| ValidatorSignerDescription {
+            uid: current_euid(),
+            pid: std::process::id(),
+            vote_keys: vec![ValidatorPublicKey::from(key)],
+            proposal_keys: vec![ValidatorPublicKey::from(key)],
+        };
+        let data_dir = root.join("node");
+        std::fs::create_dir_all(&data_dir).expect("data dir");
+        let registry = data_dir.join(VALIDATOR_REGISTRY_FILE);
+        std::fs::write(
+            &registry,
+            serde_json::to_vec(&ValidatorRegistry {
+                validators: vec![ValidatorRegistryRecord {
+                    node_id: "validator-0".to_string(),
+                    algorithm_id: record.algorithm_id.clone(),
+                    public_key_hex: record.public_key_hex.clone(),
+                }],
+            })
+            .expect("registry json"),
+        )
+        .expect("write registry");
+        let matches =
+            |key| validator_signer_key_matches_registry(&describe(key), &data_dir, "validator-0");
+        assert!(matches(&record).expect("readable registry"));
+        // A signer holding another key: a key mismatch, not a read failure.
+        assert!(!matches(&other).expect("readable registry"));
+        // An unreadable registry is an error, never a mismatch.
+        std::fs::write(&registry, b"{ not a registry").expect("corrupt registry");
+        assert!(matches(&record).is_err());
+        std::fs::remove_file(&registry).expect("remove registry");
+        assert!(matches(&record).is_err());
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -1160,6 +1307,21 @@ mod validator_signer_tests {
         drop(UnixListener::bind(&stale).expect("stale listener"));
         assert!(stale.exists());
         let _listener = bind_signer_socket(&stale, None).expect("replace the stale socket");
+        // A file that is not a socket is never replaced.
+        let regular = root.join("regular.sock");
+        std::fs::write(&regular, b"not a socket").expect("regular file");
+        let error = bind_signer_socket(&regular, None).expect_err("a regular file is kept");
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert!(
+            error
+                .to_string()
+                .starts_with("validator_signer_socket_path_not_a_socket"),
+            "{error}"
+        );
+        assert_eq!(
+            std::fs::read(&regular).expect("regular file"),
+            b"not a socket"
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 

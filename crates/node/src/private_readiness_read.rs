@@ -20,7 +20,7 @@ pub const PRIVATE_READINESS_SCHEMA: &str = "postfiat.private_readiness.v1";
 /// parameter, and it never makes `ready` true.
 pub const PRIVATE_ACTION_ADMISSION_SWITCH_KEYS: [&str; 1] = ["--allow-private-action-admission"];
 /// The custody refusals, in report order. The W-1 manifest lists the same.
-pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 10] = [
+pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 11] = [
     "readiness_not_published_by_running_service",
     "store_not_transactional",
     "validator_signer_none",
@@ -28,6 +28,7 @@ pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 10] = [
     "validator_signer_same_user",
     "validator_signer_unreachable",
     "validator_signer_key_mismatch",
+    "validator_registry_unreadable",
     "validator_key_file_missing",
     "validator_key_file_unreadable",
     "validator_key_file_not_owner_only",
@@ -74,8 +75,11 @@ pub struct PrivateReadinessSignerSocket {
     pub peer_uid: Option<u32>,
     /// Whether the keys the signer described for this read, for both roles,
     /// are the keys the validator registry records; `None` when it did not
-    /// answer.
+    /// answer or the registry could not be read.
     pub key_matches: Option<bool>,
+    /// Whether the validator registry could be read for that comparison;
+    /// `None` when the signer did not answer.
+    pub registry_readable: Option<bool>,
 }
 
 /// The validator signer of the serving process. `PlaintextKeyFile` is
@@ -135,9 +139,13 @@ pub struct PrivateReadinessCustody {
     /// The serving process's effective uid.
     pub serving_uid: u32,
     /// Whether the socket signer holds, for both roles, the key the
-    /// validator registry records; `null` when it did not answer or there
-    /// is no socket signer.
+    /// validator registry records; `null` when it did not answer, the
+    /// registry could not be read, or there is no socket signer.
     pub signer_key_matches: Option<bool>,
+    /// Whether the validator registry could be read to compare the socket
+    /// signer's keys; `null` when the signer did not answer or there is no
+    /// socket signer.
+    pub validator_registry_readable: Option<bool>,
 }
 
 /// The identity a verifier proves it was built with.
@@ -467,6 +475,7 @@ fn readiness_custody(
         signer_uid: signer_socket.and_then(|socket| socket.peer_uid),
         serving_uid: euid,
         signer_key_matches: signer_socket.and_then(|socket| socket.key_matches),
+        validator_registry_readable: signer_socket.and_then(|socket| socket.registry_readable),
     })
 }
 
@@ -508,6 +517,7 @@ pub(super) fn custody_reasons(custody: &PrivateReadinessCustody) -> Vec<String> 
         socket && custody.signer_uid == Some(custody.serving_uid),
         socket && custody.signer_uid.is_none(),
         socket && custody.signer_key_matches == Some(false),
+        socket && custody.validator_registry_readable == Some(false),
         any_key_file("missing") || (file_signer && custody.key_files.is_empty()),
         any_key_file("unreadable"),
         any_key_file("not_owner_only"),
