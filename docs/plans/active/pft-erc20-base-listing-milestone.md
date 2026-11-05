@@ -77,6 +77,7 @@ Decided by the product owner 2026-10-28: total supply 100 billion PFT; the Base 
 ## Phase 3 — the reverse export route (optional)
 
 - [ ] P3.1 *(this lane)* Export native PFT as the same ERC-20, released from the Base lock contract. This needs the export route generalised beyond NAV assets (`crates/execution/src/nav_vault_asset_execution.rs:6470-6477`), and the PFTL finality verifier and relay deployed on Base.
+  - [ ] Designed and refused until built (branch `token/export-route-design`): the design note `docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md` and the `external_lane_export_v1` skeleton. The skeleton has its type and shape refusals, and mempool admission, batch building and execution refuse it with `external_lane_export_not_supported` (`crates/execution/src/external_lane_release.rs`, `crates/node/src/tests/external_lane_export_tests.rs`). `exported_atoms` and the Base path come with the implementation.
 
 ## Mandate deliverables (AGENTS.md)
 
