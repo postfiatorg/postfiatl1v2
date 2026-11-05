@@ -851,6 +851,83 @@ fn sign_refuses_a_key_file_whose_private_key_is_not_its_public_key() {
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
+/// `state` with the logs of the Lock transaction (index 1) of `BLOCK`
+/// replaced, and the block's receipts root rebuilt.
+fn with_lock_logs(mut state: BaseState, logs: Vec<Value>) -> BaseState {
+    let receipts = state.receipts.get_mut(&BLOCK).expect("block receipts");
+    receipts[1]["logs"] = json!(logs);
+    let root = crate::ethereum_receipt_proof_builder::receipts_root_of(receipts).expect("root");
+    state.blocks.get_mut(&BLOCK).expect("block")["receiptsRoot"] = json!(format!("0x{}", bytes_to_hex(&root)));
+    state
+}
+
+#[test]
+fn lock_proof_refuses_two_locked_logs_a_mismatched_recipient_hash_or_a_forged_certificate() {
+    // Two `Locked` logs of the lock contract and no `--log-index`.
+    let chain = source_chain("ambiguous");
+    let two = vec![
+        locked_log(LOCK_NONCE, &chain.recipient, amount()),
+        locked_log(LOCK_NONCE + 9, &chain.recipient, amount()),
+        transfer_log(TOKEN, amount()),
+    ];
+    let rpc = MockBase::serve(with_lock_logs(base_state(&chain.recipient, amount(), 0xa0), two));
+    let certificate = certificate_of(&chain, &rpc, "ambiguous");
+    let error = lock_proof(&chain, &rpc, &certificate, &lock_tx(1), None, "ambiguous").unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::LockedLogAmbiguous);
+    assert!(!chain.data_dir.join("ambiguous.operation.json").exists());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+
+    // Recipient bytes that do not hash to the indexed recipient hash.
+    let chain = source_chain("recipient-hash");
+    let mut locked = locked_log(LOCK_NONCE, &chain.recipient, amount());
+    locked["topics"][3] = json!(format!("0x{}", bytes_to_hex(&keccak(b"another recipient"))));
+    let rpc = MockBase::serve(with_lock_logs(
+        base_state(&chain.recipient, amount(), 0xa0),
+        vec![locked, transfer_log(TOKEN, amount())],
+    ));
+    let certificate = certificate_of(&chain, &rpc, "hash");
+    let error = lock_proof(&chain, &rpc, &certificate, &lock_tx(1), None, "hash").unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::LockedEventInvalid);
+    assert!(!chain.data_dir.join("hash.operation.json").exists());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+
+    // A certificate whose votes do not verify.
+    let chain = source_chain("forged-certificate");
+    let rpc = MockBase::serve(base_state(&chain.recipient, amount(), 0xa0));
+    let certificate = certificate_of(&chain, &rpc, "forged");
+    let mut forged: EthereumCheckpointCertificateV1 =
+        read_json_file(&certificate, "certificate").expect("certificate");
+    forged.votes[0].signature[0] ^= 1;
+    let forged_file = chain.data_dir.join("forged.certificate.json");
+    fs::write(&forged_file, serde_json::to_vec(&forged).expect("certificate json")).expect("write certificate");
+    let error = lock_proof(&chain, &rpc, &forged_file, &lock_tx(1), None, "forged").unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::CertificateInvalid);
+    assert!(!chain.data_dir.join("forged.operation.json").exists());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn observe_sign_assemble_and_proof_refuse_a_lane_whose_committee_is_not_registered() {
+    let chain = source_chain("committee-missing");
+    let rpc = MockBase::serve(base_state(&chain.recipient, amount(), 0xa0));
+    let checkpoint = observe(&chain, &rpc, Some(BLOCK), "registered").expect("observe");
+    let votes: Vec<PathBuf> =
+        (0..5).map(|index| sign(&chain, &checkpoint, &rpc, index, "registered").expect("vote")).collect();
+    let certificate = assemble(&chain, &checkpoint, votes.clone(), "registered").expect("assemble");
+    // The ledger no longer holds the committee the lane names.
+    let store = NodeStore::new(&chain.data_dir);
+    let mut ledger = store.read_ledger().expect("ledger");
+    ledger.fastswap_committees.clear();
+    store.write_ledger(&ledger).expect("write ledger without the committee");
+    let missing = ExternalLaneCheckpointRefusal::CommitteeMissing;
+    assert_eq!(refusal(observe(&chain, &rpc, Some(BLOCK), "missing").unwrap_err()), missing);
+    assert_eq!(refusal(sign(&chain, &checkpoint, &rpc, 5, "missing").unwrap_err()), missing);
+    assert_eq!(refusal(assemble(&chain, &checkpoint, votes, "missing").unwrap_err()), missing);
+    let error = lock_proof(&chain, &rpc, &certificate, &lock_tx(1), None, "missing").unwrap_err();
+    assert_eq!(refusal(error), missing);
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
 /// Read-only qualification against a real Base Sepolia RPC at the http URL
 /// in `POSTFIAT_LIVE_BASE_RPC`: the rehearsal lock and token code hashes,
 /// the `finalized` block, five votes and the certificate, and the receipt
