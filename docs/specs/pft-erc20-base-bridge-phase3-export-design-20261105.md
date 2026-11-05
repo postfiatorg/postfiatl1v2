@@ -5,10 +5,10 @@ This is a draft design note, written on 2026-11-05 for milestone item P3.1 of `d
 ## 1. BLUF
 
 1. Phase 3 lets a PFTL holder send native PFT back to Base as ERC-20 PFT. The new PFTL operation `external_lane_export_v1` debits the sender and credits the external lane. The ERC-20 PFT then comes out of the Phase 2 lock contract, through its dormant `release` and the PFTL finality verifier on Base (`crates/pft-token-contracts/src/PFTLockV1.sol:213-250`). No ERC-20 PFT is minted.
-2. The lane grows back by exactly the exported atoms. The lane's remainder becomes reserved − released + exported, so the per-block conservation check keeps its form (section 4).
-3. PFTL does not read the lock's balance. It refuses an export that would make the lane's exported atoms exceed its released atoms. Every released atom is a Lock the lock contract still holds, so every accepted export stays payable on Base (section 4).
+2. The lane grows back by exactly the exported atoms. Its remainder becomes reserved − (released − exported), computed in checked u64 arithmetic, so the per-block conservation check keeps its form (section 4).
+3. PFTL does not read the lock's balance. It refuses an export that would make the lane's exported atoms exceed its released atoms. Every accepted export is payable on Base while two things hold: every PFTL release is backed by a real Lock, and every Base payout consumed one export packet. A false Phase 2 release or an unsound verifier payout breaks this. Sections 8 and 9 give the consequence and the response (section 4).
 4. Base needs the PFTL finality verifier and a relay. The verifier must be deployed before the lock contract, because the lock fixes the verifier's address at construction (Phase 2, section 6). It can be deployed only after the first finalized PFTL checkpoint, because its constructor needs that checkpoint. Genesis therefore pins the lock's predicted address and its code hash, which is computed from the verifier's predicted address (section 5).
-5. Today the operation is recognised and refused. Mempool admission, batch building and execution all refuse it with `external_lane_export_not_supported` and change no state (section 7).
+5. Today the operation is recognised and refused. Mempool admission, batch building and execution all refuse it with `external_lane_export_not_supported`. No lane or export state changes; in a certified block the ordinary rejected-transaction fee rule applies (section 7).
 
 ## 2. Terms
 
@@ -38,7 +38,12 @@ The transaction pays its fee like any asset transaction.
 - take the lane's next export nonce;
 - record the export packet, with its digest and commitments.
 
-The withdrawal-id commitment covers the lane, the export nonce and the packet. The burn-transaction commitment covers the accepted transaction id. The lock refuses either commitment a second time (`PFTLockV1.sol:228-231`), and so does the verifier (`PFTLFinalityVerifierV1.sol:197-204`).
+The withdrawal-id commitment covers the lane, the export nonce and the packet. The burn-transaction commitment covers the accepted transaction id. The two contracts enforce different things:
+
+- **The verifier** consumes the proof nullifier and the withdrawal-id commitment, and refuses either a second time (`PFTLFinalityVerifierV1.sol:194-204`).
+- **The lock** consumes the withdrawal-id and the burn-transaction commitments, and refuses either a second time (`PFTLockV1.sol:228-235`).
+
+So the withdrawal-id commitment is refused twice over, while the proof nullifier is checked only by the verifier and the burn commitment only by the lock.
 
 **Shape refusals** (in `validate()`, before any state is read):
 
@@ -51,7 +56,7 @@ The withdrawal-id commitment covers the lane, the export nonce and the packet. T
 
 - **Lane not configured.** The lane is not in genesis: `external_lane_not_configured`, the release's code (`crates/types/src/external_lane_types.rs:281`).
 - **Recipient is the lock contract.** The `base_recipient` is the lane's `lock_contract_address`. This check runs after the lane check, so an unknown lane reports `external_lane_not_configured` first (`crates/execution/src/external_lane_release.rs:298-319`). A release to the lock itself can never pay out: the lock's balance does not change, so the delta check reverts (`PFTLockV1.sol:243-249`). The zero address is already refused by shape, and on Base by `PFTLockV1.sol:227` and `PFTLFinalityVerifierV1.sol:286`.
-- **Above released.** `exported_atoms + amount_atoms > released_atoms` (section 4).
+- **Above released.** `amount_atoms > released_atoms − exported_atoms` (`external_lane_export_above_released`, section 4).
 - **Not enough balance.** The usual balance and reserve refusals.
 
 **No minimum beyond one atom.** The lock's `release` has no minimum; it refuses only zero (`PFTLockV1.sol:226`). `minimumLockAmount` binds Locks, not releases (`:254-256`), and PFTL does not hold it: the lane policy has no such field (`external_lane_types.rs:305-320`). An exported amount below the lock minimum is still paid. The holder only cannot lock that exact amount back in one Lock. Section 9 lists whether to add a minimum.
@@ -62,7 +67,14 @@ The withdrawal-id commitment covers the lane, the export nonce and the packet. T
 
 The lane state today holds `reserved_atoms`, `released_atoms`, the released Lock nonces and the window fields. Its remainder is reserved − released (`external_lane_types.rs:1048-1082`).
 
-**The new field.** Phase 3 adds `exported_atoms` and an export nonce counter, so the remainder becomes reserved − released + exported. Phase 2 required released and exported atoms to be recorded separately so the lane can grow again (Phase 2, section 6). These fields arrive with the implementation, with the state-commitment change and their own qualification. The skeleton adds no ledger field.
+**The new fields.** Phase 3 adds `exported_atoms` and `next_export_nonce`, both u64. Phase 2 required released and exported atoms to be recorded separately so the lane can grow again (Phase 2, section 6). These fields arrive with the implementation, with the state-commitment change and their own qualification. The skeleton adds no ledger field.
+
+**Arithmetic.** Every counter is u64 and every operation is checked; no expression is evaluated in a form that can wrap.
+
+- **Net released.** `net_released = released_atoms.checked_sub(exported_atoms)`. The export rule keeps `exported_atoms ≤ released_atoms`, so a failure here is a corrupt state and is refused.
+- **Lane invariant.** `net_released ≤ reserved_atoms`, and `remainder = reserved_atoms − net_released`. The form reserved − released + exported is never evaluated left to right: after a full cycle (reserved 100, released 100, exported 100), the next 1-atom release would make `100 − 101` underflow before `+ 100`.
+- **A release.** `released_atoms.checked_add(amount)`, refused on overflow (`external_lane_counter_overflow`). The new net released must stay at or below `reserved_atoms`, refused otherwise as today (`external_lane_remainder_exceeded`).
+- **An export.** It requires `amount_atoms ≤ released_atoms − exported_atoms` before any counter changes (`external_lane_export_above_released`). The export nonce is `next_export_nonce`, and `next_export_nonce.checked_add(1)` is refused when the counter is exhausted (`external_lane_export_nonce_exhausted`). Only then are `exported_atoms` and the nonce written. `exported_atoms + amount_atoms ≤ released_atoms` already holds, so that addition cannot overflow.
 
 **Conservation.** The per-block check sums live native PFT, the lanes' remainders and the burns against the genesis supply (`crates/node/src/block_replay_wallet.rs:2864-2884`, `native_pft_live_total` `:2682`). An export lowers live by `amount_atoms` and raises the lane's remainder by the same amount; the fee is burned as today. The equation keeps its form: live + lanes' remainder + burns = genesis supply.
 
@@ -70,7 +82,8 @@ The lane state today holds `reserved_atoms`, `released_atoms`, the released Lock
 
 - **Locked side.** Every released atom on PFTL is a `Locked` event proven against a committee checkpoint (`crates/execution/src/external_lane_release.rs:158-275`). The lock keeps every locked token until `release` (`PFTLockV1.sol:79-92`). So the lock's `totalLocked` is at least `released_atoms`.
 - **Released side.** Every Base release consumes one export packet's commitments, once. So the lock's `totalReleased` is at most `exported_atoms`.
-- **Rule.** Refusing any export that would make `exported_atoms > released_atoms` keeps `totalLocked − totalReleased ≥ released − exported ≥ 0`. Every accepted export is then payable whenever it is relayed.
+- **Rule, and its conditions.** Refusing any export that would make `exported_atoms > released_atoms` keeps `totalLocked − totalReleased ≥ released − exported ≥ 0`, but only while two conditions hold. Every PFTL release must be backed by a real Lock, and every Base payout must have consumed one export packet. Under them, every accepted export is payable whenever it is relayed.
+- **When a condition fails.** Phase 2 does not assume the first condition: it treats a false release by a colluding committee quorum as possible, and answers it with the cap and the watcher (Phase 2, sections 5.1, 5.2 and 9). A false release raises `released_atoms` without raising the lock's `totalLocked`. An unsound verifier payout raises `totalReleased` without an export. Either way the bound can accept an export the lock cannot pay: `release` refuses with `ReleaseAboveLocked` when the balance is short (`PFTLockV1.sol:232-233`). Sections 8 and 9 give the consequence and the response.
 - **Wait, not refund.** A release that has not been relayed yet waits: the packet stays valid and anyone can relay it. Nothing is refunded on PFTL.
 - **Committee moves and unreleased Locks.** A Lock proven after a committee move still counts once, because the released Lock nonce set refuses a second release of the same nonce (`external_lane_types.rs:1068`). Locks made on Base but not yet released on PFTL raise `totalLocked` without raising `released_atoms`, so they only make the bound more conservative.
 
@@ -148,13 +161,20 @@ An exchange can export its customers' total in one operation and credit them on 
 - The type `ExternalLaneExportOperationV1` with `validate()` (`crates/types/src/transactions_mempool_receipts.rs`).
 - Its asset-operation variant `external_lane_export_v1`.
 - An execution arm that refuses after the lane and lock-address checks, with `external_lane_export_not_supported` (`crates/execution/src/nft_escrow_asset_execution.rs`).
-- Tests that the refusal holds at mempool admission, batch building and execution, with no state change. Further tests cover the shape rules (zero amount, bad recipient, unknown lane) and the lock-address refusal (`crates/node/src/tests/external_lane_export_tests.rs`, `crates/types/src/external_lane_type_tests.rs`).
+- Tests that the refusal holds at mempool admission, batch building and execution, with no lane or export state change. Further tests cover the shape rules (zero amount, bad recipient, unknown lane) and the lock-address refusal (`crates/node/src/tests/external_lane_export_tests.rs`, `crates/types/src/external_lane_type_tests.rs`).
+- In a certified block the ordinary rejected-transaction fee rule applies (`crates/execution/src/rejected_fee_claim.rs`), as for a refused release. Before `rejected_tx_fee_activation_height` nothing changes. From it, the declared fee is burned, the sequence is consumed and the code becomes `tec_external_lane_export_not_supported`; nothing else changes (`external_lane_export_in_a_block_burns_the_fee_only_after_fee_activation`).
 
 **With the implementation:**
 
 - the `exported_atoms` field and the export nonce, in the state commitment;
 - the conservation check over a release followed by an export;
-- the above-released refusal at the boundary;
+- the checked arithmetic of section 4:
+  - an export with no releases yet (refused);
+  - an export of exactly `released − exported` (accepted);
+  - one atom above it (refused);
+  - a second release after a full release-and-export cycle, with the right remainder;
+  - an amount of `u64::MAX` (refused, no overflow);
+  - an exhausted export nonce (refused);
 - packet digest vectors shared with the prover program;
 - a Base fork test of `release` against a verifier bound to the lock's code hash;
 - the deployment-order dry run of section 5 on Base Sepolia.
@@ -162,6 +182,7 @@ An exchange can export its customers' total in one operation and credit them on 
 ## 8. Risks
 
 - **Verifier soundness.** A false proof accepted on Base pays from the lock. The lock's balance bounds the loss, not PFTL: with no admin there is nothing to pause. The same holds for the NAV vaults today.
+- **A false release meets exports.** A false Phase 2 release, or an unsound Base payout, leaves the lock holding less than `released − exported`. The exports accepted afterwards still pass the PFTL bound. Base pays them in relay order until the lock is short, and the last ones then fail with `ReleaseAboveLocked`. The loss lands on the honest exporters at the end of the queue, not on the attacker, who already holds the released native PFT. Section 9 gives the response.
 - **Prover and relay liveness.** If no prover runs, exports stay unpaid on Base while the PFT has already left circulation on PFTL. Nothing is lost, but holders wait. Section 9 asks whether to add a refund after a deadline, as the NAV route's refund-source operation does (`transactions_mempool_receipts.rs:3493`).
 - **Deployment order.** A wrong predicted address, a wrong code hash or a spent deployer nonce leaves the lane's lock or its release path dead forever, because the lock has no admin (section 5). The dry run on Base Sepolia must follow the steps of section 5 and complete one release before mainnet.
 - **The chain-id field name.** `arbitrumChainId` is a generic chain-id check (`PFTLFinalityVerifierV1.sol:275-277`). A Base deployment must set 8453, not an Arbitrum id.
@@ -176,6 +197,12 @@ The product owner decides:
 4. The prover program and its audit budget, and who runs the relay.
 5. How the relay is funded: self-relay only, a relay fee carried inside the export, or an operator-funded service.
 6. The verifier's route profile and asset id for PFT on Base.
+7. The response to a false release once exports exist (section 8). The options:
+   - **An export halt.** The same governed zero-cap amendment that halts releases also halts exports: exports are refused while the lane's active cap is zero (Phase 2, section 5.2). The watcher's alarm then stops new exports from queuing behind a shortfall.
+   - **An independently authenticated Base lock balance.** PFTL would bound exports by the lock's real `totalLocked − totalReleased`, which this design avoids reading.
+   - **A refund path.** An export the lock never pays is refunded on PFTL, which needs the verifier to refuse the refunded packet (see decision 3).
+
+   The lean is the export halt. It costs least: one more check against a value the lane already has, with no new trust. It keeps the Phase 2 model of a committee-trusted bridge bounded by the cap and answered by the watcher and governance. It does not repay exports already accepted before the halt; only the refund path does that.
 
 ## 10. Sources
 
