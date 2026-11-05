@@ -75,6 +75,8 @@ pub enum ExternalLaneCheckpointRefusal {
     LogOfAnotherEvent,
     LockedEventInvalid,
     TokenMismatch,
+    OperationInvalid,
+    SigningStateInvalid,
 }
 
 impl ExternalLaneCheckpointRefusal {
@@ -104,6 +106,8 @@ impl ExternalLaneCheckpointRefusal {
             Self::LogOfAnotherEvent => "lock_receipt_log_other_event",
             Self::LockedEventInvalid => "lock_receipt_locked_event_invalid",
             Self::TokenMismatch => "lock_receipt_token_mismatch",
+            Self::OperationInvalid => "external_lane_release_operation_invalid",
+            Self::SigningStateInvalid => "checkpoint_signing_state_invalid",
         }
     }
 }
@@ -497,6 +501,16 @@ pub fn sign_external_lane_checkpoint_vote(
         &checkpoint,
         &options.validator,
     );
+    let signing_state_invalid = |error: io::Error| {
+        if error.kind() == io::ErrorKind::InvalidData {
+            refuse(
+                ExternalLaneCheckpointRefusal::SigningStateInvalid,
+                format!("`{}`: {error}", state_path.display()),
+            )
+        } else {
+            error
+        }
+    };
     let mut state = load_or_create_checkpoint_signing_state(
         &state_path,
         EthereumCheckpointSigningStateV1 {
@@ -505,7 +519,8 @@ pub fn sign_external_lane_checkpoint_vote(
             checkpoint: checkpoint.clone(),
             vote: None,
         },
-    )?;
+    )
+    .map_err(signing_state_invalid)?;
     if state.checkpoint != checkpoint {
         return Err(refuse(
             ExternalLaneCheckpointRefusal::ConflictingCheckpoint,
@@ -515,7 +530,13 @@ pub fn sign_external_lane_checkpoint_vote(
             ),
         ));
     }
-    validate_checkpoint_signing_state(&state, &checkpoint, &options.validator, &member.public_key)?;
+    validate_checkpoint_signing_state(&state, &checkpoint, &options.validator, &member.public_key)
+        .map_err(|error| {
+            refuse(
+                ExternalLaneCheckpointRefusal::SigningStateInvalid,
+                format!("`{}`: {error}", state_path.display()),
+            )
+        })?;
     if let Some(vote) = state.vote {
         write_json(&options.vote_file, &vote)?;
         return Ok(vote);
@@ -760,7 +781,9 @@ pub fn build_external_lane_lock_proof(
             log_index,
         },
     };
-    operation.validate().map_err(invalid_data)?;
+    operation
+        .validate()
+        .map_err(|error| refuse(ExternalLaneCheckpointRefusal::OperationInvalid, error))?;
     let operation = AssetTransactionOperation::ExternalLaneReleaseV1(operation);
     write_json(&options.operation_file, &operation)?;
     Ok(operation)

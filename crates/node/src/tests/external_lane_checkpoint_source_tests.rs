@@ -388,6 +388,19 @@ fn lock_proof(
     log_index: Option<u32>,
     name: &str,
 ) -> io::Result<PathBuf> {
+    let submitter = read_transfer_key_file(&chain.data_dir, None).expect("faucet").address;
+    lock_proof_by(chain, rpc, certificate_file, transaction_hash, log_index, &submitter, name)
+}
+
+fn lock_proof_by(
+    chain: &Chain,
+    rpc: &MockBase,
+    certificate_file: &Path,
+    transaction_hash: &str,
+    log_index: Option<u32>,
+    submitter: &str,
+    name: &str,
+) -> io::Result<PathBuf> {
     let operation_file = chain.data_dir.join(format!("{name}.operation.json"));
     build_external_lane_lock_proof(ExternalLaneLockProofOptions {
         data_dir: chain.data_dir.clone(),
@@ -395,11 +408,29 @@ fn lock_proof(
         base_rpc: rpc.url.clone(),
         transaction_hash: transaction_hash.to_string(),
         certificate_file: certificate_file.to_path_buf(),
-        submitter: read_transfer_key_file(&chain.data_dir, None).expect("faucet").address,
+        submitter: submitter.to_string(),
         log_index,
         operation_file: operation_file.clone(),
     })?;
     Ok(operation_file)
+}
+
+/// The certificate of `BLOCK` from the votes of validators 0–4.
+fn certificate_of(chain: &Chain, rpc: &MockBase, name: &str) -> PathBuf {
+    let checkpoint = observe(chain, rpc, Some(BLOCK), name).expect("observe");
+    let votes = (0..5).map(|index| sign(chain, &checkpoint, rpc, index, name).expect("vote")).collect();
+    assemble(chain, &checkpoint, votes, name).expect("assemble")
+}
+
+/// The signing state of `validator-{index}` for `checkpoint_file`.
+fn signing_state_path(chain: &Chain, checkpoint_file: &Path, index: usize) -> PathBuf {
+    let checkpoint: EthereumFinalizedCheckpointV1 =
+        read_json_file(checkpoint_file, "checkpoint").expect("checkpoint");
+    crate::ethereum_checkpoint_signing::ethereum_checkpoint_signing_state_path(
+        &chain.data_dir.join("external-lane-checkpoint-signing"),
+        &checkpoint,
+        &format!("validator-{index}"),
+    )
 }
 
 /// The faucet's signed release of the operation in `operation_file`.
@@ -689,6 +720,55 @@ fn observe_and_sign_follow_a_governed_committee_move() {
         recipient: chain.recipient.clone(),
     };
     sign(&moved, &after, &rpc, 0, "new-key").expect("the epoch-2 member signs");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn lock_proof_refuses_an_invalid_submitter_or_recipient_as_a_typed_refusal() {
+    let chain = source_chain("operation-invalid");
+    let rpc = MockBase::serve(base_state(&chain.recipient, amount(), 0xa0));
+    let certificate = certificate_of(&chain, &rpc, "submitter");
+    let error = lock_proof_by(&chain, &rpc, &certificate, &lock_tx(1), None, "not-an-address", "submitter")
+        .unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::OperationInvalid);
+    assert!(!chain.data_dir.join("submitter.operation.json").exists());
+
+    let _ = fs::remove_dir_all(&chain.data_dir);
+
+    // A Lock whose recipient text is not a PFTL address.
+    let chain = source_chain("recipient-invalid");
+    let rpc = MockBase::serve(base_state("not-a-pftl-address", amount(), 0xa0));
+    let certificate = certificate_of(&chain, &rpc, "recipient");
+    let error = lock_proof(&chain, &rpc, &certificate, &lock_tx(1), None, "recipient").unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::OperationInvalid);
+    assert!(!chain.data_dir.join("recipient.operation.json").exists());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn sign_refuses_a_corrupt_or_foreign_signing_state_as_a_typed_refusal() {
+    let chain = source_chain("state-invalid");
+    let rpc = MockBase::serve(base_state(&chain.recipient, amount(), 0xa0));
+    let checkpoint = observe(&chain, &rpc, Some(BLOCK), "state").expect("observe");
+    sign(&chain, &checkpoint, &rpc, 0, "state").expect("sign");
+    let path = signing_state_path(&chain, &checkpoint, 0);
+    let original: Value = serde_json::from_slice(&fs::read(&path).expect("state")).expect("state json");
+    let mut foreign = original.clone();
+    foreign["validator_id"] = json!("validator-1");
+    let mut forged = original.clone();
+    let first = forged["vote"]["signature"][0].as_u64().expect("signature byte");
+    forged["vote"]["signature"][0] = json!(first ^ 1);
+    let mut schema = original.clone();
+    schema["schema"] = json!("another-schema");
+    for (name, state) in [("foreign", foreign), ("forged", forged), ("schema", schema)] {
+        fs::write(&path, serde_json::to_vec_pretty(&state).expect("state json")).expect("write state");
+        let error = sign(&chain, &checkpoint, &rpc, 0, name).unwrap_err();
+        assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::SigningStateInvalid, "{name}");
+        assert!(!chain.data_dir.join(format!("{name}.vote-0.json")).exists(), "{name}");
+    }
+    fs::write(&path, b"{ not json").expect("write state");
+    let error = sign(&chain, &checkpoint, &rpc, 0, "garbage").unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::SigningStateInvalid);
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
