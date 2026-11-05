@@ -10,7 +10,7 @@
     "crates/node/src/tests/private_readiness_read_tests.rs": "da2ca62fc9b3e54695933fdab42631ebfccaf13297387f096f96f9a3eb00308c",
     "crates/node/src/validator_signer.rs": "7ce09c63a0c2d7aaab1e264a917620e9540ad57e8922b33d310a881c6ec9e31c",
     "crates/node/tests/fixtures/private-actions-v1/manifest.json": "9272baecbe8cd4ef50630eda9bff2dae6f10f428e674d30f703d2954fb6cb903",
-    "crates/node/tests/validator_signer_process.rs": "95c4c5f938801b069a33ea2d34629dc4059a07d0d9cc46c9fc055cfae3493e92",
+    "crates/node/tests/validator_signer_process.rs": "2204ee774b459a58d979d806fb5025f6a6cfe389b33fb556f6756e6618ef0fa8",
     "crates/node/src/validator_signer_guard.rs": "1fcdfb65a47411967e153346893b5782f828cc03e612c863eacff202e6246251",
     "crates/node/src/validator_signer_guard/tests.rs": "a2a37e4d136f877d5c34828c638a0c2796452a1277dc2ebc4c1de7a8685d225b",
     "python/postfiat_ops/validator_signer_check.py": "700650926ef5805f9ea53ce8b68ca147c3adbb8936a37af361f907ae8d622061",
@@ -51,6 +51,7 @@
     "three-user/topology.stdout": "aed9a7415d0020af7d18d392ca48a506a8774d6fd16ebfbde497636b1f5836f3",
     "two-user/run.json": "65c152ba40667fffe5bd47a572d87dc3ac3653d64c6a0d493abdb5a3dcfc31bf",
     "two-user/test.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "two-user/test.stdout": "10344a2f2a3969344de277f702195984547a0c6a35f3defaf4debe9844fb22a6"
+    "two-user/test.stdout": "10344a2f2a3969344de277f702195984547a0c6a35f3defaf4debe9844fb22a6",
+    "signer-process-verification.log": "aeaf7a13babfcf8868ee648ff379f56a6a11fb7fb83db30869d5f50dab78af0e"
   }
 }

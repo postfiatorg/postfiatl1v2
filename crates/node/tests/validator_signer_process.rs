@@ -247,6 +247,7 @@ fn rpc_serve_signs_a_finality_vote_through_the_signer_process() {
     conflict[12] = false.into();
     let error = signer.sign("validator-0", context, &serde_json::to_vec(&conflict).unwrap()).unwrap_err();
     assert!(error.to_string().contains("validator_signer_double_sign"), "{error}");
+    eprintln!("restart_refusal chain=guard-process height=1 view=0 error={error}");
 }
 
 /// The deployment shape with two OS users: the signer runs as user A and
