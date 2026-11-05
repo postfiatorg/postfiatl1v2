@@ -83,13 +83,30 @@ key, and block and consensus-v2 proposals with the proposal key; any other
 context is refused. `describe` returns the public keys and the signer's uid;
 no answer contains key material.
 
-What it protects and what it does not: the key cannot be exported, and the
-serving process never reads or holds it. The signer checks only the context,
-not the message, and keeps no record of what it signed, so a process with an
-allowed uid can still obtain any signature under those contexts while the
-signer runs, including two different votes for one slot. A compromised
-rpc-serve can therefore still equivocate until it is stopped. A durable
-double-sign guard inside the signer is the next step (W-1 milestone S7.1).
+The signer requires `--state-dir <persistent-directory>`. It decodes consensus
+messages by their signing context, binds the validator identity to the held key,
+and persists a round floor and message digest before signing. Identical retries
+at that floor are allowed; a different message at the same height/view and any
+older round are refused. Prepare and precommit, votes and timeouts, and distinct
+chain/genesis domains have separate floors. Key aliases, committee changes and
+protocol version changes cannot reset a floor. Transport authentication uses a
+separate signing domain and has no consensus slot.
+
+For a **new, never-used custody instance**, pass `--initialize-state` once with
+a nonexistent state directory. Remove that flag from the service unit. Restart
+requires the existing state and lock; missing, corrupt, shared or wrong-key state
+is refused. The directory is `0700`, files are `0600`, all owned by the signer;
+its parents must not let another user replace it. State is atomically replaced
+and both the file and directory are synced. A persistence failure disables
+signing until operator inspection and restart. An exclusive process lock and a
+request mutex serialize reservations.
+
+Never delete, restore an older copy of, or initialize a replacement guard for
+usable keys. Adoption with previously used keys needs an operator-reviewed
+signing-history/fencing procedure; an empty guard cannot reconstruct past votes.
+Key-set changes require their own reviewed transition. This is a signing-slot
+guard, not the consensus lock/QC state machine: it does not prove that a new
+round's vote is justified. The signer user/root can still compromise custody.
 
 rpc-serve takes `--finality-signer-socket <path>` instead of
 `--finality-key-file` and `--finality-proposal-key-file`; passing both is
@@ -109,6 +126,34 @@ group, and `--allow-peer-uid` with the rpc-serve user's uid. The rpc-serve unit 
 the key file, and passes `--finality-signer-socket
 /run/postfiat-signer/<validator>.sock`. Start the signer first. Readiness
 reports `validator_signer_same_user` when both units run as one user.
+It also reports `signer_double_sign_protection`; false or absent yields
+`validator_signer_guard_unavailable`. RPC startup refuses an unguarded signer.
+
+Keep guard state outside the RPC user's data directory, for example
+`/var/lib/postfiat-signer/validator-0/guard`, and allow that path in the signer's
+systemd write sandbox. Add `--state-dir` to the signer unit; never put
+`--initialize-state` in its restart command. Existing release units still need
+the explicit two-user/socket transition below.
+
+The Python deployment check reads process identities, executable hashes, the
+actual open database, custody permissions and a fresh `private_readiness` reply.
+It requires permission to inspect all three processes, normally root:
+
+```sh
+PYTHONPATH=python python3 -m postfiat_ops.validator_signer_check \
+  --signer-pid SIGNER_PID --rpc-pid RPC_PID --gateway-pid GATEWAY_PID \
+  --rpc-port RPC_PORT --node-sha256 EXPECTED_NODE_SHA256 \
+  --data-dir EXPECTED_LIVE_DATA_DIR --database EXPECTED_LIVE_REDB_FILE \
+  --key-file SIGNER_KEY_FILE --state-dir SIGNER_GUARD_DIR \
+  --socket SIGNER_SOCKET --output NEW_REPORT_DIRECTORY
+```
+
+Review `report.json` or `review.html`. Exit 2 means a failed or unavailable check;
+it is never a pass. Pin the intended live paths from the deployment manifest:
+supplying a copy's path cannot establish a live-store deployment. The gateway
+must use a third unprivileged UID and have no protected files open. This is a
+point-in-time observation, not proof of every past/future access or a memory
+secret scan. Governance readiness and rollout approval are separate.
 
 The generated release rpc unit (`batch_snapshot.rs`, the `rpc.service` it
 writes) still runs as `User=postfiat` and passes `--finality-key-file
@@ -329,3 +374,49 @@ local readiness report that omits it.
 - Production edge authentication, TLS automation, and external rate-limiter
   configuration remain deployment-infrastructure responsibilities and must be
   verified before a public endpoint is advertised.
+
+### 2026-11-05 signer qualification
+
+Task Node `task_7b1024df4fa083bde46fc48e52b2a65c`; public base
+`1c5bf4c6fc13aea6bbd76457694a781898133591`.
+[Source and evidence hashes](../review/validator-signer-20261105/manifest.json)
+and [three-user HTML review](../review/validator-signer-20261105/three-user/deployment/review.html).
+
+Commands use `CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0`
+and a dedicated `CARGO_TARGET_DIR`:
+
+| Command | Result |
+|---|---|
+| `cargo test --locked -p postfiat-node --lib validator_signer -- --nocapture` | 20 passed: persistence, conflicting/stale rounds, distinct phases/domains, concurrency, corrupt/missing state, write failure, aliases and message decoding |
+| `cargo test --locked -p postfiat-node --lib private_readiness -- --nocapture` | 14 passed |
+| `cargo test --locked -p postfiat-node --bin postfiat-node validator_signer_socket -- --nocapture` | 5 passed |
+| `cargo test --locked -p postfiat-node --test validator_signer_process -- --nocapture` | 1 passed; separate-UID test explicitly ignored locally, then passed on host below |
+| `PYTHONPATH=python python3 -m unittest discover -s python/tests -p test_validator_signer_check.py -v` | 6 passed |
+
+The transported process-test binary ran the ignored
+`rpc_serve_under_another_user_signs_through_the_group_socket` test with
+`POSTFIAT_TWO_USER_SIGNER=61001:61002:61003` and `POSTFIAT_SIGNER_TEST_NODE`
+pinning the staged candidate. It passed. [Exact invocation, times and hashes](../review/validator-signer-20261105/two-user/run.json).
+
+As root on the same host, `scripts/rehearse-validator-custody.py --node <candidate>
+--javascript-node <node22> --proxy <wallet-proxy> --python-root <python>
+--output <fresh-directory>` then started a generated transactional chain, the
+signer as UID 61011, RPC as 61012 and the actual wallet gateway as 61014. It
+restarted the signer without initialization, checked the running RPC's readiness
+and database descriptor during its request, verified the gateway had no protected
+file open or validator paths in its environment, and verified kernel permission
+denial when RPC and gateway attempted to open the generated validator key.
+[Exact commands and successful report](../review/validator-signer-20261105/three-user/result.json).
+The checker uses the RPC's EOF framing and samples descriptors during the request:
+the transactional writer lease intentionally closes while idle. It does not
+require a persistent idle descriptor. The gateway used staged Node.js 22.18.0
+(official archive SHA256 `c1bfeecf1d7404fa74728f9db72e697decbd8119ccc6f5a294d795756dfcfca7`),
+not a server installation.
+
+All keys/stores were generated for these tests; all children stopped and runtime
+directories were removed. No production units or keys, nor the frozen candidate,
+were changed. Production adoption needs operator-approved custody, an existing-key
+signing-history transition (an empty guard is not historical protection), and a
+checker run pinned to the real production store and processes. The governance
+pricing/route gates still make readiness false in the rehearsal. No cross-view
+consensus safety or malicious signer-owner rollback claim is made.

@@ -186,6 +186,7 @@ fn rpc_serve_readiness_service(
             key_files: Vec::new(),
             signer: postfiat_node::PrivateValidatorSigner::Socket,
             signer_socket: Some(postfiat_node::PrivateReadinessSignerSocket {
+                double_sign_protection: described.as_ref().map(|(description, _)| description.durable_double_sign_protection),
                 path: socket.clone(),
                 peer_uid,
                 key_matches,

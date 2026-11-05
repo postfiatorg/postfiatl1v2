@@ -504,6 +504,9 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 .unwrap_or(postfiat_node::VALIDATOR_SIGNER_DEFAULT_DEADLINE_MS);
             postfiat_node::validator_signer_serve(
                 postfiat_node::ValidatorSignerServeOptions {
+                    state_dir: flag_value(flags, "--state-dir").map(PathBuf::from)
+                        .ok_or_else(|| "validator-signer-serve requires --state-dir".to_string())?,
+                    initialize_state: flag_present(flags, "--initialize-state"),
                     key_file,
                     proposal_key_file: flag_value(flags, "--proposal-key-file").map(PathBuf::from),
                     socket: socket.clone(),

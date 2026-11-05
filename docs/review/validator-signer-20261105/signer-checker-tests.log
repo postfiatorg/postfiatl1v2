@@ -1,0 +1,11 @@
+test_copy_store_or_different_executable_refused (test_validator_signer_check.DeploymentCheckTests.test_copy_store_or_different_executable_refused) ... ok
+test_custody_pass_does_not_imply_governance_or_release_readiness (test_validator_signer_check.DeploymentCheckTests.test_custody_pass_does_not_imply_governance_or_release_readiness) ... ok
+test_gateway_access_and_shared_users_refused (test_validator_signer_check.DeploymentCheckTests.test_gateway_access_and_shared_users_refused) ... ok
+test_missing_guard_live_signal_and_file_fallback_refused (test_validator_signer_check.DeploymentCheckTests.test_missing_guard_live_signal_and_file_fallback_refused) ... ok
+test_posix_custody_refuses_symlink_shared_file_and_writable_parent (test_validator_signer_check.DeploymentCheckTests.test_posix_custody_refuses_symlink_shared_file_and_writable_parent) ... ok
+test_restart_initialization_and_extra_signing_uid_refused (test_validator_signer_check.DeploymentCheckTests.test_restart_initialization_and_extra_signing_uid_refused) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.003s
+
+OK

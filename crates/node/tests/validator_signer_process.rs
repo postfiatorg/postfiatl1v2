@@ -29,8 +29,9 @@ impl Drop for Children {
     }
 }
 
-fn node_bin() -> &'static str {
-    env!("CARGO_BIN_EXE_postfiat-node")
+fn node_bin() -> String {
+    std::env::var("POSTFIAT_SIGNER_TEST_NODE")
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_postfiat-node").to_string())
 }
 
 fn path(p: &Path) -> String {
@@ -87,6 +88,12 @@ fn rpc_serve_signs_a_finality_vote_through_the_signer_process() {
     // The key leaves the data directory: only the signer process reads it.
     let signer_dir = root.join("signer");
     fs::create_dir_all(&signer_dir).expect("signer dir");
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for directory in [&root, &signer_dir] {
+            fs::set_permissions(directory, fs::Permissions::from_mode(0o700)).expect("custody mode");
+        }
+    }
     let key_file = signer_dir.join(VALIDATOR_KEYS_FILE);
     fs::rename(data_dir.join(VALIDATOR_KEYS_FILE), &key_file).expect("move key");
     let local = status(NodeOptions {
@@ -109,6 +116,9 @@ fn rpc_serve_signs_a_finality_vote_through_the_signer_process() {
         Command::new(node_bin())
             .args([
                 "validator-signer-serve",
+                "--state-dir",
+                &path(&signer_dir.join("guard")),
+                "--initialize-state",
                 "--key-file",
                 &path(&key_file),
                 "--socket",
@@ -210,6 +220,33 @@ fn rpc_serve_signs_a_finality_vote_through_the_signer_process() {
         "{reasons}"
     );
     assert!(!reasons.contains("validator_key_file_"), "{reasons}");
+    assert_eq!(custody["signer_double_sign_protection"], true);
+
+    // Persist through an actual process death and restart, independently of
+    // rpc-serve's own vote cache. These are disposable test-chain signatures.
+    use postfiat_node::{SocketSigner, ValidatorSigner};
+    let context = b"postfiat-l1-v2/block-certificate/v1";
+    let message = serde_json::json!([
+        "guard-process", "a".repeat(96), 1, 1, 0, "b".repeat(96),
+        "validator-0", "transparent", "c".repeat(96), "d".repeat(96), [], "validator-0", true
+    ]);
+    let encoded = serde_json::to_vec(&message).expect("tuple");
+    let signer = SocketSigner::connect(&socket, Duration::from_secs(5)).expect("connect signer");
+    let signature = signer.sign("validator-0", context, &encoded).expect("first signature");
+    children.0[0].kill().expect("kill signer");
+    children.0[0].wait().expect("wait signer");
+    children.0.push(Command::new(node_bin()).args([
+        "validator-signer-serve", "--state-dir", &path(&signer_dir.join("guard")),
+        "--key-file", &path(&key_file), "--socket", &path(&socket),
+        "--allow-peer-uid", &euid.to_string(),
+    ]).stdout(Stdio::null()).stderr(Stdio::null()).spawn().expect("restart signer"));
+    wait_for("restarted signer", || SocketSigner::connect(&socket, Duration::from_millis(100)).is_ok());
+    let signer = SocketSigner::connect(&socket, Duration::from_secs(5)).expect("reconnect signer");
+    assert_eq!(signature, signer.sign("validator-0", context, &encoded).expect("idempotent restart retry"));
+    let mut conflict = message;
+    conflict[12] = false.into();
+    let error = signer.sign("validator-0", context, &serde_json::to_vec(&conflict).unwrap()).unwrap_err();
+    assert!(error.to_string().contains("validator_signer_double_sign"), "{error}");
 }
 
 /// The deployment shape with two OS users: the signer runs as user A and
@@ -305,6 +342,9 @@ fn rpc_serve_under_another_user_signs_through_the_group_socket() {
         Command::new(node_bin())
             .args([
                 "validator-signer-serve",
+                "--state-dir",
+                &path(&key_file.parent().expect("key directory").join("guard")),
+                "--initialize-state",
                 "--key-file",
                 &path(&key_file),
                 "--socket",

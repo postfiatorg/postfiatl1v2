@@ -66,6 +66,7 @@
       "validator_signer_unreachable",
       "validator_signer_key_mismatch",
       "validator_registry_unreadable",
+      "validator_signer_guard_unavailable",
       "validator_key_file_missing",
       "validator_key_file_unreadable",
       "validator_key_file_not_owner_only"
