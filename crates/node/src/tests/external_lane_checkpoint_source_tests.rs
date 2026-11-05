@@ -956,6 +956,29 @@ fn lock_proof_accepts_an_unrelated_same_shaped_transfer_beside_the_policy_token_
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
+#[test]
+fn sign_refuses_a_key_file_without_the_members_record_as_a_key_mismatch() {
+    let chain = source_chain("key-record");
+    let rpc = MockBase::serve(base_state(&chain.recipient, amount(), 0xa0));
+    let checkpoint = observe(&chain, &rpc, Some(BLOCK), "record").expect("observe");
+    // A valid key file, but validator-1's: it holds no record of validator-0.
+    let key_file = committee_key_file(&chain, 1, 1);
+    let vote_file = chain.data_dir.join("record.vote-0.json");
+    let error = sign_external_lane_checkpoint_vote(ExternalLaneCheckpointSignOptions {
+        data_dir: chain.data_dir.clone(),
+        checkpoint_file: checkpoint.clone(),
+        base_rpc: rpc.url.clone(),
+        validator: "validator-0".to_string(),
+        validator_key_file: key_file,
+        vote_file: vote_file.clone(),
+    })
+    .unwrap_err();
+    assert_eq!(refusal(error), ExternalLaneCheckpointRefusal::SigningKeyMismatch);
+    assert!(!vote_file.exists());
+    assert!(!signing_state_path(&chain, &checkpoint, 0).exists());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
 /// Read-only qualification against a real Base Sepolia RPC at the http URL
 /// in `POSTFIAT_LIVE_BASE_RPC`: the rehearsal lock and token code hashes,
 /// the `finalized` block, five votes and the certificate, and the receipt

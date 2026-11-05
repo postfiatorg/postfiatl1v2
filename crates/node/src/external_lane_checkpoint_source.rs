@@ -463,8 +463,9 @@ pub fn sign_external_lane_checkpoint_vote(
             )
         })?;
     // The loader refuses a key file whose private key does not sign for its
-    // public key; that refusal is this command's key mismatch.
-    let key_file = read_validator_key_file(&options.validator_key_file).map_err(|error| {
+    // public key, and the lookup one that holds no record of this member;
+    // both are this command's key mismatch.
+    let unusable_key_file = |error: io::Error| {
         if error.kind() == io::ErrorKind::InvalidData {
             refuse(
                 ExternalLaneCheckpointRefusal::SigningKeyMismatch,
@@ -476,8 +477,11 @@ pub fn sign_external_lane_checkpoint_vote(
         } else {
             error
         }
-    })?;
-    let key_record = validator_key_record(&key_file, &options.validator)?;
+    };
+    let key_file =
+        read_validator_key_file(&options.validator_key_file).map_err(unusable_key_file)?;
+    let key_record =
+        validator_key_record(&key_file, &options.validator).map_err(unusable_key_file)?;
     if key_record.algorithm_id != ML_DSA_65_ALGORITHM
         || hex_to_bytes(&key_record.public_key_hex).map_err(invalid_data)? != member.public_key
     {
