@@ -612,6 +612,10 @@ fn encode_receipt(receipt: &Value) -> io::Result<Vec<u8>> {
     ];
     // An OP Stack deposit receipt (Base) appends its optional deposit nonce
     // (from Regolith) and receipt version (from Canyon) to the four fields.
+    // Only the RPC's `depositNonce` and `depositReceiptVersion` fields carry
+    // them: an `eth_getBlockReceipts` that omits them rebuilds another
+    // receipt, so every Base block (each starts with a deposit) fails closed
+    // with the receipts-root mismatch.
     if receipt_type == OP_STACK_DEPOSIT_RECEIPT_TYPE {
         let nonce = receipt.get("depositNonce").and_then(Value::as_str);
         let version = receipt.get("depositReceiptVersion").and_then(Value::as_str);
