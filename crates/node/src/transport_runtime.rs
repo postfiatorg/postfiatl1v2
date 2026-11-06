@@ -844,9 +844,33 @@ pub(super) fn transport_validator_serve(
     timeout_ms: u64,
     event_log: Option<PathBuf>,
     require_signed_proposal: bool,
+    signer_socket: Option<PathBuf>,
 ) -> Result<TransportValidatorServeReport, String> {
     TRANSPORT_VALIDATOR_SHUTDOWN_REQUESTED.store(false, Ordering::Release);
     install_transport_validator_signal_handlers()?;
+    // `--finality-signer-socket`: before anything is served the signer must
+    // answer and hold the validator's registered key. The registration maps
+    // the socket path (`key_file` here) and the data directory to the
+    // signer, so block votes, proposals, consensus-v2 votes and envelope
+    // authentication all sign through it, and lives until the service stops.
+    let _signer_registration = match &signer_socket {
+        Some(socket) => {
+            let local_status = run_once(NodeOptions {
+                data_dir: data_dir.clone(),
+            })
+            .map_err(|error| format!("transport validator service status failed: {error}"))?;
+            Some(
+                postfiat_node::register_validator_signer_socket(
+                    socket,
+                    &data_dir,
+                    &local_status.node_id,
+                    Duration::from_millis(postfiat_node::VALIDATOR_SIGNER_DEFAULT_DEADLINE_MS),
+                )
+                .map_err(|error| format!("transport validator signer refused: {error}"))?,
+            )
+        }
+        None => None,
+    };
     transport_validator_serve_inner(
         data_dir,
         topology_file,
