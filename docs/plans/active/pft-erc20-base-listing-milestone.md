@@ -81,6 +81,7 @@ Decided by the product owner 2026-10-28: total supply 100 billion PFT; the Base 
 
 - [ ] P3.1 *(this lane)* Export native PFT as the same ERC-20, released from the Base lock contract. This needs the export route generalised beyond NAV assets (`crates/execution/src/nav_vault_asset_execution.rs:6470-6477`), and the PFTL finality verifier and relay deployed on Base.
   - [ ] Designed and refused until built (merged in `7a968007e`): the design note `docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md` and the `external_lane_export_v1` skeleton. The skeleton has its type and shape refusals, and mempool admission, batch building and execution refuse it with `external_lane_export_not_supported` (`crates/execution/src/external_lane_release.rs`, `crates/node/src/tests/external_lane_export_tests.rs`). `exported_atoms` and the Base path come with the implementation.
+  - [x] The PFTL half built 2026-11-06 behind `exports_enabled` (merged in `f751185c7`): the export counters in the state commitment, the checked accounting with the zero-cap halt, the packet with its commitments, the paged read ([lanes page, "Exports"](../../architecture/genesis-external-lanes.md#exports)); the Base half (verifier, prover, relay) and the product owner's decisions of the design note's section 9 remain.
 
 ## Mandate deliverables (AGENTS.md)
 
