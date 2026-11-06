@@ -1440,7 +1440,7 @@ mod release_path {
     }
 
     /// With `consensus_v2`, the block carries a block certificate and a
-    /// consensus v2 commit signed by all four validators, so it can be a
+    /// consensus v2 commit signed by all validators named by genesis, so it can be a
     /// finalized checkpoint.
     fn admit_and_apply_with(
         chain: &Chain,

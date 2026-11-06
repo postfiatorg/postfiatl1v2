@@ -177,9 +177,10 @@ It shows that the watcher reads a real node's `external_lane_info` (chain id, ge
 
 Task Node `task_f7fb0b284184dfb51713ec8bd324c97c`. The Python CLI
 `scripts/rehearse-base-lock.py --output <fresh-directory> --target-dir <cargo-target>`
-starts an isolated Anvil, deploys PFTToken and PFTLockV1, then runs the actual
-checkpoint/proof commands against a fresh Lock and releases 4,331 atoms on a
-generated six-validator native chain. Five checkpoint votes certify source block
+starts an isolated Anvil, deploys PFTToken and PFTLockV1, then runs an ignored
+composition test that calls the production implementations of the four
+checkpoint and proof commands in-process (not the `postfiat-node` CLI) against a
+fresh Lock and releases 4,331 atoms on a generated six-validator native chain. Five checkpoint votes certify source block
 5; release block 2 credits exactly 4,331 atoms. Repeating the release is refused.
 The watcher reports one backed release and zero alarms; a repeat resumes its
 cursor and checks zero already-processed releases. Block and state replay pass.
@@ -196,6 +197,11 @@ explicit network/rehearsal tests ignored; watcher tests: 32 passed. The fixture
 now sizes its finality votes from genesis. No runtime release/watcher defect was
 reproduced, so neither implementation changed. Harness corrections were address
 normalization and placing consensus activation after the bootstrap block.
+
+Two things this rehearsal does not exercise. Anvil's `finalized` tag equals its
+latest block, so the checkpoint source's finality rule is not tested locally.
+The contracts are deployed with raw `forge create`, so the deploy scripts
+(`script/DeployPFTToken.s.sol`, `script/DeployPFTLock.s.sol`) are not exercised.
 
 This is **local EVM evidence**, not Base Sepolia or mainnet deployment. The unused
 Phase 3 verifier is a test stand-in; export and OP Stack deposit receipts are not
