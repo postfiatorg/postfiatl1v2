@@ -223,21 +223,16 @@ readiness no longer reports `validator_key_copy_in_data_dir`
 (`crates/node/tests/validator_signer_two_user_units_process.rs` starts the
 three processes from the generated units on a local chain).
 
-Order on a validator:
+Order on a validator (the deploy sheet uses the same steps, word for word):
 
-1. Create `postfiat-signer` and `postfiat-signer-clients`, add `postfiat` to
-   the group, write `/etc/postfiat/signer/<validator>.env` with
-   `POSTFIAT_SIGNER_ALLOW_PEER_UID=$(id -u postfiat)`, and put the key file
-   at `/var/lib/postfiat-signer/<validator>/validator_keys.json` (`0600`,
-   owned by `postfiat-signer`). This is a move: no copy stays in the data
-   directory.
-2. Stop the old rpc unit, choose the floor `N` by the rule above, and
-   initialize the guard once as `postfiat-signer`: the signer unit's
-   `ExecStart` with `--initialize-state --min-height N` and a throwaway
-   `--socket` under the signer's directory. Stop it after its ready line.
-3. Start the signer unit, then the transport and rpc units.
-4. Run the deployment check below.
-5. Read `private_readiness`.
+1. Create `postfiat-signer` and `postfiat-signer-clients`, add `postfiat` to the group, and write `/etc/postfiat/signer/<validator>.env` with `POSTFIAT_SIGNER_ALLOW_PEER_UID=$(id -u postfiat)`.
+2. Stop both old units, `postfiat-<validator>.service` and `postfiat-<validator>-rpc.service`: both sign with the key.
+3. Move the key to `/var/lib/postfiat-signer/<validator>/validator_keys.json` (`0600`, owned by `postfiat-signer`); no copy stays in the data directory.
+4. Choose the floor `N` by the rule above, with both old units stopped.
+5. Initialize the guard once as `postfiat-signer` with `--initialize-state --min-height N` and a throwaway `--socket` under the signer's directory; stop it after its ready line.
+6. Start the signer unit, then the transport and rpc units.
+7. Run the deployment check.
+8. Read `private_readiness` and record `custody_reasons`.
 
 The [deploy sheet template](validator-signer-two-user-deploy-sheet.md) carries
 these steps with the commands.

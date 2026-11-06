@@ -10,7 +10,9 @@ moves to the signer's directory and no copy stays in the data directory.
 
 ## Per validator (operator's go)
 
-- [ ] Users and key:
+The steps are the operator page's, in the same order and words.
+
+1. [ ] Create `postfiat-signer` and `postfiat-signer-clients`, add `postfiat` to the group, and write `/etc/postfiat/signer/<validator>.env` with `POSTFIAT_SIGNER_ALLOW_PEER_UID=$(id -u postfiat)`.
 
     ```sh
     useradd --system --no-create-home postfiat-signer
@@ -22,8 +24,13 @@ moves to the signer's directory and no copy stays in the data directory.
     install -d -o postfiat-signer -g postfiat-signer-clients -m 0700 /var/lib/postfiat-signer/<validator>
     ```
 
-- [ ] Stop the old units: `systemctl stop postfiat-<validator>-rpc.service postfiat-<validator>.service`.
-- [ ] Move the key (no copy stays in the data directory):
+2. [ ] Stop both old units, `postfiat-<validator>.service` and `postfiat-<validator>-rpc.service`: both sign with the key.
+
+    ```sh
+    systemctl stop postfiat-<validator>.service postfiat-<validator>-rpc.service
+    ```
+
+3. [ ] Move the key to `/var/lib/postfiat-signer/<validator>/validator_keys.json` (`0600`, owned by `postfiat-signer`); no copy stays in the data directory.
 
     ```sh
     install -o postfiat-signer -m 0600 /var/lib/postfiat/<validator>/validator_keys.json \
@@ -31,11 +38,14 @@ moves to the signer's directory and no copy stays in the data directory.
     shred -u /var/lib/postfiat/<validator>/validator_keys.json
     ```
 
-- [ ] Floor `N`: the larger of the store's finalized height plus one
-  (`status`) and the highest height in `block_proposal_vote_locks` plus one.
-  If the old signer may have voted or timed out on a height not final yet,
-  read the tip after the other validators finalize past it. Record `N`.
-- [ ] Initialize the guard once (stop with Ctrl-C after the ready line):
+4. [ ] Choose the floor `N` by the rule above, with both old units stopped.
+
+    The rule: the larger of the store's finalized height plus one (`status`)
+    and the highest height in `block_proposal_vote_locks` plus one. If the old
+    units may have voted or timed out on a height not final yet, read the tip
+    after the other validators finalize past it. Record `N`.
+
+5. [ ] Initialize the guard once as `postfiat-signer` with `--initialize-state --min-height N` and a throwaway `--socket` under the signer's directory; stop it after its ready line.
 
     ```sh
     sudo -u postfiat-signer /opt/postfiat/releases/<release>/postfiat-node validator-signer-serve \
@@ -47,8 +57,17 @@ moves to the signer's directory and no copy stays in the data directory.
       --allow-peer-uid "$(id -u postfiat)"
     ```
 
-- [ ] `systemctl daemon-reload`, start `postfiat-<validator>-signer.service`,
-  then `postfiat-<validator>.service` and `postfiat-<validator>-rpc.service`.
-- [ ] Deployment check (`python -m postfiat_ops.validator_signer_check`, the
-  operator page's command) and its `report.json` recorded.
-- [ ] `private_readiness`: record `custody_reasons`.
+6. [ ] Start the signer unit, then the transport and rpc units.
+
+    ```sh
+    systemctl daemon-reload
+    systemctl start postfiat-<validator>-signer.service
+    systemctl start postfiat-<validator>.service postfiat-<validator>-rpc.service
+    ```
+
+7. [ ] Run the deployment check.
+
+    `python -m postfiat_ops.validator_signer_check` with the operator page's
+    arguments; record its `report.json`.
+
+8. [ ] Read `private_readiness` and record `custody_reasons`.
