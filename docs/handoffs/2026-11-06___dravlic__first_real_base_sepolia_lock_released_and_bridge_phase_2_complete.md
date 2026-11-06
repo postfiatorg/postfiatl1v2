@@ -162,3 +162,22 @@ The client's, each with the date it was first asked:
 - The client's latest handoffs, both on private branches: `2026-11-05___codex__security_release_gate_engineering.md` (branch `security/consolidated-20261103`) and `2026-11-05___codex__priority_engineering_and_remaining_production_gates.md` (branch `security/priority-engineering-20261105`).
 - Previous handoff: [Base checkpoint source merged and Phase 2 of the bridge complete](2026-11-05___dravlic__base_checkpoint_source_merged_and_phase_2_of_the_bridge_complete.md).
 - [Current State](../status/chain-state-current.md), unchanged.
+
+## End of session (13:20 UTC)
+
+- The exchange page's 10 November draft (private review repository, branch `update-20261110`) scores 83.87 with the Text Improvement Harness against the 28 October baseline of 87.40. The baseline round is in no harness database on this host, so on Monday the currently published page is re-scored first with the same registration, and only then is the drop rule applied.
+- Three readers approve the draft's text for Monday's publish, with seven wording fixes recorded in the review note beside the draft. Among them:
+    - the "not yet verified" sentence goes, because the rehearsal lock's source is verified on Sourcify and Blockscout;
+    - no "audit engaged": the audit is open, and a package for quotes exists;
+    - the bridge items are "built", not "live", because the result is from a local six-validator test fleet;
+    - future gates are attributed to the milestone;
+    - the page carries no "next update" date.
+
+    Nothing is published.
+- The [next validator release plan](../plans/active/next-validator-release-plan-20261115.md) is complete after today's merges (`f05c2f7ea`, `1f400c4ca`):
+    - the summary is corrected, and the missing rows for #186, #189 and #190 are added;
+    - the signer process (`b610061fc`), the double-sign guard (`fcfdf595e`, `f86d501bb`) and the export operation skeleton (`7a968007e`) now need their own qualification, beside the two-user shape and the export accounting. Each changes either the process that holds the key or what two binaries do with a certified block;
+    - the "Not before" row names every such merge.
+- Correction to "W-1 S7.1" above: #192 is merged with nine review-fix commits, not eight.
+- CI at 13:10 UTC is green on every merge point through `786d551d8`. The runs on `76716865e`, `65a889432`, `af592e98d`, `f05c2f7ea` and `1f400c4ca` are still in progress.
+- The two helper sessions are closed and the main session is idle. Nothing on the devnet is touched.
