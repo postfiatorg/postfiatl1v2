@@ -25,6 +25,8 @@ This is a draft research specification, written on 2026-10-26 by operator dravli
 
 ## 3. The lock contract on Base
 
+Corrected 2026-11-06: see [Corrections](#corrections-2026-11-06).
+
 The lock contract does one thing. It pulls ERC-20 PFT from the holder with `transferFrom`, assigns the next nonce, writes a permanent record, emits one `Locked` event and keeps the tokens. It has no owner, no pause and no setter. Its one other function is the dormant Phase 3 release path of section 6, bound at construction to an immutable PFTL finality verifier. The pfUSDC vault it borrows from does have an owner and a pause switch (`crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol:77-78`, `:116-125`), and the lock contract drops both.
 
 It writes a storage record as well as emitting an event, as the vault does (`ERC20BridgeVaultL1.sol:157-166`, `:177-188`), because the two proof styles read different things. The SP1 ingress program proves storage slots and treats permanent storage as the admission authority (`programs/pfusdc-eth-ingress/src/lib.rs:124-175`, `:177-180`), while the in-consensus checkpoint route proves a receipt log (`pftl_uniswap_ethereum_verification.rs:374-377`). Keeping both leaves either proof open.
@@ -179,6 +181,8 @@ The lead developer decided on 2026-10-28 how a false release is detected and ans
 
 ## 6. Phase 3 hooks kept open
 
+Corrected 2026-11-06: see [Corrections](#corrections-2026-11-06).
+
 Phase 3 exports native PFT back to Base by releasing ERC-20 PFT that was bridged in, from this same lock contract (`pft-erc20-representation-options-20261026.md:108-114`).
 
 **Deployment order.** The lock contract has no admin, so a release path added later could never reach tokens locked before it. Phase 2 therefore deploys the release function now, dormant and bound at construction to a PFTL finality verifier on Base, as the lead developer decided on 2026-10-26. The contract ships it as `release(bytes publicValues, bytes proofBytes) returns (bytes32 withdrawalIdCommitment)`, which emits `Released(bytes32 indexed withdrawalIdCommitment, bytes32 indexed burnTxIdCommitment, bytes32 indexed packetDigest, address recipient, uint256 amount)`. The verifier's address is immutable, with no setter and no admin, so Phase 3 stays possible without any privileged role, and the verifier is deployed on Base before the lock contract. Because genesis names the lock contract's address, the lock contract is deployed before genesis.
@@ -250,3 +254,9 @@ The lead developer decided four things on 2026-10-26 and two on 2026-10-28. All 
 - `crates/node/src/block_replay_wallet.rs`, `crates/node/src/history.rs`, `crates/node/src/lifecycle_queries.rs`, `deployments/a666-export-relay-mainnet-20260731/README.md`
 - `crates/types/src/fastswap_types.rs`, `crates/types/src/shielded_bridge_governance.rs`, `crates/execution/src/fastswap_control.rs`, `docs/status/chain-state-current.md`, `docs/runbooks/fastpay-committee-recovery.md`, and `deployments/fastlane-cap-20261014/ISSUER-SIGNING-SHEET-20261020.md` on branch `release/fastlane-cap-20261014`
 - Base documentation, "Withdrawals", <https://docs.base.org/specifications/base-protocol/bridging/withdrawals>, and the `base/withdrawer` README, <https://github.com/base/withdrawer>, both read on 2026-10-26.
+
+## Corrections (2026-11-06)
+
+**Deployment order (section 6).** Section 6 says the lock contract is deployed before genesis, which the constructors make impossible: the lock binds the verifier's address, the verifier binds the lock's runtime code hash and needs a finalized PFTL checkpoint, and genesis names the lock's address and code hash. The order is the eight steps of the Phase 3 note (`docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md`, section 5, "Deployment order"): predict both CREATE addresses, compute the lock's code hash, pin them in genesis, start the chain, take the first finalized PFTL checkpoint, deploy the verifier and then the lock at the predicted nonces, and check the bindings.
+
+**The release bound (section 3, invariant 4).** Invariant 4 ties what releases can pay out to the lock's `totalLocked - totalReleased` without conditions. The Phase 3 note (section 4, "Rule, and its conditions"; section 8, "A false release meets exports") shows that the lock holds at least PFTL's net released atoms only while every PFTL release is backed by a real Lock and every Base payout consumed one export packet; a false release by a colluding quorum (section 9) or an unsound verifier payout breaks it. PFTL's own refusal of a release above the lane's remainder (section 5, step 3) holds either way.
