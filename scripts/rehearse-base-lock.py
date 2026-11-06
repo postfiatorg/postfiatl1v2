@@ -49,6 +49,22 @@ def watcher_summary(lines, *, releases_checked):
     return summary
 
 
+CONTRACTS = 'crates/pft-token-contracts'
+FOUNDRY_SHARED_DIRS = ('out', 'cache', 'broadcast')
+
+
+def contracts_checkout_state():
+    """What a run must leave unchanged in the checkout's contracts crate: its git
+    status, and whether each shared Foundry directory exists and when it last
+    changed. The directories are ignored by git, so the status alone misses them."""
+    status = subprocess.check_output(['git', 'status', '--porcelain', '--ignored', CONTRACTS], cwd=ROOT, text=True)
+    stamps = {}
+    for name in FOUNDRY_SHARED_DIRS:
+        path = ROOT / CONTRACTS / name
+        stamps[name] = path.stat().st_mtime_ns if path.exists() else None
+    return status, stamps
+
+
 def free_port():
     with socket.socket() as stream:
         stream.bind(('127.0.0.1', 0))
@@ -64,6 +80,10 @@ def main():
     out.mkdir(parents=True, mode=0o700, exist_ok=False)
     target = args.target_dir.resolve()
     environment = os.environ.copy()
+    # Foundry writes its artifacts, cache and broadcasts under the output
+    # directory, never into the checkout's shared out/, cache/ or broadcast/.
+    environment.update(FOUNDRY_OUT=str(out / 'forge-out'), FOUNDRY_CACHE_PATH=str(out / 'forge-cache'),
+                       FOUNDRY_BROADCAST=str(out / 'forge-broadcast'))
     environment.update(CARGO_TARGET_DIR=str(target), CARGO_BUILD_JOBS='2', CARGO_INCREMENTAL='0',
                        CARGO_PROFILE_DEV_DEBUG='0', PYTHONPATH=str(ROOT / 'python'),
                        POSTFIAT_LOCAL_EVM_REHEARSAL=str(out / 'config.json'))
@@ -72,6 +92,7 @@ def main():
                'commands': [], 'passed': False, 'public_testnet_transaction': False}
     children = []
     native = None
+    contracts_before = contracts_checkout_state()
 
     def command(name, argv, cwd=ROOT, expected=0):
         began = time.time()
@@ -107,10 +128,11 @@ def main():
         require(rpc('eth_chainId') == '0x14a34', 'local Anvil must report chain id 84532')
         holder = rpc('eth_accounts')[0]
         contract_dir = ROOT / 'crates/pft-token-contracts'
-        command('contracts-build', ['forge', 'build'], contract_dir)
+        command('contracts-build', ['forge', 'build', '--out', out / 'forge-out', '--cache-path', out / 'forge-cache'], contract_dir)
 
         def deploy(name, contract, constructor=()):
-            argv = ['forge', 'create', contract, '--rpc-url', url, '--unlocked', '--from', holder, '--broadcast', '--json']
+            argv = ['forge', 'create', contract, '--out', out / 'forge-out', '--cache-path', out / 'forge-cache',
+                    '--rpc-url', url, '--unlocked', '--from', holder, '--broadcast', '--json']
             if constructor:
                 argv += ['--constructor-args', *constructor]
             return json.loads(command(name, argv, contract_dir))['deployedTo'].lower()
@@ -156,6 +178,12 @@ def main():
         results['watcher_repeat'] = [json.loads(line) for line in command('watcher-repeat', watcher_args).splitlines()]
         watcher_summary(results['watcher_repeat'], releases_checked=0)
         results['native'] = native
+        status, _ = contracts_checkout_state()
+        require(not subprocess.check_output(['git', 'status', '--porcelain', CONTRACTS], cwd=ROOT, text=True),
+                f'the run changed {CONTRACTS} in the checkout')
+        require(contracts_checkout_state() == contracts_before,
+                f'the run wrote the checkout\'s shared Foundry directories: {status}')
+        results['contracts_checkout_unchanged'] = True
         results['passed'] = True
     except Exception as error:
         results['error'] = str(error)
