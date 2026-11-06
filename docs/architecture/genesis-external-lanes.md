@@ -230,7 +230,7 @@ The tests do not exercise these refusals:
 - `base_chain_id_mismatch` on proof.
 - `checkpoint_certificate_invalid` on assemble.
 
- `live_base_sepolia_checkpoint_of_the_rehearsal_lock` (ignored; `POSTFIAT_LIVE_BASE_RPC`) runs observe, five signatures and assembly against Base Sepolia with the rehearsal lock and token. It also rebuilds that block's receipt trie; on 2026-11-05 the rebuilt root matched the block's receipts root (the run record is the section 'Base checkpoint source (2026-11-05)' of [the qualification record](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md)).
+ `live_base_sepolia_checkpoint_of_the_rehearsal_lock` (ignored; `POSTFIAT_LIVE_BASE_RPC`) runs observe, five signatures and assembly against Base Sepolia with the rehearsal lock and token. It also rebuilds that block's receipt trie; on 2026-11-05 the rebuilt root matched the block's receipts root (the run record is the section 'Base checkpoint source (2026-11-05)' of [the qualification record](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md)). On 2026-11-06 the four commands proved the first real Lock, on the Base Sepolia rehearsal lock, and a local six-validator fleet released it ([part 2 of the rehearsal](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md#base-sepolia-rehearsal-2026-11-06-part-2-the-release-on-a-local-fleet)).
 
 ## The watcher
 

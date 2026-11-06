@@ -1,7 +1,7 @@
 {
   "chain_id": "postfiat-lane-sepolia-example",
   "protocol_version": 1,
-  "validator_count": 1,
+  "validator_count": 6,
   "native_supply_atoms": 1000000000,
   "replicated_state_v2_activation_height": 0,
   "external_lanes": [
@@ -16,8 +16,8 @@
         "token_address": "0x90ce303356d80ecbe359faf061c84130f40eacf0",
         "token_runtime_code_hash": "0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b",
         "lock_runtime_code_hash": "0x57bc7971e6878bed2cd4efc0e63020448d4cd9493f05ecde6ddc37fda90b871c",
-        "committee_epoch": 2,
-        "committee_root": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+        "committee_epoch": 1,
+        "committee_root": "0xe8b9bc85b1d52818060d0e072172f9ca64da1479aa4df9e37949d7570ff2f7ecc2ea40a4be1816e0ec2051801544b13c",
         "confirmation_depth": 64
       }
     }

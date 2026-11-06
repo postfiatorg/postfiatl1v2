@@ -1,0 +1,283 @@
+{
+  "schema": "postfiat-base-sepolia-lock-rehearsal-part-2-v1",
+  "date": "2026-11-06",
+  "part_1": "docs/review/base-sepolia-lock-rehearsal-20261106/part-1.json",
+  "source": {
+    "commit": "d4bffaff1 (node code identical to be2a8e41e; the commit changes documentation only)",
+    "binary": "cargo build --locked -p postfiat-node --bin postfiat-node (dev profile, target/debug/postfiat-node)",
+    "code_change": "none"
+  },
+  "base_sepolia": {
+    "rpc": "https://sepolia.base.org, read methods only, no transaction of any kind",
+    "finalized_block_at_start": 55140481,
+    "finalized_block_hash_at_start": "0x976c2b126ca0c0948917da7d3ec1ac2ded6a29bbf42b01232595934da0cbb84d",
+    "finality_check": "55140481 >= 55132949 + 64 (07:46:22Z)",
+    "node_commands_rpc": "the four node commands take an http:// endpoint only; they ran through a local read-only forwarder (127.0.0.1, http to https://sepolia.base.org) that passed only read methods",
+    "forwarded_requests": {
+      "eth_blockNumber": 6,
+      "eth_chainId": 8,
+      "eth_getBlockByHash": 1,
+      "eth_getBlockByNumber": 12,
+      "eth_getBlockReceipts": 1,
+      "eth_getCode": 12,
+      "eth_getTransactionReceipt": 1
+    },
+    "refused_requests": {},
+    "watcher_rpc": "https://sepolia.base.org directly"
+  },
+  "fleet": {
+    "validators": 6,
+    "host": "one work server, loopback ports (p2p 37650-37660, rpc 37750-37755)",
+    "data_directories": "$HOME/tmp-dravlic-tests-b/sepolia-fleet-20261106/validator-0..5, removed after the run",
+    "genesis_file": "docs/review/base-sepolia-lock-rehearsal-20261106/genesis.json",
+    "genesis_sha256": "0948db179e83d82fdfae7f0302d84e2f94e1e9f60d831c55c56ef6a8adc732bc",
+    "genesis_hash": "b01544961ac962b69e6e002eca4a5c2bff998f40d9d6e6b648573104dc9ce7f168f159c8c19fe70ea2db3985395abc47",
+    "height_zero_state_root": "4fc5145977c3767b1bd8f7d87ed3ceafe98d7cedc050ad982bfc33afbd9c70a3905f14b83303c250723db48358a595c2",
+    "genesis_changes_from_part_1_template": "validator_count 1 -> 6; committee_epoch 2 -> 1 (the epoch a FastSwap governance bootstrap installs; epoch 2 needs a committee activation round); committee_root the placeholder -> 0xe8b9bc85b1d52818060d0e072172f9ca64da1479aa4df9e37949d7570ff2f7ecc2ea40a4be1816e0ec2051801544b13c, the root of the six validators' ML-DSA-65 keys (quorum 5). Unchanged: chain id, supply, reserved 300000000 atoms, window 86400 blocks, cap 200 bps, policy chain id 84532, lock and token addresses and runtime code hashes, confirmation depth 64",
+    "setup": [
+      "postfiat-node init --data-dir <keygen> --chain-id postfiat-lane-sepolia-example --validators 6 (only to generate the six validator keys)",
+      "committee root computed from the six public keys as FastSwapCommitteeV1::computed_root does (SHA3-384, domain postfiat.fastswap.committee.v1), written into the genesis",
+      "postfiat-node init --data-dir validator-0 --node-id validator-0 --genesis-file docs/review/base-sepolia-lock-rehearsal-20261106/genesis.json, with the six keys in place",
+      "postfiat-node snapshot-export --data-dir validator-0 --snapshot-dir <snapshot>; snapshot-import --data-dir validator-N --node-id validator-N --snapshot-dir <snapshot> for N = 1..5",
+      "postfiat-node topology --chain-id postfiat-lane-sepolia-example --validators 6 --base-port 37650 --rpc-base-port 37750, then the harness bound it to the lane genesis hash and recomputed topology_id f4e180cb9f05a729412031bbe5e53fc51c03ffddf146c8bcd07e46e24571f60126c0f59d4ec37bb68507a1641152fd80 (topology derives its domain from a lane-less genesis)",
+      "per validator: transport-validator-serve --unsafe-devnet-file-signer --unsafe-devnet-json-storage --topology <topology> --key-file <its key> --vote-dir <dir> (POSTFIAT_PREWARM_* = 1), and rpc-serve --unsafe-devnet-json-storage --port 3775N --allow-mempool-submit --allow-mempool-submit-finality --finality-topology <topology> --finality-key-file <its key> --keep-alive"
+    ],
+    "status_at_height_0": "six identical state roots 4fc51459..., external-lane-info: reserved 300000000, released 0, remainder 300000000"
+  },
+  "height_1_committee": {
+    "commands": [
+      "fastswap-governance-bootstrap --data-dir validator-1 --validators validator-0..5 --payload-file <payload: the epoch-1 committee, no asset rules, no policies, activation height 10> --amendment-file <a> --batch-file <b>",
+      "governance-authorization-sign by each of the six (proposal slot 1, expires at height 8)",
+      "governance-amendment-assemble, fastswap-governance-bootstrap-assemble",
+      "transport-peer-certified-batch-round --data-dir validator-1 --batch-kind governance --require-local-proposer --height 1 --quorum-early-full-propagation --local-apply-before-certified-send"
+    ],
+    "proposer": "validator-1",
+    "result": "round_ok true, 4 remote votes (certificate 5 of 6), receipt accepted; six identical tips 4600f7e0... and state roots 2be022a6...",
+    "payload_sha256": "6e718cb02963df7dfbec49dfc49308c69e19957d2262eee03ec216541b4e2857",
+    "lane_info_at_height_1": "reserved 300000000, released 0, committee epoch 1, root 0xe8b9bc85...544b13c, release_count 0"
+  },
+  "checkpoint_source": {
+    "commands": [
+      "postfiat-node external-lane-checkpoint-observe --data-dir validator-0 --lane-id base-erc20 --base-rpc <forwarder> --block-number 55132949 --checkpoint-file checkpoint.json",
+      "postfiat-node external-lane-checkpoint-sign --data-dir validator-N --checkpoint-file checkpoint.json --base-rpc <forwarder> --validator validator-N --validator-key-file <validator-N's key> --vote-file vote-N.json, for N = 0..4, each from its own data directory",
+      "postfiat-node external-lane-checkpoint-assemble --data-dir validator-0 --checkpoint-file checkpoint.json --vote-files vote-0..4.json --certificate-file certificate.json",
+      "postfiat-node external-lane-lock-proof --data-dir validator-0 --lane-id base-erc20 --base-rpc <forwarder> --transaction-hash 0x599e15fbc298649c741379df2b7179fe08a8a1a0f4e8a5effe28de6f09b5c859 --certificate-file certificate.json --submitter pf80dc643a28c0a8fc54b1620c703491d2f494ef75 --operation-file operation.json"
+    ],
+    "all_exit_0": true,
+    "checkpoint": {
+      "file": "docs/review/base-sepolia-lock-rehearsal-20261106/checkpoint.json",
+      "block_number": 55132949,
+      "block_hash": "0xfaac31ef19b9ed183b7bc5fb6ade195b6e74cc9132a86c26b3fad381af8070d7",
+      "block_hash_equals_part_1": true,
+      "receipts_root": "0x9cdcc966f3bf6f7adaf7e1fef52171ea3aa981f13cc3c5710b4d0d3eebf4e946",
+      "observed_head_number": 55153306,
+      "depth_past_block": 20357,
+      "minimum_confirmations": 64,
+      "lock_code_hash": "0x57bc7971e6878bed2cd4efc0e63020448d4cd9493f05ecde6ddc37fda90b871c",
+      "token_code_hash": "0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b",
+      "code_hashes_equal_pins": true,
+      "authority_epoch": 1,
+      "committee_root": "0xe8b9bc85b1d52818060d0e072172f9ca64da1479aa4df9e37949d7570ff2f7ecc2ea40a4be1816e0ec2051801544b13c"
+    },
+    "signers": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4"
+    ],
+    "certificate": {
+      "votes": 5,
+      "voters": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4"
+      ],
+      "size_bytes": 212247,
+      "kept": false
+    },
+    "operation": {
+      "operation": "external_lane_release_v1",
+      "submitter": "pf80dc643a28c0a8fc54b1620c703491d2f494ef75 (the fleet genesis faucet)",
+      "lane_id": "base-erc20",
+      "source_chain_id": 84532,
+      "lock_contract_address": "0xfb6cf3d7e759cb3130c094c1d7264619ece74d73",
+      "lock_nonce": 0,
+      "amount_atoms": 1000000,
+      "recipient": "pfb2f06f1346000c42db0246a0fcf6ce0356662eb6",
+      "receipt_proof_transaction_index": 6,
+      "log_index_in_receipt": 0,
+      "proof_nodes": 3,
+      "block_receipts": "8 receipts, the first an OP Stack deposit receipt (type 0x7e); the rebuilt trie matches the receipts root",
+      "size_bytes": {
+        "pretty": 304225,
+        "compact": 66245
+      },
+      "kept": false
+    },
+    "sha256": {
+      "checkpoint.json": "93685d0a24b8f3f002aed8a15d954cafd89d14909a473f20f1ca5e48c77b43a8",
+      "vote-0.json": "4e2d838ce741b375f589b9322660b529e305a8aef259d85fe6949be339a12a4c",
+      "vote-1.json": "8435ec9cf5afe74841d3174a81ee3c0fc18ab9d89fd799d5bb823b90238860c1",
+      "vote-2.json": "38d2f7e6ebd08cbe2224de980c2a59b65401da174d0eb0cdcd1983f6d036cb94",
+      "vote-3.json": "a1d77f41c9cb1b9828e0ee1e03db9c6dd0b4ae3a368bc5338151bb12644ed0f2",
+      "vote-4.json": "3f054daa40a5965a91cc17cab975d9343e70d82e5157b579070622a5f3f01712",
+      "certificate.json": "6c75542d49360ef0fd4bd361ccf63b2f06af9657f66cfa5730dc04093a3039cf",
+      "operation.json": "f9fe847d84a1a2eedfd567db2815abfe7be5583bdf50f7393fb296e4ce75b98d",
+      "operation.compact.json": "6f024d7c47888a59b605bdad7a82248d356fc7fd5e50ae77a9a82203f15aba7e"
+    }
+  },
+  "height_2_release": {
+    "commands": [
+      "postfiat-node wallet-sign-asset-transaction --key-file <the fleet faucet key> --chain-id postfiat-lane-sepolia-example --genesis-hash b0154496... --protocol-version 1 --fee 1000 --sequence 1 --operation-json \"$(cat operation.compact.json)\" (the compact form: the pretty one exceeds one 128 KiB argument)",
+      "rpc mempool_submit_signed_asset_transaction_finality on validator-2's rpc-serve, the height-2 proposer (python/postfiat_rpc/client.py)"
+    ],
+    "signed_transaction_sha256": "ae92700ec436f6fa6510d4550d8a125e5c907541ea686291f14d5d77a41f53a7",
+    "tx_id": "48fc7a5c81e47b19284a402dff5a3527ce2811ff1ce2b71cebcaf42c47dc86b223949fc2fa2dd227cd2756979a995343",
+    "receipt": "accepted, 'asset transaction applied; fee burned', fee 1000 burned",
+    "certified_block": {
+      "height": 2,
+      "proposer": "validator-2",
+      "block_hash": "fccfa5d9beeb41b67c3aeeb254fa8da97fcc71fd83ff247c3f5e910b14b1960c66b70645e169de92c31d61d773993ef7",
+      "state_root": "daa1c96265ba0e80b96f7c7b382e762d2e8f4afa7c773e38e9baa751932171af386d665d098e57b7af3f9817ccd5c3f2",
+      "certificate": "5 votes of 6, quorum 5"
+    },
+    "finality_response": "confirmed true; round_ok false only because the certified sends were deferred (all_sends_verified false at return, failed_send_count 0); all six then reported height 2 with the same tip and state root",
+    "recipient_balance_atoms": {
+      "validator-0": 1000000,
+      "validator-1": 1000000,
+      "validator-2": 1000000,
+      "validator-3": 1000000,
+      "validator-4": 1000000,
+      "validator-5": 1000000
+    },
+    "lane_info": {
+      "remainder_atoms": 299000000,
+      "window_cap_atoms": 6000000,
+      "release_count": 1,
+      "pruned_release_count": 0,
+      "release_history_root": "0xba248c76e4faeba52bb65187e8a5e3f4b5ae20c49f14c5393656b44022d92ab80ef73e5ba1fba46241d53f287caf9b76",
+      "state": {
+        "lane_id": "base-erc20",
+        "reserved_atoms": 300000000,
+        "released_atoms": 1000000,
+        "released_lock_nonces": [
+          0
+        ],
+        "window_index": 0,
+        "window_released_atoms": 1000000,
+        "release_history_root": "0xba248c76e4faeba52bb65187e8a5e3f4b5ae20c49f14c5393656b44022d92ab80ef73e5ba1fba46241d53f287caf9b76"
+      },
+      "releases": [
+        {
+          "sequence": 0,
+          "record": {
+            "lock_nonce": 0,
+            "source_chain_id": 84532,
+            "lock_contract_address": "0xfb6cf3d7e759cb3130c094c1d7264619ece74d73",
+            "amount_atoms": 1000000,
+            "recipient": "pfb2f06f1346000c42db0246a0fcf6ce0356662eb6",
+            "source_block_number": 55132949,
+            "source_block_hash": "0xfaac31ef19b9ed183b7bc5fb6ade195b6e74cc9132a86c26b3fad381af8070d7",
+            "released_at_height": 2
+          }
+        }
+      ]
+    },
+    "lane_info_sha256_all_six": "604cba2aab429325fb19a0cdec1d1d431d46765117410bed6c7665e57f171f58 (byte-identical on the six)",
+    "verifiers_on_validator_3_after_stop": {
+      "verify-blocks": "exit 0, verified, block_count 2, tip fccfa5d9..., state root daa1c962...",
+      "verify-state": "exit 0, verified"
+    }
+  },
+  "resubmission": {
+    "same_signed_transaction": "refused by all six at mempool admission: bad_sequence (expected sequence 2, got 1)",
+    "same_operation_signed_at_sequence_2": "refused by all six at mempool admission: external_lane_nonce_already_released: external lane `base-erc20` already released Lock nonce 0",
+    "state_change": "none: external-lane-info byte-identical (604cba2a...) on all six, height 2 and state root daa1c962... unchanged",
+    "signed_transaction_sha256": "c4a4481435a09bfd1485008d081f48e1375fefa3c3294780428cccc77ce962b7"
+  },
+  "watcher": {
+    "command": "PYTHONPATH=python python3 -m postfiat_rpc.external_lane_watcher --pftl-rpc <validator-0 rpc> --lane-id base-erc20 --base-rpc https://sepolia.base.org --state-file <tmp> --once",
+    "run_1": {
+      "exit": 0,
+      "file": "docs/review/base-sepolia-lock-rehearsal-20261106/watcher-run-1.jsonl",
+      "lines": [
+        {
+          "amount_atoms": 1000000,
+          "holder": "0x6e4e8e0ed73f807d8e8479cb8f25d87ce8811e17",
+          "kind": "release",
+          "lane_id": "base-erc20",
+          "lock_nonce": 0,
+          "recipient": "pfb2f06f1346000c42db0246a0fcf6ce0356662eb6",
+          "recipient_hash": "0xa443f962f419c2ee6961432119512847119ec562e70b1f760d6fac7e81d6fff4",
+          "released_at_height": 2,
+          "schema": "postfiat.external_lane_watcher.v1",
+          "sequence": 0,
+          "source_block_hash": "0xfaac31ef19b9ed183b7bc5fb6ade195b6e74cc9132a86c26b3fad381af8070d7",
+          "source_block_number": 55132949,
+          "status": "backed"
+        },
+        {
+          "alarm_codes": {
+            "lock_code_hash_mismatch": 0,
+            "release_amount_mismatch": 0,
+            "release_block_not_finalized": 0,
+            "release_pruned_before_check": 0,
+            "release_recipient_mismatch": 0,
+            "release_source_block_mismatch": 0,
+            "release_without_lock": 0
+          },
+          "alarms": 0,
+          "chain_id": 84532,
+          "checked_from_height": 0,
+          "checked_through_height": 2,
+          "current_height": 2,
+          "finalized_block": 55145286,
+          "kind": "summary",
+          "lane_id": "base-erc20",
+          "lock_code_hash": "0x57bc7971e6878bed2cd4efc0e63020448d4cd9493f05ecde6ddc37fda90b871c",
+          "lock_contract_address": "0xfb6cf3d7e759cb3130c094c1d7264619ece74d73",
+          "pruned_release_count": 0,
+          "release_count": 1,
+          "releases_checked": 1,
+          "schema": "postfiat.external_lane_watcher.v1"
+        }
+      ]
+    },
+    "run_2": {
+      "exit": 0,
+      "file": "docs/review/base-sepolia-lock-rehearsal-20261106/watcher-run-2.jsonl",
+      "lines": [
+        {
+          "alarm_codes": {
+            "lock_code_hash_mismatch": 0,
+            "release_amount_mismatch": 0,
+            "release_block_not_finalized": 0,
+            "release_pruned_before_check": 0,
+            "release_recipient_mismatch": 0,
+            "release_source_block_mismatch": 0,
+            "release_without_lock": 0
+          },
+          "alarms": 0,
+          "chain_id": 84532,
+          "checked_from_height": 3,
+          "checked_through_height": 2,
+          "current_height": 2,
+          "finalized_block": 55145286,
+          "kind": "summary",
+          "lane_id": "base-erc20",
+          "lock_code_hash": "0x57bc7971e6878bed2cd4efc0e63020448d4cd9493f05ecde6ddc37fda90b871c",
+          "lock_contract_address": "0xfb6cf3d7e759cb3130c094c1d7264619ece74d73",
+          "pruned_release_count": 0,
+          "release_count": 1,
+          "releases_checked": 0,
+          "schema": "postfiat.external_lane_watcher.v1"
+        }
+      ]
+    }
+  },
+  "teardown": "all twelve processes and the forwarder stopped; the fleet's data directories removed; only the record files kept",
+  "task_node": "skipped: request req_09def6eae74d7258f2ab087c14414b377aefaf8ee10bdd8c9dbdb2665da98702 failed at generation (inference_http_402), as both requests did this morning"
+}
