@@ -87,6 +87,53 @@ class PortRetryTests(unittest.TestCase):
         self.assertEqual(len(children), rehearsal.PORT_ATTEMPTS)
 
 
+    def test_readiness_counts_only_while_the_child_runs(self) -> None:
+        children: list = []
+        record: list = []
+
+        def argv(port: int) -> list[str]:
+            body = "raise SystemExit(1)" if not children else "import time; time.sleep(30)"
+            return [sys.executable, "-c", body]
+
+        def ready(port: int) -> bool:
+            # The first child reads as ready only once it has exited.
+            if len(children) == 1:
+                children[0].wait()
+            return True
+
+        try:
+            _, child = rehearsal.start_on_free_port("probe", argv, ready, children, record)
+            self.assertIsNone(child.poll())
+        finally:
+            for started in children:
+                started.kill()
+                started.wait()
+        self.assertEqual([entry["attempt"] for entry in record], [1, 2])
+
+    def test_a_ready_file_left_by_an_exited_attempt_is_not_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ready_file = Path(directory) / "ready.json"
+            ready_file.write_text("{}")  # left behind by an earlier attempt
+            children: list = []
+            record: list = []
+            write_and_wait = f"open({str(ready_file)!r}, 'w').close(); import time; time.sleep(30)"
+
+            def argv(port: int) -> list[str]:
+                body = "raise SystemExit(1)" if not children else write_and_wait
+                return [sys.executable, "-c", body]
+
+            try:
+                _, child = rehearsal.start_on_free_port(
+                    "probe", argv, lambda port: ready_file.exists(), children, record, ready_file=ready_file
+                )
+                self.assertIsNone(child.poll())
+            finally:
+                for started in children:
+                    started.kill()
+                    started.wait()
+            self.assertEqual([entry["attempt"] for entry in record], [1, 2])
+
+
 class PathConfinementTests(unittest.TestCase):
     def test_output_and_target_are_confined(self) -> None:
         with tempfile.TemporaryDirectory() as root:

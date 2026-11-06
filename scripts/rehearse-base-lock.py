@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import socket
@@ -127,11 +128,12 @@ def sha256_file(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def write_manifest(out, commit, tree):
+def write_manifest(out, commit, tree, toolchain=None):
     artifacts = sorted(path for path in out.iterdir() if path.is_file() and path.name != 'manifest.json')
     manifest = {
         'source_commit': commit,
         'source_tree': tree,
+        'toolchain': toolchain,
         'source_files': {name: sha256_file(ROOT / name) for name in SOURCE_FILES},
         'evidence_files': {path.name: sha256_file(path) for path in artifacts if path.name in PUBLISHED},
         'not_published': {path.name: {'sha256': sha256_file(path), 'bytes': path.stat().st_size}
@@ -160,12 +162,18 @@ def confined_paths(output, target_dir):
     return out, target
 
 
-def start_on_free_port(name, argv_for_port, ready, children, record, open_stderr=None, env=None, ticks=600):
+def start_on_free_port(name, argv_for_port, ready, children, record, open_stderr=None, env=None, ticks=600,
+                       ready_file=None):
     """Start a loopback child on a free port. The port is free when probed but
     another process can take it before the child binds, so a child that exits
-    before it is ready is started again on a new port, at most PORT_ATTEMPTS
-    times. Returns the port and the running child."""
+    before it is ready is reaped and started again on a new port, at most
+    PORT_ATTEMPTS times. A child counts as ready only while it still runs, and
+    `ready_file`, when given, is removed before each attempt, so a file an
+    exited attempt left behind never reads as ready. Returns the port and the
+    running child."""
     for attempt in range(1, PORT_ATTEMPTS + 1):
+        if ready_file is not None:
+            Path(ready_file).unlink(missing_ok=True)
         port = free_port()
         argv = [str(a) for a in argv_for_port(port)]
         stderr = open_stderr() if open_stderr else subprocess.DEVNULL
@@ -175,13 +183,50 @@ def start_on_free_port(name, argv_for_port, ready, children, record, open_stderr
         for _ in range(ticks):
             if child.poll() is not None:
                 break
-            if ready(port):
+            if ready(port) and child.poll() is None:
                 return port, child
             time.sleep(.1)
         else:
             raise RehearsalFailure(f'{name} did not become ready on port {port}')
         # Exited before ready: most likely the port was taken in between.
+        child.wait()
     raise RehearsalFailure(f'{name} exited before ready on {PORT_ATTEMPTS} ports')
+
+
+# The Foundry artifacts whose compiler provenance a run records.
+ARTIFACTS = {'PFTToken': 'PFTToken.sol/PFTToken.json', 'PFTLockV1': 'PFTLockV1.sol/PFTLockV1.json'}
+
+
+def toolchain_provenance(out):
+    """What determines the deployed runtime code besides the sources: the tool
+    versions, the Solc build, the Foundry config, the OpenZeppelin commit and
+    each artifact's metadata hash (the IPFS digest Solc appends to the runtime
+    code). Copies each artifact beside the results, where the manifest lists
+    it by sha256 under not_published."""
+    def version(tool):
+        return subprocess.check_output([tool, '--version'], text=True).strip()
+
+    artifacts = {}
+    for name, relative in ARTIFACTS.items():
+        source = out / 'forge-out' / relative
+        artifact = json.loads(source.read_text())
+        runtime = (artifact.get('deployedBytecode') or {}).get('object', '')
+        embedded = re.search(r'a264697066735822(1220[0-9a-f]{64})', runtime.lower())
+        raw = artifact.get('rawMetadata') or ''
+        artifacts[name] = {
+            'solc_version': ((artifact.get('metadata') or {}).get('compiler') or {}).get('version'),
+            'metadata_ipfs_multihash': embedded.group(1) if embedded else None,
+            'raw_metadata_sha256': hashlib.sha256(raw.encode()).hexdigest() if raw else None,
+        }
+        shutil.copyfile(source, out / f'{name}.artifact.json')
+    return {
+        'forge_version': version('forge'),
+        'cast_version': version('cast'),
+        'anvil_version': version('anvil'),
+        'foundry_toml_sha256': sha256_file(ROOT / CONTRACTS / 'foundry.toml'),
+        'openzeppelin_commit': git('rev-parse', f'HEAD:{CONTRACTS}/lib/openzeppelin-contracts'),
+        'artifacts': artifacts,
+    }
 
 
 def main():
@@ -252,6 +297,7 @@ def main():
         holder = rpc('eth_accounts')[0]
         contract_dir = ROOT / 'crates/pft-token-contracts'
         command('contracts-build', ['forge', 'build', '--out', out / 'forge-out', '--cache-path', out / 'forge-cache'], contract_dir)
+        results['toolchain'] = toolchain_provenance(out)
 
         def deploy(name, contract, constructor=()):
             argv = ['forge', 'create', contract, '--out', out / 'forge-out', '--cache-path', out / 'forge-cache',
@@ -284,7 +330,7 @@ def main():
                                        '--bind-host', '127.0.0.1', '--port', port, '--max-requests', '100',
                                        '--ready-file', ready],
             lambda port: ready.exists(), children, results['children'],
-            open_stderr=lambda: (out / 'rpc.stderr').open('a'), env=environment)
+            open_stderr=lambda: (out / 'rpc.stderr').open('a'), env=environment, ready_file=ready)
         watcher_args = [sys.executable, '-m', 'postfiat_rpc.external_lane_watcher', '--pftl-rpc', f'127.0.0.1:{rpc_port}',
                         '--lane-id', 'base-erc20', '--base-rpc', url, '--state-file', out / 'watcher-state.json', '--once']
         lines = [json.loads(line) for line in command('watcher', watcher_args).splitlines()]
@@ -320,7 +366,7 @@ def main():
         results['ended_at_unix'] = int(time.time())
         encoded = json.dumps(results, indent=2) + '\n'
         (out / 'result.json').write_text(encoded)
-        write_manifest(out, commit, tree)
+        write_manifest(out, commit, tree, results.get('toolchain'))
         print(encoded)
     return 0 if results['passed'] else 1
 

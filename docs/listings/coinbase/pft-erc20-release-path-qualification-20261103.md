@@ -189,9 +189,20 @@ The recorded run is the 2026-11-06 re-run from the clean committed tree: commit
 `fb88da35fbc7265e1e85aee2732a0c45056478d4`, tree
 `b8e303c60a473dd770394b34ded9003a887af6ee`, both in `result.json` and
 `manifest.json`, which also hashes the production entry points and the harness.
-It gives the same amounts, Lock block, Lock transaction and watcher results as
-the first run. The token and lock runtime code hashes differ from the first
-run's (`0x7175f7fe…` and `0x6808ad20…`); the run pins whatever it deploys.
+It gives the same amounts, Lock block, Lock transaction and watcher outcome as
+the first run; the release's `source_block_hash` and the summary's
+`lock_code_hash` differ between runs by nature. The token and lock runtime code
+hashes differ from the first run's (`0x7175f7fe…` and `0x6808ad20…`) only in the
+Solidity metadata: the IPFS metadata digest Solc appends, and for the lock also
+the immutable token-code-hash positions that embed the token's digest. A scratch
+build reproduces the recorded pair. An auto-detected `openzeppelin-contracts/=`
+remapping is part of that metadata, and the earlier pair most likely came from a
+stale shared artifact. This is the local rehearsal only: the production
+deployment records pin their own compiler settings and were reproduced from
+their artifacts. The script now also records the tool versions (`forge`, `cast`,
+`anvil`), the Solc build, the `foundry.toml` sha256, the OpenZeppelin commit and
+both artifacts' metadata hashes; the recorded run predates that, so the next run
+fills them.
 
 [Machine results and exact commands](../../review/base-lock-rehearsal-20261105/result.json)
 and [source/evidence hashes](../../review/base-lock-rehearsal-20261105/manifest.json).
