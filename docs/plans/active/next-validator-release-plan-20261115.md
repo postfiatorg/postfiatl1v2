@@ -34,6 +34,7 @@ Skeleton written 2026-10-30; pointed at the separately qualified next release on
 - [x] `41bde8b8a`: the external lane watcher (branch commits `cea372c1b` to `ddd1713f9`). Python (`python/postfiat_rpc/external_lane_watcher.py` and its tests) and docs only; no node change, rides along.
 - [x] `fcfdf595e` and `f86d501bb`: pull request #192 (branch commits `8b763dca2` to `5fe55f6cf`) and its review fixes (`0aedc2f42`, `e6b04ce41`, `89f9abbb4`, `e1448c8fb`, `2815dc26a`, `338e64326`, `e541cb168`, `7a8218c5b`, `af3adae6e`): the validator signer's durable double-sign guard, its readiness reasons and the Python deployment checker. It changes the node binary but nothing signed: the guard only refuses. Rides along. The guard's initialization (with the `--min-height` floor for an existing key), the checker run and the signer and rpc unit files are operator steps.
 - [x] `3c84580b7` and `d96dfe294`: pull request #191 (branch commit `02024aafd`) and its review fixes (`8e247d49f` to `643dc457f`), the local EVM Lock rehearsal of the external lane: `scripts/rehearse-base-lock.py`, an ignored composition test, a test fixture generalisation and its records. Test tooling and records only, no production code: rides along, no qualification needed.
+- [x] `76c278f22`: the first real Base Sepolia Lock and its release on a local six-validator fleet (branch commits `11da444ae` to `14bf1f8d7`). Records, deployment files and a test path; nothing in production: rides along.
 
 ## Candidates
 
