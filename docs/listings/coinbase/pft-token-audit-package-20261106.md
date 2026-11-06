@@ -7,8 +7,9 @@ on 2026-11-06 (section 7).
 
 ## 1. Scope
 
-In scope: two Solidity files of `crates/pft-token-contracts`, at origin/main
-`e5a508e7380af51a87ee132450d366d751d089b8` (2026-11-06).
+In scope: two Solidity files of `crates/pft-token-contracts`, at commit
+`e5a508e7380af51a87ee132450d366d751d089b8` (the branch point of this package,
+2026-11-06).
 
 | File | Lines | Git blob | SHA-256 | Last changed |
 |---|---|---|---|---|
@@ -37,26 +38,28 @@ runtime code hashes read today with `cast keccak $(cast code …)`:
 | Test token | `0x18fE4ca51A0cE042688D5A54917319d03B527D92` | `pft-token-base-84532`, real | `0xb0939a2407cd571d158498ba0f405f4ddb3857e688d2bc5ada170dcc655903df` |
 | Rehearsal token | `0x90cE303356D80eCBE359FAF061C84130F40EacF0` | `pft-token-rehearsal-base-84532`, test | `0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b` |
 | Rehearsal lock | `0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73` | `pft-lock-base-84532`, test | `0x57bc7971e6878bed2cd4efc0e63020448d4cd9493f05ecde6ddc37fda90b871c` |
+| Archived lock, out of scope | `0xE36e7Fc384564419187546c19719A5654266dE0B` | `pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json`, test | still on chain; predates the 10-atom minimum and never saw a Lock |
 
 The test-mode values equal the records' `deployed_code_keccak256`, the test
 token's its [dry-run record](pft-token-dry-run-20261026.md). The rehearsal
 lock's verifier `0x531659D05d86C5C4cE6fdc3C473b246C294f2Ec9` is the tests'
 `MockLockVerifier`, whose `verifyAndConsume` always reverts. No record exists
-for Base mainnet (8453).
+for Base mainnet (8453). The rehearsal records' `source_commit` (`1c5bf4c6…`) was backfilled
+on 2026-11-06, as the test-mode runs did not pass it; the build inputs are unchanged since (above).
 
 Out of scope: the PFTL node (release path, checkpoint source and watcher of
 [genesis external lanes](../../architecture/genesis-external-lanes.md)); the
-PFTL finality verifier on Base and the Phase 3 prover and relay, not built
-([Phase 3 design](../../specs/pft-erc20-base-bridge-phase3-export-design-20261105.md),
-section 5, "What Base still needs"); `crates/ethereum-contracts`, whose
-`PFTLFinalityVerifierV1` one deploy test imports. `script/` and `test/` are
-supporting material.
+generic `PFTLFinalityVerifierV1` in `crates/ethereum-contracts`, which exists
+and `test/DeployPFTLock.t.sol` imports; and its PFT-route deployment on Base,
+the PFT export prover and the relay, which do not exist ([Phase 3 design](../../specs/pft-erc20-base-bridge-phase3-export-design-20261105.md),
+section 5, "What Base still needs"). `script/` and `test/` are supporting material.
 
 ## 2. What the contracts do
 
 **`PFTToken`** is a fixed-supply ERC-20 with EIP-2612 permit. The constructor
-`PFTToken(name, symbol, totalSupply, treasury)` mints the whole supply once to
-the treasury (a Safe) and refuses a zero treasury or supply. `decimals()` is
+`PFTToken(name, symbol, totalSupply, treasury)` mints the whole supply once to any nonzero
+treasury and refuses a zero treasury or supply; the deployment script, not the
+contract, requires the treasury to be the checked Safe (section 5). `decimals()` is
 6: one unit is one atom of native PFT. No function mints or burns later, and it
 has no owner, admin, pause, blacklist, hook or upgrade path. Its ABI is a
 13-function allowlist (`test/PFTTokenBoundary.t.sol`).
@@ -95,19 +98,35 @@ supersedes the Phase 2 sentence that the lock is deployed before genesis.
 ## 3. Invariants and threat model
 
 The lock's invariants (design section 3; `crates/pft-token-contracts/README.md`,
-"Lock contract"), encoded in `test/PFTLockV1Invariant.t.sol`:
+"Lock contract"). `test/PFTLockV1Invariant.t.sol` asserts 1, 2 and 4 by name
+and covers 3 indirectly: its handlers (`lock`, `lockWithPermit`,
+`lockBelowMinimum` refused, `plainTransfer`, `release`) are the only calls, and
+the backing/balance equation is checked after every call.
 
 1. `totalLocked - totalReleased` is backed by the balance, which exceeds it
    only by plain transfers: `invariant_OutstandingIsBackedByBalance`.
 2. Nonces 0 to `nextNonce - 1`, one record and one event each, every record at
    or above the minimum: `invariant_NextNonceEqualsLockedEvents`.
-3. Only `release` lowers the balance: no function of its own; invariant 1's
-   balance equality is asserted after every handler call.
+3. Only `release` lowers the balance (covered indirectly, above).
 4. Within the fixed supply: `invariant_TotalLockedWithinSupply` (no releases)
    and `invariant_OutstandingWithinSupply` (with releases).
 
 The token's (`test/PFTTokenInvariant.t.sol`): `invariant_SumOfBalancesEqualsTotalSupply`,
 `invariant_TotalSupplyNeverChanges`, `invariant_TreasuryBalancePlusNetOutflowEqualsSupply`.
+
+System assumptions outside the two contracts, as the designs state them:
+
+- Committee members sign only Base blocks derived from finalized Ethereum data
+  (Phase 2, section 9), each with its own Base RPC (genesis external lanes,
+  "The Base checkpoint source", step 2).
+- Today's six committee members are the six devnet validators, operated by one
+  organisation, and the same five-of-six threshold governs the halt and the
+  rotation response (Phase 2, section 9).
+- The lane's `reserved_atoms` must equal the token's constructor supply, or the
+  one-for-one claim breaks (Phase 2, section 9).
+- The watcher trusts its own PFTL node and an independently operated Base node,
+  and only raises alarms (genesis external lanes, "The watcher").
+- "2 % per window" (the design's lean) and "five of six" (today's set) are not contract properties.
 
 The threat model the designs state:
 
@@ -130,7 +149,8 @@ the three invariant contracts, one entry each. `[fuzz] runs = 1000`;
 `[invariant] runs = 64`, `depth = 32`, `fail_on_revert = true`; each
 invariant contract reports runs 64, calls 2048, reverts 0.
 
-**`forge coverage --report summary`** (forge turns the optimizer off; 199 passed):
+**`forge coverage --report summary`** (forge turns the optimizer off; 199 passed).
+No total row: unseeded fuzz moved it by one line and statement between runs.
 
 | File | % Lines | % Statements | % Branches | % Funcs |
 |---|---|---|---|---|
@@ -138,7 +158,6 @@ invariant contract reports runs 64, calls 2048, reverts 0.
 | `src/PFTToken.sol` | 100.00 (8/8) | 100.00 (6/6) | 100.00 (2/2) | 100.00 (2/2) |
 | `script/DeployPFTLock.s.sol` | 100.00 (346/346) | 99.79 (467/468) | 98.75 (79/80) | 100.00 (37/37) |
 | `script/DeployPFTToken.s.sol` | 100.00 (395/395) | 99.68 (625/627) | 98.11 (104/106) | 100.00 (42/42) |
-| Total, test helpers included | 78.45 (1063/1355) | 79.33 (1458/1838) | 73.16 (229/313) | 84.24 (139/165) |
 
 **`slither .`** in `crates/pft-token-contracts`: 30 contracts (the two files
 and their OpenZeppelin imports), 102 detectors, 76 results: High 1, Medium 9,
