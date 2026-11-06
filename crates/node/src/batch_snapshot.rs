@@ -2383,6 +2383,58 @@ fn deployment_transport_unit(
     log_dir: &Path,
     validator_id: &str,
     bind_host: &str,
+    signer_shape: DeploymentSignerShape,
+) -> String {
+    let unit = deployment_key_file_transport_unit(
+        release_config_dir,
+        binary_path,
+        data_dir,
+        log_dir,
+        validator_id,
+        bind_host,
+    );
+    if signer_shape == DeploymentSignerShape::KeyFile {
+        return unit;
+    }
+    // As the rpc unit: the signer's socket instead of the key file and the
+    // file-signer acknowledgement, the socket's group, the signer first.
+    let signer_unit = format!("postfiat-{validator_id}-signer.service");
+    let two_user = unit
+        .replacen(
+            "\nAfter=network-online.target\n",
+            &format!("\nAfter=network-online.target {signer_unit}\nRequires={signer_unit}\n"),
+            1,
+        )
+        .replacen(
+            "\nGroup=postfiat\n",
+            &format!("\nGroup=postfiat\nSupplementaryGroups={DEPLOYMENT_SIGNER_CLIENTS_GROUP}\n"),
+            1,
+        )
+        .replacen(" --unsafe-devnet-file-signer", "", 1)
+        .replacen(
+            &format!(
+                "--key-file {}",
+                data_dir.join("validator_keys.json").display()
+            ),
+            &format!(
+                "--finality-signer-socket {}",
+                deployment_signer_socket(validator_id).display()
+            ),
+            1,
+        );
+    debug_assert!(
+        !two_user.contains("--key-file") && !two_user.contains("--unsafe-devnet-file-signer")
+    );
+    two_user
+}
+
+fn deployment_key_file_transport_unit(
+    release_config_dir: &Path,
+    binary_path: &Path,
+    data_dir: &Path,
+    log_dir: &Path,
+    validator_id: &str,
+    bind_host: &str,
 ) -> String {
     let ready_file = data_dir.join("readiness/transport-validator.ready.json");
     format!(
@@ -2469,8 +2521,9 @@ fn deployment_signer_socket(validator_id: &str) -> PathBuf {
 
 /// `postfiat-<validator>-signer.service`: `validator-signer-serve` as its own
 /// user, holding the key and the double-sign guard under
-/// `/var/lib/postfiat-signer/<validator>`. The rpc-serve user's uid comes from
-/// the host's `/etc/postfiat/signer/<validator>.env`. The guard is initialized
+/// `/var/lib/postfiat-signer/<validator>`. One process serves both clients,
+/// rpc-serve and transport-validator-serve, which run as the same `postfiat`
+/// user; that uid comes from the host's `/etc/postfiat/signer/<validator>.env`. The guard is initialized
 /// once by the operator (`--initialize-state`, with `--min-height` for a key
 /// that already signed), never by this unit.
 fn deployment_signer_unit(
@@ -2486,7 +2539,7 @@ fn deployment_signer_unit(
         .join(DEPLOYMENT_SIGNER_USER)
         .join(validator_id);
     format!(
-        "[Unit]\nDescription=PostFiat L1 validator signer {validator_id}\nBefore=postfiat-{validator_id}-rpc.service\nStartLimitIntervalSec=300\nStartLimitBurst=5\n\n[Service]\nType=simple\nUser={DEPLOYMENT_SIGNER_USER}\nGroup={DEPLOYMENT_SIGNER_CLIENTS_GROUP}\nEnvironmentFile=/etc/postfiat/signer/{validator_id}.env\nExecStartPre={verify_command}\nExecStart={binary_path} validator-signer-serve --key-file {state}/validator_keys.json --state-dir {state}/guard --chain-id {chain_id} --genesis-hash {genesis_hash} --socket {socket} --socket-group {DEPLOYMENT_SIGNER_CLIENTS_GROUP} --allow-peer-uid ${{POSTFIAT_SIGNER_ALLOW_PEER_UID}}\nRuntimeDirectory={DEPLOYMENT_SIGNER_USER}\nRuntimeDirectoryMode=0750\nStateDirectory={DEPLOYMENT_SIGNER_USER}/{validator_id}\nStateDirectoryMode=0700\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\nProtectHome=true\nProtectControlGroups=true\nProtectKernelTunables=true\nProtectKernelModules=true\nProtectKernelLogs=true\nRestrictSUIDSGID=true\nLockPersonality=true\nRestrictRealtime=true\nSystemCallArchitectures=native\nCapabilityBoundingSet=\nAmbientCapabilities=\nPrivateNetwork=true\nUMask=0077\nLimitCORE=0\nTasksMax=64\nKillMode=control-group\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=30\n\n[Install]\nWantedBy=multi-user.target\n",
+        "[Unit]\nDescription=PostFiat L1 validator signer {validator_id}\nBefore=postfiat-{validator_id}.service postfiat-{validator_id}-rpc.service\nStartLimitIntervalSec=300\nStartLimitBurst=5\n\n[Service]\nType=simple\nUser={DEPLOYMENT_SIGNER_USER}\nGroup={DEPLOYMENT_SIGNER_CLIENTS_GROUP}\nEnvironmentFile=/etc/postfiat/signer/{validator_id}.env\nExecStartPre={verify_command}\nExecStart={binary_path} validator-signer-serve --key-file {state}/validator_keys.json --state-dir {state}/guard --chain-id {chain_id} --genesis-hash {genesis_hash} --socket {socket} --socket-group {DEPLOYMENT_SIGNER_CLIENTS_GROUP} --allow-peer-uid ${{POSTFIAT_SIGNER_ALLOW_PEER_UID}}\nRuntimeDirectory={DEPLOYMENT_SIGNER_USER}\nRuntimeDirectoryMode=0750\nStateDirectory={DEPLOYMENT_SIGNER_USER}/{validator_id}\nStateDirectoryMode=0700\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\nProtectHome=true\nProtectControlGroups=true\nProtectKernelTunables=true\nProtectKernelModules=true\nProtectKernelLogs=true\nRestrictSUIDSGID=true\nLockPersonality=true\nRestrictRealtime=true\nSystemCallArchitectures=native\nCapabilityBoundingSet=\nAmbientCapabilities=\nPrivateNetwork=true\nUMask=0077\nLimitCORE=0\nTasksMax=64\nKillMode=control-group\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=30\n\n[Install]\nWantedBy=multi-user.target\n",
         binary_path = binary_path.display(),
         state = state.display(),
         socket = deployment_signer_socket(validator_id).display(),
@@ -2712,6 +2765,7 @@ pub fn stage_deployment_validator_units(
                     &log_dir,
                     validator_id,
                     &peer.host,
+                    options.signer_shape,
                 ),
             )?;
 

@@ -82,6 +82,34 @@ fn default_stage_writes_the_single_user_units_unchanged() {
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 
+/// Every validator's default transport unit, byte for byte as before the
+/// transport process could sign through the signer: the digests were
+/// measured on `2ef121d54`.
+#[test]
+fn default_stage_writes_every_transport_unit_unchanged() {
+    let root = unique_test_dir("postfiat-two-user-default-transport");
+    let report = stage_deployment_validator_units(stage_inputs(&root)).expect("stage");
+    let digests = report
+        .validators
+        .iter()
+        .map(|row| {
+            assert!(row.signer_unit_file.is_none());
+            sha256_file(&row.transport_unit_file)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(digests, PINNED_DEFAULT_TRANSPORT_UNITS);
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+const PINNED_DEFAULT_TRANSPORT_UNITS: [&str; 6] = [
+    "2e3fadc4599e64dc560f61c166eafd8d7d1ffe0d862a9ccc7e44a669e999e391",
+    "19a85a5001aaff9c49da2481e4817dca6e78a4664df1651eff58fc25c90ddb12",
+    "7ae012d184819cb2e988d58a70fcb6a1f8d2b3c69eb0a9f0d00d876fbed184f1",
+    "727574007721be97fdd03cf821e9fbf11d441219fdfe102a626d95e4b70a2a11",
+    "ff4aa08bff18bf28f41b089982f2193498a1a4bad2e48838307b51e0a2d76427",
+    "fdd5a3412b9f155ca36df62e9f2f236b63ca7dd9da86ad63a730b6c0b316a265",
+];
+
 #[test]
 fn two_user_stage_writes_a_signer_unit_and_an_rpc_unit_without_key_files() {
     let root = unique_test_dir("postfiat-two-user-units");
@@ -100,7 +128,7 @@ fn two_user_stage_writes_a_signer_unit_and_an_rpc_unit_without_key_files() {
     assert_eq!(
         signer,
         format!(
-            "[Unit]\nDescription=PostFiat L1 validator signer validator-0\nBefore=postfiat-validator-0-rpc.service\nStartLimitIntervalSec=300\nStartLimitBurst=5\n\n[Service]\nType=simple\nUser=postfiat-signer\nGroup=postfiat-signer-clients\nEnvironmentFile=/etc/postfiat/signer/validator-0.env\nExecStartPre={verify}\nExecStart={binary} validator-signer-serve --key-file /var/lib/postfiat-signer/validator-0/validator_keys.json --state-dir /var/lib/postfiat-signer/validator-0/guard --chain-id postfiat-stage-test --genesis-hash {genesis} --socket /run/postfiat-signer/validator-0.sock --socket-group postfiat-signer-clients --allow-peer-uid ${{POSTFIAT_SIGNER_ALLOW_PEER_UID}}\nRuntimeDirectory=postfiat-signer\nRuntimeDirectoryMode=0750\nStateDirectory=postfiat-signer/validator-0\nStateDirectoryMode=0700\n{hardening}PrivateNetwork=true\nUMask=0077\nLimitCORE=0\nTasksMax=64\nKillMode=control-group\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=30\n\n[Install]\nWantedBy=multi-user.target\n",
+            "[Unit]\nDescription=PostFiat L1 validator signer validator-0\nBefore=postfiat-validator-0.service postfiat-validator-0-rpc.service\nStartLimitIntervalSec=300\nStartLimitBurst=5\n\n[Service]\nType=simple\nUser=postfiat-signer\nGroup=postfiat-signer-clients\nEnvironmentFile=/etc/postfiat/signer/validator-0.env\nExecStartPre={verify}\nExecStart={binary} validator-signer-serve --key-file /var/lib/postfiat-signer/validator-0/validator_keys.json --state-dir /var/lib/postfiat-signer/validator-0/guard --chain-id postfiat-stage-test --genesis-hash {genesis} --socket /run/postfiat-signer/validator-0.sock --socket-group postfiat-signer-clients --allow-peer-uid ${{POSTFIAT_SIGNER_ALLOW_PEER_UID}}\nRuntimeDirectory=postfiat-signer\nRuntimeDirectoryMode=0750\nStateDirectory=postfiat-signer/validator-0\nStateDirectoryMode=0700\n{hardening}PrivateNetwork=true\nUMask=0077\nLimitCORE=0\nTasksMax=64\nKillMode=control-group\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=30\n\n[Install]\nWantedBy=multi-user.target\n",
             genesis = "11".repeat(48),
         )
     );
@@ -135,9 +163,28 @@ fn two_user_stage_writes_a_signer_unit_and_an_rpc_unit_without_key_files() {
             "--finality-signer-socket /run/postfiat-signer/validator-0.sock",
         );
     assert_eq!(rpc, rewritten);
+    // The transport unit signs through the same socket: no key file and no
+    // file-signer acknowledgement, the socket's group, the signer first.
+    let transport = std::fs::read_to_string(&row.transport_unit_file).expect("transport unit");
+    let rewritten = std::fs::read_to_string(&default_row.transport_unit_file)
+        .unwrap()
+        .replace(
+            "\nAfter=network-online.target\n",
+            "\nAfter=network-online.target postfiat-validator-0-signer.service\nRequires=postfiat-validator-0-signer.service\n",
+        )
+        .replace("Group=postfiat\n", "Group=postfiat\nSupplementaryGroups=postfiat-signer-clients\n")
+        .replace(" --unsafe-devnet-file-signer", "")
+        .replace(
+            "--key-file /var/lib/postfiat/validator-0/validator_keys.json",
+            "--finality-signer-socket /run/postfiat-signer/validator-0.sock",
+        );
+    assert_eq!(transport, rewritten);
+    assert!(transport.contains(" --finality-signer-socket /run/postfiat-signer/validator-0.sock "));
+    assert!(!transport.contains("--key-file"));
+    assert!(!transport.contains("--unsafe-devnet-file-signer"));
+    assert!(!transport.contains("validator_keys.json"));
     for (two_user, single) in [
         (&row.rpc_environment_file, &default_row.rpc_environment_file),
-        (&row.transport_unit_file, &default_row.transport_unit_file),
         (&row.transport_environment_file, &default_row.transport_environment_file),
         (&row.runtime_bindings_file, &default_row.runtime_bindings_file),
     ] {
