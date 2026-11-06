@@ -184,9 +184,13 @@ generated six-validator native chain. Five checkpoint votes certify source block
 The watcher reports one backed release and zero alarms; a repeat resumes its
 cursor and checks zero already-processed releases. Block and state replay pass.
 
-[Machine results and exact commands](../../review/base-lock-rehearsal-20261105/result.json),
-[HTML review](../../review/base-lock-rehearsal-20261105/review.html), and
-[source/evidence hashes](../../review/base-lock-rehearsal-20261105/manifest.json).
+[Machine results and exact commands](../../review/base-lock-rehearsal-20261105/result.json)
+and [source/evidence hashes](../../review/base-lock-rehearsal-20261105/manifest.json).
+The directory keeps the results, the Lock receipt and the short logs that carry a
+fact; the raw artifacts (checkpoint, votes, certificate, operation, build logs) are
+listed in the manifest by sha256 and size only. One command regenerates all of them
+in a fresh directory: `scripts/rehearse-base-lock.py --output <fresh-directory>
+--target-dir <cargo-target>`.
 The ignored composition test passed; checkpoint-source tests: 16 passed, two
 explicit network/rehearsal tests ignored; watcher tests: 32 passed. The fixture
 now sizes its finality votes from genesis. No runtime release/watcher defect was
