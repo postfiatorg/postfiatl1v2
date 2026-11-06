@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -84,6 +85,33 @@ class PortRetryTests(unittest.TestCase):
                 "dead", lambda port: [sys.executable, "-c", "raise SystemExit(1)"], lambda port: False, children, []
             )
         self.assertEqual(len(children), rehearsal.PORT_ATTEMPTS)
+
+
+class PathConfinementTests(unittest.TestCase):
+    def test_output_and_target_are_confined(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            target = base / "target"
+            (target / "debug").mkdir(parents=True)
+            out, resolved = rehearsal.confined_paths(base / "run", target)
+            self.assertEqual((out, resolved), ((base / "run").resolve(), target.resolve()))
+            for output, target_dir, message in [
+                (target, target, "same path"),
+                (target / "run", target, "contain one another"),
+                (base / "run", base / "run" / "target", "contain one another"),
+                (base, base / "elsewhere", "contain one another"),
+            ]:
+                with self.assertRaisesRegex(rehearsal.RehearsalFailure, message):
+                    rehearsal.confined_paths(output, target_dir)
+            unrelated = base / "unrelated"
+            unrelated.mkdir()
+            (unrelated / "notes.txt").write_text("not a cargo target")
+            with self.assertRaisesRegex(rehearsal.RehearsalFailure, "not a cargo target"):
+                rehearsal.confined_paths(base / "run", unrelated)
+            (base / "existing").mkdir()
+            with self.assertRaisesRegex(rehearsal.RehearsalFailure, "already exists"):
+                rehearsal.confined_paths(base / "existing", target)
+            rehearsal.confined_paths(base / "run", base / "fresh-target")
 
 
 if __name__ == "__main__":

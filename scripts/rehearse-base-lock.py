@@ -92,6 +92,24 @@ def free_port():
 PORT_ATTEMPTS = 5
 
 
+def confined_paths(output, target_dir):
+    """Resolve and check the two paths before any work: the output is a new
+    directory distinct from the target and neither holds the other, and the
+    target is absent, empty or a cargo target directory (CACHEDIR.TAG or a
+    debug/ layout), so the run never writes into an unrelated tree."""
+    out, target = output.resolve(), target_dir.resolve()
+    require(out != target, f'--output and --target-dir are the same path: {out}')
+    require(not out.is_relative_to(target) and not target.is_relative_to(out),
+            f'--output {out} and --target-dir {target} must not contain one another')
+    require(not out.exists(), f'--output {out} already exists; name a fresh directory')
+    if target.exists():
+        require(target.is_dir(), f'--target-dir {target} is not a directory')
+        if any(target.iterdir()):
+            require((target / 'CACHEDIR.TAG').is_file() or (target / 'debug').is_dir(),
+                    f'--target-dir {target} is not empty and is not a cargo target directory')
+    return out, target
+
+
 def start_on_free_port(name, argv_for_port, ready, children, record, open_stderr=None, env=None, ticks=600):
     """Start a loopback child on a free port. The port is free when probed but
     another process can take it before the child binds, so a child that exits
@@ -121,9 +139,10 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--target-dir', type=Path, required=True)
     args = parser.parse_args()
-    out = args.output.resolve()
+    out, target = confined_paths(args.output, args.target_dir)
+    print(f'output directory: {out}', file=sys.stderr)
+    print(f'cargo target directory: {target}', file=sys.stderr)
     out.mkdir(parents=True, mode=0o700, exist_ok=False)
-    target = args.target_dir.resolve()
     environment = os.environ.copy()
     # Foundry writes its artifacts, cache and broadcasts under the output
     # directory, never into the checkout's shared out/, cache/ or broadcast/.
