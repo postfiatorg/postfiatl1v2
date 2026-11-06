@@ -1628,6 +1628,8 @@ mod release_path {
             lane_id: Some("base-erc20".to_string()),
             release_cursor: cursor,
             release_limit: limit,
+            export_cursor: None,
+            export_limit: None,
         })?;
         assert_eq!(report.lane_count, 1);
         Ok(report.lanes.into_iter().next().expect("lane"))

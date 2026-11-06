@@ -1739,6 +1739,8 @@ class PostFiatRpcClient:
         *,
         release_cursor: int | None = None,
         release_limit: int | None = None,
+        export_cursor: int | None = None,
+        export_limit: int | None = None,
     ) -> dict[str, Any]:
         """Genesis external lanes: config, committed record, the release cap at
         the next block (`release_cap`: `active_cap_bps`, the amendment that set
@@ -1750,7 +1752,12 @@ class PostFiatRpcClient:
         the next older page. Each lane row also reports `release_count` (every
         release), `pruned_release_count` (releases pruned behind the finalized
         height, no longer paged) and `release_history_root` (the hash chain
-        over all of them); `external_lane_release_coverage` summarises them."""
+        over all of them); `external_lane_release_coverage` summarises them.
+        Export packets page the same way (`--export-cursor`, `--export-limit`,
+        `next_export_cursor`), with `export_count`, `pruned_export_count` and
+        `export_history_root`; the committed `state` carries `exported_atoms`
+        and `next_export_nonce`; `external_lane_export_coverage` summarises
+        them."""
         params: dict[str, Any] = {}
         if lane_id is not None:
             params["lane_id"] = self._required_text(lane_id, "lane_id")
@@ -1758,6 +1765,10 @@ class PostFiatRpcClient:
             params["release_cursor"] = self._required_u64(release_cursor, "release_cursor")
         if release_limit is not None:
             params["release_limit"] = self._required_u64(release_limit, "release_limit")
+        if export_cursor is not None:
+            params["export_cursor"] = self._required_u64(export_cursor, "export_cursor")
+        if export_limit is not None:
+            params["export_limit"] = self._required_u64(export_limit, "export_limit")
         return self._object_read("external_lane_info", params)
 
     @staticmethod
@@ -1779,6 +1790,32 @@ class PostFiatRpcClient:
             "pruned_release_count": pruned,
             "stored_release_count": release_count - pruned,
             "release_history_root": row.get("release_history_root"),
+        }
+
+    @staticmethod
+    def external_lane_export_coverage(row: dict[str, Any]) -> dict[str, Any]:
+        """The export side of an `external_lane_info` lane row: every export
+        (`export_count`, the committed `next_export_nonce`), the pruned ones,
+        the stored ones, the atoms exported and the root over all of them. A
+        row from a node before exports reads as no export."""
+        state = row.get("state") or {}
+        export_count = int(row.get("export_count", 0))
+        pruned = int(row.get("pruned_export_count", 0))
+        if export_count != int(state.get("next_export_nonce", 0)):
+            raise RpcProtocolError(
+                f"external lane row reports {export_count} exports, but its state's next_export_nonce differs"
+            )
+        if not 0 <= pruned <= export_count:
+            raise RpcProtocolError(
+                f"external lane row reports {pruned} pruned of {export_count} exports"
+            )
+        return {
+            "lane_id": row.get("lane_id"),
+            "export_count": export_count,
+            "pruned_export_count": pruned,
+            "stored_export_count": export_count - pruned,
+            "exported_atoms": int(state.get("exported_atoms", 0)),
+            "export_history_root": row.get("export_history_root"),
         }
 
     def fx_fix_info(self, fix_packet_hash: str) -> dict[str, Any]:

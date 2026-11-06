@@ -675,6 +675,20 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                             .map_err(|_| "--release-limit must be a usize".to_string())
                     })
                     .transpose()?,
+                export_cursor: flag_value(flags, "--export-cursor")
+                    .map(|value| {
+                        value
+                            .parse::<u64>()
+                            .map_err(|_| "--export-cursor must be a u64".to_string())
+                    })
+                    .transpose()?,
+                export_limit: flag_value(flags, "--export-limit")
+                    .map(|value| {
+                        value
+                            .parse::<usize>()
+                            .map_err(|_| "--export-limit must be a usize".to_string())
+                    })
+                    .transpose()?,
             })
             .map_err(|error| format!("rpc external_lane_info failed: {error}"))?;
             print_rpc_success(
