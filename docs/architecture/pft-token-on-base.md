@@ -6,7 +6,7 @@ PFT is to list first as an ERC-20 on Base, with a one-for-one path into native P
 
 `PFTToken` is a fixed-supply ERC-20 for Base ([contracts README, "PFT token (Base)"](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/README.md#pft-token-base)):
 
-- The constructor mints the whole supply once to the treasury, a Safe multisig. No function mints, burns or changes the supply later.
+- The constructor mints the whole supply once to the treasury. The intended treasury is a Safe multisig; a test-only switch (`PFT_TOKEN_ALLOW_EOA_TREASURY`) admits an EOA treasury, used only for the disposable rehearsal token. No function mints, burns or changes the supply later.
 - `decimals()` is fixed at 6: one token unit is one atom of native PFT, so 1 PFT is 1,000,000 units.
 - It has no owner, admin, pause, blacklist, hook or upgrade path. It is built only from OpenZeppelin `ERC20` and `ERC20Permit`, so approvals by signed message (EIP-2612) work.
 - OpenZeppelin is the submodule `crates/pft-token-contracts/lib/openzeppelin-contracts` at tag v5.7.0, commit `cab19933c33c2ad1d4c7a84864a3601dddfd16f3`; `foundry.toml` pins solc 0.8.24, 200 optimizer runs, `cancun` and the IPFS metadata hash ([README, "Deployment"](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/pft-token-contracts/README.md#deployment)).

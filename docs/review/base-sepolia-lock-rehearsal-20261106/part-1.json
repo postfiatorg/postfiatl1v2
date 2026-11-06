@@ -20,8 +20,11 @@
   "accounts": {
     "holder": {
       "address": "0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17",
-      "keystore_name": "pft-sepolia-lock-deployer",
-      "role": "funded holder; deployer of the archived lock 0xE36e, deployed nothing today"
+      "credentials": "the holder's keystore and password file, outside the repository",
+      "role": "disposable rehearsal holder; deployed nothing today",
+      "history": "one-time deployer of the 2026-10-28 lock 0xE36e7Fc384564419187546c19719A5654266dE0B, whose key the 2026-10-26/28 record calls retired",
+      "status": "revived on 2026-11-06 as the disposable rehearsal holder only; the project funded it on 2026-11-05 with 0.002 test ETH for exactly this (internal call from 0x9a33A96c2a718555a8996AcCbf37c8999E497D50 in transaction 0x853cad0848c77d75beae6a487a19d9b16b8071237491a6dd8d53240973484d30); it stays active until part 2 is complete",
+      "retirement": "after part 2 the key is retired again: its leftover test ETH is sent back to the funding address 0x9a33A96c2a718555a8996AcCbf37c8999E497D50, and its leftover PFTR stays in the disposable token, never moved again"
     },
     "token_deployer": {
       "address": "0x8ffA5Dea2EEa08bC2c3250af664240849cab70Da",
@@ -230,13 +233,13 @@
   },
   "commands": [
     "openssl rand -base64 24 > ~/.postfiat/<keystore name>.password (mode 600), then cast wallet new ~/.foundry/keystores <keystore name> with that password, for pft-sepolia-token-deployer-20261106 and pft-sepolia-lock-deployer-20261106",
-    "cast send 0x8ffA5Dea2EEa08bC2c3250af664240849cab70Da --value 0.0004ether --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-lock-deployer --password-file ~/.postfiat/pft-sepolia-lock-deployer.password",
-    "cast send 0xE57f8cbBdc05834f0CCdb8fEf13009bf9dAdAd25 --value 0.0004ether --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-lock-deployer --password-file ~/.postfiat/pft-sepolia-lock-deployer.password",
+    "cast send 0x8ffA5Dea2EEa08bC2c3250af664240849cab70Da --value 0.0004ether --rpc-url https://sepolia.base.org --keystore <the holder's keystore, outside the repository> --password-file <the holder's password file, outside the repository>",
+    "cast send 0xE57f8cbBdc05834f0CCdb8fEf13009bf9dAdAd25 --value 0.0004ether --rpc-url https://sepolia.base.org --keystore <the holder's keystore, outside the repository> --password-file <the holder's password file, outside the repository>",
     "PFT_TOKEN_CHAIN_ID=84532 PFT_TOKEN_NAME='PFT Rehearsal 20261106' PFT_TOKEN_SYMBOL=PFTR PFT_TOKEN_TOTAL_SUPPLY=100000000000000000 PFT_TOKEN_TOTAL_SUPPLY_PFT=100000000000 PFT_TOKEN_TREASURY=0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17 PFT_TOKEN_ALLOW_EOA_TREASURY=1 forge script script/DeployPFTToken.s.sol:DeployPFTToken --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-token-deployer-20261106 --password-file ~/.postfiat/pft-sepolia-token-deployer-20261106.password --sender 0x8ffA5Dea2EEa08bC2c3250af664240849cab70Da --broadcast",
     "PFT_LOCK_CHAIN_ID=84532 PFT_LOCK_TOKEN=0x90cE303356D80eCBE359FAF061C84130F40EacF0 PFT_LOCK_TOKEN_CODEHASH=0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b PFT_LOCK_ALLOW_TEST_TOKEN=1 PFT_LOCK_VERIFIER=0x531659D05d86C5C4cE6fdc3C473b246C294f2Ec9 PFT_LOCK_ALLOW_TEST_VERIFIER=1 PFT_LOCK_MINIMUM_LOCK_AMOUNT=10 PFT_LOCK_MAX_LOCK_AMOUNT=1000000000000 PFT_LOCK_MAX_LOCK_AMOUNT_PFT=1000000 forge script script/DeployPFTLock.s.sol:DeployPFTLock --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-lock-deployer-20261106 --password-file ~/.postfiat/pft-sepolia-lock-deployer-20261106.password --sender 0xE57f8cbBdc05834f0CCdb8fEf13009bf9dAdAd25 --broadcast",
     "postfiat-node wallet-keygen --chain-id postfiat-lane-sepolia-example --master-seed-hex-file <seed file> --account-index 0 --key-file <key file> --backup-file <backup file>",
-    "cast send 0x90cE303356D80eCBE359FAF061C84130F40EacF0 'approve(address,uint256)' 0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73 1000000 --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-lock-deployer --password-file ~/.postfiat/pft-sepolia-lock-deployer.password",
-    "cast send 0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73 'lock(uint64,bytes)' 1000000 $(cast from-utf8 pfb2f06f1346000c42db0246a0fcf6ce0356662eb6) --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-lock-deployer --password-file ~/.postfiat/pft-sepolia-lock-deployer.password",
+    "cast send 0x90cE303356D80eCBE359FAF061C84130F40EacF0 'approve(address,uint256)' 0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73 1000000 --rpc-url https://sepolia.base.org --keystore <the holder's keystore, outside the repository> --password-file <the holder's password file, outside the repository>",
+    "cast send 0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73 'lock(uint64,bytes)' 1000000 $(cast from-utf8 pfb2f06f1346000c42db0246a0fcf6ce0356662eb6) --rpc-url https://sepolia.base.org --keystore <the holder's keystore, outside the repository> --password-file <the holder's password file, outside the repository>",
     "cast send 0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17 --value <balance - 21000 * 6500000 - 100000> --legacy --gas-price 6500000 --gas-limit 21000 --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-token-deployer-20261106 --password-file ~/.postfiat/pft-sepolia-token-deployer-20261106.password",
     "cast send 0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17 --value <balance - 21000 * 6500000 - 100000> --legacy --gas-price 6500000 --gas-limit 21000 --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-lock-deployer-20261106 --password-file ~/.postfiat/pft-sepolia-lock-deployer-20261106.password"
   ],

@@ -177,6 +177,7 @@ The first real Lock on Base Sepolia (chain id 84532), on a disposable token and 
 | Token pull (log 5) | `Transfer` of 1,000,000 units by the token from the holder to the lock |
 | Read back | `lockRecord(0)` = (holder, 1,000,000, the recipient hash); `totalLocked` 1,000,000; `nextNonce` 1; the lock's token balance 1,000,000 |
 | Recipient | a fresh ML-DSA-65 account from `postfiat-node wallet-keygen --chain-id postfiat-lane-sepolia-example`; its key stays outside the repository |
+| Holder key | `0x6E4E…11E17` is the one-time deployer of the 2026-10-28 lock, whose key the [2026-10-26/28 record](pft-token-dry-run-20261026.md#base-sepolia-lock-rehearsal-2026-10-28) calls retired. It is revived on 2026-11-06 as the disposable rehearsal holder only: the project funded it on 2026-11-05 with 0.002 test ETH for exactly this (from `0x9a33A96c…E497D50`, transaction `0x853cad08…73484d30`). It stays active until part 2 is complete and is then retired again: its leftover test ETH goes back to the funding address, and its leftover PFTR stays in the disposable token. Its keystore and password file stay outside the repository |
 | One-time keys | `pft-sepolia-token-deployer-20261106` (`0x8ffA5Dea2EEa08bC2c3250af664240849cab70Da`) and `pft-sepolia-lock-deployer-20261106` (`0xE57f8cbBdc05834f0CCdb8fEf13009bf9dAdAd25`), funded with 0.0004 test ETH each, emptied back to the holder (99,908 wei of dust each) and retired |
 | Gas | eight transactions, 0.000014223396006258 test ETH in all; the holder goes from 0.002000126 to 0.001985903 test ETH |
 
