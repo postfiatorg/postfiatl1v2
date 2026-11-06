@@ -107,18 +107,18 @@ class DeploymentCheckTests(unittest.TestCase):
             rpc = dict(self.rpc, gids=[1101] * 4, groups=[])
             readers = [rpc, dict(self.gateway, gids=[1102] * 4, groups=[])]
             copies = validator_signer_check.readable_key_copies(
-                [root], signer_dir / 'validator_keys.json', [], readers)
+                [root], signer_dir / 'validator_keys.json', [], readers, test_root=root)
             # The decoy is world-readable; the signer's own key and a copy
             # only its owner can read are not reported.
             self.assertEqual(copies, [str(decoy)])
             os.chmod(decoy, 0o600)
             self.assertEqual(validator_signer_check.readable_key_copies(
-                [root], signer_dir / 'validator_keys.json', [], readers), [])
+                [root], signer_dir / 'validator_keys.json', [], readers, test_root=root), [])
             os.chmod(decoy, 0o640)
             os.chown(decoy, -1, os.getgid())
             readers[0]['groups'] = [os.getgid()]
             self.assertEqual(validator_signer_check.readable_key_copies(
-                [root], signer_dir / 'validator_keys.json', [], readers), [str(decoy)])
+                [root], signer_dir / 'validator_keys.json', [], readers, test_root=root), [str(decoy)])
 
     def test_capabilities_on_rpc_or_gateway_refused(self):
         for role in ('rpc', 'gateway'):

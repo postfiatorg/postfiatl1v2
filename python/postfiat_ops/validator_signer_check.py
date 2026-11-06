@@ -108,20 +108,24 @@ def _allows(info, proc, user_bit, group_bit, other_bit):
     return bool(info.st_mode & other_bit)
 
 
-def _readable_by(path, proc):
+def _readable_by(path, proc, test_root=None):
     """Whether `proc`'s effective uid and groups can open `path` for reading:
-    read on the file and search on every ancestor. Modes only; nothing is read."""
+    read on the file and search on every ancestor. Modes only; nothing is read.
+    `test_root` is for unit tests only: ancestors above it are not checked."""
     try:
         info = path.stat()
         if not stat.S_ISREG(info.st_mode) or not _allows(info, proc, stat.S_IRUSR, stat.S_IRGRP, stat.S_IROTH):
             return False
+        root = Path(test_root).resolve() if test_root is not None else None
+        parents = [parent for parent in path.resolve().parents
+                   if root is None or parent == root or root in parent.parents]
         return all(_allows(parent.stat(), proc, stat.S_IXUSR, stat.S_IXGRP, stat.S_IXOTH)
-                   for parent in path.resolve().parents)
+                   for parent in parents)
     except OSError:
         return False
 
 
-def readable_key_copies(roots, key_file, key_files, readers):
+def readable_key_copies(roots, key_file, key_files, readers, *, test_root=None):
     """Files under `roots`, outside the signer's directory (the key file's
     directory), named like a validator key file or the signer's key files that
     any of `readers` (the rpc and gateway processes) can read. Names and modes
@@ -136,7 +140,7 @@ def readable_key_copies(roots, key_file, key_files, readers):
                 subdirectories[:] = []
                 continue
             found += [str(Path(directory) / name) for name in files
-                      if name in names and any(_readable_by(Path(directory) / name, proc) for proc in readers)]
+                      if name in names and any(_readable_by(Path(directory) / name, proc, test_root) for proc in readers)]
     return sorted(found)
 
 
