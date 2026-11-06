@@ -177,21 +177,50 @@ It shows that the watcher reads a real node's `external_lane_info` (chain id, ge
 
 Task Node `task_f7fb0b284184dfb51713ec8bd324c97c`. The Python CLI
 `scripts/rehearse-base-lock.py --output <fresh-directory> --target-dir <cargo-target>`
-starts an isolated Anvil, deploys PFTToken and PFTLockV1, then runs the actual
-checkpoint/proof commands against a fresh Lock and releases 4,331 atoms on a
-generated six-validator native chain. Five checkpoint votes certify source block
+starts an isolated Anvil, deploys PFTToken and PFTLockV1, then runs an ignored
+composition test that calls the production implementations of the four
+checkpoint and proof commands in-process (not the `postfiat-node` CLI) against a
+fresh Lock and releases 4,331 atoms on a generated six-validator native chain. Five checkpoint votes certify source block
 5; release block 2 credits exactly 4,331 atoms. Repeating the release is refused.
 The watcher reports one backed release and zero alarms; a repeat resumes its
 cursor and checks zero already-processed releases. Block and state replay pass.
 
-[Machine results and exact commands](../../review/base-lock-rehearsal-20261105/result.json),
-[HTML review](../../review/base-lock-rehearsal-20261105/review.html), and
-[source/evidence hashes](../../review/base-lock-rehearsal-20261105/manifest.json).
+The recorded run is the 2026-11-06 re-run from the clean committed tree: commit
+`fb88da35fbc7265e1e85aee2732a0c45056478d4`, tree
+`b8e303c60a473dd770394b34ded9003a887af6ee`, both in `result.json` and
+`manifest.json`, which also hashes the production entry points and the harness.
+It gives the same amounts, Lock block, Lock transaction and watcher outcome as
+the first run; the release's `source_block_hash` and the summary's
+`lock_code_hash` differ between runs by nature. The token and lock runtime code
+hashes differ from the first run's (`0x7175f7fe…` and `0x6808ad20…`) only in the
+Solidity metadata: the IPFS metadata digest Solc appends, and for the lock also
+the immutable token-code-hash positions that embed the token's digest. A scratch
+build reproduces the recorded pair. An auto-detected `openzeppelin-contracts/=`
+remapping is part of that metadata, and the earlier pair most likely came from a
+stale shared artifact. This is the local rehearsal only: the production
+deployment records pin their own compiler settings and were reproduced from
+their artifacts. The script now also records the tool versions (`forge`, `cast`,
+`anvil`), the Solc build, the `foundry.toml` sha256, the OpenZeppelin commit and
+both artifacts' metadata hashes; the recorded run predates that, so the next run
+fills them.
+
+[Machine results and exact commands](../../review/base-lock-rehearsal-20261105/result.json)
+and [source/evidence hashes](../../review/base-lock-rehearsal-20261105/manifest.json).
+The directory keeps the results, the Lock receipt and the short logs that carry a
+fact; the raw artifacts (checkpoint, votes, certificate, operation, build logs) are
+listed in the manifest by sha256 and size only. One command regenerates all of them
+in a fresh directory: `scripts/rehearse-base-lock.py --output <fresh-directory>
+--target-dir <cargo-target>`.
 The ignored composition test passed; checkpoint-source tests: 16 passed, two
 explicit network/rehearsal tests ignored; watcher tests: 32 passed. The fixture
 now sizes its finality votes from genesis. No runtime release/watcher defect was
 reproduced, so neither implementation changed. Harness corrections were address
 normalization and placing consensus activation after the bootstrap block.
+
+Two things this rehearsal does not exercise. Anvil's `finalized` tag equals its
+latest block, so the checkpoint source's finality rule is not tested locally.
+The contracts are deployed with raw `forge create`, so the deploy scripts
+(`script/DeployPFTToken.s.sol`, `script/DeployPFTLock.s.sol`) are not exercised.
 
 This is **local EVM evidence**, not Base Sepolia or mainnet deployment. The unused
 Phase 3 verifier is a test stand-in; export and OP Stack deposit receipts are not

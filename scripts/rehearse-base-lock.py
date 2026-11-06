@@ -7,9 +7,9 @@ The Phase 3 verifier is a test stand-in; no public testnet/mainnet transaction.
 from __future__ import annotations
 import argparse
 import hashlib
-import html
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import socket
@@ -21,10 +21,212 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 
 
+class RehearsalFailure(RuntimeError):
+    """A success predicate of the rehearsal did not hold."""
+
+
+def require(condition, message):
+    """Raise unless `condition` holds; unlike `assert`, PYTHONOPTIMIZE keeps it."""
+    if not condition:
+        raise RehearsalFailure(message)
+
+
+def watcher_summary(lines, *, releases_checked):
+    """The watcher's documented `--once` output for this rehearsal: one summary
+    line with no alarm over a lane of exactly one release, `releases_checked`
+    of them checked in this run, each checked one reported as backed."""
+    summaries = [line for line in lines if line.get('kind') == 'summary']
+    require(len(summaries) == 1, f'watcher must print one summary line, printed {len(summaries)}')
+    summary = summaries[0]
+    require(summary.get('release_count') == 1, f'watcher must see one release, saw {summary.get("release_count")}')
+    require(summary.get('releases_checked') == releases_checked,
+            f'watcher must check {releases_checked} release(s), checked {summary.get("releases_checked")}')
+    require(summary.get('alarms') == 0, f'watcher must raise no alarm, raised {summary.get("alarms")}')
+    require(all(count == 0 for count in (summary.get('alarm_codes') or {}).values()), 'watcher alarm codes must all be zero')
+    releases = [line for line in lines if line.get('kind') == 'release']
+    require(len(releases) == releases_checked, f'watcher must report {releases_checked} release line(s), reported {len(releases)}')
+    require(all(line.get('status') == 'backed' for line in releases), 'every checked release must be backed')
+    return summary
+
+
+CONTRACTS = 'crates/pft-token-contracts'
+FOUNDRY_SHARED_DIRS = ('out', 'cache', 'broadcast')
+
+
+def contracts_checkout_state():
+    """What a run must leave unchanged in the checkout's contracts crate: its git
+    status, and whether each shared Foundry directory exists and when it last
+    changed. The directories are ignored by git, so the status alone misses them."""
+    status = subprocess.check_output(['git', 'status', '--porcelain', '--ignored', CONTRACTS], cwd=ROOT, text=True)
+    stamps = {}
+    for name in FOUNDRY_SHARED_DIRS:
+        path = ROOT / CONTRACTS / name
+        stamps[name] = path.stat().st_mtime_ns if path.exists() else None
+    return status, stamps
+
+
+# What the ignored composition test (crates/node/src/tests/external_lane_local_evm_tests.rs)
+# calls in-process: the implementations behind the four node commands, then the
+# ordinary release path. It runs no CLI binary for these steps.
+NODE_PLAN = [
+    {'step': 'observe the Lock block as a lane checkpoint', 'cli': 'external-lane-checkpoint-observe',
+     'calls': 'observe_external_lane_checkpoint', 'in': 'crates/node/src/external_lane_checkpoint_source.rs'},
+    {'step': 'five validators re-observe and sign it', 'cli': 'external-lane-checkpoint-sign',
+     'calls': 'sign_external_lane_checkpoint_vote', 'in': 'crates/node/src/external_lane_checkpoint_source.rs'},
+    {'step': 'assemble the five votes', 'cli': 'external-lane-checkpoint-assemble',
+     'calls': 'assemble_external_lane_checkpoint_certificate', 'in': 'crates/node/src/external_lane_checkpoint_source.rs'},
+    {'step': 'prove the Lock receipt and build the release', 'cli': 'external-lane-lock-proof',
+     'calls': 'build_external_lane_lock_proof', 'in': 'crates/node/src/external_lane_checkpoint_source.rs'},
+    {'step': 'admit, batch and apply the release in a certified block, then replay it',
+     'calls': 'submit_signed_asset_transaction_json_to_mempool, create_mempool_batch, apply_batch '
+              '(execute_external_lane_release, crates/execution/src/external_lane_release.rs), verify_blocks, verify_state'},
+]
+
+
 def free_port():
     with socket.socket() as stream:
         stream.bind(('127.0.0.1', 0))
         return stream.getsockname()[1]
+
+
+PORT_ATTEMPTS = 5
+# The production entry points the run exercises and the harness that drives
+# them: manifest.json records the sha256 of each at the recorded commit.
+SOURCE_FILES = (
+    'crates/node/src/external_lane_checkpoint_source.rs',
+    'crates/execution/src/external_lane_release.rs',
+    'python/postfiat_rpc/external_lane_watcher.py',
+    'crates/pft-token-contracts/src/PFTLockV1.sol',
+    'crates/pft-token-contracts/src/PFTToken.sol',
+    'scripts/rehearse-base-lock.py',
+    'crates/node/src/tests/external_lane_local_evm_tests.rs',
+    'crates/node/src/tests/genesis_external_lane_tests.rs',
+    'crates/pft-token-contracts/test/PFTLockV1.t.sol',
+)
+# The artifacts the public record keeps; manifest.json lists every other one by
+# sha256 and size only.
+PUBLISHED = (
+    'result.json', 'manifest.json', 'native-result.json', 'lock-receipt.json',
+    'token.stdout', 'lock.stdout', 'token-codehash.stdout', 'lock-codehash.stdout',
+    'test-verifier.stdout', 'native-release.stdout', 'watcher.stdout', 'watcher-repeat.stdout',
+)
+
+
+def git(*args):
+    return subprocess.check_output(['git', *args], cwd=ROOT, text=True).strip()
+
+
+def clean_source():
+    """The commit and tree the run executes: the worktree must hold exactly a
+    commit, so the recorded hashes name the code that ran."""
+    dirty = git('status', '--porcelain')
+    require(not dirty, f'the worktree is not clean; commit or stash first:\n{dirty}')
+    return git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}')
+
+
+def sha256_file(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def write_manifest(out, commit, tree, toolchain=None):
+    artifacts = sorted(path for path in out.iterdir() if path.is_file() and path.name != 'manifest.json')
+    manifest = {
+        'source_commit': commit,
+        'source_tree': tree,
+        'toolchain': toolchain,
+        'source_files': {name: sha256_file(ROOT / name) for name in SOURCE_FILES},
+        'evidence_files': {path.name: sha256_file(path) for path in artifacts if path.name in PUBLISHED},
+        'not_published': {path.name: {'sha256': sha256_file(path), 'bytes': path.stat().st_size}
+                          for path in artifacts if path.name not in PUBLISHED},
+        'not_published_note': 'Raw run artifacts kept out of the docs tree; scripts/rehearse-base-lock.py '
+                              'regenerates them in its --output directory.',
+    }
+    (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+
+
+def confined_paths(output, target_dir):
+    """Resolve and check the two paths before any work: the output is a new
+    directory distinct from the target and neither holds the other, and the
+    target is absent, empty or a cargo target directory (CACHEDIR.TAG or a
+    debug/ layout), so the run never writes into an unrelated tree."""
+    out, target = output.resolve(), target_dir.resolve()
+    require(out != target, f'--output and --target-dir are the same path: {out}')
+    require(not out.is_relative_to(target) and not target.is_relative_to(out),
+            f'--output {out} and --target-dir {target} must not contain one another')
+    require(not out.exists(), f'--output {out} already exists; name a fresh directory')
+    if target.exists():
+        require(target.is_dir(), f'--target-dir {target} is not a directory')
+        if any(target.iterdir()):
+            require((target / 'CACHEDIR.TAG').is_file() or (target / 'debug').is_dir(),
+                    f'--target-dir {target} is not empty and is not a cargo target directory')
+    return out, target
+
+
+def start_on_free_port(name, argv_for_port, ready, children, record, open_stderr=None, env=None, ticks=600,
+                       ready_file=None):
+    """Start a loopback child on a free port. The port is free when probed but
+    another process can take it before the child binds, so a child that exits
+    before it is ready is reaped and started again on a new port, at most
+    PORT_ATTEMPTS times. A child counts as ready only while it still runs, and
+    `ready_file`, when given, is removed before each attempt, so a file an
+    exited attempt left behind never reads as ready. Returns the port and the
+    running child."""
+    for attempt in range(1, PORT_ATTEMPTS + 1):
+        if ready_file is not None:
+            Path(ready_file).unlink(missing_ok=True)
+        port = free_port()
+        argv = [str(a) for a in argv_for_port(port)]
+        stderr = open_stderr() if open_stderr else subprocess.DEVNULL
+        child = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=stderr, env=env)
+        children.append(child)
+        record.append({'name': name, 'argv': argv, 'attempt': attempt})
+        for _ in range(ticks):
+            if child.poll() is not None:
+                break
+            if ready(port) and child.poll() is None:
+                return port, child
+            time.sleep(.1)
+        else:
+            raise RehearsalFailure(f'{name} did not become ready on port {port}')
+        # Exited before ready: most likely the port was taken in between.
+        child.wait()
+    raise RehearsalFailure(f'{name} exited before ready on {PORT_ATTEMPTS} ports')
+
+
+# The Foundry artifacts whose compiler provenance a run records.
+ARTIFACTS = {'PFTToken': 'PFTToken.sol/PFTToken.json', 'PFTLockV1': 'PFTLockV1.sol/PFTLockV1.json'}
+
+
+def toolchain_provenance(out):
+    """What determines the deployed runtime code besides the sources: the tool
+    versions, the Solc build, the Foundry config, the OpenZeppelin commit and
+    each artifact's metadata hash (the IPFS digest Solc appends to the runtime
+    code). Copies each artifact beside the results, where the manifest lists
+    it by sha256 under not_published."""
+    def version(tool):
+        return subprocess.check_output([tool, '--version'], text=True).strip()
+
+    artifacts = {}
+    for name, relative in ARTIFACTS.items():
+        source = out / 'forge-out' / relative
+        artifact = json.loads(source.read_text())
+        runtime = (artifact.get('deployedBytecode') or {}).get('object', '')
+        embedded = re.search(r'a264697066735822(1220[0-9a-f]{64})', runtime.lower())
+        raw = artifact.get('rawMetadata') or ''
+        artifacts[name] = {
+            'solc_version': ((artifact.get('metadata') or {}).get('compiler') or {}).get('version'),
+            'metadata_ipfs_multihash': embedded.group(1) if embedded else None,
+            'raw_metadata_sha256': hashlib.sha256(raw.encode()).hexdigest() if raw else None,
+        }
+        shutil.copyfile(source, out / f'{name}.artifact.json')
+    return {
+        'forge_version': version('forge'),
+        'cast_version': version('cast'),
+        'anvil_version': version('anvil'),
+        'foundry_toml_sha256': sha256_file(ROOT / CONTRACTS / 'foundry.toml'),
+        'openzeppelin_commit': git('rev-parse', f'HEAD:{CONTRACTS}/lib/openzeppelin-contracts'),
+        'artifacts': artifacts,
+    }
 
 
 def main():
@@ -32,25 +234,40 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--target-dir', type=Path, required=True)
     args = parser.parse_args()
-    out = args.output.resolve()
+    out, target = confined_paths(args.output, args.target_dir)
+    commit, tree = clean_source()
+    print(f'output directory: {out}', file=sys.stderr)
+    print(f'cargo target directory: {target}', file=sys.stderr)
     out.mkdir(parents=True, mode=0o700, exist_ok=False)
-    target = args.target_dir.resolve()
     environment = os.environ.copy()
+    # Foundry writes its artifacts, cache and broadcasts under the output
+    # directory, never into the checkout's shared out/, cache/ or broadcast/.
+    environment.update(FOUNDRY_OUT=str(out / 'forge-out'), FOUNDRY_CACHE_PATH=str(out / 'forge-cache'),
+                       FOUNDRY_BROADCAST=str(out / 'forge-broadcast'))
     environment.update(CARGO_TARGET_DIR=str(target), CARGO_BUILD_JOBS='2', CARGO_INCREMENTAL='0',
                        CARGO_PROFILE_DEV_DEBUG='0', PYTHONPATH=str(ROOT / 'python'),
                        POSTFIAT_LOCAL_EVM_REHEARSAL=str(out / 'config.json'))
     results = {'scope': 'local EVM and generated PFT chain only', 'started_at_unix': int(time.time()),
-               'source_head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
+               'children': [], 'node_plan': NODE_PLAN,
+               'source_head': commit, 'source_tree': tree,
                'commands': [], 'passed': False, 'public_testnet_transaction': False}
     children = []
     native = None
+    url = None
+    contracts_before = contracts_checkout_state()
 
-    def command(name, argv, cwd=ROOT, expected=0):
+    def command(name, argv, cwd=ROOT, expected=0, stdin_text=None):
         began = time.time()
         with (out / f'{name}.stdout').open('w') as stdout, (out / f'{name}.stderr').open('w') as stderr:
-            p = subprocess.run([str(a) for a in argv], cwd=cwd, env=environment, stdout=stdout, stderr=stderr, timeout=1800)
-        results['commands'].append({'name': name, 'argv': [str(a) for a in argv], 'cwd': str(cwd),
-                                    'exit_code': p.returncode, 'seconds': round(time.time() - began, 3)})
+            p = subprocess.run([str(a) for a in argv], cwd=cwd, env=environment, stdout=stdout, stderr=stderr,
+                               input=stdin_text, text=True, timeout=1800)
+        entry = {'name': name, 'argv': [str(a) for a in argv], 'cwd': str(cwd),
+                 'exit_code': p.returncode, 'seconds': round(time.time() - began, 3)}
+        if stdin_text is not None:
+            # Long inputs such as runtime bytecode go through stdin, recorded by hash.
+            entry['stdin_sha256'] = hashlib.sha256(stdin_text.encode()).hexdigest()
+            entry['stdin_bytes'] = len(stdin_text.encode())
+        results['commands'].append(entry)
         if p.returncode != expected:
             raise RuntimeError(f'{name}: exit {p.returncode}, expected {expected}; see saved logs')
         return (out / f'{name}.stdout').read_text()
@@ -64,66 +281,71 @@ def main():
         return value['result']
 
     try:
-        port = free_port()
-        url = f'http://127.0.0.1:{port}'
-        anvil = subprocess.Popen(['anvil', '--host', '127.0.0.1', '--port', str(port), '--chain-id', '84532', '--silent'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        children.append(anvil)
-        for _ in range(100):
+        def anvil_ready(port):
+            nonlocal url
+            url = f'http://127.0.0.1:{port}'
             try:
-                if 'anvil' in rpc('web3_clientVersion').lower():
-                    break
+                return 'anvil' in str(rpc('web3_clientVersion')).lower()
             except OSError:
-                time.sleep(.1)
-        else:
-            raise RuntimeError('local Anvil did not start')
-        assert rpc('eth_chainId') == '0x14a34'
+                return False
+
+        port, _ = start_on_free_port(
+            'anvil', lambda port: ['anvil', '--host', '127.0.0.1', '--port', port, '--chain-id', '84532', '--silent'],
+            anvil_ready, children, results['children'], ticks=100)
+        url = f'http://127.0.0.1:{port}'
+        require(rpc('eth_chainId') == '0x14a34', 'local Anvil must report chain id 84532')
         holder = rpc('eth_accounts')[0]
         contract_dir = ROOT / 'crates/pft-token-contracts'
-        command('contracts-build', ['forge', 'build'], contract_dir)
+        command('contracts-build', ['forge', 'build', '--out', out / 'forge-out', '--cache-path', out / 'forge-cache'], contract_dir)
+        results['toolchain'] = toolchain_provenance(out)
 
         def deploy(name, contract, constructor=()):
-            argv = ['forge', 'create', contract, '--rpc-url', url, '--unlocked', '--from', holder, '--broadcast', '--json']
+            argv = ['forge', 'create', contract, '--out', out / 'forge-out', '--cache-path', out / 'forge-cache',
+                    '--rpc-url', url, '--unlocked', '--from', holder, '--broadcast', '--json']
             if constructor:
                 argv += ['--constructor-args', *constructor]
             return json.loads(command(name, argv, contract_dir))['deployedTo'].lower()
 
         token = deploy('token', 'src/PFTToken.sol:PFTToken', ['Rehearsal PFT', 'rPFT', '300000000', holder])
         verifier = deploy('test-verifier', 'test/PFTLockV1.t.sol:MockFinalityVerifier')
-        token_hash = command('token-codehash', ['cast', 'keccak', rpc('eth_getCode', [token, 'latest'])]).strip()
+        token_hash = command('token-codehash', ['cast', 'keccak'], stdin_text=rpc('eth_getCode', [token, 'latest'])).strip()
         lock = deploy('lock', 'src/PFTLockV1.sol:PFTLockV1', [token, verifier, token_hash, '6000000', '10'])
-        lock_hash = command('lock-codehash', ['cast', 'keccak', rpc('eth_getCode', [lock, 'latest'])]).strip()
+        lock_hash = command('lock-codehash', ['cast', 'keccak'], stdin_text=rpc('eth_getCode', [lock, 'latest'])).strip()
         config = dict(rpc=url, output=str(out), holder=holder, token=token, lock=lock,
                       token_code_hash=token_hash, lock_code_hash=lock_hash)
         (out / 'config.json').write_text(json.dumps(config, indent=2) + '\n')
         command('native-release', ['cargo', 'test', '--locked', '-p', 'postfiat-node', '--lib',
                                  'local_evm_lock_checkpoint_release_and_replay_refusal', '--', '--ignored', '--nocapture'])
         native = json.loads((out / 'native-result.json').read_text())
-        assert native['passed'] and native['checkpoint_votes'] == 5
+        require(native.get('passed') is True, 'the native composition test must pass')
+        require(native.get('checkpoint_votes') == 5, 'five checkpoint votes must certify the Lock block')
+        require(native.get('amount_atoms') == native.get('recipient_balance') == 4331,
+                'the release must credit exactly the 4,331 locked atoms')
         command('node-build', ['cargo', 'build', '--locked', '-p', 'postfiat-node', '--bin', 'postfiat-node'])
         node = target / 'debug/postfiat-node'
         results['node_sha256'] = hashlib.sha256(node.read_bytes()).hexdigest()
-        rpc_port = free_port()
         ready = out / 'rpc-ready.json'
-        service = subprocess.Popen([str(node), 'rpc-serve', '--unsafe-devnet-json-storage', '--data-dir', native['data_dir'],
-                                    '--bind-host', '127.0.0.1', '--port', str(rpc_port), '--max-requests', '100',
-                                    '--ready-file', str(ready)], stdout=subprocess.DEVNULL, stderr=(out / 'rpc.stderr').open('w'), env=environment)
-        children.append(service)
-        for _ in range(600):
-            if ready.exists():
-                break
-            if service.poll() is not None:
-                raise RuntimeError('local PFT RPC exited before ready')
-            time.sleep(.1)
-        else:
-            raise RuntimeError('local PFT RPC did not start')
+        rpc_port, _ = start_on_free_port(
+            'rpc-serve', lambda port: [node, 'rpc-serve', '--unsafe-devnet-json-storage', '--data-dir', native['data_dir'],
+                                       '--bind-host', '127.0.0.1', '--port', port, '--max-requests', '100',
+                                       '--ready-file', ready],
+            lambda port: ready.exists(), children, results['children'],
+            open_stderr=lambda: (out / 'rpc.stderr').open('a'), env=environment, ready_file=ready)
         watcher_args = [sys.executable, '-m', 'postfiat_rpc.external_lane_watcher', '--pftl-rpc', f'127.0.0.1:{rpc_port}',
                         '--lane-id', 'base-erc20', '--base-rpc', url, '--state-file', out / 'watcher-state.json', '--once']
         lines = [json.loads(line) for line in command('watcher', watcher_args).splitlines()]
         results['watcher'] = lines
-        assert any(line.get('kind') == 'release' or line.get('type') == 'release' for line in lines), 'watcher must inspect a nonzero release'
+        watcher_summary(lines, releases_checked=1)
         # A second read exercises the persisted cursor without inventing a new Lock.
         results['watcher_repeat'] = [json.loads(line) for line in command('watcher-repeat', watcher_args).splitlines()]
+        watcher_summary(results['watcher_repeat'], releases_checked=0)
         results['native'] = native
+        status, _ = contracts_checkout_state()
+        require(not subprocess.check_output(['git', 'status', '--porcelain', CONTRACTS], cwd=ROOT, text=True),
+                f'the run changed {CONTRACTS} in the checkout')
+        require(contracts_checkout_state() == contracts_before,
+                f'the run wrote the checkout\'s shared Foundry directories: {status}')
+        results['contracts_checkout_unchanged'] = True
         results['passed'] = True
     except Exception as error:
         results['error'] = str(error)
@@ -144,10 +366,14 @@ def main():
         results['ended_at_unix'] = int(time.time())
         encoded = json.dumps(results, indent=2) + '\n'
         (out / 'result.json').write_text(encoded)
-        (out / 'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Local Base Lock rehearsal</title><h1>Local Base Lock rehearsal</h1><pre>' + html.escape(encoded) + '</pre>')
+        write_manifest(out, commit, tree, results.get('toolchain'))
         print(encoded)
     return 0 if results['passed'] else 1
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except RehearsalFailure as refusal:
+        print(f'rehearse-base-lock: {refusal}', file=sys.stderr)
+        sys.exit(2)
