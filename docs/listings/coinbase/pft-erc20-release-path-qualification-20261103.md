@@ -164,6 +164,24 @@ Requests forwarded: `eth_chainId` 8, `eth_blockNumber` 6, `eth_getBlockByNumber`
 
 It shows that the watcher reads a real node's `external_lane_info` (chain id, genesis hash, the lane row and its policy) and, over Base's real JSON-RPC, the finalized block and the lock contract's code. It sent only read methods. Matching a release against `lockRecord` has run only against the mocked RPC: no Lock and no release exist yet.
 
+## Base Sepolia rehearsal (2026-11-06), part 1: the deployment and the Lock
+
+The first real Lock on Base Sepolia (chain id 84532), on a disposable token and a fresh lock contract deployed from two new one-time keys with the unchanged scripts, from the source commit `1c5bf4c6f`. Full record: [`part-1.json`](../../review/base-sepolia-lock-rehearsal-20261106/part-1.json).
+
+| Fact | Value |
+|---|---|
+| Token | `0x90cE303356D80eCBE359FAF061C84130F40EacF0`, `PFT Rehearsal 20261106` (`PFTR`), 6 decimals, 100,000,000,000 PFT to the holder `0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17` (test switch `PFT_TOKEN_ALLOW_EOA_TREASURY`); runtime code hash `0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b`; block 55,132,270 |
+| Lock | `0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73`, test mode, the stand-in verifier `0x531659D0…4C294f2Ec9` (its `verifyAndConsume` always reverts), minimum 10 atoms, cap 1,000,000 PFT; runtime code hash `0x57bc7971e6878bed2cd4efc0e63020448d4cd9493f05ecde6ddc37fda90b871c`; block 55,132,483 |
+| Lock transaction | `0x599e15fbc298649c741379df2b7179fe08a8a1a0f4e8a5effe28de6f09b5c859`, block 55,132,949, hash `0xfaac31ef19b9ed183b7bc5fb6ade195b6e74cc9132a86c26b3fad381af8070d7`, after `approve` in block 55,132,945 |
+| `Locked` (log 4) | nonce 0, holder `0x6E4E…11E17`, amount 1,000,000 units (1 PFT), recipient `pfb2f06f1346000c42db0246a0fcf6ce0356662eb6` as UTF-8 bytes, recipient hash `0xa443f962…81d6fff4` |
+| Token pull (log 5) | `Transfer` of 1,000,000 units by the token from the holder to the lock |
+| Read back | `lockRecord(0)` = (holder, 1,000,000, the recipient hash); `totalLocked` 1,000,000; `nextNonce` 1; the lock's token balance 1,000,000 |
+| Recipient | a fresh ML-DSA-65 account from `postfiat-node wallet-keygen --chain-id postfiat-lane-sepolia-example`; its key stays outside the repository |
+| One-time keys | `pft-sepolia-token-deployer-20261106` (`0x8ffA5Dea2EEa08bC2c3250af664240849cab70Da`) and `pft-sepolia-lock-deployer-20261106` (`0xE57f8cbBdc05834f0CCdb8fEf13009bf9dAdAd25`), funded with 0.0004 test ETH each, emptied back to the holder (99,908 wei of dust each) and retired |
+| Gas | eight transactions, 0.000014223396006258 test ETH in all; the holder goes from 0.002000126 to 0.001985903 test ETH |
+
+When the Lock is recorded, Base Sepolia's finalized block is 55,127,399 and its head 55,133,176. The local fleet genesis for part 2, [`genesis.json`](../../review/base-sepolia-lock-rehearsal-20261106/genesis.json), is the external-lane test genesis with the new lock and token pinned (`init --genesis-file` accepts it; genesis hash `c619e67a…57ef2a69`). The 2026-10-28 rehearsal lock `0xE36e7Fc384564419187546c19719A5654266dE0B` is archived. Part 2, the release of this Lock on a local six-validator fleet through the four commands and the watcher, follows once Base finality reaches block 55,132,949.
+
 ## Open before genesis
 
 - Corrected 2026-11-04: no proof program is needed. The lane's proof is the committee-signed Base checkpoint plus the receipt proof (design option (b)), so it has no SP1 guest, vkey pin or proof inventory entry; an SP1 guest for Base is the design's option (a) upgrade.
