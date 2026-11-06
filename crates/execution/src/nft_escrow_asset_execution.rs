@@ -644,13 +644,32 @@ pub struct AssetExecutionCompatibility {
     pub asset_orchard_pricing_max_nav_age_blocks: Option<u64>,
     /// The governed release cap of each genesis external lane.
     pub external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps,
-    /// Set by [`Self::with_external_lane_release_caps`]. Every constructor
-    /// leaves it false: their caps are the genesis caps, which a committed
-    /// zero-cap amendment no longer is, so an external-lane export or release
-    /// executed without governed caps fails closed instead of applying.
-    pub external_lane_caps_governed: bool,
     /// The governed committee of each genesis external lane.
     pub external_lane_committees: postfiat_types::ExternalLaneCommittees,
+    /// Which of the two the caller supplied from governance.
+    pub external_lane_governed: ExternalLaneGovernedInputs,
+}
+
+/// Which external-lane inputs of an [`AssetExecutionCompatibility`] came
+/// from governance, each set only by its own builder. Every constructor
+/// starts with neither: their caps and committees are the genesis ones,
+/// which a committed zero-cap amendment or committee move no longer is. An
+/// export needs the caps; a verified release needs the caps and the
+/// committees; otherwise it fails closed instead of applying. In memory
+/// only: it is never serialized or hashed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExternalLaneGovernedInputs {
+    /// Set by [`AssetExecutionCompatibility::with_external_lane_release_caps`].
+    pub caps: bool,
+    /// Set by [`AssetExecutionCompatibility::with_external_lane_committees`].
+    pub committees: bool,
+}
+
+impl ExternalLaneGovernedInputs {
+    pub const NONE: Self = Self {
+        caps: false,
+        committees: false,
+    };
 }
 
 impl AssetExecutionCompatibility {
@@ -659,6 +678,7 @@ impl AssetExecutionCompatibility {
         committees: postfiat_types::ExternalLaneCommittees,
     ) -> Self {
         self.external_lane_committees = committees;
+        self.external_lane_governed.committees = true;
         self
     }
 
@@ -667,7 +687,7 @@ impl AssetExecutionCompatibility {
         caps: postfiat_types::ExternalLaneReleaseCaps,
     ) -> Self {
         self.external_lane_release_caps = caps;
-        self.external_lane_caps_governed = true;
+        self.external_lane_governed.caps = true;
         self
     }
 
@@ -699,8 +719,8 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
-            external_lane_caps_governed: false,
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
+            external_lane_governed: ExternalLaneGovernedInputs::NONE,
         }
     }
 
@@ -727,8 +747,8 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
-            external_lane_caps_governed: false,
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
+            external_lane_governed: ExternalLaneGovernedInputs::NONE,
         }
     }
 
@@ -755,8 +775,8 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
-            external_lane_caps_governed: false,
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
+            external_lane_governed: ExternalLaneGovernedInputs::NONE,
         }
     }
 
@@ -783,8 +803,8 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
-            external_lane_caps_governed: false,
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
+            external_lane_governed: ExternalLaneGovernedInputs::NONE,
         }
     }
 
@@ -811,8 +831,8 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
-            external_lane_caps_governed: false,
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
+            external_lane_governed: ExternalLaneGovernedInputs::NONE,
         }
     }
 
@@ -3215,7 +3235,7 @@ fn apply_asset_operation(
                 block_height,
                 compatibility.external_lane_release_caps,
                 compatibility.external_lane_committees,
-                compatibility.external_lane_caps_governed,
+                compatibility.external_lane_governed,
             )
         }
         AssetTransactionOperation::ExternalLaneExportV1(operation) => {
@@ -3235,7 +3255,7 @@ fn apply_asset_operation(
                 asset_transaction_tx_id(transaction),
                 block_height,
                 compatibility.external_lane_release_caps,
-                compatibility.external_lane_caps_governed,
+                compatibility.external_lane_governed.caps,
             )
         }
     }

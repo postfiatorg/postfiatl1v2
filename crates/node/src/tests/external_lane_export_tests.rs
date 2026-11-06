@@ -494,3 +494,23 @@ fn external_lane_info_refuses_a_bad_export_limit_for_an_unknown_lane() {
     }
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
+
+/// The external-lane provenance flags live in the in-memory compatibility
+/// only: neither it nor the flags implement `Serialize`, so nothing hashed or
+/// stored can carry them. Checked at compile time.
+#[test]
+fn external_lane_governed_inputs_are_never_serialized() {
+    trait NotSerialize {
+        const SERIALIZE: bool = false;
+    }
+    struct Probe<T>(std::marker::PhantomData<T>);
+    impl<T> NotSerialize for Probe<T> {}
+    #[allow(dead_code)]
+    impl<T: serde::Serialize> Probe<T> {
+        const SERIALIZE: bool = true;
+    }
+    const { assert!(!Probe::<postfiat_execution::AssetExecutionCompatibility>::SERIALIZE) };
+    const { assert!(!Probe::<postfiat_execution::ExternalLaneGovernedInputs>::SERIALIZE) };
+    // The probe does see a serializable type.
+    const { assert!(Probe::<postfiat_types::ExternalLaneState>::SERIALIZE) };
+}

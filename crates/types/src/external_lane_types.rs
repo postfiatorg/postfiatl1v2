@@ -305,6 +305,10 @@ pub const EXTERNAL_LANE_EXPORT_NEEDS_GOVERNED_CAPS: &str =
 /// fails closed, as an export does.
 pub const EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS: &str =
     "external_lane_release_needs_governed_caps";
+/// A verified release executed with governed caps but without the governed
+/// committees: the committee it was checked against may have moved.
+pub const EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_COMMITTEES: &str =
+    "external_lane_release_needs_governed_committees";
 /// An export above `released_atoms - exported_atoms`.
 pub const EXTERNAL_LANE_EXPORT_ABOVE_RELEASED: &str = "external_lane_export_above_released";
 pub const EXTERNAL_LANE_EXPORT_NONCE_EXHAUSTED: &str = "external_lane_export_nonce_exhausted";

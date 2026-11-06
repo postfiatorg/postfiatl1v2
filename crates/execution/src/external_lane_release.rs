@@ -31,6 +31,7 @@ use postfiat_types::{
     ExternalLaneExportOperationV1, ExternalLaneExportPacket, EXTERNAL_LANE_EXPORT_HALTED,
     EXTERNAL_LANE_EXPORT_NEEDS_GOVERNED_CAPS, EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
     EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK, EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS,
+    EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_COMMITTEES,
 };
 
 type ExecutionError = (&'static str, String);
@@ -429,10 +430,13 @@ pub(crate) fn apply_external_lane_export_with_caps(
 
 /// Verifies the operation's proof against the lane's genesis policy, then
 /// applies the release rules and credits the proven recipient. A release is
-/// bounded by the governed cap and signed by the governed committee, so
-/// without them (`caps_governed` false: the bare `execute_asset_transaction`
-/// entry, which knows only the genesis ones) a verified release fails closed
-/// before the cap is read, as an export does.
+/// bounded by the governed cap and signed by the governed committee, so a
+/// verified release fails closed before the cap is read unless `governed`
+/// says the caller supplied both: without the caps (the bare
+/// `execute_asset_transaction` entry) with
+/// `external_lane_release_needs_governed_caps`, and with the caps but the
+/// implicit genesis committees with
+/// `external_lane_release_needs_governed_committees`.
 pub(crate) fn execute_external_lane_release(
     genesis: &Genesis,
     ledger: &mut LedgerState,
@@ -440,7 +444,7 @@ pub(crate) fn execute_external_lane_release(
     block_height: u64,
     caps: ExternalLaneReleaseCaps,
     committees: ExternalLaneCommittees,
-    caps_governed: bool,
+    governed: crate::ExternalLaneGovernedInputs,
 ) -> Result<(), ExecutionError> {
     let lane_index = genesis
         .external_lanes()
@@ -457,11 +461,20 @@ pub(crate) fn execute_external_lane_release(
         recipient: &operation.recipient,
     };
     let lock = verify_external_lane_lock(genesis, ledger, &claim, &operation.proof, selector)?;
-    if !caps_governed {
+    if !governed.caps {
         return Err((
             EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS,
             format!(
                 "external_lane_release_v1 on external lane `{}` needs the governed caps and committees; execute it with execute_asset_transaction_with_compatibility",
+                lock.lane_id
+            ),
+        ));
+    }
+    if !governed.committees {
+        return Err((
+            EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_COMMITTEES,
+            format!(
+                "external_lane_release_v1 on external lane `{}` needs the governed committees beside the caps; pass them with with_external_lane_committees",
                 lock.lane_id
             ),
         ));
@@ -1500,8 +1513,16 @@ mod proof_tests {
         }
     }
 
-    #[test]
-    fn external_lane_release_after_a_committee_move_needs_the_new_committee() {
+    /// The lane fixture with a committee move to epoch 3 committed at
+    /// height 10: the ledger with the new committee registered, the governed
+    /// committees, and the same Lock proven by the old and the new committee.
+    fn committee_move_fixture() -> (
+        Fixture,
+        LedgerState,
+        ExternalLaneCommittees,
+        EthereumExternalEventProofV1,
+        EthereumExternalEventProofV1,
+    ) {
         let fx = fixture_on(8453);
         // Epoch 3: the same members with new keys, registered on the ledger.
         let keys: Vec<_> = (0..6_u8)
@@ -1544,6 +1565,32 @@ mod proof_tests {
             |checkpoint| checkpoint.authority_epoch = 3,
             5,
         );
+        (fx, ledger, committees, old, new)
+    }
+
+    /// `execute_external_lane_release` under `compatibility`, as the asset
+    /// dispatch calls it.
+    fn release_under(
+        fx: &Fixture,
+        ledger: &mut LedgerState,
+        proof: &EthereumExternalEventProofV1,
+        height: u64,
+        compatibility: crate::AssetExecutionCompatibility,
+    ) -> Result<(), ExecutionError> {
+        execute_external_lane_release(
+            &fx.genesis,
+            ledger,
+            &release_operation(fx, proof.clone()),
+            height,
+            compatibility.external_lane_release_caps,
+            compatibility.external_lane_committees,
+            compatibility.external_lane_governed,
+        )
+    }
+
+    #[test]
+    fn external_lane_release_after_a_committee_move_needs_the_new_committee() {
+        let (fx, mut ledger, committees, old, new) = committee_move_fixture();
         // The same Base block, attested by the new committee.
         assert_eq!(
             (
@@ -1564,7 +1611,10 @@ mod proof_tests {
                     height,
                     ExternalLaneReleaseCaps::genesis(),
                     committees,
-                    true,
+                    crate::ExternalLaneGovernedInputs {
+                        caps: true,
+                        committees: true,
+                    },
                 )
             };
         // Up to the move's block the old committee holds and the new one is refused.
@@ -1592,5 +1642,39 @@ mod proof_tests {
             release(&mut ledger, &new, 12).unwrap_err().0,
             postfiat_types::EXTERNAL_LANE_NONCE_ALREADY_RELEASED
         );
+    }
+
+    /// Governed caps alone do not make the committees governed: after the
+    /// move, a compatibility with the caps but the implicit genesis committee
+    /// refuses the old committee's release instead of applying it; with both
+    /// supplied the moved-committee rule holds.
+    #[test]
+    fn external_lane_release_needs_governed_committees_beside_governed_caps() {
+        let (fx, mut ledger, committees, old, new) = committee_move_fixture();
+        let caps_only = crate::AssetExecutionCompatibility::strict()
+            .with_external_lane_release_caps(ExternalLaneReleaseCaps::genesis());
+        let both = caps_only.with_external_lane_committees(committees);
+        let committees_only =
+            crate::AssetExecutionCompatibility::strict().with_external_lane_committees(committees);
+        let release = |ledger: &mut LedgerState,
+                       proof: &EthereumExternalEventProofV1,
+                       compatibility: crate::AssetExecutionCompatibility| {
+            release_under(&fx, ledger, proof, 11, compatibility)
+        };
+        let before = ledger.clone();
+        assert_eq!(
+            release(&mut ledger, &old, caps_only).unwrap_err().0,
+            postfiat_types::EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_COMMITTEES
+        );
+        assert_eq!(
+            release(&mut ledger, &new, committees_only).unwrap_err().0,
+            postfiat_types::EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS
+        );
+        assert_eq!(ledger, before);
+        assert_eq!(
+            release(&mut ledger, &old, both).unwrap_err().0,
+            EXTERNAL_LANE_COMMITTEE_INACTIVE
+        );
+        release(&mut ledger, &new, both).expect("the new committee with both governed");
     }
 }
