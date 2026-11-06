@@ -198,6 +198,16 @@ impl SignerGuard {
         owned_private(&lock.metadata()?, false)?;
         lock.try_lock()
             .map_err(|error| refusal("validator_signer_state_locked", error))?;
+        // Under the lock no writer is live: a `state.<pid>.<ns>.tmp` left by a
+        // crash before its rename was never committed state.
+        for entry in std::fs::read_dir(&directory)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with("state.") && name.ends_with(".tmp") {
+                std::fs::remove_file(entry.path())?;
+            }
+        }
         let state = State {
             schema: SCHEMA.into(),
             keys,

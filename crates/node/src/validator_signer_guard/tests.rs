@@ -521,3 +521,35 @@ fn guard_is_bound_to_its_initialized_domain_and_checks_it_on_open() {
         .contains("validator_signer_state_domain_mismatch"));
     assert!(open(false, Some(domain())).is_ok());
 }
+
+#[test]
+fn open_removes_temporaries_a_crash_left_before_rename() {
+    let d = Directory::new();
+    let p = public();
+    let mut guard = d.open(true);
+    guard
+        .reserve(
+            &p,
+            CONSENSUS_V2_VOTE_CONTEXT,
+            &bytes(&vote(4, 0, ConsensusV2Phase::Prepare)),
+        )
+        .unwrap();
+    drop(guard);
+    let stale = d.state().join("state.4242.1793000000000000000.tmp");
+    std::fs::write(&stale, b"{torn").unwrap();
+    let keep = d.state().join("unrelated.tmp");
+    std::fs::write(&keep, b"").unwrap();
+    let mut guard = d.open(false);
+    assert!(!stale.exists());
+    assert!(keep.exists());
+    // The committed state, not the temporary, was loaded.
+    assert!(guard
+        .reserve(
+            &p,
+            CONSENSUS_V2_VOTE_CONTEXT,
+            &bytes(&vote(3, 0, ConsensusV2Phase::Prepare))
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("validator_signer_stale_round"));
+}

@@ -103,7 +103,9 @@ and lock; missing, corrupt, shared or wrong-key state is refused. The directory 
 its parents must not let another user replace it. State is atomically replaced
 and both the file and directory are synced. A persistence failure disables
 signing until operator inspection and restart. An exclusive process lock and a
-request mutex serialize reservations.
+request mutex serialize reservations; the mutex is held across both syncs, so
+`describe` and transport signing wait for a reservation in flight (latency
+only). Opening the state removes `state.*.tmp` files a crash left before rename.
 
 Never delete, restore an older copy of, or initialize a replacement guard for
 usable keys. An empty guard cannot reconstruct past votes, so a key that already
