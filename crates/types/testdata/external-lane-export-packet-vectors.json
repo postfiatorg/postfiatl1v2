@@ -1,0 +1,44 @@
+{
+  "schema": "postfiat-external-lane-export-packet-vectors-v1",
+  "description": "external_lane_export_v1 packet digest and commitments. digest = SHA3-384(packet domain || 0x00 || packet JSON). withdrawal_id = SHA3-384(withdrawal_id domain || 0x00 || chain id || 0x00 || lane id || 0x00 || export nonce u64 big-endian || 0x00 || digest). burn_tx = SHA3-384(burn_tx domain || 0x00 || chain id || 0x00 || lane id || 0x00 || tx id). history root = SHA3-384(history domain || 0x00 || previous root text || 0x00 || digest). Strings are UTF-8; digests are 0x and 96 lower-case hex digits.",
+  "domains": {
+    "packet": "postfiat.external_lane.export_packet.v1",
+    "history": "postfiat.external_lane.export_history.v1",
+    "withdrawal_id": "postfiat.external_lane.export_withdrawal_id.v1",
+    "burn_tx": "postfiat.external_lane.export_burn_tx.v1"
+  },
+  "vectors": [
+    {
+      "chain_id": "postfiat-local",
+      "packet": {
+        "lane_id": "base-erc20",
+        "export_nonce": 0,
+        "sender": "pftl-sender",
+        "base_recipient": "0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+        "amount_atoms": 1000000,
+        "exported_at_height": 42,
+        "tx_id": "tx-0"
+      },
+      "packet_digest": "0x99da157404f5d3ad00b94f8a0360783057a5ca0c40d693df00c4ba4ec7aa5f6037ceb2b88e4faa0d5628641721a32c53",
+      "withdrawal_id_commitment": "0xe4dd6fcd6255a76e73d99f4f96324668c59d4859bbf9b81a4b0b3680af30d6c2d827bb6713611cc65035c52d0ea74ab1",
+      "burn_tx_commitment": "0xb9e01e0c7eb673755b79eeea1ee2d537f95c03b6df8979a9a6268678e3e2ed967c9965a32be26bf3f99b383f7798bd61",
+      "export_history_root_from_empty": "0x778976a3fc0feee167b2ed51c658f31e6a788e91ce895d06a340a9c44fcf02088556f3a676c78e17c9aa8632a85970f8"
+    },
+    {
+      "chain_id": "postfiat-mainnet",
+      "packet": {
+        "lane_id": "base-erc20",
+        "export_nonce": 7,
+        "sender": "pftl-sender",
+        "base_recipient": "0x00000000000000000000000000000000000000a1",
+        "amount_atoms": 1,
+        "exported_at_height": 1000,
+        "tx_id": "tx-7"
+      },
+      "packet_digest": "0xd20d05a576a8dd482f8ebdae01dd8bfcb62a00da2dd7583c778c9de6c4c85a213c2354db8f079a4ab05f0439001ec849",
+      "withdrawal_id_commitment": "0xac2c38f9e8628e41ad595eed1efed1633e55c9b445deb4adbe30bf9b72b9118dcb698c89262d6eee60247f6680995193",
+      "burn_tx_commitment": "0xc132516b790c4626f05da76942f597d5a7706a15e20e0687ea0501ba154ac8afadf041c2abe90ce55483bbd52def3019",
+      "export_history_root_from_empty": "0xe72ef8a90047e66b68e683c69b10c150f534ada6f9216a28f33b924c9619992ebc8303eb9ccdf032b31ceb4cd3ee2b1c"
+    }
+  ]
+}

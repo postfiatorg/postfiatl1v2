@@ -22,6 +22,7 @@ pub(super) fn lane_genesis(chain_id: &str, validator_count: u32) -> Genesis {
             committee_epoch: 2,
             committee_root: format!("0x{}", "5e".repeat(48)),
             confirmation_depth: 64,
+            exports_enabled: false,
         },
     }]);
     genesis.validate().expect("valid lane genesis");

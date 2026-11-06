@@ -1322,6 +1322,7 @@ fn fuzz_pruned_external_lane(
             committee_epoch: 1,
             committee_root: format!("0x{}", "5e".repeat(48)),
             confirmation_depth: 1,
+            exports_enabled: false,
         },
     };
     let mut state = postfiat_types::ExternalLaneState::genesis(&lane);
@@ -1465,6 +1466,13 @@ fn fuzz_native_supply_invariants(iterations: usize) -> Result<FuzzTargetReport, 
                 pruned_released_atoms: 0,
                 pruned_release_history_root: None,
                 releases: lane_releases,
+                exported_atoms: 0,
+                next_export_nonce: 0,
+                export_history_root: None,
+                pruned_export_count: 0,
+                pruned_exported_atoms: 0,
+                pruned_export_history_root: None,
+                exports: Vec::new(),
             });
         let mut pool = OrchardPoolState::empty(format!("native-pool-{iteration}"));
         pool.turnstile_deposit_total = orchard_value;

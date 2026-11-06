@@ -13,6 +13,7 @@ fn sample_external_lane(id: &str, reserved_atoms: u64) -> GenesisExternalLane {
             committee_epoch: 2,
             committee_root: format!("0x{}", "5e".repeat(48)),
             confirmation_depth: 64,
+            exports_enabled: false,
         },
     }
 }

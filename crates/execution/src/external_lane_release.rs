@@ -442,6 +442,7 @@ mod tests {
                 committee_epoch: 2,
                 committee_root: format!("0x{}", "5e".repeat(48)),
                 confirmation_depth: 64,
+                exports_enabled: false,
             },
         }]);
         genesis.validate().expect("lane genesis");

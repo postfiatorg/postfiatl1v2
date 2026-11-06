@@ -273,6 +273,13 @@ pub fn external_lane_amendment_slot_refusal(
 
 const EXTERNAL_LANE_ROUTE_CONFIG_DOMAIN: &[u8] = b"postfiat.external_lane.route_config.v1";
 const EXTERNAL_LANE_RELEASE_HISTORY_DOMAIN: &[u8] = b"postfiat.external_lane.release_history.v1";
+/// Domain tags of an export packet: its digest, the hash chain over a lane's
+/// packets, and the two commitments the Base lock consumes.
+pub const EXTERNAL_LANE_EXPORT_PACKET_DOMAIN: &[u8] = b"postfiat.external_lane.export_packet.v1";
+pub const EXTERNAL_LANE_EXPORT_HISTORY_DOMAIN: &[u8] = b"postfiat.external_lane.export_history.v1";
+pub const EXTERNAL_LANE_EXPORT_WITHDRAWAL_ID_DOMAIN: &[u8] =
+    b"postfiat.external_lane.export_withdrawal_id.v1";
+pub const EXTERNAL_LANE_EXPORT_BURN_TX_DOMAIN: &[u8] = b"postfiat.external_lane.export_burn_tx.v1";
 /// A release history root is 48 bytes (SHA3-384).
 const EXTERNAL_LANE_RELEASE_HISTORY_ROOT_HEX_LEN: usize = 96;
 
@@ -286,6 +293,18 @@ pub const EXTERNAL_LANE_EXPORT_NOT_SUPPORTED: &str = "external_lane_export_not_s
 /// An export whose Base recipient is the lane's own lock contract, which a
 /// release can never pay.
 pub const EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK: &str = "external_lane_export_recipient_is_lock";
+/// An export while the lane's active release cap is zero: the governed halt
+/// stops exports as it stops releases.
+pub const EXTERNAL_LANE_EXPORT_HALTED: &str = "external_lane_export_halted";
+/// An export above `released_atoms - exported_atoms`.
+pub const EXTERNAL_LANE_EXPORT_ABOVE_RELEASED: &str = "external_lane_export_above_released";
+pub const EXTERNAL_LANE_EXPORT_NONCE_EXHAUSTED: &str = "external_lane_export_nonce_exhausted";
+pub const EXTERNAL_LANE_EXPORT_RECORDS_FULL: &str = "external_lane_export_records_full";
+/// A lane whose `exported_atoms` exceed its `released_atoms`: a corrupt
+/// record no rule can produce.
+pub const EXTERNAL_LANE_STATE_CORRUPT: &str = "external_lane_state_corrupt";
+/// A release whose `released_atoms + amount` overflows u64.
+pub const EXTERNAL_LANE_COUNTER_OVERFLOW: &str = "external_lane_counter_overflow";
 pub const EXTERNAL_LANE_NONCE_ALREADY_RELEASED: &str = "external_lane_nonce_already_released";
 pub const EXTERNAL_LANE_REMAINDER_EXCEEDED: &str = "external_lane_remainder_exceeded";
 pub const EXTERNAL_LANE_WINDOW_CAP_EXCEEDED: &str = "external_lane_window_cap_exceeded";
@@ -317,6 +336,11 @@ pub struct GenesisExternalLanePolicy {
     pub committee_root: String,
     /// Source-chain confirmations a Lock needs before it can be proven.
     pub confirmation_depth: u64,
+    /// Whether `external_lane_export_v1` is applied. Absent reads as false,
+    /// and false is not encoded, so a lane without exports keeps its genesis
+    /// JSON, its genesis hash and its route-config digest.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub exports_enabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1045,10 +1069,118 @@ impl ExternalLaneReleaseRecord {
     }
 }
 
+/// One accepted `external_lane_export_v1`: the packet a Base release pays.
+/// Every field is one PFTL owns; the verifier's route profile and asset id
+/// are not part of it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalLaneExportPacket {
+    pub lane_id: String,
+    pub export_nonce: u64,
+    pub sender: String,
+    pub base_recipient: String,
+    pub amount_atoms: u64,
+    pub exported_at_height: u64,
+    /// The accepted transaction's id.
+    pub tx_id: String,
+}
+
+fn lane_digest_hex(digest: [u8; 48]) -> String {
+    format!(
+        "0x{}",
+        digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    )
+}
+
+impl ExternalLaneExportPacket {
+    /// SHA3-384 over `EXTERNAL_LANE_EXPORT_PACKET_DOMAIN`, a zero byte and
+    /// the packet's JSON, as a release record is hashed.
+    pub fn digest(&self) -> Result<[u8; 48], String> {
+        let encoded = serde_json::to_vec(self)
+            .map_err(|error| format!("encode external lane export packet: {error}"))?;
+        let mut hasher = Sha3_384::new();
+        hasher.update(EXTERNAL_LANE_EXPORT_PACKET_DOMAIN);
+        hasher.update([0_u8]);
+        hasher.update(encoded);
+        Ok(hasher.finalize().into())
+    }
+
+    /// SHA3-384 over `EXTERNAL_LANE_EXPORT_WITHDRAWAL_ID_DOMAIN`, then each
+    /// of the chain id, the lane id, the export nonce (8 bytes big-endian)
+    /// and the packet digest (48 bytes), each after a zero byte.
+    pub fn withdrawal_id_commitment(&self, chain_id: &str) -> Result<[u8; 48], String> {
+        let digest = self.digest()?;
+        let mut hasher = Sha3_384::new();
+        hasher.update(EXTERNAL_LANE_EXPORT_WITHDRAWAL_ID_DOMAIN);
+        for part in [
+            chain_id.as_bytes(),
+            self.lane_id.as_bytes(),
+            &self.export_nonce.to_be_bytes(),
+            &digest,
+        ] {
+            hasher.update([0_u8]);
+            hasher.update(part);
+        }
+        Ok(hasher.finalize().into())
+    }
+
+    /// SHA3-384 over `EXTERNAL_LANE_EXPORT_BURN_TX_DOMAIN`, then each of the
+    /// chain id, the lane id and the accepted transaction id, each after a
+    /// zero byte.
+    pub fn burn_tx_commitment(&self, chain_id: &str) -> [u8; 48] {
+        let mut hasher = Sha3_384::new();
+        hasher.update(EXTERNAL_LANE_EXPORT_BURN_TX_DOMAIN);
+        for part in [chain_id, &self.lane_id, &self.tx_id] {
+            hasher.update([0_u8]);
+            hasher.update(part.as_bytes());
+        }
+        hasher.finalize().into()
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.amount_atoms == 0 {
+            return Err(format!(
+                "external lane export nonce {} has zero amount",
+                self.export_nonce
+            ));
+        }
+        if self.sender.is_empty() || self.tx_id.is_empty() {
+            return Err(format!(
+                "external lane export nonce {} has no sender or transaction id",
+                self.export_nonce
+            ));
+        }
+        validate_lane_hex(
+            "export base_recipient",
+            &self.base_recipient,
+            EXTERNAL_LANE_EVM_ADDRESS_HEX_LEN,
+        )
+    }
+}
+
+/// The export history root after `packet`: SHA3-384 over a domain tag, the
+/// previous root (empty for the first packet) and the packet's digest.
+pub fn external_lane_export_history_root(
+    previous: Option<&str>,
+    packet: &ExternalLaneExportPacket,
+) -> Result<String, String> {
+    let mut hasher = Sha3_384::new();
+    hasher.update(EXTERNAL_LANE_EXPORT_HISTORY_DOMAIN);
+    hasher.update([0_u8]);
+    hasher.update(previous.unwrap_or_default().as_bytes());
+    hasher.update([0_u8]);
+    hasher.update(packet.digest()?);
+    Ok(lane_digest_hex(hasher.finalize().into()))
+}
+
 /// Live record of a genesis external lane. Its remainder
-/// (`reserved_atoms - released_atoms`) is native supply that is not in
-/// circulation; `external_lane_release_v1` is the only writer of the release
-/// fields, and every released atom has a stored record in `releases` or is in
+/// (`reserved_atoms - (released_atoms - exported_atoms)`) is native supply
+/// that is not in circulation; `external_lane_release_v1` is the only writer
+/// of the release fields and `external_lane_export_v1` of the export fields,
+/// and every released atom has a stored record in `releases` or is in
 /// the committed pruned aggregate (`pruned_released_atoms`) and root
 /// (`pruned_release_history_root`).
 ///
@@ -1086,6 +1218,26 @@ pub struct ExternalLaneState {
     /// in the state commitment.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub releases: Vec<ExternalLaneReleaseRecord>,
+    /// Atoms exported back to the lane and the next export nonce. Omitted
+    /// while zero, so a lane without exports encodes and commits as before.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub exported_atoms: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_export_nonce: u64,
+    /// Hash chain over the export packets, and the pruned packets' count,
+    /// atoms and root, as for releases.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export_history_root: Option<String>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub pruned_export_count: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub pruned_exported_atoms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pruned_export_history_root: Option<String>,
+    /// Export packets in nonce order, after the pruned ones; not in the
+    /// state commitment.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exports: Vec<ExternalLaneExportPacket>,
 }
 
 fn is_zero(value: &u64) -> bool {
@@ -1117,6 +1269,18 @@ struct ExternalLaneCommitment<'a> {
     pruned_released_atoms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pruned_release_history_root: Option<&'a str>,
+    #[serde(skip_serializing_if = "is_zero")]
+    exported_atoms: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    next_export_nonce: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    export_history_root: Option<&'a str>,
+    #[serde(skip_serializing_if = "is_zero")]
+    pruned_export_count: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pruned_exported_atoms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pruned_export_history_root: Option<&'a str>,
 }
 
 /// The release history root after `record`: SHA3-384 over a domain tag, the
@@ -1157,6 +1321,13 @@ impl ExternalLaneState {
             pruned_released_atoms: 0,
             pruned_release_history_root: None,
             releases: Vec::new(),
+            exported_atoms: 0,
+            next_export_nonce: 0,
+            export_history_root: None,
+            pruned_export_count: 0,
+            pruned_exported_atoms: 0,
+            pruned_export_history_root: None,
+            exports: Vec::new(),
         }
     }
 
@@ -1202,15 +1373,41 @@ impl ExternalLaneState {
         Ok(ExternalLaneReleasePrune { count, atoms, root })
     }
 
-    pub fn remainder_atoms(&self) -> Result<u64, String> {
-        self.reserved_atoms
-            .checked_sub(self.released_atoms)
+    /// `released_atoms - exported_atoms`: what has left the lane and not
+    /// come back. Exports never exceed releases, so a failure is a corrupt
+    /// record.
+    pub fn net_released_atoms(&self) -> Result<u64, (&'static str, String)> {
+        self.released_atoms
+            .checked_sub(self.exported_atoms)
             .ok_or_else(|| {
-                format!(
-                    "external lane `{}` released {} atoms above its reserve {}",
-                    self.lane_id, self.released_atoms, self.reserved_atoms
+                (
+                    EXTERNAL_LANE_STATE_CORRUPT,
+                    format!(
+                        "external lane `{}` exported {} atoms above its {} released",
+                        self.lane_id, self.exported_atoms, self.released_atoms
+                    ),
                 )
             })
+    }
+
+    /// `reserved - (released - exported)`, in that net form: the form
+    /// `reserved - released + exported` underflows after a full cycle.
+    pub fn remainder_atoms(&self) -> Result<u64, String> {
+        let net_released = self.net_released_atoms().map_err(|(_, error)| error)?;
+        self.reserved_atoms
+            .checked_sub(net_released)
+            .ok_or_else(|| {
+                format!(
+                    "external lane `{}` released {net_released} net atoms above its reserve {}",
+                    self.lane_id, self.reserved_atoms
+                )
+            })
+    }
+
+    /// Every export ever applied, pruned or stored.
+    pub fn export_count(&self) -> u64 {
+        self.pruned_export_count
+            .saturating_add(self.exports.len() as u64)
     }
 
     pub fn validate(&self) -> Result<(), String> {
@@ -1253,6 +1450,69 @@ impl ExternalLaneState {
                 root,
                 EXTERNAL_LANE_RELEASE_HISTORY_ROOT_HEX_LEN,
             )?;
+        }
+        for (field, root) in [
+            ("export_history_root", &self.export_history_root),
+            ("pruned_export_history_root", &self.pruned_export_history_root),
+        ] {
+            if let Some(root) = root {
+                validate_lane_hex(field, root, EXTERNAL_LANE_RELEASE_HISTORY_ROOT_HEX_LEN)?;
+            }
+        }
+        if self.next_export_nonce < self.pruned_export_count
+            || (self.exported_atoms > 0) != (self.next_export_nonce > 0)
+        {
+            return Err(format!(
+                "external lane `{}` has inconsistent export counters",
+                self.lane_id
+            ));
+        }
+        Ok(())
+    }
+
+    /// The export fields must be what the packets add up to: nonces in
+    /// order from the pruned count to `next_export_nonce`, and
+    /// `exported_atoms` their sum. Walks every packet, so it runs when a
+    /// replay base is loaded, not per block.
+    fn validate_recorded_exports(&self) -> Result<(), String> {
+        let consistent = if self.pruned_export_count == 0 {
+            self.pruned_exported_atoms == 0 && self.pruned_export_history_root.is_none()
+        } else {
+            self.pruned_export_history_root.is_some()
+        };
+        if !consistent || self.export_count() != self.next_export_nonce {
+            return Err(format!(
+                "external lane `{}` has inconsistent export records",
+                self.lane_id
+            ));
+        }
+        let mut exported = self.pruned_exported_atoms;
+        let mut previous_height = 0_u64;
+        let mut root = self.pruned_export_history_root.clone();
+        for (offset, packet) in self.exports.iter().enumerate() {
+            packet
+                .validate()
+                .map_err(|error| format!("external lane `{}`: {error}", self.lane_id))?;
+            if packet.lane_id != self.lane_id
+                || packet.export_nonce != self.pruned_export_count + offset as u64
+                || packet.exported_at_height < previous_height
+            {
+                return Err(format!(
+                    "external lane `{}` records export nonce {} out of order",
+                    self.lane_id, packet.export_nonce
+                ));
+            }
+            previous_height = packet.exported_at_height;
+            exported = exported.checked_add(packet.amount_atoms).ok_or_else(|| {
+                format!("external lane `{}` recorded exports overflow", self.lane_id)
+            })?;
+            root = Some(external_lane_export_history_root(root.as_deref(), packet)?);
+        }
+        if exported != self.exported_atoms || root != self.export_history_root {
+            return Err(format!(
+                "external lane `{}` has exported_atoms {} and export root {:?}, but its packets give {exported} and {root:?}",
+                self.lane_id, self.exported_atoms, self.export_history_root
+            ));
         }
         Ok(())
     }
@@ -1353,6 +1613,13 @@ impl ExternalLaneState {
 
         self.validate()?;
         self.validate_recorded_releases()?;
+        self.validate_recorded_exports()?;
+        if !lane.policy.exports_enabled && self.next_export_nonce > 0 {
+            return Err(format!(
+                "external lane `{}` records exports, but genesis does not enable them",
+                self.lane_id
+            ));
+        }
         if self.lane_id != lane.id {
             return Err(format!(
                 "external lane `{}` checked against genesis lane `{}`",
@@ -1482,6 +1749,7 @@ impl ExternalLaneState {
                 ),
             ));
         }
+        self.net_released_atoms()?;
         if self.released_lock_nonces.contains(&lock_nonce) {
             return Err((
                 EXTERNAL_LANE_NONCE_ALREADY_RELEASED,
@@ -1491,10 +1759,27 @@ impl ExternalLaneState {
                 ),
             ));
         }
-        let remainder = self
-            .remainder_atoms()
-            .map_err(|error| (EXTERNAL_LANE_REMAINDER_EXCEEDED, error))?;
-        if amount_atoms > remainder {
+        // Net form of design section 4: the new released total, less the
+        // exported atoms, stays within the reserve.
+        let released = self.released_atoms.checked_add(amount_atoms).ok_or_else(|| {
+            (
+                EXTERNAL_LANE_COUNTER_OVERFLOW,
+                format!(
+                    "external lane `{}` released atoms overflow with {amount_atoms} more",
+                    self.lane_id
+                ),
+            )
+        })?;
+        let net_released = released.checked_sub(self.exported_atoms).ok_or_else(|| {
+            (
+                EXTERNAL_LANE_STATE_CORRUPT,
+                format!("external lane `{}` exported above its releases", self.lane_id),
+            )
+        })?;
+        if net_released > self.reserved_atoms {
+            let remainder = self
+                .remainder_atoms()
+                .map_err(|error| (EXTERNAL_LANE_STATE_CORRUPT, error))?;
             return Err((
                 EXTERNAL_LANE_REMAINDER_EXCEEDED,
                 format!(
@@ -1613,6 +1898,141 @@ impl ExternalLaneState {
         Ok(())
     }
 
+    /// The export rules of design section 4, after the halt the caller
+    /// checks: the amount fits `released - exported`, the export nonce can
+    /// advance, and the stored packets stay under the ceiling. Nothing is
+    /// mutated.
+    pub fn check_export(
+        &self,
+        lane: &GenesisExternalLane,
+        amount_atoms: u64,
+        height: u64,
+    ) -> Result<(), (&'static str, String)> {
+        self.check_export_within(lane, amount_atoms, height, EXTERNAL_LANE_MAX_RELEASE_RECORDS)
+    }
+
+    fn check_export_within(
+        &self,
+        lane: &GenesisExternalLane,
+        amount_atoms: u64,
+        height: u64,
+        max_records: usize,
+    ) -> Result<(), (&'static str, String)> {
+        let exportable = self.net_released_atoms()?;
+        if amount_atoms == 0 || amount_atoms > exportable {
+            return Err((
+                EXTERNAL_LANE_EXPORT_ABOVE_RELEASED,
+                format!(
+                    "external lane `{}` can take back {exportable} released atoms, not {amount_atoms}",
+                    self.lane_id
+                ),
+            ));
+        }
+        if self.next_export_nonce.checked_add(1).is_none() {
+            return Err((
+                EXTERNAL_LANE_EXPORT_NONCE_EXHAUSTED,
+                format!("external lane `{}` export nonce is exhausted", self.lane_id),
+            ));
+        }
+        let prunable = self.export_prune(lane, height)?.count;
+        let stored = self.exports.len() - prunable;
+        if stored >= max_records {
+            return Err((
+                EXTERNAL_LANE_EXPORT_RECORDS_FULL,
+                format!(
+                    "external lane `{}` stores {stored} export packets, the ceiling {max_records}",
+                    self.lane_id
+                ),
+            ));
+        }
+        Ok(())
+    }
+
+    /// The leading packets pruning at `height` removes, by the release
+    /// rule: at or below `height` minus the retention window and in a window
+    /// before the one `height` falls in.
+    fn export_prune(
+        &self,
+        lane: &GenesisExternalLane,
+        height: u64,
+    ) -> Result<ExternalLaneReleasePrune, (&'static str, String)> {
+        let retention = lane
+            .release_window_blocks
+            .max(1)
+            .saturating_mul(EXTERNAL_LANE_RELEASE_RETENTION_WINDOWS);
+        let open_window = lane.window_index_at(height);
+        let count = height.checked_sub(retention).map_or(0, |cutoff| {
+            self.exports
+                .iter()
+                .take_while(|packet| {
+                    packet.exported_at_height <= cutoff
+                        && lane.window_index_at(packet.exported_at_height) < open_window
+                })
+                .count()
+        });
+        let mut root = self.pruned_export_history_root.clone();
+        let mut atoms = self.pruned_exported_atoms;
+        for packet in &self.exports[..count] {
+            root = Some(
+                external_lane_export_history_root(root.as_deref(), packet)
+                    .map_err(|error| (EXTERNAL_LANE_STATE_CORRUPT, error))?,
+            );
+            atoms = atoms.checked_add(packet.amount_atoms).ok_or_else(|| {
+                (
+                    EXTERNAL_LANE_STATE_CORRUPT,
+                    format!("external lane `{}` pruned exports overflow", self.lane_id),
+                )
+            })?;
+        }
+        Ok(ExternalLaneReleasePrune { count, atoms, root })
+    }
+
+    /// Applies a checked export: the packet takes `next_export_nonce`,
+    /// `exported_atoms` grows by its amount, the nonce advances and the
+    /// packets behind the window are pruned. The caller checks the halt and
+    /// debits the sender. Every fallible step runs before the first
+    /// mutation, so a refusal leaves the lane as it was.
+    pub fn apply_export(
+        &mut self,
+        lane: &GenesisExternalLane,
+        packet: ExternalLaneExportPacket,
+    ) -> Result<(), (&'static str, String)> {
+        self.apply_export_within(lane, packet, EXTERNAL_LANE_MAX_RELEASE_RECORDS)
+    }
+
+    fn apply_export_within(
+        &mut self,
+        lane: &GenesisExternalLane,
+        packet: ExternalLaneExportPacket,
+        max_records: usize,
+    ) -> Result<(), (&'static str, String)> {
+        self.check_export_within(lane, packet.amount_atoms, packet.exported_at_height, max_records)?;
+        if packet.lane_id != self.lane_id || packet.export_nonce != self.next_export_nonce {
+            return Err((
+                EXTERNAL_LANE_STATE_CORRUPT,
+                format!(
+                    "external lane `{}` export packet must take nonce {}",
+                    self.lane_id, self.next_export_nonce
+                ),
+            ));
+        }
+        let root = external_lane_export_history_root(self.export_history_root.as_deref(), &packet)
+            .map_err(|error| (EXTERNAL_LANE_STATE_CORRUPT, error))?;
+        let prune = self.export_prune(lane, packet.exported_at_height)?;
+        // `amount <= released - exported` holds, so neither step can wrap.
+        self.exported_atoms += packet.amount_atoms;
+        self.next_export_nonce += 1;
+        self.export_history_root = Some(root);
+        if prune.count > 0 {
+            self.exports.drain(..prune.count);
+            self.pruned_export_count += prune.count as u64;
+            self.pruned_exported_atoms = prune.atoms;
+            self.pruned_export_history_root = prune.root;
+        }
+        self.exports.push(packet);
+        Ok(())
+    }
+
     /// The committed fields, without the release records: bounded per
     /// release by one nonce, whatever the records hold.
     pub fn state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
@@ -1628,6 +2048,12 @@ impl ExternalLaneState {
             pruned_release_count: self.pruned_release_count,
             pruned_released_atoms: self.pruned_released_atoms,
             pruned_release_history_root: self.pruned_release_history_root.as_deref(),
+            exported_atoms: self.exported_atoms,
+            next_export_nonce: self.next_export_nonce,
+            export_history_root: self.export_history_root.as_deref(),
+            pruned_export_count: self.pruned_export_count,
+            pruned_exported_atoms: self.pruned_exported_atoms,
+            pruned_export_history_root: self.pruned_export_history_root.as_deref(),
         })
         .map_err(|error| format!("encode external lane state: {error}"))
     }
