@@ -296,6 +296,15 @@ pub const EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK: &str = "external_lane_export_r
 /// An export while the lane's active release cap is zero: the governed halt
 /// stops exports as it stops releases.
 pub const EXTERNAL_LANE_EXPORT_HALTED: &str = "external_lane_export_halted";
+/// An export that passes every rule but was executed without governed caps
+/// (the bare `execute_asset_transaction` entry): it fails closed, since the
+/// genesis cap it saw may no longer be the active one.
+pub const EXTERNAL_LANE_EXPORT_NEEDS_GOVERNED_CAPS: &str =
+    "external_lane_export_needs_governed_caps";
+/// A verified release executed without governed caps and committees: it
+/// fails closed, as an export does.
+pub const EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS: &str =
+    "external_lane_release_needs_governed_caps";
 /// An export above `released_atoms - exported_atoms`.
 pub const EXTERNAL_LANE_EXPORT_ABOVE_RELEASED: &str = "external_lane_export_above_released";
 pub const EXTERNAL_LANE_EXPORT_NONCE_EXHAUSTED: &str = "external_lane_export_nonce_exhausted";

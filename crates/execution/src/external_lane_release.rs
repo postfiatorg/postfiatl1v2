@@ -29,7 +29,8 @@ use postfiat_types::{
 };
 use postfiat_types::{
     ExternalLaneExportOperationV1, ExternalLaneExportPacket, EXTERNAL_LANE_EXPORT_HALTED,
-    EXTERNAL_LANE_EXPORT_NOT_SUPPORTED, EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK,
+    EXTERNAL_LANE_EXPORT_NEEDS_GOVERNED_CAPS, EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
+    EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK, EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS,
 };
 
 type ExecutionError = (&'static str, String);
@@ -300,6 +301,8 @@ pub(crate) fn verify_external_lane_lock(
 /// export rules, then the sender's debit of `amount_atoms` (the fee is
 /// already debited) with the ordinary balance and reserve refusals; only
 /// then the lane records the packet. Every check precedes the first write.
+/// Under governed caps; the tests call it directly.
+#[cfg(test)]
 pub(crate) fn apply_external_lane_export(
     genesis: &Genesis,
     ledger: &mut LedgerState,
@@ -308,6 +311,34 @@ pub(crate) fn apply_external_lane_export(
     tx_id: String,
     block_height: u64,
     caps: ExternalLaneReleaseCaps,
+) -> Result<(), ExecutionError> {
+    apply_external_lane_export_with_caps(
+        genesis,
+        ledger,
+        operation,
+        source,
+        tx_id,
+        block_height,
+        caps,
+        true,
+    )
+}
+
+/// `apply_external_lane_export`, with `caps_governed` false for the bare
+/// `execute_asset_transaction` entry, whose caps are the genesis caps: every
+/// refusal keeps its code, and an export that would apply is refused with
+/// `external_lane_export_needs_governed_caps` before the first write, so a
+/// governed zero-cap halt holds at that entry too.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn apply_external_lane_export_with_caps(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    operation: &ExternalLaneExportOperationV1,
+    source: &str,
+    tx_id: String,
+    block_height: u64,
+    caps: ExternalLaneReleaseCaps,
+    caps_governed: bool,
 ) -> Result<(), ExecutionError> {
     let lane = configured_lane(genesis, &operation.lane_id)?;
     if operation.base_recipient == lane.policy.lock_contract_address {
@@ -382,13 +413,26 @@ pub(crate) fn apply_external_lane_export(
     if let Some(message) = crate::account_reserve_violation(&operation.sender, sender_after) {
         return Err(("below_account_reserve", message));
     }
+    if !caps_governed {
+        return Err((
+            EXTERNAL_LANE_EXPORT_NEEDS_GOVERNED_CAPS,
+            format!(
+                "external_lane_export_v1 on external lane `{}` needs the governed release caps; execute it with execute_asset_transaction_with_compatibility",
+                lane.id
+            ),
+        ));
+    }
     ledger.external_lanes[state_index].apply_export(lane, packet)?;
     ledger.ensure_account(&operation.sender).balance = sender_after;
     Ok(())
 }
 
 /// Verifies the operation's proof against the lane's genesis policy, then
-/// applies the release rules and credits the proven recipient.
+/// applies the release rules and credits the proven recipient. A release is
+/// bounded by the governed cap and signed by the governed committee, so
+/// without them (`caps_governed` false: the bare `execute_asset_transaction`
+/// entry, which knows only the genesis ones) a verified release fails closed
+/// before the cap is read, as an export does.
 pub(crate) fn execute_external_lane_release(
     genesis: &Genesis,
     ledger: &mut LedgerState,
@@ -396,6 +440,7 @@ pub(crate) fn execute_external_lane_release(
     block_height: u64,
     caps: ExternalLaneReleaseCaps,
     committees: ExternalLaneCommittees,
+    caps_governed: bool,
 ) -> Result<(), ExecutionError> {
     let lane_index = genesis
         .external_lanes()
@@ -412,6 +457,15 @@ pub(crate) fn execute_external_lane_release(
         recipient: &operation.recipient,
     };
     let lock = verify_external_lane_lock(genesis, ledger, &claim, &operation.proof, selector)?;
+    if !caps_governed {
+        return Err((
+            EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS,
+            format!(
+                "external_lane_release_v1 on external lane `{}` needs the governed caps and committees; execute it with execute_asset_transaction_with_compatibility",
+                lock.lane_id
+            ),
+        ));
+    }
     apply_external_lane_release(genesis, ledger, lock, block_height, caps)
 }
 
@@ -1510,6 +1564,7 @@ mod proof_tests {
                     height,
                     ExternalLaneReleaseCaps::genesis(),
                     committees,
+                    true,
                 )
             };
         // Up to the move's block the old committee holds and the new one is refused.

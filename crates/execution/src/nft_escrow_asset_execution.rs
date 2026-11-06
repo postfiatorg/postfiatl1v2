@@ -644,6 +644,11 @@ pub struct AssetExecutionCompatibility {
     pub asset_orchard_pricing_max_nav_age_blocks: Option<u64>,
     /// The governed release cap of each genesis external lane.
     pub external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps,
+    /// Set by [`Self::with_external_lane_release_caps`]. Every constructor
+    /// leaves it false: their caps are the genesis caps, which a committed
+    /// zero-cap amendment no longer is, so an external-lane export or release
+    /// executed without governed caps fails closed instead of applying.
+    pub external_lane_caps_governed: bool,
     /// The governed committee of each genesis external lane.
     pub external_lane_committees: postfiat_types::ExternalLaneCommittees,
 }
@@ -662,6 +667,7 @@ impl AssetExecutionCompatibility {
         caps: postfiat_types::ExternalLaneReleaseCaps,
     ) -> Self {
         self.external_lane_release_caps = caps;
+        self.external_lane_caps_governed = true;
         self
     }
 
@@ -693,6 +699,7 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
+            external_lane_caps_governed: false,
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
         }
     }
@@ -720,6 +727,7 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
+            external_lane_caps_governed: false,
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
         }
     }
@@ -747,6 +755,7 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
+            external_lane_caps_governed: false,
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
         }
     }
@@ -774,6 +783,7 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
+            external_lane_caps_governed: false,
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
         }
     }
@@ -801,6 +811,7 @@ impl AssetExecutionCompatibility {
             asset_orchard_pricing_enforcement_activation_height: None,
             asset_orchard_pricing_max_nav_age_blocks: None,
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
+            external_lane_caps_governed: false,
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
         }
     }
@@ -3204,6 +3215,7 @@ fn apply_asset_operation(
                 block_height,
                 compatibility.external_lane_release_caps,
                 compatibility.external_lane_committees,
+                compatibility.external_lane_caps_governed,
             )
         }
         AssetTransactionOperation::ExternalLaneExportV1(operation) => {
@@ -3215,7 +3227,7 @@ fn apply_asset_operation(
                     "external_lane_export_v1 transaction kind mismatch".to_string(),
                 ));
             }
-            crate::external_lane_release::apply_external_lane_export(
+            crate::external_lane_release::apply_external_lane_export_with_caps(
                 genesis,
                 ledger,
                 operation,
@@ -3223,6 +3235,7 @@ fn apply_asset_operation(
                 asset_transaction_tx_id(transaction),
                 block_height,
                 compatibility.external_lane_release_caps,
+                compatibility.external_lane_caps_governed,
             )
         }
     }

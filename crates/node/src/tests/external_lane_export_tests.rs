@@ -351,8 +351,9 @@ fn external_lane_export_is_halted_under_a_zero_active_cap() {
     let chain = released_export_chain("export-halted", ACCOUNT_RESERVE + 1_000);
     govern_release_cap(&chain, 0);
     // Mempool admission and batch building run under the governed cap; the
-    // bare execution entry point knows only the genesis cap, so the halt is
-    // checked at the two governed entry points with nothing changed.
+    // bare execution entry point knows only the genesis cap, so it fails
+    // closed (below), and the halt is checked at the two governed entry
+    // points with nothing changed.
     let store = NodeStore::new(&chain.data_dir);
     let ledger_before = store.read_ledger().expect("ledger");
     let mempool_before = store.read_mempool().expect("mempool");
@@ -367,6 +368,27 @@ fn external_lane_export_is_halted_under_a_zero_active_cap() {
     assert_eq!(store.read_ledger().expect("ledger"), ledger_before);
     assert_eq!(store.read_mempool().expect("mempool"), mempool_before);
     assert_eq!(tip_height(&chain), tip_before);
+
+    // The bare library entry sees only the genesis cap: it refuses the export
+    // instead of applying it past the halt.
+    let mut ledger = ledger_before.clone();
+    let receipt = postfiat_execution::execute_asset_transaction(&chain.genesis, &mut ledger, &tx, tip_before + 1);
+    assert!(!receipt.accepted, "{receipt:?}");
+    assert_eq!(receipt.code, postfiat_types::EXTERNAL_LANE_EXPORT_NEEDS_GOVERNED_CAPS, "{receipt:?}");
+    assert_eq!(ledger, ledger_before, "the bare entry changed the ledger");
+
+    // A hand-assembled block carrying the export, executed as certified-block
+    // execution and replay do (governed compatibility), refuses it.
+    let governance = store.read_governance().expect("governance");
+    let mut batch = TransactionBatch::new("export-halted-block", Vec::new());
+    batch.asset_transactions.push(tx.clone());
+    let compatibility = asset_execution_compatibility_for_genesis_and_governance(&chain.genesis, &governance);
+    let mut after = ledger_before.clone();
+    let receipts =
+        execute_transparent_batch(&chain.genesis, &governance, &mut after, &batch, tip_before + 1, compatibility);
+    assert_eq!(receipts[0].code, postfiat_types::EXTERNAL_LANE_EXPORT_HALTED, "{receipts:?}");
+    assert!(!receipts[0].accepted, "{receipts:?}");
+    assert_eq!(after.external_lanes, ledger_before.external_lanes, "the block moved the lane");
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 

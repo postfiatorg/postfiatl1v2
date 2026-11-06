@@ -306,7 +306,7 @@ What it does not do:
 
 **The rules.** With the switch on, after the lane and lock-address checks (`apply_external_lane_export`, `crates/execution/src/external_lane_release.rs`):
 
-1. The halt: while the lane's active release cap is zero, the export is refused with `external_lane_export_halted`, so the governed zero-cap amendment stops exports as it stops releases.
+1. The halt: while the lane's active release cap is zero, the export is refused with `external_lane_export_halted`, so the governed zero-cap amendment stops exports as it stops releases. The halt is enforced at mempool admission, batch building, certified-block execution and replay, which all take the governed caps. The bare library entry `execute_asset_transaction` knows only the genesis caps, so it refuses an export that passes every rule with `external_lane_export_needs_governed_caps`, and a verified release with `external_lane_release_needs_governed_caps`, since a release had the same bypass of the cap and the committee. Callers pass the governed caps through `execute_asset_transaction_with_compatibility`.
 2. `amount_atoms` must be at most `released_atoms - exported_atoms` (`external_lane_export_above_released`); `next_export_nonce` must be able to advance (`external_lane_export_nonce_exhausted`); the stored packets must stay under the record ceiling (`external_lane_export_records_full`).
 3. The sender pays `amount_atoms` on top of the fee, with the ordinary `insufficient_funds` and `below_account_reserve` refusals.
 4. Only then `exported_atoms` grows by the amount, the nonce advances and the packet is recorded.
