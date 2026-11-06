@@ -19,8 +19,13 @@ pub const PRIVATE_READINESS_SCHEMA: &str = "postfiat.private_readiness.v1";
 /// receive. It is reported `unknown` rather than taken from a caller-supplied
 /// parameter, and it never makes `ready` true.
 pub const PRIVATE_ACTION_ADMISSION_SWITCH_KEYS: [&str; 1] = ["--allow-private-action-admission"];
+/// Where a validator key file sits in a data directory: the default
+/// `--finality-key-file` (`<data-dir>/validator_keys.json`) and the `node/`
+/// layout of a chain root. Their presence is a key copy in socket mode.
+pub const PRIVATE_READINESS_DATA_DIR_KEY_FILES: [&str; 2] =
+    ["validator_keys.json", "node/validator_keys.json"];
 /// The custody refusals, in report order. The W-1 manifest lists the same.
-pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 12] = [
+pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 13] = [
     "readiness_not_published_by_running_service",
     "store_not_transactional",
     "validator_signer_none",
@@ -30,6 +35,7 @@ pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 12] = [
     "validator_signer_key_mismatch",
     "validator_registry_unreadable",
     "validator_signer_guard_unavailable",
+    "validator_key_copy_in_data_dir",
     "validator_key_file_missing",
     "validator_key_file_unreadable",
     "validator_key_file_not_owner_only",
@@ -117,6 +123,11 @@ impl PrivateValidatorSigner {
 pub struct PrivateReadinessCustody {
     /// Fresh signer description; absent/false never attests durable protection.
     pub signer_double_sign_protection: Option<bool>,
+    /// With the socket signer: validator key files still present in the
+    /// serving data directory (`PRIVATE_READINESS_DATA_DIR_KEY_FILES`). The
+    /// serving user could read such a copy and sign outside the signer's guard.
+    #[serde(default)]
+    pub data_dir_key_files: Vec<String>,
     /// `rpc_serve` when the running service published it, else `local_read`.
     pub published_by: String,
     /// The store's backend-mode record: `transactional` (also the default
@@ -459,9 +470,19 @@ fn readiness_custody(
         _ => Vec::new(),
     };
     let signer_socket = service.and_then(|service| service.signer_socket.as_ref());
+    let data_dir_key_files = if signer_socket.is_some() {
+        PRIVATE_READINESS_DATA_DIR_KEY_FILES
+            .into_iter()
+            .filter(|name| std::fs::symlink_metadata(data_dir.join(name)).is_ok())
+            .map(str::to_string)
+            .collect()
+    } else {
+        Vec::new()
+    };
     Ok(PrivateReadinessCustody {
         signer_double_sign_protection: signer_socket
             .and_then(|socket| socket.double_sign_protection),
+        data_dir_key_files,
         published_by: if service.is_some() {
             "rpc_serve"
         } else {
@@ -527,6 +548,7 @@ pub(super) fn custody_reasons(custody: &PrivateReadinessCustody) -> Vec<String> 
         socket
             && custody.signer_uid.is_some()
             && custody.signer_double_sign_protection != Some(true),
+        socket && !custody.data_dir_key_files.is_empty(),
         any_key_file("missing") || (file_signer && custody.key_files.is_empty()),
         any_key_file("unreadable"),
         any_key_file("not_owner_only"),

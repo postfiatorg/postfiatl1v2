@@ -225,6 +225,15 @@ fn rpc_serve_signs_a_finality_vote_through_the_signer_process() {
         "{reasons}"
     );
     assert!(!reasons.contains("validator_key_file_"), "{reasons}");
+    // The decoy is still a key file in rpc-serve's data directory.
+    assert!(
+        reasons.contains("validator_key_copy_in_data_dir"),
+        "{reasons}"
+    );
+    assert_eq!(
+        custody["data_dir_key_files"],
+        serde_json::json!(["validator_keys.json"])
+    );
     assert_eq!(custody["signer_double_sign_protection"], true);
 
     // Persist through an actual process death and restart, independently of

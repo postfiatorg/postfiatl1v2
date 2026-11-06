@@ -142,6 +142,10 @@ the key file, and passes `--finality-signer-socket
 reports `validator_signer_same_user` when both units run as one user.
 It also reports `signer_double_sign_protection`; false or absent yields
 `validator_signer_guard_unavailable`. RPC startup refuses an unguarded signer.
+In socket mode `data_dir_key_files` lists `validator_keys.json` or
+`node/validator_keys.json` left in the serving data directory, and any entry
+yields `validator_key_copy_in_data_dir`: rpc-serve could read that copy and sign
+outside the guard. Move the key, do not copy it.
 
 Keep guard state outside the RPC user's data directory, for example
 `/var/lib/postfiat-signer/validator-0/guard`, and allow that path in the signer's
@@ -151,6 +155,10 @@ the explicit two-user/socket transition below.
 
 The Python deployment check reads process identities, executable hashes, the
 actual open database, custody permissions and a fresh `private_readiness` reply.
+It fails when a file named `validator_keys.json`, or named like the signer's
+key files, exists anywhere under the data directory, and when the rpc or gateway
+process holds any capability (`CapEff`, `CapPrm` or `CapAmb` nonzero, for example
+`CAP_DAC_READ_SEARCH` granted by systemd `AmbientCapabilities`).
 It requires permission to inspect all three processes, normally root:
 
 ```sh
