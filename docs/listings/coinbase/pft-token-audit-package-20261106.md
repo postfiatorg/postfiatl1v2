@@ -183,8 +183,8 @@ OpenZeppelin v5.7.0 or, for `pragma`, span both.
 | Contract | Sourcify | Blockscout | Basescan |
 |---|---|---|---|
 | Test token `0x18fE…7D92` | `exact_match` (creation and runtime), verified 2026-10-28 | verified, `PFTToken`, v0.8.24+commit.e11b9ed9, 200 runs, cancun | record: "not verified (no key)"; not read today |
-| Rehearsal lock `0xFb6C…4D73` | not found (HTTP 404) | `is_verified: false` | no record field; not read today |
-| Rehearsal token `0x90cE…EacF0` | not found (HTTP 404) | verified, `PFTToken`, by Blockscout's bytecode database (`is_verified_via_eth_bytecode_db`) at 10:27 UTC today, on the first read | no record field; not read today |
+| Rehearsal lock `0xFb6C…4D73` | `exact_match` (creation and runtime), verified 2026-11-06T11:48:59Z | fully verified, `PFTLockV1`, v0.8.24+commit.e11b9ed9, 200 runs, cancun, at 11:49:11 UTC | record: "not verified (no key)"; not read today |
+| Rehearsal token `0x90cE…EacF0` | `exact_match` (creation and runtime), verified 2026-11-06T11:48:48Z | fully verified, `PFTToken`, by Blockscout's bytecode database (`is_verified_via_eth_bytecode_db`) at 10:27:14 UTC | record: "not verified (no key)"; not read today |
 
 ## 5. Deploy procedure and order
 
