@@ -5,9 +5,8 @@ Copy into a release's `DEPLOY-SHEET.md` when its packet is staged with
 rules are on the [operator page](public-rpc-operator-policy.md#two-user-units).
 Replace `<validator>`, `<release>`, `<chain-id>`, `<genesis-hash>` and `N`.
 
-Until `transport-validator-serve` signs through the signer, its unit keeps
-`<data-dir>/validator_keys.json` and readiness reports
-`validator_key_copy_in_data_dir`. Record that reason; do not copy the key back.
+The signer serves both rpc-serve and `transport-validator-serve`, so the key
+moves to the signer's directory and no copy stays in the data directory.
 
 ## Per validator (operator's go)
 
@@ -21,11 +20,17 @@ Until `transport-validator-serve` signs through the signer, its unit keeps
     install -d -m 0755 /etc/postfiat/signer
     echo "POSTFIAT_SIGNER_ALLOW_PEER_UID=$(id -u postfiat)" > /etc/postfiat/signer/<validator>.env
     install -d -o postfiat-signer -g postfiat-signer-clients -m 0700 /var/lib/postfiat-signer/<validator>
-    install -o postfiat-signer -m 0600 /var/lib/postfiat/<validator>/validator_keys.json \
-      /var/lib/postfiat-signer/<validator>/validator_keys.json
     ```
 
-- [ ] Stop the old units: `systemctl stop postfiat-<validator>-rpc.service`.
+- [ ] Stop the old units: `systemctl stop postfiat-<validator>-rpc.service postfiat-<validator>.service`.
+- [ ] Move the key (no copy stays in the data directory):
+
+    ```sh
+    install -o postfiat-signer -m 0600 /var/lib/postfiat/<validator>/validator_keys.json \
+      /var/lib/postfiat-signer/<validator>/validator_keys.json
+    shred -u /var/lib/postfiat/<validator>/validator_keys.json
+    ```
+
 - [ ] Floor `N`: the larger of the store's finalized height plus one
   (`status`) and the highest height in `block_proposal_vote_locks` plus one.
   If the old signer may have voted or timed out on a height not final yet,
@@ -42,10 +47,8 @@ Until `transport-validator-serve` signs through the signer, its unit keeps
       --allow-peer-uid "$(id -u postfiat)"
     ```
 
-- [ ] Remove the data-directory key only after the transport validator no
-  longer reads it (not yet: see above).
 - [ ] `systemctl daemon-reload`, start `postfiat-<validator>-signer.service`,
-  then `postfiat-<validator>-rpc.service`.
+  then `postfiat-<validator>.service` and `postfiat-<validator>-rpc.service`.
 - [ ] Deployment check (`python -m postfiat_ops.validator_signer_check`, the
   operator page's command) and its `report.json` recorded.
 - [ ] `private_readiness`: record `custody_reasons`.

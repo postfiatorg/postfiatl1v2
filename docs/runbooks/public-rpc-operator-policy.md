@@ -183,9 +183,9 @@ secret scan. Governance readiness and rollout approval are separate.
 #### Two-user units
 
 `deployment-validator-units-stage --signer-shape two-user` writes the two-user
-shape into the release packet (`deployment_signer_unit` and
-`deployment_rpc_unit` in `crates/node/src/batch_snapshot.rs`). Without the
-option the packet keeps the single-user units, byte for byte.
+shape into the release packet (`deployment_signer_unit`, `deployment_rpc_unit`
+and `deployment_transport_unit` in `crates/node/src/batch_snapshot.rs`).
+Without the option the packet keeps the single-user units, byte for byte.
 
 - `postfiat-<validator>-signer.service` runs `validator-signer-serve` as
   `postfiat-signer` (group `postfiat-signer-clients`) with the key file and the
@@ -194,21 +194,34 @@ option the packet keeps the single-user units, byte for byte.
   `/run/postfiat-signer/<validator>.sock` (directory `0750`). It allows the uid
   in `POSTFIAT_SIGNER_ALLOW_PEER_UID`, read from the host file
   `/etc/postfiat/signer/<validator>.env`. It has no capabilities and no
-  network, and it never initializes the guard.
+  network, and it never initializes the guard. One signer process serves both
+  clients, rpc-serve and the transport validator: both run as `postfiat`, so
+  the one allowed uid covers them, and the signer already accepts every
+  context they sign (below).
 - `postfiat-<validator>-rpc.service` is the single-user rpc unit with
   `--finality-signer-socket` instead of both key-file flags,
   `SupplementaryGroups=postfiat-signer-clients`, and `Requires=`/`After=` the
   signer unit.
+- `postfiat-<validator>.service` is the single-user transport unit with
+  `transport-validator-serve --finality-signer-socket` instead of
+  `--unsafe-devnet-file-signer --key-file <data-dir>/validator_keys.json`, and
+  the same group and ordering.
 
 The signer unit is not in the signed bindings; its binary is checked by the
 same `deployment-manifest-verify` before it starts.
 
-The transport validator unit is unchanged: `transport-validator-serve` still
-reads `<data-dir>/validator_keys.json` with `--unsafe-devnet-file-signer`. While
-it does, that copy stays in rpc-serve's data directory, so readiness reports
-`validator_key_copy_in_data_dir` and the deployment check fails. The two-user
-shape reaches `ready` only once the transport validator signs through the
-signer too.
+`transport-validator-serve --finality-signer-socket PATH` replaces both
+`--key-file` and `--unsafe-devnet-file-signer` (`validator_signer_flags_conflict`
+with either). Before it binds, the signer must answer and hold the registered
+key, and in socket mode the process reads no key file
+(`validator_signer_file_refused_in_socket_mode`). Every signature it makes goes
+through the signer: block votes and proposal signatures, consensus-v2
+proposals and prepare and precommit votes (the guard decodes these), and the
+transport envelope authentication on its responses, which the guard passes
+through by design. The key therefore moves out of the data directory, and
+readiness no longer reports `validator_key_copy_in_data_dir`
+(`crates/node/tests/validator_signer_two_user_units_process.rs` starts the
+three processes from the generated units on a local chain).
 
 Order on a validator:
 
@@ -216,13 +229,13 @@ Order on a validator:
    the group, write `/etc/postfiat/signer/<validator>.env` with
    `POSTFIAT_SIGNER_ALLOW_PEER_UID=$(id -u postfiat)`, and put the key file
    at `/var/lib/postfiat-signer/<validator>/validator_keys.json` (`0600`,
-   owned by `postfiat-signer`). It becomes a move once the transport
-   validator no longer reads the data-directory copy.
+   owned by `postfiat-signer`). This is a move: no copy stays in the data
+   directory.
 2. Stop the old rpc unit, choose the floor `N` by the rule above, and
    initialize the guard once as `postfiat-signer`: the signer unit's
    `ExecStart` with `--initialize-state --min-height N` and a throwaway
    `--socket` under the signer's directory. Stop it after its ready line.
-3. Start the signer unit, then the rpc unit.
+3. Start the signer unit, then the transport and rpc units.
 4. Run the deployment check below.
 5. Read `private_readiness`.
 
