@@ -22,6 +22,7 @@ pub(super) fn lane_genesis(chain_id: &str, validator_count: u32) -> Genesis {
             committee_epoch: 2,
             committee_root: format!("0x{}", "5e".repeat(48)),
             confirmation_depth: 64,
+            exports_enabled: false,
         },
     }]);
     genesis.validate().expect("valid lane genesis");
@@ -1628,6 +1629,8 @@ mod release_path {
             lane_id: Some("base-erc20".to_string()),
             release_cursor: cursor,
             release_limit: limit,
+            export_cursor: None,
+            export_limit: None,
         })?;
         assert_eq!(report.lane_count, 1);
         Ok(report.lanes.into_iter().next().expect("lane"))
@@ -1718,7 +1721,7 @@ mod release_path {
         let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
         let lane = ledger.external_lanes[0].clone();
         assert!(lane.pruned_release_count > 0, "{lane:?}");
-        assert_eq!(lane.release_count(), 5);
+        assert_eq!(lane.release_count(), Some(5));
         assert_eq!(lane.released_lock_nonces, (1..=5_u64).collect());
         assert_eq!(lane.released_atoms, amounts.iter().sum::<u64>());
         assert_eq!(
@@ -1796,7 +1799,7 @@ mod release_path {
         let lane = ledger.external_lanes[0].clone();
         assert!(lane.pruned_release_count > 0, "{lane:?}");
         assert!(lane.pruned_release_history_root.is_some(), "{lane:?}");
-        assert_eq!(lane.release_count(), 5);
+        assert_eq!(lane.release_count(), Some(5));
         let info = lane_info(&chain.data_dir);
         assert_eq!(info.pruned_release_count, lane.pruned_release_count);
 

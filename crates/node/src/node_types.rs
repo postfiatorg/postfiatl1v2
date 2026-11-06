@@ -2627,6 +2627,9 @@ pub struct ExternalLaneInfoOptions {
     pub release_cursor: Option<u64>,
     /// Records per page, 1 to `EXTERNAL_LANE_RELEASE_PAGE_SIZE` (the default).
     pub release_limit: Option<usize>,
+    /// The same paging over the export packets, by export nonce.
+    pub export_cursor: Option<u64>,
+    pub export_limit: Option<usize>,
 }
 
 /// `external_lane_info`: each genesis external lane's configuration, live
@@ -2672,6 +2675,19 @@ pub struct ExternalLaneInfoRow {
     pub releases: Vec<ExternalLaneReleaseEntry>,
     /// Cursor of the next older page; absent on the last stored page.
     pub next_release_cursor: Option<u64>,
+    /// Every export ever applied (`state.next_export_nonce`), those pruned
+    /// behind the finalized height, and the hash chain over all of them.
+    #[serde(default)]
+    pub export_count: u64,
+    #[serde(default)]
+    pub pruned_export_count: u64,
+    #[serde(default)]
+    pub export_history_root: Option<String>,
+    /// One page of stored export packets, newest first.
+    #[serde(default)]
+    pub exports: Vec<ExternalLaneExportEntry>,
+    #[serde(default)]
+    pub next_export_cursor: Option<u64>,
 }
 
 /// The committee a lane names at the next block: its epoch and registered
@@ -2689,6 +2705,16 @@ pub struct ExternalLaneReleaseEntry {
     /// Position in the lane's release history, from 0 in application order.
     pub sequence: u64,
     pub record: postfiat_types::ExternalLaneReleaseRecord,
+}
+
+/// A stored export packet with what a Base release consumes: its digest and
+/// its withdrawal-id and burn-transaction commitments, `0x` and 96 hex digits.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalLaneExportEntry {
+    pub packet: postfiat_types::ExternalLaneExportPacket,
+    pub packet_digest: String,
+    pub withdrawal_id_commitment: String,
+    pub burn_tx_commitment: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

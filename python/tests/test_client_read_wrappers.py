@@ -251,6 +251,50 @@ class RemainingReadWrapperTests(unittest.TestCase):
                 client.external_lane_info(release_limit=asked)
             call.assert_called_once_with("external_lane_info", {"release_limit": sent})
 
+    def test_external_lane_info_sends_the_export_page_parameters(self) -> None:
+        client = _client()
+        with mock.patch.object(client, "_call", return_value={"lanes": []}) as call:
+            client.external_lane_info("base-erc20", export_cursor=4, export_limit=2)
+        call.assert_called_once_with(
+            "external_lane_info",
+            {"lane_id": "base-erc20", "export_cursor": 4, "export_limit": 2},
+        )
+        with self.assertRaisesRegex(ValueError, "export_cursor must be a non-negative integer"):
+            client.external_lane_info(export_cursor=-1)
+
+    def test_external_lane_export_coverage_reads_the_export_fields(self) -> None:
+        row = {
+            "lane_id": "base-erc20",
+            "state": {"exported_atoms": 900, "next_export_nonce": 5},
+            "export_count": 5,
+            "pruned_export_count": 2,
+            "export_history_root": "0x" + "cd" * 48,
+            "exports": [],
+            "next_export_cursor": None,
+        }
+        self.assertEqual(
+            PostFiatRpcClient.external_lane_export_coverage(row),
+            {
+                "lane_id": "base-erc20",
+                "export_count": 5,
+                "pruned_export_count": 2,
+                "stored_export_count": 3,
+                "exported_atoms": 900,
+                "export_history_root": "0x" + "cd" * 48,
+            },
+        )
+        # A row from a node before exports reads as no export.
+        before = PostFiatRpcClient.external_lane_export_coverage({"lane_id": "base-erc20", "state": {}})
+        self.assertEqual((before["export_count"], before["exported_atoms"]), (0, 0))
+        with self.assertRaises(RpcProtocolError):
+            PostFiatRpcClient.external_lane_export_coverage(
+                {"state": {"next_export_nonce": 2}, "export_count": 1}
+            )
+        with self.assertRaises(RpcProtocolError):
+            PostFiatRpcClient.external_lane_export_coverage(
+                {"state": {"next_export_nonce": 1}, "export_count": 1, "pruned_export_count": 2}
+            )
+
     def test_external_lane_info_returns_the_governed_cap_and_committee(self) -> None:
         client = _client()
         release_cap = {

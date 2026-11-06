@@ -2573,6 +2573,15 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
             format!("external lane release limit must be between 1 and {EXTERNAL_LANE_RELEASE_PAGE_SIZE}"),
         ));
     }
+    let export_limit = options
+        .export_limit
+        .unwrap_or(EXTERNAL_LANE_RELEASE_PAGE_SIZE);
+    if !(1..=EXTERNAL_LANE_RELEASE_PAGE_SIZE).contains(&export_limit) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("external lane export limit must be between 1 and {EXTERNAL_LANE_RELEASE_PAGE_SIZE}"),
+        ));
+    }
     let mut lanes = Vec::new();
     for config in genesis.external_lanes() {
         if options.lane_id.as_ref().is_some_and(|id| id != &config.id) {
@@ -2631,7 +2640,12 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
         // Sequences count every release; the stored records follow the
         // pruned ones, so a cursor at or below the pruned count is empty.
         let pruned = state.pruned_release_count;
-        let release_count = state.release_count();
+        let release_count = state.release_count().ok_or_else(|| {
+            invalid(format!(
+                "external lane `{}` release count overflows u64",
+                state.lane_id
+            ))
+        })?;
         let records = std::mem::take(&mut state.releases);
         let end = options.release_cursor.map_or(records.len(), |cursor| {
             usize::try_from(cursor.saturating_sub(pruned))
@@ -2648,7 +2662,32 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
                 record: record.clone(),
             })
             .collect();
+        let pruned_exports = state.pruned_export_count;
+        let packets = std::mem::take(&mut state.exports);
+        let export_end = options.export_cursor.map_or(packets.len(), |cursor| {
+            usize::try_from(cursor.saturating_sub(pruned_exports))
+                .unwrap_or(usize::MAX)
+                .min(packets.len())
+        });
+        let export_start = export_end.saturating_sub(export_limit);
+        let hex = |digest: [u8; 48]| format!("0x{}", bytes_to_hex(&digest));
+        let mut exports = Vec::new();
+        for packet in packets[export_start..export_end].iter().rev() {
+            exports.push(ExternalLaneExportEntry {
+                packet_digest: hex(packet.digest().map_err(invalid)?),
+                withdrawal_id_commitment: hex(packet
+                    .withdrawal_id_commitment(&genesis.chain_id)
+                    .map_err(invalid)?),
+                burn_tx_commitment: hex(packet.burn_tx_commitment(&genesis.chain_id)),
+                packet: packet.clone(),
+            });
+        }
         lanes.push(ExternalLaneInfoRow {
+            export_count: state.next_export_nonce,
+            pruned_export_count: pruned_exports,
+            export_history_root: state.export_history_root.clone(),
+            exports,
+            next_export_cursor: (export_start > 0).then_some(pruned_exports + export_start as u64),
             lane_id: config.id.clone(),
             config: config.clone(),
             remainder_atoms,

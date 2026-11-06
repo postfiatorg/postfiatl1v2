@@ -399,6 +399,8 @@ def call_method(client: PostFiatRpcClient, args: argparse.Namespace) -> Any:
             args.lane_id,
             release_cursor=args.release_cursor,
             release_limit=args.release_limit,
+            export_cursor=args.export_cursor,
+            export_limit=args.export_limit,
         )
     if method == "fx_fix_info":
         return client.fx_fix_info(require_arg(args, "fix_packet_hash", method))
@@ -551,6 +553,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lane-id")
     parser.add_argument("--release-cursor", type=int)
     parser.add_argument("--release-limit", type=int)
+    parser.add_argument("--export-cursor", type=int)
+    parser.add_argument("--export-limit", type=int)
     parser.add_argument("--fix-packet-hash")
     parser.add_argument("--reservation-id")
     parser.add_argument("--base-atoms", type=int)
