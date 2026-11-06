@@ -818,7 +818,7 @@ const EXAMPLE_LANE_GENESIS_HASH: &str =
     "03f36eb201cca42c932b04161ea058e3821fd1cb0948a775a2e4431d8cfd5960bf59c70ec3105f7e7dff502d1b1109b8";
 
 /// `lane_genesis` with the Base Sepolia rehearsal lock and token as its source,
-/// as `crates/pft-token-contracts/deployments/pft-lock-base-84532` records them.
+/// as `crates/pft-token-contracts/deployments/pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json` records them.
 fn sepolia_rehearsal_lane_genesis() -> Genesis {
     let mut genesis = lane_genesis("postfiat-lane-sepolia-example", 1);
     let policy = &mut genesis.external_lanes.as_mut().expect("lanes")[0].policy;
@@ -842,7 +842,7 @@ fn init_from_lane_genesis_file_matches_the_in_code_lane_genesis() {
     assert_eq!(genesis.to_json().expect("serialize"), EXAMPLE_LANE_GENESIS);
     assert_eq!(genesis_hash(&genesis), EXAMPLE_LANE_GENESIS_HASH);
     let record: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../pft-token-contracts/deployments/pft-lock-base-84532/deployment.json"
+        "../../../pft-token-contracts/deployments/pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json"
     ))
     .expect("lock deployment record");
     let policy = &genesis.external_lanes()[0].policy;

@@ -320,11 +320,20 @@ replayed withdrawal or burn commitment and an amount above
 only as long as the finality verifier accepts no export proof, so the
 verifier's deployment and qualification on Base decide when Phase 3 opens.
 
-On Base Sepolia the rehearsal lock `0xE36e7Fc384564419187546c19719A5654266dE0B`
-runs in test mode against a stand-in verifier, the tests' `MockLockVerifier`,
-whose `verifyAndConsume` always reverts, so its release path cannot pay; it
-predates the minimum lock amount, and the next rehearsal archives it (below,
-`deployments/pft-lock-base-84532/deployment.json`). No lock contract and no
+On Base Sepolia the rehearsal lock `0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73`
+(2026-11-06, `deployments/pft-lock-base-84532/deployment.json`) runs in test
+mode on the disposable rehearsal token `0x90cE303356D80eCBE359FAF061C84130F40EacF0`
+(`deployments/pft-token-rehearsal-base-84532/deployment.json`) against the
+same stand-in verifier, the tests' `MockLockVerifier`, whose
+`verifyAndConsume` always reverts, so its release path cannot pay; its
+minimum is 10 atoms and its cap 1,000,000 PFT, and it holds the first real
+Lock (nonce 0, 1 PFT; `docs/review/base-sepolia-lock-rehearsal-20261106/part-1.json`).
+Both records' `source_commit` (`1c5bf4c6f`) was backfilled: the test-mode runs
+did not pass `PFT_TOKEN_SOURCE_COMMIT` or `PFT_LOCK_SOURCE_COMMIT`, which
+test-mode runs must pass too.
+The earlier rehearsal lock `0xE36e7Fc384564419187546c19719A5654266dE0B`, which
+predates the minimum and never saw a Lock, is archived as
+`deployments/pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json`. No lock contract and no
 PFTL finality verifier are deployed on Base mainnet, and mainnet deployment
 waits for the audit (design note, section 8).
 
@@ -473,13 +482,15 @@ optimizer, runs, `evm_version`, `bytecode_hash`), read from the artifact's
 transaction is mined, so `tx_hash` and `block_number` are `pending` until copied
 from `broadcast/DeployPFTLock.s.sol/<chain id>/run-latest.json`.
 
-The Base Sepolia rehearsal lock `0xE36e7Fc384564419187546c19719A5654266dE0B`
-(`deployments/pft-lock-base-84532/deployment.json`) predates the minimum: it
-accepts 1-atom Locks. The record path is fixed per chain id, so the next
-rehearsal first archives the existing record under a name of its own (as for a
-reverted run below) to free that path, and deploys a new lock from a fresh
-deployer, since the script refuses an existing record (`RecordExists`) and a
-used deployer (`DeployerAlreadyUsed`).
+The record path is fixed per chain id, so a new rehearsal first archives the
+existing record under a name of its own (as for a reverted run below) to free
+that path, and deploys a new lock from a fresh deployer, since the script
+refuses an existing record (`RecordExists`) and a used deployer
+(`DeployerAlreadyUsed`). The 2026-11-06 rehearsal did so: the lock
+`0xE36e7Fc384564419187546c19719A5654266dE0B`, which accepted 1-atom Locks, is
+archived as `deployments/pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json`,
+and its test-mode broadcasts' records were copied from `cache/deploy-test/`
+with `tx_hash` and `block_number` from `broadcast/`.
 
 If the broadcast fails or its outcome is unclear (a timeout, a dropped
 connection, an unknown receipt), remember that the record and its code checks (`DeployedCodeMismatch`, `LockStateMismatch`) are

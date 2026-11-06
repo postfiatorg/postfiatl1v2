@@ -1,0 +1,261 @@
+{
+  "schema": "postfiat-base-sepolia-lock-rehearsal-part-1-v1",
+  "date": "2026-11-06",
+  "network": {
+    "name": "Base Sepolia",
+    "chain_id": 84532,
+    "rpc": "https://sepolia.base.org",
+    "gas_price_wei_at_preflight": 6000000
+  },
+  "source_commit": "1c5bf4c6fc13aea6bbd76457694a781898133591",
+  "preflight": {
+    "chain_id": 84532,
+    "holder_balance_wei": "2000126000000190",
+    "gas_price_wei": 6000000,
+    "old_lock": "0xE36e7Fc384564419187546c19719A5654266dE0B",
+    "old_lock_next_nonce": 0,
+    "forge_build": "ok",
+    "forge_test": "199 passed, 0 failed (9 suites)"
+  },
+  "accounts": {
+    "holder": {
+      "address": "0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17",
+      "credentials": "the holder's keystore and password file, outside the repository",
+      "role": "disposable rehearsal holder; deployed nothing today",
+      "history": "one-time deployer of the 2026-10-28 lock 0xE36e7Fc384564419187546c19719A5654266dE0B, whose key the 2026-10-26/28 record calls retired",
+      "status": "active: the funded rehearsal holder for the coming Base Sepolia rehearsals (the deployment-order dry run of the Phase 3 design, further Locks); revived on 2026-11-06 and funded by the project on 2026-11-05 with 0.002 test ETH (internal call from 0x9a33A96c2a718555a8996AcCbf37c8999E497D50 in transaction 0x853cad0848c77d75beae6a487a19d9b16b8071237491a6dd8d53240973484d30); after part 2 it holds 1,985,902,603,794,116 wei at nonce 6",
+      "retirement": "when the Base Sepolia rehearsals end: the key is retired and its leftover test ETH is returned to the funding address 0x9a33A96c2a718555a8996AcCbf37c8999E497D50, recorded then"
+    },
+    "token_deployer": {
+      "address": "0x8ffA5Dea2EEa08bC2c3250af664240849cab70Da",
+      "keystore_name": "pft-sepolia-token-deployer-20261106",
+      "role": "one-time deployer of the token (nonce 0)",
+      "status": "retired",
+      "nonce_after": 2,
+      "dust_left_wei": "99908"
+    },
+    "lock_deployer": {
+      "address": "0xE57f8cbBdc05834f0CCdb8fEf13009bf9dAdAd25",
+      "keystore_name": "pft-sepolia-lock-deployer-20261106",
+      "role": "one-time deployer of the lock (nonce 0)",
+      "status": "retired",
+      "nonce_after": 2,
+      "dust_left_wei": "99908"
+    },
+    "pftl_recipient": {
+      "address": "pfb2f06f1346000c42db0246a0fcf6ce0356662eb6",
+      "credentials": "the recipient's key, outside the repository"
+    }
+  },
+  "token": {
+    "address": "0x90cE303356D80eCBE359FAF061C84130F40EacF0",
+    "name": "PFT Rehearsal 20261106",
+    "symbol": "PFTR",
+    "decimals": 6,
+    "total_supply_units": "100000000000000000",
+    "total_supply_pft": "100000000000",
+    "treasury": "0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17",
+    "holder_balance_after_deploy_units": "100000000000000000",
+    "runtime_code_hash": "0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b",
+    "record": "crates/pft-token-contracts/deployments/pft-token-rehearsal-base-84532/deployment.json",
+    "deploy_tx": {
+      "tx_hash": "0x2eb1de8f979cead8f3bd3c535292698d91c301924bbdca1378f2c2125e81b4bd",
+      "block_number": 55132270,
+      "block_hash": "0x826fa913b8cfd9f0ecef5d591716c49ad926eb3faa7e7c0dd75fcd141ce940d0",
+      "status": 1,
+      "sender": "0x8ffa5dea2eea08bc2c3250af664240849cab70da",
+      "to": null,
+      "contract_address": "0x90ce303356d80ecbe359faf061c84130f40eacf0",
+      "gas_used": 947837,
+      "effective_gas_price_wei": 6000000,
+      "l1_fee_wei": 2964,
+      "fee_wei": 5687022002964
+    }
+  },
+  "lock": {
+    "address": "0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73",
+    "mode": "test",
+    "token": "0x90cE303356D80eCBE359FAF061C84130F40EacF0",
+    "finality_verifier": "0x531659D05d86C5C4cE6fdc3C473b246C294f2Ec9",
+    "finality_verifier_note": "stand-in: the tests' MockLockVerifier, verifyAndConsume always reverts; release path cannot pay",
+    "max_lock_amount_units": "1000000000000",
+    "max_lock_amount_pft": "1000000",
+    "minimum_lock_amount_units": "10",
+    "next_nonce_after_deploy": 0,
+    "runtime_code_hash": "0x57bc7971e6878bed2cd4efc0e63020448d4cd9493f05ecde6ddc37fda90b871c",
+    "record": "crates/pft-token-contracts/deployments/pft-lock-base-84532/deployment.json",
+    "deploy_tx": {
+      "tx_hash": "0x06525cebdf02f9ba9e8c1ae938624b4fa567e11aa237674374ec36dde95a0602",
+      "block_number": 55132483,
+      "block_hash": "0xaf1f5355da90b8ddc28d6d783a12f6474e75002af4f01a4fed4da862409a13d1",
+      "status": 1,
+      "sender": "0xe57f8cbbdc05834f0ccdb8fef13009bf9dadad25",
+      "to": null,
+      "contract_address": "0xfb6cf3d7e759cb3130c094c1d7264619ece74d73",
+      "gas_used": 1134497,
+      "effective_gas_price_wei": 6000000,
+      "l1_fee_wei": 2726,
+      "fee_wei": 6806982002726
+    }
+  },
+  "the_lock": {
+    "tx_hash": "0x599e15fbc298649c741379df2b7179fe08a8a1a0f4e8a5effe28de6f09b5c859",
+    "block_number": 55132949,
+    "block_hash": "0xfaac31ef19b9ed183b7bc5fb6ade195b6e74cc9132a86c26b3fad381af8070d7",
+    "block_timestamp": 1793948458,
+    "status": 1,
+    "approve_tx": {
+      "tx_hash": "0xd6390fcf54cdc45d623ae687eafd20ab42e53dcb8de90f4043eb90d176e5340f",
+      "block_number": 55132945,
+      "block_hash": "0xe7c1c232b04f7ae05784a41260f6d650f8e9b4d530164f4345e30262b399833b",
+      "status": 1,
+      "sender": "0x6e4e8e0ed73f807d8e8479cb8f25d87ce8811e17",
+      "to": "0x90ce303356d80ecbe359faf061c84130f40eacf0",
+      "contract_address": null,
+      "gas_used": 46331,
+      "effective_gas_price_wei": 6000000,
+      "l1_fee_wei": 92,
+      "fee_wei": 277986000092
+    },
+    "locked_event": {
+      "emitter": "0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73",
+      "log_index": 4,
+      "nonce": 0,
+      "holder": "0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17",
+      "amount_units": "1000000",
+      "pftl_recipient": "pfb2f06f1346000c42db0246a0fcf6ce0356662eb6",
+      "pftl_recipient_utf8_hex": "0x706662326630366631333436303030633432646230323436613066636636636530333536363632656236",
+      "pftl_recipient_hash": "0xa443f962f419c2ee6961432119512847119ec562e70b1f760d6fac7e81d6fff4"
+    },
+    "token_transfer_event": {
+      "emitter": "0x90cE303356D80eCBE359FAF061C84130F40EacF0",
+      "log_index": 5,
+      "from": "0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17",
+      "to": "0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73",
+      "amount_units": "1000000"
+    },
+    "read_back": {
+      "lockRecord(0)": {
+        "holder": "0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17",
+        "amount": "1000000",
+        "pftlRecipientHash": "0xa443f962f419c2ee6961432119512847119ec562e70b1f760d6fac7e81d6fff4"
+      },
+      "totalLocked": "1000000",
+      "nextNonce": 1,
+      "lock_token_balance_units": "1000000",
+      "holder_token_balance_units": "99999999999000000"
+    },
+    "finality_at_record_time": {
+      "finalized_block": 55127399,
+      "latest_block": 55133176,
+      "note": "part 2 starts once the finalized block reaches the Lock block"
+    }
+  },
+  "funding": {
+    "token_deployer": {
+      "tx_hash": "0x4388c2d0147fb03eacfe668107d196924a44a5c646be8a2935214c168d29b8c3",
+      "block_number": 55131972,
+      "block_hash": "0x3cd7186bb69659c7f58b78bbe96c275970ac03ad97f9e5cf9ca19b6637cef7f6",
+      "status": 1,
+      "sender": "0x6e4e8e0ed73f807d8e8479cb8f25d87ce8811e17",
+      "to": "0x8ffa5dea2eea08bc2c3250af664240849cab70da",
+      "contract_address": null,
+      "gas_used": 21000,
+      "effective_gas_price_wei": 6000000,
+      "l1_fee_wei": 94,
+      "fee_wei": 126000000094
+    },
+    "lock_deployer": {
+      "tx_hash": "0x72555048b0277097c5a0964e143b8929986fb2664a84758432d9eeda1a4b3025",
+      "block_number": 55131976,
+      "block_hash": "0x8ea04ba0bc71f9980622a453ee1a62ce07a8968f286be87e58053415fdc2284d",
+      "status": 1,
+      "sender": "0x6e4e8e0ed73f807d8e8479cb8f25d87ce8811e17",
+      "to": "0xe57f8cbbdc05834f0ccdb8fef13009bf9dadad25",
+      "contract_address": null,
+      "gas_used": 21000,
+      "effective_gas_price_wei": 6000000,
+      "l1_fee_wei": 94,
+      "fee_wei": 126000000094
+    },
+    "amount_each_eth": "0.0004"
+  },
+  "returns": {
+    "token_deployer": {
+      "tx_hash": "0x6f93d4312215c71d9a41f0c0a4382fbe98f3174a117781754c0101fd901d554a",
+      "block_number": 55133083,
+      "block_hash": "0xb448c3ff462da4b20ada81bee2750386f515720df5e6b0e915e3fa167b2408bf",
+      "status": 1,
+      "sender": "0x8ffa5dea2eea08bc2c3250af664240849cab70da",
+      "to": "0x6e4e8e0ed73f807d8e8479cb8f25d87ce8811e17",
+      "contract_address": null,
+      "gas_used": 21000,
+      "effective_gas_price_wei": 6500000,
+      "l1_fee_wei": 92,
+      "fee_wei": 136500000092
+    },
+    "lock_deployer": {
+      "tx_hash": "0x552405580e57c6ebcf0a72b517c139a31b16236e986025c6244afbd15b107f73",
+      "block_number": 55133098,
+      "block_hash": "0x6f53148fc21d170ff964cba638a8cb2cd43930e99603afc81b77ce36e64fbf68",
+      "status": 1,
+      "sender": "0xe57f8cbbdc05834f0ccdb8fef13009bf9dadad25",
+      "to": "0x6e4e8e0ed73f807d8e8479cb8f25d87ce8811e17",
+      "contract_address": null,
+      "gas_used": 21000,
+      "effective_gas_price_wei": 6500000,
+      "l1_fee_wei": 92,
+      "fee_wei": 136500000092
+    }
+  },
+  "gas": {
+    "total_fees_wei": "14223396006258",
+    "total_fees_eth": "0.000014223396006258",
+    "per_tx_fee_wei": {
+      "fund_token_deployer": "126000000094",
+      "fund_lock_deployer": "126000000094",
+      "deploy_token": "5687022002964",
+      "deploy_lock": "6806982002726",
+      "approve": "277986000092",
+      "lock": "926406000104",
+      "return_token_deployer": "136500000092",
+      "return_lock_deployer": "136500000092"
+    }
+  },
+  "balances": {
+    "holder_before_wei": "2000126000000190",
+    "holder_after_wei": "1985902603794116",
+    "token_deployer_before_wei": "0",
+    "token_deployer_after_wei": "99908",
+    "lock_deployer_before_wei": "0",
+    "lock_deployer_after_wei": "99908"
+  },
+  "commands": [
+    "openssl rand -base64 24 > ~/.postfiat/<keystore name>.password (mode 600), then cast wallet new ~/.foundry/keystores <keystore name> with that password, for pft-sepolia-token-deployer-20261106 and pft-sepolia-lock-deployer-20261106",
+    "cast send 0x8ffA5Dea2EEa08bC2c3250af664240849cab70Da --value 0.0004ether --rpc-url https://sepolia.base.org --keystore <the holder's keystore, outside the repository> --password-file <the holder's password file, outside the repository>",
+    "cast send 0xE57f8cbBdc05834f0CCdb8fEf13009bf9dAdAd25 --value 0.0004ether --rpc-url https://sepolia.base.org --keystore <the holder's keystore, outside the repository> --password-file <the holder's password file, outside the repository>",
+    "PFT_TOKEN_CHAIN_ID=84532 PFT_TOKEN_NAME='PFT Rehearsal 20261106' PFT_TOKEN_SYMBOL=PFTR PFT_TOKEN_TOTAL_SUPPLY=100000000000000000 PFT_TOKEN_TOTAL_SUPPLY_PFT=100000000000 PFT_TOKEN_TREASURY=0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17 PFT_TOKEN_ALLOW_EOA_TREASURY=1 forge script script/DeployPFTToken.s.sol:DeployPFTToken --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-token-deployer-20261106 --password-file ~/.postfiat/pft-sepolia-token-deployer-20261106.password --sender 0x8ffA5Dea2EEa08bC2c3250af664240849cab70Da --broadcast",
+    "PFT_LOCK_CHAIN_ID=84532 PFT_LOCK_TOKEN=0x90cE303356D80eCBE359FAF061C84130F40EacF0 PFT_LOCK_TOKEN_CODEHASH=0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b PFT_LOCK_ALLOW_TEST_TOKEN=1 PFT_LOCK_VERIFIER=0x531659D05d86C5C4cE6fdc3C473b246C294f2Ec9 PFT_LOCK_ALLOW_TEST_VERIFIER=1 PFT_LOCK_MINIMUM_LOCK_AMOUNT=10 PFT_LOCK_MAX_LOCK_AMOUNT=1000000000000 PFT_LOCK_MAX_LOCK_AMOUNT_PFT=1000000 forge script script/DeployPFTLock.s.sol:DeployPFTLock --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-lock-deployer-20261106 --password-file ~/.postfiat/pft-sepolia-lock-deployer-20261106.password --sender 0xE57f8cbBdc05834f0CCdb8fEf13009bf9dAdAd25 --broadcast",
+    "postfiat-node wallet-keygen --chain-id postfiat-lane-sepolia-example --master-seed-hex-file <seed file> --account-index 0 --key-file <key file> --backup-file <backup file>",
+    "cast send 0x90cE303356D80eCBE359FAF061C84130F40EacF0 'approve(address,uint256)' 0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73 1000000 --rpc-url https://sepolia.base.org --keystore <the holder's keystore, outside the repository> --password-file <the holder's password file, outside the repository>",
+    "cast send 0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73 'lock(uint64,bytes)' 1000000 $(cast from-utf8 pfb2f06f1346000c42db0246a0fcf6ce0356662eb6) --rpc-url https://sepolia.base.org --keystore <the holder's keystore, outside the repository> --password-file <the holder's password file, outside the repository>",
+    "cast send 0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17 --value <balance - 21000 * 6500000 - 100000> --legacy --gas-price 6500000 --gas-limit 21000 --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-token-deployer-20261106 --password-file ~/.postfiat/pft-sepolia-token-deployer-20261106.password",
+    "cast send 0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17 --value <balance - 21000 * 6500000 - 100000> --legacy --gas-price 6500000 --gas-limit 21000 --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-lock-deployer-20261106 --password-file ~/.postfiat/pft-sepolia-lock-deployer-20261106.password"
+  ],
+  "superseded_part_2_genesis_template": {
+    "superseded": "history only: part 2 replaced these bytes at the same path with the final six-validator genesis (sha256 0948db179e83d82fdfae7f0302d84e2f94e1e9f60d831c55c56ef6a8adc732bc, genesis hash b01544961ac962b69e6e002eca4a5c2bff998f40d9d6e6b648573104dc9ce7f168f159c8c19fe70ea2db3985395abc47; part-2.json), so the hashes below no longer name the file",
+    "file": "docs/review/base-sepolia-lock-rehearsal-20261106/genesis.json",
+    "derived_from": "crates/node/testdata/external-lane-genesis/genesis.json (only the lock and token addresses and runtime code hashes changed)",
+    "sha256": "306ea8a40fb7cc9064f3e086f2e40c752b5b710bcc4d62b2c4d2a64943303099",
+    "checked_with": "postfiat-node init --genesis-file docs/review/base-sepolia-lock-rehearsal-20261106/genesis.json (exit 0), then external-lane-info",
+    "genesis_hash": "c619e67a1cbad35f8cf47f36670ff039152fc8233ffc81633110f5d4edbe5c00bb33caebe2cfe11c355fee8a57ef2a69",
+    "state_root": "74e28d2f29531072de5666d534a57b9e305ed2416cdddd67ae079a388cea621bc2c71c78abc49728cc5aba23deaf1fa0",
+    "kept": "chain id postfiat-lane-sepolia-example, validator_count 1, reserved 300000000 atoms, window 86400 blocks, cap 200 bps, committee epoch 2 with its placeholder root, confirmation depth 64",
+    "open_for_part_2": "the committee root of the local six-validator fleet and the validator count are set when that fleet's keys exist"
+  },
+  "artifacts_sha256": {
+    "forge_broadcast_token_run_latest_json": "af9ae131bda628360939342640896fd1f945d93617bf4dffe778da4f295acb4a",
+    "forge_broadcast_lock_run_latest_json": "480499898bd320f089934bc17a1ea7c890badc225ee2eb75e506d2dee9bc37c5"
+  },
+  "task_node": "skipped: both task requests failed at generation (inference_http_402), req_6379c4d6... and req_38b132b7..."
+}

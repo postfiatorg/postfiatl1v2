@@ -29,7 +29,7 @@ Six loopback validators on one fresh genesis (`transport-validator-serve --unsaf
 | `release_window_blocks`, `release_cap_bps` | 86,400 and 200 (window cap 6,000,000 atoms), the design note's example |
 | `policy.chain_id` | 84532 (Base Sepolia) |
 | `policy.lock_contract_address` | `0xe36e7fc384564419187546c19719a5654266de0b`, the rehearsal lock |
-| `policy.lock_runtime_code_hash` | `0x328a93e9…5442fb2`, `lock_runtime_codehash` of `crates/pft-token-contracts/deployments/pft-lock-base-84532/deployment.json` |
+| `policy.lock_runtime_code_hash` | `0x328a93e9…5442fb2`, `lock_runtime_codehash` of `crates/pft-token-contracts/deployments/pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json` (archived 2026-11-06) |
 | `policy.token_address` | `0x18fe4ca51a0ce042688d5a54917319d03b527d92`, the Sepolia token |
 | `policy.token_runtime_code_hash` | `0xb0939a24…c655903df`, `token_codehash` of the same record |
 | `policy.committee_epoch`, `committee_root` | 1 and `0x71cbb891…74da260a`: the six validators' ML-DSA-65 keys, quorum 5 |
@@ -70,7 +70,7 @@ Mempool admission reports ``mempool admission rejected `<code>` ``; the dry run 
 
 - `forge test --offline` in `crates/pft-token-contracts`: 188 tests in 9 suites pass. Lock suites: `PFTLockV1Test` 24, `PFTLockV1AccountingTest` 14, `PFTLockV1InvariantTest` 1, `PFTLockV1ReleaseInvariantTest` 1, `DeployPFTLockTest` 59. Token suites: 89.
 - The deploy-script checks merged in `1e2cc55f8` (anchor and binding pins, re-read after deployment; `crates/pft-token-contracts/README.md`, "Deploy the lock contract") added 22 of the 59 `DeployPFTLockTest` tests; CI also runs `test/deploy-lock-cli.sh`.
-- The Base Sepolia rehearsal: `crates/pft-token-contracts/deployments/pft-lock-base-84532/deployment.json` (test mode, reverting stand-in verifier) and [the dry-run record](pft-token-dry-run-20261026.md), "Base Sepolia lock rehearsal".
+- The Base Sepolia rehearsal: `crates/pft-token-contracts/deployments/pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json` (archived 2026-11-06; test mode, reverting stand-in verifier) and [the dry-run record](pft-token-dry-run-20261026.md), "Base Sepolia lock rehearsal".
 
 ## Six-validator rehearsal of the amendment rounds, 2026-11-04
 
@@ -164,10 +164,56 @@ Requests forwarded: `eth_chainId` 8, `eth_blockNumber` 6, `eth_getBlockByNumber`
 
 It shows that the watcher reads a real node's `external_lane_info` (chain id, genesis hash, the lane row and its policy) and, over Base's real JSON-RPC, the finalized block and the lock contract's code. It sent only read methods. Matching a release against `lockRecord` has run only against the mocked RPC: no Lock and no release exist yet.
 
+## Base Sepolia rehearsal (2026-11-06), part 1: the deployment and the Lock
+
+The first real Lock on Base Sepolia (chain id 84532), on a disposable token and a fresh lock contract deployed from two new one-time keys with the unchanged scripts, from the source commit `1c5bf4c6f`. Full record: [`part-1.json`](../../review/base-sepolia-lock-rehearsal-20261106/part-1.json).
+
+| Fact | Value |
+|---|---|
+| Token | `0x90cE303356D80eCBE359FAF061C84130F40EacF0`, `PFT Rehearsal 20261106` (`PFTR`), 6 decimals, 100,000,000,000 PFT to the holder `0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17` (test switch `PFT_TOKEN_ALLOW_EOA_TREASURY`); runtime code hash `0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b`; block 55,132,270 |
+| Lock | `0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73`, test mode, the stand-in verifier `0x531659D0…4C294f2Ec9` (its `verifyAndConsume` always reverts), minimum 10 atoms, cap 1,000,000 PFT; runtime code hash `0x57bc7971e6878bed2cd4efc0e63020448d4cd9493f05ecde6ddc37fda90b871c`; block 55,132,483 |
+| Lock transaction | `0x599e15fbc298649c741379df2b7179fe08a8a1a0f4e8a5effe28de6f09b5c859`, block 55,132,949, hash `0xfaac31ef19b9ed183b7bc5fb6ade195b6e74cc9132a86c26b3fad381af8070d7`, after `approve` in block 55,132,945 |
+| `Locked` (log 4) | nonce 0, holder `0x6E4E…11E17`, amount 1,000,000 units (1 PFT), recipient `pfb2f06f1346000c42db0246a0fcf6ce0356662eb6` as UTF-8 bytes, recipient hash `0xa443f962…81d6fff4` |
+| Token pull (log 5) | `Transfer` of 1,000,000 units by the token from the holder to the lock |
+| Read back | `lockRecord(0)` = (holder, 1,000,000, the recipient hash); `totalLocked` 1,000,000; `nextNonce` 1; the lock's token balance 1,000,000 |
+| Recipient | a fresh ML-DSA-65 account from `postfiat-node wallet-keygen --chain-id postfiat-lane-sepolia-example`; its key stays outside the repository |
+| Holder key | `0x6E4E…11E17` is the one-time deployer of the 2026-10-28 lock, whose key the [2026-10-26/28 record](pft-token-dry-run-20261026.md#base-sepolia-lock-rehearsal-2026-10-28) calls retired. It is revived on 2026-11-06 and stays active as the funded rehearsal holder for the coming Base Sepolia rehearsals (the deployment-order dry run of the Phase 3 design, further Locks); the project funded it on 2026-11-05 with 0.002 test ETH (from `0x9a33A96c…E497D50`, transaction `0x853cad08…73484d30`), and after part 2 it holds 1,985,902,603,794,116 wei at nonce 6. When the Base Sepolia rehearsals end it is retired and its leftover test ETH is returned to the funding address, recorded then. Its keystore and password file stay outside the repository |
+| One-time keys | `pft-sepolia-token-deployer-20261106` (`0x8ffA5Dea2EEa08bC2c3250af664240849cab70Da`) and `pft-sepolia-lock-deployer-20261106` (`0xE57f8cbBdc05834f0CCdb8fEf13009bf9dAdAd25`), funded with 0.0004 test ETH each, emptied back to the holder (99,908 wei of dust each) and retired |
+| Gas | eight transactions, 0.000014223396006258 test ETH in all; the holder goes from 0.002000126 to 0.001985903 test ETH |
+
+When the Lock is recorded, Base Sepolia's finalized block is 55,127,399 and its head 55,133,176. Part 1's fleet genesis template, the external-lane test genesis with the new lock and token pinned (genesis hash `c619e67a…57ef2a69`), becomes the six-validator genesis of part 2. The 2026-10-28 rehearsal lock `0xE36e7Fc384564419187546c19719A5654266dE0B` is archived. Part 2 is [below](#base-sepolia-rehearsal-2026-11-06-part-2-the-release-on-a-local-fleet).
+
+## Base Sepolia rehearsal (2026-11-06), part 2: the release on a local fleet
+
+The Lock of part 1 (nonce 0, 1,000,000 units, block 55,132,949) is proven from Base Sepolia through the four node commands and released as 1,000,000 atoms of native PFT on a local six-validator fleet; the watcher then matches the release against the Lock on Base. Source: `d4bffaff1`, whose node code is part 1's `be2a8e41e`; no code change. Binary: `cargo build --locked -p postfiat-node --bin postfiat-node` (dev profile). Full record: [`part-2.json`](../../review/base-sepolia-lock-rehearsal-20261106/part-2.json).
+
+**Base Sepolia, read only.** At the start the finalized block is 55,140,481, past the Lock block plus 64. The node commands take an `http://` endpoint only, so they read `https://sepolia.base.org` through a local forwarder that passes read methods only: `eth_chainId` 8, `eth_getBlockByNumber` 12, `eth_getCode` 12, `eth_blockNumber` 6, `eth_getBlockByHash` 1, `eth_getTransactionReceipt` 1, `eth_getBlockReceipts` 1, nothing refused. The watcher reads `https://sepolia.base.org` directly. No transaction of any kind.
+
+**Fleet.** [`genesis.json`](../../review/base-sepolia-lock-rehearsal-20261106/genesis.json) is part 1's template with `validator_count` 6 and the lane committee of the six validators' ML-DSA-65 keys: epoch 1, root `0xe8b9bc85…544b13c`, quorum 5. The epoch is 1, not the template's 2, because a FastSwap governance bootstrap installs epoch 1. The policy pins, reserve (300,000,000 atoms), window and cap are unchanged. Genesis hash `b0154496…395abc47`. validator-0 runs `init --genesis-file` with the six keys in place, and validators 1–5 run `snapshot-import`. Each validator runs `transport-validator-serve` (`--unsafe-devnet-file-signer --unsafe-devnet-json-storage`) and `rpc-serve` (`--allow-mempool-submit-finality`) on loopback. `topology` writes the lane-less genesis hash, so the harness binds it to the lane genesis.
+
+| Step | Commands | Result |
+|---|---|---|
+| Height 1: committee | `fastswap-governance-bootstrap` (epoch-1 committee, no asset rules), six `governance-authorization-sign`, `governance-amendment-assemble`, `fastswap-governance-bootstrap-assemble`, `transport-peer-certified-batch-round --batch-kind governance` on validator-1 | Accepted, certificate 5 of 6; six identical tips; `external-lane-info`: reserved 300,000,000, released 0 |
+| Observe | `external-lane-checkpoint-observe --block-number 55132949` | Block hash `0xfaac31ef…8070d7`, part 1's; receipts root `0x9cdcc966…ebf4e946`; observed head 55,153,306 (20,357 past the block); lock and token code hashes equal the pins; epoch 1 |
+| Sign | `external-lane-checkpoint-sign` by validator-0 to validator-4, each from its own data directory, each re-observing | Five votes |
+| Assemble | `external-lane-checkpoint-assemble` with the five votes | Certificate of exactly 5 votes (212 KB; SHA-256 `6c75542d…`) |
+| Lock proof | `external-lane-lock-proof --transaction-hash 0x599e15fb…5c859` | The block's 8 receipts, the first an OP Stack deposit receipt, rebuilt to its receipts root; `external_lane_release_v1`: lane `base-erc20`, chain 84532, lock `0xfb6c…4d73`, nonce 0, 1,000,000 atoms to `pfb2f06f…662eb6`, transaction index 6, log 0 of its receipt; submitter the fleet faucet |
+| Height 2: release | `wallet-sign-asset-transaction` (faucet, fee 1,000, sequence 1, the compact operation); `mempool_submit_signed_asset_transaction_finality` on validator-2, the proposer | Accepted, fee 1,000 burned; certified block 2 (5 of 6 votes), tip `fccfa5d9…`, state root `daa1c962…` on all six |
+| Read | `account` on all six RPCs; `external-lane-info` on all six | Recipient balance 1,000,000 atoms on each. `released_atoms` 1,000,000, remainder 299,000,000, nonces `[0]`. One release record: Base block 55,132,949 and its hash, PFTL height 2. Release history root `0xba248c76…7caf9b76`. Byte-identical on the six |
+| Again | The same signed transaction; the same operation signed at sequence 2; on all six | `bad_sequence`, then `external_lane_nonce_already_released`: already released Lock nonce 0; lane info, tip and state root unchanged |
+| Verifiers | Fleet stopped; `verify-blocks`, `verify-state` on validator-3 | Both exit 0 (2 blocks) |
+| Watcher | `python -m postfiat_rpc.external_lane_watcher --pftl-rpc <validator-0> --lane-id base-erc20 --base-rpc https://sepolia.base.org --state-file <tmp> --once`, twice | Run 1: exit 0; one release, `backed`, at its source block 55,132,949 with its hash; lock code hash equal to the pin at finalized block 55,145,286; 0 alarms. Run 2: exit 0; resumes at height 3, 0 checked, 0 alarms ([run 1](../../review/base-sepolia-lock-rehearsal-20261106/watcher-run-1.jsonl), [run 2](../../review/base-sepolia-lock-rehearsal-20261106/watcher-run-2.jsonl)) |
+
+The kept checkpoint is [`checkpoint.json`](../../review/base-sepolia-lock-rehearsal-20261106/checkpoint.json); the certificate, the votes and the operation (304 KB) are recorded by SHA-256 only. The finality response reports `round_ok` false because the round defers its certified sends (`failed_send_count` 0); all six then hold the block. The fleet and its data directories are removed.
+
+**What this proves.** For the first time, a real Lock is proven from the real Base Sepolia chain through the real node commands and released into native PFT: a committee checkpoint of the finalized Lock block, signed by five of six members, plus the receipt proof against that block's receipts root. Six validators credit it once and refuse it a second time, and the watcher finds the Lock behind the release.
+
+**What it does not prove.** The fleet is local: one server, loopback, devnet file signers, and keys generated for the run. The five members share one Base RPC, which the committee-trust model does not cover. The lock's finality verifier is the reverting stand-in, so nothing can come back to Base. No mainnet contract or chain is involved. The audit is open.
+
 ## Open before genesis
 
 - Corrected 2026-11-04: no proof program is needed. The lane's proof is the committee-signed Base checkpoint plus the receipt proof (design option (b)), so it has no SP1 guest, vkey pin or proof inventory entry; an SP1 guest for Base is the design's option (a) upgrade.
-- [x] Done 2026-11-05 ([the Base checkpoint source](#base-checkpoint-source-2026-11-05)): the real Base source attestation path, checkpoint observation and votes for a lane and a lane receipt proof built from a Base block, with its own qualification. A real Lock's proof waits for the next rehearsal.
+- [x] Done 2026-11-05 ([the Base checkpoint source](#base-checkpoint-source-2026-11-05)): the real Base source attestation path, checkpoint observation and votes for a lane and a lane receipt proof built from a Base block, with its own qualification. A real Lock's proof: [part 2 of the Base Sepolia rehearsal](#base-sepolia-rehearsal-2026-11-06-part-2-the-release-on-a-local-fleet).
 - A minimum lock amount in `PFTLockV1` at or above the PFTL account reserve (10 atoms).
 - Pruning the release records behind the finalized checkpoint, keeping the root.
 - [x] Done 2026-11-04, for both kinds ([the rehearsal](#six-validator-rehearsal-of-the-amendment-rounds-2026-11-04)): a six-validator operational rehearsal of the release cap amendment round with the real CLI (`ratify-external-lane-release-cap`, signing, assembly and the governance batch) with one validator absent, since the command accepts the registry threshold of five, before P2.5 closes.

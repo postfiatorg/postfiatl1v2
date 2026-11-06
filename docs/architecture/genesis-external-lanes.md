@@ -86,7 +86,7 @@ postfiat-node init --genesis-file crates/node/testdata/external-lane-genesis/gen
 
 The file sets the chain id, validator count, activation heights and lanes, so `--chain-id` and `--validators` are refused beside it. Unknown fields are refused, and the genesis is validated, lane rules included (one id and one Base source per lane), before anything is written; a refusal exits with `init failed: <rule>` and leaves no data directory. The data directory gets the lane records in the height-zero ledger and the faucet at the native supply minus the reserves; the report's `genesis_hash` and `state_root` are those of the file's genesis.
 
-The example file has one Base Sepolia lane: the rehearsal lock `0xe36e7fc384564419187546c19719a5654266de0b` and token `0x18fe4ca51a0ce042688d5a54917319d03b527d92`, with the code hashes of `crates/pft-token-contracts/deployments/pft-lock-base-84532/deployment.json`, 300,000,000 atoms reserved and a 200 bps cap; its committee root is a placeholder. A test pins its bytes and hash and checks that `init` gives the same ledger and state root as the in-code lane genesis (`init_from_lane_genesis_file_matches_the_in_code_lane_genesis`, `crates/node/src/tests/genesis_external_lane_tests.rs`). `topology-consensus-v2` still derives its domain from a genesis without lanes.
+The example file has one Base Sepolia lane: the rehearsal lock `0xe36e7fc384564419187546c19719a5654266de0b` and token `0x18fe4ca51a0ce042688d5a54917319d03b527d92`, with the code hashes of `crates/pft-token-contracts/deployments/pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json` (the lock archived on 2026-11-06), 300,000,000 atoms reserved and a 200 bps cap; its committee root is a placeholder. A test pins its bytes and hash and checks that `init` gives the same ledger and state root as the in-code lane genesis (`init_from_lane_genesis_file_matches_the_in_code_lane_genesis`, `crates/node/src/tests/genesis_external_lane_tests.rs`). `topology-consensus-v2` still derives its domain from a genesis without lanes.
 
 ## What the conservation check counts
 
@@ -230,7 +230,7 @@ The tests do not exercise these refusals:
 - `base_chain_id_mismatch` on proof.
 - `checkpoint_certificate_invalid` on assemble.
 
- `live_base_sepolia_checkpoint_of_the_rehearsal_lock` (ignored; `POSTFIAT_LIVE_BASE_RPC`) runs observe, five signatures and assembly against Base Sepolia with the rehearsal lock and token. It also rebuilds that block's receipt trie; on 2026-11-05 the rebuilt root matched the block's receipts root (the run record is the section 'Base checkpoint source (2026-11-05)' of [the qualification record](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md)).
+ `live_base_sepolia_checkpoint_of_the_rehearsal_lock` (ignored; `POSTFIAT_LIVE_BASE_RPC`) runs observe, five signatures and assembly against Base Sepolia with the rehearsal lock and token. It also rebuilds that block's receipt trie; on 2026-11-05 the rebuilt root matched the block's receipts root (the run record is the section 'Base checkpoint source (2026-11-05)' of [the qualification record](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md)). On 2026-11-06 the four commands proved the first real Lock, on the Base Sepolia rehearsal lock, and a local six-validator fleet released it ([part 2 of the rehearsal](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md#base-sepolia-rehearsal-2026-11-06-part-2-the-release-on-a-local-fleet)).
 
 ## The watcher
 
