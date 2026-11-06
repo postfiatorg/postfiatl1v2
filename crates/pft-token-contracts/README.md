@@ -11,6 +11,8 @@ remappings, and with them the pinned A666 public reader build
 `allow_paths` does not restrict what a test may import; the deployed artifacts
 (`PFTLockV1`, `PFTToken`) are byte-identical with and without it.
 
+The audit package for both contracts: [pft-token-audit-package-20261106.md](../../docs/listings/coinbase/pft-token-audit-package-20261106.md).
+
 ## PFT token (Base)
 
 `src/PFTToken.sol` is the fixed-supply ERC-20 representation of PFT, Phase 1 of
