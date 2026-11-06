@@ -29,7 +29,7 @@ Six loopback validators on one fresh genesis (`transport-validator-serve --unsaf
 | `release_window_blocks`, `release_cap_bps` | 86,400 and 200 (window cap 6,000,000 atoms), the design note's example |
 | `policy.chain_id` | 84532 (Base Sepolia) |
 | `policy.lock_contract_address` | `0xe36e7fc384564419187546c19719a5654266de0b`, the rehearsal lock |
-| `policy.lock_runtime_code_hash` | `0x328a93e9…5442fb2`, `lock_runtime_codehash` of `crates/pft-token-contracts/deployments/pft-lock-base-84532/deployment.json` |
+| `policy.lock_runtime_code_hash` | `0x328a93e9…5442fb2`, `lock_runtime_codehash` of `crates/pft-token-contracts/deployments/pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json` (archived 2026-11-06) |
 | `policy.token_address` | `0x18fe4ca51a0ce042688d5a54917319d03b527d92`, the Sepolia token |
 | `policy.token_runtime_code_hash` | `0xb0939a24…c655903df`, `token_codehash` of the same record |
 | `policy.committee_epoch`, `committee_root` | 1 and `0x71cbb891…74da260a`: the six validators' ML-DSA-65 keys, quorum 5 |
@@ -70,7 +70,7 @@ Mempool admission reports ``mempool admission rejected `<code>` ``; the dry run 
 
 - `forge test --offline` in `crates/pft-token-contracts`: 188 tests in 9 suites pass. Lock suites: `PFTLockV1Test` 24, `PFTLockV1AccountingTest` 14, `PFTLockV1InvariantTest` 1, `PFTLockV1ReleaseInvariantTest` 1, `DeployPFTLockTest` 59. Token suites: 89.
 - The deploy-script checks merged in `1e2cc55f8` (anchor and binding pins, re-read after deployment; `crates/pft-token-contracts/README.md`, "Deploy the lock contract") added 22 of the 59 `DeployPFTLockTest` tests; CI also runs `test/deploy-lock-cli.sh`.
-- The Base Sepolia rehearsal: `crates/pft-token-contracts/deployments/pft-lock-base-84532/deployment.json` (test mode, reverting stand-in verifier) and [the dry-run record](pft-token-dry-run-20261026.md), "Base Sepolia lock rehearsal".
+- The Base Sepolia rehearsal: `crates/pft-token-contracts/deployments/pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json` (archived 2026-11-06; test mode, reverting stand-in verifier) and [the dry-run record](pft-token-dry-run-20261026.md), "Base Sepolia lock rehearsal".
 
 ## Six-validator rehearsal of the amendment rounds, 2026-11-04
 
