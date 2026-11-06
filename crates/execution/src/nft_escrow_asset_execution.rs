@@ -3215,16 +3215,11 @@ fn apply_asset_operation(
                     "external_lane_export_v1 transaction kind mismatch".to_string(),
                 ));
             }
-            if operation.sender != transaction.unsigned.source {
-                return Err((
-                    "sender_mismatch",
-                    "external_lane_export_v1 sender must be the transaction source".to_string(),
-                ));
-            }
             crate::external_lane_release::apply_external_lane_export(
                 genesis,
                 ledger,
                 operation,
+                &transaction.unsigned.source,
                 asset_transaction_tx_id(transaction),
                 block_height,
                 compatibility.external_lane_release_caps,

@@ -304,6 +304,7 @@ pub(crate) fn apply_external_lane_export(
     genesis: &Genesis,
     ledger: &mut LedgerState,
     operation: &ExternalLaneExportOperationV1,
+    source: &str,
     tx_id: String,
     block_height: u64,
     caps: ExternalLaneReleaseCaps,
@@ -325,6 +326,13 @@ pub(crate) fn apply_external_lane_export(
                 "external_lane_export_v1 on external lane `{}` is not built yet",
                 lane.id
             ),
+        ));
+    }
+    // After the switch: a disabled lane refuses every export as before.
+    if operation.sender != source {
+        return Err((
+            "sender_mismatch",
+            "external_lane_export_v1 sender must be the transaction source".to_string(),
         ));
     }
     let lane_index = genesis
@@ -802,6 +810,7 @@ mod tests {
             &genesis,
             &mut ledger,
             &export_op("faucet", 600),
+            "faucet",
             "tx-a".to_string(),
             11,
             caps,
@@ -821,6 +830,7 @@ mod tests {
             &genesis,
             &mut ledger,
             &export_op("faucet", amount - 599),
+            "faucet",
             "tx-b".to_string(),
             12,
             caps,
@@ -832,6 +842,7 @@ mod tests {
             &genesis,
             &mut ledger,
             &export_op("faucet", amount - 600),
+            "faucet",
             "tx-b".to_string(),
             12,
             caps,
@@ -865,6 +876,7 @@ mod tests {
             &genesis,
             &mut ledger,
             &export_op("pftl-empty", 1),
+            "pftl-empty",
             "tx".to_string(),
             11,
             caps,
@@ -875,6 +887,7 @@ mod tests {
             &genesis,
             &mut ledger,
             &export_op("holder", 10_001),
+            "holder",
             "tx".to_string(),
             11,
             caps,
@@ -886,6 +899,7 @@ mod tests {
             &genesis,
             &mut ledger,
             &export_op("holder", 10_000),
+            "holder",
             "tx".to_string(),
             11,
             caps,
@@ -913,6 +927,7 @@ mod tests {
             &genesis,
             &mut ledger,
             &export_op("faucet", 1),
+            "faucet",
             "tx".to_string(),
             11,
             caps,
@@ -921,9 +936,16 @@ mod tests {
         assert_eq!(code, postfiat_types::EXTERNAL_LANE_EXPORT_HALTED);
         let mut to_lock = export_op("faucet", 1);
         to_lock.base_recipient = format!("0x{}", "1a".repeat(20));
-        let (code, _) =
-            apply_external_lane_export(&genesis, &mut ledger, &to_lock, "tx".to_string(), 11, caps)
-                .unwrap_err();
+        let (code, _) = apply_external_lane_export(
+            &genesis,
+            &mut ledger,
+            &to_lock,
+            &to_lock.sender,
+            "tx".to_string(),
+            11,
+            caps,
+        )
+        .unwrap_err();
         assert_eq!(code, EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK);
         assert_eq!(ledger, before);
         // Under the genesis cap the same export is applied.
@@ -931,11 +953,37 @@ mod tests {
             &genesis,
             &mut ledger,
             &export_op("faucet", 1),
+            "faucet",
             "tx".to_string(),
             11,
             ExternalLaneReleaseCaps::genesis(),
         )
         .expect("export without the halt");
+    }
+
+    /// A sender other than the transaction source: refused as not supported
+    /// while the switch is off, as `sender_mismatch` once it is on.
+    #[test]
+    fn external_lane_export_sender_mismatch_is_checked_after_the_switch() {
+        for (genesis, code) in [
+            (lane_genesis(), EXTERNAL_LANE_EXPORT_NOT_SUPPORTED),
+            (export_genesis(), "sender_mismatch"),
+        ] {
+            let mut ledger = lane_ledger(&genesis);
+            let before = ledger.clone();
+            let (refused, _) = apply_external_lane_export(
+                &genesis,
+                &mut ledger,
+                &export_op("faucet", 1),
+                "holder",
+                "tx".to_string(),
+                11,
+                ExternalLaneReleaseCaps::genesis(),
+            )
+            .unwrap_err();
+            assert_eq!(refused, code);
+            assert_eq!(ledger, before);
+        }
     }
 
     #[test]
@@ -955,6 +1003,7 @@ mod tests {
             &genesis,
             &mut ledger,
             &export_op("faucet", 1),
+            "faucet",
             "tx".to_string(),
             11,
             ExternalLaneReleaseCaps::genesis(),

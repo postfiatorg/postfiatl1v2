@@ -11,6 +11,18 @@ fn base_recipient() -> String {
 
 fn export_tx(chain: &Chain, lane_id: &str, amount: u64, recipient: &str) -> SignedAssetTransaction {
     let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    export_tx_from(chain, lane_id, amount, recipient, &faucet.address)
+}
+
+/// `export_tx` with `sender` in the operation; the faucet still signs.
+fn export_tx_from(
+    chain: &Chain,
+    lane_id: &str,
+    amount: u64,
+    recipient: &str,
+    sender: &str,
+) -> SignedAssetTransaction {
+    let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
     let unsigned = UnsignedAssetTransaction {
         chain_id: chain.genesis.chain_id.clone(),
         genesis_hash: genesis_hash(&chain.genesis),
@@ -22,7 +34,7 @@ fn export_tx(chain: &Chain, lane_id: &str, amount: u64, recipient: &str) -> Sign
         fee: 1_000,
         sequence: faucet_sequence(chain),
         operation: AssetTransactionOperation::ExternalLaneExportV1(postfiat_types::ExternalLaneExportOperationV1 {
-            sender: faucet.address.clone(),
+            sender: sender.to_string(),
             lane_id: lane_id.to_string(),
             amount_atoms: amount,
             base_recipient: recipient.to_string(),
@@ -400,4 +412,42 @@ fn external_lane_export_wallet_signer_runs_validate_only() {
     assert!(error.contains("zero address"), "{error}");
     wallet_sign_asset_transaction(options(1, base_recipient())).expect("a valid export signs");
     let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// An operation sender other than the transaction source never reaches the
+/// export rules: admission and execution refuse the envelope on a disabled
+/// and an enabled lane alike, as before the switch existed. The rules' own
+/// order (switch, then sender) is tested in `external_lane_release.rs`.
+#[test]
+fn external_lane_export_sender_mismatch_is_refused_as_an_envelope_on_either_lane() {
+    for (chain, code) in [
+        (lane_chain("export-sender-off"), "bad_asset_transaction_envelope"),
+        (export_chain("export-sender-on"), "bad_asset_transaction_envelope"),
+    ] {
+        let tx = export_tx_from(&chain, "base-erc20", 1, &base_recipient(), &chain.recipient);
+        let store = NodeStore::new(&chain.data_dir);
+        let ledger_before = store.read_ledger().expect("ledger");
+        let error = submit_signed_asset_transaction_json_to_mempool(
+            SignedAssetTransactionJsonSubmitOptions {
+                data_dir: chain.data_dir.clone(),
+                signed_asset_transaction_json: serde_json::to_string(&tx).expect("tx json"),
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("source is not authorized by operation fields"), "{error}");
+        let height = crate::status(NodeOptions {
+            data_dir: chain.data_dir.clone(),
+        })
+        .expect("status")
+        .block_height;
+        let mut ledger = ledger_before.clone();
+        let receipt =
+            postfiat_execution::execute_asset_transaction(&chain.genesis, &mut ledger, &tx, height + 1);
+        assert!(!receipt.accepted, "{receipt:?}");
+        assert_eq!(receipt.code, code, "{receipt:?}");
+        assert_eq!(ledger, ledger_before, "execution changed the ledger");
+        assert_eq!(store.read_ledger().expect("ledger"), ledger_before);
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
 }
