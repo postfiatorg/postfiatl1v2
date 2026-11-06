@@ -33,7 +33,7 @@ Codenames such as A666, BMNRC, Z3 or G4 are defined in the
 
 ## What exists now
 
-Reviewed against main on 2026-11-05. Implementation and local qualification
+Reviewed against main `4b4da1b91` on 2026-11-06. Implementation and local qualification
 below do not imply deployment; fleet observations retain their own dates on
 [Network Status](status/network-status.md).
 
@@ -50,8 +50,8 @@ below do not imply deployment; fleet observations retain their own dates on
 | YOLO target receipts | Implemented and disabled by default; activation needs a future governance amendment. Receipts confer no trading, minting or reserve authority. | [YOLO Target Receipt v1](yolo/target-receipt-v1.md) |
 | RPC and clients | Newline-delimited JSON over TCP; read methods, controlled write methods, account history; Python client and Rust SDK. | [RPC](rpc/overview.md), [Python](python/quickstart.md) |
 | Wallets | Transparent, issued-asset, FastPay, swap, memo and shielded flows in source and tools. The private path was off and ungoverned at the last fleet observation. | [Web Wallet](wallets/web-wallet.md), [Shielded Wallet](wallets/shielded-wallet.md), [Network Status](status/network-status.md) |
-| Validators | Launch packets, service layout, history retention, monitors, signed rollout, key rotation. A separate software signer process with a durable double-sign guard is implemented; its deployment under two users remains open. | [Validators](validators/overview.md), [Signer Policy](runbooks/public-rpc-operator-policy.md#validator-signer-process) |
-| PFT on Base | Token/lock contracts, native-PFT release path, checkpoint CLI and watcher implemented. A real Base Sepolia Lock was released on a local six-validator fleet on 2026-11-06; the outside audit of the lock remains open; reverse export is refused until built. | [PFT Token On Base](architecture/pft-token-on-base.md), [Genesis External Lanes](architecture/genesis-external-lanes.md) |
+| Validators | A separate software signer, durable double-sign guard, deployment checker and two-user unit generation are implemented. Qualification of the selected release and deployment under two users remain open. | [Validators](validators/overview.md), [Signer Policy](runbooks/public-rpc-operator-policy.md#two-user-units) |
+| PFT on Base | A real Base Sepolia Lock released native PFT on a local six-validator fleet on 2026-11-06; replay was refused and the watcher confirmed backing. The Phase 2 audit remains open. Native export accounting exists behind `exports_enabled`, default off; the Base verifier deployment, export prover and relay remain open. | [PFT Token On Base](architecture/pft-token-on-base.md), [Genesis External Lanes](architecture/genesis-external-lanes.md) |
 
 What remains before public launch is listed in the
 [Release Gate Inventory](status/release-gate-inventory.md), the
