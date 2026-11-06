@@ -23,6 +23,9 @@ DEFAULT_READ_LIMIT = 100
 # refuses an `archive_window` range longer than this many blocks.
 MAX_ARCHIVE_WINDOW_BLOCKS = 512
 MAX_ACCOUNT_TX_SCAN_LIMIT = 512
+# Mirrors crates/node/src/node_types.rs EXTERNAL_LANE_RELEASE_PAGE_SIZE: the
+# node refuses an `external_lane_info` release_limit outside 1 to this many.
+EXTERNAL_LANE_RELEASE_PAGE_SIZE = 100
 ESCROW_ID_DOMAIN = "postfiat.escrow_id.v1"
 ESCROW_CONDITION_HASH_DOMAIN = "postfiat.escrow_condition_hash.v1"
 NFT_ID_DOMAIN = "postfiat.nft_id.v1"
@@ -1750,14 +1753,18 @@ class PostFiatRpcClient:
         the next older page. Each lane row also reports `release_count` (every
         release), `pruned_release_count` (releases pruned behind the finalized
         height, no longer paged) and `release_history_root` (the hash chain
-        over all of them); `external_lane_release_coverage` summarises them."""
+        over all of them); `external_lane_release_coverage` summarises them.
+        `release_limit` is bounded like the other list reads: below 1 is
+        refused, above `EXTERNAL_LANE_RELEASE_PAGE_SIZE` is clamped."""
         params: dict[str, Any] = {}
         if lane_id is not None:
             params["lane_id"] = self._required_text(lane_id, "lane_id")
         if release_cursor is not None:
             params["release_cursor"] = self._required_u64(release_cursor, "release_cursor")
         if release_limit is not None:
-            params["release_limit"] = self._required_u64(release_limit, "release_limit")
+            if self._required_u64(release_limit, "release_limit") < 1:
+                raise ValueError("release_limit must be positive")
+            params["release_limit"] = min(release_limit, EXTERNAL_LANE_RELEASE_PAGE_SIZE)
         return self._object_read("external_lane_info", params)
 
     @staticmethod
