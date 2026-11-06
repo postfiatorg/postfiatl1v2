@@ -172,3 +172,33 @@ It shows that the watcher reads a real node's `external_lane_info` (chain id, ge
 - Pruning the release records behind the finalized checkpoint, keeping the root.
 - [x] Done 2026-11-04, for both kinds ([the rehearsal](#six-validator-rehearsal-of-the-amendment-rounds-2026-11-04)): a six-validator operational rehearsal of the release cap amendment round with the real CLI (`ratify-external-lane-release-cap`, signing, assembly and the governance batch) with one validator absent, since the command accepts the registry threshold of five, before P2.5 closes.
 - A topology bound to a lane genesis: `topology-consensus-v2` derives its domain from a genesis without lanes (`init --genesis-file` now initialises from one).
+
+## 2026-11-05 local EVM composition
+
+Task Node `task_f7fb0b284184dfb51713ec8bd324c97c`. The Python CLI
+`scripts/rehearse-base-lock.py --output <fresh-directory> --target-dir <cargo-target>`
+starts an isolated Anvil, deploys PFTToken and PFTLockV1, then runs the actual
+checkpoint/proof commands against a fresh Lock and releases 4,331 atoms on a
+generated six-validator native chain. Five checkpoint votes certify source block
+5; release block 2 credits exactly 4,331 atoms. Repeating the release is refused.
+The watcher reports one backed release and zero alarms; a repeat resumes its
+cursor and checks zero already-processed releases. Block and state replay pass.
+
+[Machine results and exact commands](../../review/base-lock-rehearsal-20261105/result.json),
+[HTML review](../../review/base-lock-rehearsal-20261105/review.html), and
+[source/evidence hashes](../../review/base-lock-rehearsal-20261105/manifest.json).
+The ignored composition test passed; checkpoint-source tests: 16 passed, two
+explicit network/rehearsal tests ignored; watcher tests: 32 passed. The fixture
+now sizes its finality votes from genesis. No runtime release/watcher defect was
+reproduced, so neither implementation changed. Harness corrections were address
+normalization and placing consensus activation after the bootstrap block.
+
+This is **local EVM evidence**, not Base Sepolia or mainnet deployment. The unused
+Phase 3 verifier is a test stand-in; export and OP Stack deposit receipts are not
+qualified by this run. Its processes stopped and generated native keys were removed.
+The previous [test-token record](pft-token-dry-run-20261026.md) says both treasury
+signers are retired and their test ETH was returned. No replacement funded account
+or token-holder authority was supplied. A fresh funded deployer plus holder
+authority (or a new disposable test deployment) is required for the public-testnet
+repeat. No retired key was used and no public transaction was broadcast. P2.5
+remains open for that rehearsal and the lock audit; this does not decide allocation.

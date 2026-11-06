@@ -1499,7 +1499,8 @@ mod release_path {
             validator_id: Some(proposer),
         })
         .expect("proposal");
-        let vote_files = local_validator_ids(4)
+        let validator_count = NodeStore::new(&data_dir).read_genesis().expect("genesis").validator_count;
+        let vote_files = local_validator_ids(validator_count)
             .expect("validator ids")
             .into_iter()
             .map(|validator| {
@@ -3177,6 +3178,7 @@ mod release_path {
     mod checkpoint_source {
         use super::*;
         include!("external_lane_checkpoint_source_tests.rs");
+        include!("external_lane_local_evm_tests.rs");
     }
 
     mod export_path {
