@@ -52,6 +52,7 @@ The amounts are placeholders sized to today's devnet supply constant (`GENESIS_N
 | `policy.committee_epoch` | The bridge committee epoch whose checkpoints prove a Lock. |
 | `policy.committee_root` | That committee's root (`FastSwapCommitteeV1::computed_root`, 48 bytes): `0x` and 96 lower-case hex digits. |
 | `policy.confirmation_depth` | Positive: the Base confirmations a Lock needs before it can be proven. |
+| `policy.exports_enabled` | Optional, default `false`: whether `external_lane_export_v1` is applied ([Exports](#exports)). It is written only when `true`, so a genesis without it keeps its bytes and hash. |
 
 Unknown fields are refused at every level, so the policy cannot gain a field later without a schema change. The policy values are checked for shape, and `chain_id` against the two Base sources; the release path verifies proofs against them.
 
@@ -65,7 +66,8 @@ At genesis the faucet receives the native supply minus the sum of the lanes, and
 - `window_index` and `window_released_atoms`, the current window and what it released, starting at 0;
 - `release_history_root`, a SHA3-384 hash chain over the release records in application order, omitted while there is none;
 - `pruned_release_count`, `pruned_released_atoms` and `pruned_release_history_root`, the records pruned behind the finalized height (below), omitted while none is;
-- `releases`, the stored release records, omitted while empty.
+- `releases`, the stored release records, omitted while empty;
+- `exported_atoms` and `next_export_nonce`, starting at 0, and `export_history_root`, the pruned export fields and `exports`, the export packets, each omitted while zero or empty ([Exports](#exports)).
 
 The state commitment covers every field but `releases` (`ExternalLaneState::state_commitment_bytes`), so a block commits the lane in bytes that grow by one nonce per release, not by the records. The stored records stay in the ledger for reads and replay, and loading a replay base checks them against the committed root, refusing a mismatch:
 
@@ -93,7 +95,7 @@ The example file has one Base Sepolia lane: the rehearsal lock `0xe36e7fc3845644
 `native_pft_supply_breakdown` (`crates/node/src/block_replay_wallet.rs`) reports two lines and their total:
 
 - circulating: accounts, escrows, offers, owned objects, FastLane reserves and the Orchard pool;
-- external lane remainder: `reserved_atoms - released_atoms` over all lanes.
+- external lane remainder: `reserved_atoms - (released_atoms - exported_atoms)` over all lanes.
 
 `native_pft_live_total` is their sum, so the three checks keep their form:
 
@@ -296,11 +298,41 @@ What it does not do:
 - It trusts the lane read of the PFTL node it is pointed at, and the Lock answers of its Base node. So it runs beside the operator's own validator and against an independently operated Base node.
 - It answers nothing. The response of section 5.2 is governed: a zero-cap amendment (`ratify-external-lane-release-cap --cap-bps 0`, signed by the registry threshold), then a committee rotation, then the delayed restore of the cap. The watcher only prompts them.
 
+## Exports
+
+`external_lane_export_v1` (`ExternalLaneExportOperationV1`) moves native PFT from a sender back into the lane, to be paid on Base as ERC-20 PFT. The design is `docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md`, sections 3 and 4.
+
+**The switch.** A lane applies exports only when its genesis policy sets `exports_enabled: true`. Otherwise every export is refused as before: an unknown lane with `external_lane_not_configured`, the lane's lock contract as the Base recipient with `external_lane_export_recipient_is_lock`, and every other export with `external_lane_export_not_supported`, at mempool admission, batch building and execution; in a certified block the ordinary rejected-transaction fee rule applies (`crates/execution/src/rejected_fee_claim.rs`).
+
+**The rules.** With the switch on, after the lane and lock-address checks (`apply_external_lane_export`, `crates/execution/src/external_lane_release.rs`):
+
+1. The halt: while the lane's active release cap is zero, the export is refused with `external_lane_export_halted`, so the governed zero-cap amendment stops exports as it stops releases.
+2. `amount_atoms` must be at most `released_atoms - exported_atoms` (`external_lane_export_above_released`); `next_export_nonce` must be able to advance (`external_lane_export_nonce_exhausted`); the stored packets must stay under the record ceiling (`external_lane_export_records_full`).
+3. The sender pays `amount_atoms` on top of the fee, with the ordinary `insufficient_funds` and `below_account_reserve` refusals.
+4. Only then `exported_atoms` grows by the amount, the nonce advances and the packet is recorded.
+
+The sender must be the transaction source. There is no minimum above one atom and no refund.
+
+**The accounting.** The remainder is `reserved_atoms - (released_atoms - exported_atoms)`, in checked u64 arithmetic and in that net form, so a release after a full cycle (reserved 100, released 100, exported 100) leaves 99, not an underflow (`ExternalLaneState::remainder_atoms`). Exports above releases are a corrupt record, refused with `external_lane_state_corrupt`; a release whose `released_atoms` would overflow is refused with `external_lane_counter_overflow`. An export lowers circulating PFT and raises the lane's remainder by the same amount, and its fee is burned, so the conservation checks keep their form.
+
+**The packet.** `ExternalLaneExportPacket` holds the lane id, the export nonce, the sender, `base_recipient`, `amount_atoms`, the PFTL height and the accepted transaction id. Each hash is SHA3-384 with its own domain tag, a zero byte between parts:
+
+| Value | Hashed |
+|---|---|
+| packet digest | `postfiat.external_lane.export_packet.v1`, the packet's JSON |
+| withdrawal-id commitment | `postfiat.external_lane.export_withdrawal_id.v1`, the chain id, the lane id, the export nonce (8 bytes big-endian), the packet digest |
+| burn-transaction commitment | `postfiat.external_lane.export_burn_tx.v1`, the chain id, the lane id, the transaction id |
+| export history root | `postfiat.external_lane.export_history.v1`, the previous root, the packet digest |
+
+Fixed vectors are in `crates/types/testdata/external-lane-export-packet-vectors.json`. The state commitment covers the counters, the history root and the pruned fields, not the packets. Packets are pruned and bounded by the release-record rule ([Pruning the release records](#pruning-the-release-records)), and a replay base must chain its stored packets to the committed root.
+
+**The read.** `external_lane_info` reports `state.exported_atoms` and `state.next_export_nonce`, and pages the packets newest first with their digest and two commitments: `export_count`, `pruned_export_count`, `export_history_root`, `exports` and `next_export_cursor`, with `--export-cursor` and `--export-limit` as the release page's flags. The Python client takes `export_cursor` and `export_limit`; `external_lane_export_coverage` summarises a row.
+
 ## Not built yet
 
 The user-facing interface for the lane. The Python CLI reads a lane (`external_lane_info`) and watches it ([the watcher](#the-watcher)) but does not build or submit a release; the node commands of [the Base checkpoint source](#the-base-checkpoint-source) do. The design keeps the SP1 route for Base through its dispute games (option (a)) as a later upgrade.
 
-The Phase 3 export, `external_lane_export_v1`, is designed in `docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md`. It debits the sender into the lane, and the Base lock contract's `release` pays it against the PFTL finality verifier on Base. Today the operation is recognised and refused. An unknown lane is refused with `external_lane_not_configured`, and the lane's own lock contract as the Base recipient with `external_lane_export_recipient_is_lock`. Every other export is refused with `external_lane_export_not_supported`, at mempool admission, batch building and execution. No lane or export state changes; in a certified block the ordinary rejected-transaction fee rule applies (`crates/execution/src/rejected_fee_claim.rs`), as for a refused release. The lane records no exported atoms yet.
+The Base half of exports: the PFTL finality verifier deployment for PFT on Base with its route profile and asset id, the prover program for export packets, the relay and the Base `release` of an export. No genesis sets `exports_enabled` yet, and whether Phase 3 ships is the product owner's decision.
 
 ## Not before
 

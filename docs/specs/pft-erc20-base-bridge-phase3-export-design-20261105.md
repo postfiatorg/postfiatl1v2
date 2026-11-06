@@ -166,6 +166,8 @@ An exchange can export its customers' total in one operation and credit them on 
 
 **With the implementation:**
 
+Built 2026-11-06 behind `exports_enabled`: the PFTL accounting, the zero-cap halt, the export packet with its digest and commitments, and the paged read (`docs/architecture/genesis-external-lanes.md`, Exports); the Base fork test and the dry run wait for the Base side.
+
 - the `exported_atoms` field and the export nonce, in the state commitment;
 - the conservation check over a release followed by an export;
 - the checked arithmetic of section 4:
@@ -191,7 +193,7 @@ An exchange can export its customers' total in one operation and credit them on 
 
 The product owner decides:
 
-1. Whether Phase 3 ships at all: it is optional in the milestone.
+1. Whether Phase 3 ships at all: it is optional in the milestone. The PFTL half exists behind the genesis switch `exports_enabled`, off by default.
 2. Whether exports have a minimum above one atom, for example the lock's `minimumLockAmount`. Enforcing it needs a new lane policy field and a genesis change.
 3. Whether an unpaid export can be refunded on PFTL after a deadline. The refund needs the verifier to refuse the refunded packet. Without a refund, an export waits for the relay indefinitely.
 4. The prover program and its audit budget, and who runs the relay.
