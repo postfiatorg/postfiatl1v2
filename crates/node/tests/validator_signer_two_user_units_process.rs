@@ -399,3 +399,53 @@ fn transport_validator_serve_refuses_a_key_file_beside_the_signer_socket() {
         );
     }
 }
+
+/// Registering the signer reads the node id and writes nothing: with no
+/// signer answering, the service refuses and the node state is untouched.
+#[test]
+fn transport_validator_serve_writes_nothing_before_the_signer_answers() {
+    let root = std::env::temp_dir().join(format!(
+        "pf-vsig-units-state-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos()
+    ));
+    let data_dir = root.join("node");
+    init_consensus_v2(InitConsensusV2Options {
+        data_dir: data_dir.clone(),
+        chain_id: CHAIN_ID.to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 4,
+        activation_height: 1,
+        storage_activation_height: None,
+    })
+    .expect("init chain");
+    let state_file = data_dir.join("node_state.json");
+    let before = fs::read(&state_file).expect("node state");
+    let output = Command::new(node_bin())
+        .args([
+            "transport-validator-serve",
+            "--unsafe-devnet-json-storage",
+            "--data-dir",
+            &path(&data_dir),
+            "--topology",
+            &path(&root.join("topology.json")),
+            "--vote-dir",
+            &path(&root.join("votes")),
+            "--finality-signer-socket",
+            &path(&root.join("absent.sock")),
+        ])
+        .output()
+        .expect("run transport-validator-serve");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("validator_signer_unreachable"), "{stderr}");
+    assert_eq!(
+        fs::read(&state_file).expect("node state"),
+        before,
+        "node state written"
+    );
+    let _ = fs::remove_dir_all(root);
+}

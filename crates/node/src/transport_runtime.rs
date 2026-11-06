@@ -855,7 +855,9 @@ pub(super) fn transport_validator_serve(
     // authentication all sign through it, and lives until the service stops.
     let _signer_registration = match &signer_socket {
         Some(socket) => {
-            let local_status = run_once(NodeOptions {
+            // Read-only, as rpc-serve: nothing is written before the signer
+            // has answered.
+            let local_status = status(NodeOptions {
                 data_dir: data_dir.clone(),
             })
             .map_err(|error| format!("transport validator service status failed: {error}"))?;
