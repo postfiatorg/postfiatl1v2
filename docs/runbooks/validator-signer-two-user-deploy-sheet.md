@@ -30,7 +30,22 @@ The steps are the operator page's, in the same order and words.
     systemctl stop postfiat-<validator>.service postfiat-<validator>-rpc.service
     ```
 
-3. [ ] Move the key to `/var/lib/postfiat-signer/<validator>/validator_keys.json` (`0600`, owned by `postfiat-signer`); no copy stays in the data directory.
+3. [ ] Search for other copies of the key that `postfiat` can read, outside the signer's directory; the move is complete only when the search finds nothing.
+
+    ```sh
+    # Files named like key files, then files holding this key's fields.
+    PUB=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["validators"][0]["public_key_hex"])' \
+      /var/lib/postfiat/<validator>/validator_keys.json)
+    find / -xdev -type f -user postfiat -name '*key*.json' -print
+    find / -xdev -type f -user postfiat -size -64M -exec grep -l -F private_key_hex {} + \
+      | xargs -r grep -l -F "$PUB"
+    ```
+
+    Each hit other than `/var/lib/postfiat/<validator>/validator_keys.json`
+    (moved below) is deleted or moved to `postfiat-signer`, and recorded; then
+    search again.
+
+4. [ ] Move the key to `/var/lib/postfiat-signer/<validator>/validator_keys.json` (`0600`, owned by `postfiat-signer`); no copy stays in the data directory.
 
     ```sh
     install -o postfiat-signer -m 0600 /var/lib/postfiat/<validator>/validator_keys.json \
@@ -38,14 +53,18 @@ The steps are the operator page's, in the same order and words.
     shred -u /var/lib/postfiat/<validator>/validator_keys.json
     ```
 
-4. [ ] Choose the floor `N` by the rule above, with both old units stopped.
+    `shred -u` is best effort on a journaled filesystem: earlier blocks of the
+    file may survive in the journal or in a backup; the search above covers
+    files, not freed blocks.
+
+5. [ ] Choose the floor `N` by the rule above, with both old units stopped.
 
     The rule: the larger of the store's finalized height plus one (`status`)
     and the highest height in `block_proposal_vote_locks` plus one. If the old
     units may have voted or timed out on a height not final yet, read the tip
     after the other validators finalize past it. Record `N`.
 
-5. [ ] Initialize the guard once as `postfiat-signer` with `--initialize-state --min-height N` and a throwaway `--socket` under the signer's directory; stop it after its ready line.
+6. [ ] Initialize the guard once as `postfiat-signer` with `--initialize-state --min-height N` and a throwaway `--socket` under the signer's directory; stop it after its ready line.
 
     ```sh
     sudo -u postfiat-signer /opt/postfiat/releases/<release>/postfiat-node validator-signer-serve \
@@ -57,7 +76,7 @@ The steps are the operator page's, in the same order and words.
       --allow-peer-uid "$(id -u postfiat)"
     ```
 
-6. [ ] Start the signer unit, then the transport and rpc units.
+7. [ ] Start the signer unit, then the transport and rpc units.
 
     ```sh
     systemctl daemon-reload
@@ -65,9 +84,10 @@ The steps are the operator page's, in the same order and words.
     systemctl start postfiat-<validator>.service postfiat-<validator>-rpc.service
     ```
 
-7. [ ] Run the deployment check.
+8. [ ] Run the deployment check.
 
     `python -m postfiat_ops.validator_signer_check` with the operator page's
-    arguments; record its `report.json`.
+    arguments and `--search-root /var/lib/postfiat` plus every backup
+    directory; record its `report.json`.
 
-8. [ ] Read `private_readiness` and record `custody_reasons`.
+9. [ ] Read `private_readiness` and record `custody_reasons`.

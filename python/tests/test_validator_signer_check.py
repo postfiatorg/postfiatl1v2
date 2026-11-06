@@ -87,6 +87,39 @@ class DeploymentCheckTests(unittest.TestCase):
         self.report['custody']['data_dir_key_files'] = ['validator_keys.json']
         self.assertFalse(self.result()['passed'])
 
+    def test_search_root_reports_a_key_copy_the_rpc_or_gateway_uid_can_read(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            os.chmod(root, 0o755)
+            signer_dir = root / 'signer'
+            backup = root / 'backup'
+            for directory, mode in ((signer_dir, 0o700), (backup, 0o755)):
+                directory.mkdir()
+                os.chmod(directory, mode)
+            (signer_dir / 'validator_keys.json').write_text('{}')
+            decoy = backup / 'validator_keys.json'
+            decoy.write_text('{}')
+            private = backup / 'node' / 'validator_keys.json'
+            private.parent.mkdir()
+            private.write_text('{}')
+            os.chmod(private, 0o600)
+            os.chmod(decoy, 0o644)
+            rpc = dict(self.rpc, gids=[1101] * 4, groups=[])
+            readers = [rpc, dict(self.gateway, gids=[1102] * 4, groups=[])]
+            copies = validator_signer_check.readable_key_copies(
+                [root], signer_dir / 'validator_keys.json', [], readers)
+            # The decoy is world-readable; the signer's own key and a copy
+            # only its owner can read are not reported.
+            self.assertEqual(copies, [str(decoy)])
+            os.chmod(decoy, 0o600)
+            self.assertEqual(validator_signer_check.readable_key_copies(
+                [root], signer_dir / 'validator_keys.json', [], readers), [])
+            os.chmod(decoy, 0o640)
+            os.chown(decoy, -1, os.getgid())
+            readers[0]['groups'] = [os.getgid()]
+            self.assertEqual(validator_signer_check.readable_key_copies(
+                [root], signer_dir / 'validator_keys.json', [], readers), [str(decoy)])
+
     def test_capabilities_on_rpc_or_gateway_refused(self):
         for role in ('rpc', 'gateway'):
             for name in ('CapEff', 'CapPrm', 'CapAmb'):

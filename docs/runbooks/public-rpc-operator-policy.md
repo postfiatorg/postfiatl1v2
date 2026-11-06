@@ -162,6 +162,10 @@ It fails when a file named `validator_keys.json`, or named like the signer's
 key files, exists anywhere under the data directory, and when the rpc or gateway
 process holds any capability (`CapEff`, `CapPrm` or `CapAmb` nonzero, for example
 `CAP_DAC_READ_SEARCH` granted by systemd `AmbientCapabilities`).
+With `--search-root DIR...` it also fails, listing them under
+`readable_key_copies`, when a file named like a key file outside the signer's
+directory can be read by the rpc or gateway uid (owner, group and search
+permissions on every ancestor; no file is read).
 It requires permission to inspect all three processes, normally root:
 
 ```sh
@@ -170,7 +174,8 @@ PYTHONPATH=python python3 -m postfiat_ops.validator_signer_check \
   --rpc-port RPC_PORT --node-sha256 EXPECTED_NODE_SHA256 \
   --data-dir EXPECTED_LIVE_DATA_DIR --database EXPECTED_LIVE_REDB_FILE \
   --key-file SIGNER_KEY_FILE --state-dir SIGNER_GUARD_DIR \
-  --socket SIGNER_SOCKET --output NEW_REPORT_DIRECTORY
+  --socket SIGNER_SOCKET --output NEW_REPORT_DIRECTORY \
+  [--search-root /var/lib/postfiat BACKUP_DIRECTORY...]
 ```
 
 Review `report.json` or `review.html`. Exit 2 means a failed or unavailable check;
@@ -223,16 +228,17 @@ readiness no longer reports `validator_key_copy_in_data_dir`
 (`crates/node/tests/validator_signer_two_user_units_process.rs` starts the
 three processes from the generated units on a local chain).
 
-Order on a validator (the deploy sheet uses the same steps, word for word):
+Order on a validator (the deploy sheet uses the same steps, word for word). `shred -u` in the sheet's move is best effort on a journaled filesystem; the search step and the checker's `--search-root` find files, not freed blocks.
 
 1. Create `postfiat-signer` and `postfiat-signer-clients`, add `postfiat` to the group, and write `/etc/postfiat/signer/<validator>.env` with `POSTFIAT_SIGNER_ALLOW_PEER_UID=$(id -u postfiat)`.
 2. Stop both old units, `postfiat-<validator>.service` and `postfiat-<validator>-rpc.service`: both sign with the key.
-3. Move the key to `/var/lib/postfiat-signer/<validator>/validator_keys.json` (`0600`, owned by `postfiat-signer`); no copy stays in the data directory.
-4. Choose the floor `N` by the rule above, with both old units stopped.
-5. Initialize the guard once as `postfiat-signer` with `--initialize-state --min-height N` and a throwaway `--socket` under the signer's directory; stop it after its ready line.
-6. Start the signer unit, then the transport and rpc units.
-7. Run the deployment check.
-8. Read `private_readiness` and record `custody_reasons`.
+3. Search for other copies of the key that `postfiat` can read, outside the signer's directory; the move is complete only when the search finds nothing.
+4. Move the key to `/var/lib/postfiat-signer/<validator>/validator_keys.json` (`0600`, owned by `postfiat-signer`); no copy stays in the data directory.
+5. Choose the floor `N` by the rule above, with both old units stopped.
+6. Initialize the guard once as `postfiat-signer` with `--initialize-state --min-height N` and a throwaway `--socket` under the signer's directory; stop it after its ready line.
+7. Start the signer unit, then the transport and rpc units.
+8. Run the deployment check.
+9. Read `private_readiness` and record `custody_reasons`.
 
 The [deploy sheet template](validator-signer-two-user-deploy-sheet.md) carries
 these steps with the commands.
