@@ -339,10 +339,15 @@ waits for the audit (design note, section 8).
 
 ## Deploy the lock contract
 
-Order (design note, sections 5 and 6): the PFTL finality verifier is deployed
-on Base first, then the lock contract, which fixes the verifier at
-construction; genesis later names the lock's address and runtime code hash.
-No PFTL finality verifier exists on Base yet, so only test runs are possible.
+Order ([Phase 3 design note](../../docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md),
+section 5, "Deployment order", which supersedes the Phase 2 order): PFTL
+genesis first pins the lock's predicted address and runtime code hash,
+computed from two fresh deployers' next nonces and the predicted verifier
+address. After the first finalized PFTL checkpoint, the PFTL finality verifier
+and then the lock contract, which fixes the verifier at construction, are
+deployed at their predicted nonces, and their addresses and code hashes are
+checked against the genesis pins. No PFTL finality verifier exists on Base
+yet, so only test runs are possible.
 
 `script/DeployPFTLock.s.sol` follows `script/DeployPFTToken.s.sol` (its own
 cheatcode interface, named errors, placeholder refusal, test-only switches on
