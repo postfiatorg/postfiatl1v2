@@ -1507,6 +1507,72 @@ mod validator_signer_tests {
     }
 
     #[test]
+    fn two_different_same_slot_requests_at_once_get_one_signature_and_one_refusal() {
+        let root = temp_root("concurrent");
+        let (socket, _) = serve(&root, vec![current_euid()], 5_000);
+        for height in 1..=8u64 {
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let handles: Vec<_> = [true, false]
+                .into_iter()
+                .map(|accept| {
+                    let (socket, barrier) = (socket.clone(), barrier.clone());
+                    std::thread::spawn(move || {
+                        let message = serde_json::to_vec(&serde_json::json!([
+                            "signer-test",
+                            "a".repeat(96),
+                            1,
+                            height,
+                            0,
+                            "b".repeat(96),
+                            "validator-0",
+                            "transparent",
+                            "c".repeat(96),
+                            "d".repeat(96),
+                            [],
+                            "validator-0",
+                            accept
+                        ]))
+                        .expect("legacy message");
+                        let request = serde_json::to_vec(&ValidatorSignerRequest {
+                            schema: VALIDATOR_SIGNER_REQUEST_SCHEMA.to_string(),
+                            method: "sign".to_string(),
+                            validator_id: Some("validator-0".to_string()),
+                            context: Some(
+                                String::from_utf8_lossy(BLOCK_CERTIFICATE_SIGNATURE_CONTEXT)
+                                    .into_owned(),
+                            ),
+                            message_hex: Some(bytes_to_hex(&message)),
+                        })
+                        .expect("json");
+                        barrier.wait();
+                        raw_request(&socket, &request)
+                    })
+                })
+                .collect();
+            let answers: Vec<_> = handles
+                .into_iter()
+                .map(|handle| handle.join().expect("request thread"))
+                .collect();
+            let signed = answers
+                .iter()
+                .filter(|answer| answer.ok && answer.signature_hex.is_some())
+                .count();
+            let refused: Vec<_> = answers
+                .iter()
+                .filter_map(|answer| answer.error.as_ref())
+                .map(|error| error.message.clone())
+                .collect();
+            assert_eq!(signed, 1, "height {height}: {refused:?}");
+            assert_eq!(refused.len(), 1, "height {height}");
+            assert!(
+                refused[0].contains("validator_signer_double_sign"),
+                "height {height}: {refused:?}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn signer_refuses_a_peer_uid_outside_the_allow_list_and_signs_nothing() {
         let root = temp_root("peer");
         let other = current_euid().wrapping_add(1);
