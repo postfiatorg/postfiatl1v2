@@ -35,7 +35,7 @@ pub(super) fn stage_inputs(root: &Path) -> DeploymentValidatorUnitsStageOptions 
         ("swap.metadata.json", b"swap-metadata"),
         ("private-egress.metadata.json", b"private-egress-metadata"),
     ] {
-        atomic_write(&root.join(name), bytes).expect("stage input");
+        atomic_write(root.join(name), bytes).expect("stage input");
     }
     DeploymentValidatorUnitsStageOptions {
         release_id: "release-test-1".to_string(),
