@@ -26,9 +26,9 @@ supply, minting and redemption are tied to machine-checkable reserve packets.
 > - The code is **not externally audited**. See [SECURITY.md](SECURITY.md) and
 >   the [security overview](docs/security/index.md).
 > - Main includes a separate validator signer process using a Unix socket and
->   software key files. Its own double-sign guard and deployment qualification
->   remain open; HSM custody is not implemented. The recorded fleet still uses
->   file signers. See the [signer policy](docs/runbooks/public-rpc-operator-policy.md#validator-signer-process).
+>   software key files, with a durable double-sign guard and a deployment
+>   checker. Its deployment under two users remains open; HSM custody is not
+>   implemented. The recorded fleet still uses file signers. See the [signer policy](docs/runbooks/public-rpc-operator-policy.md#validator-signer-process).
 > - The controlled devnet has used transactional `redb` storage since height
 >   930. Offline qualification (G5) closed for the October 21 binary on October
 >   23; G6 remains open. See [State And Storage](docs/architecture/state-and-storage.md).

@@ -27,9 +27,9 @@ Public launch adds:
 Transactional indexed storage is implemented and active on the controlled
 devnet; its G5 offline packet is bound to the October 21 binary, while G6
 remains open ([State And Storage](../architecture/state-and-storage.md)).
-A separate software signer process is implemented on main, with its own
-double-sign guard and deployment qualification still open; HSM custody is not
-implemented ([Signer Policy](../runbooks/public-rpc-operator-policy.md#validator-signer-process)).
+A separate software signer process with a durable double-sign guard is
+implemented on main; its deployment under two users is still open, and HSM
+custody is not implemented ([Signer Policy](../runbooks/public-rpc-operator-policy.md#validator-signer-process)).
 Production key custody, qualification of the exact deployed binary, independent
 specialist review and deployment-specific recovery/fault drills remain
 real-value requirements.

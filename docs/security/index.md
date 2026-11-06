@@ -63,8 +63,8 @@ From the [security policy](https://github.com/postfiatorg/postfiatl1v2/blob/main
 
 - Validator keys remain software key files. Main implements a separate signer
   process with Unix-socket peer-UID checks and no key-file fallback in socket
-  mode. Its own double-sign guard and deployment qualification remain open;
-  HSM custody is not implemented. The recorded fleet still uses file signers.
+  mode, and a durable double-sign guard. Its deployment under two users
+  remains open; HSM custody is not implemented. The recorded fleet still uses file signers.
   See the [signer policy](../runbooks/public-rpc-operator-policy.md#validator-signer-process).
 - File-signer mode needs `--unsafe-devnet-file-signer`. Long-running validator
   and RPC services on JSON/JSONL or not-yet-activated storage need

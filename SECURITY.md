@@ -50,9 +50,9 @@ not be treated as externally audited production infrastructure.
 
 - Validator keys remain software-key files protected by host filesystem
   permissions. Main implements a separate signer process behind a Unix socket
-  with peer-UID checks and no key-file fallback in socket mode. Its own durable
-  double-sign guard and production deployment qualification remain open; HSM
-  custody is not implemented. The recorded fleet still uses file signers. See
+  with peer-UID checks and no key-file fallback in socket mode, and a durable
+  double-sign guard in that process. Its deployment under two users remains
+  open; HSM custody is not implemented. The recorded fleet still uses file signers. See
   the [signer policy](docs/runbooks/public-rpc-operator-policy.md#validator-signer-process).
 - Consensus state on the controlled devnet uses transactional `redb` storage,
   activated at height 930 on 2026-08-31

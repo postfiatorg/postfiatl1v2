@@ -57,7 +57,7 @@ sequenceDiagram
 Main includes `postfiat-node validator-signer-serve` and
 `rpc-serve --finality-signer-socket`: the software key stays in a separate
 process, with Unix-socket peer-UID checks and no key-file fallback in socket
-mode. Its own durable double-sign guard and deployment under two users remain
+mode, and a durable double-sign guard. Its deployment under two users remains
 open. This does not establish deployment on the recorded fleet. Use the
 [signer policy](../runbooks/public-rpc-operator-policy.md#validator-signer-process)
 and [readiness milestone](../plans/active/user-proven-shielded-actions-milestone.md)

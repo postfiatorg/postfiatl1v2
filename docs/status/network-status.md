@@ -60,8 +60,8 @@ normal on this devnet.
   on all six validators since 2026-10-21. These are certificate lanes beside
   block consensus; see [Settlement Lanes](../architecture/settlement-lanes.md).
 - **Validator keys.** The recorded fleet uses software key files. Main now
-  implements a separate signer process with a Unix socket and peer-UID checks;
-  deployment under two users and its own double-sign guard remain open. HSM
+  implements a separate signer process with a Unix socket, peer-UID checks and
+  a durable double-sign guard; its deployment under two users remains open. HSM
   custody is not implemented. See the
   [signer policy](../runbooks/public-rpc-operator-policy.md#validator-signer-process).
   File-signer mode needs `--unsafe-devnet-file-signer`. Services on JSON/JSONL
@@ -77,8 +77,10 @@ normal on this devnet.
 The [PFT token on Base](../architecture/pft-token-on-base.md) and
 [genesis external lane](../architecture/genesis-external-lanes.md) have contract,
 release, checkpoint-source and watcher implementations. The November 5 record
-demonstrates checkpoint observation/signing on Base Sepolia; a real Lock-to-PFT
-rehearsal remains open, and the watcher's live read saw zero releases. The
+demonstrates checkpoint observation/signing on Base Sepolia. On 2026-11-06 the
+first real Base Sepolia Lock was released into native PFT on a local
+six-validator fleet, refused on resubmission, and the watcher reported it
+backed ([record](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md#base-sepolia-rehearsal-2026-11-06-part-2-the-release-on-a-local-fleet)). The
 reverse export route is designed but refused until implemented. These are
 source/test results, not a Base mainnet deployment or devnet activation. See
 the [listing milestone](../plans/active/pft-erc20-base-listing-milestone.md).
