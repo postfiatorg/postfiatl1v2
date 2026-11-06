@@ -339,8 +339,12 @@ pub struct GenesisExternalLanePolicy {
     /// Whether `external_lane_export_v1` is applied. Absent reads as false,
     /// and false is not encoded, so a lane without exports keeps its genesis
     /// JSON, its genesis hash and its route-config digest.
-    #[serde(default, skip_serializing_if = "is_false")]
+    #[serde(default, skip_serializing_if = "exports_enabled_is_false")]
     pub exports_enabled: bool,
+}
+
+fn exports_enabled_is_false(enabled: &bool) -> bool {
+    !*enabled
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
