@@ -2992,6 +2992,15 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                     "--private-egress-circuit-metadata-file",
                 )?),
                 output_dir: PathBuf::from(required("--output-dir")?),
+                signer_shape: match flag_value(flags, "--signer-shape") {
+                    None | Some("key-file") => DeploymentSignerShape::KeyFile,
+                    Some("two-user") => DeploymentSignerShape::TwoUser,
+                    Some(other) => {
+                        return Err(format!(
+                            "--signer-shape must be key-file or two-user, not `{other}`"
+                        ))
+                    }
+                },
             })
             .map_err(|error| format!("deployment-validator-units-stage failed: {error}"))?;
             let json = serde_json::to_string_pretty(&report).map_err(|error| {

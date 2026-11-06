@@ -952,7 +952,7 @@ fn print_usage() {
   postfiat-node storage-integrity-migrate-legacy [--data-dir PATH] --offline-confirmed
   postfiat-node deployment-publisher-key-create --publisher-key-file PATH
   postfiat-node deployment-publisher-key-export --publisher-key-file PATH --public-key-file PATH
-  postfiat-node deployment-validator-units-stage --release-id ID --topology-file PATH --binary-file PATH --swap-circuit-metadata-file PATH --private-egress-circuit-metadata-file PATH --output-dir PATH
+  postfiat-node deployment-validator-units-stage --release-id ID --topology-file PATH --binary-file PATH --swap-circuit-metadata-file PATH --private-egress-circuit-metadata-file PATH --output-dir PATH [--signer-shape key-file|two-user]
   postfiat-node deployment-manifest-create --deployment-id ID --valid-from-unix N --valid-until-unix N --chain-id ID --genesis-hash HASH --git-revision REV --binary-file PATH --build-profile PROFILE --build-features CSV --protocol-version N --rpc-schema SCHEMA --service-unit-file PATH --environment-file PATH --validator-bindings-file PATH --topology-file PATH --swap-circuit-metadata-file PATH --private-egress-circuit-metadata-file PATH --publisher-key-file PATH --manifest-file PATH
   postfiat-node deployment-manifest-verify --manifest-file PATH --trusted-publisher-key-file PATH [--now-unix N] [--validator-id ID --validator-bindings-file PATH] [--runtime-binary-file PATH --runtime-topology-file PATH --runtime-swap-circuit-metadata-file PATH --runtime-private-egress-circuit-metadata-file PATH]
   postfiat-node rpc --method METHOD [--id ID] [--data-dir PATH] [method flags]

@@ -33,6 +33,7 @@ mod tests {
     mod private_primary_replay_gate_tests;
     mod recipient_format_activation;
     mod snapshot_deployment;
+    mod signer_two_user_units;
     mod genesis_external_lane_tests;
     mod external_lane_amendment_tests;
     mod validator_registry_continuation_tests;

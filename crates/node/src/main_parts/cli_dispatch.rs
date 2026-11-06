@@ -185,7 +185,7 @@ use postfiat_node::{
     CobaltAuthorityTransitionCreateOptions, CobaltAuthorityTransitionSignOptions,
     DeploymentManifestCreateOptions, DeploymentManifestVerifyOptions,
     DeploymentPublisherKeyCreateOptions, DeploymentPublisherKeyExportOptions,
-    DeploymentValidatorUnitsStageOptions, EscrowFeeQuoteOptions, EscrowFeeQuoteReport,
+    DeploymentSignerShape, DeploymentValidatorUnitsStageOptions, EscrowFeeQuoteOptions, EscrowFeeQuoteReport,
     EscrowInfoOptions, EthereumCheckpointCertificateAssembleOptions,
     EthereumCheckpointObserveOptions, EthereumCheckpointVoteSignOptions,
     EthereumReceiptProofBuildOptions, ExpectedBatchCommitIdentity,
