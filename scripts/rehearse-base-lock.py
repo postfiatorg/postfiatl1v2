@@ -65,6 +65,24 @@ def contracts_checkout_state():
     return status, stamps
 
 
+# What the ignored composition test (crates/node/src/tests/external_lane_local_evm_tests.rs)
+# calls in-process: the implementations behind the four node commands, then the
+# ordinary release path. It runs no CLI binary for these steps.
+NODE_PLAN = [
+    {'step': 'observe the Lock block as a lane checkpoint', 'cli': 'external-lane-checkpoint-observe',
+     'calls': 'observe_external_lane_checkpoint', 'in': 'crates/node/src/external_lane_checkpoint_source.rs'},
+    {'step': 'five validators re-observe and sign it', 'cli': 'external-lane-checkpoint-sign',
+     'calls': 'sign_external_lane_checkpoint_vote', 'in': 'crates/node/src/external_lane_checkpoint_source.rs'},
+    {'step': 'assemble the five votes', 'cli': 'external-lane-checkpoint-assemble',
+     'calls': 'assemble_external_lane_checkpoint_certificate', 'in': 'crates/node/src/external_lane_checkpoint_source.rs'},
+    {'step': 'prove the Lock receipt and build the release', 'cli': 'external-lane-lock-proof',
+     'calls': 'build_external_lane_lock_proof', 'in': 'crates/node/src/external_lane_checkpoint_source.rs'},
+    {'step': 'admit, batch and apply the release in a certified block, then replay it',
+     'calls': 'submit_signed_asset_transaction_json_to_mempool, create_mempool_batch, apply_batch '
+              '(execute_external_lane_release, crates/execution/src/external_lane_release.rs), verify_blocks, verify_state'},
+]
+
+
 def free_port():
     with socket.socket() as stream:
         stream.bind(('127.0.0.1', 0))
@@ -88,18 +106,25 @@ def main():
                        CARGO_PROFILE_DEV_DEBUG='0', PYTHONPATH=str(ROOT / 'python'),
                        POSTFIAT_LOCAL_EVM_REHEARSAL=str(out / 'config.json'))
     results = {'scope': 'local EVM and generated PFT chain only', 'started_at_unix': int(time.time()),
+               'children': [], 'node_plan': NODE_PLAN,
                'source_head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
                'commands': [], 'passed': False, 'public_testnet_transaction': False}
     children = []
     native = None
     contracts_before = contracts_checkout_state()
 
-    def command(name, argv, cwd=ROOT, expected=0):
+    def command(name, argv, cwd=ROOT, expected=0, stdin_text=None):
         began = time.time()
         with (out / f'{name}.stdout').open('w') as stdout, (out / f'{name}.stderr').open('w') as stderr:
-            p = subprocess.run([str(a) for a in argv], cwd=cwd, env=environment, stdout=stdout, stderr=stderr, timeout=1800)
-        results['commands'].append({'name': name, 'argv': [str(a) for a in argv], 'cwd': str(cwd),
-                                    'exit_code': p.returncode, 'seconds': round(time.time() - began, 3)})
+            p = subprocess.run([str(a) for a in argv], cwd=cwd, env=environment, stdout=stdout, stderr=stderr,
+                               input=stdin_text, text=True, timeout=1800)
+        entry = {'name': name, 'argv': [str(a) for a in argv], 'cwd': str(cwd),
+                 'exit_code': p.returncode, 'seconds': round(time.time() - began, 3)}
+        if stdin_text is not None:
+            # Long inputs such as runtime bytecode go through stdin, recorded by hash.
+            entry['stdin_sha256'] = hashlib.sha256(stdin_text.encode()).hexdigest()
+            entry['stdin_bytes'] = len(stdin_text.encode())
+        results['commands'].append(entry)
         if p.returncode != expected:
             raise RuntimeError(f'{name}: exit {p.returncode}, expected {expected}; see saved logs')
         return (out / f'{name}.stdout').read_text()
@@ -115,8 +140,10 @@ def main():
     try:
         port = free_port()
         url = f'http://127.0.0.1:{port}'
-        anvil = subprocess.Popen(['anvil', '--host', '127.0.0.1', '--port', str(port), '--chain-id', '84532', '--silent'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        anvil_argv = ['anvil', '--host', '127.0.0.1', '--port', str(port), '--chain-id', '84532', '--silent']
+        anvil = subprocess.Popen(anvil_argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         children.append(anvil)
+        results['children'].append({'name': 'anvil', 'argv': anvil_argv})
         for _ in range(100):
             try:
                 if 'anvil' in str(rpc('web3_clientVersion')).lower():
@@ -139,9 +166,9 @@ def main():
 
         token = deploy('token', 'src/PFTToken.sol:PFTToken', ['Rehearsal PFT', 'rPFT', '300000000', holder])
         verifier = deploy('test-verifier', 'test/PFTLockV1.t.sol:MockFinalityVerifier')
-        token_hash = command('token-codehash', ['cast', 'keccak', rpc('eth_getCode', [token, 'latest'])]).strip()
+        token_hash = command('token-codehash', ['cast', 'keccak'], stdin_text=rpc('eth_getCode', [token, 'latest'])).strip()
         lock = deploy('lock', 'src/PFTLockV1.sol:PFTLockV1', [token, verifier, token_hash, '6000000', '10'])
-        lock_hash = command('lock-codehash', ['cast', 'keccak', rpc('eth_getCode', [lock, 'latest'])]).strip()
+        lock_hash = command('lock-codehash', ['cast', 'keccak'], stdin_text=rpc('eth_getCode', [lock, 'latest'])).strip()
         config = dict(rpc=url, output=str(out), holder=holder, token=token, lock=lock,
                       token_code_hash=token_hash, lock_code_hash=lock_hash)
         (out / 'config.json').write_text(json.dumps(config, indent=2) + '\n')
@@ -157,10 +184,12 @@ def main():
         results['node_sha256'] = hashlib.sha256(node.read_bytes()).hexdigest()
         rpc_port = free_port()
         ready = out / 'rpc-ready.json'
-        service = subprocess.Popen([str(node), 'rpc-serve', '--unsafe-devnet-json-storage', '--data-dir', native['data_dir'],
-                                    '--bind-host', '127.0.0.1', '--port', str(rpc_port), '--max-requests', '100',
-                                    '--ready-file', str(ready)], stdout=subprocess.DEVNULL, stderr=(out / 'rpc.stderr').open('w'), env=environment)
+        service_argv = [str(node), 'rpc-serve', '--unsafe-devnet-json-storage', '--data-dir', native['data_dir'],
+                        '--bind-host', '127.0.0.1', '--port', str(rpc_port), '--max-requests', '100',
+                        '--ready-file', str(ready)]
+        service = subprocess.Popen(service_argv, stdout=subprocess.DEVNULL, stderr=(out / 'rpc.stderr').open('w'), env=environment)
         children.append(service)
+        results['children'].append({'name': 'rpc-serve', 'argv': service_argv})
         for _ in range(600):
             if ready.exists():
                 break
