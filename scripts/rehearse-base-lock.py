@@ -7,7 +7,6 @@ The Phase 3 verifier is a test stand-in; no public testnet/mainnet transaction.
 from __future__ import annotations
 import argparse
 import hashlib
-import html
 import json
 import os
 from pathlib import Path
@@ -90,6 +89,57 @@ def free_port():
 
 
 PORT_ATTEMPTS = 5
+# The production entry points the run exercises and the harness that drives
+# them: manifest.json records the sha256 of each at the recorded commit.
+SOURCE_FILES = (
+    'crates/node/src/external_lane_checkpoint_source.rs',
+    'crates/execution/src/external_lane_release.rs',
+    'python/postfiat_rpc/external_lane_watcher.py',
+    'crates/pft-token-contracts/src/PFTLockV1.sol',
+    'crates/pft-token-contracts/src/PFTToken.sol',
+    'scripts/rehearse-base-lock.py',
+    'crates/node/src/tests/external_lane_local_evm_tests.rs',
+    'crates/node/src/tests/genesis_external_lane_tests.rs',
+    'crates/pft-token-contracts/test/PFTLockV1.t.sol',
+)
+# The artifacts the public record keeps; manifest.json lists every other one by
+# sha256 and size only.
+PUBLISHED = (
+    'result.json', 'manifest.json', 'native-result.json', 'lock-receipt.json',
+    'token.stdout', 'lock.stdout', 'token-codehash.stdout', 'lock-codehash.stdout',
+    'test-verifier.stdout', 'native-release.stdout', 'watcher.stdout', 'watcher-repeat.stdout',
+)
+
+
+def git(*args):
+    return subprocess.check_output(['git', *args], cwd=ROOT, text=True).strip()
+
+
+def clean_source():
+    """The commit and tree the run executes: the worktree must hold exactly a
+    commit, so the recorded hashes name the code that ran."""
+    dirty = git('status', '--porcelain')
+    require(not dirty, f'the worktree is not clean; commit or stash first:\n{dirty}')
+    return git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}')
+
+
+def sha256_file(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def write_manifest(out, commit, tree):
+    artifacts = sorted(path for path in out.iterdir() if path.is_file() and path.name != 'manifest.json')
+    manifest = {
+        'source_commit': commit,
+        'source_tree': tree,
+        'source_files': {name: sha256_file(ROOT / name) for name in SOURCE_FILES},
+        'evidence_files': {path.name: sha256_file(path) for path in artifacts if path.name in PUBLISHED},
+        'not_published': {path.name: {'sha256': sha256_file(path), 'bytes': path.stat().st_size}
+                          for path in artifacts if path.name not in PUBLISHED},
+        'not_published_note': 'Raw run artifacts kept out of the docs tree; scripts/rehearse-base-lock.py '
+                              'regenerates them in its --output directory.',
+    }
+    (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
 
 
 def confined_paths(output, target_dir):
@@ -140,6 +190,7 @@ def main():
     parser.add_argument('--target-dir', type=Path, required=True)
     args = parser.parse_args()
     out, target = confined_paths(args.output, args.target_dir)
+    commit, tree = clean_source()
     print(f'output directory: {out}', file=sys.stderr)
     print(f'cargo target directory: {target}', file=sys.stderr)
     out.mkdir(parents=True, mode=0o700, exist_ok=False)
@@ -153,7 +204,7 @@ def main():
                        POSTFIAT_LOCAL_EVM_REHEARSAL=str(out / 'config.json'))
     results = {'scope': 'local EVM and generated PFT chain only', 'started_at_unix': int(time.time()),
                'children': [], 'node_plan': NODE_PLAN,
-               'source_head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
+               'source_head': commit, 'source_tree': tree,
                'commands': [], 'passed': False, 'public_testnet_transaction': False}
     children = []
     native = None
@@ -269,10 +320,14 @@ def main():
         results['ended_at_unix'] = int(time.time())
         encoded = json.dumps(results, indent=2) + '\n'
         (out / 'result.json').write_text(encoded)
-        (out / 'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Local Base Lock rehearsal</title><h1>Local Base Lock rehearsal</h1><pre>' + html.escape(encoded) + '</pre>')
+        write_manifest(out, commit, tree)
         print(encoded)
     return 0 if results['passed'] else 1
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except RehearsalFailure as refusal:
+        print(f'rehearse-base-lock: {refusal}', file=sys.stderr)
+        sys.exit(2)
