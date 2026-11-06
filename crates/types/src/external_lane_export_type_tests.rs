@@ -246,3 +246,20 @@ fn external_lane_export_packets_prune_and_bound_like_release_records() {
     assert_eq!(code, EXTERNAL_LANE_STATE_CORRUPT);
     assert_eq!(state, before);
 }
+
+/// A pruned count at the top of u64 with two packets: the second packet's
+/// expected nonce does not exist, and the walk refuses instead of overflowing.
+#[test]
+fn external_lane_recorded_exports_refuse_a_nonce_past_u64_max() {
+    let (lane, mut state) = released_export_lane(60);
+    state.apply_export(&lane, sample_export(0, 1, 2)).expect("export");
+    state.apply_export(&lane, sample_export(1, 1, 3)).expect("export");
+    state.pruned_export_count = u64::MAX;
+    state.pruned_export_history_root = Some("00".repeat(48));
+    state.next_export_nonce = u64::MAX;
+    state.exports[0].export_nonce = u64::MAX;
+    assert!(state
+        .validate_recorded_exports()
+        .unwrap_err()
+        .contains("inconsistent export records"));
+}

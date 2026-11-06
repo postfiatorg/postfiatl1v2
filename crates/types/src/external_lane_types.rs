@@ -1493,8 +1493,17 @@ impl ExternalLaneState {
             packet
                 .validate()
                 .map_err(|error| format!("external lane `{}`: {error}", self.lane_id))?;
+            let expected_nonce = self
+                .pruned_export_count
+                .checked_add(offset as u64)
+                .ok_or_else(|| {
+                    format!(
+                        "external lane `{}` has inconsistent export records",
+                        self.lane_id
+                    )
+                })?;
             if packet.lane_id != self.lane_id
-                || packet.export_nonce != self.pruned_export_count + offset as u64
+                || packet.export_nonce != expected_nonce
                 || packet.exported_at_height < previous_height
             {
                 return Err(format!(
