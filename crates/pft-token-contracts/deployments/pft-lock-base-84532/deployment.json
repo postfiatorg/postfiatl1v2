@@ -44,5 +44,10 @@
   "stand_in_verifier_deployer": "0x2317C98D52135a43c06211b9Fa381CFe7b0eFa25",
   "stand_in_verifier_tx_hash": "0xbd16c9022ed4fccb0d2f5d387953032d7e4e4b51eabab265bb6ec29b8cbcb33b",
   "token_record": "deployments/pft-token-rehearsal-base-84532/deployment.json",
-  "previous_rehearsal_lock_record": "deployments/pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json"
+  "previous_rehearsal_lock_record": "deployments/pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json",
+  "verification_sourcify": "exact_match (creation and runtime, 2026-11-06T11:48:59Z)",
+  "verification_sourcify_url": "https://repo.sourcify.dev/84532/0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73",
+  "verification_blockscout": "verified (fully verified, 2026-11-06T11:49:11Z)",
+  "verification_blockscout_url": "https://base-sepolia.blockscout.com/address/0xFb6CF3D7E759cB3130C094C1D7264619ecE74D73?tab=contract",
+  "verification_basescan": "not verified (no key)"
 }
