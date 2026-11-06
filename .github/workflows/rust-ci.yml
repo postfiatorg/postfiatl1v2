@@ -78,3 +78,5 @@ jobs:
             -- --ignored --exact --nocapture
           cargo test --locked -p postfiat-node --bin postfiat-node \
             validator_signer_socket_tests -- --ignored
+          cargo test --locked -p postfiat-node --test validator_signer_two_user_units_process \
+            two_user_units_start_the_signer_rpc_and_transport_without_a_data_dir_key -- --ignored --exact

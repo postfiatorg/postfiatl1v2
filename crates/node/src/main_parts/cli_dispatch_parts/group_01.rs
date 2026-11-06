@@ -336,12 +336,29 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
             Ok(())
         }
         "transport-validator-serve" => {
-            require_unsafe_devnet_file_signer(flags, "transport validator service")?;
+            // `--finality-signer-socket` replaces the key file, as in
+            // rpc-serve: every signing site resolves the socket by the path
+            // it is given and the process never reads a key file.
+            let signer_socket = flag_value(flags, "--finality-signer-socket").map(PathBuf::from);
+            if signer_socket.is_some()
+                && (flag_present(flags, "--key-file")
+                    || flag_present(flags, "--unsafe-devnet-file-signer"))
+            {
+                return Err("validator_signer_flags_conflict: --finality-signer-socket replaces --key-file and --unsafe-devnet-file-signer".to_string());
+            }
+            if signer_socket.is_some() {
+                postfiat_node::enter_validator_signer_socket_mode();
+            } else {
+                require_unsafe_devnet_file_signer(flags, "transport validator service")?;
+            }
             require_transactional_or_unsafe_devnet_json_storage(flags, "transport validator service")?;
             let data_dir =
                 PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
             let topology_file = flag_value(flags, "--topology").ok_or("missing --topology")?;
-            let key_file = flag_value(flags, "--key-file").ok_or("missing --key-file")?;
+            let key_file = match &signer_socket {
+                Some(socket) => socket.clone(),
+                None => PathBuf::from(flag_value(flags, "--key-file").ok_or("missing --key-file")?),
+            };
             let vote_dir = flag_value(flags, "--vote-dir").ok_or("missing --vote-dir")?;
             let max_connections = flag_value(flags, "--max-connections")
                 .unwrap_or("1")
@@ -357,13 +374,14 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
             let report = transport_validator_serve(
                 data_dir,
                 PathBuf::from(topology_file),
-                PathBuf::from(key_file),
+                key_file,
                 PathBuf::from(vote_dir),
                 bind_host,
                 max_connections,
                 timeout_ms,
                 event_log,
                 require_signed_proposal,
+                signer_socket,
             )?;
             let json = serde_json::to_string_pretty(&report).map_err(|error| {
                 format!("transport validator serve serialization failed: {error}")

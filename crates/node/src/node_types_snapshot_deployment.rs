@@ -212,6 +212,20 @@ pub struct DeploymentValidatorUnitsStageOptions {
     pub swap_circuit_metadata_file: PathBuf,
     pub private_egress_circuit_metadata_file: PathBuf,
     pub output_dir: PathBuf,
+    /// `--signer-shape`: who holds the validator key. The default keeps it in
+    /// rpc-serve's data directory; `two-user` adds a signer unit.
+    pub signer_shape: DeploymentSignerShape,
+}
+
+/// How the staged rpc unit signs as the validator.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DeploymentSignerShape {
+    /// rpc-serve reads `<data-dir>/validator_keys.json` (`--finality-key-file`).
+    #[default]
+    KeyFile,
+    /// `postfiat-<validator>-signer.service` runs `validator-signer-serve` as
+    /// `postfiat-signer`, and rpc-serve signs through its socket with no key file.
+    TwoUser,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -222,6 +236,9 @@ pub struct DeploymentValidatorUnitsStageRow {
     pub transport_unit_file: PathBuf,
     pub transport_environment_file: PathBuf,
     pub runtime_bindings_file: PathBuf,
+    /// The two-user shape's signer unit. It is not in the signed bindings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signer_unit_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

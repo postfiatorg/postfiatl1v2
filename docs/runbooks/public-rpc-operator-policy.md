@@ -162,6 +162,11 @@ It fails when a file named `validator_keys.json`, or named like the signer's
 key files, exists anywhere under the data directory, and when the rpc or gateway
 process holds any capability (`CapEff`, `CapPrm` or `CapAmb` nonzero, for example
 `CAP_DAC_READ_SEARCH` granted by systemd `AmbientCapabilities`).
+With `--search-root DIR...` it also fails, listing them under
+`readable_key_copies`, when a file named like a key file outside the signer's
+directory is readable by the rpc or gateway uid by its mode bits and group
+membership: the owner, group and other read bits on the file and the search
+bits on every ancestor. POSIX ACLs are not inspected, and no file is read.
 It requires permission to inspect all three processes, normally root:
 
 ```sh
@@ -170,7 +175,8 @@ PYTHONPATH=python python3 -m postfiat_ops.validator_signer_check \
   --rpc-port RPC_PORT --node-sha256 EXPECTED_NODE_SHA256 \
   --data-dir EXPECTED_LIVE_DATA_DIR --database EXPECTED_LIVE_REDB_FILE \
   --key-file SIGNER_KEY_FILE --state-dir SIGNER_GUARD_DIR \
-  --socket SIGNER_SOCKET --output NEW_REPORT_DIRECTORY
+  --socket SIGNER_SOCKET --output NEW_REPORT_DIRECTORY \
+  [--search-root /var/lib/postfiat BACKUP_DIRECTORY...]
 ```
 
 Review `report.json` or `review.html`. Exit 2 means a failed or unavailable check;
@@ -180,14 +186,68 @@ must use a third unprivileged UID and have no protected files open. This is a
 point-in-time observation, not proof of every past/future access or a memory
 secret scan. Governance readiness and rollout approval are separate.
 
-The generated release rpc unit (`batch_snapshot.rs`, the `rpc.service` it
-writes) still runs as `User=postfiat` and passes `--finality-key-file
-{data_dir}/validator_keys.json` and `--finality-proposal-key-file`. A
-two-user deployment therefore needs a signer unit and an edited rpc unit: no
-key-file flags, `--finality-signer-socket <socket>`, and the socket
-directory reachable from the rpc unit (listed in `ReadWritePaths` or
-otherwise not hidden by its sandboxing). The key file moves out of the data
-directory to the signer's user.
+#### Two-user units
+
+`deployment-validator-units-stage --signer-shape two-user` writes the two-user
+shape into the release packet (`deployment_signer_unit`, `deployment_rpc_unit`
+and `deployment_transport_unit` in `crates/node/src/batch_snapshot.rs`).
+Without the option the packet keeps the single-user units, byte for byte.
+
+- `postfiat-<validator>-signer.service` runs `validator-signer-serve` as
+  `postfiat-signer` (group `postfiat-signer-clients`) with the key file and the
+  guard under `/var/lib/postfiat-signer/<validator>` (`0700`), the topology's
+  chain id and genesis hash, and the socket
+  `/run/postfiat-signer/<validator>.sock` (directory `0750`). It allows the uid
+  in `POSTFIAT_SIGNER_ALLOW_PEER_UID`, read from the host file
+  `/etc/postfiat/signer/<validator>.env`. It has no capabilities and no
+  network, and it never initializes the guard. One signer process serves both
+  clients, rpc-serve and the transport validator: both run as `postfiat`, so
+  the one allowed uid covers them, and the signer already accepts every
+  context they sign (below).
+- `postfiat-<validator>-rpc.service` is the single-user rpc unit with
+  `--finality-signer-socket` instead of both key-file flags,
+  `SupplementaryGroups=postfiat-signer-clients`, and `Requires=`/`After=` the
+  signer unit.
+- `postfiat-<validator>.service` is the single-user transport unit with
+  `transport-validator-serve --finality-signer-socket` instead of
+  `--unsafe-devnet-file-signer --key-file <data-dir>/validator_keys.json`, and
+  the same group and ordering.
+
+The signer unit is not in the signed bindings; its binary is checked by the
+same `deployment-manifest-verify` before it starts.
+
+`transport-validator-serve --finality-signer-socket PATH` replaces both
+`--key-file` and `--unsafe-devnet-file-signer` (`validator_signer_flags_conflict`
+with either). Before it binds, the signer must answer and hold the registered
+key, and in socket mode the process reads no key file
+(`validator_signer_file_refused_in_socket_mode`). Every signature it makes goes
+through the signer: block votes and proposal signatures, consensus-v2
+proposals and prepare and precommit votes (the guard decodes these), and the
+transport envelope authentication on its responses, which the guard passes
+through by design. The key therefore moves out of the data directory, and
+readiness no longer reports `validator_key_copy_in_data_dir`
+(`crates/node/tests/validator_signer_two_user_units_process.rs` starts the
+three processes from the generated units on a local chain). That test checks
+startup and readiness only: it does not make the transport process sign
+anything through the socket, so the qualification run must show such a
+signature (a certified round with the signer).
+
+Order on a validator (the deploy sheet uses the same steps, word for word). `shred -u` in the sheet's move is best effort on a journaled filesystem; the search step and the checker's `--search-root` find files, not freed blocks.
+
+1. Create `postfiat-signer` and `postfiat-signer-clients`, add `postfiat` to the group, and write `/etc/postfiat/signer/<validator>.env` with `POSTFIAT_SIGNER_ALLOW_PEER_UID=$(id -u postfiat)`.
+2. Stop both old units, `postfiat-<validator>.service` and `postfiat-<validator>-rpc.service`: both sign with the key.
+3. Search for other copies of the key that `postfiat` can read, outside the signer's directory; the move is complete only when the search finds nothing.
+4. Move the key to `/var/lib/postfiat-signer/<validator>/validator_keys.json` (`0600`, owned by `postfiat-signer`); no copy stays in the data directory.
+5. Choose the floor `N` by the rule above, with both old units stopped.
+6. Initialize the guard once as `postfiat-signer` with `--initialize-state --min-height N` and a throwaway `--socket` under the signer's directory; stop it after its ready line.
+7. Start the signer unit, then the transport and rpc units.
+8. Run the deployment check.
+9. Read `private_readiness` and record `custody_reasons`.
+
+The search runs as `postfiat` over every mounted filesystem except `/proc`, `/sys`, `/dev` and `/run`, whatever the files' owner: `find -readable` lists the files named like key files that `postfiat` can read, and `grep -l` lists the files `postfiat` can read that hold `private_key_hex` and this key's public key; both print names only.
+
+The [deploy sheet template](validator-signer-two-user-deploy-sheet.md) carries
+these steps with the commands.
 
 At start the signer probes an existing file at `--socket`. If something
 still listens on it, the signer refuses to start

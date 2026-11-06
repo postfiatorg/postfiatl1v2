@@ -3112,6 +3112,7 @@ fn deployment_validator_unit_stage_is_canonical_and_non_overwriting() {
         swap_circuit_metadata_file: swap_metadata,
         private_egress_circuit_metadata_file: private_egress_metadata,
         output_dir: output_dir.clone(),
+        signer_shape: DeploymentSignerShape::KeyFile,
     };
     let report =
         stage_deployment_validator_units(options.clone()).expect("stage canonical validator units");

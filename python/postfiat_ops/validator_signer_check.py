@@ -43,6 +43,8 @@ def process(pid):
     args = (base / 'cmdline').read_bytes().rstrip(b'\0').decode().split('\0')
     fds = [os.readlink(p) for p in (base / 'fd').iterdir()]
     result = {'pid': pid, 'start_time': start, 'uids': [int(v) for v in status['Uid'].split()],
+              'gids': [int(v) for v in status['Gid'].split()],
+              'groups': [int(v) for v in status.get('Groups', '').split()],
               'capabilities': {name: int(status[name].strip(), 16) for name in CAPABILITY_SETS},
               'args': args, 'cwd': os.readlink(base / 'cwd'), 'fds': fds,
               'exe_sha256': digest(base / 'exe'),
@@ -94,6 +96,51 @@ def key_copies(data_dir, key_files=()):
     found = []
     for directory, _, files in os.walk(data_dir):
         found += [str(Path(directory) / name) for name in files if name in names]
+    return sorted(found)
+
+
+def _allows(info, proc, user_bit, group_bit, other_bit):
+    uid = proc['uids'][1]
+    if info.st_uid == uid:
+        return bool(info.st_mode & user_bit)
+    if info.st_gid in {proc['gids'][1], *proc.get('groups', ())}:
+        return bool(info.st_mode & group_bit)
+    return bool(info.st_mode & other_bit)
+
+
+def _readable_by(path, proc, test_root=None):
+    """Whether `proc`'s effective uid and groups can open `path` for reading:
+    read on the file and search on every ancestor. Modes only; nothing is read.
+    `test_root` is for unit tests only: ancestors above it are not checked."""
+    try:
+        info = path.stat()
+        if not stat.S_ISREG(info.st_mode) or not _allows(info, proc, stat.S_IRUSR, stat.S_IRGRP, stat.S_IROTH):
+            return False
+        root = Path(test_root).resolve() if test_root is not None else None
+        parents = [parent for parent in path.resolve().parents
+                   if root is None or parent == root or root in parent.parents]
+        return all(_allows(parent.stat(), proc, stat.S_IXUSR, stat.S_IXGRP, stat.S_IXOTH)
+                   for parent in parents)
+    except OSError:
+        return False
+
+
+def readable_key_copies(roots, key_file, key_files, readers, *, test_root=None):
+    """Files under `roots`, outside the signer's directory (the key file's
+    directory), named like a validator key file or the signer's key files that
+    any of `readers` (the rpc and gateway processes) can read. Names and modes
+    only: no file is read."""
+    names = set(KEY_FILE_NAMES) | {Path(path).name for path in (key_file, *key_files)}
+    signer_dir = Path(key_file).resolve().parent
+    found = []
+    for root in roots:
+        for directory, subdirectories, files in os.walk(root):
+            resolved = Path(directory).resolve()
+            if resolved == signer_dir or signer_dir in resolved.parents:
+                subdirectories[:] = []
+                continue
+            found += [str(Path(directory) / name) for name in files
+                      if name in names and any(_readable_by(Path(directory) / name, proc, test_root) for proc in readers)]
     return sorted(found)
 
 
@@ -205,6 +252,9 @@ def main(argv=None):
     for field in ('data-dir', 'database', 'key-file', 'state-dir', 'socket', 'node-sha256'):
         parser.add_argument(f'--{field}', required=True)
     parser.add_argument('--rpc-port', type=int, required=True)
+    parser.add_argument('--search-root', nargs='+', default=[],
+                        help='also report key-file-named files under these directories, outside the '
+                             "signer's directory, that the rpc or gateway uid can read")
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args(argv)
     args.output.mkdir(parents=True, exist_ok=False)
@@ -216,6 +266,10 @@ def main(argv=None):
                         'data_dir_holds_no_key_file': not key_copies(args.data_dir, [args.key_file, *proposal]),
                         'guard_is_private': private_path(args.state_dir, uid, True) and all(private_path(Path(args.state_dir) / f, uid) for f in ('state.json', 'lock')),
                         'rpc_owns_readiness_listener': owns_listener(rpc, args.rpc_port)}
+        copies = None
+        if args.search_root:
+            copies = readable_key_copies(args.search_root, args.key_file, proposal, [rpc, gateway])
+            observations['no_key_copy_readable_by_rpc_or_gateway'] = not copies
         socket_info = Path(args.socket).lstat()
         observations['socket_owned_and_group_only'] = stat.S_ISSOCK(socket_info.st_mode) and socket_info.st_uid == uid and stat.S_IMODE(socket_info.st_mode) == 0o660
         if not observations['rpc_owns_readiness_listener']:
@@ -224,6 +278,8 @@ def main(argv=None):
         result = assess(signer, rpc, gateway, report, vars(args), observations)
         result['checks']['processes_still_same'] = all(start_time(p['pid']) == p['start_time'] for p in (signer, rpc, gateway))
         result['passed'] = all(result['checks'].values())
+        if copies is not None:
+            result['readable_key_copies'] = copies
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
         # Avoid process argv/environment or secret-file content in diagnostics.
         result = {'schema': 'postfiat.validator-signer.deployment-check.v1', 'passed': False,

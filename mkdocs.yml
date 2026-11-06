@@ -201,6 +201,7 @@ nav:
           - Signed Deployment Manifest: runbooks/signed-deployment-manifest.md
           - Signed Validator Snapshot Recovery: runbooks/signed-validator-snapshot-recovery.md
           - Public RPC Operator Policy: runbooks/public-rpc-operator-policy.md
+          - Two-User Signer Deploy Sheet: runbooks/validator-signer-two-user-deploy-sheet.md
           - Validator Identity Packets: runbooks/validator-identity-packets.md
           - Task Node L1 Validator Binding: runbooks/tasknode-l1-validator-binding.md
           - Faucet Testnet Transactions: runbooks/faucet-testnet-transactions.md
