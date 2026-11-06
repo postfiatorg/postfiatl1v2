@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Reproduction for postfiatorg/postfiatl1v2#193.
+#
+# transfer_fee_quote takes the sequence of the quoted transfer from the mempool
+# but prices it against the committed ledger. With a pending transfer that
+# creates the recipient, the quote for the next sequence still charges the
+# account creation fee and mempool-submit-transfer declares it; the receipt for
+# that transfer shows the node required 10 atoms less.
+#
+# Usage:
+#   scripts/repro-transfer-fee-quote-pending-recipient            # exits 1 on main
+#   scripts/repro-transfer-fee-quote-pending-recipient --control  # empty mempool, exits 0
+#
+# NODE_BIN points at a built postfiat-node; otherwise the script builds it.
+# Everything runs in a fresh temporary data directory under REPRO_WORK_DIR
+# (default: mktemp -d), which the script removes unless KEEP_WORK_DIR=1.
+set -euo pipefail
+
+mode="repro"
+if [ "${1:-}" = "--control" ]; then
+  mode="control"
+elif [ -n "${1:-}" ]; then
+  echo "usage: $0 [--control]" >&2
+  exit 2
+fi
+
+node_bin="${NODE_BIN:-}"
+if [ -z "$node_bin" ]; then
+  cargo build -q -p postfiat-node --bin postfiat-node --locked
+  node_bin="target/debug/postfiat-node"
+fi
+
+work_dir="${REPRO_WORK_DIR:-$(mktemp -d)}"
+data_dir="$work_dir/node"
+recipient="pf0000000000000000000000000000000000000002"
+amount=1000
+cleanup() {
+  if [ "${KEEP_WORK_DIR:-0}" != "1" ]; then
+    rm -rf "$work_dir"
+  fi
+}
+trap cleanup EXIT
+
+"$node_bin" init --data-dir "$data_dir" --chain-id postfiat-local --node-id validator-0 --validators 1 >/dev/null
+faucet="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["address"])' "$data_dir/faucet_account.json")"
+
+quote_fields() {
+  python3 -c '
+import json, sys
+quote = json.load(sys.stdin)
+keys = ["sequence", "mempool_pending_for_sender", "sender_balance", "recipient_exists",
+        "will_create_recipient_account", "base_transfer_fee", "state_expansion_fee",
+        "minimum_fee", "sender_balance_after_amount_and_fee",
+        "sender_meets_reserve_after_transfer"]
+print(json.dumps({key: quote[key] for key in keys}))
+'
+}
+
+submit_fields() {
+  python3 -c '
+import json, sys
+entry = json.load(sys.stdin)
+unsigned = entry["transfer"]["unsigned"]
+print(json.dumps({"tx_id": entry["tx_id"][:16], "sequence": unsigned["sequence"],
+                  "amount": unsigned["amount"], "fee": unsigned["fee"]}))
+'
+}
+
+receipt_fields() {
+  python3 -c '
+import json, sys
+keys = ["accepted", "code", "fee_charged", "minimum_fee", "state_expansion_fee"]
+for receipt in json.load(sys.stdin):
+    row = {"tx_id": receipt["tx_id"][:16]}
+    row.update({key: receipt[key] for key in keys})
+    print(json.dumps(row))
+'
+}
+
+if [ "$mode" = "repro" ]; then
+  echo "# pending: faucet -> $recipient, sequence 1 (creates the recipient)"
+  "$node_bin" mempool-submit-transfer --data-dir "$data_dir" --to "$recipient" --amount "$amount" | submit_fields
+  expected_sequence=2
+  batch_size=2
+else
+  expected_sequence=1
+  batch_size=1
+fi
+
+echo "# transfer_fee_quote faucet -> $recipient amount $amount (sequence $expected_sequence)"
+quote_json="$("$node_bin" transfer-fee-quote --data-dir "$data_dir" --from "$faucet" --to "$recipient" --amount "$amount")"
+echo "$quote_json" | quote_fields
+quote_sequence="$(echo "$quote_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["sequence"])')"
+quote_minimum_fee="$(echo "$quote_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["minimum_fee"])')"
+quote_state_expansion_fee="$(echo "$quote_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["state_expansion_fee"])')"
+if [ "$quote_sequence" != "$expected_sequence" ]; then
+  echo "quote sequence $quote_sequence, expected $expected_sequence" >&2
+  exit 2
+fi
+
+echo "# mempool-submit-transfer faucet -> $recipient amount $amount (sequence $expected_sequence)"
+submit_json="$("$node_bin" mempool-submit-transfer --data-dir "$data_dir" --to "$recipient" --amount "$amount")"
+echo "$submit_json" | submit_fields
+declared_fee="$(echo "$submit_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["transfer"]["unsigned"]["fee"])')"
+
+echo "# mempool-batch + apply-batch ($batch_size transactions)"
+"$node_bin" mempool-batch --data-dir "$data_dir" --batch-file "$work_dir/batch.json" --max-transactions "$batch_size" >/dev/null
+receipts_json="$("$node_bin" apply-batch --data-dir "$data_dir" --batch-file "$work_dir/batch.json")"
+echo "$receipts_json" | receipt_fields
+read -r receipt_minimum_fee receipt_state_expansion_fee receipt_fee_charged <<EOF
+$(echo "$receipts_json" | python3 -c 'import json,sys; r=json.load(sys.stdin)[-1]; print(r["minimum_fee"], r["state_expansion_fee"], r["fee_charged"])')
+EOF
+
+echo "# quote for sequence $expected_sequence: state_expansion_fee=$quote_state_expansion_fee minimum_fee=$quote_minimum_fee"
+echo "# receipt for sequence $expected_sequence: state_expansion_fee=$receipt_state_expansion_fee minimum_fee=$receipt_minimum_fee fee_charged=$receipt_fee_charged (declared $declared_fee)"
+if [ "$quote_minimum_fee" = "$receipt_minimum_fee" ] && [ "$quote_state_expansion_fee" = "$receipt_state_expansion_fee" ]; then
+  echo "OK: the quote and the receipt agree"
+  exit 0
+fi
+echo "MISMATCH: the quote and the receipt disagree for the same sequence" >&2
+exit 1
