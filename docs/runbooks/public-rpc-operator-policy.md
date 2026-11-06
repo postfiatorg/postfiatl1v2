@@ -401,46 +401,14 @@ local readiness report that omits it.
 
 ### 2026-11-05 signer qualification
 
-Task Node `task_7b1024df4fa083bde46fc48e52b2a65c`; public base
-`1c5bf4c6fc13aea6bbd76457694a781898133591`.
-[Source and evidence hashes](../review/validator-signer-20261105/manifest.json)
-and [three-user HTML review](../review/validator-signer-20261105/three-user/deployment/review.html).
-
-Commands use `CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0`
-and a dedicated `CARGO_TARGET_DIR`:
-
-| Command | Result |
-|---|---|
-| `cargo test --locked -p postfiat-node --lib validator_signer -- --nocapture` | 20 passed: persistence, conflicting/stale rounds, distinct phases/domains, concurrency, corrupt/missing state, write failure, aliases and message decoding |
-| `cargo test --locked -p postfiat-node --lib private_readiness -- --nocapture` | 14 passed |
-| `cargo test --locked -p postfiat-node --bin postfiat-node validator_signer_socket -- --nocapture` | 5 passed |
-| `cargo test --locked -p postfiat-node --test validator_signer_process -- --nocapture` | 1 passed; separate-UID test explicitly ignored locally, then passed on host below |
-| `PYTHONPATH=python python3 -m unittest discover -s python/tests -p test_validator_signer_check.py -v` | 6 passed |
-
-The transported process-test binary ran the ignored
-`rpc_serve_under_another_user_signs_through_the_group_socket` test with
-`POSTFIAT_TWO_USER_SIGNER=61001:61002:61003` and `POSTFIAT_SIGNER_TEST_NODE`
-pinning the staged candidate. It passed. [Exact invocation, times and hashes](../review/validator-signer-20261105/two-user/run.json).
-
-As root on the same host, `scripts/rehearse-validator-custody.py --node <candidate>
---javascript-node <node22> --proxy <wallet-proxy> --python-root <python>
---output <fresh-directory>` then started a generated transactional chain, the
-signer as UID 61011, RPC as 61012 and the actual wallet gateway as 61014. It
-restarted the signer without initialization, checked the running RPC's readiness
-and database descriptor during its request, verified the gateway had no protected
-file open or validator paths in its environment, and verified kernel permission
-denial when RPC and gateway attempted to open the generated validator key.
-[Exact commands and successful report](../review/validator-signer-20261105/three-user/result.json).
-The checker uses the RPC's EOF framing and samples descriptors during the request:
-the transactional writer lease intentionally closes while idle. It does not
-require a persistent idle descriptor. The gateway used staged Node.js 22.18.0
-(official archive SHA256 `c1bfeecf1d7404fa74728f9db72e697decbd8119ccc6f5a294d795756dfcfca7`),
-not a server installation.
-
-All keys/stores were generated for these tests; all children stopped and runtime
-directories were removed. No production units or keys, nor the frozen candidate,
-were changed. Production adoption needs operator-approved custody, an existing-key
-signing-history transition (an empty guard is not historical protection), and a
-checker run pinned to the real production store and processes. The governance
-pricing/route gates still make readiness false in the rehearsal. No cross-view
-consensus safety or malicious signer-owner rollback claim is made.
+The guard, the socket tests and the Python checker passed on the pull request's
+rehearsed source, and the separate-UID process test and a three-user rehearsal
+(signer, rpc-serve and the wallet gateway under three generated UIDs on an
+isolated generated chain) passed on a devnet validator host. No production unit,
+key or store was used, so production adoption still needs operator-approved
+custody, the floor transition above and a checker run pinned to the real store
+and processes. Commands, UIDs, test counts and hashes are in the
+[evidence manifest](../review/validator-signer-20261105/manifest.json), with the
+[rehearsal result](../review/validator-signer-20261105/three-user/result.json),
+the [checker report](../review/validator-signer-20261105/three-user/deployment/report.json)
+and the [two-user run](../review/validator-signer-20261105/two-user/run.json).

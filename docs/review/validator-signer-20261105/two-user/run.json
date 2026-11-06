@@ -1,28 +1,22 @@
 {
   "started_at": "2026-11-05T20:08:05.637888+00:00",
-  "scope": "isolated test chain and generated keys on validator-5 host; no production configuration edits",
+  "ended_at": "2026-11-05T20:08:41.490757+00:00",
+  "scope": "isolated test chain and generated keys on a devnet validator host; no production configuration edits",
   "artifacts": {
     "postfiat-node": "91eb866fdb9745daa325a3180e5d7ba6cd0cf5f71a1baa37edaa64aeb6bab308",
     "validator_signer_process-232942fb15a28e32": "d56bd4e74eaa69fc10ece6d4c85036ba86c7e08621f82529df950f2ccb745d47"
   },
   "command": [
-    "ssh",
-    "-o",
-    "BatchMode=yes",
-    "-o",
-    "StrictHostKeyChecking=yes",
-    "-o",
-    "ConnectTimeout=10",
-    "root@45.32.110.170",
     "env",
     "POSTFIAT_TWO_USER_SIGNER=61001:61002:61003",
-    "POSTFIAT_SIGNER_TEST_NODE=/var/tmp/postfiat-signer-check-20261105-2018/postfiat-node",
-    "/var/tmp/postfiat-signer-check-20261105-2018/validator_signer_process-232942fb15a28e32",
+    "POSTFIAT_SIGNER_TEST_NODE=<stage>/postfiat-node",
+    "<stage>/validator_signer_process-232942fb15a28e32",
     "--ignored",
     "--exact",
     "rpc_serve_under_another_user_signs_through_the_group_socket",
     "--nocapture"
   ],
+  "ran_as": "root over ssh on the host",
   "exit_code": 0,
-  "ended_at": "2026-11-05T20:08:41.490757+00:00"
+  "result": "test rpc_serve_under_another_user_signs_through_the_group_socket ... ok; 1 passed"
 }

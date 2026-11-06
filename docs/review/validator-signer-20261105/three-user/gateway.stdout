@@ -1,7 +1,0 @@
-Legacy shielded certification: off; submissions take the validator-owned admission at /api/private/v1/ (/api/shielded-nav-swap/ingress, /api/shielded-nav-swap/swap, /api/shielded-nav-swap/egress answer 410; no validator key file, data directory or local Asset-Orchard service is read).
-PostFiat RPC proxy listening on 127.0.0.1:40313 -> 127.0.0.1:40477
-NAVSwap run store: disabled
-NAVSwap idempotency store: disabled
-Finality proposer routing: disabled
-Allowed origins: http://127.0.0.1:5173, http://localhost:5173
-Wallet proxy received SIGTERM; draining listeners and durable workers.
