@@ -28,7 +28,7 @@
   "fleet": {
     "validators": 6,
     "host": "one work server, loopback ports (p2p 37650-37660, rpc 37750-37755)",
-    "data_directories": "$HOME/tmp-dravlic-tests-b/sepolia-fleet-20261106/validator-0..5, removed after the run",
+    "data_directories": "<temporary fleet directories, removed after the run>",
     "genesis_file": "docs/review/base-sepolia-lock-rehearsal-20261106/genesis.json",
     "genesis_sha256": "0948db179e83d82fdfae7f0302d84e2f94e1e9f60d831c55c56ef6a8adc732bc",
     "genesis_hash": "b01544961ac962b69e6e002eca4a5c2bff998f40d9d6e6b648573104dc9ce7f168f159c8c19fe70ea2db3985395abc47",
@@ -203,6 +203,7 @@
     "run_1": {
       "exit": 0,
       "file": "docs/review/base-sepolia-lock-rehearsal-20261106/watcher-run-1.jsonl",
+      "sha256": "fbaa68138af5e83abbd9840a9b42aabaea30780d6e46b31720b61a4bd05f24dd",
       "lines": [
         {
           "amount_atoms": 1000000,
@@ -249,6 +250,7 @@
     "run_2": {
       "exit": 0,
       "file": "docs/review/base-sepolia-lock-rehearsal-20261106/watcher-run-2.jsonl",
+      "sha256": "fa94be08e9786eae9254b337030666e8d269020adf1a471ab9b5712858c501b2",
       "lines": [
         {
           "alarm_codes": {

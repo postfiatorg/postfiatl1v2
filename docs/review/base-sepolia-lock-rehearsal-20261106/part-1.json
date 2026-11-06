@@ -23,8 +23,8 @@
       "credentials": "the holder's keystore and password file, outside the repository",
       "role": "disposable rehearsal holder; deployed nothing today",
       "history": "one-time deployer of the 2026-10-28 lock 0xE36e7Fc384564419187546c19719A5654266dE0B, whose key the 2026-10-26/28 record calls retired",
-      "status": "revived on 2026-11-06 as the disposable rehearsal holder only; the project funded it on 2026-11-05 with 0.002 test ETH for exactly this (internal call from 0x9a33A96c2a718555a8996AcCbf37c8999E497D50 in transaction 0x853cad0848c77d75beae6a487a19d9b16b8071237491a6dd8d53240973484d30); it stays active until part 2 is complete",
-      "retirement": "after part 2 the key is retired again: its leftover test ETH is sent back to the funding address 0x9a33A96c2a718555a8996AcCbf37c8999E497D50, and its leftover PFTR stays in the disposable token, never moved again"
+      "status": "active: the funded rehearsal holder for the coming Base Sepolia rehearsals (the deployment-order dry run of the Phase 3 design, further Locks); revived on 2026-11-06 and funded by the project on 2026-11-05 with 0.002 test ETH (internal call from 0x9a33A96c2a718555a8996AcCbf37c8999E497D50 in transaction 0x853cad0848c77d75beae6a487a19d9b16b8071237491a6dd8d53240973484d30); after part 2 it holds 1,985,902,603,794,116 wei at nonce 6",
+      "retirement": "when the Base Sepolia rehearsals end: the key is retired and its leftover test ETH is returned to the funding address 0x9a33A96c2a718555a8996AcCbf37c8999E497D50, recorded then"
     },
     "token_deployer": {
       "address": "0x8ffA5Dea2EEa08bC2c3250af664240849cab70Da",
@@ -44,8 +44,7 @@
     },
     "pftl_recipient": {
       "address": "pfb2f06f1346000c42db0246a0fcf6ce0356662eb6",
-      "created_with": "postfiat-node wallet-keygen --chain-id postfiat-lane-sepolia-example --account-index 0 (ML-DSA-65), master seed from openssl rand -hex 32",
-      "key_file_location": "outside the repository, ~/.postfiat/base-sepolia-rehearsal-20261106/ (mode 600)"
+      "credentials": "the recipient's key, outside the repository"
     }
   },
   "token": {
@@ -243,7 +242,8 @@
     "cast send 0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17 --value <balance - 21000 * 6500000 - 100000> --legacy --gas-price 6500000 --gas-limit 21000 --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-token-deployer-20261106 --password-file ~/.postfiat/pft-sepolia-token-deployer-20261106.password",
     "cast send 0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17 --value <balance - 21000 * 6500000 - 100000> --legacy --gas-price 6500000 --gas-limit 21000 --rpc-url https://sepolia.base.org --keystore ~/.foundry/keystores/pft-sepolia-lock-deployer-20261106 --password-file ~/.postfiat/pft-sepolia-lock-deployer-20261106.password"
   ],
-  "part_2_genesis": {
+  "superseded_part_2_genesis_template": {
+    "superseded": "history only: part 2 replaced these bytes at the same path with the final six-validator genesis (sha256 0948db179e83d82fdfae7f0302d84e2f94e1e9f60d831c55c56ef6a8adc732bc, genesis hash b01544961ac962b69e6e002eca4a5c2bff998f40d9d6e6b648573104dc9ce7f168f159c8c19fe70ea2db3985395abc47; part-2.json), so the hashes below no longer name the file",
     "file": "docs/review/base-sepolia-lock-rehearsal-20261106/genesis.json",
     "derived_from": "crates/node/testdata/external-lane-genesis/genesis.json (only the lock and token addresses and runtime code hashes changed)",
     "sha256": "306ea8a40fb7cc9064f3e086f2e40c752b5b710bcc4d62b2c4d2a64943303099",

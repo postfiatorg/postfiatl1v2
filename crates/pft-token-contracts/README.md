@@ -328,6 +328,9 @@ same stand-in verifier, the tests' `MockLockVerifier`, whose
 `verifyAndConsume` always reverts, so its release path cannot pay; its
 minimum is 10 atoms and its cap 1,000,000 PFT, and it holds the first real
 Lock (nonce 0, 1 PFT; `docs/review/base-sepolia-lock-rehearsal-20261106/part-1.json`).
+Both records' `source_commit` (`1c5bf4c6f`) was backfilled: the test-mode runs
+did not pass `PFT_TOKEN_SOURCE_COMMIT` or `PFT_LOCK_SOURCE_COMMIT`, which
+test-mode runs must pass too.
 The earlier rehearsal lock `0xE36e7Fc384564419187546c19719A5654266dE0B`, which
 predates the minimum and never saw a Lock, is archived as
 `deployments/pft-lock-base-84532/archived-0xE36e7Fc384564419187546c19719A5654266dE0B.json`. No lock contract and no
