@@ -263,3 +263,22 @@ fn external_lane_recorded_exports_refuse_a_nonce_past_u64_max() {
         .unwrap_err()
         .contains("inconsistent export records"));
 }
+
+/// Pruning keeps the open window's packets, so a pruned lane always holds
+/// its latest packet: a record with every packet pruned is refused.
+#[test]
+fn external_lane_recorded_exports_refuse_a_pruned_lane_without_packets() {
+    let (lane, mut state) = released_export_lane(60);
+    for (nonce, height) in [(0, 2), (1, 101), (2, 102)] {
+        state.apply_export(&lane, sample_export(nonce, 1, height)).expect("export");
+    }
+    state.validate_recorded_exports().expect("pruned exports");
+    state.pruned_export_count = 3;
+    state.pruned_exported_atoms = 3;
+    state.pruned_export_history_root = state.export_history_root.clone();
+    state.exports.clear();
+    assert!(state
+        .validate_recorded_exports()
+        .unwrap_err()
+        .contains("inconsistent export records"));
+}

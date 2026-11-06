@@ -1478,7 +1478,9 @@ impl ExternalLaneState {
         let consistent = if self.pruned_export_count == 0 {
             self.pruned_exported_atoms == 0 && self.pruned_export_history_root.is_none()
         } else {
-            self.pruned_export_history_root.is_some()
+            // Pruning keeps the open window's packets, so a pruned lane still
+            // stores its latest packet, as `validate_recorded_releases` requires.
+            self.pruned_export_history_root.is_some() && !self.exports.is_empty()
         };
         if !consistent || self.export_count() != self.next_export_nonce {
             return Err(format!(
