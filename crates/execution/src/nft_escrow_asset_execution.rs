@@ -646,8 +646,9 @@ pub struct AssetExecutionCompatibility {
     pub external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps,
     /// The governed committee of each genesis external lane.
     pub external_lane_committees: postfiat_types::ExternalLaneCommittees,
-    /// Which of the two the caller supplied from governance.
-    pub external_lane_governed: ExternalLaneGovernedInputs,
+    /// Which of the two the caller supplied from governance: readable and
+    /// settable only inside this crate, through the two builders.
+    pub(crate) external_lane_governed: ExternalLaneGovernedInputs,
 }
 
 /// Which external-lane inputs of an [`AssetExecutionCompatibility`] came
@@ -660,9 +661,9 @@ pub struct AssetExecutionCompatibility {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExternalLaneGovernedInputs {
     /// Set by [`AssetExecutionCompatibility::with_external_lane_release_caps`].
-    pub caps: bool,
+    pub(crate) caps: bool,
     /// Set by [`AssetExecutionCompatibility::with_external_lane_committees`].
-    pub committees: bool,
+    pub(crate) committees: bool,
 }
 
 impl ExternalLaneGovernedInputs {
