@@ -10,7 +10,7 @@
         > docs/status/testnet-path.md
     ```
 
-Generated at input commit `36158400` (2026-10-23), the newest commit touching the input documents at generation time.
+Generated at input commit `4a5411851` (2026-10-30), the newest commit touching the input documents at generation time.
 
 Inputs: the [testnet-path milestone](../plans/active/l1v2-public-testnet-path-milestone.md),
 the [storage scaling milestone](../plans/completed/storage-scaling-milestone.md) gate table,
@@ -92,4 +92,4 @@ Row states from the storage scaling milestone's gate-status table.
 ## Context
 
 - Plans registry: the testnet-path milestone is LISTED ACTIVE.
-- Chain state head: updated 2026-10-23T10:40:00Z — 2026-10-23: exchange-readiness release deployed to all six validators.
+- Chain state head: updated 2026-10-30T11:21:09Z — 2026-10-30: vote-records release deployed to all six validators.

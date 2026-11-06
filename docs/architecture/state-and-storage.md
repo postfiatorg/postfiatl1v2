@@ -89,19 +89,23 @@ crash-suffix truncation/checkpointing, manifest writes, and export writes are
 not. Whole-directory mutation-sentinel tests cover successful verification and
 each repair/refusal boundary.
 
-**Deployed.** The controlled devnet has run this store since height 930
-(2026-08-31). It now runs release `store-handle-20261021`: binary
-`eea96ba6…`, source `86706699`.
+**Last recorded deployment (2026-10-30).** The controlled devnet has run this
+store since height 930 (2026-08-31). The latest fleet record names
+`vote-records-20261030`, binary `87cfe797…`, source `ae70d66d`;
+see [Network Status](../status/network-status.md). This is a dated record,
+not a fresh fleet observation.
 
-**Qualification: `OFFLINE QUALIFIED` (2026-10-23).** The packet for that
-binary covers G1, G2 and G4 (attempt 4), and the exact height-924 replay with
+**Qualification: `OFFLINE QUALIFIED` (2026-10-23).** The packet for
+`store-handle-20261021`, binary `eea96ba6…`, source `86706699`, covers
+G1, G2 and G4 (attempt 4), and the exact height-924 replay with
 its verify-only output. It also covers the height-1123 replay in place of the
 lost 915 archive, and the six-clone migration rehearsal (924–934). It is on
 the work server, not in git: `~/.cache/storage-packet-20261023/packet-r3/`,
 checksum manifest `357f06ee…`. `python -m postfiat_rpc.storage_scaling verify`
 accepts it offline; verifier output `e4fba47e…`. Offline qualification is not
 G6 (`CLONE QUALIFIED`) and not a deployment decision, and public testnet
-remains blocked.
+remains blocked. These results stay bound to that source and binary; they do
+not automatically qualify later releases.
 
 The redaction-safe G2 reports are committed under
 [`benchmarks/storage-scaling/g2-eea96ba6/`](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling/g2-eea96ba6).
@@ -138,8 +142,9 @@ rotation, signed rollback, later rotation of the same validator record, then a
 successful next certified height — plus stale, reordered, duplicated, missing,
 and wrong-root history coverage in
 `crates/node/src/tests/validator_registry_continuation_tests.rs`. The repair is
-part of the repository lineage only: it does not make `d0ae79f3` deployable,
-and no qualification gate has been rerun for a successor candidate.
+part of the repository lineage: it does not make the historical `d0ae79f3`
+candidate deployable. The later G5 qualification is recorded above; G6
+remains open in the storage milestone.
 
 ## Partial History
 

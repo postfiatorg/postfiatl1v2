@@ -12,7 +12,7 @@ operator-risk assumptions.
 | Controlled write path | Bounded operator-approved transaction submission for live evidence and wallet tests. |
 | Local request-file path | Local node command path for building batches from prepared request files. |
 | Privacy batch creation | Opt-in bounded Orchard batch creation with rate and concurrency limits. |
-| Owned lane | Opt-in FastPay sign/apply methods for owner-authorized payments and unwraps. |
+| Owned lane | Signed, state-validated FastPay sign/apply methods enabled by default; operators can disable them with `--disable-owned-lane`. Unsigned wrap/unwrap methods are not remote methods. |
 | Authenticated protocol mutation | FastSwap/FastLane messages that are remotely reachable by default but authorize themselves with owner signatures, policy commands, or quorum certificates. They are not unauthenticated writes. |
 
 ## Write And Read Paths
@@ -56,9 +56,11 @@ documented in [Settlement Lanes](../architecture/settlement-lanes.md).
   certificate; read/status convergence is audit and catch-up evidence.
 - Public or wildcard plaintext binds are rejected. Browser-facing deployments
   use a loopback node plus an authenticated TLS edge.
-- Gated signed-submission, Orchard, and owned-lane methods remain disabled unless
-  the operator enables their exact flag. The code-derived inventory fails when
-  a new method has no explicit posture.
+- Gated signed-submission and Orchard methods remain disabled unless the
+  operator enables their exact flag. Signed owned-lane methods are enabled by
+  default, with `--disable-owned-lane` as an emergency boundary; their read and
+  recovery-status methods remain available. The code-derived inventory fails
+  when a new method has no explicit posture.
 
 ## Current Tooling
 

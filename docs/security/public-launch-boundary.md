@@ -24,10 +24,15 @@ Public launch adds:
 - custodian/exchange workflows;
 - public benchmark packets for throughput claims.
 
-Production HSM/remote signing, transactional indexed storage, independent
-specialist review, and deployment-specific recovery/fault drills also remain
-real-value requirements. They are not reasons to conceal or disable the
-implemented source.
+Transactional indexed storage is implemented and active on the controlled
+devnet; its G5 offline packet is bound to the October 21 binary, while G6
+remains open ([State And Storage](../architecture/state-and-storage.md)).
+A separate software signer process is implemented on main, with its own
+double-sign guard and deployment qualification still open; HSM custody is not
+implemented ([Signer Policy](../runbooks/public-rpc-operator-policy.md#validator-signer-process)).
+Production key custody, qualification of the exact deployed binary, independent
+specialist review and deployment-specific recovery/fault drills remain
+real-value requirements.
 
 ## How To Talk About It
 

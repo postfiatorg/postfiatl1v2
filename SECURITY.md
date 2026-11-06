@@ -48,13 +48,20 @@ not be treated as externally audited production infrastructure.
 
 ## Current Security Limitations
 
-- Validator keys are plaintext software-key files protected by host filesystem
-  permissions. Production HSM/remote-signer custody is not implemented.
+- Validator keys remain software-key files protected by host filesystem
+  permissions. Main implements a separate signer process behind a Unix socket
+  with peer-UID checks and no key-file fallback in socket mode. Its own durable
+  double-sign guard and production deployment qualification remain open; HSM
+  custody is not implemented. The recorded fleet still uses file signers. See
+  the [signer policy](docs/runbooks/public-rpc-operator-policy.md#validator-signer-process).
 - Consensus state on the controlled devnet uses transactional `redb` storage,
   activated at height 930 on 2026-08-31
   ([current state](docs/status/chain-state-current.md)); bounded JSON/JSONL
-  heads remain for legacy import and audit. The storage milestone is not yet
-  offline qualified. Long-running validator and RPC services refuse to start on
+  heads remain for legacy import and audit. G5 was offline qualified on
+  2026-10-23 for the October 21 binary; G6 remains open, and that packet does
+  not qualify later binaries automatically
+  ([storage status](docs/architecture/state-and-storage.md#transactional-finality-path-store)).
+  Long-running validator and RPC services refuse to start on
   JSON/JSONL or not-yet-activated storage unless given the explicit
   `--unsafe-devnet-json-storage` acknowledgement. The generated devnet units
   still pass that flag; it skips the startup check and does not select JSON
