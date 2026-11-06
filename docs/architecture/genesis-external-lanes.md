@@ -111,28 +111,31 @@ Snapshots, restores and history checkpoints carry the lane records unchanged; te
 
 The proof is the design's option (b): an `EthereumExternalEventProofV1`, a Base block checkpoint signed by a quorum of the committee the lane's policy names, plus the receipt-inclusion proof of the lock contract's `Locked` event. For a lane the checkpoint's route fields carry the lane id, the lane's route-config digest (SHA3-384 over the genesis lane JSON), the lock contract and the token with their runtime code hashes, and the policy's `confirmation_depth` (`crates/execution/src/external_lane_release.rs`, `verify_external_lane_lock`).
 
-Execution checks, in order, and refuses with no state change and no nonce consumed: the proof first (`verify_external_lane_lock`), then the lane rules (`apply_external_lane_release`, rules on `ExternalLaneState`):
+Execution checks, in order, and refuses with no state change and no nonce consumed: the proof first (`verify_external_lane_lock`), then the lane rules (`apply_external_lane_release`, rules on `ExternalLaneState`). For a valid initialized ledger, in first-failure order; application repeats the lane, source and lane-rule checks defensively before it mutates, with the same codes.
 
 | Check | Refusal code |
 |---|---|
 | Genesis configures the lane | `external_lane_not_configured` |
 | The Lock is from the lane's chain and lock contract | `external_lane_source_mismatch` |
 | The checkpoint's observed head is at least `confirmation_depth` blocks past the Lock's block | `external_lane_checkpoint_mismatch` |
-| The certificate's votes are in canonical order and the receipt proof is within its size bounds (`validate_bounds`) | `external_lane_proof_invalid` |
+| The checkpoint, votes and receipt proof pass `validate_bounds`: schema and shape, the self-declared depth, canonical vote order, signature and receipt-proof size bounds | `external_lane_proof_invalid` |
 | A committee with the epoch and root the lane names at the height (genesis policy or governed move) is registered | `external_lane_committee_missing` |
 | The checkpoint carries that committee's epoch and root | `external_lane_committee_inactive` |
 | The certificate has a quorum of valid votes | `external_lane_proof_invalid` |
 | The checkpoint binds the lane, chain, digest, contracts, code hashes and depth | `external_lane_checkpoint_mismatch` |
 | The receipt and the `Locked` log verify | `external_lane_proof_invalid` |
 | The `Locked` nonce, amount, recipient and recipient hash equal the claim | `external_lane_lock_mismatch` |
+| The release amount is positive (the operation's own validation refuses zero earlier, as a malformed operation) | `external_lane_proof_invalid` |
 | The nonce was not released before | `external_lane_nonce_already_released` |
 | The amount fits `reserved_atoms - released_atoms` | `external_lane_remainder_exceeded` |
 | The release's window is not below the lane's recorded window | `external_lane_window_regressed` |
 | The window's released amount stays within the cap active at the height (genesis or governed) | `external_lane_window_cap_exceeded` |
+| The pruning calculation recomputes its retained prefix without overflow | `external_lane_proof_invalid` |
 | The lane stores at most `EXTERNAL_LANE_MAX_RELEASE_RECORDS` records after this release prunes and stores | `external_lane_release_records_full` |
-| A new recipient account reaches the account reserve | `below_account_reserve` |
+| Crediting the recipient does not overflow its balance | `amount_overflow` |
+| The recipient's final balance reaches its account reserve | `below_account_reserve` |
 
-The Base checkpoint attestation adds no new schema. It reuses the existing Ethereum checkpoint (`EthereumFinalizedCheckpointV1`, `EthereumExternalEventProofV1`) and its public-values layout; the source chain id, the lock contract and its code hash, the token and its code hash, the committee and the confirmation depth are parameters taken from the lane's genesis policy. The pfUSDC SP1 ingress program is unchanged and not used by the lane; an SP1 guest for Base is the design's option (a) upgrade. Today the node returns the refusal codes of the table above: `external_lane_not_configured`, `external_lane_source_mismatch`, `external_lane_committee_missing`, `external_lane_committee_inactive`, `external_lane_proof_invalid`, `external_lane_checkpoint_mismatch`, `external_lane_lock_mismatch`, `external_lane_nonce_already_released`, `external_lane_remainder_exceeded`, `external_lane_window_regressed`, `external_lane_window_cap_exceeded`, `external_lane_release_records_full` and `below_account_reserve`.
+The Base checkpoint attestation adds no new schema. It reuses the existing Ethereum checkpoint (`EthereumFinalizedCheckpointV1`, `EthereumExternalEventProofV1`) and its public-values layout; the source chain id, the lock contract and its code hash, the token and its code hash, the committee and the confirmation depth are parameters taken from the lane's genesis policy. The pfUSDC SP1 ingress program is unchanged and not used by the lane; an SP1 guest for Base is the design's option (a) upgrade. Today the node returns the refusal codes of the table above: `external_lane_not_configured`, `external_lane_source_mismatch`, `external_lane_committee_missing`, `external_lane_committee_inactive`, `external_lane_proof_invalid`, `external_lane_checkpoint_mismatch`, `external_lane_lock_mismatch`, `external_lane_nonce_already_released`, `external_lane_remainder_exceeded`, `external_lane_window_regressed`, `external_lane_window_cap_exceeded`, `external_lane_release_records_full`, `amount_overflow` and `below_account_reserve`.
 
 Genesis allows one lane per Base source: two lanes naming the same `chain_id` and `lock_contract_address` are refused at genesis validation and at init, so a Lock can be released by one lane only.
 

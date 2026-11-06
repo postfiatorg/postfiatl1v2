@@ -1429,10 +1429,14 @@ impl ExternalLaneState {
         Ok(())
     }
 
-    /// The release rules, in order: the amount is positive, a nonce is paid
-    /// once, the amount fits the remainder, the window does not regress, the
-    /// window stays within its cap, and the lane stays under the release
-    /// record ceiling. Returns a refusal code and message; nothing is mutated.
+    /// The lane-state release rules only, in order: the amount is positive, a
+    /// nonce is paid once, the amount fits the remainder, the window does not
+    /// regress, the window stays within its cap, the pruning calculation holds,
+    /// and the lane stays under the release record ceiling. Returns a refusal
+    /// code and message; nothing is mutated. The proof is checked before this
+    /// by `verify_external_lane_lock`, and the recipient's balance overflow and
+    /// account reserve after it by `apply_external_lane_release`
+    /// (`crates/execution/src/external_lane_release.rs`).
     pub fn check_release(
         &self,
         lane: &GenesisExternalLane,
