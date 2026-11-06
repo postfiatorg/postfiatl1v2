@@ -60,7 +60,7 @@ fn wait_for(what: &str, children: &mut Children, ready: impl Fn() -> bool) {
             }
         }
         assert!(
-            started.elapsed() < Duration::from_secs(900),
+            started.elapsed() < Duration::from_secs(120),
             "{what} not ready"
         );
         std::thread::sleep(Duration::from_millis(25));
@@ -105,6 +105,21 @@ fn require_temp_dir_custody_safe() {
         "TMPDIR {} or a parent is writable by another user; the signer refuses guard state there",
         dir.display()
     );
+}
+
+/// A port `p` with `p` (validator-0's RPC) and `p + 20` (its transport port)
+/// both free when probed, at most five tries. Another process can still take
+/// one before the child binds; the child then exits and `wait_for` fails with
+/// its log line.
+fn free_port_pair() -> u16 {
+    for _ in 0..5 {
+        let first = TcpListener::bind(("127.0.0.1", 0)).expect("probe port");
+        let port = first.local_addr().expect("port").port();
+        if port < u16::MAX - 20 && TcpListener::bind(("127.0.0.1", port + 20)).is_ok() {
+            return port;
+        }
+    }
+    panic!("no free port pair on loopback after five tries");
 }
 
 /// The unit's `ExecStart=` arguments with the packet's paths mapped onto the
@@ -182,9 +197,7 @@ fn two_user_units_start_the_signer_rpc_and_transport_without_a_data_dir_key() {
     })
     .expect("status");
 
-    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("reserve port");
-    let port = listener.local_addr().expect("port").port();
-    drop(listener);
+    let port = free_port_pair();
     let topology = root.join("inputs/topology.json");
     write_consensus_v2_topology(TopologyConsensusV2Options {
         chain_id: CHAIN_ID.to_string(),
@@ -278,7 +291,9 @@ fn two_user_units_start_the_signer_rpc_and_transport_without_a_data_dir_key() {
                 })
                 .collect::<Vec<_>>();
             let verify = Command::new("systemd-analyze")
-                .args(["verify", "--man=no"])
+                // Only the three units count: errors in the host's own units
+                // that they reference (network-online.target) do not.
+                .args(["verify", "--man=no", "--recursive-errors=no"])
                 .args(&mapped)
                 .output()
                 .expect("systemd-analyze verify");
