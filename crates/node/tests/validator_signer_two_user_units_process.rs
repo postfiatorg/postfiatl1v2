@@ -82,28 +82,29 @@ fn rpc(port: u16, request: serde_json::Value) -> serde_json::Value {
     serde_json::from_str(&response).expect("response json")
 }
 
-/// As in `validator_signer_process.rs`: the signer refuses guard state below
-/// a directory another user could replace.
-fn temp_dir_custody_safe() -> bool {
+/// The signer refuses guard state below a directory another user could
+/// replace, so the test that starts it is ignored by default and needs a
+/// `TMPDIR` no other user can write through: run it with `-- --ignored` (CI
+/// does); under an unsafe `TMPDIR` it fails saying so rather than pass
+/// without running.
+fn require_temp_dir_custody_safe() {
     use std::os::unix::fs::MetadataExt;
     // SAFETY: geteuid has no preconditions and cannot fail.
     let uid = unsafe { libc::geteuid() };
-    let Ok(dir) = std::env::temp_dir().canonicalize() else {
-        return false;
-    };
+    let dir = std::env::temp_dir()
+        .canonicalize()
+        .expect("canonical TMPDIR");
     let safe = dir.ancestors().all(|path| {
         fs::metadata(path).is_ok_and(|m| {
             (m.uid() == uid || m.uid() == 0)
                 && (m.mode() & 0o022 == 0 || (m.uid() == 0 && m.mode() & 0o1000 != 0))
         })
     });
-    if !safe {
-        eprintln!(
-            "skipped: TMPDIR {} or a parent is writable by another user; the signer refuses guard state there",
-            dir.display()
-        );
-    }
-    safe
+    assert!(
+        safe,
+        "TMPDIR {} or a parent is writable by another user; the signer refuses guard state there",
+        dir.display()
+    );
 }
 
 /// The unit's `ExecStart=` arguments with the packet's paths mapped onto the
@@ -135,10 +136,9 @@ fn environment(file: &Path, map: &[(String, String)]) -> BTreeMap<String, String
 }
 
 #[test]
+#[ignore = "starts the signer, which needs a TMPDIR no other user can write; run with --ignored"]
 fn two_user_units_start_the_signer_rpc_and_transport_without_a_data_dir_key() {
-    if !temp_dir_custody_safe() {
-        return;
-    }
+    require_temp_dir_custody_safe();
     let root = std::env::temp_dir().join(format!(
         "pf-vsig-units-{}-{}",
         std::process::id(),
