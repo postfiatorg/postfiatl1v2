@@ -226,7 +226,10 @@ transport envelope authentication on its responses, which the guard passes
 through by design. The key therefore moves out of the data directory, and
 readiness no longer reports `validator_key_copy_in_data_dir`
 (`crates/node/tests/validator_signer_two_user_units_process.rs` starts the
-three processes from the generated units on a local chain).
+three processes from the generated units on a local chain). That test checks
+startup and readiness only: it does not make the transport process sign
+anything through the socket, so the qualification run must show such a
+signature (a certified round with the signer).
 
 Order on a validator (the deploy sheet uses the same steps, word for word). `shred -u` in the sheet's move is best effort on a journaled filesystem; the search step and the checker's `--search-root` find files, not freed blocks.
 
