@@ -342,6 +342,12 @@ pub struct ValidatorSignerServeOptions {
     pub state_dir: PathBuf,
     /// First use only: refuses an existing directory. Omit on every restart.
     pub initialize_state: bool,
+    /// `--chain-id` and `--genesis-hash`: the chain domain of `min_height`.
+    pub chain_id: Option<String>,
+    pub genesis_hash: Option<String>,
+    /// `--min-height`, first use only: for a key that already signed, every
+    /// consensus round of that domain below this height is refused as stale.
+    pub min_height: Option<u64>,
     pub key_file: PathBuf,
     /// Defaults to `key_file`.
     pub proposal_key_file: Option<PathBuf>,
@@ -570,10 +576,28 @@ pub fn validator_signer_serve(
                 .map_err(invalid_data)
         })
         .collect::<io::Result<Vec<_>>>()?;
+    let floor = match (&options.chain_id, &options.genesis_hash, options.min_height) {
+        (_, _, None) => None,
+        (Some(chain_id), Some(genesis_hash), Some(height)) => {
+            Some(crate::validator_signer_guard::GuardFloor {
+                chain_id: chain_id.clone(),
+                genesis_hash: genesis_hash.clone(),
+                height,
+            })
+        }
+        _ => {
+            return Err(signer_error(
+                io::ErrorKind::InvalidInput,
+                "validator_signer_state_invalid",
+                "--min-height needs --chain-id and --genesis-hash",
+            ))
+        }
+    };
     let guard = crate::validator_signer_guard::SignerGuard::open(
         &options.state_dir,
         options.initialize_state,
         fingerprints,
+        floor,
     )?;
     let keys = Arc::new(HeldKeys {
         vote,
@@ -1129,6 +1153,9 @@ mod validator_signer_tests {
         let options = ValidatorSignerServeOptions {
             state_dir: root.join("guard"),
             initialize_state: true,
+            chain_id: None,
+            genesis_hash: None,
+            min_height: None,
             key_file: key,
             proposal_key_file: None,
             socket: socket.clone(),
@@ -1342,6 +1369,9 @@ mod validator_signer_tests {
         let second = ValidatorSignerServeOptions {
             state_dir: root.join("second-guard"),
             initialize_state: true,
+            chain_id: None,
+            genesis_hash: None,
+            min_height: None,
             key_file: key.clone(),
             proposal_key_file: None,
             socket: socket.clone(),

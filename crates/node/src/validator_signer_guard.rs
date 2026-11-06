@@ -18,7 +18,7 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 
 const MAX_STATE_BYTES: u64 = 1024 * 1024;
 const MAX_FAMILIES: usize = 512;
-const SCHEMA: &str = "postfiat.validator-signer.guard.v1";
+const SCHEMA: &str = "postfiat.validator-signer.guard.v2";
 
 fn refusal(code: &str, detail: impl std::fmt::Display) -> io::Error {
     io::Error::other(format!("{code}: {detail}"))
@@ -40,7 +40,29 @@ struct Mark {
 struct State {
     schema: String,
     keys: Vec<String>,
+    /// The operator's initialization floor for one chain domain: every
+    /// consensus request of that domain below `height` is refused as stale.
+    floor: Option<GuardFloor>,
     families: BTreeMap<String, Mark>,
+}
+
+/// A first-use floor for a key that signed before this guard existed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct GuardFloor {
+    pub(super) chain_id: String,
+    pub(super) genesis_hash: String,
+    pub(super) height: u64,
+}
+
+fn valid_domain(chain_id: &str, genesis_hash: &str) -> bool {
+    !chain_id.is_empty()
+        && chain_id.len() <= 256
+        && !chain_id.chars().any(char::is_control)
+        && genesis_hash.len() == 96
+        && genesis_hash
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -81,11 +103,26 @@ impl SignerGuard {
         directory: &Path,
         initialize: bool,
         mut keys: Vec<String>,
+        floor: Option<GuardFloor>,
     ) -> io::Result<Self> {
         keys.sort();
         keys.dedup();
         if keys.is_empty() {
             return Err(refusal("validator_signer_state_invalid", "no signing keys"));
+        }
+        if let Some(floor) = &floor {
+            if !initialize {
+                return Err(refusal(
+                    "validator_signer_state_invalid",
+                    "a round floor is set only with --initialize-state",
+                ));
+            }
+            if floor.height == 0 || !valid_domain(&floor.chain_id, &floor.genesis_hash) {
+                return Err(refusal(
+                    "validator_signer_state_invalid",
+                    "a floor needs a chain id, a 96-hex genesis hash and a nonzero height",
+                ));
+            }
         }
         if initialize {
             // An explicit first-use operation. Existing or missing restart state
@@ -124,6 +161,7 @@ impl SignerGuard {
         let state = State {
             schema: SCHEMA.into(),
             keys,
+            floor,
             families: BTreeMap::new(),
         };
         let mut guard = Self {
@@ -152,6 +190,9 @@ impl SignerGuard {
             if sealed.digest != hash_hex(SCHEMA, &encoded)
                 || sealed.state.schema != SCHEMA
                 || sealed.state.keys != guard.state.keys
+                || sealed.state.floor.as_ref().is_some_and(|floor| {
+                    floor.height == 0 || !valid_domain(&floor.chain_id, &floor.genesis_hash)
+                })
                 || sealed.state.families.len() > MAX_FAMILIES
                 || sealed.state.families.iter().any(|(family, mark)| {
                     family.len() != 96 || mark.message.len() != 96 || mark.height == 0
@@ -217,6 +258,17 @@ impl SignerGuard {
             return Ok(());
         }
         let slot = decode_slot(public, context, message)?;
+        if let Some(floor) = &self.state.floor {
+            if slot.chain_id == floor.chain_id
+                && slot.genesis == floor.genesis_hash
+                && slot.height < floor.height
+            {
+                return Err(refusal(
+                    "validator_signer_stale_round",
+                    "request is below the initialized round floor",
+                ));
+            }
+        }
         // Committee changes, key aliases and protocol-version changes cannot
         // create a second signing family for the same key, chain and phase.
         let public_bytes = hex_to_bytes(&public.public_key_hex).map_err(malformed)?;
@@ -565,13 +617,7 @@ fn legacy_slot(public: &ValidatorPublicKey, context: &[u8], message: &[u8]) -> i
     let height = number(domain, height_index)?;
     let view = number(domain, height_index + 1)?;
     if signer != public.node_id
-        || chain_id.is_empty()
-        || chain_id.len() > 256
-        || chain_id.chars().any(char::is_control)
-        || genesis.len() != 96
-        || !genesis
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        || !valid_domain(&chain_id, &genesis)
         || protocol == 0
         || protocol > u32::MAX as u64
         || height == 0

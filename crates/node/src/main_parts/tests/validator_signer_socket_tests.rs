@@ -53,6 +53,9 @@ mod validator_signer_socket_tests {
         let options = postfiat_node::ValidatorSignerServeOptions {
             state_dir: socket.with_extension(format!("{}.guard", key_file.file_name().unwrap().to_string_lossy())),
             initialize_state: true,
+            chain_id: None,
+            genesis_hash: None,
+            min_height: None,
             key_file: key_file.to_path_buf(),
             proposal_key_file: None,
             socket: socket.to_path_buf(),

@@ -102,9 +102,17 @@ signing until operator inspection and restart. An exclusive process lock and a
 request mutex serialize reservations.
 
 Never delete, restore an older copy of, or initialize a replacement guard for
-usable keys. Adoption with previously used keys needs an operator-reviewed
-signing-history/fencing procedure; an empty guard cannot reconstruct past votes.
-Key-set changes require their own reviewed transition. This is a signing-slot
+usable keys. An empty guard cannot reconstruct past votes, so a key that already
+signed (an existing validator moving from `--finality-key-file` to the socket)
+is initialized with a floor: `--initialize-state --chain-id <ID> --genesis-hash
+<HASH> --min-height <N>`. Every consensus round of that domain below `N` is then
+refused as `validator_signer_stale_round`, also after restart; the floor is set
+only at initialization. To choose `N`, stop the old signer and rpc-serve first,
+then take the larger of the store's finalized height plus one (`status`) and the
+highest height in the store's vote-lock index (`block_proposal_vote_locks`)
+plus one. A floor can only refuse more requests: a value too high costs liveness
+until the chain passes it, never safety. Key-set changes require their own
+reviewed transition. This is a signing-slot
 guard, not the consensus lock/QC state machine: it does not prove that a new
 round's vote is justified. The signer user/root can still compromise custody.
 

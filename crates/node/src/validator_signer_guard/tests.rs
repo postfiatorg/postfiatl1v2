@@ -21,7 +21,7 @@ impl Directory {
         self.0.join("state")
     }
     fn open(&self, initialize: bool) -> SignerGuard {
-        SignerGuard::open(&self.state(), initialize, vec!["test-key".into()]).unwrap()
+        SignerGuard::open(&self.state(), initialize, vec!["test-key".into()], None).unwrap()
     }
 }
 impl Drop for Directory {
@@ -173,14 +173,14 @@ fn guard_separates_phase_and_chain_but_not_key_aliases() {
 fn guard_refuses_missing_corrupt_reinitialized_or_shared_state() {
     let d = Directory::new();
     let guard = d.open(true);
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()]).is_err());
-    assert!(SignerGuard::open(&d.state(), true, vec!["test-key".into()]).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
+    assert!(SignerGuard::open(&d.state(), true, vec!["test-key".into()], None).is_err());
     drop(guard);
-    assert!(SignerGuard::open(&d.state(), false, vec!["other-key".into()]).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["other-key".into()], None).is_err());
     std::fs::write(d.state().join("state.json"), b"{torn").unwrap();
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()]).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
     std::fs::remove_file(d.state().join("state.json")).unwrap();
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()]).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
 }
 
 #[test]
@@ -211,11 +211,11 @@ fn guard_refuses_symlink_and_world_readable_state() {
     let moved = d.0.join("moved.json");
     std::fs::rename(&path, &moved).unwrap();
     std::os::unix::fs::symlink(&moved, &path).unwrap();
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()]).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
     std::fs::remove_file(&path).unwrap();
     std::fs::rename(&moved, &path).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()]).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
 }
 
 #[test]
@@ -223,14 +223,14 @@ fn guard_refuses_writable_ancestors_and_valid_json_checksum_tampering() {
     let d = Directory::new();
     drop(d.open(true));
     std::fs::set_permissions(&d.0, std::fs::Permissions::from_mode(0o770)).unwrap();
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()]).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
     std::fs::set_permissions(&d.0, std::fs::Permissions::from_mode(0o700)).unwrap();
     let path = d.state().join("state.json");
     let mut state: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     state["state"]["schema"] = "another-schema".into();
     std::fs::write(&path, serde_json::to_vec(&state).unwrap()).unwrap();
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()]).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
 }
 
 #[test]
@@ -382,4 +382,70 @@ fn decoder_matches_every_legacy_runtime_encoder_variant() {
             block_timeout_vote_message(&genesis, 9, 3, &root, "validator-0", registry).unwrap(),
         );
     }
+}
+
+fn floor(height: u64) -> GuardFloor {
+    GuardFloor {
+        chain_id: "guard-test".into(),
+        genesis_hash: "a".repeat(96),
+        height,
+    }
+}
+
+#[test]
+fn initialization_floor_refuses_earlier_rounds_of_its_domain_across_restart() {
+    let d = Directory::new();
+    let p = public();
+    let open = |initialize, floor| {
+        SignerGuard::open(&d.state(), initialize, vec!["test-key".into()], floor)
+    };
+    assert!(SignerGuard::open(&d.state(), true, vec!["test-key".into()], Some(floor(0))).is_err());
+    let mut guard = open(true, Some(floor(10))).unwrap();
+    for view in [0, 7, u64::MAX] {
+        assert!(guard
+            .reserve(
+                &p,
+                CONSENSUS_V2_VOTE_CONTEXT,
+                &bytes(&vote(9, view, ConsensusV2Phase::Prepare))
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("validator_signer_stale_round"));
+    }
+    drop(guard);
+    // A floor is never set or changed on restart.
+    assert!(open(false, Some(floor(11))).is_err());
+    let mut guard = open(false, None).unwrap();
+    for phase in [ConsensusV2Phase::Prepare, ConsensusV2Phase::Precommit] {
+        assert!(guard
+            .reserve(
+                &p,
+                CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT,
+                &timeout_bytes(9, 3, phase)
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("validator_signer_stale_round"));
+    }
+    guard
+        .reserve(
+            &p,
+            CONSENSUS_V2_VOTE_CONTEXT,
+            &bytes(&vote(10, 0, ConsensusV2Phase::Prepare)),
+        )
+        .unwrap();
+}
+
+fn timeout_bytes(height: u64, view: u64, phase: ConsensusV2Phase) -> Vec<u8> {
+    let v = vote(height, view, phase);
+    consensus_v2_timeout_vote_signing_bytes(&ConsensusV2TimeoutVote {
+        schema: "postfiat-consensus-timeout-vote-v2".into(),
+        domain: v.domain,
+        round: v.round,
+        phase: v.phase,
+        high_qc: None,
+        validator: v.validator,
+        signature: v.signature,
+    })
+    .unwrap()
 }
