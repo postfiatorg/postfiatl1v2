@@ -115,20 +115,23 @@ class DeploymentCheckTests(unittest.TestCase):
             self.assertFalse(json.loads((out / 'report.json').read_text())['passed'])
 
     def test_posix_custody_refuses_symlink_shared_file_and_writable_parent(self):
+        # A private root of the test's own, so TMPDIR's ancestors do not decide.
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            root.chmod(0o700)
+            check = lambda path: private_path(path, os.geteuid(), test_root=root)
             key = root / 'key'
             key.write_bytes(b'not a real key')
             key.chmod(0o600)
-            self.assertTrue(private_path(key, os.geteuid()))
+            self.assertTrue(check(key))
             link = root / 'link'
             link.symlink_to(key)
-            self.assertFalse(private_path(link, os.geteuid()))
+            self.assertFalse(check(link))
             key.chmod(0o640)
-            self.assertFalse(private_path(key, os.geteuid()))
+            self.assertFalse(check(key))
             key.chmod(0o600)
             root.chmod(0o770)
-            self.assertFalse(private_path(key, os.geteuid()))
+            self.assertFalse(check(key))
 
 
 if __name__ == '__main__':

@@ -15,6 +15,7 @@ impl Directory {
         ));
         std::fs::create_dir(&p).unwrap();
         std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o700)).unwrap();
+        super::test_roots::register(&p);
         Self(p)
     }
     fn state(&self) -> PathBuf {

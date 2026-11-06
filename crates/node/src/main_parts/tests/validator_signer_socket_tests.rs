@@ -3,15 +3,40 @@ mod validator_signer_socket_tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    fn signer_root(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
+    /// The signer refuses guard state below a directory another user could
+    /// replace (`validator_signer_state_permissions`). Under a `TMPDIR` with such
+    /// an ancestor these process-level tests cannot run, so they say so and stop.
+    fn temp_dir_custody_safe() -> bool {
+        use std::os::unix::fs::MetadataExt;
+        // SAFETY: geteuid has no preconditions and cannot fail.
+        let uid = unsafe { libc::geteuid() };
+        let Ok(dir) = std::env::temp_dir().canonicalize() else {
+            return false;
+        };
+        let safe = dir.ancestors().all(|path| {
+            std::fs::metadata(path).is_ok_and(|m| {
+                (m.uid() == uid || m.uid() == 0)
+                    && (m.mode() & 0o022 == 0 || (m.uid() == 0 && m.mode() & 0o1000 != 0))
+            })
+        });
+        if !safe {
+            eprintln!(
+                "skipped: TMPDIR {} or a parent is writable by another user; the signer refuses guard state there",
+                dir.display()
+            );
+        }
+        safe
+    }
+
+    fn signer_root(label: &str) -> Option<PathBuf> {
+        temp_dir_custody_safe().then(|| std::env::temp_dir().join(format!(
             "pf-vsock-{label}-{}-{}",
             process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("clock")
                 .as_nanos()
-        ))
+        )))
     }
 
     fn euid() -> u32 {
@@ -171,7 +196,9 @@ mod validator_signer_socket_tests {
 
     #[test]
     fn rpc_serve_signs_a_finality_vote_through_the_signer_socket_with_no_key_file() {
-        let root = signer_root("vote");
+        let Some(root) = signer_root("vote") else {
+            return;
+        };
         let (key_file, local) = chain_with_key_moved_out(&root);
         let socket = root.join("signer/signer.sock");
         start_signer(&key_file, &socket, None);
@@ -247,7 +274,9 @@ mod validator_signer_socket_tests {
 
     #[test]
     fn transport_envelopes_sign_through_the_registered_signer_with_no_key_file() {
-        let root = signer_root("transport");
+        let Some(root) = signer_root("transport") else {
+            return;
+        };
         let (key_file, _) = chain_with_key_moved_out(&root);
         let data_dir = root.join("node");
         let (_, port) = reserved_port();
@@ -352,7 +381,9 @@ mod validator_signer_socket_tests {
 
     #[test]
     fn readiness_reports_a_signer_that_holds_another_key() {
-        let root = signer_root("readiness-key");
+        let Some(root) = signer_root("readiness-key") else {
+            return;
+        };
         let (key_file, _) = chain_with_key_moved_out(&root);
         let other = other_key_file(&root, "readiness-other.json");
         let socket = root.join("signer/swap.sock");
@@ -395,7 +426,9 @@ mod validator_signer_socket_tests {
 
     #[test]
     fn rpc_serve_refuses_a_signer_whose_key_is_not_the_validators() {
-        let root = signer_root("mismatch");
+        let Some(root) = signer_root("mismatch") else {
+            return;
+        };
         let (_, _) = chain_with_key_moved_out(&root);
         let other = root.join("signer/other.json");
         let pair = postfiat_crypto_provider::ml_dsa_65_keygen_from_seed(&[7u8; 32]);

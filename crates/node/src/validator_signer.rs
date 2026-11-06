@@ -1124,6 +1124,7 @@ mod validator_signer_tests {
         std::fs::create_dir_all(&root).expect("root");
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700))
             .expect("private test root");
+        crate::validator_signer_guard::test_roots::register(&root);
         root
     }
 

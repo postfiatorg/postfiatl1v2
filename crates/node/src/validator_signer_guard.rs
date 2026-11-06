@@ -73,6 +73,27 @@ struct SealedState {
     digest: String,
 }
 
+/// Unit tests only: a test creates its own `0700` root and registers it, so
+/// the ancestor walk ends there instead of judging whatever `TMPDIR` lies
+/// under. Production builds have no such hook.
+#[cfg(test)]
+pub(super) mod test_roots {
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+    static ROOTS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+    pub(crate) fn register(root: &Path) {
+        let root = root.canonicalize().expect("test root");
+        ROOTS.lock().expect("test roots").push(root);
+    }
+    /// True when `directory` lies in a registered root and `ancestor` is
+    /// above that root; the root itself is still checked.
+    pub(super) fn stops_above(directory: &Path, ancestor: &Path) -> bool {
+        ROOTS.lock().expect("test roots").iter().any(|root| {
+            directory.starts_with(root) && root.starts_with(ancestor) && root != ancestor
+        })
+    }
+}
+
 pub(super) struct SignerGuard {
     directory: PathBuf,
     _lock: File,
@@ -152,6 +173,10 @@ impl SignerGuard {
         // A root-owned sticky temporary directory protects its owned children.
         let uid = unsafe { libc::geteuid() }; // SAFETY: no preconditions.
         for parent in directory.ancestors().skip(1) {
+            #[cfg(test)]
+            if test_roots::stops_above(&directory, parent) {
+                break;
+            }
             let metadata = std::fs::metadata(parent)?;
             let safe_sticky = metadata.uid() == 0 && metadata.mode() & 0o1000 != 0;
             if (metadata.uid() != uid && metadata.uid() != 0)

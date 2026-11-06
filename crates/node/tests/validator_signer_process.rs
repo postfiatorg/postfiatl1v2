@@ -64,8 +64,36 @@ fn rpc(port: u16, request: serde_json::Value) -> serde_json::Value {
     serde_json::from_str(&response).expect("response json")
 }
 
+/// The signer refuses guard state below a directory another user could
+/// replace (`validator_signer_state_permissions`). Under a `TMPDIR` with such
+/// an ancestor these process-level tests cannot run, so they say so and stop.
+fn temp_dir_custody_safe() -> bool {
+    use std::os::unix::fs::MetadataExt;
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    let uid = unsafe { libc::geteuid() };
+    let Ok(dir) = std::env::temp_dir().canonicalize() else {
+        return false;
+    };
+    let safe = dir.ancestors().all(|path| {
+        std::fs::metadata(path).is_ok_and(|m| {
+            (m.uid() == uid || m.uid() == 0)
+                && (m.mode() & 0o022 == 0 || (m.uid() == 0 && m.mode() & 0o1000 != 0))
+        })
+    });
+    if !safe {
+        eprintln!(
+            "skipped: TMPDIR {} or a parent is writable by another user; the signer refuses guard state there",
+            dir.display()
+        );
+    }
+    safe
+}
+
 #[test]
 fn rpc_serve_signs_a_finality_vote_through_the_signer_process() {
+    if !temp_dir_custody_safe() {
+        return;
+    }
     let root = std::env::temp_dir().join(format!(
         "pf-vsig-process-{}-{}",
         std::process::id(),

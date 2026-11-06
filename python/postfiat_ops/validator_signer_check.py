@@ -67,14 +67,19 @@ def argument_path(proc, name, expected):
     return len(values) == 1 and (Path(proc['cwd']) / values[0]).resolve() == Path(expected).resolve()
 
 
-def private_path(path, uid, directory=False):
+def private_path(path, uid, directory=False, *, test_root=None):
+    """Owner-only path whose ancestors no other user can replace. `test_root`
+    is for unit tests only: the walk stops above that private root."""
     path = Path(path)
     info = path.lstat()
     if info.st_uid != uid or stat.S_IMODE(info.st_mode) & 0o077:
         return False
     if not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)):
         return False
+    root = Path(test_root).resolve() if test_root is not None else None
     for parent in path.resolve().parents:
+        if root is not None and parent != root and root.is_relative_to(parent):
+            break
         s = parent.stat()
         sticky = s.st_uid == 0 and s.st_mode & stat.S_ISVTX
         if s.st_uid not in (0, uid) or (s.st_mode & 0o022 and not sticky):
