@@ -89,6 +89,33 @@ def free_port():
         return stream.getsockname()[1]
 
 
+PORT_ATTEMPTS = 5
+
+
+def start_on_free_port(name, argv_for_port, ready, children, record, open_stderr=None, env=None, ticks=600):
+    """Start a loopback child on a free port. The port is free when probed but
+    another process can take it before the child binds, so a child that exits
+    before it is ready is started again on a new port, at most PORT_ATTEMPTS
+    times. Returns the port and the running child."""
+    for attempt in range(1, PORT_ATTEMPTS + 1):
+        port = free_port()
+        argv = [str(a) for a in argv_for_port(port)]
+        stderr = open_stderr() if open_stderr else subprocess.DEVNULL
+        child = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=stderr, env=env)
+        children.append(child)
+        record.append({'name': name, 'argv': argv, 'attempt': attempt})
+        for _ in range(ticks):
+            if child.poll() is not None:
+                break
+            if ready(port):
+                return port, child
+            time.sleep(.1)
+        else:
+            raise RehearsalFailure(f'{name} did not become ready on port {port}')
+        # Exited before ready: most likely the port was taken in between.
+    raise RehearsalFailure(f'{name} exited before ready on {PORT_ATTEMPTS} ports')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
@@ -111,6 +138,7 @@ def main():
                'commands': [], 'passed': False, 'public_testnet_transaction': False}
     children = []
     native = None
+    url = None
     contracts_before = contracts_checkout_state()
 
     def command(name, argv, cwd=ROOT, expected=0, stdin_text=None):
@@ -138,20 +166,18 @@ def main():
         return value['result']
 
     try:
-        port = free_port()
-        url = f'http://127.0.0.1:{port}'
-        anvil_argv = ['anvil', '--host', '127.0.0.1', '--port', str(port), '--chain-id', '84532', '--silent']
-        anvil = subprocess.Popen(anvil_argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        children.append(anvil)
-        results['children'].append({'name': 'anvil', 'argv': anvil_argv})
-        for _ in range(100):
+        def anvil_ready(port):
+            nonlocal url
+            url = f'http://127.0.0.1:{port}'
             try:
-                if 'anvil' in str(rpc('web3_clientVersion')).lower():
-                    break
+                return 'anvil' in str(rpc('web3_clientVersion')).lower()
             except OSError:
-                time.sleep(.1)
-        else:
-            raise RuntimeError('local Anvil did not start')
+                return False
+
+        port, _ = start_on_free_port(
+            'anvil', lambda port: ['anvil', '--host', '127.0.0.1', '--port', port, '--chain-id', '84532', '--silent'],
+            anvil_ready, children, results['children'], ticks=100)
+        url = f'http://127.0.0.1:{port}'
         require(rpc('eth_chainId') == '0x14a34', 'local Anvil must report chain id 84532')
         holder = rpc('eth_accounts')[0]
         contract_dir = ROOT / 'crates/pft-token-contracts'
@@ -182,22 +208,13 @@ def main():
         command('node-build', ['cargo', 'build', '--locked', '-p', 'postfiat-node', '--bin', 'postfiat-node'])
         node = target / 'debug/postfiat-node'
         results['node_sha256'] = hashlib.sha256(node.read_bytes()).hexdigest()
-        rpc_port = free_port()
         ready = out / 'rpc-ready.json'
-        service_argv = [str(node), 'rpc-serve', '--unsafe-devnet-json-storage', '--data-dir', native['data_dir'],
-                        '--bind-host', '127.0.0.1', '--port', str(rpc_port), '--max-requests', '100',
-                        '--ready-file', str(ready)]
-        service = subprocess.Popen(service_argv, stdout=subprocess.DEVNULL, stderr=(out / 'rpc.stderr').open('w'), env=environment)
-        children.append(service)
-        results['children'].append({'name': 'rpc-serve', 'argv': service_argv})
-        for _ in range(600):
-            if ready.exists():
-                break
-            if service.poll() is not None:
-                raise RuntimeError('local PFT RPC exited before ready')
-            time.sleep(.1)
-        else:
-            raise RuntimeError('local PFT RPC did not start')
+        rpc_port, _ = start_on_free_port(
+            'rpc-serve', lambda port: [node, 'rpc-serve', '--unsafe-devnet-json-storage', '--data-dir', native['data_dir'],
+                                       '--bind-host', '127.0.0.1', '--port', port, '--max-requests', '100',
+                                       '--ready-file', ready],
+            lambda port: ready.exists(), children, results['children'],
+            open_stderr=lambda: (out / 'rpc.stderr').open('a'), env=environment)
         watcher_args = [sys.executable, '-m', 'postfiat_rpc.external_lane_watcher', '--pftl-rpc', f'127.0.0.1:{rpc_port}',
                         '--lane-id', 'base-erc20', '--base-rpc', url, '--state-file', out / 'watcher-state.json', '--once']
         lines = [json.loads(line) for line in command('watcher', watcher_args).splitlines()]

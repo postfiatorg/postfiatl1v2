@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
@@ -55,6 +56,34 @@ class WatcherSummaryTests(unittest.TestCase):
     def test_require_survives_python_optimize(self) -> None:
         with self.assertRaises(rehearsal.RehearsalFailure):
             rehearsal.require(False, "must raise")
+
+
+class PortRetryTests(unittest.TestCase):
+    def test_a_child_that_exits_before_ready_is_started_again_on_a_new_port(self) -> None:
+        calls: list[int] = []
+
+        def argv(port: int) -> list[str]:
+            calls.append(port)
+            body = "raise SystemExit(1)" if len(calls) == 1 else "import time; time.sleep(30)"
+            return [sys.executable, "-c", body]
+
+        children: list = []
+        record: list = []
+        try:
+            rehearsal.start_on_free_port("probe", argv, lambda port: len(calls) == 2, children, record)
+        finally:
+            for child in children:
+                child.kill()
+                child.wait()
+        self.assertEqual([entry["attempt"] for entry in record], [1, 2])
+
+    def test_the_retries_are_bounded(self) -> None:
+        children: list = []
+        with self.assertRaisesRegex(rehearsal.RehearsalFailure, "exited before ready"):
+            rehearsal.start_on_free_port(
+                "dead", lambda port: [sys.executable, "-c", "raise SystemExit(1)"], lambda port: False, children, []
+            )
+        self.assertEqual(len(children), rehearsal.PORT_ATTEMPTS)
 
 
 if __name__ == "__main__":
