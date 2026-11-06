@@ -142,7 +142,7 @@ fn guard_serializes_conflicting_concurrent_requests() {
 }
 
 #[test]
-fn guard_separates_phase_and_chain_but_not_key_aliases() {
+fn guard_separates_phase_but_refuses_another_chain_and_key_aliases() {
     let d = Directory::new();
     let mut guard = d.open(true);
     let p = public();
