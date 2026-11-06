@@ -28,8 +28,8 @@ use postfiat_types::{
     EXTERNAL_LANE_PROOF_INVALID, EXTERNAL_LANE_SOURCE_MISMATCH,
 };
 use postfiat_types::{
-    ExternalLaneExportOperationV1, EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
-    EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK,
+    ExternalLaneExportOperationV1, ExternalLaneExportPacket, EXTERNAL_LANE_EXPORT_HALTED,
+    EXTERNAL_LANE_EXPORT_NOT_SUPPORTED, EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK,
 };
 
 type ExecutionError = (&'static str, String);
@@ -291,14 +291,23 @@ pub(crate) fn verify_external_lane_lock(
     })
 }
 
-/// `external_lane_export_v1` is refused until it is built: an unknown lane,
-/// the lane's own lock contract as the Base recipient, and otherwise
-/// `external_lane_export_not_supported`. Nothing is read beyond genesis and
-/// nothing is written.
-pub(crate) fn refuse_external_lane_export<T>(
+/// `external_lane_export_v1` (design
+/// `docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md`
+/// sections 3 and 4). An unknown lane and the lane's own lock contract as
+/// the Base recipient are refused first; a lane whose genesis policy does
+/// not set `exports_enabled` refuses with `external_lane_export_not_supported`
+/// and reads nothing more. Otherwise, in order: the zero-cap halt, the lane's
+/// export rules, then the sender's debit of `amount_atoms` (the fee is
+/// already debited) with the ordinary balance and reserve refusals; only
+/// then the lane records the packet. Every check precedes the first write.
+pub(crate) fn apply_external_lane_export(
     genesis: &Genesis,
+    ledger: &mut LedgerState,
     operation: &ExternalLaneExportOperationV1,
-) -> Result<T, ExecutionError> {
+    tx_id: String,
+    block_height: u64,
+    caps: ExternalLaneReleaseCaps,
+) -> Result<(), ExecutionError> {
     let lane = configured_lane(genesis, &operation.lane_id)?;
     if operation.base_recipient == lane.policy.lock_contract_address {
         return Err((
@@ -309,13 +318,65 @@ pub(crate) fn refuse_external_lane_export<T>(
             ),
         ));
     }
-    Err((
-        EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
-        format!(
-            "external_lane_export_v1 on external lane `{}` is not built yet",
-            lane.id
-        ),
-    ))
+    if !lane.policy.exports_enabled {
+        return Err((
+            EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
+            format!(
+                "external_lane_export_v1 on external lane `{}` is not built yet",
+                lane.id
+            ),
+        ));
+    }
+    let lane_index = genesis
+        .external_lanes()
+        .iter()
+        .position(|configured| configured.id == lane.id)
+        .unwrap_or(usize::MAX);
+    if caps.cap_bps_at(lane_index, lane, block_height) == 0 {
+        return Err((
+            EXTERNAL_LANE_EXPORT_HALTED,
+            format!(
+                "external lane `{}` is halted: its active release cap is zero",
+                lane.id
+            ),
+        ));
+    }
+    let state_index = ledger
+        .external_lanes
+        .iter()
+        .position(|state| state.lane_id == lane.id)
+        .ok_or_else(|| {
+            (
+                EXTERNAL_LANE_NOT_CONFIGURED,
+                format!("ledger has no record for external lane `{}`", lane.id),
+            )
+        })?;
+    let state = &ledger.external_lanes[state_index];
+    state.check_export(lane, operation.amount_atoms, block_height)?;
+    let packet = ExternalLaneExportPacket {
+        lane_id: lane.id.clone(),
+        export_nonce: state.next_export_nonce,
+        sender: operation.sender.clone(),
+        base_recipient: operation.base_recipient.clone(),
+        amount_atoms: operation.amount_atoms,
+        exported_at_height: block_height,
+        tx_id,
+    };
+    let balance = ledger
+        .account(&operation.sender)
+        .map_or(0, |account| account.balance);
+    let sender_after = balance.checked_sub(operation.amount_atoms).ok_or_else(|| {
+        (
+            "insufficient_funds",
+            "sender balance is too low for the export".to_string(),
+        )
+    })?;
+    if let Some(message) = crate::account_reserve_violation(&operation.sender, sender_after) {
+        return Err(("below_account_reserve", message));
+    }
+    ledger.external_lanes[state_index].apply_export(lane, packet)?;
+    ledger.ensure_account(&operation.sender).balance = sender_after;
+    Ok(())
 }
 
 /// Verifies the operation's proof against the lane's genesis policy, then
@@ -700,6 +761,207 @@ mod tests {
         }
         assert_eq!(ledger, before);
         assert_eq!(live_native(&ledger), live_native(&before));
+    }
+
+    fn export_genesis() -> Genesis {
+        let mut genesis = lane_genesis();
+        genesis.external_lanes.as_mut().expect("lanes")[0]
+            .policy
+            .exports_enabled = true;
+        genesis
+    }
+
+    fn export_op(sender: &str, amount_atoms: u64) -> ExternalLaneExportOperationV1 {
+        ExternalLaneExportOperationV1 {
+            sender: sender.to_string(),
+            lane_id: LANE_ID.to_string(),
+            amount_atoms,
+            base_recipient: format!("0x{}", "2c".repeat(20)),
+        }
+    }
+
+    /// A release then exports: the sender is debited, the lane takes the
+    /// atoms back, and accounts + lanes' remainder is unchanged.
+    #[test]
+    fn external_lane_export_debits_the_sender_and_returns_atoms_to_the_lane() {
+        let genesis = export_genesis();
+        let mut ledger = lane_ledger(&genesis);
+        let supply = live_native(&ledger);
+        let amount = ACCOUNT_RESERVE + 1_000;
+        apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(1, amount, "holder"),
+            10,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .expect("release");
+        let caps = ExternalLaneReleaseCaps::genesis();
+        let faucet = ledger.account("faucet").expect("faucet").balance;
+        apply_external_lane_export(
+            &genesis,
+            &mut ledger,
+            &export_op("faucet", 600),
+            "tx-a".to_string(),
+            11,
+            caps,
+        )
+        .expect("export");
+        assert_eq!(
+            ledger.account("faucet").expect("faucet").balance,
+            faucet - 600
+        );
+        let lane = &ledger.external_lanes[0];
+        assert_eq!((lane.exported_atoms, lane.next_export_nonce), (600, 1));
+        assert_eq!(lane.exports[0].tx_id, "tx-a");
+        assert_eq!(live_native(&ledger), supply);
+        // One atom above released - exported, then exactly it.
+        let before = ledger.clone();
+        let (code, _) = apply_external_lane_export(
+            &genesis,
+            &mut ledger,
+            &export_op("faucet", amount - 599),
+            "tx-b".to_string(),
+            12,
+            caps,
+        )
+        .unwrap_err();
+        assert_eq!(code, postfiat_types::EXTERNAL_LANE_EXPORT_ABOVE_RELEASED);
+        assert_eq!(ledger, before);
+        apply_external_lane_export(
+            &genesis,
+            &mut ledger,
+            &export_op("faucet", amount - 600),
+            "tx-b".to_string(),
+            12,
+            caps,
+        )
+        .expect("export of exactly released - exported");
+        assert_eq!(
+            ledger.external_lanes[0]
+                .remainder_atoms()
+                .expect("remainder"),
+            RESERVED / 2
+        );
+        assert_eq!(live_native(&ledger), supply);
+    }
+
+    #[test]
+    fn external_lane_export_refuses_balance_and_reserve_shortfalls_without_mutation() {
+        let genesis = export_genesis();
+        let mut ledger = lane_ledger(&genesis);
+        apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(1, ACCOUNT_RESERVE + 10_000, "holder"),
+            10,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .expect("release");
+        let before = ledger.clone();
+        let caps = ExternalLaneReleaseCaps::genesis();
+        // Within released - exported, but above what the sender holds.
+        let (code, _) = apply_external_lane_export(
+            &genesis,
+            &mut ledger,
+            &export_op("pftl-empty", 1),
+            "tx".to_string(),
+            11,
+            caps,
+        )
+        .unwrap_err();
+        assert_eq!(code, "insufficient_funds");
+        let (code, _) = apply_external_lane_export(
+            &genesis,
+            &mut ledger,
+            &export_op("holder", 10_001),
+            "tx".to_string(),
+            11,
+            caps,
+        )
+        .unwrap_err();
+        assert_eq!(code, "below_account_reserve");
+        assert_eq!(ledger, before);
+        apply_external_lane_export(
+            &genesis,
+            &mut ledger,
+            &export_op("holder", 10_000),
+            "tx".to_string(),
+            11,
+            caps,
+        )
+        .expect("export down to the reserve");
+    }
+
+    /// The governed zero cap halts exports after the lane and lock-address
+    /// checks and before any counter: nothing changes.
+    #[test]
+    fn external_lane_export_is_halted_by_a_zero_active_cap() {
+        let genesis = export_genesis();
+        let mut ledger = lane_ledger(&genesis);
+        apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(1, ACCOUNT_RESERVE + 1_000, "holder"),
+            10,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .expect("release");
+        let caps = amended_caps(&genesis, &[(0, 11)]);
+        let before = ledger.clone();
+        let (code, _) = apply_external_lane_export(
+            &genesis,
+            &mut ledger,
+            &export_op("faucet", 1),
+            "tx".to_string(),
+            11,
+            caps,
+        )
+        .unwrap_err();
+        assert_eq!(code, postfiat_types::EXTERNAL_LANE_EXPORT_HALTED);
+        let mut to_lock = export_op("faucet", 1);
+        to_lock.base_recipient = format!("0x{}", "1a".repeat(20));
+        let (code, _) =
+            apply_external_lane_export(&genesis, &mut ledger, &to_lock, "tx".to_string(), 11, caps)
+                .unwrap_err();
+        assert_eq!(code, EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK);
+        assert_eq!(ledger, before);
+        // Under the genesis cap the same export is applied.
+        apply_external_lane_export(
+            &genesis,
+            &mut ledger,
+            &export_op("faucet", 1),
+            "tx".to_string(),
+            11,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .expect("export without the halt");
+    }
+
+    #[test]
+    fn external_lane_export_without_the_switch_is_not_supported() {
+        let genesis = lane_genesis();
+        let mut ledger = lane_ledger(&genesis);
+        apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(1, ACCOUNT_RESERVE + 1_000, "holder"),
+            10,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .expect("release");
+        let before = ledger.clone();
+        let (code, _) = apply_external_lane_export(
+            &genesis,
+            &mut ledger,
+            &export_op("faucet", 1),
+            "tx".to_string(),
+            11,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .unwrap_err();
+        assert_eq!(code, EXTERNAL_LANE_EXPORT_NOT_SUPPORTED);
+        assert_eq!(ledger, before);
     }
 
     #[test]
