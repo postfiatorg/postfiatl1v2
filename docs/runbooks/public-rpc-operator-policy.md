@@ -87,15 +87,19 @@ The signer requires `--state-dir <persistent-directory>`. It decodes consensus
 messages by their signing context, binds the validator identity to the held key,
 and persists a round floor and message digest before signing. Identical retries
 at that floor are allowed; a different message at the same height/view and any
-older round are refused. Prepare and precommit, votes and timeouts, and distinct
-chain/genesis domains have separate floors. Key aliases, committee changes and
-protocol version changes cannot reset a floor. Transport authentication uses a
+older round are refused. Prepare and precommit, and votes and timeouts, have
+separate floors. Key aliases, committee changes and protocol version changes
+cannot reset a floor. The guard signs for one chain domain, fixed at
+initialization: a request naming another chain id or genesis hash is refused
+(`validator_signer_domain_refused`) and leaves nothing in the state. Transport authentication uses a
 separate signing domain and has no consensus slot.
 
-For a **new, never-used custody instance**, pass `--initialize-state` once with
-a nonexistent state directory. Remove that flag from the service unit. Restart
-requires the existing state and lock; missing, corrupt, shared or wrong-key state
-is refused. The directory is `0700`, files are `0600`, all owned by the signer;
+For a **new, never-used custody instance**, pass `--initialize-state
+--chain-id <ID> --genesis-hash <HASH>` once with a nonexistent state directory.
+Remove `--initialize-state` from the service unit; keeping `--chain-id` and
+`--genesis-hash` there makes a restart refuse a guard of another chain
+(`validator_signer_state_domain_mismatch`). Restart requires the existing state
+and lock; missing, corrupt, shared or wrong-key state is refused. The directory is `0700`, files are `0600`, all owned by the signer;
 its parents must not let another user replace it. State is atomically replaced
 and both the file and directory are synced. A persistence failure disables
 signing until operator inspection and restart. An exclusive process lock and a
@@ -104,16 +108,18 @@ request mutex serialize reservations.
 Never delete, restore an older copy of, or initialize a replacement guard for
 usable keys. An empty guard cannot reconstruct past votes, so a key that already
 signed (an existing validator moving from `--finality-key-file` to the socket)
-is initialized with a floor: `--initialize-state --chain-id <ID> --genesis-hash
-<HASH> --min-height <N>`. Every consensus round of that domain below `N` is then
+is initialized with a floor: add `--min-height <N>` to the initialization. Every
+consensus round below `N` is then
 refused as `validator_signer_stale_round`, also after restart; the floor is set
 only at initialization. To choose `N`, stop the old signer and rpc-serve first,
 then take the larger of the store's finalized height plus one (`status`) and the
 highest height in the store's vote-lock index (`block_proposal_vote_locks`)
 plus one. A floor can only refuse more requests: a value too high costs liveness
 until the chain passes it, never safety. Key-set changes require their own
-reviewed transition. This is a signing-slot
-guard, not the consensus lock/QC state machine: it does not prove that a new
+reviewed transition. A process allowed on the socket can still raise a floor
+out of reach, for example by one vote near the maximum height: nothing resets a
+floor, so recovery from such poisoning is rotating the validator key. This is a
+signing-slot guard, not the consensus lock/QC state machine: it does not prove that a new
 round's vote is justified. The signer user/root can still compromise custody.
 
 rpc-serve takes `--finality-signer-socket <path>` instead of

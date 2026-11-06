@@ -21,7 +21,14 @@ impl Directory {
         self.0.join("state")
     }
     fn open(&self, initialize: bool) -> SignerGuard {
-        SignerGuard::open(&self.state(), initialize, vec!["test-key".into()], None).unwrap()
+        SignerGuard::open(
+            &self.state(),
+            initialize,
+            vec!["test-key".into()],
+            initialize.then(domain),
+            None,
+        )
+        .unwrap()
     }
 }
 impl Drop for Directory {
@@ -149,11 +156,15 @@ fn guard_separates_phase_and_chain_but_not_key_aliases() {
             &bytes(&vote(3, 0, ConsensusV2Phase::Precommit)),
         )
         .unwrap();
+    // The guard is bound to one domain: another chain is refused, never a
+    // fresh family (this assertion accepted it before domain binding).
     let mut other_chain = v.clone();
     other_chain.domain.chain_id = "another-chain".into();
-    guard
+    assert!(guard
         .reserve(&p, CONSENSUS_V2_VOTE_CONTEXT, &bytes(&other_chain))
-        .unwrap();
+        .unwrap_err()
+        .to_string()
+        .contains("validator_signer_domain_refused"));
     let mut alias = p.clone();
     alias.node_id = "alias".into();
     let mut other_id = v.clone();
@@ -173,14 +184,21 @@ fn guard_separates_phase_and_chain_but_not_key_aliases() {
 fn guard_refuses_missing_corrupt_reinitialized_or_shared_state() {
     let d = Directory::new();
     let guard = d.open(true);
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
-    assert!(SignerGuard::open(&d.state(), true, vec!["test-key".into()], None).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None, None).is_err());
+    assert!(SignerGuard::open(
+        &d.state(),
+        true,
+        vec!["test-key".into()],
+        Some(domain()),
+        None
+    )
+    .is_err());
     drop(guard);
-    assert!(SignerGuard::open(&d.state(), false, vec!["other-key".into()], None).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["other-key".into()], None, None).is_err());
     std::fs::write(d.state().join("state.json"), b"{torn").unwrap();
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None, None).is_err());
     std::fs::remove_file(d.state().join("state.json")).unwrap();
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None, None).is_err());
 }
 
 #[test]
@@ -211,11 +229,11 @@ fn guard_refuses_symlink_and_world_readable_state() {
     let moved = d.0.join("moved.json");
     std::fs::rename(&path, &moved).unwrap();
     std::os::unix::fs::symlink(&moved, &path).unwrap();
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None, None).is_err());
     std::fs::remove_file(&path).unwrap();
     std::fs::rename(&moved, &path).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None, None).is_err());
 }
 
 #[test]
@@ -223,14 +241,14 @@ fn guard_refuses_writable_ancestors_and_valid_json_checksum_tampering() {
     let d = Directory::new();
     drop(d.open(true));
     std::fs::set_permissions(&d.0, std::fs::Permissions::from_mode(0o770)).unwrap();
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None, None).is_err());
     std::fs::set_permissions(&d.0, std::fs::Permissions::from_mode(0o700)).unwrap();
     let path = d.state().join("state.json");
     let mut state: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     state["state"]["schema"] = "another-schema".into();
     std::fs::write(&path, serde_json::to_vec(&state).unwrap()).unwrap();
-    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None).is_err());
+    assert!(SignerGuard::open(&d.state(), false, vec!["test-key".into()], None, None).is_err());
 }
 
 #[test]
@@ -384,11 +402,10 @@ fn decoder_matches_every_legacy_runtime_encoder_variant() {
     }
 }
 
-fn floor(height: u64) -> GuardFloor {
-    GuardFloor {
+fn domain() -> GuardDomain {
+    GuardDomain {
         chain_id: "guard-test".into(),
         genesis_hash: "a".repeat(96),
-        height,
     }
 }
 
@@ -396,11 +413,17 @@ fn floor(height: u64) -> GuardFloor {
 fn initialization_floor_refuses_earlier_rounds_of_its_domain_across_restart() {
     let d = Directory::new();
     let p = public();
-    let open = |initialize, floor| {
-        SignerGuard::open(&d.state(), initialize, vec!["test-key".into()], floor)
+    let open = |initialize: bool, floor| {
+        SignerGuard::open(
+            &d.state(),
+            initialize,
+            vec!["test-key".into()],
+            initialize.then(domain),
+            floor,
+        )
     };
-    assert!(SignerGuard::open(&d.state(), true, vec!["test-key".into()], Some(floor(0))).is_err());
-    let mut guard = open(true, Some(floor(10))).unwrap();
+    assert!(open(true, Some(0)).is_err());
+    let mut guard = open(true, Some(10)).unwrap();
     for view in [0, 7, u64::MAX] {
         assert!(guard
             .reserve(
@@ -414,7 +437,7 @@ fn initialization_floor_refuses_earlier_rounds_of_its_domain_across_restart() {
     }
     drop(guard);
     // A floor is never set or changed on restart.
-    assert!(open(false, Some(floor(11))).is_err());
+    assert!(open(false, Some(11)).is_err());
     let mut guard = open(false, None).unwrap();
     for phase in [ConsensusV2Phase::Prepare, ConsensusV2Phase::Precommit] {
         assert!(guard
@@ -448,4 +471,52 @@ fn timeout_bytes(height: u64, view: u64, phase: ConsensusV2Phase) -> Vec<u8> {
         signature: v.signature,
     })
     .unwrap()
+}
+
+#[test]
+fn guard_is_bound_to_its_initialized_domain_and_checks_it_on_open() {
+    let d = Directory::new();
+    let p = public();
+    let open = |initialize: bool, domain: Option<GuardDomain>| {
+        SignerGuard::open(
+            &d.state(),
+            initialize,
+            vec!["test-key".into()],
+            domain,
+            None,
+        )
+    };
+    assert!(open(true, None)
+        .err()
+        .expect("initialization needs a domain")
+        .to_string()
+        .contains("--chain-id"));
+    let mut guard = open(true, Some(domain())).unwrap();
+    for (chain_id, genesis_hash) in [("bogus", "a".repeat(96)), ("guard-test", "b".repeat(96))] {
+        let mut foreign = vote(5, 0, ConsensusV2Phase::Prepare);
+        foreign.domain.chain_id = chain_id.into();
+        foreign.domain.genesis_hash = genesis_hash;
+        assert!(guard
+            .reserve(&p, CONSENSUS_V2_VOTE_CONTEXT, &bytes(&foreign))
+            .unwrap_err()
+            .to_string()
+            .contains("validator_signer_domain_refused"));
+    }
+    // A refused foreign request leaves no family and no floor behind.
+    guard
+        .reserve(
+            &p,
+            CONSENSUS_V2_VOTE_CONTEXT,
+            &bytes(&vote(5, 0, ConsensusV2Phase::Prepare)),
+        )
+        .unwrap();
+    drop(guard);
+    let mut other = domain();
+    other.genesis_hash = "c".repeat(96);
+    assert!(open(false, Some(other))
+        .err()
+        .expect("another domain on restart")
+        .to_string()
+        .contains("validator_signer_state_domain_mismatch"));
+    assert!(open(false, Some(domain())).is_ok());
 }

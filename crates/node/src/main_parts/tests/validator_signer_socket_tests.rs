@@ -49,12 +49,17 @@ mod validator_signer_socket_tests {
     }
 
     fn start_signer(key_file: &Path, socket: &Path, max_connections: Option<usize>) {
+        // The guard signs for the test chain beside the signer directory.
+        let chain = status(NodeOptions {
+            data_dir: key_file.parent().and_then(Path::parent).expect("root").join("node"),
+        })
+        .expect("status");
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
         let options = postfiat_node::ValidatorSignerServeOptions {
             state_dir: socket.with_extension(format!("{}.guard", key_file.file_name().unwrap().to_string_lossy())),
             initialize_state: true,
-            chain_id: None,
-            genesis_hash: None,
+            chain_id: Some(chain.chain_id.clone()),
+            genesis_hash: Some(chain.genesis_hash.clone()),
             min_height: None,
             key_file: key_file.to_path_buf(),
             proposal_key_file: None,

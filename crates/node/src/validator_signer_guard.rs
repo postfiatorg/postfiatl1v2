@@ -40,19 +40,20 @@ struct Mark {
 struct State {
     schema: String,
     keys: Vec<String>,
-    /// The operator's initialization floor for one chain domain: every
-    /// consensus request of that domain below `height` is refused as stale.
-    floor: Option<GuardFloor>,
+    /// The one chain domain this guard signs for; any other is refused, so a
+    /// caller cannot open new families or set floors for invented chains.
+    domain: GuardDomain,
+    /// The operator's initialization floor: every consensus request below
+    /// this height is refused as stale. Set only at initialization.
+    min_height: Option<u64>,
     families: BTreeMap<String, Mark>,
 }
 
-/// A first-use floor for a key that signed before this guard existed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct GuardFloor {
+pub(super) struct GuardDomain {
     pub(super) chain_id: String,
     pub(super) genesis_hash: String,
-    pub(super) height: u64,
 }
 
 fn valid_domain(chain_id: &str, genesis_hash: &str) -> bool {
@@ -103,27 +104,41 @@ impl SignerGuard {
         directory: &Path,
         initialize: bool,
         mut keys: Vec<String>,
-        floor: Option<GuardFloor>,
+        domain: Option<GuardDomain>,
+        min_height: Option<u64>,
     ) -> io::Result<Self> {
         keys.sort();
         keys.dedup();
         if keys.is_empty() {
             return Err(refusal("validator_signer_state_invalid", "no signing keys"));
         }
-        if let Some(floor) = &floor {
-            if !initialize {
-                return Err(refusal(
-                    "validator_signer_state_invalid",
-                    "a round floor is set only with --initialize-state",
-                ));
-            }
-            if floor.height == 0 || !valid_domain(&floor.chain_id, &floor.genesis_hash) {
-                return Err(refusal(
-                    "validator_signer_state_invalid",
-                    "a floor needs a chain id, a 96-hex genesis hash and a nonzero height",
-                ));
-            }
+        if min_height.is_some() && !initialize {
+            return Err(refusal(
+                "validator_signer_state_invalid",
+                "a round floor is set only with --initialize-state",
+            ));
         }
+        if min_height == Some(0)
+            || domain
+                .as_ref()
+                .is_some_and(|d| !valid_domain(&d.chain_id, &d.genesis_hash))
+        {
+            return Err(refusal(
+                "validator_signer_state_invalid",
+                "the domain needs a chain id and a 96-hex genesis hash; a floor a nonzero height",
+            ));
+        }
+        let Some(configured) = domain.clone().or_else(|| {
+            (!initialize).then(|| GuardDomain {
+                chain_id: String::new(),
+                genesis_hash: String::new(),
+            })
+        }) else {
+            return Err(refusal(
+                "validator_signer_state_invalid",
+                "--initialize-state needs --chain-id and --genesis-hash",
+            ));
+        };
         if initialize {
             // An explicit first-use operation. Existing or missing restart state
             // is never silently reset. Do not keep this flag in a service unit.
@@ -161,7 +176,8 @@ impl SignerGuard {
         let state = State {
             schema: SCHEMA.into(),
             keys,
-            floor,
+            domain: configured,
+            min_height,
             families: BTreeMap::new(),
         };
         let mut guard = Self {
@@ -190,9 +206,11 @@ impl SignerGuard {
             if sealed.digest != hash_hex(SCHEMA, &encoded)
                 || sealed.state.schema != SCHEMA
                 || sealed.state.keys != guard.state.keys
-                || sealed.state.floor.as_ref().is_some_and(|floor| {
-                    floor.height == 0 || !valid_domain(&floor.chain_id, &floor.genesis_hash)
-                })
+                || !valid_domain(
+                    &sealed.state.domain.chain_id,
+                    &sealed.state.domain.genesis_hash,
+                )
+                || sealed.state.min_height == Some(0)
                 || sealed.state.families.len() > MAX_FAMILIES
                 || sealed.state.families.iter().any(|(family, mark)| {
                     family.len() != 96 || mark.message.len() != 96 || mark.height == 0
@@ -201,6 +219,12 @@ impl SignerGuard {
                 return Err(refusal(
                     "validator_signer_state_invalid",
                     "checksum, key set or state shape differs",
+                ));
+            }
+            if domain.is_some_and(|domain| domain != sealed.state.domain) {
+                return Err(refusal(
+                    "validator_signer_state_domain_mismatch",
+                    "the guard state belongs to another chain id or genesis hash",
                 ));
             }
             guard.state = sealed.state;
@@ -258,16 +282,23 @@ impl SignerGuard {
             return Ok(());
         }
         let slot = decode_slot(public, context, message)?;
-        if let Some(floor) = &self.state.floor {
-            if slot.chain_id == floor.chain_id
-                && slot.genesis == floor.genesis_hash
-                && slot.height < floor.height
-            {
-                return Err(refusal(
-                    "validator_signer_stale_round",
-                    "request is below the initialized round floor",
-                ));
-            }
+        if slot.chain_id != self.state.domain.chain_id
+            || slot.genesis != self.state.domain.genesis_hash
+        {
+            return Err(refusal(
+                "validator_signer_domain_refused",
+                "request names a chain id or genesis hash this guard does not sign for",
+            ));
+        }
+        if self
+            .state
+            .min_height
+            .is_some_and(|floor| slot.height < floor)
+        {
+            return Err(refusal(
+                "validator_signer_stale_round",
+                "request is below the initialized round floor",
+            ));
         }
         // Committee changes, key aliases and protocol-version changes cannot
         // create a second signing family for the same key, chain and phase.
