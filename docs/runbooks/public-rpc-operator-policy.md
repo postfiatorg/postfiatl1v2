@@ -164,8 +164,9 @@ process holds any capability (`CapEff`, `CapPrm` or `CapAmb` nonzero, for exampl
 `CAP_DAC_READ_SEARCH` granted by systemd `AmbientCapabilities`).
 With `--search-root DIR...` it also fails, listing them under
 `readable_key_copies`, when a file named like a key file outside the signer's
-directory can be read by the rpc or gateway uid (owner, group and search
-permissions on every ancestor; no file is read).
+directory is readable by the rpc or gateway uid by its mode bits and group
+membership: the owner, group and other read bits on the file and the search
+bits on every ancestor. POSIX ACLs are not inspected, and no file is read.
 It requires permission to inspect all three processes, normally root:
 
 ```sh
@@ -242,6 +243,8 @@ Order on a validator (the deploy sheet uses the same steps, word for word). `shr
 7. Start the signer unit, then the transport and rpc units.
 8. Run the deployment check.
 9. Read `private_readiness` and record `custody_reasons`.
+
+The search runs as `postfiat` over every mounted filesystem except `/proc`, `/sys`, `/dev` and `/run`, whatever the files' owner: `find -readable` lists the files named like key files that `postfiat` can read, and `grep -l` lists the files `postfiat` can read that hold `private_key_hex` and this key's public key; both print names only.
 
 The [deploy sheet template](validator-signer-two-user-deploy-sheet.md) carries
 these steps with the commands.

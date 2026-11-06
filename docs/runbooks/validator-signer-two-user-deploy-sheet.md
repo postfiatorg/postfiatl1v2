@@ -32,13 +32,18 @@ The steps are the operator page's, in the same order and words.
 
 3. [ ] Search for other copies of the key that `postfiat` can read, outside the signer's directory; the move is complete only when the search finds nothing.
 
+    The search runs as `postfiat` over every mounted filesystem except `/proc`, `/sys`, `/dev` and `/run`, whatever the files' owner: `find -readable` lists the files named like key files that `postfiat` can read, and `grep -l` lists the files `postfiat` can read that hold `private_key_hex` and this key's public key; both print names only.
+
     ```sh
-    # Files named like key files, then files holding this key's fields.
     PUB=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["validators"][0]["public_key_hex"])' \
       /var/lib/postfiat/<validator>/validator_keys.json)
-    find / -xdev -type f -user postfiat -name '*key*.json' -print
-    find / -xdev -type f -user postfiat -size -64M -exec grep -l -F private_key_hex {} + \
-      | xargs -r grep -l -F "$PUB"
+    SKIP='( -path /proc -o -path /sys -o -path /dev -o -path /run ) -prune -o'
+    # Files named like key files that postfiat can read, whatever their owner.
+    sudo -u postfiat find / $SKIP -type f -readable -name '*key*.json' -print 2>/dev/null
+    # Files postfiat can read that hold private_key_hex and this key's public key.
+    sudo -u postfiat find / $SKIP -type f -readable -size -64M -print0 2>/dev/null \
+      | sudo -u postfiat xargs -0 -r grep -l -F private_key_hex 2>/dev/null \
+      | sudo -u postfiat xargs -r -d '\n' grep -l -F "$PUB"
     ```
 
     Each hit other than `/var/lib/postfiat/<validator>/validator_keys.json`
