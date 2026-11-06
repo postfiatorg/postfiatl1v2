@@ -342,6 +342,14 @@ pub struct ValidatorSignerServeOptions {
     pub state_dir: PathBuf,
     /// First use only: refuses an existing directory. Omit on every restart.
     pub initialize_state: bool,
+    /// `--chain-id` and `--genesis-hash`: the one chain domain the guard
+    /// signs for. Required with `initialize_state`; on a restart, when given,
+    /// they must equal the domain stored in the guard state.
+    pub chain_id: Option<String>,
+    pub genesis_hash: Option<String>,
+    /// `--min-height`, first use only: for a key that already signed, every
+    /// consensus round below this height is refused as stale.
+    pub min_height: Option<u64>,
     pub key_file: PathBuf,
     /// Defaults to `key_file`.
     pub proposal_key_file: Option<PathBuf>,
@@ -570,10 +578,26 @@ pub fn validator_signer_serve(
                 .map_err(invalid_data)
         })
         .collect::<io::Result<Vec<_>>>()?;
+    let domain = match (&options.chain_id, &options.genesis_hash) {
+        (Some(chain_id), Some(genesis_hash)) => Some(crate::validator_signer_guard::GuardDomain {
+            chain_id: chain_id.clone(),
+            genesis_hash: genesis_hash.clone(),
+        }),
+        (None, None) => None,
+        _ => {
+            return Err(signer_error(
+                io::ErrorKind::InvalidInput,
+                "validator_signer_state_invalid",
+                "--chain-id and --genesis-hash go together",
+            ))
+        }
+    };
     let guard = crate::validator_signer_guard::SignerGuard::open(
         &options.state_dir,
         options.initialize_state,
         fingerprints,
+        domain,
+        options.min_height,
     )?;
     let keys = Arc::new(HeldKeys {
         vote,
@@ -1100,6 +1124,7 @@ mod validator_signer_tests {
         std::fs::create_dir_all(&root).expect("root");
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700))
             .expect("private test root");
+        crate::validator_signer_guard::test_roots::register(&root);
         root
     }
 
@@ -1129,6 +1154,9 @@ mod validator_signer_tests {
         let options = ValidatorSignerServeOptions {
             state_dir: root.join("guard"),
             initialize_state: true,
+            chain_id: Some("signer-test".to_string()),
+            genesis_hash: Some("a".repeat(96)),
+            min_height: None,
             key_file: key,
             proposal_key_file: None,
             socket: socket.clone(),
@@ -1342,6 +1370,9 @@ mod validator_signer_tests {
         let second = ValidatorSignerServeOptions {
             state_dir: root.join("second-guard"),
             initialize_state: true,
+            chain_id: Some("signer-test".to_string()),
+            genesis_hash: Some("a".repeat(96)),
+            min_height: None,
             key_file: key.clone(),
             proposal_key_file: None,
             socket: socket.clone(),
@@ -1472,6 +1503,72 @@ mod validator_signer_tests {
             "validator_signer_context_refused"
         );
         assert!(refused.signature_hex.is_none());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn two_different_same_slot_requests_at_once_get_one_signature_and_one_refusal() {
+        let root = temp_root("concurrent");
+        let (socket, _) = serve(&root, vec![current_euid()], 5_000);
+        for height in 1..=8u64 {
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let handles: Vec<_> = [true, false]
+                .into_iter()
+                .map(|accept| {
+                    let (socket, barrier) = (socket.clone(), barrier.clone());
+                    std::thread::spawn(move || {
+                        let message = serde_json::to_vec(&serde_json::json!([
+                            "signer-test",
+                            "a".repeat(96),
+                            1,
+                            height,
+                            0,
+                            "b".repeat(96),
+                            "validator-0",
+                            "transparent",
+                            "c".repeat(96),
+                            "d".repeat(96),
+                            [],
+                            "validator-0",
+                            accept
+                        ]))
+                        .expect("legacy message");
+                        let request = serde_json::to_vec(&ValidatorSignerRequest {
+                            schema: VALIDATOR_SIGNER_REQUEST_SCHEMA.to_string(),
+                            method: "sign".to_string(),
+                            validator_id: Some("validator-0".to_string()),
+                            context: Some(
+                                String::from_utf8_lossy(BLOCK_CERTIFICATE_SIGNATURE_CONTEXT)
+                                    .into_owned(),
+                            ),
+                            message_hex: Some(bytes_to_hex(&message)),
+                        })
+                        .expect("json");
+                        barrier.wait();
+                        raw_request(&socket, &request)
+                    })
+                })
+                .collect();
+            let answers: Vec<_> = handles
+                .into_iter()
+                .map(|handle| handle.join().expect("request thread"))
+                .collect();
+            let signed = answers
+                .iter()
+                .filter(|answer| answer.ok && answer.signature_hex.is_some())
+                .count();
+            let refused: Vec<_> = answers
+                .iter()
+                .filter_map(|answer| answer.error.as_ref())
+                .map(|error| error.message.clone())
+                .collect();
+            assert_eq!(signed, 1, "height {height}: {refused:?}");
+            assert_eq!(refused.len(), 1, "height {height}");
+            assert!(
+                refused[0].contains("validator_signer_double_sign"),
+                "height {height}: {refused:?}"
+            );
+        }
         let _ = std::fs::remove_dir_all(root);
     }
 

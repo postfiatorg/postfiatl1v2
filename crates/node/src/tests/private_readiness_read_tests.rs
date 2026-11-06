@@ -505,6 +505,7 @@
         ] {
             let custody = PrivateReadinessCustody {
                 signer_double_sign_protection: None,
+                data_dir_key_files: Vec::new(),
                 published_by: "rpc_serve".to_string(),
                 store_backend: backend.as_str().to_string(),
                 transactional_active: active,
@@ -531,6 +532,7 @@
                        signer_key_matches: Option<bool>,
                        validator_registry_readable: Option<bool>| PrivateReadinessCustody {
             signer_double_sign_protection: Some(true),
+            data_dir_key_files: Vec::new(),
             published_by: "rpc_serve".to_string(),
             store_backend: "transactional".to_string(),
             transactional_active: true,
@@ -552,6 +554,11 @@
         assert_eq!(reasons(None, None, None), ["validator_signer_unreachable"]);
         // A signer that answers with keys other than the registry's.
         assert_eq!(reasons(Some(1001), Some(false), Some(true)), ["validator_signer_key_mismatch"]);
+        // A key copy left in the serving data directory, readable by rpc-serve.
+        let mut copied = custody(Some(1001), Some(true), Some(true));
+        copied.data_dir_key_files = vec!["validator_keys.json".to_string()];
+        assert_eq!(super::private_readiness_read::custody_reasons(&copied),
+            ["validator_key_copy_in_data_dir"]);
         for available in [None, Some(false)] {
             let mut unguarded = custody(Some(1001), Some(true), Some(true));
             unguarded.signer_double_sign_protection = available;
@@ -564,6 +571,7 @@
     fn private_readiness_reports_an_unreadable_registry_apart_from_a_key_mismatch() {
         let custody = PrivateReadinessCustody {
             signer_double_sign_protection: Some(true),
+            data_dir_key_files: Vec::new(),
             published_by: "rpc_serve".to_string(),
             store_backend: "transactional".to_string(),
             transactional_active: true,

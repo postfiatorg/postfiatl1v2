@@ -507,6 +507,12 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                     state_dir: flag_value(flags, "--state-dir").map(PathBuf::from)
                         .ok_or_else(|| "validator-signer-serve requires --state-dir".to_string())?,
                     initialize_state: flag_present(flags, "--initialize-state"),
+                    chain_id: flag_value(flags, "--chain-id").map(str::to_string),
+                    genesis_hash: flag_value(flags, "--genesis-hash").map(str::to_string),
+                    min_height: flag_value(flags, "--min-height")
+                        .map(str::parse::<u64>)
+                        .transpose()
+                        .map_err(|_| "--min-height must be a u64".to_string())?,
                     key_file,
                     proposal_key_file: flag_value(flags, "--proposal-key-file").map(PathBuf::from),
                     socket: socket.clone(),

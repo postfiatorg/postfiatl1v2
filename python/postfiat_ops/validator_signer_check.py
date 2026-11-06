@@ -17,6 +17,11 @@ import sys
 import threading
 import time
 
+# Key file names a data directory must not hold once the signer has the key:
+# rpc-serve's default --finality-key-file, at any depth (also node/).
+KEY_FILE_NAMES = ('validator_keys.json',)
+CAPABILITY_SETS = ('CapEff', 'CapPrm', 'CapAmb')
+
 
 def digest(path):
     h = hashlib.sha256()
@@ -38,6 +43,7 @@ def process(pid):
     args = (base / 'cmdline').read_bytes().rstrip(b'\0').decode().split('\0')
     fds = [os.readlink(p) for p in (base / 'fd').iterdir()]
     result = {'pid': pid, 'start_time': start, 'uids': [int(v) for v in status['Uid'].split()],
+              'capabilities': {name: int(status[name].strip(), 16) for name in CAPABILITY_SETS},
               'args': args, 'cwd': os.readlink(base / 'cwd'), 'fds': fds,
               'exe_sha256': digest(base / 'exe'),
               'same_network_namespace': os.stat(base / 'ns/net').st_ino == os.stat('/proc/self/ns/net').st_ino}
@@ -61,19 +67,34 @@ def argument_path(proc, name, expected):
     return len(values) == 1 and (Path(proc['cwd']) / values[0]).resolve() == Path(expected).resolve()
 
 
-def private_path(path, uid, directory=False):
+def private_path(path, uid, directory=False, *, test_root=None):
+    """Owner-only path whose ancestors no other user can replace. `test_root`
+    is for unit tests only: the walk stops above that private root."""
     path = Path(path)
     info = path.lstat()
     if info.st_uid != uid or stat.S_IMODE(info.st_mode) & 0o077:
         return False
     if not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)):
         return False
+    root = Path(test_root).resolve() if test_root is not None else None
     for parent in path.resolve().parents:
+        if root is not None and parent != root and root.is_relative_to(parent):
+            break
         s = parent.stat()
         sticky = s.st_uid == 0 and s.st_mode & stat.S_ISVTX
         if s.st_uid not in (0, uid) or (s.st_mode & 0o022 and not sticky):
             return False
     return True
+
+
+def key_copies(data_dir, key_files=()):
+    """Regular files under the data directory named like a validator key file
+    or like the signer's key files. Names only: no file is read."""
+    names = set(KEY_FILE_NAMES) | {Path(path).name for path in key_files}
+    found = []
+    for directory, _, files in os.walk(data_dir):
+        found += [str(Path(directory) / name) for name in files if name in names]
+    return sorted(found)
 
 
 def owns_listener(proc, port):
@@ -99,6 +120,8 @@ def readiness(port):
     if len(line) > 1024 * 1024:
         raise ValueError('readiness response exceeds bound')
     value = json.loads(line)
+    if not isinstance(value, dict) or not isinstance(value.get('result'), dict):
+        raise ValueError('readiness response is not an object')
     if value.get('ok') is not True or value.get('version') != request['version'] or value.get('id') != request['id']:
         raise ValueError('readiness RPC refused')
     return value['result']
@@ -149,6 +172,9 @@ def assess(signer, rpc, gateway, report, expected, observations):
                 gateway_open.append(fd)
     checks = {
         'three_distinct_unprivileged_users': len({uid(signer), uid(rpc), uid(gateway)}) == 3 and all(0 not in p['uids'] and len(set(p['uids'])) == 1 for p in (signer, rpc, gateway)),
+        # A non-root uid with CAP_DAC_READ_SEARCH/CAP_DAC_OVERRIDE (for example
+        # systemd AmbientCapabilities) reads the key despite its mode.
+        'rpc_and_gateway_hold_no_capabilities': all(isinstance(p.get('capabilities'), dict) and all(p['capabilities'].get(name) == 0 for name in CAPABILITY_SETS) for p in (rpc, gateway)),
         'node_executables_match_pin': signer['exe_sha256'] == rpc['exe_sha256'] == expected['node_sha256'],
         'signer_command': 'validator-signer-serve' in signer['args'],
         'rpc_command': 'rpc-serve' in rpc['args'],
@@ -159,7 +185,7 @@ def assess(signer, rpc, gateway, report, expected, observations):
         'restart_does_not_initialize_state': '--initialize-state' not in signer['args'],
         'expected_database_open': str(Path(expected['database']).resolve()) in rpc['fds'],
         'gateway_has_no_protected_file_open': not gateway_open,
-        'live_readiness_has_durable_socket_custody': custody.get('published_by') == 'rpc_serve' and custody.get('validator_signer') == 'socket' and custody.get('transactional_active') is True and custody.get('signer_uid') == uid(signer) and custody.get('serving_uid') == uid(rpc) and custody.get('signer_double_sign_protection') is True and custody.get('signer_key_matches') is True and custody.get('validator_registry_readable') is True,
+        'live_readiness_has_durable_socket_custody': custody.get('published_by') == 'rpc_serve' and custody.get('validator_signer') == 'socket' and custody.get('transactional_active') is True and custody.get('signer_uid') == uid(signer) and custody.get('serving_uid') == uid(rpc) and custody.get('signer_double_sign_protection') is True and custody.get('data_dir_key_files') == [] and custody.get('signer_key_matches') is True and custody.get('validator_registry_readable') is True,
         **observations,
     }
     return {'schema': 'postfiat.validator-signer.deployment-check.v1',
@@ -185,7 +211,9 @@ def main(argv=None):
     try:
         signer, rpc, gateway = [process(getattr(args, f'{role}_pid')) for role in ('signer', 'rpc', 'gateway')]
         uid = signer['uids'][1]
+        proposal = option(signer['args'], '--proposal-key-file')
         observations = {'key_is_private': private_path(args.key_file, uid),
+                        'data_dir_holds_no_key_file': not key_copies(args.data_dir, [args.key_file, *proposal]),
                         'guard_is_private': private_path(args.state_dir, uid, True) and all(private_path(Path(args.state_dir) / f, uid) for f in ('state.json', 'lock')),
                         'rpc_owns_readiness_listener': owns_listener(rpc, args.rpc_port)}
         socket_info = Path(args.socket).lstat()
@@ -196,7 +224,7 @@ def main(argv=None):
         result = assess(signer, rpc, gateway, report, vars(args), observations)
         result['checks']['processes_still_same'] = all(start_time(p['pid']) == p['start_time'] for p in (signer, rpc, gateway))
         result['passed'] = all(result['checks'].values())
-    except (OSError, ValueError, KeyError, TypeError) as error:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
         # Avoid process argv/environment or secret-file content in diagnostics.
         result = {'schema': 'postfiat.validator-signer.deployment-check.v1', 'passed': False,
                   'error': type(error).__name__, 'detail': 'Inspection unavailable or inconsistent; no custody pass. Check permissions, PIDs, listener and supplied paths.'}

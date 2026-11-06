@@ -3,8 +3,29 @@ mod validator_signer_socket_tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    /// The signer refuses guard state below a directory another user could
+    /// replace (`validator_signer_state_permissions`), so the four tests that
+    /// start it are ignored by default and need a `TMPDIR` no other user can
+    /// write through. Run them with `-- --ignored` (CI does); under an unsafe
+    /// `TMPDIR` they fail saying so rather than pass without running.
     fn signer_root(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
+        use std::os::unix::fs::MetadataExt;
+        let uid = euid();
+        let dir = std::env::temp_dir()
+            .canonicalize()
+            .expect("canonical TMPDIR");
+        let safe = dir.ancestors().all(|path| {
+            std::fs::metadata(path).is_ok_and(|m| {
+                (m.uid() == uid || m.uid() == 0)
+                    && (m.mode() & 0o022 == 0 || (m.uid() == 0 && m.mode() & 0o1000 != 0))
+            })
+        });
+        assert!(
+            safe,
+            "TMPDIR {} or a parent is writable by another user; the signer refuses guard state there",
+            dir.display()
+        );
+        dir.join(format!(
             "pf-vsock-{label}-{}-{}",
             process::id(),
             SystemTime::now()
@@ -49,10 +70,18 @@ mod validator_signer_socket_tests {
     }
 
     fn start_signer(key_file: &Path, socket: &Path, max_connections: Option<usize>) {
+        // The guard signs for the test chain beside the signer directory.
+        let chain = status(NodeOptions {
+            data_dir: key_file.parent().and_then(Path::parent).expect("root").join("node"),
+        })
+        .expect("status");
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
         let options = postfiat_node::ValidatorSignerServeOptions {
             state_dir: socket.with_extension(format!("{}.guard", key_file.file_name().unwrap().to_string_lossy())),
             initialize_state: true,
+            chain_id: Some(chain.chain_id.clone()),
+            genesis_hash: Some(chain.genesis_hash.clone()),
+            min_height: None,
             key_file: key_file.to_path_buf(),
             proposal_key_file: None,
             socket: socket.to_path_buf(),
@@ -162,6 +191,7 @@ mod validator_signer_socket_tests {
     }
 
     #[test]
+    #[ignore = "starts the signer, which needs a TMPDIR no other user can write; run with --ignored"]
     fn rpc_serve_signs_a_finality_vote_through_the_signer_socket_with_no_key_file() {
         let root = signer_root("vote");
         let (key_file, local) = chain_with_key_moved_out(&root);
@@ -238,6 +268,7 @@ mod validator_signer_socket_tests {
     }
 
     #[test]
+    #[ignore = "starts the signer, which needs a TMPDIR no other user can write; run with --ignored"]
     fn transport_envelopes_sign_through_the_registered_signer_with_no_key_file() {
         let root = signer_root("transport");
         let (key_file, _) = chain_with_key_moved_out(&root);
@@ -343,6 +374,7 @@ mod validator_signer_socket_tests {
     }
 
     #[test]
+    #[ignore = "starts the signer, which needs a TMPDIR no other user can write; run with --ignored"]
     fn readiness_reports_a_signer_that_holds_another_key() {
         let root = signer_root("readiness-key");
         let (key_file, _) = chain_with_key_moved_out(&root);
@@ -386,6 +418,7 @@ mod validator_signer_socket_tests {
     }
 
     #[test]
+    #[ignore = "starts the signer, which needs a TMPDIR no other user can write; run with --ignored"]
     fn rpc_serve_refuses_a_signer_whose_key_is_not_the_validators() {
         let root = signer_root("mismatch");
         let (_, _) = chain_with_key_moved_out(&root);

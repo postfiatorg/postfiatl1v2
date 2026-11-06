@@ -78,7 +78,7 @@ def main():
             stream.bind(('127.0.0.1', 0)); return stream.getsockname()[1]
 
     try:
-        command('init', [node, 'init-consensus-v2', '--data-dir', data, '--chain-id', 'isolated-custody-rehearsal',
+        initialized = command('init', [node, 'init-consensus-v2', '--data-dir', data, '--chain-id', 'isolated-custody-rehearsal',
                         '--node-id', 'validator-0', '--validators', '4', '--activation-height', '10', '--storage-activation-height', '1'])
         faucet = json.loads((data / 'faucet_key.json').read_text())
         batch = runtime / 'activation-batch.json'
@@ -97,7 +97,9 @@ def main():
                 '--hosts', '127.0.0.1,127.0.0.1,127.0.0.1,127.0.0.1', '--output', topology])
         topology.chmod(0o644)
         guard, sock = keys / 'guard', sockets / 'validator.sock'
-        signer_args = [node, 'validator-signer-serve', '--state-dir', guard, '--key-file', key, '--socket', sock,
+        chain = json.loads(initialized)
+        signer_args = [node, 'validator-signer-serve', '--state-dir', guard, '--chain-id', chain['chain_id'],
+                       '--genesis-hash', chain['genesis_hash'], '--key-file', key, '--socket', sock,
                        '--socket-group', str(group), '--allow-peer-uid', str(rpc_uid)]
         signer = spawn('signer-init', [*signer_args, '--initialize-state'], signer_uid, group)
         wait(sock.exists, signer, 'initial signer')

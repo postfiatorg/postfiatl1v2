@@ -64,8 +64,36 @@ fn rpc(port: u16, request: serde_json::Value) -> serde_json::Value {
     serde_json::from_str(&response).expect("response json")
 }
 
+/// The signer refuses guard state below a directory another user could
+/// replace (`validator_signer_state_permissions`). Under a `TMPDIR` with such
+/// an ancestor these process-level tests cannot run, so they say so and stop.
+fn temp_dir_custody_safe() -> bool {
+    use std::os::unix::fs::MetadataExt;
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    let uid = unsafe { libc::geteuid() };
+    let Ok(dir) = std::env::temp_dir().canonicalize() else {
+        return false;
+    };
+    let safe = dir.ancestors().all(|path| {
+        std::fs::metadata(path).is_ok_and(|m| {
+            (m.uid() == uid || m.uid() == 0)
+                && (m.mode() & 0o022 == 0 || (m.uid() == 0 && m.mode() & 0o1000 != 0))
+        })
+    });
+    if !safe {
+        eprintln!(
+            "skipped: TMPDIR {} or a parent is writable by another user; the signer refuses guard state there",
+            dir.display()
+        );
+    }
+    safe
+}
+
 #[test]
 fn rpc_serve_signs_a_finality_vote_through_the_signer_process() {
+    if !temp_dir_custody_safe() {
+        return;
+    }
     let root = std::env::temp_dir().join(format!(
         "pf-vsig-process-{}-{}",
         std::process::id(),
@@ -120,6 +148,10 @@ fn rpc_serve_signs_a_finality_vote_through_the_signer_process() {
                 "--state-dir",
                 &path(&signer_dir.join("guard")),
                 "--initialize-state",
+                "--chain-id",
+                CHAIN_ID,
+                "--genesis-hash",
+                &local.genesis_hash,
                 "--key-file",
                 &path(&key_file),
                 "--socket",
@@ -221,17 +253,28 @@ fn rpc_serve_signs_a_finality_vote_through_the_signer_process() {
         "{reasons}"
     );
     assert!(!reasons.contains("validator_key_file_"), "{reasons}");
+    // The decoy is still a key file in rpc-serve's data directory.
+    assert!(
+        reasons.contains("validator_key_copy_in_data_dir"),
+        "{reasons}"
+    );
+    assert_eq!(
+        custody["data_dir_key_files"],
+        serde_json::json!(["validator_keys.json"])
+    );
     assert_eq!(custody["signer_double_sign_protection"], true);
 
     // Persist through an actual process death and restart, independently of
     // rpc-serve's own vote cache. These are disposable test-chain signatures.
     use postfiat_node::{SocketSigner, ValidatorSigner};
     let context = b"postfiat-l1-v2/block-certificate/v1";
+    // The guard signs only for this chain; a far height keeps the slot clear
+    // of rpc-serve's own votes.
     let message = serde_json::json!([
-        "guard-process",
-        "a".repeat(96),
+        CHAIN_ID,
+        local.genesis_hash,
         1,
-        1,
+        1_000_000,
         0,
         "b".repeat(96),
         "validator-0",
@@ -290,7 +333,7 @@ fn rpc_serve_signs_a_finality_vote_through_the_signer_process() {
         error.to_string().contains("validator_signer_double_sign"),
         "{error}"
     );
-    eprintln!("restart_refusal chain=guard-process height=1 view=0 error={error}");
+    eprintln!("restart_refusal chain={CHAIN_ID} height=1000000 view=0 error={error}");
 }
 
 /// The deployment shape with two OS users: the signer runs as user A and
@@ -389,6 +432,10 @@ fn rpc_serve_under_another_user_signs_through_the_group_socket() {
                 "--state-dir",
                 &path(&key_file.parent().expect("key directory").join("guard")),
                 "--initialize-state",
+                "--chain-id",
+                CHAIN_ID,
+                "--genesis-hash",
+                &local.genesis_hash,
                 "--key-file",
                 &path(&key_file),
                 "--socket",

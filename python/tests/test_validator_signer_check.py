@@ -4,14 +4,20 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from postfiat_ops.validator_signer_check import assess, private_path
+import json
+import stat
+from unittest import mock
+
+from postfiat_ops import validator_signer_check
+from postfiat_ops.validator_signer_check import assess, key_copies, private_path
 
 
 class DeploymentCheckTests(unittest.TestCase):
     def setUp(self):
         def process(uid, args, fds=()):
             return {'pid': uid, 'start_time': '1', 'uids': [uid] * 4, 'args': args,
-                    'cwd': '/', 'fds': list(fds), 'exe_sha256': 'abc'}
+                    'cwd': '/', 'fds': list(fds), 'exe_sha256': 'abc',
+                    'capabilities': {'CapEff': 0, 'CapPrm': 0, 'CapAmb': 0}}
         self.expected = dict(data_dir='/srv/node', database='/srv/node/db/state.redb',
                              state_dir='/srv/signer/guard', key_file='/srv/signer/key.json',
                              socket='/run/signer.sock', node_sha256='abc')
@@ -24,7 +30,8 @@ class DeploymentCheckTests(unittest.TestCase):
         self.report = {'ready': False, 'reasons': ['governance_not_activated'], 'custody': {
             'published_by': 'rpc_serve', 'validator_signer': 'socket', 'transactional_active': True,
             'signer_uid': 1100, 'serving_uid': 1101, 'signer_double_sign_protection': True,
-            'signer_key_matches': True, 'validator_registry_readable': True}}
+            'signer_key_matches': True, 'validator_registry_readable': True,
+            'data_dir_key_files': []}}
 
     def result(self):
         return assess(self.signer, self.rpc, self.gateway, self.report, self.expected, {'filesystem_checked': True})
@@ -64,21 +71,67 @@ class DeploymentCheckTests(unittest.TestCase):
         self.signer['args'] += ['--allow-peer-uid', '1102']
         self.assertFalse(self.result()['passed'])
 
+    def test_key_copy_in_the_data_directory_refused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary) / 'node'
+            (data / 'db').mkdir(parents=True)
+            self.assertEqual(key_copies(data, ['/srv/signer/proposal.json']), [])
+            for name in ('validator_keys.json', 'db/proposal.json'):
+                (data / name).write_text('{}')
+                copies = key_copies(data, ['/srv/signer/proposal.json'])
+                self.assertIn(str(data / name), copies)
+                result = assess(self.signer, self.rpc, self.gateway, self.report, self.expected,
+                                {'data_dir_holds_no_key_file': not copies})
+                self.assertFalse(result['passed'])
+                (data / name).unlink()
+        self.report['custody']['data_dir_key_files'] = ['validator_keys.json']
+        self.assertFalse(self.result()['passed'])
+
+    def test_capabilities_on_rpc_or_gateway_refused(self):
+        for role in ('rpc', 'gateway'):
+            for name in ('CapEff', 'CapPrm', 'CapAmb'):
+                setUp = getattr(self, role)
+                setUp['capabilities'][name] = 1 << 2  # CAP_DAC_READ_SEARCH
+                self.assertFalse(self.result()['passed'], (role, name))
+                setUp['capabilities'][name] = 0
+        del self.rpc['capabilities']
+        self.assertFalse(self.result()['passed'])
+
+    def test_non_object_readiness_result_exits_two(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            out = Path(temporary) / 'report'
+            procs = {1100: self.signer, 1101: self.rpc, 1102: self.gateway}
+            with mock.patch.object(validator_signer_check, 'process', side_effect=procs.__getitem__), \
+                 mock.patch.object(validator_signer_check, 'owns_listener', return_value=True), \
+                 mock.patch.object(validator_signer_check, 'private_path', return_value=True), \
+                 mock.patch.object(validator_signer_check, 'readiness_with_database_observation', return_value=['not', 'an', 'object']), \
+                 mock.patch.object(validator_signer_check.Path, 'lstat', return_value=mock.Mock(st_mode=stat.S_IFSOCK | 0o660, st_uid=1100)), \
+                 mock.patch('sys.stdout'):
+                code = validator_signer_check.main([
+                    '--signer-pid', '1100', '--rpc-pid', '1101', '--gateway-pid', '1102', '--rpc-port', '1',
+                    '--node-sha256', 'abc', '--data-dir', temporary, '--database', 'db', '--key-file', 'k',
+                    '--state-dir', 's', '--socket', 'sock', '--output', str(out)])
+            self.assertEqual(code, 2)
+            self.assertFalse(json.loads((out / 'report.json').read_text())['passed'])
+
     def test_posix_custody_refuses_symlink_shared_file_and_writable_parent(self):
+        # A private root of the test's own, so TMPDIR's ancestors do not decide.
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            root.chmod(0o700)
+            check = lambda path: private_path(path, os.geteuid(), test_root=root)
             key = root / 'key'
             key.write_bytes(b'not a real key')
             key.chmod(0o600)
-            self.assertTrue(private_path(key, os.geteuid()))
+            self.assertTrue(check(key))
             link = root / 'link'
             link.symlink_to(key)
-            self.assertFalse(private_path(link, os.geteuid()))
+            self.assertFalse(check(link))
             key.chmod(0o640)
-            self.assertFalse(private_path(key, os.geteuid()))
+            self.assertFalse(check(key))
             key.chmod(0o600)
             root.chmod(0o770)
-            self.assertFalse(private_path(key, os.geteuid()))
+            self.assertFalse(check(key))
 
 
 if __name__ == '__main__':

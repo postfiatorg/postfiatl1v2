@@ -114,6 +114,17 @@ class PrivatePathStateTests(unittest.TestCase):
         ))["Readiness"]
         self.assertEqual((ready["status"], ready["reasons"]), ("ok", []))
 
+    def test_socket_custody_key_copy_reason_and_field_pass_through(self) -> None:
+        socket = {**READINESS, "reasons": ["validator_key_copy_in_data_dir"],
+                  "custody": {**READINESS["custody"], "validator_signer": "socket",
+                              "key_files": [], "signer_double_sign_protection": True,
+                              "data_dir_key_files": ["validator_keys.json"]}}
+        readiness = sections(private_path_ui.read_private_path_state(
+            fake_client(private_readiness=socket)))["Readiness"]
+        self.assertEqual(readiness["reasons"], ["validator_key_copy_in_data_dir"])
+        rows = dict(readiness["rows"])
+        self.assertEqual(rows["custody.data_dir_key_files[0]"], "validator_keys.json")
+
     def test_snapshot_counts_pricing_and_egress_render_from_fixtures(self) -> None:
         view = sections(private_path_ui.read_private_path_state(fake_client()))
         snapshot = dict(view["Pool snapshot"]["rows"])
