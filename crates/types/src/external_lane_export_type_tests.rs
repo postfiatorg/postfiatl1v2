@@ -231,7 +231,7 @@ fn external_lane_export_packets_prune_and_bound_like_release_records() {
     state.apply_export(&lane, sample_export(2, 1, 102)).expect("export");
     assert_eq!(state.pruned_export_count, 1);
     assert_eq!(state.pruned_exported_atoms, 1);
-    assert_eq!(state.export_count(), 3);
+    assert_eq!(state.export_count(), Some(3));
     assert_eq!(state.exports[0].export_nonce, 1);
     state.validate_against_genesis(&lane).expect("pruned exports");
     // The stored ceiling refuses without mutation.
@@ -258,6 +258,28 @@ fn external_lane_recorded_exports_refuse_a_nonce_past_u64_max() {
     state.pruned_export_history_root = Some("00".repeat(48));
     state.next_export_nonce = u64::MAX;
     state.exports[0].export_nonce = u64::MAX;
+    assert!(state
+        .validate_recorded_exports()
+        .unwrap_err()
+        .contains("inconsistent export records"));
+}
+
+/// A pruned count at the top of u64 with one packet at nonce u64::MAX and
+/// otherwise consistent fields: the count is u64::MAX + 1, which does not
+/// exist, so it cannot equal `next_export_nonce` and the record is refused.
+#[test]
+fn external_lane_recorded_exports_refuse_a_saturated_count_with_one_packet() {
+    let (lane, mut state) = released_export_lane(60);
+    state.apply_export(&lane, sample_export(0, 1, 2)).expect("export");
+    let pruned_root = "00".repeat(48);
+    state.pruned_export_count = u64::MAX;
+    state.pruned_export_history_root = Some(pruned_root.clone());
+    state.next_export_nonce = u64::MAX;
+    state.exports[0].export_nonce = u64::MAX;
+    state.export_history_root = Some(
+        external_lane_export_history_root(Some(&pruned_root), &state.exports[0])
+            .expect("root"),
+    );
     assert!(state
         .validate_recorded_exports()
         .unwrap_err()

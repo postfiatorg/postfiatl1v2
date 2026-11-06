@@ -955,7 +955,7 @@ fn external_lane_release_prunes_records_behind_the_finalized_height_at_the_bound
     assert_eq!(pruned.pruned_release_count, 1);
     assert_eq!(pruned.pruned_released_atoms, 10);
     assert_eq!(pruned.pruned_release_history_root, unpruned_history_root(&[5]));
-    assert_eq!(pruned.release_count(), 2);
+    assert_eq!(pruned.release_count(), Some(2));
     pruned.validate_against_genesis(&lane).expect("pruned lane");
     kept.validate_against_genesis(&lane).expect("unpruned lane");
     // The pruned nonce stays paid.
@@ -995,7 +995,7 @@ fn external_lane_releases_past_the_record_ceiling_with_pruning_are_admitted() {
     }
     assert_eq!(state.released_atoms, 200);
     assert_eq!(state.released_lock_nonces.len(), 20);
-    assert_eq!(state.release_count(), 20);
+    assert_eq!(state.release_count(), Some(20));
     state.validate_against_genesis(&lane).expect("pruned lane");
 }
 
@@ -1017,7 +1017,7 @@ fn external_lane_release_of_zero_atoms_is_refused_before_a_release_can_prune_it(
     assert!(error.contains("zero amount"), "{error}");
     let (code, _) = state.check_release(&lane, 2, 0, 106).unwrap_err();
     assert_eq!(code, EXTERNAL_LANE_PROOF_INVALID);
-    assert_eq!((state.release_count(), state.pruned_release_count), (1, 0));
+    assert_eq!((state.release_count(), state.pruned_release_count), (Some(1), 0));
     assert_eq!(state.released_lock_nonces, [1_u64].into_iter().collect());
 }
 

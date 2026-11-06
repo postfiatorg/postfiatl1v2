@@ -2640,7 +2640,12 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
         // Sequences count every release; the stored records follow the
         // pruned ones, so a cursor at or below the pruned count is empty.
         let pruned = state.pruned_release_count;
-        let release_count = state.release_count();
+        let release_count = state.release_count().ok_or_else(|| {
+            invalid(format!(
+                "external lane `{}` release count overflows u64",
+                state.lane_id
+            ))
+        })?;
         let records = std::mem::take(&mut state.releases);
         let end = options.release_cursor.map_or(records.len(), |cursor| {
             usize::try_from(cursor.saturating_sub(pruned))

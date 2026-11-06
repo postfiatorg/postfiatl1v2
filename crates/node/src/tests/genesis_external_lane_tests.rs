@@ -1720,7 +1720,7 @@ mod release_path {
         let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
         let lane = ledger.external_lanes[0].clone();
         assert!(lane.pruned_release_count > 0, "{lane:?}");
-        assert_eq!(lane.release_count(), 5);
+        assert_eq!(lane.release_count(), Some(5));
         assert_eq!(lane.released_lock_nonces, (1..=5_u64).collect());
         assert_eq!(lane.released_atoms, amounts.iter().sum::<u64>());
         assert_eq!(
@@ -1798,7 +1798,7 @@ mod release_path {
         let lane = ledger.external_lanes[0].clone();
         assert!(lane.pruned_release_count > 0, "{lane:?}");
         assert!(lane.pruned_release_history_root.is_some(), "{lane:?}");
-        assert_eq!(lane.release_count(), 5);
+        assert_eq!(lane.release_count(), Some(5));
         let info = lane_info(&chain.data_dir);
         assert_eq!(info.pruned_release_count, lane.pruned_release_count);
 

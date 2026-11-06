@@ -1335,10 +1335,11 @@ impl ExternalLaneState {
         }
     }
 
-    /// Every release ever applied, pruned or stored.
-    pub fn release_count(&self) -> u64 {
+    /// Every release ever applied, pruned or stored; `None` when the sum
+    /// does not fit in u64, which no valid record reaches.
+    pub fn release_count(&self) -> Option<u64> {
         self.pruned_release_count
-            .saturating_add(self.releases.len() as u64)
+            .checked_add(u64::try_from(self.releases.len()).ok()?)
     }
 
     /// The leading records that pruning at `finalized_height` removes: those
@@ -1408,10 +1409,11 @@ impl ExternalLaneState {
             })
     }
 
-    /// Every export ever applied, pruned or stored.
-    pub fn export_count(&self) -> u64 {
+    /// Every export ever applied, pruned or stored; `None` when the sum
+    /// does not fit in u64, which no valid record reaches.
+    pub fn export_count(&self) -> Option<u64> {
         self.pruned_export_count
-            .saturating_add(self.exports.len() as u64)
+            .checked_add(u64::try_from(self.exports.len()).ok()?)
     }
 
     pub fn validate(&self) -> Result<(), String> {
@@ -1486,7 +1488,7 @@ impl ExternalLaneState {
             // stores its latest packet, as `validate_recorded_releases` requires.
             self.pruned_export_history_root.is_some() && !self.exports.is_empty()
         };
-        if !consistent || self.export_count() != self.next_export_nonce {
+        if !consistent || self.export_count() != Some(self.next_export_nonce) {
             return Err(format!(
                 "external lane `{}` has inconsistent export records",
                 self.lane_id
@@ -1580,7 +1582,7 @@ impl ExternalLaneState {
         // per release, the stored ones among them.
         if pruned > 0
             && (!nonces.is_subset(&self.released_lock_nonces)
-                || self.released_lock_nonces.len() as u64 != self.release_count())
+                || u64::try_from(self.released_lock_nonces.len()).ok() != self.release_count())
         {
             return Err(format!(
                 "external lane `{}` released Lock nonces ({}) differ from its recorded releases ({} stored, {pruned} pruned)",
