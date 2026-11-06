@@ -2573,6 +2573,15 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
             format!("external lane release limit must be between 1 and {EXTERNAL_LANE_RELEASE_PAGE_SIZE}"),
         ));
     }
+    let export_limit = options
+        .export_limit
+        .unwrap_or(EXTERNAL_LANE_RELEASE_PAGE_SIZE);
+    if !(1..=EXTERNAL_LANE_RELEASE_PAGE_SIZE).contains(&export_limit) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("external lane export limit must be between 1 and {EXTERNAL_LANE_RELEASE_PAGE_SIZE}"),
+        ));
+    }
     let mut lanes = Vec::new();
     for config in genesis.external_lanes() {
         if options.lane_id.as_ref().is_some_and(|id| id != &config.id) {
@@ -2648,15 +2657,6 @@ pub fn external_lane_info(options: ExternalLaneInfoOptions) -> io::Result<Extern
                 record: record.clone(),
             })
             .collect();
-        let export_limit = options
-            .export_limit
-            .unwrap_or(EXTERNAL_LANE_RELEASE_PAGE_SIZE);
-        if !(1..=EXTERNAL_LANE_RELEASE_PAGE_SIZE).contains(&export_limit) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("external lane export limit must be between 1 and {EXTERNAL_LANE_RELEASE_PAGE_SIZE}"),
-            ));
-        }
         let pruned_exports = state.pruned_export_count;
         let packets = std::mem::take(&mut state.exports);
         let export_end = options.export_cursor.map_or(packets.len(), |cursor| {

@@ -451,3 +451,24 @@ fn external_lane_export_sender_mismatch_is_refused_as_an_envelope_on_either_lane
         let _ = fs::remove_dir_all(&chain.data_dir);
     }
 }
+
+/// The export page limit is refused before the lanes are walked, so an
+/// unknown lane id does not turn a bad limit into an empty success.
+#[test]
+fn external_lane_info_refuses_a_bad_export_limit_for_an_unknown_lane() {
+    let chain = export_chain("export-limit-unknown-lane");
+    for limit in [0, EXTERNAL_LANE_RELEASE_PAGE_SIZE + 1] {
+        let error = external_lane_info(ExternalLaneInfoOptions {
+            data_dir: chain.data_dir.clone(),
+            lane_id: Some("base-erc21".to_string()),
+            release_cursor: None,
+            release_limit: None,
+            export_cursor: None,
+            export_limit: Some(limit),
+        })
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("export limit"), "{error}");
+    }
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
