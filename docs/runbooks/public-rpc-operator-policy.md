@@ -180,14 +180,54 @@ must use a third unprivileged UID and have no protected files open. This is a
 point-in-time observation, not proof of every past/future access or a memory
 secret scan. Governance readiness and rollout approval are separate.
 
-The generated release rpc unit (`batch_snapshot.rs`, the `rpc.service` it
-writes) still runs as `User=postfiat` and passes `--finality-key-file
-{data_dir}/validator_keys.json` and `--finality-proposal-key-file`. A
-two-user deployment therefore needs a signer unit and an edited rpc unit: no
-key-file flags, `--finality-signer-socket <socket>`, and the socket
-directory reachable from the rpc unit (listed in `ReadWritePaths` or
-otherwise not hidden by its sandboxing). The key file moves out of the data
-directory to the signer's user.
+#### Two-user units
+
+`deployment-validator-units-stage --signer-shape two-user` writes the two-user
+shape into the release packet (`deployment_signer_unit` and
+`deployment_rpc_unit` in `crates/node/src/batch_snapshot.rs`). Without the
+option the packet keeps the single-user units, byte for byte.
+
+- `postfiat-<validator>-signer.service` runs `validator-signer-serve` as
+  `postfiat-signer` (group `postfiat-signer-clients`) with the key file and the
+  guard under `/var/lib/postfiat-signer/<validator>` (`0700`), the topology's
+  chain id and genesis hash, and the socket
+  `/run/postfiat-signer/<validator>.sock` (directory `0750`). It allows the uid
+  in `POSTFIAT_SIGNER_ALLOW_PEER_UID`, read from the host file
+  `/etc/postfiat/signer/<validator>.env`. It has no capabilities and no
+  network, and it never initializes the guard.
+- `postfiat-<validator>-rpc.service` is the single-user rpc unit with
+  `--finality-signer-socket` instead of both key-file flags,
+  `SupplementaryGroups=postfiat-signer-clients`, and `Requires=`/`After=` the
+  signer unit.
+
+The signer unit is not in the signed bindings; its binary is checked by the
+same `deployment-manifest-verify` before it starts.
+
+The transport validator unit is unchanged: `transport-validator-serve` still
+reads `<data-dir>/validator_keys.json` with `--unsafe-devnet-file-signer`. While
+it does, that copy stays in rpc-serve's data directory, so readiness reports
+`validator_key_copy_in_data_dir` and the deployment check fails. The two-user
+shape reaches `ready` only once the transport validator signs through the
+signer too.
+
+Order on a validator:
+
+1. Create `postfiat-signer` and `postfiat-signer-clients`, add `postfiat` to
+   the group, write `/etc/postfiat/signer/<validator>.env` with
+   `POSTFIAT_SIGNER_ALLOW_PEER_UID=$(id -u postfiat)`, and put the key file
+   at `/var/lib/postfiat-signer/<validator>/validator_keys.json` (`0600`,
+   owned by `postfiat-signer`). It becomes a move once the transport
+   validator no longer reads the data-directory copy.
+2. Stop the old rpc unit, choose the floor `N` by the rule above, and
+   initialize the guard once as `postfiat-signer`: the signer unit's
+   `ExecStart` with `--initialize-state --min-height N` and a throwaway
+   `--socket` under the signer's directory. Stop it after its ready line.
+3. Start the signer unit, then the rpc unit.
+4. Run the deployment check below.
+5. Read `private_readiness`.
+
+The [deploy sheet template](validator-signer-two-user-deploy-sheet.md) carries
+these steps with the commands.
 
 At start the signer probes an existing file at `--socket`. If something
 still listens on it, the signer refuses to start
