@@ -33,6 +33,12 @@ mod validator_signer_socket_tests {
         .expect("init chain");
         let signer_dir = root.join("signer");
         fs::create_dir_all(&signer_dir).expect("signer dir");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for directory in [root, signer_dir.as_path()] {
+                fs::set_permissions(directory, fs::Permissions::from_mode(0o700)).expect("custody mode");
+            }
+        }
         let key_file = signer_dir.join(VALIDATOR_KEYS_FILE);
         fs::rename(root.join("node").join(VALIDATOR_KEYS_FILE), &key_file).expect("move key");
         let local = status(NodeOptions {
@@ -45,6 +51,8 @@ mod validator_signer_socket_tests {
     fn start_signer(key_file: &Path, socket: &Path, max_connections: Option<usize>) {
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
         let options = postfiat_node::ValidatorSignerServeOptions {
+            state_dir: socket.with_extension(format!("{}.guard", key_file.file_name().unwrap().to_string_lossy())),
+            initialize_state: true,
             key_file: key_file.to_path_buf(),
             proposal_key_file: None,
             socket: socket.to_path_buf(),

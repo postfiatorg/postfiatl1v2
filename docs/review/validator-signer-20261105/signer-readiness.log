@@ -1,0 +1,22 @@
+   Compiling postfiat-node v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-signer-guard-20261105/crates/node)
+    Finished `test` profile [unoptimized] target(s) in 42.16s
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/postfiatl1v2-priorities-20261105/target/debug/deps/postfiat_node-bda8e2350670215f)
+
+running 14 tests
+test tests::private_readiness_custody_refuses_an_inactive_store ... ok
+test tests::private_readiness_reports_an_unreadable_registry_apart_from_a_key_mismatch ... ok
+test tests::private_readiness_socket_signer_needs_another_user_and_no_key_file ... ok
+test tests::private_readiness_key_file_must_be_owned_by_the_serving_user ... ok
+test tests::private_readiness_custody_refuses_a_plain_init_store ... ok
+test tests::private_readiness_matches_the_route_by_asset_id_when_codes_repeat ... ok
+test tests::private_readiness_requires_built_verifiers_with_the_pinned_identity ... ok
+test tests::private_readiness_reports_two_routes_with_the_same_pair_as_ambiguous ... ok
+test tests::private_readiness_types_an_unreadable_key_file ... ok
+test tests::private_readiness_is_byte_identical_on_repeat_reads_and_refuses_torn_state ... ok
+test tests::private_readiness_follows_the_governed_atomic_batch_activation ... ok
+test tests::private_readiness_reports_the_governed_a666_pfusdc_route ... ok
+test tests::private_readiness_custody_refuses_a_local_read_a_file_signer_and_a_shared_key ... ok
+test tests::private_readiness_builds_the_real_verifiers_with_their_pinned_identity ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 4.73s
+

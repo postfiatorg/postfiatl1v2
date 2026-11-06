@@ -1,0 +1,18 @@
+{
+  "source_parent": "31abdb56199c59166ae19d9fce490991841ec4df",
+  "change": "Rustfmt-only follow-up in private_readiness_read.rs, validator_signer.rs and validator_signer_process.rs. No behavior change.",
+  "reason": "Hosted Rust check and proof-kit failed cargo fmt; proof-kit tests themselves passed.",
+  "checks": [
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit": 0
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 cargo clippy --locked -p postfiat-node --lib --tests -- -D warnings",
+      "exit": 0
+    }
+  ],
+  "rehearsal_source": "8b763dca294a7d6ff71612ec9c8cbafef7b86981",
+  "rehearsal_binary_sha256": "91eb866fdb9745daa325a3180e5d7ba6cd0cf5f71a1baa37edaa64aeb6bab308",
+  "limits": "Prior process/custody results retain their exact original source and binary pins. Full hosted CI on the follow-up is pending."
+}

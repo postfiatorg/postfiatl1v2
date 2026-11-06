@@ -504,6 +504,7 @@
             (postfiat_storage::StorageBackendMode::LegacyJsonl, false, true),
         ] {
             let custody = PrivateReadinessCustody {
+                signer_double_sign_protection: None,
                 published_by: "rpc_serve".to_string(),
                 store_backend: backend.as_str().to_string(),
                 transactional_active: active,
@@ -529,6 +530,7 @@
         let custody = |signer_uid: Option<u32>,
                        signer_key_matches: Option<bool>,
                        validator_registry_readable: Option<bool>| PrivateReadinessCustody {
+            signer_double_sign_protection: Some(true),
             published_by: "rpc_serve".to_string(),
             store_backend: "transactional".to_string(),
             transactional_active: true,
@@ -550,11 +552,18 @@
         assert_eq!(reasons(None, None, None), ["validator_signer_unreachable"]);
         // A signer that answers with keys other than the registry's.
         assert_eq!(reasons(Some(1001), Some(false), Some(true)), ["validator_signer_key_mismatch"]);
+        for available in [None, Some(false)] {
+            let mut unguarded = custody(Some(1001), Some(true), Some(true));
+            unguarded.signer_double_sign_protection = available;
+            assert_eq!(super::private_readiness_read::custody_reasons(&unguarded),
+                ["validator_signer_guard_unavailable"]);
+        }
     }
 
     #[test]
     fn private_readiness_reports_an_unreadable_registry_apart_from_a_key_mismatch() {
         let custody = PrivateReadinessCustody {
+            signer_double_sign_protection: Some(true),
             published_by: "rpc_serve".to_string(),
             store_backend: "transactional".to_string(),
             transactional_active: true,

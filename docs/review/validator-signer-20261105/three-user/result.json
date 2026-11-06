@@ -1,0 +1,205 @@
+{
+  "scope": "isolated generated chain, three UIDs and real gateway; no production units or keys",
+  "started_at_unix": 1793910480,
+  "commands": [
+    {
+      "name": "init",
+      "argv": [
+        "/var/tmp/postfiat-signer-check-20261105-2018/postfiat-node",
+        "init-consensus-v2",
+        "--data-dir",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/node",
+        "--chain-id",
+        "isolated-custody-rehearsal",
+        "--node-id",
+        "validator-0",
+        "--validators",
+        "4",
+        "--activation-height",
+        "10",
+        "--storage-activation-height",
+        "1"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "batch",
+      "argv": [
+        "/var/tmp/postfiat-signer-check-20261105-2018/postfiat-node",
+        "batch-transfer",
+        "--data-dir",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/node",
+        "--to",
+        "pf29410aba7fdef27f69e5bdea0eafd793069eebb2",
+        "--amount",
+        "1",
+        "--batch-file",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/activation-batch.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "activate-store",
+      "argv": [
+        "/var/tmp/postfiat-signer-check-20261105-2018/postfiat-node",
+        "apply-batch",
+        "--data-dir",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/node",
+        "--batch-file",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/activation-batch.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "topology",
+      "argv": [
+        "/var/tmp/postfiat-signer-check-20261105-2018/postfiat-node",
+        "topology-consensus-v2",
+        "--chain-id",
+        "isolated-custody-rehearsal",
+        "--validators",
+        "4",
+        "--activation-height",
+        "10",
+        "--storage-activation-height",
+        "1",
+        "--base-port",
+        "40457",
+        "--rpc-base-port",
+        "40477",
+        "--hosts",
+        "127.0.0.1,127.0.0.1,127.0.0.1,127.0.0.1",
+        "--output",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/topology.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "deployment-check",
+      "argv": [
+        "/usr/bin/python3",
+        "-m",
+        "postfiat_ops.validator_signer_check",
+        "--signer-pid",
+        "118390",
+        "--rpc-pid",
+        "118393",
+        "--gateway-pid",
+        "118396",
+        "--rpc-port",
+        "40477",
+        "--node-sha256",
+        "91eb866fdb9745daa325a3180e5d7ba6cd0cf5f71a1baa37edaa64aeb6bab308",
+        "--data-dir",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/node",
+        "--database",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/node/postfiat-state-v1.redb",
+        "--key-file",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/signer/validator_keys.json",
+        "--state-dir",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/signer/guard",
+        "--socket",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/socket/validator.sock",
+        "--output",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/evidence/deployment"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "rpc-key-denied",
+      "argv": [
+        "/usr/bin/python3",
+        "-c",
+        "import os,sys\ntry: os.open(sys.argv[1],os.O_RDONLY)\nexcept PermissionError: sys.exit(0)\nsys.exit(1)",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/signer/validator_keys.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "gateway-key-denied",
+      "argv": [
+        "/usr/bin/python3",
+        "-c",
+        "import os,sys\ntry: os.open(sys.argv[1],os.O_RDONLY)\nexcept PermissionError: sys.exit(0)\nsys.exit(1)",
+        "/var/tmp/postfiat-signer-check-20261105-2018/custody-check-5/runtime/signer/validator_keys.json"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "passed": true,
+  "node_sha256": "91eb866fdb9745daa325a3180e5d7ba6cd0cf5f71a1baa37edaa64aeb6bab308",
+  "deployment": {
+    "schema": "postfiat.validator-signer.deployment-check.v1",
+    "observed_at_unix": 1793910508,
+    "checks": {
+      "three_distinct_unprivileged_users": true,
+      "node_executables_match_pin": true,
+      "signer_command": true,
+      "rpc_command": true,
+      "signer_paths": true,
+      "rpc_uses_expected_store_and_socket": true,
+      "rpc_has_no_file_signer_flags": true,
+      "only_rpc_uid_allowed": true,
+      "restart_does_not_initialize_state": true,
+      "expected_database_open": true,
+      "gateway_has_no_protected_file_open": true,
+      "live_readiness_has_durable_socket_custody": true,
+      "key_is_private": true,
+      "guard_is_private": true,
+      "rpc_owns_readiness_listener": true,
+      "socket_owned_and_group_only": true,
+      "processes_still_same": true
+    },
+    "passed": true,
+    "readiness_ready": false,
+    "readiness_reasons": [
+      "shielded_atomic_batch_activation_absent",
+      "asset_orchard_pricing_enforcement_activation_absent",
+      "a666_pfusdc_route_absent"
+    ],
+    "processes": {
+      "signer": {
+        "pid": 118390,
+        "start_time": "951213957",
+        "uids": [
+          61011,
+          61011,
+          61011,
+          61011
+        ],
+        "exe_sha256": "91eb866fdb9745daa325a3180e5d7ba6cd0cf5f71a1baa37edaa64aeb6bab308"
+      },
+      "rpc": {
+        "pid": 118393,
+        "start_time": "951214211",
+        "uids": [
+          61012,
+          61012,
+          61012,
+          61012
+        ],
+        "exe_sha256": "91eb866fdb9745daa325a3180e5d7ba6cd0cf5f71a1baa37edaa64aeb6bab308"
+      },
+      "gateway": {
+        "pid": 118396,
+        "start_time": "951214231",
+        "uids": [
+          61014,
+          61014,
+          61014,
+          61014
+        ],
+        "exe_sha256": "ccacb2d6d87ba6d118b2bffc1ae33747a05cc5fc6b1f1ec4fc1d420b687e952d"
+      }
+    },
+    "limitations": [
+      "Point-in-time process and filesystem observation, not a trace of all access.",
+      "The operator must pin the intended live data/database paths; a supplied copy path cannot prove live deployment.",
+      "Does not certify gateway memory/environment secret absence or production approval."
+    ]
+  },
+  "gateway_environment_excludes_validator_paths": true,
+  "children_stopped": true,
+  "runtime_removed": true,
+  "ended_at_unix": 1793910508
+}

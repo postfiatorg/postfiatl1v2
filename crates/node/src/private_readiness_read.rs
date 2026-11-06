@@ -20,7 +20,7 @@ pub const PRIVATE_READINESS_SCHEMA: &str = "postfiat.private_readiness.v1";
 /// parameter, and it never makes `ready` true.
 pub const PRIVATE_ACTION_ADMISSION_SWITCH_KEYS: [&str; 1] = ["--allow-private-action-admission"];
 /// The custody refusals, in report order. The W-1 manifest lists the same.
-pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 11] = [
+pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 12] = [
     "readiness_not_published_by_running_service",
     "store_not_transactional",
     "validator_signer_none",
@@ -29,6 +29,7 @@ pub const PRIVATE_READINESS_CUSTODY_REASONS: [&str; 11] = [
     "validator_signer_unreachable",
     "validator_signer_key_mismatch",
     "validator_registry_unreadable",
+    "validator_signer_guard_unavailable",
     "validator_key_file_missing",
     "validator_key_file_unreadable",
     "validator_key_file_not_owner_only",
@@ -80,6 +81,7 @@ pub struct PrivateReadinessSignerSocket {
     /// Whether the validator registry could be read for that comparison;
     /// `None` when the signer did not answer.
     pub registry_readable: Option<bool>,
+    pub double_sign_protection: Option<bool>,
 }
 
 /// The validator signer of the serving process. `PlaintextKeyFile` is
@@ -113,6 +115,8 @@ impl PrivateValidatorSigner {
 /// Who published the report and what custody the publisher has.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PrivateReadinessCustody {
+    /// Fresh signer description; absent/false never attests durable protection.
+    pub signer_double_sign_protection: Option<bool>,
     /// `rpc_serve` when the running service published it, else `local_read`.
     pub published_by: String,
     /// The store's backend-mode record: `transactional` (also the default
@@ -456,6 +460,8 @@ fn readiness_custody(
     };
     let signer_socket = service.and_then(|service| service.signer_socket.as_ref());
     Ok(PrivateReadinessCustody {
+        signer_double_sign_protection: signer_socket
+            .and_then(|socket| socket.double_sign_protection),
         published_by: if service.is_some() {
             "rpc_serve"
         } else {
@@ -518,6 +524,9 @@ pub(super) fn custody_reasons(custody: &PrivateReadinessCustody) -> Vec<String> 
         socket && custody.signer_uid.is_none(),
         socket && custody.signer_key_matches == Some(false),
         socket && custody.validator_registry_readable == Some(false),
+        socket
+            && custody.signer_uid.is_some()
+            && custody.signer_double_sign_protection != Some(true),
         any_key_file("missing") || (file_signer && custody.key_files.is_empty()),
         any_key_file("unreadable"),
         any_key_file("not_owner_only"),
