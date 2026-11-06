@@ -24,7 +24,8 @@ DEFAULT_READ_LIMIT = 100
 MAX_ARCHIVE_WINDOW_BLOCKS = 512
 MAX_ACCOUNT_TX_SCAN_LIMIT = 512
 # Mirrors crates/node/src/node_types.rs EXTERNAL_LANE_RELEASE_PAGE_SIZE: the
-# node refuses an `external_lane_info` release_limit outside 1 to this many.
+# node refuses an `external_lane_info` release_limit or export_limit outside 1
+# to this many.
 EXTERNAL_LANE_RELEASE_PAGE_SIZE = 100
 ESCROW_ID_DOMAIN = "postfiat.escrow_id.v1"
 ESCROW_CONDITION_HASH_DOMAIN = "postfiat.escrow_condition_hash.v1"
@@ -1760,9 +1761,10 @@ class PostFiatRpcClient:
         refused, above `EXTERNAL_LANE_RELEASE_PAGE_SIZE` is clamped.
         Export packets page the same way (`--export-cursor`, `--export-limit`,
         `next_export_cursor`), with `export_count`, `pruned_export_count` and
-        `export_history_root`; the committed `state` carries `exported_atoms`
-        and `next_export_nonce`; `external_lane_export_coverage` summarises
-        them."""
+        `export_history_root`. `export_limit` is bounded the same way, by the
+        same page size the node uses for exports. The committed `state`
+        carries `exported_atoms` and `next_export_nonce`;
+        `external_lane_export_coverage` summarises them."""
         params: dict[str, Any] = {}
         if lane_id is not None:
             params["lane_id"] = self._required_text(lane_id, "lane_id")
@@ -1775,7 +1777,9 @@ class PostFiatRpcClient:
         if export_cursor is not None:
             params["export_cursor"] = self._required_u64(export_cursor, "export_cursor")
         if export_limit is not None:
-            params["export_limit"] = self._required_u64(export_limit, "export_limit")
+            if self._required_u64(export_limit, "export_limit") < 1:
+                raise ValueError("export_limit must be positive")
+            params["export_limit"] = min(export_limit, EXTERNAL_LANE_RELEASE_PAGE_SIZE)
         return self._object_read("external_lane_info", params)
 
     @staticmethod

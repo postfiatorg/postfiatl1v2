@@ -251,6 +251,19 @@ class RemainingReadWrapperTests(unittest.TestCase):
                 client.external_lane_info(release_limit=asked)
             call.assert_called_once_with("external_lane_info", {"release_limit": sent})
 
+    def test_external_lane_info_bounds_the_export_limit_like_the_release_limit(self) -> None:
+        client = _client()
+        with mock.patch.object(client, "_call", return_value={"lanes": []}) as call:
+            with self.assertRaisesRegex(ValueError, "export_limit must be positive"):
+                client.external_lane_info(export_limit=0)
+            with self.assertRaisesRegex(ValueError, "export_limit must be a non-negative integer"):
+                client.external_lane_info(export_limit=True)  # type: ignore[arg-type]
+        call.assert_not_called()
+        for asked, sent in ((1, 1), (100, 100), (101, 100), (500, 100)):
+            with mock.patch.object(client, "_call", return_value={"lanes": []}) as call:
+                client.external_lane_info(export_limit=asked)
+            call.assert_called_once_with("external_lane_info", {"export_limit": sent})
+
     def test_external_lane_info_sends_the_export_page_parameters(self) -> None:
         client = _client()
         with mock.patch.object(client, "_call", return_value={"lanes": []}) as call:
