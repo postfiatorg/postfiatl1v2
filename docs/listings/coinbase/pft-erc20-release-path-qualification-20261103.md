@@ -185,6 +185,14 @@ fresh Lock and releases 4,331 atoms on a generated six-validator native chain. F
 The watcher reports one backed release and zero alarms; a repeat resumes its
 cursor and checks zero already-processed releases. Block and state replay pass.
 
+The recorded run is the 2026-11-06 re-run from the clean committed tree: commit
+`fb88da35fbc7265e1e85aee2732a0c45056478d4`, tree
+`b8e303c60a473dd770394b34ded9003a887af6ee`, both in `result.json` and
+`manifest.json`, which also hashes the production entry points and the harness.
+It gives the same amounts, Lock block, Lock transaction and watcher results as
+the first run. The token and lock runtime code hashes differ from the first
+run's (`0x7175f7fe…` and `0x6808ad20…`); the run pins whatever it deploys.
+
 [Machine results and exact commands](../../review/base-lock-rehearsal-20261105/result.json)
 and [source/evidence hashes](../../review/base-lock-rehearsal-20261105/manifest.json).
 The directory keeps the results, the Lock receipt and the short logs that carry a

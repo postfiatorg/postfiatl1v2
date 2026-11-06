@@ -1,65 +1,72 @@
 {
-  "source_base": "1c5bf4c6fc13aea6bbd76457694a781898133591",
+  "source_commit": "fb88da35fbc7265e1e85aee2732a0c45056478d4",
+  "source_tree": "b8e303c60a473dd770394b34ded9003a887af6ee",
   "source_files": {
-    "crates/node/src/tests/genesis_external_lane_tests.rs": "fb289261424d7075f68b77ce64dba5b074495f62b8b657eb657aff347adc5fec",
+    "crates/node/src/external_lane_checkpoint_source.rs": "f74af67401afe6ed66b2c67d63a6623e4d599f2784a924b54d283f9f14fed7c1",
+    "crates/execution/src/external_lane_release.rs": "ed030d33bfb90042e3ae7533f0b6447465b3fb8ebafd1fb56f4db392216e2c4e",
+    "python/postfiat_rpc/external_lane_watcher.py": "750de81c98a50fcd1b4a2eba34b5081e6e6c7b2031379fdb793ce1db36be00fe",
+    "crates/pft-token-contracts/src/PFTLockV1.sol": "3a0f2fe71ea1ad17946cffe5611da51a86a7ab18a967ca27cccd7d67aa3dc856",
+    "crates/pft-token-contracts/src/PFTToken.sol": "34019b60abd23c90b9e9d53b95007701a898bd041e7535b4cbfbea3f2da0f706",
+    "scripts/rehearse-base-lock.py": "d448f176c6046d1506cfe9ef9ddf4a511ba72c14df5d44692f1cd37adf053045",
     "crates/node/src/tests/external_lane_local_evm_tests.rs": "64c1f78eb8937600ad5c42ffd45fa8c1e35718c6fea5a751d0a8498997a5035a",
-    "scripts/rehearse-base-lock.py": "8d46c26ad8f57f65295222888545ff1cfb369ac5bfea191b1572b20079ebfdbd"
+    "crates/node/src/tests/genesis_external_lane_tests.rs": "817496f96caa2f95a943760dbf69be6f7badc9f7902cd730defa3ca9954e9960",
+    "crates/pft-token-contracts/test/PFTLockV1.t.sol": "00ba74cd6bd6cf61ac95e84defe31fa1525afb3e46c4c84c2c4f60e515a2cc06"
   },
   "evidence_files": {
-    "base-checkpoint-tests.log": "13d619f5ce325aca186ffe9d4c20fad3607b78c4c84ee2a80a8dcae35ab728a9",
-    "base-watcher-tests.log": "6ce52daa5744a359c2a52f624d4dcfff72144f18807e8929ee6c93ea8b4d4241",
-    "lock-codehash.stdout": "f11db6fe210cf8cc35a3ac3863f725f94249647ca8b4f719bdb2d11a223ee572",
-    "lock-receipt.json": "82b1a755a49290cd3ef4632b164a6d98431312fe9af233f27a8b35443077c47b",
-    "lock.stdout": "4717bdd6ebcbd9dc758d199fed2863218a286f6b01eb87aff8c640bb01ef2283",
-    "native-release.stdout": "17ffaf75d5e7fe30d23dd2e6a23b46f5c041f7ef3fb39bda1ce63b5e9f2e24c5",
-    "native-result.json": "ab533d88daa5d416a6f01bc7ad724b0494bf5002f95772f6c2c97834139a22f7",
-    "result.json": "b387527afe5675c0b5feb360c70968fa999ed94a86fafb6d2e9ee7c853e671ae",
-    "test-verifier.stdout": "76426b3c24674590728c5786dff656e818185876ccbf1fbc9b168ce0056105e5",
-    "token-codehash.stdout": "96015375225e8c734ac50e7377c393953fb87b734289504daa89ff0ef96ffb47",
-    "token.stdout": "06eb5e5fadca7acf8be52c03158bc62e822e738745e021506b517445d745f1d0",
-    "watcher-repeat.stdout": "14591b5df8c4b866c57f8e7cbce4277b346ab112bb63c6c333cba84a69ef3321",
-    "watcher.stdout": "f27198a882933b81813a6ee86ba38527fa18e54625aa90eca0caa9720b3f851e"
+    "base-checkpoint-tests.log": "7f3f5a3137c1f90fe3320e59636dffb1f90c7dc960f4f60f5e0500db971e3b17",
+    "base-watcher-tests.log": "464ca791922cc9c57151fda75b1a04b7951855aae0d54f57433a179603f9ad76",
+    "lock-codehash.stdout": "ec3e064a9f4718886dfd3d065e8403171b415b04e8d85783a419ddf2c22f809c",
+    "lock-receipt.json": "cd36aa9be29e2bf9400b0077cd0a3ad8c6a7cac78afb57036c21e788f4096514",
+    "lock.stdout": "c217e740d03c0ca1dd86d2c08f53703df725386d7e17543c4b9f44d0280528c3",
+    "native-release.stdout": "d5944740c22eb862ae94f25a4411c8115ccc9ca568541970676df3d8af08ef61",
+    "native-result.json": "12b87b03084fb81991046a2586618c42fdc6867999d086d28c00a246a31e3a1c",
+    "result.json": "4573bf2b52e1e05d551d894cf927f4d9d583ac2aaae9a73709e7c18ce15d9379",
+    "test-verifier.stdout": "68bd2163523128a7eaa075c5bb0ca290397b68fe192ebd3de1b1342e17c79881",
+    "token-codehash.stdout": "d7d4da809c57129edd87bdf4e206920859580910450d3c8a12fdc11061596576",
+    "token.stdout": "361a8e035b3f1b06a893706361fb24a9ba4b64ec242dd44a4299f278b2f0b9a0",
+    "watcher-repeat.stdout": "2b5fe4745b2ac473b6eea4d7e7d92306c62e8dae61a38c26b6ba943ecdf861fe",
+    "watcher.stdout": "49ab9a145a22a3e9f75bd11ecd007bd92b4e182410c6d5ebf70d1cf805cea8cb"
   },
   "not_published": {
     "certificate.json": {
-      "sha256": "167cb533d8aee9fe046e0c3ecbde806dd1634dc046b2d988b69e28017cdce23f",
-      "bytes": 212207
+      "sha256": "692732df804c126478ab44cda2134e976004b5a4991a9166dbf24331431f42b6",
+      "bytes": 212219
     },
     "checkpoint-vote-0.json": {
-      "sha256": "ce3c80ada2bc6103f7de03742525666f911cdd91dfc06cd5399a0069fbd90b76",
-      "bytes": 28344
+      "sha256": "486266e1230e72489b1de232dfc415ecd66e157a7257070a2c196dc756613279",
+      "bytes": 28374
     },
     "checkpoint-vote-1.json": {
-      "sha256": "9ae4b78870a54251e60829afe3ebc3e0769d5342a6caba36f663e3cdc998174c",
-      "bytes": 28337
+      "sha256": "aecf295aebb928721b2c5cf33a6e12a688a90b402c565c3533f7ce80e22139e8",
+      "bytes": 28365
     },
     "checkpoint-vote-2.json": {
-      "sha256": "3475b5b77dac12fcbebc94c03decf431ec56149ab2d84fdceb99eaa115dbd7ee",
+      "sha256": "a4767f2b2e035554bf53c65ad88f211bd1c5f7b44996eef5eca32b01551ac984",
       "bytes": 28396
     },
     "checkpoint-vote-3.json": {
-      "sha256": "ca6561b834d20241e47cdc09d2173d6b2ae307baa07eed521672e1719a6602ca",
-      "bytes": 28398
+      "sha256": "adb40e16ad70075e579a4536888e5dd6760b6f0a8d0dee6c96763f913c0be7f5",
+      "bytes": 28344
     },
     "checkpoint-vote-4.json": {
-      "sha256": "968d1b822cae6fa7cbf261942a685fb15bc980d04142d90eae87e81f104623b5",
-      "bytes": 28406
+      "sha256": "f18dbf9de5835c69497ed3d90a2ccd2261da30b3f6fc2d416ac6c20a752306c2",
+      "bytes": 28400
     },
     "checkpoint.json": {
-      "sha256": "9c4d6aec9183ce628a51fca253467982a7b6c50c8d8577acfaf8189944c55870",
-      "bytes": 3320
+      "sha256": "26f308980d811701578cd9537cfd84b7dc469fe435a1e7544eb2962497a96f2d",
+      "bytes": 3334
     },
     "config.json": {
-      "sha256": "fc8a9598d80d40509c7e4f13ab4dfa7fd1ff222775e3ef4bdcaa1b33d1c8e62c",
-      "bytes": 477
+      "sha256": "2a0c8ccf229a3ddc3adf7dc1a09d728d28b8178cdb6736fbc2ad81f85d56bfe1",
+      "bytes": 467
     },
     "contracts-build.stderr": {
-      "sha256": "2d9356bf77b5a5747fb330621d5b5595d962588d9ecede46819f1614da51b7d0",
-      "bytes": 403050
+      "sha256": "55fb0592f311bd260ece167fc5734394c04e3b302f7983fc3739cfbdac4b8021",
+      "bytes": 402995
     },
     "contracts-build.stdout": {
-      "sha256": "e2dc256d5c41211f19e76246b1b462dbcaae5f97939f00d0c0a9bc39c808c4a9",
-      "bytes": 92
+      "sha256": "d8adc912eac9addc137d44ea0e4873fb7ed534f6fc8b3852629df384b27dd5e4",
+      "bytes": 91
     },
     "lock-codehash.stderr": {
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -70,28 +77,24 @@
       "bytes": 0
     },
     "native-release.stderr": {
-      "sha256": "8089816a28b879f199317c6765ca63e77e2e59434d0dd0ae6dc23264aa175197",
-      "bytes": 316
+      "sha256": "53265ea500baaaee502d0bba059f5bee2b3e6fb5e53354703b5ca0b243cacafe",
+      "bytes": 9976
     },
     "node-build.stderr": {
-      "sha256": "981af87efb5c1114d91ba13cff0305cf62923f7e25736aef683e221e0e3fb166",
-      "bytes": 171
+      "sha256": "06da58e78f21b5a6f4bbdbeaaf1a58fb974a74de4b2f19ec9c3d551ae32c3e47",
+      "bytes": 155
     },
     "node-build.stdout": {
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0
     },
     "operation.json": {
-      "sha256": "0316237cfe300e218fc36f5eb3cba1266cc5968fd658478d834e067f395a35c9",
-      "bytes": 299431
-    },
-    "review.html": {
-      "sha256": "ceb2e546f2eb0b301cfe9d7545790111e2c9091470d5a4bb1df9d7439d93cbf3",
-      "bytes": 28050
+      "sha256": "b1fce46a842c6e0dabef4f30d104a6ffcfa70a998202f2bd2aa7629cc2c15fa4",
+      "bytes": 299443
     },
     "rpc-ready.json": {
-      "sha256": "df24637a435d1feb4f170548e643cfe60937a3c44fab4c99b79b202632d965da",
-      "bytes": 666
+      "sha256": "04bcafe0854e7967856a0aef8444093beeb659ddb0c881f1e335ae31ebb9144c",
+      "bytes": 730
     },
     "rpc.stderr": {
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -114,7 +117,7 @@
       "bytes": 0
     },
     "watcher-state.json": {
-      "sha256": "47a7ee24091f40ed82fff3e861864a6ba42e3b7aab55a6f59204b83b5e1a8e20",
+      "sha256": "e6042543b7f5984ff9d00ab687a41d6326f464ed0710e4f0843f868853c5415a",
       "bytes": 385
     },
     "watcher.stderr": {
@@ -122,5 +125,6 @@
       "bytes": 0
     }
   },
-  "not_published_note": "Raw run artifacts kept out of the docs tree; scripts/rehearse-base-lock.py regenerates them in its --output directory."
+  "not_published_note": "Raw run artifacts kept out of the docs tree; scripts/rehearse-base-lock.py regenerates them in its --output directory.",
+  "test_logs_note": "base-checkpoint-tests.log and base-watcher-tests.log are the focused test runs at the same commit, outside the script."
 }
