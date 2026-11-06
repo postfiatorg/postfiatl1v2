@@ -21,6 +21,34 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 
 
+class RehearsalFailure(RuntimeError):
+    """A success predicate of the rehearsal did not hold."""
+
+
+def require(condition, message):
+    """Raise unless `condition` holds; unlike `assert`, PYTHONOPTIMIZE keeps it."""
+    if not condition:
+        raise RehearsalFailure(message)
+
+
+def watcher_summary(lines, *, releases_checked):
+    """The watcher's documented `--once` output for this rehearsal: one summary
+    line with no alarm over a lane of exactly one release, `releases_checked`
+    of them checked in this run, each checked one reported as backed."""
+    summaries = [line for line in lines if line.get('kind') == 'summary']
+    require(len(summaries) == 1, f'watcher must print one summary line, printed {len(summaries)}')
+    summary = summaries[0]
+    require(summary.get('release_count') == 1, f'watcher must see one release, saw {summary.get("release_count")}')
+    require(summary.get('releases_checked') == releases_checked,
+            f'watcher must check {releases_checked} release(s), checked {summary.get("releases_checked")}')
+    require(summary.get('alarms') == 0, f'watcher must raise no alarm, raised {summary.get("alarms")}')
+    require(all(count == 0 for count in (summary.get('alarm_codes') or {}).values()), 'watcher alarm codes must all be zero')
+    releases = [line for line in lines if line.get('kind') == 'release']
+    require(len(releases) == releases_checked, f'watcher must report {releases_checked} release line(s), reported {len(releases)}')
+    require(all(line.get('status') == 'backed' for line in releases), 'every checked release must be backed')
+    return summary
+
+
 def free_port():
     with socket.socket() as stream:
         stream.bind(('127.0.0.1', 0))
@@ -70,13 +98,13 @@ def main():
         children.append(anvil)
         for _ in range(100):
             try:
-                if 'anvil' in rpc('web3_clientVersion').lower():
+                if 'anvil' in str(rpc('web3_clientVersion')).lower():
                     break
             except OSError:
                 time.sleep(.1)
         else:
             raise RuntimeError('local Anvil did not start')
-        assert rpc('eth_chainId') == '0x14a34'
+        require(rpc('eth_chainId') == '0x14a34', 'local Anvil must report chain id 84532')
         holder = rpc('eth_accounts')[0]
         contract_dir = ROOT / 'crates/pft-token-contracts'
         command('contracts-build', ['forge', 'build'], contract_dir)
@@ -98,7 +126,10 @@ def main():
         command('native-release', ['cargo', 'test', '--locked', '-p', 'postfiat-node', '--lib',
                                  'local_evm_lock_checkpoint_release_and_replay_refusal', '--', '--ignored', '--nocapture'])
         native = json.loads((out / 'native-result.json').read_text())
-        assert native['passed'] and native['checkpoint_votes'] == 5
+        require(native.get('passed') is True, 'the native composition test must pass')
+        require(native.get('checkpoint_votes') == 5, 'five checkpoint votes must certify the Lock block')
+        require(native.get('amount_atoms') == native.get('recipient_balance') == 4331,
+                'the release must credit exactly the 4,331 locked atoms')
         command('node-build', ['cargo', 'build', '--locked', '-p', 'postfiat-node', '--bin', 'postfiat-node'])
         node = target / 'debug/postfiat-node'
         results['node_sha256'] = hashlib.sha256(node.read_bytes()).hexdigest()
@@ -120,9 +151,10 @@ def main():
                         '--lane-id', 'base-erc20', '--base-rpc', url, '--state-file', out / 'watcher-state.json', '--once']
         lines = [json.loads(line) for line in command('watcher', watcher_args).splitlines()]
         results['watcher'] = lines
-        assert any(line.get('kind') == 'release' or line.get('type') == 'release' for line in lines), 'watcher must inspect a nonzero release'
+        watcher_summary(lines, releases_checked=1)
         # A second read exercises the persisted cursor without inventing a new Lock.
         results['watcher_repeat'] = [json.loads(line) for line in command('watcher-repeat', watcher_args).splitlines()]
+        watcher_summary(results['watcher_repeat'], releases_checked=0)
         results['native'] = native
         results['passed'] = True
     except Exception as error:
