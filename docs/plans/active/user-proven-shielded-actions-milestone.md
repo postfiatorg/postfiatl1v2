@@ -19,7 +19,7 @@ to two weeks for what remains of S1 to S7, before the review and the ce22 run.
 
 Owners are marked *(this lane)* or *(wallet team)*.
 
-## S1 — the contract (done but for S1.5)
+## S1 — the contract (done)
 
 - [x] S1.1 *(this lane)* Versioned request and response fixtures for `snapshot`, `submit` and `receipt`, including a typed terminal rejection (`state: rejected` with its code and fee).
 - [x] S1.2 *(this lane)* Canonical vectors: an action of each kind, its intent id under `tasknode.private-intent.v1`, and its atomic batch id from `build_atomic_shielded_action_batch` (`crates/node/src/consensus_artifacts.rs:1591`).
@@ -29,7 +29,7 @@ Owners are marked *(this lane)* or *(wallet team)*.
   - [x] Recorded from the deployed release (2026-10-30): `private_readiness` on all six at 1168 reports build `ae70d66d` (`release`), release `vote-records-20261030` (`87cfe797…`), both verifiers on their pins, and atomic batches active from height 483. `manifest.json` carries these values.
 - [x] S1.4 *(this lane)* The full A666 and pfUSDC profile: full asset ids, issuers, proof profiles and precision, replacing the retired a651/a652 registry (`wallet-proxy/navswap-config-bridge.js:963`).
   - The governed swap pair is `null`: it arrives with `ed89c916` behind a governed activation, after the deployed release.
-- [ ] S1.5 *(wallet team)* Their intent helper (`core/src/private_actions.rs:110`) reproduces the S1.2 vectors. To tick S1: the fixtures in the repository and both sides passing the vectors.
+- [x] S1.5 (wallet team) The normal wallet uses the shared typed action parser and canonical batch bindings in `core/src/private_api.rs`. Its pinned vector file is byte-identical to S1.2 (SHA-256 `02dd5d89282f2da713c98330b296d5598190832a9f94ebdff08e14872449f7c9`); positive and negative vectors pass in the Rust core tests. See [wallet PR 36 evidence](https://github.com/postfiatorg/tasknode-apple/pull/36).
 
 ## Contract fixtures
 
@@ -40,7 +40,7 @@ In `crates/node/tests/fixtures/private-actions-v1/`, shared types in `crates/typ
 - `manifest.json`: devnet identity, release `vote-records-20261030` (`ae70d66d`), verifier pins, atomic-batch activation height 483, all from the deployed release's `private_readiness`.
 - `assets.json`: A666 and pfUSDC from live reads on 2026-10-29, each field with its source; the governed pair is `null`.
 
-## S2 — the gateway entry points (1 day left)
+## S2 — the gateway entry points (app integration done; live cutover pending)
 
 - [x] S2.1 *(this lane)* `POST /api/private/v1/snapshot`, `/submit` and `/receipt` behind the browser relay or native session token, with the S1 schemas and size limits (1 MiB action, 2 MiB request, 4 MiB response): `wallet-proxy/private-actions.js`, wired in `wallet-proxy/server.js`. `submit` counts against the mutation rate window; `snapshot` and `receipt` are authenticated reads.
   - [x] The snapshot is assembled from the node reads `private_pool_snapshot`, `private_pool_page` and `private_account_lines` (`683a5b32`). It takes one token from both sources and refuses a mixed tip, pages every section under the wallet's ceilings with all pages pinned to that token, retries once when the tip moves, and takes the pricing claim, policy id and disclosure hash from the node. The `complete` flags combine the node's flags with whether paging reached each total.
@@ -51,7 +51,7 @@ In `crates/node/tests/fixtures/private-actions-v1/`, shared types in `crates/typ
 - [x] Crash-and-retry: `wallet-proxy/test_private_actions.js` kills the process after the reservation; on restart the intent is `queued`, no new batch is built, and the reserved batch is sent once.
 - [x] S2.5 *(this lane)* Adapt the gateway's dispatch to the S3 methods as they landed (`968da908`, `d7de5ec7`). The node wants flat `chain_id`, `genesis_hash`, `protocol_version`, `pool_id`, `session_scope`, `intent_id`, `action_json` and `action_hash`, and returns `{record}` from submit and `{record, contract_receipt}` from receipt. Only real refusals may be final, and the `session_scope` the gateway sends is still to be decided.
   - Proven against the real node by `crates/node/tests/private_actions_gateway.rs`. The test runs two validators, each with the transport service and `rpc-serve --allow-private-action-admission`, plus the real proxy with both as sources. It opens a native session signed in Rust, takes a snapshot of the empty pool, and submits a user-built ingress v2 that is accepted with finality. The next snapshot shows its commitment and ciphertext; a duplicate runs no second round; changed bytes are refused and an unknown intent stays pending. `session_scope` is the session principal.
-- [ ] S2.4 *(wallet team)* The app moves from `/api/private-local/` to `/api/private/v1/`.
+- [x] S2.4 (wallet team) Normal Release Shield and Unshield use `/api/private/v1/`. Run `42408358931` at wallet `d8b850c` passes fresh 65-note recovery, Shield, identical intent after relaunch and Unshield on six isolated validators. Its later certificate cleanup failed separately; [exact evidence](https://github.com/postfiatorg/tasknode-apple/pull/36). No public cutover or ce22 transaction is authorized.
 - S2 is ticked on the gateway side; the routes reach a validator only once S3 deploys the two node methods behind its operator switch.
 
 ## S3 — the validator-owned admission and round service (2–4 days left)
@@ -77,7 +77,7 @@ In `crates/node/tests/fixtures/private-actions-v1/`, shared types in `crates/typ
 - [x] S4.3 *(this lane)* Paged receipt and market reads, and asset rows bound to `asset_info`.
   - [x] Asset rows bound to `asset_info` and account lines with zero balances (`683a5b32`, the `assets` section and `private_account_lines`).
   - [x] Paged receipt and market reads under the snapshot token (`0c396fc8`): `private_pool_receipts` and `private_pool_market` in `crates/node/src/private_pool_receipt_market_reads.rs`.
-- [ ] S4.4 *(wallet team)* Versioned paging and incremental scan in the app, replacing today's ceilings (64 ciphertexts, 2 MiB of ciphertext, 4096 commitments, 16 assets, 1 MiB action, 2 MiB request, 4 MiB response). To tick S4: a missing, duplicated, reordered or mixed-tip page refused in tests.
+- [x] S4.4 (wallet team) Normal Mac recovery pages ciphertexts in batches of 64 while retaining the 2 MiB ciphertext, 4,096 commitment, 16 asset and wire-size ceilings; 256 owned notes are supported. `V3PrivatePagesTests.swift` refuses missing, duplicated, reordered, mixed-tip and looping pages. These tests pass in [wallet build ad9b328](https://github.com/postfiatorg/tasknode-apple/actions/runs/42396051451); the normal Mac fresh-vault page-boundary observation is recorded in S6.4.
 
 ## S5 — the pricing claim and egress binding reads (done)
 
@@ -115,9 +115,9 @@ halt flag and the ratio within the band.
     - A proxy killed right after the submit returns `queued` and restarted on the same store keeps the record. A repeat submit returns the same record, and the validators' round lands it once.
     - A stopped source refuses the snapshot with 503 `private_snapshot_unavailable` until it serves again.
     - Sources at different finalized heights refuse it with 503 `private_snapshot_sources_diverged`.
-- [ ] S6.4 *(this lane, wallet team)* Fresh-key full rescan and page boundaries.
+- [x] S6.4 (this lane, wallet team) Fresh-key full rescan and page boundaries.
   - [x] Lane part (`e37d77fd`, `110997f1`, `f8b9a838`): a fresh wallet that holds only its note seeds decrypts every retained output from `private_pool_page`, with an outputs limit of 2 and an assets limit of 1 below the totals, and matches each asset's live total. Retained snapshot points keep every page byte-identical across 15 later blocks, and the gateway pages every section to completeness.
-  - [ ] Wallet team part: the app's fresh-key rescan across page boundaries (S4.4).
+  - [x] Wallet team part: normal Release app `f07f3a1` restores a fresh vault from its original public test phrase and recovers 65 real notes in batches of 64 and 1. [Run 42397359541](https://github.com/postfiatorg/tasknode-apple/actions/runs/42397359541) asserts 65 available and captures a screenshot before shielding. The full UI test subsequently fails while scrolling the accepted intent; relaunch and Unshield qualification remain open. The Linux CLI separately recovers all 66 notes into a fresh vault. Evidence is in wallet PR 36's `docs/evidence/private-wallet-20261107/`.
 
 ## S7 — readiness and secret inspection (1–2 days left)
 
@@ -195,7 +195,7 @@ halt flag and the ratio within the band.
 ## Mac integration update — 2026-11-07
 
 Task Node `task_898a823d2214a3680fbf4b5b34ec35dc` governs the normal Mac
-shield-and-recovery integration in tasknode-apple PR 36. Work is in progress;
+shield-and-recovery integration in tasknode-apple PR 36. The normal UI passes;
 this is not live deployment or milestone completion.
 
 - [x] Classify `private_readiness`, `private_pool_snapshot`, `private_pool_page`
@@ -203,4 +203,5 @@ this is not live deployment or milestone completion.
   as public reads in the wallet proxy. These existing node methods are read-only;
   validator signing and private admission remain authenticated mutations.
   Checked with `node wallet-proxy/test_public_auth_boundary_regression.js`.
-- [ ] Qualify the normal Mac build against W-1 admission and durable recovery.
+- [x] Correct gateway connection lifecycle: retire sockets at the node's 64-request ceiling and ignore stale socket events without replaying mutations (`a6362a955`, `wallet-proxy/test_rpc_connection_lifecycle.js`). All 46 wallet-proxy regressions pass in CI.
+- [x] Qualify the normal Mac build against isolated W-1 admission and durable recovery: run `42408358931` at `d8b850c`, one UI test passed, exit 0, no timeout. Shield and the identical recovered intent at height 91, then Unshield at height 92. Network cleanup passed; later Mac certificate removal timed out. S7/S8 and public distribution remain open.

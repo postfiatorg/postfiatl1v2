@@ -192,6 +192,20 @@ token; `submit` counts against the mutation rate window. The contract is in
   section stopped at a ceiling or reported incomplete by the node has its
   `complete` flag false.
 
+The normal Mac candidate in [wallet PR 36](https://github.com/postfiatorg/tasknode-apple/pull/36)
+uses these routes for Shield, saved-intent recovery and whole-note Unshield.
+It keeps keys, note openings and proof generation on the device, verifies the
+pinned validators' inclusion certificate, and continues ciphertext recovery
+through `private_pool_page` in batches of 64 under one finalized token. The
+aggregate recovery limits remain 4,096 commitments, 2 MiB of ciphertext and
+256 owned notes. `private_readiness`, `private_pool_snapshot`,
+`private_pool_page` and `asset_orchard_private_egress_binding` are public reads;
+submissions and validator signing retain their authentication requirements.
+The [wallet evidence](https://github.com/postfiatorg/tasknode-apple/blob/wallet/local-custody-current-chain-20261106/docs/evidence/private-wallet-20261107/README.md)
+records qualification separately from live activation. This Mac integration
+does not migrate the browser's legacy swap flow or authorize the public
+deployment cutover below.
+
 In-app settings are stored in IndexedDB with the wallet settings record. The
 More tab can change:
 
