@@ -198,8 +198,9 @@ Task Node `task_898a823d2214a3680fbf4b5b34ec35dc` governs the normal Mac
 shield-and-recovery integration in tasknode-apple PR 36. Work is in progress;
 this is not live deployment or milestone completion.
 
-- [x] Classify `private_readiness` and `asset_orchard_private_egress_binding`
-  as public reads in the wallet proxy. Both existing node methods are read-only;
+- [x] Classify `private_readiness`, `private_pool_snapshot`, `private_pool_page`
+  and `asset_orchard_private_egress_binding`
+  as public reads in the wallet proxy. These existing node methods are read-only;
   validator signing and private admission remain authenticated mutations.
   Checked with `node wallet-proxy/test_public_auth_boundary_regression.js`.
 - [ ] Qualify the normal Mac build against W-1 admission and durable recovery.
