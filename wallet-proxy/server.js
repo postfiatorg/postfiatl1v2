@@ -381,6 +381,8 @@ const PUBLIC_READ_RPC_METHODS = new Set([
     'fx_fix_reservation_info',
     'asset_orchard_action_status',
     'private_readiness',
+    'private_pool_snapshot',
+    'private_pool_page',
     'asset_orchard_private_egress_binding',
     'fx_fix_quote',
     'vault_bridge_route',
