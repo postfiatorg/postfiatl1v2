@@ -475,6 +475,7 @@ wss } = runtime;
             this.queue = [];
             this.current = null;
             this.connecting = false;
+            this.completedRequests = 0;
         }
 
         requestLine(request, timeoutMs = TCP_TIMEOUT_MS) {
@@ -529,12 +530,15 @@ wss } = runtime;
             this.buffer = '';
             const socket = net.connect(this.port, this.host);
             this.socket = socket;
+            this.completedRequests = 0;
             socket.setKeepAlive(true);
             socket.on('connect', () => {
+                if (this.socket !== socket) return;
                 this.connecting = false;
                 this._processQueue();
             });
             socket.on('data', (chunk) => {
+                if (this.socket !== socket) return;
                 this.buffer += chunk.toString('utf8');
                 let idx;
                 while ((idx = this.buffer.indexOf('\n')) >= 0) {
@@ -549,21 +553,34 @@ wss } = runtime;
                     clearTimeout(item.timer);
                     this.current = null;
                     item.resolve(line);
+                    // rpc-serve closes after 64 requests. Retire this socket
+                    // before a queued request can race that FIN. No submitted
+                    // request is replayed, including mutations.
+                    this.completedRequests += 1;
+                    if (this.completedRequests >= 64) {
+                        this.socket = null;
+                        this.buffer = '';
+                        socket.destroy();
+                    }
                     this._processQueue();
                 }
             });
             socket.on('error', (error) => {
-                this._handleDisconnect(error);
+                this._handleDisconnect(error, socket);
             });
             socket.on('close', () => {
-                this._handleDisconnect(new Error(`RPC connection closed by ${this.host}:${this.port}`));
+                this._handleDisconnect(new Error(`RPC connection closed by ${this.host}:${this.port}`), socket);
             });
         }
 
-        _handleDisconnect(error) {
+        _handleDisconnect(error, socket) {
+            // An error/timeout can be followed by a delayed close after a new
+            // connection has started. Old events cannot evict the new socket.
+            if (this.socket !== socket) return;
             this.connecting = false;
             this.socket = null;
             this.buffer = '';
+            socket.destroy();
             this._rejectCurrentAndQueue(error);
         }
 
