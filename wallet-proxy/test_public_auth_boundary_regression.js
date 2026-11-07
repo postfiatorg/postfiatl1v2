@@ -208,6 +208,8 @@ async function main() {
     'fx_fix_info',
     'fx_fix_reservation_info',
     'asset_orchard_action_status',
+    'private_readiness',
+    'asset_orchard_private_egress_binding',
     'fx_fix_quote',
   ]) {
     assert.strictEqual(rpcRequestRequiresAuth(method), false, `${method} is a public read`);

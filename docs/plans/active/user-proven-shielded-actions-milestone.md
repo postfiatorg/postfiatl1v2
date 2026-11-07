@@ -192,3 +192,14 @@ halt flag and the ratio within the band.
 - [Wallet findings handoff](../../handoffs/2026-10-29___goodalexander__tasknode_wallet_findings_for_the_l1.md), section 3
 - [Web wallet: native app sessions](../../wallets/web-wallet.md#native-app-sessions)
 - `AGENTS.md` (the specification lock, the CLI and interface, retirement)
+## Mac integration update — 2026-11-07
+
+Task Node `task_898a823d2214a3680fbf4b5b34ec35dc` governs the normal Mac
+shield-and-recovery integration in tasknode-apple PR 36. Work is in progress;
+this is not live deployment or milestone completion.
+
+- [x] Classify `private_readiness` and `asset_orchard_private_egress_binding`
+  as public reads in the wallet proxy. Both existing node methods are read-only;
+  validator signing and private admission remain authenticated mutations.
+  Checked with `node wallet-proxy/test_public_auth_boundary_regression.js`.
+- [ ] Qualify the normal Mac build against W-1 admission and durable recovery.
