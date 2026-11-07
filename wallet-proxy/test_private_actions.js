@@ -571,6 +571,19 @@ async function main() {
         c.server.close();
         for (const socket of c.state.sockets) socket.destroy();
 
+        // Distinguish transport failures without leaking arbitrary upstream text.
+        for (const [message, code] of [
+            ['RPC timeout from sensitive-upstream', 'rpc_timeout'],
+            ['RPC connection closed by sensitive-upstream', 'rpc_connection_closed'],
+            ['invalid JSON from sensitive-upstream', 'rpc_invalid_json'],
+            ['unexpected sensitive-upstream body', 'rpc_transport_error'],
+        ]) {
+            const failedRead = createPrivateActions({ env: privateEnv, rpcRequest: () => { throw new Error(message); } });
+            await assert.rejects(failedRead.snapshot({ address: WALLET }), (error) =>
+                error.statusCode === 503 && error.code === 'private_snapshot_unavailable'
+                && error.message.endsWith(`: ${code}`) && !error.message.includes('sensitive-upstream'));
+        }
+
         // Disabled without a configured domain.
         const disabled = createPrivateActions({ env: {} });
         assert.strictEqual(disabled.enabled, false);

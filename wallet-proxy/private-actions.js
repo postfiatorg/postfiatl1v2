@@ -291,7 +291,13 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
         } catch (error) {
             // Transport errors reserve nothing that a resend could duplicate: the node returns
             // the existing record for an intent it already holds.
-            return { source: source.validatorId, ok: false, final: false, code: String(error.code || 'rpc_transport_error').slice(0, 64) };
+            // Keep operator diagnostics useful without reflecting an upstream
+            // address, response body or arbitrary exception message.
+            const message = typeof error?.message === 'string' ? error.message : '';
+            const transportCode = message.startsWith('RPC timeout from ') ? 'rpc_timeout'
+                : message.startsWith('RPC connection closed ') ? 'rpc_connection_closed'
+                : message.startsWith('invalid JSON from ') ? 'rpc_invalid_json' : 'rpc_transport_error';
+            return { source: source.validatorId, ok: false, final: false, code: String(error?.code || transportCode).slice(0, 64) };
         }
     }
     const allSources = (method, params, sources = config.sources) => Promise.all(sources.map((source) => callSource(source, method, params)));
