@@ -51,11 +51,11 @@ Included only when ready and reviewed by the cut; none is promised.
 
 - [x] Draft PR #47 (citadelculture): relative RPC child request spool path, issue #27 (`crates/node/src/rpc_cli.rs`). Closed by its author 2026-10-15; superseded by #56 (`d51f6ae7`) and #109 (`a7a5a027`), nothing in its diff missing on main; note posted 2026-10-22 ([comment](https://github.com/postfiatorg/postfiatl1v2/pull/47#issuecomment-6338932892)).
 - [x] PR #52 (JJ2203-theRealOne): RPC worker requests with relative data directories (`crates/node/src/main_parts/cli_dispatch_parts/group_03.rs`). Closed 2026-10-22 as superseded by #56 (`d51f6ae7`) and #109 (`a7a5a027`); nothing in its diff missing on main ([comment](https://github.com/postfiatorg/postfiatl1v2/pull/52#issuecomment-6338932036)).
-- [ ] Draft PRs #43–#46 (citadelculture), if their owner finishes them. Tooling:
-    - [ ] #43 rejects uncorrelated raw finality RPC responses (`scripts/native_rpc_finality_submit.py`).
-    - [ ] #44 documented node wrapper invocations (`scripts/node-*`).
-    - [ ] #45 Python RPC probe false negative across resolved addresses (`python/postfiat_rpc/rpc_probe.py`).
-    - [ ] #46 transparent-only monitor smoke with the sole proof warning (`scripts/testnet-monitor-snapshot-smoke`).
+- [x] Owner drafts [#43](https://github.com/postfiatorg/postfiatl1v2/pull/43), [#44](https://github.com/postfiatorg/postfiatl1v2/pull/44), [#45](https://github.com/postfiatorg/postfiatl1v2/pull/45) and [#46](https://github.com/postfiatorg/postfiatl1v2/pull/46) were retired as superseded on 2026-10-15, not merged. Their functional fixes were already on main at `58229844`:
+    - #43: strict response correlation before status consumption or finality routing/persistence (`751cbccc`).
+    - #44: explicit node binary and devnet acknowledgements (`e8834838`, `72177cf3`).
+    - #45: resolved-address fallback, including failed socket construction (`90d5cb27`, `92e6abd6`).
+    - #46: the monitor producer distinguishes absent proof history from unknown telemetry (`7e5c9f62`); the strict smoke gate remains.
 - [x] Python fallback gaps: no atomic-swap rows; escrow, NFT and offer row indexes shift in blocks with a swap (`_account_tx_client_side_scan`; [account history](../../rpc/account-history.md#result-window-and-truncated)). Owner: this lane. Read-path tooling. Closed on main by #57 (`1736aebb`, 2026-10-13) and #137.
 - [ ] Archive scan `truncated` means "possibly incomplete" (`account_tx_scan`, `crates/node/src/block_finality.rs`). Changed only if an exact flag is wanted; it needs an unbounded scan of a public read. Owner: this lane, on request. Read-path.
 - [ ] The other lane's delayed-precommit fix for its unreleased candidate. Blocker: pushed to main and reviewed. **Consensus change: its own qualification.**
