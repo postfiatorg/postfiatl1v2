@@ -34,12 +34,25 @@ Rows come from two block kinds:
 - `batch_kind: "shielded"`: shielded withdrawals that credit a transparent
   account (see below).
 
-Escrow rows name the account that signed and paid: `escrow_create` runs
-owner → recipient with the escrowed `amount`; `escrow_finish` is signed by the
-recipient, so `from` and `to` are the recipient and `amount` is 0 (a terminal
-row: the credited amount is on the create row); `escrow_cancel` runs
-owner → owner with `amount` 0. A finish is therefore listed only in the
-recipient's history and a cancel only in the owner's.
+Escrow rows name the account that signed and paid:
+
+- **`escrow_create`** runs owner → recipient with the escrowed `amount`. The
+  amount leaves the owner into the escrow; the recipient is not credited yet.
+- **`escrow_finish`** is signed by the recipient, so `from` and `to` are the
+  recipient. Execution credits the recipient with the escrowed amount at the
+  finish. The row's `amount` is still 0, because neither the finish operation
+  nor its receipt carries the amount. The amount appears on the create row,
+  as the owner's lock, and `escrow_info` returns it with the escrow's state.
+- **`escrow_cancel`** runs owner → owner with `amount` 0. Execution returns the
+  escrowed amount to the owner.
+
+Confirm an escrow deposit at the accepted finish row, or by the balance. Do
+not confirm it at the create row: the escrow can still be cancelled.
+
+A finish is listed only in the recipient's history, and a cancel only in the
+owner's. The owner's balance does not change at a finish, so the finish does
+not appear in the owner's history. An owner watches `account_escrows` or
+`escrow_info` for the escrow's end.
 
 Every row carries `accepted` and `receipt_code` from the receipt. A row with
 `accepted: false` did not transfer its `amount`; a `tec_` receipt may still

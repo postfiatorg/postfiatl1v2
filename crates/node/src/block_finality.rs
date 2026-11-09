@@ -1634,7 +1634,9 @@ fn account_tx_rows_for_transparent_batch(
                     )
                 }
                 // The recipient signs a finish, pays its fee and consumes its
-                // sequence; the credited amount is on the create row.
+                // sequence. Execution credits the recipient here, but the
+                // operation and the receipt do not carry the amount (only the
+                // escrow record does), so the row keeps `amount` 0.
                 EscrowTransactionOperation::EscrowFinish(operation) => (
                     unsigned.source.clone(),
                     operation.recipient.clone(),

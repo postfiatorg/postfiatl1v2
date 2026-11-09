@@ -209,10 +209,12 @@ fn account_tx_escrow_create_row_names_the_signer_as_from() {
     fs::remove_dir_all(devnet.data_dir).expect("cleanup");
 }
 
-/// The recipient signs the finish, pays its fee and consumes its sequence; the
-/// ledger shows the owner untouched. The row lists the recipient as `from` and
-/// `to` with amount 0 (the credited amount is on the create row), so it is in
-/// the recipient's history only, as the cancel row is in the owner's only.
+/// The recipient signs the finish, pays its fee and consumes its sequence, and
+/// execution credits it the escrowed amount; the ledger shows the owner
+/// untouched. The row lists the recipient as `from` and `to` with amount 0
+/// (neither the operation nor the receipt carries the amount; `escrow_info`
+/// does), so it is in the recipient's history only, as the cancel row is in
+/// the owner's only.
 #[test]
 fn account_tx_escrow_finish_row_names_the_signer_as_from() {
     let (devnet, owner, recipient) = init_devnet("postfiat-account-tx-escrow-finish-row");
@@ -290,6 +292,17 @@ fn account_tx_escrow_finish_row_names_the_signer_as_from() {
         owner_after.balance,
         recipient_before.balance,
         recipient_after.balance,
+    );
+    // The row carries 0; the escrow record keeps the amount the finish credited.
+    let info = escrow_info(EscrowInfoOptions {
+        data_dir: devnet.data_dir.clone(),
+        escrow_id: escrow_id.clone(),
+    })
+    .expect("escrow_info");
+    let escrow = info.escrow.expect("escrow record after the finish");
+    assert_eq!(
+        (escrow.amount, escrow.state.as_str()),
+        (ESCROW_AMOUNT, "finished")
     );
     fs::remove_dir_all(devnet.data_dir).expect("cleanup");
 }

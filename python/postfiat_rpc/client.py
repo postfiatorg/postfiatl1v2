@@ -2860,7 +2860,9 @@ class PostFiatRpcClient:
                 if isinstance(condition, str) and condition:
                     condition_hash = _escrow_condition_hash(condition)
             elif op_kind == "escrow_finish":
-                # The recipient signs the finish and pays its fee.
+                # The recipient signs the finish and pays its fee. The finish
+                # credits the escrowed amount, which the operation does not carry,
+                # so the row's amount stays 0 as in the node's row builder.
                 sender = unsigned.get("source")
                 recipient = operation.get("recipient")
             elif op_kind == "escrow_cancel":
