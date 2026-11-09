@@ -2852,6 +2852,8 @@ pub struct EscrowFeeQuoteReport {
     pub transfer_fee_per_quantum: u64,
     pub escrow_weight_bytes: u64,
     pub sender_balance_after_fee: Option<u64>,
+    /// Balance after the fee and the native PFT an `escrow_create` locks.
+    pub sender_balance_after_amount_and_fee: Option<u64>,
     pub sender_meets_reserve_after_fee: bool,
     pub operation: EscrowTransactionOperation,
 }
@@ -2951,6 +2953,9 @@ pub struct OfferFeeQuoteReport {
     pub offer_weight_bytes: u64,
     pub sender_balance_after_fee: Option<u64>,
     pub sender_balance_after_fee_and_reserve: Option<u64>,
+    /// Balance after the fee, the native PFT an `offer_create` sells and the
+    /// offer object reserve.
+    pub sender_balance_after_amount_fee_and_reserve: Option<u64>,
     pub sender_meets_reserve_after_fee: bool,
     pub sender_meets_reserve_after_fee_and_reserve: bool,
     pub operation: OfferTransactionOperation,

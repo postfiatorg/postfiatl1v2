@@ -1810,9 +1810,22 @@ pub fn escrow_fee_quote(options: EscrowFeeQuoteOptions) -> io::Result<EscrowFeeQ
     };
 
     let sender_balance_after_fee = sender.balance.checked_sub(minimum_fee);
-    let sender_meets_reserve_after_fee = sender_balance_after_fee.is_some_and(|balance| {
-        balance >= postfiat_execution::required_account_reserve(&options.source)
-    });
+    // Execution takes the fee, then locks a native escrow amount from the
+    // owner and checks the reserve after the lock.
+    let native_locked_amount = match &operation {
+        EscrowTransactionOperation::EscrowCreate(create)
+            if create.asset_id == postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID =>
+        {
+            create.amount
+        }
+        _ => 0,
+    };
+    let sender_balance_after_amount_and_fee =
+        sender_balance_after_fee.and_then(|balance| balance.checked_sub(native_locked_amount));
+    let sender_meets_reserve_after_fee =
+        sender_balance_after_amount_and_fee.is_some_and(|balance| {
+            balance >= postfiat_execution::required_account_reserve(&options.source)
+        });
     let sequence_source = if options.sequence.is_some() {
         "explicit".to_string()
     } else {
@@ -1839,6 +1852,7 @@ pub fn escrow_fee_quote(options: EscrowFeeQuoteOptions) -> io::Result<EscrowFeeQ
         transfer_fee_per_quantum: TRANSFER_FEE_PER_QUANTUM,
         escrow_weight_bytes: u64::try_from(weight_bytes).unwrap_or(u64::MAX),
         sender_balance_after_fee,
+        sender_balance_after_amount_and_fee,
         sender_meets_reserve_after_fee,
         operation,
     })
@@ -2097,10 +2111,23 @@ pub fn offer_fee_quote(options: OfferFeeQuoteOptions) -> io::Result<OfferFeeQuot
     };
     let sender_balance_after_fee_and_reserve =
         sender_balance_after_fee.and_then(|balance| balance.checked_sub(offer_object_reserve));
+    // Execution takes the fee, locks a native sell side and checks the
+    // reserve, then takes the offer object reserve and checks it again.
+    let native_locked_amount = match &operation {
+        OfferTransactionOperation::OfferCreate(create)
+            if create.taker_gets_asset_id == postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID =>
+        {
+            create.taker_gets_amount
+        }
+        _ => 0,
+    };
+    let sender_balance_after_amount_fee_and_reserve = sender_balance_after_fee
+        .and_then(|balance| balance.checked_sub(native_locked_amount))
+        .and_then(|balance| balance.checked_sub(offer_object_reserve));
     let sender_meets_reserve_after_fee = sender_balance_after_fee.is_some_and(|balance| {
         balance >= postfiat_execution::required_account_reserve(&options.source)
     });
-    let sender_meets_reserve_after_fee_and_reserve = sender_balance_after_fee_and_reserve
+    let sender_meets_reserve_after_fee_and_reserve = sender_balance_after_amount_fee_and_reserve
         .is_some_and(|balance| {
             balance >= postfiat_execution::required_account_reserve(&options.source)
         });
@@ -2136,6 +2163,7 @@ pub fn offer_fee_quote(options: OfferFeeQuoteOptions) -> io::Result<OfferFeeQuot
         offer_weight_bytes: u64::try_from(weight_bytes).unwrap_or(u64::MAX),
         sender_balance_after_fee,
         sender_balance_after_fee_and_reserve,
+        sender_balance_after_amount_fee_and_reserve,
         sender_meets_reserve_after_fee,
         sender_meets_reserve_after_fee_and_reserve,
         operation,
