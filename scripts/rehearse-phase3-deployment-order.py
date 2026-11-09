@@ -129,18 +129,23 @@ def code_hash(runtime_hex: str) -> str:
     return '0x' + keccak256(bytes.fromhex(runtime_hex.removeprefix('0x'))).hex()
 
 
-def refuse_unless_planned_nonce(deployer, current_nonce, planned_nonce, predicted_verifier, predicted_lock):
-    """The guard run before any deployment: the deployer's next nonce must be the
-    planned one, so the verifier and the lock land on the predicted addresses that
-    genesis pins. Returns the two addresses the deployment would produce."""
-    would_verifier = create_address(deployer, current_nonce)
-    would_lock = create_address(deployer, current_nonce + 1)
-    require(current_nonce == planned_nonce and would_verifier == predicted_verifier.lower()
-            and would_lock == predicted_lock.lower(),
-            f'deployer {deployer} is at nonce {current_nonce}, planned {planned_nonce}: the verifier would land at '
-            f'{would_verifier} (predicted {predicted_verifier}) and the lock at {would_lock} (predicted '
-            f'{predicted_lock}); the genesis pins can no longer be met, refusing to deploy')
-    return would_verifier, would_lock
+def refuse_unless_planned_nonce(deployer, nonces, planned_nonce, predicted):
+    """The guard run immediately before each deployment. `nonces` holds the
+    deployer's `latest` and `pending` transaction counts: they must agree (no
+    transaction in flight) and equal `planned_nonce`, and `predicted` (the
+    addresses planned at `planned_nonce`, `planned_nonce + 1`, ...) must be the
+    CREATE addresses at those nonces, so the deployments land where genesis
+    pins them. Returns the addresses the deployments would produce."""
+    latest, pending = nonces['latest'], nonces['pending']
+    require(latest == pending,
+            f'deployer {deployer} has latest nonce {latest} but pending nonce {pending}: a transaction is in flight '
+            f'and could take a planned nonce; refusing to deploy')
+    would = tuple(create_address(deployer, latest + offset) for offset in range(len(predicted)))
+    require(latest == planned_nonce and would == tuple(address.lower() for address in predicted),
+            f'deployer {deployer} is at nonce {latest}, planned {planned_nonce}: the next deployments would land at '
+            f'{", ".join(would)} (predicted {", ".join(predicted)}); the genesis pins can no longer be met, '
+            f'refusing to deploy')
+    return would
 
 
 def pin_lane_genesis(fixture: dict, *, lock_address, lock_code_hash, token_address, token_code_hash):
@@ -287,8 +292,8 @@ def main(argv=None):
             raise RehearsalFailure(f'local Anvil refused {method}: {value["error"]}')
         return value['result']
 
-    def nonce_of(address):
-        return int(rpc('eth_getTransactionCount', [address, 'latest']), 16)
+    def nonces_of(address):
+        return {tag: int(rpc('eth_getTransactionCount', [address, tag]), 16) for tag in ('latest', 'pending')}
 
     def runtime(address):
         return rpc('eth_getCode', [address, 'latest'])
@@ -364,9 +369,11 @@ def main(argv=None):
         token_key, token_deployer = disposable_account()
         deployer_key, deployer = disposable_account()
 
-        def deploy(name, crate, contract, key, constructor):
+        def deploy(name, crate, contract, key, constructor, nonce=None):
+            """`forge create`; with `nonce`, the transaction's nonce is pinned, so it lands at that nonce or fails."""
+            pin = [] if nonce is None else ['--nonce', str(nonce)]
             argv = ['forge', 'create', contract, '--rpc-url', url, '--private-key', key, '--broadcast', '--json',
-                    '--constructor-args', *constructor]
+                    *pin, '--constructor-args', *constructor]
             return json.loads(command(name, argv, ROOT / crate, forge_env[crate]))['deployedTo'].lower()
 
         token = deploy('deploy-token', TOKEN_CRATE, 'src/PFTToken.sol:PFTToken', token_key,
@@ -374,7 +381,9 @@ def main(argv=None):
         token_code_hash = code_hash(runtime(token))
 
         # (1) Predict both CREATE addresses from the deployer and its next two nonces.
-        planned_nonce = nonce_of(deployer)
+        planned_nonce = nonces_of(deployer)['latest']
+        refuse_unless_planned_nonce(deployer, nonces_of(deployer), planned_nonce,
+                                    (create_address(deployer, planned_nonce),))
         predicted_verifier = create_address(deployer, planned_nonce)
         predicted_lock = create_address(deployer, planned_nonce + 1)
         for nonce, predicted in ((planned_nonce, predicted_verifier), (planned_nonce + 1, predicted_lock)):
@@ -392,7 +401,8 @@ def main(argv=None):
                 return body()
             finally:
                 require(rpc('evm_revert', [snapshot]) is True, f'{label}: evm_revert failed')
-                require(nonce_of(deployer) == planned_nonce, f'{label}: the revert did not restore the nonce')
+                require(nonces_of(deployer) == {'latest': planned_nonce, 'pending': planned_nonce},
+                        f'{label}: the revert did not restore the nonce')
                 require(runtime(predicted_verifier) == '0x' and runtime(predicted_lock) == '0x',
                         f'{label}: code remains at a predicted address after the revert')
 
@@ -406,9 +416,11 @@ def main(argv=None):
         def probe_lock():
             verifier = deploy('probe-verifier', VERIFIER_CRATE, 'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1',
                               deployer_key, [verifier_constructor_tuple(token=token, token_code_hash=token_code_hash,
-                                                                         vault_code_hash=placeholder)])
+                                                                         vault_code_hash=placeholder)],
+                              nonce=planned_nonce)
             require(verifier == predicted_verifier, f'probe verifier at {verifier}, predicted {predicted_verifier}')
-            lock = deploy('probe-lock', TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1', deployer_key, lock_args)
+            lock = deploy('probe-lock', TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1', deployer_key, lock_args,
+                          nonce=planned_nonce + 1)
             require(lock == predicted_lock, f'probe lock at {lock}, predicted {predicted_lock}')
             return code_hash(runtime(lock))
 
@@ -418,7 +430,8 @@ def main(argv=None):
             verifier = deploy('probe-verifier-final', VERIFIER_CRATE,
                               'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1', deployer_key,
                               [verifier_constructor_tuple(token=token, token_code_hash=token_code_hash,
-                                                          vault_code_hash=predicted_lock_code_hash)])
+                                                          vault_code_hash=predicted_lock_code_hash)],
+                              nonce=planned_nonce)
             require(verifier == predicted_verifier, f'probe verifier at {verifier}, predicted {predicted_verifier}')
             return code_hash(runtime(verifier))
 
@@ -444,26 +457,33 @@ def main(argv=None):
         def stray_nonce():
             command('stray-transaction', ['cast', 'send', deployer, '--value', '0', '--rpc-url', url,
                                           '--private-key', deployer_key])
-            current = nonce_of(deployer)
+            current = nonces_of(deployer)
             try:
-                refuse_unless_planned_nonce(deployer, current, planned_nonce, predicted_verifier, predicted_lock)
+                refuse_unless_planned_nonce(deployer, current, planned_nonce, (predicted_verifier, predicted_lock))
             except RehearsalFailure as refusal:
                 require(runtime(predicted_verifier) == '0x' and runtime(predicted_lock) == '0x',
                         'the refusal must come before any deployment')
-                return {'deployer_nonce': current, 'planned_nonce': planned_nonce,
-                        'verifier_would_land_at': create_address(deployer, current),
-                        'lock_would_land_at': create_address(deployer, current + 1),
+                return {'deployer_nonce': current['latest'], 'deployer_pending_nonce': current['pending'],
+                        'planned_nonce': planned_nonce,
+                        'verifier_would_land_at': create_address(deployer, current['latest']),
+                        'lock_would_land_at': create_address(deployer, current['latest'] + 1),
                         'refused': True, 'message': str(refusal)}
             raise RehearsalFailure('the guard deployed with a deployer nonce off by one')
 
         results['nonce_off_by_one'] = on_snapshot('nonce off by one', stray_nonce)
 
-        # (4)-(5) Deploy the verifier with the fixture checkpoint, then the lock, at the predicted nonces.
-        refuse_unless_planned_nonce(deployer, nonce_of(deployer), planned_nonce, predicted_verifier, predicted_lock)
+        # (4)-(5) Deploy the verifier with the fixture checkpoint, then the lock, at the predicted
+        # nonces. Immediately before each deployment the guard re-reads the latest and pending
+        # nonces, and each transaction pins its nonce, so it lands at the predicted address or fails.
+        refuse_unless_planned_nonce(deployer, nonces_of(deployer), planned_nonce, (predicted_verifier, predicted_lock))
         verifier = deploy('deploy-verifier', VERIFIER_CRATE, 'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1',
                           deployer_key, [verifier_constructor_tuple(token=token, token_code_hash=token_code_hash,
-                                                                     vault_code_hash=predicted_lock_code_hash)])
-        lock = deploy('deploy-lock', TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1', deployer_key, lock_args)
+                                                                     vault_code_hash=predicted_lock_code_hash)],
+                          nonce=planned_nonce)
+        require(verifier == predicted_verifier, f'verifier at {verifier}, predicted {predicted_verifier}')
+        refuse_unless_planned_nonce(deployer, nonces_of(deployer), planned_nonce + 1, (predicted_lock,))
+        lock = deploy('deploy-lock', TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1', deployer_key, lock_args,
+                      nonce=planned_nonce + 1)
 
         # (6) The on-chain checks.
         deployed_verifier_code_hash = code_hash(runtime(verifier))

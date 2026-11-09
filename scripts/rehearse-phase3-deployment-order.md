@@ -45,6 +45,11 @@ Without `--node-bin` the script builds `postfiat-node` into this checkout's
 6. Deploys the verifier, then the lock, at the predicted nonces. The verifier is
    seeded with the fixture checkpoint of
    `crates/ethereum-contracts/test/PFUSDCTier4.t.sol`.
+   - Immediately before each deployment the guard reads the deployer's `latest`
+     and `pending` transaction counts. Both must equal the planned nonce (`n`
+     for the verifier, `n + 1` for the lock), or the script refuses.
+   - Each `forge create` pins its nonce with `--nonce`. A transaction that takes
+     the nonce first makes the deployment fail; it cannot shift an address.
 7. Checks on chain:
    - both addresses and both runtime code hashes equal the predictions;
    - `lock.finalityVerifier()` is the verifier;
@@ -74,6 +79,12 @@ Anvil is stopped.
   for the lock. This rehearsal uses a single deployer and its next two nonces.
   The ordering argument is the same: a stray transaction moves either
   prediction.
+- **The guard is not race-free.** A transaction sent between the check and the
+  deployment can still take the planned nonce. The pinned nonce then makes the
+  deployment fail, but the predicted address is lost and the genesis pins can
+  never be met. Locally only the script holds the key and Anvil mines at once. A
+  production run must also use the two dedicated deployer keys of section 5.
+  Nothing else may hold or use them, and nothing else may be sent from them.
 - **Base Sepolia waits.** The Base Sepolia dry run waits for the Base route
   profile and asset id.
 

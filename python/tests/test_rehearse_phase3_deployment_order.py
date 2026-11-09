@@ -53,21 +53,42 @@ class NonceGuardTests(unittest.TestCase):
 
     def test_the_planned_nonce_passes(self):
         self.assertEqual(
-            rehearsal.refuse_unless_planned_nonce(DEPLOYER, 0, 0, self.verifier, self.lock),
+            rehearsal.refuse_unless_planned_nonce(DEPLOYER, {"latest": 0, "pending": 0}, 0, (self.verifier, self.lock)),
             (self.verifier, self.lock),
+        )
+
+    def test_the_lock_guard_passes_at_the_next_nonce(self):
+        self.assertEqual(
+            rehearsal.refuse_unless_planned_nonce(DEPLOYER, {"latest": 1, "pending": 1}, 1, (self.lock,)),
+            (self.lock,),
         )
 
     def test_a_nonce_off_by_one_is_refused(self):
         with self.assertRaises(rehearsal.RehearsalFailure) as refusal:
-            rehearsal.refuse_unless_planned_nonce(DEPLOYER, 1, 0, self.verifier, self.lock)
+            rehearsal.refuse_unless_planned_nonce(DEPLOYER, {"latest": 1, "pending": 1}, 0, (self.verifier, self.lock))
         message = str(refusal.exception)
         self.assertIn("refusing to deploy", message)
         self.assertIn(rehearsal.create_address(DEPLOYER, 1), message)
         self.assertIn(rehearsal.create_address(DEPLOYER, 2), message)
 
+    def test_the_lock_guard_refuses_when_the_verifier_did_not_take_its_nonce(self):
+        with self.assertRaises(rehearsal.RehearsalFailure):
+            rehearsal.refuse_unless_planned_nonce(DEPLOYER, {"latest": 0, "pending": 0}, 1, (self.lock,))
+
+    def test_a_pending_transaction_is_refused_even_when_latest_matches(self):
+        with self.assertRaises(rehearsal.RehearsalFailure) as refusal:
+            rehearsal.refuse_unless_planned_nonce(DEPLOYER, {"latest": 0, "pending": 1}, 0, (self.verifier, self.lock))
+        message = str(refusal.exception)
+        self.assertIn("pending", message)
+        self.assertIn("refusing to deploy", message)
+
+    def test_a_pending_count_below_latest_is_refused(self):
+        with self.assertRaises(rehearsal.RehearsalFailure):
+            rehearsal.refuse_unless_planned_nonce(DEPLOYER, {"latest": 1, "pending": 0}, 1, (self.lock,))
+
     def test_predictions_that_do_not_match_the_nonce_are_refused(self):
         with self.assertRaises(rehearsal.RehearsalFailure):
-            rehearsal.refuse_unless_planned_nonce(DEPLOYER, 0, 0, self.lock, self.verifier)
+            rehearsal.refuse_unless_planned_nonce(DEPLOYER, {"latest": 0, "pending": 0}, 0, (self.lock, self.verifier))
 
 
 class GenesisAndManifestTests(unittest.TestCase):
