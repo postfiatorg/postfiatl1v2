@@ -88,6 +88,16 @@ Signed submit methods reject a destination address that is not a canonical
 [Addresses And Checksums](../wallets/address-format.md). The `account` result
 adds `address_checksummed`, the display form of `address`.
 
+The fee quotes take the next sequence from the mempool and price the
+transaction on the ledger after the executable mempool, the sender's pending
+entries included, as admission does. For `transfer_fee_quote` this means
+`minimum_fee`, `state_expansion_fee`, `recipient_exists`, `sender_balance` and
+the reserve checks describe the ledger that sequence runs on: a recipient a
+pending transfer creates already exists and the sender's pending debits are
+counted. Its `sender_sequence` stays the committed sequence. The quote holds
+only while the pending entries do: if one is dropped before the block, a fee
+signed from the quote can be below the minimum the block then requires.
+
 Receipts from these submissions use `accepted: true` with code `accepted` (or
 an offer fill code) when applied. A rejected receipt whose code starts with
 `tec_` was fee-claimed: its fee was burned and its sequence consumed, nothing

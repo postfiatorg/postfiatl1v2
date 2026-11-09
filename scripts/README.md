@@ -32,4 +32,4 @@ outside the repository under `~/repos/postfiat-archive/postfiatl1v2/`.
 | `testnet-p0-network-gate` | Runs the P0 network readiness gate for testnet infrastructure. |
 | `testnet-node-run-peer-certified-smoke` | Runs the peer-certified batch smoke test. |
 | `testnet-wallet-minimum-smoke` | Runs the minimum wallet flow smoke test. |
-| `repro-transfer-fee-quote-pending-recipient` | Reproduction for issue #193: quotes and submits a transfer to a recipient a pending transfer creates, then compares the quote with the receipt. Exits 1 on the mismatch; `--control` runs the empty-mempool case. See `repro-transfer-fee-quote-pending-recipient.md`. |
+| `repro-transfer-fee-quote-pending-recipient` | Regression check for issue #193: quotes and submits a transfer to a recipient a pending transfer creates, then checks the quote, the declared fee and the receipt agree. Exits 0 on main, 1 on a regression; `--control` runs the empty-mempool case. See `repro-transfer-fee-quote-pending-recipient.md`. |

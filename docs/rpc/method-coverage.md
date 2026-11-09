@@ -27,7 +27,7 @@ A method being listed here does not authorize exposing it remotely.
 | `owned-unwrap-apply` | operator/local only | Hyphenated local compatibility alias for `owned_unwrap_apply`; verifies and applies a supplied unwrap certificate. |
 | `transfer` | operator/local only | With direct-state mode enabled, signs a transparent transfer with a local key file and applies it directly. |
 | `batch_transfer` | operator/local only | Builds a signed transparent-transfer batch file; it does not apply the batch. |
-| `mempool_submit_transfer` | operator/local only | Signs with a local wallet key and admits a transparent transfer to the local mempool. |
+| `mempool_submit_transfer` | operator/local only | Signs with a local wallet key and admits a transparent transfer to the local mempool. Declares the fee `transfer_fee_quote` quotes: the minimum on the ledger after the executable mempool. |
 | `mempool_batch` | operator/local only | Builds a proposer batch from admitted mempool transactions. |
 | `apply_batch` | operator/local only | Applies a prepared transparent batch directly and returns its receipts. |
 

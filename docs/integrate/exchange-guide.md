@@ -191,7 +191,9 @@ Sequence and mempool rules (`crates/execution/src/entrypoints.rs`,
   only if it would be accepted. It refuses a duplicate
   transaction ID or a second pending transaction with the same sender
   sequence. At most 64 transactions per sender and 1,024 in total may be
-  pending.
+  pending. `transfer_fee_quote` prices the next transfer on the ledger after
+  the pending entries, so a quote taken while earlier withdrawals are pending
+  counts their debits and the accounts they create.
 - **No expiry.** A signed v1 transfer stays valid until its sequence is used.
   To cancel a signed but unexecuted withdrawal, use up that sequence with
   another transaction.

@@ -1,17 +1,14 @@
-// Reproduction for postfiatorg/postfiatl1v2#193.
+// Regression tests for postfiatorg/postfiatl1v2#193.
 //
 // `transfer_fee_quote` and `mempool-submit-transfer` take the sequence of the
-// quoted transfer from the mempool, so they describe the transfer that runs
-// after the sender's pending entries, but they price it against the committed
-// ledger: `recipient_exists`, `state_expansion_fee`, `minimum_fee`,
-// `sender_balance` and `sender_meets_reserve_after_transfer` ignore the
-// pending entries. The other quotes (`asset_fee_quote`, `escrow_fee_quote`,
-// `nft_fee_quote`, `offer_fee_quote`), mempool admission and block execution
-// all use `ledger_after_executable_mempool`.
-//
-// The two `#[ignore]` tests state the expected behaviour and fail on main; the
-// control test passes on main. Run them with
-// `cargo test -p postfiat-node transfer_fee_quote_pending_recipient -- --include-ignored`.
+// quoted transfer from the mempool, so they must price it on the ledger that
+// sequence executes on: after the executable mempool
+// (`ledger_after_executable_mempool`), as mempool admission, block execution
+// and the other quotes (`asset_fee_quote`, `escrow_fee_quote`,
+// `nft_fee_quote`, `offer_fee_quote`) do. Before the fix they priced it on the
+// committed ledger, so `recipient_exists`, `state_expansion_fee`,
+// `minimum_fee`, `sender_balance` and `sender_meets_reserve_after_transfer`
+// ignored the pending entries. The control test pins the empty-mempool case.
 use super::*;
 
 const RECIPIENT: &str = "pf0000000000000000000000000000000000000002";
@@ -102,11 +99,9 @@ fn transfer_fee_quote_matches_the_receipt_with_an_empty_mempool() {
 }
 
 /// A pending transfer creates the recipient. The quote for the next sequence
-/// still prices the account creation, and `mempool-submit-transfer` declares
-/// that fee; the receipt shows the node required `TRANSFER_ACCOUNT_CREATION_FEE`
-/// less.
+/// and the fee `mempool-submit-transfer` declares must not price the account
+/// creation again: the receipt charges no `TRANSFER_ACCOUNT_CREATION_FEE`.
 #[test]
-#[ignore = "reproduction for #193: the quote prices a recipient a pending transfer already creates"]
 fn transfer_fee_quote_sees_the_recipient_a_pending_transfer_creates() {
     let data_dir = init_devnet("postfiat-transfer-fee-quote-pending-recipient");
     let faucet = read_transfer_key_file(&data_dir, None).expect("faucet key");
@@ -144,10 +139,13 @@ fn transfer_fee_quote_sees_the_recipient_a_pending_transfer_creates() {
     fs::remove_dir_all(data_dir).expect("cleanup");
 }
 
-/// The quote reports the committed balance and `sender_meets_reserve_after_transfer: true`
-/// for a transfer that admission refuses because of the sender's pending debit.
+/// The quote must count the sender's pending debit: it reports
+/// `sender_meets_reserve_after_transfer: false` for a transfer that admission
+/// refuses. With the declared fee priced on the same ledger (22: the pending
+/// transfer creates the recipient) admission refuses with
+/// `below_account_reserve`; before the fix the declared 32 made it
+/// `insufficient_funds`.
 #[test]
-#[ignore = "reproduction for #193: the quote ignores the sender's pending debit"]
 fn transfer_fee_quote_counts_the_pending_debit_of_the_sender() {
     let data_dir = init_devnet("postfiat-transfer-fee-quote-pending-debit");
     let faucet = read_transfer_key_file(&data_dir, None).expect("faucet key");
@@ -191,11 +189,17 @@ fn transfer_fee_quote_counts_the_pending_debit_of_the_sender() {
     let refused = submit_faucet_transfer(&data_dir, RECIPIENT, AMOUNT)
         .expect_err("admission refuses the second transfer");
     assert!(
-        refused.to_string().contains("insufficient_funds"),
+        refused.to_string().contains("below_account_reserve"),
         "{refused}"
     );
 
     // Expected: the quote agrees with admission.
+    assert_eq!(quote.sender_balance, remaining - AMOUNT - first.transfer.unsigned.fee);
+    assert_eq!(quote.minimum_fee, 22, "sequence 2 creates the recipient");
+    assert_eq!(
+        quote.sender_balance_after_amount_and_fee,
+        Some(quote.sender_balance - AMOUNT - 22)
+    );
     assert!(
         !quote.sender_meets_reserve_after_transfer,
         "quote: sender_balance {} after {:?}, meets reserve; admission: {refused}",

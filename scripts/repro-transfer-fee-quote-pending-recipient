@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Reproduction for postfiatorg/postfiatl1v2#193.
+# Regression check for postfiatorg/postfiatl1v2#193.
 #
-# transfer_fee_quote takes the sequence of the quoted transfer from the mempool
-# but prices it against the committed ledger. With a pending transfer that
-# creates the recipient, the quote for the next sequence still charges the
-# account creation fee and mempool-submit-transfer declares it; the receipt for
-# that transfer shows the node required 10 atoms less.
+# transfer_fee_quote and mempool-submit-transfer take the sequence of the
+# quoted transfer from the mempool and price it on the ledger after the
+# executable mempool. With a pending transfer that creates the recipient, the
+# quote for the next sequence and the declared fee must match the receipt (no
+# second account creation fee). Before the fix they priced it on the committed
+# ledger and the sender burned 10 atoms the node did not require.
 #
 # Usage:
-#   scripts/repro-transfer-fee-quote-pending-recipient            # exits 1 on main
+#   scripts/repro-transfer-fee-quote-pending-recipient            # exits 0; 1 on a regression
 #   scripts/repro-transfer-fee-quote-pending-recipient --control  # empty mempool, exits 0
 #
 # NODE_BIN points at a built postfiat-node; otherwise the script builds it.
@@ -113,9 +114,9 @@ EOF
 
 echo "# quote for sequence $expected_sequence: state_expansion_fee=$quote_state_expansion_fee minimum_fee=$quote_minimum_fee"
 echo "# receipt for sequence $expected_sequence: state_expansion_fee=$receipt_state_expansion_fee minimum_fee=$receipt_minimum_fee fee_charged=$receipt_fee_charged (declared $declared_fee)"
-if [ "$quote_minimum_fee" = "$receipt_minimum_fee" ] && [ "$quote_state_expansion_fee" = "$receipt_state_expansion_fee" ]; then
-  echo "OK: the quote and the receipt agree"
+if [ "$quote_minimum_fee" = "$receipt_minimum_fee" ] && [ "$quote_state_expansion_fee" = "$receipt_state_expansion_fee" ] && [ "$declared_fee" = "$quote_minimum_fee" ]; then
+  echo "OK: the quote, the declared fee and the receipt agree"
   exit 0
 fi
-echo "MISMATCH: the quote and the receipt disagree for the same sequence" >&2
+echo "MISMATCH: the quote, the declared fee and the receipt disagree for the same sequence" >&2
 exit 1
