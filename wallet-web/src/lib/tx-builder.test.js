@@ -1037,6 +1037,48 @@ test('sendEscrowTransaction rejects sequence substitution before signing', async
   assert.deepEqual(calls, ['escrowFeeQuote']);
 });
 
+test('sendOfferTransaction rejects a reserve missed after the native sell lock before signing', async () => {
+  const calls = [];
+  const wasm = {
+    wallet_sign_offer_transaction_fields() {
+      calls.push('wallet_sign_offer_transaction_fields');
+      throw new Error('offer signing should not happen');
+    },
+  };
+  const rpc = {
+    async offerFeeQuote() {
+      calls.push('offerFeeQuote');
+      return {
+        ok: true,
+        result: {
+          sender_meets_reserve_after_fee: true,
+          sender_meets_reserve_after_fee_and_reserve: false,
+        },
+      };
+    },
+    async submitSignedOfferTransaction() {
+      throw new Error('offer submit should not happen');
+    },
+  };
+  const builder = new TxBuilder(rpc, () => wasm);
+
+  await assert.rejects(
+    () => builder.sendOfferTransaction('backup-json', 'pf-from', {
+      operation: {
+        operation: 'offer_create',
+        owner: 'pf-from',
+        taker_gets_asset_id: 'PFT',
+        taker_gets_amount: 1000,
+        taker_pays_asset_id: 'asset-1',
+        taker_pays_amount: 10,
+        expiration_height: 0,
+      },
+    }),
+    /Insufficient balance for offer transaction amount and reserve/,
+  );
+  assert.deepEqual(calls, ['offerFeeQuote']);
+});
+
 test('sendOwnedTransfer refuses missing certificate domain before signing or mutation', async () => {
   let signed = false;
   const wasm = {

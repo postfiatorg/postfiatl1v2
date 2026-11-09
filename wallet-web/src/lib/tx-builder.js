@@ -786,6 +786,9 @@ export class TxBuilder {
     if (quote.sender_meets_reserve_after_fee === false) {
       throw new Error('Insufficient balance for offer transaction fee.');
     }
+    if (quote.sender_meets_reserve_after_fee_and_reserve === false) {
+      throw new Error('Insufficient balance for offer transaction amount and reserve.');
+    }
 
     // Build fields for signing
     const signFields = {
