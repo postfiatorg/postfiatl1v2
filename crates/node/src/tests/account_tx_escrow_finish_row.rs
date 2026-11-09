@@ -1,15 +1,10 @@
-// Reproduction for postfiatorg/postfiatl1v2#198.
+// Regression tests for postfiatorg/postfiatl1v2#198.
 //
-// The `account_tx` row for an `escrow_finish` lists the escrow owner as
-// `from` and carries the signed envelope's `fee` and `sequence`. A finish is
-// signed by the recipient (`EscrowTransactionOperation::source_matches`), who
-// pays the fee and whose sequence advances; the owner's balance and sequence
-// do not move. The row contract (docs/rpc/account-history.md) says `fee` left
-// `from` and `sequence` was consumed from it.
-//
-// The control (the escrow_create row) passes on main. The `#[ignore]` test
-// states the expected attribution and fails on main. Run it with
-// `cargo test -p postfiat-node --lib account_tx_escrow_finish_row -- --include-ignored`.
+// A finish is signed by the recipient (`EscrowTransactionOperation::source_matches`),
+// who pays the fee and whose sequence advances; the owner's balance and
+// sequence do not move. The row contract (docs/rpc/account-history.md) says
+// `fee` left `from` and `sequence` was consumed from it, so the finish row's
+// `from` is the signer. Before the fix it was the owner.
 use super::*;
 
 const ESCROW_AMOUNT: u64 = ACCOUNT_RESERVE + 25;
@@ -215,10 +210,10 @@ fn account_tx_escrow_create_row_names_the_signer_as_from() {
 }
 
 /// The recipient signs the finish, pays its fee and consumes its sequence; the
-/// ledger shows the owner untouched. The row lists `from: owner` with the
-/// recipient's fee and sequence, in the owner's history.
+/// ledger shows the owner untouched. The row lists the recipient as `from` and
+/// `to` with amount 0 (the credited amount is on the create row), so it is in
+/// the recipient's history only, as the cancel row is in the owner's only.
 #[test]
-#[ignore = "reproduction for #198: the escrow_finish row attributes the signer's fee and sequence to the owner"]
 fn account_tx_escrow_finish_row_names_the_signer_as_from() {
     let (devnet, owner, recipient) = init_devnet("postfiat-account-tx-escrow-finish-row");
     let (_, escrow_id) = create_escrow(&devnet, &owner, &recipient);
@@ -266,18 +261,22 @@ fn account_tx_escrow_finish_row_names_the_signer_as_from() {
 
     let owner_rows = rows_at(&devnet, &owner.address, 3);
     let recipient_rows = rows_at(&devnet, &recipient.address, 3);
-    assert_eq!(owner_rows.len(), 1, "{owner_rows:?}");
-    assert_eq!(
-        recipient_rows, owner_rows,
-        "one row, listed for both parties"
+    assert!(
+        owner_rows.is_empty(),
+        "the owner neither signed nor paid: {owner_rows:?}"
     );
-    let row = &owner_rows[0];
+    assert_eq!(recipient_rows.len(), 1, "{recipient_rows:?}");
+    let row = &recipient_rows[0];
     assert_eq!(row.transaction_kind, ESCROW_FINISH_TRANSACTION_KIND);
     assert_eq!(row.escrow_id.as_deref(), Some(escrow_id.as_str()));
     assert_eq!(
         (row.fee, row.sequence),
         (signed_finish.unsigned.fee, signed_finish.unsigned.sequence),
         "the row carries the recipient's fee and sequence"
+    );
+    assert_eq!(
+        (row.to_address.as_str(), row.amount),
+        (recipient.address.as_str(), 0)
     );
     assert_eq!(
         row.from_address, recipient.address,

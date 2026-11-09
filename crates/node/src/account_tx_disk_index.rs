@@ -1,4 +1,4 @@
-// Disk layout of the `account_tx` history index (schema v3). Included from
+// Disk layout of the `account_tx` history index (schema v4). Included from
 // lib.rs next to block_finality.rs, which computes the rows.
 //
 // <data-dir>/account_tx_index_meta.json      disk index metadata (counts, ranges)
@@ -22,10 +22,11 @@ const ACCOUNT_TX_ACCOUNT_HEAD_FILE: &str = "head.json";
 // older schema is unusable for reads (the archive scan answers instead) and is
 // never extended: the next `account-tx-index-build` rebuilds it from the
 // retained blocks.
-const ACCOUNT_TX_INDEX_SCHEMA: &str = "postfiat-account-tx-index-v3";
-const ACCOUNT_TX_DISK_INDEX_SCHEMA: &str = "postfiat-account-tx-disk-index-v3";
-const ACCOUNT_TX_ACCOUNT_HEAD_SCHEMA: &str = "postfiat-account-tx-account-head-v3";
-const ACCOUNT_TX_ACCOUNT_CHUNK_SCHEMA: &str = "postfiat-account-tx-account-chunk-v3";
+// v4 rows attribute an `escrow_finish` to the recipient who signed it.
+const ACCOUNT_TX_INDEX_SCHEMA: &str = "postfiat-account-tx-index-v4";
+const ACCOUNT_TX_DISK_INDEX_SCHEMA: &str = "postfiat-account-tx-disk-index-v4";
+const ACCOUNT_TX_ACCOUNT_HEAD_SCHEMA: &str = "postfiat-account-tx-account-head-v4";
+const ACCOUNT_TX_ACCOUNT_CHUNK_SCHEMA: &str = "postfiat-account-tx-account-chunk-v4";
 /// Rows per account chunk written by `account-tx-index-build`. Commits use the
 /// value recorded in the metadata.
 pub(crate) const ACCOUNT_TX_CHUNK_ROWS: u64 = 64;

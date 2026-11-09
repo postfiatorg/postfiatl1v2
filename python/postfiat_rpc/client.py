@@ -2860,7 +2860,8 @@ class PostFiatRpcClient:
                 if isinstance(condition, str) and condition:
                     condition_hash = _escrow_condition_hash(condition)
             elif op_kind == "escrow_finish":
-                sender = operation.get("owner")
+                # The recipient signs the finish and pays its fee.
+                sender = unsigned.get("source")
                 recipient = operation.get("recipient")
             elif op_kind == "escrow_cancel":
                 sender = operation.get("owner")

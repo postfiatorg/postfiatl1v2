@@ -1633,8 +1633,10 @@ fn account_tx_rows_for_transparent_batch(
                         condition_hash,
                     )
                 }
+                // The recipient signs a finish, pays its fee and consumes its
+                // sequence; the credited amount is on the create row.
                 EscrowTransactionOperation::EscrowFinish(operation) => (
-                    operation.owner.clone(),
+                    unsigned.source.clone(),
                     operation.recipient.clone(),
                     0,
                     None,

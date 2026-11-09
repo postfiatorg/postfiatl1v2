@@ -95,12 +95,13 @@ block; the metadata is written last, so reads use the archive scan until then.
 
 ## Upgrade Backfill
 
-Index schema `postfiat-account-tx-index-v3` (disk index
-`postfiat-account-tx-disk-index-v3`, account files
-`postfiat-account-tx-account-head-v3` and `postfiat-account-tx-account-chunk-v3`)
-is the chunked layout above. Its rows are the v2 rows, and `account_tx` returns
-the same bytes for the same chain. Schema v2 added `payment_v2` memo contents
-and shielded-withdrawal rows. After installing a binary with a new schema, run
+Index schema `postfiat-account-tx-index-v4` (disk index
+`postfiat-account-tx-disk-index-v4`, account files
+`postfiat-account-tx-account-head-v4` and `postfiat-account-tx-account-chunk-v4`)
+is the chunked layout above. v4 rows differ from v3 only in the
+`escrow_finish` row, whose `from` is now the recipient who signed and paid it
+(v3 named the owner). Schema v3 introduced the chunked layout; v2 added
+`payment_v2` memo contents and shielded-withdrawal rows. After installing a binary with a new schema, run
 the build once on every node that serves `account_tx`:
 
 ```bash
@@ -108,15 +109,15 @@ postfiat-node account-tx-index-build --data-dir <validator-data>
 postfiat-node account-tx-index-status --data-dir <validator-data>
 ```
 
-An older index (v1 or v2) is never read or extended, so this build re-reads
-every retained block and writes the v3 files; for a v1 index that also
+An older index (v1, v2 or v3) is never read or extended, so this build re-reads
+every retained block and writes the v4 files; for a v1 index that also
 backfills memo contents and historical shielded withdrawals. Before the
 rebuild, status reports `index_usable: false` with
 `unsupported account_tx index schema` (and `disk_index_reason` with the disk
 schema), commits leave the old files as they are, and reads use the bounded
 archive scan (`index_used: false`), which already returns the current rows.
 After it, status reports both indexes usable and reads return
-`index_used: true`. The build removes the old v2 shard files. Rows for history
+`index_used: true`. The build removes the old shard files. Rows for history
 pruned below the retained base are not rebuilt.
 
 ## Build

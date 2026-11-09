@@ -181,6 +181,13 @@ class AccountTxFallbackSwapRowTests(unittest.TestCase):
     the same ``transaction_index`` and ``tx_id`` as the archive scan."""
 
     def _rows(self, payload: dict, receipt_count: int):
+        scan = self._scan_rows(payload, receipt_count, ADDRESS)
+        return [
+            (row.transaction_index, row.tx_id, row.transaction_kind, row.tx_role)
+            for row in scan
+        ]
+
+    def _scan_rows(self, payload: dict, receipt_count: int, address: str):
         client = PostFiatRpcClient("127.0.0.1:1234")
         block = {
             "header": {"height": 1, "batch_kind": "transparent", "batch_id": "b1"},
@@ -195,12 +202,35 @@ class AccountTxFallbackSwapRowTests(unittest.TestCase):
             ),
             mock.patch.object(client, "receipts", return_value=[]),
         ):
-            scan = client.account_tx(ADDRESS, from_height=1, limit=10)
+            scan = client.account_tx(address, from_height=1, limit=10)
         self.assertFalse(scan.index_used)
-        return [
-            (row.transaction_index, row.tx_id, row.transaction_kind, row.tx_role)
-            for row in scan.rows
-        ]
+        return scan.rows
+
+    def test_escrow_finish_row_names_the_recipient_who_signed_it(self):
+        payload = {
+            "escrow_transactions": [
+                {
+                    "unsigned": {
+                        "transaction_kind": "escrow",
+                        "source": ADDRESS,
+                        "fee": 22,
+                        "sequence": 3,
+                        "operation": {
+                            "operation": "escrow_finish",
+                            "escrow_id": "e" * 96,
+                            "owner": OTHER,
+                            "recipient": ADDRESS,
+                        },
+                    }
+                }
+            ],
+        }
+        rows = self._scan_rows(payload, 1, ADDRESS)
+        self.assertEqual(
+            [(row.sender, row.recipient, row.amount, row.fee, row.sequence) for row in rows],
+            [(ADDRESS, ADDRESS, 0, 22, 3)],
+        )
+        self.assertEqual(list(self._scan_rows(payload, 1, OTHER)), [])
 
     def test_swap_rows_and_later_kinds_match_the_archive_scan_numbering(self):
         payload = {

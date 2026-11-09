@@ -438,11 +438,11 @@ fn an_older_schema_index_is_reported_and_not_read_until_rebuilt() {
     assert_eq!(index_files(&data_dir), v2_files);
     assert!(!account_tx(query(&data_dir, RECIPIENT_C)).expect("account tx").index_used);
 
-    // The build rebuilds it as v3, and the v2 shard files are gone.
+    // The build rebuilds it as v4, and the v2 shard files are gone.
     let rebuilt = build(&data_dir);
     assert!(rebuilt.index_usable && rebuilt.disk_index_usable, "{rebuilt:?}");
     let meta = json(&fs::read(data_dir.join(ACCOUNT_TX_DISK_INDEX_FILE)).expect("meta"));
-    assert_eq!(meta["schema"], "postfiat-account-tx-disk-index-v3");
+    assert_eq!(meta["schema"], "postfiat-account-tx-disk-index-v4");
     assert!(index_files(&data_dir).keys().all(|path| !path.ends_with(".json")
         || !path.starts_with(ACCOUNT_TX_ACCOUNT_SHARDS_DIR)
         || path.matches('/').count() == 2));

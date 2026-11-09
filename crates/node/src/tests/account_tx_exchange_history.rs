@@ -505,7 +505,7 @@ fn account_tx_index_rebuild_backfills_memos_and_shielded_withdrawals_over_a_v1_i
     assert_eq!(egress.rows, expected_egress_rows);
     assert_shielded_withdrawal_rows(&shielded, &withdraw.rows, &egress.rows);
     let rebuilt = read_account_tx_index_file(&index_path).expect("read rebuilt index");
-    assert_eq!(rebuilt.schema, "postfiat-account-tx-index-v3");
+    assert_eq!(rebuilt.schema, "postfiat-account-tx-index-v4");
 
     fs::remove_dir_all(data_dir).expect("remove test data dir");
 }
@@ -775,7 +775,7 @@ fn account_tx_results_are_byte_identical_after_the_v3_rebuild() {
         &fs::read(data_dir.join(ACCOUNT_TX_DISK_INDEX_FILE)).expect("meta"),
     )
     .expect("meta json");
-    assert_eq!(meta["schema"], "postfiat-account-tx-disk-index-v3");
+    assert_eq!(meta["schema"], "postfiat-account-tx-disk-index-v4");
     let v3_results = addresses
         .iter()
         .flat_map(|address| queries.map(|bounds| (address.clone(), bounds)))

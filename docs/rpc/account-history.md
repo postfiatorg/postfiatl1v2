@@ -34,6 +34,13 @@ Rows come from two block kinds:
 - `batch_kind: "shielded"`: shielded withdrawals that credit a transparent
   account (see below).
 
+Escrow rows name the account that signed and paid: `escrow_create` runs
+owner → recipient with the escrowed `amount`; `escrow_finish` is signed by the
+recipient, so `from` and `to` are the recipient and `amount` is 0 (a terminal
+row: the credited amount is on the create row); `escrow_cancel` runs
+owner → owner with `amount` 0. A finish is therefore listed only in the
+recipient's history and a cancel only in the owner's.
+
 Every row carries `accepted` and `receipt_code` from the receipt. A row with
 `accepted: false` did not transfer its `amount`; a `tec_` receipt may still
 have charged its fee (see below). Credit a deposit only from a row with
@@ -194,10 +201,11 @@ postfiat-node account-tx-index-build --data-dir <validator-data>
 The build extends a current index from its tip, or rebuilds it from every
 retained block when it cannot be extended.
 
-The current index schema is `postfiat-account-tx-index-v3`: rows in bounded
-per-account chunks and metadata-only aggregate files, with the same rows and
-results as v2. Schema v2 added memo contents and shielded withdrawals. An index
-written with an older schema (v1 or v2) is never read or extended. After
+The current index schema is `postfiat-account-tx-index-v4`: the v3 layout (rows
+in bounded per-account chunks and metadata-only aggregate files), with the
+`escrow_finish` row attributed to the recipient who signed it (v3 named the
+owner). Schema v2 added memo contents and shielded withdrawals. An index
+written with an older schema (v1, v2 or v3) is never read or extended. After
 upgrading, run `account-tx-index-build` once: it rebuilds the index from all
 retained blocks, which for a v1 index also backfills memo contents and
 historical shielded withdrawals. Until then,
