@@ -160,7 +160,9 @@ jobs:
           # that read so shared-runner IP rate limits cannot disable this gate.
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          curl --fail --location --proto '=https' --tlsv1.2 https://sp1up.succinct.xyz | bash
+          # sp1up.succinct.xyz stopped answering on 2026-11-09; fetch sp1up from the pinned release tag instead.
+          curl --fail --location --proto '=https' --tlsv1.2 --create-dirs --output "$HOME/.sp1/bin/sp1up" https://raw.githubusercontent.com/succinctlabs/sp1/v6.3.1/sp1up/sp1up
+          chmod +x "$HOME/.sp1/bin/sp1up"
           "$HOME/.sp1/bin/sp1up" --version 6.3.1
           export PATH="$HOME/.sp1/bin:$PATH"
           cargo prove --version | grep -F 'cargo-prove sp1'
