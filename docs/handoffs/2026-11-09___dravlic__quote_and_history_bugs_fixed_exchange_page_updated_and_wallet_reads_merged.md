@@ -187,6 +187,18 @@ From his 2026-11-07 wallet handoffs:
   - **`product-security-ci`:** last green on `8a6216a84`. It is running on `9f76e2e5e`, `ff1f6a8b1`, `02a2ca229`, `f58515e52`, `00cfc75ad` and `e18c6ee71`. Its only red run today is `b47ae08d6`, before the SP1 installer fix (`7ecf15adf`), which is expected.
 - **Sessions and devnet.** The two helper sessions are closed and the main session is idle. Nothing on the devnet was touched beyond read-only reads.
 
+## CI follow-up (2026-11-09)
+
+The workflows that were still running at the end of the session completed
+successfully on the final handoff commit `90da097c9`:
+
+- [docs-build](https://github.com/postfiatorg/postfiatl1v2/actions/runs/42627350633)
+- [rust-ci](https://github.com/postfiatorg/postfiatl1v2/actions/runs/42627350681)
+- [product-security-ci](https://github.com/postfiatorg/postfiatl1v2/actions/runs/42627350552)
+
+All three also passed on the preceding code commit `e18c6ee71`. This closes the
+CI follow-up above; the deployment and qualification boundaries are unchanged.
+
 [#193]: https://github.com/postfiatorg/postfiatl1v2/issues/193
 [#194]: https://github.com/postfiatorg/postfiatl1v2/pull/194
 [#195]: https://github.com/postfiatorg/postfiatl1v2/pull/195
