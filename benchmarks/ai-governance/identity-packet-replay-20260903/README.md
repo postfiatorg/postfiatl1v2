@@ -137,6 +137,10 @@ packet's confidence labels and profile-size tier are never treated as a score.
 - `test_package.py`: package invariants
 - `outputs/`: four raw runs, host identities, comparison, scores, and the
   redaction-safe rental teardown receipt
+- `outputs/primary-bootstrap.log`, `outputs/replay-bootstrap.log` and
+  `outputs/primary-sglang.log`: original September 3 bootstrap and inference
+  diagnostics, added to version control on November 9. These historical logs
+  do not change the frozen inputs or the replay result.
 
 ## Verify
 
