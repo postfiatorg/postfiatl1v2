@@ -16,6 +16,7 @@ const atomicNavswapModule = require('./navswap-atomic');
 const { FastpayCertificateOutbox } = require('./fastpay-certificate-outbox');
 const { OPEN_PATH: NATIVE_SESSION_OPEN_PATH, createNativeSessions } = require('./native-session');
 const { createPrivateActions } = require('./private-actions');
+const { PUBLIC_READ_CACHE_METHODS, createPublicReadCache } = require('./public-read-cache');
 const {
     handleRetiredLegacyRoute,
     legacyShieldedCertificationEnabled,
@@ -407,6 +408,9 @@ const PUBLIC_READ_RPC_METHODS = new Set([
     'atomic_swap_fee_quote',
     atomicNavswapModule.ATOMIC_QUOTE_METHOD,
 ]);
+
+// Short shared answers for the heavy anonymous private reads (public-read-cache.js).
+const publicReadCache = createPublicReadCache();
 
 const REMOVED_PUBLIC_RPC_METHODS = new Set([
     'wallet_sign_owned_transfer',
@@ -1681,6 +1685,13 @@ wss.on('connection', (ws, req) => {
         try {
             const originalOutbound = requestWithProxyReadiness(parsed, target.route);
             const outbound = compactFastpayVoteRequest(originalOutbound);
+            if (PUBLIC_READ_CACHE_METHODS.has(parsed.method)) {
+                const response = await publicReadCache.read(parsed.method, parsed.params, parsed.id, async () => JSON.parse(
+                    await rpcTcpRequestLine(target.endpoint.host, target.endpoint.port, outbound, TCP_TIMEOUT_MS, 'default'),
+                ), `${target.endpoint.host}:${target.endpoint.port}`);
+                ws.send(addProxyRouteEvent(JSON.stringify(response), target.route));
+                return;
+            }
             let line = await rpcTcpRequestLine(
                 target.endpoint.host,
                 target.endpoint.port,
