@@ -1,5 +1,7 @@
 'use strict';
 
+const { rpcTransportError } = require('./rpc-transport-errors');
+
 function create(runtime) {
     const { A651_ASSET_ID,
 A652_ASSET_ID,
@@ -426,7 +428,7 @@ wss } = runtime;
                 if (!settled && !tcpClosed) {
                     settled = true;
                     tcp.destroy();
-                    reject(new Error(`RPC timeout from ${host}:${port}`));
+                    reject(rpcTransportError('rpc_timeout', `RPC timeout from ${host}:${port}`));
                 }
             }, timeoutMs);
 
@@ -456,7 +458,7 @@ wss } = runtime;
                 if (!settled) {
                     settled = true;
                     clearTimeout(timer);
-                    reject(new Error(`RPC connection closed by ${host}:${port}`));
+                    reject(rpcTransportError('rpc_connection_closed', `RPC connection closed by ${host}:${port}`));
                 }
             });
         });
@@ -486,7 +488,7 @@ wss } = runtime;
         }
 
         close() {
-            this._rejectCurrentAndQueue(new Error(`RPC connection closed for ${this.host}:${this.port}`));
+            this._rejectCurrentAndQueue(rpcTransportError('rpc_connection_closed', `RPC connection closed for ${this.host}:${this.port}`));
             if (this.socket) {
                 this.socket.destroy();
             }
@@ -509,7 +511,7 @@ wss } = runtime;
             this.current = item;
             item.timer = setTimeout(() => {
                 if (this.current === item) {
-                    item.reject(new Error(`RPC timeout from ${this.host}:${this.port}`));
+                    item.reject(rpcTransportError('rpc_timeout', `RPC timeout from ${this.host}:${this.port}`));
                     this.current = null;
                     this.close();
                 }
@@ -569,7 +571,7 @@ wss } = runtime;
                 this._handleDisconnect(error, socket);
             });
             socket.on('close', () => {
-                this._handleDisconnect(new Error(`RPC connection closed by ${this.host}:${this.port}`), socket);
+                this._handleDisconnect(rpcTransportError('rpc_connection_closed', `RPC connection closed by ${this.host}:${this.port}`), socket);
             });
         }
 
@@ -629,7 +631,7 @@ wss } = runtime;
         try {
             return JSON.parse(line);
         } catch (e) {
-            throw new Error(`invalid JSON from ${host}:${port}`);
+            throw rpcTransportError('rpc_invalid_json', `invalid JSON from ${host}:${port}`);
         }
     }
 

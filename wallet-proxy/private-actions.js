@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { rpcTransportErrorClass } = require('./rpc-transport-errors');
 
 const SCHEMA = 'postfiat-private-actions-v1';
 const RECORD_SCHEMA = 'postfiat-private-action-record-v1';
@@ -291,13 +292,9 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
         } catch (error) {
             // Transport errors reserve nothing that a resend could duplicate: the node returns
             // the existing record for an intent it already holds.
-            // Keep operator diagnostics useful without reflecting an upstream
-            // address, response body or arbitrary exception message.
-            const message = typeof error?.message === 'string' ? error.message : '';
-            const transportCode = message.startsWith('RPC timeout from ') ? 'rpc_timeout'
-                : message.startsWith('RPC connection closed ') ? 'rpc_connection_closed'
-                : message.startsWith('invalid JSON from ') ? 'rpc_invalid_json' : 'rpc_transport_error';
-            return { source: source.validatorId, ok: false, final: false, code: String(error?.code || transportCode).slice(0, 64) };
+            // Only a class from the closed list reaches the caller: never an
+            // upstream address, response body, exception message or raw system code.
+            return { source: source.validatorId, ok: false, final: false, code: rpcTransportErrorClass(error) };
         }
     }
     const allSources = (method, params, sources = config.sources) => Promise.all(sources.map((source) => callSource(source, method, params)));

@@ -16,6 +16,7 @@ const vectors = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'vectors.json'), 
 const assets = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'assets.json'), 'utf8')).assets;
 const schema = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'schema.json'), 'utf8'));
 const { batchIdFor, createPrivateActions, intentIdFor, parsePublicAction } = require('./private-actions');
+const { RPC_TRANSPORT_ERROR_CLASSES, rpcTransportError } = require('./rpc-transport-errors');
 
 const DOMAIN = vectors.domain;
 const WALLET = 'pf0123456789abcdef0123456789abcdef01234567';
@@ -571,18 +572,31 @@ async function main() {
         c.server.close();
         for (const socket of c.state.sockets) socket.destroy();
 
-        // Distinguish transport failures without leaking arbitrary upstream text.
-        for (const [message, code] of [
-            ['RPC timeout from sensitive-upstream', 'rpc_timeout'],
-            ['RPC connection closed by sensitive-upstream', 'rpc_connection_closed'],
-            ['invalid JSON from sensitive-upstream', 'rpc_invalid_json'],
-            ['unexpected sensitive-upstream body', 'rpc_transport_error'],
+        // Transport failures carry a class from the closed list, set where the
+        // error is thrown; system codes are mapped and never passed through, and
+        // no upstream text reaches the caller.
+        const systemError = (code) => Object.assign(new Error(`connect ${code} sensitive-upstream:1`), { code });
+        for (const [thrown, code] of [
+            [rpcTransportError('rpc_timeout', 'RPC timeout from sensitive-upstream'), 'rpc_timeout'],
+            [rpcTransportError('rpc_connection_closed', 'RPC connection closed by sensitive-upstream'), 'rpc_connection_closed'],
+            [rpcTransportError('rpc_invalid_json', 'invalid JSON from sensitive-upstream'), 'rpc_invalid_json'],
+            [rpcTransportError('rpc_response_id_mismatch', 'RPC response id mismatch from sensitive-upstream'), 'rpc_response_id_mismatch'],
+            [systemError('ECONNRESET'), 'rpc_connection_reset'],
+            [systemError('ECONNREFUSED'), 'rpc_connection_refused'],
+            [systemError('EPIPE'), 'rpc_connection_reset'],
+            [systemError('ETIMEDOUT'), 'rpc_timeout'],
+            [systemError('EHOSTUNREACH'), 'rpc_unreachable'],
+            [Object.assign(new Error('x'), { code: 'sensitive-upstream-code' }), 'rpc_transport_error'],
+            [new Error('RPC timeout from sensitive-upstream'), 'rpc_transport_error'],
+            [new Error('unexpected sensitive-upstream body'), 'rpc_transport_error'],
         ]) {
-            const failedRead = createPrivateActions({ env: privateEnv, rpcRequest: () => { throw new Error(message); } });
+            const failedRead = createPrivateActions({ env: privateEnv, rpcRequest: () => { throw thrown; } });
             await assert.rejects(failedRead.snapshot({ address: WALLET }), (error) =>
                 error.statusCode === 503 && error.code === 'private_snapshot_unavailable'
-                && error.message.endsWith(`: ${code}`) && !error.message.includes('sensitive-upstream'));
+                && error.message.endsWith(`: ${code}`) && RPC_TRANSPORT_ERROR_CLASSES.includes(code)
+                && !error.message.includes('sensitive-upstream') && !/\bE[A-Z]{3,}\b/.test(error.message));
         }
+        assert.throws(() => rpcTransportError('sensitive-upstream', 'x'), /unknown RPC transport class/);
 
         // Disabled without a configured domain.
         const disabled = createPrivateActions({ env: {} });
