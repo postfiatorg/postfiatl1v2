@@ -51,3 +51,8 @@ environment files keep `POSTFIAT_DEPLOYMENT_VERIFIED_RECORD` ([packet](qualifica
 - [read-import-state.py](read-import-state.py): local read of a signed canary import: the three activation heights and both routes' `authority_epoch`.
 - [inventory.txt](inventory.txt): the unchanged rollout inventory.
 - [qualification/](qualification/README.md): the local qualification packet.
+- `observed/vote-record/round-artifacts-validator-{0,1,2}.txt` and
+  `observed/vote-record/validator-2-round-1160-files.txt`: original October 27
+  artifact listings, retained in version control on November 9. These list
+  filenames, sizes and timestamps; they are not a new fleet observation or
+  a requalification of the release.
