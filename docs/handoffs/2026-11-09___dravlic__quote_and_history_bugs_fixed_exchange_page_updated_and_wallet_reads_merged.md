@@ -173,6 +173,20 @@ From his 2026-11-07 wallet handoffs:
 - **The client's weekend handoffs** in the private wallet repository, at `07ecd36`: `docs/handoffs/2026-11-07_primary_postfiat_wallet.md` and `docs/handoffs/2026-11-07_normal_mac_private_wallet.md`.
 - **Previous handoff:** [2026-11-06: first real Base Sepolia Lock released, bridge Phase 2 complete](2026-11-06___dravlic__first_real_base_sepolia_lock_released_and_bridge_phase_2_complete.md).
 
+## End of session (13:45 UTC)
+
+- **`e18c6ee71` landed after this handoff** ("Serve the cached status without the server_info count").
+  - The plain `status` method now serves a fresh cached status whether or not a registry count is cached. The startup-seeded status is served again, and a `status` refresh reads no governance.
+  - `server_info` refreshes the status and the count together, under one lease, when the cached count is not from the cached status's refresh.
+  - The [release-plan row](../plans/active/next-validator-release-plan-20261115.md) names `f58515e52` and this follow-up.
+  - The integration test `private_actions_gateway` passed 2 of 2 on the final tree.
+- **Second reading of `f58515e52`.** It approved the commit. Its two small points are the ones `e18c6ee71` fixes.
+- **Public CI at the time of writing** (`gh run list --branch main`, 13:38Z; no run is red):
+  - **`docs-build`:** green on every push, last on `e18c6ee71`.
+  - **`rust-ci`:** green on `ff1f6a8b1` (a docs-only push). The last green push with code is `d0e163d2f`. It is running on `8a6216a84`, `9f76e2e5e`, `02a2ca229`, `f58515e52`, `00cfc75ad` and `e18c6ee71`.
+  - **`product-security-ci`:** last green on `8a6216a84`. It is running on `9f76e2e5e`, `ff1f6a8b1`, `02a2ca229`, `f58515e52`, `00cfc75ad` and `e18c6ee71`. Its only red run today is `b47ae08d6`, before the SP1 installer fix (`7ecf15adf`), which is expected.
+- **Sessions and devnet.** The two helper sessions are closed and the main session is idle. Nothing on the devnet was touched beyond read-only reads.
+
 [#193]: https://github.com/postfiatorg/postfiatl1v2/issues/193
 [#194]: https://github.com/postfiatorg/postfiatl1v2/pull/194
 [#195]: https://github.com/postfiatorg/postfiatl1v2/pull/195
