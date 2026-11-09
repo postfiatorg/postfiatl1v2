@@ -1,11 +1,23 @@
 # PostFiat L1 Current State
 
-Documentation reviewed: `2026-11-06`. Latest reported fleet observation: the
-read-only probes in the November 6 operator handoff. Latest deployment receipt:
+Documentation reviewed: `2026-11-09`. Latest fleet observation: the read-only
+all-six read of `2026-11-09T11:51:47Z`–`11:54:07Z`, tip 1170. Latest deployment receipt:
 `2026-10-30T11:21:09Z`, release `vote-records-20261030`, tip 1168. The dated
 rollout records below retain their original observations.
 
 Status: **canonical operational-state reference**
+
+!!! note "2026-11-09: fleet observation at height 1170, no deployment"
+
+    A read-only read of all six validators (`2026-11-09T11:51:47Z`–`11:54:07Z`;
+    `status`, `server_info` and `mempool_status` only, through the Python
+    client over SSH-forwarded loopback RPC) found every node `running` with an
+    empty mempool at height 1170, tip `51c1cab0…`, state root `36233f64…`,
+    executable `87cfe797…`, build `ae70d66d` and manifest `ee1df5b3…` verified:
+    release `vote-records-20261030`, two blocks past the October 30 receipt's
+    1168. `server_info` on validator-2 and validator-5 answered only after
+    10.8 s and 14.1 s, past the client's 8-second default, while `status`
+    answered promptly on all six. Nothing was written, signed or restarted.
 
 !!! note "2026-11-06: fleet observation, no deployment"
 
@@ -646,9 +658,8 @@ binary to the running services.
 
 !!! warning "Point-in-time evidence"
 
-    The latest reported fleet observation is the November 6 handoff above:
-    all six at height 1168, tip `a20e406e…`, root `39771b74…`, executable
-    `87cfe797…`. The deployment receipt and detailed readiness/governance
+    The latest fleet observation is the November 9 read above: all six at
+    height 1170, tip `51c1cab0…`, root `36233f64…`, executable `87cfe797…`. The deployment receipt and detailed readiness/governance
     checks remain dated October 30. Earlier observations retain their dates;
     none is a real-time query now.
 
@@ -656,7 +667,7 @@ binary to the running services.
 
 | Plane | Recorded state | Exact identifier | Observed or updated at | Evidence and freshness |
 | --- | --- | --- | --- | --- |
-| Running devnet, latest reported state | All six validators agree at height 1168 with the October 30 executable. The rollout's detailed preflight results retain their original date. | Chain `postfiat-wan-devnet-2`; tip `a20e406e…`; root `39771b74…`; executable `87cfe797…` on all six. | November 6 handoff, read-only probes | November 6 entry above; original [October 30 after state](https://github.com/postfiatorg/postfiatl1v2/blob/release/vote-records-20261030/deployments/vote-records-20261030/observed/after-final.json). Reported observation, not a new docs-task probe. |
+| Running devnet, latest reported state | All six validators agree at height 1170 with the October 30 executable. The rollout's detailed preflight results retain their original date. | Chain `postfiat-wan-devnet-2`; tip `51c1cab0…`; root `36233f64…`; executable `87cfe797…` on all six. | 2026-11-09T11:51:47Z–11:54:07Z, read-only read | November 9 entry above; original [October 30 after state](https://github.com/postfiatorg/postfiatl1v2/blob/release/vote-records-20261030/deployments/vote-records-20261030/observed/after-final.json). Reported observation, not a new docs-task probe. |
 | Deployed runtime | Release `vote-records-20261030` on all six validators: all 12 validator and RPC processes on one executable, `deployment_manifest_verified=true` and build `ae70d66d` on every host, RPC units with `--max-requests 100000` and `RestartSec=1` and without `--allow-private-action-admission`. Rolled out one validator at a time (validator-1 canary, then 0, 2, 3, 4, 5); rollback was not needed. Governed activation heights `recipient_format`, `rejected_tx_fee` and `require_memo` all 1153 (unchanged); `account_tx` v3 index following commits. Vote outcome records live with the VR-01 fix. Private path present, switched off and ungoverned. | Source `ae70d66d`; executable `87cfe797…`; signed manifest `ee1df5b3…`; rollback release `index-v3-20261027` (`b5cf3ce4…`). | `2026-10-30T11:21Z` | 2026-10-30 entry above. |
 | Storage | Transactional `redb` storage has been the live store since height 930 (2026-08-31). This release carries the STO-07 store-handle fix (`8644f0af`); every batch the new executable accepted reports `storage_work.database_opens=0`. Storage is `OFFLINE QUALIFIED` (2026-10-23, packet-r3 `357f06ee…`); that is neither `CLONE QUALIFIED` nor a deployment decision. | Activation height 930; G5-qualified binary `eea96ba6…`; current deployed binary `87cfe797…` | October 21/23 qualification; October 30 deployment | [Storage-scaling implementation boundary](#storage-scaling-implementation-boundary) and the [storage milestone](../plans/completed/storage-scaling-milestone.md). The August `10dd9f20` canary and its rollback are in the [canary rollback report](../postmortems/devnet-storage-live-canary-rollback-2026-08-30.md). |
 | Swap and bridge committees | FastSwap committee epoch 2 on all six (`enabled: true`), migrated 2026-10-21. Bridge committee epoch 2 activated at height 1131 on 2026-10-15. The A666 and BMNRC routes stay on `authority_epoch` 1, so validators 0–4 still sign Ethereum checkpoints; neither issuer route update has been submitted. FastPay committee epoch 2 was installed at height 1123 for orders 10001–19990. | Epoch-2 committee root `72836827…`; route authority root `a2eebcba…` | 2026-10-21 | 2026-10-21, 2026-10-15 and 2026-10-12 entries above. |
