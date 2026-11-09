@@ -1449,7 +1449,7 @@ pub fn transfer_fee_quote(options: TransferFeeQuoteOptions) -> io::Result<Transf
     let genesis = store.read_genesis()?;
     let ledger = store.read_ledger()?;
     let mempool = store.read_mempool()?;
-    let sender = ledger.account(&options.from).ok_or_else(|| {
+    let ledger_sender = ledger.account(&options.from).ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::NotFound,
             format!("sender account `{}` not found", options.from),
@@ -1463,8 +1463,29 @@ pub fn transfer_fee_quote(options: TransferFeeQuoteOptions) -> io::Result<Transf
                 "sequence must be nonzero",
             ));
         }
-        None => next_pending_sender_sequence(&mempool, &options.from, sender.sequence)?,
+        None => next_pending_sender_sequence(&mempool, &options.from, ledger_sender.sequence)?,
     };
+    let sender_sequence = ledger_sender.sequence;
+    // Price the transfer on the ledger its sequence executes on: after the
+    // executable mempool, as admission and the other fee quotes do.
+    let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
+    let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
+    let quote_ledger = ledger_after_executable_mempool(
+        &genesis,
+        ledger,
+        &mempool,
+        block_height,
+        asset_execution_compatibility,
+    )?;
+    let sender = quote_ledger.account(&options.from).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "sender account `{}` not found after pending mempool dry-run",
+                options.from
+            ),
+        )
+    })?;
     let mempool_pending_for_sender = mempool_pending_count_for_sender(&mempool, &options.from);
     let memos = payment_v2_quote_memos(&options)?;
     let quote_transaction_kind = if memos.is_empty() {
@@ -1497,7 +1518,7 @@ pub fn transfer_fee_quote(options: TransferFeeQuoteOptions) -> io::Result<Transf
                     signed.unsigned.from.clone(),
                     signed.unsigned.to.clone(),
                     minimum_transfer_fee(&signed),
-                    transfer_state_expansion_fee(&ledger, &signed),
+                    transfer_state_expansion_fee(&quote_ledger, &signed),
                     transfer_weight_bytes(&signed),
                 )
             } else {
@@ -1514,7 +1535,7 @@ pub fn transfer_fee_quote(options: TransferFeeQuoteOptions) -> io::Result<Transf
                     signed.unsigned.from.clone(),
                     signed.unsigned.to.clone(),
                     minimum_payment_v2_fee(&signed),
-                    payment_v2_state_expansion_fee(&ledger, &signed),
+                    payment_v2_state_expansion_fee(&quote_ledger, &signed),
                     payment_v2_weight_bytes(&signed),
                 )
             };
@@ -1532,7 +1553,7 @@ pub fn transfer_fee_quote(options: TransferFeeQuoteOptions) -> io::Result<Transf
         fee = minimum_fee;
     };
 
-    let recipient = ledger.account(&options.to);
+    let recipient = quote_ledger.account(&options.to);
     let recipient_exists = recipient.is_some();
     let will_create_recipient_account = quote_from != quote_to && !recipient_exists;
     let total_debit = options.amount.checked_add(minimum_fee);
@@ -1580,7 +1601,7 @@ pub fn transfer_fee_quote(options: TransferFeeQuoteOptions) -> io::Result<Transf
         sequence,
         sequence_source,
         sender_balance: sender.balance,
-        sender_sequence: sender.sequence,
+        sender_sequence,
         mempool_pending_for_sender,
         recipient_exists,
         will_create_recipient_account,

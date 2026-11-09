@@ -56,9 +56,20 @@ pub fn submit_transfer_to_mempool(options: TransferOptions) -> io::Result<Mempoo
     let mempool = store.read_mempool()?;
     enforce_mempool_admission_limits(&mempool, &key_file.address)?;
     let sequence = next_pending_sender_sequence(&mempool, &key_file.address, sender.sequence)?;
+    // Declare the fee of the ledger this sequence executes on, as
+    // `transfer_fee_quote` quotes it: after the executable mempool.
+    let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
+    let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
+    let fee_ledger = ledger_after_executable_mempool(
+        &genesis,
+        ledger,
+        &mempool,
+        block_height,
+        asset_execution_compatibility,
+    )?;
     let signed = build_signed_transfer_for_key(
         &genesis,
-        &ledger,
+        &fee_ledger,
         &key_file,
         options.to,
         options.amount,
