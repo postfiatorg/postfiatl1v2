@@ -2414,4 +2414,133 @@ mod rpc_serve_request_tests {
             assert!(result.get("address_checksummed").is_none(), "{key}");
         }
     }
+
+    /// A one-validator chain with three blocks of transfers and one validator
+    /// registry update record, for the `server_info` comparison.
+    fn server_info_fixture() -> PathBuf {
+        let root = env::temp_dir().join(format!(
+            "postfiat-server-info-in-process-{}",
+            process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        postfiat_node::init(postfiat_node::InitOptions {
+            data_dir: root.clone(),
+            chain_id: "server-info-in-process-test".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 1,
+        })
+        .expect("init server_info fixture");
+        for block in 0..3 {
+            postfiat_node::submit_transfer_to_mempool(postfiat_node::TransferOptions {
+                data_dir: root.clone(),
+                key_file: None,
+                to: format!("pf{:040x}", block + 7),
+                amount: 1_000,
+            })
+            .expect("pending transfer");
+            let batch_file = root.join(format!("server-info-{block}.batch.json"));
+            create_mempool_batch(MempoolBatchOptions {
+                data_dir: root.clone(),
+                batch_file: batch_file.clone(),
+                max_transactions: 1,
+            })
+            .expect("mempool batch");
+            let receipts = apply_batch(ApplyBatchOptions {
+                data_dir: root.clone(),
+                batch_file,
+                certificate_file: None,
+            })
+            .expect("apply batch");
+            assert!(receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
+        }
+        let store = postfiat_storage::NodeStore::new(&root);
+        let genesis = store.read_genesis().expect("genesis");
+        let mut governance = store.read_governance().expect("governance");
+        governance.validator_registry_updates.push(
+            serde_json::from_value(serde_json::json!({
+                "schema": "postfiat-validator-registry-update-v1",
+                "update_id": "server-info-fixture-update",
+                "chain_id": genesis.chain_id,
+                "genesis_hash": postfiat_execution::genesis_hash(&genesis),
+                "protocol_version": genesis.protocol_version,
+                "instance_id": "server-info-fixture",
+                "proposal_id": "server-info-fixture",
+                "certificate_id": "server-info-fixture",
+                "proposer": "validator-0",
+                "validators": ["validator-0"],
+                "quorum": 1,
+                "support": ["validator-0"],
+                "votes": [],
+                "activation_height": 3,
+                "previous_registry_root": "aa".repeat(48),
+                "new_registry_root": "bb".repeat(48),
+                "operation": "rotate_key",
+                "subject_node_id": "validator-0"
+            }))
+            .expect("registry update record"),
+        );
+        store.write_governance(&governance).expect("write governance");
+        root
+    }
+
+    fn merge_test_server_info_capabilities(result: &mut serde_json::Value) {
+        merge_rpc_serve_server_info_capabilities(
+            result,
+            false,
+            false,
+            false,
+            false,
+            &postfiat_types::OwnedCertificateDomain {
+                schema: postfiat_types::OWNED_CERTIFICATE_DOMAIN_SCHEMA_V2.to_string(),
+                chain_id: "server-info-in-process-test".to_string(),
+                genesis_hash: "ab".repeat(48),
+                protocol_version: 1,
+                registry_id: "cd".repeat(48),
+            },
+            4,
+            16,
+        );
+    }
+
+    /// rpc-serve's in-process `server_info` answers with the same fields,
+    /// types and values as the `rpc --method server_info` computation its child
+    /// process used to run (status and metrics over the whole history).
+    #[test]
+    fn server_info_in_process_matches_the_child_answer() {
+        let root = server_info_fixture();
+
+        let started = Instant::now();
+        let mut child_answer =
+            rpc_dispatch::rpc_server_info(root.clone()).expect("child server_info");
+        let child_elapsed = started.elapsed();
+        merge_test_server_info_capabilities(&mut child_answer);
+
+        let health_cache = Mutex::new(RpcServeHealthCache::default());
+        let started = Instant::now();
+        let (mut in_process, cache_hit) =
+            rpc_serve_server_info(&root, &health_cache).expect("in-process server_info");
+        let in_process_elapsed = started.elapsed();
+        assert!(!cache_hit);
+        merge_test_server_info_capabilities(&mut in_process);
+        eprintln!(
+            "server_info computation on the fixture: child path {child_elapsed:?}, in-process {in_process_elapsed:?}"
+        );
+
+        assert_eq!(in_process["ledger"]["height"], serde_json::json!(3));
+        assert_eq!(
+            child_answer["validators"]["registry_update_count"],
+            serde_json::json!(1)
+        );
+        let child_fields = child_answer.as_object().expect("child object");
+        let in_process_fields = in_process.as_object().expect("in-process object");
+        assert_eq!(
+            child_fields.keys().collect::<Vec<_>>(),
+            in_process_fields.keys().collect::<Vec<_>>()
+        );
+        for (field, value) in child_fields {
+            assert_eq!(&in_process_fields[field], value, "field `{field}` differs");
+        }
+
+        let _ = fs::remove_dir_all(root);
+    }
 }

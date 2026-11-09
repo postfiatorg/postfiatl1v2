@@ -33,12 +33,18 @@ authorization inventory is
 | `account_tx` | Bounded account transaction history: transparent rows with native and issued payment memo contents, plus shielded-withdrawal credits. |
 | `account_tx_index_status` | Account-history index readiness. |
 
-`server_info` is slow by design. The node answers it in a child process that
-recomputes the status and reads the whole stored history. On the devnet
-validators on 2026-11-09 that took 6.6–12 s, so callers should allow 30 s for
-it; the Python client does (`SERVER_INFO_TIMEOUT_SECONDS`). `status` returns
-the same height, tip and state root quickly, from a cache. An in-process
-answer for `server_info` is planned.
+`rpc-serve` answers `server_info` in-process, from three sources:
+
+- its cached status (the same 1 s cache as `status`);
+- one governance read, for `validators.registry_update_count`;
+- the constant fees.
+
+The response is unchanged. Releases before this change answered it in a child
+process that recomputed the status and read the whole stored history, which
+took 6.6–12 s on the devnet validators on 2026-11-09. Until a deployed release
+carries the in-process answer, callers should allow 30 s; the Python client
+does (`SERVER_INFO_TIMEOUT_SECONDS`). The local `rpc --method server_info`
+command still computes the full metrics.
 
 ## Ledger Object Reads
 

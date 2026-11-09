@@ -1723,25 +1723,40 @@ fn handle_rpc_serve_connection(
             }
         }
     } else if method == "server_info" {
-        match run_rpc_request_via_child_limited(context, request_index, &id, &line) {
-            Ok(mut response) => {
-                if response.ok {
-                    if let Some(result) = response.result.as_mut() {
-                        merge_rpc_serve_server_info_capabilities(
-                            result,
-                            context.allow_mempool_submit,
-                            context.allow_mempool_submit_finality,
-                            context.allow_orchard_batch_create,
-                            context.owned_lane_enabled,
-                            &context.owned_certificate_domain,
-                            context.max_mempool_submit_per_peer,
-                            context.max_mempool_submit_total,
-                        );
-                    }
-                }
-                response
+        // In-process: the cached status, one governance read and the constant
+        // fees. No child process and no read of the stored history.
+        match rpc_serve_server_info(&context.data_dir, &context.health_cache) {
+            Ok((mut result, cache_hit)) => {
+                health_cache_hit = cache_hit;
+                merge_rpc_serve_server_info_capabilities(
+                    &mut result,
+                    context.allow_mempool_submit,
+                    context.allow_mempool_submit_finality,
+                    context.allow_orchard_batch_create,
+                    context.owned_lane_enabled,
+                    &context.owned_certificate_domain,
+                    context.max_mempool_submit_per_peer,
+                    context.max_mempool_submit_total,
+                );
+                let node_id = result
+                    .get("node_id")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown")
+                    .to_string();
+                success_response(
+                    &id,
+                    &result,
+                    vec![RpcEvent::new("server_info", node_id, "server info queried")],
+                )
+                .unwrap_or_else(|error| {
+                    rpc_serve_error_response(
+                        &id,
+                        "rpc_internal",
+                        &format!("server_info serialization failed: {error}"),
+                    )
+                })
             }
-            Err(error) => rpc_serve_child_error_response(&id, &error),
+            Err(error) => rpc_serve_error_response(&id, "rpc_status_failed", &error),
         }
     } else {
         match run_rpc_request_via_child_limited(context, request_index, &id, &line) {
@@ -1875,6 +1890,39 @@ fn merge_rpc_serve_server_info_capabilities(
         "health_cache_max_age_ms".to_string(),
         serde_json::json!(RPC_SERVE_HEALTH_STAMP_MAX_AGE.as_millis()),
     );
+}
+
+/// `server_info` answered inside rpc-serve: the cached status, the
+/// validator-registry update count from one governance read, and the constant
+/// fees. The result has the same fields, types and values as the
+/// `rpc --method server_info` answer (`rpc_dispatch::rpc_server_info`), which
+/// rpc-serve used to run in a child process.
+fn rpc_serve_server_info(
+    data_dir: &Path,
+    health_cache: &Mutex<RpcServeHealthCache>,
+) -> Result<(serde_json::Value, bool), String> {
+    let (status_report, cache_hit) = rpc_serve_cached_status(data_dir, health_cache)?;
+    let registry_update_count = rpc_serve_registry_update_count(data_dir);
+    let result = rpc_dispatch::rpc_server_info_response(
+        &status_report,
+        registry_update_count
+            .as_ref()
+            .map(|count| *count)
+            .map_err(String::as_str),
+    );
+    Ok((result, cache_hit))
+}
+
+/// The validator-registry update count `metrics()` reports, from one
+/// governance read under the store lease `status()` also takes.
+fn rpc_serve_registry_update_count(data_dir: &Path) -> Result<u64, String> {
+    let store = postfiat_storage::NodeStore::new(data_dir);
+    let read = || -> std::io::Result<u64> {
+        let _store_lease = store.transactional_store_lease()?;
+        let governance = store.read_governance()?;
+        Ok(governance.validator_registry_updates.len() as u64)
+    };
+    read().map_err(|error| format!("rpc server_info metrics failed: {error}"))
 }
 
 fn rpc_serve_cached_status(

@@ -2754,43 +2754,42 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
     }
 }
 
-fn rpc_server_info(data_dir: PathBuf) -> Result<serde_json::Value, String> {
+/// The local `rpc --method server_info` answer, which rpc-serve's child path
+/// used to run: `status()` and `metrics()` over the whole stored history.
+/// rpc-serve now answers in-process (`rpc_serve_server_info` in rpc_cli.rs)
+/// with the same fields from its cached status and one governance read.
+pub(crate) fn rpc_server_info(data_dir: PathBuf) -> Result<serde_json::Value, String> {
     let status_report = status(NodeOptions {
         data_dir: data_dir.clone(),
     })
     .map_err(|error| format!("rpc server_info status failed: {error}"))?;
-    let metrics_report = metrics(NodeOptions { data_dir });
-    let (metrics_report, metrics_error) = match metrics_report {
-        Ok(report) => (Some(report), None),
-        Err(error) => (
-            None,
-            Some(format!("rpc server_info metrics failed: {error}")),
-        ),
-    };
+    let registry_update_count = metrics(NodeOptions { data_dir })
+        .map(|report| report.consensus.validator_registry_update_count)
+        .map_err(|error| format!("rpc server_info metrics failed: {error}"));
     Ok(rpc_server_info_response(
         &status_report,
-        metrics_report.as_ref(),
-        metrics_error.as_deref(),
+        registry_update_count
+            .as_ref()
+            .map(|count| *count)
+            .map_err(String::as_str),
     ))
 }
 
-fn rpc_server_info_response(
+/// The `server_info` result from a status report and the validator-registry
+/// update count. The fees are the execution constants, which is also what
+/// `metrics()` reports. A failed count becomes `null` with the
+/// `server_info_metrics_unavailable` warning.
+pub(crate) fn rpc_server_info_response(
     status_report: &StatusReport,
-    metrics_report: Option<&postfiat_node::NodeMetrics>,
-    metrics_error: Option<&str>,
+    registry_update_count: Result<u64, &str>,
 ) -> serde_json::Value {
-    let registry_update_count = metrics_report
-        .map(|report| serde_json::json!(report.consensus.validator_registry_update_count))
-        .unwrap_or(serde_json::Value::Null);
-    let minimum_transfer_fee = metrics_report
-        .map(|report| report.execution.minimum_transfer_fee)
-        .unwrap_or(postfiat_execution::MIN_TRANSFER_FEE);
-    let account_reserve = metrics_report
-        .map(|report| report.execution.account_reserve)
-        .unwrap_or(postfiat_execution::ACCOUNT_RESERVE);
-    let transfer_account_creation_fee = metrics_report
-        .map(|report| report.execution.transfer_account_creation_fee)
-        .unwrap_or(postfiat_execution::TRANSFER_ACCOUNT_CREATION_FEE);
+    let (registry_update_count, metrics_error) = match registry_update_count {
+        Ok(count) => (serde_json::json!(count), None),
+        Err(error) => (serde_json::Value::Null, Some(error)),
+    };
+    let minimum_transfer_fee = postfiat_execution::MIN_TRANSFER_FEE;
+    let account_reserve = postfiat_execution::ACCOUNT_RESERVE;
+    let transfer_account_creation_fee = postfiat_execution::TRANSFER_ACCOUNT_CREATION_FEE;
     let mut response = serde_json::json!({
         "schema": "postfiat-server-info-v1",
         "chain_id": &status_report.chain_id,
@@ -2830,7 +2829,7 @@ fn rpc_server_info_response(
             ]
         },
         "metrics": {
-            "ok": metrics_report.is_some()
+            "ok": metrics_error.is_none()
         }
     });
     if let Some(error) = metrics_error {
@@ -3593,8 +3592,7 @@ mod rpc_cli_tests {
         };
         let result = rpc_server_info_response(
             &status_report,
-            None,
-            Some("rpc server_info metrics failed: failed to parse batch archive append"),
+            Err("rpc server_info metrics failed: failed to parse batch archive append"),
         );
 
         assert_eq!(result["metrics"]["ok"], serde_json::json!(false));
