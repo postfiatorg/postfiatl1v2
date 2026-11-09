@@ -19,6 +19,7 @@ const {
   LISTEN_HOST,
   RPC_FLEET,
   RPC_HOST,
+  PUBLIC_READ_RPC_METHODS,
   rpcRequestRequiresAuth,
   server,
   websocketOriginAllowed,
@@ -212,12 +213,28 @@ async function main() {
     'private_pool_snapshot',
     'private_pool_page',
     'asset_orchard_private_egress_binding',
+    'external_lane_info',
     'fx_fix_quote',
   ]) {
     assert.strictEqual(rpcRequestRequiresAuth(method), false, `${method} is a public read`);
   }
   for (const method of ['owned_sign_v3', 'owned_apply_v3', 'owned_unwrap_sign_v3', 'owned_unwrap_apply_v3']) {
     assert.strictEqual(rpcRequestRequiresAuth(method), true, `${method} is an authenticated mutation`);
+  }
+  // Pin the whole public-read list: any addition is a deliberate review decision.
+  assert.deepStrictEqual([...PUBLIC_READ_RPC_METHODS].sort(), [
+    'account', 'account_assets', 'account_lines', 'account_tx', 'asset_fee_quote', 'asset_info',
+    'asset_orchard_action_status', 'asset_orchard_private_egress_binding', 'atomic_swap_fee_quote',
+    'blocks', 'escrow_fee_quote', 'escrow_info', 'external_lane_info', 'fee', 'fx_fix_info',
+    'fx_fix_list', 'fx_fix_quote', 'fx_fix_reservation_info', 'mempool', 'nav_reserve_proof_status',
+    'navcoin_bridge_routes', 'navcoin_bridge_supply_status', 'nft_fee_quote', 'offer_fee_quote',
+    'owned_certificate', 'owned_objects', 'owned_recovery_capabilities', 'owned_recovery_status',
+    'private_pool_page', 'private_pool_snapshot', 'private_readiness', 'receipt', 'server_info',
+    'status', 'transfer_fee_quote', 'validators', 'vault_bridge_route', 'vault_bridge_status',
+  ]);
+  // Private admission and account-scoped private reads stay authenticated.
+  for (const method of ['private_action_submit', 'private_action_receipt', 'private_account_lines', 'private_pool_receipts']) {
+    assert.strictEqual(rpcRequestRequiresAuth(method), true, `${method} stays authenticated`);
   }
   assert.strictEqual(rpcRequestRequiresAuth('consensus_v2_timeout_vote'), true);
 
