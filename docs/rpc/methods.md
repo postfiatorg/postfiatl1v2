@@ -92,18 +92,20 @@ The fee quotes take the next sequence from the mempool and price the
 transaction on a ledger that includes pending entries.
 
 - `transfer_fee_quote` prices on the ledger admission dry-runs the transfer
-  on. That is the committed ledger plus every sender's pending plain
-  transfers; a memo quote adds the pending `payment_v2` entries. This is the
-  order a block runs them in.
+  on. Its base is the committed ledger with the confirmed FastPay effects
+  that are not yet in a block, the same base admission starts from. On top of
+  it come every sender's pending plain transfers; a memo quote adds the
+  pending `payment_v2` entries. This is the order a block runs them in.
 - So its `minimum_fee`, `state_expansion_fee`, `recipient_exists`,
   `sender_balance` and reserve checks count a recipient that one of those
   entries creates, and their debits.
 - They do not count kinds that run after the transfer: asset, escrow, NFT or
   offer entries, or `payment_v2` entries for a plain transfer. A plain transfer
   to an account that only such an entry creates pays the creation fee.
-- Its `sender_sequence` stays the committed sequence.
-- The other four quotes price on the ledger after the whole executable
-  mempool.
+- Its `sender_sequence` is the sequence on that base, before the pending
+  entries.
+- The other four quotes start from the same base and price on the ledger
+  after the whole executable mempool.
 
 A quote holds only while the pending entries do: if one is dropped before the
 block, a fee signed from the quote can be below the minimum the block then

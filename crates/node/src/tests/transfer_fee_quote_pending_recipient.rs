@@ -323,3 +323,56 @@ fn transfer_fee_quote_runs_only_the_entries_before_a_plain_transfer() {
 
     fs::remove_dir_all(data_dir).expect("cleanup");
 }
+
+/// With transactional storage active, a confirmed FastPay effect that is not
+/// yet in a block is in the ledger admission starts from
+/// (`read_fastpay_ledger`), not in the committed ledger. Every fee quote
+/// starts from `admission_base_ledger`, so it must return that view, and the
+/// transfer quote's `sender_balance` is what admission sees.
+#[test]
+fn fee_quotes_start_from_the_ledger_admission_uses() {
+    let (root, dirs, owner) = super::fastpay_payment_safety::active_fastpay_fixture();
+    let certificate = super::fastpay_payment_safety::active_fastpay_transfer(&dirs, &owner);
+    let certificate_json = serde_json::to_string(&certificate).expect("certificate json");
+    owned_apply_v3(
+        NodeOptions {
+            data_dir: dirs[0].clone(),
+        },
+        &certificate_json,
+        "validator-0",
+    )
+    .expect("apply the certified FastPay transfer");
+    let store = NodeStore::new(&dirs[0]);
+    let committed = store.read_ledger().expect("committed ledger");
+    let admission = read_fastpay_ledger(&store).expect("admission ledger");
+    assert_ne!(
+        admission.owned_objects, committed.owned_objects,
+        "fixture: the FastPay effect is confirmed but not committed"
+    );
+    assert!(
+        admission_base_ledger(&store).expect("quote base ledger") == admission,
+        "the quotes' base ledger is not admission's (FastPay effects missing)"
+    );
+
+    let faucet = read_transfer_key_file(&dirs[0], None).expect("faucet key");
+    let quote = transfer_fee_quote(TransferFeeQuoteOptions {
+        data_dir: dirs[0].clone(),
+        from: faucet.address.clone(),
+        to: RECIPIENT.to_string(),
+        amount: AMOUNT,
+        sequence: None,
+        memo_type: None,
+        memo_format: None,
+        memo_data: None,
+    })
+    .expect("transfer quote");
+    assert_eq!(
+        quote.sender_balance,
+        admission
+            .account(&faucet.address)
+            .expect("faucet account")
+            .balance
+    );
+
+    fs::remove_dir_all(root).expect("cleanup");
+}

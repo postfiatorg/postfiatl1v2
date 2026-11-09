@@ -45,7 +45,7 @@ pub fn create_transfer_batch(options: BatchTransferOptions) -> io::Result<Transa
 pub fn submit_transfer_to_mempool(options: TransferOptions) -> io::Result<MempoolEntry> {
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = read_fastpay_ledger(&store)?;
+    let ledger = admission_base_ledger(&store)?;
     let key_file = read_transfer_key_file(&options.data_dir, options.key_file)?;
     let sender = ledger.account(&key_file.address).ok_or_else(|| {
         io::Error::new(
@@ -220,7 +220,7 @@ fn admit_signed_transfer_to_mempool(
             "signed transfer chain domain does not match local node",
         ));
     }
-    let ledger = read_fastpay_ledger(&store)?;
+    let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
@@ -372,7 +372,7 @@ fn admit_signed_payment_v2_to_mempool(
             "signed payment_v2 chain domain does not match local node",
         ));
     }
-    let ledger = read_fastpay_ledger(&store)?;
+    let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
@@ -1269,6 +1269,13 @@ pub(super) fn mempool_pending_count_for_sender(mempool: &MempoolState, sender: &
             .filter(|entry| entry.transaction.unsigned.source == sender)
             .count();
     u64::try_from(count).unwrap_or(u64::MAX)
+}
+
+/// The ledger admission starts from, and so every fee quote: the committed
+/// ledger plus the confirmed FastPay effects not yet in a block
+/// (`read_fastpay_ledger`). The pending entries of the mempool run on top of it.
+pub(super) fn admission_base_ledger(store: &NodeStore) -> io::Result<LedgerState> {
+    read_fastpay_ledger(store)
 }
 
 /// The pending families that run before a new transfer, in admission's and

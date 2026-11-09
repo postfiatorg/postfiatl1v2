@@ -1447,7 +1447,7 @@ pub fn metrics(options: NodeOptions) -> io::Result<NodeMetrics> {
 pub fn transfer_fee_quote(options: TransferFeeQuoteOptions) -> io::Result<TransferFeeQuoteReport> {
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let ledger_sender = ledger.account(&options.from).ok_or_else(|| {
         io::Error::new(
@@ -1645,7 +1645,7 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
 
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let ledger_sender = ledger.account(&options.source).ok_or_else(|| {
         io::Error::new(
@@ -1756,7 +1756,7 @@ pub fn escrow_fee_quote(options: EscrowFeeQuoteOptions) -> io::Result<EscrowFeeQ
 
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let ledger_sender = ledger.account(&options.source).ok_or_else(|| {
         io::Error::new(
@@ -1881,7 +1881,7 @@ pub fn nft_fee_quote(options: NftFeeQuoteOptions) -> io::Result<NftFeeQuoteRepor
 
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let ledger_sender = ledger.account(&options.source).ok_or_else(|| {
         io::Error::new(
@@ -2031,7 +2031,7 @@ pub fn offer_fee_quote(options: OfferFeeQuoteOptions) -> io::Result<OfferFeeQuot
 
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let ledger_sender = ledger.account(&options.source).ok_or_else(|| {
         io::Error::new(

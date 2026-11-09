@@ -2811,7 +2811,7 @@ fn active_fastpay_certify(
     (certificate_file, proposal)
 }
 
-fn active_fastpay_fixture() -> (
+pub(super) fn active_fastpay_fixture() -> (
     PathBuf,
     Vec<PathBuf>,
     postfiat_crypto_provider::MlDsa65KeyPair,
@@ -2969,7 +2969,7 @@ fn active_fastpay_fixture() -> (
     (root, dirs, owner)
 }
 
-fn active_fastpay_transfer(
+pub(super) fn active_fastpay_transfer(
     dirs: &[PathBuf],
     owner: &postfiat_crypto_provider::MlDsa65KeyPair,
 ) -> postfiat_types::OwnedTransferCertificateV3 {

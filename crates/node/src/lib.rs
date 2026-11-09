@@ -339,6 +339,12 @@ use lifecycle_queries::{
     write_history_checkpoint_state_file, write_history_prune_pending_file,
 };
 mod mempool_proposals;
+use mempool_proposals::{
+    admission_base_ledger, apply_pending_before_new_transfer,
+    build_ordered_batch_proposal_with_timings, ledger_after_executable_mempool,
+    mempool_pending_count_for_sender, normalize_block_proposal_batch_kind, proposed_ordered_state,
+    PendingPrefix,
+};
 pub use mempool_proposals::{
     admit_fastlane_primary_to_mempool, create_mempool_batch, create_signed_asset_transaction_batch,
     create_transfer_batch, fastlane_primary_receipt_is_success, mempool_state, propose_batch,
@@ -351,11 +357,6 @@ pub use mempool_proposals::{
     submit_signed_transfer_to_mempool, submit_transfer_to_mempool, transfer, verify_mempool,
 };
 use mempool_proposals::{admit_signed_atomic_swap_to_mempool, enforce_mempool_state_limits};
-use mempool_proposals::{
-    apply_pending_before_new_transfer, build_ordered_batch_proposal_with_timings,
-    ledger_after_executable_mempool, mempool_pending_count_for_sender,
-    normalize_block_proposal_batch_kind, proposed_ordered_state, PendingPrefix,
-};
 #[cfg(test)]
 use mempool_proposals::{enforce_mempool_admission_limits, verify_mempool_state};
 mod storage_activation_cli;
