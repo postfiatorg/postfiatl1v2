@@ -522,7 +522,7 @@ fn admit_signed_asset_transaction_to_mempool(
             "signed asset transaction chain domain does not match local node",
         ));
     }
-    let ledger = read_fastpay_ledger(&store)?;
+    let ledger = admission_base_ledger(&store)?;
     let shielded = store.read_shielded()?;
     let orchard_balances = shielded
         .orchard
@@ -731,7 +731,7 @@ pub(super) fn admit_signed_atomic_swap_to_mempool(
         ));
     }
 
-    let ledger = read_fastpay_ledger(&store)?;
+    let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let tx_id = atomic_swap_transaction_tx_id(&signed);
     if mempool_has_tx_id(&mempool, &tx_id) {
@@ -808,7 +808,7 @@ pub fn admit_fastlane_primary_to_mempool(
     }
     let store = NodeStore::new(data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = read_fastpay_ledger(&store)?;
+    let ledger = admission_base_ledger(&store)?;
     let shielded = store.read_shielded()?;
     let mempool = store.read_mempool()?;
     if mempool.len() >= MAX_MEMPOOL_PENDING_TRANSACTIONS {
@@ -910,7 +910,7 @@ fn admit_signed_escrow_transaction_to_mempool(
             "signed escrow transaction chain domain does not match local node",
         ));
     }
-    let ledger = read_fastpay_ledger(&store)?;
+    let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
@@ -1076,7 +1076,7 @@ fn admit_signed_nft_transaction_to_mempool(
             "signed nft transaction chain domain does not match local node",
         ));
     }
-    let ledger = read_fastpay_ledger(&store)?;
+    let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
@@ -1139,7 +1139,7 @@ fn admit_signed_offer_transaction_to_mempool(
             "signed offer transaction chain domain does not match local node",
         ));
     }
-    let ledger = read_fastpay_ledger(&store)?;
+    let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;

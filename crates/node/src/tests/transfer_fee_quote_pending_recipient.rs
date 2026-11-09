@@ -324,54 +324,219 @@ fn transfer_fee_quote_runs_only_the_entries_before_a_plain_transfer() {
     fs::remove_dir_all(data_dir).expect("cleanup");
 }
 
-/// With transactional storage active, a confirmed FastPay effect that is not
-/// yet in a block is in the ledger admission starts from
-/// (`read_fastpay_ledger`), not in the committed ledger. Every fee quote
-/// starts from `admission_base_ledger`, so it must return that view, and the
-/// transfer quote's `sender_balance` is what admission sees.
+/// A confirmed FastPay unwrap that is not yet in a block credits a transparent
+/// account in the ledger admission starts from (`read_fastpay_ledger`) and not
+/// in the committed ledger. Every fee quote must see that credit: the account
+/// exists with the unwrapped amount for each quote that names it.
 #[test]
 fn fee_quotes_start_from_the_ledger_admission_uses() {
     let (root, dirs, owner) = super::fastpay_payment_safety::active_fastpay_fixture();
-    let certificate = super::fastpay_payment_safety::active_fastpay_transfer(&dirs, &owner);
-    let certificate_json = serde_json::to_string(&certificate).expect("certificate json");
-    owned_apply_v3(
+    let unwrapped_to = "pf00000000000000000000000000000000000000a9".to_string();
+    let store = NodeStore::new(&dirs[0]);
+    let committed = store.read_ledger().expect("committed ledger");
+    let committee = &committed.fastpay_recovery_committees[0];
+    let mut order = postfiat_types::OwnedUnwrapOrderV3 {
+        domain: committee.certificate_domain(),
+        recovery: postfiat_types::FastPayOrderRecoveryV1 {
+            schema: postfiat_types::FASTPAY_ORDER_RECOVERY_SCHEMA_V1.into(),
+            committee_epoch: 1,
+            lock_id: "00".repeat(48),
+            valid_from_height: 1,
+            expires_at_height: 10,
+            recovery_closes_at_height: 20,
+        },
+        inputs: vec![postfiat_types::OwnedObjectRef {
+            id: "active-fastpay-input".into(),
+            version: 1,
+        }],
+        to_address: unwrapped_to.clone(),
+        amount: 99,
+        fee: 1,
+        asset: "PFT".into(),
+        nonce: 43,
+        memos: Vec::new(),
+    };
+    order.recovery.lock_id = postfiat_types::fastpay_unwrap_lock_id_v1(&order);
+    let owner_signature_hex = bytes_to_hex(
+        &ml_dsa_65_sign_with_context(
+            &owner.private_key,
+            &postfiat_execution::owned_unwrap_v3_signing_bytes(&order),
+            postfiat_execution::OWNED_UNWRAP_CONTEXT_V3,
+        )
+        .expect("owner signature"),
+    );
+    let keys = read_validator_key_file(&dirs[0].join(VALIDATOR_KEYS_FILE)).expect("keys");
+    let votes = keys
+        .validators
+        .iter()
+        .take(5)
+        .map(|key| postfiat_types::OwnedUnwrapVote {
+            validator_id: key.node_id.clone(),
+            signature_hex: bytes_to_hex(
+                &ml_dsa_65_sign_with_context(
+                    &hex_to_bytes(&key.private_key_hex).expect("validator key"),
+                    &postfiat_execution::owned_unwrap_v3_signing_bytes(&order),
+                    postfiat_execution::OWNED_UNWRAP_CONTEXT_V3,
+                )
+                .expect("vote signature"),
+            ),
+        })
+        .collect();
+    let certificate = postfiat_types::OwnedUnwrapCertificateV3 {
+        order,
+        owner_pubkey_hex: bytes_to_hex(&owner.public_key),
+        owner_signature_hex,
+        votes,
+    };
+    owned_unwrap_apply_v3(
         NodeOptions {
             data_dir: dirs[0].clone(),
         },
-        &certificate_json,
+        &serde_json::to_string(&certificate).expect("certificate json"),
         "validator-0",
     )
-    .expect("apply the certified FastPay transfer");
-    let store = NodeStore::new(&dirs[0]);
-    let committed = store.read_ledger().expect("committed ledger");
-    let admission = read_fastpay_ledger(&store).expect("admission ledger");
-    assert_ne!(
-        admission.owned_objects, committed.owned_objects,
-        "fixture: the FastPay effect is confirmed but not committed"
-    );
-    assert!(
-        admission_base_ledger(&store).expect("quote base ledger") == admission,
-        "the quotes' base ledger is not admission's (FastPay effects missing)"
+    .expect("apply the certified FastPay unwrap");
+
+    // The unwrap is confirmed but not committed.
+    assert!(store
+        .read_ledger()
+        .expect("committed ledger")
+        .account(&unwrapped_to)
+        .is_none());
+    let admission = admission_base_ledger(&store).expect("admission ledger");
+    assert_eq!(
+        admission.account(&unwrapped_to).expect("unwrapped account").balance,
+        99
     );
 
+    // The transfer quote sees the account the unwrap created, as a recipient
+    // and as a sender.
     let faucet = read_transfer_key_file(&dirs[0], None).expect("faucet key");
-    let quote = transfer_fee_quote(TransferFeeQuoteOptions {
+    let transfer_quote = |from: &str, to: &str| {
+        transfer_fee_quote(TransferFeeQuoteOptions {
+            data_dir: dirs[0].clone(),
+            from: from.to_string(),
+            to: to.to_string(),
+            amount: 10,
+            sequence: None,
+            memo_type: None,
+            memo_format: None,
+            memo_data: None,
+        })
+    };
+    let to_unwrapped = transfer_quote(&faucet.address, &unwrapped_to).expect("transfer quote");
+    assert!(to_unwrapped.recipient_exists, "{to_unwrapped:?}");
+    assert_eq!(to_unwrapped.state_expansion_fee, 0);
+    let from_unwrapped = transfer_quote(&unwrapped_to, &faucet.address)
+        .expect("transfer quote from the unwrapped account");
+    assert_eq!(from_unwrapped.sender_balance, 99);
+
+    // The other four quotes report the unwrapped account's balance.
+    let escrow = escrow_fee_quote(EscrowFeeQuoteOptions {
         data_dir: dirs[0].clone(),
-        from: faucet.address.clone(),
-        to: RECIPIENT.to_string(),
-        amount: AMOUNT,
+        source: unwrapped_to.clone(),
+        operation_json: serde_json::to_string(&EscrowTransactionOperation::EscrowCreate(
+            EscrowCreateOperation {
+                owner: unwrapped_to.clone(),
+                recipient: faucet.address.clone(),
+                asset_id: postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+                amount: 1,
+                condition: "unwrap-quote".to_string(),
+                finish_after: 0,
+                cancel_after: 50,
+            },
+        ))
+        .expect("escrow json"),
         sequence: None,
-        memo_type: None,
-        memo_format: None,
-        memo_data: None,
     })
-    .expect("transfer quote");
-    assert_eq!(
-        quote.sender_balance,
-        admission
-            .account(&faucet.address)
-            .expect("faucet account")
-            .balance
+    .expect("escrow quote");
+    assert_eq!(escrow.sender_balance, 99);
+    let asset = asset_fee_quote(AssetFeeQuoteOptions {
+        data_dir: dirs[0].clone(),
+        source: unwrapped_to.clone(),
+        operation_json: serde_json::to_string(&AssetTransactionOperation::AssetCreate(
+            AssetCreateOperation {
+                issuer: unwrapped_to.clone(),
+                code: "UNW".to_string(),
+                version: 1,
+                precision: 0,
+                display_name: "unwrap quote asset".to_string(),
+                max_supply: Some(10),
+                requires_authorization: false,
+                freeze_enabled: false,
+                clawback_enabled: false,
+            },
+        ))
+        .expect("asset json"),
+        sequence: None,
+    })
+    .expect("asset quote");
+    assert_eq!(asset.sender_balance, 99);
+    let nft = nft_fee_quote(NftFeeQuoteOptions {
+        data_dir: dirs[0].clone(),
+        source: unwrapped_to.clone(),
+        operation_json: serde_json::json!({
+            "operation": "nft_mint",
+            "issuer": unwrapped_to,
+            "collection_id": "unwrap-quote",
+            "serial": 1,
+            "owner": unwrapped_to,
+            "metadata_hash": "ab".repeat(32)
+        })
+        .to_string(),
+        sequence: None,
+    })
+    .expect("nft quote");
+    assert_eq!(nft.sender_balance, 99);
+    let offer = offer_fee_quote(OfferFeeQuoteOptions {
+        data_dir: dirs[0].clone(),
+        source: unwrapped_to.clone(),
+        operation_json: serde_json::to_string(&OfferTransactionOperation::OfferCreate(
+            OfferCreateOperation {
+                owner: unwrapped_to.clone(),
+                taker_gets_asset_id: postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+                taker_gets_amount: 1,
+                taker_pays_asset_id: "cd".repeat(48),
+                taker_pays_amount: 1,
+                expiration_height: 0,
+            },
+        ))
+        .expect("offer json"),
+        sequence: None,
+    })
+    .expect("offer quote");
+    assert_eq!(offer.sender_balance, 99);
+
+    // Atomic swaps are not active in this fixture, so the swap quote stops at
+    // its activation check. It reads its base ledger first: with a FastPay
+    // journal admission's ledger rejects, the quote fails on that journal.
+    let journal_path = dirs[0].join(FASTPAY_SPECULATIVE_JOURNAL_FILE);
+    let mut journal: serde_json::Value =
+        serde_json::from_slice(&fs::read(&journal_path).expect("journal")).expect("journal json");
+    journal["effects"][0]["retained_tip"]["height"] = 1_000.into();
+    atomic_write(&journal_path, serde_json::to_vec(&journal).expect("journal bytes"))
+        .expect("write journal");
+    let leg = |owner: &str, recipient: &str| AtomicSwapQuoteLegInput {
+        owner: owner.to_string(),
+        recipient: recipient.to_string(),
+        issuer: String::new(),
+        asset_id: postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+        amount: 1,
+    };
+    let swap_error = atomic_swap_fee_quote(AtomicSwapFeeQuoteOptions {
+        data_dir: dirs[0].clone(),
+        rfq_hash: "11".repeat(48),
+        market_envelope_hash: "22".repeat(48),
+        nav_epoch: 1,
+        expires_at_height: 50,
+        swap_nonce: "33".repeat(16),
+        leg_0: leg(&unwrapped_to, &faucet.address),
+        leg_1: leg(&faucet.address, &unwrapped_to),
+    })
+    .expect_err("the swap quote reads the rejected FastPay journal");
+    assert!(
+        swap_error.to_string().contains("FastPay journal"),
+        "{swap_error}"
     );
 
     fs::remove_dir_all(root).expect("cleanup");

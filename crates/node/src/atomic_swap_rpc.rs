@@ -153,7 +153,8 @@ pub fn atomic_swap_fee_quote(
             data_dir: options.data_dir.clone(),
         })?;
         let genesis = store.read_genesis()?;
-        let ledger = store.read_ledger()?;
+        // The ledger admission starts from, FastPay effects included.
+        let ledger = admission_base_ledger(&store)?;
         let mempool = store.read_mempool()?;
         let mempool_after = store.read_mempool()?;
         let after = status(NodeOptions {
