@@ -1,8 +1,22 @@
 # PostFiat L1 Current State
 
-Updated: `2026-10-30T11:21:09Z` (release `vote-records-20261030` deployed to all six, applied at blocks 1162–1167; vote outcome records live with the VR-01 fix from 1168; private path present but switched off and ungoverned; tip 1168); latest fleet observation `2026-10-30T11:21Z`
+Documentation reviewed: `2026-11-06`. Latest reported fleet observation: the
+read-only probes in the November 6 operator handoff. Latest deployment receipt:
+`2026-10-30T11:21:09Z`, release `vote-records-20261030`, tip 1168. The dated
+rollout records below retain their original observations.
 
 Status: **canonical operational-state reference**
+
+!!! note "2026-11-06: fleet observation, no deployment"
+
+    The [November 6 operator handoff](https://github.com/postfiatorg/postfiatl1v2/blob/4b4da1b91493e2349f431b0c94652cc0bfa98d99/docs/handoffs/2026-11-06___dravlic__first_real_base_sepolia_lock_released_and_bridge_phase_2_complete.md)
+    reports read-only probes of all six hosts: executable `87cfe797…`, height
+    1168, tip `a20e406e…`, state root `39771b74…`. These match the October 30
+    release below. No deployment, signing or transaction was performed on that devnet.
+    This entry transcribes that report; the docs refresh made no fleet probe and
+    does not assign a new observation date to the older governance, readiness or
+    rollout checks. The Base Sepolia bridge rehearsal used a separate local
+    six-validator fleet; the signer and bridge merges remain undeployed here.
 
 !!! success "2026-10-30: vote-records release deployed to all six validators"
 
@@ -632,25 +646,22 @@ binary to the running services.
 
 !!! warning "Point-in-time evidence"
 
-    The latest recorded fleet state is from the 2026-10-21 store-handle
-    rollout and FastSwap committee migration (entries at the top of this
-    page): all six validators at height 1137, tip `18a4dc86…`, root
-    `1277c76c…`, with six-way agreement after every host and
-    `demo-preflight.py` READY (60 PASS). The latest fleet observation is
-    `2026-10-21T12:30:55Z`. The September and August observations below remain
-    historical evidence. Every observation is point-in-time evidence, not a
-    real-time query now.
+    The latest reported fleet observation is the November 6 handoff above:
+    all six at height 1168, tip `a20e406e…`, root `39771b74…`, executable
+    `87cfe797…`. The deployment receipt and detailed readiness/governance
+    checks remain dated October 30. Earlier observations retain their dates;
+    none is a real-time query now.
 
 ## Operational summary
 
 | Plane | Recorded state | Exact identifier | Observed or updated at | Evidence and freshness |
 | --- | --- | --- | --- | --- |
-| Running devnet, latest recorded state | All six validators agree at height 1168. Blocks 1162–1167 are the vote-records rollout's faucet grants (one after each apply); 1168 is the vote-record check grant. `demo-preflight.py` reported READY. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `a20e406e…`; root `39771b74…` on all six. | `2026-10-30T11:21Z` | 2026-10-30 entry above; [after state](https://github.com/postfiatorg/postfiatl1v2/blob/release/vote-records-20261030/deployments/vote-records-20261030/observed/after-final.json). Point in time. |
+| Running devnet, latest reported state | All six validators agree at height 1168 with the October 30 executable. The rollout's detailed preflight results retain their original date. | Chain `postfiat-wan-devnet-2`; tip `a20e406e…`; root `39771b74…`; executable `87cfe797…` on all six. | November 6 handoff, read-only probes | November 6 entry above; original [October 30 after state](https://github.com/postfiatorg/postfiatl1v2/blob/release/vote-records-20261030/deployments/vote-records-20261030/observed/after-final.json). Reported observation, not a new docs-task probe. |
 | Deployed runtime | Release `vote-records-20261030` on all six validators: all 12 validator and RPC processes on one executable, `deployment_manifest_verified=true` and build `ae70d66d` on every host, RPC units with `--max-requests 100000` and `RestartSec=1` and without `--allow-private-action-admission`. Rolled out one validator at a time (validator-1 canary, then 0, 2, 3, 4, 5); rollback was not needed. Governed activation heights `recipient_format`, `rejected_tx_fee` and `require_memo` all 1153 (unchanged); `account_tx` v3 index following commits. Vote outcome records live with the VR-01 fix. Private path present, switched off and ungoverned. | Source `ae70d66d`; executable `87cfe797…`; signed manifest `ee1df5b3…`; rollback release `index-v3-20261027` (`b5cf3ce4…`). | `2026-10-30T11:21Z` | 2026-10-30 entry above. |
-| Storage | Transactional `redb` storage has been the live store since height 930 (2026-08-31). This release carries the STO-07 store-handle fix (`8644f0af`); every batch the new executable accepted reports `storage_work.database_opens=0`. Storage is `OFFLINE QUALIFIED` (2026-10-23, packet-r3 `357f06ee…`); that is neither `CLONE QUALIFIED` nor a deployment decision. | Activation height 930; deployed binary `eea96ba6…` | 2026-10-21 deployment; 2026-10-23 storage note | [Storage-scaling implementation boundary](#storage-scaling-implementation-boundary) and the [storage milestone](../plans/completed/storage-scaling-milestone.md). The August `10dd9f20` canary and its rollback are in the [canary rollback report](../postmortems/devnet-storage-live-canary-rollback-2026-08-30.md). |
+| Storage | Transactional `redb` storage has been the live store since height 930 (2026-08-31). This release carries the STO-07 store-handle fix (`8644f0af`); every batch the new executable accepted reports `storage_work.database_opens=0`. Storage is `OFFLINE QUALIFIED` (2026-10-23, packet-r3 `357f06ee…`); that is neither `CLONE QUALIFIED` nor a deployment decision. | Activation height 930; G5-qualified binary `eea96ba6…`; current deployed binary `87cfe797…` | October 21/23 qualification; October 30 deployment | [Storage-scaling implementation boundary](#storage-scaling-implementation-boundary) and the [storage milestone](../plans/completed/storage-scaling-milestone.md). The August `10dd9f20` canary and its rollback are in the [canary rollback report](../postmortems/devnet-storage-live-canary-rollback-2026-08-30.md). |
 | Swap and bridge committees | FastSwap committee epoch 2 on all six (`enabled: true`), migrated 2026-10-21. Bridge committee epoch 2 activated at height 1131 on 2026-10-15. The A666 and BMNRC routes stay on `authority_epoch` 1, so validators 0–4 still sign Ethereum checkpoints; neither issuer route update has been submitted. FastPay committee epoch 2 was installed at height 1123 for orders 10001–19990. | Epoch-2 committee root `72836827…`; route authority root `a2eebcba…` | 2026-10-21 | 2026-10-21, 2026-10-15 and 2026-10-12 entries above. |
 | Validator-trust authority | Cobalt remains active for validator-registry and trust-graph ratification. The final signed drill rollback committed at 922, return to Cobalt at 923, and legitimate validator-5 rotation at 924. Consensus v2 remains block finality. | Registry root `08a451e0…2b9b1d`; trust root `89f18aef…08f0307`; ratification anchor sequence 2, ID `5eada38d…c21153c8`. | Accepted history through height 924; fleet-audited through `2026-08-30T23:00:39Z`. | The recovery probe found authority mode 1 and identical registry/trust roots on all six. |
-| Repository | The deployed source is `ae70d66d` on `release/vote-records-20261030`; it equals `main` `ae70d66d`. A later `main` commit is not deployed until a fleet receipt binds its source and binary to the running services. | Deployed source `ae70d66d`; use `git rev-parse HEAD` for the checkout. | 2026-10-30 | Release records above. |
+| Repository | The deployed source is `ae70d66d` on `release/vote-records-20261030`; main was at `ae70d66d` at that cut. A later `main` commit is not deployed until a fleet receipt binds its source and binary to the running services. | Deployed source `ae70d66d`; use `git rev-parse HEAD` for the checkout. | 2026-10-30 | Release records above. |
 | Adversarial campaign | E1–E6 passed their locked gates. The consolidated decision is `KEEP_ACTIVE` for Cobalt's bounded controlled-devnet validator-trust role. | E1 `495a59a2…4dfcd90`; E2 `8742d960…d7cba3`; E3 `9302b355…40b600`; E4 `93ba3db0…c14508`; E5 `0695284a…f3b3db`; E6 `ee6848f5…121be0b`. | Completed 2026-08-26 | [Completed milestone](../plans/completed/cobalt-adversarial-verification-milestone.md) and [results](../governance/cobalt-adversarial-verification-results.md). |
 | Operator boundary | The campaign proves protocol capability, not operator decentralization. Current proposals and authorizations originate from Foundation-administered validators. | E6 decision: independent-operator proposal path remains a mandatory follow-on milestone. | 2026-08-26 | No independent operators were recruited and no mainnet authority was granted. |
 

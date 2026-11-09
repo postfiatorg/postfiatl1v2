@@ -14,8 +14,8 @@ extension of Zcash Orchard with Halo2 proofs; that shielded stack itself is not
 post-quantum. The main application is NAVCoins: floating-value assets whose
 supply, minting and redemption are tied to machine-checkable reserve packets.
 
-> **Guidance reviewed 2026-11-05: devnet only. Latest recorded fleet observation:
-> 2026-10-30. See
+> **Guidance reviewed 2026-11-06: devnet only. Latest reported fleet observation:
+> 2026-11-06. See
 > [Network Status](docs/status/network-status.md).**
 >
 > - One network runs today: the devnet `postfiat-wan-devnet-2`, run by six
@@ -27,7 +27,8 @@ supply, minting and redemption are tied to machine-checkable reserve packets.
 >   the [security overview](docs/security/index.md).
 > - Main includes a separate validator signer process using a Unix socket and
 >   software key files, with a durable double-sign guard and a deployment
->   checker. Its deployment under two users remains open; HSM custody is not
+>   checker and staged units for the signer, RPC and transport services. Its
+>   deployment under two users remains open; HSM custody is not
 >   implemented. The recorded fleet still uses file signers. See the [signer policy](docs/runbooks/public-rpc-operator-policy.md#validator-signer-process).
 > - The controlled devnet has used transactional `redb` storage since height
 >   930. Offline qualification (G5) closed for the October 21 binary on October

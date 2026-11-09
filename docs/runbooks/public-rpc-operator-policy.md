@@ -134,15 +134,16 @@ that later stops answering or times out fails that request
 (`validator_signer_unreachable`, `validator_signer_timeout`); nothing falls
 back to a key file, and rpc-serve does not read `<data-dir>/validator_keys.json`.
 
-Deployment shape: two units and two users. The signer unit runs as its own
+Deployment shape: three units and two users. The signer unit runs as its own
 user (for example `postfiat-signer`) and owns the key file (`0600`) and a
 socket directory such as `/run/postfiat-signer` (`0750`, group
 `postfiat-signer-clients`, which the serving user is a member of). It passes
 `--socket-group postfiat-signer-clients`, so the socket is `0660` in that
-group, and `--allow-peer-uid` with the rpc-serve user's uid. The rpc-serve unit runs as `postfiat`, cannot read
-the key file, and passes `--finality-signer-socket
+group, and `--allow-peer-uid` with the clients' uid. The RPC and transport units
+run as `postfiat`, cannot read
+the key file, and pass `--finality-signer-socket
 /run/postfiat-signer/<validator>.sock`. Start the signer first. Readiness
-reports `validator_signer_same_user` when both units run as one user.
+reports `validator_signer_same_user` when the signer and RPC run as one user.
 It also reports `signer_double_sign_protection`; false or absent yields
 `validator_signer_guard_unavailable`. RPC startup refuses an unguarded signer.
 In socket mode `data_dir_key_files` lists `validator_keys.json` or
@@ -460,6 +461,20 @@ local readiness report that omits it.
   configuration remain deployment-infrastructure responsibilities and must be
   verified before a public endpoint is advertised.
 
+### 2026-11-06 source and deployment status
+
+PR192 and its review fixes are merged, including the initial `--min-height`
+floor for previously used keys, a guard bound to one chain domain, and checks
+for client capabilities and readable key copies. Unit generation now supports
+the signer, RPC and transport services under two users ([two-user units](#two-user-units)).
+The [November 6 handoff](../handoffs/2026-11-06___dravlic__first_real_base_sepolia_lock_released_and_bridge_phase_2_complete.md)
+reports these changes as undeployed on the devnet. The generated-unit process
+test used one OS user and therefore reports `validator_signer_same_user`; it
+does not prove an actual two-user deployment. The selected release needs its
+own qualification, followed by the operator-approved key migration, seeded
+floor and deployed readiness check in the [deploy sheet](validator-signer-two-user-deploy-sheet.md).
+The older rehearsal below remains evidence for its pinned source only.
+
 ### 2026-11-05 signer qualification
 
 The guard, the socket tests and the Python checker passed on the pull request's
@@ -469,7 +484,7 @@ isolated generated chain) passed on a devnet validator host. No production unit,
 key or store was used, so production adoption still needs operator-approved
 custody, the floor transition above and a checker run pinned to the real store
 and processes. Commands, UIDs, test counts and hashes are in the
-[evidence manifest](../review/validator-signer-20261105/manifest.json), with the
-[rehearsal result](../review/validator-signer-20261105/three-user/result.json),
-the [checker report](../review/validator-signer-20261105/three-user/deployment/report.json)
-and the [two-user run](../review/validator-signer-20261105/two-user/run.json).
+[evidence manifest](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/review/validator-signer-20261105/manifest.json), with the
+[rehearsal result](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/review/validator-signer-20261105/three-user/result.json),
+the [checker report](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/review/validator-signer-20261105/three-user/deployment/report.json)
+and the [two-user run](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/review/validator-signer-20261105/two-user/run.json).

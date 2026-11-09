@@ -1,6 +1,6 @@
 # Network Status
 
-**Guidance reviewed 2026-11-05; latest recorded fleet observation 2026-10-30.**
+**Guidance reviewed 2026-11-06; latest reported fleet observation 2026-11-06.**
 This page summarizes recorded observations and separately labels newer source
 work. It is not a live query. The full, dated operating log is
 [Current State](chain-state-current.md); when the two disagree, the log wins.
@@ -30,7 +30,11 @@ position.
 
 ## Last recorded release and height
 
-Recorded on 2026-10-30 in [Current State](chain-state-current.md):
+The 2026-10-30 deployment is recorded in [Current State](chain-state-current.md).
+The [November 6 handoff](../handoffs/2026-11-06___dravlic__first_real_base_sepolia_lock_released_and_bridge_phase_2_complete.md)
+reports read-only probes of all six hosts with the same executable, height, tip
+and state root. This documentation refresh made no new fleet probe; the handoff
+does not re-certify every October deployment check.
 
 | Item | Value |
 | --- | --- |
@@ -38,7 +42,7 @@ Recorded on 2026-10-30 in [Current State](chain-state-current.md):
 | Node executable SHA-256 | `87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7` on all six validators |
 | Rollout | One validator at a time with `scripts/postfiat-safe-rollout apply-next`, 2026-10-30 10:31–11:14 UTC; no rollback needed |
 | Height | 1168 on all six validators (tip `a20e406e…`, state root `39771b74…`) |
-| Latest fleet observation | 2026-10-30 11:21 UTC |
+| Latest reported fleet observation | 2026-11-06, read-only probes recorded in the handoff; original rollout receipt remains dated 2026-10-30 |
 
 Changes merged after that release are not evidence of deployment. The
 [next-release plan](../plans/active/next-validator-release-plan-20261115.md)
@@ -61,7 +65,8 @@ normal on this devnet.
   block consensus; see [Settlement Lanes](../architecture/settlement-lanes.md).
 - **Validator keys.** The recorded fleet uses software key files. Main now
   implements a separate signer process with a Unix socket, peer-UID checks and
-  a durable double-sign guard; its deployment under two users remains open. HSM
+  a durable double-sign guard. Unit generation for the signer, RPC and transport
+  services is implemented; its qualified deployment under two users remains open. HSM
   custody is not implemented. See the
   [signer policy](../runbooks/public-rpc-operator-policy.md#validator-signer-process).
   File-signer mode needs `--unsafe-devnet-file-signer`. Services on JSON/JSONL
@@ -80,10 +85,18 @@ release, checkpoint-source and watcher implementations. The November 5 record
 demonstrates checkpoint observation/signing on Base Sepolia. On 2026-11-06 the
 first real Base Sepolia Lock was released into native PFT on a local
 six-validator fleet, refused on resubmission, and the watcher reported it
-backed ([record](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md#base-sepolia-rehearsal-2026-11-06-part-2-the-release-on-a-local-fleet)). The
-reverse export route is designed but refused until implemented. These are
-source/test results, not a Base mainnet deployment or devnet activation. See
-the [listing milestone](../plans/active/pft-erc20-base-listing-milestone.md).
+backed ([record](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/listings/coinbase/pft-erc20-release-path-qualification-20261103.md#base-sepolia-rehearsal-2026-11-06-part-2-the-release-on-a-local-fleet)). The
+native half of the reverse route is implemented behind the genesis switch
+`exports_enabled`, default off. The Base verifier deployment, export prover
+and relay remain open. These are source/test results, not a Base mainnet
+deployment or activation on `postfiat-wan-devnet-2`.
+
+The [listing milestone](../plans/active/pft-erc20-base-listing-milestone.md)
+leaves P2.5 open on the lock audit. That is the remaining Phase 2 qualification
+item, not the only launch gate: token allocation and migration decisions, the
+production Safe and contracts, the genesis plan and release qualification remain
+separate. The [audit package](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/listings/coinbase/pft-token-audit-package-20261106.md)
+is ready for quotes; no external audit report is recorded.
 
 ## Access
 
@@ -113,6 +126,6 @@ and the [Glossary](../start/glossary.md#pftl-pft-ledger-and-postfiatd)).
 
 Update this page when a release is deployed or a fleet observation changes the
 facts above. Copy fleet values from [Current State](chain-state-current.md)
-and retain their observation date separately from the documentation review
-date. Cite source changes to their existing milestones and keep implementation,
+or a newer dated operator handoff. Retain the observation date separately from
+the documentation review date. Cite source changes to their existing milestones and keep implementation,
 qualification and deployment claims separate. A docs refresh is not a fleet probe.

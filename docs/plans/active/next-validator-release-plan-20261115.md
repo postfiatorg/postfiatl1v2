@@ -5,6 +5,16 @@ Skeleton written 2026-10-30; pointed at the separately qualified next release on
 
 ## Summary
 
+Documentation review, 2026-11-06: public main `4b4da1b91` includes the merged
+documentation refresh (PR190), local-EVM rehearsal (PR191), signer guard (PR192)
+and their review fixes. Its [docs build](https://github.com/postfiatorg/postfiatl1v2/actions/runs/42223603082),
+[Rust CI](https://github.com/postfiatorg/postfiatl1v2/actions/runs/42223602975) and
+[product security CI](https://github.com/postfiatorg/postfiatl1v2/actions/runs/42223603181)
+all completed successfully. These results supersede the handoff's pending-CI
+observation for that public source. They do not qualify another release cut or
+constitute a deployment receipt. The [latest reported fleet observation](../../status/chain-state-current.md)
+still has `vote-records-20261030` on all six validators.
+
 1. The next validator release is the one prepared on a private branch, with its own qualification. On 2026-11-04 it was rebuilt on a branch that contains main up to `76bc12fea` (2026-11-03, the end-of-session note), so it carries everything on main up to that commit, including the genesis external lane and the inbound release path ([list](#in-the-next-release)). Its qualification and rollout are its own, not this plan's.
 2. `vote-records-20261030` (main `ae70d66d`, executable `87cfe797…`) has run on all six validators since 2026-10-30 11:14Z. It was applied at 1162–1167, and the after state is 1168 / `a20e406e…` / `39771b74…`. It carries the VR-01 fix to the vote outcome records, live from 1168. Riding along were the wallet app's private path, the kept snapshot points, the public finalized private-pool reads, the Asset-Orchard secret wiping, the removed `k256` node dependency and the transport ack timeout fix. The private path is present but not usable: admission is off, the pricing rules and egress registry are inert, and `private_readiness` reports not ready.
 3. The commits on main after `76bc12fea` are not in the candidate ([list](#already-on-main-past-the-cut)). Eight changes (nine merges) wait for the release after with their own qualification. Five change the node binary and a state result: the pruning of the external lane release records (`f53e7457c`), the governed release cap (`f2dedd257`), the governed committee move (`be09a97f1`), the refused export operation (`7a968007e`) and the export accounting behind `exports_enabled` (`f751185c7`). Three change the process that holds the validator key or its stored state: the validator signer process (`b610061fc`), its double-sign guard (`fcfdf595e`, `f86d501bb`) and the two-user deployment shape (`7651635f6`). Six change the node binary but no execution, state commitment, signed bytes or key-holding process, and ride along: the readiness custody facts (`59b1d8a18`), the zero-cap lane genesis rule (`9251541ef`, `b319b4d2c`), the Base checkpoint source (`08d6e03f6`), the transfer fee quote on the pending ledger (`3ac4adc65`), the escrow and offer quotes' native lock (`600cafb38`) and the escrow finish history row with the `account_tx` index v4 (`66c110dfa`), whose index needs a one-time rebuild on release day. The others change no node binary (docs, CI, Solidity, Python, tests) and ride along.

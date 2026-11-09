@@ -238,7 +238,7 @@ The tests do not exercise these refusals:
 - `base_chain_id_mismatch` on proof.
 - `checkpoint_certificate_invalid` on assemble.
 
- `live_base_sepolia_checkpoint_of_the_rehearsal_lock` (ignored; `POSTFIAT_LIVE_BASE_RPC`) runs observe, five signatures and assembly against Base Sepolia with the rehearsal lock and token. It also rebuilds that block's receipt trie; on 2026-11-05 the rebuilt root matched the block's receipts root (the run record is the section 'Base checkpoint source (2026-11-05)' of [the qualification record](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md)). On 2026-11-06 the four commands proved the first real Lock, on the Base Sepolia rehearsal lock, and a local six-validator fleet released it ([part 2 of the rehearsal](../listings/coinbase/pft-erc20-release-path-qualification-20261103.md#base-sepolia-rehearsal-2026-11-06-part-2-the-release-on-a-local-fleet)).
+ `live_base_sepolia_checkpoint_of_the_rehearsal_lock` (ignored; `POSTFIAT_LIVE_BASE_RPC`) runs observe, five signatures and assembly against Base Sepolia with the rehearsal lock and token. It also rebuilds that block's receipt trie; on 2026-11-05 the rebuilt root matched the block's receipts root (the run record is the section 'Base checkpoint source (2026-11-05)' of [the qualification record](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/listings/coinbase/pft-erc20-release-path-qualification-20261103.md)). On 2026-11-06 the four commands proved the first real Lock, on the Base Sepolia rehearsal lock, and a local six-validator fleet released it ([part 2 of the rehearsal](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/listings/coinbase/pft-erc20-release-path-qualification-20261103.md#base-sepolia-rehearsal-2026-11-06-part-2-the-release-on-a-local-fleet)).
 
 ## The watcher
 
@@ -338,14 +338,26 @@ Fixed vectors are in `crates/types/testdata/external-lane-export-packet-vectors.
 
 The user-facing interface for the lane. The Python CLI reads a lane (`external_lane_info`) and watches it ([the watcher](#the-watcher)) but does not build or submit a release; the node commands of [the Base checkpoint source](#the-base-checkpoint-source) do. The design keeps the SP1 route for Base through its dispute games (option (a)) as a later upgrade.
 
-The Base half of exports: the PFTL finality verifier deployment for PFT on Base with its route profile and asset id, the prover program for export packets, the relay and the Base `release` of an export. No genesis sets `exports_enabled` yet, and whether Phase 3 ships is the product owner's decision.
+The Base half of exports: the PFTL finality verifier deployment for PFT on Base with its route profile and asset id, the prover program for export packets, the relay and the Base `release` of an export. No deployed genesis enables exports; tests use the switch to qualify the native-chain implementation. Whether Phase 3 ships is the product owner's decision.
 
 ## Not before
 
-The design note sets three "not before" rules:
+The implementation is merged and the November 6 rehearsal configured a lane on
+a separate local fleet. Production activation still requires:
 
-1. No genesis code merges before the token document fixes the supply number.
-2. No lane is configured before a mainnet genesis plan exists. The [launch specification](l1v2-testnet-genesis-and-launch-spec.md) leaves token migration to a separate document that does not exist yet.
-3. The lock contract is not deployed on Base mainnet before its audit is complete.
+1. The token document and genesis plan must fix the ERC-20 slice, native
+   allocation and treatment of existing PFT Ledger payments; the decided total
+   is 100 billion PFT. The [launch specification](l1v2-testnet-genesis-and-launch-spec.md)
+   leaves token migration to a separate document.
+2. Genesis must pin the intended lock address and runtime code hash. The
+   [deployment order](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md#5-proof-on-base)
+   predicts the verifier and lock addresses, establishes the first finalized
+   PFTL checkpoint, then deploys the verifier and lock. The rehearsal's stand-in
+   verifier does not qualify that production path.
+3. The token and lock audit, production treasury/deployment steps and selected
+   validator release's qualification remain open in the
+   [milestone](../plans/active/pft-erc20-base-listing-milestone.md) and
+   [release plan](../plans/active/next-validator-release-plan-20261115.md).
 
-This work therefore lives on a branch, and no running network's genesis changes.
+Existing network genesis files are unchanged. P2.5's remaining lock audit is
+one qualification item; it is not a statement that all launch gates are closed.

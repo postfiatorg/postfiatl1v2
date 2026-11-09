@@ -8,6 +8,12 @@ Replace `<validator>`, `<release>`, `<chain-id>`, `<genesis-hash>` and `N`.
 The signer serves both rpc-serve and `transport-validator-serve`, so the key
 moves to the signer's directory and no copy stays in the data directory.
 
+As of the [November 6 handoff](../handoffs/2026-11-06___dravlic__first_real_base_sepolia_lock_released_and_bridge_phase_2_complete.md),
+unit generation and its process test are implemented, but this shape is not
+deployed on the devnet. Use a separately qualified release and an approved
+deployment window. Existing keys need the recorded floor in steps 5–6; a new
+empty guard alone does not protect their earlier signing history.
+
 ## Per validator (operator's go)
 
 The steps are the operator page's, in the same order and words.
