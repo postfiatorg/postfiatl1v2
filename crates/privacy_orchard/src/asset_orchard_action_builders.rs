@@ -919,7 +919,7 @@ pub fn build_asset_orchard_private_egress_action(
         Some(spend_authority_from_wallet_note_with_alpha(
             &input_note,
             &signing_key,
-            alpha,
+            alpha.clone(),
         )?),
     )?;
     timing.signing_witness_prep_ms = asset_orchard_timing_elapsed_ms(stage_start);
@@ -927,9 +927,9 @@ pub fn build_asset_orchard_private_egress_action(
     let stage_start = std::time::Instant::now();
     let nullifier = asset_derive_nullifier(
         pool_domain,
-        input_witness.nk,
-        input_witness.note.rho,
-        input_witness.note.psi,
+        *input_witness.nk,
+        *input_witness.note.rho,
+        *input_witness.note.psi,
         input_witness.cmx,
     )?;
     let rk_point = randomized_verification_key_point(&input_witness)?;
@@ -1212,14 +1212,14 @@ fn build_asset_orchard_private_primary_action(
         Some(spend_authority_from_wallet_note_with_alpha(
             &input_note,
             &signing_key,
-            alpha,
+            alpha.clone(),
         )?),
     )?;
     let nullifier = asset_derive_nullifier(
         pool_domain,
-        input_witness.nk,
-        input_witness.note.rho,
-        input_witness.note.psi,
+        *input_witness.nk,
+        *input_witness.note.rho,
+        *input_witness.note.psi,
         input_witness.cmx,
     )?;
     let rk_point = randomized_verification_key_point(&input_witness)?;
@@ -1600,7 +1600,23 @@ fn validate_wallet_note_for_swap(
     Ok(())
 }
 
-// see issue #181
+// Issue #181 point 3: secret ownership from wallet note to circuit witness.
+//
+// - Wallet note `nk`, `rivk`, `spend_auth_signing_key`, `rseed` and the note opening are
+//   `AssetOrchardSecret`/zeroizing owners already (548d4918).
+// - `AssetNoteOpening` (from `to_note_opening`), the witness `nk` and every
+//   `AssetOrchardSpendAuthorityWitness` field (`ak`, `alpha`, `rivk`) are now
+//   `AssetOrchardSecretValue` owners: they and their clones wipe on drop, on success and on every
+//   `?` exit, and their `Debug` is redacted. The pasta values themselves are `Copy` with no
+//   `Zeroize`; reads (`*value`), moves and arithmetic make copies this crate cannot wipe.
+// - Hex-decoded key and scalar bytes (`fixed_hex_array`, `scalar_from_hex`, `parse_pallas_*`)
+//   live in `Zeroizing` buffers.
+// - `SigningKey<SpendAuth>` (orchard 0.14 redpallas over reddsa 0.5.1) is `Clone + Debug` with
+//   no `Drop`, and `try_from` takes its `[u8; 32]` by value; that upstream owner is not wiped
+//   and must not be formatted.
+// - `AssetOrchardMerkleWitness` and `cmx` are public tree data and stay plain.
+// - halo2 `Value<T>` witnesses and the prover's buffers copy these values during proving; they
+//   have no zeroize support (halo2_proofs 0.3).
 fn wallet_note_to_swap_witness(
     pool_domain: pallas::Base,
     note: &AssetOrchardWalletNote,
@@ -1611,25 +1627,25 @@ fn wallet_note_to_swap_witness(
     let mut witness = AssetOrchardSwapNoteWitness::from_note_with_nk(
         pool_domain,
         note.note.to_note_opening()?,
-        note.nk.to_field()?,
+        AssetOrchardSecretValue::new(note.nk.to_field()?),
     )?;
-    if let Some(merkle_witness) = merkle_witness {
-        witness = witness.with_merkle_witness(merkle_witness);
-    }
-    if let Some(spend_authority) = spend_authority {
-        witness = witness.with_spend_authority(spend_authority);
-    }
+    // Set in place rather than through the by-value `with_*` builders, which move the witness.
+    witness.merkle_witness = merkle_witness;
+    witness.spend_authority = spend_authority;
     Ok(witness)
 }
 
+/// Decodes the note's spend authorization key. The decoded bytes are wiped; the returned
+/// `SigningKey` is an upstream owner without zeroize (see the point 3 notes above), so callers
+/// keep it scoped to the builder and never format it.
 fn asset_orchard_spend_signing_key(
     note: &AssetOrchardWalletNote,
 ) -> Result<SigningKey<SpendAuth>, AssetOrchardError> {
-    let bytes = fixed_hex_array::<32>(
+    let bytes = Zeroizing::new(fixed_hex_array::<32>(
         "asset_orchard_spend_auth_signing_key",
         note.spend_auth_signing_key.as_str(),
-    )?;
-    SigningKey::<SpendAuth>::try_from(bytes).map_err(|_| {
+    )?);
+    SigningKey::<SpendAuth>::try_from(*bytes).map_err(|_| {
         AssetOrchardError::new(
             "invalid_asset_orchard_spend_auth_signing_key",
             "asset-orchard wallet note spend authorization key is invalid",
@@ -1641,22 +1657,22 @@ fn spend_authority_from_wallet_note(
     note: &AssetOrchardWalletNote,
     signing_key: &SigningKey<SpendAuth>,
 ) -> Result<AssetOrchardSpendAuthorityWitness, AssetOrchardError> {
-    let alpha = random_pallas_scalar_nonzero();
+    let alpha = AssetOrchardSecretValue::new(random_pallas_scalar_nonzero());
     spend_authority_from_wallet_note_with_alpha(note, signing_key, alpha)
 }
 
 fn spend_authority_from_wallet_note_with_alpha(
     note: &AssetOrchardWalletNote,
     signing_key: &SigningKey<SpendAuth>,
-    alpha: pallas::Scalar,
+    alpha: AssetOrchardSecretValue<pallas::Scalar>,
 ) -> Result<AssetOrchardSpendAuthorityWitness, AssetOrchardError> {
     let verification_key = VerificationKey::from(signing_key);
-    let ak = spend_auth_verification_key_affine(&verification_key)?;
-    Ok(AssetOrchardSpendAuthorityWitness {
-        ak,
-        alpha,
-        rivk: scalar_from_hex("asset_orchard_wallet_note_rivk", note.rivk.as_str())?,
-    })
+    let ak = AssetOrchardSecretValue::new(spend_auth_verification_key_affine(&verification_key)?);
+    let rivk = AssetOrchardSecretValue::new(scalar_from_hex(
+        "asset_orchard_wallet_note_rivk",
+        note.rivk.as_str(),
+    )?);
+    Ok(AssetOrchardSpendAuthorityWitness { ak, alpha, rivk })
 }
 
 fn spend_auth_verification_key_affine(
@@ -1679,8 +1695,8 @@ fn spend_auth_verification_key_affine(
     Ok(point)
 }
 
-fn private_egress_spend_randomizer() -> pallas::Scalar {
-    random_pallas_scalar_nonzero()
+fn private_egress_spend_randomizer() -> AssetOrchardSecretValue<pallas::Scalar> {
+    AssetOrchardSecretValue::new(random_pallas_scalar_nonzero())
 }
 
 fn asset_orchard_merkle_witnesses_from_commitments(
@@ -1899,16 +1915,16 @@ fn asset_orchard_input_nullifiers(
     Ok([
         asset_derive_nullifier(
             pool_domain,
-            inputs[0].nk,
-            inputs[0].note.rho,
-            inputs[0].note.psi,
+            *inputs[0].nk,
+            *inputs[0].note.rho,
+            *inputs[0].note.psi,
             inputs[0].cmx,
         )?,
         asset_derive_nullifier(
             pool_domain,
-            inputs[1].nk,
-            inputs[1].note.rho,
-            inputs[1].note.psi,
+            *inputs[1].nk,
+            *inputs[1].note.rho,
+            *inputs[1].note.psi,
             inputs[1].cmx,
         )?,
     ])
@@ -1936,7 +1952,7 @@ fn randomized_verification_key_point(
             "asset-orchard input witness is missing spend authority",
         )
     })?;
-    Ok((pallas::Point::from(authority.ak) + asset_spend_auth_g() * authority.alpha).to_affine())
+    Ok((pallas::Point::from(*authority.ak) + asset_spend_auth_g() * *authority.alpha).to_affine())
 }
 
 fn signed_asset_orchard_action_from_witnesses(
@@ -1997,7 +2013,7 @@ fn signed_asset_orchard_action_from_witnesses(
         .into_iter()
         .zip(inputs.iter())
         .map(|(key, input)| {
-            let alpha = input
+            let alpha = &input
                 .spend_authority
                 .as_ref()
                 .ok_or_else(|| {
@@ -2008,7 +2024,7 @@ fn signed_asset_orchard_action_from_witnesses(
                 })?
                 .alpha;
             Ok(AssetOrchardSpendAuthSignature::from_orchard(
-                &key.randomize(&alpha).sign(OsRng, &sighash),
+                &key.randomize(alpha).sign(OsRng, &sighash),
             ))
         })
         .collect::<Result<Vec<_>, AssetOrchardError>>()?;
@@ -2019,9 +2035,12 @@ fn signed_asset_orchard_action_from_witnesses(
 #[cfg(test)]
 mod secret_lifetime_tests {
     use super::*;
-    use crate::asset_orchard::{build_asset_orchard_wallet_note, AssetOrchardPricingClaim};
+    use crate::asset_orchard::{
+        build_asset_orchard_wallet_note, field_enc, scalar_enc, AssetOrchardPricingClaim,
+        AssetOrchardSecret,
+    };
     use postfiat_crypto_provider::bytes_to_hex;
-    use zeroize::Zeroizing;
+    use zeroize::{Zeroize, Zeroizing};
 
     const CHAIN_ID: &str = "postfiat-swap-seed-test";
     const GENESIS_HASH: [u8; 32] = [5u8; 32];
@@ -2108,6 +2127,169 @@ mod secret_lifetime_tests {
             );
             assert_eq!(error.code(), code);
             assert_eq!(error.to_string(), direct.to_string());
+        }
+    }
+
+    fn pool() -> pallas::Base {
+        AssetOrchardSwapAction::expected_pool_domain(CHAIN_ID, GENESIS_HASH, PROTOCOL_VERSION)
+            .expect("pool domain")
+    }
+
+    fn input_witness(
+        note: &AssetOrchardWalletNote,
+    ) -> Result<AssetOrchardSwapNoteWitness, AssetOrchardError> {
+        let signing_key = asset_orchard_spend_signing_key(note)?;
+        let authority = spend_authority_from_wallet_note(note, &signing_key)?;
+        wallet_note_to_swap_witness(pool(), note, None, Some(authority))
+    }
+
+    #[test]
+    fn secret_value_wipes_curve_values_per_owner_and_redacts_debug() {
+        let mut scalar = AssetOrchardSecretValue::new(pallas::Scalar::from(42u64));
+        let mut base = AssetOrchardSecretValue::new(pallas::Base::from(7u64));
+        let mut point = AssetOrchardSecretValue::new(pallas::Affine::generator());
+        let kept = scalar.clone();
+        for render in [format!("{scalar:?}"), format!("{base:#?}"), format!("{point:?}")] {
+            assert_eq!(render, "AssetOrchardSecretValue([redacted])");
+        }
+        scalar.zeroize();
+        base.zeroize();
+        point.zeroize();
+        assert_eq!(*scalar, pallas::Scalar::ZERO);
+        assert_eq!(*base, pallas::Base::ZERO);
+        assert!(bool::from(point.is_identity()));
+        // A clone is its own owner: wiping the original leaves it intact until its own drop.
+        assert_eq!(*kept, pallas::Scalar::from(42u64));
+    }
+
+    #[test]
+    fn swap_witness_holds_unchanged_values_in_self_wiping_owners() {
+        let note = input_note("asset-a", 10, 31);
+        let opening = note.note.to_note_opening().expect("opening");
+        let witness = input_witness(&note).expect("witness");
+        assert_eq!(*witness.nk, note.nk.to_field().expect("nk"));
+        assert_eq!(witness.cmx, note.output_commitment.to_field().expect("cmx"));
+        assert_eq!(*witness.note.rcm, *opening.rcm);
+        assert_eq!(*witness.note.rho, *opening.rho);
+        assert_eq!(*witness.note.psi, *opening.psi);
+        assert_eq!(*witness.note.g_d, *opening.g_d);
+        assert_eq!(*witness.note.pk_d, *opening.pk_d);
+        assert_eq!(witness.note.value, 10);
+        assert!(witness.merkle_witness.is_none());
+        let authority = witness.spend_authority.as_ref().expect("authority");
+        let signing_key = asset_orchard_spend_signing_key(&note).expect("signing key");
+        assert_eq!(
+            *authority.ak,
+            spend_auth_verification_key_affine(&VerificationKey::from(&signing_key)).expect("ak")
+        );
+        assert_eq!(
+            *authority.rivk,
+            scalar_from_hex("rivk", note.rivk.as_str()).expect("rivk")
+        );
+        assert!(!bool::from(authority.alpha.is_zero()));
+
+        let mut wiped = witness.clone();
+        wiped.nk.zeroize();
+        wiped.note.zeroize();
+        let wiped_authority = wiped.spend_authority.as_mut().expect("authority");
+        wiped_authority.ak.zeroize();
+        wiped_authority.alpha.zeroize();
+        wiped_authority.rivk.zeroize();
+        assert_eq!(*wiped.nk, pallas::Base::ZERO);
+        assert_eq!(*wiped_authority.alpha, pallas::Scalar::ZERO);
+        assert_eq!(*wiped_authority.rivk, pallas::Scalar::ZERO);
+        assert!(bool::from(wiped_authority.ak.is_identity()));
+        // The original is untouched by wiping its clone.
+        assert_eq!(*witness.nk, note.nk.to_field().expect("nk"));
+        assert!(!bool::from(authority.rivk.is_zero()));
+    }
+
+    #[test]
+    fn note_opening_zeroize_used_by_drop_clears_every_field() {
+        let note = input_note("asset-a", 10, 31);
+        let mut opening = note.note.to_note_opening().expect("opening");
+        let kept = opening.clone();
+        opening.zeroize();
+        assert_eq!(
+            opening.diversifier,
+            [0u8; crate::asset_orchard::ASSET_ORCHARD_DIVERSIFIER_BYTES]
+        );
+        assert_eq!(
+            (opening.asset_tag.lo, opening.asset_tag.hi, opening.value),
+            (0, 0, 0)
+        );
+        assert_eq!(*opening.rho, pallas::Base::ZERO);
+        assert_eq!(*opening.psi, pallas::Base::ZERO);
+        assert_eq!(*opening.rcm, pallas::Scalar::ZERO);
+        assert!(bool::from(opening.g_d.is_identity()));
+        assert!(bool::from(opening.pk_d.is_identity()));
+        assert_eq!(kept.value, 10);
+        kept.validate().expect("clone still valid");
+    }
+
+    #[test]
+    fn swap_witness_and_spend_authority_debug_redact_secrets() {
+        let note = input_note("asset-secret-debug", 4_242_424_242, 33);
+        let witness = input_witness(&note).expect("witness");
+        let authority = witness.spend_authority.as_ref().expect("authority");
+        let opening = &witness.note;
+        let forbidden = [
+            format!("{:?}", *witness.nk),
+            format!("{:?}", *opening.rho),
+            format!("{:?}", *opening.psi),
+            format!("{:?}", *opening.rcm),
+            format!("{:?}", *opening.g_d),
+            format!("{:?}", *opening.pk_d),
+            format!("{:?}", *authority.ak),
+            format!("{:?}", *authority.alpha),
+            format!("{:?}", *authority.rivk),
+            bytes_to_hex(&field_enc(*witness.nk)),
+            bytes_to_hex(&scalar_enc(*authority.alpha)),
+            bytes_to_hex(&scalar_enc(*authority.rivk)),
+            note.rivk.as_str().to_string(),
+            note.nk.as_hex().to_string(),
+            "4242424242".to_string(),
+        ];
+        let renders = [
+            format!("{witness:?}"),
+            format!("{witness:#?}"),
+            format!("{authority:?}"),
+            format!("{opening:?}"),
+        ];
+        for render in &renders {
+            for value in &forbidden {
+                assert!(!render.contains(value.as_str()), "Debug leaked {value}: {render}");
+            }
+            assert!(render.contains("redacted"));
+        }
+        // The public commitment is still printed.
+        assert!(renders[0].contains(&format!("{:?}", witness.cmx)));
+    }
+
+    #[test]
+    fn spend_key_and_rivk_parse_errors_keep_codes_on_every_exit() {
+        let note = input_note("asset-a", 10, 31);
+        let signing_key = asset_orchard_spend_signing_key(&note).expect("signing key");
+        for (rivk, code) in [
+            ("zz".repeat(32), "invalid_asset_orchard_hex"),
+            ("ab".repeat(31), "invalid_asset_orchard_hex_len"),
+            ("ff".repeat(32), "invalid_asset_orchard_scalar"),
+        ] {
+            let mut bad = note.clone();
+            bad.rivk = AssetOrchardSecret::new(rivk);
+            let error = spend_authority_from_wallet_note(&bad, &signing_key).expect_err("rivk");
+            assert_eq!(error.code(), code);
+            assert_eq!(input_witness(&bad).expect_err("witness").code(), code);
+        }
+        for (key, code) in [
+            ("zz".repeat(32), "invalid_asset_orchard_hex"),
+            ("ab".repeat(33), "invalid_asset_orchard_hex_len"),
+            ("ff".repeat(32), "invalid_asset_orchard_spend_auth_signing_key"),
+        ] {
+            let mut bad = note.clone();
+            bad.spend_auth_signing_key = AssetOrchardSecret::new(key);
+            let error = asset_orchard_spend_signing_key(&bad).expect_err("signing key");
+            assert_eq!(error.code(), code);
         }
     }
 }

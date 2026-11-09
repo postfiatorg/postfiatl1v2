@@ -847,13 +847,13 @@ mod tests {
         let rseed = [11u8; ASSET_ORCHARD_RSEED_BYTES];
         AssetNoteOpening {
             diversifier: [3u8; ASSET_ORCHARD_DIVERSIFIER_BYTES],
-            g_d: sample_point(b"g_d"),
-            pk_d: sample_point(b"pk_d"),
+            g_d: sample_point(b"g_d").into(),
+            pk_d: sample_point(b"pk_d").into(),
             asset_tag: AssetTag::derive("a651").expect("asset tag"),
             value: 123,
-            rho,
-            psi: orchard_psi(&rseed, rho).expect("psi"),
-            rcm: orchard_rcm(&rseed, rho).expect("rcm"),
+            rho: rho.into(),
+            psi: orchard_psi(&rseed, rho).expect("psi").into(),
+            rcm: orchard_rcm(&rseed, rho).expect("rcm").into(),
         }
     }
 
@@ -977,7 +977,7 @@ mod tests {
         let expected_cmx = note.cmx(pool_domain).expect("host cmx");
         let circuit = AssetNoteCommitmentTestCircuit {
             pieces,
-            rcm: note.rcm,
+            rcm: *note.rcm,
         };
         let prover = MockProver::run(11, &circuit, vec![vec![expected_cmx]]).expect("prover");
 

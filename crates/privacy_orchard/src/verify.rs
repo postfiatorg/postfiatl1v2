@@ -2645,12 +2645,37 @@ pub fn orchard_spending_key_from_zip32_seed(
             "Orchard ZIP32 account index must be below 2^31",
         )
     })?;
-    // see issue #181
-    let spending_key = SpendingKey::from_zip32_seed(seed, POSTFIAT_ORCHARD_COIN_TYPE, account)
-        .map_err(|error| {
-            OrchardVerificationError::new("zip32_spending_key_derivation_failed", error.to_string())
-        })?;
-    Ok(Zeroizing::new(*spending_key.to_bytes()))
+    let spending_key = Zip32SpendingKey(
+        SpendingKey::from_zip32_seed(seed, POSTFIAT_ORCHARD_COIN_TYPE, account).map_err(
+            |error| {
+                OrchardVerificationError::new(
+                    "zip32_spending_key_derivation_failed",
+                    error.to_string(),
+                )
+            },
+        )?,
+    );
+    // Copy straight into the zeroizing owner instead of through a plain `[u8; 32]` temporary.
+    let mut bytes = Zeroizing::new([0u8; 32]);
+    bytes.copy_from_slice(spending_key.0.to_bytes());
+    Ok(bytes)
+}
+
+/// Issue #181 point 5: upstream secret-owner gap. orchard 0.14.0 `src/keys.rs:41-42` declares
+/// `#[derive(Debug, Copy, Clone)] pub struct SpendingKey([u8; 32])` with no `Drop`, so its `Debug`
+/// prints the raw key bytes and every move is a bitwise copy that nothing wipes. The ZIP32
+/// intermediates behind `from_zip32_seed` (orchard `ExtendedSpendingKey`, zip32 0.2.1 `ChainCode`
+/// and `HardenedOnlyKey`, the BLAKE2b-512 output) have no zeroize either. Wiping them from this
+/// crate would need `unsafe` writes into third-party types, which is ruled out; it needs an
+/// upstream non-`Copy`, `ZeroizeOnDrop`, redacted secret-owner API. Until then the key is held
+/// only here, its `Debug` is redacted, it has no `Deref`/`Display`, and only the zeroizing copy
+/// leaves `orchard_spending_key_from_zip32_seed`.
+struct Zip32SpendingKey(SpendingKey);
+
+impl std::fmt::Debug for Zip32SpendingKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Zip32SpendingKey([redacted])")
+    }
 }
 
 pub fn orchard_full_viewing_key_from_spending_key(
@@ -3775,6 +3800,59 @@ mod tests {
             value,
             asset_blinding: format!("{tag}-asset-blinding"),
             value_blinding: format!("{tag}-value-blinding"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod zip32_secret_owner_tests {
+    use super::*;
+
+    // Non-secret test seed.
+    const SEED: [u8; 32] = [0x42; 32];
+
+    fn upstream_key(account: u32) -> SpendingKey {
+        SpendingKey::from_zip32_seed(
+            &SEED,
+            POSTFIAT_ORCHARD_COIN_TYPE,
+            AccountId::try_from(account).expect("account"),
+        )
+        .expect("upstream zip32 key")
+    }
+
+    #[test]
+    fn zip32_spending_key_bytes_match_upstream_derivation() {
+        for account in [0u32, 1, 7] {
+            let bytes = orchard_spending_key_from_zip32_seed(&SEED, account).expect("derive");
+            assert_eq!(*bytes, *upstream_key(account).to_bytes());
+        }
+        assert_ne!(
+            *orchard_spending_key_from_zip32_seed(&SEED, 0).expect("account 0"),
+            *orchard_spending_key_from_zip32_seed(&SEED, 1).expect("account 1"),
+        );
+    }
+
+    #[test]
+    fn zip32_spending_key_rejects_hardened_account_index_before_derivation() {
+        let error = orchard_spending_key_from_zip32_seed(&SEED, 1 << 31).expect_err("reject");
+        assert_eq!(error.code(), "invalid_zip32_account");
+        assert!(!error.to_string().contains(&bytes_to_hex(&SEED)));
+    }
+
+    #[test]
+    fn zip32_spending_key_holder_debug_is_redacted() {
+        let key = upstream_key(0);
+        let key_bytes = *key.to_bytes();
+        let upstream_debug = format!("{key:?}");
+        // Canary for the documented upstream gap: orchard's derived `Debug` prints the raw key.
+        // If this starts failing, orchard has fixed it; revisit `Zip32SpendingKey`.
+        assert!(upstream_debug.contains(&format!("{key_bytes:?}")));
+
+        let holder = Zip32SpendingKey(key);
+        for render in [format!("{holder:?}"), format!("{holder:#?}")] {
+            assert_eq!(render, "Zip32SpendingKey([redacted])");
+            assert!(!render.contains(&format!("{key_bytes:?}")));
+            assert!(!render.contains(&bytes_to_hex(&key_bytes)));
         }
     }
 }

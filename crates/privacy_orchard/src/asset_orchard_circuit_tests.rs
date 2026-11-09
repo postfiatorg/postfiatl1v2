@@ -128,17 +128,21 @@ fn note_witness_with_rho(
     let pk_d = (pallas::Point::from(g_d) * ivk_scalar).to_affine();
     let note = AssetNoteOpening {
         diversifier,
-        g_d,
-        pk_d,
+        g_d: g_d.into(),
+        pk_d: pk_d.into(),
         asset_tag: AssetTag::derive(asset_id).expect("asset tag"),
         value,
-        rho,
-        psi: orchard_psi(&rseed, rho).expect("psi"),
-        rcm: orchard_rcm(&rseed, rho).expect("rcm"),
+        rho: rho.into(),
+        psi: orchard_psi(&rseed, rho).expect("psi").into(),
+        rcm: orchard_rcm(&rseed, rho).expect("rcm").into(),
     };
-    AssetOrchardSwapNoteWitness::from_note_with_nk(pool_domain, note, nk)
+    AssetOrchardSwapNoteWitness::from_note_with_nk(pool_domain, note, nk.into())
         .expect("note witness")
-        .with_spend_authority(AssetOrchardSpendAuthorityWitness { ak, alpha, rivk })
+        .with_spend_authority(AssetOrchardSpendAuthorityWitness {
+            ak: ak.into(),
+            alpha: alpha.into(),
+            rivk: rivk.into(),
+        })
 }
 
 fn spend_auth_signing_key(seed: u64) -> SigningKey<SpendAuth> {
@@ -171,17 +175,21 @@ fn note_witness_with_signing_key(
     let pk_d = (pallas::Point::from(g_d) * ivk_scalar).to_affine();
     let note = AssetNoteOpening {
         diversifier,
-        g_d,
-        pk_d,
+        g_d: g_d.into(),
+        pk_d: pk_d.into(),
         asset_tag: AssetTag::derive(asset_id).expect("asset tag"),
         value,
-        rho,
-        psi: orchard_psi(&rseed, rho).expect("psi"),
-        rcm: orchard_rcm(&rseed, rho).expect("rcm"),
+        rho: rho.into(),
+        psi: orchard_psi(&rseed, rho).expect("psi").into(),
+        rcm: orchard_rcm(&rseed, rho).expect("rcm").into(),
     };
-    AssetOrchardSwapNoteWitness::from_note_with_nk(pool_domain, note, nk)
+    AssetOrchardSwapNoteWitness::from_note_with_nk(pool_domain, note, nk.into())
         .expect("note witness")
-        .with_spend_authority(AssetOrchardSpendAuthorityWitness { ak, alpha, rivk })
+        .with_spend_authority(AssetOrchardSpendAuthorityWitness {
+            ak: ak.into(),
+            alpha: alpha.into(),
+            rivk: rivk.into(),
+        })
 }
 
 #[test]
@@ -202,12 +210,13 @@ fn swap_builder_alpha_randomizes_rk_for_repeated_public_commitment() {
 
     let first = spend_authority_from_wallet_note(&note, &signing_key).expect("first alpha");
     let second = spend_authority_from_wallet_note(&note, &signing_key).expect("second alpha");
-    assert_eq!(first.ak, second.ak);
-    assert_ne!(first.alpha, second.alpha);
+    assert_eq!(*first.ak, *second.ak);
+    assert_ne!(*first.alpha, *second.alpha);
 
-    let first_rk = (pallas::Point::from(first.ak) + asset_spend_auth_g() * first.alpha).to_affine();
+    let first_rk =
+        (pallas::Point::from(*first.ak) + asset_spend_auth_g() * *first.alpha).to_affine();
     let second_rk =
-        (pallas::Point::from(second.ak) + asset_spend_auth_g() * second.alpha).to_affine();
+        (pallas::Point::from(*second.ak) + asset_spend_auth_g() * *second.alpha).to_affine();
     assert_ne!(first_rk, second_rk);
 
     let old_public_alpha = hash_to_pallas_scalar_nonzero(
@@ -216,7 +225,7 @@ fn swap_builder_alpha_randomizes_rk_for_repeated_public_commitment() {
     )
     .expect("old deterministic alpha");
     let old_public_rk =
-        (pallas::Point::from(first.ak) + asset_spend_auth_g() * old_public_alpha).to_affine();
+        (pallas::Point::from(*first.ak) + asset_spend_auth_g() * old_public_alpha).to_affine();
     assert_ne!(first_rk, old_public_rk);
     assert_ne!(second_rk, old_public_rk);
 }
@@ -225,7 +234,7 @@ fn swap_builder_alpha_randomizes_rk_for_repeated_public_commitment() {
 fn private_egress_alpha_sampler_uses_fresh_randomness() {
     let first = private_egress_spend_randomizer();
     let second = private_egress_spend_randomizer();
-    assert_ne!(first, second);
+    assert_ne!(*first, *second);
 }
 
 #[test]
@@ -572,17 +581,17 @@ fn note_swap_nullifiers(
     [
         asset_derive_nullifier(
             pool_domain,
-            inputs[0].nk,
-            inputs[0].note.rho,
-            inputs[0].note.psi,
+            *inputs[0].nk,
+            *inputs[0].note.rho,
+            *inputs[0].note.psi,
             inputs[0].cmx,
         )
         .expect("nf0"),
         asset_derive_nullifier(
             pool_domain,
-            inputs[1].nk,
-            inputs[1].note.rho,
-            inputs[1].note.psi,
+            *inputs[1].nk,
+            *inputs[1].note.rho,
+            *inputs[1].note.psi,
             inputs[1].cmx,
         )
         .expect("nf1"),
@@ -594,7 +603,7 @@ fn note_swap_rks(
 ) -> [RandomizedVerificationKeyFields; ASSET_ORCHARD_LEG_COUNT] {
     inputs.each_ref().map(|input| {
         let authority = input.spend_authority.as_ref().expect("spend authority");
-        let rk = (pallas::Point::from(authority.ak) + asset_spend_auth_g() * authority.alpha)
+        let rk = (pallas::Point::from(*authority.ak) + asset_spend_auth_g() * *authority.alpha)
             .to_affine();
         RandomizedVerificationKeyFields::from_affine(rk).expect("rk")
     })
@@ -605,7 +614,7 @@ fn note_swap_rk_points(
 ) -> [pallas::Affine; ASSET_ORCHARD_LEG_COUNT] {
     inputs.each_ref().map(|input| {
         let authority = input.spend_authority.as_ref().expect("spend authority");
-        (pallas::Point::from(authority.ak) + asset_spend_auth_g() * authority.alpha).to_affine()
+        (pallas::Point::from(*authority.ak) + asset_spend_auth_g() * *authority.alpha).to_affine()
     })
 }
 
@@ -765,13 +774,13 @@ fn signed_asset_orchard_action_from_witness(
         .into_iter()
         .zip(inputs.iter())
         .map(|(key, input)| {
-            let alpha = input
+            let alpha = &input
                 .spend_authority
                 .as_ref()
                 .expect("spend authority")
                 .alpha;
             AssetOrchardSpendAuthSignature::from_orchard(
-                &key.randomize(&alpha).sign(OsRng, &sighash),
+                &key.randomize(alpha).sign(OsRng, &sighash),
             )
         })
         .collect();
@@ -1506,7 +1515,7 @@ fn swap_circuit_rejects_wrong_spend_authority_relation() {
     fields.nullifiers = note_swap_nullifiers(fields.pool_domain, &inputs);
     fields.randomized_verification_keys = note_swap_rks(&inputs);
     fields.output_commitments = [outputs[0].cmx, outputs[1].cmx];
-    inputs[0]
+    *inputs[0]
         .spend_authority
         .as_mut()
         .expect("spend authority")
@@ -1581,15 +1590,15 @@ fn private_egress_mock_prover_binds_note_to_public_exit_instance() {
     let input = input.with_merkle_witness(witnesses[0].clone());
     let nullifier = asset_derive_nullifier(
         pool_domain,
-        input.nk,
-        input.note.rho,
-        input.note.psi,
+        *input.nk,
+        *input.note.rho,
+        *input.note.psi,
         input.cmx,
     )
     .expect("nullifier");
     let authority = input.spend_authority.as_ref().expect("spend authority");
     let rk_point =
-        (pallas::Point::from(authority.ak) + asset_spend_auth_g() * authority.alpha).to_affine();
+        (pallas::Point::from(*authority.ak) + asset_spend_auth_g() * *authority.alpha).to_affine();
     let exit_binding_hash = asset_orchard_private_egress_exit_binding_hash(
         &AssetOrchardPrivateEgressExitBindingPreimage {
             chain_id: &domain.chain_id,
@@ -1884,13 +1893,13 @@ fn swap_consensus_verifier_accepts_real_proof_and_rejects_forged_nonconservation
         .into_iter()
         .zip(inputs.iter())
         .map(|(key, input)| {
-            let alpha = input
+            let alpha = &input
                 .spend_authority
                 .as_ref()
                 .expect("spend authority")
                 .alpha;
             AssetOrchardSpendAuthSignature::from_orchard(
-                &key.randomize(&alpha).sign(OsRng, &sighash),
+                &key.randomize(alpha).sign(OsRng, &sighash),
             )
         })
         .collect();
@@ -1907,7 +1916,7 @@ fn swap_consensus_verifier_accepts_real_proof_and_rejects_forged_nonconservation
     assert_eq!(rejected_timings.proof_verifications[0].result, "error");
 
     let mut forged_outputs = outputs.clone();
-    forged_outputs[0] = note_witness_with_rho(pool_domain, "pfUSDC", 10, 43, outputs[0].note.rho);
+    forged_outputs[0] = note_witness_with_rho(pool_domain, "pfUSDC", 10, 43, *outputs[0].note.rho);
     let forged_fields = asset_orchard_public_fields_from_witness(
         &domain,
         &inputs,
