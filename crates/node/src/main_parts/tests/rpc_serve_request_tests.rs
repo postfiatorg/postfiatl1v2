@@ -2552,7 +2552,13 @@ mod rpc_serve_request_tests {
             serde_json::to_value(&cached.status.as_ref().expect("cached status").storage)
                 .expect("storage json")
         );
-        assert_eq!(cached.registry_update_count, Some(Ok(1)));
+        assert_eq!(
+            cached
+                .registry_update_count
+                .as_ref()
+                .map(|(_, count)| count.clone()),
+            Some(Ok(1))
+        );
         drop(cached);
 
         let _ = fs::remove_dir_all(root);
@@ -2570,8 +2576,14 @@ mod rpc_serve_request_tests {
         assert_eq!(healthy["metrics"]["ok"], serde_json::json!(true));
         // The count is read with the cached status; seed a failed read for the
         // same report.
-        health_cache.lock().expect("health cache").registry_update_count =
-            Some(Err("rpc server_info metrics failed: governance read refused".to_string()));
+        {
+            let mut cache = health_cache.lock().expect("health cache");
+            let checked_at = cache.status_checked_at.expect("refreshed");
+            cache.registry_update_count = Some((
+                checked_at,
+                Err("rpc server_info metrics failed: governance read refused".to_string()),
+            ));
+        }
         let (result, cache_hit) =
             rpc_serve_server_info(&root, &health_cache).expect("in-process server_info");
         assert!(cache_hit);
@@ -2585,6 +2597,72 @@ mod rpc_serve_request_tests {
             serde_json::json!("server_info_metrics_unavailable")
         );
         assert_eq!(result["ledger"], healthy["ledger"]);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// `status` serves a fresh cached status without the `server_info` count:
+    /// the startup seed (a status, no count) is served, and a `status` refresh
+    /// reads no count. `server_info` refreshes both together whenever its
+    /// count is not from the cached status's refresh.
+    #[test]
+    fn status_cache_does_not_need_the_server_info_count() {
+        let root = server_info_fixture("status-cache");
+        let seeded = status(NodeOptions {
+            data_dir: root.clone(),
+        })
+        .expect("seed status");
+        let seeded_at = Instant::now();
+        // The startup seed of rpc_serve_runtime: a status and no count.
+        let health_cache = Mutex::new(RpcServeHealthCache {
+            status: Some(seeded.clone()),
+            status_checked_at: Some(seeded_at),
+            ..RpcServeHealthCache::default()
+        });
+        let (served, cache_hit) =
+            rpc_serve_cached_status(&root, &health_cache).expect("cached status");
+        assert!(cache_hit, "the seeded status is served without a refresh");
+        assert_eq!(served, seeded);
+
+        // server_info refreshes status and count together.
+        let (_, cache_hit) =
+            rpc_serve_server_info(&root, &health_cache).expect("server_info");
+        assert!(!cache_hit, "no count yet, so server_info refreshes");
+        {
+            let cache = health_cache.lock().expect("health cache");
+            let (count_at, count) = cache.registry_update_count.clone().expect("count");
+            assert_eq!(Some(count_at), cache.status_checked_at);
+            assert_eq!(count, Ok(1));
+        }
+        assert!(rpc_serve_server_info(&root, &health_cache).expect("server_info").1);
+        assert!(rpc_serve_cached_status(&root, &health_cache).expect("status").1);
+
+        // An expired status refreshed by `status` alone reads no count; the
+        // next server_info then refreshes both again.
+        let expired = Instant::now()
+            .checked_sub(RPC_SERVE_HEALTH_STAMP_MAX_AGE * 2)
+            .expect("expired instant");
+        health_cache.lock().expect("health cache").status_checked_at = Some(expired);
+        let previous_count_at = health_cache
+            .lock()
+            .expect("health cache")
+            .registry_update_count
+            .as_ref()
+            .map(|(at, _)| *at);
+        let (_, cache_hit) =
+            rpc_serve_cached_status(&root, &health_cache).expect("status refresh");
+        assert!(!cache_hit);
+        {
+            let cache = health_cache.lock().expect("health cache");
+            assert_eq!(
+                cache.registry_update_count.as_ref().map(|(at, _)| *at),
+                previous_count_at,
+                "a status refresh does not read the count"
+            );
+            assert_ne!(cache.status_checked_at, previous_count_at);
+        }
+        let (_, cache_hit) =
+            rpc_serve_server_info(&root, &health_cache).expect("server_info");
+        assert!(!cache_hit, "the count is not from the cached status's refresh");
         let _ = fs::remove_dir_all(root);
     }
 }

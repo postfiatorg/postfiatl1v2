@@ -292,9 +292,11 @@ struct RpcServeMempoolSubmitState {
 #[derive(Debug, Default)]
 struct RpcServeHealthCache {
     status: Option<StatusReport>,
-    /// The validator-registry update count for `server_info`, read in the same
-    /// refresh and under the same store lease as `status`.
-    registry_update_count: Option<Result<u64, String>>,
+    /// The validator-registry update count for `server_info` and the start of
+    /// the refresh that read it. `server_info` uses it only while that refresh
+    /// is the cached status's, so the count and the height come from one read
+    /// under one lease. `status` never needs it.
+    registry_update_count: Option<(Instant, Result<u64, String>)>,
     mempool: Option<(RpcServeHealthStamp, postfiat_types::MempoolState)>,
     status_checked_at: Option<Instant>,
     mempool_checked_at: Option<Instant>,
@@ -1920,24 +1922,12 @@ fn rpc_serve_cached_status(
     data_dir: &Path,
     health_cache: &Mutex<RpcServeHealthCache>,
 ) -> Result<(StatusReport, bool), String> {
-    rpc_serve_cached_status_and_registry_count(data_dir, health_cache)
-        .map(|(report, _, cache_hit)| (report, cache_hit))
-}
-
-/// The cached status and the validator-registry update count, refreshed
-/// together under one store lease so both describe one moment.
-fn rpc_serve_cached_status_and_registry_count(
-    data_dir: &Path,
-    health_cache: &Mutex<RpcServeHealthCache>,
-) -> Result<(StatusReport, Result<u64, String>, bool), String> {
     if let Ok(cache) = health_cache.lock() {
         if cache.status_checked_at.is_some_and(|checked_at| {
             checked_at.elapsed() <= RPC_SERVE_HEALTH_STAMP_MAX_AGE
         }) {
-            if let (Some(report), Some(count)) =
-                (cache.status.as_ref(), cache.registry_update_count.as_ref())
-            {
-                return Ok((report.clone(), count.clone(), true));
+            if let Some(report) = cache.status.as_ref() {
+                return Ok((report.clone(), true));
             }
         }
     }
@@ -1945,6 +1935,39 @@ fn rpc_serve_cached_status_and_registry_count(
     // limit must bound the report itself, not just checks of those files.
     // Start the age before the read, and publish it only on success: a slow
     // or failed refresh must not extend the lifetime of an old report.
+    let checked_at = Instant::now();
+    let report = status(NodeOptions {
+        data_dir: data_dir.to_path_buf(),
+    })
+    .map_err(|error| format!("rpc status read failed: {error}"))?;
+    if let Ok(mut cache) = health_cache.lock() {
+        cache.status = Some(report.clone());
+        cache.status_checked_at = Some(checked_at);
+    }
+    Ok((report, false))
+}
+
+/// The cached status with the validator-registry update count read in the
+/// same refresh, for `server_info`. A fresh status whose refresh did not read
+/// the count is refreshed again, status and count together under one store
+/// lease, so both describe one moment.
+fn rpc_serve_cached_status_and_registry_count(
+    data_dir: &Path,
+    health_cache: &Mutex<RpcServeHealthCache>,
+) -> Result<(StatusReport, Result<u64, String>, bool), String> {
+    if let Ok(cache) = health_cache.lock() {
+        if let (Some(checked_at), Some(report), Some((count_checked_at, count))) = (
+            cache.status_checked_at,
+            cache.status.as_ref(),
+            cache.registry_update_count.as_ref(),
+        ) {
+            if checked_at.elapsed() <= RPC_SERVE_HEALTH_STAMP_MAX_AGE
+                && *count_checked_at == checked_at
+            {
+                return Ok((report.clone(), count.clone(), true));
+            }
+        }
+    }
     let checked_at = Instant::now();
     let store = postfiat_storage::NodeStore::new(data_dir);
     // One lease for the status and the count: `status()` reuses this
@@ -1963,7 +1986,7 @@ fn rpc_serve_cached_status_and_registry_count(
     drop(store_lease);
     if let Ok(mut cache) = health_cache.lock() {
         cache.status = Some(report.clone());
-        cache.registry_update_count = Some(registry_update_count.clone());
+        cache.registry_update_count = Some((checked_at, registry_update_count.clone()));
         cache.status_checked_at = Some(checked_at);
     }
     Ok((report, registry_update_count, false))
