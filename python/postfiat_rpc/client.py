@@ -17,6 +17,10 @@ from typing import Any
 
 RPC_VERSION = "postfiat-local-rpc-v1"
 DEFAULT_TIMEOUT_SECONDS = 8.0
+# `server_info` runs in a child process on the node that recomputes the status
+# and reads the whole stored history: 6.6-7.0 s on most devnet validators and
+# 10-12 s on the slowest (2026-11-09), so it gets more than the default.
+SERVER_INFO_TIMEOUT_SECONDS = 30.0
 DEFAULT_RESPONSE_BYTE_CAP = 1_048_576
 DEFAULT_READ_LIMIT = 100
 # Mirrors crates/node/src/lifecycle_queries.rs MAX_READ_QUERY_LIMIT: the node
@@ -3347,13 +3351,20 @@ class PostFiatRpcClient:
             "params": params,
         }
 
+    def _request_timeout(self, method: str) -> float:
+        """The read timeout for `method`: the client's, or more for a slow method."""
+        if method == "server_info":
+            return max(self.timeout_seconds, SERVER_INFO_TIMEOUT_SECONDS)
+        return self.timeout_seconds
+
     def _send(self, request: dict[str, Any]) -> dict[str, Any]:
         wire = json.dumps(request, separators=(",", ":")).encode("utf-8") + b"\n"
+        timeout = self._request_timeout(str(request.get("method", "")))
         with socket.create_connection(
             (self.endpoint.host, self.endpoint.port),
-            timeout=self.timeout_seconds,
+            timeout=timeout,
         ) as stream:
-            stream.settimeout(self.timeout_seconds)
+            stream.settimeout(timeout)
             stream.sendall(wire)
             stream.shutdown(socket.SHUT_WR)
             chunks: list[bytes] = []
@@ -3523,7 +3534,9 @@ class PostFiatWebSocketRpcClient(PostFiatRpcClient):
                     raise RpcProtocolError("request id reused on this WebSocket session")
                 self._sent_request_ids.add(wire_id)
                 websocket.send(wire)
-                message = websocket.recv(timeout=self.timeout_seconds)
+                message = websocket.recv(
+                    timeout=self._request_timeout(str(request.get("method", "")))
+                )
                 if isinstance(message, bytes):
                     raw = message.decode("utf-8")
                 else:

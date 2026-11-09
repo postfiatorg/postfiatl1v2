@@ -33,6 +33,13 @@ authorization inventory is
 | `account_tx` | Bounded account transaction history: transparent rows with native and issued payment memo contents, plus shielded-withdrawal credits. |
 | `account_tx_index_status` | Account-history index readiness. |
 
+`server_info` is slow by design. The node answers it in a child process that
+recomputes the status and reads the whole stored history. On the devnet
+validators on 2026-11-09 that took 6.6–12 s, so callers should allow 30 s for
+it; the Python client does (`SERVER_INFO_TIMEOUT_SECONDS`). `status` returns
+the same height, tip and state root quickly, from a cache. An in-process
+answer for `server_info` is planned.
+
 ## Ledger Object Reads
 
 | Method | Purpose |
