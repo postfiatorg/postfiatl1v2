@@ -2417,9 +2417,9 @@ mod rpc_serve_request_tests {
 
     /// A one-validator chain with three blocks of transfers and one validator
     /// registry update record, for the `server_info` comparison.
-    fn server_info_fixture() -> PathBuf {
+    fn server_info_fixture(label: &str) -> PathBuf {
         let root = env::temp_dir().join(format!(
-            "postfiat-server-info-in-process-{}",
+            "postfiat-server-info-{label}-{}",
             process::id()
         ));
         let _ = fs::remove_dir_all(&root);
@@ -2504,10 +2504,12 @@ mod rpc_serve_request_tests {
 
     /// rpc-serve's in-process `server_info` answers with the same fields,
     /// types and values as the `rpc --method server_info` computation its child
-    /// process used to run (status and metrics over the whole history).
+    /// process used to run (status and metrics over the whole history), except
+    /// `storage`: it describes the store handle that computed the status,
+    /// which is now rpc-serve's own (its counters differ on redb by design).
     #[test]
     fn server_info_in_process_matches_the_child_answer() {
-        let root = server_info_fixture();
+        let root = server_info_fixture("matches");
 
         let started = Instant::now();
         let mut child_answer =
@@ -2538,9 +2540,51 @@ mod rpc_serve_request_tests {
             in_process_fields.keys().collect::<Vec<_>>()
         );
         for (field, value) in child_fields {
+            if field == "storage" {
+                continue;
+            }
             assert_eq!(&in_process_fields[field], value, "field `{field}` differs");
         }
+        // `storage` is the cached status report's: rpc-serve's own handle.
+        let cached = health_cache.lock().expect("health cache");
+        assert_eq!(
+            in_process_fields["storage"],
+            serde_json::to_value(&cached.status.as_ref().expect("cached status").storage)
+                .expect("storage json")
+        );
+        assert_eq!(cached.registry_update_count, Some(Ok(1)));
+        drop(cached);
 
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// A failed registry-count read keeps the answer and reports the failure:
+    /// `metrics.ok` false, a null count, and the
+    /// `server_info_metrics_unavailable` warning.
+    #[test]
+    fn server_info_in_process_reports_a_failed_registry_count() {
+        let root = server_info_fixture("failed-count");
+        let health_cache = Mutex::new(RpcServeHealthCache::default());
+        let (healthy, _) =
+            rpc_serve_server_info(&root, &health_cache).expect("in-process server_info");
+        assert_eq!(healthy["metrics"]["ok"], serde_json::json!(true));
+        // The count is read with the cached status; seed a failed read for the
+        // same report.
+        health_cache.lock().expect("health cache").registry_update_count =
+            Some(Err("rpc server_info metrics failed: governance read refused".to_string()));
+        let (result, cache_hit) =
+            rpc_serve_server_info(&root, &health_cache).expect("in-process server_info");
+        assert!(cache_hit);
+        assert_eq!(result["metrics"]["ok"], serde_json::json!(false));
+        assert_eq!(
+            result["validators"]["registry_update_count"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            result["warnings"][0]["code"],
+            serde_json::json!("server_info_metrics_unavailable")
+        );
+        assert_eq!(result["ledger"], healthy["ledger"]);
         let _ = fs::remove_dir_all(root);
     }
 }

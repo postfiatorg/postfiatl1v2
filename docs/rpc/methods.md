@@ -39,7 +39,16 @@ authorization inventory is
 - one governance read, for `validators.registry_update_count`;
 - the constant fees.
 
-The response is unchanged. Main answers it in-process since `9f76e2e5e`. The
+The fields and values are the same as before, with four exceptions:
+
+- `metrics.ok` reports only the governance read; it no longer means the whole
+  stored history is readable;
+- `storage` describes rpc-serve's own store handle;
+- the answer can be up to 1 s old, like `status`, with the count read in the
+  same refresh as the status;
+- a failed status read returns `rpc_status_failed`.
+
+Main answers it in-process since `9f76e2e5e`. The
 deployed release still runs the child-process path, which recomputes the status
 and reads the whole stored history. That took 6.6–14.1 s on the devnet
 validators on 2026-11-09. Until the next release carries `9f76e2e5e` (see the

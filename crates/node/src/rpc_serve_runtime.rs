@@ -143,6 +143,8 @@ fn rpc_serve_drain(
     let finality_submit_lock = Arc::new(Mutex::new(()));
     let health_cache = Arc::new(Mutex::new(RpcServeHealthCache {
         status: Some(local_status.clone()),
+        // Read with the first `server_info` refresh.
+        registry_update_count: None,
         mempool: Some((
             rpc_serve_health_stamp(&options.data_dir, false)?,
             initial_mempool,

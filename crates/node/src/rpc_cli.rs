@@ -292,6 +292,9 @@ struct RpcServeMempoolSubmitState {
 #[derive(Debug, Default)]
 struct RpcServeHealthCache {
     status: Option<StatusReport>,
+    /// The validator-registry update count for `server_info`, read in the same
+    /// refresh and under the same store lease as `status`.
+    registry_update_count: Option<Result<u64, String>>,
     mempool: Option<(RpcServeHealthStamp, postfiat_types::MempoolState)>,
     status_checked_at: Option<Instant>,
     mempool_checked_at: Option<Instant>,
@@ -1893,16 +1896,16 @@ fn merge_rpc_serve_server_info_capabilities(
 }
 
 /// `server_info` answered inside rpc-serve: the cached status, the
-/// validator-registry update count from one governance read, and the constant
-/// fees. The result has the same fields, types and values as the
-/// `rpc --method server_info` answer (`rpc_dispatch::rpc_server_info`), which
-/// rpc-serve used to run in a child process.
+/// validator-registry update count cached with it, and the constant fees. The
+/// result has the fields of the `rpc --method server_info` answer
+/// (`rpc_dispatch::rpc_server_info`), which rpc-serve used to run in a child
+/// process.
 fn rpc_serve_server_info(
     data_dir: &Path,
     health_cache: &Mutex<RpcServeHealthCache>,
 ) -> Result<(serde_json::Value, bool), String> {
-    let (status_report, cache_hit) = rpc_serve_cached_status(data_dir, health_cache)?;
-    let registry_update_count = rpc_serve_registry_update_count(data_dir);
+    let (status_report, registry_update_count, cache_hit) =
+        rpc_serve_cached_status_and_registry_count(data_dir, health_cache)?;
     let result = rpc_dispatch::rpc_server_info_response(
         &status_report,
         registry_update_count
@@ -1913,28 +1916,28 @@ fn rpc_serve_server_info(
     Ok((result, cache_hit))
 }
 
-/// The validator-registry update count `metrics()` reports, from one
-/// governance read under the store lease `status()` also takes.
-fn rpc_serve_registry_update_count(data_dir: &Path) -> Result<u64, String> {
-    let store = postfiat_storage::NodeStore::new(data_dir);
-    let read = || -> std::io::Result<u64> {
-        let _store_lease = store.transactional_store_lease()?;
-        let governance = store.read_governance()?;
-        Ok(governance.validator_registry_updates.len() as u64)
-    };
-    read().map_err(|error| format!("rpc server_info metrics failed: {error}"))
-}
-
 fn rpc_serve_cached_status(
     data_dir: &Path,
     health_cache: &Mutex<RpcServeHealthCache>,
 ) -> Result<(StatusReport, bool), String> {
+    rpc_serve_cached_status_and_registry_count(data_dir, health_cache)
+        .map(|(report, _, cache_hit)| (report, cache_hit))
+}
+
+/// The cached status and the validator-registry update count, refreshed
+/// together under one store lease so both describe one moment.
+fn rpc_serve_cached_status_and_registry_count(
+    data_dir: &Path,
+    health_cache: &Mutex<RpcServeHealthCache>,
+) -> Result<(StatusReport, Result<u64, String>, bool), String> {
     if let Ok(cache) = health_cache.lock() {
         if cache.status_checked_at.is_some_and(|checked_at| {
             checked_at.elapsed() <= RPC_SERVE_HEALTH_STAMP_MAX_AGE
         }) {
-            if let Some(report) = cache.status.as_ref() {
-                return Ok((report.clone(), true));
+            if let (Some(report), Some(count)) =
+                (cache.status.as_ref(), cache.registry_update_count.as_ref())
+            {
+                return Ok((report.clone(), count.clone(), true));
             }
         }
     }
@@ -1943,15 +1946,27 @@ fn rpc_serve_cached_status(
     // Start the age before the read, and publish it only on success: a slow
     // or failed refresh must not extend the lifetime of an old report.
     let checked_at = Instant::now();
+    let store = postfiat_storage::NodeStore::new(data_dir);
+    // One lease for the status and the count: `status()` reuses this
+    // process's open handle instead of opening the database again.
+    let store_lease = store
+        .transactional_store_lease()
+        .map_err(|error| format!("rpc status read failed: {error}"))?;
     let report = status(NodeOptions {
         data_dir: data_dir.to_path_buf(),
     })
     .map_err(|error| format!("rpc status read failed: {error}"))?;
+    let registry_update_count = store
+        .read_governance()
+        .map(|governance| governance.validator_registry_updates.len() as u64)
+        .map_err(|error| format!("rpc server_info metrics failed: {error}"));
+    drop(store_lease);
     if let Ok(mut cache) = health_cache.lock() {
         cache.status = Some(report.clone());
+        cache.registry_update_count = Some(registry_update_count.clone());
         cache.status_checked_at = Some(checked_at);
     }
-    Ok((report, false))
+    Ok((report, registry_update_count, false))
 }
 
 fn rpc_serve_cached_mempool(
@@ -5519,6 +5534,7 @@ mod child_dispatch_limit_tests {
             finality_submit_lock: Arc::new(Mutex::new(())),
             health_cache: Arc::new(Mutex::new(RpcServeHealthCache {
                 status: None,
+                registry_update_count: None,
                 mempool: None,
                 status_checked_at: None,
                 mempool_checked_at: None,
