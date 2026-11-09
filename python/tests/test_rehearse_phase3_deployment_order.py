@@ -125,6 +125,27 @@ class GenesisAndManifestTests(unittest.TestCase):
         self.assertEqual(set(manifest["evidence_files"]), {"summary.json"})
         self.assertEqual(set(manifest["not_published"]), {"deploy-lock.stdout"})
 
+    def test_manifest_inventories_nested_files_recursively(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out / "summary.json").write_text("{}\n")
+            (out / "manifest.json").write_text("{}\n")
+            nested = out / "forge-out-x" / "A.sol"
+            nested.mkdir(parents=True)
+            (nested / "A.json").write_text("{\"a\": 1}\n")
+            (out / "forge-cache-x").mkdir()
+            (out / "forge-cache-x" / "summary.json").write_text("{}\n")
+            manifest = rehearsal.build_manifest(out, "c" * 40, "t" * 40, {}, {})
+        self.assertEqual(set(manifest["evidence_files"]), {"summary.json"})
+        self.assertEqual(set(manifest["not_published"]), {"forge-out-x/A.sol/A.json", "forge-cache-x/summary.json"})
+        self.assertEqual(manifest["not_published"]["forge-out-x/A.sol/A.json"]["bytes"], 9)
+
+    def test_build_provenance_names_the_host_and_rust_toolchain(self):
+        provenance = rehearsal.build_provenance("dev (debug)")
+        self.assertEqual(set(provenance), {"cargo", "rustc", "python", "host_os", "postfiat_node_build_profile"})
+        self.assertEqual(provenance["postfiat_node_build_profile"], "dev (debug)")
+        self.assertTrue(provenance["python"] and provenance["host_os"])
+
     def test_fixture_checkpoint_is_non_zero(self):
         for key in ("initialCheckpointCommitment", "initialCommitteeRootCommitment", "pftlGenesisHashCommitment"):
             self.assertNotEqual(int(rehearsal.FIXTURE_CHECKPOINT[key], 16), 0)

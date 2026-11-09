@@ -64,6 +64,12 @@ Anvil is stopped.
 - The manifest holds the addresses, code hashes, nonces, tool versions, the
   source commit and tree, the sha256 of each source and Foundry artifact, and
   the node binary's sha256.
+- It also records the cargo, rustc and Python versions, the node's build
+  profile and the host OS.
+- `postfiat_node_sha256` identifies the exact binary used. It is not expected to
+  reproduce across builds; the source, configuration and artifact hashes are.
+- `not_published` lists every other file under the output directory,
+  recursively, by its path relative to that directory, with sha256 and size.
 - The generated node directory holds dev validator keys. It is removed after a
   passing run.
 

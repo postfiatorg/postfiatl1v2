@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import shutil
 import socket
 import subprocess
@@ -48,7 +49,8 @@ ARTIFACTS = {
     'PFTLockV1': (TOKEN_CRATE, 'PFTLockV1.sol/PFTLockV1.json'),
     'PFTLFinalityVerifierV1': (VERIFIER_CRATE, 'PFTLFinalityVerifierV1.sol/PFTLFinalityVerifierV1.json'),
 }
-# The files the public record keeps; the manifest lists every other one by sha256 and size only.
+# The files the public record keeps; the manifest lists every other file under the
+# output directory, recursively, by relative path, sha256 and size only.
 PUBLISHED = ('summary.json', 'manifest.json')
 
 
@@ -223,19 +225,36 @@ def confined_output(output):
 
 
 def build_manifest(out, commit, tree, toolchain, deployment):
-    files = sorted(path for path in out.iterdir() if path.is_file() and path.name != 'manifest.json')
+    files = {path.relative_to(out).as_posix(): path for path in sorted(out.rglob('*')) if path.is_file()}
+    files.pop('manifest.json', None)
     return {
         'source_commit': commit,
         'source_tree': tree,
         'toolchain': toolchain,
         'deployment': deployment,
         'source_files': {name: sha256_file(ROOT / name) for name in SOURCE_FILES},
-        'evidence_files': {path.name: sha256_file(path) for path in files if path.name in PUBLISHED},
-        'not_published': {path.name: {'sha256': sha256_file(path), 'bytes': path.stat().st_size}
-                          for path in files if path.name not in PUBLISHED},
+        'evidence_files': {name: sha256_file(path) for name, path in files.items() if name in PUBLISHED},
+        'not_published': {name: {'sha256': sha256_file(path), 'bytes': path.stat().st_size}
+                          for name, path in files.items() if name not in PUBLISHED},
         'not_published_note': 'Raw run artifacts stay out of the docs tree; '
                               'scripts/rehearse-phase3-deployment-order.py regenerates them in its --output directory.',
     }
+
+
+def tool_version(tool):
+    """The first line of `tool --version`, or None when the tool is absent."""
+    try:
+        return subprocess.check_output([tool, '--version'], cwd=ROOT, text=True).strip().splitlines()[0]
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def build_provenance(node_build_profile):
+    """The host and Rust toolchain the run used. The node binary's sha256 identifies
+    the exact binary; a debug build is not expected to reproduce it."""
+    return {'cargo': tool_version('cargo'), 'rustc': tool_version('rustc'),
+            'python': platform.python_version(), 'host_os': platform.platform(),
+            'postfiat_node_build_profile': node_build_profile}
 
 
 def free_port():
@@ -335,7 +354,11 @@ def main(argv=None):
             command('node-build', ['cargo', 'build', '--locked', '-p', 'postfiat-node', '--bin', 'postfiat-node'])
             node_bin = ROOT / 'target/debug/postfiat-node'
         node_bin = node_bin.resolve()
+        toolchain.update(build_provenance('dev (debug), cargo build --locked' if args.node_bin is None
+                                          else 'unknown (given by --node-bin)'))
         toolchain['postfiat_node_sha256'] = sha256_file(node_bin)
+        toolchain['postfiat_node_sha256_note'] = ('identifies the exact binary used; not expected to reproduce '
+                                                  'across builds')
         results['toolchain'] = toolchain
 
         # A fresh loopback Anvil.
