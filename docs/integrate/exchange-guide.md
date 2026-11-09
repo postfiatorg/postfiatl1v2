@@ -192,8 +192,10 @@ Sequence and mempool rules (`crates/execution/src/entrypoints.rs`,
   transaction ID or a second pending transaction with the same sender
   sequence. At most 64 transactions per sender and 1,024 in total may be
   pending. `transfer_fee_quote` prices the next transfer on the ledger after
-  the pending entries, so a quote taken while earlier withdrawals are pending
-  counts their debits and the accounts they create.
+  the pending plain transfers, the ones admission runs before it. A quote
+  taken while earlier withdrawals are pending therefore counts their debits
+  and the accounts they create. An account that only a pending memo payment,
+  asset, escrow, NFT or offer entry creates still costs the creation fee.
 - **No expiry.** A signed v1 transfer stays valid until its sequence is used.
   To cancel a signed but unexecuted withdrawal, use up that sequence with
   another transaction.

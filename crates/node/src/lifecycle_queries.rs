@@ -1466,16 +1466,25 @@ pub fn transfer_fee_quote(options: TransferFeeQuoteOptions) -> io::Result<Transf
         None => next_pending_sender_sequence(&mempool, &options.from, ledger_sender.sequence)?,
     };
     let sender_sequence = ledger_sender.sequence;
-    // Price the transfer on the ledger its sequence executes on: after the
-    // executable mempool, as admission and the other fee quotes do.
+    let memos = payment_v2_quote_memos(&options)?;
+    // Price the transfer on the ledger admission dry-runs it on: the committed
+    // ledger plus the pending entries that run before it (plain transfers, and
+    // for a memo payment the pending `payment_v2` entries as well).
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
-    let quote_ledger = ledger_after_executable_mempool(
+    let mut quote_ledger = ledger;
+    apply_pending_before_new_transfer(
         &genesis,
-        ledger,
+        &mut quote_ledger,
         &mempool,
         block_height,
         asset_execution_compatibility,
+        if memos.is_empty() {
+            PendingPrefix::Transfer
+        } else {
+            PendingPrefix::PaymentV2
+        },
+        "mempool dry-run",
     )?;
     let sender = quote_ledger.account(&options.from).ok_or_else(|| {
         io::Error::new(
@@ -1487,7 +1496,6 @@ pub fn transfer_fee_quote(options: TransferFeeQuoteOptions) -> io::Result<Transf
         )
     })?;
     let mempool_pending_for_sender = mempool_pending_count_for_sender(&mempool, &options.from);
-    let memos = payment_v2_quote_memos(&options)?;
     let quote_transaction_kind = if memos.is_empty() {
         TRANSFER_TRANSACTION_KIND
     } else {

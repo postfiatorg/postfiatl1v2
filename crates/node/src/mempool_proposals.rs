@@ -56,16 +56,19 @@ pub fn submit_transfer_to_mempool(options: TransferOptions) -> io::Result<Mempoo
     let mempool = store.read_mempool()?;
     enforce_mempool_admission_limits(&mempool, &key_file.address)?;
     let sequence = next_pending_sender_sequence(&mempool, &key_file.address, sender.sequence)?;
-    // Declare the fee of the ledger this sequence executes on, as
-    // `transfer_fee_quote` quotes it: after the executable mempool.
+    // Declare the fee of the ledger this transfer executes on, as
+    // `transfer_fee_quote` quotes it: after the pending plain transfers.
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
-    let fee_ledger = ledger_after_executable_mempool(
+    let mut fee_ledger = ledger;
+    apply_pending_before_new_transfer(
         &genesis,
-        ledger,
+        &mut fee_ledger,
         &mempool,
         block_height,
         asset_execution_compatibility,
+        PendingPrefix::Transfer,
+        "mempool dry-run",
     )?;
     let signed = build_signed_transfer_for_key(
         &genesis,
@@ -239,24 +242,15 @@ fn admit_signed_transfer_to_mempool(
         ));
     }
     let mut dry_run_ledger = ledger.clone();
-    for pending in &mempool.pending {
-        let pending_receipt = execute_transfer_with_compatibility(
-            &genesis,
-            &mut dry_run_ledger,
-            &pending.transfer,
-            block_height,
-            asset_execution_compatibility,
-        );
-        if !pending_receipt.accepted {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "mempool admission blocked by stale pending `{}`: {}",
-                    pending.tx_id, pending_receipt.message
-                ),
-            ));
-        }
-    }
+    apply_pending_before_new_transfer(
+        &genesis,
+        &mut dry_run_ledger,
+        &mempool,
+        block_height,
+        asset_execution_compatibility,
+        PendingPrefix::Transfer,
+        "mempool admission",
+    )?;
     let dry_run_receipt = execute_transfer_with_compatibility(
         &genesis,
         &mut dry_run_ledger,
@@ -273,24 +267,14 @@ fn admit_signed_transfer_to_mempool(
             ),
         ));
     }
-    for pending in &mempool.pending_payment_v2 {
-        let pending_receipt = execute_payment_v2_with_compatibility(
-            &genesis,
-            &mut dry_run_ledger,
-            &pending.payment,
-            block_height,
-            asset_execution_compatibility,
-        );
-        if !pending_receipt.accepted {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "mempool admission blocked by stale pending `{}`: {}",
-                    pending.tx_id, pending_receipt.message
-                ),
-            ));
-        }
-    }
+    apply_pending_payment_v2(
+        &genesis,
+        &mut dry_run_ledger,
+        &mempool,
+        block_height,
+        asset_execution_compatibility,
+        "mempool admission",
+    )?;
     for pending in &mempool.pending_asset_transactions {
         let pending_receipt = execute_asset_transaction_with_compatibility(
             &genesis,
@@ -410,42 +394,15 @@ fn admit_signed_payment_v2_to_mempool(
         ));
     }
     let mut dry_run_ledger = ledger.clone();
-    for pending in &mempool.pending {
-        let pending_receipt = execute_transfer_with_compatibility(
-            &genesis,
-            &mut dry_run_ledger,
-            &pending.transfer,
-            block_height,
-            asset_execution_compatibility,
-        );
-        if !pending_receipt.accepted {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "mempool admission blocked by stale pending `{}`: {}",
-                    pending.tx_id, pending_receipt.message
-                ),
-            ));
-        }
-    }
-    for pending in &mempool.pending_payment_v2 {
-        let pending_receipt = execute_payment_v2_with_compatibility(
-            &genesis,
-            &mut dry_run_ledger,
-            &pending.payment,
-            block_height,
-            asset_execution_compatibility,
-        );
-        if !pending_receipt.accepted {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "mempool admission blocked by stale pending `{}`: {}",
-                    pending.tx_id, pending_receipt.message
-                ),
-            ));
-        }
-    }
+    apply_pending_before_new_transfer(
+        &genesis,
+        &mut dry_run_ledger,
+        &mempool,
+        block_height,
+        asset_execution_compatibility,
+        PendingPrefix::PaymentV2,
+        "mempool admission",
+    )?;
     let dry_run_receipt = execute_payment_v2_with_compatibility(
         &genesis,
         &mut dry_run_ledger,
@@ -1312,6 +1269,90 @@ pub(super) fn mempool_pending_count_for_sender(mempool: &MempoolState, sender: &
             .filter(|entry| entry.transaction.unsigned.source == sender)
             .count();
     u64::try_from(count).unwrap_or(u64::MAX)
+}
+
+/// The pending families that run before a new transfer, in admission's and
+/// the block's order: plain transfers first, then `payment_v2` entries, then
+/// the other kinds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PendingPrefix {
+    /// Before a new plain transfer: the pending plain transfers.
+    Transfer,
+    /// Before a new `payment_v2`: the pending plain transfers, then the
+    /// pending `payment_v2` entries.
+    PaymentV2,
+}
+
+/// Runs on `ledger` the pending entries that execute before a new transfer of
+/// `prefix`'s kind. Admission and the transfer quote share it, so the ledger a
+/// quote prices is the one admission dry-runs the transfer on.
+pub(super) fn apply_pending_before_new_transfer(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    mempool: &MempoolState,
+    block_height: u64,
+    asset_execution_compatibility: AssetExecutionCompatibility,
+    prefix: PendingPrefix,
+    context: &str,
+) -> io::Result<()> {
+    for pending in &mempool.pending {
+        let pending_receipt = execute_transfer_with_compatibility(
+            genesis,
+            ledger,
+            &pending.transfer,
+            block_height,
+            asset_execution_compatibility,
+        );
+        if !pending_receipt.accepted {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "{context} blocked by stale pending `{}`: {}",
+                    pending.tx_id, pending_receipt.message
+                ),
+            ));
+        }
+    }
+    if prefix == PendingPrefix::PaymentV2 {
+        apply_pending_payment_v2(
+            genesis,
+            ledger,
+            mempool,
+            block_height,
+            asset_execution_compatibility,
+            context,
+        )?;
+    }
+    Ok(())
+}
+
+fn apply_pending_payment_v2(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    mempool: &MempoolState,
+    block_height: u64,
+    asset_execution_compatibility: AssetExecutionCompatibility,
+    context: &str,
+) -> io::Result<()> {
+    for pending in &mempool.pending_payment_v2 {
+        let pending_receipt = execute_payment_v2_with_compatibility(
+            genesis,
+            ledger,
+            &pending.payment,
+            block_height,
+            asset_execution_compatibility,
+        );
+        if !pending_receipt.accepted {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "{context} blocked by stale pending `{}`: {}",
+                    pending.tx_id, pending_receipt.message
+                ),
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn ledger_after_executable_mempool(

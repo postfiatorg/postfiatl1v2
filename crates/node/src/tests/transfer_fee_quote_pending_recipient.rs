@@ -208,3 +208,118 @@ fn transfer_fee_quote_counts_the_pending_debit_of_the_sender() {
 
     fs::remove_dir_all(data_dir).expect("cleanup");
 }
+
+/// Another sender's pending `payment_v2` creates the recipient. A plain
+/// transfer runs before every pending `payment_v2` in admission and in the
+/// block, so for it the recipient does not exist yet: the quote and the fee
+/// `mempool-submit-transfer` declares must include the creation fee. A memo
+/// quote runs after the pending `payment_v2` entries and sees the recipient.
+#[test]
+fn transfer_fee_quote_runs_only_the_entries_before_a_plain_transfer() {
+    let data_dir = init_devnet("postfiat-transfer-fee-quote-family-order");
+    let genesis = NodeStore::new(&data_dir).read_genesis().expect("genesis");
+    let faucet = read_transfer_key_file(&data_dir, None).expect("faucet key");
+    let sender = create_dev_key_file().expect("sender key");
+    let sender_key = data_dir.join("sender.key.json");
+    fs::write(
+        &sender_key,
+        serde_json::to_string_pretty(&sender).expect("key json"),
+    )
+    .expect("write sender key");
+    set_private_file_permissions(&sender_key).expect("key permissions");
+    submit_faucet_transfer(&data_dir, &sender.address, 100_000).expect("fund sender");
+    assert!(apply_pending(&data_dir, 1)[0].accepted);
+
+    // The faucet's pending payment_v2 creates SINK.
+    let memo = || PaymentMemo {
+        memo_type: "74616700".to_string(),
+        memo_format: String::new(),
+        memo_data: "2a".to_string(),
+    };
+    let memo_quote = |from: &str| {
+        transfer_fee_quote(TransferFeeQuoteOptions {
+            data_dir: data_dir.clone(),
+            from: from.to_string(),
+            to: SINK.to_string(),
+            amount: AMOUNT,
+            sequence: None,
+            memo_type: Some(memo().memo_type),
+            memo_format: Some(memo().memo_format),
+            memo_data: Some(memo().memo_data),
+        })
+        .expect("memo quote")
+    };
+    let faucet_quote = memo_quote(&faucet.address);
+    let unsigned = UnsignedPaymentV2 {
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        address_namespace: postfiat_types::ADDRESS_NAMESPACE.to_string(),
+        transaction_kind: PAYMENT_V2_TRANSACTION_KIND.to_string(),
+        signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        from: faucet.address.clone(),
+        to: SINK.to_string(),
+        amount: AMOUNT,
+        fee: faucet_quote.minimum_fee,
+        sequence: faucet_quote.sequence,
+        memos: vec![memo()],
+    };
+    let private_key = hex_to_bytes(&faucet.private_key_hex).expect("faucet private key");
+    let signature = ml_dsa_65_sign(&private_key, &unsigned.signing_bytes()).expect("sign");
+    let payment = SignedPaymentV2 {
+        unsigned,
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        public_key_hex: faucet.public_key_hex.clone(),
+        signature_hex: bytes_to_hex(&signature),
+    };
+    submit_signed_payment_v2_json_to_mempool(SignedPaymentV2JsonSubmitOptions {
+        data_dir: data_dir.clone(),
+        signed_payment_v2_json: serde_json::to_string(&payment).expect("payment json"),
+    })
+    .expect("pending payment_v2 creating the recipient");
+
+    // A plain transfer from the other sender runs before that payment_v2.
+    let quote = transfer_fee_quote(TransferFeeQuoteOptions {
+        data_dir: data_dir.clone(),
+        from: sender.address.clone(),
+        to: SINK.to_string(),
+        amount: AMOUNT,
+        sequence: None,
+        memo_type: None,
+        memo_format: None,
+        memo_data: None,
+    })
+    .expect("plain quote");
+    assert!(!quote.recipient_exists, "{quote:?}");
+    assert!(quote.will_create_recipient_account);
+    assert_eq!(quote.state_expansion_fee, TRANSFER_ACCOUNT_CREATION_FEE);
+
+    let submitted = submit_transfer_to_mempool(TransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: Some(sender_key.clone()),
+        to: SINK.to_string(),
+        amount: AMOUNT,
+    })
+    .expect("admission accepts the plain transfer at the quoted fee");
+    assert_eq!(submitted.transfer.unsigned.fee, quote.minimum_fee);
+
+    // A memo payment runs after the pending payment_v2 entries: the recipient exists.
+    let sender_memo_quote = memo_quote(&sender.address);
+    assert!(sender_memo_quote.recipient_exists, "{sender_memo_quote:?}");
+    assert_eq!(sender_memo_quote.state_expansion_fee, 0);
+
+    let receipts = apply_pending(&data_dir, 10);
+    assert_eq!(receipts.len(), 2, "{receipts:?}");
+    assert!(receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
+    let transfer_receipt = receipts
+        .iter()
+        .find(|receipt| receipt.tx_id == submitted.tx_id)
+        .expect("transfer receipt");
+    assert_eq!(
+        (transfer_receipt.state_expansion_fee, transfer_receipt.minimum_fee),
+        (quote.state_expansion_fee, quote.minimum_fee),
+        "the plain transfer created the recipient, as quoted"
+    );
+
+    fs::remove_dir_all(data_dir).expect("cleanup");
+}

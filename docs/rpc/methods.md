@@ -89,14 +89,29 @@ Signed submit methods reject a destination address that is not a canonical
 adds `address_checksummed`, the display form of `address`.
 
 The fee quotes take the next sequence from the mempool and price the
-transaction on the ledger after the executable mempool, the sender's pending
-entries included, as admission does. For `transfer_fee_quote` this means
-`minimum_fee`, `state_expansion_fee`, `recipient_exists`, `sender_balance` and
-the reserve checks describe the ledger that sequence runs on: a recipient a
-pending transfer creates already exists and the sender's pending debits are
-counted. Its `sender_sequence` stays the committed sequence. The quote holds
-only while the pending entries do: if one is dropped before the block, a fee
-signed from the quote can be below the minimum the block then requires.
+transaction on a ledger that includes pending entries.
+
+- `transfer_fee_quote` prices on the ledger admission dry-runs the transfer
+  on. That is the committed ledger plus every sender's pending plain
+  transfers; a memo quote adds the pending `payment_v2` entries. This is the
+  order a block runs them in.
+- So its `minimum_fee`, `state_expansion_fee`, `recipient_exists`,
+  `sender_balance` and reserve checks count a recipient that one of those
+  entries creates, and their debits.
+- They do not count kinds that run after the transfer: asset, escrow, NFT or
+  offer entries, or `payment_v2` entries for a plain transfer. A plain transfer
+  to an account that only such an entry creates pays the creation fee.
+- Its `sender_sequence` stays the committed sequence.
+- The other four quotes price on the ledger after the whole executable
+  mempool.
+
+A quote holds only while the pending entries do: if one is dropped before the
+block, a fee signed from the quote can be below the minimum the block then
+requires. A pending entry that no longer executes makes a quote fail with
+`mempool dry-run blocked by stale pending …`, and it makes admission refuse as
+well. For `transfer_fee_quote` this applies to any sender's pending plain
+transfer (or `payment_v2`, for a memo quote); for the other quotes, to any
+pending entry.
 
 The escrow and offer reserve flags count the native PFT the transaction
 locks, as execution does after taking the fee. In `escrow_fee_quote`,
