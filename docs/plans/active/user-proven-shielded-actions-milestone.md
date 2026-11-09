@@ -211,6 +211,7 @@ deployment or milestone completion.
 - [x] Correct gateway connection lifecycle: retire sockets at the node's
   64-request ceiling and ignore stale socket events without replaying
   mutations (`a6362a955`, `wallet-proxy/test_rpc_connection_lifecycle.js`).
+- [x] Merged to main in `a8593af50` (#196) and `45312c804` (its review fixes).
 - S2.4 records the run; S7/S8 and public distribution remain open.
 
 ## References
