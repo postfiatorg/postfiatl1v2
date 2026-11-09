@@ -514,3 +514,182 @@ fn offer_create_quote_and_admission_refuse_one_atom_past_the_reserve() {
     );
     fs::remove_dir_all(devnet.data_dir).expect("cleanup");
 }
+
+// ---------------------------------------------------------------------------
+// Issued assets lock nothing native
+// ---------------------------------------------------------------------------
+
+const ISSUED_HOLDING: u64 = 1_000;
+
+/// A faucet-issued asset, a trustline for each of `holders`, and
+/// `ISSUED_HOLDING` units paid to the first holder: more units than it holds
+/// native atoms, so a native lock of that amount could not pass.
+fn setup_issued_holding(devnet: &Devnet, holders: &[&Holder]) -> String {
+    let ledger = devnet.store.read_ledger().expect("ledger");
+    let faucet_sequence = ledger
+        .account(&devnet.faucet.address)
+        .expect("faucet")
+        .sequence
+        + 1;
+    let sign = |ledger: &LedgerState, signer: &Holder, kind: &str, sequence: u64, operation| {
+        signed_asset_transaction_for_test(
+            &devnet.genesis,
+            ledger,
+            &signer.address,
+            &signer.public_key_hex,
+            &signer.private_key_hex,
+            kind,
+            sequence,
+            operation,
+        )
+    };
+    let faucet = Holder {
+        address: devnet.faucet.address.clone(),
+        public_key_hex: devnet.faucet.public_key_hex.clone(),
+        private_key_hex: devnet.faucet.private_key_hex.clone(),
+    };
+    let mut dry_run = ledger.clone();
+    let mut transactions = vec![sign(
+        &dry_run,
+        &faucet,
+        ASSET_CREATE_TRANSACTION_KIND,
+        faucet_sequence,
+        AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+            issuer: devnet.faucet.address.clone(),
+            code: "ISX".to_string(),
+            version: 1,
+            precision: 0,
+            display_name: "issued no-lock asset".to_string(),
+            max_supply: Some(10 * ISSUED_HOLDING),
+            requires_authorization: false,
+            freeze_enabled: false,
+            clawback_enabled: false,
+        }),
+    )];
+    assert!(execute_asset_transaction(&devnet.genesis, &mut dry_run, &transactions[0], 1).accepted);
+    let asset_id = dry_run.asset_definitions[0].asset_id.clone();
+    for holder in holders {
+        let trust_set = sign(
+            &dry_run,
+            holder,
+            TRUST_SET_TRANSACTION_KIND,
+            1,
+            AssetTransactionOperation::TrustSet(TrustSetOperation {
+                account: holder.address.clone(),
+                issuer: devnet.faucet.address.clone(),
+                asset_id: asset_id.clone(),
+                limit: 5 * ISSUED_HOLDING,
+                authorized: false,
+                frozen: false,
+                reserve_paid: postfiat_execution::TRUSTLINE_STATE_EXPANSION_FEE,
+            }),
+        );
+        assert!(execute_asset_transaction(&devnet.genesis, &mut dry_run, &trust_set, 1).accepted);
+        transactions.push(trust_set);
+    }
+    let payment = sign(
+        &dry_run,
+        &faucet,
+        ISSUED_PAYMENT_TRANSACTION_KIND,
+        faucet_sequence + 1,
+        AssetTransactionOperation::IssuedPayment(IssuedPaymentOperation {
+            from: devnet.faucet.address.clone(),
+            to: holders[0].address.clone(),
+            issuer: devnet.faucet.address.clone(),
+            asset_id: asset_id.clone(),
+            amount: ISSUED_HOLDING,
+        }),
+    );
+    transactions.push(payment);
+    let batch = postfiat_mempool_dag::build_mixed_transaction_batch_with_assets(
+        &mempool_batch_domain(&devnet.genesis),
+        Vec::new(),
+        Vec::new(),
+        transactions,
+    )
+    .expect("issued setup batch")
+    .batch;
+    let batch_file = devnet.data_dir.join("issued-setup-batch.json");
+    write_batch_file(&batch_file, &batch).expect("write issued setup batch");
+    let receipts = apply_batch(ApplyBatchOptions {
+        data_dir: devnet.data_dir.clone(),
+        batch_file,
+        certificate_file: None,
+    })
+    .expect("apply issued setup");
+    assert!(
+        receipts.iter().all(|receipt| receipt.accepted),
+        "{receipts:?}"
+    );
+    asset_id
+}
+
+/// An issued-asset escrow locks no native PFT: the after-amount field equals
+/// the after-fee field, the flag says the reserve is met, and admission and
+/// the block accept an escrow of more units than the owner holds native atoms.
+#[test]
+fn issued_escrow_create_quote_subtracts_no_native_lock() {
+    let devnet = init_devnet("postfiat-escrow-quote-issued-no-lock");
+    let holder = keygen_holder();
+    let recipient = keygen_holder();
+    fund(&devnet, &holder.address, FUNDING, 1);
+    fund(&devnet, &recipient.address, FUNDING, 2);
+    let asset_id = setup_issued_holding(&devnet, &[&holder, &recipient]);
+
+    let operation = EscrowTransactionOperation::EscrowCreate(EscrowCreateOperation {
+        owner: holder.address.clone(),
+        recipient: recipient.address.clone(),
+        asset_id,
+        amount: ISSUED_HOLDING,
+        condition: "issued-no-lock".to_string(),
+        finish_after: 0,
+        cancel_after: 50,
+    });
+    let quote = quote_escrow(&devnet, &holder.address, &operation);
+    assert!(quote.sender_balance < ISSUED_HOLDING, "{quote:?}");
+    assert!(quote.sender_meets_reserve_after_fee, "{quote:?}");
+    assert_eq!(
+        quote.sender_balance_after_amount_and_fee,
+        quote.sender_balance_after_fee
+    );
+    let signed = sign_escrow(&devnet, &holder, quote.sequence, &operation);
+    submit_escrow(&devnet, &signed).expect("admission accepts the issued escrow");
+    let receipts = apply_pending(&devnet, "issued-escrow");
+    assert!(receipts.len() == 1 && receipts[0].accepted, "{receipts:?}");
+    fs::remove_dir_all(devnet.data_dir).expect("cleanup");
+}
+
+/// An offer that sells an issued asset and buys native PFT locks no native
+/// PFT: the after-amount field equals the after-fee-and-reserve field, the
+/// flag says the reserve is met, and admission and the block accept it.
+#[test]
+fn issued_sell_native_buy_offer_quote_subtracts_no_native_lock() {
+    let devnet = init_devnet("postfiat-offer-quote-issued-no-lock");
+    let holder = keygen_holder();
+    fund(&devnet, &holder.address, FUNDING, 1);
+    let asset_id = setup_issued_holding(&devnet, &[&holder]);
+
+    let operation = OfferTransactionOperation::OfferCreate(OfferCreateOperation {
+        owner: holder.address.clone(),
+        taker_gets_asset_id: asset_id,
+        taker_gets_amount: ISSUED_HOLDING,
+        taker_pays_asset_id: postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+        taker_pays_amount: 1,
+        expiration_height: 0,
+    });
+    let quote = quote_offer(&devnet, &holder.address, &operation);
+    assert!(quote.sender_balance < ISSUED_HOLDING, "{quote:?}");
+    assert!(
+        quote.sender_meets_reserve_after_fee_and_reserve,
+        "{quote:?}"
+    );
+    assert_eq!(
+        quote.sender_balance_after_amount_fee_and_reserve,
+        quote.sender_balance_after_fee_and_reserve
+    );
+    let signed = sign_offer(&devnet, &holder, quote.sequence, &operation);
+    submit_offer(&devnet, &signed).expect("admission accepts the issued-sell offer");
+    let receipts = apply_pending(&devnet, "issued-offer");
+    assert!(receipts.len() == 1 && receipts[0].accepted, "{receipts:?}");
+    fs::remove_dir_all(devnet.data_dir).expect("cleanup");
+}

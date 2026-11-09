@@ -935,7 +935,7 @@ test('sendEscrowTransaction rejects insufficient fee reserve before signing', as
     () => builder.sendEscrowTransaction('backup-json', 'pf-from', {
       operation: { operation: 'escrow_cancel', escrow_id: 'escrow-1', owner: 'pf-from' },
     }),
-    /Insufficient balance for escrow transaction fee/,
+    /Insufficient balance for escrow transaction fee and locked amount/,
   );
   assert.deepEqual(calls, ['escrowFeeQuote']);
 });

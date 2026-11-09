@@ -733,8 +733,9 @@ export class TxBuilder {
     if (!quoteResp.ok) throw new Error('Escrow fee quote failed: ' + (quoteResp.error?.message || 'unknown'));
     const quote = quoteResp.result;
 
+    // For a native escrow_create the flag also counts the amount the escrow locks.
     if (quote.sender_meets_reserve_after_fee === false) {
-      throw new Error('Insufficient balance for escrow transaction fee.');
+      throw new Error('Insufficient balance for escrow transaction fee and locked amount.');
     }
     if (quote.source && quote.source !== sourceAddress) {
       throw new Error('Escrow fee quote source does not match the wallet address.');
