@@ -1,17 +1,17 @@
-// Reproduction for postfiatorg/postfiatl1v2#197.
+// Regression tests for postfiatorg/postfiatl1v2#197.
 //
-// `escrow_fee_quote` and `offer_fee_quote` report whether the sender keeps the
-// account reserve from `sender.balance - minimum_fee` (for offers, minus the
-// offer object reserve as well). Execution also locks the native PFT the
-// transaction moves: the escrow amount (`apply_escrow_operation`) and the
-// offer's native sell side (`lock_offer_sell_side`), and refuses with
-// `below_account_reserve` or `insufficient_funds` when that lock breaks the
-// reserve. `transfer_fee_quote` subtracts the amount; these two quotes do not.
+// Execution locks the native PFT an `escrow_create` escrows
+// (`apply_escrow_operation`) or an `offer_create` sells (`lock_offer_sell_side`)
+// after taking the fee, and refuses with `insufficient_funds` or
+// `below_account_reserve` when the lock breaks the reserve. `escrow_fee_quote`
+// and `offer_fee_quote` count that lock in `sender_meets_reserve_after_fee`
+// (escrow) and `sender_meets_reserve_after_fee_and_reserve` (offer) and report
+// the balance after it in `sender_balance_after_amount_and_fee` and
+// `sender_balance_after_amount_fee_and_reserve`. Before the fix they counted
+// only the fee (and the offer object reserve).
 //
-// The controls pin the exact boundary and pass on main. The `#[ignore]` tests
-// are one atom past it (or above the balance), state the expected behaviour
-// and fail on main. Run them with
-// `cargo test -p postfiat-node --lib escrow_offer_quote_native_lock -- --include-ignored`.
+// The controls pin the exact boundary; the other tests are one atom past it
+// (or above the balance), where the quote and admission must both refuse.
 use super::*;
 
 const FUNDING: u64 = ACCOUNT_RESERVE + 700;
@@ -203,6 +203,7 @@ fn escrow_create_quote_and_admission_agree_at_exactly_the_reserve() {
     let (operation, quote) = sized_native_escrow_create(&devnet, &holder, &recipient.address, 0);
     assert_eq!(quote.sender_balance, FUNDING);
     assert!(quote.sender_meets_reserve_after_fee, "{quote:?}");
+    assert_eq!(quote.sender_balance_after_amount_and_fee, Some(ACCOUNT_RESERVE));
     let signed = sign_escrow(&devnet, &holder, quote.sequence, &operation);
     assert_eq!(signed.unsigned.fee, quote.minimum_fee);
 
@@ -219,42 +220,44 @@ fn escrow_create_quote_and_admission_agree_at_exactly_the_reserve() {
     fs::remove_dir_all(devnet.data_dir).expect("cleanup");
 }
 
-/// One atom more than the holder can lock. The quote still reports
-/// `sender_meets_reserve_after_fee: true` with a positive
-/// `sender_balance_after_fee`; admission refuses the transaction signed with
-/// the quote's fee and sequence with `below_account_reserve`.
+/// One atom more than the holder can lock. The quote reports the reserve
+/// missed, one atom below it after the lock, and admission refuses the
+/// transaction signed with the quote's fee and sequence with
+/// `below_account_reserve`.
 #[test]
-#[ignore = "reproduction for #197: escrow_fee_quote does not account for the locked native amount"]
-fn escrow_create_quote_says_affordable_one_atom_past_the_reserve_but_admission_refuses() {
+fn escrow_create_quote_and_admission_refuse_one_atom_past_the_reserve() {
     let devnet = init_devnet("postfiat-escrow-quote-native-lock-plus-one");
     let holder = keygen_holder();
     let recipient = keygen_holder();
     fund(&devnet, &holder.address, FUNDING, 1);
 
     let (operation, quote) = sized_native_escrow_create(&devnet, &holder, &recipient.address, -1);
-    assert!(quote.sender_meets_reserve_after_fee, "{quote:?}");
+    assert!(!quote.sender_meets_reserve_after_fee, "{quote:?}");
+    assert_eq!(
+        quote.sender_balance_after_amount_and_fee,
+        Some(ACCOUNT_RESERVE - 1)
+    );
+    assert_eq!(
+        quote.sender_balance_after_fee,
+        Some(quote.sender_balance - quote.minimum_fee),
+        "the after-fee field keeps its meaning"
+    );
     let signed = sign_escrow(&devnet, &holder, quote.sequence, &operation);
     assert_eq!(signed.unsigned.fee, quote.minimum_fee);
 
-    let admitted = submit_escrow(&devnet, &signed);
+    let refused = submit_escrow(&devnet, &signed).expect_err("admission refuses");
     assert!(
-        admitted.is_ok(),
-        "quote: sender_balance={} minimum_fee={} sender_balance_after_fee={:?} sender_meets_reserve_after_fee={} for amount {}; admission: {}",
-        quote.sender_balance,
-        quote.minimum_fee,
-        quote.sender_balance_after_fee,
-        quote.sender_meets_reserve_after_fee,
-        escrow_amount(&operation),
-        admitted.err().map(|e| e.to_string()).unwrap_or_default(),
+        refused.to_string().contains("below_account_reserve"),
+        "amount {}: {refused}",
+        escrow_amount(&operation)
     );
     fs::remove_dir_all(devnet.data_dir).expect("cleanup");
 }
 
-/// The same shape with an amount above the whole balance: the quote reports
-/// the reserve met; admission refuses with `insufficient_funds`.
+/// An amount above the whole balance: the quote reports the reserve missed
+/// and no balance after the lock; admission refuses with `insufficient_funds`.
 #[test]
-#[ignore = "reproduction for #197: escrow_fee_quote does not account for the locked native amount"]
-fn escrow_create_quote_says_affordable_above_the_balance_but_admission_refuses() {
+fn escrow_create_quote_and_admission_refuse_above_the_balance() {
     let devnet = init_devnet("postfiat-escrow-quote-native-lock-above-balance");
     let holder = keygen_holder();
     let recipient = keygen_holder();
@@ -262,19 +265,15 @@ fn escrow_create_quote_says_affordable_above_the_balance_but_admission_refuses()
 
     let operation = native_escrow_create(&holder.address, &recipient.address, FUNDING * 10);
     let quote = quote_escrow(&devnet, &holder.address, &operation);
-    assert!(quote.sender_meets_reserve_after_fee, "{quote:?}");
+    assert!(!quote.sender_meets_reserve_after_fee, "{quote:?}");
+    assert_eq!(quote.sender_balance_after_amount_and_fee, None);
     let signed = sign_escrow(&devnet, &holder, quote.sequence, &operation);
 
-    let admitted = submit_escrow(&devnet, &signed);
+    let refused = submit_escrow(&devnet, &signed).expect_err("admission refuses");
     assert!(
-        admitted.is_ok(),
-        "quote: sender_balance={} minimum_fee={} sender_balance_after_fee={:?} sender_meets_reserve_after_fee={} for amount {}; admission: {}",
-        quote.sender_balance,
-        quote.minimum_fee,
-        quote.sender_balance_after_fee,
-        quote.sender_meets_reserve_after_fee,
-        escrow_amount(&operation),
-        admitted.err().map(|e| e.to_string()).unwrap_or_default(),
+        refused.to_string().contains("insufficient_funds"),
+        "amount {}: {refused}",
+        escrow_amount(&operation)
     );
     fs::remove_dir_all(devnet.data_dir).expect("cleanup");
 }
@@ -464,6 +463,10 @@ fn offer_create_quote_and_admission_agree_at_exactly_the_reserve() {
         quote.sender_meets_reserve_after_fee_and_reserve,
         "{quote:?}"
     );
+    assert_eq!(
+        quote.sender_balance_after_amount_fee_and_reserve,
+        Some(ACCOUNT_RESERVE)
+    );
     let signed = sign_offer(&devnet, &holder, quote.sequence, &operation);
     assert_eq!(signed.unsigned.fee, quote.minimum_fee);
     submit_offer(&devnet, &signed).expect("admission accepts the boundary offer");
@@ -478,12 +481,11 @@ fn offer_create_quote_and_admission_agree_at_exactly_the_reserve() {
     fs::remove_dir_all(devnet.data_dir).expect("cleanup");
 }
 
-/// One atom more on the native sell side: the quote still reports
-/// `sender_meets_reserve_after_fee_and_reserve: true`; admission refuses with
-/// `below_account_reserve`.
+/// One atom more on the native sell side: the quote reports the reserve
+/// missed, one atom below it after the lock and the object reserve, and
+/// admission refuses with `below_account_reserve`.
 #[test]
-#[ignore = "reproduction for #197: offer_fee_quote does not account for the locked native sell side"]
-fn offer_create_quote_says_affordable_one_atom_past_the_reserve_but_admission_refuses() {
+fn offer_create_quote_and_admission_refuse_one_atom_past_the_reserve() {
     let devnet = init_devnet("postfiat-offer-quote-native-lock-plus-one");
     let holder = keygen_holder();
     fund(&devnet, &holder.address, FUNDING, 1);
@@ -491,21 +493,24 @@ fn offer_create_quote_says_affordable_one_atom_past_the_reserve_but_admission_re
 
     let (operation, quote) = sized_native_sell_offer(&devnet, &holder, &asset_id, -1);
     assert!(
-        quote.sender_meets_reserve_after_fee_and_reserve,
+        !quote.sender_meets_reserve_after_fee_and_reserve,
         "{quote:?}"
     );
-    let signed = sign_offer(&devnet, &holder, quote.sequence, &operation);
-    let admitted = submit_offer(&devnet, &signed);
-    assert!(
-        admitted.is_ok(),
-        "quote: sender_balance={} minimum_fee={} offer_object_reserve={} sender_balance_after_fee_and_reserve={:?} sender_meets_reserve_after_fee_and_reserve={} for taker_gets_amount {}; admission: {}",
-        quote.sender_balance,
-        quote.minimum_fee,
-        quote.offer_object_reserve,
+    assert_eq!(
+        quote.sender_balance_after_amount_fee_and_reserve,
+        Some(ACCOUNT_RESERVE - 1)
+    );
+    assert_eq!(
         quote.sender_balance_after_fee_and_reserve,
-        quote.sender_meets_reserve_after_fee_and_reserve,
-        offer_sell_amount(&operation),
-        admitted.err().map(|e| e.to_string()).unwrap_or_default(),
+        Some(quote.sender_balance - quote.minimum_fee - quote.offer_object_reserve),
+        "the after-fee-and-reserve field keeps its meaning"
+    );
+    let signed = sign_offer(&devnet, &holder, quote.sequence, &operation);
+    let refused = submit_offer(&devnet, &signed).expect_err("admission refuses");
+    assert!(
+        refused.to_string().contains("below_account_reserve"),
+        "taker_gets_amount {}: {refused}",
+        offer_sell_amount(&operation)
     );
     fs::remove_dir_all(devnet.data_dir).expect("cleanup");
 }

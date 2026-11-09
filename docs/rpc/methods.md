@@ -98,6 +98,19 @@ counted. Its `sender_sequence` stays the committed sequence. The quote holds
 only while the pending entries do: if one is dropped before the block, a fee
 signed from the quote can be below the minimum the block then requires.
 
+The escrow and offer reserve flags count the native PFT the transaction
+locks, as execution does after taking the fee. In `escrow_fee_quote`,
+`sender_meets_reserve_after_fee` is false unless the balance after the fee and
+a native `escrow_create`'s `amount` (`sender_balance_after_amount_and_fee`)
+keeps the account reserve. In `offer_fee_quote`,
+`sender_meets_reserve_after_fee_and_reserve` is false unless the balance after
+the fee, a native sell side's `taker_gets_amount` and the offer object
+reserve (`sender_balance_after_amount_fee_and_reserve`) keeps it. Issued
+assets lock nothing native. The after-amount fields are `null` when the lock
+exceeds the balance; `sender_balance_after_fee` and
+`sender_balance_after_fee_and_reserve` still count only the fee and the
+object reserve.
+
 Receipts from these submissions use `accepted: true` with code `accepted` (or
 an offer fill code) when applied. A rejected receipt whose code starts with
 `tec_` was fee-claimed: its fee was burned and its sequence consumed, nothing
