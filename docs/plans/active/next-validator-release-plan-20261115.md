@@ -42,7 +42,7 @@ Skeleton written 2026-10-30; pointed at the separately qualified next release on
 - [x] `3198674a8`: pull request #189 (branch commit `74402b7c7`), the Python client's bound on the external lane release page limit like the other paged reads. The Python client and its tests only; rides along.
 - [x] `0d6b7a8d5` and `e5a508e73`: pull request #190 (branch commit `a006b86dc`) and its correction to today's main, the refreshed current guidance that distinguishes implemented, qualified and deployed state. Docs only, rides along.
 - [ ] `7651635f6`: the two-user validator signer deployment shape (branch commits `c23175cdd` to `dae568ce2`). It changes the transport validator's runtime: it waits for the release after, with its own qualification ([row](#for-the-release-after)).
-- [x] `a8593af50` and `45312c804`: pull request #196 (branch commits `130989b7b` to `acf851839`) and its review fixes (`44088b95a` to `1ae408854`): the gateway's public private reads, its RPC connection lifecycle, typed transport errors and a 2-second shared cache for the four private reads. `wallet-proxy/` and docs only; the node binary is untouched, rides along.
+- [x] `f897d5526` and `a11e8d12c`: pull request #196 (branch commits `130989b7b` to `acf851839`) and its review fixes (`44088b95a` to `1ae408854`): the gateway's public private reads, its RPC connection lifecycle, typed transport errors and a 2-second shared cache for the four private reads. `wallet-proxy/` and docs only; the node binary is untouched, rides along. The content first landed as twelve replayed commits, `91d418187` to `ff0713595`; the two merges record the pull request's history.
 
 ## Candidates
 
