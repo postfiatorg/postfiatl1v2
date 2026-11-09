@@ -17,9 +17,10 @@ from typing import Any
 
 RPC_VERSION = "postfiat-local-rpc-v1"
 DEFAULT_TIMEOUT_SECONDS = 8.0
-# `server_info` runs in a child process on the node that recomputes the status
-# and reads the whole stored history: 6.6-7.0 s on most devnet validators and
-# 10-12 s on the slowest (2026-11-09), so it gets more than the default.
+# A deployed node before 9f76e2e5e answers `server_info` in a child process that
+# recomputes the status and reads the whole stored history: 6.6-14.1 s on the
+# devnet validators on 2026-11-09, so it gets more than the default until a
+# release carries the in-process answer.
 SERVER_INFO_TIMEOUT_SECONDS = 30.0
 DEFAULT_RESPONSE_BYTE_CAP = 1_048_576
 DEFAULT_READ_LIMIT = 100

@@ -34,5 +34,32 @@ class ServerInfoTimeoutTests(unittest.TestCase):
         self.assertEqual(self._timeout_used(client, "server_info"), 60)
 
 
+class WebSocketServerInfoTimeoutTests(unittest.TestCase):
+    def _recv_timeout(self, client, method: str) -> float:
+        timeouts = []
+
+        class _FakeWebSocket:
+            def send(self, wire):
+                pass
+
+            def recv(self, timeout=None):
+                timeouts.append(timeout)
+                raise _Stop
+
+        with mock.patch.object(client, "_connect_websocket", return_value=_FakeWebSocket()):
+            with self.assertRaises(Exception):
+                getattr(client, method)()
+        self.assertEqual(len(timeouts), 1)
+        return timeouts[0]
+
+    def test_websocket_server_info_uses_the_longer_timeout(self):
+        client = client_module.PostFiatWebSocketRpcClient("ws://127.0.0.1:1234")
+        self.assertEqual(self._recv_timeout(client, "server_info"), 30.0)
+        client = client_module.PostFiatWebSocketRpcClient("ws://127.0.0.1:1234")
+        self.assertEqual(
+            self._recv_timeout(client, "status"), client_module.DEFAULT_TIMEOUT_SECONDS
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

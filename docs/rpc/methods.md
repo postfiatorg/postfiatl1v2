@@ -39,12 +39,14 @@ authorization inventory is
 - one governance read, for `validators.registry_update_count`;
 - the constant fees.
 
-The response is unchanged. Releases before this change answered it in a child
-process that recomputed the status and read the whole stored history, which
-took 6.6–12 s on the devnet validators on 2026-11-09. Until a deployed release
-carries the in-process answer, callers should allow 30 s; the Python client
-does (`SERVER_INFO_TIMEOUT_SECONDS`). The local `rpc --method server_info`
-command still computes the full metrics.
+The response is unchanged. Main answers it in-process since `9f76e2e5e`. The
+deployed release still runs the child-process path, which recomputes the status
+and reads the whole stored history. That took 6.6–14.1 s on the devnet
+validators on 2026-11-09. Until the next release carries `9f76e2e5e` (see the
+[release plan](../plans/active/next-validator-release-plan-20261115.md)),
+callers should allow 30 s; the Python client does
+(`SERVER_INFO_TIMEOUT_SECONDS`). The local `rpc --method server_info` command
+still computes the full metrics.
 
 ## Ledger Object Reads
 
