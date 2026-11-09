@@ -444,6 +444,10 @@ wss } = runtime;
                 settled = true;
                 clearTimeout(timer);
                 tcp.end();
+                if (responseIdMismatch(request, line)) {
+                    reject(rpcTransportError('rpc_response_id_mismatch', `RPC response id mismatch from ${host}:${port}`));
+                    return;
+                }
                 resolve(line);
             });
             tcp.on('error', (e) => {
@@ -468,6 +472,34 @@ wss } = runtime;
         return `${channel}|${host}:${port}`;
     }
 
+    // rpc-serve closes a keep-alive connection after this many requests
+    // (RPC_SERVE_MAX_REQUESTS_PER_CONNECTION, crates/node/src/rpc_cli.rs:213).
+    // Keep the two equal: the proxy retires its socket on the last response
+    // so a queued request never races the node's FIN.
+    const UPSTREAM_MAX_REQUESTS_PER_CONNECTION = 64;
+    // rpc-serve drops a connection idle for min(--timeout-ms, 30 s)
+    // (RPC_SERVE_CONNECTION_READ_TIMEOUT_MS, crates/node/src/rpc_cli.rs:211).
+    // A socket idle this long is retired before reuse instead of racing that close.
+    const UPSTREAM_IDLE_RETIRE_MS = Number.isFinite(runtime.UPSTREAM_IDLE_RETIRE_MS)
+        ? runtime.UPSTREAM_IDLE_RETIRE_MS : 25_000;
+    const upstreamClockMs = typeof runtime.upstreamClockMs === 'function' ? runtime.upstreamClockMs : Date.now;
+
+    // A response must answer the request it is matched to. rpc-serve echoes
+    // every request id, so a response naming another id means the stream no
+    // longer pairs requests with responses. Requests without a string id and
+    // responses without an id are not checked; an unparsable line is left to
+    // the caller.
+    function responseIdMismatch(request, line) {
+        if (typeof request?.id !== 'string') return false;
+        try {
+            const response = JSON.parse(line);
+            return response !== null && typeof response === 'object'
+                && Object.prototype.hasOwnProperty.call(response, 'id') && response.id !== request.id;
+        } catch (_) {
+            return false;
+        }
+    }
+
     class UpstreamRpcConnection {
         constructor(host, port) {
             this.host = host;
@@ -477,7 +509,9 @@ wss } = runtime;
             this.queue = [];
             this.current = null;
             this.connecting = false;
+            this.connectTimer = null;
             this.completedRequests = 0;
+            this.lastActivityMs = 0;
         }
 
         requestLine(request, timeoutMs = TCP_TIMEOUT_MS) {
@@ -489,6 +523,7 @@ wss } = runtime;
 
         close() {
             this._rejectCurrentAndQueue(rpcTransportError('rpc_connection_closed', `RPC connection closed for ${this.host}:${this.port}`));
+            this._clearConnectTimer();
             if (this.socket) {
                 this.socket.destroy();
             }
@@ -501,8 +536,28 @@ wss } = runtime;
             return this.socket && !this.socket.destroyed && this.socket.readyState === 'open';
         }
 
+        _clearConnectTimer() {
+            if (this.connectTimer) clearTimeout(this.connectTimer);
+            this.connectTimer = null;
+        }
+
+        // Drop a socket that carries no request. Its later events are ignored,
+        // and nothing written on it is ever resent.
+        _retire(socket) {
+            if (this.socket === socket) {
+                this._clearConnectTimer();
+                this.socket = null;
+                this.buffer = '';
+                this.connecting = false;
+            }
+            socket.destroy();
+        }
+
         _processQueue() {
             if (this.current || this.queue.length === 0) return;
+            if (this._socketReady() && upstreamClockMs() - this.lastActivityMs >= UPSTREAM_IDLE_RETIRE_MS) {
+                this._retire(this.socket);
+            }
             if (!this._socketReady()) {
                 this._connect();
                 return;
@@ -528,22 +583,35 @@ wss } = runtime;
 
         _connect() {
             if (this.connecting) return;
+            // A half-closed socket being replaced is destroyed, not left to linger.
+            if (this.socket) this._retire(this.socket);
             this.connecting = true;
             this.buffer = '';
             const socket = net.connect(this.port, this.host);
             this.socket = socket;
             this.completedRequests = 0;
+            // The request timer starts only once a request is written, so the
+            // connect itself is bounded by the same timeout.
+            const connectTimeoutMs = this.queue[0]?.timeoutMs ?? TCP_TIMEOUT_MS;
+            this.connectTimer = setTimeout(() => {
+                this.connectTimer = null;
+                if (this.socket === socket && this.connecting) {
+                    this._handleDisconnect(rpcTransportError('rpc_timeout', `RPC connect timeout to ${this.host}:${this.port}`), socket);
+                }
+            }, connectTimeoutMs);
             socket.setKeepAlive(true);
             socket.on('connect', () => {
                 if (this.socket !== socket) return;
+                this._clearConnectTimer();
                 this.connecting = false;
+                this.lastActivityMs = upstreamClockMs();
                 this._processQueue();
             });
             socket.on('data', (chunk) => {
                 if (this.socket !== socket) return;
                 this.buffer += chunk.toString('utf8');
                 let idx;
-                while ((idx = this.buffer.indexOf('\n')) >= 0) {
+                while (this.socket === socket && (idx = this.buffer.indexOf('\n')) >= 0) {
                     const line = this.buffer.slice(0, idx).trim();
                     this.buffer = this.buffer.slice(idx + 1);
                     if (!line) continue;
@@ -554,15 +622,22 @@ wss } = runtime;
                     }
                     clearTimeout(item.timer);
                     this.current = null;
+                    this.lastActivityMs = upstreamClockMs();
+                    if (responseIdMismatch(item.request, line)) {
+                        // The stream no longer pairs requests with responses:
+                        // refuse this one and continue the queue on a new socket.
+                        item.reject(rpcTransportError('rpc_response_id_mismatch', `RPC response id mismatch from ${this.host}:${this.port}`));
+                        this._retire(socket);
+                        this._processQueue();
+                        return;
+                    }
                     item.resolve(line);
-                    // rpc-serve closes after 64 requests. Retire this socket
-                    // before a queued request can race that FIN. No submitted
-                    // request is replayed, including mutations.
+                    // Retire this socket on the node's last response before a
+                    // queued request can race its FIN. No submitted request is
+                    // replayed, including mutations.
                     this.completedRequests += 1;
-                    if (this.completedRequests >= 64) {
-                        this.socket = null;
-                        this.buffer = '';
-                        socket.destroy();
+                    if (this.completedRequests >= UPSTREAM_MAX_REQUESTS_PER_CONNECTION) {
+                        this._retire(socket);
                     }
                     this._processQueue();
                 }
@@ -579,6 +654,7 @@ wss } = runtime;
             // An error/timeout can be followed by a delayed close after a new
             // connection has started. Old events cannot evict the new socket.
             if (this.socket !== socket) return;
+            this._clearConnectTimer();
             this.connecting = false;
             this.socket = null;
             this.buffer = '';
@@ -2335,7 +2411,7 @@ wss } = runtime;
     }
 
 
-    return { UpstreamRpcConnection,
+    return { UPSTREAM_IDLE_RETIRE_MS, UPSTREAM_MAX_REQUESTS_PER_CONNECTION, UpstreamRpcConnection,
 addProxyRouteEvent,
 bftQuorumThreshold,
 broadcastFastpayMutation,
