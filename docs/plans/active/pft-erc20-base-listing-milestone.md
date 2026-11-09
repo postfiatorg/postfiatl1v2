@@ -7,11 +7,18 @@
 
 ## BLUF
 
+PFT goes onto Coinbase first as a fixed-supply ERC-20 on Base, with six
+decimals, the unit of native PFT. A 1:1 bridge into native PFT opens at
+PFTL's mainnet genesis and never closes.
+
 Reviewed 2026-11-06. The token and lock contracts, inbound release path,
-checkpoint commands and watcher are implemented. A real Base Sepolia Lock of
-1 PFT released 1,000,000 atoms on a local six-validator fleet, was refused on
-resubmission and was confirmed by the watcher ([record](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/listings/coinbase/pft-erc20-release-path-qualification-20261103.md#base-sepolia-rehearsal-2026-11-06-part-2-the-release-on-a-local-fleet)).
-The fleet was local and the verifier a reverting stand-in; production is undeployed.
+checkpoint commands and watcher are implemented. A real Lock of 1 PFT
+(1,000,000 units) on the Base Sepolia rehearsal lock, made with the disposable
+rehearsal token rather than the PFT ERC-20, released 1,000,000 atoms on a local
+six-validator fleet, was refused on resubmission and was confirmed by the
+watcher ([record](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/listings/coinbase/pft-erc20-release-path-qualification-20261103.md#base-sepolia-rehearsal-2026-11-06-part-2-the-release-on-a-local-fleet)).
+The fleet was local and the lock, in test mode, has a reverting stand-in
+finality verifier; production is undeployed.
 
 P2.5 remains open on the outside lock audit. Launch also needs the token document,
 production Safe and contracts, genesis allocation and deployment plan, and the
@@ -31,7 +38,7 @@ Owners are marked (this lane), (other lane) or (Coinbase).
   - The token is its own Foundry project, so `crates/ethereum-contracts` compiles as before and the pinned A666 public reader build stays reproducible.
 - [x] P1.2 (this lane) The OpenZeppelin pin (`ad5ba32f`). The submodule `crates/pft-token-contracts/lib/openzeppelin-contracts` is at `cab19933` (`.gitmodules:7-9`), with its remapping in `crates/pft-token-contracts/foundry.toml`; the CI `evm-contracts` job fetches it and runs `forge test` there (`.github/workflows/product-security-ci.yml`).
 - [x] P1.3 (this lane) The dry run against anvil with chain id 84532, as `crates/pft-token-contracts/README.md` describes, then a test deployment on Base Sepolia. To tick it: the dry-run output, the Base Sepolia address and its verified source. Both are recorded in [pft-token-dry-run-20261026.md](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/listings/coinbase/pft-token-dry-run-20261026.md). The Base Sepolia test token is `0x18fE4ca51A0cE042688D5A54917319d03B527D92` (2026-10-28), with its supply held by the test Safe `0x7424F4F4A620d37CFB54A4558a1Ec7f60b71A0CB`; record `crates/pft-token-contracts/deployments/pft-token-base-84532/deployment.json`.
-- [ ] P1.4 (other lane) The audit, including its budget and the vendor choice. To tick it: the report, with every finding closed.
+- [ ] P1.4 (other lane) The audit, including its budget and the vendor choice. For one contract of this size it typically takes one to three weeks of calendar time. To tick it: the report, with every finding closed.
   - [x] The audit package prepared for quotes: [pft-token-audit-package-20261106.md](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/listings/coinbase/pft-token-audit-package-20261106.md), 2026-11-06.
 - [ ] P1.5 (other lane) The token document with the four decisions. To tick it: the published document.
   - [x] the total supply: 100 billion PFT, fixed, decided 2026-10-28;
