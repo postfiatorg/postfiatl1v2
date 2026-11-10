@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import secrets
 import subprocess
 import tempfile
@@ -1467,6 +1468,82 @@ def submit_asset_transaction(
         finalized_batch_file=finalized_batch_file,
         receipts_by_validator=tuple(receipts),
         asset_id=asset_id,
+    )
+
+
+def external_lane_export_refusal(
+    row: dict[str, Any] | None, *, amount_atoms: int, base_recipient: str
+) -> tuple[str, str] | None:
+    """The refusal `external-lane-export` returns before signing, from an
+    `external_lane_info` lane row, as `(code, message)`; `None` when the lane
+    takes the export. The balance check needs the fee quote and is left to it."""
+
+    if row is None:
+        return ("external_lane_not_configured", "the external lane does not exist on this chain")
+    policy = row.get("config", {}).get("policy", {})
+    state = row.get("state", {})
+    if not policy.get("exports_enabled", False):
+        return ("external_lane_export_not_supported", "exports are switched off on this lane")
+    if int(row.get("release_cap", {}).get("active_cap_bps", 0)) == 0:
+        return ("external_lane_export_halted", "the lane is halted: its active release cap is zero")
+    if amount_atoms <= 0:
+        return ("external_lane_export_amount_zero", "the amount must be at least one atom")
+    exportable = int(state.get("released_atoms", 0)) - int(state.get("exported_atoms", 0))
+    if amount_atoms > exportable:
+        return (
+            "external_lane_export_above_released",
+            f"{amount_atoms} atoms is above released minus exported, {exportable}",
+        )
+    if not re.fullmatch(r"0x[0-9a-f]{40}", base_recipient or ""):
+        return (
+            "external_lane_export_recipient_invalid",
+            "the Base recipient must be 0x and 40 lower-case hex digits",
+        )
+    if base_recipient == "0x" + "0" * 40:
+        return ("external_lane_export_recipient_invalid", "the Base recipient must not be the zero address")
+    if base_recipient == policy.get("lock_contract_address"):
+        return ("external_lane_export_recipient_is_lock", "the Base recipient is the lane's lock contract")
+    if base_recipient == policy.get("token_address"):
+        return ("external_lane_export_recipient_is_token", "the Base recipient is the lane's token contract")
+    return None
+
+
+def external_lane_export(
+    client: PostFiatRpcClient,
+    *,
+    wallet: TransparentWallet,
+    lane_id: str,
+    amount_atoms: int,
+    base_recipient: str,
+    work_dir: str | Path | None = None,
+    sequence: int | None = None,
+) -> AssetTransactionResult:
+    """Export native PFT to Base on a genesis external lane: the lane checks of
+    `external-lane-export` from `external_lane_info`, then quote, sign and
+    submit through `submit_asset_transaction`. A refusal raises `ValueError`
+    with the code before anything is quoted or signed; a node refusal at
+    admission is raised by the submit call with the node's code and message."""
+
+    if isinstance(amount_atoms, bool) or not isinstance(amount_atoms, int):
+        raise ValueError("amount_atoms must be an integer")
+    report = client.external_lane_info(lane_id, release_limit=1, export_limit=1)
+    row = next((lane for lane in report.get("lanes", []) if lane.get("lane_id") == lane_id), None)
+    refusal = external_lane_export_refusal(row, amount_atoms=amount_atoms, base_recipient=base_recipient)
+    if refusal is not None:
+        code, message = refusal
+        raise ValueError(f"refused before signing: {code}: {message}")
+    return submit_asset_transaction(
+        client,
+        wallet=wallet,
+        operation={
+            "operation": "external_lane_export_v1",
+            "sender": wallet.address,
+            "lane_id": lane_id,
+            "amount_atoms": amount_atoms,
+            "base_recipient": base_recipient,
+        },
+        work_dir=work_dir,
+        sequence=sequence,
     )
 
 

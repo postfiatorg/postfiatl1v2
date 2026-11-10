@@ -32,6 +32,11 @@ MAX_ACCOUNT_TX_SCAN_LIMIT = 512
 # node refuses an `external_lane_info` release_limit or export_limit outside 1
 # to this many.
 EXTERNAL_LANE_RELEASE_PAGE_SIZE = 100
+# The node's `external-lane-export-status` prints the same line.
+EXTERNAL_LANE_EXPORT_BASE_PAYOUT_NOTE = (
+    "the payout on Base needs a release relay that does not exist yet; "
+    "this packet is recorded on PFTL only"
+)
 ESCROW_ID_DOMAIN = "postfiat.escrow_id.v1"
 ESCROW_CONDITION_HASH_DOMAIN = "postfiat.escrow_condition_hash.v1"
 NFT_ID_DOMAIN = "postfiat.nft_id.v1"
@@ -1832,6 +1837,71 @@ class PostFiatRpcClient:
             "stored_export_count": export_count - pruned,
             "exported_atoms": int(state.get("exported_atoms", 0)),
             "export_history_root": row.get("export_history_root"),
+        }
+
+    def external_lane_export_status(self, lane_id: str, tx_id_or_nonce: str | int) -> dict[str, Any]:
+        """One export packet of a lane, by the accepted transaction's id (a
+        string) or its export nonce (an int), as `external-lane-export-status`
+        prints it: the packet, its digest and commitments, whether its block is
+        final (`tx` confirms it), the lane's `exported_atoms`, and that the Base
+        payout needs a relay that does not exist yet. Pages the lane's stored
+        exports newest first; a pruned or unknown export raises `LookupError`."""
+        lane_id = self._required_text(lane_id, "lane_id")
+        if isinstance(tx_id_or_nonce, str):
+            tx_id: str | None = self._required_text(tx_id_or_nonce, "tx_id_or_nonce")
+            nonce = None
+            cursor = None
+        else:
+            tx_id = None
+            nonce = self._required_u64(tx_id_or_nonce, "tx_id_or_nonce")
+            cursor = nonce + 1
+        while True:
+            report = self.external_lane_info(
+                lane_id, export_cursor=cursor, export_limit=EXTERNAL_LANE_RELEASE_PAGE_SIZE
+            )
+            row = next((lane for lane in report.get("lanes", []) if lane.get("lane_id") == lane_id), None)
+            if row is None:
+                raise LookupError(f"external_lane_not_configured: external lane `{lane_id}` does not exist")
+            entry = next(
+                (
+                    entry
+                    for entry in row.get("exports", [])
+                    if (tx_id is not None and entry["packet"]["tx_id"] == tx_id)
+                    or (nonce is not None and int(entry["packet"]["export_nonce"]) == nonce)
+                ),
+                None,
+            )
+            if entry is not None:
+                break
+            cursor = row.get("next_export_cursor")
+            if nonce is not None or cursor is None:
+                wanted = f"nonce {nonce}" if nonce is not None else f"tx `{tx_id}`"
+                raise LookupError(f"no stored export on external lane `{lane_id}` matches {wanted}")
+        packet = entry["packet"]
+        try:
+            finality = self.tx(packet["tx_id"])
+            block_final = bool(finality.get("confirmed")) and int(
+                finality["block"]["header"]["height"]
+            ) == int(packet["exported_at_height"])
+        except RpcError:
+            block_final = False
+        coverage = self.external_lane_export_coverage(row)
+        return {
+            "lane_id": lane_id,
+            "export_nonce": int(packet["export_nonce"]),
+            "sender": packet["sender"],
+            "amount_atoms": int(packet["amount_atoms"]),
+            "base_recipient": packet["base_recipient"],
+            "exported_at_height": int(packet["exported_at_height"]),
+            "tx_id": packet["tx_id"],
+            "packet_digest": entry["packet_digest"],
+            "withdrawal_id_commitment": entry["withdrawal_id_commitment"],
+            "burn_tx_commitment": entry["burn_tx_commitment"],
+            "block_final": block_final,
+            "current_height": int(report.get("current_height", 0)),
+            "lane_exported_atoms": coverage["exported_atoms"],
+            "lane_export_count": coverage["export_count"],
+            "base_payout": EXTERNAL_LANE_EXPORT_BASE_PAYOUT_NOTE,
         }
 
     def fx_fix_info(self, fix_packet_hash: str) -> dict[str, Any]:
