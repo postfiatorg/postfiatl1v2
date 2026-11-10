@@ -127,6 +127,20 @@ class ExternalLaneExportTests(unittest.TestCase):
         submit.assert_called_once()
         self.assertEqual(submit.call_args.args[0], SIGNED)
 
+    def test_a_dry_run_returns_the_quote_and_the_signed_transaction_and_never_submits(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        quote = _quote()
+        result, signer, submit, _ = self._export(client, quote, amount_atoms=600, dry_run=True)
+        signer.assert_called_once()
+        submit.assert_not_called()
+        self.assertEqual(result.quote_response, quote)
+        self.assertEqual(result.signed_asset_transaction, SIGNED)
+        self.assertEqual((result.tx_id, result.submit_result), (None, {}))
+        # The refusals hold for a dry run too.
+        error, signer, _, _ = self._export(client, _quote(sender_balance=0), amount_atoms=600, dry_run=True)
+        self.assertRegex(str(error), "insufficient_funds")
+        signer.assert_not_called()
+
     def test_a_balance_short_of_amount_fee_and_reserve_is_refused_before_the_signer_runs(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")
         # 600 + 22 + 10 = 632: one atom short, then exactly enough.

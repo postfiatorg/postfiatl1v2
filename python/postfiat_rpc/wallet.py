@@ -1525,6 +1525,7 @@ def external_lane_export(
     base_recipient: str,
     work_dir: str | Path | None = None,
     sequence: int | None = None,
+    dry_run: bool = False,
 ) -> AssetTransactionResult:
     """Export native PFT to Base on a genesis external lane, as
     `external-lane-export`: the lane checks from `external_lane_info`, the fee
@@ -1533,7 +1534,9 @@ def external_lane_export(
     node's pending transactions), and only then sign and submit. Every refusal
     raises `ValueError("refused before signing: CODE: ...")` before the signer
     runs. A transaction admitted between the quote and the submission can
-    still make admission refuse this one (raised by the submit call, no fee)."""
+    still make admission refuse this one (raised by the submit call, no fee).
+    `dry_run=True` returns the quote and the signed transaction with no tx id
+    and an empty `submit_result`, and never calls the submit method."""
 
     if isinstance(amount_atoms, bool) or not isinstance(amount_atoms, int):
         raise ValueError("amount_atoms must be an integer")
@@ -1569,6 +1572,16 @@ def external_lane_export(
     if export_refusal:
         raise ValueError(f"refused before signing: {export_refusal['code']}: {export_refusal['message']}")
     signed_asset_transaction = _sign_asset_quote(wallet, quote_response, _work_dir(work_dir))
+    if dry_run:
+        return AssetTransactionResult(
+            tx_id=None,
+            operation=operation,
+            quote_response=quote_response,
+            signed_asset_transaction=signed_asset_transaction,
+            submit_result={},
+            finalized_batch_file=None,
+            receipts_by_validator=(),
+        )
     submit_result = client.mempool_submit_signed_asset_transaction(
         signed_asset_transaction,
         request_id=f"py-export-submit-{secrets.token_hex(4)}",
