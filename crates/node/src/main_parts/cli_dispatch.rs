@@ -41,6 +41,8 @@ use postfiat_node::{
     assemble_cobalt_authority_transition, assemble_consensus_v2_commit,
     assemble_ethereum_checkpoint_certificate,
     assemble_external_lane_checkpoint_certificate, build_external_lane_lock_proof,
+    external_lane_export, external_lane_export_status, ExternalLaneExportOptions,
+    ExternalLaneExportSelector, ExternalLaneExportStatusOptions,
     observe_external_lane_checkpoint, sign_external_lane_checkpoint_vote,
     ExternalLaneCheckpointAssembleOptions, ExternalLaneCheckpointObserveOptions,
     ExternalLaneCheckpointSignOptions, ExternalLaneLockProofOptions,
@@ -516,6 +518,8 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "external-lane-checkpoint-sign"
         | "external-lane-checkpoint-assemble"
         | "external-lane-lock-proof"
+        | "external-lane-export"
+        | "external-lane-export-status"
         | "fastswap-control-prepare"
         | "fastswap-control-vote-sign"
         | "fastswap-control-assemble"

@@ -514,3 +514,243 @@ fn external_lane_governed_inputs_are_never_serialized() {
     // The probe does see a serializable type.
     const { assert!(Probe::<postfiat_types::ExternalLaneState>::SERIALIZE) };
 }
+
+// ---- The holder's commands: `external-lane-export` and its status read ----
+
+fn export_command(
+    chain: &Chain,
+    lane_id: &str,
+    amount: u64,
+    recipient: &str,
+    dry_run: bool,
+) -> std::io::Result<crate::ExternalLaneExportReport> {
+    export_command_with_key(chain, chain.data_dir.join(FAUCET_KEY_FILE), lane_id, amount, recipient, dry_run)
+}
+
+fn export_command_with_key(
+    chain: &Chain,
+    key_file: PathBuf,
+    lane_id: &str,
+    amount: u64,
+    recipient: &str,
+    dry_run: bool,
+) -> std::io::Result<crate::ExternalLaneExportReport> {
+    crate::external_lane_export(crate::ExternalLaneExportOptions {
+        data_dir: chain.data_dir.clone(),
+        key_file,
+        lane_id: lane_id.to_string(),
+        amount_atoms: amount,
+        base_recipient: recipient.to_string(),
+        dry_run,
+    })
+}
+
+fn export_status(chain: &Chain, selector: crate::ExternalLaneExportSelector) -> crate::ExternalLaneExportStatusReport {
+    crate::external_lane_export_status(crate::ExternalLaneExportStatusOptions {
+        data_dir: chain.data_dir.clone(),
+        lane_id: "base-erc20".to_string(),
+        selector,
+    })
+    .expect("export status")
+}
+
+/// The command refuses with `code` before signing: no report, and the
+/// mempool, the ledger and the tip are unchanged.
+fn command_refused_before_signing(
+    chain: &Chain,
+    key_file: PathBuf,
+    lane_id: &str,
+    amount: u64,
+    recipient: &str,
+    code: &str,
+) -> String {
+    let store = NodeStore::new(&chain.data_dir);
+    let ledger_before = store.read_ledger().expect("ledger");
+    let mempool_before = store.read_mempool().expect("mempool");
+    let tip_before = tip_height(chain);
+    for dry_run in [true, false] {
+        let error = export_command_with_key(chain, key_file.clone(), lane_id, amount, recipient, dry_run)
+            .expect_err("refused")
+            .to_string();
+        assert!(error.starts_with(&format!("refused before signing: {code}: ")), "{error}");
+    }
+    assert_eq!(store.read_mempool().expect("mempool"), mempool_before, "something was submitted");
+    assert_eq!(store.read_ledger().expect("ledger"), ledger_before);
+    assert_eq!(tip_height(chain), tip_before);
+    export_command_with_key(chain, key_file, lane_id, amount, recipient, true)
+        .expect_err("refused")
+        .to_string()
+}
+
+fn faucet_refused(chain: &Chain, lane_id: &str, amount: u64, recipient: &str, code: &str) -> String {
+    command_refused_before_signing(chain, chain.data_dir.join(FAUCET_KEY_FILE), lane_id, amount, recipient, code)
+}
+
+/// Proposes a batch from the mempool and applies it.
+fn apply_mempool(chain: &Chain, label: &str) -> Receipt {
+    let batch_file = chain.data_dir.join(format!("{label}.batch.json"));
+    create_mempool_batch(MempoolBatchOptions {
+        data_dir: chain.data_dir.clone(),
+        batch_file: batch_file.clone(),
+        max_transactions: 8,
+    })
+    .expect("mempool batch");
+    let receipts = apply_batch(ApplyBatchOptions {
+        data_dir: chain.data_dir.clone(),
+        batch_file,
+        certificate_file: None,
+    })
+    .expect("apply batch");
+    assert_eq!(receipts.len(), 1, "{receipts:?}");
+    receipts.into_iter().next().expect("receipt")
+}
+
+/// A release, then the export through the command (a dry run first, which
+/// submits nothing), then the status read by tx id and by nonce.
+#[test]
+fn external_lane_export_command_runs_end_to_end_and_the_status_read_shows_the_packet() {
+    let chain = released_export_chain("export-command", ACCOUNT_RESERVE + 1_000);
+    let store = NodeStore::new(&chain.data_dir);
+    let mempool_before = store.read_mempool().expect("mempool");
+
+    let dry = export_command(&chain, "base-erc20", 400, &base_recipient(), true).expect("dry run");
+    assert!(dry.dry_run && !dry.submitted, "{dry:?}");
+    assert_eq!(dry.tx_id, postfiat_execution::asset_transaction_tx_id(&dry.signed_asset_transaction));
+    assert_eq!(store.read_mempool().expect("mempool"), mempool_before, "the dry run submitted");
+    assert_eq!(export_page(&chain.data_dir, None, None).export_count, 0);
+
+    let report = export_command(&chain, "base-erc20", 400, &base_recipient(), false).expect("export");
+    assert!(report.submitted && !report.dry_run, "{report:?}");
+    assert_eq!(report.signed_asset_transaction.unsigned.fee, report.fee);
+    let receipt = apply_mempool(&chain, "export-command");
+    assert!(receipt.accepted, "{receipt:?}");
+    assert_eq!(receipt.tx_id, report.tx_id);
+
+    let status = export_status(&chain, crate::ExternalLaneExportSelector::TxId(report.tx_id.clone()));
+    assert_eq!(status, export_status(&chain, crate::ExternalLaneExportSelector::Nonce(0)));
+    let page = export_page(&chain.data_dir, None, None);
+    assert_eq!(
+        (status.export_nonce, status.amount_atoms, status.base_recipient.as_str(), status.exported_at_height),
+        (0, 400, base_recipient().as_str(), tip_height(&chain))
+    );
+    assert_eq!(status.packet_digest, page.exports[0].packet_digest);
+    assert!(status.block_final, "{status:?}");
+    assert_eq!((status.lane_exported_atoms, status.lane_export_count), (400, 1));
+    assert_eq!(page.state.exported_atoms, 400);
+    assert!(status.base_payout.contains("relay that does not exist yet"), "{status:?}");
+
+    let missing = crate::external_lane_export_status(crate::ExternalLaneExportStatusOptions {
+        data_dir: chain.data_dir.clone(),
+        lane_id: "base-erc20".to_string(),
+        selector: crate::ExternalLaneExportSelector::Nonce(1),
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(missing.contains("no stored export"), "{missing}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_an_unknown_lane_before_signing() {
+    let chain = released_export_chain("export-command-lane", ACCOUNT_RESERVE + 1_000);
+    let error = faucet_refused(&chain, "base-erc21", 1, &base_recipient(), postfiat_types::EXTERNAL_LANE_NOT_CONFIGURED);
+    assert!(error.contains("`base-erc21` does not exist"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_a_lane_with_exports_off_before_signing() {
+    let chain = lane_chain("export-command-off");
+    let receipt = admit_and_apply(&chain, &release_tx(&chain, "base-erc20", 1, ACCOUNT_RESERVE + 1_000, 1), "release");
+    assert!(receipt.accepted, "{receipt:?}");
+    let error = faucet_refused(&chain, "base-erc20", 1, &base_recipient(), "external_lane_export_not_supported");
+    assert!(error.contains("exports are switched off"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_a_halted_lane_before_signing() {
+    let chain = released_export_chain("export-command-halt", ACCOUNT_RESERVE + 1_000);
+    govern_release_cap(&chain, 0);
+    let error = faucet_refused(&chain, "base-erc20", 1, &base_recipient(), postfiat_types::EXTERNAL_LANE_EXPORT_HALTED);
+    assert!(error.contains("active release cap is zero"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_a_zero_amount_before_signing() {
+    let chain = released_export_chain("export-command-zero", ACCOUNT_RESERVE + 1_000);
+    let error = faucet_refused(&chain, "base-erc20", 0, &base_recipient(), "external_lane_export_amount_zero");
+    assert!(error.contains("at least one atom"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_an_amount_above_released_minus_exported_before_signing() {
+    let released = ACCOUNT_RESERVE + 1_000;
+    let chain = released_export_chain("export-command-above", released);
+    let code = postfiat_types::EXTERNAL_LANE_EXPORT_ABOVE_RELEASED;
+    let error = faucet_refused(&chain, "base-erc20", released + 1, &base_recipient(), code);
+    assert!(error.contains(&format!("released {released} minus exported 0")), "{error}");
+    export_command(&chain, "base-erc20", 400, &base_recipient(), false).expect("export");
+    assert!(apply_mempool(&chain, "export-command-above").accepted);
+    let error = faucet_refused(&chain, "base-erc20", released - 399, &base_recipient(), code);
+    assert!(error.contains(&format!("minus exported 400 is {}", released - 400)), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_a_malformed_or_zero_recipient_before_signing() {
+    let chain = released_export_chain("export-command-shape", ACCOUNT_RESERVE + 1_000);
+    for recipient in ["0x12", "2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c", &format!("0x{}", "2C".repeat(20))] {
+        faucet_refused(&chain, "base-erc20", 1, recipient, "external_lane_export_recipient_invalid");
+    }
+    let error = faucet_refused(
+        &chain,
+        "base-erc20",
+        1,
+        &format!("0x{}", "00".repeat(20)),
+        "external_lane_export_recipient_invalid",
+    );
+    assert!(error.contains("zero address"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_the_lock_as_recipient_before_signing() {
+    let chain = released_export_chain("export-command-lock", ACCOUNT_RESERVE + 1_000);
+    let error = faucet_refused(&chain, "base-erc20", 1, LANE_LOCK, "external_lane_export_recipient_is_lock");
+    assert!(error.contains("lock contract"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_the_token_as_recipient_before_signing() {
+    let chain = released_export_chain("export-command-token", ACCOUNT_RESERVE + 1_000);
+    let token = export_page(&chain.data_dir, None, None).config.policy.token_address;
+    let error = faucet_refused(&chain, "base-erc20", 1, &token, crate::EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN);
+    assert!(error.contains("token contract"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// The release recipient holds exactly the released atoms: exporting 1,000
+/// of them leaves less than the fee and the reserve.
+#[test]
+fn external_lane_export_command_refuses_a_balance_short_of_amount_fee_and_reserve_before_signing() {
+    let chain = released_export_chain("export-command-balance", ACCOUNT_RESERVE + 1_000);
+    let key_pair = ml_dsa_65_keygen_from_seed(&[0x99; 32]);
+    let key_file = chain.data_dir.join("recipient-key.json");
+    write_key_file(
+        &key_file,
+        &DevKeyFile {
+            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            address: address_from_public_key(&key_pair.public_key),
+            public_key_hex: bytes_to_hex(&key_pair.public_key),
+            private_key_hex: bytes_to_hex(&key_pair.private_key),
+        },
+    )
+    .expect("recipient key");
+    let error = command_refused_before_signing(&chain, key_file, "base-erc20", 1_000, &base_recipient(), "insufficient_funds");
+    assert!(error.contains("cannot cover the amount 1000"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
