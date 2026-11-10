@@ -1626,13 +1626,13 @@ fn validate_wallet_note_for_swap(
 //   have no zeroize support (halo2_proofs 0.3).
 //
 // Plain copies that remain, and why:
-// - `SigningKey<SpendAuth>` locals and their `randomize(&alpha)` results: asset_orchard.rs:637,
-//   :702 (wallet-note `spend_key`), :3510 and :3535 (disclosed egress), and
-//   asset_orchard_action_builders.rs:1016, :1382, :2027. The upstream type has no `Zeroize` or
+// - `SigningKey<SpendAuth>` locals and their `randomize(&alpha)` results: asset_orchard.rs:654,
+//   :719 (wallet-note `spend_key`), :3527 and :3552 (disclosed egress), and
+//   asset_orchard_action_builders.rs:1016, :1382, :2049. The upstream type has no `Zeroize` or
 //   `Drop` (see above); wiping it here would need `unsafe`.
-// - By-value arguments to public functions: `scalar_enc` (asset_orchard.rs:3872),
-//   `orchard_commit_ivk` (:646, :709, :3594), `asset_derive_nullifier` (:3420, :3579) and the
-//   pasta `to_repr`/`from_repr` round trip of `ivk` (:648, :710, :3600). The callee owns its
+// - By-value arguments to public functions: `scalar_enc` (asset_orchard.rs:3889),
+//   `orchard_commit_ivk` (:663, :726, :3611), `asset_derive_nullifier` (:3437, :3596) and the
+//   pasta `to_repr`/`from_repr` round trip of `ivk` (:665, :727, :3617). The callee owns its
 //   argument copy; borrowing would change public signatures used by node, fuzz and wallets.
 // - verify.rs:2681 `orchard_full_viewing_key_from_spending_key`, :2695
 //   `orchard_scan_encrypted_outputs_with_spending_key` and :2708 `..._report_with_spending_key`
@@ -2235,6 +2235,9 @@ mod secret_lifetime_tests {
     /// dropped value. The counter is per thread, so parallel tests do not disturb it.
     #[derive(Clone, Copy, Debug, PartialEq)]
     struct WipeProbe(u64);
+
+    impl crate::asset_orchard::secret_value_payload::Sealed for WipeProbe {}
+    impl crate::asset_orchard::AssetOrchardSecretValuePayload for WipeProbe {}
 
     impl Default for WipeProbe {
         fn default() -> Self {

@@ -234,22 +234,39 @@ impl<T: Zeroize> From<T> for AssetOrchardSecret<T> {
     }
 }
 
-/// Owner for a `Copy` secret such as a `pallas::Scalar`, `pallas::Base` or `pallas::Affine`
-/// witness value. pasta_curves 0.5 implements no `Zeroize`, but these types are `Copy + Default`
-/// with all-zero defaults (zero, identity), so `zeroize` can overwrite the owned value with
-/// volatile writes. The owner is not `Copy`: it and every clone wipe on drop, including `?`
+/// A `Copy` secret payload whose `Default` is all-zero bytes, so the `DefaultIsZeroes` wipe of
+/// [`AssetOrchardSecretValue`] writes zeros. Sealed: implemented only for `pallas::Scalar`,
+/// `pallas::Base` (zero limbs) and `pallas::Affine` (identity `(0, 0)`) in pasta_curves 0.5.1,
+/// because another `T::default()` need not be all-zero.
+pub trait AssetOrchardSecretValuePayload: secret_value_payload::Sealed + Copy + Default {}
+
+pub(crate) mod secret_value_payload {
+    pub trait Sealed {}
+    impl Sealed for pasta_curves::pallas::Scalar {}
+    impl Sealed for pasta_curves::pallas::Base {}
+    impl Sealed for pasta_curves::pallas::Affine {}
+}
+
+impl AssetOrchardSecretValuePayload for pallas::Scalar {}
+impl AssetOrchardSecretValuePayload for pallas::Base {}
+impl AssetOrchardSecretValuePayload for pallas::Affine {}
+
+/// Owner for a `Copy` secret: a `pallas::Scalar`, `pallas::Base` or `pallas::Affine` witness
+/// value. pasta_curves 0.5 implements no `Zeroize`, but these types are `Copy + Default` with
+/// all-zero defaults (zero, identity), so `zeroize` can overwrite the owned value with volatile
+/// writes. The owner is not `Copy`: it and every clone wipe on drop, including `?`
 /// error exits, and `Debug` is redacted. Reading the value (`*secret`) makes an ordinary copy;
 /// copies made by curve arithmetic, halo2 `Value`s, moves or registers are outside its reach
 /// (issue #181).
 #[derive(Clone, Default)]
-pub struct AssetOrchardSecretValue<T: Copy + Default>(SecretValueCell<T>);
+pub struct AssetOrchardSecretValue<T: AssetOrchardSecretValuePayload>(SecretValueCell<T>);
 
 #[derive(Clone, Copy, Default)]
-struct SecretValueCell<T: Copy + Default>(T);
+struct SecretValueCell<T: AssetOrchardSecretValuePayload>(T);
 
-impl<T: Copy + Default> DefaultIsZeroes for SecretValueCell<T> {}
+impl<T: AssetOrchardSecretValuePayload> DefaultIsZeroes for SecretValueCell<T> {}
 
-impl<T: Copy + Default> AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> AssetOrchardSecretValue<T> {
     pub fn new(value: T) -> Self {
         Self(SecretValueCell(value))
     }
@@ -259,7 +276,7 @@ impl<T: Copy + Default> AssetOrchardSecretValue<T> {
     }
 }
 
-impl<T: Copy + Default> Deref for AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> Deref for AssetOrchardSecretValue<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -267,33 +284,33 @@ impl<T: Copy + Default> Deref for AssetOrchardSecretValue<T> {
     }
 }
 
-impl<T: Copy + Default> DerefMut for AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> DerefMut for AssetOrchardSecretValue<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0 .0
     }
 }
 
-impl<T: Copy + Default> Zeroize for AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> Zeroize for AssetOrchardSecretValue<T> {
     fn zeroize(&mut self) {
         self.0.zeroize();
     }
 }
 
-impl<T: Copy + Default> Drop for AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> Drop for AssetOrchardSecretValue<T> {
     fn drop(&mut self) {
         self.zeroize();
     }
 }
 
-impl<T: Copy + Default> ZeroizeOnDrop for AssetOrchardSecretValue<T> {}
+impl<T: AssetOrchardSecretValuePayload> ZeroizeOnDrop for AssetOrchardSecretValue<T> {}
 
-impl<T: Copy + Default> std::fmt::Debug for AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> std::fmt::Debug for AssetOrchardSecretValue<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("AssetOrchardSecretValue([redacted])")
     }
 }
 
-impl<T: Copy + Default> From<T> for AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> From<T> for AssetOrchardSecretValue<T> {
     fn from(value: T) -> Self {
         Self::new(value)
     }
