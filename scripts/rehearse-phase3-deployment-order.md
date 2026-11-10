@@ -52,11 +52,13 @@ Without `--node-bin` the script builds `postfiat-node` into this checkout's
      the nonce first makes the deployment fail; it cannot shift an address.
 7. Checks on chain:
    - both addresses and both runtime code hashes equal the predictions;
-   - `lock.finalityVerifier()` is the verifier;
-   - the verifier's `vaultRuntimeCodeHash`, `token` and `tokenRuntimeCodeHash`
-     are the expected values;
-   - the verifier's seeded height and checkpoint are as given, and its chain id
-     is 84532;
+   - every constructor value is read back through its getter and compared, by
+     name, with the value the script passed: all 17 fields of the verifier's
+     `Config` (the three `initial...` values through `latestCheckpointCommitment`,
+     `latestFinalizedHeight` and `latestCommitteeRootCommitment`) and the lock's
+     `token`, `finalityVerifier`, `maxLockAmount` and `minimumLockAmount`. The
+     predicted code hash comes from the same arguments, so only this read-back
+     catches two same-typed values swapped in them;
    - the genesis pins equal the deployed lock and token.
 
 `summary.json` and `manifest.json` are written to the output directory, and

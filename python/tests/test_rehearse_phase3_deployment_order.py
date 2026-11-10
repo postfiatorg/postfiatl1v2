@@ -91,6 +91,69 @@ class NonceGuardTests(unittest.TestCase):
             rehearsal.refuse_unless_planned_nonce(DEPLOYER, {"latest": 0, "pending": 0}, 0, (self.lock, self.verifier))
 
 
+TOKEN = "0x" + "12" * 20
+VERIFIER = "0x" + "ab" * 20
+LOCK = "0x" + "cd" * 20
+
+
+def fake_chain(verifier_values, lock_values):
+    """`call_word` over a verifier and a lock deployed with the given values."""
+    words = {(VERIFIER, f"{getter}()"): rehearsal.abi_word(verifier_values[field])
+             for field, getter in rehearsal.VERIFIER_GETTERS.items()}
+    words |= {(LOCK, f"{name}()"): rehearsal.abi_word(lock_values[name]) for name in rehearsal.LOCK_GETTERS}
+    return lambda address, signature: words[(address, signature)]
+
+
+class ConstructorReadBackTests(unittest.TestCase):
+    def setUp(self):
+        self.verifier_values = rehearsal.verifier_config(
+            token=TOKEN, token_code_hash="0x" + "34" * 32, vault_code_hash="0x" + "56" * 32)
+        self.lock_values = {"token": TOKEN, "finalityVerifier": VERIFIER, "maxLockAmount": 6_000_000,
+                            "minimumLockAmount": 10}
+
+    def check(self, chain):
+        return rehearsal.check_constructor_values(chain, verifier=VERIFIER, verifier_values=self.verifier_values,
+                                                  lock=LOCK, lock_values=self.lock_values)
+
+    def test_every_constructor_value_is_read_back(self):
+        read = self.check(fake_chain(self.verifier_values, self.lock_values))
+        self.assertEqual(len(read), len(rehearsal.VERIFIER_CONFIG_FIELDS) + len(rehearsal.LOCK_GETTERS))
+        for getter in ("programVKey", "pftlChainIdHash", "pftlGenesisHashCommitment", "pftlProtocolVersion",
+                       "routeProfileHashCommitment", "routeEpoch", "assetIdCommitment", "maxProofBytes",
+                       "maxPublicValuesBytes", "latestCommitteeRootCommitment", "sp1Verifier"):
+            self.assertIn(f"verifier.{getter}()", read)
+        self.assertIn("lock.maxLockAmount()", read)
+        self.assertIn("lock.minimumLockAmount()", read)
+
+    def test_a_swapped_route_profile_and_asset_id_fail(self):
+        deployed = dict(self.verifier_values, routeProfileHashCommitment=self.verifier_values["assetIdCommitment"],
+                        assetIdCommitment=self.verifier_values["routeProfileHashCommitment"])
+        with self.assertRaises(rehearsal.RehearsalFailure) as refusal:
+            self.check(fake_chain(deployed, self.lock_values))
+        self.assertIn("routeProfileHashCommitment", str(refusal.exception))
+
+    def test_a_swapped_max_proof_and_public_values_bound_fail(self):
+        deployed = dict(self.verifier_values, maxProofBytes=self.verifier_values["maxPublicValuesBytes"],
+                        maxPublicValuesBytes=self.verifier_values["maxProofBytes"])
+        with self.assertRaises(rehearsal.RehearsalFailure):
+            self.check(fake_chain(deployed, self.lock_values))
+
+    def test_a_swapped_lock_max_and_minimum_fail(self):
+        deployed = dict(self.lock_values, maxLockAmount=10, minimumLockAmount=6_000_000)
+        with self.assertRaises(rehearsal.RehearsalFailure) as refusal:
+            self.check(fake_chain(self.verifier_values, deployed))
+        self.assertIn("maxLockAmount", str(refusal.exception))
+
+    def test_the_tuple_follows_the_config_struct_order(self):
+        source = (ROOT / "crates/ethereum-contracts/src/PFTLFinalityVerifierV1.sol").read_text()
+        struct = source[source.index("struct Config {"):]
+        struct = struct[:struct.index("}")]
+        names = tuple(line.split()[-1].rstrip(";") for line in struct.splitlines()[1:] if line.strip())
+        self.assertEqual(names, rehearsal.VERIFIER_CONFIG_FIELDS)
+        fields = rehearsal.verifier_constructor_tuple(self.verifier_values)[1:-1].split(",")
+        self.assertEqual(fields, [str(self.verifier_values[name]) for name in names])
+
+
 class GenesisAndManifestTests(unittest.TestCase):
     def test_pin_lane_genesis_replaces_only_the_lane_pins(self):
         fixture = json.loads((ROOT / rehearsal.GENESIS_FIXTURE).read_text())

@@ -193,13 +193,64 @@ FIXTURE_CHECKPOINT = {
 FIXTURE_SP1_VERIFIER = '0x00000000000000000000000000000000000000f1'
 
 
-def verifier_constructor_tuple(*, token, token_code_hash, vault_code_hash):
+# The fields of `PFTLFinalityVerifierV1.Config`, in declaration order.
+VERIFIER_CONFIG_FIELDS = (
+    'sp1Verifier', 'programVKey', 'pftlChainIdHash', 'pftlGenesisHashCommitment', 'pftlProtocolVersion',
+    'routeProfileHashCommitment', 'routeEpoch', 'assetIdCommitment', 'arbitrumChainId', 'vaultRuntimeCodeHash',
+    'token', 'tokenRuntimeCodeHash', 'maxProofBytes', 'maxPublicValuesBytes', 'initialCheckpointCommitment',
+    'initialFinalizedHeight', 'initialCommitteeRootCommitment',
+)
+# The verifier's public getter for each constructor value (the constructor
+# stores the three `initial...` values in the `latest...` state variables).
+VERIFIER_GETTERS = {field: field for field in VERIFIER_CONFIG_FIELDS} | {
+    'initialCheckpointCommitment': 'latestCheckpointCommitment',
+    'initialFinalizedHeight': 'latestFinalizedHeight',
+    'initialCommitteeRootCommitment': 'latestCommitteeRootCommitment',
+}
+# The lock's constructor values that it exposes, in constructor order.
+LOCK_GETTERS = ('token', 'finalityVerifier', 'maxLockAmount', 'minimumLockAmount')
+
+
+def verifier_config(*, token, token_code_hash, vault_code_hash):
+    """The verifier's constructor values by field name."""
     c = FIXTURE_CHECKPOINT
-    fields = [FIXTURE_SP1_VERIFIER, c['programVKey'], c['pftlChainIdHash'], c['pftlGenesisHashCommitment'],
-              c['pftlProtocolVersion'], c['routeProfileHashCommitment'], c['routeEpoch'], c['assetIdCommitment'],
-              CHAIN_ID, vault_code_hash, token, token_code_hash, c['maxProofBytes'], c['maxPublicValuesBytes'],
-              c['initialCheckpointCommitment'], c['initialFinalizedHeight'], c['initialCommitteeRootCommitment']]
-    return '(' + ','.join(str(field) for field in fields) + ')'
+    config = {name: c[name] for name in VERIFIER_CONFIG_FIELDS if name in c}
+    config.update(sp1Verifier=FIXTURE_SP1_VERIFIER, arbitrumChainId=CHAIN_ID, vaultRuntimeCodeHash=vault_code_hash,
+                  token=token, tokenRuntimeCodeHash=token_code_hash)
+    require(set(config) == set(VERIFIER_CONFIG_FIELDS), 'the verifier config must name every Config field')
+    return config
+
+
+def verifier_constructor_tuple(config):
+    return '(' + ','.join(str(config[name]) for name in VERIFIER_CONFIG_FIELDS) + ')'
+
+
+def abi_word(value) -> str:
+    """The 32-byte ABI word of a uint, an address or a bytes32, as lower-case hex."""
+    if isinstance(value, int):
+        return f'0x{value:064x}'
+    raw = value.lower().removeprefix('0x')
+    require(len(raw) in (40, 64), f'{value!r} is neither an address nor a bytes32')
+    return '0x' + raw.rjust(64, '0')
+
+
+def check_constructor_values(call_word, *, verifier, verifier_values, lock, lock_values):
+    """Read back every constructor value of the verifier and the lock through its
+    getter and compare it, by name, with the value the script passed. A swap of
+    two same-typed values in the constructor arguments fails here even though
+    the predicted code hash, computed from the same arguments, would match.
+    Returns the getters read."""
+    read = []
+    for contract, address, getters, values in (
+            ('verifier', verifier, VERIFIER_GETTERS, verifier_values),
+            ('lock', lock, {name: name for name in LOCK_GETTERS}, lock_values)):
+        require(set(values) == set(getters), f'{contract}: the expected values must name every constructor value')
+        for field, getter in getters.items():
+            actual = call_word(address, f'{getter}()').lower()
+            require(actual == abi_word(values[field]),
+                    f'{contract}.{getter}() is {actual}, but the script passed {field} = {values[field]}')
+            read.append(f'{contract}.{getter}()')
+    return read
 
 
 def git(*args):
@@ -322,9 +373,6 @@ def main(argv=None):
         require(len(word) == 66, f'{signature} on {address} returned {word}')
         return word.lower()
 
-    def as_address(word):
-        return '0x' + word[-40:]
-
     try:
         # Tools, contracts and the node binary.
         toolchain = {tool: subprocess.check_output([tool, '--version'], text=True).strip().splitlines()[0]
@@ -414,6 +462,8 @@ def main(argv=None):
                                ['cast', 'compute-address', deployer, '--nonce', nonce]).strip().split()[-1].lower()
             require(computed == predicted, f'nonce {nonce}: cast computes {computed}, the script {predicted}')
 
+        lock_values = {'token': token, 'finalityVerifier': predicted_verifier, 'maxLockAmount': MAX_LOCK_AMOUNT,
+                       'minimumLockAmount': MINIMUM_LOCK_AMOUNT}
         lock_args = [token, predicted_verifier, token_code_hash, str(MAX_LOCK_AMOUNT), str(MINIMUM_LOCK_AMOUNT)]
 
         def on_snapshot(label, body):
@@ -436,10 +486,11 @@ def main(argv=None):
         # is then taken the same way.
         placeholder = '0x' + keccak256(b'phase3-rehearsal-placeholder-vault-code-hash').hex()
 
+        probe_values = verifier_config(token=token, token_code_hash=token_code_hash, vault_code_hash=placeholder)
+
         def probe_lock():
             verifier = deploy('probe-verifier', VERIFIER_CRATE, 'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1',
-                              deployer_key, [verifier_constructor_tuple(token=token, token_code_hash=token_code_hash,
-                                                                         vault_code_hash=placeholder)],
+                              deployer_key, [verifier_constructor_tuple(probe_values)],
                               nonce=planned_nonce)
             require(verifier == predicted_verifier, f'probe verifier at {verifier}, predicted {predicted_verifier}')
             lock = deploy('probe-lock', TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1', deployer_key, lock_args,
@@ -449,11 +500,13 @@ def main(argv=None):
 
         predicted_lock_code_hash = on_snapshot('lock code hash', probe_lock)
 
+        verifier_values = verifier_config(token=token, token_code_hash=token_code_hash,
+                                          vault_code_hash=predicted_lock_code_hash)
+
         def probe_verifier():
             verifier = deploy('probe-verifier-final', VERIFIER_CRATE,
                               'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1', deployer_key,
-                              [verifier_constructor_tuple(token=token, token_code_hash=token_code_hash,
-                                                          vault_code_hash=predicted_lock_code_hash)],
+                              [verifier_constructor_tuple(verifier_values)],
                               nonce=planned_nonce)
             require(verifier == predicted_verifier, f'probe verifier at {verifier}, predicted {predicted_verifier}')
             return code_hash(runtime(verifier))
@@ -500,8 +553,7 @@ def main(argv=None):
         # nonces, and each transaction pins its nonce, so it lands at the predicted address or fails.
         refuse_unless_planned_nonce(deployer, nonces_of(deployer), planned_nonce, (predicted_verifier, predicted_lock))
         verifier = deploy('deploy-verifier', VERIFIER_CRATE, 'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1',
-                          deployer_key, [verifier_constructor_tuple(token=token, token_code_hash=token_code_hash,
-                                                                     vault_code_hash=predicted_lock_code_hash)],
+                          deployer_key, [verifier_constructor_tuple(verifier_values)],
                           nonce=planned_nonce)
         require(verifier == predicted_verifier, f'verifier at {verifier}, predicted {predicted_verifier}')
         refuse_unless_planned_nonce(deployer, nonces_of(deployer), planned_nonce + 1, (predicted_lock,))
@@ -515,17 +567,9 @@ def main(argv=None):
         require(lock == predicted_lock, f'lock at {lock}, predicted {predicted_lock}')
         require(deployed_verifier_code_hash == predicted_verifier_code_hash, 'verifier code hash differs from the prediction')
         require(deployed_lock_code_hash == predicted_lock_code_hash, 'lock code hash differs from the prediction')
-        require(as_address(call_word(lock, 'finalityVerifier()')) == verifier, 'lock.finalityVerifier is not the verifier')
-        require(as_address(call_word(lock, 'token()')) == token, 'lock.token is not the token')
-        require(call_word(verifier, 'vaultRuntimeCodeHash()') == deployed_lock_code_hash,
-                'verifier.vaultRuntimeCodeHash is not the lock\'s code hash')
-        require(as_address(call_word(verifier, 'token()')) == token, 'verifier.token is not the token')
-        require(call_word(verifier, 'tokenRuntimeCodeHash()') == token_code_hash, 'verifier.tokenRuntimeCodeHash differs')
-        require(int(call_word(verifier, 'latestFinalizedHeight()'), 16) == FIXTURE_CHECKPOINT['initialFinalizedHeight'],
-                'verifier.latestFinalizedHeight is not the seeded height')
-        require(call_word(verifier, 'latestCheckpointCommitment()') == FIXTURE_CHECKPOINT['initialCheckpointCommitment'],
-                'verifier.latestCheckpointCommitment is not the seeded checkpoint')
-        require(int(call_word(verifier, 'arbitrumChainId()'), 16) == CHAIN_ID, 'verifier chain id is not 84532')
+        constructor_values_read = check_constructor_values(
+            call_word, verifier=verifier,
+            verifier_values=verifier_values, lock=lock, lock_values=lock_values)
         require((pinned['lock_contract_address'], pinned['lock_runtime_code_hash'],
                  pinned['token_address'], pinned['token_runtime_code_hash']) ==
                 (lock, deployed_lock_code_hash, token, token_code_hash), 'the genesis pins do not equal the deployed lock')
@@ -542,6 +586,7 @@ def main(argv=None):
                          'verifier_runtime_code_hash': deployed_verifier_code_hash,
                          'lock_runtime_code_hash': deployed_lock_code_hash},
             'code_hash_method': 'deploy on an evm_snapshot, read eth_getCode, evm_revert',
+            'constructor_values_read_back': constructor_values_read,
             'lock_constructor': {'maxLockAmount': MAX_LOCK_AMOUNT, 'minimumLockAmount': MINIMUM_LOCK_AMOUNT},
             'verifier_fixture_checkpoint': FIXTURE_CHECKPOINT,
             'verifier_sp1_verifier': FIXTURE_SP1_VERIFIER,
