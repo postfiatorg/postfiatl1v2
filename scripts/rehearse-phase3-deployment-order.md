@@ -21,9 +21,11 @@ says what landed (`steps_completed`, `complete: false`). Exit 2 means a precondi
 
 ## What it does
 
-1. Starts Anvil, generates three disposable keys and funds them with
+1. Starts Anvil, generates four disposable keys and funds them with
    `anvil_setBalance`: the token's deployer, the verifier's deployer and the
-   lock's deployer, the two dedicated deployers of section 5.
+   lock's deployer (the two dedicated deployers of section 5), and a token
+   holder. The token mints its whole supply, the lane's `reserved_atoms`, to
+   the holder.
 2. Predicts the verifier's CREATE address from the verifier deployer's next
    nonce and the lock's from the lock deployer's next nonce (RLP
    `[deployer, nonce]`, Keccak-256). Each prediction is cross-checked with
@@ -74,6 +76,11 @@ says what landed (`steps_completed`, `complete: false`). Exit 2 means a precondi
      predicted code hash comes from the same arguments, so only this read-back
      catches two same-typed values swapped in them;
    - the genesis pins equal the deployed lock and token.
+8. Runs the ERC-20 path once. The holder calls `approve` and one `lock` of the
+   minimum, 10 atoms, to a canonical PFTL address (`pf` + 40 lower-case hex,
+   derived from a label, so no key holds it). Then `nextNonce()` is 1,
+   `totalLocked()` and the lock's token balance are 10, `lockRecord(0)` names
+   the holder, the amount and the recipient's hash, and `token.decimals()` is 6.
 
 `summary.json` and `manifest.json` are written to the output directory, and
 Anvil is stopped.
@@ -95,8 +102,9 @@ Anvil is stopped.
   route profile, epoch and asset id are fixture values. In production the first
   finalized PFTL checkpoint of the pinned genesis and the Base route profile
   provide them. The genesis is only validated by `init`; no chain is run.
-- **No proofs.** The SP1 verifier is a fixture address, which the constructor
-  only requires to be non-zero, so no proof is verified and no `release` runs.
+- **No proof and no release.** The SP1 verifier is a fixture address, which
+  the constructor only requires to be non-zero, so no proof is verified and no
+  `release` runs. The one Lock stays locked.
 - **The guard is not race-free.** A transaction sent between the check and the
   deployment can still take the planned nonce. The pinned nonce then makes the
   deployment fail, but the predicted address is lost and the genesis pins can
@@ -112,5 +120,6 @@ Anvil is stopped.
   profile and asset id.
 
 The tests in `python/tests/test_rehearse_phase3_deployment_order.py` run
-without Anvil. They cover the Keccak and CREATE vectors, the nonce guard, the
-genesis pinning and the manifest shape.
+without Anvil. They cover the Keccak and CREATE vectors, the nonce guard and
+the two-deployer plan, the constructor read-back, the lock cap, the Lock path
+checks, the genesis pinning, the partial record and the manifest shape.

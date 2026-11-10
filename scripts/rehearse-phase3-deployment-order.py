@@ -20,6 +20,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -37,6 +38,10 @@ LANE_ID = 'base-erc20'
 # reserve `ACCOUNT_RESERVE` of crates/execution/src/entrypoints.rs.
 MINIMUM_LOCK_AMOUNT = 10
 UINT64_MAX = (1 << 64) - 1
+TOKEN_DECIMALS = 6
+# A canonical PFTL address (`pf` + 40 lower-case hex, crates/crypto_provider/src/address.rs),
+# derived like `address_from_public_key` from a label instead of a key, so nobody holds it.
+PFTL_RECIPIENT = 'pf' + hashlib.sha3_384(b'postfiat.address.v1\x00phase3-rehearsal-recipient').hexdigest()[:40]
 # The sources whose sha256 the manifest records at the recorded commit.
 SOURCE_FILES = (
     'crates/pft-token-contracts/src/PFTLockV1.sol',
@@ -297,6 +302,40 @@ def abi_word(value) -> str:
     return '0x' + raw.rjust(64, '0')
 
 
+def call_data(signature, *args):
+    """The calldata of a call with static arguments (uint, address, bytes32)."""
+    return '0x' + keccak256(signature.encode())[:4].hex() + ''.join(abi_word(arg)[2:] for arg in args)
+
+
+def is_canonical_pftl_address(value):
+    return re.fullmatch(r'pf[0-9a-f]{40}', value) is not None
+
+
+def check_lock_path(call, *, token, lock, holder, amount, pftl_recipient):
+    """After one `lock` of `amount` from `holder` to `pftl_recipient` on a fresh lock:
+    the token has six decimals, the lock's nonce, total and token balance moved by
+    exactly that Lock, and its record names the holder, amount and recipient hash.
+    `call(address, signature, *args)` returns the raw return data."""
+    def words(data):
+        return [int(data[2 + 64 * i:2 + 64 * (i + 1)], 16) for i in range((len(data) - 2) // 64)]
+
+    read = {
+        'token.decimals()': words(call(token, 'decimals()'))[0],
+        'lock.nextNonce()': words(call(lock, 'nextNonce()'))[0],
+        'lock.totalLocked()': words(call(lock, 'totalLocked()'))[0],
+        'token.balanceOf(lock)': words(call(token, 'balanceOf(address)', lock))[0],
+        'lock.lockRecord(0)': words(call(lock, 'lockRecord(uint64)', 0)),
+    }
+    expected_record = [int(holder, 16), amount, int.from_bytes(keccak256(pftl_recipient.encode()), 'big')]
+    for name, want in (('token.decimals()', TOKEN_DECIMALS), ('lock.nextNonce()', 1), ('lock.totalLocked()', amount),
+                       ('token.balanceOf(lock)', amount), ('lock.lockRecord(0)', expected_record)):
+        require(read[name] == want, f'after one Lock of {amount}, {name} is {read[name]}, expected {want}')
+    record = read['lock.lockRecord(0)']
+    read['lock.lockRecord(0)'] = {'holder': '0x' + f'{record[0]:040x}', 'amount': record[1],
+                                  'pftlRecipientHash': '0x' + f'{record[2]:064x}'}
+    return read
+
+
 def check_constructor_values(call_word, *, verifier, verifier_values, lock, lock_values):
     """Read back every constructor value of the verifier and the lock through its
     getter and compare it, by name, with the value the script passed. A swap of
@@ -448,10 +487,13 @@ def main(argv=None):
     def runtime(address):
         return rpc('eth_getCode', [address, 'latest'])
 
+    def call(address, signature, *args):
+        return rpc('eth_call', [{'to': address, 'data': call_data(signature, *args)}, 'latest']).lower()
+
     def call_word(address, signature):
-        word = rpc('eth_call', [{'to': address, 'data': '0x' + keccak256(signature.encode())[:4].hex()}, 'latest'])
+        word = call(address, signature)
         require(len(word) == 66, f'{signature} on {address} returned {word}')
-        return word.lower()
+        return word
 
     try:
         # Tools, contracts and the node binary.
@@ -521,6 +563,7 @@ def main(argv=None):
         token_key, token_deployer = disposable_account()
         verifier_key, verifier_deployer = disposable_account()
         lock_key, lock_deployer = disposable_account()
+        holder_key, holder = disposable_account()
         require(len({token_deployer, verifier_deployer, lock_deployer}) == 3, 'the three deployers must differ')
         keys = {verifier_deployer: verifier_key, lock_deployer: lock_key}
 
@@ -531,11 +574,14 @@ def main(argv=None):
                     *pin, '--constructor-args', *constructor]
             return json.loads(command(name, argv, ROOT / crate, forge_env[crate]))['deployedTo'].lower()
 
+        # The token's whole supply is the lane's reserved_atoms, minted to the disposable holder.
+        fixture = json.loads((ROOT / GENESIS_FIXTURE).read_text())
         token = deploy('deploy-token', TOKEN_CRATE, 'src/PFTToken.sol:PFTToken', token_key,
-                       ['Rehearsal PFT', 'rPFT', '300000000', token_deployer])
+                       ['Rehearsal PFT', 'rPFT', str(lane(fixture)['reserved_atoms']), holder])
         token_code_hash = code_hash(runtime(token))
         record_step(deployment, 'token deployed',
                     deployers={'token': token_deployer, 'verifier': verifier_deployer, 'lock': lock_deployer},
+                    token_holder=holder,
                     token=token, token_runtime_code_hash=token_code_hash)
 
         # (1) Predict the verifier's CREATE address from its deployer's next nonce and the
@@ -558,7 +604,6 @@ def main(argv=None):
                     deployer_nonce_lock=lock_nonce, predicted={'verifier': predicted_verifier, 'lock': predicted_lock})
 
         # The lock's cap is the per-window release cap of the lane the genesis pins.
-        fixture = json.loads((ROOT / GENESIS_FIXTURE).read_text())
         max_lock_amount = lane_window_cap(fixture)
         lock_values = {'token': token, 'finalityVerifier': predicted_verifier, 'maxLockAmount': max_lock_amount,
                        'minimumLockAmount': MINIMUM_LOCK_AMOUNT}
@@ -698,7 +743,20 @@ def main(argv=None):
                  pinned['token_address'], pinned['token_runtime_code_hash']) ==
                 (lock, deployed_lock_code_hash, token, token_code_hash), 'the genesis pins do not equal the deployed lock')
 
-        record_step(deployment, 'on-chain checks held', constructor_values_read_back=constructor_values_read,
+        record_step(deployment, 'on-chain checks held', constructor_values_read_back=constructor_values_read)
+
+        # (8) The ERC-20 path: the holder approves the lock and locks the minimum to a PFTL
+        # recipient. No proof is verified and nothing is released.
+        require(is_canonical_pftl_address(PFTL_RECIPIENT), f'{PFTL_RECIPIENT} is not a canonical PFTL address')
+        command('holder-approve', ['cast', 'send', token, 'approve(address,uint256)', lock, str(MINIMUM_LOCK_AMOUNT),
+                                   '--rpc-url', url, '--private-key', holder_key])
+        command('holder-lock', ['cast', 'send', lock, 'lock(uint64,bytes)', str(MINIMUM_LOCK_AMOUNT),
+                                '0x' + PFTL_RECIPIENT.encode().hex(), '--rpc-url', url, '--private-key', holder_key])
+        lock_path = check_lock_path(call, token=token, lock=lock, holder=holder, amount=MINIMUM_LOCK_AMOUNT,
+                                    pftl_recipient=PFTL_RECIPIENT)
+        record_step(deployment, 'one Lock held',
+                    erc20_lock={'holder': holder, 'amount': MINIMUM_LOCK_AMOUNT, 'pftl_recipient': PFTL_RECIPIENT,
+                                'read_back': lock_path},
                     complete=True)
         results['passed'] = True
     except Exception as error:

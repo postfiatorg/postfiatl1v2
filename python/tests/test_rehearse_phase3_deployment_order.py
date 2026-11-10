@@ -193,6 +193,51 @@ class ConstructorReadBackTests(unittest.TestCase):
         self.assertEqual(fields, [str(self.verifier_values[name]) for name in names])
 
 
+HOLDER = "0x" + "99" * 20
+
+
+def fake_lock_chain(**overrides):
+    """`call` over a token and a lock after one Lock of 10 from HOLDER to the PFTL recipient."""
+    state = {"decimals": 6, "nextNonce": 1, "totalLocked": 10, "balance": 10,
+             "record": (HOLDER, 10, "0x" + rehearsal.keccak256(rehearsal.PFTL_RECIPIENT.encode()).hex())} | overrides
+    answers = {
+        (TOKEN, "decimals()", ()): [state["decimals"]],
+        (LOCK, "nextNonce()", ()): [state["nextNonce"]],
+        (LOCK, "totalLocked()", ()): [state["totalLocked"]],
+        (TOKEN, "balanceOf(address)", (LOCK,)): [state["balance"]],
+        (LOCK, "lockRecord(uint64)", (0,)): list(state["record"]),
+    }
+    return lambda address, signature, *args: "0x" + "".join(
+        rehearsal.abi_word(value)[2:] for value in answers[(address, signature, args)])
+
+
+class Erc20LockPathTests(unittest.TestCase):
+    def check(self, chain):
+        return rehearsal.check_lock_path(chain, token=TOKEN, lock=LOCK, holder=HOLDER, amount=10,
+                                         pftl_recipient=rehearsal.PFTL_RECIPIENT)
+
+    def test_one_lock_of_the_minimum_passes(self):
+        read = self.check(fake_lock_chain())
+        self.assertEqual(read["lock.nextNonce()"], 1)
+        self.assertEqual(read["lock.lockRecord(0)"]["holder"], HOLDER)
+
+    def test_each_wrong_value_fails(self):
+        for override in ({"decimals": 18}, {"nextNonce": 0}, {"nextNonce": 2}, {"totalLocked": 20}, {"balance": 0},
+                         {"record": (TOKEN, 10, "0x" + "00" * 32)}):
+            with self.subTest(override=override), self.assertRaises(rehearsal.RehearsalFailure):
+                self.check(fake_lock_chain(**override))
+
+    def test_the_recipient_is_a_canonical_pftl_address(self):
+        self.assertTrue(rehearsal.is_canonical_pftl_address(rehearsal.PFTL_RECIPIENT))
+        self.assertFalse(rehearsal.is_canonical_pftl_address("pftl-recipient-0001"))
+        self.assertFalse(rehearsal.is_canonical_pftl_address(rehearsal.PFTL_RECIPIENT.upper()))
+
+    def test_call_data_encodes_static_arguments(self):
+        self.assertEqual(rehearsal.call_data("balanceOf(address)", LOCK),
+                         "0x70a08231" + "00" * 12 + "cd" * 20)
+        self.assertEqual(rehearsal.call_data("lockRecord(uint64)", 0)[10:], "00" * 32)
+
+
 class GenesisAndManifestTests(unittest.TestCase):
     def test_pin_lane_genesis_replaces_only_the_lane_pins(self):
         fixture = json.loads((ROOT / rehearsal.GENESIS_FIXTURE).read_text())
