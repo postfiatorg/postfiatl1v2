@@ -278,10 +278,30 @@ class GenesisAndManifestTests(unittest.TestCase):
         with self.assertRaises(rehearsal.RehearsalFailure):
             rehearsal.lane_window_cap(fixture)
 
+    def test_the_genesis_excerpt_holds_the_lane_pins_and_the_file_hash(self):
+        fixture = json.loads((ROOT / rehearsal.GENESIS_FIXTURE).read_text())
+        excerpt = rehearsal.genesis_pins_excerpt(fixture, "ab" * 32)
+        self.assertEqual(excerpt["genesis_sha256"], "ab" * 32)
+        self.assertEqual(excerpt["lane"]["policy"], rehearsal.lane_policy(fixture))
+        for pin in ("lock_contract_address", "lock_runtime_code_hash", "token_address", "token_runtime_code_hash"):
+            self.assertIn(pin, excerpt["lane"]["policy"])
+        self.assertNotIn("validator_count", json.dumps(excerpt))
+        self.assertIn(rehearsal.GENESIS_EXCERPT, rehearsal.PUBLISHED)
+
+    def test_the_test_file_is_a_source_file(self):
+        self.assertIn("python/tests/test_rehearse_phase3_deployment_order.py", rehearsal.SOURCE_FILES)
+
+    def test_the_openzeppelin_revision_is_the_pinned_submodule_commit(self):
+        if not (ROOT / rehearsal.OPENZEPPELIN / ".git").exists():
+            self.skipTest("the OpenZeppelin submodule is not checked out")
+        revision = rehearsal.submodule_revision()
+        self.assertRegex(revision, r"^[0-9a-f]{40}$")
+
     def test_manifest_shape(self):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory)
             (out / "summary.json").write_text("{}\n")
+            (out / rehearsal.GENESIS_EXCERPT).write_text("{}\n")
             (out / "deploy-lock.stdout").write_text("{}\n")
             deployment = {"predicted": {"lock": "0x" + "00" * 20}, "deployed": {"lock": "0x" + "00" * 20}}
             manifest = rehearsal.build_manifest(out, "c" * 40, "t" * 40, {"anvil": "anvil 1"}, deployment)
@@ -290,7 +310,7 @@ class GenesisAndManifestTests(unittest.TestCase):
         self.assertEqual(manifest["toolchain"], {"anvil": "anvil 1"})
         self.assertEqual(manifest["deployment"], deployment)
         self.assertEqual(set(manifest["source_files"]), set(rehearsal.SOURCE_FILES))
-        self.assertEqual(set(manifest["evidence_files"]), {"summary.json"})
+        self.assertEqual(set(manifest["evidence_files"]), {"summary.json", rehearsal.GENESIS_EXCERPT})
         self.assertEqual(set(manifest["not_published"]), {"deploy-lock.stdout"})
 
     def test_manifest_inventories_nested_files_recursively(self):

@@ -85,8 +85,14 @@ says what landed (`steps_completed`, `complete: false`). Exit 2 means a precondi
 `summary.json` and `manifest.json` are written to the output directory, and
 Anvil is stopped.
 - The manifest holds the addresses, code hashes, nonces, tool versions, the
-  source commit and tree, the sha256 of each source and Foundry artifact, and
-  the node binary's sha256.
+  source commit and tree, the sha256 of each source (the script, its test file,
+  the contracts, the lane types and the genesis fixture) and Foundry artifact,
+  the OpenZeppelin submodule revision the token crate built against, and the
+  node binary's sha256.
+- `genesis-lane-pins.json` is published with the summary and manifest: the
+  generated genesis's `base-erc20` lane (its `reserved_atoms`, window and cap
+  parameters, and its policy with the four pins) and the sha256 of the whole
+  generated `genesis.json`, which is not published.
 - It also records the cargo, rustc and Python versions, the node's build
   profile and the host OS.
 - `postfiat_node_sha256` identifies the exact binary used. It is not expected to

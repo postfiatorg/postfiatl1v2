@@ -50,7 +50,10 @@ SOURCE_FILES = (
     'crates/types/src/external_lane_types.rs',
     GENESIS_FIXTURE,
     'scripts/rehearse-phase3-deployment-order.py',
+    'python/tests/test_rehearse_phase3_deployment_order.py',
 )
+OPENZEPPELIN = 'crates/pft-token-contracts/lib/openzeppelin-contracts'
+GENESIS_EXCERPT = 'genesis-lane-pins.json'
 ARTIFACTS = {
     'PFTToken': (TOKEN_CRATE, 'PFTToken.sol/PFTToken.json'),
     'PFTLockV1': (TOKEN_CRATE, 'PFTLockV1.sol/PFTLockV1.json'),
@@ -58,7 +61,7 @@ ARTIFACTS = {
 }
 # The files the public record keeps; the manifest lists every other file under the
 # output directory, recursively, by relative path, sha256 and size only.
-PUBLISHED = ('summary.json', 'manifest.json')
+PUBLISHED = ('summary.json', 'manifest.json', GENESIS_EXCERPT)
 
 
 class RehearsalFailure(RuntimeError):
@@ -194,6 +197,16 @@ def refuse_unless_plan_intact(plan, nonces):
             refusals.append(f'{role}: {refusal}')
     require(not refusals, 'the deployment plan is refused as a whole; ' + '; '.join(refusals))
     return nonce_plan_status(plan, nonces)
+
+
+def genesis_pins_excerpt(genesis: dict, genesis_sha256: str) -> dict:
+    """The published excerpt of the generated genesis: the lane's cap parameters and
+    its policy with the four pins, and the sha256 of the whole (unpublished) file."""
+    entry = lane(genesis)
+    return {'genesis_sha256': genesis_sha256,
+            'note': 'an excerpt of the generated genesis.json, which is not published; its sha256 is of the whole file',
+            'lane': {key: copy.deepcopy(entry[key])
+                     for key in ('id', 'reserved_atoms', 'release_window_blocks', 'release_cap_bps', 'policy')}}
 
 
 def pin_lane_genesis(fixture: dict, *, lock_address, lock_code_hash, token_address, token_code_hash):
@@ -409,6 +422,15 @@ def write_records(out, results, commit, tree):
     return manifest
 
 
+def submodule_revision(path=OPENZEPPELIN):
+    """The commit a submodule is pinned at, which must be the one checked out."""
+    pinned = git('ls-tree', 'HEAD', path).split()
+    require(len(pinned) >= 3 and pinned[1] == 'commit', f'{path} is not a submodule at HEAD')
+    checked_out = subprocess.check_output(['git', '-C', str(ROOT / path), 'rev-parse', 'HEAD'], text=True).strip()
+    require(checked_out == pinned[2], f'{path} is checked out at {checked_out}, but HEAD pins {pinned[2]}')
+    return pinned[2]
+
+
 def tool_version(tool):
     """The first line of `tool --version`, or None when the tool is absent."""
     try:
@@ -517,6 +539,7 @@ def main(argv=None):
                 'solc_version': ((artifact.get('metadata') or {}).get('compiler') or {}).get('version'),
             }
         toolchain['artifacts'] = artifacts
+        toolchain['openzeppelin_contracts'] = {'path': OPENZEPPELIN, 'revision': submodule_revision()}
         toolchain['foundry_toml_sha256'] = {crate: sha256_file(ROOT / crate / 'foundry.toml')
                                             for crate in (TOKEN_CRATE, VERIFIER_CRATE)}
         node_bin = args.node_bin
@@ -671,6 +694,8 @@ def main(argv=None):
                                    token_address=token, token_code_hash=token_code_hash)
         genesis_path = out / 'genesis.json'
         genesis_path.write_text(json.dumps(genesis, indent=2) + '\n')
+        excerpt = genesis_pins_excerpt(genesis, sha256_file(genesis_path))
+        (out / GENESIS_EXCERPT).write_text(json.dumps(excerpt, indent=2) + '\n')
         node_dir = out / 'pftl-node'
         init_report = json.loads(command('node-init', [node_bin, 'init', '--genesis-file', genesis_path,
                                                        '--data-dir', node_dir, '--node-id', 'validator-0']))
@@ -680,8 +705,10 @@ def main(argv=None):
         require((pinned['lock_contract_address'], pinned['lock_runtime_code_hash']) ==
                 (predicted_lock, predicted_lock_code_hash), 'the node read other lock pins than the ones written')
         refuse_unless_cap_matches(node_genesis, max_lock_amount)
+        require(excerpt['lane']['policy'] == pinned, 'the published excerpt differs from the pins the node read')
         record_step(deployment, 'genesis pinned',
-                    genesis_fixture=GENESIS_FIXTURE, genesis_sha256=sha256_file(genesis_path),
+                    genesis_fixture=GENESIS_FIXTURE, genesis_sha256=excerpt['genesis_sha256'],
+                    genesis_excerpt=GENESIS_EXCERPT,
                     genesis_lane_policy=pinned,
                     genesis_parse_check='postfiat-node init --genesis-file validated the genesis; the lane pins were '
                                         'read back from the data directory',
