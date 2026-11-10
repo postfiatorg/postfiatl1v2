@@ -1,6 +1,6 @@
 {
-  "source_commit": "5c4cb62e82ea06ac37f2badc9899980bb69f6121",
-  "source_tree": "a1198ed8f037b212a3d3fcf12d46c90196032bb3",
+  "source_commit": "da049f00e6582f34d35f9d0cfe2dae2116f9a229",
+  "source_tree": "fb44d2923d73009b6cdce1647f62f87468c7dc2a",
   "toolchain": {
     "anvil": "anvil Version: 1.8.1",
     "forge": "forge Version: 1.8.1",
@@ -22,6 +22,10 @@
         "solc_version": "0.8.24+commit.e11b9ed9"
       }
     },
+    "openzeppelin_contracts": {
+      "path": "crates/pft-token-contracts/lib/openzeppelin-contracts",
+      "revision": "cab19933c33c2ad1d4c7a84864a3601dddfd16f3"
+    },
     "foundry_toml_sha256": {
       "crates/pft-token-contracts": "0ae07db2d381e40fe0295e4400cf85292b26b0556fc0b2980854f944ca0f7e60",
       "crates/ethereum-contracts": "c8db23b2cdab8fd1efd7fd63a578bf44a198716f6637bfccbc7e814c00f00831"
@@ -31,33 +35,44 @@
     "python": "3.14.4",
     "host_os": "Linux-7.0.0-29-generic-x86_64-with-glibc2.43",
     "postfiat_node_build_profile": "dev (debug), cargo build --locked",
-    "postfiat_node_sha256": "87d59502ba30cf01a57bd20d1826f3d9f07037dc21be5c7070b71b4de29b9832",
+    "postfiat_node_sha256": "0e6866003158cd07253d215660c93a31e9c26feaacc7b2fd3bf46b878d6b3116",
     "postfiat_node_sha256_note": "identifies the exact binary used; not expected to reproduce across builds"
   },
   "deployment": {
     "chain_id": 84532,
-    "deployer": "0x40fc065336db7170f7157412e8365a174100cac7",
-    "token_deployer": "0x9b7f6df67ed68c6a34b20c53d60c6fe3f0de22be",
-    "deployer_nonce_verifier": 0,
-    "deployer_nonce_lock": 1,
-    "token": "0x452cbf6eccaa267816acc8b2cca65c0c522c7585",
-    "token_runtime_code_hash": "0xa7f1e25e542def86244afdaadccb466f7e42ead8a3118f83a9e9355b3f2824dd",
-    "predicted": {
-      "verifier": "0x37d46f261c6fbd84c0aa5408d02aa75f8e09cf92",
-      "lock": "0x97ad1ce8fef4663874a93239e8d5fc11e5f1b48a",
-      "verifier_runtime_code_hash": "0xeb74f0292bcf8f415a99bacf76b6f4a651326b33616ccbbec279864d9021b3cb",
-      "lock_runtime_code_hash": "0x5d0aed7a516ad2c8fe42c542aa03b76bfddfa7a194677d4d4ab98f234461d6d3"
+    "complete": true,
+    "steps_completed": [
+      "token deployed",
+      "addresses predicted",
+      "code hashes predicted",
+      "genesis pinned",
+      "verifier deployed",
+      "lock deployed",
+      "on-chain checks held",
+      "one Lock held"
+    ],
+    "deployers": {
+      "token": "0x7d0a54ce42d205a35d7b309c913bf3f7b07b6907",
+      "verifier": "0x18275b842323245deb060915569498fb03f44926",
+      "lock": "0x9df9133325ceed11952bc0075b96fa9c17a0940e"
     },
-    "deployed": {
-      "verifier": "0x37d46f261c6fbd84c0aa5408d02aa75f8e09cf92",
-      "lock": "0x97ad1ce8fef4663874a93239e8d5fc11e5f1b48a",
-      "verifier_runtime_code_hash": "0xeb74f0292bcf8f415a99bacf76b6f4a651326b33616ccbbec279864d9021b3cb",
-      "lock_runtime_code_hash": "0x5d0aed7a516ad2c8fe42c542aa03b76bfddfa7a194677d4d4ab98f234461d6d3"
+    "token_holder": "0x93eb38eb048a7d7ce6cd0957c8d124a80e92f3cc",
+    "token": "0xbb4e03075dbbc038cb986c660f31fbb2a8ca01a5",
+    "token_runtime_code_hash": "0x238da973741c2aabc5cf0b5a644454abdf80d64ba0666456f9843db70d4ea89c",
+    "deployer_nonce_verifier": 0,
+    "deployer_nonce_lock": 0,
+    "predicted": {
+      "verifier": "0x56c2a3a7dde8d8740c021b54d9fe8ef398cdae2a",
+      "lock": "0xad0bb02f04f9bdde7afb68109d31822a37eb15ff",
+      "verifier_runtime_code_hash": "0xca4f7ed49450e2712241f8f1e3ebeb467587c3d8c3995edeb02bb5cdffd2158f",
+      "lock_runtime_code_hash": "0x32b473cebd6e9fb2583fcc01450fa512551d572849edaa739bffd82726fc2040"
     },
     "code_hash_method": "deploy on an evm_snapshot, read eth_getCode, evm_revert",
     "lock_constructor": {
       "maxLockAmount": 6000000,
-      "minimumLockAmount": 10
+      "minimumLockAmount": 10,
+      "maxLockAmount_source": "the lane per-window release cap, reserved_atoms * release_cap_bps // 10_000, of the pinned genesis",
+      "minimumLockAmount_source": "PFTLockV1.PFTL_ACCOUNT_RESERVE, the PFTL account reserve"
     },
     "verifier_fixture_checkpoint": {
       "source": "crates/ethereum-contracts/test/PFUSDCTier4.t.sol (setUp)",
@@ -76,20 +91,66 @@
     },
     "verifier_sp1_verifier": "0x00000000000000000000000000000000000000f1",
     "genesis_fixture": "crates/node/testdata/external-lane-genesis/genesis.json",
-    "genesis_sha256": "26eb508d7c3e9b465bd876e5b475982ad24d63f7e8aa2be0babebc3b181ad407",
+    "genesis_sha256": "7b01ebf592d272d780b582a209869d516196660633cf7af61a60e750529854cd",
+    "genesis_excerpt": "genesis-lane-pins.json",
     "genesis_lane_policy": {
       "chain_id": 84532,
-      "lock_contract_address": "0x97ad1ce8fef4663874a93239e8d5fc11e5f1b48a",
-      "token_address": "0x452cbf6eccaa267816acc8b2cca65c0c522c7585",
-      "token_runtime_code_hash": "0xa7f1e25e542def86244afdaadccb466f7e42ead8a3118f83a9e9355b3f2824dd",
-      "lock_runtime_code_hash": "0x5d0aed7a516ad2c8fe42c542aa03b76bfddfa7a194677d4d4ab98f234461d6d3",
+      "lock_contract_address": "0xad0bb02f04f9bdde7afb68109d31822a37eb15ff",
+      "token_address": "0xbb4e03075dbbc038cb986c660f31fbb2a8ca01a5",
+      "token_runtime_code_hash": "0x238da973741c2aabc5cf0b5a644454abdf80d64ba0666456f9843db70d4ea89c",
+      "lock_runtime_code_hash": "0x32b473cebd6e9fb2583fcc01450fa512551d572849edaa739bffd82726fc2040",
       "committee_epoch": 2,
       "committee_root": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
       "confirmation_depth": 64
     },
     "genesis_parse_check": "postfiat-node init --genesis-file validated the genesis; the lane pins were read back from the data directory",
-    "pftl_genesis_hash": "c57c14575a39927e688360b8c898d8c4455058910164886a75bb7a160bf8e0c5c1a0f70df1cb5844fcb8d81a6d9591d3",
-    "pftl_chain_id": "postfiat-lane-sepolia-example"
+    "pftl_genesis_hash": "8241675d701264ed979e12d37d9def6507affc573ec9d44aa56acaaccf1f5d33cce1d52ac1e6b78f42b200ed051f5790",
+    "pftl_chain_id": "postfiat-lane-sepolia-example",
+    "deployed": {
+      "verifier": "0x56c2a3a7dde8d8740c021b54d9fe8ef398cdae2a",
+      "verifier_runtime_code_hash": "0xca4f7ed49450e2712241f8f1e3ebeb467587c3d8c3995edeb02bb5cdffd2158f",
+      "lock": "0xad0bb02f04f9bdde7afb68109d31822a37eb15ff",
+      "lock_runtime_code_hash": "0x32b473cebd6e9fb2583fcc01450fa512551d572849edaa739bffd82726fc2040"
+    },
+    "constructor_values_read_back": [
+      "verifier.sp1Verifier()",
+      "verifier.programVKey()",
+      "verifier.pftlChainIdHash()",
+      "verifier.pftlGenesisHashCommitment()",
+      "verifier.pftlProtocolVersion()",
+      "verifier.routeProfileHashCommitment()",
+      "verifier.routeEpoch()",
+      "verifier.assetIdCommitment()",
+      "verifier.arbitrumChainId()",
+      "verifier.vaultRuntimeCodeHash()",
+      "verifier.token()",
+      "verifier.tokenRuntimeCodeHash()",
+      "verifier.maxProofBytes()",
+      "verifier.maxPublicValuesBytes()",
+      "verifier.latestCheckpointCommitment()",
+      "verifier.latestFinalizedHeight()",
+      "verifier.latestCommitteeRootCommitment()",
+      "lock.token()",
+      "lock.finalityVerifier()",
+      "lock.maxLockAmount()",
+      "lock.minimumLockAmount()"
+    ],
+    "erc20_lock": {
+      "holder": "0x93eb38eb048a7d7ce6cd0957c8d124a80e92f3cc",
+      "amount": 10,
+      "pftl_recipient": "pf500c2bfeb17a2797d9a8726cbc3a162763309ba6",
+      "read_back": {
+        "token.decimals()": 6,
+        "lock.nextNonce()": 1,
+        "lock.totalLocked()": 10,
+        "token.balanceOf(lock)": 10,
+        "lock.lockRecord(0)": {
+          "holder": "0x93eb38eb048a7d7ce6cd0957c8d124a80e92f3cc",
+          "amount": 10,
+          "pftlRecipientHash": "0x32a243c97e94407a5fffb455663971a86bb80c5fbb42670635557ec9070342d6"
+        }
+      }
+    }
   },
   "source_files": {
     "crates/pft-token-contracts/src/PFTLockV1.sol": "3a0f2fe71ea1ad17946cffe5611da51a86a7ab18a967ca27cccd7d67aa3dc856",
@@ -97,10 +158,12 @@
     "crates/ethereum-contracts/src/PFTLFinalityVerifierV1.sol": "8e0139eeb4cb41030234c34293099bd8722d2ca53998b5be3b42906dafe60da7",
     "crates/types/src/external_lane_types.rs": "dfc07d8f8e0b8436a7d778a4ddfd5ea0fe07204628a27409f3433fbfdaa4ef64",
     "crates/node/testdata/external-lane-genesis/genesis.json": "43e44b686c34bf6072f0d53d16d6734af03200408de8735b372b437ad0309755",
-    "scripts/rehearse-phase3-deployment-order.py": "6bdcf8e4ec6de6b5cf33b66fc48c27b3be0cc6213494f4337119e6d3ce62bd7b"
+    "scripts/rehearse-phase3-deployment-order.py": "7f2210536d9c0f7c177a010f47a1901bb950e4c376b7d62fce46494517bc8a11",
+    "python/tests/test_rehearse_phase3_deployment_order.py": "4dc895c764eceed8bb5cda3f32d14e847d27e038ff1be12d77cabd7697985e39"
   },
   "evidence_files": {
-    "summary.json": "e2921e0a235b41697c93947347618e7a88645f55c1b5910c76cd790231973e03"
+    "genesis-lane-pins.json": "12c104ae55a7a93b87ae623585b338a3fc2fc9a852919dca2cd55d8517fc582d",
+    "summary.json": "fcd22b15a3da9906681ffa93739aa4d43b6f9389b99f82045dda50dae7cdc9ea"
   },
   "not_published": {
     "account-1.stderr": {
@@ -108,7 +171,7 @@
       "bytes": 0
     },
     "account-1.stdout": {
-      "sha256": "98267231df12184b90763cab68c38c33e0b39b3593df6e2a56965114c53950c2",
+      "sha256": "30ef9a55301eda414fdb6c80c3132a7745f471235e760be1cdf7319707c09177",
       "bytes": 43
     },
     "account-2.stderr": {
@@ -116,23 +179,39 @@
       "bytes": 0
     },
     "account-2.stdout": {
-      "sha256": "60a2e1c90f16536e2e77decf08e8659db8a8a9fbe6e014214c7db21bda8b6808",
+      "sha256": "8832533e898a6d4ee2fb094733e65357cc28d99e45f1591d1175514574aac4d1",
       "bytes": 43
     },
-    "cast-compute-address-0.stderr": {
+    "account-3.stderr": {
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0
     },
-    "cast-compute-address-0.stdout": {
-      "sha256": "13b2b6941c0f2d403b501ad0b96ba4739823ebbd0d6129df2b7acf3017b263a8",
+    "account-3.stdout": {
+      "sha256": "bb8570276128c15f5aabdca31363fa6ee7dd8406f3773bf15be8003d813fdf71",
       "bytes": 43
     },
-    "cast-compute-address-1.stderr": {
+    "account-4.stderr": {
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0
     },
-    "cast-compute-address-1.stdout": {
-      "sha256": "d74961cf1ad6c864bffeb0e396abcc4739fb09d09069d2246449143c6123e262",
+    "account-4.stdout": {
+      "sha256": "434cb002bd470851440f3c0e8e4f42b26de5c997f830c51e503416abe7f33616",
+      "bytes": 43
+    },
+    "cast-compute-address-lock.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "cast-compute-address-lock.stdout": {
+      "sha256": "f4ca13bc49876d1367a2d05f379af395152531c3889c0190ae607fe231718763",
+      "bytes": 43
+    },
+    "cast-compute-address-verifier.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "cast-compute-address-verifier.stdout": {
+      "sha256": "27ae2730f74dd826770813cb5eb6abfea6145e45f2170bd8be7ac85ea84c2bc1",
       "bytes": 43
     },
     "deploy-lock.stderr": {
@@ -140,7 +219,7 @@
       "bytes": 0
     },
     "deploy-lock.stdout": {
-      "sha256": "c363fcbb26a4b7f058cb70885607777fb62f74139dfc228224a154e89ba7e46b",
+      "sha256": "3853517973a4a7b743336b35a6d14c8e8ff4402e9ea05da65ad74e4ddb23560d",
       "bytes": 216
     },
     "deploy-token.stderr": {
@@ -148,7 +227,7 @@
       "bytes": 0
     },
     "deploy-token.stdout": {
-      "sha256": "7da885a345d997ca3f114693778b70e82814fd386f5001ed5d7db9789167982e",
+      "sha256": "b51865c20e2060442b8fce1c6bf2a82c5a7e41db992b67391d922cdf132f6a0f",
       "bytes": 216
     },
     "deploy-verifier.stderr": {
@@ -156,32 +235,32 @@
       "bytes": 0
     },
     "deploy-verifier.stdout": {
-      "sha256": "0384a95fe2f8a143e33f021ae3972d69d6ca18e1269c94d6f821223a5c6ef1c0",
+      "sha256": "fde950cdfdf0c76fa92936870a2e6548aaf569da8e0cb5ff870bde801affea3c",
       "bytes": 216
     },
     "forge-build-ethereum-contracts.stderr": {
-      "sha256": "d6ccda890186e334109eac41213408023ab9fbb0008e21bdf0e56e1a1345b560",
+      "sha256": "da62c93e41563bf5f7a42c636612424e3898ae5e25a0d93987d2569441446e78",
       "bytes": 1482251
     },
     "forge-build-ethereum-contracts.stdout": {
-      "sha256": "e8c3a81aabd05f5108d3face5a4930083c0b251149010ac2353c0f65e744c5a0",
+      "sha256": "385bab9bbe714033a7d092df8483d9dba535a105beaafcc2b3be7a274d5e66e7",
       "bytes": 92
     },
     "forge-build-pft-token-contracts.stderr": {
-      "sha256": "f85d182e25567bdfc4fe795e1a8aaecf78106b820d28f398248883d552732187",
+      "sha256": "e84181280632b3c6dce6b4f465ff381b0c363a66035993833921a81d6e402e91",
       "bytes": 403050
     },
     "forge-build-pft-token-contracts.stdout": {
-      "sha256": "0a021fad5e2678bd908d1809947d077dec2bbc9155810a34bf917d71d1971da7",
+      "sha256": "367869be69685a00fd5386618e49412c980e5113346172fd3223cd94b6bea465",
       "bytes": 91
     },
     "forge-cache-ethereum-contracts/solidity-files-cache.json": {
-      "sha256": "2ad985287ef62e174443b108b448bdcb71fa75390c2ddcb075ce2e7ad8c33818",
-      "bytes": 1570
+      "sha256": "8b336ad15581358745a1c1bcb5cc4aff4e821404ad1449148baca5ca73d479a1",
+      "bytes": 1472
     },
     "forge-cache-pft-token-contracts/solidity-files-cache.json": {
-      "sha256": "4b4e34467c6c74bfdcadaaa77767f52d6fff12324897aa9890e079350eb79100",
-      "bytes": 19701
+      "sha256": "11ea3dc880765a04f0c824becec94b16f78ba247d5e5bd2c0b416e23b9bdab2b",
+      "bytes": 19603
     },
     "forge-out-ethereum-contracts/A651ToA666MigrationV1.sol/A651ToA666MigrationV1.json": {
       "sha256": "ac985ce19985431ba38c5386b11c3a50129208093289a6e53568cdb5aaf41b4b",
@@ -903,12 +982,12 @@
       "sha256": "9e9fdc547b1e4bd6c2b3f514aecce8b9f8ec3aadbd07c32810ba3c0cb35cd93f",
       "bytes": 3737
     },
-    "forge-out-ethereum-contracts/build-info/3d257f2bdd30a442.json": {
-      "sha256": "257c888cb9f236e2f5995daa832b544f93043cd313b0fa88734c288e7f75299b",
+    "forge-out-ethereum-contracts/build-info/5168f04b8fd0f57f.json": {
+      "sha256": "f4730aae5fde639ff7abadafe7af23b16819681756d88d43ed05b5a070fef113",
       "bytes": 106
     },
-    "forge-out-ethereum-contracts/build-info/cb21eb84a88adfab.json": {
-      "sha256": "32ddfeb454947b4f1748cd1f309af3491efcc2491621c7eec065777a3aec3bb6",
+    "forge-out-ethereum-contracts/build-info/c237315a2f2f71a2.json": {
+      "sha256": "e69981ac5e92b4b6b23bed01466bec1d97a301e45e69f7a428d1fa28a1305874",
       "bytes": 2604
     },
     "forge-out-pft-token-contracts/Bytes.sol/Bytes.json": {
@@ -1104,11 +1183,11 @@
       "bytes": 3640
     },
     "forge-out-pft-token-contracts/PFTLFinalityVerifierV1.sol/ISP1Verifier.json": {
-      "sha256": "40896fcd0676eda58b43b686a07bd053ec36b522cf117e682322b964b6ce6d3b",
+      "sha256": "9d9c8be2f0599f8aaf82e09fbd5dab4fe175bf376f66450a72b4c2a13f853176",
       "bytes": 3239
     },
     "forge-out-pft-token-contracts/PFTLFinalityVerifierV1.sol/PFTLFinalityVerifierV1.json": {
-      "sha256": "1895f779cb95ff7c504f5d3ecf1b8b7cdae02257be025b4925e0d87a79b0472b",
+      "sha256": "027d5d0109019117e6c7157c2a5146663d467a0102f4ddc31bce627078445182",
       "bytes": 119357
     },
     "forge-out-pft-token-contracts/PFTLockV1.sol/IPFTLFinalityVerifierV1.json": {
@@ -1291,16 +1370,16 @@
       "sha256": "af17c8633ede064089c6b4fd5f66670e03fdb41ab876abc86f0ca8d1e896da35",
       "bytes": 7075
     },
-    "forge-out-pft-token-contracts/build-info/735fda877d604f94.json": {
-      "sha256": "95ae8a969c0650fdfca60d058bceb605d385d8611b89e70f20eca7cb61c9f564",
+    "forge-out-pft-token-contracts/build-info/38adedeceee20edf.json": {
+      "sha256": "86684caf2252b7436de516588679c7812544ab8a9cead392a622fa8ec2f541e9",
       "bytes": 884
     },
-    "forge-out-pft-token-contracts/build-info/89dc4e4b85161b93.json": {
-      "sha256": "a8d445b782f2a7102c34145ce4a1df39ab50c88b7425c798a65f1c50f25f7094",
+    "forge-out-pft-token-contracts/build-info/aba64ceee70b1372.json": {
+      "sha256": "beb4b37f369f15b18970961be71417e717af653b569addd2cab86a3e408f208c",
       "bytes": 2590
     },
-    "forge-out-pft-token-contracts/build-info/fd13c592f0e092aa.json": {
-      "sha256": "a78e9de766d8ee175df1a0144ee61e2d6be7acc2c21c935785fd0a147b53f67d",
+    "forge-out-pft-token-contracts/build-info/df1376dab389fcc9.json": {
+      "sha256": "fd0c8a99befcb1b5f5e977c644e2440f451ba883a2d88c494cb24e53083ee1c3",
       "bytes": 1482
     },
     "forge-out-pft-token-contracts/draft-IERC6093.sol/IERC1155Errors.json": {
@@ -1316,11 +1395,27 @@
       "bytes": 7750
     },
     "genesis.json": {
-      "sha256": "26eb508d7c3e9b465bd876e5b475982ad24d63f7e8aa2be0babebc3b181ad407",
+      "sha256": "7b01ebf592d272d780b582a209869d516196660633cf7af61a60e750529854cd",
       "bytes": 953
     },
+    "holder-approve.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "holder-approve.stdout": {
+      "sha256": "36f94c97a86d35c1b7fe3f651af24031a718408a159993c718066f6da016cf90",
+      "bytes": 1767
+    },
+    "holder-lock.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "holder-lock.stdout": {
+      "sha256": "080e3501a3fd58cf93dd702c727fe19ce28464d7c873badc6e41ac4b0892641c",
+      "bytes": 2721
+    },
     "node-build.stderr": {
-      "sha256": "2e61680bd2cef7928ce0d6387f71e52d8d10b8e5ac6ac9eb9b73b797e134ebcb",
+      "sha256": "da40e4f7910783d760ed9239436fe814c25140827e0019f69763b7c9a798bc95",
       "bytes": 168
     },
     "node-build.stdout": {
@@ -1332,7 +1427,7 @@
       "bytes": 0
     },
     "node-init.stdout": {
-      "sha256": "5ef9a8370dacda15c0940f9ba18601a8056ae2f281c8ccf5d8d855a0a0affe47",
+      "sha256": "5ab3b7c80bda57011c917b1b28ec53ad7eb8ece2f2000906913d245d7343c98e",
       "bytes": 1970
     },
     "probe-lock.stderr": {
@@ -1340,7 +1435,7 @@
       "bytes": 0
     },
     "probe-lock.stdout": {
-      "sha256": "c363fcbb26a4b7f058cb70885607777fb62f74139dfc228224a154e89ba7e46b",
+      "sha256": "3853517973a4a7b743336b35a6d14c8e8ff4402e9ea05da65ad74e4ddb23560d",
       "bytes": 216
     },
     "probe-verifier-final.stderr": {
@@ -1348,7 +1443,7 @@
       "bytes": 0
     },
     "probe-verifier-final.stdout": {
-      "sha256": "0384a95fe2f8a143e33f021ae3972d69d6ca18e1269c94d6f821223a5c6ef1c0",
+      "sha256": "fde950cdfdf0c76fa92936870a2e6548aaf569da8e0cb5ff870bde801affea3c",
       "bytes": 216
     },
     "probe-verifier.stderr": {
@@ -1356,15 +1451,23 @@
       "bytes": 0
     },
     "probe-verifier.stdout": {
-      "sha256": "fba0b8d746f8a8e68571f969f6a56d82137b5dddba523af4f1169c3fb49a7e2e",
+      "sha256": "a58f02e001378519af2890fb2a234c69cbfa1a7541e524b4fc2b6927c18e1152",
       "bytes": 216
     },
-    "stray-transaction.stderr": {
+    "stray-transaction-lock.stderr": {
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0
     },
-    "stray-transaction.stdout": {
-      "sha256": "e2f741dcb1131ee53a004a578338a0139a0eff6a8a3928b8023b61b3ed7a42e4",
+    "stray-transaction-lock.stdout": {
+      "sha256": "eaec7a5db69a779f12a5e80947e5156c59fbb23397904f64ffb82427324ba1b4",
+      "bytes": 1141
+    },
+    "stray-transaction-verifier.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "stray-transaction-verifier.stdout": {
+      "sha256": "8419a2a5e2921972e2de4b0b60b1a7b6bedcf62f8caf3b459833f8677aba06fa",
       "bytes": 1141
     }
   },
