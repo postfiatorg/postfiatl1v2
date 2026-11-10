@@ -428,6 +428,14 @@ def evaluate(records: list[dict[str, Any]], terms: dict[str, Any],
         "evaluated_at_unix_ms": anchor_ms,
         "window_start_unix_ms": window_start_ms,
         "observation_window_seconds": window_s,
+        "log_coverage_seconds": round(
+            (anchor_ms - records[0]["recorded_at_unix_ms"]) / 1000.0, 3),
+        "coverage_note": (
+            "cadence is judged from epochs observed inside this log; a proof "
+            "finalized before logging started can only be caught through its "
+            "operator observation time (nav_stale) or its absence "
+            "(nav_age_not_wall_clock_verifiable), never by block-count "
+            "arithmetic"),
         "terms_sha256": terms_digest(terms),
         "decisions_ref": terms["decisions_ref"],
         "samples_judged": len(in_window),
