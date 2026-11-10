@@ -357,7 +357,8 @@ def signer_args(args, local_anvil):
         return ['--private-key', key], key
     require(args.account and args.password_file, 'name --account and --password-file (or, on a loopback Anvil, '
                                                  '--private-key-file)')
-    return ['--account', args.account, '--password-file', str(args.password_file)], None
+    return ['--account', args.account, '--password-file', str(args.password_file)], [args.account,
+                                                                                     str(args.password_file)]
 
 
 def decode_released(receipt, lock):
@@ -415,7 +416,11 @@ def load_values(input_dir):
 
 
 def redact(text, secret):
-    return text.replace(secret, '<redacted>') if secret else text
+    """`secret` is one string or several (a key, or a keystore name and its password file)."""
+    for value in ([secret] if isinstance(secret, str) else list(secret or [])):
+        if value:
+            text = text.replace(value, '<redacted>')
+    return text
 
 
 def run(argv, *, secret=None, timeout=1800, **kwargs):

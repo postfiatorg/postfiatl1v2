@@ -187,7 +187,7 @@ class SafetyTests(unittest.TestCase):
             relay.signer_args(args, local_anvil=False)
         args = argparse.Namespace(private_key_file=None, account="relayer", password_file=Path("pw"))
         self.assertEqual(relay.signer_args(args, local_anvil=False),
-                         (["--account", "relayer", "--password-file", "pw"], None))
+                         (["--account", "relayer", "--password-file", "pw"], ["relayer", "pw"]))
 
     def test_loopback_urls(self):
         self.assertTrue(relay.is_loopback_url("http://127.0.0.1:8545"))
@@ -377,3 +377,22 @@ class ReleaseCommitteeTests(unittest.TestCase):
         rpc = MockRpc({(VERIFIER, f"checkpointCommitteeRootCommitment(bytes32):{relay.commitment(h48('66'))}"):
                        relay.commitment(h48("58"))})
         self.assertIn("recorded_committee_root", refusals(rpc, resulting_checkpoint_block_id=h48("66")))
+
+
+class KeystoreRedactionTests(unittest.TestCase):
+    def test_account_and_password_file_are_redacted(self):
+        args = argparse.Namespace(private_key_file=None, account="pft-relayer-1", password_file=Path("/secret/pw"))
+        flags, secrets = relay.signer_args(args, local_anvil=False)
+        original = relay.subprocess.run
+
+        def fake(*a, **k):
+            raise subprocess.TimeoutExpired(["cast", "send", *flags], 1)
+
+        relay.subprocess.run = fake
+        try:
+            with self.assertRaises(relay.RelayRefusal) as caught:
+                relay.run(["cast", "send", *flags], secret=secrets)
+        finally:
+            relay.subprocess.run = original
+        for text in ("pft-relayer-1", "/secret/pw"):
+            self.assertNotIn(text, str(caught.exception))

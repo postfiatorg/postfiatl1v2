@@ -70,6 +70,11 @@ SP1_VERIFIER = {
     'version': 'v6.1.0',
 }
 GAS_MARGIN = 3
+# deploy refuses when the gas price is more than this factor above the plan's.
+GAS_PRICE_FACTOR = 5
+# The holder funds the verifier deployer, the lock deployer and the relayer.
+FUNDING_TRANSFERS = 3
+TRANSFER_GAS = 21_000
 PROGRAM_INFO = ROOT / 'programs/pft-lane-export/program-info.json'
 COMMITTED_ELF = ROOT / 'programs/pft-lane-export/elf/pft-lane-export-program'
 
@@ -286,6 +291,12 @@ def refuse_mock_off_loopback(*, mock_artifact, rpc_url, client_version):
             'a mock SP1 verifier is refused unless the RPC is a loopback Anvil')
 
 
+def check_gas_price(*, plan_wei, current_wei):
+    require(current_wei <= plan_wei * GAS_PRICE_FACTOR,
+            f'the gas price is {current_wei} wei, more than {GAS_PRICE_FACTOR}x the plan\'s {plan_wei}; '
+            'nothing was sent. Rerun preflight\'s sheet or wait')
+
+
 def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_identity=None):
     """Every address, nonce, constructor value, gas figure and the test ETH each key needs."""
     keys = {
@@ -296,14 +307,22 @@ def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_iden
     needs = {}
     for key, steps in keys.items():
         gas = sum(gas_used.get(step, 0) for step in steps)
+        if key == 'holder':
+            gas += FUNDING_TRANSFERS * TRANSFER_GAS
         needs[key] = {'steps': list(steps), 'gas': gas,
                       'wei_with_margin': gas * gas_price_wei * GAS_MARGIN,
                       'eth_with_margin': f'{gas * gas_price_wei * GAS_MARGIN / 1e18:.9f}'}
+    needs['holder']['steps'].append(f'{FUNDING_TRANSFERS} funding transfers')
+    needs['relayer'] = {'steps': ['release'], 'gas': None, 'wei_with_margin': None, 'eth_with_margin': None,
+                        'note': 'release gas cannot be estimated without a real proof; fund it separately'}
     return {'chain_id': CHAIN_ID, 'plan': plan, 'verifier_constructor': verifier_config,
             'program_identity': program_identity,
             'sp1_verifier': SP1_VERIFIER, 'gas_price_wei': gas_price_wei, 'gas_margin': GAS_MARGIN,
             'gas_used_on_fork': gas_used, 'test_eth_per_key': needs,
-            'release_gas': 'not estimated: a release needs a real proof'}
+            'release_gas': 'not estimated: a release needs a real proof',
+            'funding_transfers': {'count': FUNDING_TRANSFERS, 'gas_each': TRANSFER_GAS,
+                                  'to': ['verifier deployer', 'lock deployer', 'relayer'],
+                                  'from': 'holder'}}
 
 
 def sheet_markdown(sheet):
@@ -315,7 +334,8 @@ def sheet_markdown(sheet):
                      f'`{plan[role]["predicted"]}` |')
     lines += ['', '| Key | Gas on the fork | Test ETH (x3 margin) |', '|---|---|---|']
     for key, need in sheet['test_eth_per_key'].items():
-        lines.append(f'| {key} | {need["gas"]} | {need["eth_with_margin"]} |')
+        lines.append(f'| {key} | {need["gas"] if need["gas"] is not None else "n/a"} | '
+                     f'{need["eth_with_margin"] or need.get("note")} |')
     identity = sheet.get('program_identity') or {}
     if identity:
         lines += ['', f'Program: ELF sha256 `{identity["elf_sha256"]}`, key `{identity["program_vkey"]}`, source '
@@ -611,6 +631,9 @@ def main(argv=None):
                         'cast', 'wallet', 'address', *signer_flags(getattr(args, f'{role}_account'),
                                                                    getattr(args, f'{role}_password_file'))]).strip())
                 require_no_resume_acknowledged(args.i_accept_no_resume_between_deploy_and_export)
+                # Base Sepolia's own price, also in fork mode (a fork reports Anvil's base fee).
+                check_gas_price(plan_wei=plan['gas_price_wei'],
+                                current_wei=int(rpc(BASE_SEPOLIA_RPC, 'eth_gasPrice'), 16))
                 expected_code = {'verifier': data['preflight']['verifier_runtime_code_hash'],
                                  'lock': data['preflight']['lock_runtime_code_hash']}
                 chain = BaseChain(lambda method, params: rpc(url, method, params))
@@ -760,7 +783,7 @@ def main(argv=None):
                 command('relay-release', [sys.executable, ROOT / 'scripts/pft-lane-export-relay.py', 'release',
                                           '--rpc', target_url(), '--lock', data['deploy']['lock'], '--input',
                                           out / 'relay-input', '--proof', args.proof,
-                                          *signer_flags(args.holder_account, args.holder_password_file),
+                                          *signer_flags(args.relayer_account, args.relayer_password_file),
                                           '--expect-program-vkey', vkey, '--expect-sp1-verifier',
                                           SP1_VERIFIER['address']])
             elif stage == 'record':

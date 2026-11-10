@@ -66,7 +66,7 @@ class DeploySheetTests(unittest.TestCase):
                                      gas_price_wei=6_000_000)
         needs = sheet["test_eth_per_key"]
         self.assertEqual(needs["verifier deployer"]["gas"], 3_000_000)
-        self.assertEqual(needs["holder"]["gas"], 200_000)
+        self.assertEqual(needs["holder"]["gas"], 200_000 + 3 * 21_000)
         self.assertEqual(needs["lock deployer"]["wei_with_margin"], 2_000_000 * 6_000_000 * 3)
         markdown = dry_run.sheet_markdown(sheet)
         for text in ("0x" + "22" * 20, "0x" + "44" * 20, "programVKey", dry_run.SP1_VERIFIER["address"]):
@@ -254,3 +254,25 @@ class RecoveryTests(unittest.TestCase):
         with self.assertRaises(dry_run.RehearsalFailure):
             dry_run.require_no_resume_acknowledged(False)
         dry_run.require_no_resume_acknowledged(True)
+
+
+class SheetAndGasTests(unittest.TestCase):
+    def test_sheet_names_the_relayer_and_the_funding_transfers(self):
+        plan = DeployAddressTests.PLAN
+        sheet = dry_run.deploy_sheet(plan=plan, verifier_config={}, gas_used={"approve": 1, "lock": 1},
+                                     gas_price_wei=1)
+        self.assertIn("relayer", sheet["test_eth_per_key"])
+        self.assertIn("real proof", sheet["test_eth_per_key"]["relayer"]["note"])
+        self.assertEqual(sheet["funding_transfers"]["count"], 3)
+        self.assertEqual(sheet["test_eth_per_key"]["holder"]["gas"], 2 + 3 * 21_000)
+
+    def test_deploy_refuses_a_gas_price_far_above_the_plan(self):
+        dry_run.check_gas_price(plan_wei=6_000_000, current_wei=6_000_000 * dry_run.GAS_PRICE_FACTOR)
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_gas_price(plan_wei=6_000_000, current_wei=6_000_000 * dry_run.GAS_PRICE_FACTOR + 1)
+
+    def test_errors_never_carry_keystore_names_or_password_files(self):
+        text = dry_run.redact_all("cast failed: --account pft-lock-deployer --password-file /k/pw",
+                                  ["pft-lock-deployer", "/k/pw"])
+        self.assertNotIn("pft-lock-deployer", text)
+        self.assertNotIn("/k/pw", text)
