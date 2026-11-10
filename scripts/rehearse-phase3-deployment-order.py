@@ -355,6 +355,21 @@ def build_manifest(out, commit, tree, toolchain, deployment):
     }
 
 
+def record_step(deployment, step, **fields):
+    """Record what a step put on chain or fixed, as soon as it succeeded, so a
+    failed run still says what landed."""
+    deployment.update(fields)
+    deployment['steps_completed'].append(step)
+
+
+def write_records(out, results, commit, tree):
+    """Write summary.json and manifest.json, on success and on failure alike."""
+    (out / 'summary.json').write_text(json.dumps(results, indent=2) + '\n')
+    manifest = build_manifest(out, commit, tree, results.get('toolchain'), results.get('deployment'))
+    (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    return manifest
+
+
 def tool_version(tool):
     """The first line of `tool --version`, or None when the tool is absent."""
     try:
@@ -391,6 +406,8 @@ def main(argv=None):
     results = {'scope': 'local Anvil (chain id 84532) and a generated PFTL genesis only',
                'public_network_transaction': False, 'source_commit': commit, 'source_tree': tree,
                'started_at_unix': int(time.time()), 'commands': [], 'passed': False}
+    # Filled as each step succeeds; written on failure too.
+    deployment = results['deployment'] = {'chain_id': CHAIN_ID, 'complete': False, 'steps_completed': []}
     secrets = []
     children = []
     url = None
@@ -517,6 +534,9 @@ def main(argv=None):
         token = deploy('deploy-token', TOKEN_CRATE, 'src/PFTToken.sol:PFTToken', token_key,
                        ['Rehearsal PFT', 'rPFT', '300000000', token_deployer])
         token_code_hash = code_hash(runtime(token))
+        record_step(deployment, 'token deployed',
+                    deployers={'token': token_deployer, 'verifier': verifier_deployer, 'lock': lock_deployer},
+                    token=token, token_runtime_code_hash=token_code_hash)
 
         # (1) Predict the verifier's CREATE address from its deployer's next nonce and the
         # lock's from its own deployer's next nonce.
@@ -534,6 +554,8 @@ def main(argv=None):
                                ['cast', 'compute-address', entry['deployer'], '--nonce', entry['planned_nonce']]
                                ).strip().split()[-1].lower()
             require(computed == entry['predicted'], f'{role}: cast computes {computed}, the script {entry["predicted"]}')
+        record_step(deployment, 'addresses predicted', deployer_nonce_verifier=verifier_nonce,
+                    deployer_nonce_lock=lock_nonce, predicted={'verifier': predicted_verifier, 'lock': predicted_lock})
 
         # The lock's cap is the per-window release cap of the lane the genesis pins.
         fixture = json.loads((ROOT / GENESIS_FIXTURE).read_text())
@@ -588,6 +610,16 @@ def main(argv=None):
             return code_hash(runtime(verifier))
 
         predicted_verifier_code_hash = on_snapshot('verifier code hash', probe_verifier)
+        deployment['predicted'].update(verifier_runtime_code_hash=predicted_verifier_code_hash,
+                                       lock_runtime_code_hash=predicted_lock_code_hash)
+        record_step(deployment, 'code hashes predicted',
+                    code_hash_method='deploy on an evm_snapshot, read eth_getCode, evm_revert',
+                    lock_constructor={'maxLockAmount': max_lock_amount, 'minimumLockAmount': MINIMUM_LOCK_AMOUNT,
+                                      'maxLockAmount_source': 'the lane per-window release cap, reserved_atoms * '
+                                                              'release_cap_bps // 10_000, of the pinned genesis',
+                                      'minimumLockAmount_source': 'PFTLockV1.PFTL_ACCOUNT_RESERVE, the PFTL account '
+                                                                  'reserve'},
+                    verifier_fixture_checkpoint=FIXTURE_CHECKPOINT, verifier_sp1_verifier=FIXTURE_SP1_VERIFIER)
 
         # (3) Pin the predicted lock in a lane genesis and read it with the node.
         genesis = pin_lane_genesis(fixture, lock_address=predicted_lock, lock_code_hash=predicted_lock_code_hash,
@@ -603,6 +635,12 @@ def main(argv=None):
         require((pinned['lock_contract_address'], pinned['lock_runtime_code_hash']) ==
                 (predicted_lock, predicted_lock_code_hash), 'the node read other lock pins than the ones written')
         refuse_unless_cap_matches(node_genesis, max_lock_amount)
+        record_step(deployment, 'genesis pinned',
+                    genesis_fixture=GENESIS_FIXTURE, genesis_sha256=sha256_file(genesis_path),
+                    genesis_lane_policy=pinned,
+                    genesis_parse_check='postfiat-node init --genesis-file validated the genesis; the lane pins were '
+                                        'read back from the data directory',
+                    pftl_genesis_hash=init_report.get('genesis_hash'), pftl_chain_id=init_report.get('chain_id'))
 
         # (7) A deployer nonce off by one, once per deployer: a stray transaction moves that
         # deployer's nonce. The other contract's predicted address stays intact, but the
@@ -638,9 +676,13 @@ def main(argv=None):
         refuse_unless_plan_intact(plan, all_nonces())
         verifier = deploy('deploy-verifier', VERIFIER_CRATE, 'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1',
                           verifier_key, [verifier_constructor_tuple(verifier_values)], nonce=verifier_nonce)
+        deployment['deployed'] = {'verifier': verifier, 'verifier_runtime_code_hash': code_hash(runtime(verifier))}
+        record_step(deployment, 'verifier deployed')
         require(verifier == predicted_verifier, f'verifier at {verifier}, predicted {predicted_verifier}')
         refuse_unless_planned_nonce(lock_deployer, nonces_of(lock_deployer), lock_nonce, (predicted_lock,))
         lock = deploy('deploy-lock', TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1', lock_key, lock_args, nonce=lock_nonce)
+        deployment['deployed'].update(lock=lock, lock_runtime_code_hash=code_hash(runtime(lock)))
+        record_step(deployment, 'lock deployed')
 
         # (6) The on-chain checks.
         deployed_verifier_code_hash = code_hash(runtime(verifier))
@@ -656,35 +698,8 @@ def main(argv=None):
                  pinned['token_address'], pinned['token_runtime_code_hash']) ==
                 (lock, deployed_lock_code_hash, token, token_code_hash), 'the genesis pins do not equal the deployed lock')
 
-        deployment = {
-            'chain_id': CHAIN_ID,
-            'deployers': {'token': token_deployer, 'verifier': verifier_deployer, 'lock': lock_deployer},
-            'deployer_nonce_verifier': verifier_nonce, 'deployer_nonce_lock': lock_nonce,
-            'token': token, 'token_runtime_code_hash': token_code_hash,
-            'predicted': {'verifier': predicted_verifier, 'lock': predicted_lock,
-                          'verifier_runtime_code_hash': predicted_verifier_code_hash,
-                          'lock_runtime_code_hash': predicted_lock_code_hash},
-            'deployed': {'verifier': verifier, 'lock': lock,
-                         'verifier_runtime_code_hash': deployed_verifier_code_hash,
-                         'lock_runtime_code_hash': deployed_lock_code_hash},
-            'code_hash_method': 'deploy on an evm_snapshot, read eth_getCode, evm_revert',
-            'constructor_values_read_back': constructor_values_read,
-            'lock_constructor': {'maxLockAmount': max_lock_amount, 'minimumLockAmount': MINIMUM_LOCK_AMOUNT,
-                                 'maxLockAmount_source': 'the lane per-window release cap, reserved_atoms * '
-                                                         'release_cap_bps // 10_000, of the pinned genesis',
-                                 'minimumLockAmount_source': 'PFTLockV1.PFTL_ACCOUNT_RESERVE, the PFTL account '
-                                                             'reserve'},
-            'verifier_fixture_checkpoint': FIXTURE_CHECKPOINT,
-            'verifier_sp1_verifier': FIXTURE_SP1_VERIFIER,
-            'genesis_fixture': GENESIS_FIXTURE,
-            'genesis_sha256': sha256_file(genesis_path),
-            'genesis_lane_policy': pinned,
-            'genesis_parse_check': 'postfiat-node init --genesis-file validated the genesis; the lane pins were read back '
-                                   'from the data directory',
-            'pftl_genesis_hash': init_report.get('genesis_hash'),
-            'pftl_chain_id': init_report.get('chain_id'),
-        }
-        results['deployment'] = deployment
+        record_step(deployment, 'on-chain checks held', constructor_values_read_back=constructor_values_read,
+                    complete=True)
         results['passed'] = True
     except Exception as error:
         results['error'] = str(error)
@@ -704,9 +719,7 @@ def main(argv=None):
             shutil.rmtree(out / 'pftl-node')
             results['generated_node_dir_removed'] = True
         results['ended_at_unix'] = int(time.time())
-        (out / 'summary.json').write_text(json.dumps(results, indent=2) + '\n')
-        manifest = build_manifest(out, commit, tree, results.get('toolchain'), results.get('deployment'))
-        (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+        write_records(out, results, commit, tree)
         print(json.dumps({key: results.get(key) for key in ('passed', 'deployment', 'nonce_off_by_one', 'error')},
                          indent=2))
     return 0 if results['passed'] else 1

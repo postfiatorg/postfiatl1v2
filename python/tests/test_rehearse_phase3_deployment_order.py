@@ -263,6 +263,23 @@ class GenesisAndManifestTests(unittest.TestCase):
         self.assertEqual(set(manifest["not_published"]), {"forge-out-x/A.sol/A.json", "forge-cache-x/summary.json"})
         self.assertEqual(manifest["not_published"]["forge-out-x/A.sol/A.json"]["bytes"], 9)
 
+    def test_a_failed_run_records_what_landed(self):
+        deployment = {"chain_id": 84532, "complete": False, "steps_completed": []}
+        rehearsal.record_step(deployment, "token deployed", token=TOKEN)
+        deployment["deployed"] = {"verifier": VERIFIER}
+        rehearsal.record_step(deployment, "verifier deployed")
+        results = {"passed": False, "error": "deploy-lock: exit 1", "deployment": deployment}
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            manifest = rehearsal.write_records(out, results, "c" * 40, "t" * 40)
+            summary = json.loads((out / "summary.json").read_text())
+            written = json.loads((out / "manifest.json").read_text())
+        for record in (summary["deployment"], written["deployment"], manifest["deployment"]):
+            self.assertEqual(record["steps_completed"], ["token deployed", "verifier deployed"])
+            self.assertEqual(record["deployed"], {"verifier": VERIFIER})
+            self.assertFalse(record["complete"])
+        self.assertEqual(summary["error"], "deploy-lock: exit 1")
+
     def test_build_provenance_names_the_host_and_rust_toolchain(self):
         provenance = rehearsal.build_provenance("dev (debug)")
         self.assertEqual(set(provenance), {"cargo", "rustc", "python", "host_os", "postfiat_node_build_profile"})

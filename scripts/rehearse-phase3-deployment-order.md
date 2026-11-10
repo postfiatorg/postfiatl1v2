@@ -15,7 +15,9 @@ The worktree must be clean, so the manifest names the commit and tree that ran.
 Foundry writes its artifacts, cache and broadcasts under `<fresh-directory>`.
 Without `--node-bin` the script builds `postfiat-node` into this checkout's
 `./target`. Exit 0 means every check held. Exit 1 means a step failed, and
-`summary.json` holds the error. Exit 2 means a precondition was refused.
+`summary.json` holds the error. The `deployment` block of `summary.json` and
+`manifest.json` is filled as each step succeeds, so after a failure it still
+says what landed (`steps_completed`, `complete: false`). Exit 2 means a precondition was refused.
 
 ## What it does
 
@@ -101,6 +103,11 @@ Anvil is stopped.
   never be met. Locally only the script holds the keys and Anvil mines at once.
   In production nothing else may hold or use the two dedicated deployer keys,
   and nothing else may be sent from them.
+- **A verifier without its lock is unusable.** If the verifier is deployed and
+  the lock then cannot be deployed at its predicted address, the verifier is
+  unusable: it pins the predicted lock's code hash, which holds the verifier's
+  address. Redeploying the verifier changes its address, so the lock's code
+  hash and the genesis pins change with it.
 - **Base Sepolia waits.** The Base Sepolia dry run waits for the Base route
   profile and asset id.
 
