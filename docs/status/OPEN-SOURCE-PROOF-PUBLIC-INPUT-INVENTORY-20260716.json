@@ -95,7 +95,7 @@
     "programs/pfusdc-eth-mainnet-ingress/src/lib.rs": "7d1baeb587f0d96c14596718fe2560bfc4c790c19f1a89c9acff5474b3157b91",
     "programs/pfeth-eth-mainnet-ingress/src/main.rs": "67782df70bad2a243115c401088d274874cda3e5fa8a96b85a9577546df71469",
     "programs/pfusdc-egress/src/main.rs": "c1cfd019f37a70d7862226f17659e72730bdae4c861f920dd93aba181ad67945",
-    "crates/types/src/pfusdc_tier4_types.rs": "7245c1ad13a137ee2c689b1f3e4febe6953f3d7c1efab45a71e97e1a3b0561ba",
+    "crates/types/src/pfusdc_tier4_types.rs": "9af8e316fcfb555aff35248ede7dd891f1e81ad95f222295dc677080e46ca4d4",
     "crates/execution/src/nav_vault_asset_execution.rs": "4463592336d5e5cbf9237c83da5efbf4a36ba812ef6197d6891777a8d3246d50",
     "tools/eth-l1-mainnet-fast-lane-p0/src/main.rs": "aae5805fcd10b42c0429f096e850ee7eb7e0bbaafbee43c1344c289ca37fa979",
     "crates/ethereum-contracts/src/WETHBridgeVaultL1.sol": "7d6a25df0f73e832ea15d2743f110974648323fc574ff78e74f548a7d25eeb12",

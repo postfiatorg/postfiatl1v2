@@ -722,3 +722,15 @@ fn external_lane_verifier_pins_come_from_one_genesis() {
         );
     }
 }
+
+#[test]
+fn external_lane_export_root_holds_at_most_the_per_block_bound() {
+    let full = vec![[7_u8; 48]; EXTERNAL_LANE_EXPORT_ROOT_MAX_LEAVES_V1];
+    let root = external_lane_export_root_v1(&full).expect("a full block");
+    let proof = external_lane_export_root_proof_v1(&full, full.len() - 1).expect("proof");
+    verify_external_lane_export_root_proof_v1(&root, &proof).expect("member");
+    let over = vec![[7_u8; 48]; EXTERNAL_LANE_EXPORT_ROOT_MAX_LEAVES_V1 + 1];
+    let error = external_lane_export_root_v1(&over).unwrap_err();
+    assert!(error.starts_with(EXTERNAL_LANE_EXPORT_ROOT_FULL), "{error}");
+    assert!(external_lane_export_root_proof_v1(&over, 0).is_err());
+}

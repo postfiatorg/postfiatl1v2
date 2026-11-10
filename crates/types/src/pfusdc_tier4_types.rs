@@ -1625,122 +1625,34 @@ pub fn bridge_exit_empty_root_v1() -> String {
 }
 
 pub fn bridge_exit_merkle_root_v1(leaves: &[BridgeExitLeafV1]) -> Result<String, String> {
-    bridge_exit_tree_root_v1(&bridge_exit_leaf_commitments(leaves)?)
-}
-
-fn bridge_exit_leaf_commitments(leaves: &[BridgeExitLeafV1]) -> Result<Vec<Vec<u8>>, String> {
-    if leaves.len() > BRIDGE_EXIT_MAX_LEAVES_PER_BLOCK_V1 {
-        return Err("bridge exit tree exceeds the v1 per-block leaf limit".to_string());
-    }
-    leaves
-        .iter()
-        .map(|leaf| pfusdc_decode_hex(&leaf.commitment()?))
-        .collect()
-}
-
-/// The bridge-exit tree over 48-byte leaf commitments: SHA3-384 nodes under
-/// `postfiat.bridge_exit_tree.node.v1`, an odd node paired with itself, and
-/// the empty root for no leaves. Every per-block header root uses it; the
-/// leaves carry their own domain.
-fn bridge_exit_tree_root_v1(leaves: &[Vec<u8>]) -> Result<String, String> {
     if leaves.len() > BRIDGE_EXIT_MAX_LEAVES_PER_BLOCK_V1 {
         return Err("bridge exit tree exceeds the v1 per-block leaf limit".to_string());
     }
     if leaves.is_empty() {
         return Ok(bridge_exit_empty_root_v1());
     }
-    let mut level = leaves.to_vec();
+    let mut level = leaves
+        .iter()
+        .map(BridgeExitLeafV1::commitment)
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(|value| pfusdc_decode_hex(&value))
+        .collect::<Result<Vec<_>, _>>()?;
     while level.len() > 1 {
-        level = bridge_exit_tree_next_level(&level)?;
+        let mut next = Vec::with_capacity(level.len().div_ceil(2));
+        for pair in level.chunks(2) {
+            let right = pair.get(1).unwrap_or(&pair[0]);
+            let mut bytes = Vec::with_capacity(pair[0].len() + right.len());
+            bytes.extend_from_slice(&pair[0]);
+            bytes.extend_from_slice(right);
+            next.push(pfusdc_decode_hex(&pfusdc_sha3_384_commitment(
+                BRIDGE_EXIT_NODE_DOMAIN_V1,
+                &bytes,
+            ))?);
+        }
+        level = next;
     }
     Ok(bytes_to_hex(&level[0]))
-}
-
-fn bridge_exit_tree_next_level(level: &[Vec<u8>]) -> Result<Vec<Vec<u8>>, String> {
-    let mut next = Vec::with_capacity(level.len().div_ceil(2));
-    for pair in level.chunks(2) {
-        let right = pair.get(1).unwrap_or(&pair[0]);
-        let mut bytes = Vec::with_capacity(pair[0].len() + right.len());
-        bytes.extend_from_slice(&pair[0]);
-        bytes.extend_from_slice(right);
-        next.push(pfusdc_decode_hex(&pfusdc_sha3_384_commitment(
-            BRIDGE_EXIT_NODE_DOMAIN_V1,
-            &bytes,
-        ))?);
-    }
-    Ok(next)
-}
-
-/// The siblings of `leaf_index` from the leaf up.
-fn bridge_exit_tree_siblings_v1(leaves: &[Vec<u8>], leaf_index: usize) -> Result<Vec<String>, String> {
-    if leaves.is_empty() || leaves.len() > BRIDGE_EXIT_MAX_LEAVES_PER_BLOCK_V1 {
-        return Err("bridge exit proof requires a nonempty bounded tree".to_string());
-    }
-    if leaf_index >= leaves.len() {
-        return Err("bridge exit proof leaf index is out of bounds".to_string());
-    }
-    let mut level = leaves.to_vec();
-    let mut index = leaf_index;
-    let mut siblings = Vec::new();
-    while level.len() > 1 {
-        let sibling_index = if index.is_multiple_of(2) {
-            (index + 1).min(level.len() - 1)
-        } else {
-            index - 1
-        };
-        siblings.push(bytes_to_hex(&level[sibling_index]));
-        level = bridge_exit_tree_next_level(&level)?;
-        index /= 2;
-    }
-    Ok(siblings)
-}
-
-/// Checks a membership path in the bridge-exit tree against `expected_root`.
-fn verify_bridge_exit_tree_path_v1(
-    expected_root: &str,
-    leaf_commitment: &[u8],
-    leaf_index: u64,
-    leaf_count: u64,
-    siblings: &[String],
-) -> Result<(), String> {
-    validate_lower_hex_len("bridge_exit_proof.expected_root", expected_root, 96)?;
-    if leaf_count == 0
-        || leaf_count > BRIDGE_EXIT_MAX_LEAVES_PER_BLOCK_V1 as u64
-        || leaf_index >= leaf_count
-    {
-        return Err("bridge exit proof has invalid leaf bounds".to_string());
-    }
-    let expected_depth = if leaf_count <= 1 {
-        0
-    } else {
-        (u64::BITS - (leaf_count - 1).leading_zeros()) as usize
-    };
-    if siblings.len() != expected_depth {
-        return Err("bridge exit proof sibling depth mismatch".to_string());
-    }
-    let mut current = leaf_commitment.to_vec();
-    let mut index = leaf_index;
-    for sibling in siblings {
-        validate_lower_hex_len("bridge_exit_proof.sibling", sibling, 96)?;
-        let sibling = pfusdc_decode_hex(sibling)?;
-        let mut bytes = Vec::with_capacity(current.len() + sibling.len());
-        if index.is_multiple_of(2) {
-            bytes.extend_from_slice(&current);
-            bytes.extend_from_slice(&sibling);
-        } else {
-            bytes.extend_from_slice(&sibling);
-            bytes.extend_from_slice(&current);
-        }
-        current = pfusdc_decode_hex(&pfusdc_sha3_384_commitment(
-            BRIDGE_EXIT_NODE_DOMAIN_V1,
-            &bytes,
-        ))?;
-        index /= 2;
-    }
-    if bytes_to_hex(&current) != expected_root {
-        return Err("bridge exit proof root mismatch".to_string());
-    }
-    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1762,7 +1674,36 @@ pub fn bridge_exit_merkle_proof_v1(
         .get(leaf_index)
         .cloned()
         .ok_or_else(|| "bridge exit proof leaf index is out of bounds".to_string())?;
-    let siblings = bridge_exit_tree_siblings_v1(&bridge_exit_leaf_commitments(leaves)?, leaf_index)?;
+    let mut level = leaves
+        .iter()
+        .map(BridgeExitLeafV1::commitment)
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(|value| pfusdc_decode_hex(&value))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut index = leaf_index;
+    let mut siblings = Vec::new();
+    while level.len() > 1 {
+        let sibling_index = if index.is_multiple_of(2) {
+            (index + 1).min(level.len() - 1)
+        } else {
+            index - 1
+        };
+        siblings.push(bytes_to_hex(&level[sibling_index]));
+        let mut next = Vec::with_capacity(level.len().div_ceil(2));
+        for pair in level.chunks(2) {
+            let right = pair.get(1).unwrap_or(&pair[0]);
+            let mut bytes = Vec::with_capacity(pair[0].len() + right.len());
+            bytes.extend_from_slice(&pair[0]);
+            bytes.extend_from_slice(right);
+            next.push(pfusdc_decode_hex(&pfusdc_sha3_384_commitment(
+                BRIDGE_EXIT_NODE_DOMAIN_V1,
+                &bytes,
+            ))?);
+        }
+        level = next;
+        index /= 2;
+    }
     Ok(BridgeExitMerkleProofV1 {
         leaf,
         leaf_index: u64::try_from(leaf_index)
@@ -1778,13 +1719,43 @@ pub fn verify_bridge_exit_merkle_proof_v1(
     proof: &BridgeExitMerkleProofV1,
 ) -> Result<(), String> {
     validate_lower_hex_len("bridge_exit_proof.expected_root", expected_root, 96)?;
-    verify_bridge_exit_tree_path_v1(
-        expected_root,
-        &pfusdc_decode_hex(&proof.leaf.commitment()?)?,
-        proof.leaf_index,
-        proof.leaf_count,
-        &proof.siblings,
-    )
+    if proof.leaf_count == 0
+        || proof.leaf_count > BRIDGE_EXIT_MAX_LEAVES_PER_BLOCK_V1 as u64
+        || proof.leaf_index >= proof.leaf_count
+    {
+        return Err("bridge exit proof has invalid leaf bounds".to_string());
+    }
+    let expected_depth = if proof.leaf_count <= 1 {
+        0
+    } else {
+        (u64::BITS - (proof.leaf_count - 1).leading_zeros()) as usize
+    };
+    if proof.siblings.len() != expected_depth {
+        return Err("bridge exit proof sibling depth mismatch".to_string());
+    }
+    let mut current = pfusdc_decode_hex(&proof.leaf.commitment()?)?;
+    let mut index = proof.leaf_index;
+    for sibling in &proof.siblings {
+        validate_lower_hex_len("bridge_exit_proof.sibling", sibling, 96)?;
+        let sibling = pfusdc_decode_hex(sibling)?;
+        let mut bytes = Vec::with_capacity(current.len() + sibling.len());
+        if index.is_multiple_of(2) {
+            bytes.extend_from_slice(&current);
+            bytes.extend_from_slice(&sibling);
+        } else {
+            bytes.extend_from_slice(&sibling);
+            bytes.extend_from_slice(&current);
+        }
+        current = pfusdc_decode_hex(&pfusdc_sha3_384_commitment(
+            BRIDGE_EXIT_NODE_DOMAIN_V1,
+            &bytes,
+        ))?;
+        index /= 2;
+    }
+    if bytes_to_hex(&current) != expected_root {
+        return Err("bridge exit proof root mismatch".to_string());
+    }
+    Ok(())
 }
 
 fn pfusdc_canonical_prefix(schema: &str) -> Vec<u8> {

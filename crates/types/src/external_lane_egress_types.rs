@@ -343,11 +343,53 @@ impl ExternalLaneExportPacket {
     }
 }
 
+/// The most export leaves one block's header root holds: the bridge-exit
+/// tree's per-block bound. Batch building stops adding exports at it, and a
+/// block with more is invalid (`external_lane_export_root_full`).
+pub const EXTERNAL_LANE_EXPORT_ROOT_MAX_LEAVES_V1: usize = BRIDGE_EXIT_MAX_LEAVES_PER_BLOCK_V1;
+pub const EXTERNAL_LANE_EXPORT_ROOT_FULL: &str = "external_lane_export_root_full";
+
+// The lane root's own tree, the shape of the bridge-exit tree in
+// `pfusdc_tier4_types.rs` (left unchanged, since the pfUSDC egress guest links
+// it): SHA3-384 nodes under its node domain over left || right, an odd node
+// paired with itself, and its empty root for no leaves.
+fn external_lane_export_tree_node(left: &[u8], right: &[u8]) -> Result<Vec<u8>, String> {
+    let mut bytes = Vec::with_capacity(left.len() + right.len());
+    bytes.extend_from_slice(left);
+    bytes.extend_from_slice(right);
+    pfusdc_decode_hex(&pfusdc_sha3_384_commitment(
+        BRIDGE_EXIT_NODE_DOMAIN_V1,
+        &bytes,
+    ))
+}
+
+fn external_lane_export_tree_next(level: &[Vec<u8>]) -> Result<Vec<Vec<u8>>, String> {
+    level
+        .chunks(2)
+        .map(|pair| external_lane_export_tree_node(&pair[0], pair.get(1).unwrap_or(&pair[0])))
+        .collect()
+}
+
+fn external_lane_export_tree_leaves(leaves: &[[u8; 48]]) -> Result<Vec<Vec<u8>>, String> {
+    if leaves.len() > EXTERNAL_LANE_EXPORT_ROOT_MAX_LEAVES_V1 {
+        return Err(format!(
+            "{EXTERNAL_LANE_EXPORT_ROOT_FULL}: a block holds at most {EXTERNAL_LANE_EXPORT_ROOT_MAX_LEAVES_V1} exports"
+        ));
+    }
+    Ok(leaves.iter().map(|leaf| leaf.to_vec()).collect())
+}
+
 /// The header root over a block's export leaves, in execution order across
-/// all lanes: the bridge-exit tree (`bridge_exit_tree_root_v1`), whose empty
-/// value is `bridge_exit_empty_root_v1()`. 96 lower-case hex digits.
+/// all lanes; `bridge_exit_empty_root_v1()` for none. 96 lower-case hex digits.
 pub fn external_lane_export_root_v1(leaves: &[[u8; 48]]) -> Result<String, String> {
-    bridge_exit_tree_root_v1(&leaves.iter().map(|leaf| leaf.to_vec()).collect::<Vec<_>>())
+    let mut level = external_lane_export_tree_leaves(leaves)?;
+    if level.is_empty() {
+        return Ok(bridge_exit_empty_root_v1());
+    }
+    while level.len() > 1 {
+        level = external_lane_export_tree_next(&level)?;
+    }
+    Ok(bytes_to_hex(&level[0]))
 }
 
 /// Membership of one export leaf in its block's export root.
@@ -365,8 +407,22 @@ pub fn external_lane_export_root_proof_v1(
     leaves: &[[u8; 48]],
     leaf_index: usize,
 ) -> Result<ExternalLaneExportRootProofV1, String> {
-    let commitments = leaves.iter().map(|leaf| leaf.to_vec()).collect::<Vec<_>>();
-    let siblings = bridge_exit_tree_siblings_v1(&commitments, leaf_index)?;
+    let mut level = external_lane_export_tree_leaves(leaves)?;
+    if leaf_index >= level.len() {
+        return Err("external lane export proof leaf index is out of bounds".to_string());
+    }
+    let mut index = leaf_index;
+    let mut siblings = Vec::new();
+    while level.len() > 1 {
+        let sibling = if index.is_multiple_of(2) {
+            (index + 1).min(level.len() - 1)
+        } else {
+            index - 1
+        };
+        siblings.push(bytes_to_hex(&level[sibling]));
+        level = external_lane_export_tree_next(&level)?;
+        index /= 2;
+    }
     Ok(ExternalLaneExportRootProofV1 {
         leaf: bytes_to_hex(&leaves[leaf_index]),
         leaf_index: leaf_index as u64,
@@ -379,14 +435,42 @@ pub fn verify_external_lane_export_root_proof_v1(
     expected_root: &str,
     proof: &ExternalLaneExportRootProofV1,
 ) -> Result<(), String> {
-    validate_lower_hex_len("external_lane_export_root_proof.leaf", &proof.leaf, 96)?;
-    verify_bridge_exit_tree_path_v1(
+    validate_lower_hex_len(
+        "external_lane_export_root_proof.expected_root",
         expected_root,
-        &pfusdc_decode_hex(&proof.leaf)?,
-        proof.leaf_index,
-        proof.leaf_count,
-        &proof.siblings,
-    )
+        96,
+    )?;
+    validate_lower_hex_len("external_lane_export_root_proof.leaf", &proof.leaf, 96)?;
+    if proof.leaf_count == 0
+        || proof.leaf_count > EXTERNAL_LANE_EXPORT_ROOT_MAX_LEAVES_V1 as u64
+        || proof.leaf_index >= proof.leaf_count
+    {
+        return Err("external lane export proof has invalid leaf bounds".to_string());
+    }
+    let depth = if proof.leaf_count <= 1 {
+        0
+    } else {
+        (u64::BITS - (proof.leaf_count - 1).leading_zeros()) as usize
+    };
+    if proof.siblings.len() != depth {
+        return Err("external lane export proof sibling depth mismatch".to_string());
+    }
+    let mut current = pfusdc_decode_hex(&proof.leaf)?;
+    let mut index = proof.leaf_index;
+    for sibling in &proof.siblings {
+        validate_lower_hex_len("external_lane_export_root_proof.sibling", sibling, 96)?;
+        let sibling = pfusdc_decode_hex(sibling)?;
+        current = if index.is_multiple_of(2) {
+            external_lane_export_tree_node(&current, &sibling)?
+        } else {
+            external_lane_export_tree_node(&sibling, &current)?
+        };
+        index /= 2;
+    }
+    if bytes_to_hex(&current) != expected_root {
+        return Err("external lane export proof root mismatch".to_string());
+    }
+    Ok(())
 }
 
 /// The external-lane export-root activation height of a chain: its genesis
