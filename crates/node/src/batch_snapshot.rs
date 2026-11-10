@@ -150,6 +150,23 @@ pub(super) fn bridge_exit_root_for_block(
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
 }
 
+/// The most exports one block carries: the export root's leaf bound. A batch
+/// holds at most `MAX_BATCH_TRANSACTIONS` (1,024) transactions, below it, so
+/// the bound is also a defence in depth. Tests may lower it on their thread.
+pub(crate) fn external_lane_export_block_bound() -> usize {
+    #[cfg(test)]
+    if let Some(bound) = EXTERNAL_LANE_EXPORT_BLOCK_BOUND_FOR_TESTS.with(std::cell::Cell::get) {
+        return bound;
+    }
+    postfiat_types::EXTERNAL_LANE_EXPORT_ROOT_MAX_LEAVES_V1
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static EXTERNAL_LANE_EXPORT_BLOCK_BOUND_FOR_TESTS: std::cell::Cell<Option<usize>> =
+        const { std::cell::Cell::new(None) };
+}
+
 /// From the external-lane export-root activation height on, the root over the
 /// export packets this block accepted, in receipt (execution) order across all
 /// lanes; `None` before it, so earlier headers and hashes are unchanged.
@@ -169,7 +186,19 @@ pub(super) fn external_lane_export_root_for_block(
             "external-lane export-root activation requires consensus v2 finality",
         ));
     }
-    let leaves = external_lane_export_packets_for_block(ledger, receipts, block_height)?
+    let packets = external_lane_export_packets_for_block(ledger, receipts, block_height)?;
+    let bound = external_lane_export_block_bound();
+    if packets.len() > bound {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "{}: block {block_height} accepts {} external lane exports, above the bound of {bound}",
+                postfiat_types::EXTERNAL_LANE_EXPORT_ROOT_FULL,
+                packets.len()
+            ),
+        ));
+    }
+    let leaves = packets
         .iter()
         .map(|packet| packet.export_root_leaf(&genesis.chain_id))
         .collect::<Result<Vec<_>, _>>()

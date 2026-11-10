@@ -22,6 +22,18 @@ fn export_tx_from(
     recipient: &str,
     sender: &str,
 ) -> SignedAssetTransaction {
+    export_tx_at(chain, lane_id, amount, recipient, sender, faucet_sequence(chain))
+}
+
+/// `export_tx_from` at an explicit faucet `sequence`.
+fn export_tx_at(
+    chain: &Chain,
+    lane_id: &str,
+    amount: u64,
+    recipient: &str,
+    sender: &str,
+    sequence: u64,
+) -> SignedAssetTransaction {
     let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
     let unsigned = UnsignedAssetTransaction {
         chain_id: chain.genesis.chain_id.clone(),
@@ -32,7 +44,7 @@ fn export_tx_from(
         signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
         source: faucet.address.clone(),
         fee: 1_000,
-        sequence: faucet_sequence(chain),
+        sequence,
         operation: AssetTransactionOperation::ExternalLaneExportV1(postfiat_types::ExternalLaneExportOperationV1 {
             sender: sender.to_string(),
             lane_id: lane_id.to_string(),
@@ -681,4 +693,79 @@ fn external_lane_export_root_orders_leaves_by_receipt_across_lanes() {
     // A packet of the block without an accepted receipt is a corrupt block.
     let missing = receipts[..3].to_vec();
     assert!(external_lane_export_packets_for_block(&ledger, &missing, 9).is_err());
+}
+
+/// A mempool with bound + 3 exports gives a block of exactly the bound and the
+/// next block the 3 left waiting; a block over the bound is invalid when it is
+/// applied and when it is replayed. The test lowers the bound to 3 on its
+/// thread (`EXTERNAL_LANE_EXPORT_BLOCK_BOUND_FOR_TESTS`): the real bound, 4,096,
+/// is above the 1,024-transaction batch cap.
+#[test]
+fn external_lane_exports_past_the_block_bound_wait_for_the_next_block() {
+    let bound = 3;
+    EXTERNAL_LANE_EXPORT_BLOCK_BOUND_FOR_TESTS.with(|cell| cell.set(Some(bound)));
+    let chain = released_export_chain("export-bound", ACCOUNT_RESERVE + 100_000);
+    let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    let first = faucet_sequence(&chain);
+    for offset in 0..(bound as u64 + 3) {
+        let tx = export_tx_at(&chain, "base-erc20", 10, &base_recipient(), &faucet.address, first + offset);
+        submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
+            data_dir: chain.data_dir.clone(),
+            signed_asset_transaction_json: serde_json::to_string(&tx).expect("tx json"),
+        })
+        .expect("mempool admits the export");
+    }
+    let next_batch = |label: &str| {
+        let batch_file = chain.data_dir.join(format!("{label}.batch.json"));
+        let batch = create_mempool_batch(MempoolBatchOptions {
+            data_dir: chain.data_dir.clone(),
+            batch_file: batch_file.clone(),
+            max_transactions: 8,
+        })
+        .expect("mempool batch");
+        (batch, batch_file)
+    };
+    let apply = |batch_file: PathBuf, label: &str| {
+        let certificate_file = Some(consensus_v2_certificate(&chain.data_dir, &batch_file, label));
+        apply_batch(ApplyBatchOptions { data_dir: chain.data_dir.clone(), batch_file, certificate_file })
+    };
+    let apply_certified = |batch_file: PathBuf, certificate_file: PathBuf| {
+        apply_batch(ApplyBatchOptions {
+            data_dir: chain.data_dir.clone(),
+            batch_file,
+            certificate_file: Some(certificate_file),
+        })
+    };
+    let (batch, batch_file) = next_batch("bound-1");
+    assert_eq!(batch.asset_transactions.len(), bound);
+    let store = NodeStore::new(&chain.data_dir);
+    assert_eq!(store.read_mempool().expect("mempool").pending_asset_transactions.len(), 3);
+    let receipts = apply(batch_file, "bound-1").expect("block of the bound");
+    assert!(receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
+    let (batch, batch_file) = next_batch("bound-2");
+    assert_eq!(batch.asset_transactions.len(), 3);
+    // Certified under a bound of 3, the same block is refused by a validator
+    // whose bound is 2.
+    let certificate_file = consensus_v2_certificate(&chain.data_dir, &batch_file, "bound-2");
+    EXTERNAL_LANE_EXPORT_BLOCK_BOUND_FOR_TESTS.with(|cell| cell.set(Some(2)));
+    let error = apply_certified(batch_file.clone(), certificate_file.clone()).unwrap_err().to_string();
+    assert!(error.contains(postfiat_types::EXTERNAL_LANE_EXPORT_ROOT_FULL), "{error}");
+    EXTERNAL_LANE_EXPORT_BLOCK_BOUND_FOR_TESTS.with(|cell| cell.set(Some(bound)));
+    apply_certified(batch_file, certificate_file).expect("block of the remaining three");
+    let tip = tip_height(&chain);
+    for height in [tip - 1, tip] {
+        let leaves = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger").external_lanes[0]
+            .exports
+            .iter()
+            .filter(|packet| packet.exported_at_height == height)
+            .count();
+        assert_eq!(leaves, bound, "height {height}");
+    }
+    verify_blocks(NodeOptions { data_dir: chain.data_dir.clone() }).expect("replay within the bound");
+    // Replay under a bound of 2 finds both blocks over it.
+    EXTERNAL_LANE_EXPORT_BLOCK_BOUND_FOR_TESTS.with(|cell| cell.set(Some(2)));
+    let error = verify_blocks(NodeOptions { data_dir: chain.data_dir.clone() }).unwrap_err().to_string();
+    assert!(error.contains(postfiat_types::EXTERNAL_LANE_EXPORT_ROOT_FULL), "{error}");
+    EXTERNAL_LANE_EXPORT_BLOCK_BOUND_FOR_TESTS.with(|cell| cell.set(None));
+    let _ = fs::remove_dir_all(&chain.data_dir);
 }

@@ -1937,6 +1937,24 @@ pub(super) fn verify_replayed_blocks(
                 validator_registry: &validator_registry,
             },
         )?;
+        // The export root is recomputed from the replayed exports, so a header
+        // whose root, or whose number of exports, disagrees fails here.
+        let replayed_export_root = external_lane_export_root_for_block(
+            genesis,
+            &governance,
+            &ledger,
+            &receipts,
+            block.header.height,
+        )?;
+        if replayed_export_root != block.header.external_lane_export_root {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "block {} external lane export root does not match the replayed exports",
+                    block.header.height
+                ),
+            ));
+        }
         let native_supply_after = native_pft_live_total(&ledger, &shielded)?;
         verify_native_pft_transition(
             block.header.height,
