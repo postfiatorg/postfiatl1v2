@@ -289,5 +289,22 @@ class ReleaseResultTests(unittest.TestCase):
             relay.release_result(self.receipt(address=TOKEN), LOCK, VALUES, balance_before=0, balance_after=400_000)
 
 
+class StatusAndCheckpointTests(unittest.TestCase):
+    def test_checkpoint_report_says_how_far_behind_the_verifier_is(self):
+        values = dict(VALUES)
+        reads = relay.read_release_state(MockRpc(), LOCK, values)
+        report = relay.checkpoint_report(reads, values)
+        self.assertTrue(report["prior_is_latest"])
+        self.assertEqual(report["latest_finalized_height"], 5)
+        self.assertEqual(report["proof_finalized_height"], 4)
+
+    def test_status_takes_from_block_and_a_proof_path(self):
+        args = relay.parser().parse_args(["status", "--rpc", "http://127.0.0.1:1", "--lock", LOCK, "--input", "x",
+                                          "--from-block", "17"])
+        self.assertEqual(args.from_block, 17)
+        with self.assertRaises(SystemExit):
+            relay.parser().parse_args(["status", "--rpc", "http://127.0.0.1:1", "--lock", LOCK, "--input", "x"])
+
+
 if __name__ == "__main__":
     unittest.main()

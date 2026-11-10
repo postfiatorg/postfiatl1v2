@@ -339,6 +339,17 @@ def release_result(receipt, lock, values, *, balance_before, balance_after):
             'recipient_balance_delta': delta, 'warnings': warnings}
 
 
+def checkpoint_report(reads, values):
+    """The prior checkpoint must be one the verifier accepted; the latest one
+    says how far behind the verifier is."""
+    return {'prior_checkpoint_commitment': commitment(values['prior_checkpoint_block_id']),
+            'latest_checkpoint_commitment': reads['verifier.latestCheckpointCommitment'],
+            'prior_is_latest': commitment(values['prior_checkpoint_block_id'])
+            == reads['verifier.latestCheckpointCommitment'],
+            'latest_finalized_height': reads['verifier.latestFinalizedHeight'],
+            'proof_finalized_height': values['finalized_block_height']}
+
+
 def load_values(input_dir):
     document = json.loads((Path(input_dir) / 'expected-public-values.json').read_text())
     return document['expected_public_values'], document['expected_public_values_hex']
@@ -448,7 +459,8 @@ def cmd_release(args):
                                 public_values_bytes=len(bytes.fromhex(expected_hex)),
                                 expected={'program_vkey': args.expect_program_vkey,
                                           'sp1_verifier': args.expect_sp1_verifier})
-    result = {'reads_before': reads, 'refusals': refusals, 'sent': False}
+    result = {'reads_before': reads, 'checkpoint': checkpoint_report(reads, values), 'refusals': refusals,
+              'sent': False}
     if refusals and not args.force_send:
         print(json.dumps(result, indent=2))
         raise RelayRefusal('release would revert: ' + '; '.join(r['code'] for r in refusals))
@@ -512,15 +524,16 @@ def cmd_advance_checkpoint(args):
 def cmd_status(args):
     """One packet: exported (in the input), final (input built), proven, released (Base)."""
     values, expected_hex = load_values(args.input)
-    status = {'packet_digest': values['withdrawal_packet_digest'], 'exported': True, 'final': True,
-              'proven': (Path(args.input) / 'proof' / 'proof.json').exists() or bool(args.proof and
-                                                                                    Path(args.proof).exists())}
+    proven = False
+    if args.proof and Path(args.proof).exists():
+        proven = json.loads(Path(args.proof).read_text()).get('public_values_hex') == expected_hex
+    status = {'packet_digest': values['withdrawal_packet_digest'], 'exported': True, 'final': True, 'proven': proven}
     rpc = Rpc(args.rpc)
     verifier = as_address(rpc.call(args.lock, 'finalityVerifier()'))
     consumed = as_int(rpc.call(verifier, 'consumedWithdrawalIdCommitment(bytes32)', commitment(values['withdrawal_id'])))
     status['released'] = consumed != 0
     if consumed:
-        logs = rpc.request('eth_getLogs', [{'address': args.lock, 'fromBlock': '0x0', 'toBlock': 'latest',
+        logs = rpc.request('eth_getLogs', [{'address': args.lock, 'fromBlock': hex(args.from_block), 'toBlock': 'latest',
                                             'topics': [RELEASED_TOPIC, None, None,
                                                        word_hex(values['withdrawal_packet_digest'])]}])
         status['base_transactions'] = [log['transactionHash'] for log in logs]
@@ -589,7 +602,8 @@ def parser():
     p.add_argument('--rpc', required=True)
     p.add_argument('--lock', required=True)
     p.add_argument('--input', type=Path, required=True)
-    p.add_argument('--proof', type=Path)
+    p.add_argument('--proof', type=Path, help='the proof.json of `prove`; proven when it is for these values')
+    p.add_argument('--from-block', type=int, required=True, help='the Base block to search Released logs from')
     p.set_defaults(func=cmd_status)
     return top
 

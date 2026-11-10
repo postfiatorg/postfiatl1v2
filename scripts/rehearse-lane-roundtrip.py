@@ -365,6 +365,7 @@ def main(argv=None):
         require(locked['status'] == '0x1', 'the Lock transaction failed')
         base = base_state(token, lock)
         require(base['total_locked'] == LOCK_AMOUNT, 'totalLocked is not the Lock amount')
+        locked_block = int(locked['blockNumber'], 16)
         results['steps']['a_lock'] = {'transaction': locked['transactionHash'], 'block': int(locked['blockNumber'], 16),
                                       'amount': LOCK_AMOUNT, 'pftl_recipient': recipient, 'base': base}
 
@@ -427,7 +428,7 @@ def main(argv=None):
                        'proof_is_placeholder': proof['mock_verifier_only'], 'release': sent, 'base': base,
                        'status': json.loads(command(f'relay-{index}-status', [
                            *relay, 'status', '--rpc', url, '--lock', lock, '--input', work / 'input',
-                           '--proof', work / 'proof/proof.json']))}
+                           '--proof', work / 'proof/proof.json', '--from-block', str(locked_block)]))}
             if index == 1:
                 # (e) The same packet again: refused before sending, and reverted when forced.
                 command('relay-1-release-again', release_argv, expected=2)
