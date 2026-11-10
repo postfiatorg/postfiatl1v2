@@ -1,10 +1,13 @@
 // The Base half of Phase 3: what the Base finality verifier
-// (`PFTLFinalityVerifierV1`) pins for a lane.
+// (`PFTLFinalityVerifierV1`) pins for a lane, and the public values it decodes
+// for one `external_lane_export_v1` packet.
 
 pub const EXTERNAL_LANE_ROUTE_PROFILE_SCHEMA_V1: &str = "postfiat.external_lane.route_profile.v1";
 pub const EXTERNAL_LANE_ROUTE_PROFILE_HASH_DOMAIN_V1: &str =
     "postfiat.external_lane.route_profile_hash.v1";
 pub const EXTERNAL_LANE_ASSET_ID_DOMAIN_V1: &str = "postfiat.external_lane.asset_id.v1";
+pub const EXTERNAL_LANE_EXPORT_EVM_DIGEST_DOMAIN_V1: &str =
+    "postfiat.external_lane.export_evm_digest.v1";
 /// The asset a lane carries: native PFT, as `issued_asset_id` names an asset
 /// by code and version.
 pub const EXTERNAL_LANE_ASSET_CODE: &str = "PFT";
@@ -92,4 +95,146 @@ impl GenesisExternalLane {
             route_epoch: EXTERNAL_LANE_ROUTE_EPOCH_V1,
         })
     }
+}
+
+/// A finalized PFTL checkpoint at or above the export's height, as the egress
+/// public values carry it. Hashes are 96 lower-case hex digits without `0x`,
+/// as in `PfUsdcEgressPublicValuesV1`; `export_history_root` is the lane's
+/// root at the finalized block, as the lane state stores it (`0x` and 96).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalLaneExportCheckpointV1 {
+    pub pftl_chain_id: String,
+    pub pftl_genesis_hash: String,
+    pub pftl_protocol_version: u32,
+    pub prior_checkpoint_block_id: String,
+    pub committee_epoch: u64,
+    pub committee_root: String,
+    pub committee_transition_commitment: String,
+    pub finalized_block_height: u64,
+    pub finalized_block_view: u64,
+    pub finalized_block_id: String,
+    pub finalized_parent_block_id: String,
+    pub finalized_state_root: String,
+    pub export_history_root: String,
+}
+
+/// The 32-byte digest the verifier returns and the lock emits as
+/// `packetDigest`: Keccak-256 over the domain tag, a zero byte and the
+/// 48-byte packet digest.
+pub fn external_lane_export_evm_digest(
+    packet: &ExternalLaneExportPacket,
+) -> Result<String, String> {
+    Ok(pfusdc_keccak_commitment(
+        EXTERNAL_LANE_EXPORT_EVM_DIGEST_DOMAIN_V1,
+        &packet.digest()?,
+    ))
+}
+
+fn lane_hex_without_prefix(field: &str, value: &str) -> Result<String, String> {
+    let digits = value
+        .strip_prefix("0x")
+        .ok_or_else(|| format!("{field} must be 0x-prefixed"))?;
+    Ok(digits.to_string())
+}
+
+/// Every field of the verifier's `DecodedEgress` for one export packet, as the
+/// egress public values the verifier decodes (field table: design note,
+/// "Base half, step 1").
+pub fn external_lane_export_egress_public_values(
+    lane: &GenesisExternalLane,
+    packet: &ExternalLaneExportPacket,
+    checkpoint: &ExternalLaneExportCheckpointV1,
+) -> Result<PfUsdcEgressPublicValuesV1, String> {
+    lane.validate()?;
+    packet.validate()?;
+    if !lane.policy.exports_enabled {
+        return Err(format!("external lane `{}` has no exports", lane.id));
+    }
+    if packet.lane_id != lane.id {
+        return Err("export packet names another lane".to_string());
+    }
+    if packet.exported_at_height == 0
+        || packet.exported_at_height > checkpoint.finalized_block_height
+    {
+        return Err("export is not at or below the finalized checkpoint".to_string());
+    }
+    validate_lower_hex_len("external_lane_export.tx_id", &packet.tx_id, 96)?;
+    let chain_id = checkpoint.pftl_chain_id.as_str();
+    let route = lane.route_profile(chain_id)?;
+    let digest = bytes_to_hex(&packet.digest()?);
+    let burn_tx_id = bytes_to_hex(&packet.burn_tx_commitment(chain_id));
+    let withdrawal_id = bytes_to_hex(&packet.withdrawal_id_commitment(chain_id)?);
+    let route_epoch = u64::from(route.route_epoch);
+    let proof_nullifier = pfusdc_egress_proof_nullifier_v1(
+        route_epoch,
+        &burn_tx_id,
+        &withdrawal_id,
+        &checkpoint.finalized_block_id,
+    )?;
+    let none = "00".repeat(48);
+    let mut values = PfUsdcEgressPublicValuesV1 {
+        schema: PFUSDC_EGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+        proof_program_version: 1,
+        pftl_chain_id: chain_id.to_string(),
+        pftl_genesis_hash: checkpoint.pftl_genesis_hash.clone(),
+        pftl_protocol_version: checkpoint.pftl_protocol_version,
+        route_profile_hash: route.profile_hash(),
+        route_epoch,
+        prior_checkpoint_block_id: checkpoint.prior_checkpoint_block_id.clone(),
+        resulting_checkpoint_block_id: checkpoint.finalized_block_id.clone(),
+        committee_epoch: checkpoint.committee_epoch,
+        committee_root: checkpoint.committee_root.clone(),
+        committee_transition_commitment: checkpoint.committee_transition_commitment.clone(),
+        finalized_block_height: checkpoint.finalized_block_height,
+        finalized_block_view: checkpoint.finalized_block_view,
+        finalized_block_id: checkpoint.finalized_block_id.clone(),
+        finalized_parent_block_id: checkpoint.finalized_parent_block_id.clone(),
+        finalized_state_root: checkpoint.finalized_state_root.clone(),
+        bridge_exit_root: lane_hex_without_prefix(
+            "checkpoint.export_history_root",
+            &checkpoint.export_history_root,
+        )?,
+        exit_leaf_index: packet.export_nonce,
+        exit_leaf_commitment: digest.clone(),
+        accepted_receipt_id: packet.tx_id.clone(),
+        accepted_receipt_code: BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE.to_string(),
+        asset_id: route.asset_id.clone(),
+        burn_tx_id,
+        withdrawal_id,
+        source_bucket_id: bytes_to_hex(&lane.route_config_digest()?),
+        amount_atoms: packet.amount_atoms,
+        recipient: packet.base_recipient.clone(),
+        destination_hash: none.clone(),
+        evidence_root: none,
+        withdrawal_finalized_height: packet.exported_at_height,
+        arbitrum_chain_id: lane.policy.chain_id,
+        vault_address: route.vault_address,
+        vault_runtime_code_hash: lane_hex_without_prefix(
+            "lock_runtime_code_hash",
+            &route.vault_runtime_code_hash,
+        )?,
+        token_address: route.token_address,
+        token_runtime_code_hash: lane_hex_without_prefix(
+            "token_runtime_code_hash",
+            &route.token_runtime_code_hash,
+        )?,
+        withdrawal_packet_digest: external_lane_export_evm_digest(packet)?,
+        withdrawal_packet_hash: digest,
+        proof_nullifier,
+        public_values_commitment: String::new(),
+    };
+    values.seal()?;
+    values.validate()?;
+    Ok(values)
+}
+
+/// The exact bytes the verifier's `verifyAndConsume` decodes.
+pub fn external_lane_export_egress_public_values_bytes(
+    lane: &GenesisExternalLane,
+    packet: &ExternalLaneExportPacket,
+    checkpoint: &ExternalLaneExportCheckpointV1,
+) -> Result<Vec<u8>, String> {
+    external_lane_export_egress_public_values(lane, packet, checkpoint)?
+        .canonical_bytes_without_commitment()
 }

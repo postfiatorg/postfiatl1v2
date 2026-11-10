@@ -1,5 +1,10 @@
 const EXTERNAL_LANE_ROUTE_PROFILE_VECTORS: &str =
     include_str!("../testdata/external-lane-route-profile-vectors.json");
+const EXTERNAL_LANE_EXPORT_FOUNDRY_FIXTURE_PATH: &str =
+    "../ethereum-contracts/test/fixtures/ExternalLaneExportFixture.sol";
+const EXTERNAL_LANE_EXPORT_FOUNDRY_FIXTURE: &str =
+    include_str!("../../ethereum-contracts/test/fixtures/ExternalLaneExportFixture.sol");
+
 fn keccak_commitment_hex(hex48: &str) -> String {
     format!(
         "0x{}",
@@ -101,4 +106,268 @@ fn external_lane_route_profile_and_asset_id_bind_each_genesis_field() {
         hash
     );
     assert!(lane.pft_asset_id("bad\nchain").is_err());
+}
+
+fn sample_egress_inputs() -> (
+    GenesisExternalLane,
+    ExternalLaneExportPacket,
+    ExternalLaneExportCheckpointV1,
+) {
+    let vectors: serde_json::Value =
+        serde_json::from_str(EXTERNAL_LANE_ROUTE_PROFILE_VECTORS).expect("vector file");
+    let mut lane: GenesisExternalLane =
+        serde_json::from_value(vectors["vectors"][0]["lane"].clone()).expect("lane");
+    lane.policy.exports_enabled = true;
+    let packet = ExternalLaneExportPacket {
+        lane_id: lane.id.clone(),
+        export_nonce: 3,
+        sender: "pftl-sender".to_string(),
+        base_recipient: format!("0x{}", "2c".repeat(20)),
+        amount_atoms: 1_000_000,
+        exported_at_height: 42,
+        tx_id: "ab".repeat(48),
+    };
+    let checkpoint = ExternalLaneExportCheckpointV1 {
+        pftl_chain_id: vectors["vectors"][0]["pftl_chain_id"]
+            .as_str()
+            .expect("chain id")
+            .to_string(),
+        pftl_genesis_hash: "11".repeat(48),
+        pftl_protocol_version: 1,
+        prior_checkpoint_block_id: "10".repeat(48),
+        committee_epoch: 1,
+        committee_root: "41".repeat(48),
+        committee_transition_commitment: String::new(),
+        finalized_block_height: 50,
+        finalized_block_view: 3,
+        finalized_block_id: "50".repeat(48),
+        finalized_parent_block_id: "4f".repeat(48),
+        finalized_state_root: "5a".repeat(48),
+        export_history_root: external_lane_export_history_root(None, &packet).expect("root"),
+    };
+    (lane, packet, checkpoint)
+}
+
+#[test]
+fn external_lane_export_maps_to_every_egress_public_value() {
+    let (lane, packet, checkpoint) = sample_egress_inputs();
+    let chain_id = checkpoint.pftl_chain_id.as_str();
+    let values =
+        external_lane_export_egress_public_values(&lane, &packet, &checkpoint).expect("values");
+    let route = lane.route_profile(chain_id).expect("route");
+    let strip = |value: &str| value.trim_start_matches("0x").to_string();
+    assert_eq!(values.schema, PFUSDC_EGRESS_PUBLIC_VALUES_SCHEMA_V1);
+    assert_eq!(values.proof_program_version, 1);
+    assert_eq!(values.pftl_chain_id, chain_id);
+    assert_eq!(values.route_profile_hash, route.profile_hash());
+    assert_eq!(values.route_epoch, 1);
+    assert_eq!(
+        values.asset_id,
+        lane.pft_asset_id(chain_id).expect("asset id")
+    );
+    assert_eq!(
+        values.resulting_checkpoint_block_id,
+        checkpoint.finalized_block_id
+    );
+    assert_eq!(
+        values.bridge_exit_root,
+        strip(&checkpoint.export_history_root)
+    );
+    assert_eq!(values.exit_leaf_index, packet.export_nonce);
+    let digest = bytes_to_hex(&packet.digest().expect("digest"));
+    assert_eq!(values.exit_leaf_commitment, digest);
+    assert_eq!(values.withdrawal_packet_hash, digest);
+    assert_eq!(values.accepted_receipt_id, packet.tx_id);
+    assert_eq!(values.accepted_receipt_code, "accepted");
+    assert_eq!(
+        values.burn_tx_id,
+        bytes_to_hex(&packet.burn_tx_commitment(chain_id))
+    );
+    assert_eq!(
+        values.withdrawal_id,
+        bytes_to_hex(
+            &packet
+                .withdrawal_id_commitment(chain_id)
+                .expect("withdrawal id")
+        )
+    );
+    assert_eq!(
+        values.source_bucket_id,
+        bytes_to_hex(&lane.route_config_digest().expect("route config"))
+    );
+    assert_eq!(values.destination_hash, "00".repeat(48));
+    assert_eq!(values.evidence_root, "00".repeat(48));
+    assert_eq!(values.amount_atoms, packet.amount_atoms);
+    assert_eq!(values.recipient, packet.base_recipient);
+    assert_eq!(
+        values.withdrawal_finalized_height,
+        packet.exported_at_height
+    );
+    assert_eq!(
+        values.arbitrum_chain_id,
+        EXTERNAL_LANE_BASE_SEPOLIA_CHAIN_ID
+    );
+    assert_eq!(values.vault_address, lane.policy.lock_contract_address);
+    assert_eq!(
+        values.vault_runtime_code_hash,
+        strip(&lane.policy.lock_runtime_code_hash)
+    );
+    assert_eq!(values.token_address, lane.policy.token_address);
+    assert_eq!(
+        values.token_runtime_code_hash,
+        strip(&lane.policy.token_runtime_code_hash)
+    );
+    assert_eq!(
+        values.withdrawal_packet_digest,
+        external_lane_export_evm_digest(&packet).expect("evm digest")
+    );
+    assert_eq!(
+        values.proof_nullifier,
+        pfusdc_egress_proof_nullifier_v1(
+            1,
+            &values.burn_tx_id,
+            &values.withdrawal_id,
+            &values.finalized_block_id
+        )
+        .expect("nullifier")
+    );
+    let bytes = external_lane_export_egress_public_values_bytes(&lane, &packet, &checkpoint)
+        .expect("bytes");
+    assert_eq!(
+        bytes,
+        values.canonical_bytes_without_commitment().expect("bytes")
+    );
+    assert!(bytes.starts_with(b"PFTL-PFUSDC-TIER4"));
+}
+
+#[test]
+fn external_lane_export_public_values_refuse_what_the_lane_did_not_export() {
+    let (lane, packet, checkpoint) = sample_egress_inputs();
+    let mut disabled = lane.clone();
+    disabled.policy.exports_enabled = false;
+    assert!(external_lane_export_egress_public_values(&disabled, &packet, &checkpoint).is_err());
+    let mut other = packet.clone();
+    other.lane_id = "base-other".to_string();
+    assert!(external_lane_export_egress_public_values(&lane, &other, &checkpoint).is_err());
+    let mut early = checkpoint.clone();
+    early.finalized_block_height = packet.exported_at_height - 1;
+    assert!(external_lane_export_egress_public_values(&lane, &packet, &early).is_err());
+    let mut text_id = packet.clone();
+    text_id.tx_id = "tx-0".to_string();
+    assert!(external_lane_export_egress_public_values(&lane, &text_id, &checkpoint).is_err());
+    let mut root = checkpoint.clone();
+    root.export_history_root = strip_lane_prefix(&root.export_history_root);
+    assert!(external_lane_export_egress_public_values(&lane, &packet, &root).is_err());
+}
+
+fn strip_lane_prefix(value: &str) -> String {
+    value.trim_start_matches("0x").to_string()
+}
+
+fn external_lane_export_foundry_fixture() -> String {
+    let (lane, packet, checkpoint) = sample_egress_inputs();
+    let values =
+        external_lane_export_egress_public_values(&lane, &packet, &checkpoint).expect("values");
+    let bytes = values.canonical_bytes_without_commitment().expect("bytes");
+    let raw =
+        |name: &str, value: &str| format!("    bytes internal constant {name} = hex\"{value}\";\n");
+    let word = |kind: &str, name: &str, value: &str| {
+        format!("    {kind} internal constant {name} = {kind}(hex\"{value}\");\n")
+    };
+    let number = |kind: &str, name: &str, value: u64| {
+        format!("    {kind} internal constant {name} = {value};\n")
+    };
+    let mut out = String::from(
+        "// SPDX-License-Identifier: MIT OR Apache-2.0\npragma solidity ^0.8.24;\n\n\
+         /// Written by the Rust test `external_lane_export_public_values_match_the_foundry_fixture`\n\
+         /// (crates/types/src/external_lane_egress_type_tests.rs): the egress public values of one\n\
+         /// export packet on the Base Sepolia rehearsal lane, and the values they carry.\n\
+         /// Regenerate with EXTERNAL_LANE_WRITE_FIXTURE=1.\nlibrary ExternalLaneExportFixture {\n",
+    );
+    out.push_str(&raw("PUBLIC_VALUES", &bytes_to_hex(&bytes)));
+    out.push_str(&format!(
+        "    string internal constant PFTL_CHAIN_ID = \"{}\";\n",
+        values.pftl_chain_id
+    ));
+    out.push_str(&raw("PFTL_GENESIS_HASH", &values.pftl_genesis_hash));
+    out.push_str(&number(
+        "uint32",
+        "PFTL_PROTOCOL_VERSION",
+        u64::from(values.pftl_protocol_version),
+    ));
+    out.push_str(&raw("ROUTE_PROFILE_HASH", &values.route_profile_hash));
+    out.push_str(&number("uint64", "ROUTE_EPOCH", values.route_epoch));
+    out.push_str(&raw("PRIOR_CHECKPOINT", &values.prior_checkpoint_block_id));
+    out.push_str(&raw(
+        "RESULTING_CHECKPOINT",
+        &values.resulting_checkpoint_block_id,
+    ));
+    out.push_str(&raw("COMMITTEE_ROOT", &values.committee_root));
+    out.push_str(&number(
+        "uint64",
+        "FINALIZED_HEIGHT",
+        values.finalized_block_height,
+    ));
+    out.push_str(&raw("EXPORT_HISTORY_ROOT", &values.bridge_exit_root));
+    out.push_str(&raw("TX_ID", &values.accepted_receipt_id));
+    out.push_str(&raw("ASSET_ID", &values.asset_id));
+    out.push_str(&raw("BURN_TX_ID", &values.burn_tx_id));
+    out.push_str(&raw("WITHDRAWAL_ID", &values.withdrawal_id));
+    out.push_str(&number("uint64", "AMOUNT", values.amount_atoms));
+    out.push_str(&word(
+        "bytes20",
+        "RECIPIENT",
+        &strip_lane_prefix(&values.recipient),
+    ));
+    out.push_str(&number(
+        "uint64",
+        "EXPORTED_AT_HEIGHT",
+        values.withdrawal_finalized_height,
+    ));
+    out.push_str(&number(
+        "uint64",
+        "SOURCE_CHAIN_ID",
+        values.arbitrum_chain_id,
+    ));
+    out.push_str(&word(
+        "bytes20",
+        "LOCK",
+        &strip_lane_prefix(&values.vault_address),
+    ));
+    out.push_str(&word(
+        "bytes32",
+        "LOCK_CODE_HASH",
+        &values.vault_runtime_code_hash,
+    ));
+    out.push_str(&word(
+        "bytes20",
+        "TOKEN",
+        &strip_lane_prefix(&values.token_address),
+    ));
+    out.push_str(&word(
+        "bytes32",
+        "TOKEN_CODE_HASH",
+        &values.token_runtime_code_hash,
+    ));
+    out.push_str(&word(
+        "bytes32",
+        "PACKET_EVM_DIGEST",
+        &values.withdrawal_packet_digest,
+    ));
+    out.push_str(&raw("PACKET_DIGEST", &values.withdrawal_packet_hash));
+    out.push_str(&word("bytes32", "PROOF_NULLIFIER", &values.proof_nullifier));
+    out.push_str("}\n");
+    out
+}
+
+#[test]
+fn external_lane_export_public_values_match_the_foundry_fixture() {
+    let fixture = external_lane_export_foundry_fixture();
+    if std::env::var_os("EXTERNAL_LANE_WRITE_FIXTURE").is_some() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(EXTERNAL_LANE_EXPORT_FOUNDRY_FIXTURE_PATH);
+        std::fs::write(path, &fixture).expect("write fixture");
+        return;
+    }
+    assert_eq!(EXTERNAL_LANE_EXPORT_FOUNDRY_FIXTURE, fixture);
 }
