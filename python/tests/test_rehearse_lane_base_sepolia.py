@@ -78,7 +78,7 @@ class IdentityTests(unittest.TestCase):
         import json
         info = json.loads(dry_run.PROGRAM_INFO.read_text())
         self.assertEqual(dry_run.check_committed_identity(info, dry_run.COMMITTED_ELF), info["elf_sha256"])
-        self.assertEqual(dry_run.parser().parse_args(["--output", "x"]).program_info, dry_run.PROGRAM_INFO)
+        self.assertIsNone(dry_run.parser().parse_args(["--output", "x"]).program_info)
 
     def test_a_different_elf_is_refused(self):
         import json
@@ -136,3 +136,30 @@ class DeployAddressTests(unittest.TestCase):
                                      expected_code={"verifier": "0xc0de", "lock": "0xc0de"})
         self.assertEqual(sent, ["verifier", "lock"])
         self.assertEqual(result["lock"]["address"], self.PLAN["lock"]["predicted"])
+
+
+class ProgramIdentityTests(unittest.TestCase):
+    def test_non_fork_mode_refuses_an_override(self):
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.load_program_identity(fork=False, override=Path("other.json"), worktree_clean=True,
+                                          head="abc")
+
+    def test_non_fork_mode_needs_a_clean_worktree(self):
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.load_program_identity(fork=False, override=None, worktree_clean=False, head="abc")
+
+    def test_non_fork_mode_takes_the_committed_identity(self):
+        identity = dry_run.load_program_identity(fork=False, override=None, worktree_clean=True, head="abc")
+        self.assertEqual(identity["elf_sha256"], "e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab")
+        self.assertEqual(identity["checked_out_commit"], "abc")
+        self.assertEqual(len(identity["runs"]), 2)
+
+    def test_a_mismatching_elf_is_refused(self):
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.load_program_identity(fork=False, override=None, worktree_clean=True, head="abc",
+                                          elf=dry_run.ROOT / "programs/pft-lane-export/Cargo.toml")
+
+    def test_fork_mode_accepts_an_override(self):
+        identity = dry_run.load_program_identity(fork=True, override=dry_run.PROGRAM_INFO, worktree_clean=False,
+                                                 head="abc")
+        self.assertEqual(identity["program_vkey"][:6], "0x000c")

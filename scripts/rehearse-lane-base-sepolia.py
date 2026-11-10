@@ -122,6 +122,38 @@ def deploy_pair(plan, *, send, code_hash, expected_code):
     return result
 
 
+RELEASES = ROOT / 'programs/pft-lane-export/releases.json'
+
+
+def load_program_identity(*, fork, override, worktree_clean, head, elf=COMMITTED_ELF):
+    """The program key and where it comes from. Off the fork: only the committed
+    program-info.json at the checked-out commit, in a clean worktree, with the
+    committed ELF hashing to its elf_sha256 and releases.json naming the same
+    identity and its two reproducible runs. `--program-info` only with `--fork`."""
+    if not fork:
+        require(override is None, '--program-info is accepted only with --fork; a real run uses the committed one')
+        require(worktree_clean, 'a real run needs a clean worktree at a commit; commit or stash first')
+    info = json.loads((override or PROGRAM_INFO).read_text())
+    for field in ('schema', 'elf_sha256', 'program_vkey', 'source_commit', 'docker_image', 'build_command'):
+        require(info.get(field), f'the program info has no {field}')
+    require(info['schema'] == 'postfiat-sp1-program-info-v1', 'the program info has another schema')
+    elf_sha256 = check_committed_identity(info, elf)
+    runs = []
+    if override is None:
+        releases = json.loads(RELEASES.read_text())
+        release = releases['releases'][-1]
+        require((release['elf_sha256'], release['program_vkey'], release['source_commit'])
+                == (info['elf_sha256'], info['program_vkey'], info['source_commit']),
+                'releases.json names another identity than program-info.json')
+        require(releases['docker_image'] == info['docker_image'], 'releases.json names another image')
+        runs = release['runs']
+        require(len(runs) >= 2, 'releases.json must record two reproducible runs')
+    return {'elf_sha256': elf_sha256, 'program_vkey': info['program_vkey'], 'source_commit': info['source_commit'],
+            'docker_image': info['docker_image'], 'build_command': info['build_command'], 'runs': runs,
+            'program_info': str((override or PROGRAM_INFO).relative_to(ROOT)) if (override or PROGRAM_INFO)
+            .resolve().is_relative_to(ROOT) else '<override>', 'checked_out_commit': head}
+
+
 def load_state(path):
     return json.loads(path.read_text()) if path.exists() else {'completed': [], 'data': {}}
 
@@ -150,7 +182,7 @@ def refuse_mock_off_loopback(*, mock_artifact, rpc_url, client_version):
             'a mock SP1 verifier is refused unless the RPC is a loopback Anvil')
 
 
-def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei):
+def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_identity=None):
     """Every address, nonce, constructor value, gas figure and the test ETH each key needs."""
     keys = {
         'verifier deployer': ('deploy-verifier',),
@@ -164,6 +196,7 @@ def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei):
                       'wei_with_margin': gas * gas_price_wei * GAS_MARGIN,
                       'eth_with_margin': f'{gas * gas_price_wei * GAS_MARGIN / 1e18:.9f}'}
     return {'chain_id': CHAIN_ID, 'plan': plan, 'verifier_constructor': verifier_config,
+            'program_identity': program_identity,
             'sp1_verifier': SP1_VERIFIER, 'gas_price_wei': gas_price_wei, 'gas_margin': GAS_MARGIN,
             'gas_used_on_fork': gas_used, 'test_eth_per_key': needs,
             'release_gas': 'not estimated: a release needs a real proof'}
@@ -179,6 +212,10 @@ def sheet_markdown(sheet):
     lines += ['', '| Key | Gas on the fork | Test ETH (x3 margin) |', '|---|---|---|']
     for key, need in sheet['test_eth_per_key'].items():
         lines.append(f'| {key} | {need["gas"]} | {need["eth_with_margin"]} |')
+    identity = sheet.get('program_identity') or {}
+    if identity:
+        lines += ['', f'Program: ELF sha256 `{identity["elf_sha256"]}`, key `{identity["program_vkey"]}`, source '
+                      f'commit `{identity["source_commit"]}`.']
     lines += ['', f'Gas price read: {sheet["gas_price_wei"]} wei. SP1 verifier: `{SP1_VERIFIER["address"]}` '
               f'({SP1_VERIFIER["name"]}, {SP1_VERIFIER["source"]}).', '', '## Verifier constructor', '']
     lines += [f'- `{name}`: `{value}`' for name, value in (sheet['verifier_constructor'] or {}).items()]
@@ -192,8 +229,8 @@ def parser():
     p.add_argument('--output', type=Path, required=True, help='the run directory; holds state.json')
     p.add_argument('--fork', action='store_true', help='run every stage on a local Anvil fork of Base Sepolia')
     p.add_argument('--through', choices=STAGES, default='record', help='stop after this stage')
-    p.add_argument('--program-info', type=Path, default=PROGRAM_INFO,
-                   help='program-info.json with program_vkey; default: the committed one')
+    p.add_argument('--program-info', type=Path,
+                   help='another program-info.json; only with --fork. A real run takes the committed one')
     p.add_argument('--elf', type=Path, default=COMMITTED_ELF,
                    help='the guest ELF; default: the committed one, checked against the program info')
     p.add_argument('--node-bin', type=Path, default=ROOT / 'target/debug/postfiat-node')
@@ -221,8 +258,13 @@ def main(argv=None):
     refuse_mock_off_loopback(mock_artifact=args.mock_sp1_artifact,
                              rpc_url='http://127.0.0.1' if args.fork else BASE_SEPOLIA_RPC,
                              client_version='anvil' if args.fork else '')
-    program_info = json.loads(args.program_info.read_text())
-    vkey = program_info['program_vkey']
+    identity = load_program_identity(
+        fork=args.fork, override=args.program_info, elf=args.elf,
+        worktree_clean=not subprocess.run(['git', 'status', '--porcelain'], cwd=ROOT, capture_output=True,
+                                          text=True).stdout.strip(),
+        head=ORDER.git('rev-parse', 'HEAD'))
+    program_info = identity
+    vkey = identity['program_vkey']
     children, roles = [], {str(out): '<output>'}
     environment = dict(os.environ)
     urls = {'public': BASE_SEPOLIA_RPC}
@@ -311,8 +353,7 @@ def main(argv=None):
             check_stage(state, stage)
             print(f'stage {stage}', file=sys.stderr)
             if stage == 'plan':
-                data['program_identity'] = {'elf_sha256': check_committed_identity(program_info, args.elf),
-                                            'program_vkey': vkey}
+                data['program_identity'] = identity
                 head = int(rpc(BASE_SEPOLIA_RPC, 'eth_blockNumber'), 16)
                 gas_price = int(rpc(BASE_SEPOLIA_RPC, 'eth_gasPrice'), 16)
                 sp1_code = ORDER.code_hash(rpc(BASE_SEPOLIA_RPC, 'eth_getCode', [SP1_VERIFIER['address'], 'latest']))
@@ -384,6 +425,9 @@ def main(argv=None):
                     lock_code_hash=data['plan']['lock_runtime_code_hash'])
                 verifier_config['programVKey'] = vkey
                 data['verifier_config'] = verifier_config
+                data['verifier_constructor_record'] = {
+                    'programVKey': vkey, 'program_elf_sha256': identity['elf_sha256'],
+                    'program_source_commit': identity['source_commit'], 'program_info': identity['program_info']}
             elif stage == 'preflight':
                 fork = start_fork('preflight-fork', data['plan']['fork_block'])
                 plan, gas = data['plan'], {}
@@ -418,7 +462,7 @@ def main(argv=None):
                                      'constructor_values_read_back': len(read), 'matches_predictions': True}
                 sheet = deploy_sheet(plan={r: plan[r] for r in ('verifier', 'lock')},
                                      verifier_config=data['verifier_config'], gas_used=gas,
-                                     gas_price_wei=plan['gas_price_wei'])
+                                     gas_price_wei=plan['gas_price_wei'], program_identity=identity)
                 (out / 'deploy-sheet.json').write_text(json.dumps(sheet, indent=2) + '\n')
                 (out / 'deploy-sheet.md').write_text(sheet_markdown(sheet))
                 children.pop().terminate()
