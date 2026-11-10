@@ -397,6 +397,7 @@ const PUBLIC_READ_RPC_METHODS = new Set([
     'owned_recovery_capabilities',
     'owned_certificate',
     'owned_recovery_status',
+    'fastpay_recovery_committee',
     'blocks',
     'receipt',
     'mempool',

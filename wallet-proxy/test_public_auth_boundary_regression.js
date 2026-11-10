@@ -202,6 +202,7 @@ async function main() {
     'owned_recovery_capabilities',
     'owned_certificate',
     'owned_recovery_status',
+    'fastpay_recovery_committee',
     'navcoin_bridge_supply_status',
     'nav_reserve_proof_status',
     'vault_bridge_status',
@@ -221,11 +222,14 @@ async function main() {
   for (const method of ['owned_sign_v3', 'owned_apply_v3', 'owned_unwrap_sign_v3', 'owned_unwrap_apply_v3']) {
     assert.strictEqual(rpcRequestRequiresAuth(method), true, `${method} is an authenticated mutation`);
   }
+  // The committee read is small and changes only at a rotation: no 2-second shared answer.
+  assert(!require('./public-read-cache').PUBLIC_READ_CACHE_METHODS.has('fastpay_recovery_committee'));
   // Pin the whole public-read list: any addition is a deliberate review decision.
   assert.deepStrictEqual([...PUBLIC_READ_RPC_METHODS].sort(), [
     'account', 'account_assets', 'account_lines', 'account_tx', 'asset_fee_quote', 'asset_info',
     'asset_orchard_action_status', 'asset_orchard_private_egress_binding', 'atomic_swap_fee_quote',
-    'blocks', 'escrow_fee_quote', 'escrow_info', 'external_lane_info', 'fee', 'fx_fix_info',
+    'blocks', 'escrow_fee_quote', 'escrow_info', 'external_lane_info', 'fastpay_recovery_committee',
+    'fee', 'fx_fix_info',
     'fx_fix_list', 'fx_fix_quote', 'fx_fix_reservation_info', 'mempool', 'nav_reserve_proof_status',
     'navcoin_bridge_routes', 'navcoin_bridge_supply_status', 'nft_fee_quote', 'offer_fee_quote',
     'owned_certificate', 'owned_objects', 'owned_recovery_capabilities', 'owned_recovery_status',
