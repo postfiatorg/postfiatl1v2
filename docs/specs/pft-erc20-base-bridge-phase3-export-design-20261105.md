@@ -146,7 +146,7 @@ Any party can relay, because `release` is permissionless and pays the packet's r
 
 ## 6. Operator and user flow
 
-1. The holder submits `external_lane_export_v1` with the amount and its own Base address. The wallet signer (`wallet-sign-asset-transaction --operation-json`) runs the operation's `validate()` and so checks the address before signing (`crates/node/src/block_replay_wallet.rs:3300-3303`); a future dedicated CLI can do the same. No export CLI exists today.
+1. The holder submits `external_lane_export_v1` with the amount and its own Base address. The wallet signer (`wallet-sign-asset-transaction --operation-json`) runs the operation's `validate()` and so checks the address before signing (`crates/node/src/block_replay_wallet.rs:3300-3303`); `postfiat-node external-lane-export` also checks the lane, the recipient (zero, lock and token addresses) and the balance before signing, and `external-lane-export-status` reads the packet back ([Exports](../architecture/genesis-external-lanes.md#exports)).
 2. PFTL accepts it, and the holder sees the export packet in the receipt.
 3. The relay proves the packet and calls `release` on Base. The holder can also relay it.
 4. The ERC-20 PFT arrives at the Base address, with a `Released` event naming the packet.

@@ -334,6 +334,22 @@ Fixed vectors are in `crates/types/testdata/external-lane-export-packet-vectors.
 
 **The read.** `external_lane_info` reports `state.exported_atoms` and `state.next_export_nonce`, and pages the packets newest first with their digest and two commitments: `export_count`, `pruned_export_count`, `export_history_root`, `exports` and `next_export_cursor`, with `--export-cursor` and `--export-limit` as the release page's flags. The Python client takes `export_cursor` and `export_limit`; `external_lane_export_coverage` summarises a row.
 
+**The holder's commands.** `external-lane-export` reads the lane with `external_lane_info` and refuses before signing, with `refused before signing: CODE: message`, when the lane does not exist (`external_lane_not_configured`), exports are off (`external_lane_export_not_supported`), the active cap is zero (`external_lane_export_halted`), the amount is zero (`external_lane_export_amount_zero`) or above `released_atoms - exported_atoms` (`external_lane_export_above_released`), the recipient is malformed or zero (`external_lane_export_recipient_invalid`), the lane's lock (`external_lane_export_recipient_is_lock`) or its token (`external_lane_export_recipient_is_token`), or the balance cannot cover the amount, the `asset_fee_quote` fee and the account reserve (`insufficient_funds`). It then signs through `wallet_sign_asset_transaction` and submits through the mempool path; `--dry-run` prints the signed transaction and submits nothing. A refusal the node returns at admission is printed as the node gives it (`crates/node/src/external_lane_export_cli.rs`).
+
+```bash
+postfiat-node external-lane-export --data-dir DATA_DIR --key-file KEY_FILE \
+  --lane-id base-erc20 --amount-atoms 400 \
+  --base-recipient 0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c --dry-run
+```
+
+`external-lane-export-status` finds one packet by `--tx-id` or `--export-nonce` in the lane's stored export pages and prints it with its digest and commitments, whether its block is final, the lane's `exported_atoms`, and a last line saying that the payout on Base needs a relay that does not exist yet. A pruned packet is no longer found.
+
+```bash
+postfiat-node external-lane-export-status --data-dir DATA_DIR --lane-id base-erc20 --export-nonce 0
+```
+
+The Python client has the same pair: `external_lane_export(client, wallet=..., lane_id=..., amount_atoms=..., base_recipient=...)` runs the lane checks (`external_lane_export_refusal`; the balance is left to the node) and then quotes, signs and submits through `submit_asset_transaction`, and `PostFiatRpcClient.external_lane_export_status(lane_id, tx_id_or_nonce)` is the status read.
+
 ## Not built yet
 
 The user-facing interface for the lane. The Python CLI reads a lane (`external_lane_info`) and watches it ([the watcher](#the-watcher)) but does not build or submit a release; the node commands of [the Base checkpoint source](#the-base-checkpoint-source) do. The design keeps the SP1 route for Base through its dispute games (option (a)) as a later upgrade.
