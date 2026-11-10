@@ -2133,6 +2133,7 @@ pub fn create_block_vote_for_verified_proposal(
     let governance =
         governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
     validate_bridge_exit_root_activation(&proposal, &genesis, &governance)?;
+    validate_external_lane_export_root_activation(&proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     let proposal_hash = block_proposal_hash(&proposal)?;
     let target = BlockVoteTarget {
@@ -2163,6 +2164,7 @@ pub fn read_block_vote_for_verified_proposal(
     let governance =
         governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
     validate_bridge_exit_root_activation(proposal, &genesis, &governance)?;
+    validate_external_lane_export_root_activation(proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     let proposal_hash = block_proposal_hash(proposal)?;
     let target = BlockVoteTarget {
@@ -2444,6 +2446,7 @@ pub(crate) fn aggregate_prevalidated_proposal_block_certificate(
     let governance =
         governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
     validate_bridge_exit_root_activation(proposal, &genesis, &governance)?;
+    validate_external_lane_export_root_activation(proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     let expected_proposer =
         leader_for_view(&validators, proposal.block_height, proposal.view).map_err(invalid_data)?;
@@ -3619,6 +3622,7 @@ fn block_vote_target_with_timings(
             proposal.block_height,
         )?;
         validate_bridge_exit_root_activation(&proposal, genesis, &governance)?;
+        validate_external_lane_export_root_activation(&proposal, genesis, &governance)?;
         timings.governance_ms = node_timing_elapsed_ms(stage_start);
 
         let stage_start = std::time::Instant::now();
@@ -3764,6 +3768,41 @@ fn validate_bridge_exit_root_activation(
                 ));
             }
             validate_lower_hex_len("block_proposal.bridge_exit_root", root, 96)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+        }
+    }
+}
+
+/// The lane export root's presence follows its activation height exactly,
+/// as the bridge-exit root's does: refused before it is hashed or signed.
+fn validate_external_lane_export_root_activation(
+    proposal: &BlockProposalFile,
+    genesis: &Genesis,
+    governance: &GovernanceState,
+) -> io::Result<()> {
+    let active = postfiat_types::external_lane_export_root_active_at(
+        genesis,
+        governance,
+        proposal.block_height,
+    );
+    match (active, proposal.external_lane_export_root.as_deref()) {
+        (false, None) => Ok(()),
+        (false, Some(_)) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "block proposal supplies external_lane_export_root before activation",
+        )),
+        (true, None) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "activated block proposal omits external_lane_export_root",
+        )),
+        (true, Some(root)) => {
+            if !consensus_v2_active_at(genesis, proposal.block_height) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "external-lane export-root activation requires consensus v2 finality",
+                ));
+            }
+            validate_lower_hex_len("block_proposal.external_lane_export_root", root, 96)
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
         }
     }
@@ -3953,6 +3992,34 @@ mod bridge_exit_root_activation_tests {
         )
         .expect("v1 exit root at activation");
     }
+
+    #[test]
+    fn external_lane_export_root_encoding_is_exactly_activation_gated() {
+        let mut genesis = Genesis::new("postfiat-tier4-test");
+        genesis.external_lane_export_root_activation_height = Some(10);
+        let governance = GovernanceState::new(4);
+        let root = postfiat_types::bridge_exit_empty_root_v1();
+        let with_root = |height: u64, root: Option<String>| {
+            let mut proposal = proposal(height, None);
+            proposal.external_lane_export_root = root;
+            proposal
+        };
+        let check = |genesis: &Genesis, proposal: BlockProposalFile| {
+            validate_external_lane_export_root_activation(&proposal, genesis, &governance)
+        };
+        // Inactive and missing; inactive and present; active and missing.
+        check(&genesis, with_root(9, None)).expect("no root before activation");
+        let error = check(&genesis, with_root(9, Some(root.clone()))).unwrap_err();
+        assert!(error.to_string().contains("before activation"), "{error}");
+        let error = check(&genesis, with_root(10, None)).unwrap_err();
+        assert!(error.to_string().contains("omits external_lane_export_root"), "{error}");
+        // Active and present, without and with consensus v2.
+        let error = check(&genesis, with_root(10, Some(root.clone()))).unwrap_err();
+        assert!(error.to_string().contains("requires consensus v2"), "{error}");
+        genesis.consensus_v2_activation_height = Some(1);
+        check(&genesis, with_root(10, Some(root))).expect("root at activation");
+        assert!(check(&genesis, with_root(10, Some("ab".to_string()))).is_err());
+    }
 }
 
 fn sign_block_proposal_file(
@@ -3987,6 +4054,7 @@ fn sign_block_proposal_file(
     let governance =
         governance_with_due_validator_registry_activations(store, &genesis, proposal.block_height)?;
     validate_bridge_exit_root_activation(proposal, &genesis, &governance)?;
+    validate_external_lane_export_root_activation(proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     if !validators
         .iter()
@@ -4045,6 +4113,7 @@ pub fn sign_verified_block_proposal(
     let governance =
         governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
     validate_bridge_exit_root_activation(&proposal, &genesis, &governance)?;
+    validate_external_lane_export_root_activation(&proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     let expected_proposer =
         leader_for_view(&validators, proposal.block_height, proposal.view).map_err(invalid_data)?;
@@ -4108,6 +4177,7 @@ fn verify_block_proposal_signature_if_present(
     let governance =
         governance_with_due_validator_registry_activations(store, &genesis, proposal.block_height)?;
     validate_bridge_exit_root_activation(proposal, &genesis, &governance)?;
+    validate_external_lane_export_root_activation(proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     if !validators
         .iter()
