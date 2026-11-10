@@ -309,6 +309,23 @@ The full values, their verifier commitments and an 8453 example with synthetic a
 4. **The lane policy.** The witness carries the chain's genesis. Its hash, chain id and protocol version must be the ones the finality domain signed. Its lane gives the route profile hash and the asset id (`Genesis::external_lane_verifier_pins`).
 5. **The transaction.** The accepted transaction id in the public values is the packet's `tx_id`. The packet digest inside the leaf binds it, the header root binds the leaf, and the block id the committee signed binds the root. The block's `receipt_ids` are not checked: neither the block id nor the finality check covers them, so a witness could list any id there. A review found that the first version of this check proved nothing and removed it.
 
+**Why "accepted" holds.** "Accepted" in the public values is true for every packet whose leaf is in a signed export root:
+
+- a packet is recorded only by an accepted export transaction;
+- the root is built only from packets with an accepted receipt in that block;
+- every validator rebuilds the proposal from its own execution before it votes;
+- replay recomputes the root.
+
+So the claim rests on a quorum of validators running correct, version-compatible execution, as every statement of the light client does.
+
+**Before any verifier uses this key.** All of the following must hold before any verifier is constructed with the program's key:
+
+1. The committed identity: `programs/pft-lane-export/elf/` and `program-info.json`.
+2. The program's entry in the proof public-input inventory.
+3. The identity check (`pft-lane-export-identity`) green on the commit being deployed.
+4. The verifier's `programVKey` taken from the committed program info and cross-checked in the deployment record.
+5. Before production: at least one real SP1 proof generated and verified against the versioned SP1 verifier. None exists yet.
+
 The result is then compared field by field with what the finality check returned: prior and resulting checkpoint, committee root and transition, heights, view, block ids, parent, state root, export root and leaf index. The Checkpoint variant calls `verify_checkpoint_witness_v1` unchanged.
 
 **The witness.** It holds the chain id, the genesis hash, the protocol version and the prior checkpoint. It also holds the finality ancestry and committee (the pfUSDC bounds: at most 64 ancestry blocks and 64 validators), the export's block, the genesis, the packet and the membership proof (at most 12 siblings, so 4,096 leaves).
