@@ -3208,6 +3208,7 @@ mod release_path {
         use super::*;
         include!("external_lane_checkpoint_source_tests.rs");
         include!("external_lane_local_evm_tests.rs");
+        include!("external_lane_roundtrip_tests.rs");
     }
 
     mod export_path {
