@@ -5,11 +5,12 @@ use postfiat_crypto_provider::{bytes_to_hex, ML_DSA_65_ALGORITHM};
 use postfiat_ordering_fast::{
     certify_consensus_v2_votes, consensus_v2_block_ref,
     consensus_v2_block_ref_with_bridge_exit_root, consensus_v2_block_ref_with_commitment_roots,
-    consensus_v2_commit_from_precommit_qc, consensus_v2_genesis_parent_id,
-    consensus_v2_proposal_signing_bytes, consensus_v2_timeout_vote_signing_bytes,
-    consensus_v2_vote_signing_bytes, verify_consensus_v2_commit, verify_consensus_v2_proposal,
-    verify_consensus_v2_timeout_vote, verify_consensus_v2_vote, ConsensusV2ValidatorSet,
-    CONSENSUS_V2_PROPOSAL_CONTEXT, CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT, CONSENSUS_V2_VOTE_CONTEXT,
+    consensus_v2_block_ref_with_external_lane_export_root, consensus_v2_commit_from_precommit_qc,
+    consensus_v2_genesis_parent_id, consensus_v2_proposal_signing_bytes,
+    consensus_v2_timeout_vote_signing_bytes, consensus_v2_vote_signing_bytes,
+    verify_consensus_v2_commit, verify_consensus_v2_proposal, verify_consensus_v2_timeout_vote,
+    verify_consensus_v2_vote, ConsensusV2ValidatorSet, CONSENSUS_V2_PROPOSAL_CONTEXT,
+    CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT, CONSENSUS_V2_VOTE_CONTEXT,
 };
 use postfiat_types::{
     ConsensusV2Commit, ConsensusV2Phase, ConsensusV2Proposal, ConsensusV2QuorumCertificate,
@@ -53,7 +54,18 @@ pub fn create_consensus_v2_proposal_for_block(
     let timeout_certificate_id =
         timeout_certificate.map(|certificate| certificate.certificate_id.clone());
     let parent_block_id = consensus_v2_parent_block_id(&domain, block_proposal)?;
-    let block = if let Some(receipt_root) = block_proposal.pftl_uniswap_receipt_root.clone() {
+    let block = if let Some(export_root) = block_proposal.external_lane_export_root.clone() {
+        consensus_v2_block_ref_with_external_lane_export_root(
+            &domain,
+            block_proposal.block_height,
+            parent_block_id,
+            block_proposal.payload_hash.clone(),
+            block_proposal.state_root.clone(),
+            block_proposal.bridge_exit_root.clone(),
+            block_proposal.pftl_uniswap_receipt_root.clone(),
+            export_root,
+        )
+    } else if let Some(receipt_root) = block_proposal.pftl_uniswap_receipt_root.clone() {
         consensus_v2_block_ref_with_commitment_roots(
             &domain,
             block_proposal.block_height,
@@ -377,6 +389,7 @@ pub fn verify_consensus_v2_proposal_matches_block(
         || proposal.block.state_root != block.state_root
         || proposal.block.bridge_exit_root != block.bridge_exit_root
         || proposal.block.pftl_uniswap_receipt_root != block.pftl_uniswap_receipt_root
+        || proposal.block.external_lane_export_root != block.external_lane_export_root
     {
         return Err(invalid_data(
             "consensus v2 proposal does not match ordered block proposal",
@@ -495,6 +508,7 @@ mod tests {
             state_root: "33".repeat(48),
             bridge_exit_root: None,
             pftl_uniswap_receipt_root: None,
+            external_lane_export_root: None,
             receipt_count: 0,
             receipt_ids: Vec::new(),
             fastpay_pre_state_effects: Vec::new(),

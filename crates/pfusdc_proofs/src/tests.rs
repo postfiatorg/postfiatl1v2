@@ -186,6 +186,7 @@ fn signed_block_record(
             state_root: block_ref.state_root.clone(),
             bridge_exit_root,
             pftl_uniswap_receipt_root: None,
+            external_lane_export_root: None,
             receipt_count: receipt_ids.len() as u64,
             certificate_id: "dd".repeat(48),
             certificate: BlockCertificate {
@@ -362,6 +363,7 @@ fn fixture() -> PfUsdcEgressProofWitnessV1 {
             state_root: block_ref.state_root.clone(),
             bridge_exit_root: Some(exit_root),
             pftl_uniswap_receipt_root: None,
+            external_lane_export_root: None,
             receipt_count: 1,
             certificate_id: "dd".repeat(48),
             certificate: BlockCertificate {

@@ -324,6 +324,11 @@ pub struct Genesis {
     /// every existing chain, so their genesis bytes and hash are unchanged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub external_lanes: Option<Vec<GenesisExternalLane>>,
+    /// Height from which every block header carries `external_lane_export_root`
+    /// and `external_lane_export_v1` is applied; governance can set it on a
+    /// running chain. Absent, so existing genesis files and hashes are unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_lane_export_root_activation_height: Option<u64>,
 }
 
 impl Genesis {
@@ -341,6 +346,7 @@ impl Genesis {
             atomic_swap_activation_height: None,
             consensus_v2_activation_height: None,
             external_lanes: None,
+            external_lane_export_root_activation_height: None,
         }
     }
 
@@ -358,6 +364,7 @@ impl Genesis {
             atomic_swap_activation_height: None,
             consensus_v2_activation_height: None,
             external_lanes: None,
+            external_lane_export_root_activation_height: None,
         }
     }
 
@@ -674,6 +681,8 @@ pub struct BlockHeader {
     pub bridge_exit_root: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pftl_uniswap_receipt_root: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_lane_export_root: Option<String>,
     pub receipt_count: u64,
     pub certificate_id: String,
     pub certificate: BlockCertificate,

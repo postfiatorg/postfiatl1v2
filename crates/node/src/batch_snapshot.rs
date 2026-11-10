@@ -94,6 +94,13 @@ pub(super) fn build_block_proposal_from_state<T: Serialize>(
     } else {
         None
     };
+    let external_lane_export_root = external_lane_export_root_for_block(
+        plan.genesis,
+        plan.governance,
+        plan.ledger,
+        plan.receipts,
+        block_height,
+    )?;
     Ok(BlockProposalFile {
         schema: BLOCK_PROPOSAL_FILE_SCHEMA.to_string(),
         chain_id: plan.genesis.chain_id.clone(),
@@ -109,6 +116,7 @@ pub(super) fn build_block_proposal_from_state<T: Serialize>(
         state_root,
         bridge_exit_root,
         pftl_uniswap_receipt_root,
+        external_lane_export_root,
         receipt_count: receipt_ids.len() as u64,
         receipt_ids,
         fastpay_pre_state_effects: plan.fastpay_pre_state_effects,
@@ -140,6 +148,92 @@ pub(super) fn bridge_exit_root_for_block(
     bridge_exit_merkle_root_v1(&leaves)
         .map(Some)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+}
+
+/// The most exports one block carries: the export root's leaf bound. A batch
+/// holds at most `MAX_BATCH_TRANSACTIONS` (1,024) transactions, below it, so
+/// the bound is also a defence in depth. Tests may lower it on their thread.
+pub(crate) fn external_lane_export_block_bound() -> usize {
+    #[cfg(test)]
+    if let Some(bound) = EXTERNAL_LANE_EXPORT_BLOCK_BOUND_FOR_TESTS.with(std::cell::Cell::get) {
+        return bound;
+    }
+    postfiat_types::EXTERNAL_LANE_EXPORT_ROOT_MAX_LEAVES_V1
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static EXTERNAL_LANE_EXPORT_BLOCK_BOUND_FOR_TESTS: std::cell::Cell<Option<usize>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// From the external-lane export-root activation height on, the root over the
+/// export packets this block accepted, in receipt (execution) order across all
+/// lanes; `None` before it, so earlier headers and hashes are unchanged.
+pub(super) fn external_lane_export_root_for_block(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    receipts: &[Receipt],
+    block_height: u64,
+) -> io::Result<Option<String>> {
+    if !postfiat_types::external_lane_export_root_active_at(genesis, governance, block_height) {
+        return Ok(None);
+    }
+    if !consensus_v2_active_at(genesis, block_height) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "external-lane export-root activation requires consensus v2 finality",
+        ));
+    }
+    let packets = external_lane_export_packets_for_block(ledger, receipts, block_height)?;
+    let bound = external_lane_export_block_bound();
+    if packets.len() > bound {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "{}: block {block_height} accepts {} external lane exports, above the bound of {bound}",
+                postfiat_types::EXTERNAL_LANE_EXPORT_ROOT_FULL,
+                packets.len()
+            ),
+        ));
+    }
+    let leaves = packets
+        .iter()
+        .map(|packet| packet.export_root_leaf(&genesis.chain_id))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    postfiat_types::external_lane_export_root_v1(&leaves)
+        .map(Some)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+}
+
+/// The export packets a block accepted, in the order of their receipts.
+pub(crate) fn external_lane_export_packets_for_block(
+    ledger: &LedgerState,
+    receipts: &[Receipt],
+    block_height: u64,
+) -> io::Result<Vec<postfiat_types::ExternalLaneExportPacket>> {
+    let mut packets = Vec::new();
+    for packet in ledger
+        .external_lanes
+        .iter()
+        .flat_map(|lane| lane.exports.iter())
+        .filter(|packet| packet.exported_at_height == block_height)
+    {
+        let index = receipts
+            .iter()
+            .position(|receipt| receipt.tx_id == packet.tx_id && receipt.accepted)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "external lane export has no accepted receipt in its block",
+                )
+            })?;
+        packets.push((index, packet.clone()));
+    }
+    packets.sort_by_key(|(index, _)| *index);
+    Ok(packets.into_iter().map(|(_, packet)| packet).collect())
 }
 
 pub(super) fn bridge_exit_leaves_for_block(

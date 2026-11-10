@@ -206,6 +206,7 @@ nav:
           - Task Node L1 Validator Binding: runbooks/tasknode-l1-validator-binding.md
           - Faucet Testnet Transactions: runbooks/faucet-testnet-transactions.md
           - Ingress Permit Activation: runbooks/ingress-permit-activation.md
+          - External Lane Export Root Activation: runbooks/external-lane-export-root-activation.md
   - Security:
       - Overview: security/index.md
       - Threat Model: security/threat-model.md

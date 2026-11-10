@@ -649,6 +649,10 @@ pub struct AssetExecutionCompatibility {
     /// Which of the two the caller supplied from governance: readable and
     /// settable only inside this crate, through the two builders.
     pub(crate) external_lane_governed: ExternalLaneGovernedInputs,
+    /// Height from which block headers carry the external-lane export root, so
+    /// an accepted export is provable; before it `external_lane_export_v1` is
+    /// refused. `None` refuses every export.
+    pub external_lane_export_root_activation_height: Option<u64>,
 }
 
 /// Which external-lane inputs of an [`AssetExecutionCompatibility`] came
@@ -722,6 +726,7 @@ impl AssetExecutionCompatibility {
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
             external_lane_governed: ExternalLaneGovernedInputs::NONE,
+            external_lane_export_root_activation_height: None,
         }
     }
 
@@ -750,6 +755,7 @@ impl AssetExecutionCompatibility {
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
             external_lane_governed: ExternalLaneGovernedInputs::NONE,
+            external_lane_export_root_activation_height: None,
         }
     }
 
@@ -778,6 +784,7 @@ impl AssetExecutionCompatibility {
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
             external_lane_governed: ExternalLaneGovernedInputs::NONE,
+            external_lane_export_root_activation_height: None,
         }
     }
 
@@ -806,6 +813,7 @@ impl AssetExecutionCompatibility {
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
             external_lane_governed: ExternalLaneGovernedInputs::NONE,
+            external_lane_export_root_activation_height: None,
         }
     }
 
@@ -834,6 +842,7 @@ impl AssetExecutionCompatibility {
             external_lane_release_caps: postfiat_types::ExternalLaneReleaseCaps::genesis(),
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
             external_lane_governed: ExternalLaneGovernedInputs::NONE,
+            external_lane_export_root_activation_height: None,
         }
     }
 
@@ -903,6 +912,19 @@ impl AssetExecutionCompatibility {
     ) -> Self {
         self.atomic_swap_activation_height = atomic_swap_activation_height;
         self
+    }
+
+    pub const fn with_external_lane_export_root_activation_height(
+        mut self,
+        activation_height: Option<u64>,
+    ) -> Self {
+        self.external_lane_export_root_activation_height = activation_height;
+        self
+    }
+
+    pub fn external_lane_export_root_active(&self, block_height: u64) -> bool {
+        self.external_lane_export_root_activation_height
+            .is_some_and(|activation_height| block_height >= activation_height)
     }
 
     pub fn atomic_swap_active(&self, block_height: u64) -> bool {
@@ -3257,6 +3279,7 @@ fn apply_asset_operation(
                 block_height,
                 compatibility.external_lane_release_caps,
                 compatibility.external_lane_governed.caps,
+                compatibility.external_lane_export_root_active(block_height),
             )
         }
     }

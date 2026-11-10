@@ -722,6 +722,7 @@ mod tests {
                 state_root: "state".to_string(),
                 bridge_exit_root: None,
                 pftl_uniswap_receipt_root: None,
+                external_lane_export_root: None,
                 receipt_ids: Vec::new(),
                 fastpay_pre_state_effects: Vec::new(),
             },
