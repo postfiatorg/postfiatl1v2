@@ -17,7 +17,9 @@ use postfiat_types::{
 /// pfUSDC finality-segment check; (ii) the export's block is that block: its
 /// consensus v2 block id, recomputed with the header's export root, is the
 /// finalized id, and its height is the packet's; (iii) the packet's leaf is in
-/// that root at the claimed index under the claimed count; (iv) the lane
+/// that root (the index and count are not unique under one root, since an
+/// odd node pairs with itself and the root does not commit the count; the
+/// index in the public values is advisory); (iv) the lane
 /// policy, from the genesis whose hash the finality domain signed, gives the
 /// route profile hash and asset id; (v) the accepted transaction id is the
 /// packet's `tx_id`, bound by the packet digest inside the leaf, the leaf by
