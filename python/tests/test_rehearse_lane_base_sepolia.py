@@ -163,3 +163,94 @@ class ProgramIdentityTests(unittest.TestCase):
         identity = dry_run.load_program_identity(fork=True, override=dry_run.PROGRAM_INFO, worktree_clean=False,
                                                  head="abc")
         self.assertEqual(identity["program_vkey"][:6], "0x000c")
+
+
+class FakeChain:
+    """Base state after a crash: what a mined transaction left behind."""
+
+    def __init__(self, *, receipts=None, nonces=None, codes=None, allowance=0, next_nonce=0, records=None):
+        self.receipts, self.nonces, self.codes = receipts or {}, nonces or {}, codes or {}
+        self.allowance_value, self.next_nonce_value, self.records = allowance, next_nonce, records or {}
+
+    def receipt(self, transaction):
+        return self.receipts.get(transaction)
+
+    def nonce(self, address, tag):
+        return self.nonces.get((address, tag), self.nonces.get(address, 0))
+
+    def code_hash(self, address):
+        return self.codes.get(address, "0x" + "00" * 32)
+
+    def allowance(self, owner, spender):
+        return self.allowance_value
+
+    def next_nonce(self, lock):
+        return self.next_nonce_value
+
+    def lock_record(self, lock, nonce):
+        return self.records.get(nonce)
+
+
+class RecoveryTests(unittest.TestCase):
+    """Fault injection: the transaction was mined, the stage was not marked complete."""
+
+    SENDER, PREDICTED, CODE = "0x" + "11" * 20, "0x" + "22" * 20, "0xc0de"
+
+    def intent(self, **extra):
+        state = {"completed": [], "data": {}}
+        return state, dry_run.begin_intent(state, stage="deploy", role="verifier", sender=self.SENDER, nonce=0,
+                                           purpose="deploy the verifier", **extra)
+
+    def test_the_intent_is_recorded_once(self):
+        state, first = self.intent()
+        again = dry_run.begin_intent(state, stage="deploy", role="verifier", sender=self.SENDER, nonce=0,
+                                     purpose="deploy the verifier")
+        self.assertIs(first, again)
+        self.assertEqual(len(state["intents"]), 1)
+
+    def test_a_mined_verifier_is_adopted_by_hash_or_by_nonce(self):
+        _, intent = self.intent()
+        chain = FakeChain(nonces={self.SENDER: 1}, codes={self.PREDICTED: self.CODE})
+        self.assertEqual(dry_run.reconcile_deployment(intent, chain, predicted=self.PREDICTED,
+                                                      expected_code=self.CODE), "adopt")
+        intent["hash"] = "0xabc"
+        chain.receipts["0xabc"] = {"status": "0x1", "contractAddress": self.PREDICTED}
+        self.assertEqual(dry_run.reconcile_deployment(intent, chain, predicted=self.PREDICTED,
+                                                      expected_code=self.CODE), "adopt")
+
+    def test_a_mined_lock_deployment_with_other_code_is_refused(self):
+        _, intent = self.intent()
+        chain = FakeChain(nonces={self.SENDER: 1}, codes={self.PREDICTED: "0xother"})
+        with self.assertRaises(dry_run.RehearsalFailure) as caught:
+            dry_run.reconcile_deployment(intent, chain, predicted=self.PREDICTED, expected_code=self.CODE)
+        self.assertIn("plan is dead", str(caught.exception))
+
+    def test_an_unsent_deployment_is_sent_and_a_pending_one_waits(self):
+        _, intent = self.intent()
+        self.assertEqual(dry_run.reconcile_deployment(intent, FakeChain(), predicted=self.PREDICTED,
+                                                      expected_code=self.CODE), "send")
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.reconcile_deployment(intent, FakeChain(nonces={(self.SENDER, "pending"): 1}),
+                                         predicted=self.PREDICTED, expected_code=self.CODE)
+
+    def test_a_mined_approve_is_adopted(self):
+        self.assertEqual(dry_run.reconcile_approve({}, FakeChain(allowance=10), owner="h", spender="l", amount=10),
+                         "adopt")
+        self.assertEqual(dry_run.reconcile_approve({}, FakeChain(allowance=0), owner="h", spender="l", amount=10),
+                         "send")
+
+    def test_a_mined_lock_is_adopted_and_never_sent_twice(self):
+        intent = {"next_nonce_before": 3}
+        chain = FakeChain(next_nonce=4, records={3: ("0xh", 10, "0xr")})
+        self.assertEqual(dry_run.reconcile_lock(intent, chain, lock="l", holder="0xh", amount=10,
+                                                recipient_hash="0xr"), "adopt")
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.reconcile_lock(intent, FakeChain(next_nonce=4, records={3: ("0xother", 10, "0xr")}), lock="l",
+                                   holder="0xh", amount=10, recipient_hash="0xr")
+        self.assertEqual(dry_run.reconcile_lock(intent, FakeChain(next_nonce=3), lock="l", holder="0xh", amount=10,
+                                                recipient_hash="0xr"), "send")
+
+    def test_deploy_needs_the_no_resume_acknowledgement(self):
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.require_no_resume_acknowledged(False)
+        dry_run.require_no_resume_acknowledged(True)

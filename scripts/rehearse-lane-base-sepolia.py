@@ -154,6 +154,110 @@ def load_program_identity(*, fork, override, worktree_clean, head, elf=COMMITTED
             .resolve().is_relative_to(ROOT) else '<override>', 'checked_out_commit': head}
 
 
+# --- recovery: intent before every public transaction, reconciliation on a rerun ---
+
+def begin_intent(state, *, stage, role, sender, nonce, purpose, **extra):
+    """Record the intent of a transaction before it is sent; the same intent on a rerun."""
+    intents = state.setdefault('intents', [])
+    for intent in intents:
+        if (intent['stage'], intent['role']) == (stage, role):
+            return intent
+    intent = {'stage': stage, 'role': role, 'sender': sender, 'nonce': nonce, 'purpose': purpose,
+              'hash': None, 'receipt': None, 'outcome': None, **extra}
+    intents.append(intent)
+    return intent
+
+
+def reconcile_deployment(intent, chain, *, predicted, expected_code):
+    """`adopt` a mined deployment that matches the plan, `send` when nothing was
+    sent at the planned nonce; refuse anything else."""
+    if intent.get('hash'):
+        receipt = chain.receipt(intent['hash'])
+        if receipt is not None:
+            require(int(str(receipt.get('status')), 0) == 1,
+                    f'the {intent["role"]} transaction {intent["hash"]} reverted; its nonce is spent and the plan is dead')
+    if chain.nonce(intent['sender'], 'latest') > intent['nonce']:
+        found = chain.code_hash(predicted)
+        require(found == expected_code,
+                f'the {intent["role"]} deployer\'s nonce {intent["nonce"]} is spent, but {predicted} holds code '
+                f'{found}, not {expected_code}; the plan is dead')
+        return 'adopt'
+    require(chain.nonce(intent['sender'], 'pending') == intent['nonce'],
+            f'a transaction of the {intent["role"]} deployer is pending at the planned nonce; wait for it and rerun')
+    return 'send'
+
+
+def reconcile_approve(intent, chain, *, owner, spender, amount):
+    return 'adopt' if chain.allowance(owner, spender) >= amount else 'send'
+
+
+def reconcile_lock(intent, chain, *, lock, holder, amount, recipient_hash):
+    """A Lock at the recorded `nextNonce` that matches the plan is adopted; one
+    that does not is refused; a second Lock is never sent for one plan."""
+    before = intent['next_nonce_before']
+    if chain.next_nonce(lock) > before:
+        record = chain.lock_record(lock, before)
+        require(record == (holder, amount, recipient_hash),
+                f'Lock nonce {before} on {lock} is {record}, not this plan\'s Lock; refusing to send another')
+        return 'adopt'
+    if intent.get('hash'):
+        receipt = chain.receipt(intent['hash'])
+        require(receipt is None or int(str(receipt.get('status')), 0) != 1,
+                'the Lock transaction succeeded but the lock\'s nextNonce did not move; stop and inspect')
+    return 'send'
+
+
+def require_no_resume_acknowledged(acknowledged):
+    require(acknowledged, 'the PFTL fleet lives in this process from fleet to export and cannot be reopened: a crash '
+                          'after deploy leaves contracts bound to a chain that is gone. Pass '
+                          '--i-accept-no-resume-between-deploy-and-export to go on')
+
+
+LOCKED_TOPIC = '0x' + keccak256(b'Locked(uint64,address,bytes32,bytes,uint64)').hex()
+
+
+class BaseChain:
+    """The reads reconciliation needs, over one JSON-RPC callable."""
+
+    def __init__(self, rpc):
+        self.rpc = rpc
+
+    def receipt(self, transaction):
+        return self.rpc('eth_getTransactionReceipt', [transaction])
+
+    def nonce(self, address, tag):
+        return int(self.rpc('eth_getTransactionCount', [address, tag]), 16)
+
+    def code_hash(self, address):
+        return ORDER.code_hash(self.rpc('eth_getCode', [address, 'latest']))
+
+    def _call(self, to, signature, *args):
+        return self.rpc('eth_call', [{'to': to, 'data': ORDER.call_data(signature, *args)}, 'latest'])
+
+    def allowance(self, owner, spender):
+        return int(self._call(TOKEN, 'allowance(address,address)', owner, spender), 16)
+
+    def next_nonce(self, lock):
+        return int(self._call(lock, 'nextNonce()'), 16)
+
+    def lock_record(self, lock, nonce):
+        data = self._call(lock, 'lockRecord(uint64)', nonce)[2:]
+        return ('0x' + data[24:64], int(data[64:128], 16), '0x' + data[128:192])
+
+    def lock_log(self, lock, nonce, from_block):
+        logs = self.rpc('eth_getLogs', [{'address': lock, 'fromBlock': hex(from_block), 'toBlock': 'latest',
+                                         'topics': [LOCKED_TOPIC, ORDER.abi_word(nonce)]}])
+        require(len(logs) == 1, f'Lock nonce {nonce} has {len(logs)} Locked events')
+        return logs[0]
+
+
+def redact_all(text, secrets):
+    """Keystore names and password-file paths never appear in an error."""
+    for secret in sorted(secrets, key=len, reverse=True):
+        text = text.replace(secret, '<redacted>')
+    return text
+
+
 def load_state(path):
     return json.loads(path.read_text()) if path.exists() else {'completed': [], 'data': {}}
 
@@ -236,9 +340,11 @@ def parser():
     p.add_argument('--node-bin', type=Path, default=ROOT / 'target/debug/postfiat-node')
     p.add_argument('--proof', type=Path, help='a real SP1 proof file for prove-and-release')
     p.add_argument('--mock-sp1-artifact', type=Path, help='refused unless the RPC is a loopback Anvil')
-    for role in ('verifier', 'lock', 'holder'):
+    for role in ('verifier', 'lock', 'holder', 'relayer'):
         p.add_argument(f'--{role}-account')
         p.add_argument(f'--{role}-password-file', type=Path)
+    p.add_argument('--i-accept-no-resume-between-deploy-and-export', action='store_true',
+                   help='deploy goes on knowing the in-process PFTL fleet cannot be reopened after a crash')
     p.add_argument('--verifier-deployer', help='address of the one-time verifier keystore')
     p.add_argument('--lock-deployer', help='address of the one-time lock keystore')
     return p
@@ -272,10 +378,18 @@ def main(argv=None):
     def save():
         state_path.write_text(json.dumps(state, indent=2) + '\n')
 
+    redacted = [str(value) for value in (args.verifier_account, args.lock_account, args.holder_account,
+                                         args.relayer_account, args.verifier_password_file,
+                                         args.lock_password_file, args.holder_password_file,
+                                         args.relayer_password_file) if value]
+
     def command(name, argv, cwd=ROOT, env=None, expected=0):
         with (out / f'{name}.stdout').open('w') as so, (out / f'{name}.stderr').open('w') as se:
-            p = subprocess.run([str(a) for a in argv], cwd=cwd, env=env or environment, stdout=so, stderr=se,
-                               text=True, timeout=3600)
+            try:
+                p = subprocess.run([str(a) for a in argv], cwd=cwd, env=env or environment, stdout=so, stderr=se,
+                                   text=True, timeout=3600)
+            except (subprocess.TimeoutExpired, OSError) as error:
+                raise RehearsalFailure(redact_all(f'{name}: {error}', redacted)) from None
         require(p.returncode == expected, f'{name}: exit {p.returncode}; see {out / (name + ".stderr")}')
         return (out / f'{name}.stdout').read_text()
 
@@ -348,6 +462,27 @@ def main(argv=None):
             if stage in state['completed']:
                 continue
             if stage in DRIVER_STAGES[1:] and 'fleet' in state['completed'] and driver['process'] is None:
+                # Reconcile what a crashed run may have sent, so the record says it, then stop.
+                chain = BaseChain(lambda method, params: rpc(target_url(), method, params))
+                for intent in [i for i in state.get('intents', []) if i['outcome'] in (None, 'sent')]:
+                    try:
+                        if intent['stage'] == 'deploy':
+                            role = intent['role']
+                            verdict = reconcile_deployment(
+                                intent, chain, predicted=data['plan'][role]['predicted'],
+                                expected_code=data['preflight'][f'{role}_runtime_code_hash'])
+                        elif intent['role'] == 'approve':
+                            verdict = reconcile_approve(intent, chain, owner=HOLDER, spender=data['deploy']['lock'],
+                                                        amount=LOCK_AMOUNT)
+                        else:
+                            verdict = reconcile_lock(intent, chain, lock=data['deploy']['lock'], holder=HOLDER,
+                                                     amount=LOCK_AMOUNT, recipient_hash='0x' + keccak256(
+                                                         data['fleet']['recipient'].encode()).hex())
+                        intent['reconciled'] = {'adopt': 'mined and matches the plan',
+                                                'send': 'not mined'}[verdict]
+                    except RehearsalFailure as refusal:
+                        intent['reconciled'] = f'refused: {refusal}'
+                save()
                 raise RehearsalFailure('the fleet driver from an earlier invocation is gone; fleet through export '
                                        'run in one invocation in this version (start a fresh output directory)')
             check_stage(state, stage)
@@ -475,12 +610,27 @@ def main(argv=None):
                     check_deployer_keystores(plan, lambda role: command(f'{role}-keystore-address', [
                         'cast', 'wallet', 'address', *signer_flags(getattr(args, f'{role}_account'),
                                                                    getattr(args, f'{role}_password_file'))]).strip())
-                check_planned_nonces(plan, lambda address, tag: int(
-                    rpc(url, 'eth_getTransactionCount', [address, tag]), 16))
+                require_no_resume_acknowledged(args.i_accept_no_resume_between_deploy_and_export)
                 expected_code = {'verifier': data['preflight']['verifier_runtime_code_hash'],
                                  'lock': data['preflight']['lock_runtime_code_hash']}
+                chain = BaseChain(lambda method, params: rpc(url, method, params))
+                intents, actions = {}, {}
+                for role in ('verifier', 'lock'):
+                    intents[role] = begin_intent(state, stage='deploy', role=role, sender=plan[role]['deployer'],
+                                                 nonce=plan[role]['planned_nonce'],
+                                                 purpose=f'deploy the {role} at {plan[role]["predicted"]}')
+                    save()
+                    actions[role] = reconcile_deployment(intents[role], chain, predicted=plan[role]['predicted'],
+                                                         expected_code=expected_code[role])
+                if all(action == 'send' for action in actions.values()):
+                    check_planned_nonces(plan, chain.nonce)
 
                 def send(role):
+                    intent = intents[role]
+                    if actions[role] == 'adopt':
+                        intent['outcome'] = 'adopted after a rerun'
+                        save()
+                        return plan[role]['predicted'], intent['hash']
                     if role == 'verifier':
                         address, _, tx = deploy(url, 'verifier', ORDER.VERIFIER_CRATE,
                                                 'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1',
@@ -493,6 +643,9 @@ def main(argv=None):
                                                 lock_args(plan['verifier']['predicted'],
                                                           plan['token_runtime_code_hash']),
                                                 plan['lock']['planned_nonce'], args.fork)
+                    intent.update(hash=tx, receipt=rpc(url, 'eth_getTransactionReceipt', [tx]).get('status'),
+                                  outcome='sent')
+                    save()
                     return address, tx
 
                 deployed = deploy_pair(plan, send=send, code_hash=lambda address: code_hash(url, address),
@@ -514,14 +667,41 @@ def main(argv=None):
                     signer = ['--unlocked', '--from', HOLDER]
                 else:
                     signer = signer_flags(args.holder_account, args.holder_password_file)
-                command('approve', ['cast', 'send', TOKEN, 'approve(address,uint256)', lock, str(LOCK_AMOUNT),
-                                    '--rpc-url', url, *signer, '--json'])
-                receipt = json.loads(command('lock', ['cast', 'send', lock, 'lock(uint64,bytes)', str(LOCK_AMOUNT),
-                                                      '0x' + data['fleet']['recipient'].encode().hex(), '--rpc-url',
-                                                      url, *signer, '--json']))
-                require(receipt['status'] == '0x1', 'the Lock failed')
+                chain = BaseChain(lambda method, params: rpc(url, method, params))
+                recipient = data['fleet']['recipient']
+                recipient_hash = '0x' + keccak256(recipient.encode()).hex()
+
+                def send_async(name, argv, intent):
+                    # The hash is recorded as soon as cast prints it, then the receipt.
+                    intent['hash'] = command(name, ['cast', 'send', *argv, '--rpc-url', url, *signer,
+                                                    '--async']).strip().split()[-1]
+                    save()
+                    receipt = json.loads(command(f'{name}-receipt', ['cast', 'receipt', intent['hash'],
+                                                                     '--rpc-url', url, '--json']))
+                    intent.update(receipt=receipt['status'], outcome='sent')
+                    save()
+                    require(receipt['status'] == '0x1', f'the {name} transaction failed')
+                    return receipt
+
+                approve = begin_intent(state, stage='lock', role='approve', sender=HOLDER, nonce=None,
+                                       purpose=f'approve the lock for {LOCK_AMOUNT}')
+                save()
+                if reconcile_approve(approve, chain, owner=HOLDER, spender=lock, amount=LOCK_AMOUNT) == 'send':
+                    send_async('approve', [TOKEN, 'approve(address,uint256)', lock, str(LOCK_AMOUNT)], approve)
+                lock_intent = begin_intent(state, stage='lock', role='lock', sender=HOLDER, nonce=None,
+                                           purpose=f'Lock {LOCK_AMOUNT} to {recipient}',
+                                           next_nonce_before=chain.next_nonce(lock))
+                save()
+                if reconcile_lock(lock_intent, chain, lock=lock, holder=HOLDER, amount=LOCK_AMOUNT,
+                                  recipient_hash=recipient_hash) == 'adopt':
+                    lock_intent['outcome'] = 'adopted after a rerun'
+                    log = chain.lock_log(lock, lock_intent['next_nonce_before'], data['plan']['fork_block'])
+                    receipt = {'transactionHash': log['transactionHash'], 'blockNumber': log['blockNumber']}
+                else:
+                    receipt = send_async('lock', [lock, 'lock(uint64,bytes)', str(LOCK_AMOUNT),
+                                                  '0x' + recipient.encode().hex()], lock_intent)
                 data['lock'] = {'transaction': receipt['transactionHash'], 'block': int(receipt['blockNumber'], 16),
-                                'amount': LOCK_AMOUNT}
+                                'amount': LOCK_AMOUNT, 'lock_nonce': lock_intent['next_nonce_before']}
             elif stage == 'release-on-pftl':
                 if not args.fork:
                     # The first wait: Base finality of the Lock's block (about an hour on 2026-11-06).
