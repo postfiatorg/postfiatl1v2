@@ -283,6 +283,14 @@ The full values, their verifier commitments and an 8453 example with synthetic a
 - From the height they take new versions that add the root: `postfiat.block.v5`, `postfiat.block_proposal.v5`, the `.v5` signature and vote messages, and `postfiat.consensus.block-id.external-lane-export-root.v1`.
 - The proposer computes the root. A validator refuses a commit whose root differs from its own execution, and `verify-blocks` recomputes it from the replayed exports.
 
+**Rollout.** Every node and every validator signer process must run a build that knows the root before the activation height is proposed. An older signer refuses to sign a block that carries the root: its guard does not know the `.v5` vote and proposal messages. The activation height must also be a height at which consensus v2 is active. `init` refuses a genesis that breaks this rule. The governed amendment's lifecycle check does not yet refuse it (still open).
+
+**The empty value.** A block without exports carries the bridge-exit tree's empty value, the same bytes as an empty bridge-exit root. This is harmless: the leaf domain differs from the bridge-exit leaf domain, and the two roots sit in different header fields, each covered by the block id under its own name.
+
+**NAV egress proofs.** `crates/pfusdc_proofs` is unchanged on purpose. A NAV egress proof does not compare the lane export root field by field; it relies on the recomputed block id, which binds the root. The lane's own proof must compare the root explicitly.
+
+**The binding.** The inclusion names the export block's id and height. The proof program must show, in the same witness, that the root is that block's header root and that the block is the checkpoint's finalized block or an ancestor of it. The mapping cannot check this, and its doc comments say so. It refuses a block above the checkpoint, and a block id equal to the finalized block's at another height, or the reverse.
+
 **Refusal before activation.** `external_lane_export_v1` is refused with `external_lane_export_root_not_active` while the root is not active at that height: at mempool admission, at batch building and at execution. In a certified block the ordinary rejected-transaction fee rule applies. An accepted export is therefore always in a header root. `exports_enabled` is unchanged.
 
 **The binding follows the header.** The egress public values take tag 18 from the export block's root, tags 19 and 20 from the leaf, and tag 31 from that block (table above). The checkpoint input carries the export block's height, root and membership proof (`ExternalLaneExportInclusionV1`), not the lane's hash-chain root.
