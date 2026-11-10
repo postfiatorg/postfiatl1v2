@@ -547,61 +547,15 @@ fn admit_signed_asset_transaction_to_mempool(
         ));
     }
     let mut dry_run_ledger = ledger.clone();
-    for pending in &mempool.pending {
-        let pending_receipt = execute_transfer_with_compatibility(
-            &genesis,
-            &mut dry_run_ledger,
-            &pending.transfer,
-            block_height,
-            asset_execution_compatibility,
-        );
-        if !pending_receipt.accepted {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "mempool admission blocked by stale pending `{}`: {}",
-                    pending.tx_id, pending_receipt.message
-                ),
-            ));
-        }
-    }
-    for pending in &mempool.pending_payment_v2 {
-        let pending_receipt = execute_payment_v2_with_compatibility(
-            &genesis,
-            &mut dry_run_ledger,
-            &pending.payment,
-            block_height,
-            asset_execution_compatibility,
-        );
-        if !pending_receipt.accepted {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "mempool admission blocked by stale pending `{}`: {}",
-                    pending.tx_id, pending_receipt.message
-                ),
-            ));
-        }
-    }
-    for pending in &mempool.pending_asset_transactions {
-        let pending_receipt = execute_asset_transaction_with_compatibility_and_orchard(
-            &genesis,
-            &mut dry_run_ledger,
-            &pending.transaction,
-            block_height,
-            asset_execution_compatibility,
-            orchard_balances,
-        );
-        if !pending_receipt.accepted {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "mempool admission blocked by stale pending `{}`: {}",
-                    pending.tx_id, pending_receipt.message
-                ),
-            ));
-        }
-    }
+    apply_pending_before_new_asset_transaction(
+        &genesis,
+        &mut dry_run_ledger,
+        &mempool,
+        block_height,
+        asset_execution_compatibility,
+        orchard_balances,
+        "mempool admission",
+    )?;
     let dry_run_receipt = execute_asset_transaction_with_compatibility_and_orchard(
         &genesis,
         &mut dry_run_ledger,
@@ -1329,6 +1283,53 @@ pub(super) fn apply_pending_before_new_transfer(
             asset_execution_compatibility,
             context,
         )?;
+    }
+    Ok(())
+}
+
+/// Runs on `ledger` the pending entries asset admission executes before a
+/// new asset transaction: the pending plain transfers, the pending
+/// `payment_v2` entries, then the pending asset transactions. The later
+/// families (atomic swaps, FastLane primary, escrow, NFT, offers) execute
+/// after the new transaction and are not run. Admission and the export check
+/// of `asset_fee_quote` share it, so the quote checks an export on the ledger
+/// admission executes it on.
+pub(super) fn apply_pending_before_new_asset_transaction(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    mempool: &MempoolState,
+    block_height: u64,
+    asset_execution_compatibility: AssetExecutionCompatibility,
+    orchard_balances: &[AssetOrchardAssetBalance],
+    context: &str,
+) -> io::Result<()> {
+    apply_pending_before_new_transfer(
+        genesis,
+        ledger,
+        mempool,
+        block_height,
+        asset_execution_compatibility,
+        PendingPrefix::PaymentV2,
+        context,
+    )?;
+    for pending in &mempool.pending_asset_transactions {
+        let pending_receipt = execute_asset_transaction_with_compatibility_and_orchard(
+            genesis,
+            ledger,
+            &pending.transaction,
+            block_height,
+            asset_execution_compatibility,
+            orchard_balances,
+        );
+        if !pending_receipt.accepted {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "{context} blocked by stale pending `{}`: {}",
+                    pending.tx_id, pending_receipt.message
+                ),
+            ));
+        }
     }
     Ok(())
 }

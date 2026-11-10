@@ -1665,13 +1665,38 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
     };
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
-    let quote_ledger = ledger_after_executable_mempool(
-        &genesis,
-        ledger,
-        &mempool,
-        block_height,
-        asset_execution_compatibility,
-    )?;
+    // An export is quoted and checked on the ledger asset admission executes
+    // it on (`apply_pending_before_new_asset_transaction`); every other kind
+    // keeps the ledger after the executable mempool.
+    let quote_ledger = if matches!(
+        operation,
+        AssetTransactionOperation::ExternalLaneExportV1(_)
+    ) {
+        let shielded = store.read_shielded()?;
+        let orchard_balances = shielded
+            .orchard
+            .as_ref()
+            .map_or(&[][..], |pool| pool.asset_orchard_balances.as_slice());
+        let mut export_ledger = ledger;
+        apply_pending_before_new_asset_transaction(
+            &genesis,
+            &mut export_ledger,
+            &mempool,
+            block_height,
+            asset_execution_compatibility,
+            orchard_balances,
+            "asset fee quote",
+        )?;
+        export_ledger
+    } else {
+        ledger_after_executable_mempool(
+            &genesis,
+            ledger,
+            &mempool,
+            block_height,
+            asset_execution_compatibility,
+        )?
+    };
     let sender = quote_ledger.account(&options.source).ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::NotFound,
@@ -1763,7 +1788,7 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
 }
 
 /// For `external_lane_export_above_released`: the amount against released
-/// and exported on the ledger after the executable mempool.
+/// and exported on the ledger asset admission executes the export on.
 fn export_above_released_message(
     quote_ledger: &LedgerState,
     export: &postfiat_types::ExternalLaneExportOperationV1,
@@ -1777,7 +1802,7 @@ fn export_above_released_message(
         .iter()
         .find(|state| state.lane_id == export.lane_id)?;
     Some(format!(
-        "{} atoms is above what external lane `{}` can take back after the executable mempool (pending releases and exports included): released {} minus exported {} is {}",
+        "{} atoms is above what external lane `{}` can take back after the pending transfers, payment_v2 entries and asset transactions (pending releases and exports included): released {} minus exported {} is {}",
         export.amount_atoms,
         export.lane_id,
         state.released_atoms,

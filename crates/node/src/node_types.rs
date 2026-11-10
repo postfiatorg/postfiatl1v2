@@ -2830,8 +2830,9 @@ pub struct AssetFeeQuoteReport {
     pub sender_meets_reserve_after_fee: bool,
     pub operation: AssetTransactionOperation,
     /// For `external_lane_export_v1`: the refusal execution returns for the
-    /// export on the ledger after the executable mempool, the state
-    /// admission checks against. Absent when the export would apply.
+    /// export on the ledger asset admission executes it on (the pending
+    /// plain transfers, `payment_v2` entries and asset transactions; later
+    /// families excluded). Absent when the export would apply.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub export_refusal: Option<AssetOperationRefusal>,
 }

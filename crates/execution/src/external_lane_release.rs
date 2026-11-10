@@ -329,8 +329,9 @@ pub(crate) fn apply_external_lane_export(
 /// and without writing: on a copy, the fee is taken off the source as
 /// execution takes it before the operation, then
 /// `apply_external_lane_export_with_caps` runs with `compatibility`'s caps.
-/// Run on the ledger after the executable mempool (the dry run admission
-/// and the fee quote use), it returns the refusal admission would return for
+/// Run on the ledger asset admission executes a new asset transaction on
+/// (the pending plain transfers, `payment_v2` entries and asset transactions;
+/// `asset_fee_quote` uses that ledger for an export), it returns the refusal admission would return for
 /// the signed transaction, so a caller can refuse before anything is signed.
 pub fn dry_run_external_lane_export(
     genesis: &Genesis,

@@ -340,10 +340,10 @@ use lifecycle_queries::{
 };
 mod mempool_proposals;
 use mempool_proposals::{
-    admission_base_ledger, apply_pending_before_new_transfer,
-    build_ordered_batch_proposal_with_timings, ledger_after_executable_mempool,
-    mempool_pending_count_for_sender, normalize_block_proposal_batch_kind, proposed_ordered_state,
-    PendingPrefix,
+    admission_base_ledger, apply_pending_before_new_asset_transaction,
+    apply_pending_before_new_transfer, build_ordered_batch_proposal_with_timings,
+    ledger_after_executable_mempool, mempool_pending_count_for_sender,
+    normalize_block_proposal_batch_kind, proposed_ordered_state, PendingPrefix,
 };
 pub use mempool_proposals::{
     admit_fastlane_primary_to_mempool, create_mempool_batch, create_signed_asset_transaction_batch,

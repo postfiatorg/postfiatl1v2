@@ -747,20 +747,96 @@ fn external_lane_export_command_refuses_the_token_as_recipient_before_signing() 
 #[test]
 fn external_lane_export_command_refuses_a_balance_short_of_amount_fee_and_reserve_before_signing() {
     let chain = released_export_chain("export-command-balance", ACCOUNT_RESERVE + 1_000);
-    let key_pair = ml_dsa_65_keygen_from_seed(&[0x99; 32]);
-    let key_file = chain.data_dir.join("recipient-key.json");
-    write_key_file(
-        &key_file,
-        &DevKeyFile {
-            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
-            address: address_from_public_key(&key_pair.public_key),
-            public_key_hex: bytes_to_hex(&key_pair.public_key),
-            private_key_hex: bytes_to_hex(&key_pair.private_key),
-        },
-    )
-    .expect("recipient key");
+    let key_file = release_recipient_key_file(&chain);
     let error = command_refused_before_signing(&chain, key_file, "base-erc20", 1_000, &base_recipient(), "insufficient_funds");
     assert!(error.contains("cannot cover the amount 1000"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// The key of the release recipient (`chain.recipient`), written to a file.
+fn release_recipient_key_file(chain: &Chain) -> PathBuf {
+    let key_file = chain.data_dir.join("recipient-key.json");
+    write_key_file(&key_file, &release_recipient_key(chain)).expect("recipient key");
+    key_file
+}
+
+fn release_recipient_key(chain: &Chain) -> DevKeyFile {
+    let key_pair = ml_dsa_65_keygen_from_seed(&[0x99; 32]);
+    let key = DevKeyFile {
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        address: address_from_public_key(&key_pair.public_key),
+        public_key_hex: bytes_to_hex(&key_pair.public_key),
+        private_key_hex: bytes_to_hex(&key_pair.private_key),
+    };
+    assert_eq!(key.address, chain.recipient);
+    key
+}
+
+/// Submits `operation` signed by `signer` at its next ledger sequence.
+fn submit_escrow_tx(chain: &Chain, signer: &DevKeyFile, operation: EscrowTransactionOperation, kind: &str) {
+    let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
+    let sequence = ledger.account(&signer.address).expect("signer").sequence + 1;
+    let signed = signed_escrow_transaction_for_test(
+        &chain.genesis,
+        &ledger,
+        &signer.address,
+        &signer.public_key_hex,
+        &signer.private_key_hex,
+        kind,
+        sequence,
+        operation,
+    );
+    submit_signed_escrow_transaction_json_to_mempool(SignedEscrowTransactionJsonSubmitOptions {
+        data_dir: chain.data_dir.clone(),
+        signed_escrow_transaction_json: serde_json::to_string(&signed).expect("escrow json"),
+    })
+    .expect("escrow admitted");
+}
+
+/// A pending entry of a family admission runs after a new asset transaction
+/// does not count before signing: the exporter's pending escrow finish that
+/// would credit it does not make an export that fits only with the credit
+/// pass, since admission executes the export on the ledger before the finish. Once the finish is
+/// committed the same export is signed and admitted.
+#[test]
+fn external_lane_export_command_does_not_count_a_later_family_credit_before_signing() {
+    let released = ACCOUNT_RESERVE + 1_000;
+    let chain = released_export_chain("export-command-later-credit", released);
+    let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    let escrow_amount = 10_000;
+    let create = EscrowTransactionOperation::EscrowCreate(EscrowCreateOperation {
+        owner: faucet.address.clone(),
+        recipient: chain.recipient.clone(),
+        asset_id: postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+        amount: escrow_amount,
+        condition: "later-credit".to_string(),
+        finish_after: 0,
+        cancel_after: 50,
+    });
+    let faucet_key = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    submit_escrow_tx(&chain, &faucet_key, create, ESCROW_CREATE_TRANSACTION_KIND);
+    assert!(apply_mempool(&chain, "later-credit-create").accepted);
+    let escrow_id = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger").escrows[0]
+        .escrow_id
+        .clone();
+    let finish = EscrowTransactionOperation::EscrowFinish(EscrowFinishOperation {
+        escrow_id,
+        owner: faucet.address.clone(),
+        recipient: chain.recipient.clone(),
+        fulfillment: "later-credit".to_string(),
+    });
+    // The exporter finishes the escrow to itself: a pending credit in a
+    // family that runs after asset transactions.
+    submit_escrow_tx(&chain, &release_recipient_key(&chain), finish, ESCROW_FINISH_TRANSACTION_KIND);
+
+    let key_file = release_recipient_key_file(&chain);
+    command_refused_before_signing(&chain, key_file.clone(), "base-erc20", 1_000, &base_recipient(), "insufficient_funds");
+
+    assert!(apply_mempool(&chain, "later-credit-finish").accepted);
+    let report = export_command_with_key(&chain, key_file, "base-erc20", 1_000, &base_recipient(), false)
+        .expect("fits once the finish is committed");
+    let receipt = apply_mempool(&chain, "later-credit-export");
+    assert!(receipt.accepted && receipt.tx_id == report.tx_id, "{receipt:?}");
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
@@ -839,7 +915,7 @@ fn external_lane_export_command_counts_a_pending_release_before_signing() {
     let left = released - 500;
     assert!(
         error.contains(&format!("released {} minus exported {amount} is {left}", 2 * released))
-            && error.contains("after the executable mempool"),
+            && error.contains("payment_v2 entries and asset transactions (pending releases and exports included)"),
         "{error}"
     );
     let batch_file = chain.data_dir.join("pending-release.batch.json");

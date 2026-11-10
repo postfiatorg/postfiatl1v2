@@ -95,7 +95,8 @@ pub fn parse_export_amount_atoms(text: &str) -> Result<u64, String> {
 
 /// Checks the export against the lane and the sender's balance, then signs
 /// it and, unless `dry_run`, submits it. Every refusal is returned before the
-/// key signs anything, against the ledger after the executable pending
+/// key signs anything, against the ledger asset admission executes the export
+/// on: the pending plain transfers, `payment_v2` entries and asset
 /// transactions (`asset_fee_quote`'s `export_refusal`). A transaction another
 /// submitter gets admitted between that check and the submission can still
 /// make admission refuse this one; a refused admission charges no fee.
@@ -195,9 +196,10 @@ pub fn external_lane_export(
             ),
         ));
     }
-    // The lane rules on the ledger after the executable mempool, by
-    // execution's own export path: pending exports count as admission
-    // counts them.
+    // The lane rules on the ledger asset admission executes the export on
+    // (pending transfers, payment_v2 entries and asset transactions), by
+    // execution's own export path: pending releases and exports count as
+    // admission counts them; later families do not.
     if let Some(refusal) = &quote.export_refusal {
         return Err(refused(&refusal.code, refusal.message.clone()));
     }

@@ -1524,8 +1524,9 @@ def external_lane_export(
     """Export native PFT to Base on a genesis external lane, as
     `external-lane-export`: the lane checks from `external_lane_info`, the fee
     quote, then the balance (amount + minimum fee + account reserve) and the
-    quote's `export_refusal` (execution's export rules on the ledger after the
-    node's pending transactions), and only then sign and submit. Every refusal
+    quote's `export_refusal` (execution's export rules on the ledger asset
+    admission executes the export on: the pending transfers, payment_v2 entries
+    and asset transactions), and only then sign and submit. Every refusal
     raises `ValueError("refused before signing: CODE: ...")` before the signer
     runs. A transaction admitted between the quote and the submission can
     still make admission refuse this one (raised by the submit call, no fee).
