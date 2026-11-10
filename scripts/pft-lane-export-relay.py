@@ -318,6 +318,27 @@ def mock_code_hash(args):
     return artifact_code_hash(json.loads(Path(args.mock_sp1_artifact).read_text()))
 
 
+def release_result(receipt, lock, values, *, balance_before, balance_after):
+    """The result of a sent release: the `Released` event the expected lock
+    emitted in a successful receipt, with the recipient, amount and the three
+    commitments of these public values. The recipient's balance change only
+    corroborates it: an unrelated transfer between the two reads, or a
+    recipient equal to the lock, moves it, so a difference is a warning."""
+    require(receipt.get('status') in ('0x1', 1), f'release transaction failed: {receipt.get("status")}')
+    released = decode_released(receipt, lock)
+    expected = {'withdrawal_id_commitment': commitment(values['withdrawal_id']),
+                'burn_tx_id_commitment': commitment(values['burn_tx_id']),
+                'packet_digest': word_hex(values['withdrawal_packet_digest']),
+                'recipient': values['recipient'].lower(), 'amount': values['amount_atoms']}
+    for field, want in expected.items():
+        require(str(released[field]).lower() == str(want).lower(), f'Released names another {field}')
+    delta = balance_after - balance_before
+    warnings = [] if delta == values['amount_atoms'] else [
+        f'the recipient balance moved by {delta}, not {values["amount_atoms"]}; the Released event is the result']
+    return {'released': released, 'recipient_balance_before': balance_before, 'recipient_balance_after': balance_after,
+            'recipient_balance_delta': delta, 'warnings': warnings}
+
+
 def load_values(input_dir):
     document = json.loads((Path(input_dir) / 'expected-public-values.json').read_text())
     return document['expected_public_values'], document['expected_public_values_hex']
@@ -443,18 +464,13 @@ def cmd_release(args):
         print(json.dumps(result, indent=2))
         raise RelayRefusal('release reverted on chain')
     receipt = json.loads(p.stdout)
-    require(receipt.get('status') in ('0x1', 1), f'release transaction failed: {receipt.get("status")}')
-    released = decode_released(receipt, args.lock)
     balance_after = as_int(rpc.call(reads['lock.token'], 'balanceOf(address)', recipient))
-    require(released['packet_digest'].lower() == word_hex(values['withdrawal_packet_digest']),
-            'Released names another packet digest')
-    require(released['recipient'] == recipient.lower() and released['amount'] == values['amount_atoms'],
-            'Released names another recipient or amount')
-    require(balance_after - balance_before == values['amount_atoms'],
-            f'the recipient balance moved by {balance_after - balance_before}, not {values["amount_atoms"]}')
+    result.update(release_result(receipt, args.lock, values, balance_before=balance_before,
+                                 balance_after=balance_after))
     result.update(transaction=receipt['transactionHash'], block=int(str(receipt['blockNumber']), 0),
-                  released=released, recipient_balance_before=balance_before, recipient_balance_after=balance_after,
                   lock_total_released_after=as_int(rpc.call(args.lock, 'totalReleased()')))
+    for warning in result['warnings']:
+        print(f'pft-lane-export-relay: warning: {warning}', file=sys.stderr)
     print(json.dumps(result, indent=2))
     return result
 

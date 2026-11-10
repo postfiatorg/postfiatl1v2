@@ -44,6 +44,7 @@ VALUES = {
     "token_address": TOKEN,
     "token_runtime_code_hash": "aa" * 32,
     "proof_program_version": 1,
+    "burn_tx_id": h48("67"),
     "withdrawal_finalized_height": 4,
     "finalized_block_height": 4,
 }
@@ -262,6 +263,30 @@ class MoreRefusalTests(unittest.TestCase):
         self.assertEqual(refusals(expected={"program_vkey": "0x" + "0b" * 32, "sp1_verifier": SP1}), [])
         self.assertIn("wrong_program_vkey", refusals(expected={"program_vkey": "0x" + "0c" * 32}))
         self.assertIn("wrong_sp1_verifier", refusals(expected={"sp1_verifier": "0x" + "00" * 20}))
+
+
+class ReleaseResultTests(unittest.TestCase):
+    def receipt(self, amount=400_000, status="0x1", address=LOCK):
+        topics = [relay.RELEASED_TOPIC, relay.commitment(VALUES["withdrawal_id"]), relay.commitment(VALUES["burn_tx_id"]),
+                  word(VALUES["withdrawal_packet_digest"])]
+        data = "0x" + RECIPIENT[2:].rjust(64, "0") + f"{amount:064x}"
+        return {"status": status, "logs": [{"address": address, "topics": topics, "data": data}]}
+
+    def test_the_event_is_the_result_and_a_balance_mismatch_only_warns(self):
+        result = relay.release_result(self.receipt(), LOCK, VALUES, balance_before=0, balance_after=400_000)
+        self.assertEqual(result["warnings"], [])
+        # An unrelated transfer between the two reads: still released, with a warning.
+        result = relay.release_result(self.receipt(), LOCK, VALUES, balance_before=0, balance_after=400_007)
+        self.assertEqual(result["released"]["amount"], 400_000)
+        self.assertEqual(len(result["warnings"]), 1)
+
+    def test_a_wrong_event_or_failed_receipt_is_refused(self):
+        with self.assertRaises(relay.RelayRefusal):
+            relay.release_result(self.receipt(amount=1), LOCK, VALUES, balance_before=0, balance_after=1)
+        with self.assertRaises(relay.RelayRefusal):
+            relay.release_result(self.receipt(status="0x0"), LOCK, VALUES, balance_before=0, balance_after=0)
+        with self.assertRaises(relay.RelayRefusal):
+            relay.release_result(self.receipt(address=TOKEN), LOCK, VALUES, balance_before=0, balance_after=400_000)
 
 
 if __name__ == "__main__":

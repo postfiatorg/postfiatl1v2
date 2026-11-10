@@ -344,7 +344,7 @@ A `Genesis` has no account field (`crates/types/src/core_chain.rs:303`). Funded 
 - `advance-checkpoint` runs the Checkpoint variant through the same steps (`pfusdc-checkpoint-witness`, execute, `advanceCheckpoint`). Use it when the verifier's checkpoint is too far behind for a bounded proof. It was not run in the rehearsal.
 - `status` reports one packet: exported, final, proven, released, and the Base transaction.
 
-**Release checks.** `release` it checks, before sending, these reverts:
+**Release checks.** Before sending, `release` checks these reverts:
 
 - **Sizes:** a proof or public values that are empty or larger than `maxProofBytes` or `maxPublicValuesBytes`, including an empty proof from an external prover.
 - **Program version** other than 1.

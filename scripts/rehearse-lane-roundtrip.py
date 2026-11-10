@@ -416,6 +416,7 @@ def main(argv=None):
             sent = json.loads(command(f'relay-{index}-release', release_argv))
             base = base_state(token, lock)
             require(call_int(token, 'balanceOf(address)', base_recipient) == amount, 'the Base recipient was not paid')
+            require(not sent['warnings'], f'the relay warned: {sent["warnings"]}')
             require(sent['released']['packet_digest'] == RELAY.word_hex(values['withdrawal_packet_digest']),
                     'Released names another packet digest')
             check_cross_chain(applied['lane'], base)
