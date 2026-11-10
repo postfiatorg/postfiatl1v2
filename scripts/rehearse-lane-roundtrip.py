@@ -291,8 +291,10 @@ def main(argv=None):
         config = {'rpc': url, 'handshake_dir': str(hand), 'lock': predicted_lock, 'lock_code_hash': lock_code_hash,
                   'token': token, 'token_code_hash': token_code_hash}
         (out / 'driver-config.json').write_text(json.dumps(config, indent=2))
+        # The generated chain lives under the output directory, never in the system temp directory.
+        (out / 'tmp').mkdir(mode=0o700)
         driver_env = dict(environment, POSTFIAT_LANE_ROUNDTRIP=str(out / 'driver-config.json'),
-                          CARGO_TARGET_DIR=str(ROOT / 'target'))
+                          CARGO_TARGET_DIR=str(ROOT / 'target'), TMPDIR=str(out / 'tmp'))
         driver_out = (out / 'pftl-driver.stdout').open('w')
         driver = subprocess.Popen(['cargo', 'test', '--locked', '-p', 'postfiat-node', '--lib', 'local_evm_lane_roundtrip',
                                    '--', '--ignored', '--nocapture'], cwd=ROOT, env=driver_env, stdout=driver_out,

@@ -122,6 +122,10 @@ fn local_evm_lane_roundtrip() {
         .unwrap(),
     )
     .unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&key_file, fs::Permissions::from_mode(0o600)).expect("key file mode");
+    }
     roundtrip_write(
         &dir,
         "pftl-ready.json",
