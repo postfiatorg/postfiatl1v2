@@ -35,8 +35,47 @@ pub struct ExternalLaneRouteProfileV1 {
 }
 
 impl ExternalLaneRouteProfileV1 {
-    pub fn canonical_preimage(&self) -> String {
-        format!(
+    /// The shapes the preimage relies on: the schema, the lane id, a 48-byte
+    /// asset id, a Base chain id, lower-case `0x` addresses and code hashes,
+    /// and a nonzero epoch.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema != EXTERNAL_LANE_ROUTE_PROFILE_SCHEMA_V1 {
+            return Err("external lane route profile schema mismatch".to_string());
+        }
+        validate_external_lane_id(&self.route_id)?;
+        validate_lower_hex_len("external_lane_route_profile.asset_id", &self.asset_id, 96)?;
+        if !EXTERNAL_LANE_SOURCE_CHAIN_IDS.contains(&self.source_chain_id) {
+            return Err("external lane route profile source chain id is not Base".to_string());
+        }
+        validate_lane_hex(
+            "vault_address",
+            &self.vault_address,
+            EXTERNAL_LANE_EVM_ADDRESS_HEX_LEN,
+        )?;
+        validate_lane_hex(
+            "token_address",
+            &self.token_address,
+            EXTERNAL_LANE_EVM_ADDRESS_HEX_LEN,
+        )?;
+        validate_lane_hex(
+            "vault_runtime_code_hash",
+            &self.vault_runtime_code_hash,
+            EXTERNAL_LANE_CODE_HASH_HEX_LEN,
+        )?;
+        validate_lane_hex(
+            "token_runtime_code_hash",
+            &self.token_runtime_code_hash,
+            EXTERNAL_LANE_CODE_HASH_HEX_LEN,
+        )?;
+        if self.route_epoch == 0 {
+            return Err("external lane route profile route_epoch must be nonzero".to_string());
+        }
+        Ok(())
+    }
+
+    pub fn canonical_preimage(&self) -> Result<String, String> {
+        self.validate()?;
+        Ok(format!(
             "schema={}\nroute_id={}\nasset_id={}\nsource_chain_id={}\nvault_address={}\nvault_runtime_code_hash={}\ntoken_address={}\ntoken_runtime_code_hash={}\nroute_epoch={}\n",
             self.schema,
             self.route_id,
@@ -47,16 +86,16 @@ impl ExternalLaneRouteProfileV1 {
             self.token_address,
             self.token_runtime_code_hash,
             self.route_epoch,
-        )
+        ))
     }
 
     /// SHA3-384 over the domain tag, a zero byte and the preimage: 48 bytes,
-    /// as `VaultBridgeRouteProfileV1::profile_hash`.
-    pub fn profile_hash(&self) -> String {
-        hash_hex_domain(
+    /// as `VaultBridgeRouteProfileV1::profile_hash`. Validates first.
+    pub fn profile_hash(&self) -> Result<String, String> {
+        Ok(hash_hex_domain(
             EXTERNAL_LANE_ROUTE_PROFILE_HASH_DOMAIN_V1,
-            self.canonical_preimage().as_bytes(),
-        )
+            self.canonical_preimage()?.as_bytes(),
+        ))
     }
 }
 
@@ -179,7 +218,7 @@ pub fn external_lane_export_egress_public_values(
         pftl_chain_id: chain_id.to_string(),
         pftl_genesis_hash: checkpoint.pftl_genesis_hash.clone(),
         pftl_protocol_version: checkpoint.pftl_protocol_version,
-        route_profile_hash: route.profile_hash(),
+        route_profile_hash: route.profile_hash()?,
         route_epoch,
         prior_checkpoint_block_id: checkpoint.prior_checkpoint_block_id.clone(),
         resulting_checkpoint_block_id: checkpoint.finalized_block_id.clone(),

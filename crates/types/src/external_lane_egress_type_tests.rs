@@ -40,17 +40,20 @@ fn external_lane_route_profile_and_asset_id_match_the_shared_vectors() {
         assert_eq!(asset_id, vector["asset_id"]);
         assert_eq!(profile.asset_id, asset_id);
         assert_eq!(
-            profile.canonical_preimage(),
+            profile.canonical_preimage().expect("preimage"),
             vector["route_profile_preimage"]
         );
-        assert_eq!(profile.profile_hash(), vector["route_profile_hash"]);
+        assert_eq!(
+            profile.profile_hash().expect("hash"),
+            vector["route_profile_hash"]
+        );
         assert_eq!(u64::from(profile.route_epoch), vector["route_epoch"]);
         assert_eq!(
             keccak_commitment_hex(&asset_id),
             vector["verifier_asset_id_commitment"]
         );
         assert_eq!(
-            keccak_commitment_hex(&profile.profile_hash()),
+            keccak_commitment_hex(&profile.profile_hash().expect("hash")),
             vector["verifier_route_profile_hash_commitment"]
         );
     }
@@ -68,13 +71,38 @@ fn external_lane_route_profile_and_asset_id_match_the_shared_vectors() {
 }
 
 #[test]
+fn external_lane_route_profile_validates_before_hashing() {
+    let lane = sample_external_lane("base-erc20", 1_000);
+    let profile = lane.route_profile("postfiat-local").expect("profile");
+    profile.validate().expect("valid");
+    let changes: [fn(&mut ExternalLaneRouteProfileV1); 8] = [
+        |profile| profile.schema = "postfiat.vault_bridge.route_profile.v1".to_string(),
+        |profile| profile.route_id = "Base".to_string(),
+        |profile| profile.asset_id = "ab".repeat(32),
+        |profile| profile.source_chain_id = 1,
+        |profile| profile.vault_address = "0x1A".repeat(10),
+        |profile| profile.token_address = format!("0x{}", "2b".repeat(19)),
+        |profile| profile.vault_runtime_code_hash = "4d".repeat(32),
+        |profile| profile.route_epoch = 0,
+    ];
+    for (index, change) in changes.iter().enumerate() {
+        let mut changed = profile.clone();
+        change(&mut changed);
+        assert!(changed.validate().is_err(), "change {index}");
+        assert!(changed.profile_hash().is_err(), "change {index}");
+        assert!(changed.canonical_preimage().is_err(), "change {index}");
+    }
+}
+
+#[test]
 fn external_lane_route_profile_and_asset_id_bind_each_genesis_field() {
     let lane = sample_external_lane("base-erc20", 1_000);
     let asset_id = lane.pft_asset_id("postfiat-local").expect("asset id");
     let hash = lane
         .route_profile("postfiat-local")
         .expect("profile")
-        .profile_hash();
+        .profile_hash()
+        .expect("hash");
     let changes: [fn(&mut GenesisExternalLane); 6] = [
         |lane| lane.id = "base-erc21".to_string(),
         |lane| lane.policy.chain_id = EXTERNAL_LANE_BASE_SEPOLIA_CHAIN_ID,
@@ -87,7 +115,11 @@ fn external_lane_route_profile_and_asset_id_bind_each_genesis_field() {
         let mut changed = lane.clone();
         change(&mut changed);
         let profile = changed.route_profile("postfiat-local").expect("profile");
-        assert_ne!(profile.profile_hash(), hash, "change {index}");
+        assert_ne!(
+            profile.profile_hash().expect("hash"),
+            hash,
+            "change {index}"
+        );
         // The code hashes are route fields, not asset fields.
         assert_eq!(profile.asset_id == asset_id, index >= 4, "change {index}");
     }
@@ -102,7 +134,8 @@ fn external_lane_route_profile_and_asset_id_bind_each_genesis_field() {
     assert_eq!(
         caps.route_profile("postfiat-local")
             .expect("profile")
-            .profile_hash(),
+            .profile_hash()
+            .expect("hash"),
         hash
     );
     assert!(lane.pft_asset_id("bad\nchain").is_err());
@@ -159,7 +192,10 @@ fn external_lane_export_maps_to_every_egress_public_value() {
     assert_eq!(values.schema, PFUSDC_EGRESS_PUBLIC_VALUES_SCHEMA_V1);
     assert_eq!(values.proof_program_version, 1);
     assert_eq!(values.pftl_chain_id, chain_id);
-    assert_eq!(values.route_profile_hash, route.profile_hash());
+    assert_eq!(
+        values.route_profile_hash,
+        route.profile_hash().expect("hash")
+    );
     assert_eq!(values.route_epoch, 1);
     assert_eq!(
         values.asset_id,
