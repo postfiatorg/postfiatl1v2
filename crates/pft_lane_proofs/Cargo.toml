@@ -1,0 +1,20 @@
+[package]
+name = "postfiat-pft-lane-proofs"
+version = "0.1.0"
+description = "Pure external-lane export proof statement verification"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+mldsa-guest-acceleration = ["postfiat-pfusdc-proofs/mldsa-guest-acceleration"]
+mldsa-cycle-tracking = ["postfiat-pfusdc-proofs/mldsa-cycle-tracking"]
+
+[dependencies]
+postfiat-ordering-fast = { path = "../ordering_fast" }
+postfiat-pfusdc-proofs = { path = "../pfusdc_proofs" }
+postfiat-types = { path = "../types" }

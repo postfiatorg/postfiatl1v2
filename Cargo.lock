@@ -3212,6 +3212,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "postfiat-pft-lane-proofs"
+version = "0.1.0"
+dependencies = [
+ "postfiat-ordering-fast",
+ "postfiat-pfusdc-proofs",
+ "postfiat-types",
+]
+
+[[package]]
 name = "postfiat-pftl-uniswap-proofs"
 version = "0.1.0"
 dependencies = [
