@@ -769,3 +769,106 @@ fn external_lane_exports_past_the_block_bound_wait_for_the_next_block() {
     EXTERNAL_LANE_EXPORT_BLOCK_BOUND_FOR_TESTS.with(|cell| cell.set(None));
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
+
+/// Every consensus v2 block reference in a certificate file, edited by `edit`.
+fn edit_certificate_blocks(certificate_file: &Path, label: &str, edit: impl Fn(&mut serde_json::Map<String, serde_json::Value>)) -> PathBuf {
+    fn walk(value: &mut serde_json::Value, edit: &dyn Fn(&mut serde_json::Map<String, serde_json::Value>)) {
+        match value {
+            serde_json::Value::Object(map) => {
+                if map.contains_key("payload_hash") && map.contains_key("parent_block_id") {
+                    edit(map);
+                }
+                for child in map.values_mut() {
+                    walk(child, edit);
+                }
+            }
+            serde_json::Value::Array(items) => items.iter_mut().for_each(|item| walk(item, edit)),
+            _ => {}
+        }
+    }
+    let mut certificate: serde_json::Value =
+        serde_json::from_slice(&fs::read(certificate_file).expect("certificate")).expect("certificate json");
+    walk(&mut certificate, &edit);
+    let edited = certificate_file.with_file_name(format!("{label}.certificate.json"));
+    fs::write(&edited, serde_json::to_vec(&certificate).expect("json")).expect("write certificate");
+    edited
+}
+
+/// A validator applies a consensus v2 commit only when its block's lane export
+/// root is the one its own execution gives: a different root, a root before the
+/// activation height and no root from it on are all refused, and the tip stays.
+/// The edited certificates fail at the block-id recomputation, which binds the
+/// root, before the comparison with the validator's execution in
+/// `storage_commit.rs`.
+#[test]
+fn external_lane_export_root_of_a_commit_must_match_the_validators_execution() {
+    // Consensus v2 from height 2, the export root from height 4.
+    let chain = lane_chain_with_genesis("export-root-commit", 86_400, Some(2), 4, |genesis| {
+        genesis.external_lanes.as_mut().expect("lanes")[0].policy.exports_enabled = true;
+        genesis.external_lane_export_root_activation_height = Some(4);
+    });
+    let receipt = admit_and_apply(&chain, &release_tx(&chain, "base-erc20", 1, ACCOUNT_RESERVE + 100_000, 1), "release");
+    assert!(receipt.accepted, "{receipt:?}");
+    let prepared = |tx: &SignedAssetTransaction, label: &str| {
+        submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
+            data_dir: chain.data_dir.clone(),
+            signed_asset_transaction_json: serde_json::to_string(tx).expect("tx json"),
+        })
+        .expect("mempool admits");
+        let batch_file = chain.data_dir.join(format!("{label}.batch.json"));
+        create_mempool_batch(MempoolBatchOptions {
+            data_dir: chain.data_dir.clone(),
+            batch_file: batch_file.clone(),
+            max_transactions: 8,
+        })
+        .expect("batch");
+        let certificate = consensus_v2_certificate(&chain.data_dir, &batch_file, label);
+        (batch_file, certificate)
+    };
+    let refused = |batch_file: &Path, certificate: PathBuf| {
+        let tip = tip_height(&chain);
+        let result = apply_batch(ApplyBatchOptions {
+            data_dir: chain.data_dir.clone(),
+            batch_file: batch_file.to_path_buf(),
+            certificate_file: Some(certificate),
+        });
+        assert!(result.is_err(), "{result:?}");
+        assert_eq!(tip_height(&chain), tip);
+        result.unwrap_err().to_string()
+    };
+    let apply = |batch_file: &Path, certificate: PathBuf| {
+        apply_batch(ApplyBatchOptions {
+            data_dir: chain.data_dir.clone(),
+            batch_file: batch_file.to_path_buf(),
+            certificate_file: Some(certificate),
+        })
+        .expect("apply")
+    };
+    let other_root = postfiat_types::external_lane_export_root_v1(&[[9; 48]]).expect("root");
+
+    // Height 3, before the activation height: a root is refused.
+    let (batch, certificate) = prepared(&release_tx(&chain, "base-erc20", 2, 1_000, faucet_sequence(&chain)), "commit-3");
+    let early = edit_certificate_blocks(&certificate, "commit-3-root", |block| {
+        block.insert("external_lane_export_root".to_string(), serde_json::json!(other_root));
+    });
+    let error = refused(&batch, early);
+    assert!(error.contains("consensus v2 proposal block ID mismatch"), "{error}");
+    apply(&batch, certificate);
+
+    // Height 4, the activation height: another root, or none, is refused.
+    let (batch, certificate) = prepared(&export_tx(&chain, "base-erc20", 10, &base_recipient()), "commit-4");
+    let wrong = edit_certificate_blocks(&certificate, "commit-4-wrong", |block| {
+        block.insert("external_lane_export_root".to_string(), serde_json::json!(other_root));
+    });
+    let error = refused(&batch, wrong);
+    assert!(error.contains("consensus v2 proposal block ID mismatch"), "{error}");
+    let missing = edit_certificate_blocks(&certificate, "commit-4-none", |block| {
+        block.remove("external_lane_export_root");
+    });
+    let error = refused(&batch, missing);
+    assert!(error.contains("consensus v2 proposal block ID mismatch"), "{error}");
+    let receipts = apply(&batch, certificate);
+    assert!(receipts[0].accepted, "{receipts:?}");
+    assert!(header_at(&chain, 4).external_lane_export_root.is_some());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
