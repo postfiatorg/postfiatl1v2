@@ -48,6 +48,7 @@ fn block() -> BlockRecord {
             state_root: "state-1".to_owned(),
             bridge_exit_root: None,
             pftl_uniswap_receipt_root: None,
+            external_lane_export_root: None,
             receipt_count: 0,
             certificate_id: "certificate-1".to_owned(),
             certificate: BlockCertificate {

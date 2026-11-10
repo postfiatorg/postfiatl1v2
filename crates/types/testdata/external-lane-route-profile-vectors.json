@@ -1,0 +1,64 @@
+{
+  "schema": "postfiat-external-lane-route-profile-vectors-v1",
+  "description": "PFT asset id and route profile hash of an external lane, derived from its genesis policy. asset_id = SHA3-384(asset_id domain || 0x00 || \"chain_id=..\\nlane_id=..\\nsource_chain_id=..\\nlock_contract_address=..\\ntoken_address=..\\ncode_bytes=3\\ncode=PFT\\nversion=1\\n\"). route_profile_hash = SHA3-384(profile hash domain || 0x00 || route_profile_preimage). Both are 96 lower-case hex digits; the verifier commitments are Keccak-256 of their 48 bytes.",
+  "domains": {
+    "asset_id": "postfiat.external_lane.asset_id.v1",
+    "route_profile_hash": "postfiat.external_lane.route_profile_hash.v1",
+    "route_profile_schema": "postfiat.external_lane.route_profile.v1"
+  },
+  "vectors": [
+    {
+      "name": "base-sepolia-rehearsal-20261106 (docs/review/base-sepolia-lock-rehearsal-20261106/genesis.json)",
+      "pftl_chain_id": "postfiat-lane-sepolia-example",
+      "lane": {
+        "id": "base-erc20",
+        "reserved_atoms": 300000000,
+        "release_window_blocks": 86400,
+        "release_cap_bps": 200,
+        "policy": {
+          "chain_id": 84532,
+          "lock_contract_address": "0xfb6cf3d7e759cb3130c094c1d7264619ece74d73",
+          "token_address": "0x90ce303356d80ecbe359faf061c84130f40eacf0",
+          "token_runtime_code_hash": "0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b",
+          "lock_runtime_code_hash": "0x57bc7971e6878bed2cd4efc0e63020448d4cd9493f05ecde6ddc37fda90b871c",
+          "committee_epoch": 1,
+          "committee_root": "0xe8b9bc85b1d52818060d0e072172f9ca64da1479aa4df9e37949d7570ff2f7ecc2ea40a4be1816e0ec2051801544b13c",
+          "confirmation_depth": 64
+        }
+      },
+      "asset_id": "1656c1b10ca43e947a4ced7f4d1398c6475b7245415090ed45d53bd20d026d875319db337246bd90d64c6a6bfa9521df",
+      "route_profile_preimage": "schema=postfiat.external_lane.route_profile.v1\nroute_id=base-erc20\nasset_id=1656c1b10ca43e947a4ced7f4d1398c6475b7245415090ed45d53bd20d026d875319db337246bd90d64c6a6bfa9521df\nsource_chain_id=84532\nvault_address=0xfb6cf3d7e759cb3130c094c1d7264619ece74d73\nvault_runtime_code_hash=0x57bc7971e6878bed2cd4efc0e63020448d4cd9493f05ecde6ddc37fda90b871c\ntoken_address=0x90ce303356d80ecbe359faf061c84130f40eacf0\ntoken_runtime_code_hash=0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b\nroute_epoch=1\n",
+      "route_profile_hash": "9fd03c5748bb71dfe5339ef9d5807593f45a24cb079d9b16a2c26cec1b6661c5a03fa07c2c861ab73e561757e3c48a17",
+      "route_epoch": 1,
+      "verifier_asset_id_commitment": "0x18f4f5168aee50214fd8dd85f3f59616712cd4b47f98408b58f42977de5c1aa0",
+      "verifier_route_profile_hash_commitment": "0x93df76c9d2df571b53c5a6ac3f1f9fd00a6c442d99ce47ae5d9f5f48d9316431"
+    },
+    {
+      "name": "example: Base mainnet 8453 with synthetic addresses, not a deployment",
+      "pftl_chain_id": "postfiat-mainnet-example",
+      "lane": {
+        "id": "base-erc20",
+        "reserved_atoms": 300000000,
+        "release_window_blocks": 86400,
+        "release_cap_bps": 200,
+        "policy": {
+          "chain_id": 8453,
+          "lock_contract_address": "0x1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+          "token_address": "0x2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+          "token_runtime_code_hash": "0x3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
+          "lock_runtime_code_hash": "0x4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d",
+          "committee_epoch": 1,
+          "committee_root": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+          "confirmation_depth": 64,
+          "exports_enabled": true
+        }
+      },
+      "asset_id": "f0587a445aaed43b778d641111252fc36412dbd0d74ec8ec8189eaffe28a8c04380f9f5fe77b17ebc6ef9dd8668552f0",
+      "route_profile_preimage": "schema=postfiat.external_lane.route_profile.v1\nroute_id=base-erc20\nasset_id=f0587a445aaed43b778d641111252fc36412dbd0d74ec8ec8189eaffe28a8c04380f9f5fe77b17ebc6ef9dd8668552f0\nsource_chain_id=8453\nvault_address=0x1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a\nvault_runtime_code_hash=0x4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d\ntoken_address=0x2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b\ntoken_runtime_code_hash=0x3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c\nroute_epoch=1\n",
+      "route_profile_hash": "59cd334f0d3fea02c38245316133f3b35f27388e93addbaaf8373f3a8fb3bee590ac6601d5245ce018f85075e4e75829",
+      "route_epoch": 1,
+      "verifier_asset_id_commitment": "0x0415042a5c899ee3765eb713d70a4fde340f27ed0bc132d67ebe13affc60bf9d",
+      "verifier_route_profile_hash_commitment": "0x034497d2e3b9e81f16a49e62df1db95b05ec9a4719c5fffbdc5d19e215e5df5d"
+    }
+  ]
+}

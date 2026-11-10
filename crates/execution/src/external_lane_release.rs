@@ -30,7 +30,8 @@ use postfiat_types::{
 use postfiat_types::{
     ExternalLaneExportOperationV1, ExternalLaneExportPacket, EXTERNAL_LANE_EXPORT_HALTED,
     EXTERNAL_LANE_EXPORT_NEEDS_GOVERNED_CAPS, EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
-    EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK, EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS,
+    EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK, EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN,
+    EXTERNAL_LANE_EXPORT_ROOT_NOT_ACTIVE, EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS,
     EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_COMMITTEES,
 };
 
@@ -302,7 +303,8 @@ pub(crate) fn verify_external_lane_lock(
 /// export rules, then the sender's debit of `amount_atoms` (the fee is
 /// already debited) with the ordinary balance and reserve refusals; only
 /// then the lane records the packet. Every check precedes the first write.
-/// Under governed caps; the tests call it directly.
+/// Under governed caps and an active export root (the dispatcher passes the
+/// chain's activation); the tests call it directly.
 #[cfg(test)]
 pub(crate) fn apply_external_lane_export(
     genesis: &Genesis,
@@ -321,6 +323,7 @@ pub(crate) fn apply_external_lane_export(
         tx_id,
         block_height,
         caps,
+        true,
         true,
     )
 }
@@ -355,6 +358,7 @@ pub fn dry_run_external_lane_export(
         block_height,
         compatibility.external_lane_release_caps,
         compatibility.external_lane_governed.caps,
+        compatibility.external_lane_export_root_active(block_height),
     )
 }
 
@@ -373,6 +377,7 @@ pub(crate) fn apply_external_lane_export_with_caps(
     block_height: u64,
     caps: ExternalLaneReleaseCaps,
     caps_governed: bool,
+    export_root_active: bool,
 ) -> Result<(), ExecutionError> {
     let lane = configured_lane(genesis, &operation.lane_id)?;
     if operation.base_recipient == lane.policy.lock_contract_address {
@@ -384,12 +389,29 @@ pub(crate) fn apply_external_lane_export_with_caps(
             ),
         ));
     }
+    if operation.base_recipient == lane.policy.token_address {
+        return Err((
+            EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN,
+            format!(
+                "the Base recipient is external lane `{}`'s token contract, which would hold the release out of every holder's reach",
+                lane.id
+            ),
+        ));
+    }
     if !lane.policy.exports_enabled {
         return Err((
             EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
             format!(
                 "external_lane_export_v1 on external lane `{}` is not built yet",
                 lane.id
+            ),
+        ));
+    }
+    if !export_root_active {
+        return Err((
+            EXTERNAL_LANE_EXPORT_ROOT_NOT_ACTIVE,
+            format!(
+                "block headers do not carry the external lane export root at height {block_height}, so an export could never be proven on Base"
             ),
         ));
     }
@@ -1047,6 +1069,20 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(code, EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK);
+        assert_eq!(ledger, before);
+        let mut to_token = export_op("faucet", 1);
+        to_token.base_recipient = format!("0x{}", "2b".repeat(20));
+        let (code, _) = apply_external_lane_export(
+            &genesis,
+            &mut ledger,
+            &to_token,
+            &to_token.sender,
+            "tx".to_string(),
+            11,
+            caps,
+        )
+        .unwrap_err();
+        assert_eq!(code, EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN);
         assert_eq!(ledger, before);
         // Under the genesis cap the same export is applied.
         apply_external_lane_export(

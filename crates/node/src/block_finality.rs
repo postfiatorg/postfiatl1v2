@@ -2133,6 +2133,7 @@ pub fn create_block_vote_for_verified_proposal(
     let governance =
         governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
     validate_bridge_exit_root_activation(&proposal, &genesis, &governance)?;
+    validate_external_lane_export_root_activation(&proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     let proposal_hash = block_proposal_hash(&proposal)?;
     let target = BlockVoteTarget {
@@ -2163,6 +2164,7 @@ pub fn read_block_vote_for_verified_proposal(
     let governance =
         governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
     validate_bridge_exit_root_activation(proposal, &genesis, &governance)?;
+    validate_external_lane_export_root_activation(proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     let proposal_hash = block_proposal_hash(proposal)?;
     let target = BlockVoteTarget {
@@ -2444,6 +2446,7 @@ pub(crate) fn aggregate_prevalidated_proposal_block_certificate(
     let governance =
         governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
     validate_bridge_exit_root_activation(proposal, &genesis, &governance)?;
+    validate_external_lane_export_root_activation(proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     let expected_proposer =
         leader_for_view(&validators, proposal.block_height, proposal.view).map_err(invalid_data)?;
@@ -3619,6 +3622,7 @@ fn block_vote_target_with_timings(
             proposal.block_height,
         )?;
         validate_bridge_exit_root_activation(&proposal, genesis, &governance)?;
+        validate_external_lane_export_root_activation(&proposal, genesis, &governance)?;
         timings.governance_ms = node_timing_elapsed_ms(stage_start);
 
         let stage_start = std::time::Instant::now();
@@ -3709,6 +3713,10 @@ fn validate_block_proposal_file(proposal: &BlockProposalFile, genesis: &Genesis)
         ));
     }
     validate_unique_receipt_ids(&proposal.receipt_ids, "block proposal")?;
+    if let Some(root) = &proposal.external_lane_export_root {
+        validate_lower_hex_len("block_proposal.external_lane_export_root", root, 96)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    }
     if let Some(root) = &proposal.pftl_uniswap_receipt_root {
         validate_lower_hex_len("block_proposal.pftl_uniswap_receipt_root", root, 96)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
@@ -3765,6 +3773,41 @@ fn validate_bridge_exit_root_activation(
     }
 }
 
+/// The lane export root's presence follows its activation height exactly,
+/// as the bridge-exit root's does: refused before it is hashed or signed.
+fn validate_external_lane_export_root_activation(
+    proposal: &BlockProposalFile,
+    genesis: &Genesis,
+    governance: &GovernanceState,
+) -> io::Result<()> {
+    let active = postfiat_types::external_lane_export_root_active_at(
+        genesis,
+        governance,
+        proposal.block_height,
+    );
+    match (active, proposal.external_lane_export_root.as_deref()) {
+        (false, None) => Ok(()),
+        (false, Some(_)) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "block proposal supplies external_lane_export_root before activation",
+        )),
+        (true, None) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "activated block proposal omits external_lane_export_root",
+        )),
+        (true, Some(root)) => {
+            if !consensus_v2_active_at(genesis, proposal.block_height) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "external-lane export-root activation requires consensus v2 finality",
+                ));
+            }
+            validate_lower_hex_len("block_proposal.external_lane_export_root", root, 96)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+        }
+    }
+}
+
 #[cfg(test)]
 mod bridge_exit_root_activation_tests {
     use super::*;
@@ -3786,6 +3829,7 @@ mod bridge_exit_root_activation_tests {
             state_root: "44".repeat(48),
             bridge_exit_root: root,
             pftl_uniswap_receipt_root: None,
+            external_lane_export_root: None,
             receipt_count: 0,
             receipt_ids: Vec::new(),
             fastpay_pre_state_effects: Vec::new(),
@@ -3948,6 +3992,271 @@ mod bridge_exit_root_activation_tests {
         )
         .expect("v1 exit root at activation");
     }
+
+    #[test]
+    fn external_lane_export_root_encoding_is_exactly_activation_gated() {
+        let mut genesis = Genesis::new("postfiat-tier4-test");
+        genesis.external_lane_export_root_activation_height = Some(10);
+        let governance = GovernanceState::new(4);
+        let root = postfiat_types::bridge_exit_empty_root_v1();
+        let with_root = |height: u64, root: Option<String>| {
+            let mut proposal = proposal(height, None);
+            proposal.external_lane_export_root = root;
+            proposal
+        };
+        let check = |genesis: &Genesis, proposal: BlockProposalFile| {
+            validate_external_lane_export_root_activation(&proposal, genesis, &governance)
+        };
+        // Inactive and missing; inactive and present; active and missing.
+        check(&genesis, with_root(9, None)).expect("no root before activation");
+        let error = check(&genesis, with_root(9, Some(root.clone()))).unwrap_err();
+        assert!(error.to_string().contains("before activation"), "{error}");
+        let error = check(&genesis, with_root(10, None)).unwrap_err();
+        assert!(error.to_string().contains("omits external_lane_export_root"), "{error}");
+        // Active and present, without and with consensus v2.
+        let error = check(&genesis, with_root(10, Some(root.clone()))).unwrap_err();
+        assert!(error.to_string().contains("requires consensus v2"), "{error}");
+        genesis.consensus_v2_activation_height = Some(1);
+        check(&genesis, with_root(10, Some(root))).expect("root at activation");
+        assert!(check(&genesis, with_root(10, Some("ab".to_string()))).is_err());
+    }
+}
+
+/// A proposal whose lane export root presence does not follow the activation
+/// height is refused through every entry point that signs it, votes for it,
+/// reads a vote for it or certifies it, and nothing is signed or written.
+#[cfg(test)]
+mod external_lane_export_root_entry_point_tests {
+    use super::*;
+
+    /// Consensus v2 from height 1, the export root from height 2.
+    const ACTIVATION: u64 = 2;
+    const BEFORE: &str = "supplies external_lane_export_root before activation";
+    const OMITS: &str = "omits external_lane_export_root";
+
+    struct Fixture {
+        data_dir: PathBuf,
+        genesis: Genesis,
+        key_file: PathBuf,
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.data_dir);
+        }
+    }
+
+    fn fixture(label: &str) -> Fixture {
+        let data_dir = std::env::temp_dir().join(format!(
+            "pf-export-root-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let mut genesis = Genesis::try_new_with_validator_count("postfiat-tier4-test", 1)
+            .expect("genesis");
+        genesis.consensus_v2_activation_height = Some(1);
+        genesis.external_lane_export_root_activation_height = Some(ACTIVATION);
+        crate::lifecycle_queries::init_with_genesis(
+            data_dir.clone(),
+            "validator-0".to_string(),
+            genesis,
+        )
+        .expect("init");
+        let genesis = NodeStore::new(&data_dir).read_genesis().expect("genesis");
+        let key_file = data_dir.join(VALIDATOR_KEYS_FILE);
+        Fixture { data_dir, genesis, key_file }
+    }
+
+    fn proposal(fx: &Fixture, height: u64, root: bool) -> BlockProposalFile {
+        BlockProposalFile {
+            schema: BLOCK_PROPOSAL_FILE_SCHEMA.to_string(),
+            chain_id: fx.genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&fx.genesis),
+            protocol_version: fx.genesis.protocol_version,
+            block_height: height,
+            view: 0,
+            parent_hash: "11".repeat(48),
+            proposer: "validator-0".to_string(),
+            batch_kind: BATCH_KIND_TRANSPARENT.to_string(),
+            batch_id: "22".repeat(48),
+            payload_hash: "33".repeat(48),
+            state_root: "44".repeat(48),
+            bridge_exit_root: None,
+            pftl_uniswap_receipt_root: None,
+            external_lane_export_root: root.then(postfiat_types::bridge_exit_empty_root_v1),
+            receipt_count: 0,
+            receipt_ids: Vec::new(),
+            fastpay_pre_state_effects: Vec::new(),
+            signature: None,
+        }
+    }
+
+    /// A root before the activation height and none from it on, each with the
+    /// refusal it must meet and the well-formed proposal for the same slot.
+    fn wrong_presences(fx: &Fixture) -> [(BlockProposalFile, &'static str, BlockProposalFile); 2] {
+        [
+            (proposal(fx, ACTIVATION - 1, true), BEFORE, proposal(fx, ACTIVATION - 1, false)),
+            (proposal(fx, ACTIVATION, false), OMITS, proposal(fx, ACTIVATION, true)),
+        ]
+    }
+
+    fn assert_refused(result: io::Result<impl std::fmt::Debug>, expected: &str) {
+        let error = result.expect_err("wrong export root presence must be refused");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData, "{error}");
+        assert!(error.to_string().contains(expected), "{error}");
+    }
+
+    /// Signs `proposal` with the validator key directly, past every check.
+    fn forge_signature(fx: &Fixture, mut proposal: BlockProposalFile) -> BlockProposalFile {
+        let signer = validator_signer_for(&fx.key_file).expect("signer");
+        let key = signer
+            .validator_key(BLOCK_PROPOSAL_SIGNATURE_CONTEXT, Some("validator-0"))
+            .expect("key");
+        let message = block_proposal_signature_message(&proposal).expect("message");
+        let signature = signer
+            .sign(&key.node_id, BLOCK_PROPOSAL_SIGNATURE_CONTEXT, &message)
+            .expect("sign");
+        proposal.signature = Some(BlockProposalSignature {
+            signer: key.node_id,
+            algorithm_id: key.algorithm_id,
+            public_key_hex: key.public_key_hex,
+            signature_hex: bytes_to_hex(&signature),
+        });
+        proposal
+    }
+
+    /// Writes a vote for `proposal` with the validator key, past the
+    /// proposal checks, so the reading and certifying paths have one.
+    fn forge_vote(fx: &Fixture, proposal: &BlockProposalFile, vote_file: &Path) {
+        let store = NodeStore::new(&fx.data_dir);
+        let target = BlockVoteTarget {
+            evidence: OwnedBlockEvidence::from_proposal(proposal),
+            validators: vec!["validator-0".to_string()],
+            block_hash: None,
+            proposal_hash: Some(block_proposal_hash(proposal).expect("hash")),
+        };
+        create_block_vote_for_target(
+            &store,
+            &fx.genesis,
+            target,
+            &fx.key_file,
+            Some("validator-0"),
+            vote_file,
+        )
+        .expect("forged vote");
+    }
+
+    fn vote_options(fx: &Fixture, proposal: BlockProposalFile, vote_file: &Path) -> BlockVoteForVerifiedProposalOptions {
+        BlockVoteForVerifiedProposalOptions {
+            data_dir: fx.data_dir.clone(),
+            verify_block_log: false,
+            key_file: fx.key_file.clone(),
+            validator_id: Some("validator-0".to_string()),
+            block_height: Some(proposal.block_height),
+            proposal,
+            vote_file: vote_file.to_path_buf(),
+        }
+    }
+
+    /// `sign_verified_block_proposal`: refused before the key is opened, and
+    /// no proposal lock is taken, so the right proposal for the slot signs.
+    #[test]
+    fn external_lane_export_root_wrong_presence_is_not_signed_as_a_proposal() {
+        let fx = fixture("sign");
+        let missing_key = fx.data_dir.join("missing.validator_keys.json");
+        for (wrong, expected, right) in wrong_presences(&fx) {
+            assert_refused(
+                sign_verified_block_proposal(&fx.data_dir, wrong.clone(), &missing_key, "validator-0"),
+                expected,
+            );
+            assert_refused(
+                sign_verified_block_proposal(&fx.data_dir, wrong, &fx.key_file, "validator-0"),
+                expected,
+            );
+            let signed = sign_verified_block_proposal(&fx.data_dir, right, &fx.key_file, "validator-0")
+                .expect("the right proposal for the slot is still signable");
+            verify_signed_block_proposal(&fx.data_dir, &signed).expect("signature verifies");
+        }
+    }
+
+    /// `verify_signed_block_proposal`: a proposal signed past the checks is
+    /// still refused when its signature is verified.
+    #[test]
+    fn external_lane_export_root_wrong_presence_fails_signed_proposal_verification() {
+        let fx = fixture("verify");
+        for (wrong, expected, _) in wrong_presences(&fx) {
+            let forged = forge_signature(&fx, wrong);
+            assert_refused(verify_signed_block_proposal(&fx.data_dir, &forged), expected);
+        }
+    }
+
+    /// `create_block_vote_for_verified_proposal`, unsigned and signed: no vote
+    /// file is written and no vote lock is taken.
+    #[test]
+    fn external_lane_export_root_wrong_presence_is_not_voted_for() {
+        let fx = fixture("vote");
+        for (wrong, expected, right) in wrong_presences(&fx) {
+            let height = wrong.block_height;
+            let vote_file = fx.data_dir.join(format!("{height}.block-vote.json"));
+            let signed = forge_signature(&fx, wrong.clone());
+            for candidate in [wrong, signed] {
+                assert_refused(
+                    create_block_vote_for_verified_proposal(vote_options(&fx, candidate, &vote_file)),
+                    expected,
+                );
+                assert!(!vote_file.exists(), "a vote was written for height {height}");
+            }
+            create_block_vote_for_verified_proposal(vote_options(&fx, right, &vote_file))
+                .expect("the right proposal for the slot is still votable");
+            assert!(vote_file.exists());
+        }
+    }
+
+    /// `read_block_vote_for_verified_proposal`: a vote signed for the
+    /// proposal past the checks is not accepted.
+    #[test]
+    fn external_lane_export_root_wrong_presence_vote_is_not_read() {
+        let fx = fixture("read");
+        for (wrong, expected, _) in wrong_presences(&fx) {
+            let vote_file = fx.data_dir.join(format!("{}.block-vote.json", wrong.block_height));
+            forge_vote(&fx, &wrong, &vote_file);
+            assert_refused(
+                read_block_vote_for_verified_proposal(&fx.data_dir, &wrong, &vote_file),
+                expected,
+            );
+        }
+    }
+
+    /// `aggregate_prevalidated_verified_block_certificate`: a vote for the
+    /// proposal does not become a certificate, and none is written.
+    #[test]
+    fn external_lane_export_root_wrong_presence_is_not_certified() {
+        let fx = fixture("certify");
+        for (wrong, expected, _) in wrong_presences(&fx) {
+            let height = wrong.block_height;
+            let vote_file = fx.data_dir.join(format!("{height}.block-vote.json"));
+            let certificate_file = fx.data_dir.join(format!("{height}.block-certificate.json"));
+            forge_vote(&fx, &wrong, &vote_file);
+            let options = BlockCertificateOptions {
+                data_dir: fx.data_dir.clone(),
+                verify_block_log: false,
+                batch_file: None,
+                proposal_file: None,
+                timeout_certificate_file: None,
+                block_height: Some(height),
+                vote_files: vec![vote_file],
+                certificate_file: certificate_file.clone(),
+            };
+            assert_refused(
+                aggregate_prevalidated_verified_block_certificate(options, &wrong, &wrong),
+                expected,
+            );
+            assert!(!certificate_file.exists(), "a certificate was written for height {height}");
+        }
+    }
 }
 
 fn sign_block_proposal_file(
@@ -3982,6 +4291,7 @@ fn sign_block_proposal_file(
     let governance =
         governance_with_due_validator_registry_activations(store, &genesis, proposal.block_height)?;
     validate_bridge_exit_root_activation(proposal, &genesis, &governance)?;
+    validate_external_lane_export_root_activation(proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     if !validators
         .iter()
@@ -4040,6 +4350,7 @@ pub fn sign_verified_block_proposal(
     let governance =
         governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
     validate_bridge_exit_root_activation(&proposal, &genesis, &governance)?;
+    validate_external_lane_export_root_activation(&proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     let expected_proposer =
         leader_for_view(&validators, proposal.block_height, proposal.view).map_err(invalid_data)?;
@@ -4103,6 +4414,7 @@ fn verify_block_proposal_signature_if_present(
     let governance =
         governance_with_due_validator_registry_activations(store, &genesis, proposal.block_height)?;
     validate_bridge_exit_root_activation(proposal, &genesis, &governance)?;
+    validate_external_lane_export_root_activation(proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     if !validators
         .iter()
@@ -4172,6 +4484,7 @@ fn block_proposal_hash(proposal: &BlockProposalFile) -> io::Result<String> {
         state_root: proposal.state_root.as_str(),
         bridge_exit_root: proposal.bridge_exit_root.as_deref(),
         pftl_uniswap_receipt_root: proposal.pftl_uniswap_receipt_root.as_deref(),
+        external_lane_export_root: proposal.external_lane_export_root.as_deref(),
         receipt_ids: &proposal.receipt_ids,
         fastpay_pre_state_effects: &proposal.fastpay_pre_state_effects,
     })
@@ -4299,6 +4612,7 @@ fn block_proposal_hash_from_evidence(
         state_root: evidence.state_root,
         bridge_exit_root: evidence.bridge_exit_root,
         pftl_uniswap_receipt_root: evidence.pftl_uniswap_receipt_root,
+        external_lane_export_root: evidence.external_lane_export_root,
         receipt_ids: evidence.receipt_ids,
         fastpay_pre_state_effects: evidence.fastpay_pre_state_effects,
     })
@@ -4318,11 +4632,37 @@ struct BlockProposalHashInput<'a> {
     state_root: &'a str,
     bridge_exit_root: Option<&'a str>,
     pftl_uniswap_receipt_root: Option<&'a str>,
+    external_lane_export_root: Option<&'a str>,
     receipt_ids: &'a [String],
     fastpay_pre_state_effects: &'a [postfiat_types::FastPayVersionFenceV1],
 }
 
 fn block_proposal_hash_fields(fields: BlockProposalHashInput<'_>) -> io::Result<String> {
+    if let Some(external_lane_export_root) = fields.external_lane_export_root {
+        let encoded = serde_json::to_vec(&(
+            "postfiat.block_proposal.v5",
+            fields.chain_id,
+            fields.genesis_hash,
+            fields.protocol_version,
+            fields.block_height,
+            fields.view,
+            fields.parent_hash,
+            fields.proposer,
+            fields.batch_kind,
+            fields.batch_id,
+            fields.payload_hash,
+            fields.state_root,
+            (
+                fields.bridge_exit_root,
+                fields.pftl_uniswap_receipt_root,
+                external_lane_export_root,
+            ),
+            fields.receipt_ids,
+            fields.fastpay_pre_state_effects,
+        ))
+        .map_err(invalid_data)?;
+        return Ok(hash_hex("postfiat.block_proposal.v5", &encoded));
+    }
     if let Some(pftl_uniswap_receipt_root) = fields.pftl_uniswap_receipt_root {
         let encoded = serde_json::to_vec(&(
             "postfiat.block_proposal.v4",

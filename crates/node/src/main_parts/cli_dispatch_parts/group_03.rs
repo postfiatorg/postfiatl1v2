@@ -1955,6 +1955,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
         | "ratify-pfusdc-source-series-activation-height"
         | "ratify-replicated-state-v2-activation-height"
         | "ratify-bridge-exit-root-activation-height"
+        | "ratify-external-lane-export-root-activation-height"
         | "ratify-shielded-atomic-batch-activation-height"
         | "ratify-recipient-format-activation-height"
         | "ratify-asset-orchard-pricing-enforcement-activation-height"
@@ -1998,6 +1999,10 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 "ratify-bridge-exit-root-activation-height" => (
                     GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT,
                     "--bridge-exit-root-activation-height",
+                ),
+                "ratify-external-lane-export-root-activation-height" => (
+                    postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT,
+                    "--external-lane-export-root-activation-height",
                 ),
                 "ratify-shielded-atomic-batch-activation-height" => (
                     GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,

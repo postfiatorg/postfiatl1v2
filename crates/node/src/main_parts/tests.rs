@@ -267,6 +267,58 @@ fn transactional_storage_rebuild_requires_explicit_offline_confirmation() {
     );
 }
 
+/// `ratify-external-lane-export-root-activation-height` builds the governed
+/// export-root amendment under either height flag; the governed round itself
+/// is `external_lane_export_root_ratify_command_activates_the_root_at_its_height`.
+#[test]
+fn external_lane_export_root_activation_cli_builds_the_governed_amendment() {
+    let root = std::env::temp_dir().join(format!(
+        "postfiat-export-root-cli-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos()
+    ));
+    let data_dir = root.join("node");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-export-root-cli".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 1,
+    })
+    .expect("initialize export-root CLI fixture");
+    for (flag, value) in [
+        ("--height", "7"),
+        ("--external-lane-export-root-activation-height", "9"),
+    ] {
+        let amendment_file = root.join(format!("export-root-{value}.json"));
+        run_cli(vec![
+            "ratify-external-lane-export-root-activation-height".to_string(),
+            "--data-dir".to_string(),
+            data_dir.display().to_string(),
+            "--validators".to_string(),
+            "validator-0".to_string(),
+            flag.to_string(),
+            value.to_string(),
+            "--amendment-file".to_string(),
+            amendment_file.display().to_string(),
+        ])
+        .expect("build export-root activation amendment through CLI");
+        let amendment: postfiat_types::GovernanceAmendment = serde_json::from_slice(
+            &std::fs::read(&amendment_file).expect("read export-root amendment"),
+        )
+        .expect("parse export-root amendment");
+        assert_eq!(
+            amendment.kind,
+            postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT
+        );
+        assert_eq!(amendment.value.to_string(), value);
+        assert_eq!(amendment.support, ["validator-0"]);
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
 #[cfg(test)]
 mod replicated_state_activation_cli_tests {
     include!("tests/replicated_state_activation_cli_tests.rs");

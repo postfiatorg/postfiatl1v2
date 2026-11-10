@@ -1,0 +1,69 @@
+{
+  "schema": "postfiat-external-lane-export-root-vectors-v1",
+  "description": "leaf = SHA3-384(leaf domain || 0x00 || chain id || 0x00 || lane id || 0x00 || export nonce u64 big-endian || 0x00 || packet digest). The root is the bridge-exit tree over the leaves in execution order: node = SHA3-384(node domain || 0x00 || left || right), an odd node paired with itself, and SHA3-384(empty domain || 0x00) for a block without exports. Values are 96 lower-case hex digits; siblings run from the leaf up.",
+  "domains": {
+    "leaf": "postfiat.external_lane.export_root_leaf.v1",
+    "node": "postfiat.bridge_exit_tree.node.v1",
+    "empty": "postfiat.bridge_exit_tree.empty.v1"
+  },
+  "chain_id": "postfiat-local",
+  "packets": [
+    {
+      "lane_id": "base-erc20",
+      "export_nonce": 0,
+      "sender": "pftl-sender",
+      "base_recipient": "0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+      "amount_atoms": 1000000,
+      "exported_at_height": 42,
+      "tx_id": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"
+    },
+    {
+      "lane_id": "base-other",
+      "export_nonce": 0,
+      "sender": "pftl-sender",
+      "base_recipient": "0x3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d",
+      "amount_atoms": 5,
+      "exported_at_height": 42,
+      "tx_id": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
+    },
+    {
+      "lane_id": "base-erc20",
+      "export_nonce": 1,
+      "sender": "pftl-sender",
+      "base_recipient": "0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+      "amount_atoms": 7,
+      "exported_at_height": 42,
+      "tx_id": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"
+    }
+  ],
+  "leaves": [
+    "f02078ffd943dadfb52318a4bb997f3c6f1c22c31a0d4b4837b2993176e49d28df09183d92c4c395335e1ce4e00eb14e",
+    "e6412378aa64333f37f9ecd2a866ac101760446fa2e2493df13d733d6b6753f2ee8cddffe8bae0167daf70e812f76e05",
+    "a1133c63c7f7f07bef0c43a7b4a291a7b5c8c64a2fd80002d12ca8ea53524148465e283e8bd98bd80e9ad98acb461220"
+  ],
+  "root": "7f70bb6713d6fbacfa220ea5dea11008acdf5de8666451c19343c553d4ff07cb52530406a90aafb580dbe2ce62037b34",
+  "proofs": [
+    {
+      "leaf_index": 0,
+      "siblings": [
+        "e6412378aa64333f37f9ecd2a866ac101760446fa2e2493df13d733d6b6753f2ee8cddffe8bae0167daf70e812f76e05",
+        "2e32189106f9087736d35fd37260e9f3c702d5bbc5d258191b391f96c7b4cce16a0da220aa4d1a8b0cc188c0a21d93a6"
+      ]
+    },
+    {
+      "leaf_index": 1,
+      "siblings": [
+        "f02078ffd943dadfb52318a4bb997f3c6f1c22c31a0d4b4837b2993176e49d28df09183d92c4c395335e1ce4e00eb14e",
+        "2e32189106f9087736d35fd37260e9f3c702d5bbc5d258191b391f96c7b4cce16a0da220aa4d1a8b0cc188c0a21d93a6"
+      ]
+    },
+    {
+      "leaf_index": 2,
+      "siblings": [
+        "a1133c63c7f7f07bef0c43a7b4a291a7b5c8c64a2fd80002d12ca8ea53524148465e283e8bd98bd80e9ad98acb461220",
+        "7a8c8bf33f8286641642725d2891816a09469ce4fcd1a345faa7c7bda1ced98b17280ba19de83e3c878e1c4afa1a665f"
+      ]
+    }
+  ],
+  "empty_root": "b8e0f151a40d5d0d6fdc429d75c9daf57e9c193bd1880fa3ddcced6d138b1d81eb9ac3a65bbb699c5a78d05681e521ae"
+}

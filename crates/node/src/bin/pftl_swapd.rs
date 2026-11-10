@@ -2899,6 +2899,7 @@ mod tests {
             state_root: "33".repeat(48),
             bridge_exit_root: None,
             pftl_uniswap_receipt_root: None,
+            external_lane_export_root: None,
             receipt_count: 0,
             receipt_ids: Vec::new(),
             fastpay_pre_state_effects: Vec::new(),

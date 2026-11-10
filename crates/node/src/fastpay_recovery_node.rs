@@ -498,14 +498,24 @@ fn fastpay_domain_for_committee(
 
 pub fn owned_recovery_capabilities_v3(options: NodeOptions) -> io::Result<String> {
     let store = NodeStore::new(&options.data_dir);
-    let _read_lock = store.lock_ordered_commit()?;
-    let ledger = read_fastpay_ledger(&store)?;
-    ensure_fastpay_unanchored_capacity(&store, &ledger)?;
-    let height = fastpay_height(&store)?;
+    let read_lock = store.lock_ordered_commit()?;
+    let report = owned_recovery_capabilities_v3_locked(&store, &read_lock)?;
+    serde_json::to_string(&report).map_err(invalid_data)
+}
+
+/// `owned_recovery_capabilities_v3` for a caller that already holds the
+/// ordered-commit lock (the lock is not re-entrant).
+pub(super) fn owned_recovery_capabilities_v3_locked(
+    store: &NodeStore,
+    _commit_lock: &StorageMutationLock,
+) -> io::Result<postfiat_types::FastPayRecoveryCapabilitiesV1> {
+    let ledger = read_fastpay_ledger(store)?;
+    ensure_fastpay_unanchored_capacity(store, &ledger)?;
+    let height = fastpay_height(store)?;
     let committee = active_fastpay_recovery_committee(&ledger, height)?;
     let report = postfiat_types::FastPayRecoveryCapabilitiesV1 {
         schema: postfiat_types::FASTPAY_RECOVERY_CAPABILITIES_SCHEMA_V1.to_string(),
-        domain: owned_certificate_domain_v3(&options.data_dir)?,
+        domain: owned_certificate_domain_v3(store.data_dir())?,
         committee_epoch: committee.committee_epoch,
         current_height: height,
         validator_count: committee.validators.len(),
@@ -513,7 +523,7 @@ pub fn owned_recovery_capabilities_v3(options: NodeOptions) -> io::Result<String
         policy: fastpay_recovery_policy(&ledger)?,
     };
     report.validate().map_err(fastpay_invalid_data)?;
-    serde_json::to_string(&report).map_err(invalid_data)
+    Ok(report)
 }
 
 pub fn owned_sign_v3(

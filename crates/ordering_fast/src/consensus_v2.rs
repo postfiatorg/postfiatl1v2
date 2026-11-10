@@ -26,6 +26,8 @@ const CONSENSUS_V2_BRIDGE_EXIT_BLOCK_ID_DOMAIN: &str =
     "postfiat.consensus.block-id.bridge-exit-root.v1";
 const CONSENSUS_V2_PFTL_UNISWAP_BLOCK_ID_DOMAIN: &str =
     "postfiat.consensus.block-id.pftl-uniswap-receipt-root.v1";
+const CONSENSUS_V2_EXTERNAL_LANE_EXPORT_BLOCK_ID_DOMAIN: &str =
+    "postfiat.consensus.block-id.external-lane-export-root.v1";
 const CONSENSUS_V2_GENESIS_PARENT_ID_DOMAIN: &str = "postfiat.consensus.genesis-parent-id.v2";
 const CONSENSUS_V2_PROPOSAL_ID_DOMAIN: &str = "postfiat.consensus.proposal-id.v2";
 const CONSENSUS_V2_QC_ID_DOMAIN: &str = "postfiat.consensus.qc-id.v2";
@@ -195,6 +197,7 @@ pub fn consensus_v2_block_ref(
         state_root.into(),
         None,
         None,
+        None,
     )
 }
 
@@ -213,6 +216,7 @@ pub fn consensus_v2_block_ref_with_bridge_exit_root(
         payload_hash.into(),
         state_root.into(),
         Some(bridge_exit_root.into()),
+        None,
         None,
     )
 }
@@ -234,6 +238,31 @@ pub fn consensus_v2_block_ref_with_commitment_roots(
         state_root.into(),
         bridge_exit_root,
         Some(pftl_uniswap_receipt_root.into()),
+        None,
+    )
+}
+
+/// A block from the external-lane export-root activation height on: it binds
+/// the export root, and the bridge-exit and PFTL-Uniswap roots when present.
+pub fn consensus_v2_block_ref_with_external_lane_export_root(
+    domain: &ConsensusV2Domain,
+    height: u64,
+    parent_block_id: impl Into<String>,
+    payload_hash: impl Into<String>,
+    state_root: impl Into<String>,
+    bridge_exit_root: Option<String>,
+    pftl_uniswap_receipt_root: Option<String>,
+    external_lane_export_root: impl Into<String>,
+) -> Result<ConsensusV2BlockRef, OrderingError> {
+    consensus_v2_block_ref_internal(
+        domain,
+        height,
+        parent_block_id.into(),
+        payload_hash.into(),
+        state_root.into(),
+        bridge_exit_root,
+        pftl_uniswap_receipt_root,
+        Some(external_lane_export_root.into()),
     )
 }
 
@@ -245,6 +274,7 @@ fn consensus_v2_block_ref_internal(
     state_root: String,
     bridge_exit_root: Option<String>,
     pftl_uniswap_receipt_root: Option<String>,
+    external_lane_export_root: Option<String>,
 ) -> Result<ConsensusV2BlockRef, OrderingError> {
     validate_consensus_v2_domain(domain)?;
     if height == 0 {
@@ -261,7 +291,12 @@ fn consensus_v2_block_ref_internal(
     if let Some(root) = pftl_uniswap_receipt_root.as_deref() {
         validate_hash("PFTL-Uniswap receipt root", root)?;
     }
-    let block_id_domain = if pftl_uniswap_receipt_root.is_some() {
+    if let Some(root) = external_lane_export_root.as_deref() {
+        validate_hash("external lane export root", root)?;
+    }
+    let block_id_domain = if external_lane_export_root.is_some() {
+        CONSENSUS_V2_EXTERNAL_LANE_EXPORT_BLOCK_ID_DOMAIN
+    } else if pftl_uniswap_receipt_root.is_some() {
         CONSENSUS_V2_PFTL_UNISWAP_BLOCK_ID_DOMAIN
     } else if bridge_exit_root.is_some() {
         CONSENSUS_V2_BRIDGE_EXIT_BLOCK_ID_DOMAIN
@@ -280,6 +315,9 @@ fn consensus_v2_block_ref_internal(
         if let Some(root) = pftl_uniswap_receipt_root.as_deref() {
             append_str_field(bytes, "pftl_uniswap_receipt_root", root);
         }
+        if let Some(root) = external_lane_export_root.as_deref() {
+            append_str_field(bytes, "external_lane_export_root", root);
+        }
     });
     Ok(ConsensusV2BlockRef {
         height,
@@ -289,6 +327,7 @@ fn consensus_v2_block_ref_internal(
         state_root,
         bridge_exit_root,
         pftl_uniswap_receipt_root,
+        external_lane_export_root,
     })
 }
 
@@ -310,6 +349,18 @@ fn recompute_consensus_v2_block_ref(
     domain: &ConsensusV2Domain,
     block: &ConsensusV2BlockRef,
 ) -> Result<ConsensusV2BlockRef, OrderingError> {
+    if let Some(root) = block.external_lane_export_root.as_deref() {
+        return consensus_v2_block_ref_with_external_lane_export_root(
+            domain,
+            block.height,
+            block.parent_block_id.clone(),
+            block.payload_hash.clone(),
+            block.state_root.clone(),
+            block.bridge_exit_root.clone(),
+            block.pftl_uniswap_receipt_root.clone(),
+            root.to_string(),
+        );
+    }
     if let Some(root) = block.pftl_uniswap_receipt_root.as_deref() {
         return consensus_v2_block_ref_with_commitment_roots(
             domain,
@@ -1321,6 +1372,9 @@ fn append_block(bytes: &mut Vec<u8>, block: &ConsensusV2BlockRef) {
     }
     if let Some(root) = block.pftl_uniswap_receipt_root.as_deref() {
         append_str_field(bytes, "block.pftl_uniswap_receipt_root", root);
+    }
+    if let Some(root) = block.external_lane_export_root.as_deref() {
+        append_str_field(bytes, "block.external_lane_export_root", root);
     }
 }
 

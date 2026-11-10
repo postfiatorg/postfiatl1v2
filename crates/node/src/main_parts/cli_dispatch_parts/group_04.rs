@@ -1102,6 +1102,29 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             );
             Ok(())
         }
+        "fastpay-admission-export" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let out = flag_value(flags, "--out").ok_or("missing --out")?;
+            let admission = postfiat_node::fastpay_admission_export(Path::new(data_dir))
+                .map_err(|error| format!("fastpay-admission-export refused: {error}"))?;
+            let json = serde_json::to_string_pretty(&admission)
+                .map_err(|error| format!("FastPay admission serialization failed: {error}"))?;
+            std::fs::write(out, format!("{json}\n"))
+                .map_err(|error| format!("write --out `{out}` failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::json!({
+                    "out": out,
+                    "committee_epoch": admission.committee.committee_epoch,
+                    "registry_root": admission.committee.registry_root,
+                    "validator_count": admission.committee.validators.len(),
+                    "quorum": admission.committee.quorum,
+                    "valid_from_height": admission.committee.valid_from_height,
+                    "new_orders_through_height": admission.committee.new_orders_through_height,
+                })
+            );
+            Ok(())
+        }
         "fastswap-store-migrate" => {
             // Offline only: both validator units must be stopped first (the
             // store lock check below cannot see a unit that has not opened it).

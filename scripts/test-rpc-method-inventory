@@ -287,6 +287,7 @@ def main() -> int:
         "owned_recovery_capabilities": "read_only_public",
         "owned_certificate": "read_only_public",
         "owned_recovery_status": "read_only_public",
+        "fastpay_recovery_committee": "read_only_public",
         "owned_sign_v3": "owned_lane_gated",
         "owned_apply_v3": "owned_lane_gated",
         "owned_unwrap_sign_v3": "owned_lane_gated",

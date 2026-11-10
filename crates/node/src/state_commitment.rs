@@ -1849,6 +1849,7 @@ fn assert_genesis_commitment_inventory_complete(genesis: &Genesis) {
         consensus_v2_activation_height: _,
         // Committed through the genesis hash; the live records are ledger state.
         external_lanes: _,
+        external_lane_export_root_activation_height: _,
     } = genesis;
 }
 

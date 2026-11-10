@@ -188,6 +188,7 @@ Built 2026-11-06 behind `exports_enabled`: the PFTL accounting, the zero-cap hal
 - **Prover and relay liveness.** If no prover runs, exports stay unpaid on Base while the PFT has already left circulation on PFTL. Nothing is lost, but holders wait. Section 9 asks whether to add a refund after a deadline, as the NAV route's refund-source operation does (`transactions_mempool_receipts.rs:3493`).
 - **Deployment order.** A wrong predicted address, a wrong code hash or a spent deployer nonce leaves the lane's lock or its release path dead forever, because the lock has no admin (section 5). The dry run on Base Sepolia must follow the steps of section 5 and complete one release before mainnet.
 - **The chain-id field name.** `arbitrumChainId` is a generic chain-id check (`PFTLFinalityVerifierV1.sol:275-277`). A Base deployment must set 8453, not an Arbitrum id.
+- **A fixed verifier.** The Base verifier fixes its program key, the PFTL protocol version (`PROTOCOL_VERSION`, `crates/types/src/core_chain.rs:9`) and the SP1 verifier address for ever, and the lock fixes the verifier for ever. Three events would end exports for a deployed lock: a PFTL upgrade that changes the protocol version or the finality format the program proves, a corrected program (a new key), or the retirement of that SP1 verifier. Nothing is lost on PFTL: exports are refused or stay unpaid, and the locked ERC-20 stays in the lock (decision 9).
 
 ## 9. Decisions
 
@@ -198,13 +199,103 @@ The product owner decides:
 3. Whether an unpaid export can be refunded on PFTL after a deadline. The refund needs the verifier to refuse the refunded packet. Without a refund, an export waits for the relay indefinitely.
 4. The prover program and its audit budget, and who runs the relay.
 5. How the relay is funded: self-relay only, a relay fee carried inside the export, or an operator-funded service.
-6. The verifier's route profile and asset id for PFT on Base.
+6. The verifier's route profile and asset id for PFT on Base. Resolved by rule on 2026-11-10: both are derived from the lane's genesis policy ([Base half, step 1](#base-half-step-1-2026-11-10)).
 7. The response to a false release once exports exist (section 8). The options:
    - **An export halt.** The same governed zero-cap amendment that halts releases also halts exports: exports are refused while the lane's active cap is zero (Phase 2, section 5.2). The watcher's alarm then stops new exports from queuing behind a shortfall.
    - **An independently authenticated Base lock balance.** PFTL would bound exports by the lock's real `totalLocked − totalReleased`, which this design avoids reading.
    - **A refund path.** An export the lock never pays is refunded on PFTL, which needs the verifier to refuse the refunded packet (see decision 3).
 
    The lean is the export halt. It costs least: one more check against a value the lane already has, with no new trust. It keeps the Phase 2 model of a committee-trusted bridge bounded by the cap and answered by the watcher and governance. It does not repay exports already accepted before the halt; only the refund path does that.
+8. How a finalized PFTL block commits a lane export so that a bounded proof can show it. Taken on 2026-11-10: a block-header root ([Base half, step 2](#base-half-step-2-2026-11-10)).
+9. How exports survive a change the fixed verifier cannot follow (section 8, "A fixed verifier"). The options:
+   - **Accept it.** Add the rule that PFTL upgrades keep the old checkpoint format provable for the deployed program.
+   - **A later verifier design.** A new program is admitted by a proof of the PFTL committee's approval. This is a new contract and a new audit scope.
+
+## Base half, step 1 (2026-11-10)
+
+**The rule (decision 6).** Neither value is chosen by hand. Both come from the lane's genesis entry and the PFTL chain id (`crates/types/src/external_lane_egress_types.rs`):
+
+- **Asset id.** `GenesisExternalLane::pft_asset_id` follows `issued_asset_id` (`account_owned_asset_types.rs:658-675`): the PFTL chain id, then the lane's Base binding in the issuer's place (lane id, source chain id, lock, token), then code `PFT` and version 1. It is SHA3-384 under `postfiat.external_lane.asset_id.v1`, which gives 48 bytes.
+- **Route profile.** `GenesisExternalLane::route_profile` takes the fields of `VaultBridgeRouteProfileV1` that genesis fixes for a lane, in its order and `key=value` preimage format (`account_owned_asset_types.rs:277-314`). Those fields are the lane id as `route_id`, the asset id, the source chain id, the lock and its code hash as the vault, the token and its code hash, and `route_epoch` 1. A lane's route has no governed successor, so it has a single epoch. The hash is SHA3-384 under `postfiat.external_lane.route_profile_hash.v1`, which gives 48 bytes. The verifier kind, program key and proof bounds are deployment values of the verifier, not route fields.
+- **Verifier pins.** The verifier stores `keccak256` of each 48-byte value.
+- **Production.** Mainnet uses the same functions at chain id 8453, with the production lock and token from the mainnet genesis.
+
+For the Base Sepolia rehearsal lane of 2026-11-06 (`docs/review/base-sepolia-lock-rehearsal-20261106/genesis.json`, PFTL chain id `postfiat-lane-sepolia-example`):
+
+- asset id `1656c1b1…9521df`;
+- route profile hash `9fd03c57…e3c48a17`.
+
+The full values, their verifier commitments and an 8453 example with synthetic addresses are in `crates/types/testdata/external-lane-route-profile-vectors.json`. The values were computed by `scripts/external-lane-route-profile-vectors.py`.
+
+**The public values.** `external_lane_export_egress_public_values` maps a packet, its lane and a finalized checkpoint (`ExternalLaneExportCheckpointV1`) to every field of the verifier's egress public values. `external_lane_export_egress_public_values_bytes` returns the bytes `verifyAndConsume` decodes. The verifier fixes the magic, the schema (`postfiat.pfusdc.egress_public_values.v1`) and the field layout (`PFTLFinalityVerifierV1.sol:354-446`). The lane reuses that layout unchanged.
+
+| Tag | Field (decoded as) | Lane value |
+| --- | --- | --- |
+| 1, 2 | schema, `proofProgramVersion` | the egress schema, 1 |
+| 3, 4, 5 | `pftlChainIdHash`, `pftlGenesisHashCommitment`, `pftlProtocolVersion` | checkpoint |
+| 6, 7 | `routeProfileHashCommitment`, `routeEpoch` | derived profile hash, 1 |
+| 8, 9, 11, 12, 13 | prior and resulting checkpoint, committee root and transition, `finalizedBlockHeight` | checkpoint |
+| 10, 14-17 | committee epoch, view, block id, parent, state root (not decoded) | checkpoint |
+| 18 | `bridgeExitRootCommitment` | the `external_lane_export_root` of the export's block header |
+| 19, 20 | exit leaf index, leaf commitment (not decoded) | the leaf's index and the leaf in that root |
+| 21, 22 | `acceptedReceiptCommitment`, receipt code | the export's transaction id, `accepted` |
+| 23 | `assetIdCommitment` | derived asset id |
+| 24, 25 | `burnTxIdCommitment`, `withdrawalIdCommitment` | the packet's burn-tx and withdrawal-id commitments |
+| 26 | source bucket (not decoded) | the lane's `route_config_digest` |
+| 27, 28 | `amount`, `recipient` | `amount_atoms`, `base_recipient` |
+| 29, 30 | destination hash, evidence root (not decoded) | 48 zero bytes |
+| 31 | `withdrawalFinalizedHeight` | the export block's height (`exported_at_height`) |
+| 32 | `arbitrumChainId` | the policy's chain id (84532, 8453) |
+| 33, 34 | `vault`, `vaultRuntimeCodeHash` | lock address and its code hash |
+| 35, 36 | `token`, `tokenRuntimeCodeHash` | token address and its code hash |
+| 37 | `packetDigest` | Keccak-256 under `postfiat.external_lane.export_evm_digest.v1` of the 48-byte packet digest |
+| 38 | `withdrawalPacketHashCommitment` | the packet digest |
+| 39 | `proofNullifier` | `pfusdc_egress_proof_nullifier_v1(1, burn tx, withdrawal id, finalized block)` |
+
+**NAV-specific fields.** These fields have no natural source in a lane packet: route epoch, bridge-exit root, exit leaf index and commitment, accepted receipt, source bucket, destination hash, evidence root, the 32-byte `packetDigest` and the chain id's Arbitrum name. The table gives the lane's value for each.
+
+**Limits.** None of the verifier's checks fails for a lane. The 48-byte commitments, the u64 amount and chain id, the lock and token code-hash bindings, and the replay keys (proof nullifier and withdrawal id on the verifier; withdrawal id and burn tx on the lock) all hold. Some differences remain:
+
+- **Transaction id.** Tag 21 is 48 bytes, so the mapping refuses a transaction id that is not 96 lower-case hex digits. The vector file's `tx-0` placeholders are refused.
+- **Released event.** `packetDigest` is 32 bytes, so the lock's `Released` event carries the Keccak digest, not the 48-byte PFTL packet digest. The 48-byte digest is in tag 38.
+- **Statement.** The bytes are tested against the real decode (`crates/ethereum-contracts/test/ExternalLaneExportPublicValues.t.sol`, with a fixture the Rust test writes). The prover program that proves them is the next step.
+- **A new guest.** The export program is a new SP1 guest with its own key. The pfUSDC guest requires `receipt.tx_id == burn_tx_id`, which a lane does not satisfy. Before it emits public values the program must authenticate the checkpoint's chain id and genesis, the PFTL finality of the export's block, that block's `external_lane_export_root`, the leaf's membership and index, the accepted transaction id, and the lane policy behind the route profile and asset id.
+- **Replay.** The proof nullifier contains the finalized block id, so one export proven at two checkpoints has two nullifiers. Replay protection of one export rests on the withdrawal-id consumption in the verifier and in the lock.
+- **Chain ids.** Every commitment binds the PFTL chain-id string. Two PFTL chains must never reuse a chain-id string.
+- **The checkpoint input.** `ExternalLaneExportCheckpointV1` takes hashes without `0x`; its doc comment says so.
+- **Deployment values.** `Genesis::external_lane_verifier_pins` returns the asset id, the route profile and its hash, their Keccak commitments, the chain-id hash and the genesis-hash commitment from one genesis. The lower-level functions take a chain id from the caller, so deployment code does not use them.
+
+## Base half, step 2 (2026-11-10)
+
+**Decision 8 is taken: a block-header root.** From an activation height, every block header carries `external_lane_export_root`. It is the root over the lane export packets the block accepted. A Merkleized state commitment would also give a bounded path, but it would change how every state field is committed, its replay and its archive. The header root is the shape the bridge-exit root and the PFTL-Uniswap receipt root already have.
+
+**The leaf and the tree.**
+
+- **Leaf.** SHA3-384 under `postfiat.external_lane.export_root_leaf.v1` over the PFTL chain id, the lane id, the export nonce (8 bytes big-endian) and the packet digest, each after a zero byte (`ExternalLaneExportPacket::export_root_leaf`).
+- **Order.** Leaves follow the block's receipts, in execution order across all lanes (`external_lane_export_packets_for_block`, `crates/node/src/batch_snapshot.rs`).
+- **Tree.** The bridge-exit tree's shape, in the lane's own small tree (`external_lane_export_root_v1`, `crates/types/src/external_lane_egress_types.rs`). It uses that tree's node hash and empty root unchanged, and does not edit `pfusdc_tier4_types.rs`, which the deployed pfUSDC egress guest links. A block without exports carries the empty value. A membership proof is `ExternalLaneExportRootProofV1`.
+- **Bound.** At most `EXTERNAL_LANE_EXPORT_ROOT_MAX_LEAVES_V1` (4,096, the bridge-exit tree's per-block bound) exports per block. Batch building leaves exports past the bound in the mempool for the next block. A proposed or replayed block with more is invalid (`external_lane_export_root_full`). A batch holds at most 1,024 transactions, so the bound is also a defence in depth.
+- **Vectors.** `crates/types/testdata/external-lane-export-root-vectors.json`, computed by `scripts/external-lane-export-root-vectors.py`.
+
+**Activation.** The height comes from the genesis field `external_lane_export_root_activation_height`, so a new chain can have the root from its first block. A running chain activates it with the governed amendment of the same name, which must be scheduled after its own block. An operator proposes it with `postfiat-node ratify-external-lane-export-root-activation-height --validators CSV --height H --external-lane-export-root-activation-height H' --amendment-file PATH`. The genesis value wins; otherwise the earliest unpaused amendment applies. As for the bridge-exit root, consensus v2 must be active at that height.
+
+- Before the height the header has no field, and the block hash, the proposal hash, the vote message and the consensus v2 block id are unchanged.
+- From the height they take new versions that add the root: `postfiat.block.v5`, `postfiat.block_proposal.v5`, the `.v5` signature and vote messages, and `postfiat.consensus.block-id.external-lane-export-root.v1`.
+- The proposer computes the root. A validator refuses a commit whose root differs from its own execution, and `verify-blocks` recomputes it from the replayed exports.
+
+**Rollout.** Every node and every validator signer process must run a build that knows the root before the activation height is proposed. An older signer refuses to sign a block that carries the root: its guard does not know the `.v5` vote and proposal messages. The activation height must also be a height at which consensus v2 is active. `init` refuses a genesis that breaks this rule. The governed amendment is refused with `external_lane_export_root_activation_requires_consensus_v2` at admission, batch building, execution and replay when its height breaks it (`external_lane_export_root_consensus_v2_rejection`, `crates/node/src/execution_actions.rs`). The bridge-exit root's activation rule is unchanged. The operator steps are in [External Lane Export Root Activation](../runbooks/external-lane-export-root-activation.md).
+
+**The empty value.** A block without exports carries the bridge-exit tree's empty value, the same bytes as an empty bridge-exit root. This is harmless: the leaf domain differs from the bridge-exit leaf domain, and the two roots sit in different header fields, each covered by the block id under its own name.
+
+**NAV egress proofs.** `crates/pfusdc_proofs` is unchanged on purpose. A NAV egress proof does not compare the lane export root field by field; it relies on the recomputed block id, which binds the root. The lane's own proof must compare the root explicitly.
+
+**The binding.** The inclusion names the export block's id and height. The proof program must show, in the same witness, that the root is that block's header root and that the block is the checkpoint's finalized block or an ancestor of it. The mapping cannot check this, and its doc comments say so. It refuses a block above the checkpoint, and a block id equal to the finalized block's at another height, or the reverse.
+
+**Refusal before activation.** `external_lane_export_v1` is refused with `external_lane_export_root_not_active` while the root is not active at that height: at mempool admission, at batch building and at execution. In a certified block the ordinary rejected-transaction fee rule applies. An accepted export is therefore always in a header root. `exports_enabled` is unchanged.
+
+**The binding follows the header.** The egress public values take tag 18 from the export block's root, tags 19 and 20 from the leaf, and tag 31 from that block (table above). The checkpoint input carries the export block's height, root and membership proof (`ExternalLaneExportInclusionV1`), not the lane's hash-chain root.
+
+**Not done.** No proof was generated. The export proof program, the proof-input command, the relay and the deployment are still to do.
 
 ## 10. Sources
 

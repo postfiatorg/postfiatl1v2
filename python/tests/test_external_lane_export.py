@@ -164,6 +164,8 @@ class ExternalLaneExportTests(unittest.TestCase):
             "external_lane_export_above_released",
             "external_lane_export_nonce_exhausted",
             "external_lane_export_records_full",
+            "external_lane_export_root_not_active",
+            "external_lane_export_recipient_is_token",
         ):
             with self.subTest(code=code):
                 quote = _quote(export_refusal={"code": code, "message": "after the pending exports"})

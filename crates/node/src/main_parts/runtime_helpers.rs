@@ -747,6 +747,7 @@ fn print_usage() {
   postfiat-node ratify-vault-bridge-route-authority-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-replicated-state-v2-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-bridge-exit-root-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
+  postfiat-node ratify-external-lane-export-root-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node governance-authorization-sign [--data-dir PATH] --amendment-file PATH --validator NODE_ID --validator-key-file PATH --proposal-slot H --expires-at-height H --authorization-file PATH
   postfiat-node governance-amendment-assemble [--data-dir PATH] --amendment-file PATH --authorization-files CSV --proposal-slot H --output PATH
   postfiat-node ethereum-checkpoint-observe [--data-dir PATH] --route-id ID --ethereum-rpc http://HOST:PORT[/PATH] [--block-number N] --checkpoint-file PATH
@@ -816,6 +817,7 @@ fn print_usage() {
   postfiat-node fastpay-recovery-governance-bootstrap [--data-dir PATH] --validators CSV [--support CSV] [--veto-until-height H] --payload-file PATH --amendment-file PATH --batch-file PATH
   postfiat-node fastpay-recovery-governance-bootstrap-assemble [--data-dir PATH] --payload-file PATH --signed-amendment-file PATH --proposal-slot H --batch-file PATH
   postfiat-node fastpay-committee-prepare [--data-dir PATH] [--registry-file PATH] [--valid-from H] [--new-orders-through H]
+  postfiat-node fastpay-admission-export [--data-dir PATH] --out FILE
   postfiat-node fastswap-store-migrate --data-dir PATH [--dry-run] [--backup-dir PATH]
   postfiat-node fastswap-committee-migrate --data-dir PATH --committee-file PATH --anchor-file PATH [--backup-dir PATH] [--validator-id ID] [--dry-run]
   postfiat-node apply-governance-batch [--data-dir PATH] --batch-file PATH [--certificate-file PATH]

@@ -1572,6 +1572,91 @@ mod validator_signer_tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
+    /// A block that carries the external-lane export root is signed through
+    /// the signer as a `.v5` proposal and a `.v5` vote, and a conflicting
+    /// second vote for the same height and view is still a double sign.
+    #[test]
+    fn signer_signs_v5_messages_of_a_block_with_the_export_root_and_refuses_a_double_vote() {
+        let root = temp_root("export-root");
+        let (socket, _) = serve(&root, vec![current_euid()], 5_000);
+        let sign = |context: &[u8], message: serde_json::Value| {
+            let request = serde_json::to_vec(&ValidatorSignerRequest {
+                schema: VALIDATOR_SIGNER_REQUEST_SCHEMA.to_string(),
+                method: "sign".to_string(),
+                validator_id: Some("validator-0".to_string()),
+                context: Some(String::from_utf8_lossy(context).into_owned()),
+                message_hex: Some(bytes_to_hex(&serde_json::to_vec(&message).expect("json"))),
+            })
+            .expect("json");
+            raw_request(&socket, &request)
+        };
+        let export_root = "e".repeat(96);
+        let proposal = sign(
+            BLOCK_PROPOSAL_SIGNATURE_CONTEXT,
+            serde_json::json!([
+                "postfiat.block_proposal.signature-message.v5",
+                "signer-test",
+                "a".repeat(96),
+                1,
+                5,
+                0,
+                "b".repeat(96),
+                "validator-0",
+                "transparent",
+                "c".repeat(96),
+                "d".repeat(96),
+                "f".repeat(96),
+                [null, null, export_root],
+                [],
+                []
+            ]),
+        );
+        assert!(
+            proposal.ok && proposal.signature_hex.is_some(),
+            "{:?}",
+            proposal.error
+        );
+        let vote = |accept: bool, state_root: &str| {
+            sign(
+                BLOCK_CERTIFICATE_SIGNATURE_CONTEXT,
+                serde_json::json!([
+                    "postfiat.block_certificate_vote.message.v5",
+                    [
+                        "signer-test",
+                        "a".repeat(96),
+                        1,
+                        "",
+                        6,
+                        0,
+                        "b".repeat(96),
+                        "validator-0",
+                        "transparent",
+                        "c".repeat(96),
+                        state_root,
+                        null,
+                        null,
+                        export_root
+                    ],
+                    [[], [], "validator-0", accept]
+                ]),
+            )
+        };
+        let first = vote(true, &"f".repeat(96));
+        assert!(
+            first.ok && first.signature_hex.is_some(),
+            "{:?}",
+            first.error
+        );
+        let conflicting = vote(true, &"0".repeat(96));
+        assert!(!conflicting.ok && conflicting.signature_hex.is_none());
+        let message = conflicting.error.expect("refusal").message;
+        assert!(
+            message.contains("validator_signer_double_sign"),
+            "{message}"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     #[test]
     fn signer_refuses_a_peer_uid_outside_the_allow_list_and_signs_nothing() {
         let root = temp_root("peer");

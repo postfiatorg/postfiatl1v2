@@ -152,6 +152,7 @@ PUBLIC_READ_OBJECT_METHODS = frozenset(
         "private_pool_receipts",
         "private_pool_market",
         "private_readiness",
+        "fastpay_recovery_committee",
         "pfusdc_ingress_preflight",
         "pfusdc_egress_witness",
         "yolo_target_receipt",
@@ -220,6 +221,7 @@ CLI_METHODS: tuple[str, ...] = (
     "private_pool_receipts",
     "private_pool_market",
     "private_readiness",
+    "fastpay_recovery_committee",
     "pfusdc_ingress_preflight",
     "pfusdc_egress_witness",
     "yolo_target_receipt",
@@ -454,6 +456,8 @@ def call_method(client: PostFiatRpcClient, args: argparse.Namespace) -> Any:
         )
     if method == "private_readiness":
         return client.private_readiness(pool_id=args.pool_id)
+    if method == "fastpay_recovery_committee":
+        return client.fastpay_recovery_committee(epoch=args.epoch)
     if method == "pfusdc_ingress_preflight":
         return client.pfusdc_ingress_preflight(
             require_arg(args, "asset_id", method),

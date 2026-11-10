@@ -2637,13 +2637,19 @@ pub fn create_mempool_batch(options: MempoolBatchOptions) -> io::Result<Transact
         }
     }
     let pending_asset_transactions = std::mem::take(&mut mempool.pending_asset_transactions);
+    let export_bound = external_lane_export_block_bound();
+    let mut exports = 0_usize;
     for entry in pending_asset_transactions {
+        let is_export = entry.transaction.unsigned.transaction_kind
+            == postfiat_types::EXTERNAL_LANE_EXPORT_TRANSACTION_KIND_V1;
         if transactions
             .len()
             .saturating_add(payments_v2.len())
             .saturating_add(asset_transactions.len())
             >= options.max_transactions
+            || (is_export && exports >= export_bound)
         {
+            // An export past the block's bound waits for the next block.
             remaining_asset_transactions.push(entry);
             continue;
         }
@@ -2655,6 +2661,7 @@ pub fn create_mempool_batch(options: MempoolBatchOptions) -> io::Result<Transact
             asset_execution_compatibility,
         );
         if receipt.accepted {
+            exports += usize::from(is_export);
             asset_transactions.push(entry.transaction);
         }
     }
@@ -3310,11 +3317,11 @@ fn build_governance_batch_proposal(
     verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, block_height)?;
 
     verify_storage_commitment_action_readiness(store, &genesis, &batch, &chain_tip)?;
-    ensure_governance_batch_lifecycle_ready(&batch, block_height)?;
+    ensure_governance_batch_lifecycle_ready(&genesis, &batch, block_height)?;
     let receipts = execute_governance_batch(
         &mut governance,
         Some(&mut ledger),
-        Some(genesis.external_lanes()),
+        Some(&genesis),
         &batch,
         block_height,
     );
