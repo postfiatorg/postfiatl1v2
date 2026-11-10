@@ -734,3 +734,12 @@ fn external_lane_export_root_holds_at_most_the_per_block_bound() {
     assert!(error.starts_with(EXTERNAL_LANE_EXPORT_ROOT_FULL), "{error}");
     assert!(external_lane_export_root_proof_v1(&over, 0).is_err());
 }
+
+#[test]
+fn external_lane_export_root_proof_refuses_an_index_at_or_above_the_leaf_count() {
+    let leaves = [[1_u8; 48], [2_u8; 48]];
+    for index in [2, 3] {
+        assert!(external_lane_export_root_proof_v1(&leaves, index).is_err(), "index {index}");
+    }
+    assert!(external_lane_export_root_proof_v1(&[], 0).is_err());
+}
