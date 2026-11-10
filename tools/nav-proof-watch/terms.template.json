@@ -1,0 +1,7 @@
+{
+  "_source": "Every value here is set by the founder through D-SETTLEMENT (plan 07, 'Decisions only the founder can make'). This template ships with every value deliberately null; nav_proof_watch.py refuses to evaluate (exit 3) until a completed, dated file replaces this one. The 4-hour figures in docs/navcoins/navcoin-create-and-swap-spec.md are an older specification setting, not a founder requirement (plan 07 W2).",
+  "max_nav_age_seconds": null,
+  "proof_interval_seconds": null,
+  "observation_window_seconds": null,
+  "decisions_ref": null
+}

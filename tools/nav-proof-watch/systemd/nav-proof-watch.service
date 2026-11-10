@@ -1,0 +1,17 @@
+# Template. NOT installed, NOT enabled by the branch that ships it.
+# Read-only observer/evaluator. Exit 2 = alarm (see nav-proof-watch README);
+# OnFailure then trips the alarm unit below.
+[Unit]
+Description=NAV proof cadence and freshness observation (read-only)
+Documentation=file:/usr/local/lib/nav-proof-watch/README.md
+OnFailure=nav-proof-watch-alarm.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/nav-proof-watch/nav_proof_watch.py observe --state-dir /var/lib/nav-proof-watch
+ExecStartPost=/usr/bin/python3 /usr/local/lib/nav-proof-watch/nav_proof_watch.py evaluate --state-dir /var/lib/nav-proof-watch --terms /etc/nav-proof-watch/terms.json
+# the state dir is the recorded observation window: keep it
+StateDirectory=nav-proof-watch
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/nav-proof-watch
