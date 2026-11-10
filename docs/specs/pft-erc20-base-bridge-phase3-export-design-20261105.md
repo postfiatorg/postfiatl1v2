@@ -205,6 +205,7 @@ The product owner decides:
    - **A refund path.** An export the lock never pays is refunded on PFTL, which needs the verifier to refuse the refunded packet (see decision 3).
 
    The lean is the export halt. It costs least: one more check against a value the lane already has, with no new trust. It keeps the Phase 2 model of a committee-trusted bridge bounded by the cap and answered by the watcher and governance. It does not repay exports already accepted before the halt; only the refund path does that.
+8. How a finalized PFTL block commits a lane export so that a bounded proof can show it. Today nothing does ([Base half, step 2](#base-half-step-2-2026-11-10)).
 
 ## Base half, step 1 (2026-11-10)
 
@@ -254,6 +255,23 @@ The full values, their verifier commitments and an 8453 example with synthetic a
 - **Transaction id.** Tag 21 is 48 bytes, so the mapping refuses a transaction id that is not 96 lower-case hex digits. The vector file's `tx-0` placeholders are refused.
 - **Released event.** `packetDigest` is 32 bytes, so the lock's `Released` event carries the Keccak digest, not the 48-byte PFTL packet digest. The 48-byte digest is in tag 38.
 - **Statement.** The bytes are tested against the real decode (`crates/ethereum-contracts/test/ExternalLaneExportPublicValues.t.sol`, with a fixture the Rust test writes). The prover program that proves them is the next step.
+
+## Base half, step 2 (2026-11-10)
+
+This step stopped before the prover program. The export packet cannot yet be bound to a finalized PFTL block with a bounded witness. No witness type, program, ELF or proof-input command was added.
+
+**What blocks it.** The block header carries the state root, the bridge-exit root and the PFTL-Uniswap receipt root (`core_chain.rs:663-683`). None of them commits a lane export with a bounded path:
+
+- **The state root is one flat hash.** It is SHA3-384 over the whole replicated state serialized in order (`crates/node/src/state_commitment.rs:516-575`). The lane's export history root sits inside the ledger section (`:1630-1640`). After it come every ordered batch id since genesis (`:572`), the shielded notes and nullifiers, and the bridge state. A path from the state root to a lane therefore needs the whole state as the witness, and that grows with every block. A hash midstate in place of the prefix would not be sound: whoever chooses the sponge state can absorb any bytes.
+- **The bridge-exit root holds only NAV exits.** Its leaves come from vault-bridge redemptions alone (`crates/node/src/batch_snapshot.rs:119-200`). The NAV egress check binds that header field, not the state root (`crates/pfusdc_proofs/src/lib.rs:35-68`).
+- **The export history is a hash chain.** It shows a packet in a bounded way only from the root right after that packet's block, and only given the previous root and the later digests of the same block.
+
+**What the commitment would need (decision 8).** The direct route follows `bridge_exit_root` and `pftl_uniswap_receipt_root`. Add a header root of the lane exports accepted in each block, gated by an activation height and included in the block hash. A proof would then show the finality of the export's block and the packet's membership under that root, the shape of the NAV egress statement. A Merkleized state commitment would also work, but it is a much larger change. Either one changes the block hash, so it is a consensus change.
+
+**Done in this step.**
+
+- The packet vectors use 96-digit transaction ids, the form execution gives an export (`asset_transaction_tx_id`, `crates/execution/src/tx_hashing.rs:20-25`).
+- `crates/pft-token-contracts/test/ExternalLaneLockRelease.t.sol` releases an export through a deployed `PFTLockV1` and the real verifier on Rust-written public values. The recipient is paid once. A second release reverts as already consumed. Another vault, token or chain id reverts with the verifier's binding error.
 
 ## 10. Sources
 
