@@ -53,7 +53,7 @@ contract ExternalLaneExportPublicValuesTest {
         require(d.committeeRootCommitment == verifier.latestCommitteeRootCommitment(), "committee_root");
         require(d.committeeTransitionCommitment == bytes32(0), "committee_transition");
         require(d.finalizedBlockHeight == F.FINALIZED_HEIGHT, "finalized_height");
-        require(d.bridgeExitRootCommitment == keccak256(F.EXPORT_HISTORY_ROOT), "export_history_root");
+        require(d.bridgeExitRootCommitment == keccak256(F.EXPORT_ROOT), "export_root");
         require(d.acceptedReceiptCommitment == keccak256(F.TX_ID), "accepted_receipt");
         require(d.assetIdCommitment == verifier.assetIdCommitment(), "asset_id");
         require(d.burnTxIdCommitment == keccak256(F.BURN_TX_ID), "burn_tx_id");

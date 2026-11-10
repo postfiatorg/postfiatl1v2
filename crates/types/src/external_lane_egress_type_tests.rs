@@ -176,7 +176,8 @@ fn sample_egress_inputs() -> (
         finalized_block_id: "50".repeat(48),
         finalized_parent_block_id: "4f".repeat(48),
         finalized_state_root: "5a".repeat(48),
-        export_history_root: external_lane_export_history_root(None, &packet).expect("root"),
+        export: ExternalLaneExportInclusionV1::single(&packet, "postfiat-lane-sepolia-example")
+            .expect("inclusion"),
     };
     (lane, packet, checkpoint)
 }
@@ -205,13 +206,18 @@ fn external_lane_export_maps_to_every_egress_public_value() {
         values.resulting_checkpoint_block_id,
         checkpoint.finalized_block_id
     );
+    // Tags 18-20 and 31 come from the export's block header root and leaf.
+    assert_eq!(values.bridge_exit_root, checkpoint.export.export_root);
+    assert_eq!(values.exit_leaf_index, checkpoint.export.proof.leaf_index);
     assert_eq!(
-        values.bridge_exit_root,
-        strip(&checkpoint.export_history_root)
+        values.exit_leaf_commitment,
+        bytes_to_hex(&packet.export_root_leaf(chain_id).expect("leaf"))
     );
-    assert_eq!(values.exit_leaf_index, packet.export_nonce);
+    assert_eq!(
+        values.withdrawal_finalized_height,
+        checkpoint.export.block_height
+    );
     let digest = bytes_to_hex(&packet.digest().expect("digest"));
-    assert_eq!(values.exit_leaf_commitment, digest);
     assert_eq!(values.withdrawal_packet_hash, digest);
     assert_eq!(values.accepted_receipt_id, packet.tx_id);
     assert_eq!(values.accepted_receipt_code, "accepted");
@@ -306,9 +312,16 @@ fn external_lane_export_public_values_refuse_what_the_lane_did_not_export() {
     let mut text_id = packet.clone();
     text_id.tx_id = "tx-0".to_string();
     assert!(external_lane_export_egress_public_values(&lane, &text_id, &checkpoint).is_err());
+    // The inclusion must prove this packet's leaf, in its block, under the root.
     let mut root = checkpoint.clone();
-    root.export_history_root = strip_lane_prefix(&root.export_history_root);
+    root.export.export_root = bridge_exit_empty_root_v1();
     assert!(external_lane_export_egress_public_values(&lane, &packet, &root).is_err());
+    let mut block = checkpoint.clone();
+    block.export.block_height += 1;
+    assert!(external_lane_export_egress_public_values(&lane, &packet, &block).is_err());
+    let mut other = packet.clone();
+    other.amount_atoms += 1;
+    assert!(external_lane_export_egress_public_values(&lane, &other, &checkpoint).is_err());
 }
 
 fn strip_lane_prefix(value: &str) -> String {
@@ -372,7 +385,7 @@ fn solidity_lane_fixture(
         "FINALIZED_HEIGHT",
         values.finalized_block_height,
     ));
-    out.push_str(&raw("EXPORT_HISTORY_ROOT", &values.bridge_exit_root));
+    out.push_str(&raw("EXPORT_ROOT", &values.bridge_exit_root));
     out.push_str(&raw("TX_ID", &values.accepted_receipt_id));
     out.push_str(&raw("ASSET_ID", &values.asset_id));
     out.push_str(&raw("BURN_TX_ID", &values.burn_tx_id));
@@ -461,8 +474,8 @@ fn external_lane_lock_release_fixture() -> String {
     lane.policy.token_address = EXTERNAL_LANE_LOCAL_TOKEN.to_string();
     lane.policy.token_runtime_code_hash = EXTERNAL_LANE_LOCAL_TOKEN_CODE_HASH.to_string();
     packet.lane_id = lane.id.clone();
-    checkpoint.export_history_root =
-        external_lane_export_history_root(None, &packet).expect("root");
+    checkpoint.export = ExternalLaneExportInclusionV1::single(&packet, &checkpoint.pftl_chain_id)
+        .expect("inclusion");
     let values =
         external_lane_export_egress_public_values(&lane, &packet, &checkpoint).expect("values");
     let variant = |change: fn(&mut PfUsdcEgressPublicValuesV1)| {
@@ -525,8 +538,9 @@ fn external_lane_export_vectors_carry_execution_transaction_ids() {
         validate_lower_hex_len("export tx_id", &packet.tx_id, 96).expect("tx id");
         packet.exported_at_height = checkpoint.finalized_block_height;
         let mut checkpoint = checkpoint.clone();
-        checkpoint.export_history_root =
-            external_lane_export_history_root(None, &packet).expect("root");
+        checkpoint.export =
+            ExternalLaneExportInclusionV1::single(&packet, &checkpoint.pftl_chain_id)
+                .expect("inclusion");
         let values =
             external_lane_export_egress_public_values(&lane, &packet, &checkpoint).expect("values");
         assert_eq!(values.accepted_receipt_id, packet.tx_id);

@@ -136,10 +136,11 @@ impl GenesisExternalLane {
     }
 }
 
-/// A finalized PFTL checkpoint at or above the export's height, as the egress
-/// public values carry it. Hashes are 96 lower-case hex digits without `0x`,
-/// as in `PfUsdcEgressPublicValuesV1`; `export_history_root` is the lane's
-/// root at the finalized block, as the lane state stores it (`0x` and 96).
+/// A finalized PFTL checkpoint at or above the export's block, as the egress
+/// public values carry it. Every hash is 96 lower-case hex digits WITHOUT `0x`,
+/// as in `PfUsdcEgressPublicValuesV1` (the lane state's own roots carry `0x`;
+/// none of them is an input here). `export` places the packet in the
+/// `external_lane_export_root` of the block that accepted it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExternalLaneExportCheckpointV1 {
@@ -155,7 +156,29 @@ pub struct ExternalLaneExportCheckpointV1 {
     pub finalized_block_id: String,
     pub finalized_parent_block_id: String,
     pub finalized_state_root: String,
-    pub export_history_root: String,
+    pub export: ExternalLaneExportInclusionV1,
+}
+
+/// The export's block: its height, the header's `external_lane_export_root`
+/// and the packet leaf's membership proof under it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalLaneExportInclusionV1 {
+    pub block_height: u64,
+    pub export_root: String,
+    pub proof: ExternalLaneExportRootProofV1,
+}
+
+impl ExternalLaneExportInclusionV1 {
+    /// The inclusion of the only export of a block.
+    pub fn single(packet: &ExternalLaneExportPacket, chain_id: &str) -> Result<Self, String> {
+        let leaf = packet.export_root_leaf(chain_id)?;
+        Ok(Self {
+            block_height: packet.exported_at_height,
+            export_root: external_lane_export_root_v1(&[leaf])?,
+            proof: external_lane_export_root_proof_v1(&[leaf], 0)?,
+        })
+    }
 }
 
 /// The 32-byte digest the verifier returns and the lock emits as
@@ -208,6 +231,14 @@ pub fn external_lane_export_egress_public_values(
     }
     validate_lower_hex_len("external_lane_export.tx_id", &packet.tx_id, 96)?;
     let chain_id = checkpoint.pftl_chain_id.as_str();
+    let export = &checkpoint.export;
+    if export.block_height != packet.exported_at_height {
+        return Err("export inclusion names another block".to_string());
+    }
+    if export.proof.leaf != bytes_to_hex(&packet.export_root_leaf(chain_id)?) {
+        return Err("export inclusion proves another leaf".to_string());
+    }
+    verify_external_lane_export_root_proof_v1(&export.export_root, &export.proof)?;
     let route = lane.route_profile(chain_id)?;
     let digest = bytes_to_hex(&packet.digest()?);
     let burn_tx_id = bytes_to_hex(&packet.burn_tx_commitment(chain_id));
@@ -238,12 +269,9 @@ pub fn external_lane_export_egress_public_values(
         finalized_block_id: checkpoint.finalized_block_id.clone(),
         finalized_parent_block_id: checkpoint.finalized_parent_block_id.clone(),
         finalized_state_root: checkpoint.finalized_state_root.clone(),
-        bridge_exit_root: lane_hex_without_prefix(
-            "checkpoint.export_history_root",
-            &checkpoint.export_history_root,
-        )?,
-        exit_leaf_index: packet.export_nonce,
-        exit_leaf_commitment: digest.clone(),
+        bridge_exit_root: export.export_root.clone(),
+        exit_leaf_index: export.proof.leaf_index,
+        exit_leaf_commitment: export.proof.leaf.clone(),
         accepted_receipt_id: packet.tx_id.clone(),
         accepted_receipt_code: BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE.to_string(),
         asset_id: route.asset_id.clone(),
@@ -254,7 +282,7 @@ pub fn external_lane_export_egress_public_values(
         recipient: packet.base_recipient.clone(),
         destination_hash: none.clone(),
         evidence_root: none,
-        withdrawal_finalized_height: packet.exported_at_height,
+        withdrawal_finalized_height: export.block_height,
         arbitrum_chain_id: lane.policy.chain_id,
         vault_address: route.vault_address,
         vault_runtime_code_hash: lane_hex_without_prefix(
