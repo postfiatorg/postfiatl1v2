@@ -19,19 +19,20 @@ Without `--node-bin` the script builds `postfiat-node` into this checkout's
 
 ## What it does
 
-1. Starts Anvil, generates two disposable keys and funds them with
-   `anvil_setBalance`. One key deploys the PFT token; the other deploys the
-   verifier and the lock.
-2. Predicts the verifier's CREATE address at the deployer's next nonce `n` and
-   the lock's at `n + 1` (RLP `[deployer, nonce]`, Keccak-256). The prediction
-   is cross-checked with `cast compute-address`.
+1. Starts Anvil, generates three disposable keys and funds them with
+   `anvil_setBalance`: the token's deployer, the verifier's deployer and the
+   lock's deployer, the two dedicated deployers of section 5.
+2. Predicts the verifier's CREATE address from the verifier deployer's next
+   nonce and the lock's from the lock deployer's next nonce (RLP
+   `[deployer, nonce]`, Keccak-256). Each prediction is cross-checked with
+   `cast compute-address`.
 3. Predicts both runtime code hashes on an `evm_snapshot` that is then reverted.
    - The lock holds the verifier's address as an immutable. So a probe verifier
-     with a placeholder vault hash and the lock are deployed at the predicted
-     nonces, and the lock's code is hashed.
+     with a placeholder vault hash and the lock are deployed from their
+     deployers at the planned nonces, and the lock's code is hashed.
    - On a second snapshot, the verifier is deployed with that lock code hash,
      and its code is hashed.
-   - After each revert the script checks that the deployer's nonce and both
+   - After each revert the script checks that both deployers' nonces and both
      addresses are back as they were.
    - The lock's constructor values come from the genesis it is pinned in.
      `maxLockAmount` is the `base-erc20` lane's per-window release cap,
@@ -47,15 +48,18 @@ Without `--node-bin` the script builds `postfiat-node` into this checkout's
    committee. The node reads it with `postfiat-node init --genesis-file`, which
    validates the genesis. The script compares the lane pins in the data
    directory's `genesis.json` with the written ones.
-5. Refuses a deployer nonce off by one. On a snapshot, a stray zero-value
-   transaction moves the nonce. The guard computes where both contracts would
-   land, refuses, and no code appears at either predicted address.
-6. Deploys the verifier, then the lock, at the predicted nonces. The verifier is
-   seeded with the fixture checkpoint of
+5. Refuses a deployer nonce off by one, once per deployer. On a snapshot, a
+   stray zero-value transaction moves that deployer's nonce. The other
+   contract's predicted address stays intact, but the guard refuses the pins as
+   a whole: genesis pins the lock and the lock pins the verifier, so one lost
+   address loses both. No code appears at either predicted address.
+6. Deploys the verifier, then the lock, each from its deployer at its planned
+   nonce. The verifier is seeded with the fixture checkpoint of
    `crates/ethereum-contracts/test/PFUSDCTier4.t.sol`.
-   - Immediately before each deployment the guard reads the deployer's `latest`
-     and `pending` transaction counts. Both must equal the planned nonce (`n`
-     for the verifier, `n + 1` for the lock), or the script refuses.
+   - Immediately before each deployment the guard reads the `latest` and
+     `pending` transaction counts: of both deployers before the verifier, of
+     the lock deployer before the lock. Both counts must equal the planned
+     nonce, or the script refuses.
    - Each `forge create` pins its nonce with `--nonce`. A transaction that takes
      the nonce first makes the deployment fail; it cannot shift an address.
 7. Checks on chain:
@@ -91,16 +95,12 @@ Anvil is stopped.
   provide them. The genesis is only validated by `init`; no chain is run.
 - **No proofs.** The SP1 verifier is a fixture address, which the constructor
   only requires to be non-zero, so no proof is verified and no `release` runs.
-- **One deployer.** Section 5 recommends one deployer for the verifier and one
-  for the lock. This rehearsal uses a single deployer and its next two nonces.
-  The ordering argument is the same: a stray transaction moves either
-  prediction.
 - **The guard is not race-free.** A transaction sent between the check and the
   deployment can still take the planned nonce. The pinned nonce then makes the
   deployment fail, but the predicted address is lost and the genesis pins can
-  never be met. Locally only the script holds the key and Anvil mines at once. A
-  production run must also use the two dedicated deployer keys of section 5.
-  Nothing else may hold or use them, and nothing else may be sent from them.
+  never be met. Locally only the script holds the keys and Anvil mines at once.
+  In production nothing else may hold or use the two dedicated deployer keys,
+  and nothing else may be sent from them.
 - **Base Sepolia waits.** The Base Sepolia dry run waits for the Base route
   profile and asset id.
 

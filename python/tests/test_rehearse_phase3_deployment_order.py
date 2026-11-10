@@ -15,6 +15,7 @@ rehearsal = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(rehearsal)
 
 DEPLOYER = "0x6ac7ea33f8831ea9dcc53393aaa88b25a785dbf0"
+LOCK_DEPLOYER = "0x" + "77" * 20
 
 
 class KeccakAndCreateAddressTests(unittest.TestCase):
@@ -89,6 +90,44 @@ class NonceGuardTests(unittest.TestCase):
     def test_predictions_that_do_not_match_the_nonce_are_refused(self):
         with self.assertRaises(rehearsal.RehearsalFailure):
             rehearsal.refuse_unless_planned_nonce(DEPLOYER, {"latest": 0, "pending": 0}, 0, (self.lock, self.verifier))
+
+
+class TwoDeployerPlanTests(unittest.TestCase):
+    def setUp(self):
+        self.plan = rehearsal.deployment_plan(verifier_deployer=DEPLOYER, verifier_nonce=0,
+                                              lock_deployer=LOCK_DEPLOYER, lock_nonce=0)
+        self.at_plan = {DEPLOYER: {"latest": 0, "pending": 0}, LOCK_DEPLOYER: {"latest": 0, "pending": 0}}
+
+    def test_each_address_comes_from_its_own_deployer(self):
+        self.assertEqual(self.plan["verifier"]["predicted"], rehearsal.create_address(DEPLOYER, 0))
+        self.assertEqual(self.plan["lock"]["predicted"], rehearsal.create_address(LOCK_DEPLOYER, 0))
+        status = rehearsal.refuse_unless_plan_intact(self.plan, self.at_plan)
+        self.assertTrue(status["verifier"]["intact"] and status["lock"]["intact"])
+
+    def test_one_deployer_for_both_is_refused(self):
+        with self.assertRaises(rehearsal.RehearsalFailure):
+            rehearsal.deployment_plan(verifier_deployer=DEPLOYER, verifier_nonce=0, lock_deployer=DEPLOYER,
+                                      lock_nonce=1)
+
+    def test_a_stray_transaction_on_one_deployer_leaves_the_other_intact_but_refuses_the_plan(self):
+        for role, deployer, other in (("verifier", DEPLOYER, "lock"), ("lock", LOCK_DEPLOYER, "verifier")):
+            with self.subTest(role=role):
+                moved = dict(self.at_plan, **{deployer: {"latest": 1, "pending": 1}})
+                status = rehearsal.nonce_plan_status(self.plan, moved)
+                self.assertFalse(status[role]["intact"])
+                self.assertEqual(status[role]["would_land_at"], rehearsal.create_address(deployer, 1))
+                self.assertTrue(status[other]["intact"])
+                self.assertEqual(status[other]["would_land_at"], self.plan[other]["predicted"])
+                with self.assertRaises(rehearsal.RehearsalFailure) as refusal:
+                    rehearsal.refuse_unless_plan_intact(self.plan, moved)
+                self.assertIn(f"{role}:", str(refusal.exception))
+                self.assertNotIn(f"{other}:", str(refusal.exception))
+
+    def test_a_pending_transaction_on_either_deployer_refuses_the_plan(self):
+        for deployer in (DEPLOYER, LOCK_DEPLOYER):
+            with self.assertRaises(rehearsal.RehearsalFailure):
+                rehearsal.refuse_unless_plan_intact(
+                    self.plan, dict(self.at_plan, **{deployer: {"latest": 0, "pending": 1}}))
 
 
 TOKEN = "0x" + "12" * 20
