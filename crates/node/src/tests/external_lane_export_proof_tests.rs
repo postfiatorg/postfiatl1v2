@@ -249,9 +249,9 @@ fn external_lane_export_proof_input_proves_each_export_and_refuses_changes() {
             "prior checkpoint",
         ),
         (
-            "receipt list",
-            mutate(&|w| w.block.receipt_ids.clear()),
-            "not a receipt of the proven block",
+            "transaction id",
+            mutate(&|w| w.packet.tx_id = "ef".repeat(48)),
+            "another leaf",
         ),
         (
             "older export block",

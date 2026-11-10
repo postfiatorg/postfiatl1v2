@@ -19,8 +19,11 @@ use postfiat_types::{
 /// finalized id, and its height is the packet's; (iii) the packet's leaf is in
 /// that root at the claimed index under the claimed count; (iv) the lane
 /// policy, from the genesis whose hash the finality domain signed, gives the
-/// route profile hash and asset id; (v) the accepted
-/// transaction id is the packet's. An export in an older block is refused.
+/// route profile hash and asset id; (v) the accepted transaction id is the
+/// packet's `tx_id`, bound by the packet digest inside the leaf, the leaf by
+/// the header root, and the root by the block id the committee signed. The
+/// block's `receipt_ids` are not checked: no signed value covers them. An
+/// export in an older block is refused.
 pub fn verify_external_lane_export_witness_v1(
     witness: &ExternalLaneExportProofWitnessV1,
 ) -> Result<PfUsdcEgressPublicValuesV1, String> {
@@ -107,16 +110,6 @@ pub fn verify_external_lane_export_witness_v1(
         export_root,
         &witness.export_root_proof,
     )?;
-
-    // (v) the transaction is a receipt of the block.
-    if !witness
-        .block
-        .receipt_ids
-        .iter()
-        .any(|id| id == &packet.tx_id)
-    {
-        return Err("export transaction is not a receipt of the proven block".to_string());
-    }
 
     let checkpoint = ExternalLaneExportCheckpointV1 {
         pftl_chain_id: witness.chain_id.clone(),
