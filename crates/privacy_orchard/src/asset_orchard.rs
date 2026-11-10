@@ -4270,9 +4270,18 @@ fn parse_lower_hex(
             format!("{label} has {byte_len} bytes, max {max_bytes}"),
         ));
     }
-    hex_to_bytes(value).map_err(|error| {
-        AssetOrchardError::new("invalid_hex", format!("{label} has invalid hex: {error}"))
-    })?;
+    // Validate the digits without decoding: the value may be a key or note secret, and a decoded
+    // copy here would be freed unwiped (issue #181). Uppercase is rejected above, so this accepts
+    // exactly what `hex_to_bytes` accepts, with its message.
+    if !value
+        .bytes()
+        .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return Err(AssetOrchardError::new(
+            "invalid_hex",
+            format!("{label} has invalid hex: invalid hex digit"),
+        ));
+    }
     Ok(())
 }
 
@@ -5399,6 +5408,41 @@ mod tests {
                 .expect_err("identity point")
                 .code(),
             "identity_point"
+        );
+    }
+
+    #[test]
+    fn fixed_lower_hex_array_keeps_error_codes_and_messages() {
+        let cases = [
+            ("", "empty_hex", "secret hex must not be empty"),
+            (
+                " 0a",
+                "noncanonical_hex",
+                "secret hex has leading or trailing whitespace",
+            ),
+            ("0a0", "noncanonical_hex", "secret hex has odd length"),
+            ("0A", "noncanonical_hex", "secret hex must be lowercase"),
+            ("0a", "undersized_hex", "secret has 1 bytes, min 2"),
+            ("0a0b0c", "oversized_hex", "secret has 3 bytes, max 2"),
+            (
+                "0g00",
+                "invalid_hex",
+                "secret has invalid hex: invalid hex digit",
+            ),
+            (
+                "0a\u{e9}",
+                "invalid_hex",
+                "secret has invalid hex: invalid hex digit",
+            ),
+        ];
+        for (value, code, message) in cases {
+            let error = fixed_lower_hex_array::<2>("secret", value).expect_err(value);
+            assert_eq!(error.code(), code);
+            assert_eq!(error.to_string(), format!("{code}: {message}"));
+        }
+        assert_eq!(
+            fixed_lower_hex_array::<2>("secret", "0aff").expect("valid"),
+            [0x0a, 0xff]
         );
     }
 
