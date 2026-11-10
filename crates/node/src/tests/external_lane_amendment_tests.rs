@@ -308,6 +308,7 @@ fn certificate_replay_refuses_a_release_cap_amendment_for_an_unconfigured_lane()
             state_root: String::new(),
             bridge_exit_root: None,
             pftl_uniswap_receipt_root: None,
+            external_lane_export_root: None,
             receipt_count: 1,
             certificate_id: String::new(),
             certificate: BlockCertificate {

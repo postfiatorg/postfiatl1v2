@@ -222,13 +222,29 @@ fn external_lane_export_in_a_block_burns_the_fee_only_after_fee_activation() {
 
 // ---- Exports behind `exports_enabled` (design sections 3 and 4) ----------
 
+/// Consensus v2 and the export root start after the committee bootstrap.
+const EXPORT_ROOT_HEIGHT: u64 = 2;
+
+/// Exports enabled, with consensus v2 and the export root from [`EXPORT_ROOT_HEIGHT`].
 fn export_chain(label: &str) -> Chain {
-    lane_chain_configured(label, 86_400, None, 4, |policy| policy.exports_enabled = true)
+    export_chain_from(label, EXPORT_ROOT_HEIGHT)
+}
+
+/// Exports enabled, with consensus v2 and the export root from `height`.
+fn export_chain_from(label: &str, height: u64) -> Chain {
+    lane_chain_with_genesis(label, 86_400, Some(height), 4, |genesis| {
+        genesis.external_lanes.as_mut().expect("lanes")[0].policy.exports_enabled = true;
+        genesis.external_lane_export_root_activation_height = Some(height);
+    })
 }
 
 /// A lane chain with exports enabled after one release of `amount` atoms.
 fn released_export_chain(label: &str, amount: u64) -> Chain {
-    let chain = export_chain(label);
+    released_export_chain_from(label, amount, EXPORT_ROOT_HEIGHT)
+}
+
+fn released_export_chain_from(label: &str, amount: u64, height: u64) -> Chain {
+    let chain = export_chain_from(label, height);
     let receipt = admit_and_apply(&chain, &release_tx(&chain, "base-erc20", 1, amount, 1), "release");
     assert!(receipt.accepted, "{receipt:?}");
     chain
@@ -348,7 +364,9 @@ fn external_lane_release_then_export_conserves_native_supply() {
 /// lock-address checks, and nothing changes.
 #[test]
 fn external_lane_export_is_halted_under_a_zero_active_cap() {
-    let chain = released_export_chain("export-halted", ACCOUNT_RESERVE + 1_000);
+    // The governance round is a legacy block; consensus v2 and the export root
+    // start at the export's height.
+    let chain = released_export_chain_from("export-halted", ACCOUNT_RESERVE + 1_000, 4);
     govern_release_cap(&chain, 0);
     // Mempool admission and batch building run under the governed cap; the
     // bare execution entry point knows only the genesis cap, so it fails
@@ -513,4 +531,122 @@ fn external_lane_governed_inputs_are_never_serialized() {
     const { assert!(!Probe::<postfiat_execution::ExternalLaneGovernedInputs>::SERIALIZE) };
     // The probe does see a serializable type.
     const { assert!(Probe::<postfiat_types::ExternalLaneState>::SERIALIZE) };
+}
+
+fn header_at(chain: &Chain, height: u64) -> BlockHeader {
+    NodeStore::new(&chain.data_dir)
+        .read_blocks()
+        .expect("blocks")
+        .blocks
+        .into_iter()
+        .find(|block| block.header.height == height)
+        .expect("block")
+        .header
+}
+
+/// Before the activation height a header has no export root and an export is
+/// refused at mempool admission, batch building and execution; from it every
+/// header has one: the root of the block's export leaves, or the empty value.
+#[test]
+fn external_lane_export_root_starts_at_its_activation_height() {
+    let chain = released_export_chain_from("export-root-boundary", ACCOUNT_RESERVE + 1_000, 4);
+    assert_eq!(tip_height(&chain), 2);
+    let early = export_tx(&chain, "base-erc20", 7, &base_recipient());
+    refused_at_every_entry_point(&chain, &early, postfiat_types::EXTERNAL_LANE_EXPORT_ROOT_NOT_ACTIVE, "early");
+    let receipt = admit_and_apply(
+        &chain,
+        &release_tx(&chain, "base-erc20", 2, 1_000, faucet_sequence(&chain)),
+        "release-3",
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    for height in [2, 3] {
+        assert_eq!(header_at(&chain, height).external_lane_export_root, None, "height {height}");
+    }
+
+    let receipt = admit_and_apply(&chain, &export_tx(&chain, "base-erc20", 7, &base_recipient()), "export-4");
+    assert!(receipt.accepted, "{receipt:?}");
+    let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
+    let packet = ledger.external_lanes[0].exports[0].clone();
+    assert_eq!(packet.exported_at_height, 4);
+    let leaf = packet.export_root_leaf(&chain.genesis.chain_id).expect("leaf");
+    let root = header_at(&chain, 4).external_lane_export_root.expect("root at the activation height");
+    assert_eq!(root, postfiat_types::external_lane_export_root_v1(&[leaf]).expect("root"));
+    let proof = postfiat_types::external_lane_export_root_proof_v1(&[leaf], 0).expect("proof");
+    postfiat_types::verify_external_lane_export_root_proof_v1(&root, &proof).expect("member");
+
+    let receipt = admit_and_apply(
+        &chain,
+        &release_tx(&chain, "base-erc20", 3, 1_000, faucet_sequence(&chain)),
+        "release-5",
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    assert_eq!(header_at(&chain, 5).external_lane_export_root, Some(postfiat_types::bridge_exit_empty_root_v1()));
+    verify_blocks(NodeOptions { data_dir: chain.data_dir.clone() }).expect("replay verifies the roots");
+
+    // A block whose export root was changed after the fact no longer verifies.
+    let store = NodeStore::new(&chain.data_dir);
+    let mut blocks = store.read_blocks().expect("blocks");
+    let tampered = blocks.blocks.iter_mut().find(|block| block.header.height == 4).expect("block 4");
+    tampered.header.external_lane_export_root = Some(postfiat_types::bridge_exit_empty_root_v1());
+    store.write_blocks(&blocks).expect("write tampered blocks");
+    assert!(verify_blocks(NodeOptions { data_dir: chain.data_dir.clone() }).is_err());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+fn export_receipt(tx_id: &str, accepted: bool) -> Receipt {
+    serde_json::from_value(serde_json::json!({
+        "tx_id": tx_id, "accepted": accepted, "code": if accepted { "accepted" } else { "refused" },
+        "message": "", "fee_charged": 0, "fee_burned": 0, "minimum_fee": 0, "account_reserve": 0,
+        "state_expansion_fee": 0, "nft_issuer_transfer_fee": 0, "nft_collection_flags": 0,
+        "offer_fills": []
+    }))
+    .expect("receipt")
+}
+
+/// Two exports of one lane and one of another in one block: the leaves follow
+/// the receipts (execution order) across lanes, and each has a proof.
+#[test]
+fn external_lane_export_root_orders_leaves_by_receipt_across_lanes() {
+    let packet = |lane: &str, nonce: u64, tx: &str| postfiat_types::ExternalLaneExportPacket {
+        lane_id: lane.to_string(),
+        export_nonce: nonce,
+        sender: "pftl-sender".to_string(),
+        base_recipient: base_recipient(),
+        amount_atoms: 5,
+        exported_at_height: 9,
+        tx_id: tx.repeat(48),
+    };
+    let mut ledger = LedgerState::new(Vec::new());
+    let lane = |id: &str| {
+        let mut lane = lane_genesis("postfiat-local", 4).external_lanes.expect("lanes")[0].clone();
+        lane.id = id.to_string();
+        postfiat_types::ExternalLaneState::genesis(&lane)
+    };
+    let mut first = lane("base-erc20");
+    first.exports = vec![packet("base-erc20", 0, "0a"), packet("base-erc20", 1, "0c")];
+    let mut second = lane("base-other");
+    // An earlier block's export is not a leaf of this one.
+    let mut old = packet("base-other", 0, "0d");
+    old.exported_at_height = 8;
+    second.exports = vec![old, packet("base-other", 1, "0b")];
+    ledger.external_lanes = vec![first, second];
+    let receipts = ["0a", "0e", "0b", "0c"]
+        .iter()
+        .map(|tx| export_receipt(&tx.repeat(48), *tx != "0e"))
+        .collect::<Vec<_>>();
+    let packets = external_lane_export_packets_for_block(&ledger, &receipts, 9).expect("packets");
+    let order = packets.iter().map(|packet| (packet.lane_id.as_str(), packet.export_nonce)).collect::<Vec<_>>();
+    assert_eq!(order, [("base-erc20", 0), ("base-other", 1), ("base-erc20", 1)]);
+    let leaves = packets
+        .iter()
+        .map(|packet| packet.export_root_leaf("postfiat-local").expect("leaf"))
+        .collect::<Vec<_>>();
+    let root = postfiat_types::external_lane_export_root_v1(&leaves).expect("root");
+    for index in 0..3 {
+        let proof = postfiat_types::external_lane_export_root_proof_v1(&leaves, index).expect("proof");
+        postfiat_types::verify_external_lane_export_root_proof_v1(&root, &proof).expect("member");
+    }
+    // A packet of the block without an accepted receipt is a corrupt block.
+    let missing = receipts[..3].to_vec();
+    assert!(external_lane_export_packets_for_block(&ledger, &missing, 9).is_err());
 }

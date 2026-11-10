@@ -481,3 +481,128 @@ fn external_lane_export_vectors_carry_execution_transaction_ids() {
         assert_eq!(values.accepted_receipt_id, packet.tx_id);
     }
 }
+
+#[test]
+fn external_lane_export_root_matches_the_shared_vectors() {
+    let vectors: serde_json::Value = serde_json::from_str(include_str!(
+        "../testdata/external-lane-export-root-vectors.json"
+    ))
+    .expect("vector file");
+    assert_eq!(
+        vectors["domains"]["leaf"],
+        EXTERNAL_LANE_EXPORT_ROOT_LEAF_DOMAIN_V1
+    );
+    let chain_id = vectors["chain_id"].as_str().expect("chain id");
+    let leaves = vectors["packets"]
+        .as_array()
+        .expect("packets")
+        .iter()
+        .map(|packet| {
+            serde_json::from_value::<ExternalLaneExportPacket>(packet.clone())
+                .expect("packet")
+                .export_root_leaf(chain_id)
+                .expect("leaf")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(leaves.len(), 3);
+    for (leaf, expected) in leaves
+        .iter()
+        .zip(vectors["leaves"].as_array().expect("leaves"))
+    {
+        assert_eq!(bytes_to_hex(leaf), *expected);
+    }
+    let root = external_lane_export_root_v1(&leaves).expect("root");
+    assert_eq!(root, vectors["root"]);
+    for (index, expected) in vectors["proofs"]
+        .as_array()
+        .expect("proofs")
+        .iter()
+        .enumerate()
+    {
+        let proof = external_lane_export_root_proof_v1(&leaves, index).expect("proof");
+        assert_eq!(proof.leaf_index, expected["leaf_index"]);
+        assert_eq!(proof.leaf_count, 3);
+        assert_eq!(serde_json::json!(proof.siblings), expected["siblings"]);
+        verify_external_lane_export_root_proof_v1(&root, &proof).expect("member");
+        let mut moved = proof.clone();
+        moved.leaf_index = (proof.leaf_index + 1) % 3;
+        assert!(verify_external_lane_export_root_proof_v1(&root, &moved).is_err());
+        let mut other = proof.clone();
+        other.leaf = bytes_to_hex(&leaves[(index + 1) % 3]);
+        assert!(verify_external_lane_export_root_proof_v1(&root, &other).is_err());
+    }
+    // A block without exports carries the tree's empty value.
+    assert_eq!(
+        external_lane_export_root_v1(&[]).expect("empty"),
+        vectors["empty_root"]
+    );
+    assert_eq!(vectors["empty_root"], bridge_exit_empty_root_v1());
+    // The leaf binds the chain id, the lane, the nonce and the packet.
+    let packet: ExternalLaneExportPacket =
+        serde_json::from_value(vectors["packets"][0].clone()).expect("packet");
+    let mut other_lane = packet.clone();
+    other_lane.lane_id = "base-other".to_string();
+    let mut other_nonce = packet.clone();
+    other_nonce.export_nonce = 9;
+    let mut other_amount = packet.clone();
+    other_amount.amount_atoms += 1;
+    for changed in [
+        packet.export_root_leaf("postfiat-other").expect("leaf"),
+        other_lane.export_root_leaf(chain_id).expect("leaf"),
+        other_nonce.export_root_leaf(chain_id).expect("leaf"),
+        other_amount.export_root_leaf(chain_id).expect("leaf"),
+    ] {
+        assert_ne!(changed, leaves[0]);
+    }
+}
+
+#[test]
+fn external_lane_export_root_activation_reads_genesis_then_governance() {
+    let mut genesis = Genesis::new("postfiat-local");
+    let mut governance = GovernanceState::new(4);
+    assert!(!external_lane_export_root_active_at(
+        &genesis,
+        &governance,
+        u64::MAX
+    ));
+    assert!(!genesis
+        .to_json()
+        .expect("json")
+        .contains("external_lane_export_root"));
+    governance.amendments.push(
+        serde_json::from_value(serde_json::json!({
+            "amendment_id": "a", "chain_id": "postfiat-local", "genesis_hash": "g",
+            "protocol_version": 1, "instance_id": "i", "proposal_id": "p",
+            "certificate_id": "c", "proposer": "v", "validators": [], "quorum": 1,
+            "kind": GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT,
+            "value": 20, "support": [], "votes": []
+        }))
+        .expect("amendment"),
+    );
+    assert!(!external_lane_export_root_active_at(
+        &genesis,
+        &governance,
+        19
+    ));
+    assert!(external_lane_export_root_active_at(
+        &genesis,
+        &governance,
+        20
+    ));
+    governance.amendments[0].paused = true;
+    assert!(!external_lane_export_root_active_at(
+        &genesis,
+        &governance,
+        20
+    ));
+    genesis.external_lane_export_root_activation_height = Some(1);
+    assert!(external_lane_export_root_active_at(
+        &genesis,
+        &governance,
+        1
+    ));
+    assert!(genesis
+        .to_json()
+        .expect("json")
+        .contains("external_lane_export_root_activation_height"));
+}

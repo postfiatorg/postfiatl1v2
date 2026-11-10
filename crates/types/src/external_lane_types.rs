@@ -293,6 +293,9 @@ pub const EXTERNAL_LANE_EXPORT_NOT_SUPPORTED: &str = "external_lane_export_not_s
 /// An export whose Base recipient is the lane's own lock contract, which a
 /// release can never pay.
 pub const EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK: &str = "external_lane_export_recipient_is_lock";
+/// `external_lane_export_v1` before block headers carry the external-lane
+/// export root: an export accepted then could never be proven on Base.
+pub const EXTERNAL_LANE_EXPORT_ROOT_NOT_ACTIVE: &str = "external_lane_export_root_not_active";
 /// An export while the lane's active release cap is zero: the governed halt
 /// stops exports as it stops releases.
 pub const EXTERNAL_LANE_EXPORT_HALTED: &str = "external_lane_export_halted";

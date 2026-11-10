@@ -94,6 +94,13 @@ pub(super) fn build_block_proposal_from_state<T: Serialize>(
     } else {
         None
     };
+    let external_lane_export_root = external_lane_export_root_for_block(
+        plan.genesis,
+        plan.governance,
+        plan.ledger,
+        plan.receipts,
+        block_height,
+    )?;
     Ok(BlockProposalFile {
         schema: BLOCK_PROPOSAL_FILE_SCHEMA.to_string(),
         chain_id: plan.genesis.chain_id.clone(),
@@ -109,6 +116,7 @@ pub(super) fn build_block_proposal_from_state<T: Serialize>(
         state_root,
         bridge_exit_root,
         pftl_uniswap_receipt_root,
+        external_lane_export_root,
         receipt_count: receipt_ids.len() as u64,
         receipt_ids,
         fastpay_pre_state_effects: plan.fastpay_pre_state_effects,
@@ -140,6 +148,63 @@ pub(super) fn bridge_exit_root_for_block(
     bridge_exit_merkle_root_v1(&leaves)
         .map(Some)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+}
+
+/// From the external-lane export-root activation height on, the root over the
+/// export packets this block accepted, in receipt (execution) order across all
+/// lanes; `None` before it, so earlier headers and hashes are unchanged.
+pub(super) fn external_lane_export_root_for_block(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    receipts: &[Receipt],
+    block_height: u64,
+) -> io::Result<Option<String>> {
+    if !postfiat_types::external_lane_export_root_active_at(genesis, governance, block_height) {
+        return Ok(None);
+    }
+    if !consensus_v2_active_at(genesis, block_height) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "external-lane export-root activation requires consensus v2 finality",
+        ));
+    }
+    let leaves = external_lane_export_packets_for_block(ledger, receipts, block_height)?
+        .iter()
+        .map(|packet| packet.export_root_leaf(&genesis.chain_id))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    postfiat_types::external_lane_export_root_v1(&leaves)
+        .map(Some)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+}
+
+/// The export packets a block accepted, in the order of their receipts.
+pub(crate) fn external_lane_export_packets_for_block(
+    ledger: &LedgerState,
+    receipts: &[Receipt],
+    block_height: u64,
+) -> io::Result<Vec<postfiat_types::ExternalLaneExportPacket>> {
+    let mut packets = Vec::new();
+    for packet in ledger
+        .external_lanes
+        .iter()
+        .flat_map(|lane| lane.exports.iter())
+        .filter(|packet| packet.exported_at_height == block_height)
+    {
+        let index = receipts
+            .iter()
+            .position(|receipt| receipt.tx_id == packet.tx_id && receipt.accepted)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "external lane export has no accepted receipt in its block",
+                )
+            })?;
+        packets.push((index, packet.clone()));
+    }
+    packets.sort_by_key(|(index, _)| *index);
+    Ok(packets.into_iter().map(|(_, packet)| packet).collect())
 }
 
 pub(super) fn bridge_exit_leaves_for_block(

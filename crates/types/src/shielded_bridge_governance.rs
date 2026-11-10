@@ -47,6 +47,10 @@ pub const GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT: &str =
     "replicated_state_v2_activation_height";
 pub const GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT: &str =
     "bridge_exit_root_activation_height";
+/// Height from which block headers carry `external_lane_export_root` and
+/// `external_lane_export_v1` is applied, on a chain whose genesis does not set it.
+pub const GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT: &str =
+    "external_lane_export_root_activation_height";
 pub const GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT: &str =
     "shielded_atomic_batch_activation_height";
 /// First block height at which an at-NAV Asset-Orchard swap pricing claim
@@ -1676,6 +1680,17 @@ impl GovernanceState {
             .iter()
             .filter(|amendment| {
                 amendment.kind == GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
+            })
+            .map(|amendment| u64::from(amendment.value))
+            .min()
+    }
+
+    pub fn external_lane_export_root_activation_height(&self) -> Option<u64> {
+        self.amendments
+            .iter()
+            .filter(|amendment| {
+                amendment.kind == GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT
+                    && !amendment.paused
             })
             .map(|amendment| u64::from(amendment.value))
             .min()

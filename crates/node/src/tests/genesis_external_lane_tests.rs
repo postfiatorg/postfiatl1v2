@@ -1161,6 +1161,20 @@ mod release_path {
         validator_count: u32,
         edit_policy: impl FnOnce(&mut GenesisExternalLanePolicy),
     ) -> Chain {
+        lane_chain_with_genesis(label, release_window_blocks, consensus_v2_activation_height, validator_count, |genesis| {
+            edit_policy(&mut genesis.external_lanes.as_mut().expect("lanes")[0].policy)
+        })
+    }
+
+    /// [`lane_chain_with`] whose genesis `edit_genesis` changes, after the
+    /// lane committee is set, before it is written.
+    fn lane_chain_with_genesis(
+        label: &str,
+        release_window_blocks: u64,
+        consensus_v2_activation_height: Option<u64>,
+        validator_count: u32,
+        edit_genesis: impl FnOnce(&mut Genesis),
+    ) -> Chain {
         let keys: Vec<_> = (0..u8::try_from(validator_count).expect("count"))
             .map(|index| ml_dsa_65_keygen_from_seed(&[0x81 + index; 32]))
             .collect();
@@ -1194,7 +1208,7 @@ mod release_path {
         let policy = &mut genesis.external_lanes.as_mut().expect("lanes")[0].policy;
         policy.committee_epoch = 1;
         policy.committee_root = format!("0x{}", bytes_to_hex(&committee.domain.committee_root.0));
-        edit_policy(policy);
+        edit_genesis(&mut genesis);
         genesis.validate().expect("lane genesis");
         committee.domain.chain = FastSwapChainDomainV1 {
             chain_id: genesis.chain_id.clone(),
@@ -1436,8 +1450,12 @@ mod release_path {
 
     /// Admits the transaction through the mempool, proposes a batch from the
     /// mempool and applies it: the path a submitted release takes.
+    /// Certified with a consensus v2 commit from the chain's v2 activation on.
     fn admit_and_apply(chain: &Chain, tx: &SignedAssetTransaction, label: &str) -> Receipt {
-        admit_and_apply_with(chain, tx, label, false)
+        let store = NodeStore::new(&chain.data_dir);
+        let genesis = store.read_genesis().expect("genesis");
+        let next = next_block_height_from_chain_tip(&store, &genesis).expect("next height");
+        admit_and_apply_with(chain, tx, label, consensus_v2_active_at(&genesis, next))
     }
 
     /// With `consensus_v2`, the block carries a block certificate and a

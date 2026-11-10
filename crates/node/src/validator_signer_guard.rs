@@ -482,6 +482,7 @@ impl Fields<'_> {
             state_root: self.text("block.state_root")?,
             bridge_exit_root: self.optional_root("block.bridge_exit_root")?,
             pftl_uniswap_receipt_root: self.optional_root("block.pftl_uniswap_receipt_root")?,
+            external_lane_export_root: self.optional_root("block.external_lane_export_root")?,
         })
     }
     fn qc(&mut self) -> io::Result<Option<ConsensusV2QcRef>> {

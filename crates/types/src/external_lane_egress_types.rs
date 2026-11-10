@@ -238,3 +238,94 @@ pub fn external_lane_export_egress_public_values_bytes(
     external_lane_export_egress_public_values(lane, packet, checkpoint)?
         .canonical_bytes_without_commitment()
 }
+
+pub const EXTERNAL_LANE_EXPORT_ROOT_LEAF_DOMAIN_V1: &str =
+    "postfiat.external_lane.export_root_leaf.v1";
+
+impl ExternalLaneExportPacket {
+    /// The packet's leaf in its block's `external_lane_export_root`: SHA3-384
+    /// over the leaf domain, then each of the PFTL chain id, the lane id, the
+    /// export nonce (8 bytes big-endian) and the packet digest (48 bytes),
+    /// each after a zero byte.
+    pub fn export_root_leaf(&self, chain_id: &str) -> Result<[u8; 48], String> {
+        let digest = self.digest()?;
+        let mut hasher = Sha3_384::new();
+        hasher.update(EXTERNAL_LANE_EXPORT_ROOT_LEAF_DOMAIN_V1.as_bytes());
+        for part in [
+            chain_id.as_bytes(),
+            self.lane_id.as_bytes(),
+            &self.export_nonce.to_be_bytes(),
+            &digest,
+        ] {
+            hasher.update([0_u8]);
+            hasher.update(part);
+        }
+        Ok(hasher.finalize().into())
+    }
+}
+
+/// The header root over a block's export leaves, in execution order across
+/// all lanes: the bridge-exit tree (`bridge_exit_tree_root_v1`), whose empty
+/// value is `bridge_exit_empty_root_v1()`. 96 lower-case hex digits.
+pub fn external_lane_export_root_v1(leaves: &[[u8; 48]]) -> Result<String, String> {
+    bridge_exit_tree_root_v1(&leaves.iter().map(|leaf| leaf.to_vec()).collect::<Vec<_>>())
+}
+
+/// Membership of one export leaf in its block's export root.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalLaneExportRootProofV1 {
+    /// The leaf, 96 lower-case hex digits.
+    pub leaf: String,
+    pub leaf_index: u64,
+    pub leaf_count: u64,
+    pub siblings: Vec<String>,
+}
+
+pub fn external_lane_export_root_proof_v1(
+    leaves: &[[u8; 48]],
+    leaf_index: usize,
+) -> Result<ExternalLaneExportRootProofV1, String> {
+    let commitments = leaves.iter().map(|leaf| leaf.to_vec()).collect::<Vec<_>>();
+    let siblings = bridge_exit_tree_siblings_v1(&commitments, leaf_index)?;
+    Ok(ExternalLaneExportRootProofV1 {
+        leaf: bytes_to_hex(&leaves[leaf_index]),
+        leaf_index: leaf_index as u64,
+        leaf_count: leaves.len() as u64,
+        siblings,
+    })
+}
+
+pub fn verify_external_lane_export_root_proof_v1(
+    expected_root: &str,
+    proof: &ExternalLaneExportRootProofV1,
+) -> Result<(), String> {
+    validate_lower_hex_len("external_lane_export_root_proof.leaf", &proof.leaf, 96)?;
+    verify_bridge_exit_tree_path_v1(
+        expected_root,
+        &pfusdc_decode_hex(&proof.leaf)?,
+        proof.leaf_index,
+        proof.leaf_count,
+        &proof.siblings,
+    )
+}
+
+/// The external-lane export-root activation height of a chain: its genesis
+/// value, else the earliest unpaused governed one.
+pub fn external_lane_export_root_activation_height(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+) -> Option<u64> {
+    genesis
+        .external_lane_export_root_activation_height
+        .or_else(|| governance.external_lane_export_root_activation_height())
+}
+
+pub fn external_lane_export_root_active_at(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    height: u64,
+) -> bool {
+    external_lane_export_root_activation_height(genesis, governance)
+        .is_some_and(|activation| height >= activation)
+}

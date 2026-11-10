@@ -504,6 +504,9 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
         )
         .with_external_lane_release_caps(governance.external_lane_release_caps(genesis))
         .with_external_lane_committees(governance.external_lane_committees(genesis))
+        .with_external_lane_export_root_activation_height(
+            postfiat_types::external_lane_export_root_activation_height(genesis, governance),
+        )
 }
 
 pub(super) fn asset_execution_compatibility_with_chain_activation(
@@ -534,6 +537,9 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
         )
         .with_external_lane_release_caps(governance.external_lane_release_caps(genesis))
         .with_external_lane_committees(governance.external_lane_committees(genesis))
+        .with_external_lane_export_root_activation_height(
+            postfiat_types::external_lane_export_root_activation_height(genesis, governance),
+        )
 }
 
 pub(super) fn ensure_atomic_swap_batch_allowed(
@@ -2100,6 +2106,15 @@ pub(super) fn governance_amendment_lifecycle_rejection(
                 .to_string(),
         ));
     }
+    if amendment.kind == postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "invalid_external_lane_export_root_activation_height",
+            "external-lane export-root activation must be scheduled strictly after the amendment block"
+                .to_string(),
+        ));
+    }
     if amendment.kind == GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
         && u64::from(amendment.value) <= block_height
     {
@@ -2355,6 +2370,10 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .bridge_exit_root_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
+        postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT => governance
+            .external_lane_export_root_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
         GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT => governance
             .shielded_atomic_batch_activation_height()
             .and_then(|height| u32::try_from(height).ok())
@@ -2393,6 +2412,7 @@ fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
             | GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
+            | postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT

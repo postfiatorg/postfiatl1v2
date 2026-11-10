@@ -30,8 +30,8 @@ use postfiat_types::{
 use postfiat_types::{
     ExternalLaneExportOperationV1, ExternalLaneExportPacket, EXTERNAL_LANE_EXPORT_HALTED,
     EXTERNAL_LANE_EXPORT_NEEDS_GOVERNED_CAPS, EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
-    EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK, EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS,
-    EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_COMMITTEES,
+    EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK, EXTERNAL_LANE_EXPORT_ROOT_NOT_ACTIVE,
+    EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS, EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_COMMITTEES,
 };
 
 type ExecutionError = (&'static str, String);
@@ -302,7 +302,8 @@ pub(crate) fn verify_external_lane_lock(
 /// export rules, then the sender's debit of `amount_atoms` (the fee is
 /// already debited) with the ordinary balance and reserve refusals; only
 /// then the lane records the packet. Every check precedes the first write.
-/// Under governed caps; the tests call it directly.
+/// Under governed caps and an active export root (the dispatcher passes the
+/// chain's activation); the tests call it directly.
 #[cfg(test)]
 pub(crate) fn apply_external_lane_export(
     genesis: &Genesis,
@@ -322,6 +323,7 @@ pub(crate) fn apply_external_lane_export(
         block_height,
         caps,
         true,
+        true,
     )
 }
 
@@ -340,6 +342,7 @@ pub(crate) fn apply_external_lane_export_with_caps(
     block_height: u64,
     caps: ExternalLaneReleaseCaps,
     caps_governed: bool,
+    export_root_active: bool,
 ) -> Result<(), ExecutionError> {
     let lane = configured_lane(genesis, &operation.lane_id)?;
     if operation.base_recipient == lane.policy.lock_contract_address {
@@ -357,6 +360,14 @@ pub(crate) fn apply_external_lane_export_with_caps(
             format!(
                 "external_lane_export_v1 on external lane `{}` is not built yet",
                 lane.id
+            ),
+        ));
+    }
+    if !export_root_active {
+        return Err((
+            EXTERNAL_LANE_EXPORT_ROOT_NOT_ACTIVE,
+            format!(
+                "block headers do not carry the external lane export root at height {block_height}, so an export could never be proven on Base"
             ),
         ));
     }

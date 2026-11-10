@@ -48,6 +48,10 @@ pub struct ConsensusV2BlockRef {
     /// Cumulative v2 PFTL-Uniswap receipt accumulator committed by this block.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pftl_uniswap_receipt_root: Option<String>,
+    /// Root of the lane export packets accepted in this block, from the
+    /// external-lane export-root activation height on; absent before it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_lane_export_root: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

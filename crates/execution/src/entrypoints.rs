@@ -795,7 +795,10 @@ pub fn execute_asset_transaction(
         block_height,
         tx_id,
         &signing_bytes,
-        AssetExecutionCompatibility::strict(),
+        // The bare entry knows the genesis activation, not a governed one.
+        AssetExecutionCompatibility::strict().with_external_lane_export_root_activation_height(
+            genesis.external_lane_export_root_activation_height,
+        ),
         &[],
     )
 }

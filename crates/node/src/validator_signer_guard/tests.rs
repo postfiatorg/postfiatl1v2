@@ -281,6 +281,7 @@ fn decoder_uses_outer_round_with_nested_qc_and_both_optional_roots() {
         state_root: "d".repeat(96),
         bridge_exit_root: Some("e".repeat(96)),
         pftl_uniswap_receipt_root: Some("f".repeat(96)),
+        external_lane_export_root: None,
     };
     let qc = ConsensusV2QcRef {
         certificate_id: "a".repeat(96),
@@ -360,6 +361,7 @@ fn decoder_matches_every_legacy_runtime_encoder_variant() {
             state_root: &root,
             bridge_exit_root: (variant >= 2).then_some(root.as_str()),
             pftl_uniswap_receipt_root: (variant >= 3).then_some(root.as_str()),
+            external_lane_export_root: None,
             receipt_ids: &[],
             fastpay_pre_state_effects: if variant >= 1 { &effects } else { &[] },
         };
@@ -385,6 +387,7 @@ fn decoder_matches_every_legacy_runtime_encoder_variant() {
             state_root: root.clone(),
             bridge_exit_root: evidence.bridge_exit_root.map(str::to_string),
             pftl_uniswap_receipt_root: evidence.pftl_uniswap_receipt_root.map(str::to_string),
+            external_lane_export_root: evidence.external_lane_export_root.map(str::to_string),
             receipt_count: 0,
             receipt_ids: vec![],
             fastpay_pre_state_effects: evidence.fastpay_pre_state_effects.to_vec(),
