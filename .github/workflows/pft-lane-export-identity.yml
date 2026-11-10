@@ -1,20 +1,21 @@
 name: pft-lane-export-identity
 
-# The lane export program (programs/pft-lane-export) has no committed ELF or
-# key yet. Each run builds it twice in the pinned SP1 Docker image from two
-# clean trees, requires byte-identical ELFs, derives the verifying key and
-# uploads the ELF and its program info. Commit them only after two independent
-# runs produced the same ELF hash.
+# The lane export program's committed identity (programs/pft-lane-export:
+# elf/, program-info.json, releases.json). Each run builds the guest twice in
+# the pinned SP1 Docker image from two clean trees, requires byte-identical
+# ELFs, derives the verifying key, uploads both, and FAILS when the rebuilt
+# ELF's sha256 or the key differs from the committed program-info.json. No
+# path filter: the guest links crates/types, crates/pfusdc_proofs,
+# crates/ordering_fast, crates/consensus_cobalt, crates/mempool_dag,
+# crates/crypto_provider, third_party/fips204 and the root workspace manifest,
+# so any change may move the ELF.
 
 on:
   push:
     branches:
+      - main
       - token/phase3-base-half
-    paths:
-      - programs/pft-lane-export/**
-      - crates/pft_lane_proofs/**
-      - tools/pft-lane-export-prover/**
-      - .github/workflows/pft-lane-export-identity.yml
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -104,6 +105,19 @@ jobs:
             }' > "$root/report/program-info.json"
           cat "$root/report/program-info.json"
           (cd "$root/report" && sha256sum pft-lane-export-program program-info.json > SHA256SUMS)
+      - name: Compare with the committed identity
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/pft-lane-export-identity"
+          committed=programs/pft-lane-export/program-info.json
+          rebuilt_sha="$(jq -er .elf_sha256 "$root/report/program-info.json")"
+          rebuilt_vkey="$(jq -er .program_vkey "$root/report/program-info.json")"
+          printf 'committed elf_sha256=%s program_vkey=%s\n' "$(jq -er .elf_sha256 "$committed")" "$(jq -er .program_vkey "$committed")"
+          printf 'rebuilt   elf_sha256=%s program_vkey=%s\n' "$rebuilt_sha" "$rebuilt_vkey"
+          test "$rebuilt_sha" = "$(jq -er .elf_sha256 "$committed")"
+          test "$rebuilt_vkey" = "$(jq -er .program_vkey "$committed")"
+          test "$(sha256sum programs/pft-lane-export/elf/pft-lane-export-program | cut -d' ' -f1)" = "$rebuilt_sha"
+          cmp programs/pft-lane-export/elf/pft-lane-export-program "$root/report/pft-lane-export-program"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
