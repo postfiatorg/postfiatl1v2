@@ -10,8 +10,8 @@ use postfiat_crypto_provider::{bytes_to_hex, hex_to_bytes};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use sha3::{digest::Update, Digest, Sha3_256, Sha3_384, Sha3_512};
-use std::ops::Deref;
-use zeroize::Zeroize;
+use std::ops::{Deref, DerefMut};
+use zeroize::{DefaultIsZeroes, Zeroize, Zeroizing};
 
 use crate::asset_orchard_sinsemilla::asset_spend_auth_g;
 
@@ -234,6 +234,69 @@ impl<T: Zeroize> From<T> for AssetOrchardSecret<T> {
     }
 }
 
+/// Owner for a `Copy` secret such as a `pallas::Scalar`, `pallas::Base` or `pallas::Affine`
+/// witness value. pasta_curves 0.5 implements no `Zeroize`, but these types are `Copy + Default`
+/// with all-zero defaults (zero, identity), so `zeroize` can overwrite the owned value with
+/// volatile writes. The owner is not `Copy`: it and every clone wipe on drop, including `?`
+/// error exits, and `Debug` is redacted. Reading the value (`*secret`) makes an ordinary copy;
+/// copies made by curve arithmetic, halo2 `Value`s, moves or registers are outside its reach
+/// (issue #181).
+#[derive(Clone, Default)]
+pub struct AssetOrchardSecretValue<T: Copy + Default>(SecretValueCell<T>);
+
+#[derive(Clone, Copy, Default)]
+struct SecretValueCell<T: Copy + Default>(T);
+
+impl<T: Copy + Default> DefaultIsZeroes for SecretValueCell<T> {}
+
+impl<T: Copy + Default> AssetOrchardSecretValue<T> {
+    pub fn new(value: T) -> Self {
+        Self(SecretValueCell(value))
+    }
+
+    pub fn expose_secret(&self) -> &T {
+        &self.0 .0
+    }
+}
+
+impl<T: Copy + Default> Deref for AssetOrchardSecretValue<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.expose_secret()
+    }
+}
+
+impl<T: Copy + Default> DerefMut for AssetOrchardSecretValue<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0 .0
+    }
+}
+
+impl<T: Copy + Default> Zeroize for AssetOrchardSecretValue<T> {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl<T: Copy + Default> Drop for AssetOrchardSecretValue<T> {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+impl<T: Copy + Default> std::fmt::Debug for AssetOrchardSecretValue<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("AssetOrchardSecretValue([redacted])")
+    }
+}
+
+impl<T: Copy + Default> From<T> for AssetOrchardSecretValue<T> {
+    fn from(value: T) -> Self {
+        Self::new(value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct AssetOrchardFieldElement(String);
@@ -430,14 +493,14 @@ impl AssetOrchardPublicNoteOpening {
         note.validate()?;
         Ok(Self {
             diversifier: bytes_to_hex(&note.diversifier),
-            g_d: AssetOrchardPoint::from_affine(note.g_d)?,
-            pk_d: AssetOrchardPoint::from_affine(note.pk_d)?,
+            g_d: AssetOrchardPoint::from_affine(*note.g_d)?,
+            pk_d: AssetOrchardPoint::from_affine(*note.pk_d)?,
             asset_tag_lo: note.asset_tag.lo,
             asset_tag_hi: note.asset_tag.hi,
             value: note.value,
-            rho: AssetOrchardFieldElement::from_field(note.rho),
-            psi: AssetOrchardFieldElement::from_field(note.psi),
-            rcm: AssetOrchardSecret::new(bytes_to_hex(&scalar_enc(note.rcm))),
+            rho: AssetOrchardFieldElement::from_field(*note.rho),
+            psi: AssetOrchardFieldElement::from_field(*note.psi),
+            rcm: AssetOrchardSecret::new(bytes_to_hex(&scalar_enc(*note.rcm))),
         })
     }
 
@@ -465,16 +528,16 @@ impl AssetOrchardPublicNoteOpening {
         )?;
         let note = AssetNoteOpening {
             diversifier,
-            g_d: self.g_d.to_affine()?,
-            pk_d: self.pk_d.to_affine()?,
+            g_d: self.g_d.to_affine()?.into(),
+            pk_d: self.pk_d.to_affine()?.into(),
             asset_tag: AssetTag {
                 lo: self.asset_tag_lo,
                 hi: self.asset_tag_hi,
             },
             value: self.value,
-            rho: self.rho.to_field()?,
-            psi: self.psi.to_field()?,
-            rcm: parse_pallas_scalar(&self.rcm)?,
+            rho: self.rho.to_field()?.into(),
+            psi: self.psi.to_field()?.into(),
+            rcm: parse_pallas_scalar(&self.rcm)?.into(),
         };
         note.validate()?;
         Ok(note)
@@ -577,13 +640,13 @@ fn build_asset_orchard_wallet_note_inner(
     let pk_d = (pallas::Point::from(g_d) * ivk_scalar).to_affine();
     let note = AssetNoteOpening {
         diversifier,
-        g_d,
-        pk_d,
+        g_d: g_d.into(),
+        pk_d: pk_d.into(),
         asset_tag: AssetTag::derive(asset_id)?,
         value,
-        rho,
-        psi: orchard_psi(&rseed, rho)?,
-        rcm: orchard_rcm(&rseed, rho)?,
+        rho: rho.into(),
+        psi: orchard_psi(&rseed, rho)?.into(),
+        rcm: orchard_rcm(&rseed, rho)?.into(),
     };
     let output_commitment = AssetOrchardFieldElement::from_field(note.cmx(pool)?);
     let public_note = AssetOrchardPublicNoteOpening::from_note(&note)?;
@@ -3325,8 +3388,8 @@ pub fn asset_orchard_wallet_note_nullifier(
         asset_derive_nullifier(
             pool_domain,
             note.nk.to_field()?,
-            opening.rho,
-            opening.psi,
+            *opening.rho,
+            *opening.psi,
             cmx,
         )?,
     ))
@@ -3489,8 +3552,8 @@ pub fn verify_asset_orchard_disclosed_egress(
     let expected_nullifier = asset_derive_nullifier(
         check.preimage.pool_domain,
         check.nk.to_field()?,
-        note_opening.rho,
-        note_opening.psi,
+        *note_opening.rho,
+        *note_opening.psi,
         check.preimage.output_commitment,
     )?;
     if expected_nullifier != check.preimage.nullifier {
@@ -3513,8 +3576,8 @@ pub fn verify_asset_orchard_disclosed_egress(
                 "derived Orchard ivk cannot be represented as a Pallas scalar",
             )
         })?;
-    let expected_pk_d = (pallas::Point::from(note_opening.g_d) * ivk_scalar).to_affine();
-    if point_enc(expected_pk_d)? != point_enc(note_opening.pk_d)? {
+    let expected_pk_d = (pallas::Point::from(*note_opening.g_d) * ivk_scalar).to_affine();
+    if point_enc(expected_pk_d)? != point_enc(*note_opening.pk_d)? {
         return Err(AssetOrchardError::new(
             "asset_orchard_egress_spend_authority_mismatch",
             "asset-orchard disclosed egress spend authority does not control the note",
@@ -3573,16 +3636,45 @@ fn randomized_spend_auth_key(
     Ok(rk)
 }
 
-#[derive(Debug, Clone)]
+/// Circuit-side note opening. Every field is custody material, so the curve values live in
+/// `AssetOrchardSecretValue` owners, the integer fields are wiped on drop and `Debug` is redacted
+/// (issue #181).
+#[derive(Clone)]
 pub struct AssetNoteOpening {
     pub diversifier: [u8; ASSET_ORCHARD_DIVERSIFIER_BYTES],
-    pub g_d: pallas::Affine,
-    pub pk_d: pallas::Affine,
+    pub g_d: AssetOrchardSecretValue<pallas::Affine>,
+    pub pk_d: AssetOrchardSecretValue<pallas::Affine>,
     pub asset_tag: AssetTag,
     pub value: u64,
-    pub rho: pallas::Base,
-    pub psi: pallas::Base,
-    pub rcm: pallas::Scalar,
+    pub rho: AssetOrchardSecretValue<pallas::Base>,
+    pub psi: AssetOrchardSecretValue<pallas::Base>,
+    pub rcm: AssetOrchardSecretValue<pallas::Scalar>,
+}
+
+impl Zeroize for AssetNoteOpening {
+    fn zeroize(&mut self) {
+        self.diversifier.zeroize();
+        self.g_d.zeroize();
+        self.pk_d.zeroize();
+        self.asset_tag.lo.zeroize();
+        self.asset_tag.hi.zeroize();
+        self.value.zeroize();
+        self.rho.zeroize();
+        self.psi.zeroize();
+        self.rcm.zeroize();
+    }
+}
+
+impl Drop for AssetNoteOpening {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+impl std::fmt::Debug for AssetNoteOpening {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("AssetNoteOpening([redacted])")
+    }
 }
 
 impl AssetNoteOpening {
@@ -3594,8 +3686,8 @@ impl AssetNoteOpening {
             ));
         }
         self.asset_tag.validate()?;
-        reject_identity_point("g_d", self.g_d)?;
-        reject_identity_point("pk_d", self.pk_d)?;
+        reject_identity_point("g_d", *self.g_d)?;
+        reject_identity_point("pk_d", *self.pk_d)?;
         if bool::from(self.rcm.is_zero()) {
             return Err(AssetOrchardError::new(
                 "zero_rcm",
@@ -3637,11 +3729,11 @@ pub fn asset_note_message_bits(
     bits.extend(i2lebsp_from_field(pool_domain, 255));
     bits.extend(i2lebsp_from_u128(note.asset_tag.lo, 128));
     bits.extend(i2lebsp_from_u128(note.asset_tag.hi, 128));
-    bits.extend(point_bits(note.g_d)?);
-    bits.extend(point_bits(note.pk_d)?);
+    bits.extend(point_bits(*note.g_d)?);
+    bits.extend(point_bits(*note.pk_d)?);
     bits.extend(i2lebsp_from_u64(note.value, 64));
-    bits.extend(i2lebsp_from_field(note.rho, 255));
-    bits.extend(i2lebsp_from_field(note.psi, 255));
+    bits.extend(i2lebsp_from_field(*note.rho, 255));
+    bits.extend(i2lebsp_from_field(*note.psi, 255));
     Ok(bits)
 }
 
@@ -4080,8 +4172,11 @@ fn append_len_bytes_vec(payload: &mut Vec<u8>, bytes: &[u8]) -> Result<(), Asset
 }
 
 fn parse_pallas_base(value: &str) -> Result<pallas::Base, AssetOrchardError> {
-    let bytes = fixed_lower_hex_array::<ASSET_ORCHARD_FIELD_BYTES>("asset_orchard_field", value)?;
-    Option::<pallas::Base>::from(pallas::Base::from_repr(bytes)).ok_or_else(|| {
+    let bytes = Zeroizing::new(fixed_lower_hex_array::<ASSET_ORCHARD_FIELD_BYTES>(
+        "asset_orchard_field",
+        value,
+    )?);
+    Option::<pallas::Base>::from(pallas::Base::from_repr(*bytes)).ok_or_else(|| {
         AssetOrchardError::new(
             "noncanonical_pallas_field",
             "field element is not canonical Pallas-base encoding",
@@ -4090,9 +4185,12 @@ fn parse_pallas_base(value: &str) -> Result<pallas::Base, AssetOrchardError> {
 }
 
 fn parse_pallas_scalar(value: &str) -> Result<pallas::Scalar, AssetOrchardError> {
-    let bytes = fixed_lower_hex_array::<ASSET_ORCHARD_FIELD_BYTES>("asset_orchard_scalar", value)?;
+    let bytes = Zeroizing::new(fixed_lower_hex_array::<ASSET_ORCHARD_FIELD_BYTES>(
+        "asset_orchard_scalar",
+        value,
+    )?);
     let scalar =
-        Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(bytes)).ok_or_else(|| {
+        Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(*bytes)).ok_or_else(|| {
             AssetOrchardError::new(
                 "noncanonical_pallas_scalar",
                 "scalar element is not canonical Pallas-scalar encoding",
@@ -4183,15 +4281,19 @@ fn fixed_lower_hex_array<const N: usize>(
     value: &str,
 ) -> Result<[u8; N], AssetOrchardError> {
     parse_lower_hex(label, value, N, N)?;
-    let bytes = hex_to_bytes(value).map_err(|error| {
+    // The decoded buffer may hold a key or note secret; wipe it on every exit (issue #181).
+    let bytes = Zeroizing::new(hex_to_bytes(value).map_err(|error| {
         AssetOrchardError::new("invalid_hex", format!("{label} has invalid hex: {error}"))
-    })?;
-    bytes.try_into().map_err(|bytes: Vec<u8>| {
-        AssetOrchardError::new(
+    })?);
+    if bytes.len() != N {
+        return Err(AssetOrchardError::new(
             "invalid_hex_length",
             format!("{label} decoded to {} bytes, expected {N}", bytes.len()),
-        )
-    })
+        ));
+    }
+    let mut array = [0u8; N];
+    array.copy_from_slice(&bytes);
+    Ok(array)
 }
 
 fn validate_count(
@@ -4294,13 +4396,13 @@ mod tests {
         let rseed = [9u8; ASSET_ORCHARD_RSEED_BYTES];
         AssetNoteOpening {
             diversifier: [7u8; ASSET_ORCHARD_DIVERSIFIER_BYTES],
-            g_d: sample_point(b"g_d"),
-            pk_d: sample_point(b"pk_d"),
+            g_d: sample_point(b"g_d").into(),
+            pk_d: sample_point(b"pk_d").into(),
             asset_tag: AssetTag::derive(asset_id).expect("asset tag"),
             value,
-            rho,
-            psi: orchard_psi(&rseed, rho).expect("psi"),
-            rcm: orchard_rcm(&rseed, rho).expect("rcm"),
+            rho: rho.into(),
+            psi: orchard_psi(&rseed, rho).expect("psi").into(),
+            rcm: orchard_rcm(&rseed, rho).expect("rcm").into(),
         }
     }
 
@@ -4313,31 +4415,31 @@ mod tests {
             AssetNoteMessageSource::PoolDomain => i2lebsp_from_field(pool_domain, 255),
             AssetNoteMessageSource::AssetTagLo => i2lebsp_from_u128(note.asset_tag.lo, 128),
             AssetNoteMessageSource::AssetTagHi => i2lebsp_from_u128(note.asset_tag.hi, 128),
-            AssetNoteMessageSource::GdX => point_bits(note.g_d)
+            AssetNoteMessageSource::GdX => point_bits(*note.g_d)
                 .expect("g_d bits")
                 .into_iter()
                 .take(255)
                 .collect(),
-            AssetNoteMessageSource::GdYSign => point_bits(note.g_d)
+            AssetNoteMessageSource::GdYSign => point_bits(*note.g_d)
                 .expect("g_d bits")
                 .into_iter()
                 .skip(255)
                 .take(1)
                 .collect(),
-            AssetNoteMessageSource::PkdX => point_bits(note.pk_d)
+            AssetNoteMessageSource::PkdX => point_bits(*note.pk_d)
                 .expect("pk_d bits")
                 .into_iter()
                 .take(255)
                 .collect(),
-            AssetNoteMessageSource::PkdYSign => point_bits(note.pk_d)
+            AssetNoteMessageSource::PkdYSign => point_bits(*note.pk_d)
                 .expect("pk_d bits")
                 .into_iter()
                 .skip(255)
                 .take(1)
                 .collect(),
             AssetNoteMessageSource::Value => i2lebsp_from_u64(note.value, 64),
-            AssetNoteMessageSource::Rho => i2lebsp_from_field(note.rho, 255),
-            AssetNoteMessageSource::Psi => i2lebsp_from_field(note.psi, 255),
+            AssetNoteMessageSource::Rho => i2lebsp_from_field(*note.rho, 255),
+            AssetNoteMessageSource::Psi => i2lebsp_from_field(*note.psi, 255),
             AssetNoteMessageSource::Padding => vec![false; 3],
         }
     }
