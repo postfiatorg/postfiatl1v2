@@ -2835,6 +2835,12 @@ pub struct AssetFeeQuoteReport {
     /// families excluded). Absent when the export would apply.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub export_refusal: Option<AssetOperationRefusal>,
+    /// `true` for `external_lane_export_v1` only: this node ran the export
+    /// check, so an absent `export_refusal` means the export would apply.
+    /// Not serialized for any other kind. A quote without it comes from a
+    /// node too old to check an export; the holder's commands refuse it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub export_checked: bool,
 }
 
 /// A refusal code and message from an execution dry run.

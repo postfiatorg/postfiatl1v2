@@ -1555,6 +1555,11 @@ def external_lane_export(
         request_id=f"py-export-quote-{secrets.token_hex(4)}",
     )
     quote = quote_response.get("result", {})
+    if quote.get("export_checked") is not True:
+        raise ValueError(
+            "refused before signing: external_lane_export_not_checked: "
+            "the node is too old to check an export: its asset_fee_quote carries no export_checked"
+        )
     balance = int(quote.get("sender_balance", 0))
     fee = int(quote["minimum_fee"])
     reserve = int(quote["account_reserve"])

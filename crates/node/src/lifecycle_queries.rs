@@ -1740,6 +1740,10 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
     } else {
         "ledger_mempool".to_string()
     };
+    let export_checked = matches!(
+        operation,
+        AssetTransactionOperation::ExternalLaneExportV1(_)
+    );
     let export_refusal = match &operation {
         AssetTransactionOperation::ExternalLaneExportV1(export) => {
             postfiat_execution::dry_run_external_lane_export(
@@ -1784,6 +1788,7 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
         sender_meets_reserve_after_fee,
         operation,
         export_refusal,
+        export_checked,
     })
 }
 

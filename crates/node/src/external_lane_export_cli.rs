@@ -19,8 +19,8 @@ use crate::{
     asset_fee_quote, external_lane_info, read_key_file,
     submit_signed_asset_transaction_json_to_mempool, tx_finality,
     tx_finality_error_is_transaction_not_found, wallet_sign_asset_transaction,
-    AssetFeeQuoteOptions, ExternalLaneExportEntry, ExternalLaneInfoOptions, ExternalLaneInfoRow,
-    SignedAssetTransactionJsonSubmitOptions, TxFinalityQueryOptions,
+    AssetFeeQuoteOptions, AssetFeeQuoteReport, ExternalLaneExportEntry, ExternalLaneInfoOptions,
+    ExternalLaneInfoRow, SignedAssetTransactionJsonSubmitOptions, TxFinalityQueryOptions,
     WalletSignAssetTransactionOptions, EXTERNAL_LANE_RELEASE_PAGE_SIZE,
 };
 
@@ -57,6 +57,19 @@ pub struct ExternalLaneExportReport {
     pub submitted: bool,
     pub tx_id: String,
     pub signed_asset_transaction: SignedAssetTransaction,
+}
+
+/// Refuses an export quote without `export_checked`: it comes from a node too
+/// old to check an export, so its missing `export_refusal` proves nothing.
+pub fn export_quote_was_checked(quote: &AssetFeeQuoteReport) -> io::Result<()> {
+    if quote.export_checked {
+        return Ok(());
+    }
+    Err(refused(
+        "external_lane_export_not_checked",
+        "the node is too old to check an export: its asset_fee_quote carries no export_checked"
+            .to_string(),
+    ))
 }
 
 fn refused(code: &str, message: String) -> io::Error {
@@ -181,6 +194,7 @@ pub fn external_lane_export(
         io::ErrorKind::NotFound => refused("insufficient_funds", error.to_string()),
         _ => error,
     })?;
+    export_quote_was_checked(&quote)?;
     let needed = u128::from(options.amount_atoms)
         + u128::from(quote.minimum_fee)
         + u128::from(quote.account_reserve);

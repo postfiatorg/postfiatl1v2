@@ -81,7 +81,12 @@ class ExternalLaneExportRefusalTests(unittest.TestCase):
 
 
 def _quote(**overrides: Any) -> dict[str, Any]:
-    result: dict[str, Any] = {"sender_balance": 10_000, "minimum_fee": 22, "account_reserve": 10}
+    result: dict[str, Any] = {
+        "sender_balance": 10_000,
+        "minimum_fee": 22,
+        "account_reserve": 10,
+        "export_checked": True,
+    }
     result.update(overrides)
     return {"ok": True, "result": result}
 
@@ -166,6 +171,20 @@ class ExternalLaneExportTests(unittest.TestCase):
                 self.assertRegex(str(error), f"^refused before signing: {code}: after the pending exports")
                 signer.assert_not_called()
                 submit.assert_not_called()
+
+    def test_a_quote_without_the_export_checked_marker_is_refused_before_the_signer_runs(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        old_node = _quote()
+        del old_node["result"]["export_checked"]
+        for quote in (old_node, _quote(export_checked=False)):
+            for dry_run in (False, True):
+                with self.subTest(quote=quote, dry_run=dry_run):
+                    error, signer, submit, _ = self._export(client, quote, amount_atoms=1, dry_run=dry_run)
+                    self.assertRegex(
+                        str(error), "^refused before signing: external_lane_export_not_checked: .*too old"
+                    )
+                    signer.assert_not_called()
+                    submit.assert_not_called()
 
     def test_a_pending_release_lets_an_export_above_the_committed_amount_be_signed(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")

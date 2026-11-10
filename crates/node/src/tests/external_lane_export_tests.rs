@@ -938,6 +938,83 @@ fn external_lane_export_command_counts_a_pending_release_before_signing() {
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
+/// The quote of an export says it was checked (`export_checked`); a quote
+/// without the marker comes from a node too old to check an export, and the
+/// command refuses it before signing. A quote of another kind is unchanged:
+/// no marker, the same fields.
+#[test]
+fn external_lane_export_command_refuses_a_quote_that_was_not_checked() {
+    let chain = released_export_chain("export-command-checked", ACCOUNT_RESERVE + 1_000);
+    let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    let quote_json = |operation: &AssetTransactionOperation| {
+        let quote = asset_fee_quote(AssetFeeQuoteOptions {
+            data_dir: chain.data_dir.clone(),
+            source: faucet.address.clone(),
+            operation_json: serde_json::to_string(operation).expect("operation json"),
+            sequence: None,
+        })
+        .expect("quote");
+        serde_json::to_value(&quote).expect("quote json")
+    };
+    let export = AssetTransactionOperation::ExternalLaneExportV1(postfiat_types::ExternalLaneExportOperationV1 {
+        sender: faucet.address.clone(),
+        lane_id: "base-erc20".to_string(),
+        amount_atoms: 400,
+        base_recipient: base_recipient(),
+    });
+    let mut checked = quote_json(&export);
+    assert_eq!(checked["export_checked"], serde_json::Value::Bool(true), "{checked}");
+    let report: crate::AssetFeeQuoteReport = serde_json::from_value(checked.clone()).expect("quote");
+    crate::export_quote_was_checked(&report).expect("a checked quote");
+    checked.as_object_mut().expect("object").remove("export_checked");
+    let old_node: crate::AssetFeeQuoteReport = serde_json::from_value(checked).expect("old node quote");
+    let error = crate::export_quote_was_checked(&old_node).expect_err("refused").to_string();
+    assert!(
+        error.starts_with("refused before signing: external_lane_export_not_checked: ") && error.contains("too old"),
+        "{error}"
+    );
+
+    let other = quote_json(&AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+        issuer: faucet.address.clone(),
+        code: "EUR".to_string(),
+        version: 1,
+        precision: 2,
+        display_name: "Euro".to_string(),
+        max_supply: Some(10_000),
+        requires_authorization: false,
+        freeze_enabled: false,
+        clawback_enabled: false,
+    }));
+    let keys: Vec<&str> = other.as_object().expect("object").keys().map(String::as_str).collect();
+    assert_eq!(
+        keys,
+        [
+            "account_reserve",
+            "asset_weight_bytes",
+            "base_asset_fee",
+            "chain_id",
+            "genesis_hash",
+            "mempool_pending_for_sender",
+            "minimum_fee",
+            "operation",
+            "protocol_version",
+            "schema",
+            "sender_balance",
+            "sender_balance_after_fee",
+            "sender_meets_reserve_after_fee",
+            "sender_sequence",
+            "sequence",
+            "sequence_source",
+            "source",
+            "state_expansion_fee",
+            "transaction_kind",
+            "transfer_fee_byte_quantum",
+            "transfer_fee_per_quantum",
+        ]
+    );
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
 #[test]
 fn external_lane_export_command_amount_is_digits_only() {
     assert_eq!(crate::parse_export_amount_atoms("1500"), Ok(1_500));
