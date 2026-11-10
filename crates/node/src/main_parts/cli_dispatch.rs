@@ -497,6 +497,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ratify-pfusdc-source-series-activation-height"
         | "ratify-replicated-state-v2-activation-height"
         | "ratify-bridge-exit-root-activation-height"
+        | "ratify-external-lane-export-root-activation-height"
         | "ratify-shielded-atomic-batch-activation-height"
         | "ratify-recipient-format-activation-height"
         | "ratify-asset-orchard-pricing-enforcement-activation-height"
