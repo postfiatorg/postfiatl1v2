@@ -1,0 +1,18 @@
+[package]
+name = "pft-lane-export-prover"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+postfiat-pft-lane-proofs = { path = "../../crates/pft_lane_proofs" }
+postfiat-types = { path = "../../crates/types" }
+serde_cbor = "0.11.2"
+serde_json = "1.0"
+sp1-sdk = { version = "=6.3.1" }
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+
+[workspace]

@@ -3205,5 +3205,6 @@ mod release_path {
     mod export_path {
         use super::*;
         include!("external_lane_export_tests.rs");
+        include!("external_lane_export_proof_tests.rs");
     }
 }
