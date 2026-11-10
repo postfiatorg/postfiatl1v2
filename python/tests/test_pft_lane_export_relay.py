@@ -308,3 +308,72 @@ class StatusAndCheckpointTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CheckpointRefusalTests(unittest.TestCase):
+    PRIOR, TARGET, ROOT = h48("44"), h48("45"), h48("55")
+
+    def reads(self, **changes):
+        reads = {"chain_id": 84532, "verifier.pftlChainIdHash": "0x" + relay.keccak256(b"postfiat-lane").hex(),
+                 "verifier.pftlGenesisHashCommitment": relay.commitment(VALUES["pftl_genesis_hash"]),
+                 "verifier.pftlProtocolVersion": 1, "verifier.maxProofBytes": 4096,
+                 "verifier.maxPublicValuesBytes": 16384, "verifier.latestFinalizedHeight": 4,
+                 "verifier.priorCommitteeRootCommitment": relay.commitment(self.ROOT),
+                 "verifier.resultingCommitteeRootCommitment": "0x" + "00" * 32}
+        reads.update(changes)
+        return reads
+
+    def values(self, **changes):
+        values = {"pftl_chain_id": "postfiat-lane", "pftl_genesis_hash": VALUES["pftl_genesis_hash"],
+                  "pftl_protocol_version": 1, "prior_checkpoint_block_id": self.PRIOR,
+                  "resulting_checkpoint_block_id": self.TARGET, "committee_root": self.ROOT,
+                  "committee_transition_commitment": "", "finalized_block_height": 9}
+        values.update(changes)
+        return values
+
+    def codes(self, reads=None, values=None, proof_bytes=100, public_values_bytes=300):
+        return [r["code"] for r in relay.checkpoint_refusals(reads or self.reads(), values or self.values(),
+                                                             proof_bytes=proof_bytes,
+                                                             public_values_bytes=public_values_bytes)]
+
+    def test_matching_checkpoint_passes(self):
+        self.assertEqual(self.codes(), [])
+
+    def test_bindings_sizes_and_prior(self):
+        self.assertIn("wrong_pftl_chain", self.codes(values=self.values(pftl_chain_id="other")))
+        self.assertIn("wrong_genesis", self.codes(values=self.values(pftl_genesis_hash=h48("12"))))
+        self.assertIn("proof_too_large", self.codes(proof_bytes=0))
+        self.assertIn("public_values_too_large", self.codes(public_values_bytes=20000))
+        self.assertIn("unknown_prior_checkpoint",
+                      self.codes(reads=self.reads(**{"verifier.priorCommitteeRootCommitment": "0x" + "00" * 32})))
+
+    def test_committee_progression(self):
+        self.assertIn("wrong_committee_root", self.codes(values=self.values(committee_root=h48("56"))))
+        # A non-empty transition must start at the prior checkpoint's committee.
+        self.assertEqual(self.codes(values=self.values(committee_transition_commitment=self.ROOT,
+                                                       committee_root=h48("56"))), [])
+        self.assertIn("wrong_committee_transition_start",
+                      self.codes(values=self.values(committee_transition_commitment=h48("57"))))
+        # A resulting checkpoint already recorded under another committee root.
+        self.assertIn("recorded_committee_root", self.codes(
+            reads=self.reads(**{"verifier.resultingCommitteeRootCommitment": relay.commitment(h48("58"))})))
+
+    def test_advance_checkpoint_has_the_prove_modes(self):
+        parser = relay.parser()
+        base = ["advance-checkpoint", "--rpc", "http://127.0.0.1:1", "--lock", LOCK, "--node-bin", "n",
+                "--data-dir", "d", "--prior-checkpoint", self.PRIOR, "--target-block", self.TARGET, "--output", "o"]
+        self.assertEqual(parser.parse_args(base + ["--mode", "command", "--prover-command", "x"]).mode, "command")
+        self.assertEqual(parser.parse_args(base + ["--mode", "execute-only", "--elf", "e", "--prover-tool", "t"]).mode,
+                         "execute-only")
+        self.assertEqual(parser.parse_args(base + ["--mode", "proof-file", "--proof-file", "p",
+                                                   "--public-values-file", "v"]).mode, "proof-file")
+
+
+class ReleaseCommitteeTests(unittest.TestCase):
+    def test_transition_must_start_at_the_prior_committee_and_the_result_must_not_be_recorded_elsewhere(self):
+        self.assertIn("wrong_committee_transition_start", refusals(committee_transition_commitment=h48("57")))
+        self.assertEqual(refusals(committee_transition_commitment=VALUES["committee_root"],
+                                  committee_root=h48("59")), [])
+        rpc = MockRpc({(VERIFIER, f"checkpointCommitteeRootCommitment(bytes32):{relay.commitment(h48('66'))}"):
+                       relay.commitment(h48("58"))})
+        self.assertIn("recorded_committee_root", refusals(rpc, resulting_checkpoint_block_id=h48("66")))
