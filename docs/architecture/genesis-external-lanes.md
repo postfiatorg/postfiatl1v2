@@ -334,7 +334,7 @@ Fixed vectors are in `crates/types/testdata/external-lane-export-packet-vectors.
 
 **The read.** `external_lane_info` reports `state.exported_atoms` and `state.next_export_nonce`, and pages the packets newest first with their digest and two commitments: `export_count`, `pruned_export_count`, `export_history_root`, `exports` and `next_export_cursor`, with `--export-cursor` and `--export-limit` as the release page's flags. The Python client takes `export_cursor` and `export_limit`; `external_lane_export_coverage` summarises a row.
 
-**The holder's commands.** `external-lane-export` reads the lane with `external_lane_info` and refuses before signing, with `refused before signing: CODE: message`, when the lane does not exist (`external_lane_not_configured`), exports are off (`external_lane_export_not_supported`), the active cap is zero (`external_lane_export_halted`), the amount is zero (`external_lane_export_amount_zero`) or above `released_atoms - exported_atoms` (`external_lane_export_above_released`), the recipient is malformed or zero (`external_lane_export_recipient_invalid`), the lane's lock (`external_lane_export_recipient_is_lock`) or its token (`external_lane_export_recipient_is_token`), or the balance cannot cover the amount, the `asset_fee_quote` fee and the account reserve (`insufficient_funds`). It then signs through `wallet_sign_asset_transaction` and submits through the mempool path; `--dry-run` prints the signed transaction and submits nothing. A refusal the node returns at admission is printed as the node gives it (`crates/node/src/external_lane_export_cli.rs`).
+**The holder's commands.** `external-lane-export` reads the lane with `external_lane_info` and refuses before signing, with `refused before signing: CODE: message`, when the lane does not exist (`external_lane_not_configured`), exports are off (`external_lane_export_not_supported`), the active cap is zero (`external_lane_export_halted`), the amount is zero (`external_lane_export_amount_zero`) or above `released_atoms - exported_atoms` (`external_lane_export_above_released`), the recipient is malformed or zero (`external_lane_export_recipient_invalid`), the lane's lock (`external_lane_export_recipient_is_lock`) or its token (`external_lane_export_recipient_is_token`), or the balance cannot cover the amount, the `asset_fee_quote` fee and the account reserve (`insufficient_funds`). Last, it refuses with the quote's `export_refusal`: `asset_fee_quote` runs execution's export rules (`dry_run_external_lane_export`, `crates/execution/src/external_lane_release.rs`) on the ledger after the node's executable pending transactions, the state admission checks, so pending exports count and `external_lane_export_above_released`, `external_lane_export_nonce_exhausted` and `external_lane_export_records_full` are refused before signing. It then signs through `wallet_sign_asset_transaction` and submits through the mempool path; `--dry-run` prints the signed transaction and submits nothing. What remains possible: a transaction another submitter gets admitted between the check and the submission can still make admission refuse the export; a refused admission charges no fee. A refusal the node returns at admission is printed as the node gives it (`crates/node/src/external_lane_export_cli.rs`).
 
 ```bash
 postfiat-node external-lane-export --data-dir DATA_DIR --key-file KEY_FILE \
@@ -348,7 +348,18 @@ postfiat-node external-lane-export --data-dir DATA_DIR --key-file KEY_FILE \
 postfiat-node external-lane-export-status --data-dir DATA_DIR --lane-id base-erc20 --export-nonce 0 --audit
 ```
 
-The Python client has the same pair: `external_lane_export(client, wallet=..., lane_id=..., amount_atoms=..., base_recipient=...)` runs the lane checks (`external_lane_export_refusal`; the balance is left to the node) and then quotes, signs and submits through `submit_asset_transaction`, and `PostFiatRpcClient.external_lane_export_status(lane_id, tx_id_or_nonce)` is the status read.
+The Python client has the same pair: `external_lane_export(client, wallet=..., lane_id=..., amount_atoms=..., base_recipient=..., dry_run=False)` runs the lane checks (`external_lane_export_refusal`), quotes, refuses `insufficient_funds` below amount + minimum fee + account reserve and refuses the quote's `export_refusal`, all before the signer runs, then signs and submits; `dry_run=True` returns the quote and the signed transaction and never submits. `PostFiatRpcClient.external_lane_export_status(lane_id, tx_id_or_nonce, audit=False, sender=None)` is the status read.
+
+**Before an operator or an exchange exports:**
+
+- [ ] Keep the key file readable by its owner only (`chmod 600`); it is the only thing that signs.
+- [ ] Run the reads, the signing and the submission against one trusted node that is synced to the chain tip; the pending-export check is that node's mempool.
+- [ ] Run with `--dry-run` first and check the chain id and genesis hash it prints (`signed_asset_transaction.unsigned`) and the lane policy `external-lane-info --lane-id ID` prints (exports on, lock and token contracts) against the published ones.
+- [ ] Keep the printed `tx_id`; it is the handle for the status read.
+- [ ] Wait for `external-lane-export-status --tx-id ID --sender ADDRESS` to show `in_committed_block: true` (`--audit` to replay the node's block log).
+- [ ] Expect no ERC-20 on Base: until a release relay exists, nothing pays the packet out.
+
+An export that is accepted and never paid loses nothing on PFTL beyond the exported amount, which is out of circulation and counted in the lane's `exported_atoms`; the packet stays in the lane's export history and stays provable against the committed `export_history_root` for a future relay.
 
 ## Not built yet
 
