@@ -1,0 +1,86 @@
+{
+  "alarm_count": 4,
+  "alarms": [
+    {
+      "age_basis": "submitted_height_only",
+      "age_blocks": 62,
+      "code": "nav_age_not_wall_clock_verifiable",
+      "decisions_ref": "SYNTHETIC DEMO TERMS - NOT D-SETTLEMENT (worker p07-c06, 2026-11-10; demonstrates alarm output only; authorizes nothing; D-SETTLEMENT is undecided)",
+      "reason": "the finalized packet carries no operator observation time (age_basis='submitted_height_only'); its NAV age cannot be bounded in wall-clock time, so freshness against max_nav_age_seconds cannot be verified. This is finding R3-F1 of execution/review-03-reserve-proofs-nav-mint-caps.md",
+      "recorded_at_unix_ms": 1794343265849,
+      "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+      "schema": "postfiat.nav-proof-watch.alarm.v1",
+      "severity": "high"
+    },
+    {
+      "chain_height": 1170,
+      "code": "chain_idle_over_window",
+      "reason": "chain height did not advance across the whole window (1170\u21921170): block-counted NAV age is not moving, so even block-based freshness limits cannot be exercised (idle-chain trap, R3-F1)",
+      "recorded_at_unix_ms": 1794343265850,
+      "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+      "schema": "postfiat.nav-proof-watch.alarm.v1",
+      "severity": "medium"
+    },
+    {
+      "age_basis": "submitted_height_only",
+      "age_blocks": 71,
+      "code": "nav_age_not_wall_clock_verifiable",
+      "decisions_ref": "SYNTHETIC DEMO TERMS - NOT D-SETTLEMENT (worker p07-c06, 2026-11-10; demonstrates alarm output only; authorizes nothing; D-SETTLEMENT is undecided)",
+      "reason": "the finalized packet carries no operator observation time (age_basis='submitted_height_only'); its NAV age cannot be bounded in wall-clock time, so freshness against max_nav_age_seconds cannot be verified. This is finding R3-F1 of execution/review-03-reserve-proofs-nav-mint-caps.md",
+      "recorded_at_unix_ms": 1794343265850,
+      "route_id": "pftl-bmnrc-ethereum-wBMNRC-usdc-v1",
+      "schema": "postfiat.nav-proof-watch.alarm.v1",
+      "severity": "high"
+    },
+    {
+      "chain_height": 1170,
+      "code": "chain_idle_over_window",
+      "reason": "chain height did not advance across the whole window (1170\u21921170): block-counted NAV age is not moving, so even block-based freshness limits cannot be exercised (idle-chain trap, R3-F1)",
+      "recorded_at_unix_ms": 1794343265850,
+      "route_id": "pftl-bmnrc-ethereum-wBMNRC-usdc-v1",
+      "schema": "postfiat.nav-proof-watch.alarm.v1",
+      "severity": "medium"
+    }
+  ],
+  "coverage_note": "cadence is judged from epochs observed inside this log; a proof finalized before logging started can only be caught through its operator observation time (nav_stale) or its absence (nav_age_not_wall_clock_verifiable), never by block-count arithmetic",
+  "decisions_ref": "SYNTHETIC DEMO TERMS - NOT D-SETTLEMENT (worker p07-c06, 2026-11-10; demonstrates alarm output only; authorizes nothing; D-SETTLEMENT is undecided)",
+  "evaluated_at_unix_ms": 1794343249960,
+  "log_coverage_seconds": 2545.125,
+  "observation_window_seconds": 3600,
+  "per_route": {
+    "pftl-a666-ethereum-wA666-usdc-v1": {
+      "chain_height_advanced": 0,
+      "chain_height_first_in_window": 1170,
+      "chain_height_last_in_window": 1170,
+      "epochs_in_window_count": 1,
+      "finalized_epochs_in_window": [
+        {
+          "epoch": 9
+        }
+      ],
+      "freshness_verdict": "not_verifiable_no_observation_time",
+      "sampler_reported_stale_last": false,
+      "samples_in_window": 7,
+      "worst_proof_gap_seconds": 2545.125
+    },
+    "pftl-bmnrc-ethereum-wBMNRC-usdc-v1": {
+      "chain_height_advanced": 0,
+      "chain_height_first_in_window": 1170,
+      "chain_height_last_in_window": 1170,
+      "epochs_in_window_count": 1,
+      "finalized_epochs_in_window": [
+        {
+          "epoch": 1
+        }
+      ],
+      "freshness_verdict": "not_verifiable_no_observation_time",
+      "sampler_reported_stale_last": false,
+      "samples_in_window": 7,
+      "worst_proof_gap_seconds": 2545.125
+    }
+  },
+  "samples_judged": 14,
+  "schema": "postfiat.nav-proof-watch.evaluation.v1",
+  "terms_sha256": "2bfdee8b3dbf61ccc6b2b1ac18bf24a28bcec67023dcb3c2140a285d96f358eb",
+  "window_start_unix_ms": 1794339649960
+}

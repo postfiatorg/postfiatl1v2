@@ -1,0 +1,76 @@
+{
+  "buyer_exit_verified": false,
+  "evaluated_at_unix_ms": 1794340748143,
+  "gates": {
+    "route_redemption_lane": {
+      "measured": [
+        {
+          "capacity_pfusdc": 140.344262,
+          "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+          "state_reason": "Finalized epoch and route available"
+        },
+        {
+          "capacity_pfusdc": 0.0,
+          "route_id": "pftl-bmnrc-ethereum-wBMNRC-usdc-v1",
+          "state_reason": "Exit limited to available principal"
+        }
+      ],
+      "pass": true,
+      "why": "sell lane open with measured reserve"
+    },
+    "usdc_exit_lane": {
+      "missing": [
+        "USDC lane status file not found at None. The pfUSDC\u2192USDC exit lane's liveness is not exposed by any public endpoint; an operator must capture navcoin-bridge-supply-status and supply it. This tool will not guess a lane state."
+      ],
+      "pass": false,
+      "refused": true,
+      "why": "operator input missing; verdict refused, not guessed"
+    },
+    "vault_usdc_coverage": {
+      "measured": {
+        "obligations_covered": true,
+        "pfusdc_vault": "0xe7a432a28b20621a70e845c7f202004cf98e7a2c",
+        "rpc": "https://ethereum-rpc.publicnode.com",
+        "vault_paused": false,
+        "vault_total_obligations_usdc": 76.06714,
+        "vault_usdc": 76.06714
+      },
+      "pass": true,
+      "why": "the vault must hold at least its obligations in physical USDC and not be paused"
+    }
+  },
+  "measured_capacity": {
+    "note": "measured facts only: route settlement reserves and vault USDC. Any *stated* capacity above these is a founder term (D-SETTLEMENT); this tool reports what the chain actually pays.",
+    "redemption_at_nav_pfusdc_total": 140.344262,
+    "usdc_exit_backing_usdc": 76.06714
+  },
+  "routes": [
+    {
+      "buy_allowed": true,
+      "name": "Post Fiat NAVCoin a666",
+      "redemption_capacity_pfusdc": 140.344262,
+      "reserve_backed_redeem_atoms": "120222695",
+      "reserve_backed_redeem_pfusdc": 120.222695,
+      "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+      "sell_allowed": true,
+      "settlement_asset_code": "PFUSDC",
+      "settlement_reserve_atoms": "140344262",
+      "state_label": "Open",
+      "state_reason": "Finalized epoch and route available"
+    },
+    {
+      "buy_allowed": true,
+      "name": "BMNR Carry NAVCoin",
+      "redemption_capacity_pfusdc": 0.0,
+      "reserve_backed_redeem_atoms": "0",
+      "reserve_backed_redeem_pfusdc": 0.0,
+      "route_id": "pftl-bmnrc-ethereum-wBMNRC-usdc-v1",
+      "sell_allowed": false,
+      "settlement_asset_code": "PFUSDC",
+      "settlement_reserve_atoms": "0",
+      "state_label": "Exit-limited",
+      "state_reason": "Exit limited to available principal"
+    }
+  ],
+  "schema": "postfiat.nav-proof-watch.exit-capacity.v1"
+}

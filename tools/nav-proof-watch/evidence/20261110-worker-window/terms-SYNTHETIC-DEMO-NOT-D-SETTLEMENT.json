@@ -1,0 +1,6 @@
+{
+  "max_nav_age_seconds": 14400,
+  "proof_interval_seconds": 14400,
+  "observation_window_seconds": 3600,
+  "decisions_ref": "SYNTHETIC DEMO TERMS - NOT D-SETTLEMENT (worker p07-c06, 2026-11-10; demonstrates alarm output only; authorizes nothing; D-SETTLEMENT is undecided)"
+}
