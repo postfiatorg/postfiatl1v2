@@ -68,6 +68,9 @@ pub fn verify_external_lane_export_witness_v1(
         committee_epoch: witness.committee_epoch,
         committee_root: segment.committee_root.clone(),
     };
+    // The finality check and the root check above already bound these fields
+    // to the signed block id. This recomputation restates that binding, so the
+    // statement fails closed if the two ever diverge.
     let recomputed = consensus_v2_block_ref_with_external_lane_export_root(
         &domain,
         header.height,
