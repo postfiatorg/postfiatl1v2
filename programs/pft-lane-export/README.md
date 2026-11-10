@@ -4,15 +4,28 @@ The SP1 guest for PFT exports from an external lane to Base. It reads the versio
 
 It has its own key. The pfUSDC egress program (`programs/pfusdc-egress`) binds a burn receipt and the bridge-exit root, which a lane export does not have. That program and its key are unchanged.
 
-## Release status
+## Release identity
 
-No ELF and no `program-info` are committed yet. A release build must be the Docker-reproducible one that the proof-identity CI jobs check:
+`elf/pft-lane-export-program` and `program-info.json` are the program's identity:
 
-```sh
-cargo prove build --docker --tag v6.3.1 --locked --output-directory elf
-```
+- ELF sha256: `e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab`
+- Verifying key: `0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414`
 
-Run it on a host with Docker and SP1 6.3.1. Then record the ELF digest and verifying key in `program-info.json` in the neighbours' format, and add the program to the proof public-input inventory and the CI identity job.
+`releases.json` records how they were produced:
+
+- **Workflow:** `pft-lane-export-identity`, run 42818337185 at commit `439803aaa`, attempts 1 and 2 on separate runner machines.
+- **Builds:** each attempt built the guest twice from two clean trees in the pinned SP1 image `ghcr.io/succinctlabs/sp1@sha256:0942a27d…3400`, with `cargo prove build --docker --tag v6.3.1 --locked`. All four ELFs were byte-identical, and both attempts derived the same key.
+- **Rebuild check:** the workflow rebuilds the guest on every push and pull request and fails when the ELF or the key differs from `program-info.json`.
+
+**No proof has been generated with this key yet.**
+
+Before any verifier is constructed with this key, all of these must hold:
+
+1. This committed identity, unchanged.
+2. The program's entry in the proof public-input inventory (`docs/status/OPEN-SOURCE-PROOF-PUBLIC-INPUT-INVENTORY-20260716.json`).
+3. The identity check green on the commit being deployed.
+4. The verifier's `programVKey` taken from `program-info.json` and cross-checked in the deployment record.
+5. Before production: at least one real SP1 proof generated with this program and verified against the versioned SP1 verifier. None exists yet.
 
 ## Execute locally
 

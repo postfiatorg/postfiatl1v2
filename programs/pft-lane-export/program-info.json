@@ -1,0 +1,25 @@
+{
+  "schema": "postfiat-sp1-program-info-v1",
+  "program": "pft-lane-export-program",
+  "sp1_version": "6.3.1",
+  "build_command": "cargo prove build --docker --tag v6.3.1 --locked --workspace-directory <checkout> --output-directory elf",
+  "elf_path": "elf/pft-lane-export-program",
+  "elf_sha256": "e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab",
+  "program_vkey": "0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414",
+  "cargo_lock_sha256": "d34ce6ca28550ab6caa959a0827c30587ead1614ec73026476a35103724938f7",
+  "cargo_toml_sha256": "e223bfb298eb2874c2f0d0f8663ac474fa6c56c1327874cb84604b4723ba2f6b",
+  "source_commit": "439803aaa3d6f34dfe97a4a48eca5d6008cba43d",
+  "docker_image": "ghcr.io/succinctlabs/sp1@sha256:0942a27dbe8e38f4b14f3732e779df4027b17bde93e9fbc9e8c773c15eb63400",
+  "build_count": 2,
+  "clean_source_trees": 2,
+  "byte_exact_replay": true,
+  "proof_modes": [
+    {
+      "kind": "withdrawal"
+    },
+    {
+      "kind": "checkpoint"
+    }
+  ],
+  "proof_status": "elf_and_vkey_derived_no_proof_generated"
+}
