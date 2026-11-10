@@ -388,6 +388,8 @@ The exports are signed with `wallet-sign-asset-transaction --operation-json`.
 
 **Limits.** No SP1 proof exists: a mock SP1 verifier accepted placeholder bytes, and the guest only ran in execute mode. Anvil stands in for Base. The ELF is a local build without a committed key. The rehearsal's "six-validator fleet" is one data directory driven by an ignored node test: every block carries consensus v2 commits from all six validators, but no separate node processes or network ran. The exports are applied by that driver, not submitted through a running node's RPC. The recipient got 10,000 native atoms from the faucet for the two export fees. The Phase 2 release watcher still reports the one release as backed. It has no export view, so it reports nothing about exports or their Base releases.
 
+**The Base Sepolia dry run (2026-11-10).** `scripts/rehearse-lane-base-sepolia.py` runs the section 5 order on Base Sepolia as one resumable command. The verifier's SP1 verifier is Succinct's versioned `V6_1_0_SP1_VERIFIER_GROTH16`, and the program key comes from `program-info.json`. Without a real proof it stops at `prove-and-release`. It has run once with `--fork` on a local Anvil fork, and nothing was sent to Base Sepolia (`docs/review/lane-base-sepolia-fork-rehearsal-20261110/`, runbook `docs/runbooks/lane-base-sepolia-dry-run.md`).
+
 ## 10. Sources
 
 - `docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md`, sections 5.1, 6 and 7.
