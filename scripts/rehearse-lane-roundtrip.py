@@ -441,6 +441,25 @@ def main(argv=None):
         require(driver.wait(timeout=600) == 0, 'the PFTL driver test failed; see pftl-driver.stdout')
         results['steps']['f_round_empty'] = {'lane': done['lane'], 'base': base}
         results['steps']['g_over_export_refused'] = refused
+
+        # (i) The Phase 2 release watcher over a read-only RPC of the chain (the base-lock rehearsal's way).
+        ready_file = out / 'rpc-ready.json'
+        watch_env = dict(environment, PYTHONPATH=str(ROOT / 'python'))
+        rpc_port, _ = BASE_LOCK.start_on_free_port(
+            'rpc-serve', lambda port: [node_bin, 'rpc-serve', '--unsafe-devnet-json-storage', '--data-dir',
+                                       state['data_dir'], '--bind-host', '127.0.0.1', '--port', port,
+                                       '--max-requests', '100', '--ready-file', ready_file],
+            lambda port: ready_file.exists(), children, results['children'],
+            open_stderr=lambda: (out / 'rpc-serve.stderr').open('a'), env=watch_env, ready_file=ready_file)
+        lines = [json.loads(line) for line in command('watcher', [
+            sys.executable, '-m', 'postfiat_rpc.external_lane_watcher', '--pftl-rpc', f'127.0.0.1:{rpc_port}',
+            '--lane-id', LANE_ID, '--base-rpc', url, '--state-file', out / 'watcher-state.json', '--once'],
+            env=watch_env).splitlines()]
+        results['steps']['i_watcher'] = {
+            'summary': BASE_LOCK.watcher_summary(lines, releases_checked=1),
+            'releases': [line for line in lines if line.get('kind') == 'release'],
+            'exports': 'the watcher has no export view: it reads releases and their Base Locks only, and '
+                       'reports nothing about exports or Base releases of exports'}
         results['passed'] = True
     except Exception as error:
         results['error'] = portable(error)
