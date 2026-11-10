@@ -4,22 +4,24 @@
 
 **What was NOT real:** the SP1 proof. The verifier was built with the Foundry tests' mock SP1 verifier (`Tier4MockSP1Verifier`, `crates/ethereum-contracts/test/PFUSDCTier4.t.sol`) and a placeholder program key. It accepted the relay's placeholder bytes, and no proof was generated. A local Anvil with chain id 84532 stood in for Base. The guest ELF was a local SP1 6.3.1 build without a committed key. The "six-validator fleet" was one data directory driven by an ignored node test: every block carries consensus v2 commits from all six validators, but no separate node processes or network ran. The exports were applied by that driver, not submitted through a running node's RPC.
 
+The relay sent the placeholder only after checking that the verifier's `sp1Verifier` has the mock's runtime code hash and that the RPC is a loopback Anvil. Before each release it printed the verifier's `programVKey` and `sp1Verifier` and its checkpoint lag. Its `Released` event was taken as the result, and the balance change matched it with no warning.
+
 This records one run of `scripts/rehearse-lane-roundtrip.py`, which uses the relay `scripts/pft-lane-export-relay.py`. No public network was touched, and no request went to a prover network. `summary.json` holds every value below. `manifest.json` holds the source and tool hashes, the ELF's sha256 and the hashes of the unpublished run files. No key material is recorded.
 
-- **Source:** commit `cf06ff863dcabebcb6393e426328f26493a6254a`, tree `84809aa257f941aac679599d5d45317744b641a2`.
+- **Source:** commit `5cc0bb165ad772113b0b7dcfd775fc72fcf3caa5`, tree `0e92a9be15399e2a11585624a4ced1a6a960b549`.
 - **Tools:** Foundry 1.8.1 (anvil, forge, cast), Rust 1.95.0.
-- **ELF:** sha256 `13dd27f5b521259268fce63cf93df6d0b3d5fbd92da51e8f29818475b4e30b7e`, a local test build.
+- **ELF:** sha256 `d7ae2a38b6dba0ae7f438c64012b72a36e092ff5cf0cf17eec8bcfdf373ed2cd`, a local native build of `programs/pft-lane-export` at the recorded commit, named in the record by this hash.
 
 ## The run
 
 | Step | PFTL | Base (Anvil) |
 |---|---|---|
-| Setup | Lane genesis pins the predicted lock. Chain `postfiat-lane-lane-roundtrip`, six validators, consensus v2 and the export root from block 2. First checkpoint: block 1. | Token, mock SP1 verifier, then the verifier `0x01a63a3b…6430` and the lock `0x165d84d9…2001` at their predicted addresses. All 21 constructor values read back. |
+| Setup | Lane genesis pins the predicted lock. Chain `postfiat-lane-lane-roundtrip`, six validators, consensus v2 and the export root from block 2. First checkpoint: block 1. | Token, mock SP1 verifier, then the verifier `0x2c4926a4…3a3a` and the lock `0x4d538bbb…5b28` at their predicted addresses. All 21 constructor values read back. |
 | (a) Lock | | 1,000,000 locked to the PFTL recipient (block 6). `totalLocked` 1,000,000; lock balance 1,000,000. |
 | (b) Release | Block 2. The recipient holds 1,000,000 atoms. Lane released 1,000,000, remainder 299,000,000. | unchanged |
-| (c)–(d) Export 400,000 | Block 4 carries the lane export root. Lane exported 400,000, remainder 299,400,000. | The relay paid 400,000 to `0xfb012590…f93b` (block 135). `totalReleased` 400,000, lock balance 600,000. `Released` names the packet digest. Guest: 76,727,816 instructions. |
+| (c)–(d) Export 400,000 | Block 4 carries the lane export root. Lane exported 400,000, remainder 299,400,000. | The relay paid 400,000 to `0xfb012590…f93b` (block 135). `totalReleased` 400,000, lock balance 600,000. `Released` names the packet digest. Guest: 76,616,855 instructions. |
 | (e) Same packet again | | Refused before sending (`already_consumed`). Forced, it reverted on chain. State unchanged. |
-| (f) Export 600,000 | Block 5. Lane released 1,000,000, exported 1,000,000, remainder 300,000,000. | Paid 600,000 to `0x74cd441b…49aa` (block 136). `totalLocked - totalReleased` 0, lock balance 0. Guest: 48,863,644 instructions. |
+| (f) Export 600,000 | Block 5. Lane released 1,000,000, exported 1,000,000, remainder 300,000,000. | Paid 600,000 to `0x74cd441b…49aa` (block 136). `totalLocked - totalReleased` 0, lock balance 0. Guest: 48,833,637 instructions. |
 | (g) Export 1 atom | Refused at admission: `external_lane_export_above_released`. | |
 | (i) Watcher | One release, checked, `backed`, no alarm. | Its Lock found on Base. |
 

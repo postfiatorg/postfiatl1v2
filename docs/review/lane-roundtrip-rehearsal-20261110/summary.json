@@ -2,9 +2,9 @@
   "scope": "local Anvil (chain id 84532) and a generated six-validator PFTL chain only",
   "public_network_transaction": false,
   "proof_network_request": false,
-  "source_commit": "cf06ff863dcabebcb6393e426328f26493a6254a",
-  "source_tree": "84809aa257f941aac679599d5d45317744b641a2",
-  "started_at_unix": 1794313472,
+  "source_commit": "5cc0bb165ad772113b0b7dcfd775fc72fcf3caa5",
+  "source_tree": "0e92a9be15399e2a11585624a4ced1a6a960b549",
+  "started_at_unix": 1794315600,
   "commands": [
     {
       "name": "forge-build-pft-token-contracts",
@@ -13,7 +13,7 @@
         "build"
       ],
       "exit_code": 0,
-      "seconds": 10.451
+      "seconds": 10.903
     },
     {
       "name": "forge-build-ethereum-contracts",
@@ -22,7 +22,7 @@
         "build"
       ],
       "exit_code": 0,
-      "seconds": 12.555
+      "seconds": 12.456
     },
     {
       "name": "account-token",
@@ -46,7 +46,7 @@
         "<disposable-key>"
       ],
       "exit_code": 0,
-      "seconds": 0.032
+      "seconds": 0.033
     },
     {
       "name": "account-lock",
@@ -70,7 +70,7 @@
         "<disposable-key>"
       ],
       "exit_code": 0,
-      "seconds": 0.032
+      "seconds": 0.033
     },
     {
       "name": "account-relayer",
@@ -82,7 +82,7 @@
         "<disposable-key>"
       ],
       "exit_code": 0,
-      "seconds": 0.032
+      "seconds": 0.033
     },
     {
       "name": "deploy-token",
@@ -91,7 +91,7 @@
         "create",
         "src/PFTToken.sol:PFTToken",
         "--rpc-url",
-        "http://127.0.0.1:58753",
+        "http://127.0.0.1:55181",
         "--private-key",
         "<disposable-key>",
         "--broadcast",
@@ -100,10 +100,10 @@
         "Rehearsal PFT",
         "rPFT",
         "300000000",
-        "0x855338b85a973b23e952613229cfa8d29a5008e8"
+        "0x3532000c0eb3d2ce91a48df9d47aa9b3a341612a"
       ],
       "exit_code": 0,
-      "seconds": 0.566
+      "seconds": 0.617
     },
     {
       "name": "deploy-mock-sp1",
@@ -112,14 +112,14 @@
         "create",
         "test/PFUSDCTier4.t.sol:Tier4MockSP1Verifier",
         "--rpc-url",
-        "http://127.0.0.1:58753",
+        "http://127.0.0.1:55181",
         "--private-key",
         "<disposable-key>",
         "--broadcast",
         "--json"
       ],
       "exit_code": 0,
-      "seconds": 1.521
+      "seconds": 1.623
     },
     {
       "name": "probe-verifier",
@@ -128,7 +128,7 @@
         "create",
         "src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1",
         "--rpc-url",
-        "http://127.0.0.1:58753",
+        "http://127.0.0.1:55181",
         "--private-key",
         "<disposable-key>",
         "--broadcast",
@@ -136,10 +136,10 @@
         "--nonce",
         "0",
         "--constructor-args",
-        "(0x00000000000000000000000000000000000000f1,0x215ab3f55e32e9b66d181026f50e35307511097ebd2450d9fa413936fc4a2c48,0x3276bfc46090fee6ac0eb7a925656367df3823e446233bf9b515b11ec04b250e,0xa27528c0b62b0fa65831b8d854a01d9d87c96fd28acb728a985cebee68330d03,1,0xc8dc24d164b107c1ab123df2f70913e9f9f17077fb860e7e13f250a90ed40a1b,7,0xe3f5559f67c73440d43b8334e414b5d1dd402a8defb6e044f0a2f6d849e77c49,84532,0xdd5f4a40891243106ad927058f4519a6fd2037f7356b0a02219316326a4f2025,0x6b92f754a1900439a286a8dd166532a27b102f74,0x827a7c73ca7be85b687dd98ea90bef1533972a7a8c4a721c4a04af6c0f48be83,4096,16384,0xa53752dc6386d848789372c6ab4f0ca82bbede89c7e239a99de6191d2d0d2677,10,0x558ba219208a9a35971bb6be250b9052f3a8255780d19ba31192b1748a2bf7e0)"
+        "(0x00000000000000000000000000000000000000f1,0x215ab3f55e32e9b66d181026f50e35307511097ebd2450d9fa413936fc4a2c48,0x3276bfc46090fee6ac0eb7a925656367df3823e446233bf9b515b11ec04b250e,0xa27528c0b62b0fa65831b8d854a01d9d87c96fd28acb728a985cebee68330d03,1,0xc8dc24d164b107c1ab123df2f70913e9f9f17077fb860e7e13f250a90ed40a1b,7,0xe3f5559f67c73440d43b8334e414b5d1dd402a8defb6e044f0a2f6d849e77c49,84532,0xdd5f4a40891243106ad927058f4519a6fd2037f7356b0a02219316326a4f2025,0x0ce44c7b04979f1781c7161399f3e9f6dc946249,0xc1fe8aa7048b2ed946e191138995099be23bfb97ac9f56fb4b88ec303abb85ae,4096,16384,0xa53752dc6386d848789372c6ab4f0ca82bbede89c7e239a99de6191d2d0d2677,10,0x558ba219208a9a35971bb6be250b9052f3a8255780d19ba31192b1748a2bf7e0)"
       ],
       "exit_code": 0,
-      "seconds": 0.366
+      "seconds": 0.316
     },
     {
       "name": "probe-lock",
@@ -148,7 +148,7 @@
         "create",
         "src/PFTLockV1.sol:PFTLockV1",
         "--rpc-url",
-        "http://127.0.0.1:58753",
+        "http://127.0.0.1:55181",
         "--private-key",
         "<disposable-key>",
         "--broadcast",
@@ -156,9 +156,9 @@
         "--nonce",
         "0",
         "--constructor-args",
-        "0x6b92f754a1900439a286a8dd166532a27b102f74",
-        "0x01a63a3b2fac26fc375e4b452e62eca6ec736430",
-        "0x827a7c73ca7be85b687dd98ea90bef1533972a7a8c4a721c4a04af6c0f48be83",
+        "0x0ce44c7b04979f1781c7161399f3e9f6dc946249",
+        "0x2c4926a4ce77fa0c6f86db72d395a7c7bd513a3a",
+        "0xc1fe8aa7048b2ed946e191138995099be23bfb97ac9f56fb4b88ec303abb85ae",
         "6000000",
         "10"
       ],
@@ -172,7 +172,7 @@
         "create",
         "src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1",
         "--rpc-url",
-        "http://127.0.0.1:58753",
+        "http://127.0.0.1:55181",
         "--private-key",
         "<disposable-key>",
         "--broadcast",
@@ -180,10 +180,10 @@
         "--nonce",
         "0",
         "--constructor-args",
-        "(0x39080e0a7819ef6681f8133cb94dda77a7d61108,0xc38e6158912567128fc380abfed5dd4731d1f74fa0095ebf36463d7da4deb96e,0x4ea8ee52b27fd187a726848ac2e0a41d4cf2c511922f08404f79d25fdbef878d,0x2a13c8703df02dbffc9207084cfe3d52c0593b5f77cc41334c6ba798c1a82a59,1,0x6c64d6df61f3b11e5a6664a6266329d97378298d861829175323db81f336b7f0,1,0xf03718b74a1fca6e2693d1304646871e67ffc2086f9fbbc7f9fdf8c406e69c0c,84532,0x26b090d7514b9c6e9d9bbc01caa283a88c3821ef37ae73dc7554020af5ede791,0x6b92f754a1900439a286a8dd166532a27b102f74,0x827a7c73ca7be85b687dd98ea90bef1533972a7a8c4a721c4a04af6c0f48be83,4096,16384,0x81c523069f2d7641b37fe679fa8e409cf4a6a081f2c75180f53d86d721c66e14,1,0x8f8526dae0492efa5eab7f3cd42d10ba3337cae00038afb5ad52eae5b8558a78)"
+        "(0xbb9f9fdc255d9104ee617dc17a78fa1ff295cc9f,0xc38e6158912567128fc380abfed5dd4731d1f74fa0095ebf36463d7da4deb96e,0x4ea8ee52b27fd187a726848ac2e0a41d4cf2c511922f08404f79d25fdbef878d,0x4a559c57f5abf71e82f7308491309f20d435324dd19ed9cf67edb54db03e15f6,1,0x1ee2536219fd9c9177ad0c5a4ccdda976d61aac998ca2c4a7af122ffdcd1400d,1,0xc0516f09c0dc2c54e66810cd7e0e0ba91c322d81c81ee0389eeb0887996e88c7,84532,0x9cd128bd2ab5bc276ca4ca78cfe40f33f1035727532daa6c3d9a8db7520608cc,0x0ce44c7b04979f1781c7161399f3e9f6dc946249,0xc1fe8aa7048b2ed946e191138995099be23bfb97ac9f56fb4b88ec303abb85ae,4096,16384,0x0de2d65d9c793fd1a6db23bff65ff8e30ab814cb34df28f05b9755237fd313ac,1,0xcd093bd72a374af6e19066aee97dd8ba717d579c23938eb900912887a5488764)"
       ],
       "exit_code": 0,
-      "seconds": 0.366
+      "seconds": 0.316
     },
     {
       "name": "deploy-lock",
@@ -192,7 +192,7 @@
         "create",
         "src/PFTLockV1.sol:PFTLockV1",
         "--rpc-url",
-        "http://127.0.0.1:58753",
+        "http://127.0.0.1:55181",
         "--private-key",
         "<disposable-key>",
         "--broadcast",
@@ -200,9 +200,9 @@
         "--nonce",
         "0",
         "--constructor-args",
-        "0x6b92f754a1900439a286a8dd166532a27b102f74",
-        "0x01a63a3b2fac26fc375e4b452e62eca6ec736430",
-        "0x827a7c73ca7be85b687dd98ea90bef1533972a7a8c4a721c4a04af6c0f48be83",
+        "0x0ce44c7b04979f1781c7161399f3e9f6dc946249",
+        "0x2c4926a4ce77fa0c6f86db72d395a7c7bd513a3a",
+        "0xc1fe8aa7048b2ed946e191138995099be23bfb97ac9f56fb4b88ec303abb85ae",
         "6000000",
         "10"
       ],
@@ -214,35 +214,35 @@
       "argv": [
         "cast",
         "send",
-        "0x6b92f754a1900439a286a8dd166532a27b102f74",
+        "0x0ce44c7b04979f1781c7161399f3e9f6dc946249",
         "approve(address,uint256)",
-        "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
+        "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
         "1000000",
         "--rpc-url",
-        "http://127.0.0.1:58753",
+        "http://127.0.0.1:55181",
         "--private-key",
         "<disposable-key>"
       ],
       "exit_code": 0,
-      "seconds": 0.316
+      "seconds": 0.366
     },
     {
       "name": "holder-lock",
       "argv": [
         "cast",
         "send",
-        "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
+        "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
         "lock(uint64,bytes)",
         "1000000",
         "0x706664613432653666646366323632656365326161653632326636316337623430303033653139373562",
         "--rpc-url",
-        "http://127.0.0.1:58753",
+        "http://127.0.0.1:55181",
         "--private-key",
         "<disposable-key>",
         "--json"
       ],
       "exit_code": 0,
-      "seconds": 0.317
+      "seconds": 0.316
     },
     {
       "name": "export-1-sign",
@@ -250,11 +250,11 @@
         "<checkout>/target/debug/postfiat-node",
         "wallet-sign-asset-transaction",
         "--key-file",
-        "<output>/tmp/postfiat-external-lane-lane-roundtrip-4008881-1794313512102614152/roundtrip-recipient-key.json",
+        "<output>/tmp/postfiat-external-lane-lane-roundtrip-4169987-1794315643134354447/roundtrip-recipient-key.json",
         "--chain-id",
         "postfiat-lane-lane-roundtrip",
         "--genesis-hash",
-        "71cf998cffe81c938ebb2eb0139999dc86a0d729a7cd0397dee0ae0104f384f16a102316d57c5cbceae98e9b214bdbb8",
+        "6ae2add35c2922515deaddc66a5588ef3e1502f9616f02a267503d755e9fa885076eb5febc7c2103729c38e087b51c70",
         "--protocol-version",
         "1",
         "--fee",
@@ -265,34 +265,34 @@
         "{\"operation\": \"external_lane_export_v1\", \"sender\": \"pfda42e6fdcf262ece2aae622f61c7b40003e1975b\", \"lane_id\": \"base-erc20\", \"amount_atoms\": 400000, \"base_recipient\": \"0xfb0125905c90d402b3af12f7914557cb5361f93b\"}"
       ],
       "exit_code": 0,
-      "seconds": 0.115
+      "seconds": 0.216
     },
     {
       "name": "relay-1-input",
       "argv": [
-        "/usr/bin/python3",
+        "<python>",
         "<checkout>/scripts/pft-lane-export-relay.py",
         "input",
         "--node-bin",
         "<checkout>/target/debug/postfiat-node",
         "--data-dir",
-        "<output>/tmp/postfiat-external-lane-lane-roundtrip-4008881-1794313512102614152",
+        "<output>/tmp/postfiat-external-lane-lane-roundtrip-4169987-1794315643134354447",
         "--lane-id",
         "base-erc20",
         "--export-nonce",
         "0",
         "--prior-checkpoint",
-        "25d4b7f4b6c1c754a5ed534e4391554b0277dd43a2785484984e2d917d2d79e2e3da48b68c9b10cd411a07e47ee11f5a",
+        "271e4e5dec656151c15d2a9149757a77c383d7520683abc570242cc07446da98a41563d7bd649dc6161b35f45385ce50",
         "--output",
         "<output>/relay-1/input"
       ],
       "exit_code": 0,
-      "seconds": 0.819
+      "seconds": 1.018
     },
     {
       "name": "relay-1-prove",
       "argv": [
-        "/usr/bin/python3",
+        "<python>",
         "<checkout>/scripts/pft-lane-export-relay.py",
         "prove",
         "--input",
@@ -300,89 +300,97 @@
         "--mode",
         "execute-only",
         "--elf",
-        "~/tmp-dravlic-tests/phase3-base-half/elf/pft-lane-export-program",
+        "<elf sha256:d7ae2a38b6dba0ae7f438c64012b72a36e092ff5cf0cf17eec8bcfdf373ed2cd>",
         "--prover-tool",
-        "<checkout>/target/release/pft-lane-export-prover",
+        "<prover-tool sha256:24352abcb9839289029899b241192bb68a5183d8fb8e39bf76f0f26084ceb97b>",
         "--output",
         "<output>/relay-1/proof"
       ],
       "exit_code": 0,
-      "seconds": 25.78
+      "seconds": 33.936
     },
     {
       "name": "relay-1-release",
       "argv": [
-        "/usr/bin/python3",
+        "<python>",
         "<checkout>/scripts/pft-lane-export-relay.py",
         "release",
         "--rpc",
-        "http://127.0.0.1:58753",
+        "http://127.0.0.1:55181",
         "--lock",
-        "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
-        "--input",
-        "<output>/relay-1/input",
-        "--proof",
-        "<output>/relay-1/proof/proof.json",
-        "--private-key-file",
-        "<output>/relayer.key"
-      ],
-      "exit_code": 0,
-      "seconds": 0.466
-    },
-    {
-      "name": "relay-1-status",
-      "argv": [
-        "/usr/bin/python3",
-        "<checkout>/scripts/pft-lane-export-relay.py",
-        "status",
-        "--rpc",
-        "http://127.0.0.1:58753",
-        "--lock",
-        "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
-        "--input",
-        "<output>/relay-1/input",
-        "--proof",
-        "<output>/relay-1/proof/proof.json"
-      ],
-      "exit_code": 0,
-      "seconds": 0.165
-    },
-    {
-      "name": "relay-1-release-again",
-      "argv": [
-        "/usr/bin/python3",
-        "<checkout>/scripts/pft-lane-export-relay.py",
-        "release",
-        "--rpc",
-        "http://127.0.0.1:58753",
-        "--lock",
-        "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
-        "--input",
-        "<output>/relay-1/input",
-        "--proof",
-        "<output>/relay-1/proof/proof.json",
-        "--private-key-file",
-        "<output>/relayer.key"
-      ],
-      "exit_code": 2,
-      "seconds": 0.115
-    },
-    {
-      "name": "relay-1-release-forced",
-      "argv": [
-        "/usr/bin/python3",
-        "<checkout>/scripts/pft-lane-export-relay.py",
-        "release",
-        "--rpc",
-        "http://127.0.0.1:58753",
-        "--lock",
-        "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
+        "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
         "--input",
         "<output>/relay-1/input",
         "--proof",
         "<output>/relay-1/proof/proof.json",
         "--private-key-file",
         "<output>/relayer.key",
+        "--mock-sp1-artifact",
+        "<output>/forge-out-ethereum-contracts/PFUSDCTier4.t.sol/Tier4MockSP1Verifier.json"
+      ],
+      "exit_code": 0,
+      "seconds": 0.617
+    },
+    {
+      "name": "relay-1-status",
+      "argv": [
+        "<python>",
+        "<checkout>/scripts/pft-lane-export-relay.py",
+        "status",
+        "--rpc",
+        "http://127.0.0.1:55181",
+        "--lock",
+        "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
+        "--input",
+        "<output>/relay-1/input",
+        "--proof",
+        "<output>/relay-1/proof/proof.json",
+        "--from-block",
+        "6"
+      ],
+      "exit_code": 0,
+      "seconds": 0.114
+    },
+    {
+      "name": "relay-1-release-again",
+      "argv": [
+        "<python>",
+        "<checkout>/scripts/pft-lane-export-relay.py",
+        "release",
+        "--rpc",
+        "http://127.0.0.1:55181",
+        "--lock",
+        "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
+        "--input",
+        "<output>/relay-1/input",
+        "--proof",
+        "<output>/relay-1/proof/proof.json",
+        "--private-key-file",
+        "<output>/relayer.key",
+        "--mock-sp1-artifact",
+        "<output>/forge-out-ethereum-contracts/PFUSDCTier4.t.sol/Tier4MockSP1Verifier.json"
+      ],
+      "exit_code": 2,
+      "seconds": 0.165
+    },
+    {
+      "name": "relay-1-release-forced",
+      "argv": [
+        "<python>",
+        "<checkout>/scripts/pft-lane-export-relay.py",
+        "release",
+        "--rpc",
+        "http://127.0.0.1:55181",
+        "--lock",
+        "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
+        "--input",
+        "<output>/relay-1/input",
+        "--proof",
+        "<output>/relay-1/proof/proof.json",
+        "--private-key-file",
+        "<output>/relayer.key",
+        "--mock-sp1-artifact",
+        "<output>/forge-out-ethereum-contracts/PFUSDCTier4.t.sol/Tier4MockSP1Verifier.json",
         "--force-send"
       ],
       "exit_code": 2,
@@ -394,11 +402,11 @@
         "<checkout>/target/debug/postfiat-node",
         "wallet-sign-asset-transaction",
         "--key-file",
-        "<output>/tmp/postfiat-external-lane-lane-roundtrip-4008881-1794313512102614152/roundtrip-recipient-key.json",
+        "<output>/tmp/postfiat-external-lane-lane-roundtrip-4169987-1794315643134354447/roundtrip-recipient-key.json",
         "--chain-id",
         "postfiat-lane-lane-roundtrip",
         "--genesis-hash",
-        "71cf998cffe81c938ebb2eb0139999dc86a0d729a7cd0397dee0ae0104f384f16a102316d57c5cbceae98e9b214bdbb8",
+        "6ae2add35c2922515deaddc66a5588ef3e1502f9616f02a267503d755e9fa885076eb5febc7c2103729c38e087b51c70",
         "--protocol-version",
         "1",
         "--fee",
@@ -409,34 +417,34 @@
         "{\"operation\": \"external_lane_export_v1\", \"sender\": \"pfda42e6fdcf262ece2aae622f61c7b40003e1975b\", \"lane_id\": \"base-erc20\", \"amount_atoms\": 600000, \"base_recipient\": \"0x74cd441b58320526d8e1ee3a2e6b145feca449aa\"}"
       ],
       "exit_code": 0,
-      "seconds": 0.115
+      "seconds": 0.165
     },
     {
       "name": "relay-2-input",
       "argv": [
-        "/usr/bin/python3",
+        "<python>",
         "<checkout>/scripts/pft-lane-export-relay.py",
         "input",
         "--node-bin",
         "<checkout>/target/debug/postfiat-node",
         "--data-dir",
-        "<output>/tmp/postfiat-external-lane-lane-roundtrip-4008881-1794313512102614152",
+        "<output>/tmp/postfiat-external-lane-lane-roundtrip-4169987-1794315643134354447",
         "--lane-id",
         "base-erc20",
         "--export-nonce",
         "1",
         "--prior-checkpoint",
-        "109edabc4c0c496f4b809274ed8c53696cdd6323c9ae1e3ba5c7abca7b60157c52c72f58b67f1de5325e6e243460568b",
+        "f15c9782fbbcd7650471f02aa14e0450bc5e01d74b206e0077b56db70219b53be38332c043c6e52613d50c8e0291ea08",
         "--output",
         "<output>/relay-2/input"
       ],
       "exit_code": 0,
-      "seconds": 0.818
+      "seconds": 0.867
     },
     {
       "name": "relay-2-prove",
       "argv": [
-        "/usr/bin/python3",
+        "<python>",
         "<checkout>/scripts/pft-lane-export-relay.py",
         "prove",
         "--input",
@@ -444,52 +452,56 @@
         "--mode",
         "execute-only",
         "--elf",
-        "~/tmp-dravlic-tests/phase3-base-half/elf/pft-lane-export-program",
+        "<elf sha256:d7ae2a38b6dba0ae7f438c64012b72a36e092ff5cf0cf17eec8bcfdf373ed2cd>",
         "--prover-tool",
-        "<checkout>/target/release/pft-lane-export-prover",
+        "<prover-tool sha256:24352abcb9839289029899b241192bb68a5183d8fb8e39bf76f0f26084ceb97b>",
         "--output",
         "<output>/relay-2/proof"
       ],
       "exit_code": 0,
-      "seconds": 25.179
+      "seconds": 25.12
     },
     {
       "name": "relay-2-release",
       "argv": [
-        "/usr/bin/python3",
+        "<python>",
         "<checkout>/scripts/pft-lane-export-relay.py",
         "release",
         "--rpc",
-        "http://127.0.0.1:58753",
+        "http://127.0.0.1:55181",
         "--lock",
-        "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
+        "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
         "--input",
         "<output>/relay-2/input",
         "--proof",
         "<output>/relay-2/proof/proof.json",
         "--private-key-file",
-        "<output>/relayer.key"
+        "<output>/relayer.key",
+        "--mock-sp1-artifact",
+        "<output>/forge-out-ethereum-contracts/PFUSDCTier4.t.sol/Tier4MockSP1Verifier.json"
       ],
       "exit_code": 0,
-      "seconds": 0.466
+      "seconds": 0.517
     },
     {
       "name": "relay-2-status",
       "argv": [
-        "/usr/bin/python3",
+        "<python>",
         "<checkout>/scripts/pft-lane-export-relay.py",
         "status",
         "--rpc",
-        "http://127.0.0.1:58753",
+        "http://127.0.0.1:55181",
         "--lock",
-        "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
+        "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
         "--input",
         "<output>/relay-2/input",
         "--proof",
-        "<output>/relay-2/proof/proof.json"
+        "<output>/relay-2/proof/proof.json",
+        "--from-block",
+        "6"
       ],
       "exit_code": 0,
-      "seconds": 0.114
+      "seconds": 0.115
     },
     {
       "name": "export-3-sign",
@@ -497,11 +509,11 @@
         "<checkout>/target/debug/postfiat-node",
         "wallet-sign-asset-transaction",
         "--key-file",
-        "<output>/tmp/postfiat-external-lane-lane-roundtrip-4008881-1794313512102614152/roundtrip-recipient-key.json",
+        "<output>/tmp/postfiat-external-lane-lane-roundtrip-4169987-1794315643134354447/roundtrip-recipient-key.json",
         "--chain-id",
         "postfiat-lane-lane-roundtrip",
         "--genesis-hash",
-        "71cf998cffe81c938ebb2eb0139999dc86a0d729a7cd0397dee0ae0104f384f16a102316d57c5cbceae98e9b214bdbb8",
+        "6ae2add35c2922515deaddc66a5588ef3e1502f9616f02a267503d755e9fa885076eb5febc7c2103729c38e087b51c70",
         "--protocol-version",
         "1",
         "--fee",
@@ -512,20 +524,20 @@
         "{\"operation\": \"external_lane_export_v1\", \"sender\": \"pfda42e6fdcf262ece2aae622f61c7b40003e1975b\", \"lane_id\": \"base-erc20\", \"amount_atoms\": 1, \"base_recipient\": \"0xcfc1df67889dc07508d3b14fef72189e1a0e9c1f\"}"
       ],
       "exit_code": 0,
-      "seconds": 0.115
+      "seconds": 0.065
     },
     {
       "name": "watcher",
       "argv": [
-        "/usr/bin/python3",
+        "<python>",
         "-m",
         "postfiat_rpc.external_lane_watcher",
         "--pftl-rpc",
-        "127.0.0.1:54367",
+        "127.0.0.1:55587",
         "--lane-id",
         "base-erc20",
         "--base-rpc",
-        "http://127.0.0.1:58753",
+        "http://127.0.0.1:55181",
         "--state-file",
         "<output>/watcher-state.json",
         "--once"
@@ -536,52 +548,52 @@
   ],
   "steps": {
     "base_predicted": {
-      "token": "0x6b92f754a1900439a286a8dd166532a27b102f74",
-      "token_runtime_code_hash": "0x827a7c73ca7be85b687dd98ea90bef1533972a7a8c4a721c4a04af6c0f48be83",
-      "mock_sp1_verifier": "0x39080e0a7819ef6681f8133cb94dda77a7d61108",
+      "token": "0x0ce44c7b04979f1781c7161399f3e9f6dc946249",
+      "token_runtime_code_hash": "0xc1fe8aa7048b2ed946e191138995099be23bfb97ac9f56fb4b88ec303abb85ae",
+      "mock_sp1_verifier": "0xbb9f9fdc255d9104ee617dc17a78fa1ff295cc9f",
       "mock_sp1_contract": "test/PFUSDCTier4.t.sol:Tier4MockSP1Verifier",
-      "predicted_verifier": "0x01a63a3b2fac26fc375e4b452e62eca6ec736430",
-      "predicted_lock": "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
-      "predicted_lock_runtime_code_hash": "0x26b090d7514b9c6e9d9bbc01caa283a88c3821ef37ae73dc7554020af5ede791",
+      "predicted_verifier": "0x2c4926a4ce77fa0c6f86db72d395a7c7bd513a3a",
+      "predicted_lock": "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
+      "predicted_lock_runtime_code_hash": "0x9cd128bd2ab5bc276ca4ca78cfe40f33f1035727532daa6c3d9a8db7520608cc",
       "deployers": {
-        "token": "0x46069163872825d960ca8287f72c6a44adf5e769",
-        "verifier": "0x7ecccd1e125b81798f47213c78e1d05967571562",
-        "lock": "0x3faf53e473be1c37fe13ca14e03b610341515867",
-        "holder": "0x855338b85a973b23e952613229cfa8d29a5008e8",
-        "relayer": "0xbf90d13fb42a0b9acbad21dfa4ddcd59e545276e"
+        "token": "0x806ca602cf80133d88e9571517c5945ba1bd6e69",
+        "verifier": "0xd346f08732a7875d0af02da96751ff9d3c328f10",
+        "lock": "0x058b8fe4d0e79e3299ef3d4eb72c4b7ef7784e85",
+        "holder": "0x3532000c0eb3d2ce91a48df9d47aa9b3a341612a",
+        "relayer": "0x959e0efeafb0ec1ac81433e37a5c5fdb8ac6474a"
       }
     },
     "pftl_started": {
       "chain_id": "postfiat-lane-lane-roundtrip",
-      "genesis_hash": "71cf998cffe81c938ebb2eb0139999dc86a0d729a7cd0397dee0ae0104f384f16a102316d57c5cbceae98e9b214bdbb8",
+      "genesis_hash": "6ae2add35c2922515deaddc66a5588ef3e1502f9616f02a267503d755e9fa885076eb5febc7c2103729c38e087b51c70",
       "validators": 6,
       "checkpoint": {
-        "block_id": "25d4b7f4b6c1c754a5ed534e4391554b0277dd43a2785484984e2d917d2d79e2e3da48b68c9b10cd411a07e47ee11f5a",
+        "block_id": "271e4e5dec656151c15d2a9149757a77c383d7520683abc570242cc07446da98a41563d7bd649dc6161b35f45385ce50",
         "committee_epoch": 1,
-        "committee_root": "15bd7076f80665b9ef9b459342012c03fe461d5eaef272d29fd51769913687fdee9390d2805e89bbe05ddd153991181a",
+        "committee_root": "9b9a4861abbdc8553711dbe8d262bd71f03f321f377fce1f60993d8e47ba6e2bffaa870366dd04050270e85fc1df8ec9",
         "height": 1
       },
       "pins": {
-        "asset_id": "6130688ecb80f238621b452277b843a8b489ce920c72e01fad0b01f88174b217e547b9c541fac108f3fa4fd99cf7c5a9",
-        "asset_id_commitment": "0xf03718b74a1fca6e2693d1304646871e67ffc2086f9fbbc7f9fdf8c406e69c0c",
+        "asset_id": "c270a2a77fef94e78491e24d12148e17319de1c7006e567baace9b431a9512c4c5118ed5bfed6de044411e8640ab8e80",
+        "asset_id_commitment": "0xc0516f09c0dc2c54e66810cd7e0e0ba91c322d81c81ee0389eeb0887996e88c7",
         "lane_id": "base-erc20",
         "pftl_chain_id": "postfiat-lane-lane-roundtrip",
         "pftl_chain_id_hash": "0x4ea8ee52b27fd187a726848ac2e0a41d4cf2c511922f08404f79d25fdbef878d",
-        "pftl_genesis_hash": "71cf998cffe81c938ebb2eb0139999dc86a0d729a7cd0397dee0ae0104f384f16a102316d57c5cbceae98e9b214bdbb8",
-        "pftl_genesis_hash_commitment": "0x2a13c8703df02dbffc9207084cfe3d52c0593b5f77cc41334c6ba798c1a82a59",
+        "pftl_genesis_hash": "6ae2add35c2922515deaddc66a5588ef3e1502f9616f02a267503d755e9fa885076eb5febc7c2103729c38e087b51c70",
+        "pftl_genesis_hash_commitment": "0x4a559c57f5abf71e82f7308491309f20d435324dd19ed9cf67edb54db03e15f6",
         "route_profile": {
-          "asset_id": "6130688ecb80f238621b452277b843a8b489ce920c72e01fad0b01f88174b217e547b9c541fac108f3fa4fd99cf7c5a9",
+          "asset_id": "c270a2a77fef94e78491e24d12148e17319de1c7006e567baace9b431a9512c4c5118ed5bfed6de044411e8640ab8e80",
           "route_epoch": 1,
           "route_id": "base-erc20",
           "schema": "postfiat.external_lane.route_profile.v1",
           "source_chain_id": 84532,
-          "token_address": "0x6b92f754a1900439a286a8dd166532a27b102f74",
-          "token_runtime_code_hash": "0x827a7c73ca7be85b687dd98ea90bef1533972a7a8c4a721c4a04af6c0f48be83",
-          "vault_address": "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
-          "vault_runtime_code_hash": "0x26b090d7514b9c6e9d9bbc01caa283a88c3821ef37ae73dc7554020af5ede791"
+          "token_address": "0x0ce44c7b04979f1781c7161399f3e9f6dc946249",
+          "token_runtime_code_hash": "0xc1fe8aa7048b2ed946e191138995099be23bfb97ac9f56fb4b88ec303abb85ae",
+          "vault_address": "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
+          "vault_runtime_code_hash": "0x9cd128bd2ab5bc276ca4ca78cfe40f33f1035727532daa6c3d9a8db7520608cc"
         },
-        "route_profile_hash": "0f59c4961076ab465193d128a1d46385373f31c5178eeaf69f6e45be1adbcc8bbc7f9aa9e8f957487bc295e938276595",
-        "route_profile_hash_commitment": "0x6c64d6df61f3b11e5a6664a6266329d97378298d861829175323db81f336b7f0"
+        "route_profile_hash": "a9437fe590f0ab8124ce7a3502668d41acae794f4814a3c1ffc074400fbad2fdfbbf5f441daca75ac720760dcf2ca5dd",
+        "route_profile_hash_commitment": "0x1ee2536219fd9c9177ad0c5a4ccdda976d61aac998ca2c4a7af122ffdcd1400d"
       },
       "lane": {
         "blocks_and_state_replayed": true,
@@ -595,26 +607,26 @@
       }
     },
     "base_deployed": {
-      "verifier": "0x01a63a3b2fac26fc375e4b452e62eca6ec736430",
-      "lock": "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
+      "verifier": "0x2c4926a4ce77fa0c6f86db72d395a7c7bd513a3a",
+      "lock": "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
       "verifier_values": {
-        "sp1Verifier": "0x39080e0a7819ef6681f8133cb94dda77a7d61108",
+        "sp1Verifier": "0xbb9f9fdc255d9104ee617dc17a78fa1ff295cc9f",
         "programVKey": "0xc38e6158912567128fc380abfed5dd4731d1f74fa0095ebf36463d7da4deb96e",
         "pftlChainIdHash": "0x4ea8ee52b27fd187a726848ac2e0a41d4cf2c511922f08404f79d25fdbef878d",
-        "pftlGenesisHashCommitment": "0x2a13c8703df02dbffc9207084cfe3d52c0593b5f77cc41334c6ba798c1a82a59",
+        "pftlGenesisHashCommitment": "0x4a559c57f5abf71e82f7308491309f20d435324dd19ed9cf67edb54db03e15f6",
         "pftlProtocolVersion": 1,
-        "routeProfileHashCommitment": "0x6c64d6df61f3b11e5a6664a6266329d97378298d861829175323db81f336b7f0",
+        "routeProfileHashCommitment": "0x1ee2536219fd9c9177ad0c5a4ccdda976d61aac998ca2c4a7af122ffdcd1400d",
         "routeEpoch": 1,
-        "assetIdCommitment": "0xf03718b74a1fca6e2693d1304646871e67ffc2086f9fbbc7f9fdf8c406e69c0c",
+        "assetIdCommitment": "0xc0516f09c0dc2c54e66810cd7e0e0ba91c322d81c81ee0389eeb0887996e88c7",
         "arbitrumChainId": 84532,
-        "vaultRuntimeCodeHash": "0x26b090d7514b9c6e9d9bbc01caa283a88c3821ef37ae73dc7554020af5ede791",
-        "token": "0x6b92f754a1900439a286a8dd166532a27b102f74",
-        "tokenRuntimeCodeHash": "0x827a7c73ca7be85b687dd98ea90bef1533972a7a8c4a721c4a04af6c0f48be83",
+        "vaultRuntimeCodeHash": "0x9cd128bd2ab5bc276ca4ca78cfe40f33f1035727532daa6c3d9a8db7520608cc",
+        "token": "0x0ce44c7b04979f1781c7161399f3e9f6dc946249",
+        "tokenRuntimeCodeHash": "0xc1fe8aa7048b2ed946e191138995099be23bfb97ac9f56fb4b88ec303abb85ae",
         "maxProofBytes": 4096,
         "maxPublicValuesBytes": 16384,
-        "initialCheckpointCommitment": "0x81c523069f2d7641b37fe679fa8e409cf4a6a081f2c75180f53d86d721c66e14",
+        "initialCheckpointCommitment": "0x0de2d65d9c793fd1a6db23bff65ff8e30ab814cb34df28f05b9755237fd313ac",
         "initialFinalizedHeight": 1,
-        "initialCommitteeRootCommitment": "0x8f8526dae0492efa5eab7f3cd42d10ba3337cae00038afb5ad52eae5b8558a78"
+        "initialCommitteeRootCommitment": "0xcd093bd72a374af6e19066aee97dd8ba717d579c23938eb900912887a5488764"
       },
       "program_vkey_note": "placeholder; no ELF or key is committed",
       "constructor_values_read_back": [
@@ -647,7 +659,7 @@
       }
     },
     "a_lock": {
-      "transaction": "0x63951143f62e0d445e1967d55e82179928751efd9af1101be327adb0e769c48c",
+      "transaction": "0xeb8b61d2a5d40d8e96a051f5bf4f710a7a63edffcdb0c121bc9a5cdfba3176f0",
       "block": 6,
       "amount": 1000000,
       "pftl_recipient": "pfda42e6fdcf262ece2aae622f61c7b40003e1975b",
@@ -693,7 +705,7 @@
         "message": "asset transaction applied; fee burned",
         "minimum_fee": 23,
         "state_expansion_fee": 0,
-        "tx_id": "327ea80497d115a8c941756d586a68f44f113b6c8b7397caacc37ea2b96adb6edb074c8ea19630c56bd830042d9c215a"
+        "tx_id": "602489abf4616555a6424277443c7db100fd130213206b8b4dae9aca080ba20e24030be15689ec40167b655d912f91ce"
       }
     },
     "export_1": {
@@ -702,8 +714,8 @@
       "pftl_export": {
         "accepted": true,
         "block_height": 4,
-        "block_id": "109edabc4c0c496f4b809274ed8c53696cdd6323c9ae1e3ba5c7abca7b60157c52c72f58b67f1de5325e6e243460568b",
-        "external_lane_export_root": "9a4d764b93a13dfbce8208c3df33cd24ac9dbcb30802e463f927c912907d073d587770cc4387538b2abd0b0dccae8052",
+        "block_id": "f15c9782fbbcd7650471f02aa14e0450bc5e01d74b206e0077b56db70219b53be38332c043c6e52613d50c8e0291ea08",
+        "external_lane_export_root": "f9e0f6ef9ca97ff2fcead301ed46d03fcd9e83d2a73d32b253947095f5b04020cce83e76cc411385150e80a14a68f469",
         "lane": {
           "blocks_and_state_replayed": true,
           "exported_atoms": 400000,
@@ -723,53 +735,69 @@
           "message": "asset transaction applied; fee burned",
           "minimum_fee": 22,
           "state_expansion_fee": 0,
-          "tx_id": "68f06e5c8631c7be8af1204677c028bd8ea22ac3578d61ba710819a2b8f6045e67c1d2de7da83da6a8027886ce34c0ca"
+          "tx_id": "94abd4aca6c245eb32fde0d09ca92b213323e86edf683aeb66f367873f429277ee49017d14b3426acd1c6900a8779e4b"
         },
         "recipient_balance": 609000,
         "recipient_sequence": 1
       },
-      "packet_digest": "daa1c3ba29551144c610b1973a66e871cb49610102733431244cd97f1f0d53c5",
-      "public_values_sha256": "8ee0173e0f83638cbfd58ac076f674ad56f59c2659d46b78589d85cfcb8690f5",
-      "guest_instruction_count": 76727816,
+      "packet_digest": "d92e267b7fce49375d79dad28052216028622394546a4afbd07d3756fe0b7f2f",
+      "public_values_sha256": "8ac9cf2282b66d731b5f3eb378a778ac1248e640a9d4ae836ec0411e53e42f93",
+      "guest_instruction_count": 76616855,
       "proof_mode": "execute-only",
       "proof_is_placeholder": true,
       "release": {
         "reads_before": {
           "chain_id": 84532,
-          "lock": "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
-          "lock.finalityVerifier": "0x01a63a3b2fac26fc375e4b452e62eca6ec736430",
-          "lock.token": "0x6b92f754a1900439a286a8dd166532a27b102f74",
+          "lock": "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
+          "lock.finalityVerifier": "0x2c4926a4ce77fa0c6f86db72d395a7c7bd513a3a",
+          "lock.token": "0x0ce44c7b04979f1781c7161399f3e9f6dc946249",
           "lock.totalLocked": 1000000,
           "lock.totalReleased": 0,
           "verifier.pftlChainIdHash": "0x4ea8ee52b27fd187a726848ac2e0a41d4cf2c511922f08404f79d25fdbef878d",
-          "verifier.pftlGenesisHashCommitment": "0x2a13c8703df02dbffc9207084cfe3d52c0593b5f77cc41334c6ba798c1a82a59",
-          "verifier.routeProfileHashCommitment": "0x6c64d6df61f3b11e5a6664a6266329d97378298d861829175323db81f336b7f0",
-          "verifier.assetIdCommitment": "0xf03718b74a1fca6e2693d1304646871e67ffc2086f9fbbc7f9fdf8c406e69c0c",
-          "verifier.vaultRuntimeCodeHash": "0x26b090d7514b9c6e9d9bbc01caa283a88c3821ef37ae73dc7554020af5ede791",
-          "verifier.tokenRuntimeCodeHash": "0x827a7c73ca7be85b687dd98ea90bef1533972a7a8c4a721c4a04af6c0f48be83",
-          "verifier.latestCheckpointCommitment": "0x81c523069f2d7641b37fe679fa8e409cf4a6a081f2c75180f53d86d721c66e14",
+          "verifier.pftlGenesisHashCommitment": "0x4a559c57f5abf71e82f7308491309f20d435324dd19ed9cf67edb54db03e15f6",
+          "verifier.routeProfileHashCommitment": "0x1ee2536219fd9c9177ad0c5a4ccdda976d61aac998ca2c4a7af122ffdcd1400d",
+          "verifier.assetIdCommitment": "0xc0516f09c0dc2c54e66810cd7e0e0ba91c322d81c81ee0389eeb0887996e88c7",
+          "verifier.vaultRuntimeCodeHash": "0x9cd128bd2ab5bc276ca4ca78cfe40f33f1035727532daa6c3d9a8db7520608cc",
+          "verifier.tokenRuntimeCodeHash": "0xc1fe8aa7048b2ed946e191138995099be23bfb97ac9f56fb4b88ec303abb85ae",
+          "verifier.latestCheckpointCommitment": "0x0de2d65d9c793fd1a6db23bff65ff8e30ab814cb34df28f05b9755237fd313ac",
           "verifier.pftlProtocolVersion": 1,
           "verifier.routeEpoch": 1,
           "verifier.arbitrumChainId": 84532,
           "verifier.latestFinalizedHeight": 1,
-          "verifier.token": "0x6b92f754a1900439a286a8dd166532a27b102f74",
-          "verifier.priorCommitteeRootCommitment": "0x8f8526dae0492efa5eab7f3cd42d10ba3337cae00038afb5ad52eae5b8558a78",
+          "verifier.token": "0x0ce44c7b04979f1781c7161399f3e9f6dc946249",
+          "verifier.sp1Verifier": "0xbb9f9fdc255d9104ee617dc17a78fa1ff295cc9f",
+          "verifier.sp1VerifierCodeHash": "0x6490b3b327e89d9589158a48b0fe2bd6ebcc9cfaa91118130eff8a1c21e303f8",
+          "verifier.programVKey": "0xc38e6158912567128fc380abfed5dd4731d1f74fa0095ebf36463d7da4deb96e",
+          "verifier.maxProofBytes": 4096,
+          "verifier.maxPublicValuesBytes": 16384,
+          "lock.liveCodeHash": "0x9cd128bd2ab5bc276ca4ca78cfe40f33f1035727532daa6c3d9a8db7520608cc",
+          "token.liveCodeHash": "0xc1fe8aa7048b2ed946e191138995099be23bfb97ac9f56fb4b88ec303abb85ae",
+          "verifier.priorCommitteeRootCommitment": "0xcd093bd72a374af6e19066aee97dd8ba717d579c23938eb900912887a5488764",
           "verifier.withdrawalConsumed": false,
           "verifier.nullifierConsumed": false
         },
+        "checkpoint": {
+          "prior_checkpoint_commitment": "0x0de2d65d9c793fd1a6db23bff65ff8e30ab814cb34df28f05b9755237fd313ac",
+          "latest_checkpoint_commitment": "0x0de2d65d9c793fd1a6db23bff65ff8e30ab814cb34df28f05b9755237fd313ac",
+          "prior_is_latest": true,
+          "latest_finalized_height": 1,
+          "proof_finalized_height": 4
+        },
         "refusals": [],
         "sent": true,
-        "transaction": "0x9f303fafb5c0e85ab0dce7cc380150be8fcd8258e01c694eb0427baa5284c64f",
-        "block": 135,
         "released": {
-          "withdrawal_id_commitment": "0x1e00135df2b36001b54f3938fc1a8928a6b2bfc4dd464520ff7b9458ded70fca",
-          "burn_tx_id_commitment": "0xa8e33b600d5229cee3d2c5dfaa184cd916e5e8aed245df7b5e1d9d364753e913",
-          "packet_digest": "0xdaa1c3ba29551144c610b1973a66e871cb49610102733431244cd97f1f0d53c5",
+          "withdrawal_id_commitment": "0xe979967edecc58b1ea3b3b31cee128a01f82031f2d9468bbec273ca497aa3e1d",
+          "burn_tx_id_commitment": "0x28795483c7b67250a513c5b577a466167a280716552ec0df0005d8d6ee67b13d",
+          "packet_digest": "0xd92e267b7fce49375d79dad28052216028622394546a4afbd07d3756fe0b7f2f",
           "recipient": "0xfb0125905c90d402b3af12f7914557cb5361f93b",
           "amount": 400000
         },
         "recipient_balance_before": 0,
         "recipient_balance_after": 400000,
+        "recipient_balance_delta": 400000,
+        "warnings": [],
+        "transaction": "0x99eb236f242336663ca81b4c36f7be7fc0aa795afb32d39d8a55ebba7188f1cc",
+        "block": 135,
         "lock_total_released_after": 400000
       },
       "base": {
@@ -778,13 +806,13 @@
         "total_released": 400000
       },
       "status": {
-        "packet_digest": "daa1c3ba29551144c610b1973a66e871cb49610102733431244cd97f1f0d53c5",
+        "packet_digest": "d92e267b7fce49375d79dad28052216028622394546a4afbd07d3756fe0b7f2f",
         "exported": true,
         "final": true,
         "proven": true,
         "released": true,
         "base_transactions": [
-          "0x9f303fafb5c0e85ab0dce7cc380150be8fcd8258e01c694eb0427baa5284c64f"
+          "0x99eb236f242336663ca81b4c36f7be7fc0aa795afb32d39d8a55ebba7188f1cc"
         ]
       },
       "second_release": {
@@ -798,8 +826,8 @@
       "pftl_export": {
         "accepted": true,
         "block_height": 5,
-        "block_id": "7b65cd7bb2632a165b84e1bcade30e48f28a829da96ecc1b4f20709417a67d91ad524e3f60a8595f68c48f155929c5d4",
-        "external_lane_export_root": "78631b801e94887ab6ee64378a8d40f5185e140137f4beea834cbfb805e27980a7bc60f722c3fb88725c327ec079c19f",
+        "block_id": "aff8128e7c7a7ed6e92eb1ec2d030989aea3ef2fad97b87b3b2697978e351adaff1e373cb28cc9dfceb4f6d4e5e2a4d8",
+        "external_lane_export_root": "6e65b69e5083fffd6db2004b918a482133e65c462939f8379a736ccc05722efea8b2c7b8dd3e3721143a5b6c5cba7aee",
         "lane": {
           "blocks_and_state_replayed": true,
           "exported_atoms": 1000000,
@@ -819,53 +847,69 @@
           "message": "asset transaction applied; fee burned",
           "minimum_fee": 22,
           "state_expansion_fee": 0,
-          "tx_id": "cf1fe3a3b091c23e1591a695b5d30c06687c0feef12a77eca04d721067d9890f6b1213a9ba75dcf27236267a90ba03e8"
+          "tx_id": "edfc9c3f1b5da53b16ec8fb7561cae4dfd7fd03024b6fadec179dd20af42a9ca950c0e515e021dcef16f9e9425b585f5"
         },
         "recipient_balance": 8000,
         "recipient_sequence": 2
       },
-      "packet_digest": "4f0b09c7a17915ad25caba4a7f597d97139a0717d922fa9f0f6e176ff82b0389",
-      "public_values_sha256": "aac10b67aa8f3a981d33fcb3719a943fc9840d3a5ddc934b89c0ab63a696feea",
-      "guest_instruction_count": 48863644,
+      "packet_digest": "997b90b765594105c9a0269bbdec8c729e687c8813e83bb4ecf36de09bcd550f",
+      "public_values_sha256": "6aa786c46356bff5f3b2474272132e8720dd950627de899767780e78439f0e04",
+      "guest_instruction_count": 48833637,
       "proof_mode": "execute-only",
       "proof_is_placeholder": true,
       "release": {
         "reads_before": {
           "chain_id": 84532,
-          "lock": "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
-          "lock.finalityVerifier": "0x01a63a3b2fac26fc375e4b452e62eca6ec736430",
-          "lock.token": "0x6b92f754a1900439a286a8dd166532a27b102f74",
+          "lock": "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
+          "lock.finalityVerifier": "0x2c4926a4ce77fa0c6f86db72d395a7c7bd513a3a",
+          "lock.token": "0x0ce44c7b04979f1781c7161399f3e9f6dc946249",
           "lock.totalLocked": 1000000,
           "lock.totalReleased": 400000,
           "verifier.pftlChainIdHash": "0x4ea8ee52b27fd187a726848ac2e0a41d4cf2c511922f08404f79d25fdbef878d",
-          "verifier.pftlGenesisHashCommitment": "0x2a13c8703df02dbffc9207084cfe3d52c0593b5f77cc41334c6ba798c1a82a59",
-          "verifier.routeProfileHashCommitment": "0x6c64d6df61f3b11e5a6664a6266329d97378298d861829175323db81f336b7f0",
-          "verifier.assetIdCommitment": "0xf03718b74a1fca6e2693d1304646871e67ffc2086f9fbbc7f9fdf8c406e69c0c",
-          "verifier.vaultRuntimeCodeHash": "0x26b090d7514b9c6e9d9bbc01caa283a88c3821ef37ae73dc7554020af5ede791",
-          "verifier.tokenRuntimeCodeHash": "0x827a7c73ca7be85b687dd98ea90bef1533972a7a8c4a721c4a04af6c0f48be83",
-          "verifier.latestCheckpointCommitment": "0x75290bbbf62e9ee5b600c8dbdb4e91bb115b0886f0dc4ef71b0b18b12553f3ea",
+          "verifier.pftlGenesisHashCommitment": "0x4a559c57f5abf71e82f7308491309f20d435324dd19ed9cf67edb54db03e15f6",
+          "verifier.routeProfileHashCommitment": "0x1ee2536219fd9c9177ad0c5a4ccdda976d61aac998ca2c4a7af122ffdcd1400d",
+          "verifier.assetIdCommitment": "0xc0516f09c0dc2c54e66810cd7e0e0ba91c322d81c81ee0389eeb0887996e88c7",
+          "verifier.vaultRuntimeCodeHash": "0x9cd128bd2ab5bc276ca4ca78cfe40f33f1035727532daa6c3d9a8db7520608cc",
+          "verifier.tokenRuntimeCodeHash": "0xc1fe8aa7048b2ed946e191138995099be23bfb97ac9f56fb4b88ec303abb85ae",
+          "verifier.latestCheckpointCommitment": "0x3f5413b308b278cd29e3056bb4fb8b48e21d6963140a8d81ec765792d812b5f6",
           "verifier.pftlProtocolVersion": 1,
           "verifier.routeEpoch": 1,
           "verifier.arbitrumChainId": 84532,
           "verifier.latestFinalizedHeight": 4,
-          "verifier.token": "0x6b92f754a1900439a286a8dd166532a27b102f74",
-          "verifier.priorCommitteeRootCommitment": "0x8f8526dae0492efa5eab7f3cd42d10ba3337cae00038afb5ad52eae5b8558a78",
+          "verifier.token": "0x0ce44c7b04979f1781c7161399f3e9f6dc946249",
+          "verifier.sp1Verifier": "0xbb9f9fdc255d9104ee617dc17a78fa1ff295cc9f",
+          "verifier.sp1VerifierCodeHash": "0x6490b3b327e89d9589158a48b0fe2bd6ebcc9cfaa91118130eff8a1c21e303f8",
+          "verifier.programVKey": "0xc38e6158912567128fc380abfed5dd4731d1f74fa0095ebf36463d7da4deb96e",
+          "verifier.maxProofBytes": 4096,
+          "verifier.maxPublicValuesBytes": 16384,
+          "lock.liveCodeHash": "0x9cd128bd2ab5bc276ca4ca78cfe40f33f1035727532daa6c3d9a8db7520608cc",
+          "token.liveCodeHash": "0xc1fe8aa7048b2ed946e191138995099be23bfb97ac9f56fb4b88ec303abb85ae",
+          "verifier.priorCommitteeRootCommitment": "0xcd093bd72a374af6e19066aee97dd8ba717d579c23938eb900912887a5488764",
           "verifier.withdrawalConsumed": false,
           "verifier.nullifierConsumed": false
         },
+        "checkpoint": {
+          "prior_checkpoint_commitment": "0x3f5413b308b278cd29e3056bb4fb8b48e21d6963140a8d81ec765792d812b5f6",
+          "latest_checkpoint_commitment": "0x3f5413b308b278cd29e3056bb4fb8b48e21d6963140a8d81ec765792d812b5f6",
+          "prior_is_latest": true,
+          "latest_finalized_height": 4,
+          "proof_finalized_height": 5
+        },
         "refusals": [],
         "sent": true,
-        "transaction": "0x0057c0032ad8ec01272e4f85cf85cce06fe970cb59cf8765be39ea61671d4996",
-        "block": 136,
         "released": {
-          "withdrawal_id_commitment": "0x730efac02903129f2d6d62e338c27ae135effd2fa1a4b1f91ec8176dc745b23c",
-          "burn_tx_id_commitment": "0xf155db25d4de12997133eaefd8d5f9950b78a93632f5eeee4d052780e62c4ce1",
-          "packet_digest": "0x4f0b09c7a17915ad25caba4a7f597d97139a0717d922fa9f0f6e176ff82b0389",
+          "withdrawal_id_commitment": "0x5244e5124b1cee4e31a3a3b2a1de789a761aea988c07c654aab5f3b6f65099db",
+          "burn_tx_id_commitment": "0x323428f771629f44a01556c10747c102f26251a496e558db4fd23d9eabdcb1b1",
+          "packet_digest": "0x997b90b765594105c9a0269bbdec8c729e687c8813e83bb4ecf36de09bcd550f",
           "recipient": "0x74cd441b58320526d8e1ee3a2e6b145feca449aa",
           "amount": 600000
         },
         "recipient_balance_before": 0,
         "recipient_balance_after": 600000,
+        "recipient_balance_delta": 600000,
+        "warnings": [],
+        "transaction": "0xce97cc66763568b4910b9dd36fc1bda17c5ba10a428f9b921da22098e94ba8e5",
+        "block": 136,
         "lock_total_released_after": 1000000
       },
       "base": {
@@ -874,13 +918,13 @@
         "total_released": 1000000
       },
       "status": {
-        "packet_digest": "4f0b09c7a17915ad25caba4a7f597d97139a0717d922fa9f0f6e176ff82b0389",
+        "packet_digest": "997b90b765594105c9a0269bbdec8c729e687c8813e83bb4ecf36de09bcd550f",
         "exported": true,
         "final": true,
         "proven": true,
         "released": true,
         "base_transactions": [
-          "0x0057c0032ad8ec01272e4f85cf85cce06fe970cb59cf8765be39ea61671d4996"
+          "0xce97cc66763568b4910b9dd36fc1bda17c5ba10a428f9b921da22098e94ba8e5"
         ]
       }
     },
@@ -934,8 +978,8 @@
         "finalized_block": 72,
         "kind": "summary",
         "lane_id": "base-erc20",
-        "lock_code_hash": "0x26b090d7514b9c6e9d9bbc01caa283a88c3821ef37ae73dc7554020af5ede791",
-        "lock_contract_address": "0x165d84d9a93e20d6685d26f46f123bc4eabf2001",
+        "lock_code_hash": "0x9cd128bd2ab5bc276ca4ca78cfe40f33f1035727532daa6c3d9a8db7520608cc",
+        "lock_contract_address": "0x4d538bbbc2bb3ab062d78f4ec56b102fb4d45b28",
         "pruned_release_count": 0,
         "release_count": 1,
         "releases_checked": 1,
@@ -944,7 +988,7 @@
       "releases": [
         {
           "amount_atoms": 1000000,
-          "holder": "0x855338b85a973b23e952613229cfa8d29a5008e8",
+          "holder": "0x3532000c0eb3d2ce91a48df9d47aa9b3a341612a",
           "kind": "release",
           "lane_id": "base-erc20",
           "lock_nonce": 0,
@@ -953,7 +997,7 @@
           "released_at_height": 2,
           "schema": "postfiat.external_lane_watcher.v1",
           "sequence": 0,
-          "source_block_hash": "0x20cafb0285ce579d0ab211f0bf048a5ffd43aecb3bb2f31d25e58068a8d22844",
+          "source_block_hash": "0x2f387cafef8a8e4771216cf44badd63505b17a277485391715fee6f48bff9a4e",
           "source_block_number": 6,
           "status": "backed"
         }
@@ -973,10 +1017,10 @@
     "cast": "cast Version: 1.8.1",
     "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
     "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
-    "elf_sha256": "13dd27f5b521259268fce63cf93df6d0b3d5fbd92da51e8f29818475b4e30b7e",
+    "elf_sha256": "d7ae2a38b6dba0ae7f438c64012b72a36e092ff5cf0cf17eec8bcfdf373ed2cd",
     "elf_note": "a local native SP1 6.3.1 build of programs/pft-lane-export for execute mode only; not the Docker-reproducible release build, and no key is committed",
-    "prover_tool_sha256": "dfdf427db70259288a8d9be28cd58619f270c555ff6cdb5ab9b8559c1be1eb17",
-    "postfiat_node_sha256": "84962d7caeefa2000115be6da4cb06b3eddfac42707306fde4427c8cb9b2b1d8"
+    "prover_tool_sha256": "24352abcb9839289029899b241192bb68a5183d8fb8e39bf76f0f26084ceb97b",
+    "postfiat_node_sha256": "b6a00d4def7ec2cf3fe204c6bde9dfd05c05199c7b6ead949d35c457b34a5b27"
   },
   "children": [
     {
@@ -986,7 +1030,7 @@
         "--host",
         "127.0.0.1",
         "--port",
-        "58753",
+        "55181",
         "--chain-id",
         "84532",
         "--silent"
@@ -1000,11 +1044,11 @@
         "rpc-serve",
         "--unsafe-devnet-json-storage",
         "--data-dir",
-        "<output>/tmp/postfiat-external-lane-lane-roundtrip-4008881-1794313512102614152",
+        "<output>/tmp/postfiat-external-lane-lane-roundtrip-4169987-1794315643134354447",
         "--bind-host",
         "127.0.0.1",
         "--port",
-        "54367",
+        "55587",
         "--max-requests",
         "100",
         "--ready-file",
@@ -1015,5 +1059,5 @@
   ],
   "children_stopped": true,
   "generated_chain_removed": true,
-  "ended_at_unix": 1794313639
+  "ended_at_unix": 1794315779
 }
