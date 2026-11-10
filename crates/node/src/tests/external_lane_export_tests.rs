@@ -590,6 +590,31 @@ fn external_lane_export_root_starts_at_its_activation_height() {
     assert_eq!(header_at(&chain, 5).external_lane_export_root, Some(postfiat_types::bridge_exit_empty_root_v1()));
     verify_blocks(NodeOptions { data_dir: chain.data_dir.clone() }).expect("replay verifies the roots");
 
+    // A snapshot round trip keeps the headers' roots and still verifies.
+    let snapshot_dir = sibling_dir(&chain.data_dir, "export-root-snapshot");
+    let restored_dir = sibling_dir(&chain.data_dir, "export-root-restored");
+    export_snapshot(SnapshotExportOptions { data_dir: chain.data_dir.clone(), snapshot_dir: snapshot_dir.clone() })
+        .expect("export snapshot");
+    import_snapshot(SnapshotImportOptions {
+        data_dir: restored_dir.clone(),
+        snapshot_dir: snapshot_dir.clone(),
+        node_id: Some("validator-restored".to_string()),
+    })
+    .expect("import snapshot");
+    let restored = NodeStore::new(&restored_dir).read_blocks().expect("restored blocks");
+    for block in &restored.blocks {
+        assert_eq!(
+            block.header.external_lane_export_root,
+            header_at(&chain, block.header.height).external_lane_export_root,
+            "height {}",
+            block.header.height
+        );
+    }
+    assert_eq!(restored.blocks.iter().filter(|block| block.header.external_lane_export_root.is_some()).count(), 2);
+    for dir in [snapshot_dir, restored_dir] {
+        let _ = fs::remove_dir_all(dir);
+    }
+
     // A block whose export root was changed after the fact no longer verifies.
     let store = NodeStore::new(&chain.data_dir);
     let mut blocks = store.read_blocks().expect("blocks");
