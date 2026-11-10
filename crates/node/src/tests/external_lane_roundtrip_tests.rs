@@ -73,7 +73,14 @@ fn local_evm_lane_roundtrip() {
     let config_path = std::env::var("POSTFIAT_LANE_ROUNDTRIP").expect("round-trip config");
     let config: Value = serde_json::from_slice(&fs::read(config_path).unwrap()).unwrap();
     let url = config["rpc"].as_str().unwrap();
-    assert!(url.starts_with("http://127.0.0.1:"), "loopback only");
+    // A loopback Anvil, or Base Sepolia's public RPC for reads only
+    // (scripts/rehearse-lane-base-sepolia.py): this driver never sends a Base
+    // transaction, and it mines only on a loopback Anvil.
+    let loopback = url.starts_with("http://127.0.0.1:");
+    assert!(
+        loopback || url == "https://sepolia.base.org",
+        "loopback or Base Sepolia reads only"
+    );
     let dir = PathBuf::from(config["handshake_dir"].as_str().unwrap());
     let cast = |args: &[&str]| -> Value {
         let result = std::process::Command::new("cast")
@@ -142,7 +149,9 @@ fn local_evm_lane_roundtrip() {
     let locked = roundtrip_wait(&dir, "base-locked.json");
     let tx = locked["transaction"].as_str().unwrap();
     let block = locked["block"].as_u64().unwrap();
-    cast(&["rpc", "anvil_mine", "0x80"]);
+    if loopback {
+        cast(&["rpc", "anvil_mine", "0x80"]);
+    }
     let checkpoint_file = dir.join("base-checkpoint.json");
     observe_external_lane_checkpoint(ExternalLaneCheckpointObserveOptions {
         data_dir: chain.data_dir.clone(),
