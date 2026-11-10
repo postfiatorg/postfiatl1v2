@@ -1609,14 +1609,36 @@ fn validate_wallet_note_for_swap(
 //   `AssetOrchardSecretValue` owners: they and their clones wipe on drop, on success and on every
 //   `?` exit, and their `Debug` is redacted. The pasta values themselves are `Copy` with no
 //   `Zeroize`; reads (`*value`), moves and arithmetic make copies this crate cannot wipe.
-// - Hex-decoded key and scalar bytes (`fixed_hex_array`, `scalar_from_hex`, `parse_pallas_*`)
-//   live in `Zeroizing` buffers.
+// - Hex-decoded key and scalar bytes (`fixed_hex_array`, `fixed_lower_hex_array`,
+//   `scalar_from_hex`, `parse_pallas_*`) are returned in `Zeroizing` owners; `parse_lower_hex`
+//   validates the digits without decoding a second copy.
+// - Wallet-note derivation (`build_asset_orchard_wallet_note_inner`,
+//   `asset_orchard_incoming_viewing_key_from_seed`), `from_note`'s `rcm` hex, the nullifier and the
+//   disclosed-egress check hold the seed, `rseed`, diversifier, `nk`, `rivk`, the spend scalar and
+//   its bytes, `ivk` and the ivk scalar in owners. On the validator path the disclosed-egress
+//   `nk`/`rivk` come from the public payload (node orchard_policy_actions.rs:3423); on the wallet
+//   path they are the wallet's own keys, so they are wiped either way.
 // - `SigningKey<SpendAuth>` (orchard 0.14 redpallas over reddsa 0.5.1) is `Clone + Debug` with
 //   no `Drop`, and `try_from` takes its `[u8; 32]` by value; that upstream owner is not wiped
 //   and must not be formatted.
 // - `AssetOrchardMerkleWitness` and `cmx` are public tree data and stay plain.
 // - halo2 `Value<T>` witnesses and the prover's buffers copy these values during proving; they
 //   have no zeroize support (halo2_proofs 0.3).
+//
+// Plain copies that remain, and why:
+// - `SigningKey<SpendAuth>` locals and their `randomize(&alpha)` results: asset_orchard.rs:637,
+//   :702 (wallet-note `spend_key`), :3510 and :3535 (disclosed egress), and
+//   asset_orchard_action_builders.rs:1016, :1382, :2027. The upstream type has no `Zeroize` or
+//   `Drop` (see above); wiping it here would need `unsafe`.
+// - By-value arguments to public functions: `scalar_enc` (asset_orchard.rs:3872),
+//   `orchard_commit_ivk` (:646, :709, :3594), `asset_derive_nullifier` (:3420, :3579) and the
+//   pasta `to_repr`/`from_repr` round trip of `ivk` (:648, :710, :3600). The callee owns its
+//   argument copy; borrowing would change public signatures used by node, fuzz and wallets.
+// - verify.rs:2681 `orchard_full_viewing_key_from_spending_key`, :2695
+//   `orchard_scan_encrypted_outputs_with_spending_key` and :2708 `..._report_with_spending_key`
+//   take the spending key as a public by-value `[u8; 32]`, so callers copy it out of the
+//   `Zeroizing` result of `orchard_spending_key_from_zip32_seed`; the `SpendingKey` they build is
+//   `Copy` upstream (point 5). The private `orchard_spending_key_from_bytes` now borrows.
 fn wallet_note_to_swap_witness(
     pool_domain: pallas::Base,
     note: &AssetOrchardWalletNote,

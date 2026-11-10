@@ -173,8 +173,8 @@ pub fn decrypt_asset_orchard_wallet_note(
         ));
     }
 
-    let ivk = secret_curve_value(asset_orchard_incoming_viewing_key_from_seed(note_seed_hex)?);
-    let shared = secret_curve_value((pallas::Point::from(epk) * ivk.0).to_affine());
+    let ivk = asset_orchard_incoming_viewing_key_from_seed(note_seed_hex)?;
+    let shared = secret_curve_value((pallas::Point::from(epk) * *ivk).to_affine());
     let pool_domain =
         AssetOrchardSwapAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
     let template = build_asset_orchard_wallet_note_with_rho(

@@ -502,7 +502,7 @@ impl AssetOrchardPublicNoteOpening {
             value: note.value,
             rho: AssetOrchardFieldElement::from_field(*note.rho),
             psi: AssetOrchardFieldElement::from_field(*note.psi),
-            rcm: AssetOrchardSecret::new(bytes_to_hex(&scalar_enc(*note.rcm))),
+            rcm: AssetOrchardSecret::new(secret_scalar_hex(&note.rcm)),
         })
     }
 
@@ -606,23 +606,35 @@ fn build_asset_orchard_wallet_note_inner(
     let seed = fixed_lower_hex_array::<32>("asset_orchard_wallet_note_seed", seed_hex)?;
     let pool =
         AssetOrchardSwapAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
-    let mut diversifier = [0u8; ASSET_ORCHARD_DIVERSIFIER_BYTES];
+    let mut diversifier = Zeroizing::new([0u8; ASSET_ORCHARD_DIVERSIFIER_BYTES]);
     diversifier.copy_from_slice(
-        &derive_bytes("postfiat.asset_orchard.wallet_note.diversifier.v1", &*seed)?
-            [..ASSET_ORCHARD_DIVERSIFIER_BYTES],
+        &Zeroizing::new(derive_bytes(
+            "postfiat.asset_orchard.wallet_note.diversifier.v1",
+            &seed,
+        )?)[..ASSET_ORCHARD_DIVERSIFIER_BYTES],
     );
-    let rseed = derive_bytes("postfiat.asset_orchard.wallet_note.rseed.v1", &*seed)?;
+    let rseed = Zeroizing::new(derive_bytes(
+        "postfiat.asset_orchard.wallet_note.rseed.v1",
+        &seed,
+    )?);
     let rho = rho_override.unwrap_or(hash_to_pallas_base(
         "postfiat.asset_orchard.wallet_note.rho.v1",
         &*seed,
     )?);
-    let nk = hash_to_pallas_base("postfiat.asset_orchard.wallet_note.nk.v1", &*seed)?;
-    let rivk = hash_to_pallas_scalar_nonzero("postfiat.asset_orchard.wallet_note.rivk.v1", &*seed)?;
-    let spend_scalar = hash_to_pallas_scalar_nonzero(
+    let nk = AssetOrchardSecretValue::new(hash_to_pallas_base(
+        "postfiat.asset_orchard.wallet_note.nk.v1",
+        &*seed,
+    )?);
+    let rivk = AssetOrchardSecretValue::new(hash_to_pallas_scalar_nonzero(
+        "postfiat.asset_orchard.wallet_note.rivk.v1",
+        &*seed,
+    )?);
+    let spend_scalar = AssetOrchardSecretValue::new(hash_to_pallas_scalar_nonzero(
         "postfiat.asset_orchard.wallet_note.spend_auth_sk.v1",
         &*seed,
-    )?;
-    let spend_key = SigningKey::<SpendAuth>::try_from(scalar_enc(spend_scalar)).map_err(|_| {
+    )?);
+    let spend_bytes = Zeroizing::new(scalar_enc(*spend_scalar));
+    let spend_key = SigningKey::<SpendAuth>::try_from(*spend_bytes).map_err(|_| {
         AssetOrchardError::new(
             "invalid_asset_orchard_spend_key",
             "derived AssetOrchard spend key is not accepted by RedPallas",
@@ -631,17 +643,20 @@ fn build_asset_orchard_wallet_note_inner(
     let ak = verification_key_affine(&VerificationKey::from(&spend_key))?;
     let g_d = pallas::Point::hash_to_curve("postfiat.asset_orchard.wallet_note.g_d.v1")(&*seed)
         .to_affine();
-    let ivk = orchard_commit_ivk(ak, nk, rivk)?;
-    let ivk_scalar = Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr()))
-        .ok_or_else(|| {
-            AssetOrchardError::new(
-                "invalid_asset_orchard_ivk_scalar",
-                "derived Orchard ivk cannot be represented as a Pallas scalar",
-            )
-        })?;
-    let pk_d = (pallas::Point::from(g_d) * ivk_scalar).to_affine();
+    let ivk = AssetOrchardSecretValue::new(orchard_commit_ivk(ak, *nk, *rivk)?);
+    let ivk_scalar = AssetOrchardSecretValue::new(
+        Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr())).ok_or_else(
+            || {
+                AssetOrchardError::new(
+                    "invalid_asset_orchard_ivk_scalar",
+                    "derived Orchard ivk cannot be represented as a Pallas scalar",
+                )
+            },
+        )?,
+    );
+    let pk_d = (pallas::Point::from(g_d) * *ivk_scalar).to_affine();
     let note = AssetNoteOpening {
-        diversifier,
+        diversifier: *diversifier,
         g_d: g_d.into(),
         pk_d: pk_d.into(),
         asset_tag: AssetTag::derive(asset_id)?,
@@ -660,37 +675,51 @@ fn build_asset_orchard_wallet_note_inner(
         value,
         output_commitment,
         note: public_note,
-        nk: AssetOrchardSecret::new(AssetOrchardFieldElement::from_field(nk)),
-        rivk: AssetOrchardSecret::new(bytes_to_hex(&scalar_enc(rivk))),
-        spend_auth_signing_key: AssetOrchardSecret::new(bytes_to_hex(&scalar_enc(spend_scalar))),
-        rseed: AssetOrchardSecret::new(bytes_to_hex(&rseed)),
+        nk: AssetOrchardSecret::new(AssetOrchardFieldElement::from_field(*nk)),
+        rivk: AssetOrchardSecret::new(secret_scalar_hex(&rivk)),
+        spend_auth_signing_key: AssetOrchardSecret::new(secret_scalar_hex(&spend_scalar)),
+        rseed: AssetOrchardSecret::new(bytes_to_hex(&*rseed)),
     })
 }
 
 pub(crate) fn asset_orchard_incoming_viewing_key_from_seed(
     seed_hex: &str,
-) -> Result<pallas::Scalar, AssetOrchardError> {
+) -> Result<AssetOrchardSecretValue<pallas::Scalar>, AssetOrchardError> {
     let seed = fixed_lower_hex_array::<32>("asset_orchard_wallet_note_seed", seed_hex)?;
-    let nk = hash_to_pallas_base("postfiat.asset_orchard.wallet_note.nk.v1", &*seed)?;
-    let rivk = hash_to_pallas_scalar_nonzero("postfiat.asset_orchard.wallet_note.rivk.v1", &*seed)?;
-    let spend_scalar = hash_to_pallas_scalar_nonzero(
+    let nk = AssetOrchardSecretValue::new(hash_to_pallas_base(
+        "postfiat.asset_orchard.wallet_note.nk.v1",
+        &*seed,
+    )?);
+    let rivk = AssetOrchardSecretValue::new(hash_to_pallas_scalar_nonzero(
+        "postfiat.asset_orchard.wallet_note.rivk.v1",
+        &*seed,
+    )?);
+    let spend_scalar = AssetOrchardSecretValue::new(hash_to_pallas_scalar_nonzero(
         "postfiat.asset_orchard.wallet_note.spend_auth_sk.v1",
         &*seed,
-    )?;
-    let spend_key = SigningKey::<SpendAuth>::try_from(scalar_enc(spend_scalar)).map_err(|_| {
+    )?);
+    let spend_bytes = Zeroizing::new(scalar_enc(*spend_scalar));
+    let spend_key = SigningKey::<SpendAuth>::try_from(*spend_bytes).map_err(|_| {
         AssetOrchardError::new(
             "invalid_asset_orchard_spend_key",
             "derived AssetOrchard spend key is not accepted by RedPallas",
         )
     })?;
     let ak = verification_key_affine(&VerificationKey::from(&spend_key))?;
-    let ivk = orchard_commit_ivk(ak, nk, rivk)?;
-    Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr())).ok_or_else(|| {
-        AssetOrchardError::new(
-            "invalid_asset_orchard_ivk_scalar",
-            "derived Orchard ivk cannot be represented as a Pallas scalar",
-        )
-    })
+    let ivk = AssetOrchardSecretValue::new(orchard_commit_ivk(ak, *nk, *rivk)?);
+    Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr()))
+        .map(AssetOrchardSecretValue::new)
+        .ok_or_else(|| {
+            AssetOrchardError::new(
+                "invalid_asset_orchard_ivk_scalar",
+                "derived Orchard ivk cannot be represented as a Pallas scalar",
+            )
+        })
+}
+
+/// Lowercase hex of a secret scalar for an `AssetOrchardSecret`; the encoded bytes are wiped.
+fn secret_scalar_hex(scalar: &pallas::Scalar) -> String {
+    bytes_to_hex(&*Zeroizing::new(scalar_enc(*scalar)))
 }
 
 fn verification_key_affine(
@@ -3386,14 +3415,9 @@ pub fn asset_orchard_wallet_note_nullifier(
     validate_asset_orchard_wallet_note_for_pool(note, pool_domain)?;
     let opening = note.note.to_note_opening()?;
     let cmx = opening.cmx(pool_domain)?;
+    let nk = AssetOrchardSecretValue::new(note.nk.to_field()?);
     Ok(AssetOrchardFieldElement::from_field(
-        asset_derive_nullifier(
-            pool_domain,
-            note.nk.to_field()?,
-            *opening.rho,
-            *opening.psi,
-            cmx,
-        )?,
+        asset_derive_nullifier(pool_domain, *nk, *opening.rho, *opening.psi, cmx)?,
     ))
 }
 
@@ -3551,9 +3575,10 @@ pub fn verify_asset_orchard_disclosed_egress(
         ));
     }
     let note_opening = check.note.to_note_opening()?;
+    let nk = AssetOrchardSecretValue::new(check.nk.to_field()?);
     let expected_nullifier = asset_derive_nullifier(
         check.preimage.pool_domain,
-        check.nk.to_field()?,
+        *nk,
         *note_opening.rho,
         *note_opening.psi,
         check.preimage.output_commitment,
@@ -3565,20 +3590,23 @@ pub fn verify_asset_orchard_disclosed_egress(
         ));
     }
 
-    let rivk = parse_pallas_scalar(check.rivk)?;
-    let ivk = orchard_commit_ivk(
+    let rivk = AssetOrchardSecretValue::new(parse_pallas_scalar(check.rivk)?);
+    let ivk = AssetOrchardSecretValue::new(orchard_commit_ivk(
         check.preimage.spend_auth_verification_key,
-        check.nk.to_field()?,
-        rivk,
-    )?;
-    let ivk_scalar = Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr()))
-        .ok_or_else(|| {
-            AssetOrchardError::new(
-                "invalid_asset_orchard_ivk_scalar",
-                "derived Orchard ivk cannot be represented as a Pallas scalar",
-            )
-        })?;
-    let expected_pk_d = (pallas::Point::from(*note_opening.g_d) * ivk_scalar).to_affine();
+        *nk,
+        *rivk,
+    )?);
+    let ivk_scalar = AssetOrchardSecretValue::new(
+        Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr())).ok_or_else(
+            || {
+                AssetOrchardError::new(
+                    "invalid_asset_orchard_ivk_scalar",
+                    "derived Orchard ivk cannot be represented as a Pallas scalar",
+                )
+            },
+        )?,
+    );
+    let expected_pk_d = (pallas::Point::from(*note_opening.g_d) * *ivk_scalar).to_affine();
     if point_enc(expected_pk_d)? != point_enc(*note_opening.pk_d)? {
         return Err(AssetOrchardError::new(
             "asset_orchard_egress_spend_authority_mismatch",
