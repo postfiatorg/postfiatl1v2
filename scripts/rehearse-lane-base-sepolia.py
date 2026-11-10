@@ -84,6 +84,44 @@ def check_committed_identity(program_info, elf_path):
 
 # --- the state machine --------------------------------------------------------
 
+def check_deployer_keystores(plan, derive):
+    """Each keystore must be the deployer the plan predicted from; checked before any broadcast."""
+    for role in ('verifier', 'lock'):
+        derived = derive(role).lower()
+        require(derived == plan[role]['deployer'].lower(),
+                f'the {role} keystore is {derived}, but the plan predicted from {plan[role]["deployer"]}; '
+                'nothing was sent')
+
+
+def check_planned_nonces(plan, nonce):
+    """Both deployers' latest and pending nonces must still be the planned ones."""
+    for role in ('verifier', 'lock'):
+        for tag in ('latest', 'pending'):
+            current = nonce(plan[role]['deployer'], tag)
+            require(current == plan[role]['planned_nonce'],
+                    f'the {role} deployer\'s {tag} nonce is {current}, the plan needs {plan[role]["planned_nonce"]}; '
+                    'nothing was sent')
+
+
+def check_landed(plan, role, address, code_hash, expected_code):
+    require(address.lower() == plan[role]['predicted'].lower() and code_hash == expected_code,
+            f'the {role} landed at {address} with code hash {code_hash}; the plan predicted '
+            f'{plan[role]["predicted"]} with {expected_code}. The plan is dead: its nonce is spent'
+            + ('; the lock was NOT deployed' if role == 'verifier' else ''))
+
+
+def deploy_pair(plan, *, send, code_hash, expected_code):
+    """The verifier, then the lock. Each must land at its predicted address with
+    the preflight's code hash; a verifier that does not stops the run before the
+    lock is sent."""
+    result = {}
+    for role in ('verifier', 'lock'):
+        address, transaction = send(role)
+        check_landed(plan, role, address, code_hash(address), expected_code[role])
+        result[role] = {'address': address.lower(), 'transaction': transaction}
+    return result
+
+
 def load_state(path):
     return json.loads(path.read_text()) if path.exists() else {'completed': [], 'data': {}}
 
@@ -389,20 +427,34 @@ def main(argv=None):
                 if args.fork:
                     for role in ('verifier', 'lock'):
                         impersonate(url, plan[role]['deployer'])
-                for role in ('verifier', 'lock'):
-                    current = int(rpc(url, 'eth_getTransactionCount', [plan[role]['deployer'], 'pending']), 16)
-                    require(current == plan[role]['planned_nonce'], f'the {role} deployer\'s nonce moved to {current}')
-                verifier, _, vtx = deploy(url, 'verifier', ORDER.VERIFIER_CRATE,
-                                          'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1',
-                                          plan['verifier']['deployer'],
-                                          [ORDER.verifier_constructor_tuple(data['verifier_config'])],
-                                          plan['verifier']['planned_nonce'], args.fork)
-                lock, _, ltx = deploy(url, 'lock', ORDER.TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1',
-                                      plan['lock']['deployer'], lock_args(verifier, plan['token_runtime_code_hash']),
-                                      plan['lock']['planned_nonce'], args.fork)
-                require(code_hash(url, verifier) == data['preflight']['verifier_runtime_code_hash']
-                        and code_hash(url, lock) == data['preflight']['lock_runtime_code_hash'],
-                        'the deployed code differs from the preflight')
+                else:
+                    check_deployer_keystores(plan, lambda role: command(f'{role}-keystore-address', [
+                        'cast', 'wallet', 'address', *signer_flags(getattr(args, f'{role}_account'),
+                                                                   getattr(args, f'{role}_password_file'))]).strip())
+                check_planned_nonces(plan, lambda address, tag: int(
+                    rpc(url, 'eth_getTransactionCount', [address, tag]), 16))
+                expected_code = {'verifier': data['preflight']['verifier_runtime_code_hash'],
+                                 'lock': data['preflight']['lock_runtime_code_hash']}
+
+                def send(role):
+                    if role == 'verifier':
+                        address, _, tx = deploy(url, 'verifier', ORDER.VERIFIER_CRATE,
+                                                'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1',
+                                                plan['verifier']['deployer'],
+                                                [ORDER.verifier_constructor_tuple(data['verifier_config'])],
+                                                plan['verifier']['planned_nonce'], args.fork)
+                    else:
+                        address, _, tx = deploy(url, 'lock', ORDER.TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1',
+                                                plan['lock']['deployer'],
+                                                lock_args(plan['verifier']['predicted'],
+                                                          plan['token_runtime_code_hash']),
+                                                plan['lock']['planned_nonce'], args.fork)
+                    return address, tx
+
+                deployed = deploy_pair(plan, send=send, code_hash=lambda address: code_hash(url, address),
+                                       expected_code=expected_code)
+                verifier, lock = deployed['verifier']['address'], deployed['lock']['address']
+                vtx, ltx = deployed['verifier']['transaction'], deployed['lock']['transaction']
                 data['deploy'] = {'verifier': verifier, 'lock': lock, 'transactions': [vtx, ltx],
                                   'sourcify': 'skipped on the fork' if args.fork else 'see sourcify-*.stdout'}
                 if not args.fork:

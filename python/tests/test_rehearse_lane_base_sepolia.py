@@ -89,3 +89,50 @@ class IdentityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeployAddressTests(unittest.TestCase):
+    PLAN = {"verifier": {"deployer": "0x" + "11" * 20, "planned_nonce": 0, "predicted": "0x" + "22" * 20},
+            "lock": {"deployer": "0x" + "33" * 20, "planned_nonce": 0, "predicted": "0x" + "44" * 20}}
+
+    def test_a_keystore_for_another_address_is_refused_before_any_broadcast(self):
+        sent = []
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_deployer_keystores(self.PLAN, lambda role: "0x" + "99" * 20)
+        self.assertEqual(sent, [])
+        dry_run.check_deployer_keystores(self.PLAN, lambda role: self.PLAN[role]["deployer"].upper().replace("0X", "0x"))
+
+    def test_nonces_must_equal_the_plan(self):
+        dry_run.check_planned_nonces(self.PLAN, lambda address, tag: 0)
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_planned_nonces(self.PLAN, lambda address, tag: 1 if tag == "pending" else 0)
+
+    def test_a_verifier_that_lands_elsewhere_stops_before_the_lock(self):
+        sent = []
+
+        def send(role):
+            sent.append(role)
+            return ("0x" + "55" * 20 if role == "verifier" else self.PLAN[role]["predicted"]), "0xhash"
+
+        with self.assertRaises(dry_run.RehearsalFailure) as caught:
+            dry_run.deploy_pair(self.PLAN, send=send, code_hash=lambda address: "0xc0de",
+                                expected_code={"verifier": "0xc0de", "lock": "0xc0de"})
+        self.assertEqual(sent, ["verifier"])
+        self.assertIn("plan is dead", str(caught.exception))
+
+    def test_a_wrong_code_hash_also_stops_before_the_lock_and_both_must_match(self):
+        sent = []
+
+        def send(role):
+            sent.append(role)
+            return self.PLAN[role]["predicted"], "0xhash"
+
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.deploy_pair(self.PLAN, send=send, code_hash=lambda address: "0xbad",
+                                expected_code={"verifier": "0xc0de", "lock": "0xc0de"})
+        self.assertEqual(sent, ["verifier"])
+        sent.clear()
+        result = dry_run.deploy_pair(self.PLAN, send=send, code_hash=lambda address: "0xc0de",
+                                     expected_code={"verifier": "0xc0de", "lock": "0xc0de"})
+        self.assertEqual(sent, ["verifier", "lock"])
+        self.assertEqual(result["lock"]["address"], self.PLAN["lock"]["predicted"])
