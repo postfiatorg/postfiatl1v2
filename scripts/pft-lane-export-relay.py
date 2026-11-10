@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """Relay one PFT lane export from PFTL to the Base lock (design note, "Base half, step 4").
 
+`release` checks before sending every revert the chain state shows: sizes,
+program version, bindings and pins, live lock and token code, prior
+checkpoint and committee, consumed withdrawal and nullifier, zero recipient,
+withdrawal height, and the amount against locked minus released. No pre-send
+check exists for the lock's consumed burn-tx commitment (a private mapping
+without a getter; the verifier's withdrawal and nullifier records cover the
+same packet), for the SP1 proof itself, or for a race with another relay
+between the reads and the send (the losing transaction reverts and costs gas
+only).
+
 Steps, as the A666 relay: wait until the export's PFTL block is final (`input`),
 prove (`prove`), call `release` on the lock (`release`), and wait for the
 receipt. `advance-checkpoint` moves the verifier's checkpoint with the
@@ -173,6 +183,11 @@ def read_release_state(rpc, lock, values):
     reads['verifier.token'] = as_address(rpc.call(verifier, 'token()'))
     reads['verifier.sp1Verifier'] = as_address(rpc.call(verifier, 'sp1Verifier()'))
     reads['verifier.sp1VerifierCodeHash'] = rpc.code_hash(reads['verifier.sp1Verifier'])
+    reads['verifier.programVKey'] = rpc.call(verifier, 'programVKey()')
+    reads['verifier.maxProofBytes'] = as_int(rpc.call(verifier, 'maxProofBytes()'))
+    reads['verifier.maxPublicValuesBytes'] = as_int(rpc.call(verifier, 'maxPublicValuesBytes()'))
+    reads['lock.liveCodeHash'] = rpc.code_hash(lock)
+    reads['token.liveCodeHash'] = rpc.code_hash(reads['lock.token'])
     reads['verifier.priorCommitteeRootCommitment'] = rpc.call(verifier, 'checkpointCommitteeRootCommitment(bytes32)',
                                                                prior)
     reads['verifier.withdrawalConsumed'] = as_int(rpc.call(verifier, 'consumedWithdrawalIdCommitment(bytes32)',
@@ -182,9 +197,13 @@ def read_release_state(rpc, lock, values):
     return reads
 
 
-def release_refusals(reads, values):
-    """Every reason `release(publicValues, proof)` would revert, from the reads
-    and the public values; an empty list means it should pay."""
+def release_refusals(reads, values, *, proof_bytes, public_values_bytes, expected):
+    """The reverts of `release(publicValues, proof)` that the reads and the
+    public values can show before sending; an empty list means none of them
+    applies. Not checkable here: the lock's consumed burn-tx commitment (a
+    private mapping without a getter; the verifier's withdrawal and nullifier
+    records are checked instead), the SP1 proof itself, and a race with
+    another relay between these reads and the send (it costs gas only)."""
     refusals = []
 
     def check(condition, code, message):
@@ -192,6 +211,27 @@ def release_refusals(reads, values):
             refusals.append({'code': code, 'message': message})
 
     lock = reads['lock']
+    check(0 < proof_bytes <= reads['verifier.maxProofBytes'], 'proof_too_large',
+          f'the proof has {proof_bytes} bytes; the verifier takes 1 to {reads["verifier.maxProofBytes"]}')
+    check(0 < public_values_bytes <= reads['verifier.maxPublicValuesBytes'], 'public_values_too_large',
+          f'the public values have {public_values_bytes} bytes; the verifier takes up to '
+          f'{reads["verifier.maxPublicValuesBytes"]}')
+    check(values['proof_program_version'] == 1, 'wrong_proof_program_version',
+          f'proof program version {values["proof_program_version"]}, the verifier takes 1')
+    check(int(values['recipient'], 16) != 0, 'zero_recipient', 'the recipient is the zero address')
+    check(0 < values['withdrawal_finalized_height'] <= values['finalized_block_height'], 'wrong_withdrawal_height',
+          'the export height is zero or above the finalized height')
+    check(reads['lock.liveCodeHash'] == reads['verifier.vaultRuntimeCodeHash'], 'live_lock_code',
+          'the lock\'s live runtime code hash is not the one the verifier pins')
+    check(reads['token.liveCodeHash'] == reads['verifier.tokenRuntimeCodeHash']
+          == word_hex(values['token_runtime_code_hash']), 'live_token_code',
+          'the token\'s live runtime code hash differs from the verifier\'s pin or the public values')
+    if expected.get('program_vkey'):
+        check(reads['verifier.programVKey'] == word_hex(expected['program_vkey']), 'wrong_program_vkey',
+              f'the verifier\'s programVKey is {reads["verifier.programVKey"]}, expected {expected["program_vkey"]}')
+    if expected.get('sp1_verifier'):
+        check(reads['verifier.sp1Verifier'] == expected['sp1_verifier'].lower(), 'wrong_sp1_verifier',
+              f'the verifier\'s sp1Verifier is {reads["verifier.sp1Verifier"]}, expected {expected["sp1_verifier"]}')
     check(values['vault_address'].lower() == lock, 'wrong_vault',
           f'the public values pay from {values["vault_address"]}, not this lock {lock}')
     check(values['token_address'].lower() == reads['lock.token'] == reads['verifier.token'], 'wrong_token',
@@ -361,6 +401,7 @@ def cmd_prove(args):
         require(p.returncode == 0, f'prover command failed: {p.stderr.strip()[-2000:]}')
         committed = Path(str(proof_path) + '.public-values').read_bytes().hex()
         require(committed == expected_hex, 'the prover committed other bytes than the expected public values')
+        require(proof_path.stat().st_size > 0, 'the prover command wrote an empty proof')
         proof.update(proof_hex='0x' + proof_path.read_bytes().hex(), mock_verifier_only=False)
     (out / 'proof.json').write_text(json.dumps(proof, indent=2) + '\n')
     print(json.dumps({key: value for key, value in proof.items() if key != 'public_values_hex'}, indent=2))
@@ -381,7 +422,11 @@ def cmd_release(args):
                                  mock_code_hash=mock_code_hash(args), lock_verifier=reads['lock.finalityVerifier'],
                                  acknowledged=args.i_know_this_is_a_mock_verifier)
     require(refusal is None, refusal or '')
-    refusals = release_refusals(reads, values)
+    proof_bytes = len(bytes.fromhex(proof['proof_hex'].removeprefix('0x')))
+    refusals = release_refusals(reads, values, proof_bytes=proof_bytes,
+                                public_values_bytes=len(bytes.fromhex(expected_hex)),
+                                expected={'program_vkey': args.expect_program_vkey,
+                                          'sp1_verifier': args.expect_sp1_verifier})
     result = {'reads_before': reads, 'refusals': refusals, 'sent': False}
     if refusals and not args.force_send:
         print(json.dumps(result, indent=2))
@@ -504,11 +549,13 @@ def parser():
         p.add_argument('--mock-sp1-artifact', type=Path,
                        help='Foundry artifact of Tier4MockSP1Verifier; required to send a placeholder proof')
 
-    p = sub.add_parser('release', help='check every revert condition, then call release and check the payout')
+    p = sub.add_parser('release', help='check the reverts that can be read before sending, then call release and report Released')
     base(p)
     p.add_argument('--input', type=Path, required=True)
     p.add_argument('--proof', type=Path, required=True)
     p.add_argument('--force-send', action='store_true', help='send despite refusals (to show the on-chain revert)')
+    p.add_argument('--expect-program-vkey', help="refuse unless the verifier's programVKey is this")
+    p.add_argument('--expect-sp1-verifier', help="refuse unless the verifier's sp1Verifier is this")
     p.set_defaults(func=cmd_release)
 
     p = sub.add_parser('advance-checkpoint', help="move the verifier's checkpoint with the Checkpoint variant")

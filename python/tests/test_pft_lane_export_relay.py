@@ -43,6 +43,9 @@ VALUES = {
     "vault_runtime_code_hash": "99" * 32,
     "token_address": TOKEN,
     "token_runtime_code_hash": "aa" * 32,
+    "proof_program_version": 1,
+    "withdrawal_finalized_height": 4,
+    "finalized_block_height": 4,
 }
 
 
@@ -80,13 +83,16 @@ class MockRpc:
             (VERIFIER, "latestFinalizedHeight()"): word(5),
             (VERIFIER, "token()"): word(TOKEN),
             (VERIFIER, "sp1Verifier()"): word(SP1),
+            (VERIFIER, "programVKey()"): word("0b" * 32),
+            (VERIFIER, "maxProofBytes()"): word(4096),
+            (VERIFIER, "maxPublicValuesBytes()"): word(16384),
             (VERIFIER, f"checkpointCommitteeRootCommitment(bytes32):{prior}"): relay.commitment(VALUES["committee_root"]),
             (VERIFIER, f"consumedWithdrawalIdCommitment(bytes32):{withdrawal}"): word(0),
             (VERIFIER, f"consumedProofNullifier(bytes32):{word(VALUES['proof_nullifier'])}"): word(0),
         }
         self.answers.update(overrides or {})
         self.chain = 84532
-        self.code_hashes = {}
+        self.code_hashes = {LOCK: "0x" + "99" * 32, TOKEN: "0x" + "aa" * 32}
 
     def chain_id(self):
         return self.chain
@@ -99,10 +105,11 @@ class MockRpc:
         return self.answers[key].lower()
 
 
-def refusals(rpc=None, **changes):
+def refusals(rpc=None, proof_bytes=100, public_values_bytes=1500, expected=None, **changes):
     values = dict(VALUES, **changes)
     reads = relay.read_release_state(rpc or MockRpc(), LOCK, values)
-    return [refusal["code"] for refusal in relay.release_refusals(reads, values)]
+    return [refusal["code"] for refusal in relay.release_refusals(
+        reads, values, proof_bytes=proof_bytes, public_values_bytes=public_values_bytes, expected=expected or {})]
 
 
 class ReleaseRefusalTests(unittest.TestCase):
@@ -226,6 +233,35 @@ class RedactionTests(unittest.TestCase):
     def test_os_error_does_not_print_the_key(self):
         message = self.failing(OSError(2, "No such file", f"cast --private-key {self.KEY}"))
         self.assertNotIn(self.KEY, message)
+
+
+class MoreRefusalTests(unittest.TestCase):
+    def test_zero_recipient(self):
+        self.assertIn("zero_recipient", refusals(recipient="0x" + "00" * 20))
+
+    def test_live_code_hashes(self):
+        rpc = MockRpc()
+        rpc.code_hashes[TOKEN] = "0x" + "ab" * 32
+        self.assertIn("live_token_code", refusals(rpc))
+        rpc = MockRpc()
+        rpc.code_hashes[LOCK] = "0x" + "ab" * 32
+        self.assertIn("live_lock_code", refusals(rpc))
+
+    def test_program_version_and_withdrawal_height(self):
+        self.assertIn("wrong_proof_program_version", refusals(proof_program_version=2))
+        self.assertIn("wrong_withdrawal_height", refusals(withdrawal_finalized_height=5))
+        self.assertIn("wrong_withdrawal_height", refusals(withdrawal_finalized_height=0))
+
+    def test_sizes_and_empty_proof(self):
+        self.assertIn("proof_too_large", refusals(proof_bytes=4097))
+        self.assertIn("proof_too_large", refusals(proof_bytes=0))
+        self.assertIn("public_values_too_large", refusals(public_values_bytes=16385))
+        self.assertEqual(refusals(proof_bytes=4096, public_values_bytes=16384), [])
+
+    def test_expected_program_key_and_sp1_verifier(self):
+        self.assertEqual(refusals(expected={"program_vkey": "0x" + "0b" * 32, "sp1_verifier": SP1}), [])
+        self.assertIn("wrong_program_vkey", refusals(expected={"program_vkey": "0x" + "0c" * 32}))
+        self.assertIn("wrong_sp1_verifier", refusals(expected={"sp1_verifier": "0x" + "00" * 20}))
 
 
 if __name__ == "__main__":

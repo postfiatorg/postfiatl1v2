@@ -340,9 +340,29 @@ A `Genesis` has no account field (`crates/types/src/core_chain.rs:303`). Funded 
 - `input` runs `postfiat-node external-lane-export-proof-input` for a lane and a nonce or transaction id. With `--wait-seconds` it retries while the export's block is not final, and it stops on any other refusal.
 - `prove --mode execute-only` runs the guest in SP1's CPU executor (`tools/pft-lane-export-prover`). It checks the committed bytes against the expected public values and writes a PLACEHOLDER proof. The proof file says so in `mock_verifier_only` and `note`. Only a verifier built with a mock SP1 verifier accepts it.
 - `prove --mode command --prover-command CMD` hands the input to an external prover. This mode has not been run.
-- `release` reads the lock's `finalityVerifier`, `token`, `totalLocked` and `totalReleased`, and the verifier's pins and checkpoint records, before it sends anything. It refuses when the public values would revert: wrong vault, token, chain id, PFTL chain or genesis, route profile, asset id or code hashes; an unknown prior checkpoint; a consumed withdrawal id or proof nullifier; an amount above locked minus released. Then it sends `release(publicValues, proofBytes)`, decodes `Released` and checks that the recipient's balance moved by exactly the amount.
+- `release` reads the lock's `finalityVerifier`, `token`, `totalLocked` and `totalReleased`, the verifier's pins and checkpoint records, and the live code before it sends. It refuses on any revert those reads show (see **Release checks**), sends `release(publicValues, proofBytes)` and reports the `Released` event.
 - `advance-checkpoint` runs the Checkpoint variant through the same steps (`pfusdc-checkpoint-witness`, execute, `advanceCheckpoint`). Use it when the verifier's checkpoint is too far behind for a bounded proof. It was not run in the rehearsal.
 - `status` reports one packet: exported, final, proven, released, and the Base transaction.
+
+**Release checks.** `release` it checks, before sending, these reverts:
+
+- **Sizes:** a proof or public values that are empty or larger than `maxProofBytes` or `maxPublicValuesBytes`, including an empty proof from an external prover.
+- **Program version** other than 1.
+- **Bindings and pins:** the wrong vault, token, chain id, PFTL chain, genesis or protocol version, route profile or epoch, asset id, or pinned code hashes.
+- **Live code:** a lock or token runtime code hash, read with `eth_getCode`, that differs from the pins.
+- **Checkpoint:** an unknown prior checkpoint, or a committee root other than the one recorded for it.
+- **Consumed:** a withdrawal id or proof nullifier the verifier already consumed.
+- **Payout:** a zero recipient, an export height of zero or above the finalized height, or an amount above locked minus released.
+
+The pre-send report prints the verifier's `programVKey` and `sp1Verifier`. When the caller passes `--expect-program-vkey` or `--expect-sp1-verifier`, the relay compares them too.
+
+Three reverts have no pre-send check:
+
+- **The lock's consumed burn-tx commitment.** It is a private mapping with no getter. The verifier's withdrawal and nullifier records cover the same packet.
+- **The SP1 proof itself.**
+- **A race with another relay** between the reads and the send. The losing transaction reverts and costs gas only.
+
+After a successful send, the relay takes the decoded `Released` event of the expected lock as the result: recipient, amount and the three commitments. The recipient's balance change is corroboration. It is reported with a warning when it differs, because an unrelated transfer can move the balance between the two reads.
 
 **Cost and checkpoint cadence.** The finality ancestry of one proof is bounded at 64 blocks (`PFUSDC_EGRESS_MAX_ANCESTRY_BLOCKS_V1`). So the Base verifier's checkpoint must advance at least every 64 PFTL blocks: through releases, or through `advance-checkpoint` before an export more than 64 blocks past it. Guest instruction counts measured in execute mode:
 
