@@ -1783,6 +1783,26 @@ pub(super) fn verify_replayed_blocks(
     archive: &BatchArchive,
     persisted_receipts: &[Receipt],
 ) -> io::Result<String> {
+    verify_replayed_blocks_with_exports(
+        store,
+        genesis,
+        blocks,
+        archive,
+        persisted_receipts,
+        &mut |_, _| {},
+    )
+}
+
+/// `verify_replayed_blocks`, handing each replayed block's lane export packets,
+/// in receipt order, to `on_exports` once the block's export root matched.
+pub(super) fn verify_replayed_blocks_with_exports(
+    store: &NodeStore,
+    genesis: &Genesis,
+    blocks: &BlockLog,
+    archive: &BatchArchive,
+    persisted_receipts: &[Receipt],
+    on_exports: &mut dyn FnMut(u64, Vec<postfiat_types::ExternalLaneExportPacket>),
+) -> io::Result<String> {
     let mut persisted_receipts_by_id = BTreeMap::<&str, Vec<&Receipt>>::new();
     for receipt in persisted_receipts {
         persisted_receipts_by_id
@@ -1954,6 +1974,12 @@ pub(super) fn verify_replayed_blocks(
                     block.header.height
                 ),
             ));
+        }
+        if replayed_export_root.is_some() {
+            on_exports(
+                block.header.height,
+                external_lane_export_packets_for_block(&ledger, &receipts, block.header.height)?,
+            );
         }
         let native_supply_after = native_pft_live_total(&ledger, &shielded)?;
         verify_native_pft_transition(

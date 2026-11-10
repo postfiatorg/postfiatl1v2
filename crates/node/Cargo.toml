@@ -52,6 +52,7 @@ postfiat-execution = { path = "../execution" }
 postfiat-mempool-dag = { path = "../mempool_dag" }
 postfiat-network = { path = "../network" }
 postfiat-ordering-fast = { path = "../ordering_fast" }
+postfiat-pft-lane-proofs = { path = "../pft_lane_proofs" }
 postfiat-pftl-uniswap-proofs = { path = "../pftl_uniswap_proofs" }
 postfiat-privacy = { path = "../privacy" }
 postfiat-privacy-orchard = { path = "../privacy_orchard" }
@@ -60,6 +61,7 @@ postfiat-storage = { path = "../storage" }
 postfiat-types = { path = "../types" }
 libc = { workspace = true }
 serde = { workspace = true }
+serde_cbor = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 sha3 = { workspace = true }

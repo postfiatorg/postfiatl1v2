@@ -752,6 +752,7 @@ fn print_usage() {
   postfiat-node governance-amendment-assemble [--data-dir PATH] --amendment-file PATH --authorization-files CSV --proposal-slot H --output PATH
   postfiat-node ethereum-checkpoint-observe [--data-dir PATH] --route-id ID --ethereum-rpc http://HOST:PORT[/PATH] [--block-number N] --checkpoint-file PATH
   postfiat-node ethereum-receipt-proof-build [--data-dir PATH] --route-id ID --ethereum-rpc http://HOST:PORT[/PATH] --transaction-hash 0xHASH --proof-file PATH
+  postfiat-node external-lane-export-proof-input [--data-dir PATH] --lane-id ID (--export-nonce N | --tx-id 96_HEX) --prior-checkpoint 96_HEX --output-dir PATH
   postfiat-node pfusdc-egress-witness [--data-dir PATH] --withdrawal-id 96_HEX [--prior-checkpoint 96_HEX]
   postfiat-node pfusdc-checkpoint-witness [--data-dir PATH] --prior-checkpoint 96_HEX --target-block 96_HEX
   postfiat-node pftl-uniswap-receipt-witness [--data-dir PATH] --packet-hash 96_HEX --prior-checkpoint 96_HEX

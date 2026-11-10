@@ -21,11 +21,11 @@ pub struct PftlUniswapReceiptWitnessOptions {
     pub prior_checkpoint_block_id: String,
 }
 
-struct ExportedFinalitySegment {
-    prior_checkpoint_block_id: String,
-    finality_ancestry: Vec<PfUsdcEgressFinalityStepV1>,
-    committee_epoch: u64,
-    committee: Vec<ValidatorRegistryEntry>,
+pub(super) struct ExportedFinalitySegment {
+    pub(super) prior_checkpoint_block_id: String,
+    pub(super) finality_ancestry: Vec<PfUsdcEgressFinalityStepV1>,
+    pub(super) committee_epoch: u64,
+    pub(super) committee: Vec<ValidatorRegistryEntry>,
 }
 
 pub fn pfusdc_egress_witness(
@@ -375,7 +375,7 @@ pub fn pftl_uniswap_receipt_witness(
     Ok(witness)
 }
 
-fn pfusdc_export_finality_segment(
+pub(super) fn pfusdc_export_finality_segment(
     store: &NodeStore,
     genesis: &Genesis,
     governance: &GovernanceState,

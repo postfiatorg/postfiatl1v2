@@ -119,7 +119,7 @@ use postfiat_node::{
     owned_certificate_v3, owned_objects, owned_recovery_capabilities_v3, owned_recovery_status_v3,
     owned_safe_unlock, owned_sign, owned_sign_v3, owned_unwrap_apply, owned_unwrap_apply_report,
     owned_unwrap_apply_v3, owned_unwrap_sign, owned_unwrap_sign_v3, pftl_uniswap_receipt_witness,
-    pfusdc_checkpoint_witness, pfusdc_egress_witness, propose_batch,
+    pfusdc_checkpoint_witness, pfusdc_egress_witness, propose_batch, external_lane_export_proof_input, write_external_lane_export_proof_input, ExternalLaneExportProofInputOptions,
     propose_batch_with_required_parent_with_timings, ratify_governance, ratify_validator_set,
     read_block_vote_for_verified_proposal, read_consensus_v2_qc_graph_for_view,
     configure_storage_backend, rebuild_account_tx_index, rebuild_transactional_storage, receipts,
@@ -597,6 +597,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "fx_fix_list"
         | "external-lane-info"
         | "external_lane_info"
+        | "external-lane-export-proof-input"
         | "fx-fix-info"
         | "fx_fix_info"
         | "fx-fix-reservation-info"
