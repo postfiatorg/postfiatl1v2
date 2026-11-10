@@ -33,6 +33,14 @@ Without `--node-bin` the script builds `postfiat-node` into this checkout's
      and its code is hashed.
    - After each revert the script checks that the deployer's nonce and both
      addresses are back as they were.
+   - The lock's constructor values come from the genesis it is pinned in.
+     `maxLockAmount` is the `base-erc20` lane's per-window release cap,
+     `reserved_atoms * release_cap_bps // 10_000` (Phase 2 design note,
+     section 5.1): 6,000,000 atoms for the fixture's 300,000,000 atoms at 200
+     basis points. After the node reads the genesis back, the script refuses if
+     the two differ. `minimumLockAmount` is 10 atoms, the lock's floor
+     `PFTL_ACCOUNT_RESERVE` (`PFTLockV1.sol:128`), which is the PFTL account
+     reserve `ACCOUNT_RESERVE` of `crates/execution/src/entrypoints.rs:139`.
 4. Writes a lane genesis that pins the predicted lock address and code hash, plus
    the token. The base is the fixture
    `crates/node/testdata/external-lane-genesis/genesis.json`, with its fixture

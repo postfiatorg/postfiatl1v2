@@ -173,6 +173,27 @@ class GenesisAndManifestTests(unittest.TestCase):
             self.assertEqual(policy[key], original[key])
         self.assertNotEqual(original["lock_contract_address"], policy["lock_contract_address"])
 
+    def test_the_lock_cap_is_the_lane_window_cap(self):
+        fixture = json.loads((ROOT / rehearsal.GENESIS_FIXTURE).read_text())
+        lane = rehearsal.lane(fixture)
+        self.assertEqual(rehearsal.lane_window_cap(fixture), lane["reserved_atoms"] * lane["release_cap_bps"] // 10_000)
+        self.assertEqual(rehearsal.refuse_unless_cap_matches(fixture, 6_000_000), 6_000_000)
+
+    def test_a_lock_cap_other_than_the_window_cap_is_refused(self):
+        fixture = json.loads((ROOT / rehearsal.GENESIS_FIXTURE).read_text())
+        cap = rehearsal.lane_window_cap(fixture)
+        with self.assertRaises(rehearsal.RehearsalFailure):
+            rehearsal.refuse_unless_cap_matches(fixture, cap + 1)
+        rehearsal.lane(fixture)["release_cap_bps"] += 1
+        with self.assertRaises(rehearsal.RehearsalFailure):
+            rehearsal.refuse_unless_cap_matches(fixture, cap)
+
+    def test_a_window_cap_below_the_minimum_lock_is_refused(self):
+        fixture = json.loads((ROOT / rehearsal.GENESIS_FIXTURE).read_text())
+        rehearsal.lane(fixture)["reserved_atoms"] = 100
+        with self.assertRaises(rehearsal.RehearsalFailure):
+            rehearsal.lane_window_cap(fixture)
+
     def test_manifest_shape(self):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory)

@@ -33,8 +33,10 @@ TOKEN_CRATE = 'crates/pft-token-contracts'
 VERIFIER_CRATE = 'crates/ethereum-contracts'
 GENESIS_FIXTURE = 'crates/node/testdata/external-lane-genesis/genesis.json'
 LANE_ID = 'base-erc20'
-MAX_LOCK_AMOUNT = 6_000_000
+# The lock's floor `PFTL_ACCOUNT_RESERVE` (PFTLockV1.sol), the PFTL account
+# reserve `ACCOUNT_RESERVE` of crates/execution/src/entrypoints.rs.
 MINIMUM_LOCK_AMOUNT = 10
+UINT64_MAX = (1 << 64) - 1
 # The sources whose sha256 the manifest records at the recorded commit.
 SOURCE_FILES = (
     'crates/pft-token-contracts/src/PFTLockV1.sol',
@@ -153,17 +155,39 @@ def refuse_unless_planned_nonce(deployer, nonces, planned_nonce, predicted):
 def pin_lane_genesis(fixture: dict, *, lock_address, lock_code_hash, token_address, token_code_hash):
     """The fixture lane genesis with the lane's lock and token pins replaced."""
     genesis = copy.deepcopy(fixture)
-    lanes = [lane for lane in genesis.get('external_lanes') or [] if lane.get('id') == LANE_ID]
-    require(len(lanes) == 1, f'the genesis fixture must hold exactly one `{LANE_ID}` lane')
-    policy = lanes[0]['policy']
+    policy = lane_policy(genesis)
     policy.update(chain_id=CHAIN_ID, lock_contract_address=lock_address.lower(),
                   lock_runtime_code_hash=lock_code_hash.lower(), token_address=token_address.lower(),
                   token_runtime_code_hash=token_code_hash.lower())
     return genesis
 
 
+def lane(genesis: dict) -> dict:
+    lanes = [entry for entry in genesis.get('external_lanes') or [] if entry.get('id') == LANE_ID]
+    require(len(lanes) == 1, f'the genesis must hold exactly one `{LANE_ID}` lane')
+    return lanes[0]
+
+
 def lane_policy(genesis: dict) -> dict:
-    return next(lane['policy'] for lane in genesis['external_lanes'] if lane['id'] == LANE_ID)
+    return lane(genesis)['policy']
+
+
+def lane_window_cap(genesis: dict) -> int:
+    """The lane's per-window release cap, `reserved_atoms * release_cap_bps // 10_000`
+    (Phase 2 design note, section 5.1), which the lock's `maxLockAmount` must equal."""
+    entry = lane(genesis)
+    cap = entry['reserved_atoms'] * entry['release_cap_bps'] // 10_000
+    require(MINIMUM_LOCK_AMOUNT <= cap <= UINT64_MAX,
+            f'the `{LANE_ID}` lane cap {cap} is not a uint64 at least the minimum Lock {MINIMUM_LOCK_AMOUNT}')
+    return cap
+
+
+def refuse_unless_cap_matches(genesis: dict, max_lock_amount: int) -> int:
+    cap = lane_window_cap(genesis)
+    require(cap == max_lock_amount,
+            f'the lock\'s maxLockAmount {max_lock_amount} differs from the `{LANE_ID}` lane\'s per-window release '
+            f'cap {cap}; refusing')
+    return cap
 
 
 def _h48(value: int) -> bytes:
@@ -462,9 +486,12 @@ def main(argv=None):
                                ['cast', 'compute-address', deployer, '--nonce', nonce]).strip().split()[-1].lower()
             require(computed == predicted, f'nonce {nonce}: cast computes {computed}, the script {predicted}')
 
-        lock_values = {'token': token, 'finalityVerifier': predicted_verifier, 'maxLockAmount': MAX_LOCK_AMOUNT,
+        # The lock's cap is the per-window release cap of the lane the genesis pins.
+        fixture = json.loads((ROOT / GENESIS_FIXTURE).read_text())
+        max_lock_amount = lane_window_cap(fixture)
+        lock_values = {'token': token, 'finalityVerifier': predicted_verifier, 'maxLockAmount': max_lock_amount,
                        'minimumLockAmount': MINIMUM_LOCK_AMOUNT}
-        lock_args = [token, predicted_verifier, token_code_hash, str(MAX_LOCK_AMOUNT), str(MINIMUM_LOCK_AMOUNT)]
+        lock_args = [token, predicted_verifier, token_code_hash, str(max_lock_amount), str(MINIMUM_LOCK_AMOUNT)]
 
         def on_snapshot(label, body):
             """Run `body` on an Anvil snapshot and revert it, checking the deployer's
@@ -514,7 +541,6 @@ def main(argv=None):
         predicted_verifier_code_hash = on_snapshot('verifier code hash', probe_verifier)
 
         # (3) Pin the predicted lock in a lane genesis and read it with the node.
-        fixture = json.loads((ROOT / GENESIS_FIXTURE).read_text())
         genesis = pin_lane_genesis(fixture, lock_address=predicted_lock, lock_code_hash=predicted_lock_code_hash,
                                    token_address=token, token_code_hash=token_code_hash)
         genesis_path = out / 'genesis.json'
@@ -527,6 +553,7 @@ def main(argv=None):
         pinned = lane_policy(node_genesis)
         require((pinned['lock_contract_address'], pinned['lock_runtime_code_hash']) ==
                 (predicted_lock, predicted_lock_code_hash), 'the node read other lock pins than the ones written')
+        refuse_unless_cap_matches(node_genesis, max_lock_amount)
 
         # (7) A deployer nonce off by one: a stray transaction moves the nonce and the
         # guard refuses before any deployment.
@@ -587,7 +614,11 @@ def main(argv=None):
                          'lock_runtime_code_hash': deployed_lock_code_hash},
             'code_hash_method': 'deploy on an evm_snapshot, read eth_getCode, evm_revert',
             'constructor_values_read_back': constructor_values_read,
-            'lock_constructor': {'maxLockAmount': MAX_LOCK_AMOUNT, 'minimumLockAmount': MINIMUM_LOCK_AMOUNT},
+            'lock_constructor': {'maxLockAmount': max_lock_amount, 'minimumLockAmount': MINIMUM_LOCK_AMOUNT,
+                                 'maxLockAmount_source': 'the lane per-window release cap, reserved_atoms * '
+                                                         'release_cap_bps // 10_000, of the pinned genesis',
+                                 'minimumLockAmount_source': 'PFTLockV1.PFTL_ACCOUNT_RESERVE, the PFTL account '
+                                                             'reserve'},
             'verifier_fixture_checkpoint': FIXTURE_CHECKPOINT,
             'verifier_sp1_verifier': FIXTURE_SP1_VERIFIER,
             'genesis_fixture': GENESIS_FIXTURE,
