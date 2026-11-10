@@ -1083,3 +1083,74 @@ fn external_lane_export_root_governed_activation_at_consensus_v2_replays() {
     verify_blocks(NodeOptions { data_dir: chain.data_dir.clone() }).expect("replay with the accepted amendment");
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
+
+/// The node's ratify command for the export-root activation, driven through
+/// the governed round on six validators as the lane amendment rehearsal is
+/// (`lane_amendment_ratify_command_on_six_validators_accepts_the_registry_threshold`):
+/// the kind needs all six; a height at its own block is refused; a ratified
+/// height becomes the governed activation, the block before it has no root
+/// and refuses an export, and the block at it carries the root and accepts one.
+#[test]
+fn external_lane_export_root_ratify_command_activates_the_root_at_its_height() {
+    let chain = lane_chain_with_genesis("export-root-cli", 86_400, Some(5), 6, |genesis| {
+        genesis.external_lanes.as_mut().expect("lanes")[0].policy.exports_enabled = true;
+    });
+    let receipt = admit_and_apply(&chain, &release_tx(&chain, "base-erc20", 1, ACCOUNT_RESERVE + 1_000, 1), "release");
+    assert!(receipt.accepted, "{receipt:?}");
+    let validators = local_validator_ids(6).expect("validator ids");
+    let slot = tip_height(&chain) + 1;
+    assert_eq!(slot, 3);
+    let kind = postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT;
+    let ratify = |value: u32, support: &[String], file: &str| {
+        ratify_governance(RatifyGovernanceOptions {
+            data_dir: chain.data_dir.clone(),
+            validators: validators.clone(),
+            support: support.to_vec(),
+            kind: kind.to_string(),
+            value,
+            activation_height: slot,
+            veto_until_height: 0,
+            paused: false,
+            amendment_file: chain.data_dir.join(file),
+        })
+    };
+    let error = ratify(5, &validators[1..], "root-five.json").expect_err("five of six").to_string();
+    assert!(error.contains("need 6"), "{error}");
+
+    // A height at the amendment's own block is refused.
+    let own_block = u32::try_from(slot).expect("slot");
+    let refused = ratify(own_block, &validators, "root-own.json")
+        .and_then(|_| sign_and_apply_governance(&chain, chain.data_dir.join("root-own.json"), &validators, "root-own"))
+        .expect_err("activation at its own block")
+        .to_string();
+    assert!(refused.contains("invalid_external_lane_export_root_activation_height"), "{refused}");
+    assert_eq!(tip_height(&chain), slot - 1);
+
+    let amendment = ratify(5, &validators, "root-5.json").expect("six of six ratified");
+    assert_eq!((amendment.kind.as_str(), amendment.value, amendment.quorum), (kind, 5, 6));
+    let receipts =
+        sign_and_apply_governance(&chain, chain.data_dir.join("root-5.json"), &validators, "root-5").expect("admitted");
+    assert!(receipts[0].accepted, "{receipts:?}");
+    let governance = NodeStore::new(&chain.data_dir).read_governance().expect("governance");
+    assert_eq!(governance.external_lane_export_root_activation_height(), Some(5));
+    assert_eq!(postfiat_types::external_lane_export_root_activation_height(&chain.genesis, &governance), Some(5));
+
+    // Block 4, before the height: no root, and an export is refused.
+    let early = export_tx(&chain, "base-erc20", 7, &base_recipient());
+    refused_everywhere(&chain, &early, postfiat_types::EXTERNAL_LANE_EXPORT_ROOT_NOT_ACTIVE, "root-early");
+    let receipt = admit_and_apply(&chain, &release_tx(&chain, "base-erc20", 2, 1_000, faucet_sequence(&chain)), "release-4");
+    assert!(receipt.accepted, "{receipt:?}");
+    assert_eq!(header_at(&chain, 4).external_lane_export_root, None);
+
+    // Block 5, at the height: the export is accepted and the header has its root.
+    let receipt = admit_and_apply(&chain, &export_tx(&chain, "base-erc20", 7, &base_recipient()), "export-5");
+    assert!(receipt.accepted, "{receipt:?}");
+    let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
+    let leaf = ledger.external_lanes[0].exports[0].export_root_leaf(&chain.genesis.chain_id).expect("leaf");
+    assert_eq!(
+        header_at(&chain, 5).external_lane_export_root,
+        Some(postfiat_types::external_lane_export_root_v1(&[leaf]).expect("root"))
+    );
+    verify_blocks(NodeOptions { data_dir: chain.data_dir.clone() }).expect("replay verifies the governed root");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
