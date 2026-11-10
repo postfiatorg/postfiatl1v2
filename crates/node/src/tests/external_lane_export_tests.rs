@@ -941,3 +941,30 @@ fn block_encodings_without_the_export_root_hash_as_on_main() {
     ];
     assert_eq!(values, expected);
 }
+
+/// The genesis hash the verifier pins commit to is the one execution computes
+/// and a real finalized block's consensus v2 domain carries, which the
+/// checkpoint public values take as `pftl_genesis_hash`.
+#[test]
+fn external_lane_verifier_pins_use_the_chains_genesis_hash() {
+    let chain = released_export_chain("export-pins", ACCOUNT_RESERVE + 1_000);
+    let pins = chain.genesis.external_lane_verifier_pins("base-erc20").expect("pins");
+    assert_eq!(pins.pftl_genesis_hash, genesis_hash(&chain.genesis));
+    let block = NodeStore::new(&chain.data_dir)
+        .read_blocks()
+        .expect("blocks")
+        .blocks
+        .into_iter()
+        .rev()
+        .find(|block| block.header.consensus_v2_commit.is_some())
+        .expect("a consensus v2 block");
+    let commit = block.header.consensus_v2_commit.expect("commit");
+    assert_eq!(commit.proposal.domain.genesis_hash, pins.pftl_genesis_hash);
+    assert_eq!(commit.proposal.domain.chain_id, pins.pftl_chain_id);
+    let committed = hex_to_bytes(&commit.proposal.domain.genesis_hash).expect("hex");
+    assert_eq!(
+        pins.pftl_genesis_hash_commitment,
+        format!("0x{}", bytes_to_hex(&sha3::Keccak256::digest(&committed)))
+    );
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
