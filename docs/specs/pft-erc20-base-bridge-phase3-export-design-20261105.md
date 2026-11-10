@@ -334,6 +334,15 @@ The result is then compared field by field with what the finality check returned
 - `advance-checkpoint` runs the Checkpoint variant through the same steps (`pfusdc-checkpoint-witness`, execute, `advanceCheckpoint`). Use it when the verifier's checkpoint is too far behind for a bounded proof. It was not run in the rehearsal.
 - `status` reports one packet: exported, final, proven, released, and the Base transaction.
 
+**Cost and checkpoint cadence.** The finality ancestry of one proof is bounded at 64 blocks (`PFUSDC_EGRESS_MAX_ANCESTRY_BLOCKS_V1`). So the Base verifier's checkpoint must advance at least every 64 PFTL blocks: through releases, or through `advance-checkpoint` before an export more than 64 blocks past it. Guest instruction counts measured in execute mode:
+
+| Run | Validators | Ancestry blocks | Instructions |
+|---|---|---|---|
+| Step 3 node test, exports 0 and 1 | 4 | 0 | 33.6 M |
+| Step 3 node test, export 2 | 4 | 1 | 43.0 M |
+| Round trip, second export | 6 | 0 | 48.9 M |
+| Round trip, first export | 6 | 2 | 76.7 M |
+
 A private key is accepted only for a loopback Anvil; on any other chain the relay takes `--account` and `--password-file`. A placeholder proof goes only to a loopback Anvil, unless `--i-know-this-is-a-mock-verifier` names the lock's verifier.
 
 **The prover-command contract.** The relay runs `CMD` through the shell with `PFT_LANE_EXPORT_INPUT` (the CBOR program input) and `PFT_LANE_EXPORT_PROOF_OUT` (a path) in its environment. The command writes the raw SP1 proof bytes to that path and the committed public values to the same path plus `.public-values`, then exits 0. The relay refuses public values that differ from the expected ones. The proof is then sent as `proofBytes` unchanged.

@@ -12,6 +12,12 @@ it. `release` refuses to send it to any chain but a loopback Anvil unless
 `--i-know-this-is-a-mock-verifier` names the lock's verifier. A private key is
 accepted for a loopback Anvil only; elsewhere use `--account` and
 `--password-file` (a Foundry keystore). Keys are never written or printed.
+
+Cost: one proof carries at most 64 finality ancestry blocks
+(`PFUSDC_EGRESS_MAX_ANCESTRY_BLOCKS_V1`), so the verifier's checkpoint must
+advance at least every 64 PFTL blocks (releases or `advance-checkpoint`).
+Measured guest instructions: 33.6 M (4 validators, no ancestry), 43.0 M
+(4, one block), 48.9 M (6, none), 76.7 M (6, two blocks).
 """
 from __future__ import annotations
 
