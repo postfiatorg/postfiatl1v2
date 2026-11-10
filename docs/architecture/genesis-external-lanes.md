@@ -242,7 +242,7 @@ The tests do not exercise these refusals:
 
 ## The watcher
 
-`python/postfiat_rpc/external_lane_watcher.py` is the watcher of design section 5.2: it matches every release on PFTL against its Lock on Base and raises an alarm on the first release that no Lock backs. It only reads, on both chains, and holds no key.
+`python/postfiat_rpc/external_lane_watcher.py` is the watcher of design section 5.2: it matches every release on PFTL against its Lock on Base and raises an alarm on the first release that no Lock backs. With `--exports` it also checks the outbound direction ([the export view](#the-export-view)). It only reads, on both chains, and holds no key.
 
 Each run reads the lane's row from a PFTL node (`external_lane_info`: the lane policy and the stored release records, paged) and, on Base, the block with the `finalized` tag. Then:
 
@@ -304,6 +304,26 @@ What it does not do:
 - It trusts the lane read of the PFTL node it is pointed at, and the Lock answers of its Base node. So it runs beside the operator's own validator and against an independently operated Base node.
 - It answers nothing. The response of section 5.2 is governed: a zero-cap amendment (`ratify-external-lane-release-cap --cap-bps 0`, signed by the registry threshold), then a committee rotation, then the delayed restore of the cap. The watcher only prompts them.
 
+### The export view
+
+`--exports` adds the outbound direction to the same run, under the same rules: it reads both chains only, uses finalized Base blocks only, and follows the same exit codes. There are three new options:
+
+- `--lock-from-block N` (default 0) sets the first Base block of the `Released` scan. It must be at or below the lock's deployment block.
+- `--unpaid-warning-blocks N` turns an export that has stayed unpaid for more than N PFTL blocks into a warning.
+- `--exports` turns the view on. The release view's cursor file is unchanged; the export view rescans `Released` events from `--lock-from-block` on every run.
+
+It checks three things:
+
+1. **Every payout.** Each `Released` event of the lane's lock must match the stored export packet whose EVM digest (`external_lane_export_evm_digest`) equals the event's `packetDigest`. The recipient, the amount and the withdrawal-id commitment must also match. Otherwise it raises `payout_without_export`, `payout_amount_mismatch`, `payout_recipient_mismatch` or `payout_withdrawal_mismatch`, as alarms of the same severity as an unbacked release. When the lane has pruned export records and no stored packet matches, the payout is `unknown_pruned` with the warning `payout_unknown_pruned`, never `backed`. The archive lookup of the proof-input command needs a data directory and is not available over RPC.
+2. **Every export.** Each stored export packet in a final block is reported as `paid`, with its Base transaction and block, or `unpaid`, with its age in PFTL blocks. Unpaid is information, not an alarm; with `--unpaid-warning-blocks` set, a long-unpaid export becomes the warning `export_unpaid_too_long`.
+3. **The totals,** at the finalized block. Each broken invariant is an alarm:
+   - the lock's `totalReleased` equals the sum of the scanned payouts (`total_released_mismatch`);
+   - `token.balanceOf(lock)` equals `totalLocked − totalReleased` (`lock_balance_mismatch`);
+   - the lane's `exported_atoms` is at least the payouts' sum (`exported_below_paid`);
+   - the lane's `released_atoms` is at most `totalLocked` (`released_above_locked`).
+
+`payout`, `export` and `warning` lines join the output. The summary gains `exports` (the counts and totals) and `warnings`.
+
 ## Exports
 
 `external_lane_export_v1` (`ExternalLaneExportOperationV1`) moves native PFT from a sender back into the lane, to be paid on Base as ERC-20 PFT. The design is `docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md`, sections 3 and 4.
@@ -339,6 +359,8 @@ Fixed vectors are in `crates/types/testdata/external-lane-export-packet-vectors.
 **The read.** `external_lane_info` reports `state.exported_atoms` and `state.next_export_nonce`, and pages the packets newest first with their digest and two commitments: `export_count`, `pruned_export_count`, `export_history_root`, `exports` and `next_export_cursor`, with `--export-cursor` and `--export-limit` as the release page's flags. The Python client takes `export_cursor` and `export_limit`; `external_lane_export_coverage` summarises a row.
 
 **The proof input.** `postfiat-node external-lane-export-proof-input --lane-id ID (--export-nonce N | --tx-id HEX) --prior-checkpoint HEX --output-dir PATH` builds the witness of one export. Its block must be the proven block, and the prior checkpoint is the Base verifier's latest accepted checkpoint. The command writes the CBOR input of `programs/pft-lane-export` and the expected public values, after it checks them with `verify_external_lane_export_witness_v1`. It rebuilds pruned packets from the batch archive. It refuses an unknown or non-final export, a lane with exports off and a chain without the export root ([design note, step 3](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md#base-half-step-3-2026-11-10)).
+
+**Watching exports.** The watcher's export view matches every Base payout against an export packet and checks the lock and lane totals ([the export view](#the-export-view)).
 
 **The relay.** `scripts/pft-lane-export-relay.py` takes an export from PFTL to the Base lock. `input` builds the proof input once the block is final. `prove` runs the guest in execute mode and writes a placeholder proof, or calls an external prover. Before it sends, `release` checks every revert that it can read from the lock, the verifier and the live code. It has no pre-send check for the lock's private burn-tx record, for the SP1 proof itself, or for a race with another relay. After sending, it reports the `Released` event. `advance-checkpoint` and `status` complete the set. `scripts/rehearse-lane-roundtrip.py` runs a full round trip on a local Anvil with a mock SP1 verifier ([design note, step 4](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md#base-half-step-4-2026-11-10)).
 
