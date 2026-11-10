@@ -2827,8 +2827,12 @@ fn invert_or_zero(value: pallas::Base) -> pallas::Base {
 
 include!("asset_orchard_legacy_circuits.rs");
 include!("asset_orchard_action_builders.rs");
-fn fixed_hex_array<const N: usize>(label: &str, value: &str) -> Result<[u8; N], AssetOrchardError> {
-    // The decoded buffer may hold a spend key or `rivk`; wipe it on every exit (issue #181).
+/// Decodes fixed-size hex into an owner that wipes on drop: the value may be a spend key or `rivk`
+/// (issue #181). The intermediate buffer is wiped on every exit as well.
+fn fixed_hex_array<const N: usize>(
+    label: &str,
+    value: &str,
+) -> Result<Zeroizing<[u8; N]>, AssetOrchardError> {
     let bytes = Zeroizing::new(hex_to_bytes(value).map_err(|error| {
         AssetOrchardError::new(
             "invalid_asset_orchard_hex",
@@ -2841,13 +2845,13 @@ fn fixed_hex_array<const N: usize>(label: &str, value: &str) -> Result<[u8; N], 
             format!("{label} must be {N} bytes, got {}", bytes.len()),
         ));
     }
-    let mut array = [0u8; N];
+    let mut array = Zeroizing::new([0u8; N]);
     array.copy_from_slice(&bytes);
     Ok(array)
 }
 
 fn scalar_from_hex(label: &str, value: &str) -> Result<pallas::Scalar, AssetOrchardError> {
-    let bytes = Zeroizing::new(fixed_hex_array::<32>(label, value)?);
+    let bytes = fixed_hex_array::<32>(label, value)?;
     Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(*bytes)).ok_or_else(|| {
         AssetOrchardError::new(
             "invalid_asset_orchard_scalar",

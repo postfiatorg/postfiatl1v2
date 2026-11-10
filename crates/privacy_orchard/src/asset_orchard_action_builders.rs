@@ -1609,14 +1609,36 @@ fn validate_wallet_note_for_swap(
 //   `AssetOrchardSecretValue` owners: they and their clones wipe on drop, on success and on every
 //   `?` exit, and their `Debug` is redacted. The pasta values themselves are `Copy` with no
 //   `Zeroize`; reads (`*value`), moves and arithmetic make copies this crate cannot wipe.
-// - Hex-decoded key and scalar bytes (`fixed_hex_array`, `scalar_from_hex`, `parse_pallas_*`)
-//   live in `Zeroizing` buffers.
+// - Hex-decoded key and scalar bytes (`fixed_hex_array`, `fixed_lower_hex_array`,
+//   `scalar_from_hex`, `parse_pallas_*`) are returned in `Zeroizing` owners; `parse_lower_hex`
+//   validates the digits without decoding a second copy.
+// - Wallet-note derivation (`build_asset_orchard_wallet_note_inner`,
+//   `asset_orchard_incoming_viewing_key_from_seed`), `from_note`'s `rcm` hex, the nullifier and the
+//   disclosed-egress check hold the seed, `rseed`, diversifier, `nk`, `rivk`, the spend scalar and
+//   its bytes, `ivk` and the ivk scalar in owners. On the validator path the disclosed-egress
+//   `nk`/`rivk` come from the public payload (node orchard_policy_actions.rs:3423); on the wallet
+//   path they are the wallet's own keys, so they are wiped either way.
 // - `SigningKey<SpendAuth>` (orchard 0.14 redpallas over reddsa 0.5.1) is `Clone + Debug` with
 //   no `Drop`, and `try_from` takes its `[u8; 32]` by value; that upstream owner is not wiped
 //   and must not be formatted.
 // - `AssetOrchardMerkleWitness` and `cmx` are public tree data and stay plain.
 // - halo2 `Value<T>` witnesses and the prover's buffers copy these values during proving; they
 //   have no zeroize support (halo2_proofs 0.3).
+//
+// Plain copies that remain, and why:
+// - `SigningKey<SpendAuth>` locals and their `randomize(&alpha)` results: asset_orchard.rs:654,
+//   :719 (wallet-note `spend_key`), :3527 and :3552 (disclosed egress), and
+//   asset_orchard_action_builders.rs:1016, :1382, :2049. The upstream type has no `Zeroize` or
+//   `Drop` (see above); wiping it here would need `unsafe`.
+// - By-value arguments to public functions: `scalar_enc` (asset_orchard.rs:3889),
+//   `orchard_commit_ivk` (:663, :726, :3611), `asset_derive_nullifier` (:3437, :3596) and the
+//   pasta `to_repr`/`from_repr` round trip of `ivk` (:665, :727, :3617). The callee owns its
+//   argument copy; borrowing would change public signatures used by node, fuzz and wallets.
+// - verify.rs:2681 `orchard_full_viewing_key_from_spending_key`, :2695
+//   `orchard_scan_encrypted_outputs_with_spending_key` and :2708 `..._report_with_spending_key`
+//   take the spending key as a public by-value `[u8; 32]`, so callers copy it out of the
+//   `Zeroizing` result of `orchard_spending_key_from_zip32_seed`; the `SpendingKey` they build is
+//   `Copy` upstream (point 5). The private `orchard_spending_key_from_bytes` now borrows.
 fn wallet_note_to_swap_witness(
     pool_domain: pallas::Base,
     note: &AssetOrchardWalletNote,
@@ -1641,10 +1663,10 @@ fn wallet_note_to_swap_witness(
 fn asset_orchard_spend_signing_key(
     note: &AssetOrchardWalletNote,
 ) -> Result<SigningKey<SpendAuth>, AssetOrchardError> {
-    let bytes = Zeroizing::new(fixed_hex_array::<32>(
+    let bytes = fixed_hex_array::<32>(
         "asset_orchard_spend_auth_signing_key",
         note.spend_auth_signing_key.as_str(),
-    )?);
+    )?;
     SigningKey::<SpendAuth>::try_from(*bytes).map_err(|_| {
         AssetOrchardError::new(
             "invalid_asset_orchard_spend_auth_signing_key",
@@ -2040,7 +2062,7 @@ mod secret_lifetime_tests {
         AssetOrchardSecret,
     };
     use postfiat_crypto_provider::bytes_to_hex;
-    use zeroize::{Zeroize, Zeroizing};
+    use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
     const CHAIN_ID: &str = "postfiat-swap-seed-test";
     const GENESIS_HASH: [u8; 32] = [5u8; 32];
@@ -2204,8 +2226,68 @@ mod secret_lifetime_tests {
         assert!(!bool::from(authority.rivk.is_zero()));
     }
 
+    thread_local! {
+        static PROBE_WIPES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// A `Copy` payload whose `Default` counts calls. The `DefaultIsZeroes` wipe writes
+    /// `T::default()`, so each wipe of an owner holding it is counted without reading the
+    /// dropped value. The counter is per thread, so parallel tests do not disturb it.
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    struct WipeProbe(u64);
+
+    impl crate::asset_orchard::secret_value_payload::Sealed for WipeProbe {}
+    impl crate::asset_orchard::AssetOrchardSecretValuePayload for WipeProbe {}
+
+    impl Default for WipeProbe {
+        fn default() -> Self {
+            PROBE_WIPES.with(|wipes| wipes.set(wipes.get() + 1));
+            Self(0)
+        }
+    }
+
+    fn probe_wipes() -> usize {
+        PROBE_WIPES.with(std::cell::Cell::get)
+    }
+
+    /// `T: Drop` holds only for a type with its own `Drop` impl (field drop glue does not count),
+    /// so this stops compiling if either wipe-on-drop impl is removed.
+    #[allow(drop_bounds)]
+    fn assert_own_wiping_drop<T: Drop + Zeroize + ZeroizeOnDrop>() {}
+
     #[test]
-    fn note_opening_zeroize_used_by_drop_clears_every_field() {
+    fn secret_value_and_note_opening_have_their_own_wiping_drop() {
+        assert_own_wiping_drop::<AssetNoteOpening>();
+        assert_own_wiping_drop::<AssetOrchardSecretValue<pallas::Scalar>>();
+        // The payloads are `Copy`, so only the owner's own `Drop` impl gives drop glue.
+        assert!(std::mem::needs_drop::<AssetOrchardSecretValue<pallas::Scalar>>());
+        assert!(std::mem::needs_drop::<AssetOrchardSecretValue<pallas::Base>>());
+        assert!(std::mem::needs_drop::<AssetOrchardSecretValue<pallas::Affine>>());
+    }
+
+    #[test]
+    fn secret_value_wipes_each_owner_on_drop_and_error_exit() {
+        let start = probe_wipes();
+        let owner = AssetOrchardSecretValue::new(WipeProbe(7));
+        let clone = owner.clone();
+        assert_eq!(probe_wipes(), start);
+        drop(owner);
+        assert_eq!(probe_wipes(), start + 1);
+        assert_eq!(*clone, WipeProbe(7));
+
+        fn fails_after_taking(
+            owner: AssetOrchardSecretValue<WipeProbe>,
+        ) -> Result<WipeProbe, AssetOrchardError> {
+            let held = owner;
+            Err(AssetOrchardError::new("probe", "early exit"))?;
+            Ok(*held)
+        }
+        assert!(fails_after_taking(clone).is_err());
+        assert_eq!(probe_wipes(), start + 2);
+    }
+
+    #[test]
+    fn note_opening_zeroize_clears_every_field_and_spares_clones() {
         let note = input_note("asset-a", 10, 31);
         let mut opening = note.note.to_note_opening().expect("opening");
         let kept = opening.clone();

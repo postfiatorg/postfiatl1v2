@@ -11,7 +11,7 @@ use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use sha3::{digest::Update, Digest, Sha3_256, Sha3_384, Sha3_512};
 use std::ops::{Deref, DerefMut};
-use zeroize::{DefaultIsZeroes, Zeroize, Zeroizing};
+use zeroize::{DefaultIsZeroes, Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::asset_orchard_sinsemilla::asset_spend_auth_g;
 
@@ -234,22 +234,39 @@ impl<T: Zeroize> From<T> for AssetOrchardSecret<T> {
     }
 }
 
-/// Owner for a `Copy` secret such as a `pallas::Scalar`, `pallas::Base` or `pallas::Affine`
-/// witness value. pasta_curves 0.5 implements no `Zeroize`, but these types are `Copy + Default`
-/// with all-zero defaults (zero, identity), so `zeroize` can overwrite the owned value with
-/// volatile writes. The owner is not `Copy`: it and every clone wipe on drop, including `?`
+/// A `Copy` secret payload whose `Default` is all-zero bytes, so the `DefaultIsZeroes` wipe of
+/// [`AssetOrchardSecretValue`] writes zeros. Sealed: implemented only for `pallas::Scalar`,
+/// `pallas::Base` (zero limbs) and `pallas::Affine` (identity `(0, 0)`) in pasta_curves 0.5.1,
+/// because another `T::default()` need not be all-zero.
+pub trait AssetOrchardSecretValuePayload: secret_value_payload::Sealed + Copy + Default {}
+
+pub(crate) mod secret_value_payload {
+    pub trait Sealed {}
+    impl Sealed for pasta_curves::pallas::Scalar {}
+    impl Sealed for pasta_curves::pallas::Base {}
+    impl Sealed for pasta_curves::pallas::Affine {}
+}
+
+impl AssetOrchardSecretValuePayload for pallas::Scalar {}
+impl AssetOrchardSecretValuePayload for pallas::Base {}
+impl AssetOrchardSecretValuePayload for pallas::Affine {}
+
+/// Owner for a `Copy` secret: a `pallas::Scalar`, `pallas::Base` or `pallas::Affine` witness
+/// value. pasta_curves 0.5 implements no `Zeroize`, but these types are `Copy + Default` with
+/// all-zero defaults (zero, identity), so `zeroize` can overwrite the owned value with volatile
+/// writes. The owner is not `Copy`: it and every clone wipe on drop, including `?`
 /// error exits, and `Debug` is redacted. Reading the value (`*secret`) makes an ordinary copy;
 /// copies made by curve arithmetic, halo2 `Value`s, moves or registers are outside its reach
 /// (issue #181).
 #[derive(Clone, Default)]
-pub struct AssetOrchardSecretValue<T: Copy + Default>(SecretValueCell<T>);
+pub struct AssetOrchardSecretValue<T: AssetOrchardSecretValuePayload>(SecretValueCell<T>);
 
 #[derive(Clone, Copy, Default)]
-struct SecretValueCell<T: Copy + Default>(T);
+struct SecretValueCell<T: AssetOrchardSecretValuePayload>(T);
 
-impl<T: Copy + Default> DefaultIsZeroes for SecretValueCell<T> {}
+impl<T: AssetOrchardSecretValuePayload> DefaultIsZeroes for SecretValueCell<T> {}
 
-impl<T: Copy + Default> AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> AssetOrchardSecretValue<T> {
     pub fn new(value: T) -> Self {
         Self(SecretValueCell(value))
     }
@@ -259,7 +276,7 @@ impl<T: Copy + Default> AssetOrchardSecretValue<T> {
     }
 }
 
-impl<T: Copy + Default> Deref for AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> Deref for AssetOrchardSecretValue<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -267,31 +284,33 @@ impl<T: Copy + Default> Deref for AssetOrchardSecretValue<T> {
     }
 }
 
-impl<T: Copy + Default> DerefMut for AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> DerefMut for AssetOrchardSecretValue<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0 .0
     }
 }
 
-impl<T: Copy + Default> Zeroize for AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> Zeroize for AssetOrchardSecretValue<T> {
     fn zeroize(&mut self) {
         self.0.zeroize();
     }
 }
 
-impl<T: Copy + Default> Drop for AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> Drop for AssetOrchardSecretValue<T> {
     fn drop(&mut self) {
         self.zeroize();
     }
 }
 
-impl<T: Copy + Default> std::fmt::Debug for AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> ZeroizeOnDrop for AssetOrchardSecretValue<T> {}
+
+impl<T: AssetOrchardSecretValuePayload> std::fmt::Debug for AssetOrchardSecretValue<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("AssetOrchardSecretValue([redacted])")
     }
 }
 
-impl<T: Copy + Default> From<T> for AssetOrchardSecretValue<T> {
+impl<T: AssetOrchardSecretValuePayload> From<T> for AssetOrchardSecretValue<T> {
     fn from(value: T) -> Self {
         Self::new(value)
     }
@@ -374,7 +393,7 @@ impl AssetOrchardPoint {
         orchard::primitives::redpallas::VerificationKey<orchard::primitives::redpallas::SpendAuth>,
         AssetOrchardError,
     > {
-        orchard::primitives::redpallas::VerificationKey::try_from(fixed_lower_hex_array::<
+        orchard::primitives::redpallas::VerificationKey::try_from(*fixed_lower_hex_array::<
             ASSET_ORCHARD_POINT_BYTES,
         >(
             "asset_orchard_randomized_verification_key",
@@ -500,7 +519,7 @@ impl AssetOrchardPublicNoteOpening {
             value: note.value,
             rho: AssetOrchardFieldElement::from_field(*note.rho),
             psi: AssetOrchardFieldElement::from_field(*note.psi),
-            rcm: AssetOrchardSecret::new(bytes_to_hex(&scalar_enc(*note.rcm))),
+            rcm: AssetOrchardSecret::new(secret_scalar_hex(&note.rcm)),
         })
     }
 
@@ -527,7 +546,7 @@ impl AssetOrchardPublicNoteOpening {
             &self.diversifier,
         )?;
         let note = AssetNoteOpening {
-            diversifier,
+            diversifier: *diversifier,
             g_d: self.g_d.to_affine()?.into(),
             pk_d: self.pk_d.to_affine()?.into(),
             asset_tag: AssetTag {
@@ -604,42 +623,57 @@ fn build_asset_orchard_wallet_note_inner(
     let seed = fixed_lower_hex_array::<32>("asset_orchard_wallet_note_seed", seed_hex)?;
     let pool =
         AssetOrchardSwapAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
-    let mut diversifier = [0u8; ASSET_ORCHARD_DIVERSIFIER_BYTES];
+    let mut diversifier = Zeroizing::new([0u8; ASSET_ORCHARD_DIVERSIFIER_BYTES]);
     diversifier.copy_from_slice(
-        &derive_bytes("postfiat.asset_orchard.wallet_note.diversifier.v1", &seed)?
-            [..ASSET_ORCHARD_DIVERSIFIER_BYTES],
+        &Zeroizing::new(derive_bytes(
+            "postfiat.asset_orchard.wallet_note.diversifier.v1",
+            &seed,
+        )?)[..ASSET_ORCHARD_DIVERSIFIER_BYTES],
     );
-    let rseed = derive_bytes("postfiat.asset_orchard.wallet_note.rseed.v1", &seed)?;
-    let rho = rho_override.unwrap_or(hash_to_pallas_base(
-        "postfiat.asset_orchard.wallet_note.rho.v1",
+    let rseed = Zeroizing::new(derive_bytes(
+        "postfiat.asset_orchard.wallet_note.rseed.v1",
         &seed,
     )?);
-    let nk = hash_to_pallas_base("postfiat.asset_orchard.wallet_note.nk.v1", &seed)?;
-    let rivk = hash_to_pallas_scalar_nonzero("postfiat.asset_orchard.wallet_note.rivk.v1", &seed)?;
-    let spend_scalar = hash_to_pallas_scalar_nonzero(
+    let rho = rho_override.unwrap_or(hash_to_pallas_base(
+        "postfiat.asset_orchard.wallet_note.rho.v1",
+        &*seed,
+    )?);
+    let nk = AssetOrchardSecretValue::new(hash_to_pallas_base(
+        "postfiat.asset_orchard.wallet_note.nk.v1",
+        &*seed,
+    )?);
+    let rivk = AssetOrchardSecretValue::new(hash_to_pallas_scalar_nonzero(
+        "postfiat.asset_orchard.wallet_note.rivk.v1",
+        &*seed,
+    )?);
+    let spend_scalar = AssetOrchardSecretValue::new(hash_to_pallas_scalar_nonzero(
         "postfiat.asset_orchard.wallet_note.spend_auth_sk.v1",
-        &seed,
-    )?;
-    let spend_key = SigningKey::<SpendAuth>::try_from(scalar_enc(spend_scalar)).map_err(|_| {
+        &*seed,
+    )?);
+    let spend_bytes = Zeroizing::new(scalar_enc(*spend_scalar));
+    let spend_key = SigningKey::<SpendAuth>::try_from(*spend_bytes).map_err(|_| {
         AssetOrchardError::new(
             "invalid_asset_orchard_spend_key",
             "derived AssetOrchard spend key is not accepted by RedPallas",
         )
     })?;
     let ak = verification_key_affine(&VerificationKey::from(&spend_key))?;
-    let g_d = pallas::Point::hash_to_curve("postfiat.asset_orchard.wallet_note.g_d.v1")(&seed)
+    let g_d = pallas::Point::hash_to_curve("postfiat.asset_orchard.wallet_note.g_d.v1")(&*seed)
         .to_affine();
-    let ivk = orchard_commit_ivk(ak, nk, rivk)?;
-    let ivk_scalar = Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr()))
-        .ok_or_else(|| {
-            AssetOrchardError::new(
-                "invalid_asset_orchard_ivk_scalar",
-                "derived Orchard ivk cannot be represented as a Pallas scalar",
-            )
-        })?;
-    let pk_d = (pallas::Point::from(g_d) * ivk_scalar).to_affine();
+    let ivk = AssetOrchardSecretValue::new(orchard_commit_ivk(ak, *nk, *rivk)?);
+    let ivk_scalar = AssetOrchardSecretValue::new(
+        Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr())).ok_or_else(
+            || {
+                AssetOrchardError::new(
+                    "invalid_asset_orchard_ivk_scalar",
+                    "derived Orchard ivk cannot be represented as a Pallas scalar",
+                )
+            },
+        )?,
+    );
+    let pk_d = (pallas::Point::from(g_d) * *ivk_scalar).to_affine();
     let note = AssetNoteOpening {
-        diversifier,
+        diversifier: *diversifier,
         g_d: g_d.into(),
         pk_d: pk_d.into(),
         asset_tag: AssetTag::derive(asset_id)?,
@@ -658,37 +692,51 @@ fn build_asset_orchard_wallet_note_inner(
         value,
         output_commitment,
         note: public_note,
-        nk: AssetOrchardSecret::new(AssetOrchardFieldElement::from_field(nk)),
-        rivk: AssetOrchardSecret::new(bytes_to_hex(&scalar_enc(rivk))),
-        spend_auth_signing_key: AssetOrchardSecret::new(bytes_to_hex(&scalar_enc(spend_scalar))),
-        rseed: AssetOrchardSecret::new(bytes_to_hex(&rseed)),
+        nk: AssetOrchardSecret::new(AssetOrchardFieldElement::from_field(*nk)),
+        rivk: AssetOrchardSecret::new(secret_scalar_hex(&rivk)),
+        spend_auth_signing_key: AssetOrchardSecret::new(secret_scalar_hex(&spend_scalar)),
+        rseed: AssetOrchardSecret::new(bytes_to_hex(&*rseed)),
     })
 }
 
 pub(crate) fn asset_orchard_incoming_viewing_key_from_seed(
     seed_hex: &str,
-) -> Result<pallas::Scalar, AssetOrchardError> {
+) -> Result<AssetOrchardSecretValue<pallas::Scalar>, AssetOrchardError> {
     let seed = fixed_lower_hex_array::<32>("asset_orchard_wallet_note_seed", seed_hex)?;
-    let nk = hash_to_pallas_base("postfiat.asset_orchard.wallet_note.nk.v1", &seed)?;
-    let rivk = hash_to_pallas_scalar_nonzero("postfiat.asset_orchard.wallet_note.rivk.v1", &seed)?;
-    let spend_scalar = hash_to_pallas_scalar_nonzero(
+    let nk = AssetOrchardSecretValue::new(hash_to_pallas_base(
+        "postfiat.asset_orchard.wallet_note.nk.v1",
+        &*seed,
+    )?);
+    let rivk = AssetOrchardSecretValue::new(hash_to_pallas_scalar_nonzero(
+        "postfiat.asset_orchard.wallet_note.rivk.v1",
+        &*seed,
+    )?);
+    let spend_scalar = AssetOrchardSecretValue::new(hash_to_pallas_scalar_nonzero(
         "postfiat.asset_orchard.wallet_note.spend_auth_sk.v1",
-        &seed,
-    )?;
-    let spend_key = SigningKey::<SpendAuth>::try_from(scalar_enc(spend_scalar)).map_err(|_| {
+        &*seed,
+    )?);
+    let spend_bytes = Zeroizing::new(scalar_enc(*spend_scalar));
+    let spend_key = SigningKey::<SpendAuth>::try_from(*spend_bytes).map_err(|_| {
         AssetOrchardError::new(
             "invalid_asset_orchard_spend_key",
             "derived AssetOrchard spend key is not accepted by RedPallas",
         )
     })?;
     let ak = verification_key_affine(&VerificationKey::from(&spend_key))?;
-    let ivk = orchard_commit_ivk(ak, nk, rivk)?;
-    Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr())).ok_or_else(|| {
-        AssetOrchardError::new(
-            "invalid_asset_orchard_ivk_scalar",
-            "derived Orchard ivk cannot be represented as a Pallas scalar",
-        )
-    })
+    let ivk = AssetOrchardSecretValue::new(orchard_commit_ivk(ak, *nk, *rivk)?);
+    Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr()))
+        .map(AssetOrchardSecretValue::new)
+        .ok_or_else(|| {
+            AssetOrchardError::new(
+                "invalid_asset_orchard_ivk_scalar",
+                "derived Orchard ivk cannot be represented as a Pallas scalar",
+            )
+        })
+}
+
+/// Lowercase hex of a secret scalar for an `AssetOrchardSecret`; the encoded bytes are wiped.
+fn secret_scalar_hex(scalar: &pallas::Scalar) -> String {
+    bytes_to_hex(&*Zeroizing::new(scalar_enc(*scalar)))
 }
 
 fn verification_key_affine(
@@ -736,7 +784,7 @@ impl AssetOrchardSwapBindingHash {
     pub fn to_bytes(
         &self,
     ) -> Result<[u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES], AssetOrchardError> {
-        fixed_lower_hex_array("asset_orchard_swap_binding_hash", &self.0)
+        fixed_lower_hex_array("asset_orchard_swap_binding_hash", &self.0).map(|bytes| *bytes)
     }
 
     pub fn as_hex(&self) -> &str {
@@ -906,7 +954,7 @@ impl AssetOrchardSpendAuthSignature {
         AssetOrchardError,
     > {
         Ok(orchard::primitives::redpallas::Signature::from(
-            fixed_lower_hex_array::<ASSET_ORCHARD_SPEND_AUTH_SIGNATURE_BYTES>(
+            *fixed_lower_hex_array::<ASSET_ORCHARD_SPEND_AUTH_SIGNATURE_BYTES>(
                 "asset_orchard_spend_authorization_signature",
                 &self.0,
             )?,
@@ -2959,14 +3007,14 @@ pub fn asset_orchard_private_primary_issue_binding_hash(
         )?,
         bytes_to_field(
             "private_primary_issue.reservation_id",
-            &fixed_lower_hex_array::<48>(
+            &*fixed_lower_hex_array::<48>(
                 "private_primary_issue.reservation_id",
                 preimage.reservation_id,
             )?,
         )?,
         bytes_to_field(
             "private_primary_issue.subscription_nonce",
-            &fixed_lower_hex_array::<32>(
+            &*fixed_lower_hex_array::<32>(
                 "private_primary_issue.subscription_nonce",
                 preimage.subscription_nonce,
             )?,
@@ -2975,7 +3023,7 @@ pub fn asset_orchard_private_primary_issue_binding_hash(
         pallas::Base::from(preimage.policy_epoch),
         bytes_to_field(
             "private_primary_issue.policy_hash",
-            &fixed_lower_hex_array::<48>(
+            &*fixed_lower_hex_array::<48>(
                 "private_primary_issue.policy_hash",
                 preimage.policy_hash,
             )?,
@@ -2983,7 +3031,7 @@ pub fn asset_orchard_private_primary_issue_binding_hash(
         pallas::Base::from(preimage.pricing_nav_epoch),
         bytes_to_field(
             "private_primary_issue.pricing_reserve_packet_hash",
-            &fixed_lower_hex_array::<48>(
+            &*fixed_lower_hex_array::<48>(
                 "private_primary_issue.pricing_reserve_packet_hash",
                 preimage.pricing_reserve_packet_hash,
             )?,
@@ -3384,14 +3432,9 @@ pub fn asset_orchard_wallet_note_nullifier(
     validate_asset_orchard_wallet_note_for_pool(note, pool_domain)?;
     let opening = note.note.to_note_opening()?;
     let cmx = opening.cmx(pool_domain)?;
+    let nk = AssetOrchardSecretValue::new(note.nk.to_field()?);
     Ok(AssetOrchardFieldElement::from_field(
-        asset_derive_nullifier(
-            pool_domain,
-            note.nk.to_field()?,
-            *opening.rho,
-            *opening.psi,
-            cmx,
-        )?,
+        asset_derive_nullifier(pool_domain, *nk, *opening.rho, *opening.psi, cmx)?,
     ))
 }
 
@@ -3549,9 +3592,10 @@ pub fn verify_asset_orchard_disclosed_egress(
         ));
     }
     let note_opening = check.note.to_note_opening()?;
+    let nk = AssetOrchardSecretValue::new(check.nk.to_field()?);
     let expected_nullifier = asset_derive_nullifier(
         check.preimage.pool_domain,
-        check.nk.to_field()?,
+        *nk,
         *note_opening.rho,
         *note_opening.psi,
         check.preimage.output_commitment,
@@ -3563,20 +3607,23 @@ pub fn verify_asset_orchard_disclosed_egress(
         ));
     }
 
-    let rivk = parse_pallas_scalar(check.rivk)?;
-    let ivk = orchard_commit_ivk(
+    let rivk = AssetOrchardSecretValue::new(parse_pallas_scalar(check.rivk)?);
+    let ivk = AssetOrchardSecretValue::new(orchard_commit_ivk(
         check.preimage.spend_auth_verification_key,
-        check.nk.to_field()?,
-        rivk,
-    )?;
-    let ivk_scalar = Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr()))
-        .ok_or_else(|| {
-            AssetOrchardError::new(
-                "invalid_asset_orchard_ivk_scalar",
-                "derived Orchard ivk cannot be represented as a Pallas scalar",
-            )
-        })?;
-    let expected_pk_d = (pallas::Point::from(*note_opening.g_d) * ivk_scalar).to_affine();
+        *nk,
+        *rivk,
+    )?);
+    let ivk_scalar = AssetOrchardSecretValue::new(
+        Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr())).ok_or_else(
+            || {
+                AssetOrchardError::new(
+                    "invalid_asset_orchard_ivk_scalar",
+                    "derived Orchard ivk cannot be represented as a Pallas scalar",
+                )
+            },
+        )?,
+    );
+    let expected_pk_d = (pallas::Point::from(*note_opening.g_d) * *ivk_scalar).to_affine();
     if point_enc(expected_pk_d)? != point_enc(*note_opening.pk_d)? {
         return Err(AssetOrchardError::new(
             "asset_orchard_egress_spend_authority_mismatch",
@@ -3619,7 +3666,7 @@ fn asset_orchard_spend_signing_key_from_hex(
 ) -> Result<SigningKey<SpendAuth>, AssetOrchardError> {
     let bytes =
         fixed_lower_hex_array::<32>("asset_orchard_spend_auth_signing_key", signing_key_hex)?;
-    SigningKey::<SpendAuth>::try_from(bytes).map_err(|_| {
+    SigningKey::<SpendAuth>::try_from(*bytes).map_err(|_| {
         AssetOrchardError::new(
             "invalid_asset_orchard_spend_auth_signing_key",
             "asset-orchard wallet note spend authorization key is invalid",
@@ -3670,6 +3717,8 @@ impl Drop for AssetNoteOpening {
         self.zeroize();
     }
 }
+
+impl ZeroizeOnDrop for AssetNoteOpening {}
 
 impl std::fmt::Debug for AssetNoteOpening {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -4172,10 +4221,7 @@ fn append_len_bytes_vec(payload: &mut Vec<u8>, bytes: &[u8]) -> Result<(), Asset
 }
 
 fn parse_pallas_base(value: &str) -> Result<pallas::Base, AssetOrchardError> {
-    let bytes = Zeroizing::new(fixed_lower_hex_array::<ASSET_ORCHARD_FIELD_BYTES>(
-        "asset_orchard_field",
-        value,
-    )?);
+    let bytes = fixed_lower_hex_array::<ASSET_ORCHARD_FIELD_BYTES>("asset_orchard_field", value)?;
     Option::<pallas::Base>::from(pallas::Base::from_repr(*bytes)).ok_or_else(|| {
         AssetOrchardError::new(
             "noncanonical_pallas_field",
@@ -4185,10 +4231,7 @@ fn parse_pallas_base(value: &str) -> Result<pallas::Base, AssetOrchardError> {
 }
 
 fn parse_pallas_scalar(value: &str) -> Result<pallas::Scalar, AssetOrchardError> {
-    let bytes = Zeroizing::new(fixed_lower_hex_array::<ASSET_ORCHARD_FIELD_BYTES>(
-        "asset_orchard_scalar",
-        value,
-    )?);
+    let bytes = fixed_lower_hex_array::<ASSET_ORCHARD_FIELD_BYTES>("asset_orchard_scalar", value)?;
     let scalar =
         Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(*bytes)).ok_or_else(|| {
             AssetOrchardError::new(
@@ -4270,16 +4313,27 @@ fn parse_lower_hex(
             format!("{label} has {byte_len} bytes, max {max_bytes}"),
         ));
     }
-    hex_to_bytes(value).map_err(|error| {
-        AssetOrchardError::new("invalid_hex", format!("{label} has invalid hex: {error}"))
-    })?;
+    // Validate the digits without decoding: the value may be a key or note secret, and a decoded
+    // copy here would be freed unwiped (issue #181). Uppercase is rejected above, so this accepts
+    // exactly what `hex_to_bytes` accepts, with its message.
+    if !value
+        .bytes()
+        .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return Err(AssetOrchardError::new(
+            "invalid_hex",
+            format!("{label} has invalid hex: invalid hex digit"),
+        ));
+    }
     Ok(())
 }
 
+/// Decodes fixed-size lowercase hex into an owner that wipes on drop: the value may be a key or note
+/// secret (issue #181). Callers that need a plain array copy it out at the point of use.
 fn fixed_lower_hex_array<const N: usize>(
     label: &'static str,
     value: &str,
-) -> Result<[u8; N], AssetOrchardError> {
+) -> Result<Zeroizing<[u8; N]>, AssetOrchardError> {
     parse_lower_hex(label, value, N, N)?;
     // The decoded buffer may hold a key or note secret; wipe it on every exit (issue #181).
     let bytes = Zeroizing::new(hex_to_bytes(value).map_err(|error| {
@@ -4291,7 +4345,7 @@ fn fixed_lower_hex_array<const N: usize>(
             format!("{label} decoded to {} bytes, expected {N}", bytes.len()),
         ));
     }
-    let mut array = [0u8; N];
+    let mut array = Zeroizing::new([0u8; N]);
     array.copy_from_slice(&bytes);
     Ok(array)
 }
@@ -5399,6 +5453,41 @@ mod tests {
                 .expect_err("identity point")
                 .code(),
             "identity_point"
+        );
+    }
+
+    #[test]
+    fn fixed_lower_hex_array_keeps_error_codes_and_messages() {
+        let cases = [
+            ("", "empty_hex", "secret hex must not be empty"),
+            (
+                " 0a",
+                "noncanonical_hex",
+                "secret hex has leading or trailing whitespace",
+            ),
+            ("0a0", "noncanonical_hex", "secret hex has odd length"),
+            ("0A", "noncanonical_hex", "secret hex must be lowercase"),
+            ("0a", "undersized_hex", "secret has 1 bytes, min 2"),
+            ("0a0b0c", "oversized_hex", "secret has 3 bytes, max 2"),
+            (
+                "0g00",
+                "invalid_hex",
+                "secret has invalid hex: invalid hex digit",
+            ),
+            (
+                "0a\u{e9}",
+                "invalid_hex",
+                "secret has invalid hex: invalid hex digit",
+            ),
+        ];
+        for (value, code, message) in cases {
+            let error = fixed_lower_hex_array::<2>("secret", value).expect_err(value);
+            assert_eq!(error.code(), code);
+            assert_eq!(error.to_string(), format!("{code}: {message}"));
+        }
+        assert_eq!(
+            *fixed_lower_hex_array::<2>("secret", "0aff").expect("valid"),
+            [0x0a, 0xff]
         );
     }
 

@@ -2064,7 +2064,7 @@ pub fn orchard_build_spend_action(
             "Orchard spend witness anchor does not match requested action anchor",
         ));
     }
-    let spending_key = orchard_spending_key_from_bytes(spending_key_bytes)?;
+    let spending_key = orchard_spending_key_from_bytes(&spending_key_bytes)?;
     let full_viewing_key = FullViewingKey::from(&spending_key);
     let spend_authorizing_key = SpendAuthorizingKey::from(&spending_key);
     let note = orchard_note_from_spend_note(spend_note)?;
@@ -2201,7 +2201,7 @@ pub fn orchard_build_withdraw_action(
         ));
     }
 
-    let spending_key = orchard_spending_key_from_bytes(spending_key_bytes)?;
+    let spending_key = orchard_spending_key_from_bytes(&spending_key_bytes)?;
     let full_viewing_key = FullViewingKey::from(&spending_key);
     let spend_authorizing_key = SpendAuthorizingKey::from(&spending_key);
     let note = orchard_note_from_spend_note(spend_note)?;
@@ -2630,7 +2630,7 @@ fn orchard_merkle_path_from_spend_note(
 pub fn orchard_default_address_from_spending_key(
     spending_key_bytes: [u8; 32],
 ) -> Result<String, OrchardVerificationError> {
-    let spending_key = orchard_spending_key_from_bytes(spending_key_bytes)?;
+    let spending_key = orchard_spending_key_from_bytes(&spending_key_bytes)?;
     let full_viewing_key = FullViewingKey::from(&spending_key);
     Ok(default_address_from_full_viewing_key(&full_viewing_key))
 }
@@ -2681,7 +2681,7 @@ impl std::fmt::Debug for Zip32SpendingKey {
 pub fn orchard_full_viewing_key_from_spending_key(
     spending_key_bytes: [u8; 32],
 ) -> Result<[u8; 96], OrchardVerificationError> {
-    let spending_key = orchard_spending_key_from_bytes(spending_key_bytes)?;
+    let spending_key = orchard_spending_key_from_bytes(&spending_key_bytes)?;
     Ok(FullViewingKey::from(&spending_key).to_bytes())
 }
 
@@ -2711,7 +2711,7 @@ pub fn orchard_scan_encrypted_outputs_report_with_spending_key(
     outputs: &[EncryptedShieldedOutput],
 ) -> Result<OrchardScanReport, OrchardVerificationError> {
     let full_viewing_key =
-        FullViewingKey::from(&orchard_spending_key_from_bytes(spending_key_bytes)?);
+        FullViewingKey::from(&orchard_spending_key_from_bytes(&spending_key_bytes)?);
     orchard_scan_encrypted_outputs_report_with_full_viewing_key(
         full_viewing_key.to_bytes(),
         nullifiers,
@@ -2848,9 +2848,9 @@ fn orchard_full_viewing_key_from_bytes(
 }
 
 fn orchard_spending_key_from_bytes(
-    spending_key_bytes: [u8; 32],
+    spending_key_bytes: &[u8; 32],
 ) -> Result<SpendingKey, OrchardVerificationError> {
-    Option::<SpendingKey>::from(SpendingKey::from_bytes(spending_key_bytes)).ok_or_else(|| {
+    Option::<SpendingKey>::from(SpendingKey::from_bytes(*spending_key_bytes)).ok_or_else(|| {
         OrchardVerificationError::new(
             "invalid_orchard_spending_key",
             "Orchard spending key bytes are not canonical",
