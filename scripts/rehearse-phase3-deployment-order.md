@@ -125,6 +125,25 @@ Anvil is stopped.
 - **Base Sepolia waits.** The Base Sepolia dry run waits for the Base route
   profile and asset id.
 
+## Before a public network
+
+This local script does not implement these rules; a deployment to a public
+network must.
+
+- **Keys from keystores.** The deployer keys come from keystores, passed as
+  `--account` with `--password-file`, never as `--private-key` on a command
+  line.
+- **Simulate on a fork first.** Immediately before sending, both deployments
+  are simulated on a local fork of the target chain at its current head. A
+  deployment that is mined but reverts consumes the nonce, and the predicted
+  address is lost for good.
+- **A versioned SP1 verifier.** The verifier's `sp1Verifier` must be a
+  versioned SP1 verifier contract with no owner, whose code hash is checked.
+  It must not be a gateway whose owner can add routes.
+- **A constant route epoch.** The verifier's `routeEpoch` is immutable
+  (`PFTLFinalityVerifierV1.sol:119`) and every proof must carry it (`:268`).
+  So the lane's export route epoch must stay constant for the lane's life.
+
 The tests in `python/tests/test_rehearse_phase3_deployment_order.py` run
 without Anvil. They cover the Keccak and CREATE vectors, the nonce guard and
 the two-deployer plan, the constructor read-back, the lock cap, the Lock path
