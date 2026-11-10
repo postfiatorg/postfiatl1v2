@@ -633,7 +633,8 @@ fn legacy_slot(public: &ValidatorPublicKey, context: &[u8], message: &[u8]) -> i
                 3,
                 Some(
                     "postfiat.block_certificate_vote.message.v3"
-                    | "postfiat.block_certificate_vote.message.v4",
+                    | "postfiat.block_certificate_vote.message.v4"
+                    | "postfiat.block_certificate_vote.message.v5",
                 ),
             ) => {
                 let d = a[1]
@@ -642,7 +643,11 @@ fn legacy_slot(public: &ValidatorPublicKey, context: &[u8], message: &[u8]) -> i
                 let tail = a[2]
                     .as_array()
                     .ok_or_else(|| malformed("invalid vote tail"))?;
-                let expected = if a[0] == "postfiat.block_certificate_vote.message.v4" {
+                // v3: 12 domain fields; v4 adds the PFTL-Uniswap receipt root;
+                // v5 adds the external-lane export root after both optional roots.
+                let expected = if a[0] == "postfiat.block_certificate_vote.message.v5" {
+                    14
+                } else if a[0] == "postfiat.block_certificate_vote.message.v4" {
                     13
                 } else {
                     12
@@ -669,7 +674,9 @@ fn legacy_slot(public: &ValidatorPublicKey, context: &[u8], message: &[u8]) -> i
         match (a.len(), a.first().and_then(|v| v.as_str())) {
             (14, Some("postfiat.block_proposal.signature-message.v2"))
             | (15, Some("postfiat.block_proposal.signature-message.v3"))
-            | (16, Some("postfiat.block_proposal.signature-message.v4")) => {
+            | (16, Some("postfiat.block_proposal.signature-message.v4"))
+            // v5 nests (bridge-exit, PFTL-Uniswap, export) roots in one element.
+            | (15, Some("postfiat.block_proposal.signature-message.v5")) => {
                 (a.as_slice(), 1, 4, string(a, 7)?)
             }
             (12, _) => (a.as_slice(), 0, 3, string(a, 6)?),

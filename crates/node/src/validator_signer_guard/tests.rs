@@ -350,7 +350,9 @@ fn decoder_matches_every_legacy_runtime_encoder_variant() {
         assert_eq!((slot.height, slot.view), (9, 3));
         assert_eq!(slot.chain_id, genesis.chain_id);
     };
-    for variant in 0..4 {
+    // Variants 4 and 5 carry the external-lane export root, without and with
+    // the other two roots.
+    for variant in 0..6 {
         let evidence = BlockEvidence {
             height: 9,
             view: 3,
@@ -359,9 +361,12 @@ fn decoder_matches_every_legacy_runtime_encoder_variant() {
             batch_kind: "transparent",
             batch_id: &root,
             state_root: &root,
-            bridge_exit_root: (variant >= 2).then_some(root.as_str()),
-            pftl_uniswap_receipt_root: (variant >= 3).then_some(root.as_str()),
-            external_lane_export_root: None,
+            bridge_exit_root: (2..=3)
+                .contains(&variant)
+                .then_some(root.as_str())
+                .or((variant == 5).then_some(root.as_str())),
+            pftl_uniswap_receipt_root: (variant == 3 || variant == 5).then_some(root.as_str()),
+            external_lane_export_root: (variant >= 4).then_some(root.as_str()),
             receipt_ids: &[],
             fastpay_pre_state_effects: if variant >= 1 { &effects } else { &[] },
         };
