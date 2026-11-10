@@ -342,10 +342,10 @@ postfiat-node external-lane-export --data-dir DATA_DIR --key-file KEY_FILE \
   --base-recipient 0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c --dry-run
 ```
 
-`external-lane-export-status` finds one packet by `--tx-id` or `--export-nonce` in the lane's stored export pages and prints it with its digest and commitments, whether its block is final, the lane's `exported_atoms`, and a last line saying that the payout on Base needs a relay that does not exist yet. A pruned packet is no longer found.
+`external-lane-export-status` finds one packet by `--tx-id` or `--export-nonce` in the lane's stored export pages and prints it with its digest and commitments, `in_committed_block` (the receipt is linked from a block in this node's committed log; the log itself is not replayed), the lane's `exported_atoms`, and a last line saying that the payout on Base needs a relay that does not exist yet. `--audit` replays this node's block log (`tx --audit-block-log`) and adds `block_log_verified`. A transaction the node does not find gives `in_committed_block: false`; any other read error is returned. A pruned packet is no longer found.
 
 ```bash
-postfiat-node external-lane-export-status --data-dir DATA_DIR --lane-id base-erc20 --export-nonce 0
+postfiat-node external-lane-export-status --data-dir DATA_DIR --lane-id base-erc20 --export-nonce 0 --audit
 ```
 
 The Python client has the same pair: `external_lane_export(client, wallet=..., lane_id=..., amount_atoms=..., base_recipient=...)` runs the lane checks (`external_lane_export_refusal`; the balance is left to the node) and then quotes, signs and submits through `submit_asset_transaction`, and `PostFiatRpcClient.external_lane_export_status(lane_id, tx_id_or_nonce)` is the status read.

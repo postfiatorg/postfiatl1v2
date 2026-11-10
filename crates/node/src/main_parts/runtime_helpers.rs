@@ -767,8 +767,8 @@ fn print_usage() {
       (the external_lane_release_v1 operation of a Lock in the certificate's block, for wallet-sign-asset-transaction --operation-json)
   postfiat-node external-lane-export [--data-dir PATH] --key-file PATH --lane-id ID --amount-atoms N --base-recipient 0xADDRESS [--dry-run]
       (checks the lane, the recipient and the balance before signing, after this node's pending transactions; signs as wallet-sign-asset-transaction; --dry-run prints the signed transaction, otherwise submits it and prints the tx id; a transaction admitted between the check and the submission can still make admission refuse it, without a fee)
-  postfiat-node external-lane-export-status [--data-dir PATH] --lane-id ID (--tx-id ID | --export-nonce N)
-      (the export packet, whether its block is final, and that the Base payout needs a relay that does not exist yet)
+  postfiat-node external-lane-export-status [--data-dir PATH] --lane-id ID (--tx-id ID | --export-nonce N) [--audit]
+      (the export packet, in_committed_block: its receipt is linked from a block in this node's committed log, and that the Base payout needs a relay that does not exist yet; --audit replays the block log and prints block_log_verified)
   postfiat-node fastswap-control-prepare [--data-dir PATH] --kind activate-committee --epoch N --committee-root HEX --control-file PATH
   postfiat-node fastswap-control-prepare [--data-dir PATH] --kind stop-prepare --policy-epoch N --control-file PATH
   postfiat-node fastswap-control-vote-sign [--data-dir PATH] --control-file PATH --validator NODE_ID --validator-key-file PATH --vote-file PATH

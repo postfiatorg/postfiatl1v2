@@ -198,7 +198,8 @@ class ExternalLaneExportStatusTests(unittest.TestCase):
         info.assert_called_once_with("base-erc20", export_cursor=2, export_limit=100)
         self.assertEqual((status["export_nonce"], status["amount_atoms"], status["tx_id"]), (1, 101, "aa"))
         self.assertEqual(status["packet_digest"], "0x" + "d1" * 48)
-        self.assertTrue(status["block_final"])
+        self.assertTrue(status["in_committed_block"])
+        self.assertNotIn("block_log_verified", status)
         self.assertEqual((status["lane_exported_atoms"], status["lane_export_count"]), (201, 2))
         self.assertEqual(status["base_payout"], EXTERNAL_LANE_EXPORT_BASE_PAYOUT_NOTE)
 
@@ -211,12 +212,34 @@ class ExternalLaneExportStatusTests(unittest.TestCase):
         ]
         with (
             mock.patch.object(client, "external_lane_info", side_effect=pages) as info,
-            mock.patch.object(client, "tx", side_effect=RpcError("tx", {"code": "transaction_not_found", "message": "not found"})),
+            mock.patch.object(client, "tx", side_effect=RpcError("tx", {"code": "rpc_tx_not_found", "message": "not found"})),
         ):
             status = client.external_lane_export_status("base-erc20", "aa")
         self.assertEqual(info.call_args_list[1].kwargs["export_cursor"], 1)
         self.assertEqual(status["export_nonce"], 0)
-        self.assertFalse(status["block_final"])
+        self.assertFalse(status["in_committed_block"])
+
+    def test_status_audit_passes_audit_block_log_and_reports_block_log_verified(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        row = _row(export_count=1, state={"exported_atoms": 100, "next_export_nonce": 1}, exports=[_packet(0, "aa")])
+        finality = {"confirmed": True, "block": {"header": {"height": 10}}, "block_log_verified": True}
+        with (
+            mock.patch.object(client, "external_lane_info", return_value={"lanes": [row]}),
+            mock.patch.object(client, "tx", return_value=finality) as tx,
+        ):
+            status = client.external_lane_export_status("base-erc20", 0, audit=True)
+        tx.assert_called_once_with("aa", audit_block_log=True)
+        self.assertEqual((status["in_committed_block"], status["block_log_verified"]), (True, True))
+
+    def test_status_raises_an_rpc_error_other_than_transaction_not_found(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        row = _row(export_count=1, state={"exported_atoms": 100, "next_export_nonce": 1}, exports=[_packet(0, "aa")])
+        with (
+            mock.patch.object(client, "external_lane_info", return_value={"lanes": [row]}),
+            mock.patch.object(client, "tx", side_effect=RpcError("tx", {"code": "rpc_error", "message": "store unreadable"})),
+        ):
+            with self.assertRaisesRegex(RpcError, "store unreadable"):
+                client.external_lane_export_status("base-erc20", 0)
 
     def test_status_of_an_unknown_lane_or_export_raises(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")

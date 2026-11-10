@@ -1839,13 +1839,19 @@ class PostFiatRpcClient:
             "export_history_root": row.get("export_history_root"),
         }
 
-    def external_lane_export_status(self, lane_id: str, tx_id_or_nonce: str | int) -> dict[str, Any]:
+    def external_lane_export_status(
+        self, lane_id: str, tx_id_or_nonce: str | int, *, audit: bool = False
+    ) -> dict[str, Any]:
         """One export packet of a lane, by the accepted transaction's id (a
         string) or its export nonce (an int), as `external-lane-export-status`
-        prints it: the packet, its digest and commitments, whether its block is
-        final (`tx` confirms it), the lane's `exported_atoms`, and that the Base
-        payout needs a relay that does not exist yet. Pages the lane's stored
-        exports newest first; a pruned or unknown export raises `LookupError`."""
+        prints it: the packet, its digest and commitments, `in_committed_block`
+        (`tx` links the receipt from a block in the node's committed log; no
+        replay), the lane's `exported_atoms`, and that the Base payout needs a
+        relay that does not exist yet. `audit=True` passes `audit_block_log`
+        and adds `block_log_verified`. Pages the lane's stored exports newest
+        first; a pruned or unknown export raises `LookupError`. `tx` reporting
+        the transaction not found gives `in_committed_block` false; any other
+        RPC error is raised."""
         lane_id = self._required_text(lane_id, "lane_id")
         if isinstance(tx_id_or_nonce, str):
             tx_id: str | None = self._required_text(tx_id_or_nonce, "tx_id_or_nonce")
@@ -1878,15 +1884,19 @@ class PostFiatRpcClient:
                 wanted = f"nonce {nonce}" if nonce is not None else f"tx `{tx_id}`"
                 raise LookupError(f"no stored export on external lane `{lane_id}` matches {wanted}")
         packet = entry["packet"]
+        block_log_verified = False
         try:
-            finality = self.tx(packet["tx_id"])
-            block_final = bool(finality.get("confirmed")) and int(
+            finality = self.tx(packet["tx_id"], audit_block_log=audit)
+            in_committed_block = bool(finality.get("confirmed")) and int(
                 finality["block"]["header"]["height"]
             ) == int(packet["exported_at_height"])
-        except RpcError:
-            block_final = False
+            block_log_verified = bool(finality.get("block_log_verified"))
+        except RpcError as error:
+            if error.error.get("code") != "rpc_tx_not_found":
+                raise
+            in_committed_block = False
         coverage = self.external_lane_export_coverage(row)
-        return {
+        status: dict[str, Any] = {
             "lane_id": lane_id,
             "export_nonce": int(packet["export_nonce"]),
             "sender": packet["sender"],
@@ -1897,12 +1907,15 @@ class PostFiatRpcClient:
             "packet_digest": entry["packet_digest"],
             "withdrawal_id_commitment": entry["withdrawal_id_commitment"],
             "burn_tx_commitment": entry["burn_tx_commitment"],
-            "block_final": block_final,
+            "in_committed_block": in_committed_block,
             "current_height": int(report.get("current_height", 0)),
             "lane_exported_atoms": coverage["exported_atoms"],
             "lane_export_count": coverage["export_count"],
             "base_payout": EXTERNAL_LANE_EXPORT_BASE_PAYOUT_NOTE,
         }
+        if audit:
+            status["block_log_verified"] = block_log_verified
+        return status
 
     def fx_fix_info(self, fix_packet_hash: str) -> dict[str, Any]:
         """One FX fix packet by hash (public read, `--fix-packet-hash`)."""

@@ -546,12 +546,20 @@ fn export_command_with_key(
 }
 
 fn export_status(chain: &Chain, selector: crate::ExternalLaneExportSelector) -> crate::ExternalLaneExportStatusReport {
+    export_status_with(chain, selector, false).expect("export status")
+}
+
+fn export_status_with(
+    chain: &Chain,
+    selector: crate::ExternalLaneExportSelector,
+    audit: bool,
+) -> std::io::Result<crate::ExternalLaneExportStatusReport> {
     crate::external_lane_export_status(crate::ExternalLaneExportStatusOptions {
         data_dir: chain.data_dir.clone(),
         lane_id: "base-erc20".to_string(),
         selector,
+        audit,
     })
-    .expect("export status")
 }
 
 /// The command refuses with `code` before signing: no report, and the
@@ -634,18 +642,17 @@ fn external_lane_export_command_runs_end_to_end_and_the_status_read_shows_the_pa
         (0, 400, base_recipient().as_str(), tip_height(&chain))
     );
     assert_eq!(status.packet_digest, page.exports[0].packet_digest);
-    assert!(status.block_final, "{status:?}");
+    assert!(status.in_committed_block, "{status:?}");
+    assert_eq!(status.block_log_verified, None, "no audit, no claim");
+    let audited = export_status_with(&chain, crate::ExternalLaneExportSelector::Nonce(0), true).expect("audit");
+    assert_eq!((audited.in_committed_block, audited.block_log_verified), (true, Some(true)));
     assert_eq!((status.lane_exported_atoms, status.lane_export_count), (400, 1));
     assert_eq!(page.state.exported_atoms, 400);
     assert!(status.base_payout.contains("relay that does not exist yet"), "{status:?}");
 
-    let missing = crate::external_lane_export_status(crate::ExternalLaneExportStatusOptions {
-        data_dir: chain.data_dir.clone(),
-        lane_id: "base-erc20".to_string(),
-        selector: crate::ExternalLaneExportSelector::Nonce(1),
-    })
-    .unwrap_err()
-    .to_string();
+    let missing = export_status_with(&chain, crate::ExternalLaneExportSelector::Nonce(1), false)
+        .unwrap_err()
+        .to_string();
     assert!(missing.contains("no stored export"), "{missing}");
     let _ = fs::remove_dir_all(&chain.data_dir);
 }

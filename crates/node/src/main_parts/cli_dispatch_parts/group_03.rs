@@ -2503,6 +2503,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 data_dir: PathBuf::from(data_dir),
                 lane_id: flag_value(flags, "--lane-id").ok_or("missing --lane-id")?.to_string(),
                 selector,
+                audit: flag_present(flags, "--audit"),
             })
             .map_err(|error| format!("{command} failed: {error}"))?;
             println!(

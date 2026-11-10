@@ -18,7 +18,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     asset_fee_quote, external_lane_info, read_key_file,
-    submit_signed_asset_transaction_json_to_mempool, tx_finality, wallet_sign_asset_transaction,
+    submit_signed_asset_transaction_json_to_mempool, tx_finality,
+    tx_finality_error_is_transaction_not_found, wallet_sign_asset_transaction,
     AssetFeeQuoteOptions, ExternalLaneExportEntry, ExternalLaneInfoOptions, ExternalLaneInfoRow,
     SignedAssetTransactionJsonSubmitOptions, TxFinalityQueryOptions,
     WalletSignAssetTransactionOptions, EXTERNAL_LANE_RELEASE_PAGE_SIZE,
@@ -250,6 +251,9 @@ pub struct ExternalLaneExportStatusOptions {
     pub data_dir: PathBuf,
     pub lane_id: String,
     pub selector: ExternalLaneExportSelector,
+    /// Replay this node's block log (`tx --audit-block-log`) and report
+    /// `block_log_verified`.
+    pub audit: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -265,8 +269,12 @@ pub struct ExternalLaneExportStatusReport {
     pub packet_digest: String,
     pub withdrawal_id_commitment: String,
     pub burn_tx_commitment: String,
-    /// The block carrying the export is in this node's committed log.
-    pub block_final: bool,
+    /// The receipt is linked from a block in this node's committed log. Not
+    /// a replay of that log: see `block_log_verified`.
+    pub in_committed_block: bool,
+    /// With `audit`: this node replayed its whole block log and it verified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub block_log_verified: Option<bool>,
     pub current_height: u64,
     /// The lane's `exported_atoms` and export count now.
     pub lane_exported_atoms: u64,
@@ -333,14 +341,20 @@ pub fn external_lane_export_status(
         withdrawal_id_commitment,
         burn_tx_commitment,
     } = entry;
-    let block_final = tx_finality(TxFinalityQueryOptions {
+    let (in_committed_block, block_log_verified) = match tx_finality(TxFinalityQueryOptions {
         data_dir: options.data_dir.clone(),
         tx_id: packet.tx_id.clone(),
-        audit_block_log: false,
-    })
-    .is_ok_and(|report| {
-        report.confirmed && report.block.header.height == packet.exported_at_height
-    });
+        audit_block_log: options.audit,
+    }) {
+        Ok(report) => (
+            report.confirmed && report.block.header.height == packet.exported_at_height,
+            options.audit.then_some(report.block_log_verified),
+        ),
+        Err(error) if tx_finality_error_is_transaction_not_found(&error) => {
+            (false, options.audit.then_some(false))
+        }
+        Err(error) => return Err(error),
+    };
     let current_height = external_lane_info(ExternalLaneInfoOptions {
         data_dir: options.data_dir.clone(),
         lane_id: Some(options.lane_id.clone()),
@@ -362,7 +376,8 @@ pub fn external_lane_export_status(
         packet_digest,
         withdrawal_id_commitment,
         burn_tx_commitment,
-        block_final,
+        in_committed_block,
+        block_log_verified,
         current_height,
         lane_exported_atoms: row.state.exported_atoms,
         lane_export_count: row.export_count,
