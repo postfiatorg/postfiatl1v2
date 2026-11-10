@@ -1483,25 +1483,19 @@ def external_lane_export_refusal(
 ) -> tuple[str, str] | None:
     """The refusal `external-lane-export` returns before signing, from an
     `external_lane_info` lane row, as `(code, message)`; `None` when the lane
-    takes the export. The balance and the pending exports need the fee quote;
-    `external_lane_export` checks them after it."""
+    takes the export. Whether the amount fits (pending releases and exports
+    included) and the balance need the fee quote; `external_lane_export`
+    checks them after it."""
 
     if row is None:
         return ("external_lane_not_configured", "the external lane does not exist on this chain")
     policy = row.get("config", {}).get("policy", {})
-    state = row.get("state", {})
     if not policy.get("exports_enabled", False):
         return ("external_lane_export_not_supported", "exports are switched off on this lane")
     if int(row.get("release_cap", {}).get("active_cap_bps", 0)) == 0:
         return ("external_lane_export_halted", "the lane is halted: its active release cap is zero")
     if amount_atoms <= 0:
         return ("external_lane_export_amount_zero", "the amount must be at least one atom")
-    exportable = int(state.get("released_atoms", 0)) - int(state.get("exported_atoms", 0))
-    if amount_atoms > exportable:
-        return (
-            "external_lane_export_above_released",
-            f"{amount_atoms} atoms is above released minus exported, {exportable}",
-        )
     if not re.fullmatch(r"0x[0-9a-f]{40}", base_recipient or ""):
         return (
             "external_lane_export_recipient_invalid",

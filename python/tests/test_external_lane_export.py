@@ -64,7 +64,6 @@ class ExternalLaneExportRefusalTests(unittest.TestCase):
             (_row(config={"policy": {"lock_contract_address": LOCK}}), 1, RECIPIENT, "external_lane_export_not_supported"),
             (_row(release_cap={"active_cap_bps": 0}), 1, RECIPIENT, "external_lane_export_halted"),
             (_row(), 0, RECIPIENT, "external_lane_export_amount_zero"),
-            (_row(), 601, RECIPIENT, "external_lane_export_above_released"),
             (_row(), 1, "0x12", "external_lane_export_recipient_invalid"),
             (_row(), 1, "0x" + "2C" * 20, "external_lane_export_recipient_invalid"),
             (_row(), 1, "0x" + "00" * 20, "external_lane_export_recipient_invalid"),
@@ -77,6 +76,8 @@ class ExternalLaneExportRefusalTests(unittest.TestCase):
                 self.assertIsNotNone(refusal)
                 self.assertEqual(refusal[0], code)  # type: ignore[index]
         self.assertIsNone(external_lane_export_refusal(_row(), amount_atoms=600, base_recipient=RECIPIENT))
+        # Whether the amount fits is the quote's pending-aware dry run's.
+        self.assertIsNone(external_lane_export_refusal(_row(), amount_atoms=601, base_recipient=RECIPIENT))
 
 
 def _quote(**overrides: Any) -> dict[str, Any]:
@@ -165,6 +166,15 @@ class ExternalLaneExportTests(unittest.TestCase):
                 self.assertRegex(str(error), f"^refused before signing: {code}: after the pending exports")
                 signer.assert_not_called()
                 submit.assert_not_called()
+
+    def test_a_pending_release_lets_an_export_above_the_committed_amount_be_signed(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        # Committed released 1,000 minus exported 400 is 600; a pending
+        # release makes 1,500 fit, so the quote carries no export_refusal.
+        result, signer, submit, _ = self._export(client, _quote(), amount_atoms=1_500)
+        self.assertEqual(result.tx_id, "ab")
+        signer.assert_called_once()
+        submit.assert_called_once()
 
     def test_a_refused_export_signs_and_submits_nothing(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")

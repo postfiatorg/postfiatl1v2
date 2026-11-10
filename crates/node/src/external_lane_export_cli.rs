@@ -10,9 +10,8 @@ use std::path::PathBuf;
 
 use postfiat_types::{
     AssetTransactionOperation, ExternalLaneExportOperationV1, SignedAssetTransaction,
-    EXTERNAL_LANE_EXPORT_ABOVE_RELEASED, EXTERNAL_LANE_EXPORT_HALTED,
-    EXTERNAL_LANE_EXPORT_NOT_SUPPORTED, EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK,
-    EXTERNAL_LANE_NOT_CONFIGURED,
+    EXTERNAL_LANE_EXPORT_HALTED, EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
+    EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK, EXTERNAL_LANE_NOT_CONFIGURED,
 };
 use serde::{Deserialize, Serialize};
 
@@ -84,6 +83,16 @@ fn lane_row(
     Ok(report.lanes.into_iter().find(|row| row.lane_id == lane_id))
 }
 
+/// `--amount-atoms`: ASCII digits only (no sign, space or separator) that fit
+/// a u64; `str::parse::<u64>` alone would take a leading `+`.
+pub fn parse_export_amount_atoms(text: &str) -> Result<u64, String> {
+    if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err("--amount-atoms must be digits only".to_string());
+    }
+    text.parse::<u64>()
+        .map_err(|_| "--amount-atoms must fit a u64".to_string())
+}
+
 /// Checks the export against the lane and the sender's balance, then signs
 /// it and, unless `dry_run`, submits it. Every refusal is returned before the
 /// key signs anything, against the ledger after the executable pending
@@ -121,25 +130,14 @@ pub fn external_lane_export(
             ),
         ));
     }
-    let exportable = lane
-        .state
-        .released_atoms
-        .saturating_sub(lane.state.exported_atoms);
     if options.amount_atoms == 0 {
         return Err(refused(
             "external_lane_export_amount_zero",
             "the amount must be at least one atom".to_string(),
         ));
     }
-    if options.amount_atoms > exportable {
-        return Err(refused(
-            EXTERNAL_LANE_EXPORT_ABOVE_RELEASED,
-            format!(
-                "{} atoms is above what external lane `{}` can take back: released {} minus exported {} is {exportable}",
-                options.amount_atoms, lane.lane_id, lane.state.released_atoms, lane.state.exported_atoms
-            ),
-        ));
-    }
+    // Whether the amount fits is the dry run's (below): the committed
+    // `released - exported` misses pending releases and exports.
     let sender = read_key_file(&options.key_file)?.address;
     let operation = ExternalLaneExportOperationV1 {
         sender: sender.clone(),

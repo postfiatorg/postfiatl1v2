@@ -1729,7 +1729,8 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
             .err()
             .map(|(code, message)| AssetOperationRefusal {
                 code: code.to_string(),
-                message,
+                message: export_above_released_message(&quote_ledger, export, code)
+                    .unwrap_or(message),
             })
         }
         _ => None,
@@ -1759,6 +1760,30 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
         operation,
         export_refusal,
     })
+}
+
+/// For `external_lane_export_above_released`: the amount against released
+/// and exported on the ledger after the executable mempool.
+fn export_above_released_message(
+    quote_ledger: &LedgerState,
+    export: &postfiat_types::ExternalLaneExportOperationV1,
+    code: &str,
+) -> Option<String> {
+    if code != postfiat_types::EXTERNAL_LANE_EXPORT_ABOVE_RELEASED || export.amount_atoms == 0 {
+        return None;
+    }
+    let state = quote_ledger
+        .external_lanes
+        .iter()
+        .find(|state| state.lane_id == export.lane_id)?;
+    Some(format!(
+        "{} atoms is above what external lane `{}` can take back after the executable mempool (pending releases and exports included): released {} minus exported {} is {}",
+        export.amount_atoms,
+        export.lane_id,
+        state.released_atoms,
+        state.exported_atoms,
+        state.released_atoms.saturating_sub(state.exported_atoms)
+    ))
 }
 
 pub fn escrow_fee_quote(options: EscrowFeeQuoteOptions) -> io::Result<EscrowFeeQuoteReport> {

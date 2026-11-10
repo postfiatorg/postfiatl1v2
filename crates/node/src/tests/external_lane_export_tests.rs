@@ -810,6 +810,67 @@ fn external_lane_export_command_counts_pending_exports_before_signing() {
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
+/// A pending release counts before signing too: with `released` committed
+/// and another `released` pending, an export above the committed amount but
+/// within both fits on admission's ledger, so it is signed and admitted.
+#[test]
+fn external_lane_export_command_counts_a_pending_release_before_signing() {
+    let released = ACCOUNT_RESERVE + 1_000;
+    let chain = released_export_chain("export-command-pending-release", released);
+    submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
+        data_dir: chain.data_dir.clone(),
+        signed_asset_transaction_json: serde_json::to_string(&release_tx(&chain, "base-erc20", 2, released, 2))
+            .expect("release json"),
+    })
+    .expect("mempool admits the second release");
+    let amount = released + 500;
+    let dry_run = export_command(&chain, "base-erc20", amount, &base_recipient(), true).expect("dry run");
+    assert!(dry_run.dry_run && !dry_run.submitted);
+    let report = export_command(&chain, "base-erc20", amount, &base_recipient(), false).expect("export");
+    let mempool = NodeStore::new(&chain.data_dir).read_mempool().expect("mempool");
+    assert_eq!(mempool.pending_asset_transactions.len(), 2);
+    let error = faucet_refused(
+        &chain,
+        "base-erc20",
+        released - 499,
+        &base_recipient(),
+        postfiat_types::EXTERNAL_LANE_EXPORT_ABOVE_RELEASED,
+    );
+    let left = released - 500;
+    assert!(
+        error.contains(&format!("released {} minus exported {amount} is {left}", 2 * released))
+            && error.contains("after the executable mempool"),
+        "{error}"
+    );
+    let batch_file = chain.data_dir.join("pending-release.batch.json");
+    create_mempool_batch(MempoolBatchOptions {
+        data_dir: chain.data_dir.clone(),
+        batch_file: batch_file.clone(),
+        max_transactions: 8,
+    })
+    .expect("mempool batch");
+    let receipts = apply_batch(ApplyBatchOptions {
+        data_dir: chain.data_dir.clone(),
+        batch_file,
+        certificate_file: None,
+    })
+    .expect("apply batch");
+    assert!(receipts.len() == 2 && receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
+    assert_eq!(receipts[1].tx_id, report.tx_id);
+    let row = export_page(&chain.data_dir, None, None);
+    assert_eq!((row.state.released_atoms, row.state.exported_atoms), (2 * released, amount));
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_amount_is_digits_only() {
+    assert_eq!(crate::parse_export_amount_atoms("1500"), Ok(1_500));
+    for text in ["+1500", "-1", " 1", "1_500", "", "18446744073709551616"] {
+        let error = crate::parse_export_amount_atoms(text).expect_err(text);
+        assert!(error.contains("--amount-atoms"), "{error}");
+    }
+}
+
 /// The export nonce is the lane's, not the sender's: `--sender` refuses a
 /// packet another sender's export holds.
 #[test]

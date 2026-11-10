@@ -2471,10 +2471,9 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 data_dir: PathBuf::from(data_dir),
                 key_file: PathBuf::from(flag_value(flags, "--key-file").ok_or("missing --key-file")?),
                 lane_id: flag_value(flags, "--lane-id").ok_or("missing --lane-id")?.to_string(),
-                amount_atoms: flag_value(flags, "--amount-atoms")
-                    .ok_or("missing --amount-atoms")?
-                    .parse::<u64>()
-                    .map_err(|_| "--amount-atoms must be a u64".to_string())?,
+                amount_atoms: parse_export_amount_atoms(
+                    flag_value(flags, "--amount-atoms").ok_or("missing --amount-atoms")?,
+                )?,
                 base_recipient: flag_value(flags, "--base-recipient")
                     .ok_or("missing --base-recipient")?
                     .to_string(),

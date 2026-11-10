@@ -90,7 +90,7 @@ launch config digests.
 | `transfer_fee_quote` | Quote native PFT payment fees. |
 | `mempool_submit_signed_transfer` | Submit signed native PFT transfer. |
 | `mempool_submit_signed_payment_v2` | Submit signed native PFT payment with memos. |
-| `asset_fee_quote` | Quote issued-asset and TrustSet-style transactions. For `external_lane_export_v1`, `export_refusal` (`code`, `message`) is execution's refusal of the export after the pending transactions; absent when it would apply. |
+| `asset_fee_quote` | Quote issued-asset and TrustSet-style transactions. For `external_lane_export_v1`, `export_refusal` (`code`, `message`) is execution's refusal of the export after the pending transactions (for `external_lane_export_above_released`, the message names released and exported on that ledger); absent when it would apply. |
 | `mempool_submit_signed_asset_transaction` | Submit signed asset create, TrustSet, issued payment (`issued_payment`, or `issued_payment_v2` with memos), clawback, or `account_set` (owner account flags). |
 | `escrow_fee_quote` | Quote escrow create, finish, or cancel. |
 | `mempool_submit_signed_escrow_transaction` | Submit signed escrow transaction. |
