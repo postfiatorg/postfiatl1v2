@@ -176,8 +176,12 @@ fn sample_egress_inputs() -> (
         finalized_block_id: "50".repeat(48),
         finalized_parent_block_id: "4f".repeat(48),
         finalized_state_root: "5a".repeat(48),
-        export: ExternalLaneExportInclusionV1::single(&packet, "postfiat-lane-sepolia-example")
-            .expect("inclusion"),
+        export: ExternalLaneExportInclusionV1::single(
+            &packet,
+            "postfiat-lane-sepolia-example",
+            &"5b".repeat(48),
+        )
+        .expect("inclusion"),
     };
     (lane, packet, checkpoint)
 }
@@ -319,6 +323,23 @@ fn external_lane_export_public_values_refuse_what_the_lane_did_not_export() {
     let mut block = checkpoint.clone();
     block.export.block_height += 1;
     assert!(external_lane_export_egress_public_values(&lane, &packet, &block).is_err());
+    // The export block: not above the checkpoint, and its id is the finalized
+    // block's exactly when its height is.
+    let mut above = checkpoint.clone();
+    above.finalized_block_height = packet.exported_at_height - 1;
+    assert!(external_lane_export_egress_public_values(&lane, &packet, &above).is_err());
+    let mut same_id = checkpoint.clone();
+    same_id.export.block_id = same_id.finalized_block_id.clone();
+    assert!(external_lane_export_egress_public_values(&lane, &packet, &same_id).is_err());
+    let mut same_height = checkpoint.clone();
+    same_height.finalized_block_height = packet.exported_at_height;
+    assert!(external_lane_export_egress_public_values(&lane, &packet, &same_height).is_err());
+    same_height.export.block_id = same_height.finalized_block_id.clone();
+    external_lane_export_egress_public_values(&lane, &packet, &same_height)
+        .expect("the export block is the finalized block");
+    let mut no_id = checkpoint.clone();
+    no_id.export.block_id = String::new();
+    assert!(external_lane_export_egress_public_values(&lane, &packet, &no_id).is_err());
     let mut other = packet.clone();
     other.amount_atoms += 1;
     assert!(external_lane_export_egress_public_values(&lane, &other, &checkpoint).is_err());
@@ -474,8 +495,9 @@ fn external_lane_lock_release_fixture() -> String {
     lane.policy.token_address = EXTERNAL_LANE_LOCAL_TOKEN.to_string();
     lane.policy.token_runtime_code_hash = EXTERNAL_LANE_LOCAL_TOKEN_CODE_HASH.to_string();
     packet.lane_id = lane.id.clone();
-    checkpoint.export = ExternalLaneExportInclusionV1::single(&packet, &checkpoint.pftl_chain_id)
-        .expect("inclusion");
+    checkpoint.export =
+        ExternalLaneExportInclusionV1::single(&packet, &checkpoint.pftl_chain_id, &"5b".repeat(48))
+            .expect("inclusion");
     let values =
         external_lane_export_egress_public_values(&lane, &packet, &checkpoint).expect("values");
     let variant = |change: fn(&mut PfUsdcEgressPublicValuesV1)| {
@@ -538,9 +560,13 @@ fn external_lane_export_vectors_carry_execution_transaction_ids() {
         validate_lower_hex_len("export tx_id", &packet.tx_id, 96).expect("tx id");
         packet.exported_at_height = checkpoint.finalized_block_height;
         let mut checkpoint = checkpoint.clone();
-        checkpoint.export =
-            ExternalLaneExportInclusionV1::single(&packet, &checkpoint.pftl_chain_id)
-                .expect("inclusion");
+        // Exported in the finalized block itself: the inclusion names its id.
+        checkpoint.export = ExternalLaneExportInclusionV1::single(
+            &packet,
+            &checkpoint.pftl_chain_id,
+            &checkpoint.finalized_block_id,
+        )
+        .expect("inclusion");
         let values =
             external_lane_export_egress_public_values(&lane, &packet, &checkpoint).expect("values");
         assert_eq!(values.accepted_receipt_id, packet.tx_id);
@@ -739,7 +765,10 @@ fn external_lane_export_root_holds_at_most_the_per_block_bound() {
 fn external_lane_export_root_proof_refuses_an_index_at_or_above_the_leaf_count() {
     let leaves = [[1_u8; 48], [2_u8; 48]];
     for index in [2, 3] {
-        assert!(external_lane_export_root_proof_v1(&leaves, index).is_err(), "index {index}");
+        assert!(
+            external_lane_export_root_proof_v1(&leaves, index).is_err(),
+            "index {index}"
+        );
     }
     assert!(external_lane_export_root_proof_v1(&[], 0).is_err());
 }

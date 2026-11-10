@@ -163,21 +163,36 @@ pub struct ExternalLaneExportCheckpointV1 {
     pub export: ExternalLaneExportInclusionV1,
 }
 
-/// The export's block: its height, the header's `external_lane_export_root`
-/// and the packet leaf's membership proof under it.
+/// The export's block: its id and height, its header's
+/// `external_lane_export_root`, and the packet leaf's membership proof under it.
+///
+/// The contract: `export_root` is the header root of the block with
+/// `block_id` at `block_height`, and that block is the checkpoint's finalized
+/// block or an ancestor of it. The mapping cannot check either; the proof
+/// program must show both in the same witness (the header hashes to
+/// `block_id`, and the finality ancestry links it to the finalized block). The
+/// mapping refuses only what it can see: a height above the checkpoint's, and a
+/// block id equal to the finalized block's at another height, or the reverse.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExternalLaneExportInclusionV1 {
+    /// 96 lower-case hex digits without `0x`.
+    pub block_id: String,
     pub block_height: u64,
     pub export_root: String,
     pub proof: ExternalLaneExportRootProofV1,
 }
 
 impl ExternalLaneExportInclusionV1 {
-    /// The inclusion of the only export of a block.
-    pub fn single(packet: &ExternalLaneExportPacket, chain_id: &str) -> Result<Self, String> {
+    /// The inclusion of the only export of the block `block_id`.
+    pub fn single(
+        packet: &ExternalLaneExportPacket,
+        chain_id: &str,
+        block_id: &str,
+    ) -> Result<Self, String> {
         let leaf = packet.export_root_leaf(chain_id)?;
         Ok(Self {
+            block_id: block_id.to_string(),
             block_height: packet.exported_at_height,
             export_root: external_lane_export_root_v1(&[leaf])?,
             proof: external_lane_export_root_proof_v1(&[leaf], 0)?,
@@ -236,8 +251,19 @@ pub fn external_lane_export_egress_public_values(
     validate_lower_hex_len("external_lane_export.tx_id", &packet.tx_id, 96)?;
     let chain_id = checkpoint.pftl_chain_id.as_str();
     let export = &checkpoint.export;
+    validate_lower_hex_len("external_lane_export.block_id", &export.block_id, 96)?;
     if export.block_height != packet.exported_at_height {
         return Err("export inclusion names another block".to_string());
+    }
+    if export.block_height > checkpoint.finalized_block_height {
+        return Err("export block is above the finalized checkpoint".to_string());
+    }
+    if (export.block_id == checkpoint.finalized_block_id)
+        != (export.block_height == checkpoint.finalized_block_height)
+    {
+        return Err(
+            "export block id and height disagree with the finalized checkpoint".to_string(),
+        );
     }
     if export.proof.leaf != bytes_to_hex(&packet.export_root_leaf(chain_id)?) {
         return Err("export inclusion proves another leaf".to_string());
