@@ -877,7 +877,7 @@ fn external_lane_export_root_of_a_commit_must_match_the_validators_execution() {
 /// header without the lane export root, pinned to the values main's code gives
 /// (computed on main 5c8f693ca): this branch leaves those encodings unchanged.
 #[test]
-fn block_encodings_without_the_export_root_hash_as_on_main() {
+fn external_lane_block_encodings_without_the_export_root_hash_as_on_main() {
     let genesis = Genesis::new("postfiat-hash-pin");
     let receipt_ids = vec!["ab".repeat(48)];
     let domain = postfiat_types::ConsensusV2Domain {
