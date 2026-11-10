@@ -268,6 +268,23 @@ fn external_lane_export_foundry_fixture() -> String {
     let (lane, packet, checkpoint) = sample_egress_inputs();
     let values =
         external_lane_export_egress_public_values(&lane, &packet, &checkpoint).expect("values");
+    solidity_lane_fixture(
+        "/// Written by the Rust test `external_lane_export_public_values_match_the_foundry_fixture`\n\
+         /// (crates/types/src/external_lane_egress_type_tests.rs): the egress public values of one\n\
+         /// export packet on the Base Sepolia rehearsal lane, and the values they carry.\n\
+         /// Regenerate with EXTERNAL_LANE_WRITE_FIXTURE=1.\nlibrary ExternalLaneExportFixture {\n",
+        &values,
+        &[],
+    )
+}
+
+/// A Solidity library of the public values, the values they carry and any
+/// extra named byte strings.
+fn solidity_lane_fixture(
+    header: &str,
+    values: &PfUsdcEgressPublicValuesV1,
+    extra: &[(&str, Vec<u8>)],
+) -> String {
     let bytes = values.canonical_bytes_without_commitment().expect("bytes");
     let raw =
         |name: &str, value: &str| format!("    bytes internal constant {name} = hex\"{value}\";\n");
@@ -277,12 +294,8 @@ fn external_lane_export_foundry_fixture() -> String {
     let number = |kind: &str, name: &str, value: u64| {
         format!("    {kind} internal constant {name} = {value};\n")
     };
-    let mut out = String::from(
-        "// SPDX-License-Identifier: MIT OR Apache-2.0\npragma solidity ^0.8.24;\n\n\
-         /// Written by the Rust test `external_lane_export_public_values_match_the_foundry_fixture`\n\
-         /// (crates/types/src/external_lane_egress_type_tests.rs): the egress public values of one\n\
-         /// export packet on the Base Sepolia rehearsal lane, and the values they carry.\n\
-         /// Regenerate with EXTERNAL_LANE_WRITE_FIXTURE=1.\nlibrary ExternalLaneExportFixture {\n",
+    let mut out = format!(
+        "// SPDX-License-Identifier: MIT OR Apache-2.0\npragma solidity ^0.8.24;\n\n{header}"
     );
     out.push_str(&raw("PUBLIC_VALUES", &bytes_to_hex(&bytes)));
     out.push_str(&format!(
@@ -356,6 +369,9 @@ fn external_lane_export_foundry_fixture() -> String {
     ));
     out.push_str(&raw("PACKET_DIGEST", &values.withdrawal_packet_hash));
     out.push_str(&word("bytes32", "PROOF_NULLIFIER", &values.proof_nullifier));
+    for (name, value) in extra {
+        out.push_str(&raw(name, &bytes_to_hex(value)));
+    }
     out.push_str("}\n");
     out
 }
@@ -370,4 +386,98 @@ fn external_lane_export_public_values_match_the_foundry_fixture() {
         return;
     }
     assert_eq!(EXTERNAL_LANE_EXPORT_FOUNDRY_FIXTURE, fixture);
+}
+
+const EXTERNAL_LANE_LOCK_RELEASE_FIXTURE_PATH: &str =
+    "../pft-token-contracts/test/fixtures/ExternalLaneLockReleaseFixture.sol";
+const EXTERNAL_LANE_LOCK_RELEASE_FIXTURE: &str =
+    include_str!("../../pft-token-contracts/test/fixtures/ExternalLaneLockReleaseFixture.sol");
+/// What `crates/pft-token-contracts/test/ExternalLaneLockRelease.t.sol`
+/// deploys on its local chain: the lock, its runtime code hash, the token and
+/// its runtime code hash. That test checks them and prints the new values when
+/// a contract's bytecode changes.
+const EXTERNAL_LANE_LOCAL_LOCK: &str = "0xf62849f9a0b5bf2913b396098f7c7019b51a820a";
+const EXTERNAL_LANE_LOCAL_LOCK_CODE_HASH: &str =
+    "0x708d08249e4a466cd5d099f502af2e0d9052fecb2420587e482491d5f02c78a5";
+const EXTERNAL_LANE_LOCAL_TOKEN: &str = "0x5615deb798bb3e4dfa0139dfa1b3d433cc23b72f";
+const EXTERNAL_LANE_LOCAL_TOKEN_CODE_HASH: &str =
+    "0xd54e0a6052fbc19c3551706426ab0f553d0ab66f5d6044ec9aeebcd4be83c5b5";
+
+fn external_lane_lock_release_fixture() -> String {
+    let (mut lane, mut packet, mut checkpoint) = sample_egress_inputs();
+    lane.policy.lock_contract_address = EXTERNAL_LANE_LOCAL_LOCK.to_string();
+    lane.policy.lock_runtime_code_hash = EXTERNAL_LANE_LOCAL_LOCK_CODE_HASH.to_string();
+    lane.policy.token_address = EXTERNAL_LANE_LOCAL_TOKEN.to_string();
+    lane.policy.token_runtime_code_hash = EXTERNAL_LANE_LOCAL_TOKEN_CODE_HASH.to_string();
+    packet.lane_id = lane.id.clone();
+    checkpoint.export_history_root =
+        external_lane_export_history_root(None, &packet).expect("root");
+    let values =
+        external_lane_export_egress_public_values(&lane, &packet, &checkpoint).expect("values");
+    let variant = |change: fn(&mut PfUsdcEgressPublicValuesV1)| {
+        let mut changed = values.clone();
+        change(&mut changed);
+        changed
+            .canonical_bytes_without_commitment()
+            .expect("variant")
+    };
+    solidity_lane_fixture(
+        "/// Written by the Rust test `external_lane_lock_release_matches_the_foundry_fixture`\n\
+         /// (crates/types/src/external_lane_egress_type_tests.rs): the egress public values of one\n\
+         /// export packet on a lane whose lock and token are the ones\n\
+         /// test/ExternalLaneLockRelease.t.sol deploys, and three copies that change only the\n\
+         /// vault, the token or the chain id. Regenerate with EXTERNAL_LANE_WRITE_FIXTURE=1.\n\
+         library ExternalLaneLockReleaseFixture {\n",
+        &values,
+        &[
+            (
+                "WRONG_VAULT",
+                variant(|values| values.vault_address = format!("0x{}", "1a".repeat(20))),
+            ),
+            (
+                "WRONG_TOKEN",
+                variant(|values| values.token_address = format!("0x{}", "2b".repeat(20))),
+            ),
+            (
+                "WRONG_CHAIN_ID",
+                variant(|values| values.arbitrum_chain_id = EXTERNAL_LANE_BASE_MAINNET_CHAIN_ID),
+            ),
+        ],
+    )
+}
+
+#[test]
+fn external_lane_lock_release_matches_the_foundry_fixture() {
+    let fixture = external_lane_lock_release_fixture();
+    if std::env::var_os("EXTERNAL_LANE_WRITE_FIXTURE").is_some() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(EXTERNAL_LANE_LOCK_RELEASE_FIXTURE_PATH);
+        std::fs::write(path, &fixture).expect("write fixture");
+        return;
+    }
+    assert_eq!(EXTERNAL_LANE_LOCK_RELEASE_FIXTURE, fixture);
+}
+
+/// Execution names an export by `asset_transaction_tx_id` (SHA3-384, 96
+/// lower-case hex digits), the form the accepted-receipt field needs; the
+/// shared packet vectors use it, so each maps to public values.
+#[test]
+fn external_lane_export_vectors_carry_execution_transaction_ids() {
+    let vectors: serde_json::Value = serde_json::from_str(include_str!(
+        "../testdata/external-lane-export-packet-vectors.json"
+    ))
+    .expect("vector file");
+    let (lane, _, checkpoint) = sample_egress_inputs();
+    for vector in vectors["vectors"].as_array().expect("vectors") {
+        let mut packet: ExternalLaneExportPacket =
+            serde_json::from_value(vector["packet"].clone()).expect("packet");
+        validate_lower_hex_len("export tx_id", &packet.tx_id, 96).expect("tx id");
+        packet.exported_at_height = checkpoint.finalized_block_height;
+        let mut checkpoint = checkpoint.clone();
+        checkpoint.export_history_root =
+            external_lane_export_history_root(None, &packet).expect("root");
+        let values =
+            external_lane_export_egress_public_values(&lane, &packet, &checkpoint).expect("values");
+        assert_eq!(values.accepted_receipt_id, packet.tx_id);
+    }
 }
