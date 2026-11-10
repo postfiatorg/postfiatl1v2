@@ -28,6 +28,8 @@ use crate::{
 /// The Base recipient is the lane's token contract, which a release would
 /// strand the PFT in.
 pub const EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN: &str = "external_lane_export_recipient_is_token";
+/// The status read found a packet another sender's export holds.
+pub const EXTERNAL_LANE_EXPORT_OTHER_SENDER: &str = "external_lane_export_other_sender";
 /// The line every status read ends with until the Base release relay exists.
 pub const EXTERNAL_LANE_EXPORT_BASE_PAYOUT_NOTE: &str =
     "the payout on Base needs a release relay that does not exist yet; this packet is recorded on PFTL only";
@@ -254,6 +256,9 @@ pub struct ExternalLaneExportStatusOptions {
     /// Replay this node's block log (`tx --audit-block-log`) and report
     /// `block_log_verified`.
     pub audit: bool,
+    /// Refuse when the packet found belongs to another sender: the export
+    /// nonce is the lane's, not the sender's.
+    pub sender: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -335,6 +340,17 @@ pub fn external_lane_export_status(
             }
         }
     };
+    if let Some(sender) = options.sender.as_deref() {
+        if entry.packet.sender != sender {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "{EXTERNAL_LANE_EXPORT_OTHER_SENDER}: export nonce {} on external lane `{}` belongs to `{}`, not `{sender}`; the export nonce is the lane's, not the sender's",
+                    entry.packet.export_nonce, options.lane_id, entry.packet.sender
+                ),
+            ));
+        }
+    }
     let ExternalLaneExportEntry {
         packet,
         packet_digest,

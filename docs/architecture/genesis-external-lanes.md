@@ -342,7 +342,7 @@ postfiat-node external-lane-export --data-dir DATA_DIR --key-file KEY_FILE \
   --base-recipient 0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c --dry-run
 ```
 
-`external-lane-export-status` finds one packet by `--tx-id` or `--export-nonce` in the lane's stored export pages and prints it with its digest and commitments, `in_committed_block` (the receipt is linked from a block in this node's committed log; the log itself is not replayed), the lane's `exported_atoms`, and a last line saying that the payout on Base needs a relay that does not exist yet. `--audit` replays this node's block log (`tx --audit-block-log`) and adds `block_log_verified`. A transaction the node does not find gives `in_committed_block: false`; any other read error is returned. A pruned packet is no longer found.
+`external-lane-export-status` finds one packet by `--tx-id` or `--export-nonce` in the lane's stored export pages and prints it with its digest and commitments, `in_committed_block` (the receipt is linked from a block in this node's committed log; the log itself is not replayed), the lane's `exported_atoms`, and a last line saying that the payout on Base needs a relay that does not exist yet. `--audit` replays this node's block log (`tx --audit-block-log`) and adds `block_log_verified`. A transaction the node does not find gives `in_committed_block: false`; any other read error is returned. The export nonce is the lane's counter, not the sender's: nonce 0 is the lane's first export by anyone. `--sender ADDRESS` refuses with `external_lane_export_other_sender` when the packet found belongs to another sender. A pruned packet is no longer found.
 
 ```bash
 postfiat-node external-lane-export-status --data-dir DATA_DIR --lane-id base-erc20 --export-nonce 0 --audit

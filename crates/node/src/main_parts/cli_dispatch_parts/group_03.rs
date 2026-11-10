@@ -2504,6 +2504,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 lane_id: flag_value(flags, "--lane-id").ok_or("missing --lane-id")?.to_string(),
                 selector,
                 audit: flag_present(flags, "--audit"),
+                sender: flag_value(flags, "--sender").map(str::to_string),
             })
             .map_err(|error| format!("{command} failed: {error}"))?;
             println!(

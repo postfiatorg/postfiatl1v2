@@ -1840,7 +1840,7 @@ class PostFiatRpcClient:
         }
 
     def external_lane_export_status(
-        self, lane_id: str, tx_id_or_nonce: str | int, *, audit: bool = False
+        self, lane_id: str, tx_id_or_nonce: str | int, *, audit: bool = False, sender: str | None = None
     ) -> dict[str, Any]:
         """One export packet of a lane, by the accepted transaction's id (a
         string) or its export nonce (an int), as `external-lane-export-status`
@@ -1851,7 +1851,8 @@ class PostFiatRpcClient:
         and adds `block_log_verified`. Pages the lane's stored exports newest
         first; a pruned or unknown export raises `LookupError`. `tx` reporting
         the transaction not found gives `in_committed_block` false; any other
-        RPC error is raised."""
+        RPC error is raised. The export nonce is the lane's, not the sender's:
+        `sender` raises `ValueError` when the packet belongs to another sender."""
         lane_id = self._required_text(lane_id, "lane_id")
         if isinstance(tx_id_or_nonce, str):
             tx_id: str | None = self._required_text(tx_id_or_nonce, "tx_id_or_nonce")
@@ -1884,6 +1885,12 @@ class PostFiatRpcClient:
                 wanted = f"nonce {nonce}" if nonce is not None else f"tx `{tx_id}`"
                 raise LookupError(f"no stored export on external lane `{lane_id}` matches {wanted}")
         packet = entry["packet"]
+        if sender is not None and packet["sender"] != sender:
+            raise ValueError(
+                f"external_lane_export_other_sender: export nonce {packet['export_nonce']} on external lane "
+                f"`{lane_id}` belongs to `{packet['sender']}`, not `{sender}`; "
+                "the export nonce is the lane's, not the sender's"
+            )
         block_log_verified = False
         try:
             finality = self.tx(packet["tx_id"], audit_block_log=audit)

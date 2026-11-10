@@ -231,6 +231,19 @@ class ExternalLaneExportStatusTests(unittest.TestCase):
         tx.assert_called_once_with("aa", audit_block_log=True)
         self.assertEqual((status["in_committed_block"], status["block_log_verified"]), (True, True))
 
+    def test_status_with_a_sender_refuses_another_senders_packet(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        row = _row(export_count=1, state={"exported_atoms": 100, "next_export_nonce": 1}, exports=[_packet(0, "aa")])
+        finality = {"confirmed": True, "block": {"header": {"height": 10}}}
+        with (
+            mock.patch.object(client, "external_lane_info", return_value={"lanes": [row]}),
+            mock.patch.object(client, "tx", return_value=finality) as tx,
+        ):
+            self.assertEqual(client.external_lane_export_status("base-erc20", 0, sender="pf-holder")["sender"], "pf-holder")
+            with self.assertRaisesRegex(ValueError, "^external_lane_export_other_sender: .*the lane's, not the sender's"):
+                client.external_lane_export_status("base-erc20", 0, sender="pf-other")
+        tx.assert_called_once()
+
     def test_status_raises_an_rpc_error_other_than_transaction_not_found(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")
         row = _row(export_count=1, state={"exported_atoms": 100, "next_export_nonce": 1}, exports=[_packet(0, "aa")])

@@ -546,19 +546,21 @@ fn export_command_with_key(
 }
 
 fn export_status(chain: &Chain, selector: crate::ExternalLaneExportSelector) -> crate::ExternalLaneExportStatusReport {
-    export_status_with(chain, selector, false).expect("export status")
+    export_status_with(chain, selector, false, None).expect("export status")
 }
 
 fn export_status_with(
     chain: &Chain,
     selector: crate::ExternalLaneExportSelector,
     audit: bool,
+    sender: Option<&str>,
 ) -> std::io::Result<crate::ExternalLaneExportStatusReport> {
     crate::external_lane_export_status(crate::ExternalLaneExportStatusOptions {
         data_dir: chain.data_dir.clone(),
         lane_id: "base-erc20".to_string(),
         selector,
         audit,
+        sender: sender.map(str::to_string),
     })
 }
 
@@ -644,13 +646,13 @@ fn external_lane_export_command_runs_end_to_end_and_the_status_read_shows_the_pa
     assert_eq!(status.packet_digest, page.exports[0].packet_digest);
     assert!(status.in_committed_block, "{status:?}");
     assert_eq!(status.block_log_verified, None, "no audit, no claim");
-    let audited = export_status_with(&chain, crate::ExternalLaneExportSelector::Nonce(0), true).expect("audit");
+    let audited = export_status_with(&chain, crate::ExternalLaneExportSelector::Nonce(0), true, None).expect("audit");
     assert_eq!((audited.in_committed_block, audited.block_log_verified), (true, Some(true)));
     assert_eq!((status.lane_exported_atoms, status.lane_export_count), (400, 1));
     assert_eq!(page.state.exported_atoms, 400);
     assert!(status.base_payout.contains("relay that does not exist yet"), "{status:?}");
 
-    let missing = export_status_with(&chain, crate::ExternalLaneExportSelector::Nonce(1), false)
+    let missing = export_status_with(&chain, crate::ExternalLaneExportSelector::Nonce(1), false, None)
         .unwrap_err()
         .to_string();
     assert!(missing.contains("no stored export"), "{missing}");
@@ -805,5 +807,22 @@ fn external_lane_export_command_counts_pending_exports_before_signing() {
     .expect("apply batch");
     assert!(receipts.len() == 3 && receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
     assert_eq!(export_page(&chain.data_dir, None, None).state.exported_atoms, released);
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// The export nonce is the lane's, not the sender's: `--sender` refuses a
+/// packet another sender's export holds.
+#[test]
+fn external_lane_export_command_status_with_a_sender_refuses_another_senders_packet() {
+    let chain = released_export_chain("export-command-sender", ACCOUNT_RESERVE + 1_000);
+    let report = export_command(&chain, "base-erc20", 400, &base_recipient(), false).expect("export");
+    assert!(apply_mempool(&chain, "export-command-sender").accepted);
+    let nonce = crate::ExternalLaneExportSelector::Nonce(0);
+    let mine = export_status_with(&chain, nonce.clone(), false, Some(&report.sender)).expect("own packet");
+    assert_eq!(mine.sender, report.sender);
+    let other = "pf0000000000000000000000000000000000000000";
+    let error = export_status_with(&chain, nonce, false, Some(other)).unwrap_err().to_string();
+    assert!(error.starts_with(crate::EXTERNAL_LANE_EXPORT_OTHER_SENDER), "{error}");
+    assert!(error.contains("the lane's, not the sender's"), "{error}");
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
