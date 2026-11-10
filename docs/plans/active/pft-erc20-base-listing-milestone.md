@@ -93,6 +93,7 @@ Decided by the product owner 2026-10-28: total supply 100 billion PFT; the Base 
 - [ ] P3.1 (this lane) Export native PFT as the same ERC-20, released from the Base lock contract. The native-chain implementation is built but disabled by default. The Base verifier deployment, export prover and relay, product decisions and qualification remain open.
   - [x] The design note and initial refused skeleton landed in `7a968007e`. The native implementation below supersedes that skeleton; `external_lane_export_not_supported` still refuses exports when the genesis switch is off. The [design decisions](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md#9-decisions) remain operator/product decisions.
   - [x] The PFTL half built 2026-11-06 behind `exports_enabled` (merged in `f751185c7`): the export counters in the state commitment, the checked accounting with the zero-cap halt, the packet with its commitments, the paged read ([lanes page, "Exports"](../../architecture/genesis-external-lanes.md#exports)); the Base half (verifier, prover, relay) and the product owner's decisions of the design note's section 9 remain.
+  - [x] Local deployment-order rehearsal built on 2026-11-09 (`scripts/rehearse-phase3-deployment-order.py`, record `docs/review/phase3-deployment-order-rehearsal-20261109/`); the Base Sepolia dry run waits for the route profile and asset id.
 
 ## Mandate deliverables (AGENTS.md)
 

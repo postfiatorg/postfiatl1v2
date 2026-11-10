@@ -1,0 +1,20 @@
+{
+  "genesis_sha256": "7b01ebf592d272d780b582a209869d516196660633cf7af61a60e750529854cd",
+  "note": "an excerpt of the generated genesis.json, which is not published; its sha256 is of the whole file",
+  "lane": {
+    "id": "base-erc20",
+    "reserved_atoms": 300000000,
+    "release_window_blocks": 86400,
+    "release_cap_bps": 200,
+    "policy": {
+      "chain_id": 84532,
+      "lock_contract_address": "0xad0bb02f04f9bdde7afb68109d31822a37eb15ff",
+      "token_address": "0xbb4e03075dbbc038cb986c660f31fbb2a8ca01a5",
+      "token_runtime_code_hash": "0x238da973741c2aabc5cf0b5a644454abdf80d64ba0666456f9843db70d4ea89c",
+      "lock_runtime_code_hash": "0x32b473cebd6e9fb2583fcc01450fa512551d572849edaa739bffd82726fc2040",
+      "committee_epoch": 2,
+      "committee_root": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "confirmation_depth": 64
+    }
+  }
+}
