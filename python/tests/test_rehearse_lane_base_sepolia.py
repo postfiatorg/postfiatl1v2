@@ -35,7 +35,7 @@ class StateMachineTests(unittest.TestCase):
 class RefusalTests(unittest.TestCase):
     def test_no_raw_private_key(self):
         with self.assertRaises(SystemExit):
-            dry_run.parser().parse_args(["--output", "x", "--program-info", "p", "--private-key", "0x01"])
+            dry_run.parser().parse_args(["--output", "x", "--private-key", "0x01"])
         with self.assertRaises(dry_run.RehearsalFailure):
             dry_run.signer_flags(None, None)
         self.assertEqual(dry_run.signer_flags("lock-deployer", Path("pw")),
@@ -71,6 +71,20 @@ class DeploySheetTests(unittest.TestCase):
         markdown = dry_run.sheet_markdown(sheet)
         for text in ("0x" + "22" * 20, "0x" + "44" * 20, "programVKey", dry_run.SP1_VERIFIER["address"]):
             self.assertIn(text, markdown)
+
+
+class IdentityTests(unittest.TestCase):
+    def test_the_committed_elf_matches_the_committed_program_info(self):
+        import json
+        info = json.loads(dry_run.PROGRAM_INFO.read_text())
+        self.assertEqual(dry_run.check_committed_identity(info, dry_run.COMMITTED_ELF), info["elf_sha256"])
+        self.assertEqual(dry_run.parser().parse_args(["--output", "x"]).program_info, dry_run.PROGRAM_INFO)
+
+    def test_a_different_elf_is_refused(self):
+        import json
+        info = dict(json.loads(dry_run.PROGRAM_INFO.read_text()), elf_sha256="00" * 32)
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_committed_identity(info, dry_run.COMMITTED_ELF)
 
 
 if __name__ == "__main__":

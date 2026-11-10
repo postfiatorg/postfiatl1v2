@@ -70,6 +70,16 @@ SP1_VERIFIER = {
     'version': 'v6.1.0',
 }
 GAS_MARGIN = 3
+PROGRAM_INFO = ROOT / 'programs/pft-lane-export/program-info.json'
+COMMITTED_ELF = ROOT / 'programs/pft-lane-export/elf/pft-lane-export-program'
+
+
+def check_committed_identity(program_info, elf_path):
+    """The ELF's sha256 must be the program info's: the key belongs to that ELF."""
+    actual = hashlib.sha256(Path(elf_path).read_bytes()).hexdigest()
+    require(actual == program_info['elf_sha256'],
+            f'the ELF {elf_path} has sha256 {actual}, but the program info names {program_info["elf_sha256"]}')
+    return actual
 
 
 # --- the state machine --------------------------------------------------------
@@ -144,8 +154,10 @@ def parser():
     p.add_argument('--output', type=Path, required=True, help='the run directory; holds state.json')
     p.add_argument('--fork', action='store_true', help='run every stage on a local Anvil fork of Base Sepolia')
     p.add_argument('--through', choices=STAGES, default='record', help='stop after this stage')
-    p.add_argument('--program-info', type=Path, required=True, help='program-info.json with program_vkey')
-    p.add_argument('--elf', type=Path, help='a local guest build, for the record only')
+    p.add_argument('--program-info', type=Path, default=PROGRAM_INFO,
+                   help='program-info.json with program_vkey; default: the committed one')
+    p.add_argument('--elf', type=Path, default=COMMITTED_ELF,
+                   help='the guest ELF; default: the committed one, checked against the program info')
     p.add_argument('--node-bin', type=Path, default=ROOT / 'target/debug/postfiat-node')
     p.add_argument('--proof', type=Path, help='a real SP1 proof file for prove-and-release')
     p.add_argument('--mock-sp1-artifact', type=Path, help='refused unless the RPC is a loopback Anvil')
@@ -261,6 +273,8 @@ def main(argv=None):
             check_stage(state, stage)
             print(f'stage {stage}', file=sys.stderr)
             if stage == 'plan':
+                data['program_identity'] = {'elf_sha256': check_committed_identity(program_info, args.elf),
+                                            'program_vkey': vkey}
                 head = int(rpc(BASE_SEPOLIA_RPC, 'eth_blockNumber'), 16)
                 gas_price = int(rpc(BASE_SEPOLIA_RPC, 'eth_gasPrice'), 16)
                 sp1_code = ORDER.code_hash(rpc(BASE_SEPOLIA_RPC, 'eth_getCode', [SP1_VERIFIER['address'], 'latest']))
@@ -483,7 +497,7 @@ def main(argv=None):
                             'source_tree': ORDER.git('rev-parse', 'HEAD^{tree}'),
                             'tools': {t: ORDER.tool_version(t) for t in ('anvil', 'forge', 'cast', 'cargo')},
                             'elf_sha256': ORDER.sha256_file(args.elf) if args.elf else None,
-                            'elf_note': 'a local test build; the program key comes from program-info.json',
+                            'elf_note': 'checked against the program info in plan',
                             'evidence_files': {n: ORDER.sha256_file(out / n) for n in
                                                ('summary.json', 'deploy-sheet.json', 'deploy-sheet.md')}}
                 (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

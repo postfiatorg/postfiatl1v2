@@ -4,7 +4,7 @@ This runbook runs the Phase 3 deployment order (export design note, section 5) o
 
 ## Preconditions
 
-- **Program key:** the lane export program's ELF and `program-info.json` are committed from two matching Docker builds (workflow `pft-lane-export-identity`). The command reads the key from that file, never from a constant.
+- **Program key:** the lane export program's ELF and `program-info.json` are committed under `programs/pft-lane-export/` from two matching Docker builds (workflow `pft-lane-export-identity`). The identity check must be green on the commit you run. By default the command reads the committed `program-info.json` (`--program-info` overrides it) and never a constant. `plan` refuses when the committed ELF's sha256 differs from the program info.
 - **Review:** this script and the deploy sheet of a `--fork` run have been reviewed.
 - **Holder:** the rehearsal-token holder `0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17` (keystore `pft-sepolia-lock-deployer`) has enough test ETH to fund the two deployers and pay for its own approve and Lock. The deploy sheet gives the amounts.
 - **Keystores:** two one-time Foundry keystores exist, one for the verifier deployer and one for the lock deployer, each funded from the holder and never used before. Their nonces must equal the planned nonces. The operator who holds them is named before the run. The command takes `--verifier-account`, `--lock-account` and `--holder-account` with `--*-password-file`; it has no raw-key option.
