@@ -100,6 +100,9 @@ impl ExternalLaneRouteProfileV1 {
 }
 
 impl GenesisExternalLane {
+    /// Lower level: the caller names the chain id. Deployment code must use
+    /// `Genesis::external_lane_verifier_pins`, which takes it from the genesis.
+    ///
     /// The lane's PFT asset id: `issued_asset_id`'s construction (PFTL chain
     /// id, then the asset's issuer, code and version) with the lane's genesis
     /// binding to Base in the issuer's place, under its own domain.
@@ -120,7 +123,8 @@ impl GenesisExternalLane {
         ))
     }
 
-    /// The lane's route profile, every field from genesis.
+    /// The lane's route profile, every field from genesis. Lower level, as
+    /// `pft_asset_id`; deployment code uses `Genesis::external_lane_verifier_pins`.
     pub fn route_profile(&self, pftl_chain_id: &str) -> Result<ExternalLaneRouteProfileV1, String> {
         Ok(ExternalLaneRouteProfileV1 {
             schema: EXTERNAL_LANE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
@@ -403,4 +407,65 @@ pub fn external_lane_export_root_active_at(
 ) -> bool {
     external_lane_export_root_activation_height(genesis, governance)
         .is_some_and(|activation| height >= activation)
+}
+
+/// Every value a Base verifier and its deployment pin for one lane, all from
+/// one genesis. Hashes are 96 lower-case hex digits; Keccak-256 commitments are
+/// `0x` and 64 digits.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalLaneVerifierPinsV1 {
+    pub lane_id: String,
+    pub pftl_chain_id: String,
+    pub asset_id: String,
+    pub route_profile: ExternalLaneRouteProfileV1,
+    pub route_profile_hash: String,
+    pub asset_id_commitment: String,
+    pub route_profile_hash_commitment: String,
+    pub pftl_chain_id_hash: String,
+    pub pftl_genesis_hash: String,
+    pub pftl_genesis_hash_commitment: String,
+}
+
+fn keccak_hex(bytes: &[u8]) -> String {
+    format!("0x{}", bytes_to_hex(&Keccak256::digest(bytes)))
+}
+
+impl Genesis {
+    /// The verifier pins of lane `lane_id`, from this genesis only: its chain
+    /// id, its hash (`postfiat.genesis.v1` over its JSON) and the lane's
+    /// policy. Fails closed on an invalid genesis or an unknown lane.
+    pub fn external_lane_verifier_pins(
+        &self,
+        lane_id: &str,
+    ) -> Result<ExternalLaneVerifierPinsV1, String> {
+        self.validate()?;
+        let lane = self
+            .external_lanes
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .find(|lane| lane.id == lane_id)
+            .ok_or_else(|| format!("genesis has no external lane `{lane_id}`"))?;
+        let route_profile = lane.route_profile(&self.chain_id)?;
+        let route_profile_hash = route_profile.profile_hash()?;
+        let genesis_hash = hash_hex_domain(
+            "postfiat.genesis.v1",
+            self.to_json()
+                .map_err(|error| format!("encode genesis: {error}"))?
+                .as_bytes(),
+        );
+        Ok(ExternalLaneVerifierPinsV1 {
+            lane_id: lane.id.clone(),
+            pftl_chain_id: self.chain_id.clone(),
+            asset_id: route_profile.asset_id.clone(),
+            asset_id_commitment: keccak_hex(&pfusdc_decode_hex(&route_profile.asset_id)?),
+            route_profile_hash_commitment: keccak_hex(&pfusdc_decode_hex(&route_profile_hash)?),
+            route_profile,
+            route_profile_hash,
+            pftl_chain_id_hash: keccak_hex(self.chain_id.as_bytes()),
+            pftl_genesis_hash_commitment: keccak_hex(&pfusdc_decode_hex(&genesis_hash)?),
+            pftl_genesis_hash: genesis_hash,
+        })
+    }
 }

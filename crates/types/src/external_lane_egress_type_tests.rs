@@ -671,3 +671,54 @@ fn external_lane_export_root_activation_reads_genesis_then_governance() {
         .expect("json")
         .contains("external_lane_export_root_activation_height"));
 }
+
+#[test]
+fn external_lane_verifier_pins_come_from_one_genesis() {
+    let genesis: Genesis = serde_json::from_str(include_str!(
+        "../../../docs/review/base-sepolia-lock-rehearsal-20261106/genesis.json"
+    ))
+    .expect("rehearsal genesis");
+    let pins = genesis
+        .external_lane_verifier_pins("base-erc20")
+        .expect("pins");
+    let vectors: serde_json::Value =
+        serde_json::from_str(EXTERNAL_LANE_ROUTE_PROFILE_VECTORS).expect("vector file");
+    assert_eq!(pins.pftl_chain_id, genesis.chain_id);
+    assert_eq!(pins.asset_id, vectors["vectors"][0]["asset_id"]);
+    assert_eq!(
+        pins.route_profile_hash,
+        vectors["vectors"][0]["route_profile_hash"]
+    );
+    assert_eq!(
+        pins.asset_id_commitment,
+        vectors["vectors"][0]["verifier_asset_id_commitment"]
+    );
+    assert_eq!(
+        pins.route_profile_hash_commitment,
+        vectors["vectors"][0]["verifier_route_profile_hash_commitment"]
+    );
+    assert!(genesis.external_lane_verifier_pins("base-other").is_err());
+
+    let mut other_chain = genesis.clone();
+    other_chain.chain_id = "postfiat-lane-sepolia-other".to_string();
+    let mut other_lock = genesis.clone();
+    other_lock.external_lanes.as_mut().expect("lanes")[0]
+        .policy
+        .lock_contract_address = format!("0x{}", "1b".repeat(20));
+    for changed in [other_chain, other_lock] {
+        let other = changed
+            .external_lane_verifier_pins("base-erc20")
+            .expect("pins");
+        assert_ne!(other.asset_id, pins.asset_id);
+        assert_ne!(other.route_profile_hash, pins.route_profile_hash);
+        assert_ne!(other.asset_id_commitment, pins.asset_id_commitment);
+        assert_ne!(
+            other.route_profile_hash_commitment,
+            pins.route_profile_hash_commitment
+        );
+        assert_ne!(
+            other.pftl_genesis_hash_commitment,
+            pins.pftl_genesis_hash_commitment
+        );
+    }
+}
