@@ -1394,6 +1394,29 @@ def _fastpay_send_journal_result(
     )
 
 
+def _sign_asset_quote(wallet: TransparentWallet, quote_response: dict[str, Any], work_dir: Path) -> dict[str, Any]:
+    """Signs the quoted asset transaction with the wallet's backup file through
+    `wallet-sign-asset-transaction`; the only step that touches the key."""
+
+    quote_file = work_dir / f"asset-quote-{secrets.token_hex(8)}.response.json"
+    signed_file = work_dir / f"signed-{secrets.token_hex(8)}.asset-transaction.json"
+    _write_json(quote_file, quote_response)
+    _run(
+        [
+            *_sdk_bin(),
+            "wallet-sign-asset-transaction",
+            "--backup-file",
+            str(wallet.backup_file),
+            "--quote-response",
+            str(quote_file),
+            "--output",
+            str(signed_file),
+        ],
+        json_output=False,
+    )
+    return _read_json(signed_file)
+
+
 def submit_asset_transaction(
     client: PostFiatRpcClient,
     *,
@@ -1417,23 +1440,7 @@ def submit_asset_transaction(
         sequence=sequence,
         request_id=f"py-asset-quote-{secrets.token_hex(4)}",
     )
-    quote_file = work_dir / f"asset-quote-{secrets.token_hex(8)}.response.json"
-    signed_file = work_dir / f"signed-{secrets.token_hex(8)}.asset-transaction.json"
-    _write_json(quote_file, quote_response)
-    _run(
-        [
-            *_sdk_bin(),
-            "wallet-sign-asset-transaction",
-            "--backup-file",
-            str(wallet.backup_file),
-            "--quote-response",
-            str(quote_file),
-            "--output",
-            str(signed_file),
-        ],
-        json_output=False,
-    )
-    signed_asset_transaction = _read_json(signed_file)
+    signed_asset_transaction = _sign_asset_quote(wallet, quote_response, work_dir)
     submit_result = client.mempool_submit_signed_asset_transaction(
         signed_asset_transaction,
         request_id=f"py-asset-submit-{secrets.token_hex(4)}",
@@ -1476,7 +1483,8 @@ def external_lane_export_refusal(
 ) -> tuple[str, str] | None:
     """The refusal `external-lane-export` returns before signing, from an
     `external_lane_info` lane row, as `(code, message)`; `None` when the lane
-    takes the export. The balance check needs the fee quote and is left to it."""
+    takes the export. The balance and the pending exports need the fee quote;
+    `external_lane_export` checks them after it."""
 
     if row is None:
         return ("external_lane_not_configured", "the external lane does not exist on this chain")
@@ -1518,11 +1526,14 @@ def external_lane_export(
     work_dir: str | Path | None = None,
     sequence: int | None = None,
 ) -> AssetTransactionResult:
-    """Export native PFT to Base on a genesis external lane: the lane checks of
-    `external-lane-export` from `external_lane_info`, then quote, sign and
-    submit through `submit_asset_transaction`. A refusal raises `ValueError`
-    with the code before anything is quoted or signed; a node refusal at
-    admission is raised by the submit call with the node's code and message."""
+    """Export native PFT to Base on a genesis external lane, as
+    `external-lane-export`: the lane checks from `external_lane_info`, the fee
+    quote, then the balance (amount + minimum fee + account reserve) and the
+    quote's `export_refusal` (execution's export rules on the ledger after the
+    node's pending transactions), and only then sign and submit. Every refusal
+    raises `ValueError("refused before signing: CODE: ...")` before the signer
+    runs. A transaction admitted between the quote and the submission can
+    still make admission refuse this one (raised by the submit call, no fee)."""
 
     if isinstance(amount_atoms, bool) or not isinstance(amount_atoms, int):
         raise ValueError("amount_atoms must be an integer")
@@ -1532,18 +1543,45 @@ def external_lane_export(
     if refusal is not None:
         code, message = refusal
         raise ValueError(f"refused before signing: {code}: {message}")
-    return submit_asset_transaction(
-        client,
-        wallet=wallet,
-        operation={
-            "operation": "external_lane_export_v1",
-            "sender": wallet.address,
-            "lane_id": lane_id,
-            "amount_atoms": amount_atoms,
-            "base_recipient": base_recipient,
-        },
-        work_dir=work_dir,
+    operation = {
+        "operation": "external_lane_export_v1",
+        "sender": wallet.address,
+        "lane_id": lane_id,
+        "amount_atoms": amount_atoms,
+        "base_recipient": base_recipient,
+    }
+    quote_response = client.asset_fee_quote_response(
+        wallet.address,
+        operation,
         sequence=sequence,
+        request_id=f"py-export-quote-{secrets.token_hex(4)}",
+    )
+    quote = quote_response.get("result", {})
+    balance = int(quote.get("sender_balance", 0))
+    fee = int(quote["minimum_fee"])
+    reserve = int(quote["account_reserve"])
+    if balance < amount_atoms + fee + reserve:
+        raise ValueError(
+            "refused before signing: insufficient_funds: "
+            f"balance {balance} cannot cover the amount {amount_atoms}, the fee {fee} and the account reserve {reserve}"
+        )
+    export_refusal = quote.get("export_refusal")
+    if export_refusal:
+        raise ValueError(f"refused before signing: {export_refusal['code']}: {export_refusal['message']}")
+    signed_asset_transaction = _sign_asset_quote(wallet, quote_response, _work_dir(work_dir))
+    submit_result = client.mempool_submit_signed_asset_transaction(
+        signed_asset_transaction,
+        request_id=f"py-export-submit-{secrets.token_hex(4)}",
+    )
+    tx_id = submit_result.get("tx_id")
+    return AssetTransactionResult(
+        tx_id=tx_id if isinstance(tx_id, str) else None,
+        operation=operation,
+        quote_response=quote_response,
+        signed_asset_transaction=signed_asset_transaction,
+        submit_result=submit_result,
+        finalized_batch_file=None,
+        receipts_by_validator=(),
     )
 
 

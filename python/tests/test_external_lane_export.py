@@ -79,20 +79,42 @@ class ExternalLaneExportRefusalTests(unittest.TestCase):
         self.assertIsNone(external_lane_export_refusal(_row(), amount_atoms=600, base_recipient=RECIPIENT))
 
 
+def _quote(**overrides: Any) -> dict[str, Any]:
+    result: dict[str, Any] = {"sender_balance": 10_000, "minimum_fee": 22, "account_reserve": 10}
+    result.update(overrides)
+    return {"ok": True, "result": result}
+
+
+SIGNED = {"unsigned": {"fee": 22}, "signature_hex": "aa"}
+
+
 class ExternalLaneExportTests(unittest.TestCase):
-    def test_export_builds_the_operation_and_goes_through_the_asset_signing_helper(self) -> None:
-        client = PostFiatRpcClient("127.0.0.1:1234")
+    def _export(self, client: PostFiatRpcClient, quote: dict[str, Any], **kwargs: Any) -> tuple[Any, Any, Any, Any]:
+        """Runs `external_lane_export` with the node reads and the signer
+        subprocess mocked; returns (result or exception, signer, submit, quote)."""
         with (
-            mock.patch.object(client, "external_lane_info", return_value={"lanes": [_row()]}) as info,
-            mock.patch("postfiat_rpc.wallet.submit_asset_transaction", return_value="result") as submit,
+            mock.patch.object(client, "external_lane_info", return_value={"lanes": [_row()]}),
+            mock.patch.object(client, "asset_fee_quote_response", return_value=quote) as quote_call,
+            mock.patch.object(client, "mempool_submit_signed_asset_transaction", return_value={"tx_id": "ab"}) as submit,
+            mock.patch("postfiat_rpc.wallet._run") as signer,
+            mock.patch("postfiat_rpc.wallet._read_json", return_value=SIGNED),
+            mock.patch("postfiat_rpc.wallet._write_json"),
+            mock.patch("postfiat_rpc.wallet._work_dir", return_value=Path("unused")),
         ):
-            result = external_lane_export(
-                client, wallet=_wallet(), lane_id="base-erc20", amount_atoms=600, base_recipient=RECIPIENT
-            )
-        self.assertEqual(result, "result")
-        info.assert_called_once_with("base-erc20", release_limit=1, export_limit=1)
+            try:
+                outcome: Any = external_lane_export(
+                    client, wallet=_wallet(), lane_id="base-erc20", base_recipient=RECIPIENT, **kwargs
+                )
+            except ValueError as error:
+                outcome = error
+        return outcome, signer, submit, quote_call
+
+    def test_export_quotes_signs_and_submits_the_operation(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        result, signer, submit, quote = self._export(client, _quote(), amount_atoms=600)
+        self.assertEqual(result.tx_id, "ab")
         self.assertEqual(
-            submit.call_args.kwargs["operation"],
+            quote.call_args.args[1],
             {
                 "operation": "external_lane_export_v1",
                 "sender": "pf-holder",
@@ -101,12 +123,41 @@ class ExternalLaneExportTests(unittest.TestCase):
                 "base_recipient": RECIPIENT,
             },
         )
+        signer.assert_called_once()
+        submit.assert_called_once()
+        self.assertEqual(submit.call_args.args[0], SIGNED)
+
+    def test_a_balance_short_of_amount_fee_and_reserve_is_refused_before_the_signer_runs(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        # 600 + 22 + 10 = 632: one atom short, then exactly enough.
+        error, signer, submit, _ = self._export(client, _quote(sender_balance=631), amount_atoms=600)
+        self.assertRegex(str(error), "^refused before signing: insufficient_funds: balance 631 cannot cover")
+        signer.assert_not_called()
+        submit.assert_not_called()
+        result, signer, _, _ = self._export(client, _quote(sender_balance=632), amount_atoms=600)
+        self.assertEqual(result.tx_id, "ab")
+        signer.assert_called_once()
+
+    def test_the_quotes_pending_aware_export_refusal_is_refused_before_the_signer_runs(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        for code in (
+            "external_lane_export_above_released",
+            "external_lane_export_nonce_exhausted",
+            "external_lane_export_records_full",
+        ):
+            with self.subTest(code=code):
+                quote = _quote(export_refusal={"code": code, "message": "after the pending exports"})
+                error, signer, submit, _ = self._export(client, quote, amount_atoms=1)
+                self.assertRegex(str(error), f"^refused before signing: {code}: after the pending exports")
+                signer.assert_not_called()
+                submit.assert_not_called()
 
     def test_a_refused_export_signs_and_submits_nothing(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")
         with (
             mock.patch.object(client, "external_lane_info", return_value={"lanes": [_row()]}),
-            mock.patch("postfiat_rpc.wallet.submit_asset_transaction") as submit,
+            mock.patch.object(client, "asset_fee_quote_response") as quote,
+            mock.patch("postfiat_rpc.wallet._run") as signer,
         ):
             with self.assertRaisesRegex(ValueError, "refused before signing: external_lane_export_recipient_is_token"):
                 external_lane_export(
@@ -116,7 +167,8 @@ class ExternalLaneExportTests(unittest.TestCase):
                 external_lane_export(
                     client, wallet=_wallet(), lane_id="base-erc20", amount_atoms=True, base_recipient=RECIPIENT
                 )
-        submit.assert_not_called()
+        quote.assert_not_called()
+        signer.assert_not_called()
 
 
 class ExternalLaneExportStatusTests(unittest.TestCase):
