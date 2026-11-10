@@ -4141,6 +4141,31 @@ pub struct FastPayAdmissionFile {
     pub policy: postfiat_types::FastPayRecoveryPolicyV1,
 }
 
+/// The fields where a committee and policy differ from the served
+/// capabilities (domain, epoch, validator count, quorum, policy).
+pub fn fastpay_admission_differences(
+    caps: &postfiat_types::FastPayRecoveryCapabilitiesV1,
+    committee: &postfiat_types::FastPayRecoveryCommitteeV1,
+    policy: &postfiat_types::FastPayRecoveryPolicyV1,
+) -> Vec<&'static str> {
+    [
+        ("domain", caps.domain != committee.certificate_domain()),
+        (
+            "committee_epoch",
+            caps.committee_epoch != committee.committee_epoch,
+        ),
+        (
+            "validator_count",
+            caps.validator_count != committee.validators.len(),
+        ),
+        ("quorum", caps.quorum != committee.quorum),
+        ("policy", &caps.policy != policy),
+    ]
+    .into_iter()
+    .filter_map(|(field, differs)| differs.then_some(field))
+    .collect()
+}
+
 /// Builds the admission file from the active committee and refuses unless it
 /// equals what `owned_recovery_capabilities` serves (domain, epoch, validator
 /// count, quorum, policy).
@@ -4152,22 +4177,7 @@ pub fn fastpay_admission_export(data_dir: &Path) -> io::Result<FastPayAdmissionF
         })?)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
     let committee = report.committee;
-    let mut differences = Vec::new();
-    if caps.domain != committee.certificate_domain() {
-        differences.push("domain");
-    }
-    if caps.committee_epoch != committee.committee_epoch {
-        differences.push("committee_epoch");
-    }
-    if caps.validator_count != committee.validators.len() {
-        differences.push("validator_count");
-    }
-    if caps.quorum != committee.quorum {
-        differences.push("quorum");
-    }
-    if caps.policy != report.policy {
-        differences.push("policy");
-    }
+    let differences = fastpay_admission_differences(&caps, &committee, &report.policy);
     if !differences.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,

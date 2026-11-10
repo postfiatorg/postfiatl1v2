@@ -213,3 +213,38 @@ fn fastpay_admission_export_refuses_without_an_active_committee() {
     assert_eq!(error.kind(), io::ErrorKind::Unsupported);
     let _ = std::fs::remove_dir_all(data_dir);
 }
+
+#[test]
+fn fastpay_admission_export_refuses_each_difference_from_the_capabilities() {
+    let (data_dir, _) = two_epoch_fixture("differences");
+    let read = fastpay_recovery_committee(&data_dir, None).expect("active committee");
+    let caps: postfiat_types::FastPayRecoveryCapabilitiesV1 = serde_json::from_str(
+        &owned_recovery_capabilities_v3(NodeOptions {
+            data_dir: data_dir.clone(),
+        })
+        .expect("capabilities"),
+    )
+    .expect("capabilities json");
+    assert!(fastpay_admission_differences(&caps, &read.committee, &read.policy).is_empty());
+    let epoch_one = fastpay_recovery_committee(&data_dir, Some(1))
+        .expect("epoch 1")
+        .committee;
+    assert_eq!(
+        fastpay_admission_differences(&caps, &epoch_one, &read.policy),
+        vec!["domain", "committee_epoch"]
+    );
+    let mut fewer = caps.clone();
+    fewer.validator_count = 3;
+    fewer.quorum = 2;
+    assert_eq!(
+        fastpay_admission_differences(&fewer, &read.committee, &read.policy),
+        vec!["validator_count", "quorum"]
+    );
+    let mut policy = read.policy.clone();
+    policy.max_validity_blocks += 1;
+    assert_eq!(
+        fastpay_admission_differences(&caps, &read.committee, &policy),
+        vec!["policy"]
+    );
+    let _ = std::fs::remove_dir_all(data_dir);
+}
