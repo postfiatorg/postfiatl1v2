@@ -1160,6 +1160,53 @@ mod tests {
             .validate_against_genesis(&genesis.external_lanes()[0])
             .expect("recorded releases");
     }
+
+    /// The dry run the export command and the fee quote use reaches every
+    /// deterministic lane refusal: above released - exported and an
+    /// exhausted export nonce (the records ceiling is 1,000,000 stored
+    /// packets; `check_export_within` pins it with a small ceiling in the
+    /// type tests). A dry run writes nothing; an export that fits reaches
+    /// the governed-caps gate under bare caps and passes under governed caps.
+    #[test]
+    fn external_lane_export_dry_run_returns_the_lane_refusals_without_writing() {
+        let genesis = export_genesis();
+        let mut ledger = lane_ledger(&genesis);
+        apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(1, ACCOUNT_RESERVE + 1_000, "holder"),
+            10,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .expect("release");
+        let governed = crate::AssetExecutionCompatibility::strict()
+            .with_external_lane_release_caps(ExternalLaneReleaseCaps::genesis());
+        let dry_run = |ledger: &LedgerState, amount, compatibility| {
+            dry_run_external_lane_export(
+                &genesis,
+                ledger,
+                &export_op("faucet", amount),
+                "faucet",
+                22,
+                11,
+                compatibility,
+            )
+        };
+        let before = ledger.clone();
+        dry_run(&ledger, ACCOUNT_RESERVE + 1_000, governed).expect("fits");
+        let (code, _) =
+            dry_run(&ledger, 1, crate::AssetExecutionCompatibility::strict()).unwrap_err();
+        assert_eq!(code, EXTERNAL_LANE_EXPORT_NEEDS_GOVERNED_CAPS);
+        let (code, _) = dry_run(&ledger, ACCOUNT_RESERVE + 1_001, governed).unwrap_err();
+        assert_eq!(code, postfiat_types::EXTERNAL_LANE_EXPORT_ABOVE_RELEASED);
+        ledger.external_lanes[0].next_export_nonce = u64::MAX;
+        let exhausted = ledger.clone();
+        let (code, _) = dry_run(&ledger, 1, governed).unwrap_err();
+        assert_eq!(code, postfiat_types::EXTERNAL_LANE_EXPORT_NONCE_EXHAUSTED);
+        assert_eq!(ledger, exhausted);
+        ledger.external_lanes[0].next_export_nonce = 0;
+        assert_eq!(ledger, before);
+    }
 }
 
 #[cfg(test)]
