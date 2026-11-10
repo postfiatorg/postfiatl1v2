@@ -2040,7 +2040,7 @@ mod secret_lifetime_tests {
         AssetOrchardSecret,
     };
     use postfiat_crypto_provider::bytes_to_hex;
-    use zeroize::{Zeroize, Zeroizing};
+    use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
     const CHAIN_ID: &str = "postfiat-swap-seed-test";
     const GENESIS_HASH: [u8; 32] = [5u8; 32];
@@ -2204,8 +2204,65 @@ mod secret_lifetime_tests {
         assert!(!bool::from(authority.rivk.is_zero()));
     }
 
+    thread_local! {
+        static PROBE_WIPES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// A `Copy` payload whose `Default` counts calls. The `DefaultIsZeroes` wipe writes
+    /// `T::default()`, so each wipe of an owner holding it is counted without reading the
+    /// dropped value. The counter is per thread, so parallel tests do not disturb it.
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    struct WipeProbe(u64);
+
+    impl Default for WipeProbe {
+        fn default() -> Self {
+            PROBE_WIPES.with(|wipes| wipes.set(wipes.get() + 1));
+            Self(0)
+        }
+    }
+
+    fn probe_wipes() -> usize {
+        PROBE_WIPES.with(std::cell::Cell::get)
+    }
+
+    /// `T: Drop` holds only for a type with its own `Drop` impl (field drop glue does not count),
+    /// so this stops compiling if either wipe-on-drop impl is removed.
+    #[allow(drop_bounds)]
+    fn assert_own_wiping_drop<T: Drop + Zeroize + ZeroizeOnDrop>() {}
+
     #[test]
-    fn note_opening_zeroize_used_by_drop_clears_every_field() {
+    fn secret_value_and_note_opening_have_their_own_wiping_drop() {
+        assert_own_wiping_drop::<AssetNoteOpening>();
+        assert_own_wiping_drop::<AssetOrchardSecretValue<pallas::Scalar>>();
+        // The payloads are `Copy`, so only the owner's own `Drop` impl gives drop glue.
+        assert!(std::mem::needs_drop::<AssetOrchardSecretValue<pallas::Scalar>>());
+        assert!(std::mem::needs_drop::<AssetOrchardSecretValue<pallas::Base>>());
+        assert!(std::mem::needs_drop::<AssetOrchardSecretValue<pallas::Affine>>());
+    }
+
+    #[test]
+    fn secret_value_wipes_each_owner_on_drop_and_error_exit() {
+        let start = probe_wipes();
+        let owner = AssetOrchardSecretValue::new(WipeProbe(7));
+        let clone = owner.clone();
+        assert_eq!(probe_wipes(), start);
+        drop(owner);
+        assert_eq!(probe_wipes(), start + 1);
+        assert_eq!(*clone, WipeProbe(7));
+
+        fn fails_after_taking(
+            owner: AssetOrchardSecretValue<WipeProbe>,
+        ) -> Result<WipeProbe, AssetOrchardError> {
+            let held = owner;
+            Err(AssetOrchardError::new("probe", "early exit"))?;
+            Ok(*held)
+        }
+        assert!(fails_after_taking(clone).is_err());
+        assert_eq!(probe_wipes(), start + 2);
+    }
+
+    #[test]
+    fn note_opening_zeroize_clears_every_field_and_spares_clones() {
         let note = input_note("asset-a", 10, 31);
         let mut opening = note.note.to_note_opening().expect("opening");
         let kept = opening.clone();

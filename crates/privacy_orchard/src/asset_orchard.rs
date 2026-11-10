@@ -11,7 +11,7 @@ use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use sha3::{digest::Update, Digest, Sha3_256, Sha3_384, Sha3_512};
 use std::ops::{Deref, DerefMut};
-use zeroize::{DefaultIsZeroes, Zeroize, Zeroizing};
+use zeroize::{DefaultIsZeroes, Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::asset_orchard_sinsemilla::asset_spend_auth_g;
 
@@ -284,6 +284,8 @@ impl<T: Copy + Default> Drop for AssetOrchardSecretValue<T> {
         self.zeroize();
     }
 }
+
+impl<T: Copy + Default> ZeroizeOnDrop for AssetOrchardSecretValue<T> {}
 
 impl<T: Copy + Default> std::fmt::Debug for AssetOrchardSecretValue<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3670,6 +3672,8 @@ impl Drop for AssetNoteOpening {
         self.zeroize();
     }
 }
+
+impl ZeroizeOnDrop for AssetNoteOpening {}
 
 impl std::fmt::Debug for AssetNoteOpening {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
