@@ -171,7 +171,11 @@ pub fn external_lane_export(
         operation_json,
         sequence: None,
     })
-    .map_err(|error| refused("insufficient_funds", error.to_string()))?;
+    .map_err(|error| match error.kind() {
+        // No account holds nothing, so nothing covers the export.
+        io::ErrorKind::NotFound => refused("insufficient_funds", error.to_string()),
+        _ => error,
+    })?;
     let needed = u128::from(options.amount_atoms)
         + u128::from(quote.minimum_fee)
         + u128::from(quote.account_reserve);
