@@ -1,0 +1,17 @@
+{
+  "source_commit": "d5365e285db14c4cf198d2388bbba35706fce446",
+  "source_tree": "b7c26da258f1bee611d964b00668d44d606d4ebd",
+  "tools": {
+    "anvil": "anvil Version: 1.8.1",
+    "forge": "forge Version: 1.8.1",
+    "cast": "cast Version: 1.8.1",
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)"
+  },
+  "elf_sha256": "d7ae2a38b6dba0ae7f438c64012b72a36e092ff5cf0cf17eec8bcfdf373ed2cd",
+  "elf_note": "a local test build; the program key comes from program-info.json",
+  "evidence_files": {
+    "summary.json": "606876432cc0c3581b185084def48f756f41bdd365cb8ab89732904f10bd5760",
+    "deploy-sheet.json": "097181e84f1370627b9a773e6ae9771c342dba34317ee868ead798cc4cf5f42e",
+    "deploy-sheet.md": "4cccc579deafa78761c40fb8af23c406747cf6648e6592f878a4b6ddcf7c68ab"
+  }
+}

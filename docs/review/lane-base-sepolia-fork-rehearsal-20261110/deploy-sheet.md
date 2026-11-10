@@ -1,0 +1,34 @@
+# Lane deploy sheet (Base Sepolia, chain id 84532)
+
+| Role | Address | Nonce | Predicted contract |
+|---|---|---|---|
+| verifier deployer | `0x1310b5c3e7786a37076ed5c4c0b431ec41258291` | 0 | `0x0d17ce83912a60530a7a4e2fc7bbbcbfba94663a` |
+| lock deployer | `0x0e2a5545c75343c3005b0784cf587db820ddf4c4` | 0 | `0x9cf71da3b34391716a7925cbadef1b82bab7878c` |
+
+| Key | Gas on the fork | Test ETH (x3 margin) |
+|---|---|---|
+| verifier deployer | 2630563 | 0.000047350 |
+| lock deployer | 1134485 | 0.000020421 |
+| holder | 200732 | 0.000003613 |
+
+Gas price read: 6000000 wei. SP1 verifier: `0xb69f2584cbcff99a58c4e7002e8b89af54a6f4e2` (V6_1_0_SP1_VERIFIER_GROTH16, https://github.com/succinctlabs/sp1-contracts/blob/v6.1.0/contracts/deployments/84532.json).
+
+## Verifier constructor
+
+- `sp1Verifier`: `0xb69f2584cbcff99a58c4e7002e8b89af54a6f4e2`
+- `programVKey`: `0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414`
+- `pftlChainIdHash`: `0x4ea8ee52b27fd187a726848ac2e0a41d4cf2c511922f08404f79d25fdbef878d`
+- `pftlGenesisHashCommitment`: `0x009719e0cd2debe69a0e8324e3e777b2c0065bd92616fe4f2b41a98669b371cb`
+- `pftlProtocolVersion`: `1`
+- `routeProfileHashCommitment`: `0xd30d28c91212bd9a5fd30509e292c249a8ab4d0957d8d03ac63d0433f66a04f4`
+- `routeEpoch`: `1`
+- `assetIdCommitment`: `0xf13f8238c4d740a445b91b6ff0dfbd7d9fe1552072e76c915af4c5a1e01af860`
+- `arbitrumChainId`: `84532`
+- `vaultRuntimeCodeHash`: `0xa1c72e1ab25e755085315f2e8097d59b14f37b2d89d82e97a35ca09647bf8eac`
+- `token`: `0x90ce303356d80ecbe359faf061c84130f40eacf0`
+- `tokenRuntimeCodeHash`: `0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b`
+- `maxProofBytes`: `4096`
+- `maxPublicValuesBytes`: `16384`
+- `initialCheckpointCommitment`: `0xbb0e3861b2b1bb0f780666fc55c2b91bf0040268eee8e6a4f8fcb92ed43efdbf`
+- `initialFinalizedHeight`: `1`
+- `initialCommitteeRootCommitment`: `0x05d75e290d105b08c2765d702c8671566af90a835fce9c2fabc727124e693a5c`
