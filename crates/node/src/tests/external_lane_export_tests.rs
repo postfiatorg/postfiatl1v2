@@ -872,3 +872,72 @@ fn external_lane_export_root_of_a_commit_must_match_the_validators_execution() {
     assert!(header_at(&chain, 4).external_lane_export_root.is_some());
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
+
+/// Block hash, proposal hash, vote message and consensus v2 block id of a
+/// header without the lane export root, pinned to the values main's code gives
+/// (computed on main 5c8f693ca): this branch leaves those encodings unchanged.
+#[test]
+fn block_encodings_without_the_export_root_hash_as_on_main() {
+    let genesis = Genesis::new("postfiat-hash-pin");
+    let receipt_ids = vec!["ab".repeat(48)];
+    let domain = postfiat_types::ConsensusV2Domain {
+        schema: postfiat_types::CONSENSUS_V2_DOMAIN_SCHEMA.to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        committee_epoch: 1,
+        committee_root: "41".repeat(48),
+    };
+    let (bridge, uniswap) = ("e".repeat(96), "f".repeat(96));
+    let mut values = Vec::new();
+    for (bridge_exit_root, pftl_uniswap_receipt_root) in
+        [(None, None), (Some(bridge.as_str()), None), (Some(bridge.as_str()), Some(uniswap.as_str()))]
+    {
+        let evidence = BlockEvidence {
+            height: 5,
+            view: 1,
+            parent_hash: &"1".repeat(96),
+            proposer: "validator-0",
+            batch_kind: "transparent",
+            batch_id: &"2".repeat(96),
+            state_root: &"3".repeat(96),
+            bridge_exit_root,
+            pftl_uniswap_receipt_root,
+            external_lane_export_root: None,
+            receipt_ids: &receipt_ids,
+            fastpay_pre_state_effects: &[],
+        };
+        values.push(block_hash(&genesis, &evidence, &"c".repeat(96)).expect("block hash"));
+        values.push(block_proposal_hash_from_evidence(&genesis, &evidence, &"d".repeat(96)).expect("proposal hash"));
+        let vote = block_certificate_vote_message(&genesis, &evidence, "validator-0", true, &"a".repeat(96))
+            .expect("vote message");
+        values.push(postfiat_crypto_provider::hash_hex("postfiat.test.vote_message_pin", &vote));
+        let block = match (bridge_exit_root, pftl_uniswap_receipt_root) {
+            (None, _) => postfiat_ordering_fast::consensus_v2_block_ref(&domain, 5, "1".repeat(96), "2".repeat(96), "3".repeat(96)),
+            (Some(bridge), None) => postfiat_ordering_fast::consensus_v2_block_ref_with_bridge_exit_root(
+                &domain, 5, "1".repeat(96), "2".repeat(96), "3".repeat(96), bridge,
+            ),
+            (Some(bridge), Some(uniswap)) => postfiat_ordering_fast::consensus_v2_block_ref_with_commitment_roots(
+                &domain, 5, "1".repeat(96), "2".repeat(96), "3".repeat(96), Some(bridge.to_string()), uniswap,
+            ),
+        };
+        values.push(block.expect("consensus v2 block").block_id);
+    }
+    // Per header variant (no root, bridge-exit root, both roots): block hash,
+    // proposal hash, vote-message digest, consensus v2 block id.
+    let expected = [
+        "34fea2e2ad5af642c0d764eb5009fc2a4500dbfef37c38125d925bb94aed159071a0144a94843f0579592cdd93f077f9",
+        "6e88a13f5470ac7ed85107370b3c7eea9b09d41a339f7aca1a3e27577fbbc424862e0a8e76a05fa7c84d918de5f1ac09",
+        "3708b97f9061746d0abc8a75242b2734d8920a116fdd88f346d709f98ef9f0002703b4adf6f5577730309644b1f8d40e",
+        "22905f922156b15ae3a648451171cc7ff34086b69493082de8ae3cd400a80b6a18266ed9e90c2d111381c1bdf180a97f",
+        "67b352f21b847efc9efdee426ef5faded4236411dd32189c02b37ca4cb54ba9a9797a9ce7a0ce1f395a624ce1c247626",
+        "4ce2c2174495bfc6ce801862b1d584f2ce2ab9373420f465d7c25cc08c16a78933e55b4fb9f886e00969577ffb368c95",
+        "90ab2160020855bb5cd608fbba4b124d76d110d91e9eeac8d0e4af4508c60649e806161bbbc509a00b45980630277b18",
+        "8bf2b730aa8769993e3ba862a8b58041a7bbaa80917c6ab5146a5d2bd3783fce65db59f88b4cffd5243e7c2a7bf54cd7",
+        "d664052b432488ac3ab7d3552610dfd8266cf7a55647fdf582a3433e9e0bf1dd3c91e700f9a64532a3ef4249ef032ea9",
+        "15ea0b1781104df5813deec1b76a16c6d2280cd7ba1055f98d131ce089c111d353e32e151dcca9df510395d0401ce7f1",
+        "a9c6c9f50f1c4c38abb6919ad7d72583215b9dfa1ecce4cdb82ce5a120ba8e7dfd3ccd46780d675d0e02b400b584de45",
+        "fa60977290fd1d51c75993b6ff5d39bd90a8cfcb524bdfc983f2b2f49579bddcb6e1c4cbe9e206757886c42c07aa08c5",
+    ];
+    assert_eq!(values, expected);
+}
