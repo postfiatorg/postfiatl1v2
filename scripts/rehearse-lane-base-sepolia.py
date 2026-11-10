@@ -189,7 +189,8 @@ def main(argv=None):
 
     def rpc(url, method, params=()):
         body = json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': list(params)}).encode()
-        req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+        req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json',
+                                                              'User-Agent': 'postfiat-lane-dry-run/1'})
         with urllib.request.urlopen(req, timeout=30) as response:
             value = json.load(response)
         require('error' not in value, f'{method}: {value.get("error")}')
