@@ -98,6 +98,35 @@ def portable_text(text, *, out, root, roles, secrets):
     return _ABSOLUTE_PATH.sub('<path-outside-checkout>', text)
 
 
+def export_watch_summary(lines, *, paid, alarms=0, alarm_codes=()):
+    """The watcher's `--exports` run: one summary line with `alarms` alarms of
+    `alarm_codes`, and `paid` export lines, every one of them `paid`."""
+    summaries = [line for line in lines if line.get('kind') == 'summary']
+    require(len(summaries) == 1, f'the watcher must print one summary line, printed {len(summaries)}')
+    summary = summaries[0]
+    require(summary.get('alarms') == alarms, f'the watcher raised {summary.get("alarms")} alarms, expected {alarms}')
+    raised = sorted(line['code'] for line in lines if line.get('kind') == 'alarm')
+    require(sorted(raised) == sorted(alarm_codes), f'the watcher raised {raised}, expected {sorted(alarm_codes)}')
+    exports = [line for line in lines if line.get('kind') == 'export']
+    require(len(exports) == paid and all(line.get('status') == 'paid' for line in exports),
+            f'the watcher must report {paid} paid exports, reported {[line.get("status") for line in exports]}')
+    return {'summary': summary, 'exports': exports,
+            'payouts': [line for line in lines if line.get('kind') == 'payout'],
+            'alarms': [line for line in lines if line.get('kind') == 'alarm']}
+
+
+def forged_public_values(public_values_hex, values, fresh):
+    """Public values for a packet PFTL never recorded: the export's own, with its
+    withdrawal id, burn id, packet digest and nullifier replaced by `fresh`
+    bytes of the same lengths (the mock SP1 verifier accepts any proof)."""
+    forged = public_values_hex
+    for field in ('withdrawal_id', 'burn_tx_id', 'withdrawal_packet_digest', 'proof_nullifier'):
+        old = values[field].removeprefix('0x')
+        require(forged.count(old) == 1, f'{field} does not occur once in the public values')
+        forged = forged.replace(old, fresh(len(old) // 2).hex())
+    return forged
+
+
 def roundtrip_verifier_config(*, sp1_verifier, pins, checkpoint, token, token_code_hash, lock_code_hash):
     """The verifier's constructor values: the genesis-owned pins, the first
     finalized PFTL checkpoint, the mock SP1 verifier and the placeholder key."""
@@ -378,6 +407,24 @@ def main(argv=None):
         check_cross_chain(released['lane'], base)
         results['steps']['b_release_on_pftl'] = released
 
+        # A read-only PFTL RPC for the watcher, kept for the rest of the run.
+        ready_file = out / 'rpc-ready.json'
+        watch_env = dict(environment, PYTHONPATH=str(ROOT / 'python'))
+        rpc_port, _ = BASE_LOCK.start_on_free_port(
+            'rpc-serve', lambda port: [node_bin, 'rpc-serve', '--unsafe-devnet-json-storage', '--data-dir',
+                                       state['data_dir'], '--bind-host', '127.0.0.1', '--port', port,
+                                       '--max-requests', '10000', '--ready-file', ready_file],
+            lambda port: ready_file.exists(), children, results['children'],
+            open_stderr=lambda: (out / 'rpc-serve.stderr').open('a'), env=watch_env, ready_file=ready_file)
+
+        def export_watch(name, expected=0):
+            # Released events count only once finalized: mine past Anvil's finality depth first.
+            rpc('anvil_mine', ['0x80'])
+            argv = [sys.executable, '-m', 'postfiat_rpc.external_lane_watcher', '--pftl-rpc',
+                    f'127.0.0.1:{rpc_port}', '--lane-id', LANE_ID, '--base-rpc', url, '--once', '--exports',
+                    '--lock-from-block', '0', '--unpaid-warning-blocks', '64']
+            return [json.loads(line) for line in command(name, argv, env=watch_env, expected=expected).splitlines()]
+
         prior = ready['checkpoint']['block_id']
         sequence = released['recipient_sequence']
         relay = [sys.executable, ROOT / 'scripts/pft-lane-export-relay.py']
@@ -440,6 +487,24 @@ def main(argv=None):
                 require(base_state(token, lock) == base, 'the refused release moved Base state')
                 outcome['second_release'] = {'refused_before_sending': 'already_consumed',
                                              'forced_send_reverted': True}
+            outcome['watcher'] = export_watch_summary(export_watch(f'watcher-exports-{index}'), paid=index)
+            if index == 1:
+                # (4) The unsound-verifier case on a snapshot: a payout for a packet PFTL never recorded.
+                snapshot = rpc('evm_snapshot')
+                forged = forged_public_values(json.loads((work / 'input/expected-public-values.json').read_text())
+                                              ['expected_public_values_hex'], values, os.urandom)
+                forced = json.loads(command('forged-release', [
+                    'cast', 'send', lock, 'release(bytes,bytes)', '0x' + forged,
+                    '0x' + RELAY.PLACEHOLDER_PROOF.hex(), '--rpc-url', url, '--private-key', keys['relayer'][0],
+                    '--json']))
+                require(forced['status'] == '0x1', 'the forged release did not pay')
+                caught = export_watch_summary(
+                    export_watch('watcher-exports-forged', expected=2), paid=1, alarms=2,
+                    alarm_codes=('payout_without_export', 'exported_below_paid'))
+                require(rpc('evm_revert', [snapshot]) is True, 'evm_revert failed')
+                require(base_state(token, lock) == base, 'the snapshot revert did not restore the lock')
+                outcome['forged_payout'] = {'transaction': forced['transactionHash'],
+                                            'alarms': caught['alarms'], 'reverted': True}
             prior = values['resulting_checkpoint_block_id']
             outcomes.append(outcome)
             results['steps'][f'export_{index}'] = outcome
@@ -469,24 +534,14 @@ def main(argv=None):
         results['steps']['f_round_empty'] = {'lane': done['lane'], 'base': base}
         results['steps']['g_over_export_refused'] = refused
 
-        # (i) The Phase 2 release watcher over a read-only RPC of the chain (the base-lock rehearsal's way).
-        ready_file = out / 'rpc-ready.json'
-        watch_env = dict(environment, PYTHONPATH=str(ROOT / 'python'))
-        rpc_port, _ = BASE_LOCK.start_on_free_port(
-            'rpc-serve', lambda port: [node_bin, 'rpc-serve', '--unsafe-devnet-json-storage', '--data-dir',
-                                       state['data_dir'], '--bind-host', '127.0.0.1', '--port', port,
-                                       '--max-requests', '100', '--ready-file', ready_file],
-            lambda port: ready_file.exists(), children, results['children'],
-            open_stderr=lambda: (out / 'rpc-serve.stderr').open('a'), env=watch_env, ready_file=ready_file)
-        lines = [json.loads(line) for line in command('watcher', [
-            sys.executable, '-m', 'postfiat_rpc.external_lane_watcher', '--pftl-rpc', f'127.0.0.1:{rpc_port}',
-            '--lane-id', LANE_ID, '--base-rpc', url, '--state-file', out / 'watcher-state.json', '--once'],
-            env=watch_env).splitlines()]
+        # (i) The release view (Phase 2) and the export view, at the end.
+        lines = export_watch('watcher-final')
+        final = export_watch_summary(lines, paid=len(EXPORTS))
         results['steps']['i_watcher'] = {
             'summary': BASE_LOCK.watcher_summary(lines, releases_checked=1),
             'releases': [line for line in lines if line.get('kind') == 'release'],
-            'exports': 'the watcher has no export view: it reads releases and their Base Locks only, and '
-                       'reports nothing about exports or Base releases of exports'}
+            'exports': final['exports'], 'payouts': final['payouts'],
+            'export_totals': final['summary']['exports']['totals']}
         results['passed'] = True
     except Exception as error:
         results['error'] = portable(error)

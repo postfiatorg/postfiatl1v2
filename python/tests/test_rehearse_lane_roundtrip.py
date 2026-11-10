@@ -89,5 +89,25 @@ class PortablePathTests(unittest.TestCase):
             self.assertNotIn(fragment, clean)
 
 
+class ExportWatchTests(unittest.TestCase):
+    def test_export_watch_summary(self):
+        lines = [{"kind": "export", "status": "paid"}, {"kind": "summary", "alarms": 0}]
+        self.assertEqual(len(roundtrip.export_watch_summary(lines, paid=1)["exports"]), 1)
+        with self.assertRaises(roundtrip.RehearsalFailure):
+            roundtrip.export_watch_summary([{"kind": "export", "status": "unpaid"}, {"kind": "summary", "alarms": 0}],
+                                           paid=1)
+        alarmed = [{"kind": "alarm", "code": "payout_without_export"}, {"kind": "summary", "alarms": 1}]
+        roundtrip.export_watch_summary(alarmed, paid=0, alarms=1, alarm_codes=("payout_without_export",))
+
+    def test_forged_public_values_replace_the_packet_identity(self):
+        values = {"withdrawal_id": "aa" * 48, "burn_tx_id": "bb" * 48, "withdrawal_packet_digest": "cc" * 32,
+                  "proof_nullifier": "dd" * 32}
+        original = "00" + "aa" * 48 + "11" + "bb" * 48 + "cc" * 32 + "dd" * 32
+        forged = roundtrip.forged_public_values(original, values, lambda n: bytes([0xef]) * n)
+        self.assertEqual(len(forged), len(original))
+        for old in values.values():
+            self.assertNotIn(old, forged)
+
+
 if __name__ == "__main__":
     unittest.main()
