@@ -108,6 +108,13 @@ fn external_lane_export_refuses_an_unknown_lane_and_the_lock_as_recipient() {
         "external_lane_export_recipient_is_lock",
         "to-lock",
     );
+    let to_token = export_tx(&chain, "base-erc20", ACCOUNT_RESERVE + 1_000, &format!("0x{}", "2b".repeat(20)));
+    refused_at_every_entry_point(
+        &chain,
+        &to_token,
+        postfiat_types::EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN,
+        "to-token",
+    );
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 

@@ -30,8 +30,9 @@ use postfiat_types::{
 use postfiat_types::{
     ExternalLaneExportOperationV1, ExternalLaneExportPacket, EXTERNAL_LANE_EXPORT_HALTED,
     EXTERNAL_LANE_EXPORT_NEEDS_GOVERNED_CAPS, EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
-    EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK, EXTERNAL_LANE_EXPORT_ROOT_NOT_ACTIVE,
-    EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS, EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_COMMITTEES,
+    EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK, EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN,
+    EXTERNAL_LANE_EXPORT_ROOT_NOT_ACTIVE, EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_CAPS,
+    EXTERNAL_LANE_RELEASE_NEEDS_GOVERNED_COMMITTEES,
 };
 
 type ExecutionError = (&'static str, String);
@@ -350,6 +351,15 @@ pub(crate) fn apply_external_lane_export_with_caps(
             EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK,
             format!(
                 "the Base recipient is external lane `{}`'s lock contract, which a release can never pay",
+                lane.id
+            ),
+        ));
+    }
+    if operation.base_recipient == lane.policy.token_address {
+        return Err((
+            EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN,
+            format!(
+                "the Base recipient is external lane `{}`'s token contract, which would hold the release out of every holder's reach",
                 lane.id
             ),
         ));
@@ -1025,6 +1035,20 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(code, EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK);
+        assert_eq!(ledger, before);
+        let mut to_token = export_op("faucet", 1);
+        to_token.base_recipient = format!("0x{}", "2b".repeat(20));
+        let (code, _) = apply_external_lane_export(
+            &genesis,
+            &mut ledger,
+            &to_token,
+            &to_token.sender,
+            "tx".to_string(),
+            11,
+            caps,
+        )
+        .unwrap_err();
+        assert_eq!(code, EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN);
         assert_eq!(ledger, before);
         // Under the genesis cap the same export is applied.
         apply_external_lane_export(

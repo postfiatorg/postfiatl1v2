@@ -288,6 +288,21 @@ fn external_lane_export_public_values_refuse_what_the_lane_did_not_export() {
     let mut early = checkpoint.clone();
     early.finalized_block_height = packet.exported_at_height - 1;
     assert!(external_lane_export_egress_public_values(&lane, &packet, &early).is_err());
+    for recipient in [
+        lane.policy.lock_contract_address.clone(),
+        lane.policy.token_address.clone(),
+        format!("0x{}", "0".repeat(40)),
+    ] {
+        let mut changed = packet.clone();
+        changed.base_recipient = recipient;
+        assert!(external_lane_export_egress_public_values(&lane, &changed, &checkpoint).is_err());
+    }
+    let mut zero_amount = packet.clone();
+    zero_amount.amount_atoms = 0;
+    assert!(external_lane_export_egress_public_values(&lane, &zero_amount, &checkpoint).is_err());
+    let mut zero_height = packet.clone();
+    zero_height.exported_at_height = 0;
+    assert!(external_lane_export_egress_public_values(&lane, &zero_height, &checkpoint).is_err());
     let mut text_id = packet.clone();
     text_id.tx_id = "tx-0".to_string();
     assert!(external_lane_export_egress_public_values(&lane, &text_id, &checkpoint).is_err());

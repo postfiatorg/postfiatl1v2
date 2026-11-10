@@ -193,6 +193,14 @@ pub fn external_lane_export_egress_public_values(
     if packet.lane_id != lane.id {
         return Err("export packet names another lane".to_string());
     }
+    if packet.base_recipient == lane.policy.lock_contract_address
+        || packet.base_recipient == lane.policy.token_address
+        || packet.base_recipient == format!("0x{}", "0".repeat(40))
+    {
+        return Err(
+            "export recipient is the lane's lock, its token or the zero address".to_string(),
+        );
+    }
     if packet.exported_at_height == 0
         || packet.exported_at_height > checkpoint.finalized_block_height
     {
