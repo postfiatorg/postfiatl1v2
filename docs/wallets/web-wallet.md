@@ -318,6 +318,21 @@ The private route runs a 12-step companion-server flow through
 `SwapServer.action()` and `SwapServer.getNav()` for bridge, shielded, and NAV
 steps. The OTC route currently surfaces a quote request action in the UI.
 
+## FastPay Committee Pin
+
+A wallet that pins the FastPay committee and policy, as the Mac wallet's
+release build must before FastPay opens, takes the pin from consensus state.
+`postfiat-node fastpay-admission-export --data-dir DIR --out FILE` writes
+`{"committee": …, "policy": …}`, the committee admitting new orders and the
+committed policy, after checking them against `owned_recovery_capabilities`
+(domain, epoch, validator count, quorum, policy); it refuses on any difference.
+The public read `fastpay_recovery_committee` returns the same committee with
+`chain_id`, `genesis_hash` and the height read, so a wallet can compare its pin
+with live keys and fail closed on drift. Reviewing the file and building it
+into a signed app is the release owner's step. The pin is valid only while
+its epoch admits orders (`new_orders_through_height`); every committee
+rotation needs a fresh export, review and build.
+
 ## FastPay Funding
 
 Funding moves account PFT into the FastPay reserve through an ordinary
