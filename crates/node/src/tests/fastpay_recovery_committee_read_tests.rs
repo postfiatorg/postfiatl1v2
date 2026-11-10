@@ -94,6 +94,74 @@ fn fastpay_recovery_committee_returns_the_active_epoch_and_each_epoch_by_number(
 }
 
 #[test]
+fn fastpay_recovery_committee_and_admission_export_wait_for_an_in_progress_commit() {
+    // A rotation commits epoch 3 (heights 201-300) and moves the tip to 201.
+    // A read torn across it would pair the old ledger with height 201 (no
+    // active committee) or the new ledger with height 105.
+    let (data_dir, mut ledger) = two_epoch_fixture("commit-lock");
+    let store = NodeStore::new(&data_dir);
+    let commit_lock = store.lock_ordered_commit().expect("in-progress commit");
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    let threads = [false, true].map(|export| {
+        let (dir, done) = (data_dir.clone(), done_tx.clone());
+        std::thread::spawn(move || {
+            let epoch_and_height = if export {
+                fastpay_admission_export(&dir)
+                    .map(|admission| (admission.committee.committee_epoch, None))
+            } else {
+                fastpay_recovery_committee(&dir, None)
+                    .map(|report| (report.committee.committee_epoch, Some(report.height)))
+            };
+            done.send((export, epoch_and_height.map_err(|e| e.to_string())))
+                .unwrap();
+        })
+    });
+    assert!(
+        done_rx
+            .recv_timeout(std::time::Duration::from_millis(200))
+            .is_err(),
+        "the reads must wait for the in-progress commit"
+    );
+    let epoch_two = &ledger.fastpay_recovery_committees[1];
+    let epoch_three = postfiat_types::FastPayRecoveryCommitteeV1::from_public_keys(
+        epoch_two.chain_id.clone(),
+        epoch_two.genesis_hash.clone(),
+        epoch_two.protocol_version,
+        3,
+        201,
+        300,
+        epoch_two
+            .validators
+            .iter()
+            .map(|v| (v.validator_id.clone(), v.public_key_hex.clone()))
+            .collect(),
+    )
+    .expect("epoch 3 committee");
+    ledger.fastpay_recovery_committees.push(epoch_three);
+    store.write_ledger(&ledger).expect("committed ledger");
+    let mut tip = store.read_chain_tip().expect("tip");
+    tip.height = 201;
+    store.write_chain_tip(&tip).expect("committed tip");
+    drop(commit_lock);
+    let mut results = (0..2)
+        .map(|_| {
+            done_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .expect("read after commit")
+        })
+        .collect::<Vec<_>>();
+    results.sort();
+    assert_eq!(
+        results,
+        vec![(false, Ok((3, Some(201)))), (true, Ok((3, None)))]
+    );
+    for thread in threads {
+        thread.join().unwrap();
+    }
+    let _ = std::fs::remove_dir_all(data_dir);
+}
+
+#[test]
 fn fastpay_recovery_committee_refuses_an_unknown_epoch_with_a_typed_code() {
     let (data_dir, _) = two_epoch_fixture("unknown");
     for epoch in [0, 3, u64::MAX] {

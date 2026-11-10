@@ -4062,14 +4062,25 @@ pub fn fastpay_recovery_committee_error_code(message: &str) -> Option<&'static s
         .then_some(FASTPAY_RECOVERY_COMMITTEE_UNKNOWN_EPOCH)
 }
 
+/// Reads under the ordered-commit lock, as `owned_recovery_capabilities_v3`
+/// does, so the ledger, the tip and the committee come from one commit.
 pub fn fastpay_recovery_committee(
     data_dir: &Path,
     epoch: Option<u64>,
 ) -> io::Result<FastPayRecoveryCommitteeReport> {
     let store = NodeStore::new(data_dir);
+    let commit_lock = store.lock_ordered_commit()?;
+    fastpay_recovery_committee_locked(&store, epoch, &commit_lock)
+}
+
+fn fastpay_recovery_committee_locked(
+    store: &NodeStore,
+    epoch: Option<u64>,
+    _commit_lock: &StorageMutationLock,
+) -> io::Result<FastPayRecoveryCommitteeReport> {
     let genesis = store.read_genesis()?;
     let ledger = store.read_ledger()?;
-    let height = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?.height;
+    let height = read_chain_tip_or_reconstruct_for_genesis_read_only(store, &genesis)?.height;
     let invalid = |error: String| io::Error::new(io::ErrorKind::InvalidData, error);
     let policy = ledger.fastpay_recovery_policy.clone().ok_or_else(|| {
         io::Error::new(
@@ -4168,14 +4179,12 @@ pub fn fastpay_admission_differences(
 
 /// Builds the admission file from the active committee and refuses unless it
 /// equals what `owned_recovery_capabilities` serves (domain, epoch, validator
-/// count, quorum, policy).
+/// count, quorum, policy). Both reads share one ordered-commit lock.
 pub fn fastpay_admission_export(data_dir: &Path) -> io::Result<FastPayAdmissionFile> {
-    let report = fastpay_recovery_committee(data_dir, None)?;
-    let caps: postfiat_types::FastPayRecoveryCapabilitiesV1 =
-        serde_json::from_str(&owned_recovery_capabilities_v3(NodeOptions {
-            data_dir: data_dir.to_path_buf(),
-        })?)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    let store = NodeStore::new(data_dir);
+    let commit_lock = store.lock_ordered_commit()?;
+    let report = fastpay_recovery_committee_locked(&store, None, &commit_lock)?;
+    let caps = owned_recovery_capabilities_v3_locked(&store, &commit_lock)?;
     let committee = report.committee;
     let differences = fastpay_admission_differences(&caps, &committee, &report.policy);
     if !differences.is_empty() {
