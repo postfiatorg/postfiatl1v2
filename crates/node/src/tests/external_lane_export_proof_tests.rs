@@ -420,3 +420,58 @@ fn external_lane_export_witness_release_input_names_the_foundry_lock_and_token()
     }
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
+
+/// The witness carries the whole genesis, which the guest serialises and
+/// hashes. A genesis holds no accounts (funded accounts start from the faucet
+/// after genesis), so only its lanes can grow it, up to
+/// `EXTERNAL_LANE_MAX_LANES`. This builds the same export on the test genesis
+/// and on one with the most lanes; with PFT_LANE_EXPORT_COST_DIR set it writes
+/// both inputs for the SP1 execute-only measurement.
+#[test]
+fn external_lane_export_witness_cost_inputs() {
+    for lanes in [1, postfiat_types::EXTERNAL_LANE_MAX_LANES] {
+        let chain = lane_chain_with_genesis(
+            &format!("export-cost-{lanes}"),
+            86_400,
+            Some(EXPORT_ROOT_HEIGHT),
+            4,
+            |genesis| {
+                genesis.external_lane_export_root_activation_height = Some(EXPORT_ROOT_HEIGHT);
+                let all = genesis.external_lanes.as_mut().expect("lanes");
+                all[0].policy.exports_enabled = true;
+                let template = all[0].clone();
+                for index in 1..lanes {
+                    let mut lane = template.clone();
+                    lane.id = format!("base-erc20-extra-{index}");
+                    lane.reserved_atoms = 1_000_000;
+                    lane.policy.lock_contract_address = format!("0x{:040x}", 0x1000 + index);
+                    all.push(lane);
+                }
+            },
+        );
+        let receipt = admit_and_apply(
+            &chain,
+            &release_tx(&chain, "base-erc20", 1, ACCOUNT_RESERVE + 100_000, 1),
+            "release",
+        );
+        assert!(receipt.accepted, "{receipt:?}");
+        let prior = header_at(&chain, tip_height(&chain)).block_hash;
+        let receipt = admit_and_apply(
+            &chain,
+            &export_tx(&chain, "base-erc20", 10, &base_recipient()),
+            "export",
+        );
+        assert!(receipt.accepted, "{receipt:?}");
+        let input = proof_input(&chain, 0, &prior).expect("proof input");
+        assert_eq!(input.witness.genesis.external_lanes().len(), lanes);
+        verify_external_lane_export_witness_v1(&input.witness).expect("statement");
+        if let Some(dir) = std::env::var_os("PFT_LANE_EXPORT_COST_DIR") {
+            write_external_lane_export_proof_input(
+                &input,
+                &Path::new(&dir).join(format!("lanes-{lanes}")),
+            )
+            .expect("write input");
+        }
+        let _ = fs::remove_dir_all(&chain.data_dir);
+    }
+}
