@@ -1,0 +1,113 @@
+name: pft-lane-export-identity
+
+# The lane export program (programs/pft-lane-export) has no committed ELF or
+# key yet. Each run builds it twice in the pinned SP1 Docker image from two
+# clean trees, requires byte-identical ELFs, derives the verifying key and
+# uploads the ELF and its program info. Commit them only after two independent
+# runs produced the same ELF hash.
+
+on:
+  push:
+    branches:
+      - token/phase3-base-half
+    paths:
+      - programs/pft-lane-export/**
+      - crates/pft_lane_proofs/**
+      - tools/pft-lane-export-prover/**
+      - .github/workflows/pft-lane-export-identity.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-lane-export-identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust and SP1 toolchains
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.95.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install --yes protobuf-compiler
+          # sp1up.succinct.xyz stopped answering on 2026-11-09; fetch sp1up from the pinned release tag instead.
+          curl --fail --location --proto '=https' --tlsv1.2 --create-dirs --output "$HOME/.sp1/bin/sp1up" https://raw.githubusercontent.com/succinctlabs/sp1/v6.3.1/sp1up/sp1up
+          chmod +x "$HOME/.sp1/bin/sp1up"
+          "$HOME/.sp1/bin/sp1up" --version 6.3.1
+          export PATH="$HOME/.sp1/bin:$PATH"
+          cargo prove --version | grep -F 'cargo-prove sp1'
+      - name: Build the guest twice in Docker and derive its key
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.sp1/bin:$PATH"
+          # The same pinned image the egress releases record.
+          docker pull ghcr.io/succinctlabs/sp1:v6.3.1
+          docker_image="$(docker image inspect ghcr.io/succinctlabs/sp1:v6.3.1 --format '{{index .RepoDigests 0}}')"
+          test "$docker_image" = "$(jq -er .docker_image programs/pfusdc-egress/releases.json)"
+          root="$RUNNER_TEMP/pft-lane-export-identity"
+          mkdir -p "$root/src-a" "$root/src-b" "$root/out-a" "$root/out-b" "$root/report"
+          git archive "$GITHUB_SHA" | tar -x -C "$root/src-a"
+          git archive "$GITHUB_SHA" | tar -x -C "$root/src-b"
+          for side in a b; do
+            (
+              cd "$root/src-$side/programs/pft-lane-export"
+              cargo prove build --docker --tag v6.3.1 --locked \
+                --workspace-directory "$root/src-$side" \
+                --output-directory "$root/out-$side"
+            )
+          done
+          elf_a="$root/out-a/pft-lane-export-program"
+          elf_b="$root/out-b/pft-lane-export-program"
+          test -s "$elf_a" && test -s "$elf_b"
+          sha_a="$(sha256sum "$elf_a" | cut -d' ' -f1)"
+          sha_b="$(sha256sum "$elf_b" | cut -d' ' -f1)"
+          printf 'pft-lane-export build-a=%s build-b=%s\n' "$sha_a" "$sha_b"
+          test "$sha_a" = "$sha_b"
+          cmp "$elf_a" "$elf_b"
+          cp "$elf_a" "$root/report/pft-lane-export-program"
+          cargo +1.95.0 build --locked --release --manifest-path "$root/src-a/tools/pft-lane-export-prover/Cargo.toml"
+          SP1_PROVER=cpu "$root/src-a/tools/pft-lane-export-prover/target/release/pft-lane-export-prover" \
+            program-info --elf "$elf_a" --output "$root/report/key.json"
+          vkey="$(jq -er .program_vkey "$root/report/key.json")"
+          test "$(jq -er .elf_sha256 "$root/report/key.json")" = "$sha_a"
+          printf 'pft-lane-export elf_sha256=%s program_vkey=%s\n' "$sha_a" "$vkey"
+          jq -n \
+            --arg elf_sha256 "$sha_a" \
+            --arg program_vkey "$vkey" \
+            --arg cargo_lock_sha256 "$(sha256sum programs/pft-lane-export/Cargo.lock | cut -d' ' -f1)" \
+            --arg cargo_toml_sha256 "$(sha256sum programs/pft-lane-export/Cargo.toml | cut -d' ' -f1)" \
+            --arg source_commit "$GITHUB_SHA" \
+            --arg docker_image "$docker_image" \
+            '{
+              schema:"postfiat-sp1-program-info-v1",
+              program:"pft-lane-export-program",
+              sp1_version:"6.3.1",
+              build_command:"cargo prove build --docker --tag v6.3.1 --locked --workspace-directory <checkout> --output-directory elf",
+              elf_path:"elf/pft-lane-export-program",
+              elf_sha256:$elf_sha256,
+              program_vkey:$program_vkey,
+              cargo_lock_sha256:$cargo_lock_sha256,
+              cargo_toml_sha256:$cargo_toml_sha256,
+              source_commit:$source_commit,
+              docker_image:$docker_image,
+              build_count:2,
+              clean_source_trees:2,
+              byte_exact_replay:true,
+              proof_modes:[{kind:"withdrawal"},{kind:"checkpoint"}],
+              proof_status:"elf_and_vkey_derived_no_proof_generated_not_committed"
+            }' > "$root/report/program-info.json"
+          cat "$root/report/program-info.json"
+          (cd "$root/report" && sha256sum pft-lane-export-program program-info.json > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: pft-lane-export-identity
+          path: ${{ runner.temp }}/pft-lane-export-identity/report
+          if-no-files-found: error
+          retention-days: 30

@@ -2585,6 +2585,7 @@ dependencies = [
  "postfiat-types",
  "serde_cbor",
  "serde_json",
+ "sha2",
  "sp1-sdk",
  "tokio",
 ]
