@@ -1,0 +1,77 @@
+"""Unit tests for scripts/rehearse-lane-base-sepolia.py without a chain."""
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+SPEC = importlib.util.spec_from_file_location("rehearse_lane_base_sepolia", ROOT / "scripts/rehearse-lane-base-sepolia.py")
+dry_run = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(dry_run)
+
+
+class StateMachineTests(unittest.TestCase):
+    def test_stages_run_in_order_and_once(self):
+        state = {"completed": [], "data": {}}
+        dry_run.check_stage(state, "plan")
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_stage(state, "fleet")
+        state["completed"].append("plan")
+        dry_run.check_stage(state, "fleet")
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_stage(state, "plan")
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_stage(state, "deploy")
+
+    def test_record_may_follow_a_stopped_prove_and_release(self):
+        state = {"completed": list(dry_run.STAGES[:7]), "data": {}}
+        dry_run.check_stage(state, "record")
+        state = {"completed": list(dry_run.STAGES[:6]), "data": {}}
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_stage(state, "record")
+
+
+class RefusalTests(unittest.TestCase):
+    def test_no_raw_private_key(self):
+        with self.assertRaises(SystemExit):
+            dry_run.parser().parse_args(["--output", "x", "--program-info", "p", "--private-key", "0x01"])
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.signer_flags(None, None)
+        self.assertEqual(dry_run.signer_flags("lock-deployer", Path("pw")),
+                         ["--account", "lock-deployer", "--password-file", "pw"])
+
+    def test_mock_verifier_only_on_a_loopback_anvil(self):
+        dry_run.refuse_mock_off_loopback(mock_artifact=None, rpc_url="https://sepolia.base.org", client_version="")
+        dry_run.refuse_mock_off_loopback(mock_artifact=Path("m.json"), rpc_url="http://127.0.0.1:8545",
+                                         client_version="anvil/v1.8.1")
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.refuse_mock_off_loopback(mock_artifact=Path("m.json"), rpc_url="https://sepolia.base.org",
+                                             client_version="anvil/v1.8.1")
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.refuse_mock_off_loopback(mock_artifact=Path("m.json"), rpc_url="http://127.0.0.1:8545",
+                                             client_version="geth")
+
+    def test_the_sp1_verifier_is_the_versioned_one(self):
+        self.assertEqual(dry_run.SP1_VERIFIER["name"], "V6_1_0_SP1_VERIFIER_GROTH16")
+        self.assertNotIn("GATEWAY", dry_run.SP1_VERIFIER["name"])
+
+
+class DeploySheetTests(unittest.TestCase):
+    def test_sheet_names_every_key_and_its_test_eth(self):
+        plan = {"verifier": {"deployer": "0x" + "11" * 20, "planned_nonce": 0, "predicted": "0x" + "22" * 20},
+                "lock": {"deployer": "0x" + "33" * 20, "planned_nonce": 0, "predicted": "0x" + "44" * 20}}
+        gas = {"deploy-verifier": 3_000_000, "deploy-lock": 2_000_000, "approve": 50_000, "lock": 150_000}
+        sheet = dry_run.deploy_sheet(plan=plan, verifier_config={"programVKey": "0x01"}, gas_used=gas,
+                                     gas_price_wei=6_000_000)
+        needs = sheet["test_eth_per_key"]
+        self.assertEqual(needs["verifier deployer"]["gas"], 3_000_000)
+        self.assertEqual(needs["holder"]["gas"], 200_000)
+        self.assertEqual(needs["lock deployer"]["wei_with_margin"], 2_000_000 * 6_000_000 * 3)
+        markdown = dry_run.sheet_markdown(sheet)
+        for text in ("0x" + "22" * 20, "0x" + "44" * 20, "programVKey", dry_run.SP1_VERIFIER["address"]):
+            self.assertIn(text, markdown)
+
+
+if __name__ == "__main__":
+    unittest.main()
