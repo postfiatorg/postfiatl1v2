@@ -1155,70 +1155,50 @@ pub(super) fn archived_wan_devnet2_orchard_aware_bridge_claim_identity_allowed(
             })
 }
 
-/// `genesis_lanes` give the lane rules their genesis policies: a block
-/// executes with them and the ledger.
+/// `genesis` gives the lane rules their genesis policies and the amendment
+/// checks the consensus v2 activation: a block executes with it and the ledger.
 pub(super) fn execute_governance_batch(
     governance: &mut GovernanceState,
     ledger: Option<&mut LedgerState>,
-    genesis_lanes: Option<&[postfiat_types::GenesisExternalLane]>,
+    genesis: Option<&Genesis>,
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(
-        governance,
-        ledger,
-        genesis_lanes,
-        batch,
-        block_height,
-        false,
-    )
+    execute_governance_batch_with_replay(governance, ledger, genesis, batch, block_height, false)
 }
 
 pub(super) fn execute_archived_governance_batch(
     governance: &mut GovernanceState,
     ledger: Option<&mut LedgerState>,
-    genesis_lanes: Option<&[postfiat_types::GenesisExternalLane]>,
+    genesis: Option<&Genesis>,
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(
-        governance,
-        ledger,
-        genesis_lanes,
-        batch,
-        block_height,
-        true,
-    )
+    execute_governance_batch_with_replay(governance, ledger, genesis, batch, block_height, true)
 }
 
 /// An archived governance batch executed with no ledger, as the certificate
-/// replay does: `genesis_lanes` stand in for the ledger's lanes, so a release
+/// replay does: the genesis lanes stand in for the ledger's lanes, so a release
 /// cap amendment for a lane genesis does not configure is refused as at block
 /// execution and both governance states agree.
 pub(super) fn execute_ledgerless_archived_governance_batch(
     governance: &mut GovernanceState,
-    genesis_lanes: &[postfiat_types::GenesisExternalLane],
+    genesis: &Genesis,
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(
-        governance,
-        None,
-        Some(genesis_lanes),
-        batch,
-        block_height,
-        true,
-    )
+    execute_governance_batch_with_replay(governance, None, Some(genesis), batch, block_height, true)
 }
 
 fn execute_governance_batch_with_replay(
     governance: &mut GovernanceState,
     mut ledger: Option<&mut LedgerState>,
-    genesis_lanes: Option<&[postfiat_types::GenesisExternalLane]>,
+    genesis: Option<&Genesis>,
     batch: &GovernanceActionBatch,
     block_height: u64,
     historical_replay: bool,
 ) -> Vec<Receipt> {
+    let genesis_lanes = genesis.map(Genesis::external_lanes);
     let mut receipts = Vec::with_capacity(
         batch.amendments.len()
             + batch.validator_registry_updates.len()
@@ -1263,23 +1243,25 @@ fn execute_governance_batch_with_replay(
             continue;
         }
         if let Some((code, message)) =
-            governance_amendment_lifecycle_rejection(amendment, block_height).or_else(|| {
-                external_lane_committee_amendment_rejection(
-                    governance,
-                    ledger.as_deref(),
-                    genesis_lanes,
-                    amendment,
-                )
-                .or_else(|| {
-                    external_lane_amendment_authority_rejection(
+            governance_amendment_rejection_with_genesis(amendment, block_height, genesis).or_else(
+                || {
+                    external_lane_committee_amendment_rejection(
                         governance,
                         ledger.as_deref(),
                         genesis_lanes,
                         amendment,
-                        block_height,
                     )
-                })
-            })
+                    .or_else(|| {
+                        external_lane_amendment_authority_rejection(
+                            governance,
+                            ledger.as_deref(),
+                            genesis_lanes,
+                            amendment,
+                            block_height,
+                        )
+                    })
+                },
+            )
         {
             receipts.push(Receipt::rejected(
                 amendment.amendment_id.clone(),
@@ -1346,7 +1328,7 @@ fn execute_governance_batch_with_replay(
                 );
             }
             if let Some((code, message)) =
-                governance_amendment_lifecycle_rejection(amendment, block_height)
+                governance_amendment_rejection_with_genesis(amendment, block_height, genesis)
             {
                 return Err(format!("{code}: {message}"));
             }
@@ -1434,7 +1416,7 @@ fn execute_governance_batch_with_replay(
                 );
             }
             if let Some((code, message)) =
-                governance_amendment_lifecycle_rejection(amendment, block_height)
+                governance_amendment_rejection_with_genesis(amendment, block_height, genesis)
             {
                 return Err(format!("{code}: {message}"));
             }
@@ -1516,7 +1498,7 @@ fn execute_governance_batch_with_replay(
     for bootstrap in &batch.fastswap_bootstraps {
         let amendment = &bootstrap.amendment;
         if let Some((code, message)) =
-            governance_amendment_lifecycle_rejection(amendment, block_height)
+            governance_amendment_rejection_with_genesis(amendment, block_height, genesis)
         {
             receipts.push(Receipt::rejected(
                 amendment.amendment_id.clone(),
@@ -1568,7 +1550,7 @@ fn execute_governance_batch_with_replay(
     for bootstrap in &batch.fastpay_recovery_bootstraps {
         let amendment = &bootstrap.amendment;
         if let Some((code, message)) =
-            governance_amendment_lifecycle_rejection(amendment, block_height)
+            governance_amendment_rejection_with_genesis(amendment, block_height, genesis)
         {
             receipts.push(Receipt::rejected(
                 amendment.amendment_id.clone(),
@@ -1659,7 +1641,7 @@ fn execute_governance_batch_with_replay(
                     return Err("vault bridge route authority is not active".to_string());
                 }
                 if let Some((code, message)) =
-                    governance_amendment_lifecycle_rejection(amendment, block_height)
+                    governance_amendment_rejection_with_genesis(amendment, block_height, genesis)
                 {
                     return Err(format!("{code}: {message}"));
                 }
@@ -1792,7 +1774,7 @@ fn execute_governance_batch_with_replay(
                 return Err("vault bridge route authority is not active".to_string());
             }
             if let Some((code, message)) =
-                governance_amendment_lifecycle_rejection(amendment, block_height)
+                governance_amendment_rejection_with_genesis(amendment, block_height, genesis)
             {
                 return Err(format!("{code}: {message}"));
             }
@@ -2067,6 +2049,47 @@ pub(super) fn external_lane_amendment_authority_rejection(
     )
 }
 
+/// The lifecycle checks, then the ones that read the genesis: every path that
+/// accepts an amendment (admission, batch building, execution, replay) runs it.
+pub(super) fn governance_amendment_rejection_with_genesis(
+    amendment: &GovernanceAmendment,
+    block_height: u64,
+    genesis: Option<&Genesis>,
+) -> Option<(&'static str, String)> {
+    governance_amendment_lifecycle_rejection(amendment, block_height)
+        .or_else(|| external_lane_export_root_consensus_v2_rejection(amendment, genesis))
+}
+
+/// The export root needs consensus v2 finality from its activation height on
+/// (`external_lane_export_root_for_block` errors otherwise), so a ratified
+/// activation where consensus v2 is not active would stop block production at
+/// that height: it is refused, as `init` refuses such a genesis. Without a
+/// genesis the consensus v2 activation is unknown and the amendment is refused.
+/// No existing chain carries this kind, so replay is unchanged. The
+/// bridge-exit root's activation rule stays as it is.
+pub(super) fn external_lane_export_root_consensus_v2_rejection(
+    amendment: &GovernanceAmendment,
+    genesis: Option<&Genesis>,
+) -> Option<(&'static str, String)> {
+    if amendment.kind != postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT
+    {
+        return None;
+    }
+    let height = u64::from(amendment.value);
+    if genesis.is_some_and(|genesis| consensus_v2_active_at(genesis, height)) {
+        return None;
+    }
+    Some((
+        EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_REQUIRES_CONSENSUS_V2,
+        format!(
+            "external-lane export-root activation height {height} is below the consensus v2 activation height"
+        ),
+    ))
+}
+
+pub(super) const EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_REQUIRES_CONSENSUS_V2: &str =
+    "external_lane_export_root_activation_requires_consensus_v2";
+
 pub(super) fn governance_amendment_lifecycle_rejection(
     amendment: &GovernanceAmendment,
     block_height: u64,
@@ -2247,9 +2270,11 @@ pub(super) fn governance_amendment_lifecycle_rejection(
 }
 
 pub(super) fn ensure_governance_batch_lifecycle_ready(
+    genesis: &Genesis,
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> io::Result<()> {
+    let genesis = Some(genesis);
     for amendment in batch
         .amendments
         .iter()
@@ -2273,7 +2298,7 @@ pub(super) fn ensure_governance_batch_lifecycle_ready(
         )
     {
         if let Some((code, message)) =
-            governance_amendment_lifecycle_rejection(amendment, block_height)
+            governance_amendment_rejection_with_genesis(amendment, block_height, genesis)
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,

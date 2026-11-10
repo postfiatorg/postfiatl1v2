@@ -308,6 +308,8 @@ What it does not do:
 
 `external_lane_export_v1` (`ExternalLaneExportOperationV1`) moves native PFT from a sender back into the lane, to be paid on Base as ERC-20 PFT. The design is `docs/specs/pft-erc20-base-bridge-phase3-export-design-20261105.md`, sections 3 and 4.
 
+An export also needs the block-header export root active at its height (`external_lane_export_root_not_active` otherwise). Switching the root on, for a new chain or a running network, is in [External Lane Export Root Activation](../runbooks/external-lane-export-root-activation.md).
+
 **The switch.** A lane applies exports only when its genesis policy sets `exports_enabled: true`. Otherwise every export is refused as before: an unknown lane with `external_lane_not_configured`, the lane's lock contract as the Base recipient with `external_lane_export_recipient_is_lock`, and every other export with `external_lane_export_not_supported`, at mempool admission, batch building and execution; in a certified block the ordinary rejected-transaction fee rule applies (`crates/execution/src/rejected_fee_claim.rs`).
 
 **The rules.** With the switch on, after the lane and lock-address checks (`apply_external_lane_export`, `crates/execution/src/external_lane_release.rs`):

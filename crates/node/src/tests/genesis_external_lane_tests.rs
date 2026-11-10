@@ -2534,7 +2534,7 @@ mod release_path {
         let receipts = execute_governance_batch(
             &mut governance.clone(),
             Some(&mut ledger.clone()),
-            Some(chain.genesis.external_lanes()),
+            Some(&chain.genesis),
             &GovernanceActionBatch::new("forged-move", vec![forged]),
             5,
         );
@@ -2543,7 +2543,7 @@ mod release_path {
         let receipts = execute_governance_batch(
             &mut governance,
             Some(&mut ledger),
-            Some(chain.genesis.external_lanes()),
+            Some(&chain.genesis),
             &GovernanceActionBatch::new("move", vec![valid.clone()]),
             5,
         );
@@ -2597,7 +2597,7 @@ mod release_path {
             let receipts = execute_governance_batch(
                 &mut governance.clone(),
                 Some(&mut ledger.clone()),
-                Some(chain.genesis.external_lanes()),
+                Some(&chain.genesis),
                 &GovernanceActionBatch::new("refused-move", vec![amendment.clone()]),
                 5,
             );
@@ -2606,7 +2606,7 @@ mod release_path {
         let receipts = execute_governance_batch(
             &mut governance,
             Some(&mut ledger),
-            Some(chain.genesis.external_lanes()),
+            Some(&chain.genesis),
             &GovernanceActionBatch::new("move", vec![valid]),
             5,
         );
@@ -3046,11 +3046,11 @@ mod release_path {
         let root1 = chain.committee.domain.committee_root.0;
         assert_eq!(chain.genesis.external_lanes()[0].policy.committee_epoch, 1);
         let batch = GovernanceActionBatch::new("genesis-move", vec![committee_move(&chain, "base-erc20", 1, &root1, 1)]);
-        let live = execute_governance_batch(&mut governance.clone(), Some(&mut ledger.clone()), Some(chain.genesis.external_lanes()), &batch, 5);
+        let live = execute_governance_batch(&mut governance.clone(), Some(&mut ledger.clone()), Some(&chain.genesis), &batch, 5);
         let archived = crate::execution_actions::execute_archived_governance_batch(
             &mut governance.clone(),
             Some(&mut ledger.clone()),
-            Some(chain.genesis.external_lanes()),
+            Some(&chain.genesis),
             &batch,
             5,
         );
@@ -3093,11 +3093,11 @@ mod release_path {
                 "{kind}"
             );
             let batch = GovernanceActionBatch::new("malformed-move", vec![amendment]);
-            let live = execute_governance_batch(&mut governance.clone(), Some(&mut ledger.clone()), Some(chain.genesis.external_lanes()), &batch, 5);
+            let live = execute_governance_batch(&mut governance.clone(), Some(&mut ledger.clone()), Some(&chain.genesis), &batch, 5);
             let archived = crate::execution_actions::execute_archived_governance_batch(
                 &mut governance.clone(),
                 Some(&mut ledger.clone()),
-                Some(chain.genesis.external_lanes()),
+                Some(&chain.genesis),
                 &batch,
                 5,
             );

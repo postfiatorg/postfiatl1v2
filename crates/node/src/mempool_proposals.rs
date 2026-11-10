@@ -3316,11 +3316,11 @@ fn build_governance_batch_proposal(
     verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, block_height)?;
 
     verify_storage_commitment_action_readiness(store, &genesis, &batch, &chain_tip)?;
-    ensure_governance_batch_lifecycle_ready(&batch, block_height)?;
+    ensure_governance_batch_lifecycle_ready(&genesis, &batch, block_height)?;
     let receipts = execute_governance_batch(
         &mut governance,
         Some(&mut ledger),
-        Some(genesis.external_lanes()),
+        Some(&genesis),
         &batch,
         block_height,
     );
