@@ -11,7 +11,10 @@ PLACEHOLDER proof: only a verifier constructed with a mock SP1 verifier accepts
 it. `release` refuses to send it to any chain but a loopback Anvil unless
 `--i-know-this-is-a-mock-verifier` names the lock's verifier. A private key is
 accepted for a loopback Anvil only; elsewhere use `--account` and
-`--password-file` (a Foundry keystore). Keys are never written or printed.
+`--password-file` (a Foundry keystore). Keys are never written or printed:
+the pinned cast (Foundry 1.8.1) reads no raw private key from its environment,
+so on a loopback Anvil the key is a child argument, and every child failure,
+timeout included, is reported with the key replaced by `<redacted>`.
 
 Cost: one proof carries at most 64 finality ancestry blocks
 (`PFUSDC_EGRESS_MAX_ANCESTRY_BLOCKS_V1`), so the verifier's checkpoint must
@@ -247,8 +250,23 @@ def load_values(input_dir):
     return document['expected_public_values'], document['expected_public_values_hex']
 
 
-def run(argv, **kwargs):
-    return subprocess.run([str(a) for a in argv], capture_output=True, text=True, timeout=1800, **kwargs)
+def redact(text, secret):
+    return text.replace(secret, '<redacted>') if secret else text
+
+
+def run(argv, *, secret=None, timeout=1800, **kwargs):
+    """A child process. A timeout or an OS error becomes a refusal whose text,
+    like the child's output, has `secret` replaced: the exceptions' own text
+    carries the whole command line."""
+    try:
+        p = subprocess.run([str(a) for a in argv], capture_output=True, text=True, timeout=timeout, **kwargs)
+    except subprocess.TimeoutExpired as error:
+        raise RelayRefusal(redact(f'{error}', secret)) from None
+    except OSError as error:
+        raise RelayRefusal(redact(f'{argv[0]}: {error}', secret)) from None
+    if secret:
+        p.stdout, p.stderr = redact(p.stdout or '', secret), redact(p.stderr or '', secret)
+    return p
 
 
 # --- subcommands -------------------------------------------------------------
@@ -302,7 +320,11 @@ def cmd_prove(args):
         proof_path = out / 'proof.bin'
         env = dict(os.environ, PFT_LANE_EXPORT_INPUT=str(input_dir / 'input.cbor'),
                    PFT_LANE_EXPORT_PROOF_OUT=str(proof_path))
-        p = subprocess.run(args.prover_command, shell=True, env=env, capture_output=True, text=True, timeout=36000)
+        try:
+            p = subprocess.run(args.prover_command, shell=True, env=env, capture_output=True, text=True,
+                               timeout=36000)
+        except (subprocess.TimeoutExpired, OSError) as error:
+            raise RelayRefusal(f'prover command failed: {error}') from None
         require(p.returncode == 0, f'prover command failed: {p.stderr.strip()[-2000:]}')
         committed = Path(str(proof_path) + '.public-values').read_bytes().hex()
         require(committed == expected_hex, 'the prover committed other bytes than the expected public values')
@@ -332,8 +354,8 @@ def cmd_release(args):
     balance_before = as_int(rpc.call(reads['lock.token'], 'balanceOf(address)', recipient))
     signer, secret = signer_args(args, local)
     p = run(['cast', 'send', args.lock, 'release(bytes,bytes)', '0x' + expected_hex, proof['proof_hex'],
-             '--rpc-url', args.rpc, '--json', *signer])
-    stderr = p.stderr.replace(secret, '<redacted>') if secret else p.stderr
+             '--rpc-url', args.rpc, '--json', *signer], secret=secret)
+    stderr = p.stderr
     result['sent'] = True
     if p.returncode != 0:
         result['reverted'] = stderr.strip()[-1500:]
@@ -378,9 +400,8 @@ def cmd_advance_checkpoint(args):
             'the verifier has not accepted the prior checkpoint')
     signer, secret = signer_args(args, local)
     p = run(['cast', 'send', verifier, 'advanceCheckpoint(bytes,bytes)', public_values, '0x' + PLACEHOLDER_PROOF.hex(),
-             '--rpc-url', args.rpc, '--json', *signer])
-    require(p.returncode == 0, 'advanceCheckpoint reverted: '
-            + (p.stderr.replace(secret, '<redacted>') if secret else p.stderr).strip()[-1500:])
+             '--rpc-url', args.rpc, '--json', *signer], secret=secret)
+    require(p.returncode == 0, 'advanceCheckpoint reverted: ' + p.stderr.strip()[-1500:])
     latest = rpc.call(verifier, 'latestCheckpointCommitment()')
     require(latest == commitment(args.target_block), 'the verifier did not move to the target checkpoint')
     result = {'transaction': json.loads(p.stdout)['transactionHash'], 'latest_checkpoint_commitment': latest}

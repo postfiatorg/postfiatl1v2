@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import importlib.util
 from pathlib import Path
 import unittest
@@ -172,6 +173,33 @@ class SafetyTests(unittest.TestCase):
         self.assertEqual(released["packet_digest"], word("88" * 32))
         with self.assertRaises(relay.RelayRefusal):
             relay.decode_released({"logs": []}, LOCK)
+
+
+class RedactionTests(unittest.TestCase):
+    KEY = "0x" + "ab" * 32
+
+    def failing(self, error):
+        original = relay.subprocess.run
+
+        def fake(*args, **kwargs):
+            raise error
+
+        relay.subprocess.run = fake
+        try:
+            with self.assertRaises(relay.RelayRefusal) as caught:
+                relay.run(["cast", "send", "--private-key", self.KEY], secret=self.KEY)
+        finally:
+            relay.subprocess.run = original
+        return str(caught.exception)
+
+    def test_timeout_does_not_print_the_key(self):
+        message = self.failing(subprocess.TimeoutExpired(["cast", "send", "--private-key", self.KEY], 1))
+        self.assertNotIn(self.KEY, message)
+        self.assertIn("<redacted>", message)
+
+    def test_os_error_does_not_print_the_key(self):
+        message = self.failing(OSError(2, "No such file", f"cast --private-key {self.KEY}"))
+        self.assertNotIn(self.KEY, message)
 
 
 if __name__ == "__main__":
