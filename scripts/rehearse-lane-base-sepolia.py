@@ -413,6 +413,11 @@ def main(argv=None):
                 data['lock'] = {'transaction': receipt['transactionHash'], 'block': int(receipt['blockNumber'], 16),
                                 'amount': LOCK_AMOUNT}
             elif stage == 'release-on-pftl':
+                if not args.fork:
+                    # The first wait: Base finality of the Lock's block (about an hour on 2026-11-06).
+                    while int(rpc(BASE_SEPOLIA_RPC, 'eth_getBlockByNumber', ['finalized', False])['number'], 16) \
+                            < data['lock']['block']:
+                        time.sleep(60)
                 handshake('base-locked.json', {'transaction': data['lock']['transaction'], 'block': data['lock']['block']})
                 released = wait_for('pftl-released.json', seconds=4 * 3600)
                 require(released['recipient_balance_after_release'] == LOCK_AMOUNT, 'the release did not credit the Lock')
