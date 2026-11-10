@@ -1641,10 +1641,10 @@ fn wallet_note_to_swap_witness(
 fn asset_orchard_spend_signing_key(
     note: &AssetOrchardWalletNote,
 ) -> Result<SigningKey<SpendAuth>, AssetOrchardError> {
-    let bytes = Zeroizing::new(fixed_hex_array::<32>(
+    let bytes = fixed_hex_array::<32>(
         "asset_orchard_spend_auth_signing_key",
         note.spend_auth_signing_key.as_str(),
-    )?);
+    )?;
     SigningKey::<SpendAuth>::try_from(*bytes).map_err(|_| {
         AssetOrchardError::new(
             "invalid_asset_orchard_spend_auth_signing_key",

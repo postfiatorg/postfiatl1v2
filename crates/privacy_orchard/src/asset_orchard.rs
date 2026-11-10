@@ -376,7 +376,7 @@ impl AssetOrchardPoint {
         orchard::primitives::redpallas::VerificationKey<orchard::primitives::redpallas::SpendAuth>,
         AssetOrchardError,
     > {
-        orchard::primitives::redpallas::VerificationKey::try_from(fixed_lower_hex_array::<
+        orchard::primitives::redpallas::VerificationKey::try_from(*fixed_lower_hex_array::<
             ASSET_ORCHARD_POINT_BYTES,
         >(
             "asset_orchard_randomized_verification_key",
@@ -529,7 +529,7 @@ impl AssetOrchardPublicNoteOpening {
             &self.diversifier,
         )?;
         let note = AssetNoteOpening {
-            diversifier,
+            diversifier: *diversifier,
             g_d: self.g_d.to_affine()?.into(),
             pk_d: self.pk_d.to_affine()?.into(),
             asset_tag: AssetTag {
@@ -608,19 +608,19 @@ fn build_asset_orchard_wallet_note_inner(
         AssetOrchardSwapAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
     let mut diversifier = [0u8; ASSET_ORCHARD_DIVERSIFIER_BYTES];
     diversifier.copy_from_slice(
-        &derive_bytes("postfiat.asset_orchard.wallet_note.diversifier.v1", &seed)?
+        &derive_bytes("postfiat.asset_orchard.wallet_note.diversifier.v1", &*seed)?
             [..ASSET_ORCHARD_DIVERSIFIER_BYTES],
     );
-    let rseed = derive_bytes("postfiat.asset_orchard.wallet_note.rseed.v1", &seed)?;
+    let rseed = derive_bytes("postfiat.asset_orchard.wallet_note.rseed.v1", &*seed)?;
     let rho = rho_override.unwrap_or(hash_to_pallas_base(
         "postfiat.asset_orchard.wallet_note.rho.v1",
-        &seed,
+        &*seed,
     )?);
-    let nk = hash_to_pallas_base("postfiat.asset_orchard.wallet_note.nk.v1", &seed)?;
-    let rivk = hash_to_pallas_scalar_nonzero("postfiat.asset_orchard.wallet_note.rivk.v1", &seed)?;
+    let nk = hash_to_pallas_base("postfiat.asset_orchard.wallet_note.nk.v1", &*seed)?;
+    let rivk = hash_to_pallas_scalar_nonzero("postfiat.asset_orchard.wallet_note.rivk.v1", &*seed)?;
     let spend_scalar = hash_to_pallas_scalar_nonzero(
         "postfiat.asset_orchard.wallet_note.spend_auth_sk.v1",
-        &seed,
+        &*seed,
     )?;
     let spend_key = SigningKey::<SpendAuth>::try_from(scalar_enc(spend_scalar)).map_err(|_| {
         AssetOrchardError::new(
@@ -629,7 +629,7 @@ fn build_asset_orchard_wallet_note_inner(
         )
     })?;
     let ak = verification_key_affine(&VerificationKey::from(&spend_key))?;
-    let g_d = pallas::Point::hash_to_curve("postfiat.asset_orchard.wallet_note.g_d.v1")(&seed)
+    let g_d = pallas::Point::hash_to_curve("postfiat.asset_orchard.wallet_note.g_d.v1")(&*seed)
         .to_affine();
     let ivk = orchard_commit_ivk(ak, nk, rivk)?;
     let ivk_scalar = Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk.to_repr()))
@@ -671,11 +671,11 @@ pub(crate) fn asset_orchard_incoming_viewing_key_from_seed(
     seed_hex: &str,
 ) -> Result<pallas::Scalar, AssetOrchardError> {
     let seed = fixed_lower_hex_array::<32>("asset_orchard_wallet_note_seed", seed_hex)?;
-    let nk = hash_to_pallas_base("postfiat.asset_orchard.wallet_note.nk.v1", &seed)?;
-    let rivk = hash_to_pallas_scalar_nonzero("postfiat.asset_orchard.wallet_note.rivk.v1", &seed)?;
+    let nk = hash_to_pallas_base("postfiat.asset_orchard.wallet_note.nk.v1", &*seed)?;
+    let rivk = hash_to_pallas_scalar_nonzero("postfiat.asset_orchard.wallet_note.rivk.v1", &*seed)?;
     let spend_scalar = hash_to_pallas_scalar_nonzero(
         "postfiat.asset_orchard.wallet_note.spend_auth_sk.v1",
-        &seed,
+        &*seed,
     )?;
     let spend_key = SigningKey::<SpendAuth>::try_from(scalar_enc(spend_scalar)).map_err(|_| {
         AssetOrchardError::new(
@@ -738,7 +738,7 @@ impl AssetOrchardSwapBindingHash {
     pub fn to_bytes(
         &self,
     ) -> Result<[u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES], AssetOrchardError> {
-        fixed_lower_hex_array("asset_orchard_swap_binding_hash", &self.0)
+        fixed_lower_hex_array("asset_orchard_swap_binding_hash", &self.0).map(|bytes| *bytes)
     }
 
     pub fn as_hex(&self) -> &str {
@@ -908,7 +908,7 @@ impl AssetOrchardSpendAuthSignature {
         AssetOrchardError,
     > {
         Ok(orchard::primitives::redpallas::Signature::from(
-            fixed_lower_hex_array::<ASSET_ORCHARD_SPEND_AUTH_SIGNATURE_BYTES>(
+            *fixed_lower_hex_array::<ASSET_ORCHARD_SPEND_AUTH_SIGNATURE_BYTES>(
                 "asset_orchard_spend_authorization_signature",
                 &self.0,
             )?,
@@ -2961,14 +2961,14 @@ pub fn asset_orchard_private_primary_issue_binding_hash(
         )?,
         bytes_to_field(
             "private_primary_issue.reservation_id",
-            &fixed_lower_hex_array::<48>(
+            &*fixed_lower_hex_array::<48>(
                 "private_primary_issue.reservation_id",
                 preimage.reservation_id,
             )?,
         )?,
         bytes_to_field(
             "private_primary_issue.subscription_nonce",
-            &fixed_lower_hex_array::<32>(
+            &*fixed_lower_hex_array::<32>(
                 "private_primary_issue.subscription_nonce",
                 preimage.subscription_nonce,
             )?,
@@ -2977,7 +2977,7 @@ pub fn asset_orchard_private_primary_issue_binding_hash(
         pallas::Base::from(preimage.policy_epoch),
         bytes_to_field(
             "private_primary_issue.policy_hash",
-            &fixed_lower_hex_array::<48>(
+            &*fixed_lower_hex_array::<48>(
                 "private_primary_issue.policy_hash",
                 preimage.policy_hash,
             )?,
@@ -2985,7 +2985,7 @@ pub fn asset_orchard_private_primary_issue_binding_hash(
         pallas::Base::from(preimage.pricing_nav_epoch),
         bytes_to_field(
             "private_primary_issue.pricing_reserve_packet_hash",
-            &fixed_lower_hex_array::<48>(
+            &*fixed_lower_hex_array::<48>(
                 "private_primary_issue.pricing_reserve_packet_hash",
                 preimage.pricing_reserve_packet_hash,
             )?,
@@ -3621,7 +3621,7 @@ fn asset_orchard_spend_signing_key_from_hex(
 ) -> Result<SigningKey<SpendAuth>, AssetOrchardError> {
     let bytes =
         fixed_lower_hex_array::<32>("asset_orchard_spend_auth_signing_key", signing_key_hex)?;
-    SigningKey::<SpendAuth>::try_from(bytes).map_err(|_| {
+    SigningKey::<SpendAuth>::try_from(*bytes).map_err(|_| {
         AssetOrchardError::new(
             "invalid_asset_orchard_spend_auth_signing_key",
             "asset-orchard wallet note spend authorization key is invalid",
@@ -4176,10 +4176,7 @@ fn append_len_bytes_vec(payload: &mut Vec<u8>, bytes: &[u8]) -> Result<(), Asset
 }
 
 fn parse_pallas_base(value: &str) -> Result<pallas::Base, AssetOrchardError> {
-    let bytes = Zeroizing::new(fixed_lower_hex_array::<ASSET_ORCHARD_FIELD_BYTES>(
-        "asset_orchard_field",
-        value,
-    )?);
+    let bytes = fixed_lower_hex_array::<ASSET_ORCHARD_FIELD_BYTES>("asset_orchard_field", value)?;
     Option::<pallas::Base>::from(pallas::Base::from_repr(*bytes)).ok_or_else(|| {
         AssetOrchardError::new(
             "noncanonical_pallas_field",
@@ -4189,10 +4186,7 @@ fn parse_pallas_base(value: &str) -> Result<pallas::Base, AssetOrchardError> {
 }
 
 fn parse_pallas_scalar(value: &str) -> Result<pallas::Scalar, AssetOrchardError> {
-    let bytes = Zeroizing::new(fixed_lower_hex_array::<ASSET_ORCHARD_FIELD_BYTES>(
-        "asset_orchard_scalar",
-        value,
-    )?);
+    let bytes = fixed_lower_hex_array::<ASSET_ORCHARD_FIELD_BYTES>("asset_orchard_scalar", value)?;
     let scalar =
         Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(*bytes)).ok_or_else(|| {
             AssetOrchardError::new(
@@ -4289,10 +4283,12 @@ fn parse_lower_hex(
     Ok(())
 }
 
+/// Decodes fixed-size lowercase hex into an owner that wipes on drop: the value may be a key or note
+/// secret (issue #181). Callers that need a plain array copy it out at the point of use.
 fn fixed_lower_hex_array<const N: usize>(
     label: &'static str,
     value: &str,
-) -> Result<[u8; N], AssetOrchardError> {
+) -> Result<Zeroizing<[u8; N]>, AssetOrchardError> {
     parse_lower_hex(label, value, N, N)?;
     // The decoded buffer may hold a key or note secret; wipe it on every exit (issue #181).
     let bytes = Zeroizing::new(hex_to_bytes(value).map_err(|error| {
@@ -4304,7 +4300,7 @@ fn fixed_lower_hex_array<const N: usize>(
             format!("{label} decoded to {} bytes, expected {N}", bytes.len()),
         ));
     }
-    let mut array = [0u8; N];
+    let mut array = Zeroizing::new([0u8; N]);
     array.copy_from_slice(&bytes);
     Ok(array)
 }
@@ -5445,7 +5441,7 @@ mod tests {
             assert_eq!(error.to_string(), format!("{code}: {message}"));
         }
         assert_eq!(
-            fixed_lower_hex_array::<2>("secret", "0aff").expect("valid"),
+            *fixed_lower_hex_array::<2>("secret", "0aff").expect("valid"),
             [0x0a, 0xff]
         );
     }
