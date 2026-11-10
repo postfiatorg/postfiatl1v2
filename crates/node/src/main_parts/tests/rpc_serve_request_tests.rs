@@ -1067,6 +1067,143 @@ mod rpc_serve_request_tests {
     }
 
     #[test]
+    fn fastpay_recovery_committee_rpc_serve_reads_and_cli_admission_export() {
+        let root = env::temp_dir().join(format!(
+            "postfiat-fastpay-committee-rpc-{}-{}",
+            process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).expect("clock").as_nanos()
+        ));
+        postfiat_node::init(postfiat_node::InitOptions {
+            data_dir: root.clone(),
+            chain_id: "fastpay-committee-rpc-test".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 4,
+        })
+        .expect("initialize committee RPC fixture");
+        let store = postfiat_storage::NodeStore::new(&root);
+        let genesis = store.read_genesis().expect("read genesis");
+        store
+            .write_chain_tip(&postfiat_types::ChainTipState {
+                schema: "postfiat-chain-tip-v1".to_string(),
+                chain_id: genesis.chain_id.clone(),
+                genesis_hash: postfiat_execution::genesis_hash(&genesis),
+                protocol_version: genesis.protocol_version,
+                height: 25,
+                block_hash: "aa".repeat(48),
+                state_root: "bb".repeat(48),
+                ordered_batch_count: 0,
+                receipt_count: 0,
+                history_base_height: 0,
+            })
+            .expect("write tip");
+        let registry: postfiat_node::ValidatorRegistry = serde_json::from_slice(
+            &fs::read(root.join("validator_registry.json")).expect("read registry"),
+        )
+        .expect("decode registry");
+        let keys = registry
+            .validators
+            .iter()
+            .map(|record| (record.node_id.clone(), record.public_key_hex.clone()))
+            .collect::<Vec<_>>();
+        let mut ledger = store.read_ledger().expect("read ledger");
+        ledger.fastpay_recovery_policy = Some(postfiat_types::FastPayRecoveryPolicyV1 {
+            schema: postfiat_types::FASTPAY_RECOVERY_POLICY_SCHEMA_V1.to_string(),
+            activation_height: 1,
+            max_validity_blocks: 20,
+            max_recovery_blocks: 20,
+        });
+        for (epoch, from, through) in [(1, 1, 20), (2, 21, 200)] {
+            ledger.fastpay_recovery_committees.push(
+                postfiat_types::FastPayRecoveryCommitteeV1::from_public_keys(
+                    genesis.chain_id.clone(),
+                    postfiat_execution::genesis_hash(&genesis),
+                    genesis.protocol_version,
+                    epoch,
+                    from,
+                    through,
+                    keys.clone(),
+                )
+                .expect("build committee"),
+            );
+        }
+        store.write_ledger(&ledger).expect("write committees");
+
+        let port = TcpListener::bind(("127.0.0.1", 0))
+            .expect("reserve loopback port")
+            .local_addr()
+            .expect("read loopback port")
+            .port();
+        let options = RpcServeOptions {
+            max_requests: 5,
+            ..node_serving_read_only_options(&root, port, false)
+        };
+        let ready_file = options.ready_file.clone();
+        let server = std::thread::spawn(move || rpc_serve(options).expect("serve committee RPC"));
+        for _ in 0..200 {
+            if ready_file.is_file() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(ready_file.is_file(), "committee RPC did not become ready");
+
+        let read = |id: &str, epoch: Option<serde_json::Value>| {
+            let mut request = RpcRequest::empty(id, "fastpay_recovery_committee");
+            if let Some(epoch) = epoch {
+                request = request.with_param("epoch", &epoch).expect("epoch param");
+            }
+            let response = send_loopback_rpc(port, &request);
+            response.validate_protocol().expect("protocol-valid response");
+            response
+        };
+        let active = read("active", None)
+            .result_as::<postfiat_node::FastPayRecoveryCommitteeReport>()
+            .expect("decode active committee");
+        assert!(active.active);
+        assert_eq!(active.height, 25);
+        assert_eq!(active.committee, ledger.fastpay_recovery_committees[1]);
+        assert_eq!(Some(active.policy.clone()), ledger.fastpay_recovery_policy);
+        let first = read("epoch-1", Some(serde_json::json!(1)))
+            .result_as::<postfiat_node::FastPayRecoveryCommitteeReport>()
+            .expect("decode epoch 1");
+        assert!(!first.active);
+        assert_eq!(first.committee, ledger.fastpay_recovery_committees[0]);
+        let second = read("epoch-2", Some(serde_json::json!(2)))
+            .result_as::<postfiat_node::FastPayRecoveryCommitteeReport>()
+            .expect("decode epoch 2");
+        assert_eq!(second, active);
+        let unknown = read("epoch-9", Some(serde_json::json!(9)));
+        assert!(!unknown.ok);
+        assert_eq!(
+            unknown.error.expect("unknown epoch error").code,
+            postfiat_node::FASTPAY_RECOVERY_COMMITTEE_UNKNOWN_EPOCH
+        );
+        let malformed = read("epoch-text", Some(serde_json::json!("two")));
+        assert_eq!(malformed.error.expect("malformed epoch").code, "invalid_params");
+        server.join().expect("committee RPC server");
+
+        assert_eq!(
+            run_cli(vec!["fastpay-admission-export".to_string()]).unwrap_err(),
+            "missing --out"
+        );
+        let out = root.join("fastpay-admission.json");
+        run_cli(vec![
+            "fastpay-admission-export".to_string(),
+            "--data-dir".to_string(),
+            root.display().to_string(),
+            "--out".to_string(),
+            out.display().to_string(),
+        ])
+        .expect("export the admission file");
+        let admission: postfiat_node::FastPayAdmissionFile =
+            serde_json::from_slice(&fs::read(&out).expect("read admission file"))
+                .expect("parse admission file");
+        assert_eq!(admission.committee, active.committee);
+        assert_eq!(admission.policy, active.policy);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn tx_not_found_is_a_typed_protocol_error_and_other_tx_errors_remain_generic() {
         let tx_id = "ab".repeat(48);
         let root = env::temp_dir().join(format!(

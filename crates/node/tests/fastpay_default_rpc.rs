@@ -47,9 +47,20 @@ fn wait_for_file(path: &Path) {
 }
 
 fn spawn_rpc(data_dir: &Path, ready_file: &Path, port: u16, disabled: bool) -> Child {
+    spawn_rpc_serving(data_dir, ready_file, port, disabled, 1)
+}
+
+fn spawn_rpc_serving(
+    data_dir: &Path,
+    ready_file: &Path,
+    port: u16,
+    disabled: bool,
+    max_requests: usize,
+) -> Child {
     let mut command = Command::new(node_bin());
     let spool_dir = data_dir.join("rpc-spool");
     let port = port.to_string();
+    let max_requests = max_requests.to_string();
     command.args([
         "rpc-serve",
         "--unsafe-devnet-json-storage",
@@ -64,7 +75,7 @@ fn spawn_rpc(data_dir: &Path, ready_file: &Path, port: u16, disabled: bool) -> C
         "--port",
         &port,
         "--max-requests",
-        "1",
+        &max_requests,
         "--timeout-ms",
         "10000",
         "--child-timeout-ms",
@@ -249,6 +260,70 @@ fn verify_bridge_answers_over_rpc_serve_without_bridge_transfers() {
     let result = response.result.as_ref().expect("verify_bridge result");
     assert_eq!(result["transfer_count"], 0);
     assert_eq!(result["latest_transfer_id"], "");
+
+    fs::remove_dir_all(root).expect("remove RPC test directory");
+}
+
+/// The defect class of issue #160 across every public read that takes no
+/// parameter: on a fresh node none may build an event from an empty value,
+/// which `rpc-serve`'s protocol check would turn into `rpc_server_error`.
+#[test]
+fn parameterless_public_reads_answer_over_rpc_serve_on_a_fresh_node() {
+    const METHODS: &[&str] = &[
+        "status",
+        "server_info",
+        "metrics",
+        "ledger",
+        "account_tx_index_status",
+        "fee",
+        "external_lane_info",
+        "fx_fix_list",
+        "private_readiness",
+        "navcoin_bridge_routes",
+        "receipts",
+        "blocks",
+        "validators",
+        "manifests",
+        "batch_archive",
+        "verify_blocks",
+        "verify_state",
+        "verify_bridge",
+        "verify_mempool",
+        "verify_shielded",
+        "orchard_pool_report",
+        "mempool_status",
+        "shield_turnstile",
+        "bridge_status",
+    ];
+    let root = unique_root();
+    let data_dir = root.join("node");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-fresh-reads-rpc-test".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 1,
+    })
+    .expect("initialize RPC test node");
+
+    let port = free_port();
+    let ready = root.join("fresh-reads.ready.json");
+    let mut child = spawn_rpc_serving(&data_dir, &ready, port, false, METHODS.len());
+    wait_for_file(&ready);
+    let mut failures = Vec::new();
+    for method in METHODS {
+        let response = rpc_call(port, &RpcRequest::empty(format!("fresh-{method}"), *method));
+        if !response.ok {
+            failures.push(format!("{method}: {:?}", response.error));
+        } else if let Err(error) = response.validate_protocol() {
+            failures.push(format!("{method}: {error}"));
+        }
+    }
+    let status = child.wait().expect("wait for RPC server");
+    assert!(status.success(), "RPC server failed with {status}");
+    assert!(
+        failures.is_empty(),
+        "fresh-node reads failed: {failures:#?}"
+    );
 
     fs::remove_dir_all(root).expect("remove RPC test directory");
 }

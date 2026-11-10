@@ -1,7 +1,7 @@
 # RPC Method Inventory
 
 Status: code-derived inventory
-Date: 2026-11-04
+Date: 2026-11-10
 Report: `docs/runbooks/rpc-method-inventory.json`
 
 This inventory is generated from Rust SDK method constants, node RPC dispatch,
@@ -14,8 +14,8 @@ method lacks an explicit posture.
 
 ## Summary
 
-- Total methods observed: 166
-- Read-only public methods: 85
+- Total methods observed: 167
+- Read-only public methods: 86
 - Public cryptographically authorized protocol mutations: 12
 - Controlled write gated methods: 15
 - Privacy-alpha gated methods: 4
@@ -90,6 +90,7 @@ method lacks an explicit posture.
 | fastlane_asset_control_prepare | authorized_protocol_mutation_public | yes | no | no | yes | no |  |
 | fastlane_asset_control_preview | read_only_public | yes | no | no | yes | no |  |
 | fastlane_exit | authorized_protocol_mutation_public | yes | no | no | yes | no |  |
+| fastpay_recovery_committee | read_only_public | yes | no | yes | no | yes | committed FastPay recovery committee (validator ids, public keys, registry root, order range) and policy, active or by epoch |
 | fastswap_apply | authorized_protocol_mutation_public | yes | no | no | yes | no |  |
 | fastswap_cancel_apply | authorized_protocol_mutation_public | yes | no | no | yes | no |  |
 | fastswap_capabilities | read_only_public | yes | no | no | yes | no |  |

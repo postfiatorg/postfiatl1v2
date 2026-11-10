@@ -52,6 +52,7 @@ use std::{
     path::{Path, PathBuf},
     sync::OnceLock,
 };
+use zeroize::Zeroizing;
 
 use crate::timing::{
     asset_orchard_timing_elapsed_ms, record_asset_orchard_private_egress_action_build_timing,
@@ -78,8 +79,8 @@ use crate::asset_orchard::{
     AssetOrchardPrivateEgressAction, AssetOrchardPrivateEgressExitBindingPreimage,
     AssetOrchardPrivateEgressPublicFields, AssetOrchardPrivatePrimaryIssueAction,
     AssetOrchardPrivatePrimaryIssueBindingPreimage, AssetOrchardProofBytes,
-    AssetOrchardSpendAuthSignature, AssetOrchardSwapAction, AssetOrchardSwapBindingHash,
-    AssetOrchardWalletNote, AssetTag, RandomizedVerificationKeyFields,
+    AssetOrchardSecretValue, AssetOrchardSpendAuthSignature, AssetOrchardSwapAction,
+    AssetOrchardSwapBindingHash, AssetOrchardWalletNote, AssetTag, RandomizedVerificationKeyFields,
     ASSET_ORCHARD_ACTION_SCHEMA_V1, ASSET_ORCHARD_ACTION_VERSION_V1, ASSET_ORCHARD_CIRCUIT_ID_V1,
     ASSET_ORCHARD_H_ACTION_POSEIDON_INPUT_COUNT, ASSET_ORCHARD_LEG_COUNT,
     ASSET_ORCHARD_NOTE_MESSAGE_PIECE_BITS, ASSET_ORCHARD_NOTE_MESSAGE_PIECE_COUNT,
@@ -418,10 +419,12 @@ impl AssetOrchardSwapPrivateLeg {
     }
 }
 
+/// Private witness for one swap leg. The opening, `nk` and spend authority wipe themselves on
+/// drop (every clone too) and print redacted; `cmx` and the Merkle path are public tree data.
 #[derive(Clone, Debug)]
 pub struct AssetOrchardSwapNoteWitness {
     pub note: AssetNoteOpening,
-    pub nk: pallas::Base,
+    pub nk: AssetOrchardSecretValue<pallas::Base>,
     pub cmx: pallas::Base,
     pub merkle_witness: Option<AssetOrchardMerkleWitness>,
     pub spend_authority: Option<AssetOrchardSpendAuthorityWitness>,
@@ -433,11 +436,12 @@ pub struct AssetOrchardMerkleWitness {
     pub auth_path: [pallas::Base; ASSET_ORCHARD_MERKLE_DEPTH],
 }
 
+/// Spend-authority witness: every field is a self-wiping, redacted owner (issue #181).
 #[derive(Clone, Debug)]
 pub struct AssetOrchardSpendAuthorityWitness {
-    pub ak: pallas::Affine,
-    pub alpha: pallas::Scalar,
-    pub rivk: pallas::Scalar,
+    pub ak: AssetOrchardSecretValue<pallas::Affine>,
+    pub alpha: AssetOrchardSecretValue<pallas::Scalar>,
+    pub rivk: AssetOrchardSecretValue<pallas::Scalar>,
 }
 
 impl AssetOrchardSwapNoteWitness {
@@ -445,13 +449,17 @@ impl AssetOrchardSwapNoteWitness {
         pool_domain: pallas::Base,
         note: AssetNoteOpening,
     ) -> Result<Self, AssetOrchardError> {
-        Self::from_note_with_nk(pool_domain, note, pallas::Base::ONE)
+        Self::from_note_with_nk(
+            pool_domain,
+            note,
+            AssetOrchardSecretValue::new(pallas::Base::ONE),
+        )
     }
 
     pub fn from_note_with_nk(
         pool_domain: pallas::Base,
         note: AssetNoteOpening,
-        nk: pallas::Base,
+        nk: AssetOrchardSecretValue<pallas::Base>,
     ) -> Result<Self, AssetOrchardError> {
         let cmx = note.cmx(pool_domain)?;
         Ok(Self {
@@ -503,24 +511,24 @@ impl AssetOrchardSwapNoteWitness {
         Self {
             note: AssetNoteOpening {
                 diversifier: [0u8; crate::asset_orchard::ASSET_ORCHARD_DIVERSIFIER_BYTES],
-                g_d,
-                pk_d,
+                g_d: g_d.into(),
+                pk_d: pk_d.into(),
                 asset_tag: AssetTag { lo: 1, hi: 0 },
                 value: 1,
-                rho: pallas::Base::ONE,
-                psi: pallas::Base::ONE,
-                rcm: pallas::Scalar::ONE,
+                rho: pallas::Base::ONE.into(),
+                psi: pallas::Base::ONE.into(),
+                rcm: pallas::Scalar::ONE.into(),
             },
-            nk: pallas::Base::ONE,
+            nk: pallas::Base::ONE.into(),
             cmx: pallas::Base::ONE,
             merkle_witness: Some(AssetOrchardMerkleWitness {
                 position: 0,
                 auth_path: [pallas::Base::ZERO; ASSET_ORCHARD_MERKLE_DEPTH],
             }),
             spend_authority: Some(AssetOrchardSpendAuthorityWitness {
-                ak: g_d,
-                alpha: pallas::Scalar::ONE,
-                rivk: pallas::Scalar::ONE,
+                ak: g_d.into(),
+                alpha: pallas::Scalar::ONE.into(),
+                rivk: pallas::Scalar::ONE.into(),
             }),
         }
     }
@@ -1635,7 +1643,7 @@ fn synthesize_note_commitment(
         sinsemilla_chip.clone(),
         ecc_chip.clone(),
         &piece_subpieces,
-        Value::known(note.note.rcm),
+        Value::known(*note.note.rcm),
     )?;
     if let Some(row) = public_output_row {
         layouter.constrain_instance(cmx.inner().cell(), config.instance, row)?;
@@ -1804,12 +1812,12 @@ fn synthesize_input_spend_authority(
     let ak = NonIdentityPoint::new(
         ecc_chip.clone(),
         layouter.namespace(|| format!("{label} ak")),
-        Value::known(authority.ak),
+        Value::known(*authority.ak),
     )?;
     let alpha = ScalarFixed::new(
         ecc_chip.clone(),
         layouter.namespace(|| format!("{label} alpha")),
-        Value::known(authority.alpha),
+        Value::known(*authority.alpha),
     )?;
     let spend_auth_g =
         FixedPoint::from_inner(ecc_chip.clone(), AssetOrchardFullScalarBase::SpendAuthG);
@@ -1824,7 +1832,7 @@ fn synthesize_input_spend_authority(
         config,
         ecc_chip.clone(),
         &format!("{label} g_d"),
-        note.note.g_d,
+        *note.note.g_d,
         source_bits.gd_x_cell.clone(),
         source_bits.gd_y_sign_cell.clone(),
     )?;
@@ -1834,7 +1842,7 @@ fn synthesize_input_spend_authority(
         config,
         ecc_chip,
         &format!("{label} pk_d"),
-        note.note.pk_d,
+        *note.note.pk_d,
         source_bits.pkd_x_cell.clone(),
         source_bits.pkd_y_sign_cell.clone(),
     )?;
@@ -1844,7 +1852,7 @@ fn synthesize_input_spend_authority(
         sinsemilla_chip,
         ak.inner().x().clone(),
         source_bits.nk_cell.clone(),
-        Value::known(authority.rivk),
+        Value::known(*authority.rivk),
         &format!("{label} commit ivk"),
     )?;
     let ivk = ScalarVar::from_base(
@@ -2000,8 +2008,8 @@ fn synthesize_note_source_bits(
     pool_domain: pallas::Base,
     leg_cells: &[AssignedCell<pallas::Base, pallas::Base>],
 ) -> Result<NoteSourceBitCells, Error> {
-    let (gd_x, gd_y_sign) = point_encoding_fields(note.note.g_d)?;
-    let (pkd_x, pkd_y_sign) = point_encoding_fields(note.note.pk_d)?;
+    let (gd_x, gd_y_sign) = point_encoding_fields(*note.note.g_d)?;
+    let (pkd_x, pkd_y_sign) = point_encoding_fields(*note.note.pk_d)?;
     let extra = layouter.assign_region(
         || format!("{label} note private fields"),
         |mut region| {
@@ -2025,16 +2033,16 @@ fn synthesize_note_source_bits(
                 || "rho",
                 config.advice[4],
                 0,
-                || Value::known(note.note.rho),
+                || Value::known(*note.note.rho),
             )?;
             let psi_cell = region.assign_advice(
                 || "psi",
                 config.advice[5],
                 0,
-                || Value::known(note.note.psi),
+                || Value::known(*note.note.psi),
             )?;
             let nk_cell =
-                region.assign_advice(|| "nk", config.advice[7], 0, || Value::known(note.nk))?;
+                region.assign_advice(|| "nk", config.advice[7], 0, || Value::known(*note.nk))?;
             let padding_cell = region.assign_advice(
                 || "zero padding",
                 config.advice[6],
@@ -2124,7 +2132,7 @@ fn synthesize_note_source_bits(
             config,
             format!("{label} rho bits"),
             extra.4.clone(),
-            Value::known(note.note.rho),
+            Value::known(*note.note.rho),
             255,
         )?,
         psi: synthesize_range_decomposition(
@@ -2132,7 +2140,7 @@ fn synthesize_note_source_bits(
             config,
             format!("{label} psi bits"),
             extra.5.clone(),
-            Value::known(note.note.psi),
+            Value::known(*note.note.psi),
             255,
         )?,
         padding: synthesize_range_decomposition(
@@ -2200,9 +2208,9 @@ fn synthesize_asset_nullifier(
 ) -> Result<AssignedCell<pallas::Base, pallas::Base>, Error> {
     let inputs = asset_derive_nullifier_poseidon_inputs(
         pool_domain,
-        note.nk,
-        note.note.rho,
-        note.note.psi,
+        *note.nk,
+        *note.note.rho,
+        *note.note.psi,
         note.cmx,
     )
     .map_err(|_| Error::Synthesis)?;
@@ -2819,25 +2827,32 @@ fn invert_or_zero(value: pallas::Base) -> pallas::Base {
 
 include!("asset_orchard_legacy_circuits.rs");
 include!("asset_orchard_action_builders.rs");
-fn fixed_hex_array<const N: usize>(label: &str, value: &str) -> Result<[u8; N], AssetOrchardError> {
-    let bytes = hex_to_bytes(value).map_err(|error| {
+/// Decodes fixed-size hex into an owner that wipes on drop: the value may be a spend key or `rivk`
+/// (issue #181). The intermediate buffer is wiped on every exit as well.
+fn fixed_hex_array<const N: usize>(
+    label: &str,
+    value: &str,
+) -> Result<Zeroizing<[u8; N]>, AssetOrchardError> {
+    let bytes = Zeroizing::new(hex_to_bytes(value).map_err(|error| {
         AssetOrchardError::new(
             "invalid_asset_orchard_hex",
             format!("{label} is not valid hex: {error}"),
         )
-    })?;
+    })?);
     if bytes.len() != N {
         return Err(AssetOrchardError::new(
             "invalid_asset_orchard_hex_len",
             format!("{label} must be {N} bytes, got {}", bytes.len()),
         ));
     }
-    Ok(bytes.try_into().expect("checked fixed hex length"))
+    let mut array = Zeroizing::new([0u8; N]);
+    array.copy_from_slice(&bytes);
+    Ok(array)
 }
 
 fn scalar_from_hex(label: &str, value: &str) -> Result<pallas::Scalar, AssetOrchardError> {
     let bytes = fixed_hex_array::<32>(label, value)?;
-    Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(bytes)).ok_or_else(|| {
+    Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(*bytes)).ok_or_else(|| {
         AssetOrchardError::new(
             "invalid_asset_orchard_scalar",
             format!("{label} is not a canonical Pallas scalar"),

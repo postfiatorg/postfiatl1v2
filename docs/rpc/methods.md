@@ -165,6 +165,7 @@ Both behaviours are governed; see
 | --- | --- |
 | `owned_objects` | Read FastPay owned objects for an owner public key. Wallet-owned-object lookups use a 2048 object limit so fragmented wallets can still build standard unwraps. |
 | `owned_recovery_capabilities` | Read the active v3 recovery domain, committee, and bounded validity/reveal windows. |
+| `fastpay_recovery_committee` | Read the committed FastPay recovery committee (validator ids, ML-DSA-65 public keys, `registry_root`, `valid_from_height`..`new_orders_through_height`) and the recovery policy, with `chain_id`, `genesis_hash` and the `height` read. No params returns the committee admitting new orders (`active: true`); `epoch` returns that epoch, and an epoch the ledger lacks is refused with `fastpay_recovery_committee_unknown_epoch`. Public keys only. |
 | `owned_certificate` | Retrieve a persisted complete certificate by digest or lock ID for permissionless recovery. |
 | `owned_recovery_status` | Read ordered recovery state for a lock ID. |
 | `owned_sign_v3` | Persist-before-sign validator vote for a v3 owner-authorized transfer envelope with a derived lock and recovery window. |

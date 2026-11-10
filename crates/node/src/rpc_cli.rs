@@ -1551,6 +1551,41 @@ fn handle_rpc_serve_connection(
                 &error.to_string(),
             ),
         }
+    } else if method == "fastpay_recovery_committee" {
+        let params = request.params.as_object();
+        let epoch = params.and_then(|params| params.get("epoch"));
+        if let Some(extra) = params.and_then(|params| params.keys().find(|key| key.as_str() != "epoch")) {
+            rpc_serve_error_response(
+                &id,
+                "invalid_params",
+                &format!("unknown fastpay_recovery_committee param `{extra}`"),
+            )
+        } else if epoch.is_some_and(|epoch| !epoch.is_null() && epoch.as_u64().is_none()) {
+            rpc_serve_error_response(
+                &id,
+                "invalid_params",
+                "fastpay_recovery_committee epoch must be an unsigned integer",
+            )
+        } else {
+            match postfiat_node::fastpay_recovery_committee(
+                &context.data_dir,
+                epoch.and_then(serde_json::Value::as_u64),
+            ) {
+                Ok(report) => success_response(&id, &report, vec![]).unwrap_or_else(|_| {
+                    rpc_serve_error_response(
+                        &id,
+                        "rpc_internal",
+                        "FastPay recovery committee serialization failed",
+                    )
+                }),
+                Err(error) => {
+                    let message = error.to_string();
+                    let code = postfiat_node::fastpay_recovery_committee_error_code(&message)
+                        .unwrap_or("fastpay_recovery_committee_failed");
+                    rpc_serve_error_response(&id, code, &message)
+                }
+            }
+        }
     } else if method == "owned_certificate" {
         // The selectors are mutually exclusive: answering a request that
         // carries both from the lock_id lookup would silently ignore the
@@ -4129,6 +4164,7 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "owned_recovery_capabilities"
             | "owned_certificate"
             | "owned_recovery_status"
+            | "fastpay_recovery_committee"
     ) || (allow_mempool_submit
         && is_mempool_submit_signed_method(method)
         && !is_mempool_submit_signed_transfer_finality_method(method))
@@ -4437,6 +4473,7 @@ mod remote_method_policy_tests {
             "owned_recovery_capabilities",
             "owned_certificate",
             "owned_recovery_status",
+            "fastpay_recovery_committee",
         ] {
             assert!(rpc_serve_method_allowed_with_owned_lane(
                 method, false, false, false, false
