@@ -484,6 +484,8 @@ def main(argv=None):
         text = json.dumps(results, indent=2)
         for secret in secrets_seen:
             text = text.replace(secret, '<disposable-key>')
+        # Local paths are not evidence: name them by role.
+        text = text.replace(str(out), '<output>').replace(str(ROOT), '<checkout>').replace(str(Path.home()), '~')
         (out / 'summary.json').write_text(text + '\n')
         manifest = {'source_commit': commit, 'source_tree': tree, 'toolchain': results.get('toolchain'),
                     'source_files': {name: ORDER.sha256_file(ROOT / name) for name in SOURCE_FILES},
