@@ -9,6 +9,9 @@ pub(super) fn rpc_dispatch_error_response_parts(error: &str) -> (&'static str, &
     if let Some(code) = postfiat_node::recipient_address_error_code(error) {
         return (code, error);
     }
+    if let Some(code) = postfiat_node::fastpay_recovery_committee_error_code(error) {
+        return (code, error);
+    }
     ("rpc_error", error)
 }
 
@@ -698,6 +701,26 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                     "external_lane_info",
                     report.chain_id.clone(),
                     "external lanes queried",
+                )],
+            )
+        }
+        "fastpay_recovery_committee" => {
+            let epoch = flag_value(flags, "--epoch")
+                .map(|value| {
+                    value
+                        .parse::<u64>()
+                        .map_err(|_| "--epoch must be a u64".to_string())
+                })
+                .transpose()?;
+            let report = postfiat_node::fastpay_recovery_committee(&data_dir, epoch)
+                .map_err(|error| format!("rpc fastpay_recovery_committee failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "fastpay_recovery_committee",
+                    report.committee.committee_epoch.to_string(),
+                    "FastPay recovery committee queried",
                 )],
             )
         }

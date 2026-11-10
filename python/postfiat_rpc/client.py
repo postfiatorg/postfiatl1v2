@@ -1195,6 +1195,18 @@ class PostFiatRpcClient:
         """Read the governed FastPay v3 domain, committee, and recovery window."""
         return self._call("owned_recovery_capabilities")
 
+    def fastpay_recovery_committee(self, epoch: int | None = None) -> dict[str, Any]:
+        """The committed FastPay recovery committee (public keys) and policy.
+
+        Without `epoch` the node returns the committee admitting new orders at
+        its height (`active` true); an epoch the ledger lacks is refused with
+        `fastpay_recovery_committee_unknown_epoch`.
+        """
+        params: dict[str, Any] = {}
+        if epoch is not None:
+            params["epoch"] = self._required_u64(epoch, "epoch")
+        return self._object_read("fastpay_recovery_committee", params)
+
     def owned_recovery_status(self, lock_id: str) -> dict[str, Any]:
         """Read the FastPay v3 recovery fence and reveal status for a lock."""
         if not lock_id:

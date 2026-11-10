@@ -405,6 +405,23 @@ class RemainingReadWrapperTests(unittest.TestCase):
                 client.private_pool_market("t", "A", "")
         call.assert_not_called()
 
+    def test_fastpay_recovery_committee_sends_only_the_optional_epoch(self) -> None:
+        client = _client()
+        with mock.patch.object(client, "_call", return_value={"active": True}) as call:
+            client.fastpay_recovery_committee()
+        call.assert_called_once_with("fastpay_recovery_committee", {})
+        with mock.patch.object(client, "_call", return_value={"active": False}) as call:
+            client.fastpay_recovery_committee(epoch=1)
+        call.assert_called_once_with("fastpay_recovery_committee", {"epoch": 1})
+        with mock.patch.object(client, "_call") as call:
+            for bad in (-1, True, "2"):
+                with self.assertRaisesRegex(ValueError, "epoch must be a non-negative integer"):
+                    client.fastpay_recovery_committee(epoch=bad)  # type: ignore[arg-type]
+        call.assert_not_called()
+        with mock.patch.object(client, "_call", return_value=[]):
+            with self.assertRaisesRegex(RpcProtocolError, "must be an object"):
+                client.fastpay_recovery_committee()
+
     def test_private_readiness_sends_only_the_optional_pool_id(self) -> None:
         client = _client()
         with mock.patch.object(client, "_call", return_value={"ready": False}) as call:

@@ -157,6 +157,8 @@ class CliPublicReadDispatchTests(unittest.TestCase):
                 {"inclusion_height": None},
             ),
             ("private_readiness", {}, "private_readiness", (), {"pool_id": None}),
+            ("fastpay_recovery_committee", {}, "fastpay_recovery_committee", (), {"epoch": None}),
+            ("fastpay_recovery_committee", {"epoch": 2}, "fastpay_recovery_committee", (), {"epoch": 2}),
             ("private_readiness", {"pool_id": "asset-orchard-v1"}, "private_readiness", (), {"pool_id": "asset-orchard-v1"}),
             (
                 "pfusdc_ingress_preflight",

@@ -4033,6 +4033,156 @@ pub(super) fn validate_owner_public_key_hex(value: &str) -> io::Result<()> {
     Ok(())
 }
 
+pub const FASTPAY_RECOVERY_COMMITTEE_REPORT_SCHEMA: &str = "postfiat-fastpay-recovery-committee-v1";
+/// Typed error code for a `fastpay_recovery_committee` epoch the ledger does not hold.
+pub const FASTPAY_RECOVERY_COMMITTEE_UNKNOWN_EPOCH: &str =
+    "fastpay_recovery_committee_unknown_epoch";
+
+/// `fastpay_recovery_committee`: one committed FastPay recovery committee
+/// (public keys only) and the committed recovery policy, read from the
+/// finalized ledger at `height`.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FastPayRecoveryCommitteeReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub height: u64,
+    /// True when this committee is the one admitting new orders at `height`.
+    pub active: bool,
+    pub committee: postfiat_types::FastPayRecoveryCommitteeV1,
+    pub policy: postfiat_types::FastPayRecoveryPolicyV1,
+}
+
+/// The typed RPC error code carried by a `fastpay_recovery_committee` error.
+pub fn fastpay_recovery_committee_error_code(message: &str) -> Option<&'static str> {
+    message
+        .contains(&format!("{FASTPAY_RECOVERY_COMMITTEE_UNKNOWN_EPOCH}: "))
+        .then_some(FASTPAY_RECOVERY_COMMITTEE_UNKNOWN_EPOCH)
+}
+
+pub fn fastpay_recovery_committee(
+    data_dir: &Path,
+    epoch: Option<u64>,
+) -> io::Result<FastPayRecoveryCommitteeReport> {
+    let store = NodeStore::new(data_dir);
+    let genesis = store.read_genesis()?;
+    let ledger = store.read_ledger()?;
+    let height = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?.height;
+    let invalid = |error: String| io::Error::new(io::ErrorKind::InvalidData, error);
+    let policy = ledger.fastpay_recovery_policy.clone().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::Unsupported,
+            "FastPay v3 recovery policy is not active",
+        )
+    })?;
+    policy.validate().map_err(invalid)?;
+    // Same selection as owned_recovery_capabilities: the highest epoch whose
+    // order range contains the current height.
+    let active_epoch = ledger
+        .fastpay_recovery_committees
+        .iter()
+        .filter(|c| c.valid_from_height <= height && height <= c.new_orders_through_height)
+        .map(|c| c.committee_epoch)
+        .max();
+    let wanted = match (epoch, active_epoch) {
+        (Some(epoch), _) => epoch,
+        (None, Some(active)) => active,
+        (None, None) => {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "no FastPay v3 committee admits new orders at the current height",
+            ))
+        }
+    };
+    let committee = ledger
+        .fastpay_recovery_committees
+        .iter()
+        .find(|c| c.committee_epoch == wanted)
+        .cloned()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "{FASTPAY_RECOVERY_COMMITTEE_UNKNOWN_EPOCH}: the ledger holds no FastPay recovery committee for epoch {wanted}"
+                ),
+            )
+        })?;
+    committee.validate().map_err(invalid)?;
+    let genesis_hash = genesis_hash(&genesis);
+    if committee.chain_id != genesis.chain_id
+        || committee.genesis_hash != genesis_hash
+        || committee.protocol_version != genesis.protocol_version
+    {
+        return Err(invalid(
+            "committed FastPay committee does not match local genesis".to_string(),
+        ));
+    }
+    Ok(FastPayRecoveryCommitteeReport {
+        schema: FASTPAY_RECOVERY_COMMITTEE_REPORT_SCHEMA.to_string(),
+        chain_id: genesis.chain_id,
+        genesis_hash,
+        protocol_version: genesis.protocol_version,
+        height,
+        active: active_epoch == Some(wanted),
+        committee,
+        policy,
+    })
+}
+
+/// The wallet's FastPay admission file: exactly `{"committee", "policy"}`, the
+/// shape the Mac wallet's `FastPayAdmission.load` reads and its core parses
+/// with `deny_unknown_fields`.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FastPayAdmissionFile {
+    pub committee: postfiat_types::FastPayRecoveryCommitteeV1,
+    pub policy: postfiat_types::FastPayRecoveryPolicyV1,
+}
+
+/// Builds the admission file from the active committee and refuses unless it
+/// equals what `owned_recovery_capabilities` serves (domain, epoch, validator
+/// count, quorum, policy).
+pub fn fastpay_admission_export(data_dir: &Path) -> io::Result<FastPayAdmissionFile> {
+    let report = fastpay_recovery_committee(data_dir, None)?;
+    let caps: postfiat_types::FastPayRecoveryCapabilitiesV1 =
+        serde_json::from_str(&owned_recovery_capabilities_v3(NodeOptions {
+            data_dir: data_dir.to_path_buf(),
+        })?)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    let committee = report.committee;
+    let mut differences = Vec::new();
+    if caps.domain != committee.certificate_domain() {
+        differences.push("domain");
+    }
+    if caps.committee_epoch != committee.committee_epoch {
+        differences.push("committee_epoch");
+    }
+    if caps.validator_count != committee.validators.len() {
+        differences.push("validator_count");
+    }
+    if caps.quorum != committee.quorum {
+        differences.push("quorum");
+    }
+    if caps.policy != report.policy {
+        differences.push("policy");
+    }
+    if !differences.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "committed FastPay committee differs from owned_recovery_capabilities in: {}",
+                differences.join(", ")
+            ),
+        ));
+    }
+    Ok(FastPayAdmissionFile {
+        committee,
+        policy: report.policy,
+    })
+}
+
 // Keep the included history test module after every production item in this
 // module so strict Clippy can enforce the same module layout as ordinary files.
 include!("history.rs");
