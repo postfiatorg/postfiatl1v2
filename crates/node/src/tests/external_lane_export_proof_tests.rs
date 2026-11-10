@@ -360,3 +360,63 @@ fn external_lane_export_proof_input_rebuilds_pruned_packets_from_the_archive() {
     store.write_ledger(&original).expect("restore ledger");
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
+
+// The lock and token `crates/pft-token-contracts/test/ExternalLaneWitnessRelease.t.sol`
+// deploys on its local chain under Base chain id 8453, with their runtime code
+// hashes; that test prints the new values when the bytecode changes.
+const FOUNDRY_LOCK: &str = "0xf62849f9a0b5bf2913b396098f7c7019b51a820a";
+const FOUNDRY_LOCK_CODE_HASH: &str =
+    "0x7cb5b23356bacd0dffc245c03dc50ae95cf24bb18bca61abe66620a42d60790b";
+const FOUNDRY_TOKEN: &str = "0x5615deb798bb3e4dfa0139dfa1b3d433cc23b72f";
+const FOUNDRY_TOKEN_CODE_HASH: &str =
+    "0x3bcc91381fd36c17047501a0cac6de10d01a4e744bd9e1a92574640df6a03e6b";
+/// The proof input the lane proof crate's fixture test reads.
+const WITNESS_RELEASE_INPUT: &str = "../pft_lane_proofs/testdata/witness-release-input.cbor";
+
+/// One export on a lane that names the Foundry test's lock and token, through
+/// the proof input and the statement. With EXTERNAL_LANE_WRITE_FIXTURE=1 it
+/// records the input from which the Foundry fixture is derived.
+#[test]
+fn external_lane_export_witness_release_input_names_the_foundry_lock_and_token() {
+    let chain = lane_chain_with_genesis(
+        "export-proof-foundry",
+        86_400,
+        Some(EXPORT_ROOT_HEIGHT),
+        4,
+        |genesis| {
+            let lane = &mut genesis.external_lanes.as_mut().expect("lanes")[0];
+            lane.policy.exports_enabled = true;
+            lane.policy.lock_contract_address = FOUNDRY_LOCK.to_string();
+            lane.policy.lock_runtime_code_hash = FOUNDRY_LOCK_CODE_HASH.to_string();
+            lane.policy.token_address = FOUNDRY_TOKEN.to_string();
+            lane.policy.token_runtime_code_hash = FOUNDRY_TOKEN_CODE_HASH.to_string();
+            genesis.external_lane_export_root_activation_height = Some(EXPORT_ROOT_HEIGHT);
+        },
+    );
+    let receipt = admit_and_apply(
+        &chain,
+        &release_tx(&chain, "base-erc20", 1, ACCOUNT_RESERVE + 2_000_000, 1),
+        "release",
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let prior = header_at(&chain, tip_height(&chain)).block_hash;
+    let receipt = admit_and_apply(
+        &chain,
+        &export_tx(&chain, "base-erc20", 1_000_000, &base_recipient()),
+        "export",
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let input = proof_input(&chain, 0, &prior).expect("proof input");
+    let values = verify_external_lane_export_witness_v1(&input.witness).expect("statement");
+    assert_eq!(
+        (values.vault_address.as_str(), values.token_address.as_str()),
+        (FOUNDRY_LOCK, FOUNDRY_TOKEN)
+    );
+    // The chain's keys are fresh on every run, so the committed input is one
+    // recorded run; `crates/pft_lane_proofs` derives the Foundry fixture from it.
+    if std::env::var_os("EXTERNAL_LANE_WRITE_FIXTURE").is_some() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(WITNESS_RELEASE_INPUT);
+        fs::write(path, &input.program_input_cbor).expect("write input");
+    }
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}

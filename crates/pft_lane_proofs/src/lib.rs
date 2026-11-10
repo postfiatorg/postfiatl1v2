@@ -224,3 +224,6 @@ pub fn verify_external_lane_checkpoint_witness_v1(
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
+
+#[cfg(test)]
+mod tests;
