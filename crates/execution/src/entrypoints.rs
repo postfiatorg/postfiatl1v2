@@ -795,7 +795,11 @@ pub fn execute_asset_transaction(
         block_height,
         tx_id,
         &signing_bytes,
-        // The bare entry knows the genesis activation, not a governed one.
+        // The bare entry passes the genesis activation only, not a governed
+        // one; it stays safe because it never applies an export: one that
+        // passes the earlier checks is refused for missing governed caps
+        // (`external_lane_export_needs_governed_caps`), pinned by the node test
+        // `external_lane_export_is_halted_under_a_zero_active_cap`.
         AssetExecutionCompatibility::strict().with_external_lane_export_root_activation_height(
             genesis.external_lane_export_root_activation_height,
         ),
