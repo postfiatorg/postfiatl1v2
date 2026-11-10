@@ -323,6 +323,32 @@ The result is then compared field by field with what the finality check returned
 
 **Limits.** The export's block must be the proven block. An export from an older block than the finalized one is refused in this version. No proof was generated. There is no relay and no deployment yet.
 
+## Base half, step 4 (2026-11-10)
+
+**The relay.** `scripts/pft-lane-export-relay.py` takes the A666 relay's four steps (wait for PFTL finality, prove, call `release`, wait for the receipt):
+
+- `input` runs `postfiat-node external-lane-export-proof-input` for a lane and a nonce or transaction id. With `--wait-seconds` it retries while the export's block is not final, and it stops on any other refusal.
+- `prove --mode execute-only` runs the guest in SP1's CPU executor (`tools/pft-lane-export-prover`). It checks the committed bytes against the expected public values and writes a PLACEHOLDER proof. The proof file says so in `mock_verifier_only` and `note`. Only a verifier built with a mock SP1 verifier accepts it.
+- `prove --mode command --prover-command CMD` hands the input to an external prover. This mode has not been run.
+- `release` reads the lock's `finalityVerifier`, `token`, `totalLocked` and `totalReleased`, and the verifier's pins and checkpoint records, before it sends anything. It refuses when the public values would revert: wrong vault, token, chain id, PFTL chain or genesis, route profile, asset id or code hashes; an unknown prior checkpoint; a consumed withdrawal id or proof nullifier; an amount above locked minus released. Then it sends `release(publicValues, proofBytes)`, decodes `Released` and checks that the recipient's balance moved by exactly the amount.
+- `advance-checkpoint` runs the Checkpoint variant through the same steps (`pfusdc-checkpoint-witness`, execute, `advanceCheckpoint`). Use it when the verifier's checkpoint is too far behind for a bounded proof. It was not run in the rehearsal.
+- `status` reports one packet: exported, final, proven, released, and the Base transaction.
+
+A private key is accepted only for a loopback Anvil; on any other chain the relay takes `--account` and `--password-file`. A placeholder proof goes only to a loopback Anvil, unless `--i-know-this-is-a-mock-verifier` names the lock's verifier.
+
+**The prover-command contract.** The relay runs `CMD` through the shell with `PFT_LANE_EXPORT_INPUT` (the CBOR program input) and `PFT_LANE_EXPORT_PROOF_OUT` (a path) in its environment. The command writes the raw SP1 proof bytes to that path and the committed public values to the same path plus `.public-values`, then exits 0. The relay refuses public values that differ from the expected ones. The proof is then sent as `proofBytes` unchanged.
+
+**The round trip.** `scripts/rehearse-lane-roundtrip.py` runs one round trip on local chains. It imports the deployment-order and Base-lock rehearsals and the relay; it does not copy them. The record is in `docs/review/lane-roundtrip-rehearsal-20261110/`.
+
+1. It deploys the token on a fresh Anvil (chain id 84532), predicts the verifier's and the lock's addresses and the lock's code hash, and pins them in the lane genesis.
+2. A generated six-validator PFTL chain starts from that genesis (`local_evm_lane_roundtrip`, an ignored node test that the script drives step by step). The chain has `exports_enabled`, and consensus v2 and the export root from block 2. Block 1 is the committee bootstrap.
+3. It deploys the real `PFTLFinalityVerifierV1` with the genesis-owned pins and the first PFTL checkpoint, using the Foundry tests' `Tier4MockSP1Verifier` and a placeholder program key. Then it deploys the real `PFTLockV1`, and reads every constructor value back.
+4. It locks 1,000,000 units, releases them on PFTL, exports 400,000 and relays them, refuses a second release of the same packet, exports and relays 600,000, and refuses a third export of one atom. It checks conservation on both chains at every step.
+
+The exports are signed with `wallet-sign-asset-transaction --operation-json`.
+
+**Limits.** No SP1 proof exists: a mock SP1 verifier accepted placeholder bytes, and the guest only ran in execute mode. Anvil stands in for Base. The ELF is a local build without a committed key. The PFTL chain is one generated data directory whose blocks carry consensus v2 commits from all six validators; it is not six networked nodes. The recipient got 10,000 native atoms from the faucet for the two export fees. The Phase 2 release watcher still reports the one release as backed. It has no export view, so it reports nothing about exports or their Base releases.
+
 ## 10. Sources
 
 - `docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md`, sections 5.1, 6 and 7.
