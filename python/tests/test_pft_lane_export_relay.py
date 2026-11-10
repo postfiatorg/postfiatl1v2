@@ -16,6 +16,7 @@ LOCK = "0x" + "1a" * 20
 TOKEN = "0x" + "2b" * 20
 VERIFIER = "0x" + "3c" * 20
 RECIPIENT = "0x" + "4d" * 20
+SP1 = "0x" + "5f" * 20
 
 
 def h48(byte):
@@ -78,15 +79,20 @@ class MockRpc:
             (VERIFIER, "arbitrumChainId()"): word(84532),
             (VERIFIER, "latestFinalizedHeight()"): word(5),
             (VERIFIER, "token()"): word(TOKEN),
+            (VERIFIER, "sp1Verifier()"): word(SP1),
             (VERIFIER, f"checkpointCommitteeRootCommitment(bytes32):{prior}"): relay.commitment(VALUES["committee_root"]),
             (VERIFIER, f"consumedWithdrawalIdCommitment(bytes32):{withdrawal}"): word(0),
             (VERIFIER, f"consumedProofNullifier(bytes32):{word(VALUES['proof_nullifier'])}"): word(0),
         }
         self.answers.update(overrides or {})
         self.chain = 84532
+        self.code_hashes = {}
 
     def chain_id(self):
         return self.chain
+
+    def code_hash(self, address):
+        return self.code_hashes.get(address, "0x" + relay.keccak256(b"").hex())
 
     def call(self, address, signature, *args):
         key = (address, signature + "".join(f":{arg}" for arg in args))
@@ -135,17 +141,37 @@ class ReleaseRefusalTests(unittest.TestCase):
 
 
 class SafetyTests(unittest.TestCase):
-    def test_placeholder_proof_only_on_local_anvil_or_named_verifier(self):
+    def test_placeholder_proof_needs_the_mock_sp1_code_hash_and_a_loopback_anvil(self):
         proof = {"mock_verifier_only": True}
-        self.assertIsNone(relay.mock_proof_refusal(proof, local_anvil=True, lock_verifier=VERIFIER, acknowledged=None))
-        self.assertIsNotNone(relay.mock_proof_refusal(proof, local_anvil=False, lock_verifier=VERIFIER,
-                                                      acknowledged=None))
-        self.assertIsNotNone(relay.mock_proof_refusal(proof, local_anvil=False, lock_verifier=VERIFIER,
-                                                      acknowledged="0x" + "00" * 20))
-        self.assertIsNone(relay.mock_proof_refusal(proof, local_anvil=False, lock_verifier=VERIFIER,
-                                                   acknowledged=VERIFIER.upper().replace("0X", "0x")))
-        self.assertIsNone(relay.mock_proof_refusal({"mock_verifier_only": False}, local_anvil=False,
+        mock = "0x" + "aa" * 32
+
+        def refusal(**kwargs):
+            values = dict(loopback=True, anvil=True, sp1_code_hash=mock, mock_code_hash=mock,
+                          lock_verifier=VERIFIER, acknowledged=None)
+            values.update(kwargs)
+            return relay.mock_proof_refusal(proof, **values)
+
+        self.assertIsNone(refusal())
+        self.assertIsNotNone(refusal(loopback=False))
+        self.assertIsNotNone(refusal(anvil=False))
+        self.assertIsNotNone(refusal(sp1_code_hash="0x" + "bb" * 32))
+        self.assertIsNotNone(refusal(mock_code_hash=None))
+        # The override names the lock's verifier and still needs the mock's code.
+        self.assertIsNone(refusal(loopback=False, anvil=False, acknowledged=VERIFIER))
+        self.assertIsNotNone(refusal(loopback=False, anvil=False, acknowledged="0x" + "00" * 20))
+        self.assertIsNotNone(refusal(loopback=False, anvil=False, acknowledged=VERIFIER,
+                                     sp1_code_hash="0x" + "bb" * 32))
+        # A real proof needs none of it.
+        self.assertIsNone(relay.mock_proof_refusal({"mock_verifier_only": False}, loopback=False, anvil=False,
+                                                   sp1_code_hash=None, mock_code_hash=None,
                                                    lock_verifier=VERIFIER, acknowledged=None))
+
+    def test_the_chain_id_constant_is_gone(self):
+        self.assertFalse(hasattr(relay, "LOCAL_ANVIL_CHAIN_IDS"))
+
+    def test_mock_code_hash_from_the_artifact(self):
+        artifact = {"deployedBytecode": {"object": "0x6001"}}
+        self.assertEqual(relay.artifact_code_hash(artifact), "0x" + relay.keccak256(bytes.fromhex("6001")).hex())
 
     def test_private_key_only_on_local_anvil(self):
         args = argparse.Namespace(private_key_file=Path("/nonexistent"), account=None, password_file=None)

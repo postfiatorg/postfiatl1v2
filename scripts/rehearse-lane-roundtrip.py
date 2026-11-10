@@ -410,7 +410,9 @@ def main(argv=None):
                                                                 '--output', work / 'proof']))
             values = json.loads((work / 'input/expected-public-values.json').read_text())['expected_public_values']
             release_argv = [*relay, 'release', '--rpc', url, '--lock', lock, '--input', work / 'input',
-                            '--proof', work / 'proof/proof.json', '--private-key-file', key_file]
+                            '--proof', work / 'proof/proof.json', '--private-key-file', key_file,
+                            '--mock-sp1-artifact',
+                            out / 'forge-out-ethereum-contracts/PFUSDCTier4.t.sol/Tier4MockSP1Verifier.json']
             sent = json.loads(command(f'relay-{index}-release', release_argv))
             base = base_state(token, lock)
             require(call_int(token, 'balanceOf(address)', base_recipient) == amount, 'the Base recipient was not paid')

@@ -8,8 +8,11 @@ Checkpoint variant; `status` reports one packet.
 
 `prove --mode execute-only` runs the guest in SP1's CPU executor and writes a
 PLACEHOLDER proof: only a verifier constructed with a mock SP1 verifier accepts
-it. `release` refuses to send it to any chain but a loopback Anvil unless
-`--i-know-this-is-a-mock-verifier` names the lock's verifier. A private key is
+it. `release` sends it only when the runtime code hash at the verifier's
+`sp1Verifier` equals the mock artifact's (`--mock-sp1-artifact`) AND the RPC is
+a loopback host whose client reports anvil, or `--i-know-this-is-a-mock-verifier`
+names the lock's verifier. The chain id alone proves nothing: the rehearsal's
+own Anvil uses 84532, Base Sepolia's public chain id. A private key is
 accepted for a loopback Anvil only; elsewhere use `--account` and
 `--password-file` (a Foundry keystore). Keys are never written or printed:
 the pinned cast (Foundry 1.8.1) reads no raw private key from its environment,
@@ -55,7 +58,6 @@ call_data = _ORDER.call_data
 PLACEHOLDER_PROOF = b'PFT-LANE-EXPORT-PLACEHOLDER: NOT AN SP1 PROOF; ONLY A MOCK SP1 VERIFIER ACCEPTS IT'
 PROOF_SCHEMA = 'postfiat.pft_lane_export_relay.proof.v1'
 RELEASED_TOPIC = '0x' + keccak256(b'Released(bytes32,bytes32,bytes32,address,uint256)').hex()
-LOCAL_ANVIL_CHAIN_IDS = (31337, 84532)
 
 
 class RelayRefusal(RuntimeError):
@@ -117,6 +119,9 @@ class Rpc:
     def client_version(self):
         return str(self.request('web3_clientVersion'))
 
+    def code_hash(self, address):
+        return code_hash_at(self, address)
+
     def call(self, address, signature, *args):
         data = self.request('eth_call', [{'to': address, 'data': call_data(signature, *args)}, 'latest'])
         require(len(data) == 66, f'{signature} on {address} returned {data}')
@@ -124,7 +129,19 @@ class Rpc:
 
 
 def is_local_anvil(rpc):
-    return is_loopback_url(rpc.url) and 'anvil' in rpc.client_version().lower()
+    """(loopback RPC host, client reports anvil). Neither, nor the chain id,
+    shows what the verifier accepts: the rehearsal's own Anvil uses 84532,
+    Base Sepolia's public chain id."""
+    return is_loopback_url(rpc.url), 'anvil' in rpc.client_version().lower()
+
+
+def artifact_code_hash(artifact):
+    """keccak256 of a Foundry artifact's runtime code (the mock has no immutables)."""
+    return '0x' + keccak256(bytes.fromhex(artifact['deployedBytecode']['object'].removeprefix('0x'))).hex()
+
+
+def code_hash_at(rpc, address):
+    return '0x' + keccak256(bytes.fromhex(rpc.request('eth_getCode', [address, 'latest']).removeprefix('0x'))).hex()
 
 
 def as_int(word):
@@ -154,6 +171,8 @@ def read_release_state(rpc, lock, values):
     for getter in ('pftlProtocolVersion', 'routeEpoch', 'arbitrumChainId', 'latestFinalizedHeight'):
         reads[f'verifier.{getter}'] = as_int(rpc.call(verifier, f'{getter}()'))
     reads['verifier.token'] = as_address(rpc.call(verifier, 'token()'))
+    reads['verifier.sp1Verifier'] = as_address(rpc.call(verifier, 'sp1Verifier()'))
+    reads['verifier.sp1VerifierCodeHash'] = rpc.code_hash(reads['verifier.sp1Verifier'])
     reads['verifier.priorCommitteeRootCommitment'] = rpc.call(verifier, 'checkpointCommitteeRootCommitment(bytes32)',
                                                                prior)
     reads['verifier.withdrawalConsumed'] = as_int(rpc.call(verifier, 'consumedWithdrawalIdCommitment(bytes32)',
@@ -209,17 +228,25 @@ def release_refusals(reads, values):
     return refusals
 
 
-def mock_proof_refusal(proof, *, local_anvil, lock_verifier, acknowledged):
-    """A placeholder proof goes only to a loopback Anvil, or where the operator
-    names the (mock-SP1) verifier the lock calls."""
+def mock_proof_refusal(proof, *, loopback, anvil, sp1_code_hash, mock_code_hash, lock_verifier, acknowledged):
+    """The rule for a placeholder proof: the verifier the lock calls must use the
+    repository's mock SP1 verifier (the runtime code hash at its `sp1Verifier`
+    equals the mock artifact's), AND either the RPC is a loopback Anvil or the
+    operator names that verifier with --i-know-this-is-a-mock-verifier."""
     if not proof.get('mock_verifier_only'):
         return None
-    if local_anvil:
+    if mock_code_hash is None:
+        return 'a placeholder proof needs --mock-sp1-artifact (the Foundry artifact of Tier4MockSP1Verifier)'
+    if sp1_code_hash != mock_code_hash:
+        return ('the verifier\'s sp1Verifier is not the mock SP1 verifier (runtime code hash '
+                f'{sp1_code_hash}, mock {mock_code_hash}); a placeholder proof would be refused or, worse, mean '
+                'a real verifier is misconfigured')
+    if loopback and anvil:
         return None
     if acknowledged and acknowledged.lower() == lock_verifier.lower():
         return None
-    return ('the proof is a placeholder that only a mock SP1 verifier accepts; this is not a loopback Anvil. '
-            f'Pass --i-know-this-is-a-mock-verifier {lock_verifier} only if that verifier uses a mock SP1 verifier')
+    return ('the proof is a placeholder and the RPC is not a loopback Anvil; pass '
+            f'--i-know-this-is-a-mock-verifier {lock_verifier} to send it to that mock-SP1 verifier anyway')
 
 
 def signer_args(args, local_anvil):
@@ -243,6 +270,12 @@ def decode_released(receipt, lock):
     data = log['data'].removeprefix('0x')
     return {'withdrawal_id_commitment': log['topics'][1], 'burn_tx_id_commitment': log['topics'][2],
             'packet_digest': log['topics'][3], 'recipient': '0x' + data[24:64], 'amount': int(data[64:128], 16)}
+
+
+def mock_code_hash(args):
+    if not args.mock_sp1_artifact:
+        return None
+    return artifact_code_hash(json.loads(Path(args.mock_sp1_artifact).read_text()))
 
 
 def load_values(input_dir):
@@ -340,9 +373,12 @@ def cmd_release(args):
     proof = json.loads(Path(args.proof).read_text())
     require(proof.get('schema') == PROOF_SCHEMA and proof['public_values_hex'] == expected_hex,
             'the proof file is not for these public values')
-    local = is_local_anvil(rpc)
+    loopback, anvil = is_local_anvil(rpc)
+    local = loopback and anvil
     reads = read_release_state(rpc, args.lock, values)
-    refusal = mock_proof_refusal(proof, local_anvil=local, lock_verifier=reads['lock.finalityVerifier'],
+    refusal = mock_proof_refusal(proof, loopback=loopback, anvil=anvil,
+                                 sp1_code_hash=reads['verifier.sp1VerifierCodeHash'],
+                                 mock_code_hash=mock_code_hash(args), lock_verifier=reads['lock.finalityVerifier'],
                                  acknowledged=args.i_know_this_is_a_mock_verifier)
     require(refusal is None, refusal or '')
     refusals = release_refusals(reads, values)
@@ -391,9 +427,12 @@ def cmd_advance_checkpoint(args):
     require(p.returncode == 0, f'SP1 execute failed: {p.stderr.strip()[-2000:]}')
     public_values = '0x' + (out / 'execute' / 'public-values.bin').read_bytes().hex()
     rpc = Rpc(args.rpc)
-    local = is_local_anvil(rpc)
+    loopback, anvil = is_local_anvil(rpc)
+    local = loopback and anvil
     verifier = as_address(rpc.call(args.lock, 'finalityVerifier()'))
-    refusal = mock_proof_refusal({'mock_verifier_only': True}, local_anvil=local, lock_verifier=verifier,
+    refusal = mock_proof_refusal({'mock_verifier_only': True}, loopback=loopback, anvil=anvil,
+                                 sp1_code_hash=code_hash_at(rpc, as_address(rpc.call(verifier, 'sp1Verifier()'))),
+                                 mock_code_hash=mock_code_hash(args), lock_verifier=verifier,
                                  acknowledged=args.i_know_this_is_a_mock_verifier)
     require(refusal is None, refusal or '')
     require(as_int(rpc.call(verifier, 'acceptedCheckpointCommitment(bytes32)', commitment(args.prior_checkpoint))),
@@ -459,7 +498,11 @@ def parser():
         p.add_argument('--private-key-file', type=Path, help='loopback Anvil only')
         p.add_argument('--account')
         p.add_argument('--password-file', type=Path)
-        p.add_argument('--i-know-this-is-a-mock-verifier', metavar='VERIFIER')
+        p.add_argument('--i-know-this-is-a-mock-verifier', metavar='VERIFIER',
+                       help='send a placeholder proof off a loopback Anvil, to this verifier only, and only if its '
+                            'sp1Verifier has the mock\'s code hash')
+        p.add_argument('--mock-sp1-artifact', type=Path,
+                       help='Foundry artifact of Tier4MockSP1Verifier; required to send a placeholder proof')
 
     p = sub.add_parser('release', help='check every revert condition, then call release and check the payout')
     base(p)
