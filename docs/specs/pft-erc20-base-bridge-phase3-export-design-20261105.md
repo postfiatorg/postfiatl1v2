@@ -198,13 +198,62 @@ The product owner decides:
 3. Whether an unpaid export can be refunded on PFTL after a deadline. The refund needs the verifier to refuse the refunded packet. Without a refund, an export waits for the relay indefinitely.
 4. The prover program and its audit budget, and who runs the relay.
 5. How the relay is funded: self-relay only, a relay fee carried inside the export, or an operator-funded service.
-6. The verifier's route profile and asset id for PFT on Base.
+6. The verifier's route profile and asset id for PFT on Base. Resolved by rule on 2026-11-10: both are derived from the lane's genesis policy ([Base half, step 1](#base-half-step-1-2026-11-10)).
 7. The response to a false release once exports exist (section 8). The options:
    - **An export halt.** The same governed zero-cap amendment that halts releases also halts exports: exports are refused while the lane's active cap is zero (Phase 2, section 5.2). The watcher's alarm then stops new exports from queuing behind a shortfall.
    - **An independently authenticated Base lock balance.** PFTL would bound exports by the lock's real `totalLocked − totalReleased`, which this design avoids reading.
    - **A refund path.** An export the lock never pays is refunded on PFTL, which needs the verifier to refuse the refunded packet (see decision 3).
 
    The lean is the export halt. It costs least: one more check against a value the lane already has, with no new trust. It keeps the Phase 2 model of a committee-trusted bridge bounded by the cap and answered by the watcher and governance. It does not repay exports already accepted before the halt; only the refund path does that.
+
+## Base half, step 1 (2026-11-10)
+
+**The rule (decision 6).** Neither value is chosen by hand. Both come from the lane's genesis entry and the PFTL chain id (`crates/types/src/external_lane_egress_types.rs`):
+
+- **Asset id.** `GenesisExternalLane::pft_asset_id` follows `issued_asset_id` (`account_owned_asset_types.rs:658-675`): the PFTL chain id, then the lane's Base binding in the issuer's place (lane id, source chain id, lock, token), then code `PFT` and version 1. It is SHA3-384 under `postfiat.external_lane.asset_id.v1`, which gives 48 bytes.
+- **Route profile.** `GenesisExternalLane::route_profile` takes the fields of `VaultBridgeRouteProfileV1` that genesis fixes for a lane, in its order and `key=value` preimage format (`account_owned_asset_types.rs:277-314`). Those fields are the lane id as `route_id`, the asset id, the source chain id, the lock and its code hash as the vault, the token and its code hash, and `route_epoch` 1. A lane's route has no governed successor, so it has a single epoch. The hash is SHA3-384 under `postfiat.external_lane.route_profile_hash.v1`, which gives 48 bytes. The verifier kind, program key and proof bounds are deployment values of the verifier, not route fields.
+- **Verifier pins.** The verifier stores `keccak256` of each 48-byte value.
+- **Production.** Mainnet uses the same functions at chain id 8453, with the production lock and token from the mainnet genesis.
+
+For the Base Sepolia rehearsal lane of 2026-11-06 (`docs/review/base-sepolia-lock-rehearsal-20261106/genesis.json`, PFTL chain id `postfiat-lane-sepolia-example`):
+
+- asset id `1656c1b1…9521df`;
+- route profile hash `9fd03c57…e3c48a17`.
+
+The full values, their verifier commitments and an 8453 example with synthetic addresses are in `crates/types/testdata/external-lane-route-profile-vectors.json`. The values were computed by `scripts/external-lane-route-profile-vectors.py`.
+
+**The public values.** `external_lane_export_egress_public_values` maps a packet, its lane and a finalized checkpoint (`ExternalLaneExportCheckpointV1`) to every field of the verifier's egress public values. `external_lane_export_egress_public_values_bytes` returns the bytes `verifyAndConsume` decodes. The verifier fixes the magic, the schema (`postfiat.pfusdc.egress_public_values.v1`) and the field layout (`PFTLFinalityVerifierV1.sol:354-446`). The lane reuses that layout unchanged.
+
+| Tag | Field (decoded as) | Lane value |
+| --- | --- | --- |
+| 1, 2 | schema, `proofProgramVersion` | the egress schema, 1 |
+| 3, 4, 5 | `pftlChainIdHash`, `pftlGenesisHashCommitment`, `pftlProtocolVersion` | checkpoint |
+| 6, 7 | `routeProfileHashCommitment`, `routeEpoch` | derived profile hash, 1 |
+| 8, 9, 11, 12, 13 | prior and resulting checkpoint, committee root and transition, `finalizedBlockHeight` | checkpoint |
+| 10, 14-17 | committee epoch, view, block id, parent, state root (not decoded) | checkpoint |
+| 18 | `bridgeExitRootCommitment` | the lane's export history root at the finalized block |
+| 19, 20 | exit leaf index, leaf commitment (not decoded) | export nonce, packet digest |
+| 21, 22 | `acceptedReceiptCommitment`, receipt code | the export's transaction id, `accepted` |
+| 23 | `assetIdCommitment` | derived asset id |
+| 24, 25 | `burnTxIdCommitment`, `withdrawalIdCommitment` | the packet's burn-tx and withdrawal-id commitments |
+| 26 | source bucket (not decoded) | the lane's `route_config_digest` |
+| 27, 28 | `amount`, `recipient` | `amount_atoms`, `base_recipient` |
+| 29, 30 | destination hash, evidence root (not decoded) | 48 zero bytes |
+| 31 | `withdrawalFinalizedHeight` | `exported_at_height` |
+| 32 | `arbitrumChainId` | the policy's chain id (84532, 8453) |
+| 33, 34 | `vault`, `vaultRuntimeCodeHash` | lock address and its code hash |
+| 35, 36 | `token`, `tokenRuntimeCodeHash` | token address and its code hash |
+| 37 | `packetDigest` | Keccak-256 under `postfiat.external_lane.export_evm_digest.v1` of the 48-byte packet digest |
+| 38 | `withdrawalPacketHashCommitment` | the packet digest |
+| 39 | `proofNullifier` | `pfusdc_egress_proof_nullifier_v1(1, burn tx, withdrawal id, finalized block)` |
+
+**NAV-specific fields.** These fields have no natural source in a lane packet: route epoch, bridge-exit root, exit leaf index and commitment, accepted receipt, source bucket, destination hash, evidence root, the 32-byte `packetDigest` and the chain id's Arbitrum name. The table gives the lane's value for each.
+
+**Limits.** None of the verifier's checks fails for a lane. The 48-byte commitments, the u64 amount and chain id, the lock and token code-hash bindings, and the replay keys (proof nullifier and withdrawal id on the verifier; withdrawal id and burn tx on the lock) all hold. Some differences remain:
+
+- **Transaction id.** Tag 21 is 48 bytes, so the mapping refuses a transaction id that is not 96 lower-case hex digits. The vector file's `tx-0` placeholders are refused.
+- **Released event.** `packetDigest` is 32 bytes, so the lock's `Released` event carries the Keccak digest, not the 48-byte PFTL packet digest. The 48-byte digest is in tag 38.
+- **Statement.** The bytes are tested against the real decode (`crates/ethereum-contracts/test/ExternalLaneExportPublicValues.t.sol`, with a fixture the Rust test writes). The prover program that proves them is the next step.
 
 ## 10. Sources
 
