@@ -1272,7 +1272,7 @@ pub(super) fn update_governance_for_certificate_replay(
     // change, and the state root check reads the state-replay copy.
     let _ = crate::execution_actions::execute_ledgerless_archived_governance_batch(
         governance,
-        genesis.external_lanes(),
+        genesis,
         &batch,
         block.header.height,
     );
@@ -3087,7 +3087,7 @@ pub(super) fn replay_archived_payload(
             Ok(crate::execution_actions::execute_archived_governance_batch(
                 state.governance,
                 Some(state.ledger),
-                Some(genesis.external_lanes()),
+                Some(genesis),
                 &batch,
                 block.header.height,
             ))

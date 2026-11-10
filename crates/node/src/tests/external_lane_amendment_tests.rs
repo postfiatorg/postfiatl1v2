@@ -235,7 +235,7 @@ fn release_cap_amendment_for_a_lane_genesis_does_not_configure_is_refused() {
     let receipts = crate::execution_actions::execute_governance_batch(
         &mut governance,
         Some(&mut ledger),
-        Some(genesis.external_lanes()),
+        Some(&genesis),
         &batch,
         1,
     );
@@ -274,7 +274,7 @@ fn release_cap_amendment_must_name_its_proposal_slot() {
     let receipts = crate::execution_actions::execute_governance_batch(
         &mut governance,
         Some(&mut ledger),
-        Some(genesis.external_lanes()),
+        Some(&genesis),
         &batch,
         2,
     );
@@ -327,7 +327,7 @@ fn certificate_replay_refuses_a_release_cap_amendment_for_an_unconfigured_lane()
     let mut live = governance.clone();
     let mut ledger = store.read_ledger().expect("ledger");
     let receipts =
-        crate::execution_actions::execute_governance_batch(&mut live, Some(&mut ledger), Some(genesis.external_lanes()), &batch, 1);
+        crate::execution_actions::execute_governance_batch(&mut live, Some(&mut ledger), Some(&genesis), &batch, 1);
     assert_eq!(receipts[0].code, LANE_NOT_CONFIGURED, "{receipts:?}");
 
     let mut replayed = governance;

@@ -986,3 +986,100 @@ fn external_lane_export_root_genesis_needs_consensus_v2_at_its_height() {
         let _ = fs::remove_dir_all(data_dir);
     }
 }
+
+/// An export-root activation amendment ratified at `value`, its lifecycle
+/// activation at `slot`, supported by all of `validators`.
+fn export_root_amendment(genesis: &Genesis, validators: &[String], value: u32, slot: u64) -> GovernanceAmendment {
+    postfiat_consensus_cobalt::ratify_governance_amendment_with_lifecycle(
+        &cobalt_domain(genesis),
+        &EssentialSubsetConfig { validators: validators.to_vec(), quorum: validators.len() },
+        postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT,
+        value,
+        validators.to_vec(),
+        GovernanceAmendmentLifecycle { activation_height: slot, veto_until_height: 0, paused: false },
+    )
+    .expect("ratified")
+}
+
+const REQUIRES_CONSENSUS_V2: &str = "external_lane_export_root_activation_requires_consensus_v2";
+
+/// An export-root activation below the consensus v2 activation height would
+/// stop block production there, so batch admission and building, execution,
+/// the archived replay and the ledgerless certificate replay all refuse it,
+/// and accept one at or above that height.
+#[test]
+fn external_lane_export_root_amendment_needs_consensus_v2_at_its_height() {
+    let mut genesis = lane_genesis("postfiat-lane-root-amendment-v2", 4);
+    genesis.consensus_v2_activation_height = Some(6);
+    let validators = local_validator_ids(4).expect("validators");
+    for (value, accepted) in [(5, false), (6, true), (7, true)] {
+        let batch = GovernanceActionBatch::new(
+            format!("export-root-{value}"),
+            vec![export_root_amendment(&genesis, &validators, value, 1)],
+        );
+        let ready = ensure_governance_batch_lifecycle_ready(&genesis, &batch, 1);
+        assert_eq!(ready.is_ok(), accepted, "{value}: {ready:?}");
+        if let Err(error) = ready {
+            assert!(error.to_string().starts_with(REQUIRES_CONSENSUS_V2), "{error}");
+        }
+        let receipts = [
+            crate::execution_actions::execute_governance_batch(
+                &mut GovernanceState::new(4),
+                None,
+                Some(&genesis),
+                &batch,
+                1,
+            ),
+            crate::execution_actions::execute_archived_governance_batch(
+                &mut GovernanceState::new(4),
+                None,
+                Some(&genesis),
+                &batch,
+                1,
+            ),
+            crate::execution_actions::execute_ledgerless_archived_governance_batch(
+                &mut GovernanceState::new(4),
+                &genesis,
+                &batch,
+                1,
+            ),
+        ];
+        for receipt in receipts.iter().map(|receipts| &receipts[0]) {
+            assert_eq!(receipt.accepted, accepted, "{value}: {receipt:?}");
+            if !accepted {
+                assert_eq!(receipt.code, REQUIRES_CONSENSUS_V2, "{receipt:?}");
+            }
+        }
+        // Without a genesis the consensus v2 activation is unknown: refused.
+        let receipts = crate::execution_actions::execute_governance_batch(&mut GovernanceState::new(4), None, None, &batch, 1);
+        assert_eq!(receipts[0].code, REQUIRES_CONSENSUS_V2, "{receipts:?}");
+    }
+    // A genesis without consensus v2 refuses every height.
+    genesis.consensus_v2_activation_height = None;
+    let batch = GovernanceActionBatch::new("export-root-no-v2", vec![export_root_amendment(&genesis, &validators, 9, 1)]);
+    assert!(ensure_governance_batch_lifecycle_ready(&genesis, &batch, 1).is_err());
+}
+
+/// On a chain with consensus v2 from height 6, the governed round refuses an
+/// activation at 5 at admission and accepts one at 6; the chain then replays.
+#[test]
+fn external_lane_export_root_governed_activation_at_consensus_v2_replays() {
+    let chain = lane_chain_with_genesis("export-root-governed-v2", 86_400, Some(6), 4, |_| {});
+    let validators = local_validator_ids(4).expect("validators");
+    let slot = tip_height(&chain) + 1;
+    let ratify = |value: u32, tag: &str| {
+        let amendment_file = chain.data_dir.join(format!("{tag}.unsigned.json"));
+        let amendment = export_root_amendment(&chain.genesis, &validators, value, slot);
+        fs::write(&amendment_file, serde_json::to_vec_pretty(&amendment).expect("json")).expect("write");
+        sign_and_apply_governance(&chain, amendment_file, &validators, tag)
+    };
+    let error = ratify(5, "export-root-5").expect_err("below consensus v2").to_string();
+    assert!(error.contains(REQUIRES_CONSENSUS_V2), "{error}");
+    assert_eq!(tip_height(&chain), slot - 1);
+    let receipts = ratify(6, "export-root-6").expect("at consensus v2");
+    assert!(receipts[0].accepted, "{receipts:?}");
+    let governance = NodeStore::new(&chain.data_dir).read_governance().expect("governance");
+    assert_eq!(postfiat_types::external_lane_export_root_activation_height(&chain.genesis, &governance), Some(6));
+    verify_blocks(NodeOptions { data_dir: chain.data_dir.clone() }).expect("replay with the accepted amendment");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
