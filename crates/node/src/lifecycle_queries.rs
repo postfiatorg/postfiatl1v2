@@ -1715,6 +1715,25 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
     } else {
         "ledger_mempool".to_string()
     };
+    let export_refusal = match &operation {
+        AssetTransactionOperation::ExternalLaneExportV1(export) => {
+            postfiat_execution::dry_run_external_lane_export(
+                &genesis,
+                &quote_ledger,
+                export,
+                &options.source,
+                minimum_fee,
+                block_height,
+                asset_execution_compatibility,
+            )
+            .err()
+            .map(|(code, message)| AssetOperationRefusal {
+                code: code.to_string(),
+                message,
+            })
+        }
+        _ => None,
+    };
 
     Ok(AssetFeeQuoteReport {
         schema: "postfiat-asset-fee-quote-v1".to_string(),
@@ -1738,6 +1757,7 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
         sender_balance_after_fee,
         sender_meets_reserve_after_fee,
         operation,
+        export_refusal,
     })
 }
 

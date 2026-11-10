@@ -325,6 +325,38 @@ pub(crate) fn apply_external_lane_export(
     )
 }
 
+/// The export as execution would apply it to `ledger`, without a signature
+/// and without writing: on a copy, the fee is taken off the source as
+/// execution takes it before the operation, then
+/// `apply_external_lane_export_with_caps` runs with `compatibility`'s caps.
+/// Run on the ledger after the executable mempool (the dry run admission
+/// and the fee quote use), it returns the refusal admission would return for
+/// the signed transaction, so a caller can refuse before anything is signed.
+pub fn dry_run_external_lane_export(
+    genesis: &Genesis,
+    ledger: &LedgerState,
+    operation: &ExternalLaneExportOperationV1,
+    source: &str,
+    fee: u64,
+    block_height: u64,
+    compatibility: crate::AssetExecutionCompatibility,
+) -> Result<(), ExecutionError> {
+    let mut dry_run = ledger.clone();
+    if let Some(account) = dry_run.account_mut(source) {
+        account.balance = account.balance.saturating_sub(fee);
+    }
+    apply_external_lane_export_with_caps(
+        genesis,
+        &mut dry_run,
+        operation,
+        source,
+        String::new(),
+        block_height,
+        compatibility.external_lane_release_caps,
+        compatibility.external_lane_governed.caps,
+    )
+}
+
 /// `apply_external_lane_export`, with `caps_governed` false for the bare
 /// `execute_asset_transaction` entry, whose caps are the genesis caps: every
 /// refusal keeps its code, and an export that would apply is refused with

@@ -754,3 +754,49 @@ fn external_lane_export_command_refuses_a_balance_short_of_amount_fee_and_reserv
     assert!(error.contains("cannot cover the amount 1000"), "{error}");
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
+
+/// Pending exports count before signing: the lane's committed
+/// `released - exported` is not what admission checks, the ledger after the
+/// executable mempool is. Two and three pending exports that exhaust the
+/// lane refuse a fourth before the key signs; an export that still fits
+/// after the pending ones is signed and admitted.
+#[test]
+fn external_lane_export_command_counts_pending_exports_before_signing() {
+    let released = ACCOUNT_RESERVE + 1_000;
+    let code = postfiat_types::EXTERNAL_LANE_EXPORT_ABOVE_RELEASED;
+    let store_of = |chain: &Chain| NodeStore::new(&chain.data_dir);
+
+    let chain = released_export_chain("export-command-pending-2", released);
+    for amount in [600, released - 600] {
+        export_command(&chain, "base-erc20", amount, &base_recipient(), false).expect("pending export");
+    }
+    assert_eq!(store_of(&chain).read_mempool().expect("mempool").pending_asset_transactions.len(), 2);
+    faucet_refused(&chain, "base-erc20", 1, &base_recipient(), code);
+    let _ = fs::remove_dir_all(&chain.data_dir);
+
+    let chain = released_export_chain("export-command-pending-3", released);
+    export_command(&chain, "base-erc20", 600, &base_recipient(), false).expect("pending export");
+    export_command(&chain, "base-erc20", 1, &base_recipient(), false).expect("fits after one pending");
+    // Exactly what is left after the two pending exports.
+    export_command(&chain, "base-erc20", released - 601, &base_recipient(), false)
+        .expect("fits after two pending");
+    faucet_refused(&chain, "base-erc20", 1, &base_recipient(), code);
+    let mempool = store_of(&chain).read_mempool().expect("mempool");
+    assert_eq!(mempool.pending_asset_transactions.len(), 3);
+    let batch_file = chain.data_dir.join("pending.batch.json");
+    create_mempool_batch(MempoolBatchOptions {
+        data_dir: chain.data_dir.clone(),
+        batch_file: batch_file.clone(),
+        max_transactions: 8,
+    })
+    .expect("mempool batch");
+    let receipts = apply_batch(ApplyBatchOptions {
+        data_dir: chain.data_dir.clone(),
+        batch_file,
+        certificate_file: None,
+    })
+    .expect("apply batch");
+    assert!(receipts.len() == 3 && receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
+    assert_eq!(export_page(&chain.data_dir, None, None).state.exported_atoms, released);
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}

@@ -83,7 +83,10 @@ fn lane_row(
 
 /// Checks the export against the lane and the sender's balance, then signs
 /// it and, unless `dry_run`, submits it. Every refusal is returned before the
-/// key signs anything.
+/// key signs anything, against the ledger after the executable pending
+/// transactions (`asset_fee_quote`'s `export_refusal`). A transaction another
+/// submitter gets admitted between that check and the submission can still
+/// make admission refuse this one; a refused admission charges no fee.
 pub fn external_lane_export(
     options: ExternalLaneExportOptions,
 ) -> io::Result<ExternalLaneExportReport> {
@@ -190,6 +193,12 @@ pub fn external_lane_export(
                 quote.account_reserve
             ),
         ));
+    }
+    // The lane rules on the ledger after the executable mempool, by
+    // execution's own export path: pending exports count as admission
+    // counts them.
+    if let Some(refusal) = &quote.export_refusal {
+        return Err(refused(&refusal.code, refusal.message.clone()));
     }
     let fee = quote.minimum_fee;
     let sequence = quote.sequence;

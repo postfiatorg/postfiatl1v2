@@ -2829,6 +2829,18 @@ pub struct AssetFeeQuoteReport {
     pub sender_balance_after_fee: Option<u64>,
     pub sender_meets_reserve_after_fee: bool,
     pub operation: AssetTransactionOperation,
+    /// For `external_lane_export_v1`: the refusal execution returns for the
+    /// export on the ledger after the executable mempool, the state
+    /// admission checks against. Absent when the export would apply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export_refusal: Option<AssetOperationRefusal>,
+}
+
+/// A refusal code and message from an execution dry run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetOperationRefusal {
+    pub code: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

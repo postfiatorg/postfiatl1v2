@@ -766,7 +766,7 @@ fn print_usage() {
   postfiat-node external-lane-lock-proof [--data-dir PATH] --lane-id ID --base-rpc http://HOST:PORT[/PATH] --transaction-hash 0xHASH --certificate-file PATH --submitter ADDRESS [--log-index N] --operation-file PATH
       (the external_lane_release_v1 operation of a Lock in the certificate's block, for wallet-sign-asset-transaction --operation-json)
   postfiat-node external-lane-export [--data-dir PATH] --key-file PATH --lane-id ID --amount-atoms N --base-recipient 0xADDRESS [--dry-run]
-      (checks the lane, the recipient and the balance before signing; signs as wallet-sign-asset-transaction; --dry-run prints the signed transaction, otherwise submits it and prints the tx id)
+      (checks the lane, the recipient and the balance before signing, after this node's pending transactions; signs as wallet-sign-asset-transaction; --dry-run prints the signed transaction, otherwise submits it and prints the tx id; a transaction admitted between the check and the submission can still make admission refuse it, without a fee)
   postfiat-node external-lane-export-status [--data-dir PATH] --lane-id ID (--tx-id ID | --export-nonce N)
       (the export packet, whether its block is final, and that the Base payout needs a relay that does not exist yet)
   postfiat-node fastswap-control-prepare [--data-dir PATH] --kind activate-committee --epoch N --committee-root HEX --control-file PATH
