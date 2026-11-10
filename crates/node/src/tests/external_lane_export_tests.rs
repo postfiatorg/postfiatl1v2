@@ -968,3 +968,21 @@ fn external_lane_verifier_pins_use_the_chains_genesis_hash() {
     );
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
+
+/// `init` refuses a genesis that activates the export root at a height where
+/// consensus v2 is not active, since no block from that height could be built.
+#[test]
+fn external_lane_export_root_genesis_needs_consensus_v2_at_its_height() {
+    for (consensus_v2, accepted) in [(None, false), (Some(6), false), (Some(5), true), (Some(1), true)] {
+        let mut genesis = lane_genesis("postfiat-lane-root-init", 4);
+        genesis.external_lane_export_root_activation_height = Some(5);
+        genesis.consensus_v2_activation_height = consensus_v2;
+        let data_dir = unique_test_dir("postfiat-external-lane-root-init");
+        let result = init_with_genesis(data_dir.clone(), "validator-0".to_string(), genesis);
+        assert_eq!(result.is_ok(), accepted, "consensus v2 at {consensus_v2:?}: {result:?}");
+        if let Err(error) = result {
+            assert!(error.to_string().contains("consensus v2 is not active"), "{error}");
+        }
+        let _ = fs::remove_dir_all(data_dir);
+    }
+}

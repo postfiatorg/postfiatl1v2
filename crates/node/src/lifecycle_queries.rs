@@ -371,6 +371,18 @@ pub(super) fn init_with_genesis(
     genesis
         .validate()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    // The export root needs consensus v2 at its activation height; otherwise
+    // no block from that height on could be built.
+    if let Some(height) = genesis.external_lane_export_root_activation_height {
+        if !consensus_v2_active_at(&genesis, height) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "genesis activates the external lane export root at height {height}, where consensus v2 is not active"
+                ),
+            ));
+        }
+    }
     let store = NodeStore::new(&data_dir);
     let state = NodeState::initialized(node_id);
     let faucet_key = create_dev_key_file()?;
