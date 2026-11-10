@@ -297,6 +297,30 @@ The full values, their verifier commitments and an 8453 example with synthetic a
 
 **Not done.** No proof was generated. The export proof program, the proof-input command, the relay and the deployment are still to do.
 
+## Base half, step 3 (2026-11-10)
+
+**The lane export proof program.** The lane needs its own program and key. The pfUSDC egress program requires `receipt.tx_id == burn_tx_id` and binds the bridge-exit root, which a lane export does not satisfy. Its source and key stay as on main.
+
+**The statement.** `verify_external_lane_export_witness_v1` (`crates/pft_lane_proofs/src/lib.rs`) takes an `ExternalLaneExportProofWitnessV1` (`crates/types/src/external_lane_export_proof_types.rs`) and returns exactly `external_lane_export_egress_public_values` for it:
+
+1. **Finality.** One block is final from the checkpoint the Base verifier already accepts, by `verify_pftl_finality_segment_v1` of `crates/pfusdc_proofs`, called unchanged. Nothing is copied from that crate.
+2. **The export's block is the proven block.** The consensus v2 block id is recomputed from the witness block's fields with its `external_lane_export_root` (`postfiat.consensus.block-id.external-lane-export-root.v1`). It must equal the finalized id and the header's hash. The commit must bind the same root, and the block height must be the packet's `exported_at_height`.
+3. **Membership.** The leaf is recomputed from the chain id, the lane id, the nonce and the packet digest. It must be in the header root at the claimed index under the claimed leaf count (`verify_external_lane_export_root_proof_v1`).
+4. **The lane policy.** The witness carries the chain's genesis. Its hash, chain id and protocol version must be the ones the finality domain signed. Its lane gives the route profile hash and the asset id (`Genesis::external_lane_verifier_pins`).
+5. **The transaction.** The accepted transaction id in the public values is the packet's `tx_id`, and it must be one of the block's receipt ids.
+
+The result is then compared field by field with what the finality check returned: prior and resulting checkpoint, committee root and transition, heights, view, block ids, parent, state root, export root and leaf index. The Checkpoint variant calls `verify_checkpoint_witness_v1` unchanged.
+
+**The witness.** It holds the chain id, the genesis hash, the protocol version and the prior checkpoint. It also holds the finality ancestry and committee (the pfUSDC bounds: at most 64 ancestry blocks and 64 validators), the export's block, the genesis, the packet and the membership proof (at most 12 siblings, so 4,096 leaves).
+
+**The program.** `programs/pft-lane-export` has the shape of `programs/pfusdc-egress`. It reads the versioned CBOR `ExternalLaneExportProgramInputV1` (`withdrawal` or `checkpoint`) and commits `canonical_bytes_without_commitment()`. It has its own `Cargo.lock`.
+
+**The input command.** `postfiat-node external-lane-export-proof-input --lane-id ID (--export-nonce N | --tx-id HEX) --prior-checkpoint HEX --output-dir PATH` writes `input.cbor` and `expected-public-values.json`. It works on a data directory only, not over RPC. The prior checkpoint is the Base verifier's latest accepted checkpoint. The command runs the statement before it writes anything. When the block's packets are pruned from the lane records, it rebuilds them by replaying the batch archive. Without the archive it refuses and names what the operator needs. It refuses an unknown nonce or transaction id, an export that is not final yet, a lane with exports off, and a chain without the export root.
+
+**Key and cycles.** No ELF and no key are committed. The CI proof-identity jobs reproduce programs with the Docker build (`cargo prove build --docker --tag v6.3.1`), and this host has no Docker. A local SP1 6.3.1 native build ran in execute mode only (`tools/pft-lane-export-prover execute`, `SP1_PROVER=cpu`). On the node test chain it committed exactly the expected public values for all three exports, 1,491 bytes each. It took 33,618,449 and 33,618,734 instructions for the two exports proven from their own block, and 43,034,593 for the export one block later, with one ancestry block. Next comes a Docker build on a host with Docker. Commit its ELF and `program-info` in the neighbours' format, then add the program to the proof public-input inventory and the proof-identity CI job.
+
+**Limits.** The export's block must be the proven block. An export from an older block than the finalized one is refused in this version. No proof was generated. There is no relay and no deployment yet.
+
 ## 10. Sources
 
 - `docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md`, sections 5.1, 6 and 7.
