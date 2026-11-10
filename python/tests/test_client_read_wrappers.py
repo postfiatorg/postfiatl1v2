@@ -71,6 +71,38 @@ class VerifierWrapperTests(unittest.TestCase):
                     self.assertEqual(getattr(client, name)(), report)
                 call.assert_called_once_with(name, {})
 
+    def test_verify_bridge_returns_the_report_on_a_node_with_no_bridge_transfer(self) -> None:
+        # Issue #160: with no transfer `latest_transfer_id` is empty; the node's
+        # event names the constant subject "bridge" and the report is unchanged.
+        client = _client()
+        report: dict[str, Any] = {
+            "verified": True,
+            "domain_count": 0,
+            "transfer_count": 0,
+            "attestation_count": 0,
+            "replay_cache_count": 0,
+            "inbound_used": 0,
+            "outbound_used": 0,
+            "latest_transfer_id": "",
+        }
+
+        def answer(request: dict[str, Any]) -> dict[str, Any]:
+            self.assertEqual((request["method"], request["params"]), ("verify_bridge", {}))
+            return {
+                "version": request["version"],
+                "id": request["id"],
+                "ok": True,
+                "result": report,
+                "error": None,
+                "events": [
+                    {"event_type": "verify_bridge", "subject": "bridge", "message": "bridge state verified"}
+                ],
+            }
+
+        with mock.patch.object(client, "_send", side_effect=answer) as send:
+            self.assertEqual(client.verify_bridge(), report)
+        send.assert_called_once()
+
     def test_requires_an_object_report(self) -> None:
         client = _client()
         with mock.patch.object(client, "_call", return_value="ok"):
