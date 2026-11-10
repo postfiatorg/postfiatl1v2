@@ -1,8 +1,8 @@
 # Lane Base Sepolia dry run, local fork, 2026-11-10
 
-**This ran on a local Anvil fork of Base Sepolia. Nothing was sent to Base Sepolia, and no funded key was opened.** The fork took its state from `https://sepolia.base.org` at block 56,972,342. Every deployment, approve and Lock went to the fork, from impersonated accounts with no keys. Against the public RPC, the run made reads only: `eth_blockNumber`, `eth_gasPrice`, `eth_getCode`, `eth_call` and `eth_getTransactionCount`, plus what Anvil reads to serve its fork.
+**This ran on a local Anvil fork of Base Sepolia. Nothing was sent to Base Sepolia, and no funded key was opened.** The fork took its state from `https://sepolia.base.org` at block 56,983,631. Every deployment, approve and Lock went to the fork, from impersonated accounts with no keys. Against the public RPC, the run made reads only: `eth_blockNumber`, `eth_gasPrice`, `eth_getCode`, `eth_call` and `eth_getTransactionCount`, plus what Anvil reads to serve its fork.
 
-This records one `--fork` run of `scripts/rehearse-lane-base-sepolia.py` (runbook `docs/runbooks/lane-base-sepolia-dry-run.md`). The script came from commit `d5365e285d`. The `release-on-pftl` finality wait was added afterwards; it applies only off the fork. `summary.json` holds every value, `deploy-sheet.json` and `deploy-sheet.md` are the sheet, and `manifest.json` holds the hashes.
+This records one `--fork` run of `scripts/rehearse-lane-base-sepolia.py` (runbook `docs/runbooks/lane-base-sepolia-dry-run.md`). The script came from commit `c8e672672`, after the review fixes: the address and keystore checks, the committed-key rule, the intent journal and the relayer account. The `release-on-pftl` finality wait applies only off the fork. `summary.json` holds every value, `deploy-sheet.json` and `deploy-sheet.md` are the sheet, and `manifest.json` holds the hashes.
 
 **Real:**
 
@@ -20,21 +20,28 @@ This records one `--fork` run of `scripts/rehearse-lane-base-sepolia.py` (runboo
 
 - **Base Sepolia:** a fork stood in for it.
 - **The PFTL "fleet":** one data directory driven by an ignored node test. Every block carries consensus v2 commits from all six validators, but no separate node processes or network ran.
-- **The program key:** `0x000cef5b…1414`, taken from a `program-info.json` that holds the values reported from workflow run 42818337185. It is not committed yet.
+- **The program key:** `0x000cef5b…1414` from the committed `programs/pft-lane-export/program-info.json` (ELF `e92f2004…48ab`, source commit `439803aaa`, two reproducible runs), recorded in the deploy sheet and the constructor record.
 - **The proof:** none. `prove-and-release` stopped, as it must without a real SP1 proof.
 
 ## Stages
 
 | Stage | Result |
 |---|---|
-| plan | Fresh deployers `0x1310…8291` (verifier) and `0x0e2a…f4c4` (lock), nonce 0 each. Predicted verifier `0x0d17…663a`, lock `0x9cf7…878c`, lock code hash `0xa1c7…8eac`. |
-| fleet | First finalized checkpoint at height 1. Verifier constructor from the genesis-owned pins, the real SP1 verifier and the program key. |
-| preflight | Both contracts landed at the predicted addresses on a separate fork; all 21 constructor values read back; one approve and Lock. Gas: verifier 2,630,563; lock 1,134,485; approve 46,331; Lock 154,401. |
-| deploy | Verifier, then lock, at the pinned nonces on the target fork. Code hashes equal the preflight's. Sourcify skipped on the fork. |
-| lock | 1,000,000 units locked from the holder (fork block 56,972,346). |
+| plan | Fresh deployers `0xf1df…62d2` (verifier) and `0x5d1c…b5be` (lock), nonce 0 each. Predicted verifier `0x3ef8…300d`, lock `0x0c38…13cc`. The committed ELF matched its program info. |
+| fleet | First finalized checkpoint at height 1. Verifier constructor from the genesis-owned pins, the real SP1 verifier and the committed key. |
+| preflight | Both contracts landed at the predicted addresses on a separate fork; all 21 constructor values read back; one approve and Lock. Gas: verifier 2,630,551; lock 1,134,485; approve 46,331; Lock 154,401. |
+| deploy | Gas price checked against Base Sepolia's own. Intents recorded first; the verifier landed at its predicted address with the preflight's code hash before the lock was sent; then the lock, checked the same way. Sourcify skipped on the fork. |
+| lock | Approve and Lock sent asynchronously, each hash recorded before its receipt; 1,000,000 units locked (fork block 56,983,635, Lock nonce 0). |
 | release-on-pftl | Five checkpoint votes; release in PFTL block 2; the recipient holds 1,000,000 atoms. |
-| export | 400,000 atoms to `0x19c9…6bcb` in PFTL block 4, which carries the export root. Proof input sha256 `15728d04…809d`; expected public values sha256 `4eafc5fb…022d`. |
+| export | 400,000 atoms in PFTL block 4, which carries the export root. Proof input sha256 `e02b9808…aace`; expected public values sha256 `6f10001e…9c9f`. |
 | prove-and-release | Stopped (exit 3). It printed the prover-command contract, the program key, the input's sha256 and the public-values hash. |
 | record | Summary and manifest. |
 
-**Test ETH per key** at the gas price read (0.006 gwei), with a 3x margin: verifier deployer 0.000047350 ETH; lock deployer 0.000020421 ETH; holder 0.000003613 ETH. A release's gas is not estimated, because it needs a real proof.
+**Test ETH per key** at the gas price read (0.006 gwei), with a 3x margin:
+
+- verifier deployer: 0.000047350 ETH;
+- lock deployer: 0.000020421 ETH;
+- holder: 0.000004747 ETH, including its three funding transfers of 21,000 gas each, to the two deployers and the relayer;
+- relayer: not estimated, because a release needs a real proof.
+
+**Intent journal** (`state.json`, not published, since it names the local data directory): four intents were recorded before sending — deploy/verifier, deploy/lock, lock/approve and lock/lock. All four were sent with status `0x1`.

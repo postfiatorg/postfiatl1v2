@@ -2,14 +2,17 @@
 
 | Role | Address | Nonce | Predicted contract |
 |---|---|---|---|
-| verifier deployer | `0x1310b5c3e7786a37076ed5c4c0b431ec41258291` | 0 | `0x0d17ce83912a60530a7a4e2fc7bbbcbfba94663a` |
-| lock deployer | `0x0e2a5545c75343c3005b0784cf587db820ddf4c4` | 0 | `0x9cf71da3b34391716a7925cbadef1b82bab7878c` |
+| verifier deployer | `0xf1df66c6395ec5be01af34897fc32e83ae3d62d2` | 0 | `0x3ef8a003e9ef4638c5882bf0976a6df039b4300d` |
+| lock deployer | `0x5d1c9b41d55406e4313a6cbe9203c97a3c75b5be` | 0 | `0x0c388ce7118c092e5c310b932fbf3ae6fb9613cc` |
 
 | Key | Gas on the fork | Test ETH (x3 margin) |
 |---|---|---|
-| verifier deployer | 2630563 | 0.000047350 |
+| verifier deployer | 2630551 | 0.000047350 |
 | lock deployer | 1134485 | 0.000020421 |
-| holder | 200732 | 0.000003613 |
+| holder | 263732 | 0.000004747 |
+| relayer | n/a | release gas cannot be estimated without a real proof; fund it separately |
+
+Program: ELF sha256 `e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab`, key `0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414`, source commit `439803aaa3d6f34dfe97a4a48eca5d6008cba43d`.
 
 Gas price read: 6000000 wei. SP1 verifier: `0xb69f2584cbcff99a58c4e7002e8b89af54a6f4e2` (V6_1_0_SP1_VERIFIER_GROTH16, https://github.com/succinctlabs/sp1-contracts/blob/v6.1.0/contracts/deployments/84532.json).
 
@@ -18,17 +21,17 @@ Gas price read: 6000000 wei. SP1 verifier: `0xb69f2584cbcff99a58c4e7002e8b89af54
 - `sp1Verifier`: `0xb69f2584cbcff99a58c4e7002e8b89af54a6f4e2`
 - `programVKey`: `0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414`
 - `pftlChainIdHash`: `0x4ea8ee52b27fd187a726848ac2e0a41d4cf2c511922f08404f79d25fdbef878d`
-- `pftlGenesisHashCommitment`: `0x009719e0cd2debe69a0e8324e3e777b2c0065bd92616fe4f2b41a98669b371cb`
+- `pftlGenesisHashCommitment`: `0x00adf8ea5f9dd5f840fcd028b5830b945b0cdd0b03523af6afad99ae2ea77fbd`
 - `pftlProtocolVersion`: `1`
-- `routeProfileHashCommitment`: `0xd30d28c91212bd9a5fd30509e292c249a8ab4d0957d8d03ac63d0433f66a04f4`
+- `routeProfileHashCommitment`: `0xbc08cd934b92866c544c4c29a605ace538bd96ceb071b74fa14f7d85d670e0b9`
 - `routeEpoch`: `1`
-- `assetIdCommitment`: `0xf13f8238c4d740a445b91b6ff0dfbd7d9fe1552072e76c915af4c5a1e01af860`
+- `assetIdCommitment`: `0xef6331cbf5e3c10da961e747bd1662a4b53ca13b12225d384eb5d97a859c1998`
 - `arbitrumChainId`: `84532`
-- `vaultRuntimeCodeHash`: `0xa1c72e1ab25e755085315f2e8097d59b14f37b2d89d82e97a35ca09647bf8eac`
+- `vaultRuntimeCodeHash`: `0xceed4e9265b55fe1c89b44d9384385f1c19a9d884b9fa04fb82a80c7192b0cb6`
 - `token`: `0x90ce303356d80ecbe359faf061c84130f40eacf0`
 - `tokenRuntimeCodeHash`: `0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b`
 - `maxProofBytes`: `4096`
 - `maxPublicValuesBytes`: `16384`
-- `initialCheckpointCommitment`: `0xbb0e3861b2b1bb0f780666fc55c2b91bf0040268eee8e6a4f8fcb92ed43efdbf`
+- `initialCheckpointCommitment`: `0xbbf518e84d8a52eb871b5182b8b13b6ae104582ac3f35977e21a0088f07529a7`
 - `initialFinalizedHeight`: `1`
-- `initialCommitteeRootCommitment`: `0x05d75e290d105b08c2765d702c8671566af90a835fce9c2fabc727124e693a5c`
+- `initialCommitteeRootCommitment`: `0x80842b28e842cbfc493414d919db0f9f3e48b766f35e92b7b79e1d15ad34a7f3`
