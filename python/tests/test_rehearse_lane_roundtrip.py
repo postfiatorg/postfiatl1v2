@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 
@@ -58,6 +59,34 @@ class RoundTripTests(unittest.TestCase):
             roundtrip.check_lane_conservation(dict(lane, remainder_atoms=299_000_000))
         with self.assertRaises(roundtrip.RehearsalFailure):
             roundtrip.check_cross_chain(lane, {"total_locked": 1_000_000, "total_released": 0})
+
+
+class PortablePathTests(unittest.TestCase):
+    def test_paths_outside_the_checkout_and_output_become_roles(self):
+        out, root = "/home/op/scratch/run", "/home/op/repos/l1"
+        roles = {"/home/op/scratch/elf/pft-lane-export-program": "<elf sha256:abcd>"}
+        text = json.dumps({
+            "elf": "/home/op/scratch/elf/pft-lane-export-program",
+            "python": "/usr/bin/python3",
+            "data_dir": "/home/op/scratch/run/tmp/chain",
+            "script": "/home/op/repos/l1/scripts/x.py",
+            "elsewhere": "/home/op/other/thing.json",
+            "rpc": "http://127.0.0.1:8545",
+            "relative": "crates/node/src/lib.rs",
+            "key": "0xsecret",
+        })
+        clean = roundtrip.portable_text(text, out=out, root=root, roles=roles, secrets=["0xsecret"])
+        document = json.loads(clean)
+        self.assertEqual(document["elf"], "<elf sha256:abcd>")
+        self.assertEqual(document["python"], "<path-outside-checkout>")
+        self.assertEqual(document["data_dir"], "<output>/tmp/chain")
+        self.assertEqual(document["script"], "<checkout>/scripts/x.py")
+        self.assertEqual(document["elsewhere"], "<path-outside-checkout>")
+        self.assertEqual(document["rpc"], "http://127.0.0.1:8545")
+        self.assertEqual(document["relative"], "crates/node/src/lib.rs")
+        self.assertEqual(document["key"], "<disposable-key>")
+        for fragment in ("/home", "/usr", "op/scratch"):
+            self.assertNotIn(fragment, clean)
 
 
 if __name__ == "__main__":

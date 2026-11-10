@@ -24,6 +24,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -76,6 +77,25 @@ PUBLISHED = ('summary.json', 'manifest.json')
 def fresh_base_address(label):
     """A Base address nobody holds a key for, derived from a label."""
     return '0x' + keccak256(b'postfiat.lane-roundtrip.base-recipient\x00' + label.encode())[-20:].hex()
+
+
+# An absolute path not already named by a role: a '/' that does not follow a
+# word character, ':', '/', '<' or '>' (so URLs, relative paths and '<output>/x'
+# stay), up to the end of the path.
+_ABSOLUTE_PATH = re.compile(r'(?<![\w:/<>.~-])/[^\s"\',]*')
+
+
+def portable_text(text, *, out, root, roles, secrets):
+    """`text` without key material or local layout: secrets become
+    `<disposable-key>`, the paths in `roles` their role names, the output
+    directory `<output>`, the checkout `<checkout>`, and any other absolute
+    path `<path-outside-checkout>`."""
+    for secret in secrets:
+        text = text.replace(secret, '<disposable-key>')
+    for path, role in sorted(roles.items(), key=lambda item: -len(item[0])):
+        text = text.replace(str(path), role)
+    text = text.replace(str(out), '<output>').replace(str(root), '<checkout>')
+    return _ABSOLUTE_PATH.sub('<path-outside-checkout>', text)
 
 
 def roundtrip_verifier_config(*, sp1_verifier, pins, checkpoint, token, token_code_hash, lock_code_hash):
@@ -154,11 +174,10 @@ def main(argv=None):
     secrets, children = [], []
     state = {'url': None, 'data_dir': None}
 
+    roles = {}
+
     def portable(value):
-        text = str(value)
-        for secret in secrets:
-            text = text.replace(secret, '<disposable-key>')
-        return text.replace(str(out), '<output>').replace(str(ROOT), '<checkout>')
+        return portable_text(str(value), out=out, root=ROOT, roles=roles, secrets=secrets)
 
     def command(name, argv, cwd=ROOT, env=None, expected=0):
         began = time.time()
@@ -206,6 +225,10 @@ def main(argv=None):
     try:
         toolchain = {tool: ORDER.tool_version(tool) for tool in ('anvil', 'forge', 'cast', 'cargo', 'rustc')}
         toolchain['elf_sha256'] = ORDER.sha256_file(args.elf)
+        roles[str(args.elf.resolve())] = f'<elf sha256:{toolchain["elf_sha256"]}>'
+        roles[str(args.elf)] = roles[str(args.elf.resolve())]
+        roles[str(args.prover_tool.resolve())] = f'<prover-tool sha256:{ORDER.sha256_file(args.prover_tool)}>'
+        roles[sys.executable] = '<python>'
         toolchain['elf_note'] = ('a local native SP1 6.3.1 build of programs/pft-lane-export for execute mode only; '
                                  'not the Docker-reproducible release build, and no key is committed')
         toolchain['prover_tool_sha256'] = ORDER.sha256_file(args.prover_tool)
@@ -481,11 +504,8 @@ def main(argv=None):
             shutil.rmtree(state['data_dir'])
             results['generated_chain_removed'] = True
         results['ended_at_unix'] = int(time.time())
-        text = json.dumps(results, indent=2)
-        for secret in secrets_seen:
-            text = text.replace(secret, '<disposable-key>')
         # Local paths are not evidence: name them by role.
-        text = text.replace(str(out), '<output>').replace(str(ROOT), '<checkout>').replace(str(Path.home()), '~')
+        text = portable_text(json.dumps(results, indent=2), out=out, root=ROOT, roles=roles, secrets=secrets_seen)
         (out / 'summary.json').write_text(text + '\n')
         manifest = {'source_commit': commit, 'source_tree': tree, 'toolchain': results.get('toolchain'),
                     'source_files': {name: ORDER.sha256_file(ROOT / name) for name in SOURCE_FILES},
