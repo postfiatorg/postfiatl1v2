@@ -27,8 +27,16 @@ enum Command {
         #[arg(long)]
         elf: PathBuf,
         /// `input.cbor` from `postfiat-node external-lane-export-proof-input`.
+        #[arg(
+            long,
+            conflicts_with = "input_json",
+            required_unless_present = "input_json"
+        )]
+        input: Option<PathBuf>,
+        /// The same input as JSON (`{"kind": "checkpoint", "witness": ...}`),
+        /// encoded to the versioned CBOR before execution.
         #[arg(long)]
-        input: PathBuf,
+        input_json: Option<PathBuf>,
         #[arg(long)]
         output_dir: PathBuf,
     },
@@ -57,6 +65,7 @@ async fn main() -> Result<()> {
     let Command::Execute {
         elf,
         input,
+        input_json,
         output_dir,
     } = Args::parse().command;
     anyhow::ensure!(
@@ -64,7 +73,15 @@ async fn main() -> Result<()> {
         "set SP1_PROVER=cpu: this tool only executes locally"
     );
     let elf = Elf::from(fs::read(&elf).with_context(|| format!("read {}", elf.display()))?);
-    let input = fs::read(&input).with_context(|| format!("read {}", input.display()))?;
+    let input = match (input, input_json) {
+        (Some(path), _) => fs::read(&path).with_context(|| format!("read {}", path.display()))?,
+        (None, Some(path)) => {
+            let decoded: ExternalLaneExportProgramInputV1 =
+                serde_json::from_slice(&fs::read(&path)?).context("decode the JSON input")?;
+            serde_cbor::to_vec(&decoded).context("encode the CBOR input")?
+        }
+        (None, None) => anyhow::bail!("name --input or --input-json"),
+    };
     let expected = expected_public_values(&input)?;
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(input);
