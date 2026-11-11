@@ -55,6 +55,20 @@ only the disclosed perimeter. Completeness, legal claim quality, and source
 credit risk must be handled as explicit policy inputs, not hidden in the word
 "proof".
 
+## Watching that proofs keep arriving
+
+A finalized NAV's age is counted in PFTL blocks, so on an idle chain an old NAV
+can still look fresh, and nothing in the chain itself says when proofs stop.
+The read-only [`tools/nav-proof-watch`](https://github.com/postfiatorg/postfiatl1v2/blob/main/tools/nav-proof-watch/README.md)
+records a hash-chained log of the wallet API's routes and raises alarms when no
+new proof epoch is first seen inside the observation window, when the gap
+between new epochs exceeds the proof interval, when the chain stops advancing,
+or when its own log stops. Its thresholds come from the product owner's
+settlement terms; it has no defaults. It deliberately does not judge the
+freshness of a NAV whose packet carries no observation time: it reports
+"cannot be verified" instead of converting blocks into time. The same
+directory has a read-only buyer exit capacity check.
+
 ## Architecture
 
 The PFTL design separates backing, access, and privacy:
