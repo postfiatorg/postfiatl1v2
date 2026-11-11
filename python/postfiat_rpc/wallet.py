@@ -1510,6 +1510,25 @@ def external_lane_export_refusal(
     return None
 
 
+def _export_quote_mismatch(quote: dict[str, Any], operation: dict[str, Any], address: str) -> str | None:
+    """Why the quote is not for `operation` from `address`, or `None`. The
+    signer signs the quote's operation, source and kind, so a node that
+    answers with another recipient, amount, lane or sender gets nothing
+    signed."""
+
+    if quote.get("transaction_kind") != operation["operation"]:
+        return f"the quote is for `{quote.get('transaction_kind')}`, not `{operation['operation']}`"
+    if quote.get("source") != address:
+        return f"the quote's source `{quote.get('source')}` is not the wallet's address `{address}`"
+    quoted = quote.get("operation")
+    if not isinstance(quoted, dict) or set(quoted) != set(operation):
+        return "the quote's operation does not have the requested export's fields"
+    for field in ("operation", "sender", "lane_id", "amount_atoms", "base_recipient"):
+        if quoted[field] != operation[field] or type(quoted[field]) is not type(operation[field]):
+            return f"the quote's {field} `{quoted[field]}` is not the requested `{operation[field]}`"
+    return None
+
+
 def external_lane_export(
     client: PostFiatRpcClient,
     *,
@@ -1526,7 +1545,9 @@ def external_lane_export(
     quote, then the balance (amount + minimum fee + account reserve) and the
     quote's `export_refusal` (execution's export rules on the ledger asset
     admission executes the export on: the pending transfers, payment_v2 entries
-    and asset transactions), and only then sign and submit. Every refusal
+    and asset transactions), and only then sign and submit. A quote whose
+    kind, source or operation is not the requested export is refused with
+    `external_lane_export_quote_mismatch`. Every refusal
     raises `ValueError("refused before signing: CODE: ...")` before the signer
     runs. A transaction admitted between the quote and the submission can
     still make admission refuse this one (raised by the submit call, no fee).
@@ -1555,6 +1576,9 @@ def external_lane_export(
         request_id=f"py-export-quote-{secrets.token_hex(4)}",
     )
     quote = quote_response.get("result", {})
+    mismatch = _export_quote_mismatch(quote, operation, wallet.address)
+    if mismatch is not None:
+        raise ValueError(f"refused before signing: external_lane_export_quote_mismatch: {mismatch}")
     if quote.get("export_checked") is not True:
         raise ValueError(
             "refused before signing: external_lane_export_not_checked: "

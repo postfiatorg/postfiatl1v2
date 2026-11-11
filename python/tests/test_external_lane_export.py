@@ -80,8 +80,21 @@ class ExternalLaneExportRefusalTests(unittest.TestCase):
         self.assertIsNone(external_lane_export_refusal(_row(), amount_atoms=601, base_recipient=RECIPIENT))
 
 
+def _operation(amount_atoms: int = 600, base_recipient: str = RECIPIENT) -> dict[str, Any]:
+    return {
+        "operation": "external_lane_export_v1",
+        "sender": "pf-holder",
+        "lane_id": "base-erc20",
+        "amount_atoms": amount_atoms,
+        "base_recipient": base_recipient,
+    }
+
+
 def _quote(**overrides: Any) -> dict[str, Any]:
     result: dict[str, Any] = {
+        "transaction_kind": "external_lane_export_v1",
+        "source": "pf-holder",
+        "operation": _operation(),
         "sender_balance": 10_000,
         "minimum_fee": 22,
         "account_reserve": 10,
@@ -147,6 +160,27 @@ class ExternalLaneExportTests(unittest.TestCase):
         self.assertRegex(str(error), "insufficient_funds")
         signer.assert_not_called()
 
+    def test_a_quote_for_another_export_is_refused_before_the_signer_runs(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        other_sender = dict(_operation(), sender="pf-other")
+        cases = [
+            ("recipient", _quote(operation=_operation(base_recipient="0x" + "3d" * 20))),
+            ("amount", _quote(operation=_operation(amount_atoms=601))),
+            ("lane", _quote(operation=dict(_operation(), lane_id="base-other"))),
+            ("operation sender", _quote(operation=other_sender)),
+            ("source", _quote(source="pf-other")),
+            ("kind", _quote(transaction_kind="asset_transfer_v1")),
+            ("extra field", _quote(operation=dict(_operation(), memo="x"))),
+        ]
+        for label, quote in cases:
+            for dry_run in (False, True):
+                with self.subTest(label=label, dry_run=dry_run):
+                    error, signer, submit, _ = self._export(client, quote, amount_atoms=600, dry_run=dry_run)
+                    self.assertIsInstance(error, ValueError)
+                    self.assertRegex(str(error), "^refused before signing: external_lane_export_quote_mismatch: ")
+                    signer.assert_not_called()
+                    submit.assert_not_called()
+
     def test_a_balance_short_of_amount_fee_and_reserve_is_refused_before_the_signer_runs(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")
         # 600 + 22 + 10 = 632: one atom short, then exactly enough.
@@ -168,7 +202,10 @@ class ExternalLaneExportTests(unittest.TestCase):
             "external_lane_export_recipient_is_token",
         ):
             with self.subTest(code=code):
-                quote = _quote(export_refusal={"code": code, "message": "after the pending exports"})
+                quote = _quote(
+                    operation=_operation(amount_atoms=1),
+                    export_refusal={"code": code, "message": "after the pending exports"},
+                )
                 error, signer, submit, _ = self._export(client, quote, amount_atoms=1)
                 self.assertRegex(str(error), f"^refused before signing: {code}: after the pending exports")
                 signer.assert_not_called()
@@ -176,9 +213,9 @@ class ExternalLaneExportTests(unittest.TestCase):
 
     def test_a_quote_without_the_export_checked_marker_is_refused_before_the_signer_runs(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")
-        old_node = _quote()
+        old_node = _quote(operation=_operation(amount_atoms=1))
         del old_node["result"]["export_checked"]
-        for quote in (old_node, _quote(export_checked=False)):
+        for quote in (old_node, _quote(operation=_operation(amount_atoms=1), export_checked=False)):
             for dry_run in (False, True):
                 with self.subTest(quote=quote, dry_run=dry_run):
                     error, signer, submit, _ = self._export(client, quote, amount_atoms=1, dry_run=dry_run)
@@ -192,7 +229,7 @@ class ExternalLaneExportTests(unittest.TestCase):
         client = PostFiatRpcClient("127.0.0.1:1234")
         # Committed released 1,000 minus exported 400 is 600; a pending
         # release makes 1,500 fit, so the quote carries no export_refusal.
-        result, signer, submit, _ = self._export(client, _quote(), amount_atoms=1_500)
+        result, signer, submit, _ = self._export(client, _quote(operation=_operation(amount_atoms=1_500)), amount_atoms=1_500)
         self.assertEqual(result.tx_id, "ab")
         signer.assert_called_once()
         submit.assert_called_once()
