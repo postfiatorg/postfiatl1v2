@@ -2718,6 +2718,7 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
         ethereum_arbitrum_finality_states: _,
         fast_ingress_campaigns: _,
         arc_finality_states: _,
+        beacon_finality_states: _,
     } = ledger;
     let ShieldedState {
         next_note_position: _,

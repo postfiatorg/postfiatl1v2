@@ -3725,3 +3725,44 @@ fn changing_a_multiplier_changes_the_policy_hash() {
     let b = spread_policy(10_050, 10_000);
     assert_ne!(a.policy_hash, b.policy_hash, "fee must be bound into policy_hash");
 }
+
+#[test]
+fn an_unpinned_beacon_anchor_does_not_change_the_replicated_encoding() {
+    // The field is skipped when empty, and state_commitment only appends when
+    // non-empty. So a validator running this build produces byte-identical
+    // state to one running the old build until an anchor is actually pinned.
+    // That is what makes this a rolling deploy rather than a consensus
+    // migration: the encoding changes at the moment governance pins an anchor,
+    // deliberately and visibly, not at the moment the binary ships.
+    let ledger = LedgerState::new(Vec::new());
+    assert!(ledger.beacon_finality_states.is_empty());
+    let encoded = serde_cbor::to_vec(&ledger).expect("encode empty ledger");
+    let decoded: LedgerState = serde_cbor::from_slice(&encoded).expect("decode");
+    assert!(decoded.beacon_finality_states.is_empty());
+    let json = serde_json::to_string(&ledger).expect("json");
+    assert!(
+        !json.contains("beacon_finality_states"),
+        "an empty anchor list must not appear in the serialized ledger"
+    );
+}
+
+#[test]
+fn a_pinned_beacon_anchor_is_covered_by_the_state_commitment() {
+    // If the anchor were not committed, two validators could hold different
+    // anchors, agree on the same state root, and disagree about which Ethereum
+    // history is trusted -- reopening R2-1 behind the state root.
+    let (state, _) = beacon_anchor_fixture();
+    let first = state.state_commitment_bytes().expect("commitment");
+    let mut moved = state.clone();
+    moved.finalized_slot += 1;
+    let second = moved.state_commitment_bytes().expect("commitment");
+    assert_ne!(first, second, "advancing the anchor must change its commitment");
+
+    let mut other_root = state.clone();
+    other_root.finalized_beacon_root = "ff".repeat(32);
+    assert_ne!(
+        first,
+        other_root.state_commitment_bytes().expect("commitment"),
+        "a different beacon root must change the commitment"
+    );
+}

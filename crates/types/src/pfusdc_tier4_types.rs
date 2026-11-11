@@ -332,6 +332,27 @@ impl PfUsdcBeaconFinalityStateV1 {
         self.finalized_slot = values.finalized_slot;
         self.validate()
     }
+
+    /// Canonical bytes for the replicated state root.
+    ///
+    /// The anchor MUST be committed: if it were not, two validators could hold
+    /// different anchors, agree on the same state root, and disagree about which
+    /// Ethereum history is trusted -- which would reopen R2-1 through the back
+    /// door.
+    pub fn state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
+        self.validate()?;
+        let mut out = pfusdc_canonical_prefix(PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1);
+        pfusdc_append_text(&mut out, 1, &self.schema)?;
+        pfusdc_append_hex(&mut out, 2, &self.route_profile_hash)?;
+        pfusdc_append_u64(&mut out, 3, self.route_epoch);
+        pfusdc_append_u64(&mut out, 4, self.source_chain_id);
+        pfusdc_append_evm_address(&mut out, 5, &self.vault_address)?;
+        pfusdc_append_evm_address(&mut out, 6, &self.token_address)?;
+        pfusdc_append_hex(&mut out, 7, &self.route_binding)?;
+        pfusdc_append_hex(&mut out, 8, &self.finalized_beacon_root)?;
+        pfusdc_append_u64(&mut out, 9, self.finalized_slot);
+        Ok(out)
+    }
 }
 
 /// Governance-pinned Arc light-client state for one route epoch.
