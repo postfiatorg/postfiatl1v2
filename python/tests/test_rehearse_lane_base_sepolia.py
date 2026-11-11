@@ -558,16 +558,6 @@ class FundingPlanTests(unittest.TestCase):
         self.assertIn("estimate", note)
         self.assertIn("L1 data", note)
 
-    def test_a_real_release_needs_an_explicit_relayer_ceiling(self):
-        for ceiling in (None, 0):
-            with self.assertRaises(dry_run.RehearsalFailure):
-                dry_run.check_relayer_ceiling(fork=False, through="record", ceiling=ceiling)
-            with self.assertRaises(dry_run.RehearsalFailure):
-                dry_run.check_relayer_ceiling(fork=False, through="prove-and-release", ceiling=ceiling)
-            dry_run.check_relayer_ceiling(fork=False, through="export", ceiling=ceiling)
-            dry_run.check_relayer_ceiling(fork=True, through="record", ceiling=ceiling)
-        dry_run.check_relayer_ceiling(fork=False, through="record", ceiling=10 ** 15)
-
     def test_the_record_reads_each_keys_balance(self):
         keys = {"verifier deployer": "0xa", "lock deployer": "0xb", "holder": "0xc", "relayer": None}
         balances = dry_run.key_balances(keys, lambda address: {"0xa": 1, "0xb": 2, "0xc": 3}[address])
@@ -597,3 +587,53 @@ class PayoutRecipientTests(unittest.TestCase):
             text = (ROOT / path).read_text()
             self.assertIn("can never be moved", text)
             self.assertIn("--payout-recipient", text)
+
+
+def no_network():
+    """Any RPC read or child process fails the test instead of reaching a network."""
+    from unittest import mock
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("the refusal must come before any read or child process")
+    patches = [mock.patch("urllib.request.urlopen", refuse), mock.patch.object(dry_run.subprocess, "run", refuse),
+               mock.patch.object(dry_run.ORDER, "git", refuse)]
+
+    class Both:
+        def __enter__(self):
+            for patch in patches:
+                patch.start()
+
+        def __exit__(self, *exc):
+            for patch in patches:
+                patch.stop()
+    return Both()
+
+
+class RelayerCeilingPlanTests(unittest.TestCase):
+    """N2: every real run carries a positive relayer ceiling in its plan from the start."""
+
+    def test_every_real_run_needs_a_positive_ceiling_whatever_through_says(self):
+        for ceiling in (None, 0, -1):
+            with self.subTest(ceiling=ceiling), self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.resolve_relayer_ceiling(fork=False, requested=ceiling, plan=None)
+        self.assertEqual(dry_run.resolve_relayer_ceiling(fork=False, requested=10 ** 15, plan=None), 10 ** 15)
+        self.assertIsNone(dry_run.resolve_relayer_ceiling(fork=True, requested=None, plan=None))
+        self.assertFalse(hasattr(dry_run, "check_relayer_ceiling"))
+
+    def test_a_later_invocation_takes_the_plans_ceiling_or_names_the_same_one(self):
+        plan = {"relayer_ceiling_wei": 10 ** 15}
+        self.assertEqual(dry_run.resolve_relayer_ceiling(fork=False, requested=None, plan=plan), 10 ** 15)
+        self.assertEqual(dry_run.resolve_relayer_ceiling(fork=False, requested=10 ** 15, plan=plan), 10 ** 15)
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.resolve_relayer_ceiling(fork=False, requested=2 * 10 ** 15, plan=plan)
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.resolve_relayer_ceiling(fork=False, requested=10 ** 15, plan={"relayer_ceiling_wei": None})
+
+    def test_a_real_run_without_a_ceiling_stops_before_anything(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "run"
+            with no_network(), self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.main(["--output", str(out), "--through", "export"])
+            self.assertFalse(out.exists())
+

@@ -509,14 +509,23 @@ FEE_NOTE = ('gas x gas price is an estimate, not the exact fee: a Base transacti
             f'{GAS_MARGIN}x margin covers it and a price rise up to the gas guard.')
 
 
-def check_relayer_ceiling(*, fork, through, ceiling):
-    """A real run that reaches prove-and-release needs the relayer's ETH ceiling set
-    explicitly: the proof transaction's gas is not known before a real proof."""
-    if fork or STAGES.index(through) < STAGES.index('prove-and-release'):
-        return
-    require(ceiling is not None and ceiling > 0,
-            'a real run through prove-and-release needs --relayer-ceiling-wei: the most test ETH the holder passes '
-            'to the relayer for the release (its gas is not known before a real proof); nothing was sent')
+def resolve_relayer_ceiling(*, fork, requested, plan):
+    """The relayer's ETH ceiling. A real run names a positive one from its first
+    invocation, whatever --through says, so its plan and sheet always carry it; a
+    later invocation omits it (the plan's is used) or names the same one."""
+    require(requested is None or requested > 0, f'--relayer-ceiling-wei {requested} is not positive; nothing was sent')
+    if plan is None:
+        require(fork or requested is not None,
+                'a real run needs --relayer-ceiling-wei from its first invocation, whatever --through says: the most '
+                'test ETH the holder passes to the relayer for the release (its gas is not known before a real '
+                'proof); nothing was sent')
+        return requested
+    planned = plan.get('relayer_ceiling_wei')
+    require(fork or planned, 'this plan carries no relayer ceiling and cannot be released: start a fresh output '
+                             'directory with --relayer-ceiling-wei; nothing was sent')
+    require(requested is None or requested == planned,
+            f'--relayer-ceiling-wei {requested} differs from the plan\'s {planned}; nothing was sent')
+    return planned
 
 
 def funding_plan(needs, *, gas_price_wei, relayer_ceiling_wei):
@@ -530,7 +539,7 @@ def funding_plan(needs, *, gas_price_wei, relayer_ceiling_wei):
     plan['relayer'] = {
         'fund_wei': relayer_ceiling_wei,
         'formula': 'the ceiling the operator sets with --relayer-ceiling-wei; the release\'s gas is not known before '
-                   'a real proof' + ('' if relayer_ceiling_wei else ' (not set: required before prove-and-release)')}
+                   'a real proof' + ('' if relayer_ceiling_wei else ' (not set: a fork run; a real run needs it)')}
     own = needs['holder']['gas'] * gas_price_wei * GAS_MARGIN
     passed_on = (None if relayer_ceiling_wei is None else
                  plan['verifier deployer']['fund_wei'] + plan['lock deployer']['fund_wei'] + relayer_ceiling_wei)
@@ -649,8 +658,8 @@ def parser():
     p.add_argument('--i-accept-no-resume-between-deploy-and-export', action='store_true',
                    help='deploy goes on knowing the in-process PFTL fleet cannot be reopened after a crash')
     p.add_argument('--relayer-ceiling-wei', type=int,
-                   help='the most test ETH the holder passes to the relayer for the release; required for a real '
-                        'run through prove-and-release')
+                   help='the most test ETH the holder passes to the relayer for the release; a real run names it '
+                        'on its first invocation (it goes into the plan); later invocations omit it or repeat it')
     p.add_argument('--leftover-eth', choices=('returned-to-holder', 'kept-on-keys'),
                    help='what was done with the ETH left on the one-time keys; stated in the record')
     p.add_argument('--payout-recipient',
@@ -665,16 +674,18 @@ def main(argv=None):
     args = parser().parse_args(argv)
     out = args.output.resolve()
     require(not out.is_relative_to(ROOT / 'docs'), '--output must not be inside docs/')
-    out.mkdir(parents=True, exist_ok=True, mode=0o700)
     state_path = out / 'state.json'
     state = load_state(state_path)
     data = state['data']
+    # Before anything is read, started or written: a real run's plan always carries its ceiling.
+    relayer_ceiling = resolve_relayer_ceiling(fork=args.fork, requested=args.relayer_ceiling_wei,
+                                              plan=data.get('plan'))
+    out.mkdir(parents=True, exist_ok=True, mode=0o700)
     state.setdefault('mode', 'fork' if args.fork else 'base-sepolia')
     require(state['mode'] == ('fork' if args.fork else 'base-sepolia'), 'this output directory is for another mode')
     require(args.fork or (args.fork_finality_wait == 0 and args.fork_driver_timeout is None),
             '--fork-finality-wait and --fork-driver-timeout are fork-only')
     refuse_through_off_fork(fork=args.fork, through=args.through)
-    check_relayer_ceiling(fork=args.fork, through=args.through, ceiling=args.relayer_ceiling_wei)
     head_commit = ORDER.git('rev-parse', 'HEAD')
     check_commit(state, head_commit)
     identity = load_program_identity(
@@ -838,7 +849,7 @@ def main(argv=None):
                 fixture = json.loads((ROOT / ORDER.GENESIS_FIXTURE).read_text())
                 data['plan'] = {**plan, 'fork_block': head, 'token': TOKEN, 'token_runtime_code_hash': token_code_hash,
                                 'holder': HOLDER, 'max_lock_amount': ORDER.lane_window_cap(fixture),
-                                'gas_price_wei': gas_price}
+                                'gas_price_wei': gas_price, 'relayer_ceiling_wei': relayer_ceiling}
                 # The lock's code hash: a probe on a throwaway fork (the lock holds the verifier's address).
                 probe_url = start_fork('probe-fork', head)
                 for role in ('verifier', 'lock'):
@@ -935,8 +946,8 @@ def main(argv=None):
                 sheet = deploy_sheet(plan={r: plan[r] for r in ('verifier', 'lock')},
                                      verifier_config=data['verifier_config'], gas_used=gas,
                                      gas_price_wei=plan['gas_price_wei'], program_identity=identity,
-                                     relayer_ceiling_wei=args.relayer_ceiling_wei)
-                data['relayer_ceiling_wei'] = args.relayer_ceiling_wei
+                                     relayer_ceiling_wei=relayer_ceiling)
+                data['relayer_ceiling_wei'] = relayer_ceiling
                 (out / 'deploy-sheet.json').write_text(json.dumps(sheet, indent=2) + '\n')
                 (out / 'deploy-sheet.md').write_text(sheet_markdown(sheet))
                 children.pop().terminate()
@@ -1160,9 +1171,8 @@ def main(argv=None):
                         break
                     continue
                 require(not args.fork, 'a real proof is released on Base Sepolia, not on the fork')
-                check_relayer_ceiling(fork=False, through=stage, ceiling=args.relayer_ceiling_wei)
-                require(args.relayer_ceiling_wei == data.get('relayer_ceiling_wei'),
-                        f'--relayer-ceiling-wei {args.relayer_ceiling_wei} differs from the sheet\'s '
+                require(relayer_ceiling and relayer_ceiling == data.get('relayer_ceiling_wei'),
+                        f'the relayer ceiling {relayer_ceiling} differs from the sheet\'s '
                         f'{data.get("relayer_ceiling_wei")}; nothing was sent')
                 release = begin_intent(state, stage='prove-and-release', role='release', sender='relayer keystore',
                                        nonce=None, purpose=f'release {EXPORT_AMOUNT} to {data["export"]["base_recipient"]}')

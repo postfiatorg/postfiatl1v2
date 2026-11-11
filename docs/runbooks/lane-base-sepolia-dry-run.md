@@ -21,7 +21,7 @@ The dry-run lock on Base Sepolia is bound to a PFTL chain whose committee keys c
 `preflight` writes a funding plan into the sheet (`funding` in `deploy-sheet.json`, a table in `deploy-sheet.md`), one row per key with its amount in wei and its formula:
 
 - **Verifier deployer, lock deployer:** the fork's gas for the deployment x the plan's gas price x 3.
-- **Relayer:** a ceiling the operator sets with `--relayer-ceiling-wei`, because the proof transaction's gas is not known before a real proof. A real run through `prove-and-release` refuses to start without it, and the release refuses a ceiling other than the sheet's.
+- **Relayer:** a ceiling the operator sets with `--relayer-ceiling-wei`, because the proof transaction's gas is not known before a real proof. A real run refuses to start without a positive one, whatever `--through` says, so the plan and the sheet always carry it; later invocations omit it (the plan's is used) or name the same value, and any other value is refused.
 - **Holder:** its own gas (approve, Lock, three funding transfers) x the gas price x 3, plus what it passes on to the three keys; the sum is its starting balance. It also holds the 1,000,000 token units.
 
 Gas x gas price is an estimate, not the exact fee: a Base transaction also pays an L1 data fee. The 3x margin covers it and a price rise up to the gas guard.
@@ -30,9 +30,9 @@ After the run, `record` reads each key's balance from the chain into `summary.js
 
 ## The one order that works
 
-1. `--through plan`, then review `lane-genesis-pins.json`.
-2. One invocation through `record` with every keystore flag, `--relayer-ceiling-wei` and `--i-accept-no-resume-between-deploy-and-export`. After `preflight` it prints the real sheet (the real deployers, the constructor values, the funding amounts) and waits up to 24 hours. Fund the keys from that sheet, then write the sheet's sha256 (printed with it) to `confirm-deploy` in the output directory. The run then deploys, locks, waits for Base finality (up to 4 hours) and exports. Without `--proof` it stops at `prove-and-release` (exit 3) after writing nothing more.
-3. Later, `--proof PROOF` with the same `--relayer-ceiling-wei` on the same output directory, from the same commit: the release, then the record again.
+1. `--through plan` with `--relayer-ceiling-wei`, then review `lane-genesis-pins.json`.
+2. One invocation through `record` with every keystore flag and `--i-accept-no-resume-between-deploy-and-export`. After `preflight` it prints the real sheet (the real deployers, the constructor values, the funding amounts) and waits up to 24 hours. Fund the keys from that sheet, then write the sheet's sha256 (printed with it) to `confirm-deploy` in the output directory. The run then deploys, locks, waits for Base finality (up to 4 hours) and exports. Without `--proof` it stops at `prove-and-release` (exit 3) after writing nothing more.
+3. Later, `--proof PROOF` on the same output directory, from the same commit: the release, then the record again.
 
 Off the fork, `--through deploy`, `lock` and `release-on-pftl` are refused: a stop there ends the PFTL chain the contracts are bound to. The driver waits 31 hours for `base-locked.json`, longer than the confirmation, send and finality budgets together, and the command requires the driver before every transaction and in the finality wait.
 
