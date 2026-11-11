@@ -515,3 +515,46 @@ class SendSafetyTests(unittest.TestCase):
         with self.assertRaises(relay.RelayRefusal) as caught:
             relay.run_prover(f"{secret} sleep 5", {"PATH": "/usr/bin:/bin"}, timeout=0.2)
         self.assertNotIn("s3cr3t-value", str(caught.exception))
+
+
+class SendCapTests(unittest.TestCase):
+    """N1: a release off a loopback Anvil names its gas limit and max fee."""
+
+    def args(self, *extra):
+        return relay.parser().parse_args(["release", "--rpc", "https://base.invalid", "--lock", "0x" + "44" * 20,
+                                          "--input", "/nonexistent/in", "--proof", "/nonexistent/proof.json",
+                                          *extra])
+
+    def test_off_a_loopback_anvil_the_caps_are_required(self):
+        with self.assertRaises(relay.RelayRefusal):
+            relay.send_caps(self.args(), local_anvil=False)
+        with self.assertRaises(relay.RelayRefusal):
+            relay.send_caps(self.args("--gas-limit", "7"), local_anvil=False)
+        with self.assertRaises(relay.RelayRefusal):
+            relay.send_caps(self.args("--gas-limit", "0", "--max-fee-per-gas", "9"), local_anvil=False)
+        self.assertEqual(relay.send_caps(self.args(), local_anvil=True), [])
+        self.assertEqual(relay.send_caps(self.args("--gas-limit", "7", "--max-fee-per-gas", "9"), local_anvil=True),
+                         ["--gas-limit", "7", "--gas-price", "9"])
+
+    def test_release_refuses_before_reading_the_input(self):
+        class Remote:
+            url = "https://base.invalid"
+
+            def __init__(self, url):
+                pass
+
+            def client_version(self):
+                return "Geth/v1"
+
+        original = relay.Rpc
+        relay.Rpc = Remote
+        try:
+            with self.assertRaises(relay.RelayRefusal) as refused:
+                relay.cmd_release(self.args())
+        finally:
+            relay.Rpc = original
+        self.assertIn("--gas-limit", str(refused.exception))
+
+    def test_the_send_applies_the_caps(self):
+        source = (ROOT / "scripts/pft-lane-export-relay.py").read_text()
+        self.assertIn("'--rpc-url', args.rpc, '--json', *caps, *signer]", source)

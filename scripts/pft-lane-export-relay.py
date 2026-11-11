@@ -31,7 +31,9 @@ at the verifier's `sp1Verifier` is the repository's `Tier4MockSP1Verifier`
 is a loopback-Anvil option too. The chain id alone proves nothing: the
 rehearsal's own Anvil uses 84532, Base Sepolia's public chain id. A private key is
 accepted for a loopback Anvil only; elsewhere use `--account` and
-`--password-file` (a Foundry keystore). Keys are never written or printed:
+`--password-file` (a Foundry keystore). Off a loopback Anvil `release` also
+needs `--gas-limit` and `--max-fee-per-gas`, applied to its `cast send`: the
+release spends at most their product plus Base's L1 data fee. Keys are never written or printed:
 the pinned cast (Foundry 1.8.1) reads no raw private key from its environment,
 so on a loopback Anvil the key is a child argument, and every child failure,
 timeout included, is reported with the key replaced by `<redacted>`.
@@ -469,6 +471,20 @@ def signer_args(args, local_anvil):
                                                                                      str(args.password_file)]
 
 
+def send_caps(args, *, local_anvil):
+    """The `cast send` fee caps of a release: its gas limit and max fee per gas. Off a
+    loopback Anvil both are required, so a release spends at most their product plus
+    Base's L1 data fee."""
+    given = (args.gas_limit, args.max_fee_per_gas)
+    if given == (None, None):
+        require(local_anvil, 'off a loopback Anvil a release needs --gas-limit and --max-fee-per-gas: they bound what '
+                             'it can spend; nothing was sent')
+        return []
+    require(all(value is not None and value > 0 for value in given),
+            'name both --gas-limit and --max-fee-per-gas, each positive; nothing was sent')
+    return ['--gas-limit', str(args.gas_limit), '--gas-price', str(args.max_fee_per_gas)]
+
+
 def decode_released(receipt, lock):
     """The `Released` log of a receipt: withdrawal, burn and packet digest, recipient, amount."""
     logs = [log for log in receipt.get('logs', []) if log['address'].lower() == lock.lower()
@@ -626,12 +642,13 @@ def cmd_prove(args):
 
 def cmd_release(args):
     rpc = Rpc(args.rpc)
+    loopback, anvil = is_local_anvil(rpc)
+    local = loopback and anvil
+    caps = send_caps(args, local_anvil=local)
     values, expected_hex = load_values(args.input)
     proof = json.loads(Path(args.proof).read_text())
     require(proof.get('schema') == PROOF_SCHEMA and proof['public_values_hex'] == expected_hex,
             'the proof file is not for these public values')
-    loopback, anvil = is_local_anvil(rpc)
-    local = loopback and anvil
     require(local or not args.force_send, '--force-send is accepted only on a loopback Anvil')
     check_mock_artifact(args)
     # The checks run on the hex that will be sent, decoded; it must say what the document says.
@@ -657,7 +674,7 @@ def cmd_release(args):
     balance_before = as_int(rpc.call(reads['lock.token'], 'balanceOf(address)', recipient))
     signer, secret = signer_args(args, local)
     p = run(['cast', 'send', args.lock, 'release(bytes,bytes)', '0x' + sent_hex, proof['proof_hex'],
-             '--rpc-url', args.rpc, '--json', *signer], secret=secret)
+             '--rpc-url', args.rpc, '--json', *caps, *signer], secret=secret)
     if p.returncode != 0:
         sent, reason = classify_send_failure(p.stderr, p.stdout)
         result.update(sent=sent if sent is not None else 'unknown', failure=reason, reverted=is_revert(reason),
@@ -823,6 +840,9 @@ def parser():
                    help='loopback Anvil only: send despite refusals (to show the on-chain revert)')
     p.add_argument('--expect-program-vkey', help="refuse unless the verifier's programVKey is this")
     p.add_argument('--expect-sp1-verifier', help="refuse unless the verifier's sp1Verifier is this")
+    p.add_argument('--gas-limit', type=int, help='the release\'s gas limit; required off a loopback Anvil')
+    p.add_argument('--max-fee-per-gas', type=int,
+                   help='the release\'s max fee per gas in wei; required off a loopback Anvil')
     p.set_defaults(func=cmd_release)
 
     p = sub.add_parser('advance-checkpoint', help="move the verifier's checkpoint with the Checkpoint variant")

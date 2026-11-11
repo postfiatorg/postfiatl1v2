@@ -727,3 +727,63 @@ class L1DataFeeTests(unittest.TestCase):
         with self.assertRaises(dry_run.RehearsalFailure):
             dry_run.check_real_run_ready(eth_balance=lambda address: 100 * 7 + allowance - 1, **values)
 
+
+
+class ReleaseCapTests(unittest.TestCase):
+    """N1: the relayer ceiling bounds what a release can spend."""
+
+    CEILING = 10 ** 15
+    LOCK = "0x" + "44" * 20
+    RELAYER = "0x" + "55" * 20
+
+    def chain(self, *, balance, estimate=500_000, price=10 ** 6):
+        calls = []
+
+        def read(method, params):
+            calls.append(method)
+            return hex({"eth_getBalance": balance, "eth_estimateGas": estimate, "eth_gasPrice": price}[method])
+        return read, calls
+
+    def quote(self, read):
+        return dry_run.quote_release(ceiling_wei=self.CEILING, relayer=self.RELAYER, lock=self.LOCK,
+                                     calldata="0x1234", read=read)
+
+    def test_a_relayer_holding_more_than_the_ceiling_is_refused(self):
+        read, _ = self.chain(balance=self.CEILING + 1)
+        with self.assertRaises(dry_run.RehearsalFailure) as refused:
+            self.quote(read)
+        self.assertIn("fresh relayer account", str(refused.exception))
+        self.assertIn("new plan", str(refused.exception))
+
+    def test_the_caps_keep_the_release_within_the_ceiling(self):
+        read, _ = self.chain(balance=self.CEILING)
+        caps = self.quote(read)
+        bound = caps["gas_limit"] * caps["max_fee_per_gas_wei"] + dry_run.L1_DATA_FEE_ALLOWANCE_WEI
+        self.assertLessEqual(bound, self.CEILING)
+        self.assertEqual(caps["bound_wei"], bound)
+        self.assertGreaterEqual(caps["gas_limit"], 500_000)
+        self.assertGreaterEqual(caps["max_fee_per_gas_wei"], 10 ** 6)
+
+    def test_a_quoted_cost_above_the_ceiling_is_refused_before_signing(self):
+        read, calls = self.chain(balance=self.CEILING, price=10 ** 10)
+        with self.assertRaises(dry_run.RehearsalFailure) as refused:
+            self.quote(read)
+        self.assertIn("nothing was sent", str(refused.exception))
+        self.assertNotIn("cast send", calls)
+
+    def test_the_send_carries_the_caps(self):
+        read, _ = self.chain(balance=self.CEILING)
+        caps = self.quote(read)
+        argv = dry_run.relay_release_argv(rpc_url="http://base", lock=self.LOCK, input_dir=Path("in"),
+                                          proof=Path("proof.json"), signer=["--account", "r"], vkey="0x01",
+                                          caps=caps)
+        for flag, value in (("--gas-limit", caps["gas_limit"]), ("--max-fee-per-gas", caps["max_fee_per_gas_wei"])):
+            self.assertEqual(argv[argv.index(flag) + 1], str(value))
+        relay_args = RELAY.parser().parse_args(["release", "--rpc", "http://base", "--lock", self.LOCK,
+                                                "--input", "in", "--proof", "proof.json",
+                                                "--gas-limit", "7", "--max-fee-per-gas", "9"])
+        self.assertEqual(RELAY.send_caps(relay_args, local_anvil=False),
+                         ["--gas-limit", "7", "--gas-price", "9"])
+
+
+RELAY = dry_run._load("pft_lane_export_relay", "scripts/pft-lane-export-relay.py")
