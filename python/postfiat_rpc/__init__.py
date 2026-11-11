@@ -21,6 +21,9 @@ from .navcoin import (
     nav_reserve_packet_id,
 )
 from .wallet import (
+    QuoteRefusedError,
+    check_signing_quote,
+    default_max_fee_atoms,
     AtomicSettlementTemplateResult,
     AtomicSettlementExecutionResult,
     AssetTransactionResult,
@@ -152,6 +155,9 @@ __all__ = [
     "scan_orchard_wallet",
     "send_payment",
     "send_pft",
+    "QuoteRefusedError",
+    "check_signing_quote",
+    "default_max_fee_atoms",
     "send_issued_asset",
     "send_shielded_pft",
     "send_token",

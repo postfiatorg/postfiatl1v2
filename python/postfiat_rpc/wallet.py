@@ -447,6 +447,188 @@ def request_faucet_pft(
     )
 
 
+class QuoteRefusedError(ValueError):
+    """A fee quote refused before anything is signed; `code` is the typed
+    refusal code (`quote_invalid`, `quote_mismatch`, `quote_fee_above_ceiling`)."""
+
+    def __init__(self, code: str, reason: str) -> None:
+        super().__init__(f"refused before signing: {code}: {reason}")
+        self.code = code
+        self.reason = reason
+
+
+QUOTE_INVALID = "quote_invalid"
+QUOTE_MISMATCH = "quote_mismatch"
+QUOTE_FEE_ABOVE_CEILING = "quote_fee_above_ceiling"
+
+# Fee ceilings. A minimum fee is `MIN_TRANSFER_FEE.max(1 atom per started 512
+# bytes of the tx-id preimage)` plus the family's state-expansion part
+# (crates/execution/src/fees_offer_planning.rs). The signing envelope (the
+# ML-DSA-65 key and signature in hex, a 256-byte chain id, 20-digit fee and
+# sequence, an export-sized operation) is at most 23 quanta, as derived for
+# EXTERNAL_LANE_EXPORT_LARGEST_FEE_ATOMS; the requested operation's own bytes
+# (or a payment's memos) add at most one atom per started 512 bytes of their
+# canonical JSON, which the helper adds from the request. The default ceiling
+# is FEE_CEILING_FACTOR x (envelope + family's largest state expansion +
+# request quanta): a safety bound against an inflated quote, not a price.
+FEE_CEILING_FACTOR = 4
+SIGNING_ENVELOPE_LARGEST_FEE_ATOMS = 23
+FEE_BYTE_QUANTUM = 512
+# Transfers and payment_v2: TRANSFER_ACCOUNT_CREATION_FEE (10) for a new recipient.
+TRANSFER_DEFAULT_MAX_FEE_ATOMS = FEE_CEILING_FACTOR * (SIGNING_ENVELOPE_LARGEST_FEE_ATOMS + 10)
+# Asset transactions: the largest fixed part is VaultBridgeDepositClaim, 3 x
+# TRUSTLINE_STATE_EXPANSION_FEE (30); trust_set's is `reserve_paid.max(10)`, the
+# caller's own number, so the helper uses the requested reserve_paid when larger.
+ASSET_TRANSACTION_DEFAULT_MAX_FEE_ATOMS = FEE_CEILING_FACTOR * (SIGNING_ENVELOPE_LARGEST_FEE_ATOMS + 30)
+# Escrow and NFT: ESCROW_STATE_EXPANSION_FEE / NFT_STATE_EXPANSION_FEE (10) on create / mint.
+ESCROW_TRANSACTION_DEFAULT_MAX_FEE_ATOMS = FEE_CEILING_FACTOR * (SIGNING_ENVELOPE_LARGEST_FEE_ATOMS + 10)
+NFT_TRANSACTION_DEFAULT_MAX_FEE_ATOMS = FEE_CEILING_FACTOR * (SIGNING_ENVELOPE_LARGEST_FEE_ATOMS + 10)
+# Offers: offer_cancel has no state expansion. offer_create has none: its
+# match fee is OFFER_MATCH_CROSS_FEE per fill, and the number of fills depends
+# on the order book, which the fee rule does not bound; `max_fee_atoms` is
+# required for offer_create.
+OFFER_CANCEL_DEFAULT_MAX_FEE_ATOMS = FEE_CEILING_FACTOR * SIGNING_ENVELOPE_LARGEST_FEE_ATOMS
+
+
+def _canonical_json(value: Any) -> str:
+    return json.dumps(value, separators=(",", ":"), sort_keys=True)
+
+
+def _request_quanta(*payloads: Any) -> int:
+    size = sum(len(_canonical_json(payload).encode("utf-8")) for payload in payloads if payload is not None)
+    return -(-size // FEE_BYTE_QUANTUM)
+
+
+def default_max_fee_atoms(family: str, operation: dict[str, Any] | None = None, *memos: str | None) -> int:
+    """The default fee ceiling for `family` (`transfer`, `asset`, `escrow`,
+    `nft`, `offer`) and the requested operation or memos; raises ValueError
+    for offer_create, whose ceiling the caller must set."""
+
+    quanta = FEE_CEILING_FACTOR * _request_quanta(operation, *memos)
+    if family == "transfer":
+        return TRANSFER_DEFAULT_MAX_FEE_ATOMS + quanta
+    if family == "asset":
+        reserve = (operation or {}).get("reserve_paid") if (operation or {}).get("operation") == "trust_set" else None
+        extra = max(0, reserve - 30) if _is_u64(reserve) else 0
+        return ASSET_TRANSACTION_DEFAULT_MAX_FEE_ATOMS + FEE_CEILING_FACTOR * extra + quanta
+    if family == "escrow":
+        return ESCROW_TRANSACTION_DEFAULT_MAX_FEE_ATOMS + quanta
+    if family == "nft":
+        return NFT_TRANSACTION_DEFAULT_MAX_FEE_ATOMS + quanta
+    if family == "offer":
+        if (operation or {}).get("operation") == "offer_create":
+            raise ValueError(
+                "max_fee_atoms is required for offer_create: its match fee grows with the "
+                "number of fills, which the fee rule does not bound"
+            )
+        return OFFER_CANCEL_DEFAULT_MAX_FEE_ATOMS + quanta
+    raise ValueError(f"unknown fee family `{family}`")
+
+
+def _strict_difference(requested: Any, quoted: Any, path: str) -> str | None:
+    """The first path where `quoted` differs from `requested` in value or type
+    (an extra or missing key is a difference), or None."""
+
+    if type(requested) is not type(quoted):
+        return path
+    if isinstance(requested, dict):
+        if set(requested) != set(quoted):
+            extra = sorted(set(quoted) ^ set(requested))
+            return f"{path}.{extra[0]}"
+        for key in requested:
+            found = _strict_difference(requested[key], quoted[key], f"{path}.{key}")
+            if found is not None:
+                return found
+        return None
+    if isinstance(requested, list):
+        if len(requested) != len(quoted):
+            return path
+        for index, (left, right) in enumerate(zip(requested, quoted)):
+            found = _strict_difference(left, right, f"{path}[{index}]")
+            if found is not None:
+                return found
+        return None
+    return None if requested == quoted else path
+
+
+def check_signing_quote(
+    quote_response: Any,
+    *,
+    wallet: TransparentWallet,
+    kind: str,
+    sequence: int | None,
+    max_fee_atoms: int,
+    operation: dict[str, Any] | None = None,
+    to_address: str | None = None,
+    amount: int | None = None,
+) -> dict[str, Any]:
+    """Return the quote result when it is for exactly this request, or raise
+    QuoteRefusedError before anything is signed. Checks the kind, the source
+    (or `from`), the requested operation field by field (or the transfer's
+    `to` and `amount`), the requested sequence, the wallet's chain id and
+    genesis hash (when the wallet knows it), that sequence and minimum fee are
+    non-negative integers within u64, and the fee against `max_fee_atoms`."""
+
+    quote = quote_response.get("result") if isinstance(quote_response, dict) else None
+    if not isinstance(quote, dict):
+        raise QuoteRefusedError(QUOTE_INVALID, "the quote response has no result object")
+    for field in ("sequence", "minimum_fee"):
+        if not _is_u64(quote.get(field)):
+            raise QuoteRefusedError(
+                QUOTE_INVALID, f"the quote's {field} `{quote.get(field)!r}` is not a non-negative integer within u64"
+            )
+    if quote.get("transaction_kind") != kind:
+        raise QuoteRefusedError(QUOTE_MISMATCH, f"the quote is for `{quote.get('transaction_kind')}`, not `{kind}`")
+    if sequence is not None and quote["sequence"] != sequence:
+        raise QuoteRefusedError(QUOTE_MISMATCH, f"the quote's sequence {quote['sequence']} is not the requested {sequence}")
+    if quote.get("chain_id") != wallet.chain_id:
+        raise QuoteRefusedError(
+            QUOTE_MISMATCH, f"the quote's chain id `{quote.get('chain_id')}` is not the wallet's `{wallet.chain_id}`"
+        )
+    known_genesis = wallet.key_report.get("genesis_hash") if isinstance(wallet.key_report, dict) else None
+    if isinstance(known_genesis, str) and quote.get("genesis_hash") != known_genesis:
+        raise QuoteRefusedError(
+            QUOTE_MISMATCH, f"the quote's genesis hash `{quote.get('genesis_hash')}` is not the wallet's `{known_genesis}`"
+        )
+    if operation is not None:
+        if quote.get("source") != wallet.address:
+            raise QuoteRefusedError(
+                QUOTE_MISMATCH, f"the quote's source `{quote.get('source')}` is not the wallet's address `{wallet.address}`"
+            )
+        difference = _strict_difference(operation, quote.get("operation"), "operation")
+        if difference is not None:
+            raise QuoteRefusedError(QUOTE_MISMATCH, f"the quote's {difference} is not the requested one")
+    else:
+        if quote.get("from") != wallet.address:
+            raise QuoteRefusedError(
+                QUOTE_MISMATCH, f"the quote's from `{quote.get('from')}` is not the wallet's address `{wallet.address}`"
+            )
+        if quote.get("to") != to_address:
+            raise QuoteRefusedError(QUOTE_MISMATCH, f"the quote's to `{quote.get('to')}` is not the requested `{to_address}`")
+        if not _is_u64(quote.get("amount")):
+            raise QuoteRefusedError(
+                QUOTE_INVALID, f"the quote's amount `{quote.get('amount')!r}` is not a non-negative integer within u64"
+            )
+        if quote["amount"] != amount:
+            raise QuoteRefusedError(QUOTE_MISMATCH, f"the quote's amount {quote['amount']} is not the requested {amount}")
+    if quote["minimum_fee"] > max_fee_atoms:
+        raise QuoteRefusedError(
+            QUOTE_FEE_ABOVE_CEILING,
+            f"the quoted minimum fee {quote['minimum_fee']} atoms is above the ceiling {max_fee_atoms} atoms (max_fee_atoms)",
+        )
+    return quote
+
+
+def _resolve_max_fee_atoms(
+    max_fee_atoms: int | None, family: str, operation: dict[str, Any] | None = None, *memos: str | None
+) -> int:
+    if max_fee_atoms is None:
+        return default_max_fee_atoms(family, operation, *memos)
+    if not _is_u64(max_fee_atoms):
+        raise ValueError("max_fee_atoms must be a non-negative integer within u64")
+    return max_fee_atoms
+
+
 def send_pft(
     client: PostFiatRpcClient,
     *,
@@ -461,6 +643,7 @@ def send_pft(
     finalize_data_dir: str | Path | None = None,
     validator_data_dirs: Sequence[str | Path] | None = None,
     use_finality_submit: bool = False,
+    max_fee_atoms: int | None = None,
 ) -> SendPftResult:
     """Quote, sign, and submit a transparent PFT transfer.
 
@@ -473,12 +656,18 @@ def send_pft(
     ``mempool_submit_signed_transfer``. This requires the RPC server to
     have ``--allow-mempool-submit-finality`` enabled and the local
     validator to be the proposer for the next block height.
+
+    Before signing, the quote must be for this transfer (``check_signing_quote``:
+    kind, from, to, amount, requested sequence, chain id, genesis hash) and its
+    minimum fee at most ``max_fee_atoms`` (default ``default_max_fee_atoms``
+    for transfers); otherwise ``QuoteRefusedError`` and nothing is signed.
     """
 
-    if amount < 1:
-        raise ValueError("amount must be positive")
+    if not _is_u64(amount) or amount < 1:
+        raise ValueError("amount must be an integer between 1 and 2**64 - 1")
     if not to_address:
         raise ValueError("to_address is required")
+    max_fee_atoms = _resolve_max_fee_atoms(max_fee_atoms, "transfer", None, memo_type, memo_format, memo_data)
     work_dir = _work_dir(work_dir)
     quote_request_id = f"py-wallet-quote-{secrets.token_hex(4)}"
     quote_response = client.transfer_fee_quote_response(
@@ -491,9 +680,18 @@ def send_pft(
         memo_data=memo_data,
         request_id=quote_request_id,
     )
+    uses_payment_v2 = any(value for value in (memo_type, memo_format, memo_data))
+    check_signing_quote(
+        quote_response,
+        wallet=wallet,
+        kind="payment_v2" if uses_payment_v2 else "transparent_transfer",
+        sequence=sequence,
+        max_fee_atoms=max_fee_atoms,
+        to_address=to_address,
+        amount=amount,
+    )
     quote_file = work_dir / f"quote-{secrets.token_hex(8)}.response.json"
     quote_request_file = work_dir / f"quote-{secrets.token_hex(8)}.request.json"
-    uses_payment_v2 = any(value for value in (memo_type, memo_format, memo_data))
     signed_file = work_dir / (
         f"signed-{secrets.token_hex(8)}.payment-v2.json"
         if uses_payment_v2
@@ -636,6 +834,7 @@ def send_pft_and_poll_finality(
     poll_timeout_seconds: float = 120.0,
     poll_interval_seconds: float = 2.0,
     use_finality_submit: bool = True,
+    max_fee_atoms: int | None = None,
 ) -> SendPftResult:
     """Sign, submit a PFT transfer to RPC, then poll for finality.
 
@@ -664,6 +863,7 @@ def send_pft_and_poll_finality(
         memo_format=memo_format,
         memo_data=memo_data,
         use_finality_submit=use_finality_submit,
+        max_fee_atoms=max_fee_atoms,
     )
     # When using finality submit, the round itself returns finality evidence.
     # The submit_result contains the finality block and hot finality receipts.
@@ -1427,18 +1627,31 @@ def submit_asset_transaction(
     finalize_data_dir: str | Path | None = None,
     validator_data_dirs: Sequence[str | Path] | None = None,
     asset_id: str | None = None,
+    max_fee_atoms: int | None = None,
 ) -> AssetTransactionResult:
-    """Quote, sign, and submit a ledger-native issued-asset transaction."""
+    """Quote, sign, and submit a ledger-native issued-asset transaction. The
+    quote must be for exactly `operation` from the wallet with a fee at most
+    `max_fee_atoms` (default `default_max_fee_atoms("asset", operation)`), or
+    `QuoteRefusedError` is raised before signing."""
 
     if not isinstance(operation, dict) or not operation.get("operation"):
         raise ValueError("operation must be a nonempty asset operation object")
     work_dir = _work_dir(work_dir)
     operation = dict(operation)
+    max_fee_atoms = _resolve_max_fee_atoms(max_fee_atoms, "asset", operation)
     quote_response = client.asset_fee_quote_response(
         wallet.address,
         operation,
         sequence=sequence,
         request_id=f"py-asset-quote-{secrets.token_hex(4)}",
+    )
+    check_signing_quote(
+        quote_response,
+        wallet=wallet,
+        kind=operation["operation"],
+        sequence=sequence,
+        max_fee_atoms=max_fee_atoms,
+        operation=operation,
     )
     signed_asset_transaction = _sign_asset_quote(wallet, quote_response, work_dir)
     submit_result = client.mempool_submit_signed_asset_transaction(
@@ -2121,18 +2334,31 @@ def submit_escrow_transaction(
     finalize_data_dir: str | Path | None = None,
     validator_data_dirs: Sequence[str | Path] | None = None,
     escrow_id: str | None = None,
+    max_fee_atoms: int | None = None,
 ) -> EscrowTransactionResult:
-    """Quote, sign, and submit a ledger-native escrow transaction."""
+    """Quote, sign, and submit a ledger-native escrow transaction. The quote must be for exactly
+    `operation` from the wallet with a fee at most `max_fee_atoms` (default
+    `default_max_fee_atoms("escrow", operation)`), or `QuoteRefusedError` is
+    raised before signing."""
 
     if not isinstance(operation, dict) or not operation.get("operation"):
         raise ValueError("operation must be a nonempty escrow operation object")
     work_dir = _work_dir(work_dir)
     operation = dict(operation)
+    max_fee_atoms = _resolve_max_fee_atoms(max_fee_atoms, "escrow", operation)
     quote_response = client.escrow_fee_quote_response(
         wallet.address,
         operation,
         sequence=sequence,
         request_id=f"py-escrow-quote-{secrets.token_hex(4)}",
+    )
+    check_signing_quote(
+        quote_response,
+        wallet=wallet,
+        kind=operation["operation"],
+        sequence=sequence,
+        max_fee_atoms=max_fee_atoms,
+        operation=operation,
     )
     quote_file = work_dir / f"escrow-quote-{secrets.token_hex(8)}.response.json"
     signed_file = work_dir / f"signed-{secrets.token_hex(8)}.escrow-transaction.json"
@@ -2631,18 +2857,31 @@ def submit_nft_transaction(
     finalize_data_dir: str | Path | None = None,
     validator_data_dirs: Sequence[str | Path] | None = None,
     nft_id: str | None = None,
+    max_fee_atoms: int | None = None,
 ) -> NftTransactionResult:
-    """Quote, sign, and submit a ledger-native NFT transaction."""
+    """Quote, sign, and submit a ledger-native NFT transaction. The quote must be for exactly
+    `operation` from the wallet with a fee at most `max_fee_atoms` (default
+    `default_max_fee_atoms("nft", operation)`), or `QuoteRefusedError` is
+    raised before signing."""
 
     if not isinstance(operation, dict) or not operation.get("operation"):
         raise ValueError("operation must be a nonempty NFT operation object")
     work_dir = _work_dir(work_dir)
     operation = dict(operation)
+    max_fee_atoms = _resolve_max_fee_atoms(max_fee_atoms, "nft", operation)
     quote_response = client.nft_fee_quote_response(
         wallet.address,
         operation,
         sequence=sequence,
         request_id=f"py-nft-quote-{secrets.token_hex(4)}",
+    )
+    check_signing_quote(
+        quote_response,
+        wallet=wallet,
+        kind=operation["operation"],
+        sequence=sequence,
+        max_fee_atoms=max_fee_atoms,
+        operation=operation,
     )
     quote_file = work_dir / f"nft-quote-{secrets.token_hex(8)}.response.json"
     signed_file = work_dir / f"signed-{secrets.token_hex(8)}.nft-transaction.json"
@@ -2838,18 +3077,31 @@ def submit_offer_transaction(
     finalize_data_dir: str | Path | None = None,
     validator_data_dirs: Sequence[str | Path] | None = None,
     offer_id: str | None = None,
+    max_fee_atoms: int | None = None,
 ) -> OfferTransactionResult:
-    """Quote, sign, and submit a ledger-native DEX offer transaction."""
+    """Quote, sign, and submit a ledger-native DEX offer transaction. The quote must be for exactly
+    `operation` from the wallet with a fee at most `max_fee_atoms` (default
+    `default_max_fee_atoms("offer", operation)`), or `QuoteRefusedError` is
+    raised before signing."""
 
     if not isinstance(operation, dict) or not operation.get("operation"):
         raise ValueError("operation must be a nonempty offer operation object")
     work_dir = _work_dir(work_dir)
     operation = dict(operation)
+    max_fee_atoms = _resolve_max_fee_atoms(max_fee_atoms, "offer", operation)
     quote_response = client.offer_fee_quote_response(
         wallet.address,
         operation,
         sequence=sequence,
         request_id=f"py-offer-quote-{secrets.token_hex(4)}",
+    )
+    check_signing_quote(
+        quote_response,
+        wallet=wallet,
+        kind=operation["operation"],
+        sequence=sequence,
+        max_fee_atoms=max_fee_atoms,
+        operation=operation,
     )
     quote_file = work_dir / f"offer-quote-{secrets.token_hex(8)}.response.json"
     signed_file = work_dir / f"signed-{secrets.token_hex(8)}.offer-transaction.json"
@@ -2918,8 +3170,11 @@ def create_offer(
     sequence: int | None = None,
     finalize_data_dir: str | Path | None = None,
     validator_data_dirs: Sequence[str | Path] | None = None,
+    max_fee_atoms: int,
 ) -> OfferTransactionResult:
-    """Create a ledger-native DEX offer owned by the wallet address."""
+    """Create a ledger-native DEX offer owned by the wallet address.
+    `max_fee_atoms` is required: an offer's match fee grows with the number of
+    fills, which depends on the order book, not on a bound in the fee rule."""
 
     _validate_dex_asset_id(taker_gets_asset_id)
     _validate_dex_asset_id(taker_pays_asset_id)
@@ -2948,6 +3203,7 @@ def create_offer(
         sequence=sequence,
         finalize_data_dir=finalize_data_dir,
         validator_data_dirs=validator_data_dirs,
+        max_fee_atoms=max_fee_atoms,
     )
     quote_result = result.quote_response.get("result")
     offer_sequence = (
@@ -3460,8 +3716,10 @@ def place_offer(
     sequence: int | None = None,
     finalize_data_dir: str | Path | None = None,
     validator_data_dirs: Sequence[str | Path] | None = None,
+    max_fee_atoms: int,
 ) -> OfferTransactionResult:
-    """Create a DEX offer with OfferCreate-style value names."""
+    """Create a DEX offer with OfferCreate-style value names; `max_fee_atoms`
+    is required, as for `create_offer`."""
 
     return create_offer(
         client,
@@ -3475,6 +3733,7 @@ def place_offer(
         sequence=sequence,
         finalize_data_dir=finalize_data_dir,
         validator_data_dirs=validator_data_dirs,
+        max_fee_atoms=max_fee_atoms,
     )
 
 
