@@ -6119,19 +6119,49 @@ fn validate_owned_objects_result(result: &Value) -> Result<(), RpcResponseValida
             "expected at most limit objects",
         ));
     }
-    if truncated && object_count != limit {
+    // Cursor-era nodes add `cursor`, `next_cursor`, `height` and
+    // `state_root`; a page may then end early at the node's byte bound, and
+    // a page after the first holds only part of the summed objects.
+    let paged = result.get("next_cursor").is_some();
+    let next_cursor = match result.get("next_cursor") {
+        None | Some(Value::Null) => None,
+        Some(_) => Some(clean_string_field(result, "next_cursor")?),
+    };
+    let continued = matches!(result.get("cursor"), Some(value) if !value.is_null());
+    if paged {
+        u64_field(result, "height")?;
+        clean_string_field(result, "state_root")?;
+        if truncated != next_cursor.is_some() {
+            return Err(invalid_result(
+                "next_cursor",
+                "expected next_cursor exactly when the page is truncated",
+            ));
+        }
+    }
+    if truncated && object_count != limit && !paged {
         return Err(invalid_result(
             "truncated",
             "expected a truncated report to hold exactly limit objects",
         ));
     }
+    let keys_omitted = matches!(result.get("owner_keys_omitted"), Some(Value::Bool(true)));
 
     let mut returned_value_sum = 0_u64;
     let mut previous: Option<(&str, &str, u64)> = None;
     for (index, object) in objects.iter().enumerate() {
         let id = hex_field_any_case(object, "id", OWNED_OBJECT_ID_HEX_LEN)?;
         let version = u64_field(object, "version")?;
-        let object_owner = string_field(object, "owner_pubkey_hex")?;
+        let object_owner = if keys_omitted {
+            if object.get("owner_pubkey_hex").is_some() {
+                return Err(invalid_result(
+                    format!("objects[{index}].owner_pubkey_hex"),
+                    "expected no per-object owner key when owner_keys_omitted",
+                ));
+            }
+            owner_public_key_hex
+        } else {
+            string_field(object, "owner_pubkey_hex")?
+        };
         let value = u64_field(object, "value")?;
         let asset = clean_string_field(object, "asset")?;
         if object_owner != owner_public_key_hex {
@@ -6160,7 +6190,7 @@ fn validate_owned_objects_result(result: &Value) -> Result<(), RpcResponseValida
             invalid_result("total_value", "returned object values overflowed")
         })?;
     }
-    if truncated {
+    if truncated || continued {
         if total_value < returned_value_sum {
             return Err(invalid_result(
                 "total_value",

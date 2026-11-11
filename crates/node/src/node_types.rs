@@ -2759,6 +2759,14 @@ pub struct OwnedObjectsOptions {
     pub owner_public_key_hex: String,
     pub asset: Option<String>,
     pub limit: Option<usize>,
+    /// `next_cursor` of the previous page; `None` reads the first page.
+    pub cursor: Option<String>,
+    /// Omit `owner_pubkey_hex` from each object (the key is the top-level
+    /// `owner_public_key_hex`).
+    pub omit_owner_keys: bool,
+    /// Lowers the page byte bound below `OWNED_OBJECTS_PAGE_MAX_BYTES`;
+    /// never raises it. Not an RPC parameter.
+    pub max_page_bytes: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3256,8 +3264,56 @@ pub struct OwnedObjectsReport {
     pub limit: u64,
     pub truncated: bool,
     pub object_count: u64,
+    /// Sum over every matching object at `height`, not only this page.
     pub total_value: u64,
-    pub objects: Vec<OwnedObject>,
+    pub objects: Vec<OwnedObjectsRow>,
+    /// The request cursor this page continues from; `None` on the first page.
+    pub cursor: Option<String>,
+    /// Opaque cursor for the next page; `None` on the last page.
+    pub next_cursor: Option<String>,
+    /// Finalized tip height and state root the page was read at.
+    pub height: u64,
+    pub state_root: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub owner_keys_omitted: bool,
+}
+
+/// One `owned_objects` row: an `OwnedObject`, serialized identically unless
+/// the caller asked to omit the per-object owner key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnedObjectsRow {
+    pub id: String,
+    pub version: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_pubkey_hex: Option<String>,
+    pub value: u64,
+    pub asset: String,
+}
+
+impl OwnedObjectsRow {
+    pub fn from_object(object: OwnedObject, omit_owner_key: bool) -> Self {
+        Self {
+            id: object.id,
+            version: object.version,
+            owner_pubkey_hex: (!omit_owner_key).then_some(object.owner_pubkey_hex),
+            value: object.value,
+            asset: object.asset,
+        }
+    }
+
+    /// The full object; an omitted owner key is the report's owner.
+    pub fn as_object(&self, report: &OwnedObjectsReport) -> OwnedObject {
+        OwnedObject {
+            id: self.id.clone(),
+            version: self.version,
+            owner_pubkey_hex: self
+                .owner_pubkey_hex
+                .clone()
+                .unwrap_or_else(|| report.owner_public_key_hex.clone()),
+            value: self.value,
+            asset: self.asset.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

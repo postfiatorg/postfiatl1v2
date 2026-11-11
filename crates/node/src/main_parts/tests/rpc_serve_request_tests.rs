@@ -1280,6 +1280,23 @@ mod rpc_serve_request_tests {
     }
 
     #[test]
+    fn owned_objects_rpc_dispatch_keeps_typed_cursor_refusal_codes() {
+        for code in [
+            postfiat_node::OWNED_OBJECTS_CURSOR_MALFORMED,
+            postfiat_node::OWNED_OBJECTS_CURSOR_OWNER_MISMATCH,
+            postfiat_node::OWNED_OBJECTS_CURSOR_ASSET_MISMATCH,
+            postfiat_node::OWNED_OBJECTS_CURSOR_INVALID_OBJECT_ID,
+            postfiat_node::OWNED_OBJECTS_FOREIGN_OWNER_KEY,
+        ] {
+            let error = format!("rpc owned_objects failed: {code}: refused");
+            assert_eq!(
+                rpc_dispatch::rpc_dispatch_error_response_parts(&error),
+                (code, error.as_str())
+            );
+        }
+    }
+
+    #[test]
     fn atomic_swap_quote_rpc_preserves_typed_market_binding_codes() {
         for code in [
             "wrong_market_envelope",

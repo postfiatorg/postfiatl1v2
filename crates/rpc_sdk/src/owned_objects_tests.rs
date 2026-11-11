@@ -405,4 +405,53 @@ mod owned_objects {
         let zero_limit = request_for("owned-objects-1", owner(), None, Some(0));
         assert_eq!(bind_rejected_field(&fixture(), &zero_limit), "request");
     }
+
+    /// A cursor-era page: the node's byte bound ended it at 2 of limit 5.
+    fn paged_fixture() -> Value {
+        let mut report = with(truncated_fixture(), "/limit", json!(5));
+        let map = report.as_object_mut().unwrap();
+        map.insert("cursor".into(), Value::Null);
+        map.insert("next_cursor".into(), json!("ooc1.opaque"));
+        map.insert("height".into(), json!(40));
+        map.insert("state_root".into(), json!("bb".repeat(48)));
+        report
+    }
+
+    #[test]
+    fn accepts_byte_bounded_continued_and_keyless_pages() {
+        assert!(validate(&paged_fixture()).is_ok());
+        // The last page after a cursor holds part of the summed value.
+        let last = with(paged_fixture(), "/cursor", json!("ooc1.opaque"));
+        let last = with(last, "/next_cursor", Value::Null);
+        let last = with(last, "/truncated", json!(false));
+        assert!(validate(&last).is_ok());
+        let mut keyless = paged_fixture();
+        keyless["owner_keys_omitted"] = json!(true);
+        for row in keyless["objects"].as_array_mut().unwrap() {
+            row.as_object_mut().unwrap().remove("owner_pubkey_hex");
+        }
+        assert!(validate(&keyless).is_ok());
+        // A keyless page must not carry a per-object key.
+        let mut keyed = paged_fixture();
+        keyed["owner_keys_omitted"] = json!(true);
+        assert_eq!(rejected_field(keyed), "objects[0].owner_pubkey_hex");
+        // next_cursor and truncated must agree.
+        assert_eq!(
+            rejected_field(with(paged_fixture(), "/next_cursor", Value::Null)),
+            "next_cursor"
+        );
+        // A first page without a cursor still sums exactly when complete.
+        let first = with(last_unpaged(), "/total_value", json!(999));
+        assert_eq!(rejected_field(first), "total_value");
+    }
+
+    fn last_unpaged() -> Value {
+        let mut report = fixture();
+        let map = report.as_object_mut().unwrap();
+        map.insert("cursor".into(), Value::Null);
+        map.insert("next_cursor".into(), Value::Null);
+        map.insert("height".into(), json!(40));
+        map.insert("state_root".into(), json!("bb".repeat(48)));
+        report
+    }
 }

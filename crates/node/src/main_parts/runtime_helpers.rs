@@ -821,7 +821,7 @@ fn print_usage() {
   postfiat-node account-tx [--data-dir PATH] --address ADDRESS [--from-height HEIGHT] [--to-height HEIGHT] [--limit N]
   postfiat-node account-tx-index-build [--data-dir PATH]
   postfiat-node account-tx-index-status [--data-dir PATH]
-  postfiat-node owned-objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N]
+  postfiat-node owned-objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N] [--cursor CURSOR] [--omit-owner-keys]
   postfiat-node receipts [--data-dir PATH] [--tx-id ID] [--limit N]
   postfiat-node rpc --method server_info [--data-dir PATH]
   postfiat-node rpc --method ledger [--data-dir PATH] [--limit N]
@@ -850,7 +850,7 @@ fn print_usage() {
   postfiat-node rpc --method private_readiness [--data-dir PATH] [--pool-id ID]
   postfiat-node rpc --method account_lines [--data-dir PATH] --account ADDRESS [--issuer ADDRESS] [--asset-id ID] [--limit N]
   postfiat-node rpc --method account_assets [--data-dir PATH] --account ADDRESS [--asset-id ID] [--limit N]
-  postfiat-node rpc --method owned_objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N]
+  postfiat-node rpc --method owned_objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N] [--cursor CURSOR] [--omit-owner-keys]
   postfiat-node rpc --method issuer_assets [--data-dir PATH] --issuer ADDRESS [--limit N]
   postfiat-node rpc --method escrow_info [--data-dir PATH] --escrow-id ID
   postfiat-node rpc --method account_escrows [--data-dir PATH] --account ADDRESS [--role owner|recipient] [--state open|finished|canceled] [--limit N]

@@ -24,6 +24,7 @@ mod tests {
     mod atomic_swap_consensus;
     mod fastpay_payment_safety;
     mod fastpay_recovery_committee_read_tests;
+    mod owned_objects_cursor_tests;
     mod fastpay_non_signer_anchor;
     mod signer_committee_rotation_dry_run;
     mod fastpay_commitment_versions;

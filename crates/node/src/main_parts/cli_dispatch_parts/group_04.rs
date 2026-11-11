@@ -1728,6 +1728,9 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 owner_public_key_hex: owner_public_key_hex.to_string(),
                 asset: flag_value(flags, "--asset").map(ToString::to_string),
                 limit,
+                cursor: flag_value(flags, "--cursor").map(ToString::to_string),
+                omit_owner_keys: flags.iter().any(|flag| flag == "--omit-owner-keys"),
+                max_page_bytes: None,
             })
             .map_err(|error| format!("owned-objects failed: {error}"))?;
             let json = serde_json::to_string_pretty(&report)
