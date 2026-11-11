@@ -717,6 +717,12 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     # An entry of an earlier format is never used (see EXPORT_STATE_FORMAT):
     # nothing is carried, nothing trusted, and the scan starts at from_block.
     kept, rescan = _export_state(state)
+    # A Base node behind the kept scan (a lagging node, a failover) could hide
+    # a known payout from a rescan: nothing is discarded or rewritten on it.
+    if kept is not None and kept["scanned_through_block"] > finalized:
+        raise WatcherTransientError("base_finalized_behind_state",
+                                    f"the Base node's finalized block {finalized} is below the state's "
+                                    f"{kept['scanned_through_block']}: a lagging node or another chain")
     if discard_history:
         paid_entries = (kept or {}).get("paid", [])
         lines.append({"schema": LINE_SCHEMA, "kind": "history_discarded", "lane_id": lane_id,
@@ -737,16 +743,14 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     # every payout identity it knew, for comparison only: the recorded event
     # is the original, any other payout of a known digest a duplicate.
     known: dict[str, dict[str, Any]] = {}
+    known_paid: dict[str, dict[str, Any]] = {}
     if kept is not None and (rescan_all or kept["lock_from_block"] != from_block):
         rescan = "from_height" if rescan_all else "lock_from_block_changed"
         for entry in [*kept["pruned_paid_recent"], *kept["paid"]]:
             known[entry["evm_digest"]] = {key: entry[key] for key in RECENT_KEYS}
+        known_paid = {entry["evm_digest"]: dict(entry) for entry in kept["paid"]}
         kept = None
     if kept is not None:
-        if kept["scanned_through_block"] > finalized:
-            raise WatcherTransientError("base_finalized_behind_state",
-                                        f"the Base node's finalized block {finalized} is below the state's "
-                                        f"{kept['scanned_through_block']}: a lagging node or another chain")
         start, prior_count, prior_sum = kept["scanned_through_block"] + 1, kept["payout_count"], kept["payout_sum"]
         record = {entry["evm_digest"]: dict(entry) for entry in kept["paid"]}
         pruned_paid_count, pruned_paid_atoms = kept["pruned_paid_count"], kept["pruned_paid_atoms"]
@@ -788,10 +792,18 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     # On a rescan, the originals of known payouts whose packets PFTL has
     # pruned since: accounted as verified before the room is computed, never
     # judged again against a packet that is gone.
+    # In any run, the recorded event of a recently pruned paid export is its
+    # original too (folded already), never a duplicate of itself.
     originals: set[tuple[int, str, int]] = set()
     for event in events:
-        first = known.get(event["packet_digest"])
-        if first is None or not _same_event(first, event) or event["packet_digest"] in by_digest:
+        digest = event["packet_digest"]
+        if digest in by_digest:
+            continue
+        if digest in recently_pruned and _same_event(recently_pruned[digest], event):
+            originals.add((event["block"], event["transaction"], event["log_index"]))
+            continue
+        first = known.get(digest)
+        if first is None or not _same_event(first, event):
             continue
         if first["export_nonce"] >= pruned:
             raise WatcherTransientError("export_snapshot_behind_state",
@@ -809,18 +821,19 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     for event in events:
         result = {"schema": LINE_SCHEMA, "kind": "payout", "lane_id": lane_id, **event}
         digest = event["packet_digest"]
+        first = record.get(digest) or recently_pruned.get(digest) or known.get(digest)
         if (event["block"], event["transaction"], event["log_index"]) in originals and digest not in seen:
             seen.add(digest)
-            result.update(status="verified_earlier", export_nonce=known[digest]["export_nonce"])
+            result.update(status="verified_earlier", export_nonce=first["export_nonce"])
             lines.append(result)
             paid_total += event["amount"]
             continue
-        if (digest in seen or digest in record or digest in recently_pruned
-                or (digest in known and not _same_event(known[digest], event))):
+        # The recorded event itself is the original (judged again against a
+        # retained packet); any other payout of a known digest a duplicate.
+        if digest in seen or (first is not None and not _same_event(first, event)):
             # Also under --accept-export-baseline: the alarm keeps any baseline from being saved.
             result["status"] = "alarm"
             lines.append(result)
-            first = record.get(digest) or known.get(digest) or recently_pruned.get(digest)
             alarm("payout_duplicate", **event,
                   **({"paid_block": first["block"], "paid_transaction": first["transaction"],
                       "paid_log_index": first["log_index"]} if first else {}),
@@ -876,6 +889,11 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
               pruned_export_count=pruned, pruned_exported_atoms=pruned_atoms,
               pruned_paid_count=pruned_paid_count, pruned_paid_atoms=pruned_paid_atoms,
               baseline_payouts=prior_accepted[0], baseline_atoms=prior_accepted[1])
+    # A known payout of a retained export that this scan did not reach stays
+    # in the record: it is never moved to the recent list for that.
+    for digest, entry in known_paid.items():
+        if digest not in record and digest not in seen and entry["export_nonce"] >= pruned:
+            record[digest] = entry
     by_nonce = {entry["export_nonce"]: entry for entry in record.values()}
     unpaid = 0
     for packet in exports:

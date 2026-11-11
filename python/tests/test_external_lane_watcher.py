@@ -1683,6 +1683,45 @@ class StateLifeTests(unittest.TestCase):
             self.assertIn("state_file_invalid", stderr)
             self.assertEqual(state_file.read_text(), "{not json")
 
+    def test_n2_a_rescan_on_a_lagging_base_node_is_refused_and_the_original_stays_the_original(self):
+        paid = released_log(self.A, block=950, transaction="0x" + "a1" * 32)
+        lane = ExportPftl([self.A, self.B], released=2_000_000)
+        for extra in (("--from-height", "0"), ("--lock-from-block", "1"), ("--discard-export-history",)):
+            with self.subTest(extra=extra), tempfile.TemporaryDirectory() as directory:
+                state_file = Path(directory) / "state.json"
+                self.assertEqual(self.check(state_file, lane, [paid], 1_000)[0], 0)
+                before = json.loads(state_file.read_text())["exports"]
+                code, lines, stderr = self.check(state_file, lane, [paid], 900, *extra)
+                self.assertEqual((code, alarm_codes(lines)), (1, []))
+                self.assertIn("base_finalized_behind_state", stderr)
+                self.assertEqual(json.loads(state_file.read_text())["exports"], before)
+                code, lines, _ = self.check(state_file, lane, [paid], 1_000)
+                self.assertEqual((code, alarm_codes(lines)), (0, []))
+
+    def test_n2_a_recorded_event_seen_again_in_a_normal_run_is_the_original(self):
+        paid = released_log(self.A, block=950, transaction="0x" + "a1" * 32)
+        lane = ExportPftl([self.A, self.B], released=2_000_000)
+        _, codes, _, kept = run_export_view(lane, ExportBase([paid], locked=2_000_000, finalized=1_000))
+        self.assertEqual(codes, [])
+        # A file whose cursor lies before its own recorded payout (as the earlier rescan saved it).
+        behind = {**kept, "scanned_through_block": 900, "payout_count": 0, "payout_sum": 0}
+        lines, codes, _, again = run_export_view(lane, ExportBase([paid], locked=2_000_000, finalized=1_000),
+                                                 state=behind)
+        self.assertEqual(codes, [])
+        self.assertEqual([line["status"] for line in lines if line["kind"] == "payout"], ["backed"])
+        self.assertEqual(again["paid"], kept["paid"])
+        # The same with A pruned and in the recent list: verified earlier, not a duplicate, not folded twice.
+        pruned = ExportPftl([self.B], pruned=1, pruned_atoms=400_000, released=2_000_000)
+        _, codes, _, folded = run_export_view(pruned, ExportBase([paid], locked=2_000_000, finalized=1_000),
+                                              state=kept)
+        self.assertEqual((codes, folded["pruned_paid_count"]), ([], 1))
+        lines, codes, _, again = run_export_view(
+            pruned, ExportBase([paid], locked=2_000_000, finalized=1_000),
+            state={**folded, "scanned_through_block": 900, "payout_count": 0, "payout_sum": 0})
+        self.assertEqual(codes, [])
+        self.assertEqual([line["status"] for line in lines if line["kind"] == "payout"], ["verified_earlier"])
+        self.assertEqual((again["pruned_paid_count"], again["pruned_paid_atoms"]), (1, 400_000))
+
     def test_the_recent_list_share_of_the_size_limit(self):
         entry = {"export_nonce": U64_MAX, "evm_digest": "0x" + "ab" * 32, "block": U64_MAX,
                  "transaction": "0x" + "cd" * 32, "log_index": U64_MAX, "amount": U64_MAX}
