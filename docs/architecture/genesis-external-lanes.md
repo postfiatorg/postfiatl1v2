@@ -365,7 +365,7 @@ The Python client has the same pair: `external_lane_export(client, wallet=..., l
 - [ ] Run with `--dry-run` first and check the chain id and genesis hash it prints (`quote`) and the lane policy `external-lane-info --lane-id ID` prints (exports on, lock and token contracts) against the published ones.
 - [ ] Keep the printed `tx_id`; it is the handle for the status read.
 - [ ] Wait for `external-lane-export-status --tx-id ID --sender ADDRESS` to show `in_committed_block: true` (`--audit` to replay the node's block log).
-- [ ] Expect no ERC-20 on Base: until a release relay exists, nothing pays the packet out.
+- [ ] Expect no ERC-20 on Base: until a release relay is operated for the lane, nothing pays the packet out.
 
 An export that is accepted and never paid loses nothing on PFTL beyond the exported amount, which is out of circulation and counted in the lane's `exported_atoms`; the packet stays in the lane's export history and stays provable against the committed `export_history_root` for a future relay.
 
