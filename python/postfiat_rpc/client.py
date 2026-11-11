@@ -269,6 +269,11 @@ class AccountTxIndexStatus:
         }
 
 
+OWNED_OBJECTS_VIEW_CHANGED = "owned_objects_view_changed"
+# Restarts `owned_objects_all` makes when the view changes between pages.
+OWNED_OBJECTS_ALL_MAX_RESTARTS = 3
+
+
 class PostFiatRpcClient:
     def __init__(
         self,
@@ -1190,35 +1195,58 @@ class PostFiatRpcClient:
         asset: str | None = None,
         page_limit: int = 128,
         omit_owner_keys: bool = False,
-        max_restarts: int = 3,
+        max_restarts: int = OWNED_OBJECTS_ALL_MAX_RESTARTS,
     ) -> dict[str, Any]:
-        """Every owned object from one height and state root.
+        """Every owned object from one object view, or an error.
 
-        Pages follow `next_cursor`. When a page reports another `height` or
-        `state_root` than the first page, the set changed between pages, so
-        the read restarts from the first page (at most `max_restarts` times).
+        Pages follow `next_cursor`. Every page carries `view_digest`, the
+        node's digest of every matching object (asset, id, version, value);
+        `height` and `state_root` do not identify that view, since FastPay
+        effects change it without a new block. When the node refuses a
+        continuation with `owned_objects_view_changed`, or a page reports
+        another `view_digest` than the first, the read restarts from the
+        first page, at most `max_restarts` times, then raises
+        `RpcClientError`.
         """
         for _ in range(max_restarts + 1):
             first = self.owned_objects(
                 owner_public_key_hex, asset=asset, limit=page_limit, omit_owner_keys=omit_owner_keys
             )
-            point = (first.get("height"), first.get("state_root"))
+            view = first.get("view_digest")
             objects = list(first.get("objects") or [])
             page = first
+            pages = 1
+            changed = False
             while page.get("next_cursor") is not None:
-                page = self.owned_objects(
-                    owner_public_key_hex,
-                    asset=asset,
-                    limit=page_limit,
-                    cursor=page["next_cursor"],
-                    omit_owner_keys=omit_owner_keys,
-                )
-                if (page.get("height"), page.get("state_root")) != point:
+                try:
+                    page = self.owned_objects(
+                        owner_public_key_hex,
+                        asset=asset,
+                        limit=page_limit,
+                        cursor=page["next_cursor"],
+                        omit_owner_keys=omit_owner_keys,
+                    )
+                except RpcError as error:
+                    if error.error.get("code") != OWNED_OBJECTS_VIEW_CHANGED:
+                        raise
+                    changed = True
                     break
+                if page.get("view_digest") != view:
+                    changed = True
+                    break
+                pages += 1
                 objects.extend(page.get("objects") or [])
-            else:
-                return {**first, "objects": objects, "object_count": len(objects), "truncated": False}
-        raise RpcClientError("owned objects changed between pages on every attempt; retry later")
+            if not changed:
+                return {
+                    **first,
+                    "objects": objects,
+                    "object_count": len(objects),
+                    "truncated": False,
+                }
+        raise RpcClientError(
+            f"owned objects kept changing between pages ({max_restarts + 1} attempts); "
+            "the account is busy, retry later"
+        )
 
     def owned_sign(
         self,

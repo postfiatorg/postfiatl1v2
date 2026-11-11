@@ -181,7 +181,7 @@ fn owned_objects_byte_bound_ends_pages_early_and_keeps_every_object() {
 }
 
 #[test]
-fn owned_objects_pages_from_different_heights_are_visible() {
+fn owned_objects_continuation_across_a_new_height_and_view_is_refused() {
     let owner = owner_key(3);
     let data_dir = fixture("heights", &owner, 200);
     let base = OwnedObjectsOptions {
@@ -196,16 +196,22 @@ fn owned_objects_pages_from_different_heights_are_visible() {
     ledger.owned_objects.push(late.clone());
     store.write_ledger(&ledger).expect("ledger");
     write_tip(&store, 41, "cc");
-    let second = owned_objects(OwnedObjectsOptions {
+    let refused = owned_objects(OwnedObjectsOptions {
         cursor: first.next_cursor.clone(),
-        ..base
+        ..base.clone()
     })
-    .expect("second page");
-    assert_eq!((first.height, second.height), (40, 41));
-    assert_ne!(first.state_root, second.state_root);
-    assert_eq!(second.total_value, first.total_value + late.value);
-    assert_eq!(second.objects.last().expect("row").id, late.id);
-    assert!(second.next_cursor.is_none());
+    .expect_err("the view changed")
+    .to_string();
+    assert_eq!(
+        owned_objects_error_code(&refused),
+        Some(OWNED_OBJECTS_VIEW_CHANGED)
+    );
+    let pages = read_all(base);
+    assert!(pages.iter().all(|page| page.height == 41));
+    assert!(pages.iter().all(|page| page.view_digest == pages[0].view_digest));
+    assert_ne!(pages[0].view_digest, first.view_digest);
+    assert_eq!(pages[0].total_value, first.total_value + late.value);
+    assert_eq!(rows_of(&pages).last().expect("row").id, late.id);
 }
 
 #[test]
@@ -251,10 +257,12 @@ fn owned_objects_refuses_foreign_malformed_and_mismatched_cursors() {
     for malformed in [
         String::new(),
         "garbage".to_string(),
-        with(0, "ooc2"),
+        with(0, "ooc3"),
         with(3, "zz"),
-        with(5, "01"),
-        with(5, "x"),
+        with(3, &"A".repeat(64)),
+        with(4, "zz"),
+        with(6, "01"),
+        with(6, "x"),
         format!("{issued}.1"),
     ] {
         assert_eq!(
@@ -265,10 +273,18 @@ fn owned_objects_refuses_foreign_malformed_and_mismatched_cursors() {
     }
     for bad_id in ["abc", &"g".repeat(64), &"a".repeat(66)] {
         assert_eq!(
-            refusal(page(&other_dir, &other, None, &with(4, bad_id))),
+            refusal(page(&other_dir, &other, None, &with(5, bad_id))),
             OWNED_OBJECTS_CURSOR_INVALID_OBJECT_ID
         );
     }
+    // A cursor from before the view digest restarts the read.
+    let mut v1 = parts.clone();
+    v1.remove(3);
+    v1[0] = "ooc1";
+    assert_eq!(
+        refusal(page(&other_dir, &other, None, &v1.join("."))),
+        OWNED_OBJECTS_VIEW_CHANGED
+    );
 }
 
 #[test]
@@ -295,6 +311,8 @@ fn owned_objects_default_call_answers_as_before() {
     });
     let added = ["cursor", "next_cursor", "height", "state_root"]
         .map(|key| json.as_object_mut().expect("object").remove(key).expect(key));
+    let view = json.as_object_mut().expect("object").remove("view_digest");
+    assert_eq!(view.and_then(|v| v.as_str().map(str::len)), Some(64));
     assert_eq!(json, before);
     assert_eq!(
         added,
@@ -304,5 +322,94 @@ fn owned_objects_default_call_answers_as_before() {
             40.into(),
             "bb".repeat(48).into()
         ]
+    );
+}
+
+/// The reviewer's sequence: page 1 returns object 1 of {1, 2, 3} (10 each);
+/// at the same tip object 1 is replaced by 4. The continuation must be
+/// refused, never answered with {2, 3, 4} under the same height and root.
+#[test]
+fn owned_objects_continuation_after_a_same_tip_change_is_refused() {
+    let owner = owner_key(7);
+    let data_dir = fixture("same-tip-change", &owner, 0);
+    let store = NodeStore::new(&data_dir);
+    let numbered = |n: u8| postfiat_types::OwnedObject {
+        id: format!("{n:02x}").repeat(32),
+        version: 1,
+        owner_pubkey_hex: owner.clone(),
+        value: 10,
+        asset: "PFT".to_string(),
+    };
+    let mut ledger = store.read_ledger().expect("ledger");
+    ledger.owned_objects.extend([1, 2, 3].map(numbered));
+    store.write_ledger(&ledger).expect("ledger");
+    let base = OwnedObjectsOptions {
+        limit: Some(1),
+        ..options(&data_dir, &owner)
+    };
+    let first = owned_objects(base.clone()).expect("first page");
+    assert_eq!(first.objects[0].id, numbered(1).id);
+    assert_eq!(first.total_value, 30);
+    ledger.owned_objects.retain(|object| object.id != numbered(1).id);
+    ledger.owned_objects.push(numbered(4));
+    store.write_ledger(&ledger).expect("ledger");
+    let refused = owned_objects(OwnedObjectsOptions {
+        cursor: first.next_cursor.clone(),
+        limit: Some(3),
+        ..base.clone()
+    })
+    .expect_err("a continuation over a changed view is refused")
+    .to_string();
+    assert_eq!(
+        owned_objects_error_code(&refused),
+        Some(OWNED_OBJECTS_VIEW_CHANGED)
+    );
+    let again = owned_objects(base).expect("restarted first page");
+    assert_eq!((again.height, &again.state_root), (first.height, &first.state_root));
+    assert_eq!(again.total_value, 30);
+    assert_eq!(again.objects[0].id, numbered(2).id);
+}
+
+/// The same sequence on the transactional store with a real FastPay apply:
+/// `owned_apply_v3` spends the owner's object without a new block, so
+/// height and state root stay while the view digest changes and a
+/// continuation issued before the apply is refused.
+#[test]
+fn owned_objects_continuation_across_a_real_fastpay_apply_is_refused() {
+    let (_root, dirs, owner) = super::fastpay_payment_safety::active_fastpay_fixture();
+    let certificate = super::fastpay_payment_safety::active_fastpay_transfer(&dirs, &owner);
+    let owner_hex = postfiat_crypto_provider::bytes_to_hex(&owner.public_key);
+    let base = options(&dirs[0], &owner_hex);
+    let before = owned_objects(base.clone()).expect("before");
+    assert_eq!((before.object_count, before.total_value), (1, 100));
+    // A continuation positioned before the only object, at the read view.
+    let cursor = format!(
+        "ooc2.{}.-.{}.{}.{}.0",
+        crate::lifecycle_queries::owned_objects_owner_tag(&owner_hex),
+        before.view_digest,
+        postfiat_crypto_provider::bytes_to_hex(b"PFT"),
+        "00".repeat(32)
+    );
+    let continued = OwnedObjectsOptions {
+        cursor: Some(cursor),
+        ..base.clone()
+    };
+    assert_eq!(owned_objects(continued.clone()).expect("same view").objects, before.objects);
+    owned_apply_v3(
+        NodeOptions {
+            data_dir: dirs[0].clone(),
+        },
+        &serde_json::to_string(&certificate).expect("certificate json"),
+        "validator-0",
+    )
+    .expect("FastPay apply");
+    let after = owned_objects(base).expect("after");
+    assert_eq!((after.height, &after.state_root), (before.height, &before.state_root));
+    assert_eq!((after.object_count, after.total_value), (0, 0));
+    assert_ne!(after.view_digest, before.view_digest);
+    let refused = owned_objects(continued).expect_err("view changed").to_string();
+    assert_eq!(
+        owned_objects_error_code(&refused),
+        Some(OWNED_OBJECTS_VIEW_CHANGED)
     );
 }

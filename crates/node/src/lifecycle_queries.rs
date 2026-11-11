@@ -3077,20 +3077,26 @@ pub fn account_assets(options: AccountAssetsOptions) -> io::Result<AccountAssets
 /// about 4 KB per object with the owner key a page holds about 235 objects;
 /// without the key (about 160 bytes each), every `limit` up to 2048.
 pub const OWNED_OBJECTS_PAGE_MAX_BYTES: usize = 960 * 1024;
-const OWNED_OBJECTS_CURSOR_PREFIX: &str = "ooc1";
+const OWNED_OBJECTS_CURSOR_PREFIX: &str = "ooc2";
+/// The cursor format before the view digest; such a cursor is answered
+/// with `owned_objects_view_changed` so the caller restarts.
+const OWNED_OBJECTS_CURSOR_PREFIX_V1: &str = "ooc1";
 const OWNED_OBJECTS_CURSOR_OWNER_DOMAIN: &[u8] = b"postfiat-owned-objects-cursor-owner-v1\0";
+const OWNED_OBJECTS_VIEW_DOMAIN: &[u8] = b"postfiat-owned-objects-view-v1\0";
 /// Typed error codes for an `owned_objects` request the node refuses.
 pub const OWNED_OBJECTS_CURSOR_MALFORMED: &str = "owned_objects_cursor_malformed";
 pub const OWNED_OBJECTS_CURSOR_OWNER_MISMATCH: &str = "owned_objects_cursor_owner_mismatch";
 pub const OWNED_OBJECTS_CURSOR_ASSET_MISMATCH: &str = "owned_objects_cursor_asset_mismatch";
 pub const OWNED_OBJECTS_CURSOR_INVALID_OBJECT_ID: &str = "owned_objects_cursor_invalid_object_id";
 pub const OWNED_OBJECTS_FOREIGN_OWNER_KEY: &str = "owned_objects_foreign_owner_key";
-const OWNED_OBJECTS_ERROR_CODES: [&str; 5] = [
+pub const OWNED_OBJECTS_VIEW_CHANGED: &str = "owned_objects_view_changed";
+const OWNED_OBJECTS_ERROR_CODES: [&str; 6] = [
     OWNED_OBJECTS_CURSOR_MALFORMED,
     OWNED_OBJECTS_CURSOR_OWNER_MISMATCH,
     OWNED_OBJECTS_CURSOR_ASSET_MISMATCH,
     OWNED_OBJECTS_CURSOR_INVALID_OBJECT_ID,
     OWNED_OBJECTS_FOREIGN_OWNER_KEY,
+    OWNED_OBJECTS_VIEW_CHANGED,
 ];
 
 /// The typed RPC error code carried by an `owned_objects` refusal.
@@ -3104,7 +3110,7 @@ fn owned_objects_refusal(code: &str, detail: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, format!("{code}: {detail}"))
 }
 
-fn owned_objects_owner_tag(owner_public_key_hex: &str) -> String {
+pub(crate) fn owned_objects_owner_tag(owner_public_key_hex: &str) -> String {
     let mut hasher = Sha256::new();
     Sha2Digest::update(&mut hasher, OWNED_OBJECTS_CURSOR_OWNER_DOMAIN);
     Sha2Digest::update(&mut hasher, owner_public_key_hex.as_bytes());
@@ -3118,31 +3124,73 @@ fn owned_objects_asset_field(asset: Option<&str>) -> String {
     )
 }
 
-/// The opaque cursor after `last`: owner tag, asset filter, then the order
-/// key (asset, id, version) of the last object returned.
-fn owned_objects_cursor(owner_tag: &str, filter: &str, last: &OwnedObject) -> String {
+/// Digest of the object view a page is read from: every object matching
+/// the owner and asset filter, in (asset, id, version) order, by asset, id,
+/// version and value. Any spend, creation or value change alters it, with
+/// or without a new block.
+fn owned_objects_view_digest(owner: &str, filter: &str, objects: &[OwnedObject]) -> String {
+    let mut hasher = Sha256::new();
+    let mut field = |bytes: &[u8]| {
+        Sha2Digest::update(&mut hasher, (bytes.len() as u64).to_be_bytes());
+        Sha2Digest::update(&mut hasher, bytes);
+    };
+    field(OWNED_OBJECTS_VIEW_DOMAIN);
+    field(owner.as_bytes());
+    field(filter.as_bytes());
+    field(&(objects.len() as u64).to_be_bytes());
+    for object in objects {
+        field(object.asset.as_bytes());
+        field(object.id.as_bytes());
+        field(&object.version.to_be_bytes());
+        field(&object.value.to_be_bytes());
+    }
+    postfiat_crypto_provider::bytes_to_hex(&hasher.finalize())
+}
+
+/// The opaque cursor after `last`: owner tag, asset filter, view digest,
+/// then the order key (asset, id, version) of the last object returned.
+fn owned_objects_cursor(owner_tag: &str, filter: &str, view: &str, last: &OwnedObject) -> String {
     format!(
-        "{OWNED_OBJECTS_CURSOR_PREFIX}.{owner_tag}.{filter}.{}.{}.{}",
+        "{OWNED_OBJECTS_CURSOR_PREFIX}.{owner_tag}.{filter}.{view}.{}.{}.{}",
         postfiat_crypto_provider::bytes_to_hex(last.asset.as_bytes()),
         last.id,
         last.version
     )
 }
 
-/// Parses a cursor issued for this owner and asset filter into the order
-/// key it resumes after. Anything else is refused, never ignored.
+/// A parsed cursor: the view digest it was issued from and the order key
+/// (asset, id, version) it resumes after.
+struct OwnedObjectsCursor {
+    view: String,
+    after: (String, String, u64),
+}
+
+/// Parses a cursor issued for this owner and asset filter. Anything else is
+/// refused, never ignored.
 fn parse_owned_objects_cursor(
     cursor: &str,
     owner_tag: &str,
     filter: &str,
-) -> io::Result<(String, String, u64)> {
+) -> io::Result<OwnedObjectsCursor> {
     let malformed =
         || owned_objects_refusal(OWNED_OBJECTS_CURSOR_MALFORMED, "cursor does not parse");
     let parts = cursor.split('.').collect::<Vec<_>>();
-    let [prefix, tag, cursor_filter, asset_hex, id, version] = parts.as_slice() else {
+    if parts.len() == 6 && parts[0] == OWNED_OBJECTS_CURSOR_PREFIX_V1 {
+        return Err(owned_objects_refusal(
+            OWNED_OBJECTS_VIEW_CHANGED,
+            "cursor predates the view digest; restart from the first page",
+        ));
+    }
+    let [prefix, tag, cursor_filter, view, asset_hex, id, version] = parts.as_slice() else {
         return Err(malformed());
     };
-    if *prefix != OWNED_OBJECTS_CURSOR_PREFIX || tag.len() != 32 {
+    if *prefix != OWNED_OBJECTS_CURSOR_PREFIX
+        || tag.len() != 32
+        || view.len() != 64
+        || !view
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
         return Err(malformed());
     }
     if *tag != owner_tag {
@@ -3173,7 +3221,10 @@ fn parse_owned_objects_cursor(
         .ok()
         .filter(|parsed| parsed.to_string() == *version)
         .ok_or_else(malformed)?;
-    Ok((asset, id.to_string(), version))
+    Ok(OwnedObjectsCursor {
+        view: view.to_string(),
+        after: (asset, id.to_string(), version),
+    })
 }
 
 fn owned_objects_json_len<T: serde::Serialize>(value: &T) -> io::Result<usize> {
@@ -3188,8 +3239,11 @@ fn owned_objects_json_len<T: serde::Serialize>(value: &T) -> io::Result<usize> {
 }
 
 /// One page of the owner's objects in (asset, id, version) order, read under
-/// the ordered-commit lock so the page, `height` and `state_root` are from
-/// one moment. The page ends at `limit` objects or before the compact JSON
+/// the ordered-commit lock so the page, `view_digest`, `height` and
+/// `state_root` are from one moment. `view_digest` identifies the object
+/// view (FastPay effects change it without a new block); a continuation
+/// whose cursor carries another view digest is refused with
+/// `owned_objects_view_changed` instead of mixing two views. The page ends at `limit` objects or before the compact JSON
 /// result would exceed `OWNED_OBJECTS_PAGE_MAX_BYTES`; `next_cursor` is set
 /// when objects remain. `total_value` sums every matching object.
 pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsReport> {
@@ -3216,7 +3270,7 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
     )?;
     let owner_tag = owned_objects_owner_tag(&options.owner_public_key_hex);
     let filter = owned_objects_asset_field(options.asset.as_deref());
-    let after = options
+    let cursor = options
         .cursor
         .as_deref()
         .map(|cursor| parse_owned_objects_cursor(cursor, &owner_tag, &filter))
@@ -3249,6 +3303,16 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
             .then_with(|| left.id.cmp(&right.id))
             .then_with(|| left.version.cmp(&right.version))
     });
+    let view_digest = owned_objects_view_digest(&options.owner_public_key_hex, &filter, &objects);
+    if cursor
+        .as_ref()
+        .is_some_and(|cursor| cursor.view != view_digest)
+    {
+        return Err(owned_objects_refusal(
+            OWNED_OBJECTS_VIEW_CHANGED,
+            "the owner's objects changed since the cursor was issued; restart from the first page",
+        ));
+    }
     let total_value = objects.iter().try_fold(0u64, |sum, object| {
         sum.checked_add(object.value).ok_or_else(|| {
             io::Error::new(
@@ -3257,12 +3321,18 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
             )
         })
     })?;
-    let start = after.map_or(0, |(asset, id, version)| {
-        objects.partition_point(|object| {
-            (object.asset.as_str(), object.id.as_str(), object.version)
-                <= (asset.as_str(), id.as_str(), version)
-        })
-    });
+    let start = cursor.map_or(
+        0,
+        |OwnedObjectsCursor {
+             after: (asset, id, version),
+             ..
+         }| {
+            objects.partition_point(|object| {
+                (object.asset.as_str(), object.id.as_str(), object.version)
+                    <= (asset.as_str(), id.as_str(), version)
+            })
+        },
+    );
     let mut report = OwnedObjectsReport {
         schema: "postfiat-owned-objects-v1".to_string(),
         chain_id: genesis.chain_id.clone(),
@@ -3279,6 +3349,7 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
         next_cursor: None,
         height: tip.height,
         state_root: tip.state_root,
+        view_digest,
         owner_keys_omitted: options.omit_owner_keys,
     };
     // `null` (4 bytes) becomes the quoted cursor when a next page exists.
@@ -3292,8 +3363,14 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
             ));
         }
         let row = OwnedObjectsRow::from_object(object, report.owner_keys_omitted);
-        let cursor_len =
-            owned_objects_cursor(&owner_tag, &filter, &row.as_object(&report)).len() + 2;
+        let cursor_len = owned_objects_cursor(
+            &owner_tag,
+            &filter,
+            &report.view_digest,
+            &row.as_object(&report),
+        )
+        .len()
+            + 2;
         let row_len = owned_objects_json_len(&row)? + 1;
         if !report.objects.is_empty() && used + row_len + cursor_len > max_bytes {
             break;
@@ -3307,7 +3384,7 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
         .truncated
         .then(|| report.objects.last().map(|row| row.as_object(&report)))
         .flatten()
-        .map(|last| owned_objects_cursor(&owner_tag, &filter, &last));
+        .map(|last| owned_objects_cursor(&owner_tag, &filter, &report.view_digest, &last));
     Ok(report)
 }
 
