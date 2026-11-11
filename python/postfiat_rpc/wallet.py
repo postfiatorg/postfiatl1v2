@@ -1510,12 +1510,37 @@ def external_lane_export_refusal(
     return None
 
 
-def _export_quote_mismatch(quote: dict[str, Any], operation: dict[str, Any], address: str) -> str | None:
-    """Why the quote is not for `operation` from `address`, or `None`. The
-    signer signs the quote's operation, source and kind, so a node that
-    answers with another recipient, amount, lane or sender gets nothing
-    signed."""
+_U64_MAX = 2**64 - 1
 
+
+def _is_u64(value: Any) -> bool:
+    """A non-negative integer within u64, not a boolean."""
+
+    return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= _U64_MAX
+
+
+def _export_quote_mismatch(
+    quote: dict[str, Any],
+    operation: dict[str, Any],
+    wallet: TransparentWallet,
+    sequence: int | None,
+) -> str | None:
+    """Why the quote is not for `operation` from `wallet`, or `None`. The
+    signer signs the quote's operation, source, kind, sequence and chain, so a
+    node that answers with another recipient, amount, lane, sender, sequence
+    or chain gets nothing signed and no dry run reported."""
+
+    address = wallet.address
+    quoted_sequence = quote.get("sequence")
+    if not _is_u64(quoted_sequence):
+        return f"the quote's sequence `{quoted_sequence!r}` is not a non-negative integer within u64"
+    if sequence is not None and quoted_sequence != sequence:
+        return f"the quote's sequence {quoted_sequence} is not the requested {sequence}"
+    if quote.get("chain_id") != wallet.chain_id:
+        return f"the quote's chain id `{quote.get('chain_id')}` is not the wallet's `{wallet.chain_id}`"
+    known_genesis = wallet.key_report.get("genesis_hash") if isinstance(wallet.key_report, dict) else None
+    if isinstance(known_genesis, str) and quote.get("genesis_hash") != known_genesis:
+        return f"the quote's genesis hash `{quote.get('genesis_hash')}` is not the wallet's `{known_genesis}`"
     if quote.get("transaction_kind") != operation["operation"]:
         return f"the quote is for `{quote.get('transaction_kind')}`, not `{operation['operation']}`"
     if quote.get("source") != address:
@@ -1578,6 +1603,8 @@ def external_lane_export(
         raise ValueError("amount_atoms must be an integer")
     if isinstance(max_fee_atoms, bool) or not isinstance(max_fee_atoms, int) or max_fee_atoms < 0:
         raise ValueError("max_fee_atoms must be a non-negative integer")
+    if sequence is not None and (not _is_u64(sequence) or sequence == 0):
+        raise ValueError("sequence must be an integer between 1 and 2**64 - 1")
     report = client.external_lane_info(lane_id, release_limit=1, export_limit=1)
     row = next((lane for lane in report.get("lanes", []) if lane.get("lane_id") == lane_id), None)
     refusal = external_lane_export_refusal(row, amount_atoms=amount_atoms, base_recipient=base_recipient)
@@ -1598,7 +1625,7 @@ def external_lane_export(
         request_id=f"py-export-quote-{secrets.token_hex(4)}",
     )
     quote = quote_response.get("result", {})
-    mismatch = _export_quote_mismatch(quote, operation, wallet.address)
+    mismatch = _export_quote_mismatch(quote, operation, wallet, sequence)
     if mismatch is not None:
         raise ValueError(f"refused before signing: external_lane_export_quote_mismatch: {mismatch}")
     if quote.get("export_checked") is not True:

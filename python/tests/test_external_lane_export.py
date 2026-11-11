@@ -100,6 +100,9 @@ def _quote(**overrides: Any) -> dict[str, Any]:
         "minimum_fee": 22,
         "account_reserve": 10,
         "export_checked": True,
+        "sequence": 1,
+        "chain_id": "postfiat-local",
+        "genesis_hash": "ab" * 48,
     }
     result.update(overrides)
     return {"ok": True, "result": result}
@@ -288,6 +291,55 @@ class ExternalLaneExportTests(unittest.TestCase):
                 )
         quote.assert_not_called()
         signer.assert_not_called()
+
+    def test_the_quote_must_carry_the_requested_sequence_and_the_wallets_chain(self) -> None:
+        """B7: the signer signs the quote's sequence and chain, so both are bound
+        to the request and the wallet before anything is signed or a dry run
+        is reported."""
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        u64 = 2**64 - 1
+        cases = [
+            ("changed sequence", _quote(sequence=8), {"sequence": 7}),
+            ("boolean sequence", _quote(sequence=True), {"sequence": 1}),
+            ("boolean sequence, none requested", _quote(sequence=True), {}),
+            ("omitted sequence", _quote(sequence=None), {}),
+            ("negative sequence", _quote(sequence=-1), {}),
+            ("sequence above u64", _quote(sequence=u64 + 1), {}),
+            ("string sequence", _quote(sequence="8"), {}),
+            ("another chain", _quote(chain_id="postfiat-other"), {}),
+        ]
+        omitted = _quote()
+        del omitted["result"]["sequence"]
+        cases.append(("sequence field missing", omitted, {}))
+        for label, quote, kwargs in cases:
+            for dry_run in (False, True):
+                with self.subTest(label=label, dry_run=dry_run):
+                    error, signer, submit, _ = self._export(
+                        client, quote, amount_atoms=600, dry_run=dry_run, **kwargs)
+                    self.assertIsInstance(error, ValueError)
+                    self.assertRegex(str(error), "^refused before signing: external_lane_export_quote_mismatch: ")
+                    signer.assert_not_called()
+                    submit.assert_not_called()
+        for quote, kwargs in ((_quote(sequence=7), {"sequence": 7}), (_quote(sequence=8), {}),
+                              (_quote(sequence=u64), {})):
+            result, signer, _, _ = self._export(client, quote, amount_atoms=600, **kwargs)
+            self.assertEqual(result.tx_id, "ab")
+            signer.assert_called_once()
+
+    def test_a_quote_for_another_genesis_is_refused_when_the_wallet_knows_its_genesis(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        known = TransparentWallet(**{**_wallet().__dict__, "key_report": {"genesis_hash": "cd" * 48}})
+        with mock.patch("postfiat_rpc.wallet.TransparentWallet", TransparentWallet):
+            for dry_run in (False, True):
+                with (
+                    mock.patch.object(client, "external_lane_info", return_value={"lanes": [_row()]}),
+                    mock.patch.object(client, "asset_fee_quote_response", return_value=_quote()),
+                    mock.patch("postfiat_rpc.wallet._run") as signer,
+                ):
+                    with self.assertRaisesRegex(ValueError, "external_lane_export_quote_mismatch: .*genesis"):
+                        external_lane_export(client, wallet=known, lane_id="base-erc20", amount_atoms=600,
+                                             base_recipient=RECIPIENT, dry_run=dry_run)
+                    signer.assert_not_called()
 
 
 class ExternalLaneExportStatusTests(unittest.TestCase):
