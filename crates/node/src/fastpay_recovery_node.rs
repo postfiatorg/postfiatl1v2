@@ -1203,11 +1203,16 @@ pub fn owned_recovery_status_v3(options: NodeOptions, lock_id: &str) -> io::Resu
 pub const FASTPAY_FENCE_STATUS_SIGNER_UNAVAILABLE: &str = "fastpay_fence_status_signer_unavailable";
 pub const FASTPAY_FENCE_STATUS_NOT_A_SIGNER: &str = "fastpay_fence_status_not_a_signer";
 /// Distinct (data dir, validator, lock) answers kept per process. An entry is
-/// served only while the certified tip it was signed at is still the tip.
+/// served only while the certified tip it was signed at is still the tip and
+/// the history base is unchanged: a prune or checkpoint restore at the same
+/// tip changes the height this validator can show an effect anchored at.
 const FASTPAY_FENCE_STATUS_CACHE_ENTRIES: usize = 4096;
 
 type FastPayFenceStatusCache =
-    BTreeMap<(PathBuf, String, String), (u64, String, postfiat_types::FastPayFenceStatusV2)>;
+    BTreeMap<(PathBuf, String, String), (FenceStatusTipMark, postfiat_types::FastPayFenceStatusV2)>;
+
+/// Certified tip height, its block hash and the retained-history base.
+type FenceStatusTipMark = (u64, String, u64);
 
 fn fastpay_fence_status_cache() -> &'static std::sync::Mutex<FastPayFenceStatusCache> {
     static CACHE: std::sync::OnceLock<std::sync::Mutex<FastPayFenceStatusCache>> =
@@ -1334,12 +1339,14 @@ pub fn owned_fence_status_v3(
         validator_id.to_string(),
         lock_id.to_string(),
     );
-    if let Some((height, hash, status)) = fastpay_fence_status_cache()
+    let tip_mark: FenceStatusTipMark =
+        (tip.height, tip.block_hash.clone(), tip.history_base_height);
+    if let Some((mark, status)) = fastpay_fence_status_cache()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .get(&cache_key)
     {
-        if *height == tip.height && *hash == tip.block_hash {
+        if *mark == tip_mark {
             return Ok(status.clone());
         }
     }
@@ -1410,12 +1417,12 @@ pub fn owned_fence_status_v3(
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     if cache.len() >= FASTPAY_FENCE_STATUS_CACHE_ENTRIES {
-        cache.retain(|_, (height, hash, _)| *height == tip.height && *hash == tip.block_hash);
+        cache.retain(|_, (mark, _)| *mark == tip_mark);
         if cache.len() >= FASTPAY_FENCE_STATUS_CACHE_ENTRIES {
             cache.clear();
         }
     }
-    cache.insert(cache_key, (tip.height, tip.block_hash, status.clone()));
+    cache.insert(cache_key, (tip_mark, status.clone()));
     Ok(status)
 }
 
