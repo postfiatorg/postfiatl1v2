@@ -1281,6 +1281,110 @@ class PaidRecordTests(unittest.TestCase):
                              (301, 0))
 
 
+class ExportSnapshotTests(unittest.TestCase):
+    """F1: an export snapshot older than one the view acted on is refused."""
+
+    # Window 100: A nonce 0 at PFTL 400, B nonce 1 at 450, C nonce 2 at 600.
+    A = export_entry(0, height=400)
+    B = export_entry(1, amount=600_000, height=450)
+    C = export_entry(2, amount=500_000, height=600)
+    FIRST = released_log(A, block=950, transaction="0x" + "a1" * 32)
+    SECOND = released_log(A, block=1_150, transaction="0x" + "a2" * 32)
+
+    def old(self, height):
+        return ExportPftl([self.A, self.B], released=1_500_000, current_height=height)
+
+    def new(self, height):
+        return ExportPftl([self.C], pruned=2, pruned_atoms=1_000_000, released=1_500_000, current_height=height)
+
+    def check(self, state_file, pftl, logs, finalized, *extra):
+        return run_exports(pftl, ExportBase(logs, locked=1_500_000, finalized=finalized),
+                           "--state-file", str(state_file), *extra)
+
+    def test_f1_a_one_block_failover_to_an_older_export_snapshot_is_refused(self):
+        test = self
+
+        class AcrossOneBlock:
+            # The first lane page at 599, the export pages at 600.
+            def external_lane_info(self, *args, **kwargs):
+                pftl = test.new(600) if "export_limit" in kwargs else test.old(599)
+                return pftl.external_lane_info(*args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            code, lines, _ = self.check(state_file, self.old(500), [self.FIRST], 1_000)
+            self.assertEqual((code, alarm_codes(lines)), (0, []))
+            code, lines, _ = self.check(state_file, AcrossOneBlock(), [self.FIRST], 1_100)
+            self.assertEqual((code, alarm_codes(lines)), (0, []))
+            saved = json.loads(state_file.read_text())
+            exports = saved["exports"]
+            self.assertEqual((saved["checked_through_height"], exports["snapshot"]["height"]), (599, 600))
+            self.assertEqual((exports["pruned_paid_count"], exports["pruned_paid_atoms"], exports["paid"]),
+                             (1, 400_000, []))
+            self.assertEqual(exports["snapshot"], {"height": 600, "export_count": 3, "exported_atoms": 1_500_000,
+                                                   "pruned_export_count": 2, "pruned_exported_atoms": 1_000_000})
+            # The honest node one block behind: A and B retained, nothing pruned.
+            code, lines, stderr = self.check(state_file, self.old(599), [self.FIRST, self.SECOND], 1_200)
+            self.assertEqual((code, alarm_codes(lines)), (1, []))
+            self.assertEqual(lines[-1]["export_error"], "export_snapshot_behind_state")
+            self.assertIn("export_snapshot_behind_state", stderr)
+            self.assertEqual([line for line in lines if line["kind"] in ("payout", "export")], [])
+            self.assertEqual(json.loads(state_file.read_text())["exports"], exports)
+            # A current node again: A's second payout alarms and A is not folded twice.
+            code, lines, _ = self.check(state_file, self.new(601), [self.FIRST, self.SECOND], 1_300)
+            self.assertEqual((code, alarm_codes(lines)), (2, ["payout_pruned_before_check"]))
+            summary = lines[-1]["exports"]
+            self.assertEqual((summary["pruned_paid_count"], summary["pruned_paid_atoms"]), (1, 400_000))
+            self.assertEqual(json.loads(state_file.read_text())["exports"], exports)
+
+    def test_each_counter_below_its_high_water_mark_is_refused(self):
+        a, b = export_entry(0, height=400), export_entry(1, amount=600_000, height=450)
+        _, _, _, kept = run_export_view(ExportPftl([b], pruned=1, current_height=600), ExportBase([]),
+                                        current_height=600)
+        lagging = {"height": ExportPftl([b], pruned=1, current_height=599),
+                   "export_count": ExportPftl([], pruned=1, current_height=600),
+                   "exported_atoms": ExportPftl([], pruned=1, current_height=600),
+                   "pruned_export_count": ExportPftl([a, b], current_height=600),
+                   "pruned_exported_atoms": ExportPftl([b], pruned=1, pruned_atoms=300_000,
+                                                       exported=900_000, current_height=600)}
+        for field, pftl in lagging.items():
+            with self.subTest(field=field), self.assertRaises(watcher.WatcherError) as caught:
+                run_export_view(pftl, ExportBase([]), state=kept, current_height=600)
+            self.assertEqual(caught.exception.code, "export_snapshot_behind_state")
+            self.assertIn(field, str(caught.exception))
+
+    def test_negative_room_with_a_zero_pruned_count_is_refused(self):
+        a = export_entry(0)
+        # A state without high-water marks (an earlier round's) whose paid export was folded.
+        kept = {"lock_from_block": 0, "scanned_through_block": 1_000, "payout_count": 1, "payout_sum": 400_000,
+                "paid": [], "pruned_paid_count": 1, "pruned_paid_atoms": 400_000}
+        base = ExportBase([released_log(a, block=950), released_log(a, block=1_050, transaction="0x" + "a2" * 32)],
+                          finalized=1_100)
+        with self.assertRaises(watcher.WatcherError) as caught:
+            run_export_view(ExportPftl([a]), base, state=kept)
+        self.assertEqual(caught.exception.code, "export_snapshot_behind_state")
+        self.assertEqual(base.log_ranges, [])
+
+    def test_a_nonce_is_folded_once(self):
+        a, b = export_entry(0), export_entry(1, amount=600_000)
+        log = released_log(a, block=950)
+        _, _, _, kept = run_export_view(ExportPftl([a, b]), ExportBase([log]))
+        for height, finalized in ((501, 1_100), (502, 1_200), (503, 1_300)):
+            _, codes, _, kept = run_export_view(ExportPftl([b], pruned=1, current_height=height),
+                                                ExportBase([log], finalized=finalized), state=kept,
+                                                current_height=height)
+            self.assertEqual((codes, kept["pruned_paid_count"], kept["pruned_paid_atoms"]), ([], 1, 400_000))
+        # A record that holds a nonce below its own pruned high-water mark is refused, not folded again.
+        forged = dict(kept, paid=[{"export_nonce": 0, "evm_digest": watcher.export_evm_digest(a["packet_digest"]),
+                                   "block": 950, "transaction": "0x" + "ee" * 32, "log_index": 0,
+                                   "amount": 400_000, "withdrawal_id_commitment":
+                                   watcher.commitment_of(a["withdrawal_id_commitment"])}])
+        with self.assertRaises(watcher.WatcherError) as caught:
+            run_export_view(ExportPftl([b], pruned=1, current_height=504), ExportBase([log], finalized=1_400),
+                            state=forged, current_height=504)
+        self.assertEqual(caught.exception.code, "state_file_invalid")
+
+
 class IntervalMalformedTests(unittest.TestCase):
     def test_a_malformed_answer_in_interval_mode_is_an_error_line_and_the_loop_goes_on(self):
         entry = export_entry(0)

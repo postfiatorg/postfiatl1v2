@@ -584,6 +584,9 @@ def _selector(signature: str) -> str:
 PAID_KEYS = ("export_nonce", "evm_digest", "block", "transaction", "log_index", "amount",
              "withdrawal_id_commitment")
 BASELINE_KEYS = ("unverified_payouts", "unverified_atoms", "pruned_export_count", "pruned_exported_atoms")
+# The export snapshot a clean run used: its PFTL height and counters, each a
+# high-water mark (a run on a lower snapshot is refused).
+SNAPSHOT_KEYS = ("height", "export_count", "exported_atoms", "pruned_export_count", "pruned_exported_atoms")
 
 
 def _export_state(state: Any) -> dict[str, Any] | None:
@@ -615,6 +618,12 @@ def _export_state(state: Any) -> dict[str, Any] | None:
             or len({entry["export_nonce"] for entry in paid}) != len(paid)
             or len({entry["evm_digest"] for entry in paid}) != len(paid)):
         raise WatcherError("state_file_invalid", "the state file's paid record is malformed")
+    marks = state.get("snapshot")
+    if marks is not None and (not isinstance(marks, dict) or set(marks) != set(SNAPSHOT_KEYS)
+                              or not all(count(value) for value in marks.values())
+                              or any(entry["export_nonce"] < marks["pruned_export_count"] for entry in paid)):
+        # A paid entry below the pruned mark was folded already: it may not be folded twice.
+        raise WatcherError("state_file_invalid", "the state file's export snapshot is malformed")
     baseline = state.get("baseline")
     if baseline is not None and (
             not isinstance(baseline, dict) or baseline.get("baseline_accepted") is not True
@@ -644,7 +653,12 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     pruned count) and is then folded into `pruned_paid_count` and
     `pruned_paid_atoms`, which the bounds of unknown payouts subtract from
     the pruned count and atoms: a payout verified before pruning is never
-    counted as unknown, and a new unknown one still alarms.
+    counted as unknown, and a new unknown one still alarms. The state also
+    keeps the export snapshot used (`snapshot`: PFTL height, export count,
+    exported atoms, pruned count and atoms), each a high-water mark: a lower
+    snapshot, or a pruned count or atoms below the verified-then-pruned and
+    accepted ones, is refused (`export_snapshot_behind_state`) before any
+    payout is looked up or any entry folded.
 
     `released_atoms` comes from the run's first lane page, read before the
     finalized Base block was fixed, and `exported_atoms` from the export
@@ -670,6 +684,14 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     by_digest = {entry["evm_digest"]: entry for entry in exports}
     pruned, pruned_atoms = snapshot["pruned_export_count"], snapshot["pruned_exported_atoms"]
     kept = _export_state(state)
+    # A snapshot older than one a clean run acted on (an honest node behind,
+    # an RPC failover) could resurrect a folded export: nothing is judged on it.
+    marks = (kept or {}).get("snapshot")
+    now = {"height": snapshot["current_height"], **{key: snapshot[key] for key in SNAPSHOT_KEYS[1:]}}
+    behind = [f"{key} {now[key]} < {marks[key]}" for key in SNAPSHOT_KEYS if marks and now[key] < marks[key]]
+    if behind:
+        raise WatcherTransientError("export_snapshot_behind_state",
+                                    f"the PFTL export snapshot is older than the state's: {', '.join(behind)}")
     rescan = None
     if kept is not None and kept["lock_from_block"] != from_block:
         rescan, kept = "lock_from_block_changed", None
@@ -695,7 +717,9 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
         raise WatcherError("export_baseline_already_taken",
                            f"a baseline of {baseline['unverified_payouts']} payouts was accepted at "
                            f"{baseline['accepted_at']} and the lane has pruned no more since")
-    # Entries whose packets PFTL has pruned: folded into the two numbers.
+    # Entries whose packets PFTL has pruned: folded into the two numbers. The
+    # pruned count is at or above its mark, and the record holds no nonce
+    # below the mark, so each nonce is folded once.
     for digest, entry in list(record.items()):
         if entry["export_nonce"] < pruned:
             del record[digest]
@@ -704,6 +728,12 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     prior_accepted = (baseline["unverified_payouts"], baseline["unverified_atoms"]) if baseline else (0, 0)
     free_count = pruned - pruned_paid_count - prior_accepted[0]
     free_atoms = pruned_atoms - pruned_paid_atoms - prior_accepted[1]
+    if free_count < 0 or free_atoms < 0:
+        # More verified-then-pruned or accepted than the node reports pruned.
+        raise WatcherTransientError("export_snapshot_behind_state",
+                                    f"the lane reports {pruned} pruned exports ({pruned_atoms} atoms), fewer than "
+                                    f"the state's {pruned_paid_count + prior_accepted[0]} "
+                                    f"({pruned_paid_atoms + prior_accepted[1]} atoms) paid or accepted")
     events = _released_events(base, lock, start, finalized)
     seen: set[str] = set()
     paid_total = unknown_count = unknown_sum = accepted_count = accepted_sum = 0
@@ -827,7 +857,8 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     new_state = {"lock_from_block": from_block, "scanned_through_block": finalized,
                  "payout_count": prior_count + len(events), "payout_sum": payout_total,
                  "paid": sorted(record.values(), key=lambda entry: entry["export_nonce"]),
-                 "pruned_paid_count": pruned_paid_count, "pruned_paid_atoms": pruned_paid_atoms}
+                 "pruned_paid_count": pruned_paid_count, "pruned_paid_atoms": pruned_paid_atoms,
+                 "snapshot": now}
     if accepted_count:
         baseline = {"baseline_accepted": True,
                     "accepted_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
