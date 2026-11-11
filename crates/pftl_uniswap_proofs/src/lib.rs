@@ -5,7 +5,7 @@ use postfiat_types::{
     verify_pftl_uniswap_consensus_receipt_merkle_proof, BlockRecord, PfUsdcEgressFinalityStepV1,
     PftlUniswapConsensusReceipt, PftlUniswapConsensusRouteState, PftlUniswapMintPacketV2,
     PftlUniswapReceiptMerkleProofV1, ValidatorRegistryEntry,
-    PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS, PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS,
+    PFTL_UNISWAP_BPS_DENOMINATOR, PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS,
     PFTL_UNISWAP_EXPORT_STATUS_SOURCE_DEBITED, PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2,
     PFTL_UNISWAP_ROUTE_SCHEMA_V2, PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT,
     PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY,
@@ -268,10 +268,26 @@ pub fn verify_pftl_uniswap_receipt_witness_v1(
     if v2.route_schema_version != PFTL_UNISWAP_ROUTE_SCHEMA_V2
         || v2.outbound_verification_class != PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY
         || v2.return_verification_class != PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT
-        || policy.issue_multiplier_bps != PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS
-        || policy.redeem_multiplier_bps != PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS
     {
-        return Err("route does not satisfy a666 v2 trust and pricing policy".to_string());
+        return Err("route does not satisfy v2 trust policy".to_string());
+    }
+    // The fee is NOT pinned to one route's constants any more. It is already
+    // bound cryptographically: `policy_hash` is computed over both multipliers
+    // and `mint_packet.policy_hash_commitment` is checked below, so a proof
+    // cannot be generated under one fee and redeemed under another. Pinning the
+    // A666 numbers here additionally forbade every other fee, which is why a
+    // 20 bps route could not mint into MetaMask. What remains is the guardrail:
+    // issue at or above NAV, redemption at or below it, and neither further than
+    // PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS from NAV.
+    if policy.issue_multiplier_bps < PFTL_UNISWAP_BPS_DENOMINATOR
+        || policy.redeem_multiplier_bps > PFTL_UNISWAP_BPS_DENOMINATOR
+        || policy.redeem_multiplier_bps == 0
+        || policy.issue_multiplier_bps
+            > PFTL_UNISWAP_BPS_DENOMINATOR + PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS
+        || policy.redeem_multiplier_bps
+            < PFTL_UNISWAP_BPS_DENOMINATOR - PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS
+    {
+        return Err("route primary-market spread is outside the protocol guardrail".to_string());
     }
     let export = route
         .export_packets

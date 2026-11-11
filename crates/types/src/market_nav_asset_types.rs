@@ -2324,6 +2324,17 @@ pub const PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT: &str = "BFT_CHECKPOINT";
 pub const PFTL_UNISWAP_BPS_DENOMINATOR: u32 = 10_000;
 pub const PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS: u32 = 10_050;
 pub const PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS: u32 = 9_995;
+/// Guardrail on the primary-market spread, in basis points either side of NAV.
+///
+/// The A666 constants above are one route's chosen fee, not a protocol rule. The
+/// export proof used to require them exactly, which is why a 20 bps route could
+/// not mint into MetaMask at all. The fee is already bound cryptographically --
+/// `policy_hash` is computed over both multipliers and the mint packet commits
+/// it -- so the proof does not need to pin a specific number. It needs to refuse
+/// an absurd one. 500 bps is deliberately far above any intended fee (A666
+/// charges 50 and the one-click target is 20): this is a typo and
+/// hostile-policy bound, not a pricing decision.
+pub const PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS: u32 = 500;
 
 pub fn pftl_uniswap_keccak_commitment48(field: &str, value: &str) -> Result<String, String> {
     let decoded = decode_lower_hex_exact(field, value, 48)?;
@@ -2411,6 +2422,16 @@ impl PftlUniswapPrimaryMarketPolicyV2 {
         {
             return Err(
                 "pftl_uniswap_primary_policy issue must be at or above NAV and redemption must be in (0, NAV]"
+                    .to_string(),
+            );
+        }
+        if self.issue_multiplier_bps
+            > PFTL_UNISWAP_BPS_DENOMINATOR + PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS
+            || self.redeem_multiplier_bps
+                < PFTL_UNISWAP_BPS_DENOMINATOR - PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS
+        {
+            return Err(
+                "pftl_uniswap_primary_policy spread exceeds the protocol guardrail"
                     .to_string(),
             );
         }

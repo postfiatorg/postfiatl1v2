@@ -3646,3 +3646,82 @@ fn beacon_anchor_rejects_a_proof_for_another_route() {
     let error = state.verify_and_advance(&values).expect_err("must reject");
     assert!(error.contains("does not match its pinned finality-state route"), "{error}");
 }
+
+/// The export proof used to require the A666 multipliers exactly
+/// (10050/9995), so no other fee could mint into MetaMask -- the 20 bps
+/// one-click target was unreachable. The fee is already bound
+/// cryptographically: policy_hash is computed over both multipliers and the
+/// mint packet commits it. So the rule is now a guardrail, not a pinned number.
+fn spread_policy(issue_bps: u32, redeem_bps: u32) -> PftlUniswapPrimaryMarketPolicyV2 {
+    let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        policy_hash: String::new(),
+        policy_epoch: 2,
+        issue_multiplier_bps: issue_bps,
+        redeem_multiplier_bps: redeem_bps,
+        issue_capacity_atoms: 100_000_000,
+        redeem_capacity_atoms: 100_000_000,
+        max_order_atoms: 50_000_000,
+        min_order_atoms: 1_000_000,
+        valid_from_height: 10,
+        expires_at_height: 500_000,
+        max_nav_age_blocks: 1_000,
+        pricing_nav_epoch: 1,
+        pricing_reserve_packet_hash: "4a".repeat(48),
+    };
+    policy.policy_hash = policy.computed_hash();
+    policy
+}
+
+#[test]
+fn primary_policy_accepts_a_twenty_bps_route() {
+    // 20 bps on the buy, 0 on the sell: the one-click checkout target.
+    spread_policy(10_020, 10_000)
+        .validate()
+        .expect("a 20 bps route must be expressible");
+}
+
+#[test]
+fn primary_policy_still_accepts_the_a666_fee() {
+    spread_policy(
+        PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
+        PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS,
+    )
+    .validate()
+    .expect("the existing A666 fee must remain valid");
+}
+
+#[test]
+fn primary_policy_rejects_an_extortionate_spread() {
+    let error = spread_policy(10_000 + PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS + 1, 10_000)
+        .validate()
+        .expect_err("issue spread beyond the guardrail must be refused");
+    assert!(error.contains("spread exceeds the protocol guardrail"), "{error}");
+
+    let error = spread_policy(10_000, 10_000 - PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS - 1)
+        .validate()
+        .expect_err("redemption spread beyond the guardrail must be refused");
+    assert!(error.contains("spread exceeds the protocol guardrail"), "{error}");
+}
+
+#[test]
+fn primary_policy_still_rejects_pricing_on_the_wrong_side_of_nav() {
+    let error = spread_policy(9_999, 10_000)
+        .validate()
+        .expect_err("issuing below NAV must stay refused");
+    assert!(error.contains("at or above NAV"), "{error}");
+
+    let error = spread_policy(10_000, 10_001)
+        .validate()
+        .expect_err("redeeming above NAV must stay refused");
+    assert!(error.contains("at or above NAV"), "{error}");
+}
+
+#[test]
+fn changing_a_multiplier_changes_the_policy_hash() {
+    // This is why the proof no longer needs to pin the numbers: the fee is
+    // already committed, so a proof generated under one fee cannot be redeemed
+    // under another.
+    let a = spread_policy(10_020, 10_000);
+    let b = spread_policy(10_050, 10_000);
+    assert_ne!(a.policy_hash, b.policy_hash, "fee must be bound into policy_hash");
+}
