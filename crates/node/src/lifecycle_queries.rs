@@ -1659,31 +1659,36 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
     let genesis = store.read_genesis()?;
     let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
-    let ledger_sender = ledger.account(&options.source).ok_or_else(|| {
+    let source_not_found = || {
         io::Error::new(
             io::ErrorKind::NotFound,
             format!("source account `{}` not found", options.source),
         )
-    })?;
-    let sequence = match options.sequence {
-        Some(sequence) if sequence > 0 => sequence,
-        Some(_) => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "sequence must be nonzero",
-            ));
-        }
-        None => next_pending_sender_sequence(&mempool, &options.source, ledger_sender.sequence)?,
+    };
+    let is_export = matches!(
+        operation,
+        AssetTransactionOperation::ExternalLaneExportV1(_)
+    );
+    // Every other kind needs the source in the base ledger; an export's source
+    // is read on the pending prefix below, which may create it.
+    let base_sequence = if is_export {
+        None
+    } else {
+        Some(
+            ledger
+                .account(&options.source)
+                .ok_or_else(source_not_found)?
+                .sequence,
+        )
     };
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
     // An export is quoted and checked on the ledger asset admission executes
-    // it on (`apply_pending_before_new_asset_transaction`); every other kind
-    // keeps the ledger after the executable mempool.
-    let quote_ledger = if matches!(
-        operation,
-        AssetTransactionOperation::ExternalLaneExportV1(_)
-    ) {
+    // it on (`apply_pending_before_new_asset_transaction`), its source's
+    // existence, balance and sequence included: a pending release or transfer
+    // may create the source. Every other kind keeps the ledger after the
+    // executable mempool.
+    let quote_ledger = if is_export {
         let shielded = store.read_shielded()?;
         let orchard_balances = shielded
             .orchard
@@ -1709,15 +1714,36 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
             asset_execution_compatibility,
         )?
     };
-    let sender = quote_ledger.account(&options.source).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            format!(
-                "source account `{}` not found after pending mempool dry-run",
-                options.source
-            ),
-        )
-    })?;
+    let sender = match quote_ledger.account(&options.source) {
+        Some(sender) => sender,
+        None if is_export => return Err(source_not_found()),
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "source account `{}` not found after pending mempool dry-run",
+                    options.source
+                ),
+            ))
+        }
+    };
+    // The next sequence above every pending entry of the source, later
+    // families included; execution's dry run below refuses a sequence a later
+    // family holds (`bad_sequence`).
+    let sequence = match options.sequence {
+        Some(sequence) if sequence > 0 => sequence,
+        Some(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "sequence must be nonzero",
+            ));
+        }
+        None => next_pending_sender_sequence(
+            &mempool,
+            &options.source,
+            base_sequence.unwrap_or(sender.sequence),
+        )?,
+    };
     let mempool_pending_for_sender = mempool_pending_count_for_sender(&mempool, &options.source);
 
     let mut fee = MIN_TRANSFER_FEE;

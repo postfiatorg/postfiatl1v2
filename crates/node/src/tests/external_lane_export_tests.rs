@@ -1164,6 +1164,67 @@ fn external_lane_export_command_counts_a_pending_release_before_signing() {
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
+/// A sender that only a pending release creates: the quote evaluates its
+/// existence, balance and sequence on the ledger admission executes the export
+/// on (the pending prefix), so its export is signed and admitted, and one batch
+/// applies both.
+#[test]
+fn external_lane_export_command_takes_a_sender_a_pending_release_creates() {
+    let chain = export_chain("export-command-pending-holder");
+    submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
+        data_dir: chain.data_dir.clone(),
+        signed_asset_transaction_json: serde_json::to_string(&release_tx(&chain, "base-erc20", 1, 1_000_000, 1))
+            .expect("release json"),
+    })
+    .expect("mempool admits the release");
+    let store = NodeStore::new(&chain.data_dir);
+    assert!(store.read_ledger().expect("ledger").account(&chain.recipient).is_none(), "the holder is new");
+    let key_file = release_recipient_key_file(&chain);
+    let dry = export_command_with_key(&chain, key_file.clone(), "base-erc20", 400_000, &base_recipient(), true)
+        .expect("dry run of a holder the pending release creates");
+    assert_eq!(dry.sequence, 1);
+    let report = export_command_with_key(&chain, key_file, "base-erc20", 400_000, &base_recipient(), false)
+        .expect("export of a holder the pending release creates");
+    assert!(report.submitted && report.sequence == 1, "{report:?}");
+    let receipts = apply_mempool_batch(&chain, "pending-holder");
+    assert!(receipts.len() == 2 && receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
+    assert_eq!(Some(&receipts[1].tx_id), report.tx_id.as_ref());
+    let row = export_page(&chain.data_dir, None, None);
+    assert_eq!((row.state.released_atoms, row.state.exported_atoms), (1_000_000, 400_000));
+    let holder = store.read_ledger().expect("ledger").account(&chain.recipient).expect("holder").clone();
+    assert_eq!(holder.balance, 1_000_000 - 400_000 - report.fee);
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// The control: an account no pending entry creates is still refused before
+/// signing, also while a pending release creates another one.
+#[test]
+fn external_lane_export_command_refuses_a_sender_no_pending_entry_creates() {
+    let chain = export_chain("export-command-no-holder");
+    submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
+        data_dir: chain.data_dir.clone(),
+        signed_asset_transaction_json: serde_json::to_string(&release_tx(&chain, "base-erc20", 1, 1_000_000, 1))
+            .expect("release json"),
+    })
+    .expect("mempool admits the release");
+    let key_pair = ml_dsa_65_keygen_from_seed(&[0x77; 32]);
+    let key_file = chain.data_dir.join("stranger-key.json");
+    write_key_file(
+        &key_file,
+        &DevKeyFile {
+            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            address: address_from_public_key(&key_pair.public_key),
+            public_key_hex: bytes_to_hex(&key_pair.public_key),
+            private_key_hex: bytes_to_hex(&key_pair.private_key),
+        },
+    )
+    .expect("stranger key");
+    let error =
+        command_refused_before_signing(&chain, key_file, "base-erc20", 400_000, &base_recipient(), "insufficient_funds");
+    assert!(error.contains("not found"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
 /// The quote of an export says it was checked (`export_checked`); a quote
 /// without the marker comes from a node too old to check an export, and the
 /// command refuses it before signing. A quote of another kind is unchanged:
