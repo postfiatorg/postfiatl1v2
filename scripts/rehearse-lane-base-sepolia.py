@@ -31,6 +31,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import time
@@ -631,6 +632,14 @@ def main(argv=None):
         partial.write_text(json.dumps(value))
         partial.rename(out / 'handshake' / name)
 
+    def stop_driver():
+        # cargo runs the test binary as its child: stop the driver's whole process group.
+        if driver['process'] is not None:
+            try:
+                os.killpg(driver['process'].pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+
     def driver_alive():
         return driver['process'] is not None and driver['process'].poll() is None
 
@@ -733,7 +742,8 @@ def main(argv=None):
                      '--ignored', '--nocapture'], cwd=ROOT,
                     env=dict(environment, POSTFIAT_LANE_ROUNDTRIP=str(out / 'driver-config.json'),
                              CARGO_TARGET_DIR=str(ROOT / 'target'), TMPDIR=str(out / 'tmp')),
-                    stdout=(out / 'fleet-driver.stdout').open('w'), stderr=(out / 'fleet-driver.stderr').open('w'))
+                    stdout=(out / 'fleet-driver.stdout').open('w'), stderr=(out / 'fleet-driver.stderr').open('w'),
+                    start_new_session=True)
                 children.append(driver['process'])
                 ready = wait_for('pftl-ready.json')
                 check_driver_report(ready, max_lock_amount=data['plan']['max_lock_amount'],
@@ -987,7 +997,7 @@ def main(argv=None):
                                   'public_values_sha256': hashlib.sha256(
                                       bytes.fromhex(document['expected_public_values_hex'])).hexdigest(),
                                   'packet_digest': document['expected_public_values']['withdrawal_packet_digest']}
-                driver['process'].terminate()
+                stop_driver()
             elif stage == 'prove-and-release':
                 if args.proof is None:
                     message = {
@@ -1058,6 +1068,7 @@ def main(argv=None):
             if stage == args.through:
                 break
     finally:
+        stop_driver()
         for child in reversed(children):
             if child.poll() is None:
                 child.terminate()
