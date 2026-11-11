@@ -356,7 +356,18 @@ marked `partial`. It never merges them. It takes a connection permit per read,
 shares one fan-out between identical reads in flight, and answers
 `proxy_fence_status_busy` (with `retry_after_ms`) above
 `FASTPAY_FENCE_STATUS_MAX_FANOUTS_PER_CALLER` (default 2 per connection) or
-`FASTPAY_FENCE_STATUS_MAX_FANOUTS` (default 16) fan-outs in flight.
+`FASTPAY_FENCE_STATUS_MAX_FANOUTS` (default 16) fan-outs in flight. Because
+each new fan-out costs every validator a signature, it also spends one token
+of its source address's budget and one of the gateway's, and is answered
+`proxy_fence_status_busy` with the wait for the next token when either is
+empty. A budget holds `FASTPAY_FENCE_STATUS_SOURCE_BURST` (default 8) tokens
+per address and regains one every `FASTPAY_FENCE_STATUS_SOURCE_REFILL_MS`
+(default 2000), and `FASTPAY_FENCE_STATUS_GLOBAL_BURST` (default 64) and
+`FASTPAY_FENCE_STATUS_GLOBAL_REFILL_MS` (default 250) for the gateway. A read
+joining a fan-out in flight spends nothing; the gateway caches no answer. The
+source address is the socket's peer address; the gateway trusts no
+forwarding header, so behind a reverse proxy every client shares the proxy's
+budget until a trusted proxy header rule is added and configured.
 
 The wallet must, before releasing a reservation after a cancelled fence or
 showing an unwrap credit as ordered:

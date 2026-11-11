@@ -1677,17 +1677,58 @@ wss } = runtime;
     // uncached lock costs each one a signature. Identical reads for one lock
     // in flight share one fan-out; distinct fan-outs in flight are bounded
     // per caller and in total, with a typed busy answer above either bound.
+    // Each new fan-out also spends one token from its source address's
+    // budget and one from the gateway's; joining a fan-out in flight spends
+    // none. A budget holds at most BURST tokens and regains one every
+    // REFILL_MS.
     const FENCE_STATUS_MAX_FANOUTS = boundedEnvInteger('FASTPAY_FENCE_STATUS_MAX_FANOUTS', 16, 1024);
     const FENCE_STATUS_MAX_FANOUTS_PER_CALLER = boundedEnvInteger('FASTPAY_FENCE_STATUS_MAX_FANOUTS_PER_CALLER', 2, 1024);
+    const FENCE_STATUS_SOURCE_BURST = boundedEnvInteger('FASTPAY_FENCE_STATUS_SOURCE_BURST', 8, 1_000_000);
+    const FENCE_STATUS_SOURCE_REFILL_MS = boundedEnvInteger('FASTPAY_FENCE_STATUS_SOURCE_REFILL_MS', 2_000, 3_600_000);
+    const FENCE_STATUS_GLOBAL_BURST = boundedEnvInteger('FASTPAY_FENCE_STATUS_GLOBAL_BURST', 64, 1_000_000);
+    const FENCE_STATUS_GLOBAL_REFILL_MS = boundedEnvInteger('FASTPAY_FENCE_STATUS_GLOBAL_REFILL_MS', 250, 3_600_000);
     const fenceStatusInFlight = new Map();
     const fenceStatusCallerFanouts = new Map();
+    const fenceStatusSourceBudgets = new Map();
+    const fenceStatusGlobalBudget = { tokens: FENCE_STATUS_GLOBAL_BURST, at: Date.now() };
+
+    // Tops a budget up to `now`; returns the wait for one whole token (0 when
+    // one is available).
+    function refillFenceStatusBudget(budget, burst, refillMs, now) {
+        budget.tokens = Math.min(burst, budget.tokens + (now - budget.at) / refillMs);
+        budget.at = now;
+        return budget.tokens >= 1 ? 0 : Math.ceil((1 - budget.tokens) * refillMs);
+    }
+
+    // Spends one token of `source` and one of the gateway, or neither.
+    function spendFenceStatusBudget(source, now = Date.now()) {
+        const sourceBudget = fenceStatusSourceBudgets.get(source)
+            || { tokens: FENCE_STATUS_SOURCE_BURST, at: now };
+        const sourceWait = refillFenceStatusBudget(sourceBudget, FENCE_STATUS_SOURCE_BURST, FENCE_STATUS_SOURCE_REFILL_MS, now);
+        if (sourceWait > 0) return { scope: 'source budget', retryAfterMs: sourceWait };
+        const globalWait = refillFenceStatusBudget(
+            fenceStatusGlobalBudget, FENCE_STATUS_GLOBAL_BURST, FENCE_STATUS_GLOBAL_REFILL_MS, now,
+        );
+        if (globalWait > 0) return { scope: 'gateway budget', retryAfterMs: globalWait };
+        sourceBudget.tokens -= 1;
+        fenceStatusGlobalBudget.tokens -= 1;
+        // Only sources that spent are kept, and a full budget is the default,
+        // so the map holds the sources still refilling.
+        for (const [known, budget] of fenceStatusSourceBudgets) {
+            if (budget.tokens + (now - budget.at) / FENCE_STATUS_SOURCE_REFILL_MS >= FENCE_STATUS_SOURCE_BURST) {
+                fenceStatusSourceBudgets.delete(known);
+            }
+        }
+        fenceStatusSourceBudgets.set(source, sourceBudget);
+        return null;
+    }
 
     function boundedEnvInteger(name, fallback, max) {
         const value = Number.parseInt(process.env[name] ?? '', 10);
         return Number.isInteger(value) && value >= 1 && value <= max ? value : fallback;
     }
 
-    function fenceStatusBusy(request, scope) {
+    function fenceStatusBusy(request, scope, retryAfterMs = 250) {
         return {
             version: 'postfiat-local-rpc-v1',
             id: request.id,
@@ -1695,16 +1736,21 @@ wss } = runtime;
             result: null,
             error: {
                 code: 'proxy_fence_status_busy',
-                message: `too many owned_fence_status reads in flight (${scope})`,
-                retry_after_ms: 250,
+                message: scope.endsWith('budget')
+                    ? `owned_fence_status ${scope} exhausted`
+                    : `too many owned_fence_status reads in flight (${scope})`,
+                retry_after_ms: retryAfterMs,
             },
             events: [],
         };
     }
 
-    // `caller` names the client (its connection); reads with the same lock
-    // id join the fan-out already in flight, whoever started it.
-    async function readFastpayFenceStatuses(request, fleet = RPC_FLEET, timeoutMs = TCP_TIMEOUT_MS, caller = 'local') {
+    // `caller` names the client (its connection) and `source` its address;
+    // reads with the same lock id join the fan-out already in flight,
+    // whoever started it, and spend no budget.
+    async function readFastpayFenceStatuses(
+        request, fleet = RPC_FLEET, timeoutMs = TCP_TIMEOUT_MS, caller = 'local', source = 'local',
+    ) {
         const lockId = typeof request.params?.lock_id === 'string' ? request.params.lock_id : null;
         const key = lockId === null ? null : `${lockId}`;
         let shared = key === null ? undefined : fenceStatusInFlight.get(key);
@@ -1712,6 +1758,8 @@ wss } = runtime;
             const callerCount = fenceStatusCallerFanouts.get(caller) || 0;
             if (fenceStatusInFlight.size >= FENCE_STATUS_MAX_FANOUTS) return fenceStatusBusy(request, 'gateway');
             if (callerCount >= FENCE_STATUS_MAX_FANOUTS_PER_CALLER) return fenceStatusBusy(request, 'caller');
+            const overBudget = spendFenceStatusBudget(source);
+            if (overBudget) return fenceStatusBusy(request, overBudget.scope, overBudget.retryAfterMs);
             fenceStatusCallerFanouts.set(caller, callerCount + 1);
             const token = key ?? Symbol('fence-status');
             shared = fanOutFastpayFenceStatuses({ lock_id: request.params?.lock_id }, fleet, timeoutMs).finally(() => {
