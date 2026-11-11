@@ -1207,7 +1207,7 @@ pub const FASTPAY_FENCE_STATUS_NOT_A_SIGNER: &str = "fastpay_fence_status_not_a_
 const FASTPAY_FENCE_STATUS_CACHE_ENTRIES: usize = 4096;
 
 type FastPayFenceStatusCache =
-    BTreeMap<(PathBuf, String, String), (u64, String, postfiat_types::FastPayFenceStatusV1)>;
+    BTreeMap<(PathBuf, String, String), (u64, String, postfiat_types::FastPayFenceStatusV2)>;
 
 fn fastpay_fence_status_cache() -> &'static std::sync::Mutex<FastPayFenceStatusCache> {
     static CACHE: std::sync::OnceLock<std::sync::Mutex<FastPayFenceStatusCache>> =
@@ -1314,7 +1314,7 @@ pub fn owned_fence_status_v3(
     options: NodeOptions,
     validator_id: &str,
     lock_id: &str,
-) -> io::Result<postfiat_types::FastPayFenceStatusV1> {
+) -> io::Result<postfiat_types::FastPayFenceStatusV2> {
     validate_hex_string("FastPay lock ID", lock_id, Some(96))?;
     crate::validator_signer::refuse_key_file_in_socket_mode(
         &options.data_dir.join(VALIDATOR_KEYS_FILE),
@@ -1361,8 +1361,8 @@ pub fn owned_fence_status_v3(
             ),
         ));
     }
-    let mut status = postfiat_types::FastPayFenceStatusV1 {
-        schema: postfiat_types::FASTPAY_FENCE_STATUS_SCHEMA_V1.to_string(),
+    let mut status = postfiat_types::FastPayFenceStatusV2 {
+        schema: postfiat_types::FASTPAY_FENCE_STATUS_SCHEMA_V2.to_string(),
         chain_id: domain.chain_id,
         genesis_hash: domain.genesis_hash,
         protocol_version: domain.protocol_version,
@@ -1372,7 +1372,7 @@ pub fn owned_fence_status_v3(
         decision: None,
         operation: None,
         fence_digest: None,
-        anchored_height: None,
+        anchored_at_or_before_height: None,
         observed_height: tip.height,
         validator_id: validator_id.to_string(),
         signature_hex: String::new(),
@@ -1392,7 +1392,7 @@ pub fn owned_fence_status_v3(
         )));
         status.decision = Some(fence.decision);
         status.operation = Some(fence.operation);
-        status.anchored_height = Some(height);
+        status.anchored_at_or_before_height = Some(height);
     }
     // Every signed byte is fixed; sign outside the lock so a flood of reads
     // does not hold up block commits.
@@ -1403,7 +1403,7 @@ pub fn owned_fence_status_v3(
         &committee,
         validator_id,
         &signing_bytes,
-        postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V1,
+        postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V2,
     )?);
     status.validate_shape().map_err(fastpay_invalid_data)?;
     let mut cache = fastpay_fence_status_cache()

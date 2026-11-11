@@ -1,7 +1,7 @@
 // `owned_fence_status`: a validator signs "anchored" or "cancelled" only from
 // certified-block state, and "not terminal at H" otherwise.
 
-fn fence_status_at(dir: &Path, index: usize, lock_id: &str) -> postfiat_types::FastPayFenceStatusV1 {
+fn fence_status_at(dir: &Path, index: usize, lock_id: &str) -> postfiat_types::FastPayFenceStatusV2 {
     owned_fence_status_v3(
         NodeOptions {
             data_dir: dir.to_path_buf(),
@@ -15,10 +15,11 @@ fn fence_status_at(dir: &Path, index: usize, lock_id: &str) -> postfiat_types::F
 /// Not terminal at `observed_height`, and signed by a committee member.
 fn assert_not_terminal(
     dir: &Path,
-    status: &postfiat_types::FastPayFenceStatusV1,
+    status: &postfiat_types::FastPayFenceStatusV2,
     observed_height: u64,
 ) {
-    assert_eq!(status.terminal_answer(), (None, None, None, None));
+    assert_eq!(status.terminal_answer(), (None, None, None));
+    assert_eq!(status.anchored_at_or_before_height, None);
     assert_eq!(status.observed_height, observed_height);
     let ledger = NodeStore::new(dir).read_ledger().unwrap();
     let key = ledger
@@ -33,7 +34,7 @@ fn assert_not_terminal(
         })
         .map(|member| member.public_key_hex.clone())
         .expect("committee member");
-    assert!(postfiat_execution::verify_fastpay_fence_status_v1(
+    assert!(postfiat_execution::verify_fastpay_fence_status_v2(
         status, &key
     ));
 }
@@ -145,7 +146,7 @@ fn owned_fence_status_anchors_an_unwrap_only_at_its_certified_block_and_after_re
         .map(|(index, dir)| fence_status_at(dir, index, &lock_id))
         .collect::<Vec<_>>();
     for status in &statuses {
-        assert_eq!(status.anchored_height, Some(2));
+        assert_eq!(status.anchored_at_or_before_height, Some(2));
         assert_eq!(status.observed_height, 2);
         assert_eq!(status.operation, Some(postfiat_types::FastPayOperationKindV1::Unwrap));
         // The fence digest is the apply acknowledgement's terminal state.
@@ -156,13 +157,14 @@ fn owned_fence_status_anchors_an_unwrap_only_at_its_certified_block_and_after_re
                 if *certificate_digest == acks[0].certificate_digest
         ));
     }
-    let proved = postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v1(
+    let proved = postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v2(
         &statuses,
         &committee,
+        &committee.registry_root,
         &lock_id,
     )
     .expect("a quorum of distinct members proves the anchored unwrap");
-    assert_eq!((proved.anchored_height, proved.signers.len()), (Some(2), 5));
+    assert_eq!((proved.anchored_at_or_before_height, proved.signers.len()), (Some(2), 5));
     // A restart (no cached answer) gives the same answer at the same tip.
     clear_fastpay_fence_status_cache();
     for (index, dir) in dirs.iter().take(5).enumerate() {

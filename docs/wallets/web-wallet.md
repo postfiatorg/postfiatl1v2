@@ -339,32 +339,55 @@ rotation needs a fresh export, review and build.
 `owned_fence_status` lets a wallet prove, without trusting the gateway or one
 node, that an unwrap or transfer is ordered (anchored by a certified block) or
 that its lock was cancelled by ordered recovery. Each validator signs a
-`FastPayFenceStatusV1` from its certified blocks only, under its own context
-`postfiat-l1-v2/fastpay-fence-status/v1`: the decision, the `fence_digest`
-(equal to the apply acknowledgement's `terminal_state_digest`), the
-`anchored_height` of the certified block, and the `observed_height` it answered
-at. A speculative apply, a mempool decision or an effect that a certified block
-rolled back is answered, and signed, as "not terminal at `observed_height`".
-The gateway asks every validator and returns each answer with its validator and
-`answered_count`; a partial answer is marked `partial`. It never merges them.
+`FastPayFenceStatusV2` from its certified blocks only, under its own context
+`postfiat-l1-v2/fastpay-fence-status/v2`: the decision, the `fence_digest`
+(equal to the apply acknowledgement's `terminal_state_digest`),
+`anchored_at_or_before_height` and the `observed_height` it answered at.
+`anchored_at_or_before_height` is the lowest certified height at which that
+validator can show the effect anchored: the anchoring block's height while it
+holds that block, or its history checkpoint's height after a prune or a
+checkpoint restore, so honest validators may sign different values. (v1 signed
+it as an exact `anchored_height` and refused honest pruned validators as
+conflicting; v1 was never merged.) A speculative apply, a mempool decision or
+an effect that a certified block rolled back is answered, and signed, as "not
+terminal at `observed_height`". The gateway asks every validator and returns
+each answer with its validator and `answered_count`; a partial answer is
+marked `partial`. It never merges them. It takes a connection permit per read,
+shares one fan-out between identical reads in flight, and answers
+`proxy_fence_status_busy` (with `retry_after_ms`) above
+`FASTPAY_FENCE_STATUS_MAX_FANOUTS_PER_CALLER` (default 2 per connection) or
+`FASTPAY_FENCE_STATUS_MAX_FANOUTS` (default 16) fan-outs in flight.
 
 The wallet must, before releasing a reservation after a cancelled fence or
 showing an unwrap credit as ordered:
 
-- have the committee of the order's epoch, pinned or read with
-  `fastpay_recovery_committee`, and compare chain, genesis, epoch and
-  registry root;
+- pin the registry root of the order's committee in its own configuration
+  (the root commits to chain, genesis, protocol version, epoch and members)
+  and pass it as the required `pinned_registry_root`; a committee read with
+  `fastpay_recovery_committee` through the gateway is only a candidate;
+- validate that committee completely: its registry root recomputed from the
+  members, the protocol quorum for its member count, its schema, order range
+  and canonical member order (`invalid_committee`), then its root against the
+  pinned one (`untrusted_committee`);
 - verify each ML-DSA-65 signature against that committee's keys and count
-  only distinct members, refusing non-members, duplicates and other epochs;
+  only distinct members, refusing non-members, duplicates, other epochs and
+  any member a status does not sign (`malformed`);
 - require the committee's `quorum` of statuses with the same decision,
-  `fence_digest` and `anchored_height` (observed heights may differ).
+  operation and `fence_digest`; anchored and observed heights may differ. The
+  proved `anchored_at_or_before_height` is the highest in that quorum, the
+  height by which the quorum agrees the effect was anchored. A "not terminal"
+  observed at or above any signer's `anchored_at_or_before_height` is
+  `conflicting`.
 
-The Rust check is `postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v1`
-(rules in `postfiat_types::verify_fastpay_fence_status_quorum_v1`); the Python
-check is `postfiat_rpc.fastpay_fence_status.verify_fence_status_quorum`, with an
-ML-DSA verifier supplied by the caller. A validator whose rpc-serve signs
-through the signer socket answers `fastpay_fence_status_signer_unavailable`
-and does not count.
+The Rust check is `postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v2`
+(rules in `postfiat_types::verify_fastpay_fence_status_quorum_v2`; parse with
+`FastPayFenceStatusV2::from_json_strict`); the Python check is
+`postfiat_rpc.fastpay_fence_status.verify_fence_status_quorum`, with an
+ML-DSA verifier supplied by the caller. Both run the same acceptance vectors,
+`crates/types/test-vectors/fastpay_fence_status_acceptance_v2.json`. A
+validator whose rpc-serve signs through the signer socket answers
+`fastpay_fence_status_signer_unavailable` and does not count.
+
 
 ## FastPay Funding
 

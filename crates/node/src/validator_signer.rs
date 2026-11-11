@@ -1535,7 +1535,7 @@ mod validator_signer_tests {
         );
         registry_lock(data_dir_signers()).remove(&canonical(&data_dir));
         assert_eq!(
-            validator_signer_key_for_context(postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V1),
+            validator_signer_key_for_context(postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V2),
             None
         );
         let direct = raw_request(
@@ -1545,7 +1545,7 @@ mod validator_signer_tests {
                 method: "sign".to_string(),
                 validator_id: Some("validator-0".to_string()),
                 context: Some(
-                    String::from_utf8(postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V1.to_vec())
+                    String::from_utf8(postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V2.to_vec())
                         .expect("ascii"),
                 ),
                 message_hex: Some(bytes_to_hex(b"fence status")),

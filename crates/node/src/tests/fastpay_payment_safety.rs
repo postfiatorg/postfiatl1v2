@@ -1376,7 +1376,8 @@ fn ordered_fastpay_recovery_cancels_partial_and_withheld_certificates_and_replay
             &withheld_lock,
         )
         .expect("pending fence status");
-        assert_eq!(pending.terminal_answer(), (None, None, None, None));
+        assert_eq!(pending.terminal_answer(), (None, None, None));
+        assert_eq!(pending.anchored_at_or_before_height, None);
         assert_eq!(pending.observed_height, pending_height);
     }
     let decision_batch_file = data_dir.join("ordered-recovery-decisions.batch.json");
@@ -1436,23 +1437,25 @@ fn ordered_fastpay_recovery_cancels_partial_and_withheld_certificates_and_replay
                 status.decision,
                 Some(postfiat_types::FastPayRecoveryDecisionV1::Cancelled)
             );
-            assert_eq!(status.anchored_height, Some(4));
+            assert_eq!(status.anchored_at_or_before_height, Some(4));
             assert_eq!(status.observed_height, 4);
         }
-        let proved = postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v1(
+        let proved = postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v2(
             &statuses[..3],
             &fence_committee,
+            &fence_committee.registry_root,
             &withheld_lock,
         )
         .expect("a quorum proves the cancellation");
-        assert_eq!(proved.anchored_height, Some(4));
+        assert_eq!(proved.anchored_at_or_before_height, Some(4));
         assert!(matches!(
-            postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v1(
+            postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v2(
                 &statuses[..2],
                 &fence_committee,
+                &fence_committee.registry_root,
                 &withheld_lock,
             ),
-            Err(postfiat_types::FastPayFenceStatusRefusalV1::BelowQuorum { agreeing: 2, quorum: 3 })
+            Err(postfiat_types::FastPayFenceStatusRefusalV2::BelowQuorum { agreeing: 2, quorum: 3 })
         ));
     }
     for original in [&first_object, &second_object] {

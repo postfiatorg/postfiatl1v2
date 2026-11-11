@@ -96,17 +96,17 @@ pub fn verify_fastpay_apply_ack_v1(
 }
 
 /// One signed fence status against one validator public key.
-pub fn verify_fastpay_fence_status_v1(
-    status: &postfiat_types::FastPayFenceStatusV1,
+pub fn verify_fastpay_fence_status_v2(
+    status: &postfiat_types::FastPayFenceStatusV2,
     validator_public_key_hex: &str,
 ) -> bool {
     let Ok(bytes) = status.signing_bytes() else {
         return false;
     };
-    verify_fastpay_fence_status_signature_v1(validator_public_key_hex, &bytes, &status.signature_hex)
+    verify_fastpay_fence_status_signature_v2(validator_public_key_hex, &bytes, &status.signature_hex)
 }
 
-fn verify_fastpay_fence_status_signature_v1(
+fn verify_fastpay_fence_status_signature_v2(
     validator_public_key_hex: &str,
     bytes: &[u8],
     signature_hex: &str,
@@ -121,24 +121,26 @@ fn verify_fastpay_fence_status_signature_v1(
         &public_key,
         bytes,
         &signature,
-        postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V1,
+        postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V2,
     )
 }
 
 /// The client check: a quorum of distinct committee members signed the same
-/// answer for `lock_id` (`postfiat_types::verify_fastpay_fence_status_quorum_v1`
+/// answer for `lock_id` (`postfiat_types::verify_fastpay_fence_status_quorum_v2`
 /// with ML-DSA-65 under the fence status context).
-pub fn verify_fastpay_fence_status_quorum_ml_dsa_v1(
-    statuses: &[postfiat_types::FastPayFenceStatusV1],
+pub fn verify_fastpay_fence_status_quorum_ml_dsa_v2(
+    statuses: &[postfiat_types::FastPayFenceStatusV2],
     committee: &postfiat_types::FastPayRecoveryCommitteeV1,
+    pinned_registry_root: &str,
     lock_id: &str,
-) -> Result<postfiat_types::FastPayFenceStatusQuorumV1, postfiat_types::FastPayFenceStatusRefusalV1>
+) -> Result<postfiat_types::FastPayFenceStatusQuorumV2, postfiat_types::FastPayFenceStatusRefusalV2>
 {
-    postfiat_types::verify_fastpay_fence_status_quorum_v1(
+    postfiat_types::verify_fastpay_fence_status_quorum_v2(
         statuses,
         committee,
+        pinned_registry_root,
         lock_id,
-        verify_fastpay_fence_status_signature_v1,
+        verify_fastpay_fence_status_signature_v2,
     )
 }
 
@@ -1736,8 +1738,8 @@ mod owned_transfer_recovery_tests {
     fn fence_status_context_and_encoding_are_distinct_from_every_fastpay_message() {
         use postfiat_types::{
             FASTLANE_CHECKPOINT_CONTEXT_V1, FASTLANE_DEPOSIT_CONTEXT_V1, FASTLANE_EXIT_CONTEXT_V1,
-            FASTLANE_EXIT_VOTE_CONTEXT_V1, FASTPAY_FENCE_STATUS_CONTEXT_V1,
-            FASTPAY_FENCE_STATUS_SIGNING_TAG_V1, FASTSWAP_INTENT_CONTEXT_V1,
+            FASTLANE_EXIT_VOTE_CONTEXT_V1, FASTPAY_FENCE_STATUS_CONTEXT_V2,
+            FASTPAY_FENCE_STATUS_SIGNING_TAG_V2, FASTSWAP_INTENT_CONTEXT_V1,
             FASTSWAP_VOTE_CONTEXT_V1, OWNED_DEPOSIT_CONTEXT_V1,
         };
         // Every ML-DSA context a FastPay or owned-object message is signed
@@ -1760,9 +1762,9 @@ mod owned_transfer_recovery_tests {
             FASTLANE_EXIT_VOTE_CONTEXT_V1,
         ];
         for context in existing {
-            assert_ne!(context, FASTPAY_FENCE_STATUS_CONTEXT_V1);
-            assert!(!context.starts_with(FASTPAY_FENCE_STATUS_CONTEXT_V1));
-            assert!(!FASTPAY_FENCE_STATUS_CONTEXT_V1.starts_with(context));
+            assert_ne!(context, FASTPAY_FENCE_STATUS_CONTEXT_V2);
+            assert!(!context.starts_with(FASTPAY_FENCE_STATUS_CONTEXT_V2));
+            assert!(!FASTPAY_FENCE_STATUS_CONTEXT_V2.starts_with(context));
         }
         // The signed bytes' leading tags: none is a prefix of another, so no
         // encoding can be parsed as the fence status or the reverse.
@@ -1770,7 +1772,7 @@ mod owned_transfer_recovery_tests {
             b"postfiat.owned-transfer.v3\0",
             b"postfiat.owned-unwrap.v3\0",
             b"postfiat.fastpay.apply-ack.v1\0",
-            FASTPAY_FENCE_STATUS_SIGNING_TAG_V1,
+            FASTPAY_FENCE_STATUS_SIGNING_TAG_V2,
         ];
         for (index, left) in tags.iter().enumerate() {
             for right in &tags[index + 1..] {
@@ -1796,8 +1798,8 @@ mod owned_transfer_recovery_tests {
         .unwrap();
         let lock_id = "22".repeat(48);
         let sign = |index: usize, context: &[u8]| {
-            let mut status = postfiat_types::FastPayFenceStatusV1 {
-                schema: postfiat_types::FASTPAY_FENCE_STATUS_SCHEMA_V1.into(),
+            let mut status = postfiat_types::FastPayFenceStatusV2 {
+                schema: postfiat_types::FASTPAY_FENCE_STATUS_SCHEMA_V2.into(),
                 chain_id: committee.chain_id.clone(),
                 genesis_hash: committee.genesis_hash.clone(),
                 protocol_version: 1,
@@ -1807,7 +1809,7 @@ mod owned_transfer_recovery_tests {
                 decision: Some(postfiat_types::FastPayRecoveryDecisionV1::Cancelled),
                 operation: Some(postfiat_types::FastPayOperationKindV1::Unwrap),
                 fence_digest: Some("33".repeat(48)),
-                anchored_height: Some(4),
+                anchored_at_or_before_height: Some(4),
                 observed_height: 4 + index as u64,
                 validator_id: keys[index].0.clone(),
                 signature_hex: String::new(),
@@ -1823,29 +1825,29 @@ mod owned_transfer_recovery_tests {
             status
         };
         let statuses = (0..3)
-            .map(|index| sign(index, postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V1))
+            .map(|index| sign(index, postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V2))
             .collect::<Vec<_>>();
         assert_eq!(committee.quorum, 3);
         let accepted =
-            verify_fastpay_fence_status_quorum_ml_dsa_v1(&statuses, &committee, &lock_id).unwrap();
-        assert_eq!(accepted.anchored_height, Some(4));
-        assert!(verify_fastpay_fence_status_v1(
+            verify_fastpay_fence_status_quorum_ml_dsa_v2(&statuses, &committee, &committee.registry_root, &lock_id).unwrap();
+        assert_eq!(accepted.anchored_at_or_before_height, Some(4));
+        assert!(verify_fastpay_fence_status_v2(
             &statuses[0],
             &committee.validators[0].public_key_hex
         ));
         let mut altered = statuses.clone();
-        altered[1].anchored_height = Some(3);
+        altered[1].anchored_at_or_before_height = Some(3);
         altered[1].observed_height = 5;
         assert!(matches!(
-            verify_fastpay_fence_status_quorum_ml_dsa_v1(&altered, &committee, &lock_id),
-            Err(postfiat_types::FastPayFenceStatusRefusalV1::BadSignature { .. })
+            verify_fastpay_fence_status_quorum_ml_dsa_v2(&altered, &committee, &committee.registry_root, &lock_id),
+            Err(postfiat_types::FastPayFenceStatusRefusalV2::BadSignature { .. })
         ));
         // The same bytes signed under another FastPay context do not count.
         let mut cross = statuses;
         cross[2] = sign(2, FASTPAY_APPLY_ACK_CONTEXT_V1);
         assert!(matches!(
-            verify_fastpay_fence_status_quorum_ml_dsa_v1(&cross, &committee, &lock_id),
-            Err(postfiat_types::FastPayFenceStatusRefusalV1::BadSignature { .. })
+            verify_fastpay_fence_status_quorum_ml_dsa_v2(&cross, &committee, &committee.registry_root, &lock_id),
+            Err(postfiat_types::FastPayFenceStatusRefusalV2::BadSignature { .. })
         ));
     }
 }
