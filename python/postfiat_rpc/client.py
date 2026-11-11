@@ -274,6 +274,15 @@ OWNED_OBJECTS_VIEW_CHANGED = "owned_objects_view_changed"
 OWNED_OBJECTS_ALL_MAX_RESTARTS = 3
 
 
+def _require_owned_objects_paging(page: dict[str, Any]) -> None:
+    """A truncated page must carry the continuation and its view digest."""
+    if page.get("truncated") and (not page.get("next_cursor") or not page.get("view_digest")):
+        raise RpcClientError(
+            "owned_objects answered a truncated page without next_cursor and view_digest: "
+            "the node is too old for paging; upgrade it or read from another node"
+        )
+
+
 class PostFiatRpcClient:
     def __init__(
         self,
@@ -1206,12 +1215,14 @@ class PostFiatRpcClient:
         continuation with `owned_objects_view_changed`, or a page reports
         another `view_digest` than the first, the read restarts from the
         first page, at most `max_restarts` times, then raises
-        `RpcClientError`.
+        `RpcClientError`. A truncated answer without `next_cursor` or
+        `view_digest` comes from a node too old for paging and raises.
         """
         for _ in range(max_restarts + 1):
             first = self.owned_objects(
                 owner_public_key_hex, asset=asset, limit=page_limit, omit_owner_keys=omit_owner_keys
             )
+            _require_owned_objects_paging(first)
             view = first.get("view_digest")
             objects = list(first.get("objects") or [])
             page = first
@@ -1231,6 +1242,7 @@ class PostFiatRpcClient:
                         raise
                     changed = True
                     break
+                _require_owned_objects_paging(page)
                 if page.get("view_digest") != view:
                     changed = True
                     break

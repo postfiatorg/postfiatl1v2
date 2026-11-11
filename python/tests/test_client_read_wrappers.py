@@ -469,6 +469,17 @@ class RemainingReadWrapperTests(unittest.TestCase):
             with self.assertRaises(RpcError):
                 client.owned_objects_all("ab")
 
+    def test_owned_objects_all_refuses_a_truncated_answer_from_a_node_without_paging(self) -> None:
+        client = _client()
+        legacy = {"objects": [{"id": "1"}], "object_count": 1, "truncated": True, "total_value": 20}
+        with mock.patch.object(client, "_call", return_value=legacy):
+            with self.assertRaisesRegex(Exception, "too old for paging"):
+                client.owned_objects_all("ab")
+        no_view = {**legacy, "next_cursor": "c", "height": 1, "state_root": "r"}
+        with mock.patch.object(client, "_call", return_value=no_view):
+            with self.assertRaisesRegex(Exception, "too old for paging"):
+                client.owned_objects_all("ab")
+
     def test_fastpay_recovery_committee_sends_only_the_optional_epoch(self) -> None:
         client = _client()
         with mock.patch.object(client, "_call", return_value={"active": True}) as call:
