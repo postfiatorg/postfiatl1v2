@@ -6,9 +6,9 @@
 
 The relay sent the placeholder only after checking that the verifier's `sp1Verifier` has the mock's runtime code hash and that the RPC is a loopback Anvil. Before each release it printed the verifier's `programVKey` and `sp1Verifier` and its checkpoint lag. Its `Released` event was taken as the result, and the balance change matched it with no warning.
 
-This records one run of `scripts/rehearse-lane-roundtrip.py`, which uses the relay `scripts/pft-lane-export-relay.py`. No public network was touched, and no request went to a prover network. `summary.json` holds every value below. `manifest.json` holds the source and tool hashes, the ELF's sha256 and the hashes of the unpublished run files. No key material is recorded.
+This records one run of `scripts/rehearse-lane-roundtrip.py`, rerun on 2026-11-11 after the export view's fix round (its summaries now carry the scan position, `lock_surplus` and the new alarm codes; the steps and the alarms are unchanged). It uses the relay `scripts/pft-lane-export-relay.py`. No public network was touched, and no request went to a prover network. `summary.json` holds every value below. `manifest.json` holds the source and tool hashes, the ELF's sha256 and the hashes of the unpublished run files. No key material is recorded.
 
-- **Source:** commit `7202d8cfd453fa1f87942aaebba0443f922c0b31`, tree `f72e8f0834af48ea7d1f9de0de5012a51fe47662` (branch `token/lane-watcher-exports`).
+- **Source:** commit `465e5006d0999bc6ce5c837eb57be25d38d9a690`, tree `89894f501cd6882d1285a1f8921a7d9a9d93acf5` (branch `token/lane-watcher-exports`).
 - **Tools:** Foundry 1.8.1 (anvil, forge, cast), Rust 1.95.0.
 - **ELF:** sha256 `e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab`, the committed reproducible build `programs/pft-lane-export/elf/pft-lane-export-program`.
 
@@ -16,15 +16,15 @@ This records one run of `scripts/rehearse-lane-roundtrip.py`, which uses the rel
 
 | Step | PFTL | Base (Anvil) |
 |---|---|---|
-| Setup | Lane genesis pins the predicted lock. Chain `postfiat-lane-lane-roundtrip`, six validators, consensus v2 and the export root from block 2. First checkpoint: block 1. | Token, mock SP1 verifier, then the verifier `0xb0bd7d63…a8f4` and the lock `0x90570698…1e46` at their predicted addresses. All 21 constructor values read back. |
+| Setup | Lane genesis pins the predicted lock. Chain `postfiat-lane-lane-roundtrip`, six validators, consensus v2 and the export root from block 2. First checkpoint: block 1. | Token, mock SP1 verifier, then the verifier `0xfc9aafef…4f4f` and the lock `0x51e38e60…3db1` at their predicted addresses. All 21 constructor values read back. |
 | (a) Lock | | 1,000,000 locked to the PFTL recipient (block 6). `totalLocked` 1,000,000; lock balance 1,000,000. |
 | (b) Release | Block 2. The recipient holds 1,000,000 atoms. Lane released 1,000,000, remainder 299,000,000. | unchanged |
-| (c)–(d) Export 400,000 | Block 4 carries the lane export root. Lane exported 400,000, remainder 299,400,000. | The relay paid 400,000 to `0xfb012590…f93b` (block 135). `totalReleased` 400,000, lock balance 600,000. `Released` names the packet digest. Guest: 76,722,114 instructions. |
+| (c)–(d) Export 400,000 | Block 4 carries the lane export root. Lane exported 400,000, remainder 299,400,000. | The relay paid 400,000 to `0xfb012590…f93b` (block 135). `totalReleased` 400,000, lock balance 600,000. `Released` names the packet digest. Guest: 76,717,840 instructions. |
 | (e) Same packet again | | Refused before sending (`already_consumed`). Forced, it reverted on chain. State unchanged. |
-| (f) Export 600,000 | Block 5. Lane released 1,000,000, exported 1,000,000, remainder 300,000,000. | Paid 600,000 to `0x74cd441b…49aa` (block 264). `totalLocked - totalReleased` 0, lock balance 0. Guest: 48,970,799 instructions. |
+| (f) Export 600,000 | Block 5. Lane released 1,000,000, exported 1,000,000, remainder 300,000,000. | Paid 600,000 to `0x74cd441b…49aa` (block 264). `totalLocked - totalReleased` 0, lock balance 0. Guest: 48,793,339 instructions. |
 | (g) Export 1 atom | Refused at admission: `external_lane_export_above_released`. | |
 | (i) Watcher | Release view: one release, checked, `backed`, no alarm. | Export view (`--exports`) after each release and at the end: both exports `paid` (Base blocks 135 and 264), payouts `backed`, `totalReleased` 1,000,000 equals the payouts, zero alarms. |
-| Forged payout | | On an Anvil snapshot after the first release, a `release` was forced with public values for a packet PFTL never recorded; the mock SP1 verifier accepted it and paid 400,000. The export view raised `payout_without_export` and `exported_below_paid` (payouts 800,000 against 400,000 exported) and exited 2. The snapshot was reverted. |
+| Forged payout | | On an Anvil snapshot after the first release, a `release` was forced with public values for a packet PFTL never recorded; the mock SP1 verifier accepted it and paid 400,000. The export view raised `payout_without_export` and `exported_below_paid` (payouts 800,000 against 400,000 exported) and exited 2; with nothing pruned, `payout_unknown_above_pruned` is not raised on top. The snapshot was reverted. |
 
 **Conservation.** After every step on PFTL, the blocks and state replayed, and the lane remainder equalled `reserved - (released - exported)`. The native total of accounts plus lane remainder moved only by burned fees: 1,000 for the release, 22 for the fee transfer, and 1,000 for each export. On Base, `token.balanceOf(lock) == totalLocked - totalReleased` held at every step, and so did `totalLocked - totalReleased == released - exported` on the lane.
 
