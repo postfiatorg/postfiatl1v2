@@ -79,15 +79,15 @@ async function startProxyFixture(options = {}) {
           socket.destroy();
           return;
         }
-        const outcome = rpcHandler(request);
-        socket.write(`${JSON.stringify({
+        // A handler may answer later by returning a promise.
+        Promise.resolve(rpcHandler(request)).then(outcome => socket.write(`${JSON.stringify({
           version: 'postfiat-local-rpc-v1',
           id: request.id,
           ok: outcome.ok === true,
           result: outcome.result || null,
           error: outcome.error || null,
           events: [],
-        })}\n`);
+        })}\n`));
       }
     });
   });
@@ -109,6 +109,7 @@ async function startProxyFixture(options = {}) {
         `validator-${index}=127.0.0.1:${rpcPort}`)).join(','),
       RPC_HOST: '127.0.0.1',
       RPC_PORT: String(rpcPort),
+      ...(options.env || {}),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

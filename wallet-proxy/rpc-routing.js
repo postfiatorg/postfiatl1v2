@@ -1673,11 +1673,63 @@ wss } = runtime;
         };
     }
 
+    // owned_fence_status admission: one fan-out asks every validator, and an
+    // uncached lock costs each one a signature. Identical reads for one lock
+    // in flight share one fan-out; distinct fan-outs in flight are bounded
+    // per caller and in total, with a typed busy answer above either bound.
+    const FENCE_STATUS_MAX_FANOUTS = boundedEnvInteger('FASTPAY_FENCE_STATUS_MAX_FANOUTS', 16, 1024);
+    const FENCE_STATUS_MAX_FANOUTS_PER_CALLER = boundedEnvInteger('FASTPAY_FENCE_STATUS_MAX_FANOUTS_PER_CALLER', 2, 1024);
+    const fenceStatusInFlight = new Map();
+    const fenceStatusCallerFanouts = new Map();
+
+    function boundedEnvInteger(name, fallback, max) {
+        const value = Number.parseInt(process.env[name] ?? '', 10);
+        return Number.isInteger(value) && value >= 1 && value <= max ? value : fallback;
+    }
+
+    function fenceStatusBusy(request, scope) {
+        return {
+            version: 'postfiat-local-rpc-v1',
+            id: request.id,
+            ok: false,
+            result: null,
+            error: {
+                code: 'proxy_fence_status_busy',
+                message: `too many owned_fence_status reads in flight (${scope})`,
+                retry_after_ms: 250,
+            },
+            events: [],
+        };
+    }
+
+    // `caller` names the client (its connection); reads with the same lock
+    // id join the fan-out already in flight, whoever started it.
+    async function readFastpayFenceStatuses(request, fleet = RPC_FLEET, timeoutMs = TCP_TIMEOUT_MS, caller = 'local') {
+        const lockId = typeof request.params?.lock_id === 'string' ? request.params.lock_id : null;
+        const key = lockId === null ? null : `${lockId}`;
+        let shared = key === null ? undefined : fenceStatusInFlight.get(key);
+        if (!shared) {
+            const callerCount = fenceStatusCallerFanouts.get(caller) || 0;
+            if (fenceStatusInFlight.size >= FENCE_STATUS_MAX_FANOUTS) return fenceStatusBusy(request, 'gateway');
+            if (callerCount >= FENCE_STATUS_MAX_FANOUTS_PER_CALLER) return fenceStatusBusy(request, 'caller');
+            fenceStatusCallerFanouts.set(caller, callerCount + 1);
+            const token = key ?? Symbol('fence-status');
+            shared = fanOutFastpayFenceStatuses({ lock_id: request.params?.lock_id }, fleet, timeoutMs).finally(() => {
+                fenceStatusInFlight.delete(token);
+                const left = (fenceStatusCallerFanouts.get(caller) || 1) - 1;
+                if (left > 0) fenceStatusCallerFanouts.set(caller, left);
+                else fenceStatusCallerFanouts.delete(caller);
+            });
+            fenceStatusInFlight.set(token, shared);
+        }
+        const result = await shared;
+        return { version: 'postfiat-local-rpc-v1', id: request.id, ok: true, result, error: null, events: [] };
+    }
+
     // owned_fence_status: ask every validator and return each signed answer
     // with the validator it came from. The gateway computes no majority and
     // caches nothing; the wallet checks the signatures and the quorum itself.
-    async function readFastpayFenceStatuses(request, fleet = RPC_FLEET, timeoutMs = TCP_TIMEOUT_MS) {
-        const params = { lock_id: request.params?.lock_id };
+    async function fanOutFastpayFenceStatuses(params, fleet, timeoutMs) {
         const answers = await Promise.all(fleet.map(async (endpoint) => {
             try {
                 const response = await rpcTcpRequest(endpoint.host, endpoint.port, {
@@ -1705,19 +1757,12 @@ wss } = runtime;
         }));
         const answered = answers.filter((answer) => answer.ok).length;
         return {
-            version: 'postfiat-local-rpc-v1',
-            id: request.id,
-            ok: true,
-            result: {
-                schema: 'postfiat-proxy-fastpay-fence-statuses-v1',
-                lock_id: params.lock_id ?? null,
-                fleet_count: fleet.length,
-                answered_count: answered,
-                partial: answered < fleet.length,
-                answers,
-            },
-            error: null,
-            events: [],
+            schema: 'postfiat-proxy-fastpay-fence-statuses-v1',
+            lock_id: params.lock_id ?? null,
+            fleet_count: fleet.length,
+            answered_count: answered,
+            partial: answered < fleet.length,
+            answers,
         };
     }
 

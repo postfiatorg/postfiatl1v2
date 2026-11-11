@@ -1424,6 +1424,7 @@ wss.on('connection', (ws, req) => {
 
     // Track pending upstream requests for this WS client.
     let activeTcpConnections = 0;
+    const fenceStatusCaller = Symbol('fence-status-caller');
     const walletSubscriptions = new Map();
 
     ws.on('close', () => {
@@ -1638,7 +1639,14 @@ wss.on('connection', (ws, req) => {
         }
 
         if (parsed.method === 'owned_fence_status') {
-            ws.send(JSON.stringify(await readFastpayFenceStatuses(parsed)));
+            // Counted like every other upstream request: the permit is taken
+            // before the fan-out and released whatever happens.
+            activeTcpConnections++;
+            try {
+                ws.send(JSON.stringify(await readFastpayFenceStatuses(parsed, undefined, undefined, fenceStatusCaller)));
+            } finally {
+                activeTcpConnections = Math.max(0, activeTcpConnections - 1);
+            }
             return;
         }
 
