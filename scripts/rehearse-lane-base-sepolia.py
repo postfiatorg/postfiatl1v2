@@ -48,7 +48,6 @@ def _load(name, relative):
 
 ORDER = _load('rehearse_phase3_deployment_order', 'scripts/rehearse-phase3-deployment-order.py')
 RT = _load('rehearse_lane_roundtrip', 'scripts/rehearse-lane-roundtrip.py')
-RELAY = _load('pft_lane_export_relay', 'scripts/pft-lane-export-relay.py')
 keccak256 = ORDER.keccak256
 require = ORDER.require
 RehearsalFailure = ORDER.RehearsalFailure
@@ -1010,19 +1009,25 @@ def main(argv=None):
                 require(not args.fork, 'a real proof is released on Base Sepolia, not on the fork')
                 release = begin_intent(state, stage='prove-and-release', role='release', sender='relayer keystore',
                                        nonce=None, purpose=f'release {EXPORT_AMOUNT} to {data["export"]["base_recipient"]}')
-                require(release['outcome'] is None, f'a release was already sent ({release["outcome"]}); inspect '
-                                                    'relay-release.stdout before anything else')
+                require(release['outcome'] in (None, 'not sent'),
+                        f'a release may already have been sent ({release["outcome"]}); inspect relay-release.stdout '
+                        'before anything else')
                 release['outcome'] = 'sending'
                 save()
                 try:
-                    relay_output = command('relay-release', [sys.executable, ROOT / 'scripts/pft-lane-export-relay.py', 'release',
-                                          '--rpc', target_url(), '--lock', data['deploy']['lock'], '--input',
-                                          out / 'relay-input', '--proof', args.proof,
-                                          *signer_flags(args.relayer_account, args.relayer_password_file),
-                                          '--expect-program-vkey', vkey, '--expect-sp1-verifier',
-                                          SP1_VERIFIER['address']])
+                    relay_output = command('relay-release', [
+                        sys.executable, ROOT / 'scripts/pft-lane-export-relay.py', 'release', '--rpc', target_url(),
+                        '--lock', data['deploy']['lock'], '--input', out / 'relay-input', '--proof', args.proof,
+                        *signer_flags(args.relayer_account, args.relayer_password_file),
+                        '--expect-program-vkey', vkey, '--expect-sp1-verifier', SP1_VERIFIER['address']])
                 except RehearsalFailure:
-                    release['outcome'] = 'failed: see relay-release.stdout and relay-release.stderr'
+                    # The relay's JSON says whether anything was sent; only "not sent" may be retried.
+                    try:
+                        sent = json.loads((out / 'relay-release.stdout').read_text()).get('sent', 'unknown')
+                    except (OSError, ValueError):
+                        sent = 'unknown'
+                    release['outcome'] = 'not sent' if sent is False else (
+                        f'failed, sent: {sent}; see relay-release.stdout and relay-release.stderr')
                     raise
                 result = json.loads(relay_output)
                 release.update(hash=result.get('transaction'), outcome='sent')
