@@ -2521,7 +2521,6 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 serde_json::to_string_pretty(&report)
                     .map_err(|error| format!("export status serialization failed: {error}"))?
             );
-            println!("{}", report.base_payout);
             Ok(())
         }
         "fastswap-control-prepare" => {

@@ -734,7 +734,11 @@ fn external_lane_export_command_runs_end_to_end_and_the_status_read_shows_the_pa
     assert_eq!((audited.in_committed_block, audited.block_log_verified), (true, Some(true)));
     assert_eq!((status.lane_exported_atoms, status.lane_export_count), (400, 1));
     assert_eq!(page.state.exported_atoms, 400);
-    assert!(status.base_payout.contains("relay that does not exist yet"), "{status:?}");
+    assert!(
+        status.base_payout.contains("pays out on Base only once a release relay proves this packet")
+            && !status.base_payout.contains("does not exist"),
+        "{status:?}"
+    );
 
     let missing = export_status_with(&chain, crate::ExternalLaneExportSelector::Nonce(1), false, None)
         .unwrap_err()
@@ -807,6 +811,20 @@ fn external_lane_export_command_refuses_a_malformed_or_zero_recipient_before_sig
         "external_lane_export_recipient_invalid",
     );
     assert!(error.contains("zero address"), "{error}");
+    // A malformed sender (a dry run's `--sender`) has its own code, not the
+    // recipient's.
+    let error = export_command_as(
+        &chain,
+        chain.data_dir.join("no-such-key.json"),
+        Some("not-an-address".to_string()),
+        "base-erc20",
+        1,
+        &base_recipient(),
+        true,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.starts_with("refused before signing: external_lane_export_sender_invalid: "), "{error}");
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
@@ -822,7 +840,7 @@ fn external_lane_export_command_refuses_the_lock_as_recipient_before_signing() {
 fn external_lane_export_command_refuses_the_token_as_recipient_before_signing() {
     let chain = released_export_chain("export-command-token", ACCOUNT_RESERVE + 1_000);
     let token = export_page(&chain.data_dir, None, None).config.policy.token_address;
-    let error = faucet_refused(&chain, "base-erc20", 1, &token, crate::EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN);
+    let error = faucet_refused(&chain, "base-erc20", 1, &token, postfiat_types::EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN);
     assert!(error.contains("token contract"), "{error}");
     let _ = fs::remove_dir_all(&chain.data_dir);
 }

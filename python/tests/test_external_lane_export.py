@@ -273,6 +273,8 @@ class ExternalLaneExportStatusTests(unittest.TestCase):
         self.assertNotIn("block_log_verified", status)
         self.assertEqual((status["lane_exported_atoms"], status["lane_export_count"]), (201, 2))
         self.assertEqual(status["base_payout"], EXTERNAL_LANE_EXPORT_BASE_PAYOUT_NOTE)
+        self.assertIn("pays out on Base only once a release relay proves this packet", status["base_payout"])
+        self.assertNotIn("does not exist", status["base_payout"])
 
     def test_status_by_tx_id_pages_older_exports_and_unconfirmed_is_not_final(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")

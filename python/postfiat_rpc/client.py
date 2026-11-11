@@ -34,8 +34,8 @@ MAX_ACCOUNT_TX_SCAN_LIMIT = 512
 EXTERNAL_LANE_RELEASE_PAGE_SIZE = 100
 # The node's `external-lane-export-status` prints the same line.
 EXTERNAL_LANE_EXPORT_BASE_PAYOUT_NOTE = (
-    "the payout on Base needs a release relay that does not exist yet; "
-    "this packet is recorded on PFTL only"
+    "this packet is recorded on PFTL; it pays out on Base only once a release relay proves this packet "
+    "to the lane's lock contract on Base and that release is confirmed there"
 )
 ESCROW_ID_DOMAIN = "postfiat.escrow_id.v1"
 ESCROW_CONDITION_HASH_DOMAIN = "postfiat.escrow_condition_hash.v1"
@@ -1858,8 +1858,8 @@ class PostFiatRpcClient:
         string) or its export nonce (an int), as `external-lane-export-status`
         prints it: the packet, its digest and commitments, `in_committed_block`
         (`tx` links the receipt from a block in the node's committed log; no
-        replay), the lane's `exported_atoms`, and that the Base payout needs a
-        relay that does not exist yet. `audit=True` passes `audit_block_log`
+        replay), the lane's `exported_atoms`, and what the Base payout needs
+        (`base_payout`). `audit=True` passes `audit_block_log`
         and adds `block_log_verified`. Pages the lane's stored exports newest
         first; a pruned or unknown export raises `LookupError`. `tx` reporting
         the transaction not found gives `in_committed_block` false; any other

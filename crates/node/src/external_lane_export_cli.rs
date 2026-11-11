@@ -11,7 +11,8 @@ use std::path::PathBuf;
 use postfiat_types::{
     AssetTransactionOperation, ExternalLaneExportOperationV1, SignedAssetTransaction,
     EXTERNAL_LANE_EXPORT_HALTED, EXTERNAL_LANE_EXPORT_NOT_SUPPORTED,
-    EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK, EXTERNAL_LANE_NOT_CONFIGURED,
+    EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK, EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN,
+    EXTERNAL_LANE_NOT_CONFIGURED,
 };
 use serde::{Deserialize, Serialize};
 
@@ -24,14 +25,11 @@ use crate::{
     WalletSignAssetTransactionOptions, EXTERNAL_LANE_RELEASE_PAGE_SIZE,
 };
 
-/// The Base recipient is the lane's token contract, which a release would
-/// strand the PFT in.
-pub const EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN: &str = "external_lane_export_recipient_is_token";
 /// The status read found a packet another sender's export holds.
 pub const EXTERNAL_LANE_EXPORT_OTHER_SENDER: &str = "external_lane_export_other_sender";
-/// The line every status read ends with until the Base release relay exists.
+/// The status read's `base_payout`: what must happen for the payout on Base.
 pub const EXTERNAL_LANE_EXPORT_BASE_PAYOUT_NOTE: &str =
-    "the payout on Base needs a release relay that does not exist yet; this packet is recorded on PFTL only";
+    "this packet is recorded on PFTL; it pays out on Base only once a release relay proves this packet to the lane's lock contract on Base and that release is confirmed there";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalLaneExportOptions {
@@ -105,6 +103,20 @@ fn lane_row(
         export_limit,
     })?;
     Ok(report.lanes.into_iter().find(|row| row.lane_id == lane_id))
+}
+
+/// The code of an `ExternalLaneExportOperationV1::validate` error, by the
+/// field its message names.
+fn export_validate_code(error: &str) -> &'static str {
+    if error.contains("external_lane_export_v1.base_recipient") {
+        "external_lane_export_recipient_invalid"
+    } else if error.contains("external_lane_export_v1.sender") {
+        "external_lane_export_sender_invalid"
+    } else if error.contains("external_lane_export_v1.amount_atoms") {
+        "external_lane_export_amount_zero"
+    } else {
+        "external_lane_export_invalid"
+    }
 }
 
 /// `--amount-atoms`: ASCII digits only (no sign, space or separator) that fit
@@ -197,7 +209,7 @@ pub fn external_lane_export(
     };
     operation
         .validate()
-        .map_err(|error| refused("external_lane_export_recipient_invalid", error))?;
+        .map_err(|error| refused(export_validate_code(&error), error))?;
     if operation.base_recipient == policy.lock_contract_address {
         return Err(refused(
             EXTERNAL_LANE_EXPORT_RECIPIENT_IS_LOCK,
