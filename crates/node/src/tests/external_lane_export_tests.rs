@@ -594,6 +594,7 @@ fn export_command_as(
         amount_atoms: amount,
         base_recipient: recipient.to_string(),
         dry_run,
+        max_fee_atoms: crate::EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS,
     })
 }
 
@@ -853,6 +854,68 @@ fn external_lane_export_command_refuses_a_balance_short_of_amount_fee_and_reserv
     let key_file = release_recipient_key_file(&chain);
     let error = command_refused_before_signing(&chain, key_file, "base-erc20", 1_000, &base_recipient(), "insufficient_funds");
     assert!(error.contains("cannot cover the amount 1000"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// A quote whose fee is above `--max-fee-atoms` is refused before signing,
+/// with both numbers; a ceiling at the fee lets it through.
+#[test]
+fn external_lane_export_command_refuses_a_fee_above_the_ceiling_before_signing() {
+    let chain = released_export_chain("export-command-fee-ceiling", ACCOUNT_RESERVE + 1_000);
+    let fee = export_command(&chain, "base-erc20", 400, &base_recipient(), true).expect("dry run").fee;
+    let store = NodeStore::new(&chain.data_dir);
+    let mempool_before = store.read_mempool().expect("mempool");
+    let faucet = crate::read_key_file(&chain.data_dir.join(FAUCET_KEY_FILE)).expect("key").address;
+    for dry_run in [true, false] {
+        let error = crate::external_lane_export(crate::ExternalLaneExportOptions {
+            data_dir: chain.data_dir.clone(),
+            key_file: chain.data_dir.join(FAUCET_KEY_FILE),
+            sender: Some(faucet.clone()),
+            lane_id: "base-erc20".to_string(),
+            amount_atoms: 400,
+            base_recipient: base_recipient(),
+            dry_run,
+            max_fee_atoms: fee - 1,
+        })
+        .expect_err("a fee above the ceiling")
+        .to_string();
+        assert_eq!(
+            error,
+            format!(
+                "refused before signing: external_lane_export_fee_above_ceiling: the quoted minimum fee {fee} atoms is above the ceiling {} atoms (--max-fee-atoms)",
+                fee - 1
+            )
+        );
+        assert_eq!(store.read_mempool().expect("mempool"), mempool_before, "signed and submitted");
+    }
+    assert!(crate::export_fee_within_ceiling(fee, fee).is_ok());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// The default ceiling lets today's fees through: the largest export
+/// (longest chain id, lane id and numbers) pays at most
+/// `EXTERNAL_LANE_EXPORT_LARGEST_FEE_ATOMS`, and the default is 4x that.
+#[test]
+fn external_lane_export_default_fee_ceiling_covers_the_largest_export_fee() {
+    let chain = released_export_chain("export-command-fee-largest", ACCOUNT_RESERVE + 1_000);
+    let store = NodeStore::new(&chain.data_dir);
+    let mut genesis = store.read_genesis().expect("genesis");
+    let ledger = store.read_ledger().expect("ledger");
+    let today = export_command(&chain, "base-erc20", 400, &base_recipient(), true).expect("dry run").fee;
+    genesis.chain_id = "c".repeat(postfiat_types::MAX_TEXT_FIELD_BYTES);
+    let operation = AssetTransactionOperation::ExternalLaneExportV1(postfiat_types::ExternalLaneExportOperationV1 {
+        sender: chain.recipient.clone(),
+        lane_id: format!("l{}", "9".repeat(postfiat_types::EXTERNAL_LANE_ID_MAX_BYTES - 1)),
+        amount_atoms: u64::MAX,
+        base_recipient: base_recipient(),
+    });
+    let largest = crate::quote_signed_asset_transaction(&genesis, chain.recipient.clone(), u64::MAX, u64::MAX, operation)
+        .expect("the largest export");
+    let fee = postfiat_execution::minimum_asset_transaction_fee_for_ledger(&ledger, &largest);
+    assert_eq!(postfiat_execution::asset_transaction_state_expansion_fee(&ledger, &largest), 0);
+    assert_eq!((today, fee), (22, crate::EXTERNAL_LANE_EXPORT_LARGEST_FEE_ATOMS));
+    assert_eq!(crate::EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS, 4 * crate::EXTERNAL_LANE_EXPORT_LARGEST_FEE_ATOMS);
+    assert!(crate::export_fee_within_ceiling(fee, crate::EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS).is_ok());
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 from typing import Any
@@ -194,6 +195,39 @@ class ExternalLaneExportTests(unittest.TestCase):
         result, signer, _, _ = self._export(client, _quote(sender_balance=632), amount_atoms=600)
         self.assertEqual(result.tx_id, "ab")
         signer.assert_called_once()
+
+    def test_a_quote_with_an_inflated_fee_is_refused_before_the_signer_runs(self) -> None:
+        from postfiat_rpc import wallet as wallet_module
+
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        ceiling = wallet_module.EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS
+        # A node that names a fee far above any export's, which the balance alone would cover.
+        for kwargs, fee, limit in (({}, ceiling + 1, ceiling), ({"max_fee_atoms": 21}, 22, 21)):
+            for dry_run in (False, True):
+                with self.subTest(fee=fee, dry_run=dry_run):
+                    error, signer, submit, _ = self._export(
+                        client, _quote(minimum_fee=fee, sender_balance=10**12), amount_atoms=600,
+                        dry_run=dry_run, **kwargs)
+                    self.assertEqual(
+                        str(error),
+                        "refused before signing: external_lane_export_fee_above_ceiling: "
+                        f"the quoted minimum fee {fee} atoms is above the ceiling {limit} atoms (max_fee_atoms)",
+                    )
+                    signer.assert_not_called()
+                    submit.assert_not_called()
+
+    def test_the_default_fee_ceiling_lets_todays_export_fees_through(self) -> None:
+        from postfiat_rpc import wallet as wallet_module
+
+        source = (Path(__file__).resolve().parents[2] / "crates/node/src/external_lane_export_cli.rs").read_text()
+        largest = int(re.search(r"EXTERNAL_LANE_EXPORT_LARGEST_FEE_ATOMS: u64 = (\d+);", source).group(1))
+        self.assertEqual(wallet_module.EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS, 4 * largest)
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        for fee in (22, largest, wallet_module.EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS):
+            with self.subTest(fee=fee):
+                result, signer, _, _ = self._export(client, _quote(minimum_fee=fee), amount_atoms=600)
+                self.assertEqual(result.tx_id, "ab")
+                signer.assert_called_once()
 
     def test_the_quotes_pending_aware_export_refusal_is_refused_before_the_signer_runs(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")

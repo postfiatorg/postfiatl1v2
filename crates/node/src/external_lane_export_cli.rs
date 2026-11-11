@@ -31,6 +31,24 @@ pub const EXTERNAL_LANE_EXPORT_OTHER_SENDER: &str = "external_lane_export_other_
 pub const EXTERNAL_LANE_EXPORT_BASE_PAYOUT_NOTE: &str =
     "this packet is recorded on PFTL; it pays out on Base only once a release relay proves this packet to the lane's lock contract on Base and that release is confirmed there";
 
+/// The quoted minimum fee is above the caller's ceiling (`--max-fee-atoms`).
+pub const EXTERNAL_LANE_EXPORT_FEE_ABOVE_CEILING: &str = "external_lane_export_fee_above_ceiling";
+/// The largest fee an export can be charged today, in atoms. Its minimum fee
+/// (`minimum_asset_transaction_fee_for_ledger`) is the base fee plus the
+/// state-expansion part, and that part is 0 for `external_lane_export_v1` (it
+/// creates no account, trustline, asset or entry). The base fee is
+/// `MIN_TRANSFER_FEE.max(TRANSFER_FEE_PER_QUANTUM` (1) per started
+/// `TRANSFER_FEE_BYTE_QUANTUM` (512 bytes) of the tx-id preimage`)`: the
+/// signing bytes plus the ML-DSA-65 public key and signature in hex (3,904 +
+/// 6,618 bytes). With every field at its longest (a 256-byte chain id, a
+/// 32-byte lane id, 20-digit fee, sequence and amount) the preimage is 11,424
+/// bytes, 23 quanta: 23 atoms. A typical export pays 22 (11,132 bytes).
+pub const EXTERNAL_LANE_EXPORT_LARGEST_FEE_ATOMS: u64 = 23;
+/// The default `--max-fee-atoms`, a safety ceiling against a quote that names
+/// an inflated fee: 4x the largest fee an export can be charged today.
+pub const EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS: u64 =
+    4 * EXTERNAL_LANE_EXPORT_LARGEST_FEE_ATOMS;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalLaneExportOptions {
     pub data_dir: PathBuf,
@@ -44,6 +62,9 @@ pub struct ExternalLaneExportOptions {
     pub base_recipient: String,
     /// Stop after the checks: print the quote and sign nothing.
     pub dry_run: bool,
+    /// Refuse before signing when the quoted minimum fee is above this
+    /// (`--max-fee-atoms`, default `EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS`).
+    pub max_fee_atoms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,6 +99,19 @@ pub fn export_quote_was_checked(quote: &AssetFeeQuoteReport) -> io::Result<()> {
         "external_lane_export_not_checked",
         "the node is too old to check an export: its asset_fee_quote carries no export_checked"
             .to_string(),
+    ))
+}
+
+/// Refuses a quoted minimum fee above the caller's ceiling, before signing.
+pub fn export_fee_within_ceiling(minimum_fee: u64, max_fee_atoms: u64) -> io::Result<()> {
+    if minimum_fee <= max_fee_atoms {
+        return Ok(());
+    }
+    Err(refused(
+        EXTERNAL_LANE_EXPORT_FEE_ABOVE_CEILING,
+        format!(
+            "the quoted minimum fee {minimum_fee} atoms is above the ceiling {max_fee_atoms} atoms (--max-fee-atoms)"
+        ),
     ))
 }
 
@@ -129,16 +163,29 @@ pub fn parse_export_amount_atoms(text: &str) -> Result<u64, String> {
         .map_err(|_| "--amount-atoms must fit a u64".to_string())
 }
 
+/// `--max-fee-atoms`: ASCII digits only that fit a u64.
+pub fn parse_export_max_fee_atoms(text: &str) -> Result<u64, String> {
+    if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err("--max-fee-atoms must be digits only".to_string());
+    }
+    text.parse::<u64>()
+        .map_err(|_| "--max-fee-atoms must fit a u64".to_string())
+}
+
 /// Checks the export against the lane and the sender's balance, then, unless
 /// `dry_run` (which stops after the checks, opens no key file and signs
 /// nothing), signs and submits it. Every refusal is returned before the
 /// key signs anything, against the ledger asset admission executes the export
 /// on: the pending plain transfers, `payment_v2` entries and asset
 /// transactions (`asset_fee_quote`'s `export_refusal`, after admission's
-/// mempool limits). The one refusal that can still come after signing: a
-/// pending escrow, NFT or offer entry the export makes stale (admission
-/// re-runs them after it); no fee is charged and the holder sends the export
-/// again once that entry is in a block or has left the mempool. A transaction
+/// mempool limits), and a quoted minimum fee above `max_fee_atoms`
+/// (`external_lane_export_fee_above_ceiling`). Two refusals can still come
+/// after signing, both at admission and without a fee: a pending escrow, NFT
+/// or offer entry the export makes stale (admission re-runs them after it),
+/// and the holder sends the export again once that entry is in a block or has
+/// left the mempool; and a block committed between the quote and the
+/// submission that raises the minimum fee, which depends on the ledger
+/// (`fee_too_low`), and the holder runs the command again. A transaction
 /// another submitter gets admitted between the check and the submission can
 /// also make admission refuse this one, without a fee.
 pub fn external_lane_export(
@@ -243,6 +290,7 @@ pub fn external_lane_export(
         _ => error,
     })?;
     export_quote_was_checked(&quote)?;
+    export_fee_within_ceiling(quote.minimum_fee, options.max_fee_atoms)?;
     let needed = u128::from(options.amount_atoms)
         + u128::from(quote.minimum_fee)
         + u128::from(quote.account_reserve);

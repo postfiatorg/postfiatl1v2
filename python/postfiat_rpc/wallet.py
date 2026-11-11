@@ -1529,6 +1529,16 @@ def _export_quote_mismatch(quote: dict[str, Any], operation: dict[str, Any], add
     return None
 
 
+# The default `max_fee_atoms`, a safety ceiling against a node that quotes an
+# inflated fee: 4x the largest fee an export can be charged today, the Rust
+# command's EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS. An export's minimum fee
+# is one atom per started 512 bytes of its tx-id preimage (the ML-DSA-65 key
+# and signature in hex make most of it) plus a state-expansion part that is 0
+# for an export; with every field at its longest that is 23 atoms
+# (EXTERNAL_LANE_EXPORT_LARGEST_FEE_ATOMS, crates/node/src/external_lane_export_cli.rs).
+EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS = 4 * 23
+
+
 def external_lane_export(
     client: PostFiatRpcClient,
     *,
@@ -1539,6 +1549,7 @@ def external_lane_export(
     work_dir: str | Path | None = None,
     sequence: int | None = None,
     dry_run: bool = False,
+    max_fee_atoms: int = EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS,
 ) -> AssetTransactionResult:
     """Export native PFT to Base on a genesis external lane, as
     `external-lane-export`: the lane checks from `external_lane_info`, the fee
@@ -1547,20 +1558,26 @@ def external_lane_export(
     admission executes the export on: the pending transfers, payment_v2 entries
     and asset transactions), and only then sign and submit. A quote whose
     kind, source or operation is not the requested export is refused with
-    `external_lane_export_quote_mismatch`. Every refusal
-    raises `ValueError("refused before signing: CODE: ...")` before the signer
-    runs. The one refusal that can still come after signing is a pending
-    escrow, NFT or offer entry the export makes stale ("blocked by stale
-    pending", raised by the submit call, no fee): send the export again once
-    that entry is in a block or has left the mempool. A transaction admitted
-    between the quote and the submission can also make admission refuse this
-    one, without a fee.
+    `external_lane_export_quote_mismatch`. A quoted minimum fee above
+    `max_fee_atoms` (default `EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS`, a
+    safety ceiling) is refused with `external_lane_export_fee_above_ceiling`.
+    Every refusal raises `ValueError("refused before signing: CODE: ...")`
+    before the signer runs. Two refusals can still come after signing, both
+    raised by the submit call and both without a fee: a pending escrow, NFT or
+    offer entry the export makes stale ("blocked by stale pending"): send the
+    export again once that entry is in a block or has left the mempool; and a
+    block committed between the quote and the submission that raises the
+    minimum fee, which depends on the ledger (`fee_too_low`): run the export
+    again. A transaction admitted between the quote and the submission can
+    also make admission refuse this one, without a fee.
     `dry_run=True` stops after the checks: it returns the quote and the
     unsigned operation with no signed transaction, no tx id and an empty
     `submit_result`, and never reads the key or calls the submit method."""
 
     if isinstance(amount_atoms, bool) or not isinstance(amount_atoms, int):
         raise ValueError("amount_atoms must be an integer")
+    if isinstance(max_fee_atoms, bool) or not isinstance(max_fee_atoms, int) or max_fee_atoms < 0:
+        raise ValueError("max_fee_atoms must be a non-negative integer")
     report = client.external_lane_info(lane_id, release_limit=1, export_limit=1)
     row = next((lane for lane in report.get("lanes", []) if lane.get("lane_id") == lane_id), None)
     refusal = external_lane_export_refusal(row, amount_atoms=amount_atoms, base_recipient=base_recipient)
@@ -1592,6 +1609,11 @@ def external_lane_export(
     balance = int(quote.get("sender_balance", 0))
     fee = int(quote["minimum_fee"])
     reserve = int(quote["account_reserve"])
+    if fee > max_fee_atoms:
+        raise ValueError(
+            "refused before signing: external_lane_export_fee_above_ceiling: "
+            f"the quoted minimum fee {fee} atoms is above the ceiling {max_fee_atoms} atoms (max_fee_atoms)"
+        )
     if balance < amount_atoms + fee + reserve:
         raise ValueError(
             "refused before signing: insufficient_funds: "

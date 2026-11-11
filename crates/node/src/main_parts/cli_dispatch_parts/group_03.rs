@@ -2488,6 +2488,10 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                     .ok_or("missing --base-recipient")?
                     .to_string(),
                 dry_run: flag_present(flags, "--dry-run"),
+                max_fee_atoms: match flag_value(flags, "--max-fee-atoms") {
+                    Some(value) => parse_export_max_fee_atoms(value)?,
+                    None => EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS,
+                },
             })
             .map_err(|error| format!("{command} failed: {error}"))?;
             println!(

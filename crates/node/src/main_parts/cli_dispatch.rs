@@ -42,6 +42,7 @@ use postfiat_node::{
     assemble_ethereum_checkpoint_certificate,
     assemble_external_lane_checkpoint_certificate, build_external_lane_lock_proof,
     external_lane_export, external_lane_export_status, parse_export_amount_atoms,
+    parse_export_max_fee_atoms, EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS,
     ExternalLaneExportOptions,
     ExternalLaneExportSelector, ExternalLaneExportStatusOptions,
     observe_external_lane_checkpoint, sign_external_lane_checkpoint_vote,
