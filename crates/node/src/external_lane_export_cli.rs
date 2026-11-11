@@ -174,20 +174,23 @@ pub fn parse_export_max_fee_atoms(text: &str) -> Result<u64, String> {
 
 /// Checks the export against the lane and the sender's balance, then, unless
 /// `dry_run` (which stops after the checks, opens no key file and signs
-/// nothing), signs and submits it. Every refusal is returned before the
-/// key signs anything, against the ledger asset admission executes the export
-/// on: the pending plain transfers, `payment_v2` entries and asset
-/// transactions (`asset_fee_quote`'s `export_refusal`, after admission's
-/// mempool limits), and a quoted minimum fee above `max_fee_atoms`
-/// (`external_lane_export_fee_above_ceiling`). Two refusals can still come
-/// after signing, both at admission and without a fee: a pending escrow, NFT
-/// or offer entry the export makes stale (admission re-runs them after it),
-/// and the holder sends the export again once that entry is in a block or has
-/// left the mempool; and a block committed between the quote and the
-/// submission that raises the minimum fee, which depends on the ledger
-/// (`fee_too_low`), and the holder runs the command again. A transaction
-/// another submitter gets admitted between the check and the submission can
-/// also make admission refuse this one, without a fee.
+/// nothing), signs and submits it. Every refusal the command can know from
+/// the node's current state is returned before the key signs anything,
+/// against the ledger asset admission executes the export on: the pending
+/// plain transfers, `payment_v2` entries and asset transactions
+/// (`asset_fee_quote`'s `export_refusal`, after admission's mempool limits),
+/// and a quoted minimum fee above `max_fee_atoms`
+/// (`external_lane_export_fee_above_ceiling`). The cases that can still come
+/// after signing, all at admission and without a fee, are: a pending escrow,
+/// NFT or offer entry the export makes stale (admission re-runs them after
+/// it), and the holder sends the export again once that entry is in a block
+/// or has left the mempool; a transaction another submitter gets admitted
+/// between the check and the submission; and, only if the fee rule changes, a
+/// block committed between the quote and the submission that raises the
+/// minimum fee (`fee_too_low`), and the holder runs the command again. Under
+/// the current fee rule an export's minimum fee does not depend on the ledger
+/// (its state-expansion part is zero), so that last case cannot happen for an
+/// export now.
 pub fn external_lane_export(
     options: ExternalLaneExportOptions,
 ) -> io::Result<ExternalLaneExportReport> {

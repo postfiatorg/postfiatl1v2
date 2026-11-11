@@ -1593,15 +1593,18 @@ def external_lane_export(
     `external_lane_export_quote_invalid`. A quoted minimum fee above
     `max_fee_atoms` (default `EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS`, a
     safety ceiling) is refused with `external_lane_export_fee_above_ceiling`.
-    Every refusal raises `ValueError("refused before signing: CODE: ...")`
-    before the signer runs. Two refusals can still come after signing, both
-    raised by the submit call and both without a fee: a pending escrow, NFT or
-    offer entry the export makes stale ("blocked by stale pending"): send the
-    export again once that entry is in a block or has left the mempool; and a
-    block committed between the quote and the submission that raises the
-    minimum fee, which depends on the ledger (`fee_too_low`): run the export
-    again. A transaction admitted between the quote and the submission can
-    also make admission refuse this one, without a fee.
+    Every refusal the helper can know from the node's current state raises
+    `ValueError("refused before signing: CODE: ...")` before the signer runs.
+    The cases that can still come after signing, all raised by the submit
+    call and without a fee, are: a pending escrow, NFT or offer entry the
+    export makes stale ("blocked by stale pending"): send the export again
+    once that entry is in a block or has left the mempool; a transaction
+    admitted between the quote and the submission; and, only if the fee rule
+    changes, a block between the quote and the submission that raises the
+    minimum fee (`fee_too_low`): run the export again. Under the current fee
+    rule an export's minimum fee does not depend on the ledger (its
+    state-expansion part is zero), so that last case cannot happen for an
+    export now.
     `dry_run=True` stops after the checks: it returns the quote and the
     unsigned operation with no signed transaction, no tx id and an empty
     `submit_result`, and never reads the key or calls the submit method."""
