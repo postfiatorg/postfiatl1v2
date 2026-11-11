@@ -95,6 +95,7 @@ jobs:
           python -m pytest python/tests
           python scripts/test-a666-remote-sync-round.py
           python scripts/test-a666-ce22-remote-finality-op.py
+          (cd tools/nav-proof-watch && python -m unittest test_nav_proof_watch)
 
   wallet-and-proxy:
     runs-on: ubuntu-latest

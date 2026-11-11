@@ -143,6 +143,7 @@ Then open `http://127.0.0.1:8088/`. The site is configured in
 | [crates/](crates/) | Rust workspace: types, crypto provider, execution, ordering, consensus and Cobalt, storage, network, privacy/Orchard, node, RPC SDK, bridge and proof crates |
 | [python/](python/) | Python RPC client and wallet helpers (`postfiat_rpc`), operational safety tools (`postfiat_ops`), tests |
 | [scripts/](scripts/) | Build checks, local node and devnet, release, evidence and docs scripts |
+| [tools/](tools/) | Standalone tools and kits: the open NAV reserve-proof kit, provers, signer and validator-binding helpers, and the read-only NAV proof watchdog ([tools/nav-proof-watch](tools/nav-proof-watch/README.md)) |
 | [docs/](docs/) | Documentation source for the MkDocs site |
 | [wallet-web/](wallet-web/), [wallet-extension/](wallet-extension/), [wallet-proxy/](wallet-proxy/) | Browser wallet, Chrome extension wallet, wallet RPC proxy |
 | [programs/](programs/) | SP1 guest programs for bridge ingress, egress and receipt proofs |

@@ -1,0 +1,43 @@
+# Template, not installed by the repository. Read-only observer and evaluator.
+# Put NAV_PROOF_WATCH_URL=<wallet API routes endpoint> in
+# /etc/nav-proof-watch/env and the completed terms in
+# /etc/nav-proof-watch/terms.json before enabling the timer.
+# A failed observe (exit 4) does not stop the evaluation: a log that stops
+# growing raises observation_log_stale (exit 2), which trips OnFailure.
+# Exit 5 (window not yet covered) is expected for the first window.
+[Unit]
+Description=NAV proof cadence and freshness observation (read-only)
+OnFailure=nav-proof-watch-alarm.service
+
+[Service]
+Type=oneshot
+User=nav-proof-watch
+Group=nav-proof-watch
+EnvironmentFile=/etc/nav-proof-watch/env
+ExecStart=-/usr/bin/python3 /usr/local/lib/nav-proof-watch/nav_proof_watch.py observe --url ${NAV_PROOF_WATCH_URL} --state-dir /var/lib/nav-proof-watch
+ExecStart=/usr/bin/python3 /usr/local/lib/nav-proof-watch/nav_proof_watch.py evaluate --state-dir /var/lib/nav-proof-watch --terms /etc/nav-proof-watch/terms.json
+SuccessExitStatus=5
+TimeoutStartSec=120
+StateDirectory=nav-proof-watch
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=

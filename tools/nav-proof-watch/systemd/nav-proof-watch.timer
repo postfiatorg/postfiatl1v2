@@ -1,0 +1,15 @@
+# Template, not installed by the repository.
+# Cadence: every 5 minutes (matches the wallet indexer's own 5-minute sample
+# bound, so each observation sees a distinct live sample). Change only with
+# sample_interval_seconds in the terms file; keep the two equal.
+[Unit]
+Description=Run nav-proof-watch observation every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Unit=nav-proof-watch.service
+
+[Install]
+WantedBy=timers.target
