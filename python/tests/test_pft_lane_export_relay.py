@@ -150,29 +150,27 @@ class ReleaseRefusalTests(unittest.TestCase):
 
 class SafetyTests(unittest.TestCase):
     def test_placeholder_proof_needs_the_mock_sp1_code_hash_and_a_loopback_anvil(self):
-        proof = {"mock_verifier_only": True}
-        mock = "0x" + "aa" * 32
+        mock = relay.MOCK_SP1_VERIFIER_RUNTIME_CODE_HASH
 
         def refusal(**kwargs):
-            values = dict(loopback=True, anvil=True, sp1_code_hash=mock, mock_code_hash=mock,
-                          lock_verifier=VERIFIER, acknowledged=None)
+            values = dict(placeholder=True, loopback=True, anvil=True, sp1_code_hash=mock)
             values.update(kwargs)
-            return relay.mock_proof_refusal(proof, **values)
+            return relay.mock_proof_refusal(**values)
 
         self.assertIsNone(refusal())
         self.assertIsNotNone(refusal(loopback=False))
         self.assertIsNotNone(refusal(anvil=False))
         self.assertIsNotNone(refusal(sp1_code_hash="0x" + "bb" * 32))
-        self.assertIsNotNone(refusal(mock_code_hash=None))
-        # The override names the lock's verifier and still needs the mock's code.
-        self.assertIsNone(refusal(loopback=False, anvil=False, acknowledged=VERIFIER))
-        self.assertIsNotNone(refusal(loopback=False, anvil=False, acknowledged="0x" + "00" * 20))
-        self.assertIsNotNone(refusal(loopback=False, anvil=False, acknowledged=VERIFIER,
-                                     sp1_code_hash="0x" + "bb" * 32))
+        # No override: off a loopback Anvil a placeholder is refused even to the mock's code.
+        self.assertIsNotNone(refusal(loopback=False, anvil=False))
+        with self.assertRaises(SystemExit):
+            relay.parser().parse_args(["release", "--rpc", "x", "--lock", LOCK, "--input", "i", "--proof", "p",
+                                       "--i-know-this-is-a-mock-verifier", VERIFIER])
+        # The placeholder's bytes are a placeholder even without the flag in proof.json.
+        self.assertTrue(relay.is_placeholder(relay.PLACEHOLDER_PROOF, False))
+        self.assertFalse(relay.is_placeholder(b"\x01" * 260, False))
         # A real proof needs none of it.
-        self.assertIsNone(relay.mock_proof_refusal({"mock_verifier_only": False}, loopback=False, anvil=False,
-                                                   sp1_code_hash=None, mock_code_hash=None,
-                                                   lock_verifier=VERIFIER, acknowledged=None))
+        self.assertIsNone(refusal(placeholder=False, loopback=False, anvil=False, sp1_code_hash=None))
 
     def test_the_chain_id_constant_is_gone(self):
         self.assertFalse(hasattr(relay, "LOCAL_ANVIL_CHAIN_IDS"))
@@ -396,3 +394,113 @@ class KeystoreRedactionTests(unittest.TestCase):
             relay.subprocess.run = original
         for text in ("pft-relayer-1", "/secret/pw"):
             self.assertNotIn(text, str(caught.exception))
+
+
+def encode_public_values(schema, fields, tags, values, *, receipt_code=b"accepted", trailing=b""):
+    """The verifier's canonical encoding, for the tests: named fields from `values`, zeros elsewhere."""
+    lengths = {"u32": 4, "u64": 8, "address": 20}
+    out = relay.CANONICAL_MAGIC + len(schema).to_bytes(4, "big") + schema
+    for tag in range(1, tags + 1):
+        if tag == 1:
+            body = schema
+        elif tag in fields:
+            name, kind = fields[tag]
+            value = values.get(name, receipt_code if name == "receipt_code" else None)
+            if kind in ("u32", "u64"):
+                body = int(value).to_bytes(lengths[kind], "big")
+            elif kind == "text":
+                body = value.encode()
+            elif kind == "raw":
+                body = value
+            else:
+                body = bytes.fromhex(str(value).removeprefix("0x"))
+        else:
+            body = b"\0" * 8
+        out += tag.to_bytes(2, "big") + len(body).to_bytes(4, "big") + body
+    return out + trailing
+
+
+class DecodedValuesTests(unittest.TestCase):
+    """B2, B6: the checks run on the hex that will be sent."""
+
+    def egress(self, **kwargs):
+        return encode_public_values(relay.EGRESS_SCHEMA, relay.EGRESS_FIELDS, relay.EGRESS_TAGS,
+                                    dict(VALUES, resulting_checkpoint_block_id=h48("45")), **kwargs)
+
+    def decode(self, data):
+        return relay.decode_public_values(data, schema=relay.EGRESS_SCHEMA, fields=relay.EGRESS_FIELDS,
+                                          tags=relay.EGRESS_TAGS)
+
+    def test_the_sent_hex_decodes_to_the_document(self):
+        decoded = self.decode(self.egress())
+        self.assertEqual(decoded["amount_atoms"], 400_000)
+        self.assertEqual(decoded["recipient"], RECIPIENT)
+        self.assertEqual(relay.decoded_value_refusals(decoded, VALUES), [])
+
+    def test_a_hex_that_differs_from_the_document_is_refused(self):
+        other = encode_public_values(relay.EGRESS_SCHEMA, relay.EGRESS_FIELDS, relay.EGRESS_TAGS,
+                                     dict(VALUES, amount_atoms=900_000, resulting_checkpoint_block_id=h48("45")))
+        codes = [r["code"] for r in relay.decoded_value_refusals(self.decode(other), VALUES)]
+        self.assertEqual(codes, ["public_values_differ"])
+
+    def test_non_canonical_values_and_the_receipt_code_are_refused(self):
+        with self.assertRaises(relay.RelayRefusal):
+            self.decode(self.egress(trailing=b"\0"))
+        with self.assertRaises(relay.RelayRefusal):
+            self.decode(b"PFTL-PFUSDC-TIER5" + self.egress()[17:])
+        decoded = self.decode(self.egress(receipt_code=b"rejected"))
+        self.assertIn("receipt_code", [r["code"] for r in relay.decoded_value_refusals(decoded, VALUES)])
+
+    def test_advance_checkpoint_refuses_an_older_prior_or_a_lower_height(self):
+        case = CheckpointRefusalTests()
+        latest = relay.commitment(CheckpointRefusalTests.PRIOR)
+        self.assertEqual(case.codes(reads=case.reads(**{"verifier.latestCheckpointCommitment": latest})), [])
+        self.assertIn("prior_not_latest", case.codes(reads=case.reads(**{
+            "verifier.latestCheckpointCommitment": "0x" + "ee" * 32})))
+        self.assertIn("height_not_higher", case.codes(values=case.values(finalized_block_height=4)))
+
+    def test_advance_checkpoint_always_requires_the_move(self):
+        source = (ROOT / "scripts/pft-lane-export-relay.py").read_text()
+        self.assertNotIn("if values['finalized_block_height'] > reads['verifier.latestFinalizedHeight']:", source)
+
+
+class SendSafetyTests(unittest.TestCase):
+    """B1, B3, B4, B5."""
+
+    def test_the_pinned_mock_hash_is_the_artifact_under_foundry_1_7_1(self):
+        import shutil
+        import tempfile
+        forge = shutil.which("forge")
+        if not forge or "1.7.1" not in subprocess.run([forge, "--version"], capture_output=True, text=True).stdout:
+            self.skipTest("needs Foundry 1.7.1 on PATH")
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run([forge, "build", "test/PFUSDCTier4.t.sol"], cwd=ROOT / "crates/ethereum-contracts",
+                           env=dict(__import__("os").environ, FOUNDRY_OUT=tmp + "/out",
+                                    FOUNDRY_CACHE_PATH=tmp + "/cache"), capture_output=True, check=True)
+            artifact = __import__("json").loads(Path(tmp, "out/PFUSDCTier4.t.sol/Tier4MockSP1Verifier.json")
+                                                .read_text())
+        self.assertEqual(relay.artifact_code_hash(artifact), relay.MOCK_SP1_VERIFIER_RUNTIME_CODE_HASH)
+
+    def test_force_send_only_on_a_loopback_anvil(self):
+        source = (ROOT / "scripts/pft-lane-export-relay.py").read_text()
+        self.assertIn("require(local or not args.force_send", source)
+
+    def test_a_failed_send_is_reported_by_what_happened(self):
+        self.assertEqual(relay.classify_send_failure("Error: failed to decrypt keystore: Mac Mismatch")[0], False)
+        self.assertIn("funds", relay.classify_send_failure("insufficient funds for gas * price + value")[1])
+        self.assertIsNone(relay.classify_send_failure("Error: request timed out")[0])
+        self.assertIn("pending", relay.classify_send_failure("Error: request timed out")[1])
+        self.assertEqual(relay.classify_send_failure("Error: server returned an error response: execution reverted")[0],
+                         False)
+        mined = relay.classify_send_failure('transaction reverted: {"status":"0x0","transactionHash":"0xab"}')
+        self.assertEqual(mined[0], True)
+
+    def test_the_prover_command_is_never_echoed(self):
+        secret = "PROVER_TOKEN=s3cr3t-value"
+        with self.assertRaises(relay.RelayRefusal) as caught:
+            relay.run_prover(f"{secret} sh -c 'echo {secret} >&2; exit 3'", {"PATH": "/usr/bin:/bin"})
+        self.assertNotIn("s3cr3t-value", str(caught.exception))
+        self.assertIn("exited 3", str(caught.exception))
+        with self.assertRaises(relay.RelayRefusal) as caught:
+            relay.run_prover(f"{secret} sleep 5", {"PATH": "/usr/bin:/bin"}, timeout=0.2)
+        self.assertNotIn("s3cr3t-value", str(caught.exception))
