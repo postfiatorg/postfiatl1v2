@@ -4,9 +4,9 @@
 
 - **The placeholder check:** the relay sent the placeholder only because the verifier's `sp1Verifier` on the loopback Anvil has the pinned `Tier4MockSP1Verifier` runtime code hash `0x6490b3b3…03f8`. The relay has no off-loopback override.
 - **The forced second release:** it is refused in the node's gas estimate, so nothing is broadcast. The 2026-11-10 record said "reverted on chain"; that was the same estimate failure.
-- **The ELF:** the committed release build `e92f2004…48ab`, not a local build. `summary.json` still carries the script's fixed `elf_note` ("a local native SP1 6.3.1 build"); for this run that note is wrong.
+- **The ELF:** the committed release build `e92f2004…48ab`, not a local build. The run wrote the script's old fixed `elf_note` ("a local native SP1 6.3.1 build"), which was wrong for it. The script now derives the note from the ELF's sha256 and `programs/pft-lane-export/program-info.json`; that one field was regenerated from the recorded `elf_sha256` in `summary.json` and `manifest.json` (with the manifest's `summary.json` hash), without a rerun. No other value changed.
 - **The numbers:** the guest instruction counts (76,756,781 and 48,954,159) and the contract addresses. The amounts, blocks and conservation figures are the same.
-- **Foundry:** 1.8.1, as on 2026-11-10. Under 1.7.1, `forge build` of `crates/pft-token-contracts` fails its lint: `test/ExternalLaneWitnessRelease.t.sol` is missing from the `[lint] ignore` list. That is not fixed here.
+- **Foundry:** 1.8.1, as on 2026-11-10. Under 1.7.1, `forge build` of `crates/pft-token-contracts` failed its lint at the time because `test/ExternalLaneWitnessRelease.t.sol` was missing from the `[lint] ignore` list; it has since been added, and the build step passes under 1.7.1.
 
 **What was real:** the contracts `PFTLockV1` and `PFTLFinalityVerifierV1`, deployed from source on chain. The PFTL chain was generated with six validators, and all six signed the consensus v2 finality of every block. The Lock receipt path ran as observe, five checkpoint signatures, assemble, prove and release. The exports, the lane export root, the witness check `verify_external_lane_export_witness_v1` and the guest `programs/pft-lane-export` ran in SP1 execute mode.
 

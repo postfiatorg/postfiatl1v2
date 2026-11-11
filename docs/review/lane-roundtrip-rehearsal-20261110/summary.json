@@ -1022,7 +1022,7 @@
     "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
     "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
     "elf_sha256": "e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab",
-    "elf_note": "a local native SP1 6.3.1 build of programs/pft-lane-export for execute mode only; not the Docker-reproducible release build, and no key is committed",
+    "elf_note": "the committed reproducible release ELF sha256:e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab (programs/pft-lane-export/program-info.json), used in execute mode only; no key is committed",
     "prover_tool_sha256": "47cd6925147c9180802da345791e2afc836a17e6e8978e66e01e28d21f9a2fb3",
     "postfiat_node_sha256": "ee26c4a1dbbeb0d13da1c39dc465209bab453b7581799720b284d14a65907207"
   },

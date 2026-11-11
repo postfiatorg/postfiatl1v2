@@ -75,6 +75,19 @@ SOURCE_FILES = (
 PUBLISHED = ('summary.json', 'manifest.json')
 
 
+PROGRAM_INFO = ROOT / 'programs/pft-lane-export/program-info.json'
+
+
+def elf_note(elf_sha256, program_info=PROGRAM_INFO):
+    """What ELF the run used: the committed release build when the sha256 matches, a local build otherwise."""
+    committed = json.loads(Path(program_info).read_text())['elf_sha256']
+    if elf_sha256 == committed:
+        return (f'the committed reproducible release ELF sha256:{committed} '
+                f'(programs/pft-lane-export/program-info.json), used in execute mode only; no key is committed')
+    return (f'a local build sha256:{elf_sha256}, not the committed reproducible release ELF sha256:{committed} '
+            f'(programs/pft-lane-export/program-info.json), used in execute mode only; no key is committed')
+
+
 def fresh_base_address(label):
     """A Base address nobody holds a key for, derived from a label."""
     return '0x' + keccak256(b'postfiat.lane-roundtrip.base-recipient\x00' + label.encode())[-20:].hex()
@@ -249,8 +262,7 @@ def main(argv=None):
         roles[str(args.elf)] = roles[str(args.elf.resolve())]
         roles[str(args.prover_tool.resolve())] = f'<prover-tool sha256:{ORDER.sha256_file(args.prover_tool)}>'
         roles[sys.executable] = '<python>'
-        toolchain['elf_note'] = ('a local native SP1 6.3.1 build of programs/pft-lane-export for execute mode only; '
-                                 'not the Docker-reproducible release build, and no key is committed')
+        toolchain['elf_note'] = elf_note(toolchain['elf_sha256'])
         toolchain['prover_tool_sha256'] = ORDER.sha256_file(args.prover_tool)
         forge_env = {}
         for crate in (ORDER.TOKEN_CRATE, ORDER.VERIFIER_CRATE):
