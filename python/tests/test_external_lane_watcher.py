@@ -1411,7 +1411,8 @@ class RecentPrunedPaidTests(unittest.TestCase):
             self.assertEqual(check(ExportPftl([a, b, c], released=1_500_000), [first], 1_000)[0], 0)
             self.assertEqual(check(pruned, [first], 1_100)[0], 0)
             kept = json.loads(state_file.read_text())["exports"]
-            self.assertEqual((kept["paid"], kept["pruned_paid_count"], kept["pruned_paid_recent"]),
+            self.assertEqual((kept["paid"], kept["pruned_paid_count"],
+                              [entry["evm_digest"] for entry in kept["pruned_paid_recent"]]),
                              ([], 1, [watcher.export_evm_digest(a["packet_digest"])]))
             for extra in ((), ("--accept-export-baseline",)):
                 with self.subTest(extra=extra):
@@ -1428,7 +1429,8 @@ class RecentPrunedPaidTests(unittest.TestCase):
             _, _, _, kept = run_export_view(ExportPftl(entries, released=400_000), ExportBase(logs, locked=400_000))
             pftl = ExportPftl([entries[3]], pruned=3, pruned_atoms=300_000, released=400_000)
             _, codes, _, kept = run_export_view(pftl, ExportBase(logs, locked=400_000, finalized=1_100), state=kept)
-            self.assertEqual((codes, kept["pruned_paid_count"], kept["pruned_paid_recent"]), ([], 3, digests[1:3]))
+            self.assertEqual((codes, kept["pruned_paid_count"],
+                              [entry["evm_digest"] for entry in kept["pruned_paid_recent"]]), ([], 3, digests[1:3]))
             again = [released_log(entries[n], block=1_150, transaction="0x" + f"{n:02x}" * 32) for n in (0, 2)]
             # A second payout also exceeds the exports (exported_below_paid); the older one also exceeds
             # the pruned room left (every pruned packet was paid and verified).
@@ -1493,7 +1495,8 @@ class StateSizeTests(unittest.TestCase):
 
 
 class StateLifeTests(unittest.TestCase):
-    """R1: an exports entry of an earlier format is never used."""
+    """R1: an exports entry of an earlier format is never used. R2: a rescan
+    never forgets a payment it knew."""
 
     # Window 100: A nonce 0 at PFTL 400, B nonce 1 at 450, C nonce 2 at 600, D nonce 3 at 701.
     A = export_entry(0, height=400)
@@ -1549,6 +1552,96 @@ class StateLifeTests(unittest.TestCase):
         self.assertEqual((kept["pruned_paid_count"], [entry["export_nonce"] for entry in kept["paid"]]), (0, [2]))
         self.assertEqual(kept["snapshot"], {"height": 700, "export_count": 3, "exported_atoms": 1_500_000,
                                             "pruned_export_count": 2, "pruned_exported_atoms": 1_000_000})
+
+    def r2_lane(self):
+        a, b, c = export_entry(0), export_entry(1, amount=600_000), export_entry(2, amount=500_000)
+        first = released_log(a, block=950, transaction="0x" + "a1" * 32)
+        again = released_log(a, block=1_250, transaction="0x" + "a2" * 32)
+        return a, b, c, first, again
+
+    def test_r2_a_changed_scan_start_keeps_what_it_knew(self):
+        a, b, c, first, again = self.r2_lane()
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+
+            def check(pftl, logs, finalized, *extra):
+                return run(pftl, ExportBase(logs, locked=1_500_000, finalized=finalized), "--exports",
+                           "--state-file", str(state_file), *extra)
+
+            pruned = ExportPftl([c], pruned=2, pruned_atoms=1_000_000, released=1_500_000)
+            self.assertEqual(check(ExportPftl([a, b, c], released=1_500_000), [first], 1_000,
+                                   "--lock-from-block", "0")[0], 0)
+            self.assertEqual(check(pruned, [first], 1_100, "--lock-from-block", "0")[0], 0)
+            # The rescan from block 1 sees A's original payout: verified earlier, not unknown.
+            code, lines, _ = check(pruned, [first], 1_200, "--lock-from-block", "1")
+            self.assertEqual((code, alarm_codes(lines)), (0, []))
+            self.assertEqual(lines[-1]["exports"]["rescan"], "lock_from_block_changed")
+            self.assertEqual([line["status"] for line in lines if line["kind"] == "payout"], ["verified_earlier"])
+            kept = json.loads(state_file.read_text())["exports"]
+            self.assertEqual((kept["pruned_paid_count"], kept["pruned_paid_atoms"]), (1, 400_000))
+            self.assertEqual([(entry["evm_digest"], entry["block"]) for entry in kept["pruned_paid_recent"]],
+                             [(watcher.export_evm_digest(a["packet_digest"]), 950)])
+            # C pruned too (new room): A's second payout is a duplicate, under the baseline step as well.
+            later = ExportPftl([export_entry(3, amount=100_000)], pruned=3, pruned_atoms=1_500_000,
+                               released=1_500_000)
+            for extra in ((), ("--accept-export-baseline",)):
+                with self.subTest(extra=extra):
+                    code, lines, _ = check(later, [first, again], 1_300, "--lock-from-block", "2", *extra)
+                    self.assertEqual(code, 2)
+                    self.assertIn("payout_duplicate", alarm_codes(lines))
+                    self.assertEqual([line for line in lines if line["kind"] == "baseline_payout"], [])
+
+    def test_r2_from_height_keeps_what_it_knew(self):
+        a, b, c, first, again = self.r2_lane()
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+
+            def check(pftl, logs, finalized, *extra):
+                return run_exports(pftl, ExportBase(logs, locked=1_500_000, finalized=finalized),
+                                   "--state-file", str(state_file), *extra)
+
+            pruned = ExportPftl([c], pruned=2, pruned_atoms=1_000_000, released=1_500_000)
+            self.assertEqual(check(ExportPftl([a, b, c], released=1_500_000), [first], 1_000)[0], 0)
+            self.assertEqual(check(pruned, [first], 1_100)[0], 0)
+            for extra in ((), ("--accept-export-baseline",)):
+                with self.subTest(extra=extra):
+                    code, lines, _ = check(pruned, [first, again], 1_300, "--from-height", "0", *extra)
+                    self.assertEqual((code, alarm_codes(lines)), (2, ["payout_duplicate"]))
+                    self.assertEqual(lines[-1]["exports"]["rescan"], "from_height")
+
+    def test_discarding_the_history_is_explicit_and_counted(self):
+        a, b, c, first, again = self.r2_lane()
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+
+            def check(pftl, logs, finalized, *extra):
+                return run_exports(pftl, ExportBase(logs, locked=1_500_000, finalized=finalized),
+                                   "--state-file", str(state_file), *extra)
+
+            pruned = ExportPftl([c], pruned=2, pruned_atoms=1_000_000, released=1_500_000)
+            self.assertEqual(check(ExportPftl([a, b, c], released=1_500_000), [first], 1_000)[0], 0)
+            self.assertEqual(check(pruned, [first], 1_100)[0], 0)
+            code, lines, _ = check(pruned, [first], 1_200, "--discard-export-history", "--accept-export-baseline")
+            self.assertEqual(code, watcher.BASELINE_EXIT)
+            (discarded,) = [line for line in lines if line["kind"] == "history_discarded"]
+            self.assertEqual((discarded["identities"], discarded["verified_payouts"], discarded["verified_atoms"]),
+                             (1, 1, 400_000))
+            self.assertEqual(lines[-1]["exports"]["rescan"], "export_history_discarded")
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr), self.assertRaises(SystemExit):
+                watcher.main(["--pftl-rpc", "127.0.0.1:27650", "--lane-id", LANE, "--base-rpc",
+                              "http://127.0.0.1:8545", "--exports", "--interval", "5", "--discard-export-history"],
+                             pftl=pruned, base=ExportBase([]))
+            self.assertIn("--discard-export-history", stderr.getvalue())
+
+    def test_the_recent_list_share_of_the_size_limit(self):
+        entry = {"export_nonce": U64_MAX, "evm_digest": "0x" + "ab" * 32, "block": U64_MAX,
+                 "transaction": "0x" + "cd" * 32, "log_index": U64_MAX, "amount": U64_MAX}
+        size = len(json.dumps([entry] * watcher.RECENT_PRUNED_PAID, sort_keys=True))
+        self.assertEqual((size, 100 * size // watcher.MAX_STATE_BYTES), (1_257_472, 7))
+
+
+U64_MAX = (1 << 64) - 1
 
 
 class IntervalMalformedTests(unittest.TestCase):

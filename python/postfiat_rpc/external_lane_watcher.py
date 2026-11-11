@@ -42,8 +42,10 @@ Each part advances only after a clean run of its view, and the file is
 written before the run's summary is printed. Without it (lost or deleted),
 the next run starts from height 0 and Base block ``--lock-from-block``; a
 state file of an earlier schema is refused (delete it, or pass
-``--from-height``, which does not read the file and replaces it after a clean
-run). Run the watcher at least once per release window: release records and
+``--from-height``, which ignores its release part and replaces it after a
+clean run, but carries the export view's known payouts). An exports entry of
+an earlier format is never used (see ``EXPORT_STATE_FORMAT``), and only
+``--discard-export-history`` forgets the payouts a current one knows. Run the watcher at least once per release window: release records and
 export packets are pruned after their retention, and the Base node must
 serve each release's source block (or use an archive node).
 """
@@ -586,18 +588,21 @@ PAID_KEYS = ("export_nonce", "evm_digest", "block", "transaction", "log_index", 
 BASELINE_KEYS = ("unverified_payouts", "unverified_atoms", "pruned_export_count", "pruned_exported_atoms")
 # The export snapshot a clean run used: its PFTL height and counters, each a
 # high-water mark (a run on a lower snapshot is refused).
-# The EVM digests of the most recently pruned paid exports, oldest first: a
-# payout of one is `payout_duplicate` in every run. 4,096 digests are about
-# 290 KB, under 2% of MAX_STATE_BYTES (several release windows of pruning on
-# a busy lane).
-RECENT_PRUNED_PAID = 4096
 SNAPSHOT_KEYS = ("height", "export_count", "exported_atoms", "pruned_export_count", "pruned_exported_atoms")
+# The most recently pruned paid exports, oldest first, each with the payout
+# that was verified: a different payout of one is `payout_duplicate` in every
+# run, and a rescan recognises the original. 4,096 entries at u64-wide numbers
+# are 1,257,472 bytes, 7.5% of MAX_STATE_BYTES (several release windows of
+# pruning on a busy lane).
+RECENT_PRUNED_PAID = 4096
+RECENT_KEYS = ("export_nonce", "evm_digest", "block", "transaction", "log_index", "amount")
 # The exports entry's format. An entry without this number is never used and
 # never upgraded in place: the export view has never been released, so the
 # only earlier entries are this branch's intermediate ones, and their history
 # (which exports were folded, at which snapshot) cannot be recovered from
 # them. The view then runs as a first run from --lock-from-block.
 EXPORT_STATE_FORMAT = 1
+RESCAN_REASONS = ("export_state_format_old", "lock_from_block_changed", "from_height", "export_history_discarded")
 
 
 def _export_state(state: Any) -> tuple[dict[str, Any] | None, str | None]:
@@ -618,23 +623,25 @@ def _export_state(state: Any) -> tuple[dict[str, Any] | None, str | None]:
     def hash32(value: Any) -> bool:
         return isinstance(value, str) and HASH32.match(value) is not None
 
-    keys = ("lock_from_block", "scanned_through_block", "payout_count", "payout_sum")
-    if not isinstance(state, dict) or not all(count(state.get(key)) for key in keys):
+    def event(entry: Any, keys: tuple[str, ...]) -> bool:
+        return (isinstance(entry, dict) and set(entry) == set(keys)
+                and all(count(entry[key]) for key in ("export_nonce", "block", "log_index", "amount"))
+                and all(hash32(entry[key]) for key in keys if key in ("evm_digest", "transaction",
+                                                                     "withdrawal_id_commitment")))
+
+    keys = ("lock_from_block", "scanned_through_block", "payout_count", "payout_sum", "pruned_paid_count",
+            "pruned_paid_atoms")
+    if not all(count(state.get(key)) for key in keys):
         raise WatcherError("state_file_invalid", "the state file's exports entry is malformed")
     paid = state.get("paid")
-    if (not isinstance(paid, list) or not count(state.get("pruned_paid_count"))
-            or not count(state.get("pruned_paid_atoms"))
-            or not all(isinstance(entry, dict) and set(entry) == set(PAID_KEYS)
-                       and all(count(entry[key]) for key in ("export_nonce", "block", "log_index", "amount"))
-                       and all(hash32(entry[key]) for key in ("evm_digest", "transaction",
-                                                               "withdrawal_id_commitment"))
-                       for entry in paid)
+    if (not isinstance(paid, list) or not all(event(entry, PAID_KEYS) for entry in paid)
             or len({entry["export_nonce"] for entry in paid}) != len(paid)
             or len({entry["evm_digest"] for entry in paid}) != len(paid)):
         raise WatcherError("state_file_invalid", "the state file's paid record is malformed")
     recent = state.get("pruned_paid_recent")
-    if not isinstance(recent, list) or not all(hash32(digest) for digest in recent) or len(set(recent)) != len(recent):
-        raise WatcherError("state_file_invalid", "the state file's recently pruned paid digests are malformed")
+    if (not isinstance(recent, list) or not all(event(entry, RECENT_KEYS) for entry in recent)
+            or len({entry["evm_digest"] for entry in [*recent, *paid]}) != len(recent) + len(paid)):
+        raise WatcherError("state_file_invalid", "the state file's recently pruned paid exports are malformed")
     marks = state.get("snapshot")
     if (not isinstance(marks, dict) or set(marks) != set(SNAPSHOT_KEYS)
             or not all(count(value) for value in marks.values())
@@ -650,10 +657,15 @@ def _export_state(state: Any) -> tuple[dict[str, Any] | None, str | None]:
     return state, None
 
 
+def _same_event(known: dict[str, Any], event: dict[str, Any]) -> bool:
+    return all(known[key] == event[key] for key in ("block", "transaction", "log_index", "amount"))
+
+
 def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int, current_height: int,
                 released_atoms: int, from_block: int, state: dict[str, Any] | None = None,
                 accept_baseline: bool = False, unpaid_warning_blocks: int | None, alarm: Callable[..., None],
-                lines: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
+                lines: list[dict[str, Any]], rescan_all: bool = False,
+                discard_history: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
     """The outbound direction: every finalized `Released` payout must stand on a
     PFTL export packet (same digest, recipient, amount, withdrawal-id and
     burn commitments); every final export is `paid` or `unpaid`; the totals
@@ -705,6 +717,14 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     # An entry of an earlier format is never used (see EXPORT_STATE_FORMAT):
     # nothing is carried, nothing trusted, and the scan starts at from_block.
     kept, rescan = _export_state(state)
+    if discard_history:
+        paid_entries = (kept or {}).get("paid", [])
+        lines.append({"schema": LINE_SCHEMA, "kind": "history_discarded", "lane_id": lane_id,
+                      "identities": len(paid_entries) + len((kept or {}).get("pruned_paid_recent", [])),
+                      "verified_payouts": len(paid_entries) + (kept or {}).get("pruned_paid_count", 0),
+                      "verified_atoms": sum(entry["amount"] for entry in paid_entries)
+                      + (kept or {}).get("pruned_paid_atoms", 0)})
+        kept, rescan = None, "export_history_discarded"
     # A snapshot older than one a clean run acted on (an honest node behind,
     # an RPC failover) could resurrect a folded export: nothing is judged on it.
     marks = (kept or {}).get("snapshot")
@@ -713,8 +733,15 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     if behind:
         raise WatcherTransientError("export_snapshot_behind_state",
                                     f"the PFTL export snapshot is older than the state's: {', '.join(behind)}")
-    if kept is not None and kept["lock_from_block"] != from_block:
-        rescan, kept = "lock_from_block_changed", None
+    # A rescan rebuilds the scan and the accounting from from_block, but keeps
+    # every payout identity it knew, for comparison only: the recorded event
+    # is the original, any other payout of a known digest a duplicate.
+    known: dict[str, dict[str, Any]] = {}
+    if kept is not None and (rescan_all or kept["lock_from_block"] != from_block):
+        rescan = "from_height" if rescan_all else "lock_from_block_changed"
+        for entry in [*kept["pruned_paid_recent"], *kept["paid"]]:
+            known[entry["evm_digest"]] = {key: entry[key] for key in RECENT_KEYS}
+        kept = None
     if kept is not None:
         if kept["scanned_through_block"] > finalized:
             raise WatcherTransientError("base_finalized_behind_state",
@@ -723,7 +750,7 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
         start, prior_count, prior_sum = kept["scanned_through_block"] + 1, kept["payout_count"], kept["payout_sum"]
         record = {entry["evm_digest"]: dict(entry) for entry in kept["paid"]}
         pruned_paid_count, pruned_paid_atoms = kept["pruned_paid_count"], kept["pruned_paid_atoms"]
-        recent = list(kept["pruned_paid_recent"])
+        recent = [dict(entry) for entry in kept["pruned_paid_recent"]]
         baseline = kept.get("baseline")
     else:
         start, prior_count, prior_sum, record, recent = from_block, 0, 0, {}, []
@@ -742,19 +769,38 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
             del record[digest]
             pruned_paid_count += 1
             pruned_paid_atoms += entry["amount"]
-            recent.append(digest)
-    recent = recent[-RECENT_PRUNED_PAID:] if RECENT_PRUNED_PAID else []
-    recently_pruned = set(recent)
+            recent.append({key: entry[key] for key in RECENT_KEYS})
+    recently_pruned = {entry["evm_digest"]: entry for entry in recent}
     prior_accepted = (baseline["unverified_payouts"], baseline["unverified_atoms"]) if baseline else (0, 0)
-    free_count = pruned - pruned_paid_count - prior_accepted[0]
-    free_atoms = pruned_atoms - pruned_paid_atoms - prior_accepted[1]
-    if free_count < 0 or free_atoms < 0:
-        # More verified-then-pruned or accepted than the node reports pruned.
-        raise WatcherTransientError("export_snapshot_behind_state",
-                                    f"the lane reports {pruned} pruned exports ({pruned_atoms} atoms), fewer than "
-                                    f"the state's {pruned_paid_count + prior_accepted[0]} "
-                                    f"({pruned_paid_atoms + prior_accepted[1]} atoms) paid or accepted")
+
+    def room() -> tuple[int, int]:
+        free = (pruned - pruned_paid_count - prior_accepted[0], pruned_atoms - pruned_paid_atoms - prior_accepted[1])
+        if free[0] < 0 or free[1] < 0:
+            # More verified-then-pruned or accepted than the node reports pruned.
+            raise WatcherTransientError("export_snapshot_behind_state",
+                                        f"the lane reports {pruned} pruned exports ({pruned_atoms} atoms), fewer "
+                                        f"than the state's {pruned_paid_count + prior_accepted[0]} "
+                                        f"({pruned_paid_atoms + prior_accepted[1]} atoms) paid or accepted")
+        return free
+
+    room()  # before any payout is read
     events = _released_events(base, lock, start, finalized)
+    # On a rescan, the originals of known payouts whose packets PFTL has
+    # pruned since: accounted as verified before the room is computed, never
+    # judged again against a packet that is gone.
+    originals: set[tuple[int, str, int]] = set()
+    for event in events:
+        first = known.get(event["packet_digest"])
+        if first is None or not _same_event(first, event) or event["packet_digest"] in by_digest:
+            continue
+        if first["export_nonce"] >= pruned:
+            raise WatcherTransientError("export_snapshot_behind_state",
+                                        f"export {first['export_nonce']}, paid and verified earlier, is neither "
+                                        f"stored nor pruned in this snapshot (pruned count {pruned})")
+        originals.add((event["block"], event["transaction"], event["log_index"]))
+        pruned_paid_count += 1
+        pruned_paid_atoms += event["amount"]
+    free_count, free_atoms = room()
     seen: set[str] = set()
     paid_total = unknown_count = unknown_sum = accepted_count = accepted_sum = 0
     # Every payout counts in the totals, matched or not: a payout without an
@@ -763,11 +809,18 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     for event in events:
         result = {"schema": LINE_SCHEMA, "kind": "payout", "lane_id": lane_id, **event}
         digest = event["packet_digest"]
-        if digest in seen or digest in record or digest in recently_pruned:
+        if (event["block"], event["transaction"], event["log_index"]) in originals and digest not in seen:
+            seen.add(digest)
+            result.update(status="verified_earlier", export_nonce=known[digest]["export_nonce"])
+            lines.append(result)
+            paid_total += event["amount"]
+            continue
+        if (digest in seen or digest in record or digest in recently_pruned
+                or (digest in known and not _same_event(known[digest], event))):
             # Also under --accept-export-baseline: the alarm keeps any baseline from being saved.
             result["status"] = "alarm"
             lines.append(result)
-            first = record.get(digest)
+            first = record.get(digest) or known.get(digest) or recently_pruned.get(digest)
             alarm("payout_duplicate", **event,
                   **({"paid_block": first["block"], "paid_transaction": first["transaction"],
                       "paid_log_index": first["log_index"]} if first else {}),
@@ -876,6 +929,10 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
         alarm("exported_below_paid", **totals)
     if released_atoms > total_locked:
         alarm("released_above_locked", **totals)
+    if known:
+        # Every identity carried and not in the rebuilt record stays known.
+        recent = [entry for entry in known.values() if entry["evm_digest"] not in record]
+    recent = recent[-RECENT_PRUNED_PAID:] if RECENT_PRUNED_PAID else []
     new_state = {"format": EXPORT_STATE_FORMAT, "lock_from_block": from_block, "scanned_through_block": finalized,
                  "payout_count": prior_count + len(events), "payout_sum": payout_total,
                  "paid": sorted(record.values(), key=lambda entry: entry["export_nonce"]),
@@ -892,7 +949,8 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     summary = {"exports_checked": len(exports), "payouts_checked": len(events), "unpaid_exports": unpaid,
                "pruned_export_count": pruned, "scanned_from_block": start, "totals": totals,
                "paid_recorded": len(record), "pruned_paid_count": pruned_paid_count,
-               "pruned_paid_atoms": pruned_paid_atoms, "rescan": rescan, "baseline_accepted_now": accepted_count}
+               "pruned_paid_atoms": pruned_paid_atoms, "rescan": rescan, "known_payouts_carried": len(known),
+               "baseline_accepted_now": accepted_count}
     if baseline is not None:
         summary["baseline"] = baseline
     return summary, new_state
@@ -924,6 +982,18 @@ def _load_state(path: Path | None, lane_id: str) -> dict[str, Any] | None:
     ):
         raise WatcherError("state_file_invalid", f"`{path}` is not this lane's watcher state")
     return state
+
+
+def _export_history(path: Path | None, lane_id: str) -> dict[str, Any] | None:
+    """The exports entry of a state file read under --from-height: only a
+    file of the current schema and this lane has one; any other file has
+    nothing to carry."""
+
+    try:
+        state = _load_state(path, lane_id)
+    except WatcherError:
+        return None
+    return (state or {}).get("exports")
 
 
 def _check_state(state: dict[str, Any], snapshot: dict[str, Any], policy: dict[str, Any]) -> None:
@@ -961,7 +1031,8 @@ def _save_state(path: Path, state: dict[str, Any]) -> None:
 def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = None,
                state: dict[str, Any] | None = None, exports: bool = False, lock_from_block: int = 0,
                unpaid_warning_blocks: int | None = None, emit: Callable[[dict[str, Any]], None] | None = None,
-               accept_export_baseline: bool = False,
+               accept_export_baseline: bool = False, export_history: dict[str, Any] | None = None,
+               discard_export_history: bool = False,
                ) -> tuple[list[dict[str, Any]], int, dict[str, Any] | None]:
     """One run: the output lines, the alarm count and the state to keep.
 
@@ -970,7 +1041,9 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
     with `from_height`. With `emit`, the release view's lines are handed to
     it before the export view starts, and only the rest is returned; a
     failure of the export view is an `error` line and `export_error` in the
-    summary, never a lost release alarm.
+    summary, never a lost release alarm. With `from_height`, `state` is not
+    used and `export_history` (the file's exports entry, if any) is the export
+    view's, rescanned with its known payouts carried.
     """
 
     row, snapshot = _lane_page(pftl, lane_id, None)
@@ -1080,14 +1153,16 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
             emit(line)
         emitted = len(lines)
     export_summary = export_state = export_error = None
+    carried = (state or {}).get("exports") if from_height is None else export_history
     if exports:
         assert released_atoms is not None
         try:
             export_summary, export_state = export_view(
                 pftl, base, lane_id, lock=policy["lock"], finalized=finalized, current_height=current_height,
                 released_atoms=released_atoms, from_block=lock_from_block,
-                state=(state or {}).get("exports") if from_height is None else None,
-                accept_baseline=accept_export_baseline, unpaid_warning_blocks=unpaid_warning_blocks, alarm=alarm, lines=lines)
+                state=carried, accept_baseline=accept_export_baseline, unpaid_warning_blocks=unpaid_warning_blocks,
+                alarm=alarm, lines=lines, rescan_all=from_height is not None,
+                discard_history=discard_export_history)
         except WatcherError as error:
             export_error = error
             lines.append({"schema": LINE_SCHEMA, "kind": "error", "code": error.code, "message": str(error)})
@@ -1131,7 +1206,6 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
     }
     if new_state is not None:
         export_clean = export_state is not None and alarms == release_alarms
-        carried = (state or {}).get("exports") if from_height is None else None
         if exports and export_clean:
             new_state["exports"] = export_state
         elif carried is not None:
@@ -1175,6 +1249,10 @@ def build_parser() -> argparse.ArgumentParser:
                              "within the pruned count and atoms not already verified or accepted, list them, keep "
                              f"the scan position and exit {BASELINE_EXIT}; refused (export_baseline_already_taken) "
                              "after an earlier baseline unless the lane has pruned more since")
+    parser.add_argument("--discard-export-history", action="store_true",
+                        help="start the export view as a first run from --lock-from-block, forgetting every "
+                             "verified payout it knew: duplicate protection for those payouts ends here; prints "
+                             "how many identities and atoms it discards; one-shot runs only")
     parser.add_argument("--unpaid-warning-blocks", type=int, metavar="N",
                         help="warn when a final export stays unpaid for more than N PFTL blocks")
     return parser
@@ -1203,6 +1281,8 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
         parser.error("--from-height must not be negative")
     if args.accept_export_baseline and (not args.exports or args.interval is not None):
         parser.error("--accept-export-baseline needs --exports and a one-shot run, not --interval")
+    if args.discard_export_history and (not args.exports or args.interval is not None):
+        parser.error("--discard-export-history needs --exports and a one-shot run, not --interval")
     try:
         if base is None:
             base = pft_token.JsonRpc(args.base_rpc, args.timeout)
@@ -1218,10 +1298,13 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
     while True:
         runs += 1
         try:
-            # --from-height overrides the kept state, so the file is not read:
-            # a clean run replaces it, whatever its schema.
+            # --from-height overrides the kept state: a clean run replaces the
+            # file, whatever its schema; only a current file's export history
+            # is carried, so the rescan forgets no payout it knew.
+            history = None
             if from_height is not None:
                 state = None
+                history = _export_history(state_path, args.lane_id)
             elif state_path is not None:
                 state = _load_state(state_path, args.lane_id)
             else:
@@ -1230,7 +1313,9 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
                                                   exports=args.exports, lock_from_block=args.lock_from_block,
                                                   unpaid_warning_blocks=args.unpaid_warning_blocks,
                                                   emit=_print_line if args.exports else None,
-                                                  accept_export_baseline=args.accept_export_baseline)
+                                                  accept_export_baseline=args.accept_export_baseline,
+                                                  export_history=history,
+                                                  discard_export_history=args.discard_export_history)
             # Progress is saved before the summary is printed, so a clean
             # summary always means the state advanced.
             if new_state is not None and state_path is not None:
