@@ -1,7 +1,7 @@
 # RPC Method Inventory
 
 Status: code-derived inventory
-Date: 2026-11-10
+Date: 2026-11-11
 Report: `docs/runbooks/rpc-method-inventory.json`
 
 This inventory is generated from Rust SDK method constants, node RPC dispatch,
@@ -14,8 +14,8 @@ method lacks an explicit posture.
 
 ## Summary
 
-- Total methods observed: 167
-- Read-only public methods: 86
+- Total methods observed: 168
+- Read-only public methods: 87
 - Public cryptographically authorized protocol mutations: 12
 - Controlled write gated methods: 15
 - Privacy-alpha gated methods: 4
@@ -165,6 +165,7 @@ method lacks an explicit posture.
 | owned_apply | owned_lane_gated | no | yes | no | no | yes |  |
 | owned_apply_v3 | owned_lane_gated | no | yes | no | no | yes |  |
 | owned_certificate | read_only_public | yes | no | no | yes | yes |  |
+| owned_fence_status | read_only_public | yes | no | yes | no | yes | this validator's ML-DSA-signed FastPay fence status for a lock, from certified blocks only; typed refusal in signer-socket mode |
 | owned_objects | read_only_public | yes | no | yes | yes | yes |  |
 | owned_recovery_capabilities | read_only_public | yes | no | no | yes | yes |  |
 | owned_recovery_status | read_only_public | yes | no | no | yes | yes |  |

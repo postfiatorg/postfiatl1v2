@@ -1364,6 +1364,21 @@ fn ordered_fastpay_recovery_cancels_partial_and_withheld_certificates_and_replay
         admit_fastlane_primary_to_mempool(&data_dir, transaction)
             .expect("admit exact-boundary recovery decision");
     }
+    // Admitted to the mempool only: every validator signs "not terminal".
+    let withheld_lock = withheld_certificate.order.recovery.lock_id.clone();
+    let pending_height = store.read_chain_tip().expect("tip before recovery").height;
+    for index in 0..4 {
+        let pending = owned_fence_status_v3(
+            NodeOptions {
+                data_dir: data_dir.clone(),
+            },
+            &format!("validator-{index}"),
+            &withheld_lock,
+        )
+        .expect("pending fence status");
+        assert_eq!(pending.terminal_answer(), (None, None, None, None));
+        assert_eq!(pending.observed_height, pending_height);
+    }
     let decision_batch_file = data_dir.join("ordered-recovery-decisions.batch.json");
     let decision_batch = create_mempool_batch(MempoolBatchOptions {
         data_dir: data_dir.clone(),
@@ -1387,6 +1402,59 @@ fn ordered_fastpay_recovery_cancels_partial_and_withheld_certificates_and_replay
 
     let recovered = store.read_ledger().expect("ledger after recovery");
     assert_eq!(recovered.fastpay_version_fences.len(), 2);
+    // Cancelled only once its certified block committed, at that height;
+    // the same answer after a restart (no cached status).
+    let cancelled_fence = recovered
+        .fastpay_version_fences
+        .iter()
+        .find(|fence| fence.lock_id == withheld_lock)
+        .expect("cancelled fence");
+    let fence_committee = recovered
+        .fastpay_recovery_committees
+        .iter()
+        .find(|committee| committee.committee_epoch == cancelled_fence.committee_epoch)
+        .expect("fence committee")
+        .clone();
+    for restart in [false, true] {
+        if restart {
+            clear_fastpay_fence_status_cache();
+        }
+        let statuses = (0..4)
+            .map(|index| {
+                owned_fence_status_v3(
+                    NodeOptions {
+                        data_dir: data_dir.clone(),
+                    },
+                    &format!("validator-{index}"),
+                    &withheld_lock,
+                )
+                .expect("cancelled fence status")
+            })
+            .collect::<Vec<_>>();
+        for status in &statuses {
+            assert_eq!(
+                status.decision,
+                Some(postfiat_types::FastPayRecoveryDecisionV1::Cancelled)
+            );
+            assert_eq!(status.anchored_height, Some(4));
+            assert_eq!(status.observed_height, 4);
+        }
+        let proved = postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v1(
+            &statuses[..3],
+            &fence_committee,
+            &withheld_lock,
+        )
+        .expect("a quorum proves the cancellation");
+        assert_eq!(proved.anchored_height, Some(4));
+        assert!(matches!(
+            postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v1(
+                &statuses[..2],
+                &fence_committee,
+                &withheld_lock,
+            ),
+            Err(postfiat_types::FastPayFenceStatusRefusalV1::BelowQuorum { agreeing: 2, quorum: 3 })
+        ));
+    }
     for original in [&first_object, &second_object] {
         let advanced = recovered
             .owned_objects
@@ -3432,3 +3500,5 @@ fn assert_same_fastpay_ack_effect(left: &str, right: &str) {
     right.as_object_mut().unwrap().remove("signature_hex");
     assert_eq!(left, right);
 }
+
+include!("fastpay_fence_status_tests.rs");

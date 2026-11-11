@@ -963,6 +963,18 @@ impl TransactionalStore {
         &self,
         lock_id: &str,
     ) -> StorageResult<Option<FastPayVersionFenceV1>> {
+        Ok(self
+            .anchored_fastpay_effect_at(lock_id)?
+            .map(|(_, effect)| effect))
+    }
+
+    /// The anchored effect with the finalized height that anchored it: the
+    /// certified block's height, or the checkpoint height for an effect
+    /// imported from a retained-history checkpoint.
+    pub fn anchored_fastpay_effect_at(
+        &self,
+        lock_id: &str,
+    ) -> StorageResult<Option<(u64, FastPayVersionFenceV1)>> {
         let key = fastpay_anchor_key(lock_id)?;
         let record: Option<StoredFastPayAnchorV1> =
             self.read_json_record(HISTORY_INDEXES, HISTORY_INDEXES_TABLE, &key)?;
@@ -972,7 +984,7 @@ impl TransactionalStore {
                     && record.finalized_height > 0
                     && record.effect.lock_id == lock_id =>
             {
-                Ok(Some(record.effect))
+                Ok(Some((record.finalized_height, record.effect)))
             }
             Some(_) => Err(StorageError::new(
                 StorageErrorCode::CorruptRecord,
