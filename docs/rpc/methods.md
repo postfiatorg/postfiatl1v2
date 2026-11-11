@@ -115,6 +115,11 @@ adds `address_checksummed`, the display form of `address`.
 The fee quotes take the next sequence from the mempool and price the
 transaction on a ledger that includes pending entries.
 
+A quote is the node's answer, not the request: the asset, escrow, NFT and
+offer signers sign the quote's `operation`, `minimum_fee` and `sequence`.
+Compare them with your request before you sign; the Python client does
+([what it checks](../integrate/exchange-guide.md#what-the-python-client-checks-before-it-signs)).
+
 - `transfer_fee_quote` prices on the ledger admission dry-runs the transfer
   on. Its base is the committed ledger with the confirmed FastPay effects
   that are not yet in a block, the same base admission starts from. On top of
