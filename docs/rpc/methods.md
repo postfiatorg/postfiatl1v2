@@ -90,7 +90,7 @@ launch config digests.
 | `transfer_fee_quote` | Quote native PFT payment fees. |
 | `mempool_submit_signed_transfer` | Submit signed native PFT transfer. |
 | `mempool_submit_signed_payment_v2` | Submit signed native PFT payment with memos. |
-| `asset_fee_quote` | Quote issued-asset and TrustSet-style transactions. |
+| `asset_fee_quote` | Quote issued-asset and TrustSet-style transactions. For `external_lane_export_v1`, `export_refusal` (`code`, `message`) is execution's refusal of the export on the ledger asset admission executes it on (pending plain transfers, `payment_v2` entries and asset transactions; later families excluded), and `sender_balance` is read there too (for `external_lane_export_above_released`, the message names released and exported on that ledger); absent when it would apply. The export's quote also carries `export_checked: true` (no other kind's quote has it); the holder's commands refuse a quote without it (`external_lane_export_not_checked`), which comes from a node too old to check an export. |
 | `mempool_submit_signed_asset_transaction` | Submit signed asset create, TrustSet, issued payment (`issued_payment`, or `issued_payment_v2` with memos), clawback, or `account_set` (owner account flags). |
 | `escrow_fee_quote` | Quote escrow create, finish, or cancel. |
 | `mempool_submit_signed_escrow_transaction` | Submit signed escrow transaction. |
@@ -114,6 +114,11 @@ adds `address_checksummed`, the display form of `address`.
 
 The fee quotes take the next sequence from the mempool and price the
 transaction on a ledger that includes pending entries.
+
+A quote is the node's answer, not the request: the asset, escrow, NFT and
+offer signers sign the quote's `operation`, `minimum_fee` and `sequence`.
+Compare them with your request before you sign; the Python client does
+([what it checks](../integrate/exchange-guide.md#what-the-python-client-checks-before-it-signs)).
 
 - `transfer_fee_quote` prices on the ledger admission dry-runs the transfer
   on. Its base is the committed ledger with the confirmed FastPay effects

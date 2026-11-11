@@ -418,7 +418,10 @@ pub fn external_lane_export_root_v1(leaves: &[[u8; 48]]) -> Result<String, Strin
     Ok(bytes_to_hex(&level[0]))
 }
 
-/// Membership of one export leaf in its block's export root.
+/// Membership of one export leaf in its block's export root. The index and
+/// count are not unique under one root (an odd node pairs with itself and the
+/// root does not commit the count), so the index is advisory; replay
+/// protection rests on the packet-derived withdrawal and burn commitments.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExternalLaneExportRootProofV1 {

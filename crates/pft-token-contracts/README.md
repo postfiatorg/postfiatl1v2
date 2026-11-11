@@ -541,3 +541,8 @@ The Base mainnet run additionally needs:
 - [ ] the mainnet PFTToken and its code hash, a fresh deployer on a hardware
       wallet, `PFT_LOCK_REAL_DEPLOYMENT=1` and
       `PFT_LOCK_SOURCE_COMMIT=$(git rev-parse HEAD)`.
+
+## Fixtures with runtime code hashes
+
+The Foundry fixtures that pin runtime code hashes are produced and checked with Foundry v1.7.1, the version CI pins. This covers `test/fixtures/ExternalLaneLockReleaseFixture.sol` and `test/fixtures/ExternalLaneWitnessReleaseFixture.sol`, which `test/ExternalLaneLockRelease.t.sol` and `test/ExternalLaneWitnessRelease.t.sol` check. Another Foundry or solc build can emit other metadata, so other code hashes, and fail those tests. Regenerate a fixture only with the pinned version. On 2026-11-10, every `test/ExternalLane*` test here and in `crates/ethereum-contracts` passed under v1.7.1.
+

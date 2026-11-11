@@ -752,6 +752,7 @@ fn print_usage() {
   postfiat-node governance-amendment-assemble [--data-dir PATH] --amendment-file PATH --authorization-files CSV --proposal-slot H --output PATH
   postfiat-node ethereum-checkpoint-observe [--data-dir PATH] --route-id ID --ethereum-rpc http://HOST:PORT[/PATH] [--block-number N] --checkpoint-file PATH
   postfiat-node ethereum-receipt-proof-build [--data-dir PATH] --route-id ID --ethereum-rpc http://HOST:PORT[/PATH] --transaction-hash 0xHASH --proof-file PATH
+  postfiat-node external-lane-export-proof-input [--data-dir PATH] --lane-id ID (--export-nonce N | --tx-id 96_HEX) --prior-checkpoint 96_HEX --output-dir PATH
   postfiat-node pfusdc-egress-witness [--data-dir PATH] --withdrawal-id 96_HEX [--prior-checkpoint 96_HEX]
   postfiat-node pfusdc-checkpoint-witness [--data-dir PATH] --prior-checkpoint 96_HEX --target-block 96_HEX
   postfiat-node pftl-uniswap-receipt-witness [--data-dir PATH] --packet-hash 96_HEX --prior-checkpoint 96_HEX
@@ -766,6 +767,10 @@ fn print_usage() {
       (the certificate of exactly the committee quorum; every vote must be a distinct active member's on this checkpoint)
   postfiat-node external-lane-lock-proof [--data-dir PATH] --lane-id ID --base-rpc http://HOST:PORT[/PATH] --transaction-hash 0xHASH --certificate-file PATH --submitter ADDRESS [--log-index N] --operation-file PATH
       (the external_lane_release_v1 operation of a Lock in the certificate's block, for wallet-sign-asset-transaction --operation-json)
+  postfiat-node external-lane-export [--data-dir PATH] (--key-file PATH [--sender ADDRESS] | --dry-run --sender ADDRESS) --lane-id ID --amount-atoms N --base-recipient 0xADDRESS [--max-fee-atoms N]
+      (checks the lane, the recipient and the balance before signing, after this node's pending transactions; signs as wallet-sign-asset-transaction, submits it and prints the tx id; --dry-run stops after the checks and prints the quote: it opens no key file and signs nothing, so it needs --sender (refused without it); when signing, --sender must be the key file's address; a quoted minimum fee above --max-fee-atoms (default 92, a safety ceiling: 4x the largest fee an export can be charged today) is refused (external_lane_export_fee_above_ceiling); every refusal the command can know from the node's current state comes before signing; the cases that can still come after signing, all at admission and without a fee, are: a pending escrow, NFT or offer entry the export makes stale (mempool admission blocked by stale pending): send the export again once that entry is in a block or has left the mempool; a transaction admitted between the check and the submission; and, only if the fee rule changes, a block between the quote and the submission that raises the minimum fee (fee_too_low): run the command again; under the current fee rule an export's minimum fee does not depend on the ledger, so this cannot happen for an export now)
+  postfiat-node external-lane-export-status [--data-dir PATH] --lane-id ID (--tx-id ID | --export-nonce N) [--audit] [--sender ADDRESS]
+      (the export packet, in_committed_block: its receipt is linked from a block in this node's committed log, and base_payout: what the payout on Base needs; --audit replays the block log and prints block_log_verified; the export nonce is the lane's, not the sender's: --sender refuses a packet of another sender)
   postfiat-node fastswap-control-prepare [--data-dir PATH] --kind activate-committee --epoch N --committee-root HEX --control-file PATH
   postfiat-node fastswap-control-prepare [--data-dir PATH] --kind stop-prepare --policy-epoch N --control-file PATH
   postfiat-node fastswap-control-vote-sign [--data-dir PATH] --control-file PATH --validator NODE_ID --validator-key-file PATH --vote-file PATH

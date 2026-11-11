@@ -24,8 +24,8 @@ def main() -> None:
             )
 
     systems = {item["name"]: item for item in document["systems"]}
-    if len(systems) != 7:
-        raise SystemExit("proof inventory must classify exactly seven proof systems")
+    if len(systems) != 8:
+        raise SystemExit("proof inventory must classify exactly eight proof systems")
     expected_layouts = {
         "AssetOrchard swap": (28, "ASSET_ORCHARD_PUBLIC_INSTANCE_LEN: usize = 28"),
         "AssetOrchard private egress": (
@@ -150,6 +150,44 @@ def main() -> None:
     ):
         if marker not in source:
             raise SystemExit(f"PFTL egress source marker missing: {marker}")
+
+    lane = systems["PFT lane export egress"]
+    lane_info = json.loads(
+        (ROOT / "programs/pft-lane-export/program-info.json").read_text(encoding="utf-8")
+    )
+    lane_elf = hashlib.sha256(
+        (ROOT / "programs/pft-lane-export/elf/pft-lane-export-program").read_bytes()
+    ).hexdigest()
+    if (
+        lane["proof_system_id"] != "sp1-pft-lane-export-v1"
+        or lane["program_vkey"] != lane_info["program_vkey"]
+        or lane["elf_sha256"] != lane_info["elf_sha256"]
+        or lane_elf != lane_info["elf_sha256"]
+    ):
+        raise SystemExit("PFT lane export proof identity mismatch")
+    if [field["tag"] for field in lane["withdrawal_public_values"]] != list(range(1, 40)):
+        raise SystemExit("PFT lane export fields must cover exactly tags 1..39")
+    if [field["tag"] for field in lane["checkpoint_public_values"]] != list(range(1, 16)):
+        raise SystemExit("PFT lane checkpoint fields must cover exactly tags 1..15")
+    if any(
+        not field.get("name") or not field.get("binding")
+        for field in lane["withdrawal_public_values"] + lane["checkpoint_public_values"]
+    ):
+        raise SystemExit("PFT lane export public fields need names and bindings")
+    lane_guest = (ROOT / "programs/pft-lane-export/src/main.rs").read_text(encoding="utf-8")
+    lane_statement = (ROOT / "crates/pft_lane_proofs/src/lib.rs").read_text(encoding="utf-8")
+    lane_values = (ROOT / "crates/types/src/external_lane_egress_types.rs").read_text(
+        encoding="utf-8"
+    )
+    for marker, source in (
+        ("verify_external_lane_export_witness_v1", lane_guest),
+        ("verify_external_lane_checkpoint_witness_v1", lane_guest),
+        ("external_lane_export_egress_public_values(lane, packet, &checkpoint)", lane_statement),
+        ("verify_pftl_finality_segment_v1(", lane_statement),
+        ("pub fn external_lane_export_egress_public_values(", lane_values),
+    ):
+        if marker not in source:
+            raise SystemExit(f"PFT lane export source marker missing: {marker}")
 
     public_fields = sum(
         len(system.get("public_instances", system.get("public_values", [])))

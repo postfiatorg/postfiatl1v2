@@ -1,0 +1,33 @@
+{
+  "schema": "postfiat.pft_lane_export.release-builds.v1",
+  "sp1_version": "6.3.1",
+  "docker_image": "ghcr.io/succinctlabs/sp1@sha256:0942a27dbe8e38f4b14f3732e779df4027b17bde93e9fbc9e8c773c15eb63400",
+  "releases": [
+    {
+      "id": "pft-lane-export-v1-20261110",
+      "build_mode": "docker",
+      "build_command": "cargo prove build --docker --tag v6.3.1 --locked --workspace-directory <checkout> --output-directory elf",
+      "source_commit": "439803aaa3d6f34dfe97a4a48eca5d6008cba43d",
+      "workflow": ".github/workflows/pft-lane-export-identity.yml",
+      "runs": [
+        {
+          "run_id": 42818337185,
+          "attempt": 1,
+          "builds": 2,
+          "clean_source_trees": 2
+        },
+        {
+          "run_id": 42818337185,
+          "attempt": 2,
+          "builds": 2,
+          "clean_source_trees": 2,
+          "note": "re-run on a separate runner machine"
+        }
+      ],
+      "elf_sha256": "e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab",
+      "program_vkey": "0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414",
+      "cargo_lock_sha256": "d34ce6ca28550ab6caa959a0827c30587ead1614ec73026476a35103724938f7",
+      "expected": "programs/pft-lane-export/program-info.json"
+    }
+  ]
+}

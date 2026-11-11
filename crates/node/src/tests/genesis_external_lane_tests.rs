@@ -1311,6 +1311,11 @@ mod release_path {
 
     /// A committee checkpoint of a Base block whose one receipt holds
     /// `Locked(nonce, holder, keccak(recipient), recipient, amount)`.
+    /// A `0x` lane policy field as bytes.
+    fn lane_bytes<const N: usize>(value: &str) -> [u8; N] {
+        hex_to_bytes(&value[2..]).expect("lane hex").try_into().expect("lane field length")
+    }
+
     fn lock_proof(chain: &Chain, nonce: u64, amount: u64) -> EthereumExternalEventProofV1 {
         lock_proof_by(chain, &chain.committee, &chain.keys, nonce, amount)
     }
@@ -1324,7 +1329,7 @@ mod release_path {
         amount: u64,
     ) -> EthereumExternalEventProofV1 {
         let lane = &chain.genesis.external_lanes()[0];
-        let lock_contract = [0x1a_u8; 20];
+        let lock_contract = lane_bytes(&lane.policy.lock_contract_address);
         let mut holder = [0_u8; 32];
         holder[12..].copy_from_slice(&[0x11; 20]);
         let topics = [
@@ -1362,9 +1367,9 @@ mod release_path {
             authority_epoch: committee.domain.committee_epoch,
             committee_root: committee.domain.committee_root,
             handoff_controller: lock_contract,
-            wrapped_navcoin_token: [0x2b; 20],
-            handoff_controller_code_hash: [0x4d; 32],
-            wrapped_navcoin_code_hash: [0x3c; 32],
+            wrapped_navcoin_token: lane_bytes(&lane.policy.token_address),
+            handoff_controller_code_hash: lane_bytes(&lane.policy.lock_runtime_code_hash),
+            wrapped_navcoin_code_hash: lane_bytes(&lane.policy.token_runtime_code_hash),
         };
         let votes = keys
             .iter()
@@ -1430,7 +1435,10 @@ mod release_path {
                     submitter: faucet.address.clone(),
                     lane_id: lane_id.to_string(),
                     source_chain_id: 8453,
-                    lock_contract_address: format!("0x{}", "1a".repeat(20)),
+                    lock_contract_address: chain.genesis.external_lanes()[0]
+                        .policy
+                        .lock_contract_address
+                        .clone(),
                     lock_nonce: nonce,
                     amount_atoms: amount,
                     recipient: chain.recipient.clone(),
@@ -3200,10 +3208,12 @@ mod release_path {
         use super::*;
         include!("external_lane_checkpoint_source_tests.rs");
         include!("external_lane_local_evm_tests.rs");
+        include!("external_lane_roundtrip_tests.rs");
     }
 
     mod export_path {
         use super::*;
         include!("external_lane_export_tests.rs");
+        include!("external_lane_export_proof_tests.rs");
     }
 }

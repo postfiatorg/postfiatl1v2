@@ -2470,6 +2470,63 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             );
             Ok(())
         }
+        "external-lane-export" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let report = external_lane_export(ExternalLaneExportOptions {
+                data_dir: PathBuf::from(data_dir),
+                key_file: match (flag_value(flags, "--key-file"), flag_present(flags, "--dry-run")) {
+                    (Some(key_file), _) => PathBuf::from(key_file),
+                    (None, true) => PathBuf::new(),
+                    (None, false) => return Err("missing --key-file".to_string()),
+                },
+                sender: flag_value(flags, "--sender").map(str::to_string),
+                lane_id: flag_value(flags, "--lane-id").ok_or("missing --lane-id")?.to_string(),
+                amount_atoms: parse_export_amount_atoms(
+                    flag_value(flags, "--amount-atoms").ok_or("missing --amount-atoms")?,
+                )?,
+                base_recipient: flag_value(flags, "--base-recipient")
+                    .ok_or("missing --base-recipient")?
+                    .to_string(),
+                dry_run: flag_present(flags, "--dry-run"),
+                max_fee_atoms: match flag_value(flags, "--max-fee-atoms") {
+                    Some(value) => parse_export_max_fee_atoms(value)?,
+                    None => EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS,
+                },
+            })
+            .map_err(|error| format!("{command} failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .map_err(|error| format!("export serialization failed: {error}"))?
+            );
+            Ok(())
+        }
+        "external-lane-export-status" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let selector = match (flag_value(flags, "--tx-id"), flag_value(flags, "--export-nonce")) {
+                (Some(tx_id), None) => ExternalLaneExportSelector::TxId(tx_id.to_string()),
+                (None, Some(nonce)) => ExternalLaneExportSelector::Nonce(
+                    nonce
+                        .parse::<u64>()
+                        .map_err(|_| "--export-nonce must be a u64".to_string())?,
+                ),
+                _ => return Err("pass exactly one of --tx-id or --export-nonce".to_string()),
+            };
+            let report = external_lane_export_status(ExternalLaneExportStatusOptions {
+                data_dir: PathBuf::from(data_dir),
+                lane_id: flag_value(flags, "--lane-id").ok_or("missing --lane-id")?.to_string(),
+                selector,
+                audit: flag_present(flags, "--audit"),
+                sender: flag_value(flags, "--sender").map(str::to_string),
+            })
+            .map_err(|error| format!("{command} failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .map_err(|error| format!("export status serialization failed: {error}"))?
+            );
+            Ok(())
+        }
         "fastswap-control-prepare" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let control_file =

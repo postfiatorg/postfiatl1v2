@@ -32,6 +32,11 @@ MAX_ACCOUNT_TX_SCAN_LIMIT = 512
 # node refuses an `external_lane_info` release_limit or export_limit outside 1
 # to this many.
 EXTERNAL_LANE_RELEASE_PAGE_SIZE = 100
+# The node's `external-lane-export-status` prints the same line.
+EXTERNAL_LANE_EXPORT_BASE_PAYOUT_NOTE = (
+    "this packet is recorded on PFTL; it pays out on Base only once a release relay proves this packet "
+    "to the lane's lock contract on Base and that release is confirmed there"
+)
 ESCROW_ID_DOMAIN = "postfiat.escrow_id.v1"
 ESCROW_CONDITION_HASH_DOMAIN = "postfiat.escrow_condition_hash.v1"
 NFT_ID_DOMAIN = "postfiat.nft_id.v1"
@@ -1948,6 +1953,91 @@ class PostFiatRpcClient:
             "exported_atoms": int(state.get("exported_atoms", 0)),
             "export_history_root": row.get("export_history_root"),
         }
+
+    def external_lane_export_status(
+        self, lane_id: str, tx_id_or_nonce: str | int, *, audit: bool = False, sender: str | None = None
+    ) -> dict[str, Any]:
+        """One export packet of a lane, by the accepted transaction's id (a
+        string) or its export nonce (an int), as `external-lane-export-status`
+        prints it: the packet, its digest and commitments, `in_committed_block`
+        (`tx` links the receipt from a block in the node's committed log; no
+        replay), the lane's `exported_atoms`, and what the Base payout needs
+        (`base_payout`). `audit=True` passes `audit_block_log`
+        and adds `block_log_verified`. Pages the lane's stored exports newest
+        first; a pruned or unknown export raises `LookupError`. `tx` reporting
+        the transaction not found gives `in_committed_block` false; any other
+        RPC error is raised. The export nonce is the lane's, not the sender's:
+        `sender` raises `ValueError` when the packet belongs to another sender."""
+        lane_id = self._required_text(lane_id, "lane_id")
+        if isinstance(tx_id_or_nonce, str):
+            tx_id: str | None = self._required_text(tx_id_or_nonce, "tx_id_or_nonce")
+            nonce = None
+            cursor = None
+        else:
+            tx_id = None
+            nonce = self._required_u64(tx_id_or_nonce, "tx_id_or_nonce")
+            cursor = nonce + 1
+        while True:
+            report = self.external_lane_info(
+                lane_id, export_cursor=cursor, export_limit=EXTERNAL_LANE_RELEASE_PAGE_SIZE
+            )
+            row = next((lane for lane in report.get("lanes", []) if lane.get("lane_id") == lane_id), None)
+            if row is None:
+                raise LookupError(f"external_lane_not_configured: external lane `{lane_id}` does not exist")
+            entry = next(
+                (
+                    entry
+                    for entry in row.get("exports", [])
+                    if (tx_id is not None and entry["packet"]["tx_id"] == tx_id)
+                    or (nonce is not None and int(entry["packet"]["export_nonce"]) == nonce)
+                ),
+                None,
+            )
+            if entry is not None:
+                break
+            cursor = row.get("next_export_cursor")
+            if nonce is not None or cursor is None:
+                wanted = f"nonce {nonce}" if nonce is not None else f"tx `{tx_id}`"
+                raise LookupError(f"no stored export on external lane `{lane_id}` matches {wanted}")
+        packet = entry["packet"]
+        if sender is not None and packet["sender"] != sender:
+            raise ValueError(
+                f"external_lane_export_other_sender: export nonce {packet['export_nonce']} on external lane "
+                f"`{lane_id}` belongs to `{packet['sender']}`, not `{sender}`; "
+                "the export nonce is the lane's, not the sender's"
+            )
+        block_log_verified = False
+        try:
+            finality = self.tx(packet["tx_id"], audit_block_log=audit)
+            in_committed_block = bool(finality.get("confirmed")) and int(
+                finality["block"]["header"]["height"]
+            ) == int(packet["exported_at_height"])
+            block_log_verified = bool(finality.get("block_log_verified"))
+        except RpcError as error:
+            if error.error.get("code") != "rpc_tx_not_found":
+                raise
+            in_committed_block = False
+        coverage = self.external_lane_export_coverage(row)
+        status: dict[str, Any] = {
+            "lane_id": lane_id,
+            "export_nonce": int(packet["export_nonce"]),
+            "sender": packet["sender"],
+            "amount_atoms": int(packet["amount_atoms"]),
+            "base_recipient": packet["base_recipient"],
+            "exported_at_height": int(packet["exported_at_height"]),
+            "tx_id": packet["tx_id"],
+            "packet_digest": entry["packet_digest"],
+            "withdrawal_id_commitment": entry["withdrawal_id_commitment"],
+            "burn_tx_commitment": entry["burn_tx_commitment"],
+            "in_committed_block": in_committed_block,
+            "current_height": int(report.get("current_height", 0)),
+            "lane_exported_atoms": coverage["exported_atoms"],
+            "lane_export_count": coverage["export_count"],
+            "base_payout": EXTERNAL_LANE_EXPORT_BASE_PAYOUT_NOTE,
+        }
+        if audit:
+            status["block_log_verified"] = block_log_verified
+        return status
 
     def fx_fix_info(self, fix_packet_hash: str) -> dict[str, Any]:
         """One FX fix packet by hash (public read, `--fix-packet-hash`)."""

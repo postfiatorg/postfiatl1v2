@@ -328,6 +328,62 @@ pub(crate) fn apply_external_lane_export(
     )
 }
 
+/// The export as execution would apply it to `ledger`, without a signature
+/// and without writing, in execution's order: the source's next sequence
+/// must be `sequence` (`bad_sequence` otherwise), then, on a copy, the fee is
+/// taken off the source and `apply_external_lane_export_with_caps` runs with
+/// `compatibility`'s caps.
+/// Run on the ledger asset admission executes a new asset transaction on
+/// (the pending plain transfers, `payment_v2` entries and asset transactions;
+/// `asset_fee_quote` uses that ledger for an export), it returns the refusal admission would return for
+/// the signed transaction, so a caller can refuse before anything is signed.
+#[allow(clippy::too_many_arguments)]
+pub fn dry_run_external_lane_export(
+    genesis: &Genesis,
+    ledger: &LedgerState,
+    operation: &ExternalLaneExportOperationV1,
+    source: &str,
+    sequence: u64,
+    fee: u64,
+    block_height: u64,
+    compatibility: crate::AssetExecutionCompatibility,
+) -> Result<(), ExecutionError> {
+    if let Some(account) = ledger.account(source) {
+        let Some(expected) = account.sequence.checked_add(1) else {
+            return Err((
+                "sequence_overflow",
+                "source sequence is exhausted".to_string(),
+            ));
+        };
+        if sequence != expected {
+            let held = if sequence > expected {
+                ": a pending transaction of this sender that runs after asset transactions (escrow, NFT, offer, FastLane) holds the next sequence; send the export again once it is in a block"
+            } else {
+                ""
+            };
+            return Err((
+                "bad_sequence",
+                format!("expected sequence {expected}, got {sequence}{held}"),
+            ));
+        }
+    }
+    let mut dry_run = ledger.clone();
+    if let Some(account) = dry_run.account_mut(source) {
+        account.balance = account.balance.saturating_sub(fee);
+    }
+    apply_external_lane_export_with_caps(
+        genesis,
+        &mut dry_run,
+        operation,
+        source,
+        String::new(),
+        block_height,
+        compatibility.external_lane_release_caps,
+        compatibility.external_lane_governed.caps,
+        compatibility.external_lane_export_root_active(block_height),
+    )
+}
+
 /// `apply_external_lane_export`, with `caps_governed` false for the bare
 /// `execute_asset_transaction` entry, whose caps are the genesis caps: every
 /// refusal keeps its code, and an export that would apply is refused with
@@ -1162,6 +1218,79 @@ mod tests {
         ledger.external_lanes[0]
             .validate_against_genesis(&genesis.external_lanes()[0])
             .expect("recorded releases");
+    }
+
+    /// The dry run the export command and the fee quote use reaches every
+    /// deterministic lane refusal: above released - exported and an
+    /// exhausted export nonce (the records ceiling is 1,000,000 stored
+    /// packets; `check_export_within` pins it with a small ceiling in the
+    /// type tests). A dry run writes nothing; an export that fits reaches
+    /// the governed-caps gate under bare caps and passes under governed caps.
+    #[test]
+    fn external_lane_export_dry_run_returns_the_lane_refusals_without_writing() {
+        let genesis = export_genesis();
+        let mut ledger = lane_ledger(&genesis);
+        apply_external_lane_release(
+            &genesis,
+            &mut ledger,
+            lock(1, ACCOUNT_RESERVE + 1_000, "holder"),
+            10,
+            ExternalLaneReleaseCaps::genesis(),
+        )
+        .expect("release");
+        let governed = crate::AssetExecutionCompatibility::strict()
+            .with_external_lane_release_caps(ExternalLaneReleaseCaps::genesis())
+            .with_external_lane_export_root_activation_height(Some(0));
+        let next_sequence = ledger.account("faucet").expect("faucet").sequence + 1;
+        let dry_run_at = |ledger: &LedgerState, amount, compatibility, sequence| {
+            dry_run_external_lane_export(
+                &genesis,
+                ledger,
+                &export_op("faucet", amount),
+                "faucet",
+                sequence,
+                22,
+                11,
+                compatibility,
+            )
+        };
+        let dry_run = |ledger: &LedgerState, amount, compatibility| {
+            dry_run_at(ledger, amount, compatibility, next_sequence)
+        };
+        let before = ledger.clone();
+        dry_run(&ledger, ACCOUNT_RESERVE + 1_000, governed).expect("fits");
+        // A quote sequence past the ledger's next one (a pending entry of a
+        // later family holds it) is refused first, as execution refuses it.
+        for (amount, sequence) in [
+            (ACCOUNT_RESERVE + 1_000, next_sequence + 1),
+            (ACCOUNT_RESERVE + 1_001, next_sequence + 1),
+            (1, next_sequence - 1),
+        ] {
+            let (code, message) = dry_run_at(&ledger, amount, governed, sequence).unwrap_err();
+            assert_eq!(code, "bad_sequence", "{message}");
+            assert_eq!(
+                message.contains("runs after asset transactions"),
+                sequence > next_sequence,
+                "{message}"
+            );
+        }
+        let (code, _) = dry_run(
+            &ledger,
+            1,
+            crate::AssetExecutionCompatibility::strict()
+                .with_external_lane_export_root_activation_height(Some(0)),
+        )
+        .unwrap_err();
+        assert_eq!(code, EXTERNAL_LANE_EXPORT_NEEDS_GOVERNED_CAPS);
+        let (code, _) = dry_run(&ledger, ACCOUNT_RESERVE + 1_001, governed).unwrap_err();
+        assert_eq!(code, postfiat_types::EXTERNAL_LANE_EXPORT_ABOVE_RELEASED);
+        ledger.external_lanes[0].next_export_nonce = u64::MAX;
+        let exhausted = ledger.clone();
+        let (code, _) = dry_run(&ledger, 1, governed).unwrap_err();
+        assert_eq!(code, postfiat_types::EXTERNAL_LANE_EXPORT_NONCE_EXHAUSTED);
+        assert_eq!(ledger, exhausted);
+        ledger.external_lanes[0].next_export_nonce = 0;
+        assert_eq!(ledger, before);
     }
 }
 

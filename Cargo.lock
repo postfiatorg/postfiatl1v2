@@ -3186,6 +3186,7 @@ dependencies = [
  "postfiat-mempool-dag",
  "postfiat-network",
  "postfiat-ordering-fast",
+ "postfiat-pft-lane-proofs",
  "postfiat-pftl-uniswap-proofs",
  "postfiat-privacy",
  "postfiat-privacy-orchard",
@@ -3194,6 +3195,7 @@ dependencies = [
  "postfiat-types",
  "rand 0.8.6",
  "serde",
+ "serde_cbor",
  "serde_json",
  "sha2",
  "sha3 0.11.0",
@@ -3209,6 +3211,16 @@ dependencies = [
  "postfiat-types",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "postfiat-pft-lane-proofs"
+version = "0.1.0"
+dependencies = [
+ "postfiat-ordering-fast",
+ "postfiat-pfusdc-proofs",
+ "postfiat-types",
+ "serde_cbor",
 ]
 
 [[package]]

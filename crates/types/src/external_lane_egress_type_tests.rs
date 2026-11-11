@@ -772,3 +772,37 @@ fn external_lane_export_root_proof_refuses_an_index_at_or_above_the_leaf_count()
     }
     assert!(external_lane_export_root_proof_v1(&[], 0).is_err());
 }
+
+/// A three-leaf proof for index 2 also verifies as index 3 of 4: an odd node
+/// pairs with itself and the root does not commit the count. The public values
+/// of the two labels differ only in the advisory leaf index; the withdrawal and
+/// burn commitments the verifier consumes come from the packet alone.
+#[test]
+fn external_lane_export_proof_relabelled_index_keeps_the_replay_commitments() {
+    let (lane, packet, checkpoint) = sample_egress_inputs();
+    let chain_id = checkpoint.pftl_chain_id.clone();
+    let leaves = [[1_u8; 48], [2_u8; 48], packet.export_root_leaf(&chain_id).expect("leaf")];
+    let root = external_lane_export_root_v1(&leaves).expect("root");
+    let proof = external_lane_export_root_proof_v1(&leaves, 2).expect("proof");
+    verify_external_lane_export_root_proof_v1(&root, &proof).expect("index 2 of 3");
+    let mut relabelled = proof.clone();
+    relabelled.leaf_index = 3;
+    relabelled.leaf_count = 4;
+    verify_external_lane_export_root_proof_v1(&root, &relabelled).expect("also index 3 of 4");
+    let values = |proof: &ExternalLaneExportRootProofV1| {
+        let mut checkpoint = checkpoint.clone();
+        checkpoint.export = ExternalLaneExportInclusionV1 {
+            block_id: "5b".repeat(48),
+            block_height: packet.exported_at_height,
+            export_root: root.clone(),
+            proof: proof.clone(),
+        };
+        external_lane_export_egress_public_values(&lane, &packet, &checkpoint).expect("values")
+    };
+    let (first, second) = (values(&proof), values(&relabelled));
+    assert_eq!((first.exit_leaf_index, second.exit_leaf_index), (2, 3));
+    assert_eq!(first.withdrawal_id, second.withdrawal_id);
+    assert_eq!(first.burn_tx_id, second.burn_tx_id);
+    assert_eq!(first.proof_nullifier, second.proof_nullifier);
+    assert_eq!(first.withdrawal_packet_digest, second.withdrawal_packet_digest);
+}

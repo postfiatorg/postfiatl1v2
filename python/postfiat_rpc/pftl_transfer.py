@@ -240,6 +240,7 @@ def run_send(args: argparse.Namespace) -> dict[str, Any]:
             memo_type=args.memo_type,
             memo_format=args.memo_format,
             memo_data=args.memo_data,
+            max_fee_atoms=args.max_fee_atoms,
             finalize_data_dir=data_dir,
             validator_data_dirs=validator_dirs,
         )
@@ -254,6 +255,7 @@ def run_send(args: argparse.Namespace) -> dict[str, Any]:
             memo_type=args.memo_type,
             memo_format=args.memo_format,
             memo_data=args.memo_data,
+            max_fee_atoms=args.max_fee_atoms,
             poll_timeout_seconds=args.poll_timeout_seconds,
             poll_interval_seconds=args.poll_interval_seconds,
         )
@@ -271,6 +273,7 @@ def run_send(args: argparse.Namespace) -> dict[str, Any]:
             memo_type=args.memo_type,
             memo_format=args.memo_format,
             memo_data=args.memo_data,
+            max_fee_atoms=args.max_fee_atoms,
         )
     return transfer_report("send", amount_atoms, result)
 
@@ -350,6 +353,11 @@ def build_parser() -> argparse.ArgumentParser:
     send.add_argument("--chain-id", help="Wallet chain id; default PFTL_CHAIN_ID or postfiat-local")
     send.add_argument("--account-index", type=int, default=0)
     send.add_argument("--sequence", type=int)
+    send.add_argument(
+        "--max-fee-atoms",
+        type=int,
+        help="Refuse to sign when the quoted fee is above this; default TRANSFER_DEFAULT_MAX_FEE_ATOMS plus the memo bytes",
+    )
     send.add_argument("--memo-type")
     send.add_argument("--memo-format")
     send.add_argument("--memo-data")
