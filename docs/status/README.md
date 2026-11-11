@@ -18,7 +18,8 @@
 
 The other files here are dated burndowns, audits, inventories, experiment
 reports and machine-readable manifests (for example the `OPEN-SOURCE-*-20260716`
-productionization inventories and the `A666-*` NAVCoin records). Most are not
+productionization inventories, the `A666-*` NAVCoin records and the `z3-*` round-trip
+records, such as the [frozen G2 read of 2026-11-11](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/z3-g2-selected-state-20261111.json)). Most are not
 published on the docs site; browse them in the
 [repository](https://github.com/postfiatorg/postfiatl1v2/tree/main/docs/status).
 Their file paths are referenced by scripts and tests, so do not move or rename
