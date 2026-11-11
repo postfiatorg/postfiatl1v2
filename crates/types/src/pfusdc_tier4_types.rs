@@ -10,6 +10,8 @@ pub const PFUSDC_ARC_INGRESS_PUBLIC_VALUES_SCHEMA_V1: &str =
     "postfiat.pfusdc.arc_ingress_public_values.v1";
 pub const PFUSDC_ARC_FINALITY_STATE_SCHEMA_V1: &str =
     "postfiat.pfusdc.arc_finality_state.v1";
+pub const PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1: &str =
+    "postfiat.pfusdc.beacon_finality_state.v1";
 pub const PFETH_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1: &str =
     "postfiat.pfeth.ethereum_ingress_public_values.v1";
 pub const BRIDGE_EXIT_LEAF_SCHEMA_V1: &str = "postfiat.bridge_exit_leaf.v1";
@@ -228,6 +230,107 @@ impl PfUsdcArcIngressPublicValuesV1 {
                 64,
             ),
         ])
+    }
+}
+
+/// Governance-pinned Ethereum beacon finality anchor for one route epoch.
+///
+/// Closes R2-1. The `sp1-ethereum-finality-v1` guest copies its whole starting
+/// light-client store from the prover's own input, including the sync committee
+/// (`programs/pfusdc-eth-mainnet-ingress/src/lib.rs::verify_finality`), and
+/// publishes where it started as `prior_finalized_beacon_root` /
+/// `prior_finalized_slot`. Those two fields were never compared with anything on
+/// chain, so a prover could invent a starting state with their own 512 sync
+/// committee keys, "prove" a deposit that never happened, and be credited.
+///
+/// This type is the missing comparison. It is the same shape the Arbitrum and
+/// Arc lanes already use: the chain holds the anchor, a proof must start exactly
+/// where the chain says the last one finished, and finality only moves forward.
+///
+/// Fail-closed consequence: a route with no pinned anchor cannot admit an
+/// Ethereum-finality deposit at all, which is review-02's containment item 3
+/// enforced in code rather than by configuration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PfUsdcBeaconFinalityStateV1 {
+    pub schema: String,
+    pub route_profile_hash: String,
+    pub route_epoch: u64,
+    pub source_chain_id: u64,
+    pub vault_address: String,
+    pub token_address: String,
+    pub route_binding: String,
+    /// The beacon root a conforming proof must declare as its starting point.
+    pub finalized_beacon_root: String,
+    /// The slot a conforming proof must declare as its starting point.
+    pub finalized_slot: u64,
+}
+
+impl PfUsdcBeaconFinalityStateV1 {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema != PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1
+            || self.route_epoch == 0
+            || self.source_chain_id == 0
+            || self.finalized_slot == 0
+        {
+            return Err("pfUSDC beacon finality state has invalid schema or scalars".to_string());
+        }
+        validate_evm_address_text("pfusdc_beacon_finality.vault_address", &self.vault_address)?;
+        validate_evm_address_text("pfusdc_beacon_finality.token_address", &self.token_address)?;
+        pfusdc_validate_hex_fields(&[
+            (
+                "pfusdc_beacon_finality.route_profile_hash",
+                &self.route_profile_hash,
+                96,
+            ),
+            (
+                "pfusdc_beacon_finality.route_binding",
+                &self.route_binding,
+                64,
+            ),
+            (
+                "pfusdc_beacon_finality.finalized_beacon_root",
+                &self.finalized_beacon_root,
+                64,
+            ),
+        ])
+    }
+
+    /// Require the proof to start exactly at the pinned anchor, then advance it.
+    ///
+    /// The prior fields are the ones R2-1 showed were ignored. Equality against
+    /// the pinned anchor is what stops an invented starting state; the strict
+    /// slot increase is what stops replaying or rewinding finality.
+    pub fn verify_and_advance(
+        &mut self,
+        values: &PfUsdcEthereumIngressPublicValuesV1,
+    ) -> Result<(), String> {
+        self.validate()?;
+        values.validate()?;
+        if values.source_chain_id != self.source_chain_id
+            || values.vault_address != self.vault_address
+            || values.token_address != self.token_address
+            || values.route_binding != self.route_binding
+        {
+            return Err(
+                "pfUSDC Ethereum proof does not match its pinned finality-state route".to_string(),
+            );
+        }
+        if values.prior_finalized_beacon_root != self.finalized_beacon_root
+            || values.prior_finalized_slot != self.finalized_slot
+        {
+            return Err(
+                "pfUSDC Ethereum proof does not start from the pinned beacon finality anchor"
+                    .to_string(),
+            );
+        }
+        if values.finalized_slot <= self.finalized_slot {
+            return Err(
+                "pfUSDC Ethereum proof does not monotonically advance beacon finality".to_string(),
+            );
+        }
+        self.finalized_beacon_root = values.finalized_beacon_root.clone();
+        self.finalized_slot = values.finalized_slot;
+        self.validate()
     }
 }
 

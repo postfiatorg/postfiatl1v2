@@ -3726,6 +3726,10 @@ pub struct LedgerState {
     pub ethereum_arbitrum_finality_states: Vec<EthereumArbitrumFinalityStateV2>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub arc_finality_states: Vec<PfUsdcArcFinalityStateV1>,
+    /// Governance-pinned Ethereum beacon anchors. Empty means the Ethereum
+    /// finality lane admits nothing: see PfUsdcBeaconFinalityStateV1 (R2-1).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub beacon_finality_states: Vec<PfUsdcBeaconFinalityStateV1>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fast_ingress_campaigns: Vec<FastIngressCampaignStateV1>,
 }
@@ -3840,6 +3844,7 @@ impl LedgerState {
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
+            beacon_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -3892,6 +3897,7 @@ impl LedgerState {
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
+            beacon_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -3945,6 +3951,7 @@ impl LedgerState {
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
+            beacon_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -3993,6 +4000,7 @@ impl LedgerState {
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
+            beacon_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -4046,6 +4054,7 @@ impl LedgerState {
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
+            beacon_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -4094,6 +4103,7 @@ impl LedgerState {
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
+            beacon_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }

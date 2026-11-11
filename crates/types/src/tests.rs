@@ -3537,3 +3537,112 @@ fn pftl_source_governance_signs_unchanged_disabled_and_selected_states() {
     op.settlement_source_asset_ids = Some(vec!["33".repeat(48), "33".repeat(48)]);
     assert!(op.validate().is_err());
 }
+
+/// R2-1: the Ethereum ingress lane published where its light-client proof
+/// started (`prior_finalized_beacon_root` / `prior_finalized_slot`) and the
+/// chain never compared those fields with anything, so a prover could begin from
+/// a store they invented -- their own sync committee -- and "prove" a deposit
+/// that never happened. These tests pin the comparison that closes it.
+fn beacon_anchor_fixture() -> (PfUsdcBeaconFinalityStateV1, PfUsdcEthereumIngressPublicValuesV1) {
+    let state = PfUsdcBeaconFinalityStateV1 {
+        schema: PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1.to_string(),
+        route_profile_hash: "ab".repeat(48),
+        route_epoch: 1,
+        source_chain_id: 1,
+        vault_address: "0x1111111111111111111111111111111111111111".to_string(),
+        token_address: "0x2222222222222222222222222222222222222222".to_string(),
+        route_binding: "09".repeat(32),
+        finalized_beacon_root: "01".repeat(32),
+        finalized_slot: 100,
+    };
+    let values = PfUsdcEthereumIngressPublicValuesV1 {
+        schema: PFUSDC_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+        route_id: VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1.to_string(),
+        source_chain_id: 1,
+        prior_finalized_beacon_root: "01".repeat(32),
+        prior_finalized_slot: 100,
+        finalized_beacon_root: "02".repeat(32),
+        finalized_slot: 132,
+        finalized_execution_block_hash: "03".repeat(32),
+        finalized_execution_block_number: 1_000,
+        execution_state_root: "04".repeat(32),
+        vault_address: "0x1111111111111111111111111111111111111111".to_string(),
+        vault_runtime_code_hash: "05".repeat(32),
+        token_address: "0x2222222222222222222222222222222222222222".to_string(),
+        token_runtime_code_hash: "06".repeat(32),
+        depositor: "0x3333333333333333333333333333333333333333".to_string(),
+        pftl_recipient: "pf-eth-ingress-test".to_string(),
+        pftl_recipient_hash: vault_bridge_pftl_recipient_hash("pf-eth-ingress-test")
+            .expect("recipient hash"),
+        amount_atoms: 10,
+        nonce: "08".repeat(32),
+        route_binding: "09".repeat(32),
+        deposit_id: "0a".repeat(32),
+        evidence_root: "0c".repeat(48),
+        manifest_hash: "0d".repeat(32),
+        deposit_nullifier: "0e".repeat(32),
+        total_obligations_atoms: "10".to_string(),
+        vault_token_balance_atoms: "10".to_string(),
+    };
+    (state, values)
+}
+
+#[test]
+fn beacon_anchor_accepts_a_proof_that_starts_at_the_anchor_and_advances_it() {
+    let (mut state, values) = beacon_anchor_fixture();
+    state.verify_and_advance(&values).expect("conforming proof");
+    assert_eq!(state.finalized_beacon_root, "02".repeat(32));
+    assert_eq!(state.finalized_slot, 132);
+}
+
+#[test]
+fn beacon_anchor_rejects_an_invented_starting_state() {
+    // The R2-1 attack: the prover begins from a light-client store of their own
+    // making. Every other field is well formed.
+    let (mut state, mut values) = beacon_anchor_fixture();
+    values.prior_finalized_beacon_root = "ff".repeat(32);
+    let error = state.verify_and_advance(&values).expect_err("must reject");
+    assert!(error.contains("does not start from the pinned beacon finality anchor"), "{error}");
+    assert_eq!(state.finalized_slot, 100, "anchor must not move on rejection");
+}
+
+#[test]
+fn beacon_anchor_rejects_a_starting_slot_that_is_not_the_pinned_one() {
+    let (mut state, mut values) = beacon_anchor_fixture();
+    values.prior_finalized_slot = 99;
+    let error = state.verify_and_advance(&values).expect_err("must reject");
+    assert!(error.contains("does not start from the pinned beacon finality anchor"), "{error}");
+    assert_eq!(state.finalized_slot, 100, "anchor must not move on rejection");
+}
+
+#[test]
+fn beacon_anchor_rejects_replayed_or_rewound_finality() {
+    let (mut state, mut values) = beacon_anchor_fixture();
+    // Two layers reject this, and that is deliberate: the public values
+    // validator refuses a non-advancing slot on its own ("must advance"), and
+    // the anchor refuses it again against the pinned slot. Either message is a
+    // correct rejection; what matters is that nothing is credited and the
+    // anchor does not move.
+    values.finalized_slot = 100; // equal to the anchor
+    let error = state.verify_and_advance(&values).expect_err("must reject equal");
+    assert!(
+        error.contains("monotonically advance") || error.contains("must advance"),
+        "{error}"
+    );
+
+    values.finalized_slot = 99; // below the anchor
+    let error = state.verify_and_advance(&values).expect_err("must reject below");
+    assert!(
+        error.contains("monotonically advance") || error.contains("must advance"),
+        "{error}"
+    );
+    assert_eq!(state.finalized_slot, 100, "anchor must not move on rejection");
+}
+
+#[test]
+fn beacon_anchor_rejects_a_proof_for_another_route() {
+    let (mut state, mut values) = beacon_anchor_fixture();
+    values.vault_address = "0x9999999999999999999999999999999999999999".to_string();
+    let error = state.verify_and_advance(&values).expect_err("must reject");
+    assert!(error.contains("does not match its pinned finality-state route"), "{error}");
+}

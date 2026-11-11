@@ -1306,6 +1306,7 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
         })?;
     let mut advanced_finality = None;
     let mut advanced_arc_finality = None;
+    let mut advanced_beacon_finality = None;
     let mut advanced_campaign = None;
     let mut source_nullifier = String::new();
     if let Some(public_values) = proof_public_values {
@@ -1418,8 +1419,30 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
                     .map_err(|error| ("pfusdc_arc_finality_state_rejected", error))?;
                 advanced_arc_finality = Some(state);
             }
-            VerifiedIngressPublicValues::Ethereum { nullifier } => {
-                source_nullifier = nullifier;
+            VerifiedIngressPublicValues::Ethereum(values) => {
+                // R2-1: this lane used to take the nullifier and discard the
+                // proof's declared starting point, so a prover could begin from
+                // a light-client store they invented. Require a
+                // governance-pinned anchor and make the proof start exactly
+                // there, the same way the Arbitrum and Arc arms above do. No
+                // pinned anchor means no admission.
+                let mut state = ledger
+                    .beacon_finality_states
+                    .iter()
+                    .find(|state| state.route_profile_hash == operation.policy_hash)
+                    .ok_or_else(|| {
+                        (
+                            "pfusdc_beacon_finality_state_missing",
+                            "proof-native pfUSDC Ethereum ingress requires a governance-pinned beacon finality anchor"
+                                .to_string(),
+                        )
+                    })?
+                    .clone();
+                state
+                    .verify_and_advance(&values)
+                    .map_err(|error| ("pfusdc_beacon_finality_state_rejected", error))?;
+                source_nullifier = values.deposit_nullifier.clone();
+                advanced_beacon_finality = Some(state);
             }
         }
     }
@@ -1466,6 +1489,22 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
                 (
                     "pfusdc_arc_finality_state_missing",
                     "proof-native Arc finality state disappeared during commit".to_string(),
+                )
+            })?;
+        *current = state;
+    }
+    if let Some(state) = advanced_beacon_finality {
+        let current = ledger
+            .beacon_finality_states
+            .iter_mut()
+            .find(|current| {
+                current.route_profile_hash == state.route_profile_hash
+                    && current.route_epoch == state.route_epoch
+            })
+            .ok_or_else(|| {
+                (
+                    "pfusdc_beacon_finality_state_missing",
+                    "proof-native beacon finality anchor disappeared during commit".to_string(),
                 )
             })?;
         *current = state;
@@ -7429,7 +7468,7 @@ struct VaultBridgeDepositSourceProof<'a> {
 enum VerifiedIngressPublicValues {
     Confirmed(postfiat_types::PfUsdcIngressPublicValuesV3),
     Bonded(postfiat_types::PfUsdcBondedIngressPublicValuesV1),
-    Ethereum { nullifier: String },
+    Ethereum(Box<postfiat_types::PfUsdcEthereumIngressPublicValuesV1>),
     Arc(postfiat_types::PfUsdcArcIngressPublicValuesV1),
 }
 
@@ -7519,9 +7558,10 @@ fn ensure_vault_bridge_deposit_source_proof(
             policy_hash,
             &values,
         )?;
-        return Ok(Some(VerifiedIngressPublicValues::Ethereum {
-            nullifier: values.deposit_nullifier,
-        }));
+        // Carry the whole public values, not just the nullifier: the caller
+        // must compare the proof's declared starting point against the pinned
+        // beacon anchor, which is exactly what R2-1 showed was never done.
+        return Ok(Some(VerifiedIngressPublicValues::Ethereum(Box::new(values))));
     }
     if source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 {
         let config = fast_ingress_verifier.ok_or_else(|| {
