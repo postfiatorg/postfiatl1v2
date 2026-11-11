@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import itertools
 import json
 import re
 import tempfile
@@ -1758,22 +1759,35 @@ MODEL_AMOUNTS = (400_000, 300_000, 200_000, 100_000)  # older unpaid exports lea
 
 class ExportModelTests(unittest.TestCase):
     """The property the merge depends on, over every sequence of honest
-    answers up to DEPTH runs: a second payout of one export, or a payout with
-    no export, never makes a run exit 0 and is never `backed`, in that run or
-    a later one; a legitimate payout of a retained export is never an alarm.
+    answers up to a depth: no bad payout (a second payout of one export, or a
+    payout with no export) is ever printed `backed`, `verified_earlier` or
+    `paid`, in that run or a later one; no run that scans one exits 0; none
+    is saved. A legitimate payout of an export the run's export pages retain
+    is never an alarm, and a lagging input (a Base node below the kept scan,
+    a PFTL snapshot below the kept marks) is an error, never an alarm, and
+    leaves the export state unchanged.
 
     The lane: exports 0..3, export n at PFTL time n (height 100 + n), each
-    pruned two steps later, the newest never. Each run the PFTL time advances
-    or stays, and the export pages may come from a node one or two steps
-    behind; Base may finalize a legitimate payout (the newest unpaid export, so older unpaid ones leave pruned room),
-    a second payout of a paid export, or a payout with no export. The state
-    is carried from run to run as the CLI carries its file; no baseline flag,
-    no discard flag, no change of the scan start. Exhaustive: nothing random."""
+    pruned two steps later, the newest never. Base may finalize a legitimate
+    payout (the newest unpaid export, so older unpaid ones leave pruned
+    room), a second payout of a paid export, or a payout with no export. The
+    state is carried from run to run as the CLI carries its file. Two
+    alphabets, each exhaustive (nothing random):
 
-    DEPTH = 4
+    - PFTL answers: the PFTL time advances or stays and the export pages may
+      come from a node one or two steps behind; normal runs; depth 4.
+    - Rescans: each run is normal, `--from-height 0`, a `--lock-from-block`
+      alternating between 1 and 2 (before every payout) or a late one after
+      every earlier payout (after an unseen one, if any); the Base finalized
+      block may go back 20 blocks, below the previous run's; the PFTL time
+      advances and the export pages may come from a node one step behind;
+      depth 3."""
+
     AMOUNTS = MODEL_AMOUNTS
     ENTRIES = [export_entry(n, amount=MODEL_AMOUNTS[n], height=100 + n) for n in range(4)]
     ORPHAN = export_entry(9, amount=50_000)
+    PAYOUTS = ("none", "legit", "duplicate", "orphan")
+    BASE_BACK = 20
 
     def snapshot(self, time: int) -> ExportPftl:
         exported = min(time, 3) + 1
@@ -1781,44 +1795,55 @@ class ExportModelTests(unittest.TestCase):
         return ExportPftl(self.ENTRIES[pruned:exported], pruned=pruned, pruned_atoms=sum(self.AMOUNTS[:pruned]),
                           released=1_000_000, current_height=100 + time)
 
-    def test_no_sequence_of_honest_answers_backs_a_bad_payout(self):
+    def model(self, depth, steps, kinds, bases, least):
         import functools
         counted = {"sequences": 0, "runs": 0}
+        alphabet = (steps, kinds, bases)
         with unittest.mock.patch.object(watcher, "keccak256", functools.lru_cache(maxsize=None)(watcher.keccak256)):
-            self.explore(0, 0, None, [], frozenset(), [], counted)
-        print(f"\nexport model: depth {self.DEPTH}, {counted['sequences']} sequences, {counted['runs']} runs checked")
-        self.assertGreater(counted["sequences"], 1_000)
+            self.explore(alphabet, depth, 0, 0, None, [], frozenset(), [], counted)
+        print(f"\nexport model: {len(steps)} PFTL x {len(self.PAYOUTS)} payout x {len(kinds)} start x "
+              f"{len(bases)} Base choices, depth {depth}: {counted['sequences']} sequences, {counted['runs']} runs")
+        self.assertGreater(counted["sequences"], least)
 
-    def explore(self, run_index, time, state, logs, paid, bad, counted, trail=()):
-        if run_index == self.DEPTH:
+    def test_no_sequence_of_honest_answers_backs_a_bad_payout(self):
+        self.model(4, ("advance", "stay", "lag1", "lag2"), ("normal",), ("ok",), 1_000)
+
+    def test_no_rescan_late_start_or_lagging_base_node_backs_a_bad_payout(self):
+        self.model(3, ("advance", "lag1"), ("normal", "from_height", "lock_alt", "late"), ("ok", "back"), 5_000)
+
+    def explore(self, alphabet, depth, run_index, time, state, logs, paid, bad, counted, trail=()):
+        if run_index == depth:
             counted["sequences"] += 1
             return
-        for step in ("advance", "stay", "lag1", "lag2"):
+        steps, kinds, bases = alphabet
+        for step, payout, kind, base_step in itertools.product(steps, self.PAYOUTS, kinds, bases):
             now = time + 1 if step == "advance" else time
             answer = now - {"lag1": 1, "lag2": 2}.get(step, 0)
-            if answer < 0:
+            if answer < 0 or run_index == 0 and (kind == "late" or base_step == "back"):
                 continue
-            for payout in ("none", "legit", "duplicate", "orphan"):
-                block = 1_000 + 10 * run_index + 5
-                transaction = "0x" + f"{run_index * 16 + len(logs):064x}"
-                exists = [n for n in range(min(now, 3) + 1) if n not in paid]
-                if payout == "legit" and not exists or payout == "duplicate" and not paid:
-                    continue
-                new_logs, new_paid, new_bad = list(logs), paid, list(bad)
-                if payout == "legit":
-                    new_logs.append(released_log(self.ENTRIES[exists[-1]], block=block, transaction=transaction))
-                    new_paid = paid | {exists[-1]}
-                elif payout != "none":
-                    entry = self.ENTRIES[min(paid)] if payout == "duplicate" else self.ORPHAN
-                    new_logs.append(released_log(entry, block=block, transaction=transaction))
-                    new_bad.append((block, transaction))
-                counted["runs"] += 1
-                path = (*trail, (step, payout))
-                new_state = self.run_once(state, now, answer, new_logs, 1_000 + 10 * run_index + 9, new_bad,
-                                          new_paid, path)
-                self.explore(run_index + 1, now, new_state, new_logs, new_paid, new_bad, counted, path)
+            block = 1_000 + 10 * run_index + 5
+            transaction = "0x" + f"{run_index * 16 + len(logs):064x}"
+            exists = [n for n in range(min(now, 3) + 1) if n not in paid]
+            if payout == "legit" and not exists or payout == "duplicate" and not paid:
+                continue
+            new_logs, new_paid, new_bad = list(logs), paid, list(bad)
+            if payout == "legit":
+                new_logs.append(released_log(self.ENTRIES[exists[-1]], block=block, transaction=transaction))
+                new_paid = paid | {exists[-1]}
+            elif payout != "none":
+                entry = self.ENTRIES[min(paid)] if payout == "duplicate" else self.ORPHAN
+                new_logs.append(released_log(entry, block=block, transaction=transaction))
+                new_bad.append((block, transaction))
+            kept_from = ((state or {}).get("exports") or {}).get("lock_from_block", 0)
+            lock_from = {"lock_alt": 2 if kept_from == 1 else 1, "late": 1_000 + 10 * run_index}.get(kind, kept_from)
+            finalized = 1_000 + 10 * run_index + 9 - (self.BASE_BACK if base_step == "back" else 0)
+            counted["runs"] += 1
+            path = (*trail, (step, payout, kind, base_step))
+            new_state = self.run_once(state, now, answer, new_logs, finalized, new_bad, new_paid, path,
+                                      from_height=0 if kind == "from_height" else None, lock_from=lock_from)
+            self.explore(alphabet, depth, run_index + 1, now, new_state, new_logs, new_paid, new_bad, counted, path)
 
-    def run_once(self, state, now, answer, logs, finalized, bad, paid, path):
+    def answers(self, now, answer):
         current, lagging = self.snapshot(now), self.snapshot(answer)
 
         class Answers:
@@ -1826,32 +1851,71 @@ class ExportModelTests(unittest.TestCase):
             def external_lane_info(self, *args, **kwargs):
                 return (lagging if "export_limit" in kwargs else current).external_lane_info(*args, **kwargs)
 
+        return Answers(), lagging
+
+    def run_once(self, state, now, answer, logs, finalized, bad, paid, path, *, from_height=None, lock_from=0):
+        pftl, lagging = self.answers(now, answer)
         base = ExportBase(logs, locked=10_000_000, finalized=finalized)
         loaded = json.loads(json.dumps(state)) if state is not None else None
         try:
-            lines, alarms, new_state = watcher.watch_once(Answers(), base, LANE, state=loaded, exports=True)
+            lines, alarms, new_state = watcher.watch_once(pftl, base, LANE, state=loaded, exports=True,
+                                                          from_height=from_height, lock_from_block=lock_from)
         except watcher.WatcherError:
             return state  # exit 1: the file is kept
         failed = any(line["kind"] == "error" for line in lines)
         code = 2 if alarms else 1 if failed else 0
-        summary = lines[-1].get("exports")
+        summary, error = lines[-1].get("exports"), lines[-1].get("export_error")
+        kept = (state or {}).get("exports")
         retained = {watcher.export_evm_digest(entry["packet_digest"])
                     for entry in self.ENTRIES[lagging.pruned:lagging.pruned + len(lagging.exports)]}
         for line in lines:
-            if line["kind"] != "payout":
-                continue
-            if (line["block"], line["transaction"]) in bad:
+            if line["kind"] == "payout" and (line["block"], line["transaction"]) in bad:
                 self.assertNotIn(line["status"], ("backed", "verified_earlier"), path)
-            elif line["packet_digest"] in retained:
+            elif line["kind"] == "payout" and line["packet_digest"] in retained:
                 self.assertNotEqual(line["status"], "alarm", path)
+            elif line["kind"] == "export" and line["status"] == "paid":
+                self.assertNotIn((line["base_block"], line["base_transaction"]), bad, path)
         if summary is not None and any(summary["scanned_from_block"] <= block <= finalized for block, _ in bad):
             self.assertNotEqual(code, 0, path)
+        if kept and kept.get("format") == watcher.EXPORT_STATE_FORMAT and kept["scanned_through_block"] > finalized:
+            self.assertEqual(error, "base_finalized_behind_state", path)
+        if error is not None:
+            # A lagging input is an error, never an alarm, and keeps the export state.
+            self.assertEqual((alarms, (new_state or {}).get("exports")), (0, kept), path)
         saved = (new_state or state or {}).get("exports") or {}
         kept_transactions = {entry["transaction"] for entry in [*saved.get("paid", []),
                                                                  *saved.get("pruned_paid_recent", [])]}
         self.assertFalse(kept_transactions & {transaction for _, transaction in bad}, path)
         self.assertLessEqual(saved.get("pruned_paid_count", 0) + len(saved.get("paid", [])), len(paid), path)
         return new_state if new_state is not None else state
+
+    def test_a_state_of_another_identity_is_refused_on_every_start(self):
+        """Directed, not exhaustive: through the command line, a saved model
+        state whose genesis, lock or source chain id is not the run's is
+        refused before any of it is used and left unchanged, whatever the
+        run's start, also on a lagging Base node."""
+
+        logs = [released_log(self.ENTRIES[1], block=1_005, transaction="0x" + "a1" * 32)]
+        pftl, _ = self.answers(1, 1)
+        changes = {"genesis_hash": "d0" * 48, "lock_contract_address": "0x" + "9f" * 20, "source_chain_id": 84532}
+        starts = {"normal": (), "from_height": ("--from-height", "0"), "lock_alt": ("--lock-from-block", "1"),
+                  "late": ("--lock-from-block", "1010"), "discard": ("--discard-export-history",)}
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            code, _, _ = run(pftl, ExportBase(logs, locked=10_000_000, finalized=1_009), "--exports",
+                             "--state-file", str(state_file))
+            saved = json.loads(state_file.read_text())
+            self.assertEqual((code, len(saved["exports"]["paid"])), (0, 1))
+            for (key, value), (start, extra), finalized in itertools.product(changes.items(), starts.items(),
+                                                                            (1_019, 999)):
+                with self.subTest(key=key, start=start, finalized=finalized):
+                    state_file.write_text(json.dumps({**saved, key: value}))
+                    before = state_file.read_bytes()
+                    code, lines, stderr = run(pftl, ExportBase(logs, locked=10_000_000, finalized=finalized),
+                                              "--exports", "--state-file", str(state_file), *extra)
+                    self.assertEqual((code, lines), (1, []))
+                    self.assertIn("state_file_invalid", stderr)
+                    self.assertEqual(state_file.read_bytes(), before)
 
 
 class IntervalMalformedTests(unittest.TestCase):
