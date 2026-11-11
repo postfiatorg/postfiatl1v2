@@ -306,23 +306,40 @@ What it does not do:
 
 ### The export view
 
-`--exports` adds the outbound direction to the same run, under the same rules: it reads both chains only, uses finalized Base blocks only, and follows the same exit codes. There are three new options:
+`--exports` adds the outbound direction to the same run, under the same rules: it reads both chains only, uses finalized Base blocks only (`Released` logs up to the finalized block, the totals at it), and follows the same exit codes, plus exit 3 for an accepted baseline. Its options:
 
-- `--lock-from-block N` (default 0) sets the first Base block of the `Released` scan. It must be at or below the lock's deployment block.
+- `--exports` turns the view on.
+- `--lock-from-block N` (default 0) sets the first Base block of the `Released` scan. It must be at or below the lock's deployment block, or `totalReleased` cannot be matched.
 - `--unpaid-warning-blocks N` turns an export that has stayed unpaid for more than N PFTL blocks into a warning.
-- `--exports` turns the view on. The release view's cursor file is unchanged; the export view rescans `Released` events from `--lock-from-block` on every run.
+- `--accept-export-baseline`, the recovery path below.
+
+**The operating rule.** Start the export view when the lane goes live and run it at least once per release window, as the release view. An export packet becomes prunable after its retention, and a payout is checked against its packet only while the packet is stored. Run this way, every payout is checked once against its stored packet and no baseline is ever needed.
 
 It checks three things:
 
-1. **Every payout.** Each `Released` event of the lane's lock must match the stored export packet whose EVM digest (`external_lane_export_evm_digest`) equals the event's `packetDigest`. The recipient, the amount and the withdrawal-id commitment must also match. Otherwise it raises `payout_without_export`, `payout_amount_mismatch`, `payout_recipient_mismatch` or `payout_withdrawal_mismatch`, as alarms of the same severity as an unbacked release. When the lane has pruned export records and no stored packet matches, the payout is `unknown_pruned` with the warning `payout_unknown_pruned`, never `backed`. The archive lookup of the proof-input command needs a data directory and is not available over RPC.
+1. **Every payout.** Each `Released` event of the lane's lock must match the stored export packet whose EVM digest (`external_lane_export_evm_digest`) equals the event's `packetDigest`. The recipient, the amount and the withdrawal-id and burn commitments must also match. A payout that matches no stored packet is an alarm: `payout_without_export` when the lane has pruned nothing, `payout_pruned_before_check` when it has, since the watcher never verified it. The archive lookup of the proof-input command needs a data directory and is not available over RPC.
 2. **Every export.** Each stored export packet in a final block is reported as `paid`, with its Base transaction and block, or `unpaid`, with its age in PFTL blocks. Unpaid is information, not an alarm; with `--unpaid-warning-blocks` set, a long-unpaid export becomes the warning `export_unpaid_too_long`.
 3. **The totals,** at the finalized block. Each broken invariant is an alarm:
-   - the lock's `totalReleased` equals the sum of the scanned payouts (`total_released_mismatch`);
-   - `token.balanceOf(lock)` equals `totalLocked − totalReleased` (`lock_balance_mismatch`);
+   - the lock's `totalReleased` equals the sum of every payout up to the finalized block, the verified sum kept in the state file plus the new events (`total_released_mismatch`);
+   - `token.balanceOf(lock)` is at least `totalLocked − totalReleased`, as `PFTLockV1` promises; a shortfall is `lock_balance_mismatch`, and a surplus (tokens sent to the lock by a plain transfer) is reported as `lock_surplus` in the totals, not raised;
    - the lane's `exported_atoms` is at least the payouts' sum (`exported_below_paid`);
    - the lane's `released_atoms` is at most `totalLocked` (`released_above_locked`).
 
-`payout`, `export` and `warning` lines join the output. The summary gains `exports` (the counts and totals) and `warnings`.
+The other alarms of the view:
+
+- `payout_burn_mismatch`: the payout's burn commitment differs from the packet's.
+- `payout_duplicate`: a second payout names the same packet digest.
+- `payout_unknown_above_pruned`: the payouts that match no stored packet are more than `pruned_export_count`, or their sum is above `pruned_exported_atoms`.
+
+Its errors, each one `error` line (exit 1, retried under `--interval`): `base_answer_malformed` (a log or a call answer that is not what the lock emits or returns, or a log outside the asked range or from another address), `export_record_malformed` (an export page that breaks the paging rules: nonces not contiguous down to `pruned_export_count`, a cursor that is not the page's oldest nonce or repeats, a missing or non-integer `export_count`, `pruned_export_count` or `released_atoms`, or `exported_atoms` that is not the pruned atoms plus the stored amounts), `external_lane_info_inconsistent` (the pages came from different snapshots) and `base_finalized_behind_state` (the Base node's finalized block is below the kept one). `Released` logs are read in chunks of 10,000 blocks, halved on an RPC error down to 16. A failure of the export view does not hide the release view: its lines are printed first, and the summary names `export_error`.
+
+**The state file.** Next to the release cursor, a clean export view keeps `exports`: `lock_from_block`, `scanned_through_block` (the finalized Base block scanned through), `payout_count` and `payout_sum` up to it, and `verified_payouts_root`, a running Keccak-256 over the verified payout digests. The next run reads only later blocks, so a verified payout is not reported again. Each view's part advances only after a clean run of that view; a release alarm keeps both. A state file without `exports` (written before this view kept one) loads, and the view scans from `--lock-from-block`.
+
+**The recovery path.** A lane whose export view starts late can have payouts whose packets were pruned before any check, and each is `payout_pruned_before_check` on every run. `--accept-export-baseline` (only with `--exports`, never with `--interval`) is the one explicit way past them, as `--from-height` is for releases. It checks everything that can still be checked: every payout whose packet is stored, the four totals, and the count and sum of the unknown payouts against `pruned_export_count` and `pruned_exported_atoms`. If any of these fails, the alarms stand and no baseline is kept. Otherwise it prints each never-verified payout as a `baseline_payout` line (block, transaction, amount, recipient, digest), keeps the scan position with `baseline` (`baseline_accepted: true`, `accepted_at` in UTC, and `unverified_payouts` and `unverified_atoms`), and exits 3. Every later summary repeats `baseline`. It does not prove that those payouts had export packets: only that there were at most as many as the pruned packets and that they paid no more than the pruned atoms. Checking each one needs the pruned packets from a retained archive.
+
+**The trust.** It trusts its PFTL node as the release view does. A lagging PFTL node errs on the safe side: a payout of an export it has not applied yet shows as `payout_without_export` and `exported_below_paid`, false alarms that clear once the node catches up, never a missed one. For the same reason `released_atoms` is read from the run's first lane page, before the finalized Base block is fixed, and `exported_atoms` from the export pages, after it.
+
+`payout`, `export`, `baseline_payout` and `warning` lines join the output. The summary gains `exports` (the counts, the totals and any `baseline`), `warnings` and `warning_codes`.
 
 ## Exports
 

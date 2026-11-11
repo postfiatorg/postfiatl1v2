@@ -1,36 +1,48 @@
-"""Watch a genesis external lane: match each release on PFTL against its Base Lock.
+"""Watch a genesis external lane in both directions, reading only.
 
-Design ``docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md`` section
-5.2: every ``external_lane_release_v1`` names its Lock nonce, and the watcher
-raises an alarm for a release whose nonce has no Lock, whose amount differs
-from the Lock's, or whose recipient hash differs from the Lock's
+The release view (design ``docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md``,
+section 5.2): every ``external_lane_release_v1`` names its Lock nonce, and the
+watcher raises an alarm for a release whose nonce has no Lock, whose amount
+differs from the Lock's, or whose recipient hash differs from the Lock's
 ``pftlRecipientHash``. It pages the lane's release records from a PFTL node
-(``external_lane_info``), reads the lane policy from the same read, and checks
-each release on Base through the lock contract's ``lockRecord(nonce)`` view
-(``crates/pft-token-contracts/src/PFTLockV1.sol``) at the release's own source
-block, once that block is final and its hash is the one the release names; a
-Lock made later cannot back an earlier release.
+(``external_lane_info``) and checks each on Base through the lock's
+``lockRecord(nonce)`` view (``crates/pft-token-contracts/src/PFTLockV1.sol``)
+at the release's own source block, once that block is final and its hash is
+the one the release names; a Lock made later cannot back an earlier release.
+
+The export view (``--exports``): every ``Released`` payout of the lock in
+finalized Base blocks must match a stored PFTL export packet (digest,
+recipient, amount, withdrawal-id and burn commitments); every final export is
+``paid`` or ``unpaid``; and the lock's and the lane's totals must agree at the
+finalized block. A payout whose packet is not stored and that no earlier run
+verified is an alarm; ``--accept-export-baseline`` is the one-shot way past
+payouts pruned before the view ever ran.
 
 It only reads, on both chains: no key, no signature, no transaction.
 
     PYTHONPATH=python python -m postfiat_rpc.external_lane_watcher \\
         --pftl-rpc 127.0.0.1:27650 --lane-id base-erc20 \\
-        --base-rpc http://127.0.0.1:8545 --state-file watcher-state.json --once
+        --base-rpc http://127.0.0.1:8545 --state-file watcher-state.json --exports --once
 
-Output is JSON lines on stdout: one ``release`` line per release checked, one
-``alarm`` line per alarm, and a ``summary`` line per run. A one-shot run exits
-0 when clean, 2 on any alarm and 1 on an input or RPC error (one ``error`` line
-on stderr). With ``--interval`` it runs until stopped: it keeps running after
-an alarm, so the alert signal is the ``alarm`` line itself, and it retries
-after an RPC error or a failed state write.
+Output is JSON lines on stdout: ``release``, ``payout``, ``export``,
+``baseline_payout``, ``warning`` and ``alarm`` lines, and one ``summary`` line
+per run. A one-shot run exits 0 when clean, 2 on any alarm, 3 when it accepted
+an export baseline, and 1 on an input or RPC error (an ``error`` line on
+stderr). With ``--interval`` it runs until stopped: it keeps running after an
+alarm, so the alert signal is the ``alarm`` line itself, and it retries after
+an RPC error, a malformed answer or a failed state write.
 
-The state file is written before a run's lines are printed. Without it (lost
-or deleted), the next run starts from height 0 and re-checks every stored
-release; a state file of an earlier schema is refused (delete it, or pass
+The state file keeps each view's position: the release view's checked
+height and count, and the export view's scanned-through finalized Base block
+with its payout count, sum and a running commitment of the verified digests.
+Each part advances only after a clean run of its view, and the file is
+written before the run's summary is printed. Without it (lost or deleted),
+the next run starts from height 0 and Base block ``--lock-from-block``; a
+state file of an earlier schema is refused (delete it, or pass
 ``--from-height``, which does not read the file and replaces it after a clean
-run). The Base node must serve each release's source block: a
-node that has pruned it fails the run, so run the watcher at least once per
-release window or point it at an archive node.
+run). Run the watcher at least once per release window: release records and
+export packets are pruned after their retention, and the Base node must
+serve each release's source block (or use an archive node).
 """
 
 from __future__ import annotations
@@ -988,7 +1000,8 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m postfiat_rpc.external_lane_watcher",
-        description="Match each release of a genesis external lane against its Lock on Base (read only).",
+        description="Watch a genesis external lane, read only: match each PFTL release against its Lock on "
+                    "Base and, with --exports, each Base payout against its PFTL export packet and the totals.",
     )
     parser.add_argument("--pftl-rpc", required=True, metavar="HOST:PORT", help="a PFTL node's RPC endpoint")
     parser.add_argument("--lane-id", required=True, help="the genesis external lane, for example base-erc20")
