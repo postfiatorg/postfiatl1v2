@@ -434,9 +434,10 @@ def mock_proof_refusal(*, placeholder, loopback, anvil, sp1_code_hash):
     return None
 
 
-def classify_send_failure(stderr):
-    """What a failed `cast send` means: (sent, reason)."""
-    text = stderr.lower()
+def classify_send_failure(stderr, stdout=''):
+    """What a failed `cast send` means: (sent, reason). Foundry 1.7.1 writes the
+    error to stderr; 1.8.1 with --json writes an error document to stdout."""
+    text = (stderr + '\n' + stdout).lower()
     if any(s in text for s in ('password', 'keystore', 'decrypt', 'mac mismatch', 'no such file')):
         return False, 'the keystore or its password did not open; nothing was sent'
     if any(s in text for s in ('insufficient funds', 'gas required exceeds')):
@@ -448,6 +449,11 @@ def classify_send_failure(stderr):
     if 'revert' in text:
         return False, 'the node refused the call in its gas estimate (it would revert); nothing was sent'
     return None, 'cast send failed for another reason; check the sender\'s nonce before resending'
+
+
+def is_revert(reason):
+    """The call reverts: mined and reverted, or refused in the node's gas estimate."""
+    return 'revert' in reason
 
 
 def signer_args(args, local_anvil):
@@ -653,8 +659,9 @@ def cmd_release(args):
     p = run(['cast', 'send', args.lock, 'release(bytes,bytes)', '0x' + sent_hex, proof['proof_hex'],
              '--rpc-url', args.rpc, '--json', *signer], secret=secret)
     if p.returncode != 0:
-        sent, reason = classify_send_failure(p.stderr)
-        result.update(sent=sent if sent is not None else 'unknown', failure=reason, stderr=p.stderr.strip()[-1500:])
+        sent, reason = classify_send_failure(p.stderr, p.stdout)
+        result.update(sent=sent if sent is not None else 'unknown', failure=reason, reverted=is_revert(reason),
+                      cast_output=(p.stderr.strip() or p.stdout.strip())[-1500:])
         print(json.dumps(result, indent=2))
         raise RelayRefusal(f'release: {reason}')
     result['sent'] = True

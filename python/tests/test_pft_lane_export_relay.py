@@ -495,6 +495,17 @@ class SendSafetyTests(unittest.TestCase):
         mined = relay.classify_send_failure('transaction reverted: {"status":"0x0","transactionHash":"0xab"}')
         self.assertEqual(mined[0], True)
 
+    def test_cast_1_8_1_reports_its_error_on_stdout(self):
+        # Foundry 1.8.1 `cast send --json` writes the error document to stdout and nothing to stderr.
+        stdout = ('{"schema_version":1,"success":false,"data":null,"errors":[{"level":"error","code":"cast.error",'
+                  '"message":"Failed to estimate gas: server returned an error response: error code 3: execution '
+                  'reverted, data: \\"0x\\""}],"warnings":[]}')
+        sent, reason = relay.classify_send_failure("", stdout)
+        self.assertIs(sent, False)
+        self.assertIn("gas estimate", reason)
+        self.assertTrue(relay.is_revert(reason))
+        self.assertFalse(relay.is_revert(relay.classify_send_failure("insufficient funds", "")[1]))
+
     def test_the_prover_command_is_never_echoed(self):
         secret = "PROVER_TOKEN=s3cr3t-value"
         with self.assertRaises(relay.RelayRefusal) as caught:
