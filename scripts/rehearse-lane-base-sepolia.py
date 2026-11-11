@@ -11,8 +11,12 @@ impersonated, disposable accounts: nothing is sent to Base Sepolia. Without
 `--fork`, `deploy` and `lock` send real Base Sepolia transactions from Foundry
 keystores named by `--*-account` and `--*-password-file`; a raw private key is
 never accepted. The verifier's SP1 verifier is Succinct's versioned
-SP1 v6.1.0 Groth16 verifier (the circuit SP1 6.3.1 proves for); a mock SP1
-verifier is refused unless the RPC is a loopback Anvil.
+SP1 v6.1.0 Groth16 verifier (the circuit SP1 6.3.1 proves for); this command
+never deploys a mock SP1 verifier.
+
+The PFTL chain's committee keys come from fixed seeds in this repository, so
+the two contracts a real run deploys are a rehearsal and must never be named
+as the lane's lock.
 
 The PFTL "fleet" is the round-trip rehearsal's driver: ONE generated data
 directory driven by an ignored node test, every block carrying consensus v2
@@ -27,7 +31,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import time
@@ -70,8 +73,19 @@ SP1_VERIFIER = {
     'version': 'v6.1.0',
 }
 GAS_MARGIN = 3
-# deploy refuses when the gas price is more than this factor above the plan's.
-GAS_PRICE_FACTOR = 5
+# deploy, approve and Lock refuse when the gas price is more than this factor
+# above the plan's: at most the sheet's funding margin.
+GAS_PRICE_FACTOR = GAS_MARGIN
+# Bounded waits of a real run, all while the in-process PFTL chain waits for
+# base-locked.json: the operator's confirmation of the sheet, deployments,
+# verification, approve and Lock, and Base finality of the Lock's block.
+CONFIRMATION_BUDGET_SECONDS = 24 * 3600
+SEND_BUDGET_SECONDS = 2 * 3600
+FINALITY_BUDGET_SECONDS = 4 * 3600
+# The driver's handshake timeout (driver-config.json): above every budget above.
+DRIVER_HANDSHAKE_TIMEOUT_SECONDS = CONFIRMATION_BUDGET_SECONDS + SEND_BUDGET_SECONDS + FINALITY_BUDGET_SECONDS + 3600
+# Fixed for ever by the PFTL chain the verifier pins (scripts/rehearse-lane-roundtrip.py).
+PFTL_PROTOCOL_VERSION = 1
 # The holder funds the verifier deployer, the lock deployer and the relayer.
 FUNDING_TRANSFERS = 3
 TRANSFER_GAS = 21_000
@@ -106,6 +120,86 @@ def check_planned_nonces(plan, nonce):
             require(current == plan[role]['planned_nonce'],
                     f'the {role} deployer\'s {tag} nonce is {current}, the plan needs {plan[role]["planned_nonce"]}; '
                     'nothing was sent')
+
+
+def check_deployers_differ_from_holder(plan, holder=HOLDER):
+    for role in ('verifier', 'lock'):
+        require(plan[role]['deployer'].lower() != holder.lower(),
+                f'the {role} deployer must not be the holder {holder}: its nonce moves with every approve and Lock')
+    require(plan['verifier']['deployer'].lower() != plan['lock']['deployer'].lower(),
+            'the two deployers must differ')
+
+
+def check_real_run_ready(*, plan, sheet, holder_address, relayer_opens, eth_balance, token_balance,
+                         gas_price_wei, node_bin, driver_alive):
+    """The one block of checks before the first intent of a real run. Any failure
+    refuses with nothing sent."""
+    require(holder_address.lower() == HOLDER,
+            f'the holder keystore is {holder_address}, not the holder {HOLDER}; nothing was sent')
+    require(relayer_opens, 'the relayer keystore does not open; nothing was sent')
+    holder_gas = sheet['test_eth_per_key']['holder']['gas'] - FUNDING_TRANSFERS * TRANSFER_GAS
+    for key, address, gas in (
+            ('verifier deployer', plan['verifier']['deployer'], sheet['test_eth_per_key']['verifier deployer']['gas']),
+            ('lock deployer', plan['lock']['deployer'], sheet['test_eth_per_key']['lock deployer']['gas']),
+            ('holder', HOLDER, holder_gas)):
+        need, have = gas * gas_price_wei, eth_balance(address)
+        require(have >= need, f'the {key} {address} holds {have} wei, but its steps need {need} wei at the current '
+                              f'gas price {gas_price_wei}; nothing was sent')
+    tokens = token_balance(HOLDER)
+    require(tokens >= LOCK_AMOUNT, f'the holder holds {tokens} token units, less than the Lock {LOCK_AMOUNT}; '
+                                   'nothing was sent')
+    require(Path(node_bin).is_file(), f'the node binary {node_bin} is not built; nothing was sent')
+    require(driver_alive(), 'the PFTL fleet driver is not running; nothing was sent')
+
+
+def check_lock_event_holder(log, holder=HOLDER):
+    """The mined Lock's `Locked` event names the holder (its second indexed topic)."""
+    found = '0x' + log['topics'][2][-40:].lower()
+    require(found == holder.lower(), f'the Locked event names holder {found}, not {holder}')
+
+
+def check_driver_report(ready, *, max_lock_amount, handshake_timeout):
+    """Two values fixed for ever must equal what the driver's chain reports."""
+    require(ready['protocol_version'] == PFTL_PROTOCOL_VERSION,
+            f'the driver reports PFTL protocol version {ready["protocol_version"]}, but the verifier pins '
+            f'{PFTL_PROTOCOL_VERSION}')
+    require(int(ready['lane_release_cap_atoms']) == max_lock_amount,
+            f'the driver\'s lane release cap {ready["lane_release_cap_atoms"]} differs from the lock\'s maxLockAmount '
+            f'{max_lock_amount}')
+    require(int(ready['handshake_timeout_seconds']) == handshake_timeout,
+            f'the driver waits {ready["handshake_timeout_seconds"]} s, not the configured {handshake_timeout} s')
+
+
+def check_chain_id(chain_id):
+    require(chain_id == CHAIN_ID, f'the RPC reports chain id {chain_id}, not Base Sepolia\'s {CHAIN_ID}; nothing was sent')
+
+
+def refuse_through_off_fork(*, fork, through):
+    """Off the fork a stop between deploy and release-on-pftl kills the in-process
+    chain the contracts are bound to; it cannot be continued."""
+    require(fork or through not in ('deploy', 'lock', 'release-on-pftl'),
+            f'--through {through} is refused off the fork: stopping there ends the PFTL chain the contracts are bound '
+            'to. Run plan, then one invocation through record (it pauses for your confirmation after preflight)')
+
+
+def check_commit(state, head):
+    """The commit recorded at deploy; every later start must run the same one."""
+    recorded = state['data'].get('commit')
+    require(recorded is None or recorded == head,
+            f'this output directory deployed from commit {recorded}; the checkout is {head}')
+
+
+def wait_for_confirmation(path, *, expected, alive, budget, sleep=time.sleep):
+    """Waits for the operator's confirmation file naming the sheet's sha256,
+    while the PFTL chain stays alive."""
+    for _ in range(budget):
+        if path.exists():
+            found = path.read_text().strip()
+            require(found == expected, f'{path} names {found}, not the sheet {expected}; nothing was sent')
+            return
+        require(alive(), 'the PFTL fleet driver exited while waiting for the confirmation; nothing was sent')
+        sleep(1)
+    raise RehearsalFailure(f'no confirmation in {path} within {budget} s; nothing was sent')
 
 
 def check_landed(plan, role, address, code_hash, expected_code):
@@ -175,7 +269,8 @@ def begin_intent(state, *, stage, role, sender, nonce, purpose, **extra):
 
 def reconcile_deployment(intent, chain, *, predicted, expected_code):
     """`adopt` a mined deployment that matches the plan, `send` when nothing was
-    sent at the planned nonce; refuse anything else."""
+    sent at the planned nonce; refuse anything else. An adopted pair's
+    constructor values are read back after `deploy_pair`, as a sent pair's are."""
     if intent.get('hash'):
         receipt = chain.receipt(intent['hash'])
         if receipt is not None:
@@ -192,8 +287,18 @@ def reconcile_deployment(intent, chain, *, predicted, expected_code):
     return 'send'
 
 
+def require_not_pending(intent, chain):
+    """A recorded hash without a receipt may still be pending: wait, never resend."""
+    if intent.get('hash') and chain.receipt(intent['hash']) is None:
+        raise RehearsalFailure(f'the {intent["role"]} transaction {intent["hash"]} has no receipt yet and may be '
+                               'pending; wait for it and rerun')
+
+
 def reconcile_approve(intent, chain, *, owner, spender, amount):
-    return 'adopt' if chain.allowance(owner, spender) >= amount else 'send'
+    if chain.allowance(owner, spender) >= amount:
+        return 'adopt'
+    require_not_pending(intent, chain)
+    return 'send'
 
 
 def reconcile_lock(intent, chain, *, lock, holder, amount, recipient_hash):
@@ -205,11 +310,36 @@ def reconcile_lock(intent, chain, *, lock, holder, amount, recipient_hash):
         require(record == (holder, amount, recipient_hash),
                 f'Lock nonce {before} on {lock} is {record}, not this plan\'s Lock; refusing to send another')
         return 'adopt'
+    require_not_pending(intent, chain)
     if intent.get('hash'):
         receipt = chain.receipt(intent['hash'])
-        require(receipt is None or int(str(receipt.get('status')), 0) != 1,
+        require(int(str(receipt.get('status')), 0) != 1,
                 'the Lock transaction succeeded but the lock\'s nextNonce did not move; stop and inspect')
     return 'send'
+
+
+def reconcile_after_restart(state, chain, *, holder=HOLDER, amount=LOCK_AMOUNT):
+    """A later invocation after fleet: the driver is gone. Record what a crashed
+    run may have sent, then refuse; nothing is ever sent here."""
+    data = state['data']
+    for intent in [i for i in state.get('intents', []) if i['outcome'] in (None, 'sent')]:
+        try:
+            if intent['stage'] == 'deploy':
+                role = intent['role']
+                verdict = reconcile_deployment(intent, chain, predicted=data['plan'][role]['predicted'],
+                                               expected_code=data['preflight'][f'{role}_runtime_code_hash'])
+            elif intent['role'] == 'approve':
+                verdict = reconcile_approve(intent, chain, owner=holder, spender=data['deploy']['lock'], amount=amount)
+            elif intent['role'] == 'lock':
+                verdict = reconcile_lock(intent, chain, lock=data['deploy']['lock'], holder=holder, amount=amount,
+                                         recipient_hash='0x' + keccak256(data['fleet']['recipient'].encode()).hex())
+            else:
+                continue
+            intent['reconciled'] = {'adopt': 'mined and matches the plan', 'send': 'not mined'}[verdict]
+        except RehearsalFailure as refusal:
+            intent['reconciled'] = f'refused: {refusal}'
+    raise RehearsalFailure('the fleet driver from an earlier invocation is gone; fleet through export '
+                           'run in one invocation in this version (start a fresh output directory)')
 
 
 def require_no_resume_acknowledged(acknowledged):
@@ -267,6 +397,38 @@ def load_state(path):
     return json.loads(path.read_text()) if path.exists() else {'completed': [], 'data': {}}
 
 
+def save_state(path, state):
+    """Write, fsync, rename: a crash leaves the old state or the new one."""
+    partial = path.with_name(path.name + '.partial')
+    with partial.open('w') as handle:
+        handle.write(json.dumps(state, indent=2) + '\n')
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(partial, path)
+
+
+def with_retry(read, *, attempts=5, delay=1.0, sleep=time.sleep):
+    """A read with bounded retries and doubling back-off; the last error is raised."""
+    for attempt in range(attempts):
+        try:
+            return read()
+        except (OSError, ValueError, RehearsalFailure):
+            if attempt == attempts - 1:
+                raise
+            sleep(delay * 2 ** attempt)
+
+
+def poll(read, what, *, seconds=120, sleep=time.sleep):
+    """Reads until `read` returns something other than None, for a bounded time:
+    a backend may not have seen a just-mined block yet."""
+    for _ in range(seconds):
+        value = read()
+        if value is not None:
+            return value
+        sleep(1)
+    raise RehearsalFailure(f'{what} did not appear within {seconds} s')
+
+
 def check_stage(state, stage):
     """A stage runs once and only after every earlier stage."""
     require(stage in STAGES, f'unknown stage {stage}')
@@ -283,18 +445,12 @@ def signer_flags(account, password_file):
     return ['--account', account, '--password-file', str(password_file)]
 
 
-def refuse_mock_off_loopback(*, mock_artifact, rpc_url, client_version):
-    """A mock SP1 verifier lets anyone release from the lock: loopback Anvil only."""
-    if mock_artifact is None:
-        return
-    require(RELAY.is_loopback_url(rpc_url) and 'anvil' in client_version.lower(),
-            'a mock SP1 verifier is refused unless the RPC is a loopback Anvil')
-
-
 def check_gas_price(*, plan_wei, current_wei):
     require(current_wei <= plan_wei * GAS_PRICE_FACTOR,
-            f'the gas price is {current_wei} wei, more than {GAS_PRICE_FACTOR}x the plan\'s {plan_wei}; '
-            'nothing was sent. Rerun preflight\'s sheet or wait')
+            f'the gas price is {current_wei} wei, more than {GAS_PRICE_FACTOR}x the plan\'s {plan_wei}, the margin '
+            'the sheet funds; nothing more was sent. This output directory cannot continue (its PFTL chain ends with '
+            'this process): when the price has fallen, start a fresh output directory from plan; if the contracts '
+            'were already deployed they are bound to this chain, and a new run needs new deployer keys')
 
 
 def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_identity=None):
@@ -359,7 +515,10 @@ def parser():
                    help='the guest ELF; default: the committed one, checked against the program info')
     p.add_argument('--node-bin', type=Path, default=ROOT / 'target/debug/postfiat-node')
     p.add_argument('--proof', type=Path, help='a real SP1 proof file for prove-and-release')
-    p.add_argument('--mock-sp1-artifact', type=Path, help='refused unless the RPC is a loopback Anvil')
+    p.add_argument('--fork-finality-wait', type=int, default=0,
+                   help='fork only: wait this many seconds in place of Base finality before base-locked.json')
+    p.add_argument('--fork-driver-timeout', type=int,
+                   help='fork only: the driver\'s handshake timeout, to show what a too-short one does')
     for role in ('verifier', 'lock', 'holder', 'relayer'):
         p.add_argument(f'--{role}-account')
         p.add_argument(f'--{role}-password-file', type=Path)
@@ -380,23 +539,23 @@ def main(argv=None):
     data = state['data']
     state.setdefault('mode', 'fork' if args.fork else 'base-sepolia')
     require(state['mode'] == ('fork' if args.fork else 'base-sepolia'), 'this output directory is for another mode')
-    # This version never deploys a mock; an artifact named off a loopback fork is refused outright.
-    refuse_mock_off_loopback(mock_artifact=args.mock_sp1_artifact,
-                             rpc_url='http://127.0.0.1' if args.fork else BASE_SEPOLIA_RPC,
-                             client_version='anvil' if args.fork else '')
+    require(args.fork or (args.fork_finality_wait == 0 and args.fork_driver_timeout is None),
+            '--fork-finality-wait and --fork-driver-timeout are fork-only')
+    refuse_through_off_fork(fork=args.fork, through=args.through)
+    head_commit = ORDER.git('rev-parse', 'HEAD')
+    check_commit(state, head_commit)
     identity = load_program_identity(
         fork=args.fork, override=args.program_info, elf=args.elf,
         worktree_clean=not subprocess.run(['git', 'status', '--porcelain'], cwd=ROOT, capture_output=True,
                                           text=True).stdout.strip(),
-        head=ORDER.git('rev-parse', 'HEAD'))
+        head=head_commit)
     program_info = identity
     vkey = identity['program_vkey']
     children, roles = [], {str(out): '<output>'}
     environment = dict(os.environ)
-    urls = {'public': BASE_SEPOLIA_RPC}
 
     def save():
-        state_path.write_text(json.dumps(state, indent=2) + '\n')
+        save_state(state_path, state)
 
     redacted = [str(value) for value in (args.verifier_account, args.lock_account, args.holder_account,
                                          args.relayer_account, args.verifier_password_file,
@@ -413,7 +572,7 @@ def main(argv=None):
         require(p.returncode == expected, f'{name}: exit {p.returncode}; see {out / (name + ".stderr")}')
         return (out / f'{name}.stdout').read_text()
 
-    def rpc(url, method, params=()):
+    def rpc_once(url, method, params=()):
         body = json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': list(params)}).encode()
         req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json',
                                                               'User-Agent': 'postfiat-lane-dry-run/1'})
@@ -421,6 +580,11 @@ def main(argv=None):
             value = json.load(response)
         require('error' not in value, f'{method}: {value.get("error")}')
         return value['result']
+
+    def rpc(url, method, params=(), attempts=None):
+        # Loopback reads are probes (a starting fork): one attempt; public reads retry.
+        return with_retry(lambda: rpc_once(url, method, params),
+                          attempts=attempts or (1 if url.startswith('http://127.0.0.1') else 5))
 
     def start_fork(name, block):
         def ready(port):
@@ -439,19 +603,23 @@ def main(argv=None):
         rpc(url, 'anvil_impersonateAccount', [address])
         rpc(url, 'anvil_setBalance', [address, hex(10 ** 19)])
 
-    def deploy(url, name, crate, contract, deployer, constructor, nonce, fork_signer):
+    def deploy(url, name, crate, contract, deployer, constructor, nonce, fork_signer, tag):
         signer = ['--unlocked', '--from', deployer] if fork_signer else signer_flags(
             getattr(args, f'{name}_account'), getattr(args, f'{name}_password_file'))
-        argv = ['forge', 'create', contract, '--rpc-url', url, '--broadcast', '--json', '--nonce', str(nonce),
-                *signer, '--constructor-args', *constructor]
+        argv = ['forge', 'create', contract, '--rpc-url', url, '--chain', str(CHAIN_ID), '--broadcast', '--json',
+                '--nonce', str(nonce), *signer, '--constructor-args', *constructor]
         env = dict(environment, FOUNDRY_OUT=str(out / f'forge-out-{Path(crate).name}'),
                    FOUNDRY_CACHE_PATH=str(out / f'forge-cache-{Path(crate).name}'))
-        result = json.loads(command(f'{name}-deploy-{len(children)}', argv, ROOT / crate, env))
-        receipt = rpc(url, 'eth_getTransactionReceipt', [result['transactionHash']])
+        result = json.loads(command(f'{tag}-{name}-deploy', argv, ROOT / crate, env))
+        receipt = poll(lambda: rpc(url, 'eth_getTransactionReceipt', [result['transactionHash']]),
+                       f'the receipt of {result["transactionHash"]}')
         return result['deployedTo'].lower(), int(receipt['gasUsed'], 16), result['transactionHash']
 
     def code_hash(url, address):
-        return ORDER.code_hash(rpc(url, 'eth_getCode', [address, 'latest']))
+        # A backend that has not seen the deployment's block yet returns empty code: poll.
+        code = poll(lambda: (lambda c: c if c not in ('0x', '') else None)(rpc(url, 'eth_getCode', [address, 'latest'])),
+                    f'code at {address}', seconds=60)
+        return ORDER.code_hash(code)
 
     def lock_args(predicted_verifier, token_code_hash):
         return [TOKEN, predicted_verifier, token_code_hash, str(data['plan']['max_lock_amount']),
@@ -464,14 +632,34 @@ def main(argv=None):
         partial.write_text(json.dumps(value))
         partial.rename(out / 'handshake' / name)
 
+    def driver_alive():
+        return driver['process'] is not None and driver['process'].poll() is None
+
+    def require_driver(before):
+        require(driver_alive(), f'the PFTL fleet driver exited before {before}; nothing more is sent')
+
     def wait_for(name, seconds=3600):
         path = out / 'handshake' / name
         for _ in range(seconds * 10):
             if path.exists():
                 return json.loads(path.read_text())
-            require(driver['process'] and driver['process'].poll() is None, f'the fleet driver exited before {name}')
+            require_driver(f'it wrote {name}')
             time.sleep(.1)
         raise RehearsalFailure(f'the fleet driver did not write {name}')
+
+    def verify_sources(verifier, lock):
+        """Sourcify needs no API key. A failure is recorded, not fatal: record retries it."""
+        results = {}
+        for name, address, crate, contract in (
+                ('verifier', verifier, ORDER.VERIFIER_CRATE, 'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1'),
+                ('lock', lock, ORDER.TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1')):
+            try:
+                command(f'sourcify-{name}', ['forge', 'verify-contract', '--verifier', 'sourcify', '--chain',
+                                             str(CHAIN_ID), address, contract], ROOT / crate)
+                results[name] = 'verified'
+            except RehearsalFailure as failure:
+                results[name] = f'failed: {failure}'
+        return results
 
     def target_url():
         return data['fork_url'] if args.fork else BASE_SEPOLIA_RPC
@@ -483,28 +671,7 @@ def main(argv=None):
                 continue
             if stage in DRIVER_STAGES[1:] and 'fleet' in state['completed'] and driver['process'] is None:
                 # Reconcile what a crashed run may have sent, so the record says it, then stop.
-                chain = BaseChain(lambda method, params: rpc(target_url(), method, params))
-                for intent in [i for i in state.get('intents', []) if i['outcome'] in (None, 'sent')]:
-                    try:
-                        if intent['stage'] == 'deploy':
-                            role = intent['role']
-                            verdict = reconcile_deployment(
-                                intent, chain, predicted=data['plan'][role]['predicted'],
-                                expected_code=data['preflight'][f'{role}_runtime_code_hash'])
-                        elif intent['role'] == 'approve':
-                            verdict = reconcile_approve(intent, chain, owner=HOLDER, spender=data['deploy']['lock'],
-                                                        amount=LOCK_AMOUNT)
-                        else:
-                            verdict = reconcile_lock(intent, chain, lock=data['deploy']['lock'], holder=HOLDER,
-                                                     amount=LOCK_AMOUNT, recipient_hash='0x' + keccak256(
-                                                         data['fleet']['recipient'].encode()).hex())
-                        intent['reconciled'] = {'adopt': 'mined and matches the plan',
-                                                'send': 'not mined'}[verdict]
-                    except RehearsalFailure as refusal:
-                        intent['reconciled'] = f'refused: {refusal}'
-                save()
-                raise RehearsalFailure('the fleet driver from an earlier invocation is gone; fleet through export '
-                                       'run in one invocation in this version (start a fresh output directory)')
+                reconcile_after_restart(state, BaseChain(lambda method, params: rpc(target_url(), method, params)))
             check_stage(state, stage)
             print(f'stage {stage}', file=sys.stderr)
             if stage == 'plan':
@@ -522,6 +689,7 @@ def main(argv=None):
                 else:
                     require(args.verifier_deployer and args.lock_deployer, 'name --verifier-deployer and --lock-deployer')
                     deployers = {'verifier': args.verifier_deployer.lower(), 'lock': args.lock_deployer.lower()}
+                check_deployers_differ_from_holder({r: {'deployer': a} for r, a in deployers.items()})
                 nonces = {r: int(rpc(BASE_SEPOLIA_RPC, 'eth_getTransactionCount', [a, 'latest']), 16)
                           for r, a in deployers.items()}
                 plan = ORDER.deployment_plan(verifier_deployer=deployers['verifier'], verifier_nonce=nonces['verifier'],
@@ -538,10 +706,10 @@ def main(argv=None):
                                               vault_code_hash='0x' + keccak256(b'probe').hex())
                 deploy(probe_url, 'verifier', ORDER.VERIFIER_CRATE,
                        'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1', deployers['verifier'],
-                       [ORDER.verifier_constructor_tuple(probe)], plan['verifier']['planned_nonce'], True)
+                       [ORDER.verifier_constructor_tuple(probe)], plan['verifier']['planned_nonce'], True, 'probe')
                 probe_lock, _, _ = deploy(probe_url, 'lock', ORDER.TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1',
                                           deployers['lock'], lock_args(plan['verifier']['predicted'], token_code_hash),
-                                          plan['lock']['planned_nonce'], True)
+                                          plan['lock']['planned_nonce'], True, 'probe')
                 require(probe_lock == plan['lock']['predicted'], 'the probe lock landed off its predicted address')
                 data['plan']['lock_runtime_code_hash'] = code_hash(probe_url, probe_lock)
                 children.pop().terminate()
@@ -556,6 +724,7 @@ def main(argv=None):
                 if args.fork:
                     data['fork_url'] = start_fork('target-fork', data['plan']['fork_block'])
                 config = {'rpc': target_url(), 'handshake_dir': str(out / 'handshake'),
+                          'handshake_timeout_seconds': args.fork_driver_timeout or DRIVER_HANDSHAKE_TIMEOUT_SECONDS,
                           'lock': data['plan']['lock']['predicted'],
                           'lock_code_hash': data['plan']['lock_runtime_code_hash'], 'token': TOKEN,
                           'token_code_hash': data['plan']['token_runtime_code_hash']}
@@ -568,6 +737,11 @@ def main(argv=None):
                     stdout=(out / 'fleet-driver.stdout').open('w'), stderr=(out / 'fleet-driver.stderr').open('w'))
                 children.append(driver['process'])
                 ready = wait_for('pftl-ready.json')
+                check_driver_report(ready, max_lock_amount=data['plan']['max_lock_amount'],
+                                    handshake_timeout=config['handshake_timeout_seconds'])
+                data['driver_report_checked'] = {'protocol_version': ready['protocol_version'],
+                                                 'lane_release_cap_atoms': ready['lane_release_cap_atoms'],
+                                                 'handshake_timeout_seconds': ready['handshake_timeout_seconds']}
                 data['fleet'] = {'form': 'one data directory driven by the ignored node test local_evm_lane_roundtrip; '
                                          'six validators sign every block\'s consensus v2 commit; no separate node '
                                          'processes or network',
@@ -591,10 +765,11 @@ def main(argv=None):
                 verifier, gas['deploy-verifier'], _ = deploy(
                     fork, 'verifier', ORDER.VERIFIER_CRATE, 'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1',
                     plan['verifier']['deployer'], [ORDER.verifier_constructor_tuple(data['verifier_config'])],
-                    plan['verifier']['planned_nonce'], True)
+                    plan['verifier']['planned_nonce'], True, 'preflight')
                 lock, gas['deploy-lock'], _ = deploy(
                     fork, 'lock', ORDER.TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1', plan['lock']['deployer'],
-                    lock_args(verifier, plan['token_runtime_code_hash']), plan['lock']['planned_nonce'], True)
+                    lock_args(verifier, plan['token_runtime_code_hash']), plan['lock']['planned_nonce'], True,
+                    'preflight')
                 require((verifier, lock) == (plan['verifier']['predicted'], plan['lock']['predicted']),
                         'the fork deployments landed off the predicted addresses')
                 require(code_hash(fork, lock) == plan['lock_runtime_code_hash'], 'the fork lock code hash differs')
@@ -621,19 +796,44 @@ def main(argv=None):
                 (out / 'deploy-sheet.json').write_text(json.dumps(sheet, indent=2) + '\n')
                 (out / 'deploy-sheet.md').write_text(sheet_markdown(sheet))
                 children.pop().terminate()
+                if not args.fork:
+                    # The real run's sheet: fund the keys from it, then confirm while the chain stays alive.
+                    digest = ORDER.sha256_file(out / 'deploy-sheet.json')
+                    print(sheet_markdown(sheet), file=sys.stderr)
+                    print(f'Fund the keys from this sheet, then write {digest} to {out / "confirm-deploy"}; '
+                          f'waiting up to {CONFIRMATION_BUDGET_SECONDS} s', file=sys.stderr)
+                    wait_for_confirmation(out / 'confirm-deploy', expected=digest, alive=driver_alive,
+                                          budget=CONFIRMATION_BUDGET_SECONDS)
+                    data['sheet_confirmed'] = digest
             elif stage == 'deploy':
                 url, plan = target_url(), data['plan']
                 if args.fork:
                     for role in ('verifier', 'lock'):
                         impersonate(url, plan[role]['deployer'])
-                else:
-                    check_deployer_keystores(plan, lambda role: command(f'{role}-keystore-address', [
-                        'cast', 'wallet', 'address', *signer_flags(getattr(args, f'{role}_account'),
-                                                                   getattr(args, f'{role}_password_file'))]).strip())
                 require_no_resume_acknowledged(args.i_accept_no_resume_between_deploy_and_export)
+                check_chain_id(int(rpc(url, 'eth_chainId'), 16))
                 # Base Sepolia's own price, also in fork mode (a fork reports Anvil's base fee).
-                check_gas_price(plan_wei=plan['gas_price_wei'],
-                                current_wei=int(rpc(BASE_SEPOLIA_RPC, 'eth_gasPrice'), 16))
+                gas_price = int(rpc(BASE_SEPOLIA_RPC, 'eth_gasPrice'), 16)
+                check_gas_price(plan_wei=plan['gas_price_wei'], current_wei=gas_price)
+                if not args.fork:
+                    def keystore_address(role):
+                        return command(f'{role}-keystore-address', [
+                            'cast', 'wallet', 'address', *signer_flags(getattr(args, f'{role}_account'),
+                                                                       getattr(args, f'{role}_password_file'))]).strip()
+                    check_deployer_keystores(plan, keystore_address)
+                    try:
+                        relayer_opens = bool(keystore_address('relayer'))
+                    except RehearsalFailure:
+                        relayer_opens = False
+                    check_real_run_ready(
+                        plan=plan, sheet=json.loads((out / 'deploy-sheet.json').read_text()),
+                        holder_address=keystore_address('holder'), relayer_opens=relayer_opens,
+                        eth_balance=lambda a: int(rpc(url, 'eth_getBalance', [a, 'latest']), 16),
+                        token_balance=lambda a: int(rpc(url, 'eth_call', [{'to': TOKEN, 'data': ORDER.call_data(
+                            'balanceOf(address)', a)}, 'latest']), 16),
+                        gas_price_wei=gas_price, node_bin=args.node_bin, driver_alive=driver_alive)
+                require_driver('deploy')
+                data['commit'] = head_commit
                 expected_code = {'verifier': data['preflight']['verifier_runtime_code_hash'],
                                  'lock': data['preflight']['lock_runtime_code_hash']}
                 chain = BaseChain(lambda method, params: rpc(url, method, params))
@@ -654,20 +854,21 @@ def main(argv=None):
                         intent['outcome'] = 'adopted after a rerun'
                         save()
                         return plan[role]['predicted'], intent['hash']
+                    require_driver(f'the {role} deployment')
                     if role == 'verifier':
                         address, _, tx = deploy(url, 'verifier', ORDER.VERIFIER_CRATE,
                                                 'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1',
                                                 plan['verifier']['deployer'],
                                                 [ORDER.verifier_constructor_tuple(data['verifier_config'])],
-                                                plan['verifier']['planned_nonce'], args.fork)
+                                                plan['verifier']['planned_nonce'], args.fork, 'real')
                     else:
                         address, _, tx = deploy(url, 'lock', ORDER.TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1',
                                                 plan['lock']['deployer'],
                                                 lock_args(plan['verifier']['predicted'],
                                                           plan['token_runtime_code_hash']),
-                                                plan['lock']['planned_nonce'], args.fork)
-                    intent.update(hash=tx, receipt=rpc(url, 'eth_getTransactionReceipt', [tx]).get('status'),
-                                  outcome='sent')
+                                                plan['lock']['planned_nonce'], args.fork, 'real')
+                    intent.update(hash=tx, receipt=poll(lambda: rpc(url, 'eth_getTransactionReceipt', [tx]),
+                                                        f'the receipt of {tx}').get('status'), outcome='sent')
                     save()
                     return address, tx
 
@@ -675,14 +876,17 @@ def main(argv=None):
                                        expected_code=expected_code)
                 verifier, lock = deployed['verifier']['address'], deployed['lock']['address']
                 vtx, ltx = deployed['verifier']['transaction'], deployed['lock']['transaction']
+                # Every constructor value on the real chain, the verifier's three stored ones included
+                # (its first checkpoint, height and committee root), sent or adopted, before any Lock.
+                read = ORDER.check_constructor_values(
+                    lambda address, sig: rpc(url, 'eth_call', [{'to': address, 'data': ORDER.call_data(sig)},
+                                                               'latest']).lower(),
+                    verifier=verifier, verifier_values=data['verifier_config'], lock=lock,
+                    lock_values={'token': TOKEN, 'finalityVerifier': verifier, 'maxLockAmount': plan['max_lock_amount'],
+                                 'minimumLockAmount': ORDER.MINIMUM_LOCK_AMOUNT})
                 data['deploy'] = {'verifier': verifier, 'lock': lock, 'transactions': [vtx, ltx],
-                                  'sourcify': 'skipped on the fork' if args.fork else 'see sourcify-*.stdout'}
-                if not args.fork:
-                    for name, address, crate, contract in (
-                            ('verifier', verifier, ORDER.VERIFIER_CRATE, 'src/PFTLFinalityVerifierV1.sol:PFTLFinalityVerifierV1'),
-                            ('lock', lock, ORDER.TOKEN_CRATE, 'src/PFTLockV1.sol:PFTLockV1')):
-                        command(f'sourcify-{name}', ['forge', 'verify-contract', '--verifier', 'sourcify', '--chain',
-                                                     str(CHAIN_ID), address, contract], ROOT / crate)
+                                  'constructor_values_read_back': len(read),
+                                  'sourcify': 'skipped on the fork' if args.fork else verify_sources(verifier, lock)}
             elif stage == 'lock':
                 url, lock = target_url(), data['deploy']['lock']
                 if args.fork:
@@ -690,13 +894,22 @@ def main(argv=None):
                     signer = ['--unlocked', '--from', HOLDER]
                 else:
                     signer = signer_flags(args.holder_account, args.holder_password_file)
+                check_chain_id(int(rpc(url, 'eth_chainId'), 16))
                 chain = BaseChain(lambda method, params: rpc(url, method, params))
                 recipient = data['fleet']['recipient']
                 recipient_hash = '0x' + keccak256(recipient.encode()).hex()
 
                 def send_async(name, argv, intent):
-                    # The hash is recorded as soon as cast prints it, then the receipt.
-                    intent['hash'] = command(name, ['cast', 'send', *argv, '--rpc-url', url, *signer,
+                    # Before each send: the chain, the gas price and the PFTL chain; the nonce is
+                    # recorded with the intent, the hash as soon as cast prints it, then the receipt.
+                    check_chain_id(int(rpc(url, 'eth_chainId'), 16))
+                    check_gas_price(plan_wei=data['plan']['gas_price_wei'],
+                                    current_wei=int(rpc(BASE_SEPOLIA_RPC, 'eth_gasPrice'), 16))
+                    require_driver(name)
+                    intent['nonce'] = chain.nonce(HOLDER, 'pending')
+                    save()
+                    intent['hash'] = command(name, ['cast', 'send', *argv, '--rpc-url', url, '--chain', str(CHAIN_ID),
+                                                    '--nonce', str(intent['nonce']), *signer,
                                                     '--async']).strip().split()[-1]
                     save()
                     receipt = json.loads(command(f'{name}-receipt', ['cast', 'receipt', intent['hash'],
@@ -723,14 +936,29 @@ def main(argv=None):
                 else:
                     receipt = send_async('lock', [lock, 'lock(uint64,bytes)', str(LOCK_AMOUNT),
                                                   '0x' + recipient.encode().hex()], lock_intent)
+                    check_lock_event_holder(chain.lock_log(lock, lock_intent['next_nonce_before'],
+                                                           data['plan']['fork_block']))
                 data['lock'] = {'transaction': receipt['transactionHash'], 'block': int(receipt['blockNumber'], 16),
                                 'amount': LOCK_AMOUNT, 'lock_nonce': lock_intent['next_nonce_before']}
             elif stage == 'release-on-pftl':
-                if not args.fork:
-                    # The first wait: Base finality of the Lock's block (about an hour on 2026-11-06).
+                # The first wait: Base finality of the Lock's block (about an hour on 2026-11-06), within
+                # FINALITY_BUDGET_SECONDS and the driver's longer handshake timeout. The driver must be alive
+                # at every check: if it is gone, the chain the contracts are bound to is gone.
+                started = time.monotonic()
+                if args.fork:
+                    while time.monotonic() - started < args.fork_finality_wait:
+                        require_driver('Base finality of the Lock block (the fork\'s stand-in wait)')
+                        time.sleep(1)
+                else:
                     while int(rpc(BASE_SEPOLIA_RPC, 'eth_getBlockByNumber', ['finalized', False])['number'], 16) \
                             < data['lock']['block']:
+                        require_driver('Base finality of the Lock block')
+                        require(time.monotonic() - started < FINALITY_BUDGET_SECONDS,
+                                f'Base did not finalize block {data["lock"]["block"]} within '
+                                f'{FINALITY_BUDGET_SECONDS} s')
                         time.sleep(60)
+                data['finality_wait_seconds'] = round(time.monotonic() - started)
+                require_driver('base-locked.json')
                 handshake('base-locked.json', {'transaction': data['lock']['transaction'], 'block': data['lock']['block']})
                 released = wait_for('pftl-released.json', seconds=4 * 3600)
                 require(released['recipient_balance_after_release'] == LOCK_AMOUNT, 'the release did not credit the Lock')
@@ -780,15 +1008,35 @@ def main(argv=None):
                         break
                     continue
                 require(not args.fork, 'a real proof is released on Base Sepolia, not on the fork')
-                command('relay-release', [sys.executable, ROOT / 'scripts/pft-lane-export-relay.py', 'release',
+                release = begin_intent(state, stage='prove-and-release', role='release', sender='relayer keystore',
+                                       nonce=None, purpose=f'release {EXPORT_AMOUNT} to {data["export"]["base_recipient"]}')
+                require(release['outcome'] is None, f'a release was already sent ({release["outcome"]}); inspect '
+                                                    'relay-release.stdout before anything else')
+                release['outcome'] = 'sending'
+                save()
+                try:
+                    relay_output = command('relay-release', [sys.executable, ROOT / 'scripts/pft-lane-export-relay.py', 'release',
                                           '--rpc', target_url(), '--lock', data['deploy']['lock'], '--input',
                                           out / 'relay-input', '--proof', args.proof,
                                           *signer_flags(args.relayer_account, args.relayer_password_file),
                                           '--expect-program-vkey', vkey, '--expect-sp1-verifier',
                                           SP1_VERIFIER['address']])
+                except RehearsalFailure:
+                    release['outcome'] = 'failed: see relay-release.stdout and relay-release.stderr'
+                    raise
+                result = json.loads(relay_output)
+                release.update(hash=result.get('transaction'), outcome='sent')
+                data['prove_and_release'] = {'transaction': result.get('transaction'), 'block': result.get('block'),
+                                             'released': result.get('released')}
+                # The record is written again with the release result.
+                state['completed'] = [s for s in state['completed'] if s != 'record']
             elif stage == 'record':
+                deployed = data.get('deploy', {})
+                if not args.fork and any(str(v).startswith('failed') for v in deployed.get('sourcify', {}).values()):
+                    deployed['sourcify'] = verify_sources(deployed['verifier'], deployed['lock'])
                 summary = {'mode': state['mode'], 'public_network_transaction': not args.fork,
                            'proof_network_request': False, **{k: v for k, v in data.items() if k != 'private'},
+                           'intents': state.get('intents', []),
                            'sp1_verifier': SP1_VERIFIER, 'program_info': program_info}
                 text = RT.portable_text(json.dumps(summary, indent=2), out=out, root=ROOT, roles=roles, secrets=[])
                 (out / 'summary.json').write_text(text + '\n')

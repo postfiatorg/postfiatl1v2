@@ -4,10 +4,13 @@
 // (`POSTFIAT_LANE_ROUNDTRIP` names its config). Ignored: it needs the script's
 // local Anvil.
 
-/// Waits for `name` in the handshake directory, written by the script.
-fn roundtrip_wait(dir: &Path, name: &str) -> Value {
+/// Waits up to `timeout_seconds` for `name` in the handshake directory,
+/// written by the script. The timeout comes from the driver config
+/// (`handshake_timeout_seconds`, default 1,200): the Base Sepolia dry run sets
+/// it above its own Base finality budget.
+fn roundtrip_wait(dir: &Path, name: &str, timeout_seconds: u64) -> Value {
     let path = dir.join(name);
-    for _ in 0..12_000 {
+    for _ in 0..timeout_seconds.saturating_mul(10) {
         if let Ok(bytes) = fs::read(&path) {
             if let Ok(value) = serde_json::from_slice(&bytes) {
                 return value;
@@ -15,7 +18,7 @@ fn roundtrip_wait(dir: &Path, name: &str) -> Value {
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
-    panic!("the rehearsal did not write {name}");
+    panic!("the rehearsal did not write {name} within {timeout_seconds} s");
 }
 
 fn roundtrip_write(dir: &Path, name: &str, value: &Value) {
@@ -82,6 +85,9 @@ fn local_evm_lane_roundtrip() {
         "loopback or Base Sepolia reads only"
     );
     let dir = PathBuf::from(config["handshake_dir"].as_str().unwrap());
+    let timeout = config["handshake_timeout_seconds"]
+        .as_u64()
+        .unwrap_or(1_200);
     let cast = |args: &[&str]| -> Value {
         let result = std::process::Command::new("cast")
             .args(args)
@@ -114,6 +120,11 @@ fn local_evm_lane_roundtrip() {
         .expect("pins");
     let (domain, _) = live_consensus_v2_context(&chain.data_dir).expect("consensus v2 context");
     let checkpoint = roundtrip_header(&chain, tip_height(&chain));
+    // The lane's per-window release cap, which the lock's maxLockAmount must equal.
+    let lane_policy = &chain.genesis.external_lanes()[0];
+    let lane_release_cap_atoms = u128::from(lane_policy.reserved_atoms)
+        * u128::from(lane_policy.release_cap_bps)
+        / 10_000;
     // The recipient's key, for `wallet-sign-asset-transaction`; it stays in the
     // generated data directory, which the script removes.
     let recipient_key = ml_dsa_65_keygen_from_seed(&[0x99; 32]);
@@ -142,11 +153,12 @@ fn local_evm_lane_roundtrip() {
             "checkpoint": {"block_id": checkpoint.block_hash, "height": checkpoint.height,
                            "committee_root": domain.committee_root, "committee_epoch": domain.committee_epoch},
             "recipient": chain.recipient, "recipient_key_file": key_file, "lane": roundtrip_lane(&chain),
+            "lane_release_cap_atoms": lane_release_cap_atoms, "handshake_timeout_seconds": timeout,
         }),
     );
 
     // (b) The script deployed the verifier and the lock and locked on Base.
-    let locked = roundtrip_wait(&dir, "base-locked.json");
+    let locked = roundtrip_wait(&dir, "base-locked.json", timeout);
     let tx = locked["transaction"].as_str().unwrap();
     let block = locked["block"].as_u64().unwrap();
     if loopback {
@@ -245,7 +257,7 @@ fn local_evm_lane_roundtrip() {
 
     // (c), (f), (g) Exports the script signs with `wallet-sign-asset-transaction`.
     for (index, expect_accepted) in [(1, true), (2, true), (3, false)] {
-        let signed = roundtrip_wait(&dir, &format!("export-{index}.signed.json"));
+        let signed = roundtrip_wait(&dir, &format!("export-{index}.signed.json"), timeout);
         let tx: SignedAssetTransaction = serde_json::from_value(signed).expect("signed export");
         let applied = if expect_accepted {
             let receipt =

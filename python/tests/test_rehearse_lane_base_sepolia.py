@@ -41,16 +41,12 @@ class RefusalTests(unittest.TestCase):
         self.assertEqual(dry_run.signer_flags("lock-deployer", Path("pw")),
                          ["--account", "lock-deployer", "--password-file", "pw"])
 
-    def test_mock_verifier_only_on_a_loopback_anvil(self):
-        dry_run.refuse_mock_off_loopback(mock_artifact=None, rpc_url="https://sepolia.base.org", client_version="")
-        dry_run.refuse_mock_off_loopback(mock_artifact=Path("m.json"), rpc_url="http://127.0.0.1:8545",
-                                         client_version="anvil/v1.8.1")
-        with self.assertRaises(dry_run.RehearsalFailure):
-            dry_run.refuse_mock_off_loopback(mock_artifact=Path("m.json"), rpc_url="https://sepolia.base.org",
-                                             client_version="anvil/v1.8.1")
-        with self.assertRaises(dry_run.RehearsalFailure):
-            dry_run.refuse_mock_off_loopback(mock_artifact=Path("m.json"), rpc_url="http://127.0.0.1:8545",
-                                             client_version="geth")
+    def test_no_mock_sp1_option_and_no_dead_imports(self):
+        with self.assertRaises(SystemExit):
+            dry_run.parser().parse_args(["--output", "x", "--mock-sp1-artifact", "m.json"])
+        source = (ROOT / "scripts/rehearse-lane-base-sepolia.py").read_text()
+        self.assertNotIn("import shutil", source)
+        self.assertNotIn("urls = ", source)
 
     def test_the_sp1_verifier_is_the_versioned_one(self):
         self.assertEqual(dry_run.SP1_VERIFIER["name"], "V6_1_0_SP1_VERIFIER_GROTH16")
@@ -97,9 +93,15 @@ class DeployAddressTests(unittest.TestCase):
 
     def test_a_keystore_for_another_address_is_refused_before_any_broadcast(self):
         sent = []
+
+        def derive(role):
+            sent.append(role)  # the derivation is the only call; a broadcast would follow the check
+            return "0x" + "99" * 20
+
         with self.assertRaises(dry_run.RehearsalFailure):
-            dry_run.check_deployer_keystores(self.PLAN, lambda role: "0x" + "99" * 20)
-        self.assertEqual(sent, [])
+            dry_run.check_deployer_keystores(self.PLAN, derive)
+            sent.append("broadcast")
+        self.assertEqual(sent, ["verifier"])
         dry_run.check_deployer_keystores(self.PLAN, lambda role: self.PLAN[role]["deployer"].upper().replace("0X", "0x"))
 
     def test_nonces_must_equal_the_plan(self):
@@ -276,3 +278,180 @@ class SheetAndGasTests(unittest.TestCase):
                                   ["pft-lock-deployer", "/k/pw"])
         self.assertNotIn("pft-lock-deployer", text)
         self.assertNotIn("/k/pw", text)
+
+
+class RealRunReadinessTests(unittest.TestCase):
+    """A2, A13: one block of checks before the first intent of a real run."""
+
+    PLAN = DeployAddressTests.PLAN
+    SHEET = {"test_eth_per_key": {"verifier deployer": {"gas": 100}, "lock deployer": {"gas": 50},
+                                  "holder": {"gas": 10 + 3 * 21_000}}}
+
+    def ready(self, **change):
+        values = dict(plan=self.PLAN, sheet=self.SHEET, holder_address=dry_run.HOLDER.upper().replace("0X", "0x"),
+                      relayer_opens=True, eth_balance=lambda address: 10 ** 18, token_balance=lambda address: 10 ** 9,
+                      gas_price_wei=7, node_bin=Path(__file__), driver_alive=lambda: True)
+        values.update(change)
+        return dry_run.check_real_run_ready(**values)
+
+    def test_everything_ready_passes(self):
+        self.ready()
+
+    def test_each_missing_piece_refuses(self):
+        for change in (dict(holder_address="0x" + "99" * 20), dict(relayer_opens=False),
+                       dict(eth_balance=lambda address: 100 * 7 - 1), dict(token_balance=lambda address: 999_999),
+                       dict(node_bin=Path("/nonexistent/postfiat-node")), dict(driver_alive=lambda: False)):
+            with self.subTest(change=change), self.assertRaises(dry_run.RehearsalFailure):
+                self.ready(**change)
+
+    def test_deployers_differ_from_the_holder_and_each_other(self):
+        dry_run.check_deployers_differ_from_holder(self.PLAN)
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_deployers_differ_from_holder({"verifier": {"deployer": dry_run.HOLDER},
+                                                        "lock": self.PLAN["lock"]})
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_deployers_differ_from_holder({"verifier": self.PLAN["lock"], "lock": self.PLAN["lock"]})
+
+    def test_the_lock_event_names_the_holder(self):
+        topic = "0x" + "00" * 12 + dry_run.HOLDER[2:]
+        dry_run.check_lock_event_holder({"topics": ["0xt", "0x00", topic]})
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_lock_event_holder({"topics": ["0xt", "0x00", "0x" + "00" * 12 + "99" * 20]})
+
+
+class DriverTimeoutTests(unittest.TestCase):
+    """A1, A12: the driver outlives every wait of a real run and reports the fixed values."""
+
+    def test_the_driver_waits_longer_than_every_budget(self):
+        budgets = (dry_run.CONFIRMATION_BUDGET_SECONDS + dry_run.SEND_BUDGET_SECONDS
+                   + dry_run.FINALITY_BUDGET_SECONDS)
+        self.assertGreater(dry_run.DRIVER_HANDSHAKE_TIMEOUT_SECONDS, budgets)
+        self.assertGreater(dry_run.FINALITY_BUDGET_SECONDS, 3600)
+        driver = (ROOT / "crates/node/src/tests/external_lane_roundtrip_tests.rs").read_text()
+        self.assertIn('config["handshake_timeout_seconds"]', driver)
+        self.assertNotIn("0..12_000", driver)
+
+    def test_the_driver_report_must_match(self):
+        ready = {"protocol_version": 1, "lane_release_cap_atoms": 6_000_000, "handshake_timeout_seconds": 10}
+        dry_run.check_driver_report(ready, max_lock_amount=6_000_000, handshake_timeout=10)
+        for change in ({"protocol_version": 2}, {"lane_release_cap_atoms": 5_999_999},
+                       {"handshake_timeout_seconds": 1200}):
+            with self.subTest(change=change), self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.check_driver_report({**ready, **change}, max_lock_amount=6_000_000, handshake_timeout=10)
+
+    def test_the_confirmation_waits_while_the_driver_lives(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "confirm-deploy"
+            with self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.wait_for_confirmation(path, expected="ab", alive=lambda: False, budget=5, sleep=lambda s: None)
+            with self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.wait_for_confirmation(path, expected="ab", alive=lambda: True, budget=3, sleep=lambda s: None)
+            path.write_text("cd\n")
+            with self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.wait_for_confirmation(path, expected="ab", alive=lambda: True, budget=3, sleep=lambda s: None)
+            path.write_text("ab\n")
+            dry_run.wait_for_confirmation(path, expected="ab", alive=lambda: True, budget=3, sleep=lambda s: None)
+
+
+class RunShapeTests(unittest.TestCase):
+    """A5, A6, A8, A9, A10."""
+
+    def test_off_the_fork_no_stop_between_deploy_and_release(self):
+        for stage in ("deploy", "lock", "release-on-pftl"):
+            with self.subTest(stage=stage), self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.refuse_through_off_fork(fork=False, through=stage)
+            dry_run.refuse_through_off_fork(fork=True, through=stage)
+        for stage in ("plan", "export", "record"):
+            dry_run.refuse_through_off_fork(fork=False, through=stage)
+
+    def test_the_chain_id_must_be_base_sepolia(self):
+        dry_run.check_chain_id(84532)
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_chain_id(8453)
+
+    def test_the_gas_guard_is_within_the_funding_margin(self):
+        self.assertLessEqual(dry_run.GAS_PRICE_FACTOR, dry_run.GAS_MARGIN)
+        with self.assertRaises(dry_run.RehearsalFailure) as caught:
+            dry_run.check_gas_price(plan_wei=1, current_wei=dry_run.GAS_MARGIN + 1)
+        self.assertNotIn("Rerun preflight", str(caught.exception))
+        self.assertIn("fresh output directory", str(caught.exception))
+
+    def test_state_is_written_atomically(self):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "state.json"
+            dry_run.save_state(path, {"completed": ["plan"], "data": {}})
+            self.assertEqual(json.loads(path.read_text())["completed"], ["plan"])
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["state.json"])
+
+    def test_a_later_start_needs_the_deploy_commit(self):
+        dry_run.check_commit({"data": {}}, "abc")
+        dry_run.check_commit({"data": {"commit": "abc"}}, "abc")
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_commit({"data": {"commit": "abc"}}, "def")
+
+
+class RetryTests(unittest.TestCase):
+    """A4: bounded retries for reads, bounded polls after a deployment."""
+
+    def test_a_read_is_retried_with_back_off(self):
+        calls, sleeps = [], []
+
+        def read():
+            calls.append(1)
+            if len(calls) < 3:
+                raise OSError("connection reset")
+            return "0x1"
+
+        self.assertEqual(dry_run.with_retry(read, attempts=5, sleep=sleeps.append), "0x1")
+        self.assertEqual(sleeps, [1.0, 2.0])
+        with self.assertRaises(OSError):
+            dry_run.with_retry(lambda: (_ for _ in ()).throw(OSError("down")), attempts=2, sleep=sleeps.append)
+
+    def test_a_missing_receipt_is_polled_not_judged(self):
+        answers = iter([None, None, {"status": "0x1"}])
+        self.assertEqual(dry_run.poll(lambda: next(answers), "receipt", seconds=5, sleep=lambda s: None),
+                         {"status": "0x1"})
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.poll(lambda: None, "receipt", seconds=3, sleep=lambda s: None)
+
+
+class RestartGuardTests(unittest.TestCase):
+    """A11: a restarted run never sends; a recorded hash without a receipt is pending."""
+
+    def state(self, *intents):
+        data = {"plan": {"verifier": {"predicted": "0x" + "22" * 20}, "lock": {"predicted": "0x" + "44" * 20}},
+                "preflight": {"verifier_runtime_code_hash": "0xc0de", "lock_runtime_code_hash": "0xc0de"},
+                "deploy": {"lock": "0x" + "44" * 20}, "fleet": {"recipient": "pf" + "00" * 20}}
+        return {"completed": ["plan", "fleet"], "data": data, "intents": list(intents)}
+
+    def test_a_restart_reconciles_records_and_refuses(self):
+        state = self.state({"stage": "deploy", "role": "verifier", "sender": "0x" + "11" * 20, "nonce": 0,
+                            "hash": None, "outcome": None},
+                           {"stage": "lock", "role": "lock", "sender": dry_run.HOLDER, "nonce": 3, "hash": "0xaa",
+                            "outcome": "sent", "next_nonce_before": 0})
+        chain = FakeChain(nonces={"0x" + "11" * 20: 1}, codes={"0x" + "22" * 20: "0xc0de"})
+        with self.assertRaises(dry_run.RehearsalFailure) as caught:
+            dry_run.reconcile_after_restart(state, chain)
+        self.assertIn("start a fresh output directory", str(caught.exception))
+        self.assertEqual(state["intents"][0]["reconciled"], "mined and matches the plan")
+        self.assertIn("pending", state["intents"][1]["reconciled"])
+
+    def test_a_pending_lock_or_approve_is_never_sent_again(self):
+        intent = {"role": "lock", "hash": "0xaa", "next_nonce_before": 0}
+        with self.assertRaises(dry_run.RehearsalFailure) as caught:
+            dry_run.reconcile_lock(intent, FakeChain(next_nonce=0), lock="l", holder="0xh", amount=10,
+                                   recipient_hash="0xr")
+        self.assertIn("pending", str(caught.exception))
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.reconcile_approve({"role": "approve", "hash": "0xbb"}, FakeChain(allowance=0), owner="h",
+                                      spender="l", amount=10)
+        reverted = FakeChain(next_nonce=0, receipts={"0xaa": {"status": "0x0"}})
+        self.assertEqual(dry_run.reconcile_lock(intent, reverted, lock="l", holder="0xh", amount=10,
+                                                recipient_hash="0xr"), "send")
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.reconcile_lock(intent, FakeChain(next_nonce=0, receipts={"0xaa": {"status": "0x1"}}), lock="l",
+                                   holder="0xh", amount=10, recipient_hash="0xr")
+
