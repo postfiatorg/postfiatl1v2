@@ -455,3 +455,9 @@ class RestartGuardTests(unittest.TestCase):
             dry_run.reconcile_lock(intent, FakeChain(next_nonce=0, receipts={"0xaa": {"status": "0x1"}}), lock="l",
                                    holder="0xh", amount=10, recipient_hash="0xr")
 
+
+class RecordTests(unittest.TestCase):
+    def test_the_rehearsal_lock_is_never_the_lanes_lock(self):
+        for path in ("docs/runbooks/lane-base-sepolia-dry-run.md",
+                     "docs/review/lane-base-sepolia-fork-rehearsal-20261110/README.md"):
+            self.assertIn("must never be named as the lane's lock", (ROOT / path).read_text())

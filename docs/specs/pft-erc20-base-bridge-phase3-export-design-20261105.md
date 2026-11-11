@@ -390,7 +390,7 @@ After a successful send, the relay takes the decoded `Released` event of the exp
 | Round trip, second export | 6 | 0 | 48.9 M |
 | Round trip, first export | 6 | 2 | 76.7 M |
 
-A private key is accepted only for a loopback Anvil; on any other chain the relay takes `--account` and `--password-file`. A placeholder proof goes only to a loopback Anvil, unless `--i-know-this-is-a-mock-verifier` names the lock's verifier.
+A private key is accepted only for a loopback Anvil; on any other chain the relay takes `--account` and `--password-file`. A placeholder proof (flagged, or the placeholder's bytes) goes only to a loopback Anvil whose verifier's `sp1Verifier` has the pinned runtime code hash of `Tier4MockSP1Verifier`; there is no override.
 
 **The prover-command contract.** The relay runs `CMD` through the shell with `PFT_LANE_EXPORT_INPUT` (the CBOR program input) and `PFT_LANE_EXPORT_PROOF_OUT` (a path) in its environment. The command writes the raw SP1 proof bytes to that path and the committed public values to the same path plus `.public-values`, then exits 0. The relay refuses public values that differ from the expected ones. The proof is then sent as `proofBytes` unchanged.
 
