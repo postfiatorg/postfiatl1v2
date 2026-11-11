@@ -91,3 +91,26 @@ class PortablePathTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DriverProcessGroupTests(unittest.TestCase):
+    """cargo runs the driver's test binary as its child: stopping cargo alone leaves it running."""
+
+    def test_stopping_the_driver_stops_its_children(self):
+        import os
+        import subprocess
+        import time
+        parent = subprocess.Popen(["sh", "-c", "sleep 30 & echo $!; wait"], stdout=subprocess.PIPE, text=True,
+                                  **roundtrip.DRIVER_POPEN)
+        grandchild = int(parent.stdout.readline())
+        roundtrip.stop_driver(parent)
+        for _ in range(50):
+            try:
+                os.kill(grandchild, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.1)
+        else:
+            os.kill(grandchild, 9)
+            self.fail("the driver's child outlived the stop")
+        self.assertIsNotNone(parent.poll())
