@@ -337,6 +337,7 @@ pub(crate) fn apply_external_lane_export(
 /// (the pending plain transfers, `payment_v2` entries and asset transactions;
 /// `asset_fee_quote` uses that ledger for an export), it returns the refusal admission would return for
 /// the signed transaction, so a caller can refuse before anything is signed.
+#[allow(clippy::too_many_arguments)]
 pub fn dry_run_external_lane_export(
     genesis: &Genesis,
     ledger: &LedgerState,
