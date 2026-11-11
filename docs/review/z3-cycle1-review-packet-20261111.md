@@ -2,7 +2,7 @@
 
 For the product owner's review under gate G4's first line of the [Z3 plan](../plans/active/z3-navcoin-roundtrip-plan.md#gate-g4-operator-authorizes-one-integrated-testnet-cycle): the G2 compatibility result, the G3 tests, the dry-run amounts, the stop conditions and the wallet cap, in one place. **No cycle has run. G4 is not authorized, and this packet does not ask for it:** two signed actions of the other lane come first ([section 4](#4-g2-result)).
 
-Everything here was read or run on 2026-11-11 between 10:00 and 10:40Z on main `69c6c2e3`, read-only. Nothing was signed, submitted, restarted or deployed; no keystore was opened.
+Everything here was read or run on 2026-11-11 between 10:00 and 10:13Z on main `69c6c2e3`, read-only. Nothing was signed, submitted, restarted or deployed; no keystore was opened.
 
 ## 1. What one cycle does, in order
 
