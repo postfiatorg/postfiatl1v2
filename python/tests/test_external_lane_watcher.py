@@ -1233,7 +1233,7 @@ class PaidRecordTests(unittest.TestCase):
         base = ExportBase([released_log(a, block=950)], finalized=1_100)
         _, codes, summary, kept = run_export_view(ExportPftl([a]), base, state=old)
         self.assertEqual(codes, [])
-        self.assertEqual((base.log_ranges, summary["rescan"]), ([(0, 1_100)], "paid_record_missing"))
+        self.assertEqual((base.log_ranges, summary["rescan"]), ([(0, 1_100)], "export_state_format_old"))
         self.assertEqual([(entry["export_nonce"], entry["block"]) for entry in kept["paid"]], [(0, 950)])
         self.assertNotIn("verified_payouts_root", kept)
         # The rescan never takes an old payout whose packet is pruned as verified.
@@ -1356,15 +1356,22 @@ class ExportSnapshotTests(unittest.TestCase):
 
     def test_negative_room_with_a_zero_pruned_count_is_refused(self):
         a = export_entry(0)
-        # A state without high-water marks (an earlier round's) whose paid export was folded.
-        kept = {"lock_from_block": 0, "scanned_through_block": 1_000, "payout_count": 1, "payout_sum": 400_000,
-                "paid": [], "pruned_paid_count": 1, "pruned_paid_atoms": 400_000}
+        # A current state whose paid export was folded, on a node that reports nothing pruned.
+        _, _, _, kept = run_export_view(ExportPftl([a]), ExportBase([released_log(a, block=950)]))
+        kept = dict(kept, paid=[], pruned_paid_count=1, pruned_paid_atoms=400_000,
+                    pruned_paid_recent=[], snapshot=dict(kept["snapshot"], height=0, export_count=0,
+                                                         exported_atoms=0))
         base = ExportBase([released_log(a, block=950), released_log(a, block=1_050, transaction="0x" + "a2" * 32)],
                           finalized=1_100)
         with self.assertRaises(watcher.WatcherError) as caught:
             run_export_view(ExportPftl([a]), base, state=kept)
         self.assertEqual(caught.exception.code, "export_snapshot_behind_state")
         self.assertEqual(base.log_ranges, [])
+        # The same entry of the earlier form (no format number) is not used: both payouts are seen.
+        legacy = {key: value for key, value in kept.items() if key not in ("format", "snapshot", "pruned_paid_recent")}
+        _, codes, summary, _ = run_export_view(ExportPftl([a]), base, state=legacy)
+        self.assertEqual((codes, summary["rescan"]),
+                         (["payout_duplicate", "exported_below_paid"], "export_state_format_old"))
 
     def test_a_nonce_is_folded_once(self):
         a, b = export_entry(0), export_entry(1, amount=600_000)
@@ -1483,6 +1490,65 @@ class StateSizeTests(unittest.TestCase):
             code, lines, _ = run_exports(pftl, ExportBase([first, second], finalized=1_100), *options)
             self.assertEqual((code, lines[-1]["exports"]["scanned_from_block"], lines[-1]["exports"]["paid_recorded"]),
                              (0, 1_002, 2))
+
+
+class StateLifeTests(unittest.TestCase):
+    """R1: an exports entry of an earlier format is never used."""
+
+    # Window 100: A nonce 0 at PFTL 400, B nonce 1 at 450, C nonce 2 at 600, D nonce 3 at 701.
+    A = export_entry(0, height=400)
+    B = export_entry(1, amount=600_000, height=450)
+    C = export_entry(2, amount=500_000, height=600)
+    D = export_entry(3, amount=500_000, height=701)
+
+    def lane(self, height, retained, pruned, pruned_atoms):
+        return ExportPftl(retained, pruned=pruned, pruned_atoms=pruned_atoms, released=2_000_000,
+                          current_height=height)
+
+    def check(self, state_file, pftl, logs, finalized, *extra):
+        return run_exports(pftl, ExportBase(logs, locked=2_000_000, finalized=finalized),
+                           "--state-file", str(state_file), *extra)
+
+    def test_r1_an_earlier_format_entry_is_never_used_and_both_payouts_are_seen(self):
+        first = released_log(self.C, block=950, transaction="0x" + "c1" * 32)
+        second = released_log(self.C, block=1_150, transaction="0x" + "c2" * 32)
+        # The previous commit's file after the reviewer's run 2: C folded, `paid=[]`, no snapshot.
+        legacy = {"lock_from_block": 0, "scanned_through_block": 1_100, "payout_count": 1, "payout_sum": 500_000,
+                  "paid": [], "pruned_paid_count": 1, "pruned_paid_atoms": 500_000}
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            state_file.write_text(json.dumps({
+                "schema": watcher.STATE_SCHEMA, "lane_id": LANE, "pftl_chain_id": "postfiat-local",
+                "genesis_hash": GENESIS_HASH, "lock_contract_address": LOCK, "source_chain_id": 8453,
+                "checked_through_height": 700, "release_count": 0, "exports": legacy}))
+            # Run 3: an honest node at 700, C retained again.
+            code, lines, _ = self.check(state_file, self.lane(700, [self.C], 2, 1_000_000), [first, second], 1_200)
+            self.assertEqual((code, alarm_codes(lines)), (2, ["payout_duplicate"]))
+            self.assertEqual(lines[-1]["exports"]["rescan"], "export_state_format_old")
+            self.assertEqual(lines[-1]["exports"]["scanned_from_block"], 0)
+            self.assertNotIn("backed", [line["status"] for line in lines
+                                        if line["kind"] == "payout" and line["block"] == 1_150])
+            self.assertEqual(json.loads(state_file.read_text())["exports"], legacy)
+            # Run 4: height 702, D retained: still never used, still the duplicate.
+            code, lines, _ = self.check(state_file, self.lane(702, [self.D], 3, 1_500_000), [first, second], 1_300)
+            self.assertEqual(code, 2)
+            self.assertIn("payout_duplicate", alarm_codes(lines))
+            self.assertEqual(json.loads(state_file.read_text())["exports"], legacy)
+
+    def test_a_first_run_from_an_earlier_format_saves_only_what_it_read(self):
+        first = released_log(self.C, block=950, transaction="0x" + "c1" * 32)
+        old = {"lock_from_block": 0, "scanned_through_block": 1_100, "payout_count": 1, "payout_sum": 500_000,
+               "paid": [], "pruned_paid_count": 1, "pruned_paid_atoms": 500_000,
+               "snapshot": {"height": 701, "export_count": 4, "exported_atoms": 2_000_000,
+                            "pruned_export_count": 3, "pruned_exported_atoms": 1_500_000}}
+        pftl = self.lane(700, [self.C], 2, 1_000_000)
+        _, codes, summary, kept = run_export_view(pftl, ExportBase([first], locked=2_000_000, finalized=1_200),
+                                                  state=old, current_height=700)
+        self.assertEqual((codes, summary["rescan"]), ([], "export_state_format_old"))
+        self.assertEqual(kept["format"], watcher.EXPORT_STATE_FORMAT)
+        self.assertEqual((kept["pruned_paid_count"], [entry["export_nonce"] for entry in kept["paid"]]), (0, [2]))
+        self.assertEqual(kept["snapshot"], {"height": 700, "export_count": 3, "exported_atoms": 1_500_000,
+                                            "pruned_export_count": 2, "pruned_exported_atoms": 1_000_000})
 
 
 class IntervalMalformedTests(unittest.TestCase):
