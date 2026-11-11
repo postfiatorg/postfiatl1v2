@@ -525,17 +525,27 @@ def default_max_fee_atoms(family: str, operation: dict[str, Any] | None = None, 
     raise ValueError(f"unknown fee family `{family}`")
 
 
+def _is_serde_default(value: Any) -> bool:
+    """null, "", 0 or false: what the node's types fill in for an absent field
+    (`#[serde(default)]`) and omit when serializing, so present-with-default
+    and absent sign the same bytes."""
+
+    return value is None or value is False or value == "" or (type(value) is int and value == 0)
+
+
 def _strict_difference(requested: Any, quoted: Any, path: str) -> str | None:
-    """The first path where `quoted` differs from `requested` in value or type
-    (an extra or missing key is a difference), or None."""
+    """The first path where `quoted` differs from `requested` in value or type,
+    or None. A key on one side only is a difference unless its value is the
+    serde default (`_is_serde_default`)."""
 
     if type(requested) is not type(quoted):
         return path
     if isinstance(requested, dict):
-        if set(requested) != set(quoted):
-            extra = sorted(set(quoted) ^ set(requested))
-            return f"{path}.{extra[0]}"
-        for key in requested:
+        for key in sorted(set(quoted) ^ set(requested)):
+            value = quoted[key] if key in quoted else requested[key]
+            if not _is_serde_default(value):
+                return f"{path}.{key}"
+        for key in set(requested) & set(quoted):
             found = _strict_difference(requested[key], quoted[key], f"{path}.{key}")
             if found is not None:
                 return found

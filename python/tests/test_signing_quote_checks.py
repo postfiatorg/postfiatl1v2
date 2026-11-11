@@ -183,6 +183,27 @@ class OperationHelperQuoteTests(unittest.TestCase):
                 submit.assert_not_called()
 
 
+class DefaultFieldTests(unittest.TestCase):
+    def test_a_field_on_one_side_is_a_difference_unless_it_is_the_serde_default(self) -> None:
+        operation = {"operation": "trust_set", "account": "pf-holder", "asset_id": "aa" * 48, "limit": 5, "condition": ""}
+        quote = _operation_quote("pf-holder", operation)
+        del quote["result"]["operation"]["condition"]
+        quote["result"]["operation"]["authorized"] = False
+        quote["result"]["operation"]["reserve_paid"] = 0
+        kwargs = {"wallet": _wallet(), "kind": "trust_set", "sequence": 7, "max_fee_atoms": 200, "operation": operation}
+        wallet_module.check_signing_quote(quote, **kwargs)
+        for field, value in (("authorized", True), ("reserve_paid", 50), ("frozen", True), ("extra", "x")):
+            with self.subTest(field=field):
+                changed = _changed(quote, ("operation", field), value)
+                with self.assertRaises(QuoteRefusedError) as raised:
+                    wallet_module.check_signing_quote(changed, **kwargs)
+                self.assertEqual(raised.exception.code, "quote_mismatch")
+        missing = copy.deepcopy(quote)
+        del missing["result"]["operation"]["limit"]
+        with self.assertRaises(QuoteRefusedError):
+            wallet_module.check_signing_quote(missing, **kwargs)
+
+
 class TransferQuoteTests(unittest.TestCase):
     CASES = [
         ("recipient", ("to",), "pf-attacker", "quote_mismatch"),

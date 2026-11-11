@@ -191,7 +191,9 @@ when:
 
 - the quote's `transaction_kind`, `source` (or a transfer's `from`) or any
   field of the requested operation differs from the request, in value or
-  type; an extra field in the quoted operation is a difference;
+  type; a field on one side only is a difference unless it holds the default
+  the node fills in for an absent field (`null`, `""`, `0`, `false`), which
+  signs the same bytes;
 - a transfer's `to` or `amount` differs;
 - a requested `sequence` is not the quoted one, or the chain id (and the
   genesis hash, when the wallet knows it) is not the wallet's;
