@@ -142,7 +142,13 @@ public read as a `--method` value, with the node's parameter names as flags
 - `account_tx(address, from_height=None, to_height=None, limit=None)`
 - `account_tx_history(address, from_height=0, to_height=None,
   window_size=100, limit_per_window=512, max_windows=1000)`
-- `owned_objects(owner_public_key_hex, asset=None, limit=None)`
+- `owned_objects(owner_public_key_hex, asset=None, limit=None, cursor=None,
+  omit_owner_keys=False)`: one page; follow `next_cursor`.
+- `owned_objects_all(owner_public_key_hex, asset=None, page_limit=128,
+  omit_owner_keys=False)`: every page from one `height` and `state_root`,
+  restarting when they change between pages. The CLI form is
+  `--method owned_objects --owner-public-key-hex HEX [--cursor C]
+  [--omit-owner-keys] [--all-pages]`.
 - `wrap_owned(from_address, owner_public_key_hex, amount, asset="PFT")`
 - `owned_sign(signed_order_json, validator_id)` where the JSON contains the
   order, owner public key, and owner signature; bare orders fail closed.

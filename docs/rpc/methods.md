@@ -163,7 +163,7 @@ Both behaviours are governed; see
 
 | Method | Purpose |
 | --- | --- |
-| `owned_objects` | Read FastPay owned objects for an owner public key. Wallet-owned-object lookups use a 2048 object limit so fragmented wallets can still build standard unwraps. |
+| `owned_objects` | Read one page of the FastPay owned objects of `owner_public_key_hex` (optional `asset`, `limit` up to 2048, `cursor`, `omit_owner_keys`). See [Owned objects pages](#owned-objects-pages). |
 | `owned_recovery_capabilities` | Read the active v3 recovery domain, committee, and bounded validity/reveal windows. |
 | `fastpay_recovery_committee` | Read the committed FastPay recovery committee (validator ids, ML-DSA-65 public keys, `registry_root`, `valid_from_height`..`new_orders_through_height`) and the recovery policy, with `chain_id`, `genesis_hash` and the `height` read. No params returns the committee admitting new orders (`active: true`); `epoch` returns that epoch, and an epoch the ledger lacks is refused with `fastpay_recovery_committee_unknown_epoch`. Public keys only. |
 | `owned_certificate` | Retrieve a persisted complete certificate by digest or lock ID for permissionless recovery. |
@@ -176,6 +176,34 @@ Both behaviours are governed; see
 | `owned_unwrap_sign`, `owned_unwrap_apply` | Versioned legacy signed/certified unwrap compatibility below the governed v3 activation boundary. |
 | `wrap_owned` | Disabled unsafe compatibility path. FastPay funding uses a source-signed `mempool_submit_fastlane_primary` deposit committed by consensus. |
 | `unwrap_owned` | Disabled compatibility path. Public wallet flows must use signed/certified unwrap instead. |
+
+### Owned objects pages
+
+`owned_objects` returns objects in (asset, object id, version) order. A page
+ends after `limit` objects (default 2048) or earlier, so that the compact JSON
+result never exceeds 960 KiB (`OWNED_OBJECTS_PAGE_MAX_BYTES`): with the owner
+key each object is about 4 KB, so a page holds about 235 objects, well inside a
+2 MiB WebSocket message. When objects remain, `truncated` is true and
+`next_cursor` is set; pass it back as `cursor` with the same owner and `asset`
+to read the next page. The last page has `next_cursor: null`. A call without
+`cursor` answers as before, plus the new fields.
+
+- `total_value`: the sum of every matching object at `height`, not only this page.
+- `cursor`: the cursor this page continues from; `null` on the first page.
+- `next_cursor`: opaque; `null` on the last page. Bound to the owner, the `asset` filter and the last object returned.
+- `height`, `state_root`: the finalized tip the page was read at. The page is read under the store's ordered-commit lock, so it is one moment.
+- `owner_keys_omitted`: present and `true` when `omit_owner_keys` was sent. Objects then omit `owner_pubkey_hex` (the key is the top-level `owner_public_key_hex`; about 160 bytes per object).
+
+The node keeps no snapshot per client: a cursor names a position in the order,
+not a stored view, so validators hold no per-client state. If a page reports a
+different `height` or `state_root` than the first page, objects may have been
+created or spent between pages; restart from the first page. The Python
+client's `owned_objects_all` does this. Refusals carry typed codes and are
+never ignored: `owned_objects_cursor_malformed`,
+`owned_objects_cursor_owner_mismatch` (issued for another owner),
+`owned_objects_cursor_asset_mismatch` (issued for another `asset` filter),
+`owned_objects_cursor_invalid_object_id`, and `owned_objects_foreign_owner_key`
+(`omit_owner_keys` with an object of another key on the page).
 
 ## FastSwap Methods
 
