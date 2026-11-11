@@ -849,8 +849,8 @@ class ExportViewTests(unittest.TestCase):
     def test_a_payout_with_no_packet(self):
         stranger = export_entry(7)
         _, codes, _, _ = run_export_view(ExportPftl([]), ExportBase([released_log(stranger)]))
-        self.assertIn("payout_without_export", codes)
-        self.assertIn("exported_below_paid", codes)
+        # With nothing pruned, the pruned bound adds nothing to payout_without_export.
+        self.assertEqual(codes, ["payout_without_export", "exported_below_paid"])
 
     def test_a_payout_with_another_amount_recipient_withdrawal_or_burn(self):
         entry = export_entry(0)

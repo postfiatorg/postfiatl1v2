@@ -693,7 +693,7 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
             paid[packet["export_nonce"]] = event
             root = "0x" + keccak256(bytes.fromhex(root[2:] + event["packet_digest"][2:])).hex()
         paid_total += event["amount"]
-    if unknown_count and (unknown_count > pruned or unknown_sum > snapshot["pruned_exported_atoms"]):
+    if pruned and (unknown_count > pruned or unknown_sum > snapshot["pruned_exported_atoms"]):
         alarm("payout_unknown_above_pruned", unknown_payouts=unknown_count, unknown_atoms=unknown_sum,
               pruned_export_count=pruned, pruned_exported_atoms=snapshot["pruned_exported_atoms"])
     unpaid = 0

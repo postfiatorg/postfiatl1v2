@@ -329,7 +329,7 @@ The other alarms of the view:
 
 - `payout_burn_mismatch`: the payout's burn commitment differs from the packet's.
 - `payout_duplicate`: a second payout names the same packet digest.
-- `payout_unknown_above_pruned`: the payouts that match no stored packet are more than `pruned_export_count`, or their sum is above `pruned_exported_atoms`.
+- `payout_unknown_above_pruned`: on a lane with pruned packets, the payouts that match no stored packet are more than `pruned_export_count`, or their sum is above `pruned_exported_atoms`. With nothing pruned, each such payout is already `payout_without_export`.
 
 Its errors, each one `error` line (exit 1, retried under `--interval`): `base_answer_malformed` (a log or a call answer that is not what the lock emits or returns, or a log outside the asked range or from another address), `export_record_malformed` (an export page that breaks the paging rules: nonces not contiguous down to `pruned_export_count`, a cursor that is not the page's oldest nonce or repeats, a missing or non-integer `export_count`, `pruned_export_count` or `released_atoms`, or `exported_atoms` that is not the pruned atoms plus the stored amounts), `external_lane_info_inconsistent` (the pages came from different snapshots) and `base_finalized_behind_state` (the Base node's finalized block is below the kept one). `Released` logs are read in chunks of 10,000 blocks, halved on an RPC error down to 16. A failure of the export view does not hide the release view: its lines are printed first, and the summary names `export_error`.
 
