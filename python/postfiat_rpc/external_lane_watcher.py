@@ -65,7 +65,7 @@ from .client import PostFiatRpcClient, RpcClientError
 STATE_SCHEMA = "postfiat.external_lane_watcher.state.v2"
 LINE_SCHEMA = "postfiat.external_lane_watcher.v1"
 PAGE_SIZE = 100
-MAX_STATE_BYTES = 16 * 1024 * 1024  # the paid record: about 400 bytes per retained paid export
+MAX_STATE_BYTES = 16 * 1024 * 1024  # checked on load and before each write; ~355 bytes per retained paid export
 U64 = 1 << 64
 ZERO_ADDRESS = "0x" + "00" * 20
 ADDRESS = re.compile(r"^0x[0-9a-fA-F]{40}$")
@@ -918,9 +918,17 @@ def _check_state(state: dict[str, Any], snapshot: dict[str, Any], policy: dict[s
 
 
 def _save_state(path: Path, state: dict[str, Any]) -> None:
+    """Replace the file atomically, and only with a state the next run can
+    load: above MAX_STATE_BYTES the run fails and the last good file stays."""
+
+    data = (json.dumps(state, sort_keys=True) + "\n").encode("utf-8")
+    if len(data) > MAX_STATE_BYTES:
+        raise WatcherTransientError("state_file_too_large",
+                                    f"`{path}`: the new state is {len(data)} bytes, above {MAX_STATE_BYTES}; the "
+                                    "last good file is kept")
     temporary = path.with_name(path.name + ".tmp")
     try:
-        temporary.write_text(json.dumps(state, sort_keys=True) + "\n", encoding="utf-8")
+        temporary.write_bytes(data)
         temporary.replace(path)
     except OSError as error:
         if temporary.parent.is_dir():

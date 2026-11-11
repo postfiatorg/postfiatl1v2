@@ -8,6 +8,7 @@ import json
 import re
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 from typing import Any
 
@@ -1383,6 +1384,57 @@ class ExportSnapshotTests(unittest.TestCase):
             run_export_view(ExportPftl([b], pruned=1, current_height=504), ExportBase([log], finalized=1_400),
                             state=forged, current_height=504)
         self.assertEqual(caught.exception.code, "state_file_invalid")
+
+
+class StateSizeTests(unittest.TestCase):
+    """F2: a state above MAX_STATE_BYTES is never written over the last good one."""
+
+    def state(self, size: int) -> dict[str, Any]:
+        state = {"schema": watcher.STATE_SCHEMA, "lane_id": LANE, "pftl_chain_id": "postfiat-test",
+                 "genesis_hash": GENESIS_HASH, "lock_contract_address": LOCK, "source_chain_id": 8453,
+                 "checked_through_height": 1, "release_count": 0, "pad": ""}
+        state["pad"] = "x" * (size - len(json.dumps(state, sort_keys=True) + "\n"))
+        return state
+
+    def test_the_exact_boundary_is_written_and_one_byte_more_is_refused(self):
+        limit = watcher.MAX_STATE_BYTES
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            watcher._save_state(path, self.state(limit))
+            self.assertEqual(path.stat().st_size, limit)
+            self.assertEqual(len(watcher._load_state(path, LANE)["pad"]), len(self.state(limit)["pad"]))
+            good = path.read_bytes()
+            with self.assertRaises(watcher.WatcherError) as caught:
+                watcher._save_state(path, self.state(limit + 1))
+            self.assertEqual(caught.exception.code, "state_file_too_large")
+            self.assertEqual(path.read_bytes(), good)
+            self.assertEqual(sorted(p.name for p in Path(directory).iterdir()), ["state.json"])
+
+    def test_a_run_that_would_cross_the_limit_fails_and_keeps_the_last_good_file(self):
+        a, b = export_entry(0), export_entry(1, amount=600_000)
+        pftl = ExportPftl([a, b])
+        first, second = released_log(a, block=950), released_log(b, block=1_050, log_index=1)
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            options = ("--state-file", str(state_file))
+            self.assertEqual(run_exports(pftl, ExportBase([first]), *options)[0], 0)
+            good = state_file.read_bytes()
+            # The limit at the good file's size: one more paid record crosses it.
+            with unittest.mock.patch.object(watcher, "MAX_STATE_BYTES", len(good)):
+                self.assertEqual(run_exports(pftl, ExportBase([first], finalized=1_001), *options)[0], 0)
+                good = state_file.read_bytes()
+                code, lines, stderr = run_exports(pftl, ExportBase([first, second], finalized=1_100), *options)
+                self.assertEqual(code, 1)
+                self.assertIn("state_file_too_large", stderr)
+                self.assertEqual([line for line in lines if line["kind"] == "summary"], [])
+                self.assertEqual(state_file.read_bytes(), good)
+                # The last good file still loads and the next run starts where it did.
+                code, lines, stderr = run_exports(pftl, ExportBase([first, second], finalized=1_100), *options)
+                self.assertNotIn("state_file_invalid", stderr)
+                self.assertEqual((code, json.loads(good)["exports"]["scanned_through_block"]), (1, 1_001))
+            code, lines, _ = run_exports(pftl, ExportBase([first, second], finalized=1_100), *options)
+            self.assertEqual((code, lines[-1]["exports"]["scanned_from_block"], lines[-1]["exports"]["paid_recorded"]),
+                             (0, 1_002, 2))
 
 
 class IntervalMalformedTests(unittest.TestCase):
