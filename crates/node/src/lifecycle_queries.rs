@@ -1763,6 +1763,7 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
                 &quote_ledger,
                 export,
                 &options.source,
+                sequence,
                 minimum_fee,
                 block_height,
                 asset_execution_compatibility,

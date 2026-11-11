@@ -888,6 +888,37 @@ fn external_lane_export_command_does_not_count_a_later_family_credit_before_sign
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
+/// The exporter's own pending escrow holds its next sequence: the quote
+/// signs at the sequence after it, but admission executes the export before
+/// escrows, on a ledger where the sender's sequence is unchanged, and would
+/// refuse it with `bad_sequence`. The command refuses before signing; once
+/// the escrow is committed the same export is signed and admitted.
+#[test]
+fn external_lane_export_command_refuses_a_sequence_held_by_a_later_family_before_signing() {
+    let chain = released_export_chain("export-command-later-sequence", ACCOUNT_RESERVE + 1_000);
+    let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    let create = EscrowTransactionOperation::EscrowCreate(EscrowCreateOperation {
+        owner: faucet.address.clone(),
+        recipient: chain.recipient.clone(),
+        asset_id: postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+        amount: 10_000,
+        condition: "later-sequence".to_string(),
+        finish_after: 0,
+        cancel_after: 50,
+    });
+    submit_escrow_tx(&chain, &faucet, create, ESCROW_CREATE_TRANSACTION_KIND);
+
+    let error = faucet_refused(&chain, "base-erc20", 1_000, &base_recipient(), "bad_sequence");
+    assert!(error.contains("runs after asset transactions"), "{error}");
+
+    assert!(apply_mempool(&chain, "later-sequence-escrow").accepted);
+    let report = export_command(&chain, "base-erc20", 1_000, &base_recipient(), false)
+        .expect("signed once the escrow is committed");
+    let receipt = apply_mempool(&chain, "later-sequence-export");
+    assert!(receipt.accepted && receipt.tx_id == report.tx_id, "{receipt:?}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
 /// Pending exports count before signing: the lane's committed
 /// `released - exported` is not what admission checks, the ledger after the
 /// executable mempool is. Two and three pending exports that exhaust the
