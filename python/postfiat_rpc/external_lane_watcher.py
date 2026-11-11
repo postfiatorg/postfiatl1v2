@@ -959,7 +959,12 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
 # --- One run. ---
 
 
-def _load_state(path: Path | None, lane_id: str) -> dict[str, Any] | None:
+def _load_state(path: Path | None, *, earlier_schema: bool = False) -> dict[str, Any] | None:
+    """The state file, its form checked; its identity is checked against the
+    run's own reads (`_check_identity`) before any part of it is used. With
+    `earlier_schema` (--from-height), a readable file of another schema is
+    no state (the run replaces it); an unreadable file is always refused."""
+
     if path is None or not path.exists():
         return None
     try:
@@ -971,39 +976,35 @@ def _load_state(path: Path | None, lane_id: str) -> dict[str, Any] | None:
     def u64(value: Any) -> bool:
         return isinstance(value, int) and not isinstance(value, bool) and 0 <= value < U64
 
+    if earlier_schema and isinstance(state, dict) and state.get("schema") != STATE_SCHEMA:
+        return None
     if (
         not isinstance(state, dict)
         or state.get("schema") != STATE_SCHEMA
-        or state.get("lane_id") != lane_id
-        or not all(isinstance(state.get(key), str) for key in ("pftl_chain_id", "genesis_hash",
+        or not all(isinstance(state.get(key), str) for key in ("lane_id", "pftl_chain_id", "genesis_hash",
                                                               "lock_contract_address"))
         or not all(u64(state.get(key)) for key in ("source_chain_id", "checked_through_height",
                                                    "release_count"))
     ):
-        raise WatcherError("state_file_invalid", f"`{path}` is not this lane's watcher state")
+        raise WatcherError("state_file_invalid", f"`{path}` is not a watcher state of this schema")
     return state
 
 
-def _export_history(path: Path | None, lane_id: str) -> dict[str, Any] | None:
-    """The exports entry of a state file read under --from-height: only a
-    file of the current schema and this lane has one; any other file has
-    nothing to carry."""
+def _check_identity(state: dict[str, Any], lane_id: str, snapshot: dict[str, Any], policy: dict[str, Any]) -> None:
+    """The file's identity (lane, PFTL chain id and genesis, source chain id,
+    lock) must be this run's, on every path: a normal run, --from-height, a
+    changed --lock-from-block and a discard alike."""
 
-    try:
-        state = _load_state(path, lane_id)
-    except WatcherError:
-        return None
-    return (state or {}).get("exports")
-
-
-def _check_state(state: dict[str, Any], snapshot: dict[str, Any], policy: dict[str, Any]) -> None:
-    """The kept state must be this network's and lane's, and not ahead of the
-    node: a regression means another network or a corrupt file."""
-
-    if (state["pftl_chain_id"], state["genesis_hash"], state["lock_contract_address"].lower(),
-            state["source_chain_id"]) != (snapshot["chain_id"], snapshot["genesis_hash"], policy["lock"],
+    if (state["lane_id"], state["pftl_chain_id"], state["genesis_hash"], state["lock_contract_address"].lower(),
+            state["source_chain_id"]) != (lane_id, snapshot["chain_id"], snapshot["genesis_hash"], policy["lock"],
                                           policy["chain_id"]):
-        raise WatcherError("state_file_invalid", "the state file belongs to another chain, genesis or lane policy")
+        raise WatcherError("state_file_invalid", "the state file belongs to another chain, genesis, lane or lock")
+
+
+def _check_cursors(state: dict[str, Any], snapshot: dict[str, Any]) -> None:
+    """The kept release cursor must not be ahead of the node: a regression
+    means another network or a corrupt file."""
+
     if state["checked_through_height"] > snapshot["current_height"] or state["release_count"] > snapshot["release_count"]:
         raise WatcherError("state_file_invalid",
                            "the state file is ahead of the PFTL node: another network or a corrupt file")
@@ -1031,8 +1032,7 @@ def _save_state(path: Path, state: dict[str, Any]) -> None:
 def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = None,
                state: dict[str, Any] | None = None, exports: bool = False, lock_from_block: int = 0,
                unpaid_warning_blocks: int | None = None, emit: Callable[[dict[str, Any]], None] | None = None,
-               accept_export_baseline: bool = False, export_history: dict[str, Any] | None = None,
-               discard_export_history: bool = False,
+               accept_export_baseline: bool = False, discard_export_history: bool = False,
                ) -> tuple[list[dict[str, Any]], int, dict[str, Any] | None]:
     """One run: the output lines, the alarm count and the state to keep.
 
@@ -1041,9 +1041,9 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
     with `from_height`. With `emit`, the release view's lines are handed to
     it before the export view starts, and only the rest is returned; a
     failure of the export view is an `error` line and `export_error` in the
-    summary, never a lost release alarm. With `from_height`, `state` is not
-    used and `export_history` (the file's exports entry, if any) is the export
-    view's, rescanned with its known payouts carried.
+    summary, never a lost release alarm. The state's identity is checked on
+    every path; with `from_height` its release cursor is not used and its
+    exports entry is rescanned with its known payouts carried.
     """
 
     row, snapshot = _lane_page(pftl, lane_id, None)
@@ -1088,7 +1088,9 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
               expected=policy["code_hash"], observed=observed_code_hash)
 
     if state is not None:
-        _check_state(state, snapshot, policy)
+        _check_identity(state, lane_id, snapshot, policy)
+        if from_height is None:
+            _check_cursors(state, snapshot)
     if from_height is not None:
         start_height, checked_count = from_height, 0
     elif state is not None:
@@ -1153,7 +1155,7 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
             emit(line)
         emitted = len(lines)
     export_summary = export_state = export_error = None
-    carried = (state or {}).get("exports") if from_height is None else export_history
+    carried = (state or {}).get("exports")
     if exports:
         assert released_atoms is not None
         try:
@@ -1298,15 +1300,12 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
     while True:
         runs += 1
         try:
-            # --from-height overrides the kept state: a clean run replaces the
-            # file, whatever its schema; only a current file's export history
-            # is carried, so the rescan forgets no payout it knew.
-            history = None
-            if from_height is not None:
-                state = None
-                history = _export_history(state_path, args.lane_id)
-            elif state_path is not None:
-                state = _load_state(state_path, args.lane_id)
+            # --from-height overrides the kept release cursor, and a clean run
+            # replaces a file of an earlier schema; a current file's identity
+            # is checked first and its export history carried, so the rescan
+            # forgets no payout it knew.
+            if state_path is not None:
+                state = _load_state(state_path, earlier_schema=from_height is not None)
             else:
                 state = memory_state
             lines, alarms, new_state = watch_once(pftl, base, args.lane_id, from_height=from_height, state=state,
@@ -1314,7 +1313,6 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
                                                   unpaid_warning_blocks=args.unpaid_warning_blocks,
                                                   emit=_print_line if args.exports else None,
                                                   accept_export_baseline=args.accept_export_baseline,
-                                                  export_history=history,
                                                   discard_export_history=args.discard_export_history)
             # Progress is saved before the summary is printed, so a clean
             # summary always means the state advanced.

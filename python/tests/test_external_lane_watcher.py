@@ -1459,7 +1459,7 @@ class StateSizeTests(unittest.TestCase):
             path = Path(directory) / "state.json"
             watcher._save_state(path, self.state(limit))
             self.assertEqual(path.stat().st_size, limit)
-            self.assertEqual(len(watcher._load_state(path, LANE)["pad"]), len(self.state(limit)["pad"]))
+            self.assertEqual(len(watcher._load_state(path)["pad"]), len(self.state(limit)["pad"]))
             good = path.read_bytes()
             with self.assertRaises(watcher.WatcherError) as caught:
                 watcher._save_state(path, self.state(limit + 1))
@@ -1633,6 +1633,55 @@ class StateLifeTests(unittest.TestCase):
                               "http://127.0.0.1:8545", "--exports", "--interval", "5", "--discard-export-history"],
                              pftl=pruned, base=ExportBase([]))
             self.assertIn("--discard-export-history", stderr.getvalue())
+
+    def test_n1_from_height_never_carries_history_into_another_genesis(self):
+        c = export_entry(2, amount=500_000)
+        paid = released_log(c, block=950, transaction="0x" + "c1" * 32)
+        g2 = ExportPftl([export_entry(3, amount=500_000)], pruned=3, pruned_atoms=1_500_000, released=2_000_000)
+        g2.genesis_hash = "d0" * 48
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            g1 = ExportPftl([self.A, self.B, c], released=2_000_000)
+            self.assertEqual(self.check(state_file, g1, [paid], 1_000)[0], 0)
+            before = state_file.read_bytes()
+            for extra in ((), ("--from-height", "0"), ("--lock-from-block", "1")):
+                with self.subTest(extra=extra):
+                    code, lines, stderr = self.check(state_file, g2, [paid], 1_100, *extra)
+                    self.assertEqual(code, 1)
+                    self.assertIn("state_file_invalid", stderr)
+                    self.assertNotIn("verified_earlier", [line.get("status") for line in lines])
+                    self.assertEqual(state_file.read_bytes(), before)
+            # The control: a fresh file on G2 alarms on C's payout.
+            code, lines, _ = self.check(Path(directory) / "fresh.json", g2, [paid], 1_100)
+            self.assertEqual((code, alarm_codes(lines)[:1]), (2, ["payout_pruned_before_check"]))
+
+    def test_n1_a_changed_lock_source_chain_or_lane_is_refused_on_every_path(self):
+        c = export_entry(2, amount=500_000)
+        paid = released_log(c, block=950, transaction="0x" + "c1" * 32)
+        lane = ExportPftl([self.A, self.B, c], released=2_000_000)
+        cases = {"lock_contract_address": "0x" + "9f" * 20, "source_chain_id": 84532, "lane_id": "other-lane",
+                 "genesis_hash": "d0" * 48, "pftl_chain_id": "postfiat-other"}
+        for key, value in cases.items():
+            for extra in ((), ("--from-height", "0"), ("--lock-from-block", "1"), ("--discard-export-history",)):
+                with self.subTest(key=key, extra=extra), tempfile.TemporaryDirectory() as directory:
+                    state_file = Path(directory) / "state.json"
+                    self.assertEqual(self.check(state_file, lane, [paid], 1_000)[0], 0)
+                    state_file.write_text(json.dumps({**json.loads(state_file.read_text()), key: value}))
+                    before = state_file.read_bytes()
+                    code, lines, stderr = self.check(state_file, lane, [paid], 1_100, *extra)
+                    self.assertEqual(code, 1)
+                    self.assertIn("state_file_invalid", stderr)
+                    self.assertEqual(state_file.read_bytes(), before)
+
+    def test_n1_an_unreadable_file_is_refused_under_from_height(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            state_file.write_text("{not json")
+            code, _, stderr = self.check(state_file, ExportPftl([self.A], released=2_000_000), [], 1_000,
+                                         "--from-height", "0")
+            self.assertEqual(code, 1)
+            self.assertIn("state_file_invalid", stderr)
+            self.assertEqual(state_file.read_text(), "{not json")
 
     def test_the_recent_list_share_of_the_size_limit(self):
         entry = {"export_nonce": U64_MAX, "evm_digest": "0x" + "ab" * 32, "block": U64_MAX,
