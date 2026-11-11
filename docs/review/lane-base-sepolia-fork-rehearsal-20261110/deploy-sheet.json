@@ -2,34 +2,34 @@
   "chain_id": 84532,
   "plan": {
     "verifier": {
-      "deployer": "0x2e115df82aaba1bc7bff4fbb1a090aefdf232876",
+      "deployer": "0x31f7bf1373d5376236534ab3cdb7af10c30b6c4c",
       "planned_nonce": 0,
-      "predicted": "0x500ab6c6c706cb12243b0b31e7267ac81e6f7cf9"
+      "predicted": "0x305175cc93b8566ef506d7ef11b3a6de73777e1a"
     },
     "lock": {
-      "deployer": "0x9010af944809a2713c77bd6a441129cde43cc729",
+      "deployer": "0x75031d303975d016f845d5f05a61c483c470f775",
       "planned_nonce": 0,
-      "predicted": "0xb902246b118f3989b3808499266cd9f9191c4cc0"
+      "predicted": "0x4cba0581d7fb8c789197db074826af27eeaef8f8"
     }
   },
   "verifier_constructor": {
     "sp1Verifier": "0xb69f2584cbcff99a58c4e7002e8b89af54a6f4e2",
     "programVKey": "0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414",
     "pftlChainIdHash": "0x4ea8ee52b27fd187a726848ac2e0a41d4cf2c511922f08404f79d25fdbef878d",
-    "pftlGenesisHashCommitment": "0x6ba299a832e43d41777e6a9bb68f857fff0afbc79ef2d15d8f0718a5aca0b93a",
+    "pftlGenesisHashCommitment": "0x813a05464157c7d51a427770c0b78ad126822e04601b895873a205c88e1421a3",
     "pftlProtocolVersion": 1,
-    "routeProfileHashCommitment": "0x4e8b4ea6c9337cc34f343a883cc3d6b535a93a8ed0d1b2ec321f9f2249e31433",
+    "routeProfileHashCommitment": "0x40c09fe4beb6697bdc8503fde412781521ba8755f43e17020ab02ae4323f6692",
     "routeEpoch": 1,
-    "assetIdCommitment": "0x423cf2a8e8781ae66ef4b6172d6031ed962cf2282b5ef1b77ed0385001ceb014",
+    "assetIdCommitment": "0xc538912614ef85f4e2578d85aa2000d7d408256f5135b3b6eac1012f272a65e5",
     "arbitrumChainId": 84532,
-    "vaultRuntimeCodeHash": "0x2492247d32d8dae6bfbee36c8b0c65330383fcb3c95c3df322546c6877d9a1e6",
+    "vaultRuntimeCodeHash": "0x83b160659967579c204911555c126fb7951843e737f63535932c290d3f413c20",
     "token": "0x90ce303356d80ecbe359faf061c84130f40eacf0",
     "tokenRuntimeCodeHash": "0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b",
     "maxProofBytes": 4096,
     "maxPublicValuesBytes": 16384,
-    "initialCheckpointCommitment": "0x8ef72db2c7002eff0db68368c5ffa91979e7ad27c80c2e91da97fd4d1b64cc13",
+    "initialCheckpointCommitment": "0x54bcb391734ea680047015da855694f09505c726bbc75637567a5e72390120be",
     "initialFinalizedHeight": 1,
-    "initialCommitteeRootCommitment": "0x8a0aa5b410e9be50cddf559298c51e9882f90d40ff6ed414f8d7d7cab76c656a"
+    "initialCommitteeRootCommitment": "0xc93229a79c689c1688be4f4fc896bb01d322dfa17742fc69dfde999678b4025b"
   },
   "program_identity": {
     "elf_sha256": "e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab",
@@ -53,7 +53,7 @@
       }
     ],
     "program_info": "programs/pft-lane-export/program-info.json",
-    "checked_out_commit": "74d6e00afc546b7a052da090f7488311c1c9bc48"
+    "checked_out_commit": "0fd0e5967e114bcb32b58b3fd76ae78fe7daec2b"
   },
   "sp1_verifier": {
     "address": "0xb69f2584cbcff99a58c4e7002e8b89af54a6f4e2",

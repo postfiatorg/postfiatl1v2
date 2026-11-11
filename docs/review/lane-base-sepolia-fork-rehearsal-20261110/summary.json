@@ -2,15 +2,6 @@
   "mode": "fork",
   "public_network_transaction": false,
   "proof_network_request": false,
-  "stages_run": [
-    "plan",
-    "fleet",
-    "preflight",
-    "deploy",
-    "lock",
-    "release-on-pftl"
-  ],
-  "not_run": "export, prove-and-release and record: they need target/debug/postfiat-node, which this step did not build",
   "program_identity": {
     "elf_sha256": "e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab",
     "program_vkey": "0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414",
@@ -33,28 +24,28 @@
       }
     ],
     "program_info": "programs/pft-lane-export/program-info.json",
-    "checked_out_commit": "74d6e00afc546b7a052da090f7488311c1c9bc48"
+    "checked_out_commit": "0fd0e5967e114bcb32b58b3fd76ae78fe7daec2b"
   },
   "plan": {
     "verifier": {
-      "deployer": "0x2e115df82aaba1bc7bff4fbb1a090aefdf232876",
+      "deployer": "0x31f7bf1373d5376236534ab3cdb7af10c30b6c4c",
       "planned_nonce": 0,
-      "predicted": "0x500ab6c6c706cb12243b0b31e7267ac81e6f7cf9"
+      "predicted": "0x305175cc93b8566ef506d7ef11b3a6de73777e1a"
     },
     "lock": {
-      "deployer": "0x9010af944809a2713c77bd6a441129cde43cc729",
+      "deployer": "0x75031d303975d016f845d5f05a61c483c470f775",
       "planned_nonce": 0,
-      "predicted": "0xb902246b118f3989b3808499266cd9f9191c4cc0"
+      "predicted": "0x4cba0581d7fb8c789197db074826af27eeaef8f8"
     },
-    "fork_block": 57332555,
+    "fork_block": 57336909,
     "token": "0x90ce303356d80ecbe359faf061c84130f40eacf0",
     "token_runtime_code_hash": "0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b",
     "holder": "0x6e4e8e0ed73f807d8e8479cb8f25d87ce8811e17",
     "max_lock_amount": 6000000,
     "gas_price_wei": 6000000,
-    "lock_runtime_code_hash": "0x2492247d32d8dae6bfbee36c8b0c65330383fcb3c95c3df322546c6877d9a1e6"
+    "lock_runtime_code_hash": "0x83b160659967579c204911555c126fb7951843e737f63535932c290d3f413c20"
   },
-  "fork_url": "http://127.0.0.1:41993",
+  "fork_url": "http://127.0.0.1:54247",
   "driver_report_checked": {
     "protocol_version": 1,
     "lane_release_cap_atoms": 6000000,
@@ -63,34 +54,34 @@
   "fleet": {
     "form": "one data directory driven by the ignored node test local_evm_lane_roundtrip; six validators sign every block's consensus v2 commit; no separate node processes or network",
     "chain_id": "postfiat-lane-lane-roundtrip",
-    "genesis_hash": "d562e4adfe26e688878f1332e1e8a92963c65387dbe1ef1aaa11cf1f00bfca230ad2486cf04610dcdfae1946576c05e8",
+    "genesis_hash": "6102bf96788e36c4d13a99a683170454f859361ded264cf959487f2d3165e26c984cc65316a6930e5ffc4e2c86a4a48d",
     "checkpoint": {
-      "block_id": "58c221973aa1418c1c18f760313b814578c23b323ca0a267865f81aaac63e0a973ee203b7b7811c2a4dd53055c544114",
+      "block_id": "6cf32ccafcde44952fdf1b1952703d2655e4122eaf4c475cc0db1505c79619b79113a2adb3716aca06c8de2220617f14",
       "committee_epoch": 1,
-      "committee_root": "497e166d59d8b542bbd5a1d0821e79df9eb14c5fb5ffa29691bd9f94c8d7902ca9622251f7d3f1c35a9a3d8bde46f7da",
+      "committee_root": "28f4962ee4974cb3a65ab3f05f74011f73bdc5d76e84cd4384a55e62df540ba623f0bf50d26749ffd6c16adeccc23c8f",
       "height": 1
     },
     "pins": {
-      "asset_id": "0daaf01ae1521e132b50b8767f707cd425b8577570e3287cde86d0b7d301303170d6a088ffc805b0b335d0ca89b949b3",
-      "asset_id_commitment": "0x423cf2a8e8781ae66ef4b6172d6031ed962cf2282b5ef1b77ed0385001ceb014",
+      "asset_id": "20275c5cb23dc0fa98fc90f9030fc5dd43d05477e75574f4716763258cce63d30f83a1f63d4cbf682755d124572194fa",
+      "asset_id_commitment": "0xc538912614ef85f4e2578d85aa2000d7d408256f5135b3b6eac1012f272a65e5",
       "lane_id": "base-erc20",
       "pftl_chain_id": "postfiat-lane-lane-roundtrip",
       "pftl_chain_id_hash": "0x4ea8ee52b27fd187a726848ac2e0a41d4cf2c511922f08404f79d25fdbef878d",
-      "pftl_genesis_hash": "d562e4adfe26e688878f1332e1e8a92963c65387dbe1ef1aaa11cf1f00bfca230ad2486cf04610dcdfae1946576c05e8",
-      "pftl_genesis_hash_commitment": "0x6ba299a832e43d41777e6a9bb68f857fff0afbc79ef2d15d8f0718a5aca0b93a",
+      "pftl_genesis_hash": "6102bf96788e36c4d13a99a683170454f859361ded264cf959487f2d3165e26c984cc65316a6930e5ffc4e2c86a4a48d",
+      "pftl_genesis_hash_commitment": "0x813a05464157c7d51a427770c0b78ad126822e04601b895873a205c88e1421a3",
       "route_profile": {
-        "asset_id": "0daaf01ae1521e132b50b8767f707cd425b8577570e3287cde86d0b7d301303170d6a088ffc805b0b335d0ca89b949b3",
+        "asset_id": "20275c5cb23dc0fa98fc90f9030fc5dd43d05477e75574f4716763258cce63d30f83a1f63d4cbf682755d124572194fa",
         "route_epoch": 1,
         "route_id": "base-erc20",
         "schema": "postfiat.external_lane.route_profile.v1",
         "source_chain_id": 84532,
         "token_address": "0x90ce303356d80ecbe359faf061c84130f40eacf0",
         "token_runtime_code_hash": "0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b",
-        "vault_address": "0xb902246b118f3989b3808499266cd9f9191c4cc0",
-        "vault_runtime_code_hash": "0x2492247d32d8dae6bfbee36c8b0c65330383fcb3c95c3df322546c6877d9a1e6"
+        "vault_address": "0x4cba0581d7fb8c789197db074826af27eeaef8f8",
+        "vault_runtime_code_hash": "0x83b160659967579c204911555c126fb7951843e737f63535932c290d3f413c20"
       },
-      "route_profile_hash": "540dc6eaa9e9405966aa8253ef9729a931a8bc7893467c0e95edb09e03d3f0f836ed9ef69cf43526d96d51f4bd902009",
-      "route_profile_hash_commitment": "0x4e8b4ea6c9337cc34f343a883cc3d6b535a93a8ed0d1b2ec321f9f2249e31433"
+      "route_profile_hash": "305f6c69aa79038ece8a8b4d386251509d4d6afaaf98bc18d5abf5eaccc29360705cd3e85375dc0b2bea3dee786efd3b",
+      "route_profile_hash_commitment": "0x40c09fe4beb6697bdc8503fde412781521ba8755f43e17020ab02ae4323f6692"
     },
     "recipient": "pfda42e6fdcf262ece2aae622f61c7b40003e1975b"
   },
@@ -98,20 +89,20 @@
     "sp1Verifier": "0xb69f2584cbcff99a58c4e7002e8b89af54a6f4e2",
     "programVKey": "0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414",
     "pftlChainIdHash": "0x4ea8ee52b27fd187a726848ac2e0a41d4cf2c511922f08404f79d25fdbef878d",
-    "pftlGenesisHashCommitment": "0x6ba299a832e43d41777e6a9bb68f857fff0afbc79ef2d15d8f0718a5aca0b93a",
+    "pftlGenesisHashCommitment": "0x813a05464157c7d51a427770c0b78ad126822e04601b895873a205c88e1421a3",
     "pftlProtocolVersion": 1,
-    "routeProfileHashCommitment": "0x4e8b4ea6c9337cc34f343a883cc3d6b535a93a8ed0d1b2ec321f9f2249e31433",
+    "routeProfileHashCommitment": "0x40c09fe4beb6697bdc8503fde412781521ba8755f43e17020ab02ae4323f6692",
     "routeEpoch": 1,
-    "assetIdCommitment": "0x423cf2a8e8781ae66ef4b6172d6031ed962cf2282b5ef1b77ed0385001ceb014",
+    "assetIdCommitment": "0xc538912614ef85f4e2578d85aa2000d7d408256f5135b3b6eac1012f272a65e5",
     "arbitrumChainId": 84532,
-    "vaultRuntimeCodeHash": "0x2492247d32d8dae6bfbee36c8b0c65330383fcb3c95c3df322546c6877d9a1e6",
+    "vaultRuntimeCodeHash": "0x83b160659967579c204911555c126fb7951843e737f63535932c290d3f413c20",
     "token": "0x90ce303356d80ecbe359faf061c84130f40eacf0",
     "tokenRuntimeCodeHash": "0x486d2a13ce1250e62b52acd787d2d2ff04aaf2d623f5159cb62ee55b7f1cb76b",
     "maxProofBytes": 4096,
     "maxPublicValuesBytes": 16384,
-    "initialCheckpointCommitment": "0x8ef72db2c7002eff0db68368c5ffa91979e7ad27c80c2e91da97fd4d1b64cc13",
+    "initialCheckpointCommitment": "0x54bcb391734ea680047015da855694f09505c726bbc75637567a5e72390120be",
     "initialFinalizedHeight": 1,
-    "initialCommitteeRootCommitment": "0x8a0aa5b410e9be50cddf559298c51e9882f90d40ff6ed414f8d7d7cab76c656a"
+    "initialCommitteeRootCommitment": "0xc93229a79c689c1688be4f4fc896bb01d322dfa17742fc69dfde999678b4025b"
   },
   "verifier_constructor_record": {
     "programVKey": "0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414",
@@ -120,8 +111,8 @@
     "program_info": "programs/pft-lane-export/program-info.json"
   },
   "preflight": {
-    "verifier_runtime_code_hash": "0x8ae044e3f9b8e9f68087ebedbc78e9a1a85e3061edf96bf5a5afbd1954b9e350",
-    "lock_runtime_code_hash": "0x2492247d32d8dae6bfbee36c8b0c65330383fcb3c95c3df322546c6877d9a1e6",
+    "verifier_runtime_code_hash": "0x3a038c6b0dd38602c53db0cdd338f0672c1cc97909f4e81465e30677a7056c3b",
+    "lock_runtime_code_hash": "0x83b160659967579c204911555c126fb7951843e737f63535932c290d3f413c20",
     "gas_used": {
       "deploy-verifier": 2630563,
       "deploy-lock": 1134485,
@@ -131,24 +122,24 @@
     "constructor_values_read_back": 21,
     "matches_predictions": true
   },
-  "commit": "74d6e00afc546b7a052da090f7488311c1c9bc48",
+  "commit": "0fd0e5967e114bcb32b58b3fd76ae78fe7daec2b",
   "deploy": {
-    "verifier": "0x500ab6c6c706cb12243b0b31e7267ac81e6f7cf9",
-    "lock": "0xb902246b118f3989b3808499266cd9f9191c4cc0",
+    "verifier": "0x305175cc93b8566ef506d7ef11b3a6de73777e1a",
+    "lock": "0x4cba0581d7fb8c789197db074826af27eeaef8f8",
     "transactions": [
-      "0x7ae782fc240d14ed5586b7e15727d61955cbb65c178dd5286d6cdef4647bad00",
-      "0x747bb4d6cef2f031226de522687206e1503e32d2732bb23651c651c656793a5f"
+      "0x6db13591b3212f86768755a848ecd6fbd4a114e2a4ece1008e360a4c9b4aff2d",
+      "0x2fc38a984d36e8fafd6512e91fe13e990ef74cb08fcf71375a3323e06a349164"
     ],
     "constructor_values_read_back": 21,
     "sourcify": "skipped on the fork"
   },
   "lock": {
-    "transaction": "0x055a541e51d04d8b94497b86d2a108245d349225f10157b204f323c38bc3cbab",
-    "block": 57332559,
+    "transaction": "0x38e3f9b2dfe9891e077639cefa97a06a3a8dc796dad77f73bc6ee6268c666b97",
+    "block": 57336913,
     "amount": 1000000,
     "lock_nonce": 0
   },
-  "finality_wait_seconds": 90,
+  "finality_wait_seconds": 1230,
   "release_on_pftl": {
     "release_height": 2,
     "recipient_balance_after_release": 1000000,
@@ -164,24 +155,49 @@
       "tip_height": 2
     }
   },
+  "export": {
+    "amount": 400000,
+    "base_recipient": "0xae51528280cc7ed3ab0a57c37a6ec41a3a8ac322",
+    "block_height": 4,
+    "lane": {
+      "blocks_and_state_replayed": true,
+      "exported_atoms": 400000,
+      "native_live_atoms": 999997978,
+      "next_export_nonce": 1,
+      "released_atoms": 1000000,
+      "remainder_atoms": 299400000,
+      "reserved_atoms": 300000000,
+      "tip_height": 4
+    },
+    "input_sha256": "aa2c9d7ed2b09d9b8689ccfbaa1d1b495c4bdaeafddce4f0d0f48bf64355727f",
+    "public_values_sha256": "91b95082b61fa12420fb289f56c99cf15153b49d44d3c9707e09bddb5c1188ac",
+    "packet_digest": "6057a19f61a8cd95401d60546ddbab0ff62e9a4a84b663bc46fdd059e01ed3f6"
+  },
+  "prove_and_release": {
+    "stopped": "prove-and-release needs a real SP1 v6.3.1 Groth16 proof (--proof); the SP1 verifier 0xb69f2584cbcff99a58c4e7002e8b89af54a6f4e2 accepts no placeholder",
+    "prover_command_contract": "run with PFT_LANE_EXPORT_INPUT=<input.cbor> and PFT_LANE_EXPORT_PROOF_OUT=<path>; write the raw proof bytes there and the committed public values to <path>.public-values; exit 0 (scripts/pft-lane-export-relay.py prove --mode command)",
+    "program_vkey": "0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414",
+    "input_sha256": "aa2c9d7ed2b09d9b8689ccfbaa1d1b495c4bdaeafddce4f0d0f48bf64355727f",
+    "expected_public_values_sha256": "91b95082b61fa12420fb289f56c99cf15153b49d44d3c9707e09bddb5c1188ac"
+  },
   "intents": [
     {
       "stage": "deploy",
       "role": "verifier",
-      "sender": "0x2e115df82aaba1bc7bff4fbb1a090aefdf232876",
+      "sender": "0x31f7bf1373d5376236534ab3cdb7af10c30b6c4c",
       "nonce": 0,
-      "purpose": "deploy the verifier at 0x500ab6c6c706cb12243b0b31e7267ac81e6f7cf9",
-      "hash": "0x7ae782fc240d14ed5586b7e15727d61955cbb65c178dd5286d6cdef4647bad00",
+      "purpose": "deploy the verifier at 0x305175cc93b8566ef506d7ef11b3a6de73777e1a",
+      "hash": "0x6db13591b3212f86768755a848ecd6fbd4a114e2a4ece1008e360a4c9b4aff2d",
       "receipt": "0x1",
       "outcome": "sent"
     },
     {
       "stage": "deploy",
       "role": "lock",
-      "sender": "0x9010af944809a2713c77bd6a441129cde43cc729",
+      "sender": "0x75031d303975d016f845d5f05a61c483c470f775",
       "nonce": 0,
-      "purpose": "deploy the lock at 0xb902246b118f3989b3808499266cd9f9191c4cc0",
-      "hash": "0x747bb4d6cef2f031226de522687206e1503e32d2732bb23651c651c656793a5f",
+      "purpose": "deploy the lock at 0x4cba0581d7fb8c789197db074826af27eeaef8f8",
+      "hash": "0x2fc38a984d36e8fafd6512e91fe13e990ef74cb08fcf71375a3323e06a349164",
       "receipt": "0x1",
       "outcome": "sent"
     },
@@ -191,7 +207,7 @@
       "sender": "0x6e4e8e0ed73f807d8e8479cb8f25d87ce8811e17",
       "nonce": 6,
       "purpose": "approve the lock for 1000000",
-      "hash": "0xcc8c67f25eb9c6b8fdb0327ad6910d6a88b0c0bea8578d2a48bf4723ee57b064",
+      "hash": "0x9c62de36efb673c78f6ca3911ca4f0ce230c3f0930d6bfc6b3ad1c3a92783014",
       "receipt": "0x1",
       "outcome": "sent"
     },
@@ -201,7 +217,7 @@
       "sender": "0x6e4e8e0ed73f807d8e8479cb8f25d87ce8811e17",
       "nonce": 7,
       "purpose": "Lock 1000000 to pfda42e6fdcf262ece2aae622f61c7b40003e1975b",
-      "hash": "0x055a541e51d04d8b94497b86d2a108245d349225f10157b204f323c38bc3cbab",
+      "hash": "0x38e3f9b2dfe9891e077639cefa97a06a3a8dc796dad77f73bc6ee6268c666b97",
       "receipt": "0x1",
       "outcome": "sent",
       "next_nonce_before": 0
@@ -215,5 +231,29 @@
     "runtime_code_hash": "0xcceb864cd8a5a36b2073a8f2b32a773835cd2dd2c78a56f8e6fdb942feff04dd",
     "verifier_hash": "0x4388a21c687fdd5f218d7e3d13190cac4c5355818d3605fd5fb811df468ee696",
     "version": "v6.1.0"
+  },
+  "program_info": {
+    "elf_sha256": "e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab",
+    "program_vkey": "0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414",
+    "source_commit": "439803aaa3d6f34dfe97a4a48eca5d6008cba43d",
+    "docker_image": "ghcr.io/succinctlabs/sp1@sha256:0942a27dbe8e38f4b14f3732e779df4027b17bde93e9fbc9e8c773c15eb63400",
+    "build_command": "cargo prove build --docker --tag v6.3.1 --locked --workspace-directory <checkout> --output-directory elf",
+    "runs": [
+      {
+        "run_id": 42818337185,
+        "attempt": 1,
+        "builds": 2,
+        "clean_source_trees": 2
+      },
+      {
+        "run_id": 42818337185,
+        "attempt": 2,
+        "builds": 2,
+        "clean_source_trees": 2,
+        "note": "re-run on a separate runner machine"
+      }
+    ],
+    "program_info": "programs/pft-lane-export/program-info.json",
+    "checked_out_commit": "0fd0e5967e114bcb32b58b3fd76ae78fe7daec2b"
   }
 }
