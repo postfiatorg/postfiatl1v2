@@ -1305,10 +1305,11 @@ fn certified_fastpay_fence(
 /// consensus and transport contexts, so this read refuses with
 /// `fastpay_fence_status_signer_unavailable` instead of reading a key file.
 ///
-/// Cost: under the ordered-commit lock, one ledger read, one anchor lookup
-/// (one index read; a block-log scan on legacy storage) and one ML-DSA-65
-/// signature plus its self-check. A repeat for the same lock at the same
-/// certified tip is served from a bounded per-process cache without signing.
+/// Cost: under the ordered-commit lock, one ledger read and one anchor lookup
+/// (one index read; a block-log scan on legacy storage); then, outside it,
+/// one ML-DSA-65 signature and its self-check. A repeat for the same lock at
+/// the same certified tip is served from a bounded per-process cache
+/// (4,096 answers) without signing.
 pub fn owned_fence_status_v3(
     options: NodeOptions,
     validator_id: &str,
@@ -1325,7 +1326,7 @@ pub fn owned_fence_status_v3(
         )
     })?;
     let store = NodeStore::new(&options.data_dir);
-    let _commit_lock = store.lock_ordered_commit()?;
+    let commit_lock = store.lock_ordered_commit()?;
     let genesis = store.read_genesis()?;
     let tip = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?;
     let cache_key = (
@@ -1393,6 +1394,9 @@ pub fn owned_fence_status_v3(
         status.operation = Some(fence.operation);
         status.anchored_height = Some(height);
     }
+    // Every signed byte is fixed; sign outside the lock so a flood of reads
+    // does not hold up block commits.
+    drop(commit_lock);
     let signing_bytes = status.signing_bytes().map_err(fastpay_invalid_data)?;
     status.signature_hex = bytes_to_hex(&sign_for_fastpay_committee(
         &options.data_dir,
