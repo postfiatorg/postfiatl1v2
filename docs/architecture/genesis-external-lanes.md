@@ -321,7 +321,8 @@ It checks three things:
 2. **Every export.** Each stored export packet in a final block is reported as `paid`, with its Base transaction and block, or `unpaid`, with its age in PFTL blocks. Unpaid is information, not an alarm; with `--unpaid-warning-blocks` set, a long-unpaid export becomes the warning `export_unpaid_too_long`.
 3. **The totals,** at the finalized block. Each broken invariant is an alarm:
    - the lock's `totalReleased` equals the sum of every payout up to the finalized block, the verified sum kept in the state file plus the new events (`total_released_mismatch`);
-   - `token.balanceOf(lock)` is at least `totalLocked − totalReleased`, as `PFTLockV1` promises; a shortfall is `lock_balance_mismatch`, and a surplus (tokens sent to the lock by a plain transfer) is reported as `lock_surplus` in the totals, not raised;
+   - the lock's `totalReleased` is at most its `totalLocked`, as `PFTLockV1` enforces (`base_released_above_locked`);
+   - `token.balanceOf(lock)` is at least `totalLocked − totalReleased`, as `PFTLockV1` promises; a shortfall is `lock_balance_mismatch`, and a surplus (tokens sent to the lock by a plain transfer) is reported as `lock_surplus` in the totals, not raised. When `totalReleased` is above `totalLocked`, no balance matches the negative expectation: `lock_balance_mismatch` is raised with `base_released_above_locked` and `lock_surplus` is 0;
    - the lane's `exported_atoms` is at least the payouts' sum (`exported_below_paid`);
    - the lane's `released_atoms` is at most `totalLocked` (`released_above_locked`).
 

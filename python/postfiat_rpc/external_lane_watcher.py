@@ -95,6 +95,7 @@ ALARM_CODES = (
     "lock_balance_mismatch",
     "exported_below_paid",
     "released_above_locked",
+    "base_released_above_locked",
 )
 WARNING_CODES = ("export_unpaid_too_long",)
 
@@ -723,9 +724,11 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     lock_balance = _u256_call(base, token, _selector("balanceOf(address)") + lock.removeprefix("0x").rjust(64, "0"),
                               tag)
     exported_atoms = snapshot["exported_atoms"]
+    # Negative only if the lock's own invariant broke; then no balance is a surplus.
     expected_balance = total_locked - total_released
     totals = {"total_locked": total_locked, "total_released": total_released, "lock_balance": lock_balance,
-              "lock_surplus": max(0, lock_balance - expected_balance), "payout_sum": payout_total,
+              "lock_surplus": max(0, lock_balance - expected_balance) if expected_balance >= 0 else 0,
+              "payout_sum": payout_total,
               "paid_sum": paid_total, "exported_atoms": exported_atoms, "released_atoms": released_atoms,
               "pruned_exported_atoms": snapshot["pruned_exported_atoms"]}
     # totalReleased(finalized) - totalReleased(saved block) must be the new
@@ -733,9 +736,13 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     # verified against it, so no archive state is read.
     if total_released != payout_total:
         alarm("total_released_mismatch", **totals, from_block=from_block, scanned_from_block=start)
+    # PFTLockV1 never releases more than it locked; if it did, the expected
+    # balance is negative, no balance can match it, and both alarms are raised.
+    if total_released > total_locked:
+        alarm("base_released_above_locked", **totals)
     # PFTLockV1 holds at least totalLocked - totalReleased: a plain transfer
     # to the lock adds a surplus, which is reported, not raised.
-    if lock_balance < expected_balance:
+    if lock_balance < expected_balance or expected_balance < 0:
         alarm("lock_balance_mismatch", **totals)
     if exported_atoms < payout_total:
         alarm("exported_below_paid", **totals)

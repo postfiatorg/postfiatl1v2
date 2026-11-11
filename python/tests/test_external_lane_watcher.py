@@ -879,6 +879,18 @@ class ExportViewTests(unittest.TestCase):
         _, codes, _, _ = run_export_view(ExportPftl([entry], released=2_000_000), ExportBase([released_log(entry)]))
         self.assertEqual(codes, ["released_above_locked"])
 
+    def test_released_above_locked_on_base_is_an_alarm_and_no_balance_matches_it(self):
+        # PFTLockV1 never lets totalReleased pass totalLocked; if it ever did, the
+        # expected balance would be negative and must not silence the balance check.
+        entry = export_entry(0)  # 400,000 paid against 300,000 locked
+        for balance in (0, 5, 1_000_000):
+            with self.subTest(balance=balance):
+                _, codes, summary, _ = run_export_view(
+                    ExportPftl([entry], released=300_000),
+                    ExportBase([released_log(entry)], locked=300_000, balance=balance))
+                self.assertEqual(codes, ["base_released_above_locked", "lock_balance_mismatch"])
+                self.assertEqual(summary["totals"]["lock_surplus"], 0)
+
     def test_a_balance_above_the_locked_remainder_is_a_surplus_not_an_alarm(self):
         # Tokens sent to the lock by a plain transfer: PFTLockV1 promises only "at least".
         entry = export_entry(0)
