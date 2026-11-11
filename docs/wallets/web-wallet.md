@@ -377,9 +377,12 @@ public wallet flows.
 
 The current unwrap flow is:
 
-1. Load the FastPay object snapshot with `owned_objects`, following
-   `next_cursor` to the last page and restarting if a page reports another
-   `height` or `state_root`.
+1. Load the FastPay object snapshot with `owned_objects`
+   (`fetchOwnedObjectsSnapshot`): `omit_owner_keys`, every page through
+   `next_cursor`, and a restart from the first page (at most 3) on
+   `owned_objects_view_changed` or another `view_digest`. A truncated answer
+   without `next_cursor` (a node from before paging) or a view that keeps
+   changing is an error, never a partial list. Selection uses every page.
 2. Select one or more PFT objects that cover `amount + fee`, up to `2048`
    inputs. Exact match and smallest-covering-object are preferred before
    largest-first multi-input selection.

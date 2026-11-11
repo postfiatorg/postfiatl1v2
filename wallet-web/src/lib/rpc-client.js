@@ -76,15 +76,57 @@ export function parseOwnedObjectsResult(resp) {
   };
 }
 
+// Restarts of a paged read when the node's object view changes between pages.
+export const OWNED_OBJECTS_MAX_RESTARTS = 3;
+const OWNED_OBJECTS_VIEW_CHANGED = 'owned_objects_view_changed';
+
+function requireOwnedObjectsPaging(page) {
+  if (page.truncated && (!page.next_cursor || !page.view_digest)) {
+    throw new Error('This RPC node is too old for paging FastPay objects (a truncated answer without next_cursor); use an upgraded node.');
+  }
+}
+
+// Every owned object of one view: follows next_cursor (owner keys omitted,
+// the wallet knows its own key) and restarts from the first page when the
+// node refuses a continuation with owned_objects_view_changed or a page
+// reports another view_digest, at most OWNED_OBJECTS_MAX_RESTARTS times.
+// Never returns a partial list: a truncated answer without a cursor is an
+// error. The result is the first page's fields with every object,
+// truncated false and no cursor fields.
 export async function fetchOwnedObjectsSnapshot(rpc, ownerPublicKeyHex, opts = {}) {
   if (!rpc) throw new Error('RPC client is not connected');
   if (!ownerPublicKeyHex) throw new Error('Wallet public key is missing');
-
-  const resp = await rpc.ownedObjects(ownerPublicKeyHex, {
+  const request = {
     asset: opts.asset || 'PFT',
     limit: opts.limit ?? FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,
-  });
-  return parseOwnedObjectsResult(resp);
+    omit_owner_keys: true,
+  };
+  for (let attempt = 0; attempt <= OWNED_OBJECTS_MAX_RESTARTS; attempt += 1) {
+    const first = parseOwnedObjectsResult(await rpc.ownedObjects(ownerPublicKeyHex, request));
+    requireOwnedObjectsPaging(first);
+    const objects = [...first.objects];
+    let page = first;
+    let changed = false;
+    while (page.next_cursor) {
+      const resp = await rpc.ownedObjects(ownerPublicKeyHex, { ...request, cursor: page.next_cursor });
+      if (!resp?.ok && resp?.error?.code === OWNED_OBJECTS_VIEW_CHANGED) { changed = true; break; }
+      page = parseOwnedObjectsResult(resp);
+      requireOwnedObjectsPaging(page);
+      if (page.view_digest !== first.view_digest) { changed = true; break; }
+      objects.push(...page.objects);
+    }
+    if (!changed) {
+      return {
+        ...first,
+        objects,
+        object_count: objects.length,
+        truncated: false,
+        cursor: null,
+        next_cursor: null,
+      };
+    }
+  }
+  throw new Error('FastPay objects kept changing between pages; retry shortly.');
 }
 
 export async function pollOwnedObjectsTotal(rpc, ownerPublicKeyHex, opts = {}) {
@@ -449,6 +491,8 @@ export class RpcClient {
     const params = { owner_public_key_hex: ownerPublicKeyHex };
     if (opts.asset) params.asset = opts.asset;
     if (opts.limit !== undefined) params.limit = opts.limit;
+    if (opts.cursor) params.cursor = opts.cursor;
+    if (opts.omit_owner_keys === true) params.omit_owner_keys = true;
     return this.call('owned_objects', params);
   }
   async ownedSign(orderJson, validatorId) {
