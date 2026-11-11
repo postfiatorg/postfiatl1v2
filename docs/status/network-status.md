@@ -1,6 +1,6 @@
 # Network Status
 
-**Guidance reviewed 2026-11-06; latest fleet observation 2026-11-09.**
+**Guidance reviewed 2026-11-06; latest fleet observation 2026-11-11.**
 This page summarizes recorded observations and separately labels newer source
 work. It is not a live query. The full, dated operating log is
 [Current State](chain-state-current.md); when the two disagree, the log wins.
@@ -41,8 +41,8 @@ does not re-certify every October deployment check.
 | Release | `vote-records-20261030` (source `ae70d66d`, branch `release/vote-records-20261030`) |
 | Node executable SHA-256 | `87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7` on all six validators |
 | Rollout | One validator at a time with `scripts/postfiat-safe-rollout apply-next`, 2026-10-30 10:31–11:14 UTC; no rollback needed |
-| Height | 1170 on all six validators (tip `51c1cab0…`, state root `36233f64…`) |
-| Latest fleet observation | 2026-11-09 11:51:47–11:54:07 UTC, read-only `status`, `server_info` and `mempool_status` on all six; original rollout receipt remains dated 2026-10-30 |
+| Height | 1177 on all six validators (tip `661a1ec2b9e99c3f…`, state root `c6dfd0ebea8c2bdb…`) |
+| Latest fleet observation | 2026-11-11 10:00:58–10:01:18 UTC, read-only `status`, bridge, asset and reserve reads and `mempool_status` on all six; original rollout receipt remains dated 2026-10-30 |
 
 Changes merged after that release are not evidence of deployment. The
 [next-release plan](../plans/active/next-validator-release-plan-20261115.md)
