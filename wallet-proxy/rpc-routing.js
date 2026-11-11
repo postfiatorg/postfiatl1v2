@@ -1713,6 +1713,9 @@ wss } = runtime;
             account: accountRead.ok ? accountRead.result : null,
             account_error: accountRead.ok ? null : accountRead.error,
             owned: ownedRead.ok ? ownedRead.result : null,
+            // One page per validator per tick: a truncated page is not the
+            // inventory, and wallets must not select from it.
+            owned_complete: ownedRead.ok ? ownedRead.result?.truncated !== true : null,
             owned_error: ownedRead.ok ? null : ownedRead.error,
             assets: assetsRead.ok ? assetsRead.result : null,
             assets_error: includeAssets && !assetsRead.ok ? assetsRead.error : null,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import * as evm from '../lib/evm.js';
 import { formatBalance, formatAssetBalance, shortenAssetId, truncateMiddle, pftToAtoms } from '../lib/utils.js';
 import { displayAssetSymbol, navcoinMarketForAsset } from '../lib/navcoin-markets.js';
@@ -15,6 +15,7 @@ import {
   removeFastPayRecovery,
   saveFastPayRecovery,
 } from '../lib/fastpay-recovery-store.js';
+import { createFastpayInventory } from '../lib/fastpay-inventory.js';
 
 function formatUsdE8(value) {
   const cents = (BigInt(value) + 500_000n) / 1_000_000n;
@@ -60,12 +61,20 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
   const [wrapError, setWrapError] = useState('');
   const [wrapSuccess, setWrapSuccess] = useState('');
 
-  const applyFastpaySnapshot = useCallback((snapshot) => {
-    setFastpayBalance(snapshot.totalValue ?? snapshot.total_value ?? 0);
-    setFastpayObjects(Array.isArray(snapshot.objects) ? snapshot.objects : []);
-    setFastpayStatus('ok');
-    setFastpayError('');
+  const publishFastpay = useCallback(({ status, snapshot, error }) => {
+    if (status === 'ok') {
+      setFastpayBalance(snapshot.totalValue ?? snapshot.total_value ?? 0);
+      setFastpayObjects(Array.isArray(snapshot.objects) ? snapshot.objects : []);
+    }
+    setFastpayStatus(status);
+    setFastpayError(error);
   }, []);
+
+  // Only complete inventories reach fastpayObjects; see fastpay-inventory.js.
+  const fastpayInventory = useMemo(() => createFastpayInventory({
+    read: () => fetchOwnedObjectsSnapshot(rpc, publicKeyHex, { asset: 'PFT', limit: FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT }),
+    publish: publishFastpay,
+  }), [rpc, publicKeyHex, publishFastpay]);
 
   const refreshFastpayRecoveries = useCallback(() => {
     if (!publicKeyHex || typeof window === 'undefined') {
@@ -91,16 +100,8 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     }
 
     if (showLoading) setFastpayStatus('loading');
-    try {
-      const snapshot = await fetchOwnedObjectsSnapshot(rpc, publicKeyHex, { asset: 'PFT', limit: FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT });
-      applyFastpaySnapshot(snapshot);
-      return snapshot;
-    } catch (e) {
-      setFastpayStatus('error');
-      setFastpayError(`FastPay balance unavailable: ${humanRpcErrorMessage(e)}`);
-      throw e;
-    }
-  }, [rpc, publicKeyHex, applyFastpaySnapshot]);
+    return fastpayInventory.refresh();
+  }, [publicKeyHex, fastpayInventory]);
 
   const fetchAccount = useCallback(async () => {
     if (!rpc || !address) return;
@@ -171,7 +172,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     }
 
     if (liveSnapshot.owned) {
-      applyFastpaySnapshot(liveSnapshot.owned);
+      fastpayInventory.applyFeed(liveSnapshot.owned, liveSnapshot.owned_complete);
     } else if (liveSnapshot.owned_error && fastpayBalance === null) {
       setFastpayStatus('error');
       setFastpayError(`FastPay balance unavailable: ${humanRpcErrorMessage(liveSnapshot.owned_error)}`);
@@ -183,7 +184,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
         : (liveSnapshot.assets.assets || []);
       setAssets(items);
     }
-  }, [visible, liveSnapshot, address, publicKeyHex, balance, fastpayBalance, applyFastpaySnapshot]);
+  }, [visible, liveSnapshot, address, publicKeyHex, balance, fastpayBalance, fastpayInventory]);
 
   const openWrap = (mode = 'wrap') => {
     setFastpaySheetMode(mode);
