@@ -816,8 +816,10 @@ def run_export_view(pftl: ExportPftl, base: ExportBase, *, warning: int | None =
         codes.append(code)
         lines.append({"kind": "alarm", "code": code, **fields})
 
+    identity = {"lane_id": LANE, "pftl_chain_id": pftl.pftl_chain_id, "genesis_hash": pftl.genesis_hash,
+                "source_chain_id": pftl.chain_id, "lock": LOCK, "code_hash": pftl.code_hash}
     summary, kept = watcher.export_view(
-        pftl, base, LANE, lock=LOCK, finalized=base.finalized, current_height=current_height,
+        pftl, base, LANE, identity=identity, lock=LOCK, finalized=base.finalized, current_height=current_height,
         released_atoms=pftl.released if released is None else released, from_block=from_block, state=state,
         accept_baseline=accept, unpaid_warning_blocks=warning, alarm=alarm, lines=lines)
     return lines, codes, summary, kept
@@ -1753,6 +1755,128 @@ class StateLifeTests(unittest.TestCase):
         self.assertEqual((size, 100 * size // watcher.MAX_STATE_BYTES), (1_257_472, 7))
 
 
+OTHER_LOCK = "0x" + "9f" * 20
+IDENTITY_FIELDS = ("genesis_hash", "pftl_chain_id", "lock", "source_chain_id")
+
+
+def foreign(node: ExportPftl, field: str) -> ExportPftl:
+    """The same lane answers from a node of another network or policy."""
+
+    if field == "genesis_hash":
+        node.genesis_hash = "d0" * 48
+    elif field == "pftl_chain_id":
+        node.pftl_chain_id = "postfiat-other"
+    elif field == "source_chain_id":
+        node.chain_id = 84532
+    else:
+        node.page_hook = lambda info, cursor: info["lanes"][0]["config"]["policy"].update(
+            lock_contract_address=OTHER_LOCK)
+    return node
+
+
+class Failover:
+    """One endpoint: the release read from `release`; export page k
+    (0-based) from `export` before `switch`, from `later` from it on."""
+
+    def __init__(self, release: Any, export: Any, later: Any = None, switch: int = 0) -> None:
+        self.release, self.export, self.later, self.switch, self.pages = release, export, later, switch, 0
+
+    def external_lane_info(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        if "export_limit" not in kwargs:
+            return self.release.external_lane_info(*args, **kwargs)
+        self.pages += 1
+        node = self.later if self.later is not None and self.pages > self.switch else self.export
+        return node.external_lane_info(*args, **kwargs)
+
+
+class ExportIdentityTests(unittest.TestCase):
+    """F1: the export pages must come from the network, lane and policy the
+    release view validated, the first page and every later one, whatever
+    the run's start; honest progress between the two reads still passes."""
+
+    STARTS = {"normal": (), "from_height": ("--from-height", "0"), "lock_from_block": ("--lock-from-block", "1"),
+              "both": ("--from-height", "0", "--lock-from-block", "1")}
+    E = export_entry(0, height=400)
+    PAYOUT = released_log(E, block=950)
+
+    def refused(self, code, lines, stderr, state_file, before):
+        self.assertEqual(code, 1)
+        self.assertIn("export_identity_mismatch", stderr)
+        self.assertEqual([line for line in lines if line["kind"] in ("payout", "export")], [])
+        self.assertEqual(lines[-1]["export_error"], "export_identity_mismatch")
+        after = json.loads(state_file.read_text())
+        self.assertEqual(after.get("exports"), (before or {}).get("exports"))
+        self.assertEqual(after["genesis_hash"], GENESIS_HASH)
+
+    def seeded(self, directory):
+        state_file = Path(directory) / "state.json"
+        a = ExportPftl([], released=2_000_000)
+        self.assertEqual(run_exports(a, ExportBase([], locked=2_000_000, finalized=900),
+                                     "--state-file", str(state_file))[0], 0)
+        return state_file, json.loads(state_file.read_text())
+
+    def test_the_reviewers_failover_between_the_two_reads_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_file, before = self.seeded(directory)
+            a = ExportPftl([], released=2_000_000, current_height=500)
+            b = ExportPftl([self.E], released=2_000_000, current_height=501)
+            b.genesis_hash = "d0" * 48
+            code, lines, stderr = run_exports(Failover(a, b), ExportBase([self.PAYOUT], locked=2_000_000,
+                                                                         finalized=1_000),
+                                              "--state-file", str(state_file), "--from-height", "0")
+            self.refused(code, lines, stderr, state_file, before)
+
+    def test_every_identity_field_on_every_start_is_refused(self):
+        for field, (start, extra) in itertools.product(IDENTITY_FIELDS, self.STARTS.items()):
+            with self.subTest(field=field, start=start), tempfile.TemporaryDirectory() as directory:
+                state_file, before = self.seeded(directory)
+                a = ExportPftl([], released=2_000_000, current_height=500)
+                b = foreign(ExportPftl([self.E], released=2_000_000, current_height=501), field)
+                code, lines, stderr = run_exports(Failover(a, b), ExportBase([self.PAYOUT], locked=2_000_000,
+                                                                             finalized=1_000),
+                                                  "--state-file", str(state_file), *extra)
+                self.refused(code, lines, stderr, state_file, before)
+
+    def test_a_later_export_page_of_another_identity_is_refused(self):
+        entries = [export_entry(n, height=400 + n) for n in range(5)]
+        for field, switch in itertools.product(IDENTITY_FIELDS, (1, 2)):
+            with self.subTest(field=field, page=switch + 1), tempfile.TemporaryDirectory() as directory, \
+                    unittest.mock.patch.object(watcher, "PAGE_SIZE", 2):
+                state_file, before = self.seeded(directory)
+                a = ExportPftl(entries, released=2_000_000)
+                pftl = Failover(a, a, foreign(ExportPftl(entries, released=2_000_000), field), switch)
+                code, lines, stderr = run_exports(pftl, ExportBase([released_log(entries[0], block=950)],
+                                                                   locked=2_000_000, finalized=1_000),
+                                                  "--state-file", str(state_file))
+                self.assertEqual(pftl.pages, switch + 1)
+                self.refused(code, lines, stderr, state_file, before)
+
+    def test_a_first_run_without_a_state_file_is_refused_and_saves_no_export_part(self):
+        for field in IDENTITY_FIELDS:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as directory:
+                state_file = Path(directory) / "state.json"
+                a = ExportPftl([], released=2_000_000)
+                b = foreign(ExportPftl([self.E], released=2_000_000, current_height=501), field)
+                code, lines, stderr = run_exports(Failover(a, b), ExportBase([self.PAYOUT], locked=2_000_000,
+                                                                             finalized=1_000),
+                                                  "--state-file", str(state_file))
+                self.refused(code, lines, stderr, state_file, None)
+                self.assertNotIn("exports", json.loads(state_file.read_text()))
+
+    def test_honest_progress_between_the_two_reads_passes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_file, _ = self.seeded(directory)
+            a = ExportPftl([], released=1_500_000, current_height=500)
+            later = ExportPftl([self.E], released=2_000_000, current_height=501)
+            code, lines, stderr = run_exports(Failover(a, later), ExportBase([self.PAYOUT], locked=2_000_000,
+                                                                             finalized=1_000),
+                                              "--state-file", str(state_file))
+            self.assertEqual((code, stderr), (0, ""))
+            self.assertEqual([line["status"] for line in lines if line["kind"] in ("payout", "export")],
+                             ["backed", "paid"])
+            self.assertEqual(len(json.loads(state_file.read_text())["exports"]["paid"]), 1)
+
+
 U64_MAX = (1 << 64) - 1
 MODEL_AMOUNTS = (400_000, 300_000, 200_000, 100_000)  # older unpaid exports leave room in atoms too
 
@@ -1771,7 +1895,7 @@ class ExportModelTests(unittest.TestCase):
     pruned two steps later, the newest never. Base may finalize a legitimate
     payout (the newest unpaid export, so older unpaid ones leave pruned
     room), a second payout of a paid export, or a payout with no export. The
-    state is carried from run to run as the CLI carries its file. Two
+    state is carried from run to run as the CLI carries its file. Three
     alphabets, each exhaustive (nothing random):
 
     - PFTL answers: the PFTL time advances or stays and the export pages may
@@ -1781,7 +1905,14 @@ class ExportModelTests(unittest.TestCase):
       every earlier payout (after an unseen one, if any); the Base finalized
       block may go back 20 blocks, below the previous run's; the PFTL time
       advances and the export pages may come from a node one step behind;
-      depth 3."""
+      depth 3.
+    - Networks: the export pages come from the release view's network or
+      from one whose genesis, PFTL chain id, lock or source chain id
+      differs (a failover between the two reads); each run is normal,
+      `--from-height 0` or an alternating `--lock-from-block`; the PFTL time
+      advances; depth 3. Another network's pages are refused
+      (`export_identity_mismatch`) with no payout or export line and the
+      export state kept."""
 
     AMOUNTS = MODEL_AMOUNTS
     ENTRIES = [export_entry(n, amount=MODEL_AMOUNTS[n], height=100 + n) for n in range(4)]
@@ -1795,14 +1926,15 @@ class ExportModelTests(unittest.TestCase):
         return ExportPftl(self.ENTRIES[pruned:exported], pruned=pruned, pruned_atoms=sum(self.AMOUNTS[:pruned]),
                           released=1_000_000, current_height=100 + time)
 
-    def model(self, depth, steps, kinds, bases, least):
+    def model(self, depth, steps, kinds, bases, least, networks=("same",)):
         import functools
         counted = {"sequences": 0, "runs": 0}
-        alphabet = (steps, kinds, bases)
+        alphabet = (steps, kinds, bases, networks)
         with unittest.mock.patch.object(watcher, "keccak256", functools.lru_cache(maxsize=None)(watcher.keccak256)):
             self.explore(alphabet, depth, 0, 0, None, [], frozenset(), [], counted)
         print(f"\nexport model: {len(steps)} PFTL x {len(self.PAYOUTS)} payout x {len(kinds)} start x "
-              f"{len(bases)} Base choices, depth {depth}: {counted['sequences']} sequences, {counted['runs']} runs")
+              f"{len(bases)} Base x {len(networks)} network choices, depth {depth}: {counted['sequences']} "
+              f"sequences, {counted['runs']} runs")
         self.assertGreater(counted["sequences"], least)
 
     def test_no_sequence_of_honest_answers_backs_a_bad_payout(self):
@@ -1811,12 +1943,16 @@ class ExportModelTests(unittest.TestCase):
     def test_no_rescan_late_start_or_lagging_base_node_backs_a_bad_payout(self):
         self.model(3, ("advance", "lag1"), ("normal", "from_height", "lock_alt", "late"), ("ok", "back"), 5_000)
 
+    def test_no_export_view_of_another_network_backs_a_payout(self):
+        self.model(3, ("advance",), ("normal", "from_height", "lock_alt"), ("ok",), 50_000,
+                   networks=("same", *IDENTITY_FIELDS))
+
     def explore(self, alphabet, depth, run_index, time, state, logs, paid, bad, counted, trail=()):
         if run_index == depth:
             counted["sequences"] += 1
             return
-        steps, kinds, bases = alphabet
-        for step, payout, kind, base_step in itertools.product(steps, self.PAYOUTS, kinds, bases):
+        steps, kinds, bases, networks = alphabet
+        for step, payout, kind, base_step, network in itertools.product(steps, self.PAYOUTS, kinds, bases, networks):
             now = time + 1 if step == "advance" else time
             answer = now - {"lag1": 1, "lag2": 2}.get(step, 0)
             if answer < 0 or run_index == 0 and (kind == "late" or base_step == "back"):
@@ -1838,23 +1974,28 @@ class ExportModelTests(unittest.TestCase):
             lock_from = {"lock_alt": 2 if kept_from == 1 else 1, "late": 1_000 + 10 * run_index}.get(kind, kept_from)
             finalized = 1_000 + 10 * run_index + 9 - (self.BASE_BACK if base_step == "back" else 0)
             counted["runs"] += 1
-            path = (*trail, (step, payout, kind, base_step))
+            path = (*trail, (step, payout, kind, base_step, network))
             new_state = self.run_once(state, now, answer, new_logs, finalized, new_bad, new_paid, path,
-                                      from_height=0 if kind == "from_height" else None, lock_from=lock_from)
+                                      from_height=0 if kind == "from_height" else None, lock_from=lock_from,
+                                      network=network)
             self.explore(alphabet, depth, run_index + 1, now, new_state, new_logs, new_paid, new_bad, counted, path)
 
-    def answers(self, now, answer):
+    def answers(self, now, answer, network="same"):
         current, lagging = self.snapshot(now), self.snapshot(answer)
+        if network != "same":
+            foreign(lagging, network)
 
         class Answers:
-            # The first lane page from a current node, the export pages from one `answer` behind.
+            # The first lane page from a current node, the export pages from one `answer` behind,
+            # of the same network or of another (`network`: the identity field that differs).
             def external_lane_info(self, *args, **kwargs):
                 return (lagging if "export_limit" in kwargs else current).external_lane_info(*args, **kwargs)
 
         return Answers(), lagging
 
-    def run_once(self, state, now, answer, logs, finalized, bad, paid, path, *, from_height=None, lock_from=0):
-        pftl, lagging = self.answers(now, answer)
+    def run_once(self, state, now, answer, logs, finalized, bad, paid, path, *, from_height=None, lock_from=0,
+                 network="same"):
+        pftl, lagging = self.answers(now, answer, network)
         base = ExportBase(logs, locked=10_000_000, finalized=finalized)
         loaded = json.loads(json.dumps(state)) if state is not None else None
         try:
@@ -1877,7 +2018,11 @@ class ExportModelTests(unittest.TestCase):
                 self.assertNotIn((line["base_block"], line["base_transaction"]), bad, path)
         if summary is not None and any(summary["scanned_from_block"] <= block <= finalized for block, _ in bad):
             self.assertNotEqual(code, 0, path)
-        if kept and kept.get("format") == watcher.EXPORT_STATE_FORMAT and kept["scanned_through_block"] > finalized:
+        if network != "same":
+            # Another network's export pages: refused before any packet is used.
+            self.assertEqual(error, "export_identity_mismatch", path)
+            self.assertFalse([line for line in lines if line["kind"] in ("payout", "export")], path)
+        elif kept and kept.get("format") == watcher.EXPORT_STATE_FORMAT and kept["scanned_through_block"] > finalized:
             self.assertEqual(error, "base_finalized_behind_state", path)
         if error is not None:
             # A lagging input is an error, never an alarm, and keeps the export state.

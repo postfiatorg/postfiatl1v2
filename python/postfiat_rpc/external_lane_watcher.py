@@ -451,11 +451,25 @@ def _export_snapshot(info: dict[str, Any], row: dict[str, Any]) -> dict[str, Any
     return snapshot
 
 
-def _exports_of(pftl: Any, lane_id: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _run_identity(lane_id: str, snapshot: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
+    """The identity the release view validated (against the state file too):
+    lane, PFTL chain id and genesis, source chain id, lock and its code hash."""
+
+    return {"lane_id": lane_id, "pftl_chain_id": snapshot["chain_id"], "genesis_hash": snapshot["genesis_hash"],
+            "source_chain_id": policy["chain_id"], "lock": policy["lock"], "code_hash": policy["code_hash"]}
+
+
+def _exports_of(pftl: Any, lane_id: str, identity: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Every stored export packet of the lane, oldest first, and the snapshot
-    it was paged from. As for releases: every page from the first page's
-    snapshot, nonces contiguous from `export_count - 1` down to the pruned
-    count, each cursor the page's oldest nonce and strictly decreasing."""
+    it was paged from. Every page, the first one included, must carry the
+    run's validated `identity` (`export_identity_mismatch`), checked before
+    any of its packets is read: an endpoint that fails over between the
+    release read and the export read, or between two export pages, cannot
+    lend another network's exports to this one. Heights and counters may
+    differ from the release view's (honest progress between the reads). As
+    for releases: every page from the first page's snapshot, nonces
+    contiguous from `export_count - 1` down to the pruned count, each cursor
+    the page's oldest nonce and strictly decreasing."""
 
     exports: list[dict[str, Any]] = []
     cursor: int | None = None
@@ -472,6 +486,16 @@ def _exports_of(pftl: Any, lane_id: str) -> tuple[list[dict[str, Any]], dict[str
         if len(rows) != 1:
             raise WatcherError("external_lane_not_reported", f"the PFTL node reports no lane `{lane_id}`")
         row = rows[0]
+        try:
+            seen_identity = _run_identity(lane_id, {"chain_id": info.get("chain_id"),
+                                                   "genesis_hash": info.get("genesis_hash")}, _lane_policy(row))
+        except WatcherError as error:
+            raise WatcherError("export_identity_mismatch", f"an export page's lane policy: {error}") from None
+        if seen_identity != identity:
+            changed = sorted(key for key in identity if identity[key] != seen_identity[key])
+            raise WatcherError("export_identity_mismatch",
+                               f"an export page is not of the release view's network, lane or policy: "
+                               f"{', '.join(changed)}")
         snapshot = _export_snapshot(info, row)
         if first is None:
             first = snapshot
@@ -661,8 +685,8 @@ def _same_event(known: dict[str, Any], event: dict[str, Any]) -> bool:
     return all(known[key] == event[key] for key in ("block", "transaction", "log_index", "amount"))
 
 
-def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int, current_height: int,
-                released_atoms: int, from_block: int, state: dict[str, Any] | None = None,
+def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any], lock: str, finalized: int,
+                current_height: int, released_atoms: int, from_block: int, state: dict[str, Any] | None = None,
                 accept_baseline: bool = False, unpaid_warning_blocks: int | None, alarm: Callable[..., None],
                 lines: list[dict[str, Any]], rescan_all: bool = False,
                 discard_history: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -711,7 +735,7 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
             raise AssertionError(f"undeclared warning code {code}")
         lines.append({"schema": LINE_SCHEMA, "kind": "warning", "code": code, "lane_id": lane_id, **fields})
 
-    exports, snapshot = _exports_of(pftl, lane_id)
+    exports, snapshot = _exports_of(pftl, lane_id, identity)
     by_digest = {entry["evm_digest"]: entry for entry in exports}
     pruned, pruned_atoms = snapshot["pruned_export_count"], snapshot["pruned_exported_atoms"]
     # An entry of an earlier format is never used (see EXPORT_STATE_FORMAT):
@@ -1187,7 +1211,8 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
         assert released_atoms is not None
         try:
             export_summary, export_state = export_view(
-                pftl, base, lane_id, lock=policy["lock"], finalized=finalized, current_height=current_height,
+                pftl, base, lane_id, identity=_run_identity(lane_id, snapshot, policy), lock=policy["lock"],
+                finalized=finalized, current_height=current_height,
                 released_atoms=released_atoms, from_block=lock_from_block,
                 state=carried, accept_baseline=accept_export_baseline, unpaid_warning_blocks=unpaid_warning_blocks,
                 alarm=alarm, lines=lines, rescan_all=from_height is not None,
