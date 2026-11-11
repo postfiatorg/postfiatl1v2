@@ -79,10 +79,19 @@ export function parseOwnedObjectsResult(resp) {
 // Restarts of a paged read when the node's object view changes between pages.
 export const OWNED_OBJECTS_MAX_RESTARTS = 3;
 const OWNED_OBJECTS_VIEW_CHANGED = 'owned_objects_view_changed';
+export const OWNED_OBJECTS_PAGING_UNSUPPORTED = 'owned_objects_paging_unsupported';
+export const OWNED_OBJECTS_VIEW_UNSTABLE = 'owned_objects_view_unstable';
+
+function ownedObjectsError(code, message) {
+  return Object.assign(new Error(message), { code });
+}
 
 function requireOwnedObjectsPaging(page) {
   if (page.truncated && (!page.next_cursor || !page.view_digest)) {
-    throw new Error('This RPC node is too old for paging FastPay objects (a truncated answer without next_cursor); use an upgraded node.');
+    throw ownedObjectsError(
+      OWNED_OBJECTS_PAGING_UNSUPPORTED,
+      'This RPC node is too old for paging FastPay objects (a truncated answer without next_cursor); use an upgraded node.',
+    );
   }
 }
 
@@ -126,7 +135,7 @@ export async function fetchOwnedObjectsSnapshot(rpc, ownerPublicKeyHex, opts = {
       };
     }
   }
-  throw new Error('FastPay objects kept changing between pages; retry shortly.');
+  throw ownedObjectsError(OWNED_OBJECTS_VIEW_UNSTABLE, 'FastPay objects kept changing between pages; retry shortly.');
 }
 
 export async function pollOwnedObjectsTotal(rpc, ownerPublicKeyHex, opts = {}) {

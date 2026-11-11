@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createFastpayInventory } from './fastpay-inventory.js';
+import { createFastpayInventory, fastpayInventoryErrorMessage } from './fastpay-inventory.js';
 import { fetchOwnedObjectsSnapshot } from './rpc-client.js';
 
 const small = { id: 'small', version: 1, value: 1, asset: 'PFT' };
@@ -72,8 +72,18 @@ test('a failed reread is shown and a partial feed page does not clear it', async
   const { inventory, published } = inventoryOver(rpc);
   await assert.rejects(inventory.refresh());
   assert.equal(published.at(-1).status, 'error');
+  assert.equal(published.at(-1).reason, 'view_unstable');
   assert.match(published.at(-1).error, /kept changing/);
 
   await inventory.applyFeed(result('v9', [small], 'c'), false);
   assert.equal(published.length, 1, 'the partial page neither clears the error nor publishes');
+});
+
+test('the failure reasons distinguish an old node from a changing inventory', async () => {
+  const old = scripted([{ ok: true, result: { ...result('v1', [small], null), truncated: true, view_digest: undefined } }]);
+  const error = await fetchOwnedObjectsSnapshot(old, 'owner-pk').catch(e => e);
+  assert.equal(error.code, 'owned_objects_paging_unsupported');
+  assert.match(fastpayInventoryErrorMessage(error), /too old/);
+  assert.match(fastpayInventoryErrorMessage({ code: 'owned_objects_view_unstable' }), /kept changing/);
+  assert.doesNotMatch(fastpayInventoryErrorMessage({ code: 'owned_objects_view_unstable' }), /too old/);
 });

@@ -754,6 +754,12 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
                 <span className="pf-rk">FastPay balance</span>
                 <span className="pf-rv">{fastpayStatus === 'ok' ? `${formatBalance(fastpayBalance)} PFT` : fastpayStatus === 'error' ? 'Unavailable' : '…'}</span>
               </div>
+              {fastpayStatus === 'error' && fastpayError && (
+                <div className="pf-error" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ flex: 1 }}>{fastpayError}</span>
+                  <button className="pf-ghost" style={{ fontSize: 11, padding: '6px 10px' }} onClick={() => fetchFastpayBalance().catch(() => {})}>Retry</button>
+                </div>
+              )}
             </div>
 
             {fastpaySheetMode === 'wrap' ? (

@@ -1,4 +1,23 @@
-import { humanRpcErrorMessage } from './rpc-client.js';
+import {
+  humanRpcErrorMessage,
+  OWNED_OBJECTS_PAGING_UNSUPPORTED,
+  OWNED_OBJECTS_VIEW_UNSTABLE,
+} from './rpc-client.js';
+
+const REASONS = {
+  [OWNED_OBJECTS_PAGING_UNSUPPORTED]: 'paging_unsupported',
+  [OWNED_OBJECTS_VIEW_UNSTABLE]: 'view_unstable',
+};
+
+export function fastpayInventoryErrorMessage(error) {
+  if (error?.code === OWNED_OBJECTS_PAGING_UNSUPPORTED) {
+    return 'This RPC node is too old to page FastPay objects, so the wallet cannot read them all. Switch to an upgraded node, then retry.';
+  }
+  if (error?.code === OWNED_OBJECTS_VIEW_UNSTABLE) {
+    return 'FastPay objects kept changing between pages (the account is busy, or validators serve different views). Retry shortly.';
+  }
+  return `FastPay balance unavailable: ${humanRpcErrorMessage(error)}`;
+}
 
 // The FastPay inventory a wallet screen selects from. Only a complete answer
 // is published: the bounded all-pages read (`read`), or a live-feed answer
@@ -23,7 +42,7 @@ export function createFastpayInventory({ read, publish }) {
         return snapshot;
       } catch (error) {
         failed = true;
-        publish({ status: 'error', error: `FastPay balance unavailable: ${humanRpcErrorMessage(error)}` });
+        publish({ status: 'error', reason: REASONS[error?.code] || 'unavailable', error: fastpayInventoryErrorMessage(error) });
         throw error;
       } finally {
         inflight = null;

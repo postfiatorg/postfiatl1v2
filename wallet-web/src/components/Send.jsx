@@ -628,7 +628,10 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
                   <div className="pf-notice">Live balance feed connected.</div>
                 )}
                 {fastpayStatus === 'error' && (
-                  <div className="pf-warning">FastPay balance is unavailable.</div>
+                  <div className="pf-warning" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ flex: 1 }}>{fastpayError || 'FastPay balance is unavailable.'}</span>
+                    <button className="pf-ghost" style={{ fontSize: 11, padding: '6px 10px' }} onClick={() => fetchFastpayBalance().catch(() => {})}>Retry</button>
+                  </div>
                 )}
                 {fastpayStatus === 'ok' && fastpayObjects.length === 0 && (
                   <div className="pf-notice">No owned objects yet. Wrap account balance below to use FastPay.</div>
