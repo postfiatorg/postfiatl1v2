@@ -388,6 +388,7 @@ ML-DSA verifier supplied by the caller. Both run the same acceptance vectors,
 validator whose rpc-serve signs through the signer socket answers
 `fastpay_fence_status_signer_unavailable` and does not count.
 
+The limitation is FastPay-wide, not this read alone: no FastPay transfer or unwrap vote, signed apply acknowledgement or fence status can be signed on the two-user signer shape: rpc-serve signs all of them with the validator key file (`sign_for_fastpay_committee`, `crates/node/src/fastpay_recovery_node.rs`; `crates/node/src/consensus_artifacts.rs`), which it cannot read there, and the signer process signs only consensus and transport contexts. Enough validators on that shape and FastPay collects no vote or acknowledgement quorum at all, not only no terminal-status quorum. This lasts until the signer process gets a design that lets it check certified-state evidence itself; a key copy readable by rpc-serve would make the old paths work and defeat the isolation.
 
 ## FastPay Funding
 
