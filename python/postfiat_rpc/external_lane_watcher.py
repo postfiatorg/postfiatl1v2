@@ -40,6 +40,7 @@ import json
 import re
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -571,12 +572,19 @@ def _export_state(state: Any) -> dict[str, Any] | None:
             or not isinstance(state.get("verified_payouts_root"), str)
             or not HASH32.match(state["verified_payouts_root"])):
         raise WatcherError("state_file_invalid", "the state file's exports entry is malformed")
+    baseline = state.get("baseline")
+    if baseline is not None and (
+            not isinstance(baseline, dict) or baseline.get("baseline_accepted") is not True
+            or not isinstance(baseline.get("accepted_at"), str)
+            or not all(isinstance(baseline.get(key), int) and not isinstance(baseline.get(key), bool)
+                       and baseline[key] >= 0 for key in ("unverified_payouts", "unverified_atoms"))):
+        raise WatcherError("state_file_invalid", "the state file's export baseline is malformed")
     return state
 
 
 def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int, current_height: int,
                 released_atoms: int, from_block: int, state: dict[str, Any] | None = None,
-                unpaid_warning_blocks: int | None, alarm: Callable[..., None],
+                accept_baseline: bool = False, unpaid_warning_blocks: int | None, alarm: Callable[..., None],
                 lines: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
     """The outbound direction: every finalized `Released` payout must stand on a
     PFTL export packet (same digest, recipient, amount, withdrawal-id and
@@ -590,7 +598,13 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     finalized Base block was fixed, and `exported_atoms` from the export
     pages, read after it; both only grow, so `released_atoms <= totalLocked`
     and `payouts <= exported_atoms` can only err towards an alarm, never
-    towards silence, when the two chains move between the reads."""
+    towards silence, when the two chains move between the reads.
+
+    With `accept_baseline`, a payout whose packet is pruned and was never
+    verified is a `baseline_payout` line instead of an alarm, as long as the
+    unknown payouts stay within the pruned count and atoms; a clean run then
+    keeps a `baseline` entry (time, count and sum accepted unverified) that
+    every later summary repeats."""
 
     def warning(code: str, **fields: Any) -> None:
         if code not in WARNING_CODES:
@@ -613,7 +627,7 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     events = _released_events(base, lock, start, finalized)
     paid: dict[int, dict[str, Any]] = {}
     seen: set[str] = set()
-    paid_total = unknown_count = unknown_sum = 0
+    paid_total = unknown_count = unknown_sum = accepted_count = accepted_sum = 0
     # Every payout counts in the totals, matched or not: a payout without an
     # export must show in totalReleased and against exported_atoms as well.
     payout_total = prior_sum + sum(event["amount"] for event in events)
@@ -632,6 +646,16 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
             # watcher checked its payout, or a payout PFTL never exported.
             unknown_count += 1
             unknown_sum += event["amount"]
+            if pruned and accept_baseline:
+                result["status"] = "baseline_unverified"
+                lines.append(result)
+                lines.append({"schema": LINE_SCHEMA, "kind": "baseline_payout", "lane_id": lane_id,
+                              "block": event["block"], "transaction": event["transaction"],
+                              "amount": event["amount"], "recipient": event["recipient"],
+                              "packet_digest": event["packet_digest"]})
+                accepted_count += 1
+                accepted_sum += event["amount"]
+                continue
             result["status"] = "alarm"
             lines.append(result)
             if pruned:
@@ -708,8 +732,21 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     new_state = {"lock_from_block": from_block, "scanned_through_block": finalized,
                  "payout_count": prior_count + len(events), "payout_sum": payout_total,
                  "verified_payouts_root": root}
-    return ({"exports_checked": len(exports), "payouts_checked": len(events), "unpaid_exports": unpaid,
-             "pruned_export_count": pruned, "scanned_from_block": start, "totals": totals}, new_state)
+    baseline = kept.get("baseline") if kept is not None and kept["lock_from_block"] == from_block else None
+    if accepted_count:
+        prior = baseline or {"unverified_payouts": 0, "unverified_atoms": 0}
+        baseline = {"baseline_accepted": True,
+                    "accepted_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "unverified_payouts": prior["unverified_payouts"] + accepted_count,
+                    "unverified_atoms": prior["unverified_atoms"] + accepted_sum}
+    if baseline is not None:
+        new_state["baseline"] = baseline
+    summary = {"exports_checked": len(exports), "payouts_checked": len(events), "unpaid_exports": unpaid,
+               "pruned_export_count": pruned, "scanned_from_block": start, "totals": totals,
+               "baseline_accepted_now": accepted_count}
+    if baseline is not None:
+        summary["baseline"] = baseline
+    return summary, new_state
 
 
 # --- One run. ---
@@ -767,6 +804,7 @@ def _save_state(path: Path, state: dict[str, Any]) -> None:
 def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = None,
                state: dict[str, Any] | None = None, exports: bool = False, lock_from_block: int = 0,
                unpaid_warning_blocks: int | None = None, emit: Callable[[dict[str, Any]], None] | None = None,
+               accept_export_baseline: bool = False,
                ) -> tuple[list[dict[str, Any]], int, dict[str, Any] | None]:
     """One run: the output lines, the alarm count and the state to keep.
 
@@ -892,7 +930,7 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
                 pftl, base, lane_id, lock=policy["lock"], finalized=finalized, current_height=current_height,
                 released_atoms=released_atoms, from_block=lock_from_block,
                 state=(state or {}).get("exports") if from_height is None else None,
-                unpaid_warning_blocks=unpaid_warning_blocks, alarm=alarm, lines=lines)
+                accept_baseline=accept_export_baseline, unpaid_warning_blocks=unpaid_warning_blocks, alarm=alarm, lines=lines)
         except WatcherError as error:
             export_error = error
             lines.append({"schema": LINE_SCHEMA, "kind": "error", "code": error.code, "message": str(error)})
@@ -973,11 +1011,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lock-from-block", type=int, default=0, metavar="N",
                         help="scan Released events from this Base block; at or below the lock's deployment "
                              "block, or totalReleased cannot be matched")
+    parser.add_argument("--accept-export-baseline", action="store_true",
+                        help="one-shot recovery for a lane whose export view starts late: accept the payouts "
+                             "whose packets were pruned before any check, within the pruned count and atoms, "
+                             f"list them, keep the scan position and exit {BASELINE_EXIT}; nothing else is accepted")
     parser.add_argument("--unpaid-warning-blocks", type=int, metavar="N",
                         help="warn when a final export stays unpaid for more than N PFTL blocks")
     return parser
 
 
+BASELINE_EXIT = 3  # a baseline was accepted: neither clean (0) nor alarm (2)
 RETRIED_CODES = ("base_answer_malformed", "export_record_malformed", "external_lane_info_malformed")
 
 
@@ -998,6 +1041,8 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
         parser.error("--interval must be positive")
     if args.from_height is not None and args.from_height < 0:
         parser.error("--from-height must not be negative")
+    if args.accept_export_baseline and (not args.exports or args.interval is not None):
+        parser.error("--accept-export-baseline needs --exports and a one-shot run, not --interval")
     try:
         if base is None:
             base = pft_token.JsonRpc(args.base_rpc, args.timeout)
@@ -1024,7 +1069,8 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
             lines, alarms, new_state = watch_once(pftl, base, args.lane_id, from_height=from_height, state=state,
                                                   exports=args.exports, lock_from_block=args.lock_from_block,
                                                   unpaid_warning_blocks=args.unpaid_warning_blocks,
-                                                  emit=_print_line if args.exports else None)
+                                                  emit=_print_line if args.exports else None,
+                                                  accept_export_baseline=args.accept_export_baseline)
             # Progress is saved before the summary is printed, so a clean
             # summary always means the state advanced.
             if new_state is not None and state_path is not None:
@@ -1050,7 +1096,12 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
                 from_height = None  # a clean run moves the start to the kept height
                 memory_state = new_state
             if args.interval is None:
-                return 2 if alarms else 1 if failed else 0
+                if alarms:
+                    return 2
+                if failed:
+                    return 1
+                summary = lines[-1].get("exports") or {}
+                return BASELINE_EXIT if summary.get("baseline_accepted_now") and new_state is not None else 0
         if max_runs is not None and runs >= max_runs:
             return 0
         sleep(args.interval)

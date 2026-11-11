@@ -1066,5 +1066,99 @@ class ExportViewTests(unittest.TestCase):
             run_export_view(ExportPftl([entry]), ExportBase([released_log(entry)], finalized=900), state=kept)
 
 
+class ExportBaselineTests(unittest.TestCase):
+    """--accept-export-baseline: the one-shot way past payouts whose packets
+    were pruned before the export view ever ran."""
+
+    def run_baseline(self, pftl: ExportPftl, base: ExportBase, state_file: Path, *extra: str):
+        return run_exports(pftl, base, "--state-file", str(state_file), *extra)
+
+    def late_lane(self, *, pruned_atoms: int = 400_000):
+        old, live = export_entry(0), export_entry(1, amount=100_000)
+        pftl = ExportPftl([live], pruned=1, pruned_atoms=pruned_atoms)
+        base = ExportBase([released_log(old, block=900), released_log(live, block=950)])
+        return pftl, base
+
+    def test_a_baseline_inside_the_pruned_bounds_is_saved_and_reported_ever_after(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            pftl, base = self.late_lane()
+            code, lines, _ = self.run_baseline(pftl, base, state_file)
+            self.assertEqual((code, alarm_codes(lines)), (2, ["payout_pruned_before_check"]))
+            self.assertNotIn("exports", json.loads(state_file.read_text()), "only the release part advances")
+            code, lines, _ = self.run_baseline(pftl, base, state_file, "--accept-export-baseline")
+            self.assertEqual((code, alarm_codes(lines)), (watcher.BASELINE_EXIT, []))
+            accepted = [line for line in lines if line["kind"] == "baseline_payout"]
+            self.assertEqual([(line["block"], line["amount"]) for line in accepted], [(900, 400_000)])
+            self.assertEqual(set(accepted[0]), {"schema", "kind", "lane_id", "block", "transaction", "amount",
+                                                "recipient", "packet_digest"})
+            kept = json.loads(state_file.read_text())["exports"]
+            self.assertEqual((kept["scanned_through_block"], kept["baseline"]["unverified_payouts"],
+                              kept["baseline"]["unverified_atoms"], kept["baseline"]["baseline_accepted"]),
+                             (FINALIZED, 1, 400_000, True))
+            # A later run reads only new blocks, is clean and repeats the baseline.
+            code, lines, _ = self.run_baseline(pftl, base, state_file)
+            self.assertEqual((code, alarm_codes(lines)), (0, []))
+            self.assertEqual(lines[-1]["exports"]["baseline"], kept["baseline"])
+            self.assertEqual(lines[-1]["exports"]["scanned_from_block"], FINALIZED + 1)
+            self.assertEqual(json.loads(state_file.read_text())["exports"]["baseline"], kept["baseline"])
+
+    def test_a_payout_above_the_pruned_bounds_stays_an_alarm_and_saves_nothing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            pftl, base = self.late_lane(pruned_atoms=399_999)
+            pftl.exported = 399_999 + 100_000
+            code, lines, _ = self.run_baseline(pftl, base, state_file, "--accept-export-baseline")
+            self.assertEqual(code, 2)
+            self.assertIn("payout_unknown_above_pruned", alarm_codes(lines))
+            self.assertNotIn("exports", json.loads(state_file.read_text()))
+
+    def test_a_payout_with_nothing_pruned_is_never_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stranger = export_entry(7)
+            code, lines, _ = self.run_baseline(ExportPftl([]), ExportBase([released_log(stranger)]),
+                                               Path(directory) / "state.json", "--accept-export-baseline")
+            self.assertEqual(code, 2)
+            self.assertIn("payout_without_export", alarm_codes(lines))
+            self.assertNotIn("exports", json.loads((Path(directory) / "state.json").read_text()))
+
+    def test_the_flag_needs_exports_and_a_one_shot_run(self):
+        base_argv = ["--pftl-rpc", "127.0.0.1:27650", "--lane-id", LANE, "--base-rpc", "http://127.0.0.1:8545"]
+        for extra in (["--accept-export-baseline"], ["--exports", "--accept-export-baseline", "--interval", "5"]):
+            with self.subTest(extra=extra):
+                with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                    with self.assertRaises(SystemExit) as caught:
+                        watcher.main(base_argv + extra, pftl=ExportPftl([]), base=ExportBase([]))
+                self.assertEqual(caught.exception.code, 2)
+
+
+class IntervalMalformedTests(unittest.TestCase):
+    def test_a_malformed_answer_in_interval_mode_is_an_error_line_and_the_loop_goes_on(self):
+        entry = export_entry(0)
+
+        class Garbled(ExportBase):
+            rounds = 0
+
+            def call(self, method: str, params: list[Any]) -> Any:
+                if method == "eth_chainId":
+                    Garbled.rounds += 1
+                if method == "eth_chainId" and Garbled.rounds == 1:
+                    return "not hex"
+                return super().call(method, params)
+
+        sleeps: list[float] = []
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = watcher.main(["--pftl-rpc", "127.0.0.1:27650", "--lane-id", LANE, "--base-rpc",
+                                 "http://127.0.0.1:8545", "--exports", "--interval", "30"],
+                                pftl=ExportPftl([entry]), base=Garbled([released_log(entry)]),
+                                sleep=sleeps.append, max_runs=2)
+        self.assertEqual(code, 0)
+        self.assertEqual((Garbled.rounds, sleeps), (2, [30.0]))
+        self.assertEqual(json.loads(stderr.getvalue())["code"], "base_answer_malformed")
+        summaries = [json.loads(line) for line in stdout.getvalue().splitlines() if '"summary"' in line]
+        self.assertEqual([summary["alarms"] for summary in summaries], [0])
+
+
 if __name__ == "__main__":
     unittest.main()
