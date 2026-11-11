@@ -703,12 +703,12 @@ def export_entry(nonce: int, *, amount: int = 400_000, to: str = BASE_TO, height
 
 def released_log(entry: dict[str, Any], *, amount: int | None = None, to: str | None = None,
                  withdrawal: str | None = None, burn: str | None = None, block: int = 950,
-                 address: str = LOCK) -> dict[str, Any]:
+                 address: str = LOCK, transaction: str = "0x" + "ee" * 32, log_index: int = 0) -> dict[str, Any]:
     packet = entry["packet"]
     amount = packet["amount_atoms"] if amount is None else amount
     to = packet["base_recipient"] if to is None else to
     return {
-        "address": address, "blockNumber": hex(block), "transactionHash": "0x" + "ee" * 32,
+        "address": address, "blockNumber": hex(block), "transactionHash": transaction, "logIndex": hex(log_index),
         "topics": [watcher.RELEASED_TOPIC,
                    withdrawal or watcher.commitment_of(entry["withdrawal_id_commitment"]),
                    burn or watcher.commitment_of(entry["burn_tx_commitment"]),
@@ -805,7 +805,7 @@ class ExportBase(FakeBase):
 
 def run_export_view(pftl: ExportPftl, base: ExportBase, *, warning: int | None = None,
                     current_height: int = 500, state: dict[str, Any] | None = None, released: int | None = None,
-                    ) -> tuple[list[dict[str, Any]], list[str], dict[str, Any], dict[str, Any]]:
+                    from_block: int = 0, accept: bool = False) -> tuple[list[dict[str, Any]], list[str], dict[str, Any], dict[str, Any]]:
     lines: list[dict[str, Any]] = []
     codes: list[str] = []
 
@@ -816,8 +816,8 @@ def run_export_view(pftl: ExportPftl, base: ExportBase, *, warning: int | None =
 
     summary, kept = watcher.export_view(
         pftl, base, LANE, lock=LOCK, finalized=base.finalized, current_height=current_height,
-        released_atoms=pftl.released if released is None else released, from_block=0, state=state,
-        unpaid_warning_blocks=warning, alarm=alarm, lines=lines)
+        released_atoms=pftl.released if released is None else released, from_block=from_block, state=state,
+        accept_baseline=accept, unpaid_warning_blocks=warning, alarm=alarm, lines=lines)
     return lines, codes, summary, kept
 
 
@@ -1142,6 +1142,84 @@ class ExportBaselineTests(unittest.TestCase):
                     with self.assertRaises(SystemExit) as caught:
                         watcher.main(base_argv + extra, pftl=ExportPftl([]), base=ExportBase([]))
                 self.assertEqual(caught.exception.code, 2)
+
+
+class PaidRecordTests(unittest.TestCase):
+    """The state's record of paid exports: the reviewer's sequences B4-B6,
+    its pruning, an old state file and a changed --lock-from-block."""
+
+    def test_b4_a_payout_of_an_export_paid_in_an_earlier_run_is_a_duplicate(self):
+        a, b = export_entry(0), export_entry(1, amount=600_000)
+        pftl = ExportPftl([a, b])
+        first = released_log(a, block=950)
+        _, codes, _, kept = run_export_view(pftl, ExportBase([first]))
+        self.assertEqual((codes, kept["scanned_through_block"], kept["payout_sum"]), ([], 1_000, 400_000))
+        again = released_log(a, block=1_001, transaction="0x" + "ef" * 32)
+        base = ExportBase([first, again], finalized=1_100)
+        _, codes, summary, _ = run_export_view(pftl, base, state=kept)
+        self.assertEqual(base.log_ranges, [(1_001, 1_100)])
+        totals = summary["totals"]
+        self.assertEqual((totals["total_released"], totals["lock_balance"], totals["exported_atoms"],
+                          totals["released_atoms"]), (800_000, 200_000, 1_000_000, 1_000_000))
+        self.assertEqual(codes, ["payout_duplicate"])
+
+    def test_b5_a_paid_export_stays_paid_on_a_later_run(self):
+        a, b = export_entry(0, height=100), export_entry(1, amount=600_000, height=100)
+        pftl = ExportPftl([a, b])
+        log = released_log(a, block=950, log_index=3)
+        with tempfile.TemporaryDirectory() as directory:
+            options = ("--state-file", str(Path(directory) / "state.json"), "--unpaid-warning-blocks", "50")
+            code, _, _ = run_exports(pftl, ExportBase([log]), *options)
+            self.assertEqual(code, 0)
+            code, lines, _ = run_exports(pftl, ExportBase([log], finalized=1_100), *options)
+        self.assertEqual(code, 0)
+        self.assertEqual(lines[-1]["exports"]["scanned_from_block"], 1_001)
+        exports = {line["export_nonce"]: line for line in lines if line["kind"] == "export"}
+        self.assertEqual([(nonce, line["status"]) for nonce, line in exports.items()], [(0, "paid"), (1, "unpaid")])
+        self.assertEqual((exports[0]["status"], exports[0]["base_block"], exports[0]["base_transaction"],
+                          exports[0]["base_log_index"]), ("paid", 950, "0x" + "ee" * 32, 3))
+        self.assertEqual(exports[1]["status"], "unpaid")
+        self.assertEqual([line["export_nonce"] for line in lines if line["kind"] == "warning"], [1])
+
+    def test_a_paid_export_whose_packet_is_pruned_stays_accounted(self):
+        a, b = export_entry(0), export_entry(1, amount=600_000)
+        log = released_log(a, block=950)
+        _, codes, _, kept = run_export_view(ExportPftl([a, b]), ExportBase([log]))
+        pftl = ExportPftl([b], pruned=1, pruned_atoms=400_000)
+        _, codes, summary, kept = run_export_view(pftl, ExportBase([log], finalized=1_100), state=kept)
+        self.assertEqual(codes, [])
+        self.assertEqual((kept["paid"], kept["pruned_paid_count"], kept["pruned_paid_atoms"]), ([], 1, 400_000))
+        # A new unknown payout of the same amount still alarms, and is not accepted as a baseline.
+        base = ExportBase([log, released_log(export_entry(5), block=1_150)], finalized=1_200)
+        for accept in (False, True):
+            with self.subTest(accept=accept):
+                lines, codes, _, _ = run_export_view(pftl, base, state=kept, accept=accept)
+                self.assertEqual(sorted(codes), ["payout_pruned_before_check", "payout_unknown_above_pruned"])
+
+    def test_an_old_state_file_rescans_once_and_rebuilds_the_record(self):
+        a = export_entry(0)
+        old = {"lock_from_block": 0, "scanned_through_block": 1_000, "payout_count": 1, "payout_sum": 400_000,
+               "verified_payouts_root": "0x" + "ab" * 32}
+        base = ExportBase([released_log(a, block=950)], finalized=1_100)
+        _, codes, summary, kept = run_export_view(ExportPftl([a]), base, state=old)
+        self.assertEqual(codes, [])
+        self.assertEqual((base.log_ranges, summary["rescan"]), ([(0, 1_100)], "paid_record_missing"))
+        self.assertEqual([(entry["export_nonce"], entry["block"]) for entry in kept["paid"]], [(0, 950)])
+        self.assertNotIn("verified_payouts_root", kept)
+        # The rescan never takes an old payout whose packet is pruned as verified.
+        _, codes, _, _ = run_export_view(ExportPftl([], pruned=1), ExportBase([released_log(a)], finalized=1_100),
+                                         state=old)
+        self.assertEqual(codes, ["payout_pruned_before_check"])
+
+    def test_a_changed_lock_from_block_rescans_and_rebuilds_the_record(self):
+        a, b = export_entry(0), export_entry(1, amount=600_000)
+        _, _, _, kept = run_export_view(ExportPftl([a, b]), ExportBase([released_log(a, block=950)]))
+        base = ExportBase([released_log(a, block=950), released_log(b, block=1_050, log_index=1)], finalized=1_100)
+        _, codes, summary, new = run_export_view(ExportPftl([a, b]), base, state=kept, from_block=900)
+        self.assertEqual(codes, [])
+        self.assertEqual((base.log_ranges, summary["rescan"]), ([(900, 1_100)], "lock_from_block_changed"))
+        self.assertEqual([(entry["export_nonce"], entry["block"]) for entry in new["paid"]], [(0, 950), (1, 1_050)])
+        self.assertEqual(new["lock_from_block"], 900)
 
 
 class IntervalMalformedTests(unittest.TestCase):

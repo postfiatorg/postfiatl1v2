@@ -34,7 +34,9 @@ an RPC error, a malformed answer or a failed state write.
 
 The state file keeps each view's position: the release view's checked
 height and count, and the export view's scanned-through finalized Base block
-with its payout count, sum and a running commitment of the verified digests.
+with its payout count and sum and the record of paid exports (see
+``export_view``). It is trusted local data, and the RPCs' answers are taken
+as honest: the watcher compares two chains' reports, it does not prove them.
 Each part advances only after a clean run of its view, and the file is
 written before the run's summary is printed. Without it (lost or deleted),
 the next run starts from height 0 and Base block ``--lock-from-block``; a
@@ -62,7 +64,7 @@ from .client import PostFiatRpcClient, RpcClientError
 STATE_SCHEMA = "postfiat.external_lane_watcher.state.v2"
 LINE_SCHEMA = "postfiat.external_lane_watcher.v1"
 PAGE_SIZE = 100
-MAX_STATE_BYTES = 64 * 1024
+MAX_STATE_BYTES = 16 * 1024 * 1024  # the paid record: about 400 bytes per retained paid export
 U64 = 1 << 64
 ZERO_ADDRESS = "0x" + "00" * 20
 ADDRESS = re.compile(r"^0x[0-9a-fA-F]{40}$")
@@ -547,6 +549,10 @@ def _released_events(base: Any, lock: str, start: int, end: int) -> list[dict[st
                     or str(log.get("address", "")).lower() != lock or any(int(data[2:26], 16).to_bytes(12, "big"))):
                 raise ValueError("a log is not Released(3 topics, address, uint256) of the lock")
             number = pft_token.hex_quantity(log.get("blockNumber"), "log blockNumber")
+            log_index = pft_token.hex_quantity(log.get("logIndex"), "log logIndex")
+            transaction = log.get("transactionHash")
+            if not isinstance(transaction, str) or not HASH32.match(transaction):
+                raise ValueError("a log without a transaction hash")
             if not first <= number <= last:
                 raise ValueError(f"a log of block {number} outside the range {first}..{last}")
         except (ValueError, pft_token.PftTokenRefused) as error:
@@ -554,7 +560,8 @@ def _released_events(base: Any, lock: str, start: int, end: int) -> list[dict[st
         events.append({
             "withdrawal_id_commitment": topics[1].lower(), "burn_tx_id_commitment": topics[2].lower(),
             "packet_digest": topics[3].lower(), "recipient": "0x" + data[26:66].lower(),
-            "amount": int(data[66:130], 16), "transaction": log.get("transactionHash"), "block": number,
+            "amount": int(data[66:130], 16), "transaction": transaction.lower(), "block": number,
+            "log_index": log_index,
         })
     return events
 
@@ -573,24 +580,45 @@ def _selector(signature: str) -> str:
     return "0x" + keccak256(signature.encode()).hex()[:8]
 
 
+PAID_KEYS = ("export_nonce", "evm_digest", "block", "transaction", "log_index", "amount",
+             "withdrawal_id_commitment")
+BASELINE_KEYS = ("unverified_payouts", "unverified_atoms")
+
+
 def _export_state(state: Any) -> dict[str, Any] | None:
-    """The export view's kept state, or None when absent (an older file)."""
+    """The export view's kept state, or None when absent. An entry of the
+    earlier form (no `paid` record) is returned as is; the view rescans."""
 
     if state is None:
         return None
+
+    def count(value: Any) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+    def hash32(value: Any) -> bool:
+        return isinstance(value, str) and HASH32.match(value) is not None
+
     keys = ("lock_from_block", "scanned_through_block", "payout_count", "payout_sum")
-    if (not isinstance(state, dict)
-            or not all(isinstance(state.get(key), int) and not isinstance(state.get(key), bool)
-                       and state[key] >= 0 for key in keys)
-            or not isinstance(state.get("verified_payouts_root"), str)
-            or not HASH32.match(state["verified_payouts_root"])):
+    if not isinstance(state, dict) or not all(count(state.get(key)) for key in keys):
         raise WatcherError("state_file_invalid", "the state file's exports entry is malformed")
+    if "paid" not in state:
+        return state
+    paid = state["paid"]
+    if (not isinstance(paid, list) or not count(state.get("pruned_paid_count"))
+            or not count(state.get("pruned_paid_atoms"))
+            or not all(isinstance(entry, dict) and set(entry) == set(PAID_KEYS)
+                       and all(count(entry[key]) for key in ("export_nonce", "block", "log_index", "amount"))
+                       and all(hash32(entry[key]) for key in ("evm_digest", "transaction",
+                                                               "withdrawal_id_commitment"))
+                       for entry in paid)
+            or len({entry["export_nonce"] for entry in paid}) != len(paid)
+            or len({entry["evm_digest"] for entry in paid}) != len(paid)):
+        raise WatcherError("state_file_invalid", "the state file's paid record is malformed")
     baseline = state.get("baseline")
     if baseline is not None and (
             not isinstance(baseline, dict) or baseline.get("baseline_accepted") is not True
             or not isinstance(baseline.get("accepted_at"), str)
-            or not all(isinstance(baseline.get(key), int) and not isinstance(baseline.get(key), bool)
-                       and baseline[key] >= 0 for key in ("unverified_payouts", "unverified_atoms"))):
+            or not all(count(baseline.get(key)) for key in BASELINE_KEYS)):
         raise WatcherError("state_file_invalid", "the state file's export baseline is malformed")
     return state
 
@@ -604,8 +632,18 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     burn commitments); every final export is `paid` or `unpaid`; the totals
     of the lock and the lane must agree. Returns the summary and the state
     to keep: the finalized block scanned through, the payout count and sum
-    up to it and a running commitment of the verified payout digests; a run
-    with that state reads only later blocks.
+    up to it, and the paid record; a run with that state reads only later
+    blocks.
+
+    The paid record holds every verified payout of a retained export (nonce,
+    EVM digest, block, transaction, log index, amount, withdrawal-id
+    commitment). A payout whose digest is in it is `payout_duplicate`, in
+    any run, and a retained export in it is `paid` with its reference. An
+    entry is dropped only once PFTL has pruned its packet (nonce below the
+    pruned count) and is then folded into `pruned_paid_count` and
+    `pruned_paid_atoms`, which the bounds of unknown payouts subtract from
+    the pruned count and atoms: a payout verified before pruning is never
+    counted as unknown, and a new unknown one still alarms.
 
     `released_atoms` comes from the run's first lane page, read before the
     finalized Base block was fixed, and `exported_atoms` from the export
@@ -615,9 +653,10 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
 
     With `accept_baseline`, a payout whose packet is pruned and was never
     verified is a `baseline_payout` line instead of an alarm, as long as the
-    unknown payouts stay within the pruned count and atoms; a clean run then
-    keeps a `baseline` entry (time, count and sum accepted unverified) that
-    every later summary repeats."""
+    unknown payouts stay within the pruned count and atoms left after the
+    verified-then-pruned payouts and any earlier baseline; a clean run keeps
+    a `baseline` entry (time, cumulative count and atoms accepted) that every
+    later summary repeats."""
 
     def warning(code: str, **fields: Any) -> None:
         if code not in WARNING_CODES:
@@ -626,19 +665,38 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
 
     exports, snapshot = _exports_of(pftl, lane_id)
     by_digest = {entry["evm_digest"]: entry for entry in exports}
-    pruned = snapshot["pruned_export_count"]
+    pruned, pruned_atoms = snapshot["pruned_export_count"], snapshot["pruned_exported_atoms"]
     kept = _export_state(state)
-    if kept is not None and kept["lock_from_block"] == from_block:
+    rescan = None
+    if kept is not None and kept["lock_from_block"] != from_block:
+        rescan, kept = "lock_from_block_changed", None
+    elif kept is not None and "paid" not in kept:
+        # An entry of the earlier form: rebuilt by one scan from --lock-from-block;
+        # its payouts are verified again or alarm, never taken as verified.
+        rescan, kept = "paid_record_missing", None
+    if kept is not None:
         if kept["scanned_through_block"] > finalized:
             raise WatcherTransientError("base_finalized_behind_state",
                                         f"the Base node's finalized block {finalized} is below the state's "
                                         f"{kept['scanned_through_block']}: a lagging node or another chain")
         start, prior_count, prior_sum = kept["scanned_through_block"] + 1, kept["payout_count"], kept["payout_sum"]
-        root = kept["verified_payouts_root"]
+        record = {entry["evm_digest"]: dict(entry) for entry in kept["paid"]}
+        pruned_paid_count, pruned_paid_atoms = kept["pruned_paid_count"], kept["pruned_paid_atoms"]
+        baseline = kept.get("baseline")
     else:
-        start, prior_count, prior_sum, root = from_block, 0, 0, "0x" + "00" * 32
+        start, prior_count, prior_sum, record = from_block, 0, 0, {}
+        pruned_paid_count = pruned_paid_atoms = 0
+        baseline = None
+    # Entries whose packets PFTL has pruned: folded into the two numbers.
+    for digest, entry in list(record.items()):
+        if entry["export_nonce"] < pruned:
+            del record[digest]
+            pruned_paid_count += 1
+            pruned_paid_atoms += entry["amount"]
+    prior_accepted = (baseline["unverified_payouts"], baseline["unverified_atoms"]) if baseline else (0, 0)
+    free_count = pruned - pruned_paid_count
+    free_atoms = pruned_atoms - pruned_paid_atoms
     events = _released_events(base, lock, start, finalized)
-    paid: dict[int, dict[str, Any]] = {}
     seen: set[str] = set()
     paid_total = unknown_count = unknown_sum = accepted_count = accepted_sum = 0
     # Every payout counts in the totals, matched or not: a payout without an
@@ -646,26 +704,30 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     payout_total = prior_sum + sum(event["amount"] for event in events)
     for event in events:
         result = {"schema": LINE_SCHEMA, "kind": "payout", "lane_id": lane_id, **event}
-        if event["packet_digest"] in seen:
+        digest = event["packet_digest"]
+        if digest in seen or digest in record:
             result["status"] = "alarm"
             lines.append(result)
-            alarm("payout_duplicate", **event)
+            first = record.get(digest)
+            alarm("payout_duplicate", **event,
+                  **({"paid_block": first["block"], "paid_transaction": first["transaction"],
+                      "paid_log_index": first["log_index"]} if first else {}))
             continue
-        seen.add(event["packet_digest"])
-        packet = by_digest.get(event["packet_digest"])
+        seen.add(digest)
+        packet = by_digest.get(digest)
         if packet is None:
-            # Not stored, and not verified by an earlier run either (those are
-            # behind the scanned-through block): a packet pruned before this
-            # watcher checked its payout, or a payout PFTL never exported.
+            # Neither stored nor in the paid record: a packet pruned before
+            # this watcher checked its payout, or a payout PFTL never exported.
             unknown_count += 1
             unknown_sum += event["amount"]
-            if pruned and accept_baseline:
+            if (pruned and accept_baseline and accepted_count < free_count
+                    and accepted_sum + event["amount"] <= free_atoms):
                 result["status"] = "baseline_unverified"
                 lines.append(result)
                 lines.append({"schema": LINE_SCHEMA, "kind": "baseline_payout", "lane_id": lane_id,
                               "block": event["block"], "transaction": event["transaction"],
                               "amount": event["amount"], "recipient": event["recipient"],
-                              "packet_digest": event["packet_digest"]})
+                              "packet_digest": digest})
                 accepted_count += 1
                 accepted_sum += event["amount"]
                 continue
@@ -691,22 +753,28 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
             alarm(code, export_nonce=packet["export_nonce"], packet_amount_atoms=packet["amount_atoms"],
                   packet_base_recipient=packet["base_recipient"], **event)
         if not codes:
-            paid[packet["export_nonce"]] = event
-            root = "0x" + keccak256(bytes.fromhex(root[2:] + event["packet_digest"][2:])).hex()
+            record[digest] = {"export_nonce": packet["export_nonce"], "evm_digest": digest,
+                              "block": event["block"], "transaction": event["transaction"],
+                              "log_index": event["log_index"], "amount": event["amount"],
+                              "withdrawal_id_commitment": event["withdrawal_id_commitment"]}
         paid_total += event["amount"]
-    if pruned and (unknown_count > pruned or unknown_sum > snapshot["pruned_exported_atoms"]):
+    if pruned and (unknown_count > free_count or unknown_sum > free_atoms):
         alarm("payout_unknown_above_pruned", unknown_payouts=unknown_count, unknown_atoms=unknown_sum,
-              pruned_export_count=pruned, pruned_exported_atoms=snapshot["pruned_exported_atoms"])
+              pruned_export_count=pruned, pruned_exported_atoms=pruned_atoms,
+              pruned_paid_count=pruned_paid_count, pruned_paid_atoms=pruned_paid_atoms,
+              baseline_payouts=prior_accepted[0], baseline_atoms=prior_accepted[1])
+    by_nonce = {entry["export_nonce"]: entry for entry in record.values()}
     unpaid = 0
     for packet in exports:
         if packet["exported_at_height"] > current_height:
             continue
-        event = paid.get(packet["export_nonce"])
+        entry = by_nonce.get(packet["export_nonce"])
         line = {"schema": LINE_SCHEMA, "kind": "export", "lane_id": lane_id,
                 **{key: packet[key] for key in ("export_nonce", "amount_atoms", "base_recipient",
                                                 "exported_at_height", "packet_digest", "evm_digest")}}
-        if event is not None:
-            line.update(status="paid", base_transaction=event["transaction"], base_block=event["block"])
+        if entry is not None:
+            line.update(status="paid", base_transaction=entry["transaction"], base_block=entry["block"],
+                        base_log_index=entry["log_index"])
             lines.append(line)
             continue
         unpaid += 1
@@ -750,19 +818,19 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
         alarm("released_above_locked", **totals)
     new_state = {"lock_from_block": from_block, "scanned_through_block": finalized,
                  "payout_count": prior_count + len(events), "payout_sum": payout_total,
-                 "verified_payouts_root": root}
-    baseline = kept.get("baseline") if kept is not None and kept["lock_from_block"] == from_block else None
+                 "paid": sorted(record.values(), key=lambda entry: entry["export_nonce"]),
+                 "pruned_paid_count": pruned_paid_count, "pruned_paid_atoms": pruned_paid_atoms}
     if accepted_count:
-        prior = baseline or {"unverified_payouts": 0, "unverified_atoms": 0}
         baseline = {"baseline_accepted": True,
                     "accepted_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                    "unverified_payouts": prior["unverified_payouts"] + accepted_count,
-                    "unverified_atoms": prior["unverified_atoms"] + accepted_sum}
+                    "unverified_payouts": prior_accepted[0] + accepted_count,
+                    "unverified_atoms": prior_accepted[1] + accepted_sum}
     if baseline is not None:
         new_state["baseline"] = baseline
     summary = {"exports_checked": len(exports), "payouts_checked": len(events), "unpaid_exports": unpaid,
                "pruned_export_count": pruned, "scanned_from_block": start, "totals": totals,
-               "baseline_accepted_now": accepted_count}
+               "paid_recorded": len(record), "pruned_paid_count": pruned_paid_count,
+               "pruned_paid_atoms": pruned_paid_atoms, "rescan": rescan, "baseline_accepted_now": accepted_count}
     if baseline is not None:
         summary["baseline"] = baseline
     return summary, new_state
