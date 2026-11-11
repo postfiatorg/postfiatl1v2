@@ -818,13 +818,26 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     # Every payout counts in the totals, matched or not: a payout without an
     # export must show in totalReleased and against exported_atoms as well.
     payout_total = prior_sum + sum(event["amount"] for event in events)
+    # The totals, at the finalized block only, read before any payout is
+    # judged: a scan whose payouts do not add up to totalReleased is
+    # incomplete, and none of its matches is published as `backed`,
+    # `verified_earlier` or `paid` (`matched_incomplete_scan`).
+    tag = hex(finalized)
+    token = "0x" + f"{_u256_call(base, lock, _selector('token()'), tag):064x}"[-40:]
+    total_locked = _u256_call(base, lock, _selector("totalLocked()"), tag)
+    total_released = _u256_call(base, lock, _selector("totalReleased()"), tag)
+    lock_balance = _u256_call(base, token, _selector("balanceOf(address)") + lock.removeprefix("0x").rjust(64, "0"),
+                              tag)
+    complete = total_released == payout_total
+    matched_now: set[str] = set()
     for event in events:
         result = {"schema": LINE_SCHEMA, "kind": "payout", "lane_id": lane_id, **event}
         digest = event["packet_digest"]
         first = record.get(digest) or recently_pruned.get(digest) or known.get(digest)
         if (event["block"], event["transaction"], event["log_index"]) in originals and digest not in seen:
             seen.add(digest)
-            result.update(status="verified_earlier", export_nonce=first["export_nonce"])
+            result.update(status="verified_earlier" if complete else "matched_incomplete_scan",
+                          export_nonce=first["export_nonce"])
             lines.append(result)
             paid_total += event["amount"]
             continue
@@ -873,12 +886,14 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
             codes.append("payout_withdrawal_mismatch")
         if event["burn_tx_id_commitment"] != packet["burn_tx_id_commitment"]:
             codes.append("payout_burn_mismatch")
-        result.update(status="alarm" if codes else "backed", export_nonce=packet["export_nonce"])
+        result.update(status="alarm" if codes else "backed" if complete else "matched_incomplete_scan",
+                      export_nonce=packet["export_nonce"])
         lines.append(result)
         for code in codes:
             alarm(code, export_nonce=packet["export_nonce"], packet_amount_atoms=packet["amount_atoms"],
                   packet_base_recipient=packet["base_recipient"], **event)
         if not codes:
+            matched_now.add(digest)
             record[digest] = {"export_nonce": packet["export_nonce"], "evm_digest": digest,
                               "block": event["block"], "transaction": event["transaction"],
                               "log_index": event["log_index"], "amount": event["amount"],
@@ -904,7 +919,8 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
                 **{key: packet[key] for key in ("export_nonce", "amount_atoms", "base_recipient",
                                                 "exported_at_height", "packet_digest", "evm_digest")}}
         if entry is not None:
-            line.update(status="paid", base_transaction=entry["transaction"], base_block=entry["block"],
+            line.update(status="paid" if complete or entry["evm_digest"] not in matched_now
+                        else "matched_incomplete_scan", base_transaction=entry["transaction"], base_block=entry["block"],
                         base_log_index=entry["log_index"])
             lines.append(line)
             continue
@@ -915,13 +931,6 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
         if unpaid_warning_blocks is not None and age > unpaid_warning_blocks:
             warning("export_unpaid_too_long", export_nonce=packet["export_nonce"], age_blocks=age,
                     threshold_blocks=unpaid_warning_blocks)
-    # The totals, at the finalized block only.
-    tag = hex(finalized)
-    token = "0x" + f"{_u256_call(base, lock, _selector('token()'), tag):064x}"[-40:]
-    total_locked = _u256_call(base, lock, _selector("totalLocked()"), tag)
-    total_released = _u256_call(base, lock, _selector("totalReleased()"), tag)
-    lock_balance = _u256_call(base, token, _selector("balanceOf(address)") + lock.removeprefix("0x").rjust(64, "0"),
-                              tag)
     exported_atoms = snapshot["exported_atoms"]
     # Negative only if the lock's own invariant broke; then no balance is a surplus.
     expected_balance = total_locked - total_released
