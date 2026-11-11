@@ -461,3 +461,60 @@ class RecordTests(unittest.TestCase):
         for path in ("docs/runbooks/lane-base-sepolia-dry-run.md",
                      "docs/review/lane-base-sepolia-fork-rehearsal-20261110/README.md"):
             self.assertIn("must never be named as the lane's lock", (ROOT / path).read_text())
+
+
+class ExactAllowanceTests(unittest.TestCase):
+    """B1: the Lock leaves no allowance behind, also after an oversized or unlimited one."""
+
+    UNLIMITED = 2 ** 256 - 1
+
+    def settle(self, allowance):
+        state, chain, sent = {"completed": [], "data": {}}, FakeChain(allowance=allowance), []
+
+        def send(intent):
+            sent.append(intent["role"])
+            chain.allowance_value = 10
+        dry_run.settle_allowance(state, chain, owner="h", spender="l", amount=10, send=send)
+        return state, chain, sent
+
+    def test_an_unlimited_or_larger_allowance_is_first_set_to_the_exact_amount(self):
+        for allowance in (self.UNLIMITED, 11):
+            state, chain, sent = self.settle(allowance)
+            self.assertEqual(sent, ["reduce-allowance"])
+            self.assertEqual([i["role"] for i in state["intents"]], ["approve", "reduce-allowance"])
+            self.assertEqual(chain.allowance_value, 10)
+            self.assertIn("adopted", state["intents"][0]["outcome"])
+
+    def test_an_exact_allowance_is_adopted_and_nothing_is_sent(self):
+        state, _, sent = self.settle(10)
+        self.assertEqual(sent, [])
+        self.assertIn("adopted", state["intents"][0]["outcome"])
+
+    def test_a_smaller_allowance_is_approved(self):
+        _, chain, sent = self.settle(3)
+        self.assertEqual(sent, ["approve"])
+        self.assertEqual(chain.allowance_value, 10)
+
+    def test_after_the_lock_the_allowance_must_be_zero(self):
+        dry_run.require_allowance_spent(FakeChain(allowance=0), owner="h", spender="l")
+        for left in (self.UNLIMITED, 1):
+            with self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.require_allowance_spent(FakeChain(allowance=left), owner="h", spender="l")
+
+    def test_a_mined_lock_is_reconciled_before_any_further_approve(self):
+        recipient = "pf-recipient"
+        recipient_hash = "0x" + dry_run.keccak256(recipient.encode()).hex()
+        state = {"completed": [], "data": {"deploy": {"lock": "l"}, "fleet": {"recipient": recipient}}}
+        dry_run.begin_intent(state, stage="lock", role="approve", sender=dry_run.HOLDER, nonce=6, purpose="approve",
+                             outcome="sent")
+        dry_run.begin_intent(state, stage="lock", role="lock", sender=dry_run.HOLDER, nonce=7, purpose="Lock",
+                             next_nonce_before=0)
+        chain = FakeChain(allowance=0, next_nonce=1, records={0: (dry_run.HOLDER, 10, recipient_hash)})
+        self.assertTrue(dry_run.lock_already_mined(state, chain, lock="l", holder=dry_run.HOLDER, amount=10,
+                                                   recipient_hash=recipient_hash))
+        self.assertFalse(dry_run.lock_already_mined({"intents": []}, chain, lock="l", holder=dry_run.HOLDER,
+                                                    amount=10, recipient_hash=recipient_hash))
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.reconcile_after_restart(state, chain, amount=10)
+        self.assertEqual(state["intents"][0]["reconciled"], "spent by the mined Lock")
+        self.assertEqual(state["intents"][1]["reconciled"], "mined and matches the plan")

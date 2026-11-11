@@ -36,7 +36,8 @@ A stage runs once, and only after the stages before it (`state.json`, written at
    - Off the fork: the pause for the confirmation (see above).
 4. **`deploy`.** The verifier, then the lock, at the pinned nonces. After the verifier, it requires the predicted address and the preflight's code hash before the lock is sent; if they differ, the plan is dead and the lock is not deployed. The same check runs for the lock before the stage is marked complete. Then it reads back every constructor value on the real chain, the verifier's first checkpoint, height and committee root included, and verifies both on Sourcify. `deploy` starts only with `--i-accept-no-resume-between-deploy-and-export` (see Recovery).
    - Check: the addresses equal the sheet's.
-5. **`lock`.** The holder approves and Locks 1,000,000 units to the PFTL recipient, each at a recorded nonce.
+5. **`lock`.** The holder approves and Locks 1,000,000 units to the PFTL recipient, each at a recorded nonce. The approval is exact: an existing allowance equal to the Lock amount is adopted; a larger one (an unlimited approval included, which the token never decrements) is first set to the amount with one more recorded intent. A Lock already mined is reconciled before any further approve.
+   - Check: after the Lock the command reads the allowance back and requires zero.
 6. **`release-on-pftl`.** The first wait: Base finality of the Lock's block, about an hour on 2026-11-06, at most 4 hours. Then the four checkpoint commands read Base Sepolia, and the release lands on the PFTL chain.
    - Check: the recipient holds 1,000,000 atoms.
 7. **`export`.** Exports 400,000 atoms to a fresh Base address, then builds the proof input with the relay.
@@ -54,7 +55,7 @@ On a rerun, recorded intents are reconciled before anything else:
 
 - **By hash:** the receipt and its status. A recorded hash without a receipt may be pending: the command waits for you, it never resends.
 - **Deployments:** otherwise by the sender's nonce and the code at the predicted address.
-- **Approve and Lock:** by the allowance, and by the lock's `nextNonce` and `lockRecord`.
+- **Approve and Lock:** the Lock first, by the lock's `nextNonce` and `lockRecord`; a mined Lock marks the approve as spent. Otherwise the approve by the allowance.
 
 A mined deployment or Lock that matches the plan is adopted. One that does not is refused loudly. A second Lock is never sent for one plan.
 

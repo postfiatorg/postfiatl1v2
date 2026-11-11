@@ -295,10 +295,52 @@ def require_not_pending(intent, chain):
 
 
 def reconcile_approve(intent, chain, *, owner, spender, amount):
-    if chain.allowance(owner, spender) >= amount:
+    """`adopt` an allowance equal to the Lock amount; `reduce` a larger one (an
+    unlimited approval included, which the token never decrements) to exactly the
+    amount first; `send` the approve when it is smaller. A recorded hash without
+    a receipt is waited for, never resent."""
+    current = chain.allowance(owner, spender)
+    if current == amount:
         return 'adopt'
     require_not_pending(intent, chain)
-    return 'send'
+    return 'reduce' if current > amount else 'send'
+
+
+def settle_allowance(state, chain, *, owner, spender, amount, send):
+    """Leaves the holder's allowance on the lock at exactly the Lock amount. A
+    larger one is first set to the amount with its own recorded intent; `send`
+    sends `approve(spender, amount)` for the intent it is given."""
+    approve = begin_intent(state, stage='lock', role='approve', sender=owner, nonce=None,
+                           purpose=f'approve the lock for {amount}')
+    verdict = reconcile_approve(approve, chain, owner=owner, spender=spender, amount=amount)
+    if verdict == 'reduce':
+        found = chain.allowance(owner, spender)
+        reduce = begin_intent(state, stage='lock', role='reduce-allowance', sender=owner, nonce=None,
+                              purpose=f'set the existing allowance {found} on {spender} to exactly {amount}')
+        require_not_pending(reduce, chain)
+        send(reduce)
+        verdict = reconcile_approve(approve, chain, owner=owner, spender=spender, amount=amount)
+        require(verdict == 'adopt', f'the allowance on {spender} is not {amount} after it was reduced')
+    if verdict == 'send':
+        send(approve)
+    else:
+        approve['outcome'] = 'adopted: the allowance equals the Lock amount'
+    require(chain.allowance(owner, spender) == amount, f'the allowance on {spender} is not exactly {amount}')
+
+
+def require_allowance_spent(chain, *, owner, spender):
+    """After the Lock the holder's allowance on the lock must be zero."""
+    left = chain.allowance(owner, spender)
+    require(left == 0, f'after the Lock the holder still allows {spender} {left} token units; it must be zero')
+
+
+def lock_already_mined(state, chain, *, lock, holder, amount, recipient_hash):
+    """A recorded Lock that is mined and matches the plan; checked before any approve."""
+    for intent in state.get('intents', []):
+        if (intent['stage'], intent['role']) == ('lock', 'lock'):
+            return reconcile_lock(intent, chain, lock=lock, holder=holder, amount=amount,
+                                  recipient_hash=recipient_hash) == 'adopt'
+    return False
 
 
 def reconcile_lock(intent, chain, *, lock, holder, amount, recipient_hash):
@@ -322,20 +364,30 @@ def reconcile_after_restart(state, chain, *, holder=HOLDER, amount=LOCK_AMOUNT):
     """A later invocation after fleet: the driver is gone. Record what a crashed
     run may have sent, then refuse; nothing is ever sent here."""
     data = state['data']
+    recipient_hash = '0x' + keccak256(data['fleet']['recipient'].encode()).hex() if 'fleet' in data else None
+    try:
+        lock_mined = 'deploy' in data and lock_already_mined(state, chain, lock=data['deploy']['lock'], holder=holder,
+                                                              amount=amount, recipient_hash=recipient_hash)
+    except RehearsalFailure:
+        lock_mined = False
     for intent in [i for i in state.get('intents', []) if i['outcome'] in (None, 'sent')]:
         try:
             if intent['stage'] == 'deploy':
                 role = intent['role']
                 verdict = reconcile_deployment(intent, chain, predicted=data['plan'][role]['predicted'],
                                                expected_code=data['preflight'][f'{role}_runtime_code_hash'])
-            elif intent['role'] == 'approve':
+            elif intent['role'] in ('approve', 'reduce-allowance') and lock_mined:
+                intent['reconciled'] = 'spent by the mined Lock'
+                continue
+            elif intent['role'] in ('approve', 'reduce-allowance'):
                 verdict = reconcile_approve(intent, chain, owner=holder, spender=data['deploy']['lock'], amount=amount)
             elif intent['role'] == 'lock':
                 verdict = reconcile_lock(intent, chain, lock=data['deploy']['lock'], holder=holder, amount=amount,
-                                         recipient_hash='0x' + keccak256(data['fleet']['recipient'].encode()).hex())
+                                         recipient_hash=recipient_hash)
             else:
                 continue
-            intent['reconciled'] = {'adopt': 'mined and matches the plan', 'send': 'not mined'}[verdict]
+            intent['reconciled'] = {'adopt': 'mined and matches the plan', 'send': 'not mined',
+                                    'reduce': 'the allowance is above the Lock amount'}[verdict]
         except RehearsalFailure as refusal:
             intent['reconciled'] = f'refused: {refusal}'
     raise RehearsalFailure('the fleet driver from an earlier invocation is gone; fleet through export '
@@ -928,11 +980,14 @@ def main(argv=None):
                     require(receipt['status'] == '0x1', f'the {name} transaction failed')
                     return receipt
 
-                approve = begin_intent(state, stage='lock', role='approve', sender=HOLDER, nonce=None,
-                                       purpose=f'approve the lock for {LOCK_AMOUNT}')
-                save()
-                if reconcile_approve(approve, chain, owner=HOLDER, spender=lock, amount=LOCK_AMOUNT) == 'send':
-                    send_async('approve', [TOKEN, 'approve(address,uint256)', lock, str(LOCK_AMOUNT)], approve)
+                # A mined Lock is reconciled before any further approve; then the allowance is made exact.
+                if not lock_already_mined(state, chain, lock=lock, holder=HOLDER, amount=LOCK_AMOUNT,
+                                          recipient_hash=recipient_hash):
+                    settle_allowance(state, chain, owner=HOLDER, spender=lock, amount=LOCK_AMOUNT,
+                                     send=lambda intent: send_async(
+                                         intent['role'], [TOKEN, 'approve(address,uint256)', lock, str(LOCK_AMOUNT)],
+                                         intent))
+                    save()
                 lock_intent = begin_intent(state, stage='lock', role='lock', sender=HOLDER, nonce=None,
                                            purpose=f'Lock {LOCK_AMOUNT} to {recipient}',
                                            next_nonce_before=chain.next_nonce(lock))
@@ -947,8 +1002,10 @@ def main(argv=None):
                                                   '0x' + recipient.encode().hex()], lock_intent)
                     check_lock_event_holder(chain.lock_log(lock, lock_intent['next_nonce_before'],
                                                            data['plan']['fork_block']))
+                require_allowance_spent(chain, owner=HOLDER, spender=lock)
                 data['lock'] = {'transaction': receipt['transactionHash'], 'block': int(receipt['blockNumber'], 16),
-                                'amount': LOCK_AMOUNT, 'lock_nonce': lock_intent['next_nonce_before']}
+                                'amount': LOCK_AMOUNT, 'lock_nonce': lock_intent['next_nonce_before'],
+                                'allowance_after_lock': 0}
             elif stage == 'release-on-pftl':
                 # The first wait: Base finality of the Lock's block (about an hour on 2026-11-06), within
                 # FINALITY_BUDGET_SECONDS and the driver's longer handshake timeout. The driver must be alive
