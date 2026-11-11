@@ -397,6 +397,7 @@ const PUBLIC_READ_RPC_METHODS = new Set([
     'owned_recovery_capabilities',
     'owned_certificate',
     'owned_recovery_status',
+    'owned_fence_status',
     'fastpay_recovery_committee',
     'blocks',
     'receipt',
@@ -1005,6 +1006,7 @@ Object.assign(walletProxyRuntime, {
 });
 Object.assign(walletProxyRuntime, require('./rpc-routing').create(walletProxyRuntime));
 const { UpstreamRpcConnection,
+readFastpayFenceStatuses,
 addProxyRouteEvent,
 bftQuorumThreshold,
 broadcastFastpayMutation,
@@ -1632,6 +1634,11 @@ wss.on('connection', (ws, req) => {
                 events: []
             }));
             mutationAdmission?.release();
+            return;
+        }
+
+        if (parsed.method === 'owned_fence_status') {
+            ws.send(JSON.stringify(await readFastpayFenceStatuses(parsed)));
             return;
         }
 

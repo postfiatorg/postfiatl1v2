@@ -1670,6 +1670,54 @@ wss } = runtime;
         };
     }
 
+    // owned_fence_status: ask every validator and return each signed answer
+    // with the validator it came from. The gateway computes no majority and
+    // caches nothing; the wallet checks the signatures and the quorum itself.
+    async function readFastpayFenceStatuses(request, fleet = RPC_FLEET, timeoutMs = TCP_TIMEOUT_MS) {
+        const params = { lock_id: request.params?.lock_id };
+        const answers = await Promise.all(fleet.map(async (endpoint) => {
+            try {
+                const response = await rpcTcpRequest(endpoint.host, endpoint.port, {
+                    version: 'postfiat-local-rpc-v1',
+                    id: `proxy-fence-status-${endpoint.validatorId}`,
+                    method: 'owned_fence_status',
+                    params,
+                }, timeoutMs, 'default');
+                return response.ok === true && response.result
+                    ? { validator_id: endpoint.validatorId, ok: true, status: response.result, error: null }
+                    : {
+                        validator_id: endpoint.validatorId,
+                        ok: false,
+                        status: null,
+                        error: response.error || { code: 'proxy_fence_status_empty', message: 'no status' },
+                    };
+            } catch (error) {
+                return {
+                    validator_id: endpoint.validatorId,
+                    ok: false,
+                    status: null,
+                    error: { code: 'proxy_fence_status_unreachable', message: conciseRpcError(error) },
+                };
+            }
+        }));
+        const answered = answers.filter((answer) => answer.ok).length;
+        return {
+            version: 'postfiat-local-rpc-v1',
+            id: request.id,
+            ok: true,
+            result: {
+                schema: 'postfiat-proxy-fastpay-fence-statuses-v1',
+                lock_id: params.lock_id ?? null,
+                fleet_count: fleet.length,
+                answered_count: answered,
+                partial: answered < fleet.length,
+                answers,
+            },
+            error: null,
+            events: [],
+        };
+    }
+
     async function fetchWalletSnapshot(params) {
         const address = typeof params.address === 'string' ? params.address.trim() : '';
         const ownerPublicKeyHex = typeof params.owner_public_key_hex === 'string'
@@ -2413,7 +2461,7 @@ wss } = runtime;
     }
 
 
-    return { UPSTREAM_IDLE_RETIRE_MS, UPSTREAM_MAX_REQUESTS_PER_CONNECTION, UpstreamRpcConnection,
+    return { readFastpayFenceStatuses, UPSTREAM_IDLE_RETIRE_MS, UPSTREAM_MAX_REQUESTS_PER_CONNECTION, UpstreamRpcConnection,
 addProxyRouteEvent,
 bftQuorumThreshold,
 broadcastFastpayMutation,

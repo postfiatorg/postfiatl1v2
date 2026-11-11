@@ -104,7 +104,9 @@ async function startProxyFixture(options = {}) {
       FASTPAY_CERTIFICATE_OUTBOX_PATH: path.join(tempDir, 'fastpay-outbox.json'),
       LISTEN_HOST: '127.0.0.1',
       LISTEN_PORT: String(proxyPort),
-      RPC_FLEET: `validator-0=127.0.0.1:${rpcPort}`,
+      // `fleetSize` validators, all served by the one fixture RPC server.
+      RPC_FLEET: Array.from({ length: options.fleetSize || 1 }, (_, index) => (
+        `validator-${index}=127.0.0.1:${rpcPort}`)).join(','),
       RPC_HOST: '127.0.0.1',
       RPC_PORT: String(rpcPort),
     },
