@@ -153,6 +153,7 @@ PUBLIC_READ_OBJECT_METHODS = frozenset(
         "private_pool_market",
         "private_readiness",
         "fastpay_recovery_committee",
+        "owned_objects",
         "pfusdc_ingress_preflight",
         "pfusdc_egress_witness",
         "yolo_target_receipt",
@@ -222,6 +223,7 @@ CLI_METHODS: tuple[str, ...] = (
     "private_pool_market",
     "private_readiness",
     "fastpay_recovery_committee",
+    "owned_objects",
     "pfusdc_ingress_preflight",
     "pfusdc_egress_witness",
     "yolo_target_receipt",
@@ -458,6 +460,22 @@ def call_method(client: PostFiatRpcClient, args: argparse.Namespace) -> Any:
         return client.private_readiness(pool_id=args.pool_id)
     if method == "fastpay_recovery_committee":
         return client.fastpay_recovery_committee(epoch=args.epoch)
+    if method == "owned_objects":
+        owner = require_arg(args, "owner_public_key_hex", method)
+        if args.all_pages:
+            return client.owned_objects_all(
+                owner,
+                asset=args.asset,
+                page_limit=args.limit or 128,
+                omit_owner_keys=args.omit_owner_keys,
+            )
+        return client.owned_objects(
+            owner,
+            asset=args.asset,
+            limit=args.limit,
+            cursor=args.cursor,
+            omit_owner_keys=args.omit_owner_keys,
+        )
     if method == "pfusdc_ingress_preflight":
         return client.pfusdc_ingress_preflight(
             require_arg(args, "asset_id", method),
@@ -567,6 +585,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--snapshot-token")
     parser.add_argument("--section")
     parser.add_argument("--cursor")
+    parser.add_argument("--owner-public-key-hex")
+    parser.add_argument("--asset")
+    parser.add_argument("--omit-owner-keys", action="store_true")
+    parser.add_argument("--all-pages", action="store_true")
     parser.add_argument("--recipient")
     parser.add_argument("--depositor")
     parser.add_argument("--amount-atoms", type=int)

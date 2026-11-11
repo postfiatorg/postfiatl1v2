@@ -26,6 +26,7 @@ Before any verifier is constructed with this key, all of these must hold:
 3. The identity check green on the commit being deployed.
 4. The verifier's `programVKey` taken from `program-info.json` and cross-checked in the deployment record.
 5. Before production: at least one real SP1 proof generated with this program and verified against the versioned SP1 verifier. None exists yet.
+6. Before any verifier meant to last (anything beyond a rehearsal pair) is constructed with Succinct's `V6_1_0_SP1_VERIFIER_GROTH16` (`0xb69f2584CBcFf99a58C4e7002E8b89Af54a6f4e2` on Base Sepolia): one real proof of this program verified against that pinned verifier. It is the acceptance gate of the Base Sepolia dry run's `prove-and-release` stage. The repository's evidence that an SP1 6.3.1 Groth16 proof verifies against the v6.1.0 verifier (`docs/evidence/arc-mvp-20260828/deployments.md:107` and `conformance-test.log`) is for the Arc egress program only.
 
 ## Execute locally
 

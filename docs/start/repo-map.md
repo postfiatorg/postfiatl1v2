@@ -31,6 +31,7 @@ crates/
 | `wallet-web/`, `wallet-extension/`, `wallet-proxy/` | Wallet clients and gateway | [Web Wallet](../wallets/web-wallet.md), [Shielded Wallet](../wallets/shielded-wallet.md) |
 | `crates/node/src/external_lane_checkpoint_source.rs` | Observe, sign and assemble Base checkpoints; construct a Lock receipt proof | [Genesis External Lanes](../architecture/genesis-external-lanes.md) |
 | `crates/node/src/validator_signer.rs` | Separate software signer process and socket client | [Signer Policy](../runbooks/public-rpc-operator-policy.md#validator-signer-process) |
+| `tools/nav-proof-watch/` | Read-only NAV proof cadence and freshness watchdog and buyer exit capacity check | [NAVCoins](../navcoins/index.md#watching-that-proofs-keep-arriving) |
 
 These paths describe implemented source. See [Network Status](../status/network-status.md)
 for dated deployment records and the existing milestones for qualification gaps.

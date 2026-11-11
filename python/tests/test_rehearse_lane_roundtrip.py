@@ -35,6 +35,16 @@ class RoundTripTests(unittest.TestCase):
         self.assertEqual(config["programVKey"], roundtrip.PLACEHOLDER_PROGRAM_VKEY)
         self.assertEqual(config["arbitrumChainId"], 84532)
 
+    def test_elf_note_names_the_committed_elf_only_when_its_sha256_matches_the_program_info(self):
+        committed = json.loads((ROOT / "programs/pft-lane-export/program-info.json").read_text())["elf_sha256"]
+        note = roundtrip.elf_note(committed)
+        self.assertTrue(note.startswith(f"the committed reproducible release ELF sha256:{committed}"))
+        self.assertNotIn("local", note)
+        other = "ab" * 32
+        note = roundtrip.elf_note(other)
+        self.assertTrue(note.startswith(f"a local build sha256:{other}, not the committed"))
+        self.assertIn(committed, note)
+
     def test_export_operation_is_the_tagged_asset_operation(self):
         operation = roundtrip.export_operation(sender="pf" + "1" * 40, base_recipient="0x" + "5e" * 20, amount=7)
         self.assertEqual(operation["operation"], "external_lane_export_v1")
@@ -111,3 +121,26 @@ class ExportWatchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DriverProcessGroupTests(unittest.TestCase):
+    """cargo runs the driver's test binary as its child: stopping cargo alone leaves it running."""
+
+    def test_stopping_the_driver_stops_its_children(self):
+        import os
+        import subprocess
+        import time
+        parent = subprocess.Popen(["sh", "-c", "sleep 30 & echo $!; wait"], stdout=subprocess.PIPE, text=True,
+                                  **roundtrip.DRIVER_POPEN)
+        grandchild = int(parent.stdout.readline())
+        roundtrip.stop_driver(parent)
+        for _ in range(50):
+            try:
+                os.kill(grandchild, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.1)
+        else:
+            os.kill(grandchild, 9)
+            self.fail("the driver's child outlived the stop")
+        self.assertIsNotNone(parent.poll())

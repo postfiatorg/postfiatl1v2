@@ -1,0 +1,16 @@
+# Template, not installed by the repository. Runs when nav-proof-watch.service
+# fails: exit 1 (log damaged), 2 (alarm) or 3 (terms refused).
+# The ExecStart below deliberately only reports: the operator must point it at
+# the real paging channel.
+[Unit]
+Description=NAV proof-watch alarm notification (paging channel must be set)
+
+[Service]
+Type=oneshot
+User=nav-proof-watch
+Group=nav-proof-watch
+ExecStart=/usr/bin/env sh -c 'echo "nav-proof-watch raised an alarm; see /var/lib/nav-proof-watch/alarms.jsonl and journalctl -u nav-proof-watch.service" >&2; exit 1'
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true

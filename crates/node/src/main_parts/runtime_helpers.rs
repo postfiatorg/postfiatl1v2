@@ -767,6 +767,10 @@ fn print_usage() {
       (the certificate of exactly the committee quorum; every vote must be a distinct active member's on this checkpoint)
   postfiat-node external-lane-lock-proof [--data-dir PATH] --lane-id ID --base-rpc http://HOST:PORT[/PATH] --transaction-hash 0xHASH --certificate-file PATH --submitter ADDRESS [--log-index N] --operation-file PATH
       (the external_lane_release_v1 operation of a Lock in the certificate's block, for wallet-sign-asset-transaction --operation-json)
+  postfiat-node external-lane-export [--data-dir PATH] (--key-file PATH [--sender ADDRESS] | --dry-run --sender ADDRESS) --lane-id ID --amount-atoms N --base-recipient 0xADDRESS [--max-fee-atoms N]
+      (checks the lane, the recipient and the balance before signing, after this node's pending transactions; signs as wallet-sign-asset-transaction, submits it and prints the tx id; --dry-run stops after the checks and prints the quote: it opens no key file and signs nothing, so it needs --sender (refused without it); when signing, --sender must be the key file's address; a quoted minimum fee above --max-fee-atoms (default 92, a safety ceiling: 4x the largest fee an export can be charged today) is refused (external_lane_export_fee_above_ceiling); every refusal the command can know from the node's current state comes before signing; the cases that can still come after signing, all at admission and without a fee, are: a pending escrow, NFT or offer entry the export makes stale (mempool admission blocked by stale pending): send the export again once that entry is in a block or has left the mempool; a transaction admitted between the check and the submission; and, only if the fee rule changes, a block between the quote and the submission that raises the minimum fee (fee_too_low): run the command again; under the current fee rule an export's minimum fee does not depend on the ledger, so this cannot happen for an export now)
+  postfiat-node external-lane-export-status [--data-dir PATH] --lane-id ID (--tx-id ID | --export-nonce N) [--audit] [--sender ADDRESS]
+      (the export packet, in_committed_block: its receipt is linked from a block in this node's committed log, and base_payout: what the payout on Base needs; --audit replays the block log and prints block_log_verified; the export nonce is the lane's, not the sender's: --sender refuses a packet of another sender)
   postfiat-node fastswap-control-prepare [--data-dir PATH] --kind activate-committee --epoch N --committee-root HEX --control-file PATH
   postfiat-node fastswap-control-prepare [--data-dir PATH] --kind stop-prepare --policy-epoch N --control-file PATH
   postfiat-node fastswap-control-vote-sign [--data-dir PATH] --control-file PATH --validator NODE_ID --validator-key-file PATH --vote-file PATH
@@ -822,7 +826,7 @@ fn print_usage() {
   postfiat-node account-tx [--data-dir PATH] --address ADDRESS [--from-height HEIGHT] [--to-height HEIGHT] [--limit N]
   postfiat-node account-tx-index-build [--data-dir PATH]
   postfiat-node account-tx-index-status [--data-dir PATH]
-  postfiat-node owned-objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N]
+  postfiat-node owned-objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N] [--cursor CURSOR] [--omit-owner-keys]
   postfiat-node receipts [--data-dir PATH] [--tx-id ID] [--limit N]
   postfiat-node rpc --method server_info [--data-dir PATH]
   postfiat-node rpc --method ledger [--data-dir PATH] [--limit N]
@@ -851,7 +855,7 @@ fn print_usage() {
   postfiat-node rpc --method private_readiness [--data-dir PATH] [--pool-id ID]
   postfiat-node rpc --method account_lines [--data-dir PATH] --account ADDRESS [--issuer ADDRESS] [--asset-id ID] [--limit N]
   postfiat-node rpc --method account_assets [--data-dir PATH] --account ADDRESS [--asset-id ID] [--limit N]
-  postfiat-node rpc --method owned_objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N]
+  postfiat-node rpc --method owned_objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N] [--cursor CURSOR] [--omit-owner-keys]
   postfiat-node rpc --method issuer_assets [--data-dir PATH] --issuer ADDRESS [--limit N]
   postfiat-node rpc --method escrow_info [--data-dir PATH] --escrow-id ID
   postfiat-node rpc --method account_escrows [--data-dir PATH] --account ADDRESS [--role owner|recipient] [--state open|finished|canceled] [--limit N]

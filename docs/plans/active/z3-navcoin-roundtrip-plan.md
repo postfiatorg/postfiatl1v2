@@ -10,6 +10,17 @@
 
 **Parent gate:** [L1v2 Public Testnet Path, Gate Zero Z3](l1v2-public-testnet-path-milestone.md#gate-zero-operator-preconditions-recorded-2026-08-30)
 
+## Status 2026-11-11
+
+No cycle has run and G4 is not authorized. G2's open line stays open.
+
+- Re-read: all six validators at height 1177 (root `c6dfd0eb…`, release `vote-records-20261030`, build `ae70d66d`), plus the Arc pair, test wallet and the route's Ethereum bindings, frozen in the [G2 fixture](../../status/z3-g2-selected-state-20261111.json). Changed since October: route epoch 11 (policy `32c970e9…`, from block 1110) and A666 NAV epoch 9 (`15628936…`). The Arc reads are unchanged; the allowance is still 0.
+- Replay: `crates/bridge/tests/z3_g2_selected_state_replay.rs` recomputes the source series, bucket, route config digest, route policy and both NAV profile ids from the fixture; 5 passed.
+- G2 outcome: open; the reason is the sentence on the line below ([verdict](../../review/z3-cycle1-review-packet-20261111.md#c-verdict-on-the-g2-line-open)).
+- G3 today: Z3 Python 41 passed, driver 27, the G2 record's focused Rust tests 8; the dry run printed and resolved 39 commands with 0 submissions and 8 unresolved inputs. No tooling change was needed.
+- Packet for G4's first line: [one-cycle review packet](../../review/z3-cycle1-review-packet-20261111.md).
+- Still waiting on the other lane (first asked): the governed A666 NAV profile with fresh proofs, and input rows 8, 12 and 13 (2026-09-22); rows 4, 11, 16 and 17 and the PFTL signer keys (2026-09-22); the Arc custody row on the A666 route through an advance signed by `pffcb93…`, and row 14 (2026-09-28).
+
 ## Status 2026-10-07
 
 No live cycle has run and G4 is not authorized. The checkboxes below keep their meaning.
@@ -165,7 +176,7 @@ Nothing after G0 begins without it.
 ### Gate G2 — prove route compatibility offline
 
 - [x] Pin the integrated source commit and verify that the selected qualified lineage contains the required Arc code or an operator-approved equivalent. Candidate `15126ac3` and recorded qualified node source `1c435f4f` verified 2026-09-17; G1 lineage selection was open then and was decided on 2026-09-23 (updated 2026-10-07) ([source verdict](../../review/z3-g2-route-compatibility-20260917.md#g21-pass-candidate-source-pinned-and-required-code-present)).
-- [ ] Read back or replay the selected route, asset, proof-profile, policy, NAV, and source-domain identities from frozen fixtures.
+- [ ] Read back or replay the selected route, asset, proof-profile, policy, NAV, and source-domain identities from frozen fixtures. *2026-11-11, open:* read back at height 1177 and replayed offline from the [frozen fixture](../../status/z3-g2-selected-state-20261111.json): the A666 route (epoch 11, config digest, policy hash), the A666 and Arc-series assets, the Arc source domain, bucket and pair, the NAV epoch-9 packet and the current A666 NAV profile `a94a3929…`; the proof-profile the cycle needs, an `sp1-nav-reserve-v1` profile with its public-values schema and source-manifest hash, does not exist on chain and cannot be read back until the A666 issuer registers and binds it (asked 2026-09-22), after which the route epoch, policy and NAV identities change again with the advance that adds the Arc custody row (asked 2026-09-28).
 - [x] Prove that Arc source-labeled pfUSDC can fund the existing primary subscription and redemption operations without a new transaction kind or facility. Existing source selection and route maintenance supported 2026-09-17; the driver still needs G3 changes ([compatibility trace](../../review/z3-g2-route-compatibility-20260917.md#g23-pass-existing-operations-can-settle-the-governed-arc-source)).
 - [x] Prove that the route counts the same-cycle reserve exactly once and that its settlement asset ID cannot be substituted. Code trace and focused offline tests passed 2026-09-17; exact Arc cycle composition remains G3 work ([accounting and binding](../../review/z3-g2-route-compatibility-20260917.md#g24-pass-reserve-counted-once-settlement-identities-cannot-be-substituted)).
 - [x] Stop for the operator if compatibility requires consensus code, a generic NRRS facility, a new bridge contract, or a new settlement-price format. No prohibited expansion required by the candidate path, 2026-09-17; pair and lineage decisions remain with the operator ([stop verdict](../../review/z3-g2-route-compatibility-20260917.md#stop-verdict)).
@@ -189,6 +200,7 @@ Read-only preflight reference: [2026-09-17 fleet, Arc pairs, wallet, and missing
 Dry-run reference: [2026-09-21 release wrapper: cycle 0 blocked; command interface review](../../status/z3-dry-run-20260921.md).
 Cycle-1 input inventory: [2026-09-22 values, provenance, signer/prover bindings and remaining prerequisites](../../status/z3-cycle1-inputs-20260922.md).
 Evidence baseline manifest: [2026-09-23 file hashes and secret/forbidden-field scan](../../status/z3-g0-evidence-manifest-20260923.md).
+One-cycle review packet: [2026-11-11 G2 result, G3 counts, amounts, stop conditions, waiting inputs and provenance](../../review/z3-cycle1-review-packet-20261111.md).
 
 - [ ] The operator reviews the G2 compatibility result, G3 tests, dry-run amounts, stop conditions, and exact wallet cap.
 - [ ] The operator explicitly authorizes one Arc-testnet/PFTL-devnet integrated cycle.

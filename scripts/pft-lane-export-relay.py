@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """Relay one PFT lane export from PFTL to the Base lock (design note, "Base half, step 4").
 
-`release` checks before sending every revert the chain state shows: sizes,
-program version, bindings and pins, live lock and token code, prior
-checkpoint and committee, consumed withdrawal and nullifier, zero recipient,
+`release` decodes the public-values hex it will send (the verifier's
+canonical encoding: magic, schema, tag-ordered fields, no trailing bytes,
+receipt code "accepted"), requires it to equal the JSON document, and checks
+before sending every revert the chain state shows on those decoded values:
+sizes, program version, bindings and pins, live lock and token code, prior
+checkpoint and committee (the prior checkpoint's committee root, a transition
+that must start there, a resulting checkpoint already recorded under another
+committee root), consumed withdrawal and nullifier, zero recipient,
 withdrawal height, and the amount against locked minus released. No pre-send
-check exists for the lock's consumed burn-tx commitment (a private mapping
+check exists for: the lock's consumed burn-tx commitment (a private mapping
 without a getter; the verifier's withdrawal and nullifier records cover the
-same packet), for the SP1 proof itself, or for a race with another relay
-between the reads and the send (the losing transaction reverts and costs gas
-only).
+same packet); the lock's own balance checks (its token balance against the
+amount, and the token's transfer); the SP1 proof itself; or a race with
+another relay between the reads and the send (the losing transaction reverts
+and costs gas only).
 
 Steps, as the A666 relay: wait until the export's PFTL block is final (`input`),
 prove (`prove`), call `release` on the lock (`release`), and wait for the
@@ -18,16 +24,29 @@ Checkpoint variant; `status` reports one packet.
 
 `prove --mode execute-only` runs the guest in SP1's CPU executor and writes a
 PLACEHOLDER proof: only a verifier constructed with a mock SP1 verifier accepts
-it. `release` sends it only when the runtime code hash at the verifier's
-`sp1Verifier` equals the mock artifact's (`--mock-sp1-artifact`) AND the RPC is
-a loopback host whose client reports anvil, or `--i-know-this-is-a-mock-verifier`
-names the lock's verifier. The chain id alone proves nothing: the rehearsal's
-own Anvil uses 84532, Base Sepolia's public chain id. A private key is
+it. Placeholder bytes (flagged in proof.json or not) are sent only to a
+loopback host whose client reports anvil, and only when the runtime code hash
+at the verifier's `sp1Verifier` is the repository's `Tier4MockSP1Verifier`
+(MOCK_SP1_VERIFIER_RUNTIME_CODE_HASH); there is no override. `--force-send`
+is a loopback-Anvil option too. The chain id alone proves nothing: the
+rehearsal's own Anvil uses 84532, Base Sepolia's public chain id. A private key is
 accepted for a loopback Anvil only; elsewhere use `--account` and
-`--password-file` (a Foundry keystore). Keys are never written or printed:
+`--password-file` (a Foundry keystore). Off a loopback Anvil `release` also
+needs `--gas-limit` and `--max-fee-per-gas`, applied to its `cast send`: the
+release spends at most their product plus Base's L1 data fee. Keys are never written or printed:
 the pinned cast (Foundry 1.8.1) reads no raw private key from its environment,
 so on a loopback Anvil the key is a child argument, and every child failure,
 timeout included, is reported with the key replaced by `<redacted>`.
+
+`advance-checkpoint` takes the same proof modes as `prove` (execute-only under
+the mock rule, `--mode command` with PFT_LANE_EXPORT_INPUT_JSON and
+PFT_LANE_EXPORT_PROOF_OUT, or `--mode proof-file`). It decodes the public
+values it will send and requires them to equal the ones built from the node's
+witness, then checks the bindings, sizes and committee rules and the
+contract's two checkpoint conditions (the prior checkpoint is the verifier's
+LATEST one and the target height is higher) before sending, and afterwards
+that the verifier moved to the target checkpoint. A prover command's
+credentials come from its environment; the command line is never echoed.
 
 Cost: one proof carries at most 64 finality ancestry blocks
 (`PFUSDC_EGRESS_MAX_ANCESTRY_BLOCKS_V1`), so the verifier's checkpoint must
@@ -66,6 +85,31 @@ keccak256 = _ORDER.keccak256
 call_data = _ORDER.call_data
 
 PLACEHOLDER_PROOF = b'PFT-LANE-EXPORT-PLACEHOLDER: NOT AN SP1 PROOF; ONLY A MOCK SP1 VERIFIER ACCEPTS IT'
+# keccak256 of the runtime code of crates/ethereum-contracts/test/PFUSDCTier4.t.sol:Tier4MockSP1Verifier
+# built with Foundry 1.7.1 (python/tests/test_pft_lane_export_relay.py recomputes it).
+MOCK_SP1_VERIFIER_RUNTIME_CODE_HASH = '0x6490b3b327e89d9589158a48b0fe2bd6ebcc9cfaa91118130eff8a1c21e303f8'
+CANONICAL_MAGIC = b'PFTL-PFUSDC-TIER4'
+EGRESS_SCHEMA = b'postfiat.pfusdc.egress_public_values.v1'
+CHECKPOINT_SCHEMA = b'postfiat.pfusdc.checkpoint_public_values.v1'
+# Tag -> (name, kind) of the fields the checks use (PFTLFinalityVerifierV1.sol `_decode`, `_decodeCheckpoint`).
+EGRESS_FIELDS = {2: ('proof_program_version', 'u32'), 3: ('pftl_chain_id', 'text'), 4: ('pftl_genesis_hash', 'h'),
+                 5: ('pftl_protocol_version', 'u32'), 6: ('route_profile_hash', 'h'), 7: ('route_epoch', 'u64'),
+                 8: ('prior_checkpoint_block_id', 'h'), 9: ('resulting_checkpoint_block_id', 'h'),
+                 11: ('committee_root', 'h'), 12: ('committee_transition_commitment', 'h'),
+                 13: ('finalized_block_height', 'u64'), 22: ('receipt_code', 'raw'), 23: ('asset_id', 'h'),
+                 24: ('burn_tx_id', 'h'), 25: ('withdrawal_id', 'h'), 27: ('amount_atoms', 'u64'),
+                 28: ('recipient', 'address'), 31: ('withdrawal_finalized_height', 'u64'),
+                 32: ('arbitrum_chain_id', 'u64'), 33: ('vault_address', 'address'),
+                 34: ('vault_runtime_code_hash', 'h'), 35: ('token_address', 'address'),
+                 36: ('token_runtime_code_hash', 'h'), 37: ('withdrawal_packet_digest', 'h'),
+                 39: ('proof_nullifier', 'h')}
+EGRESS_TAGS = 39
+CHECKPOINT_FIELDS = {2: ('proof_program_version', 'u32'), 3: ('pftl_chain_id', 'text'),
+                     4: ('pftl_genesis_hash', 'h'), 5: ('pftl_protocol_version', 'u32'),
+                     6: ('prior_checkpoint_block_id', 'h'), 7: ('resulting_checkpoint_block_id', 'h'),
+                     9: ('committee_root', 'h'), 10: ('committee_transition_commitment', 'h'),
+                     11: ('finalized_block_height', 'u64')}
+CHECKPOINT_TAGS = 15
 PROOF_SCHEMA = 'postfiat.pft_lane_export_relay.proof.v1'
 RELEASED_TOPIC = '0x' + keccak256(b'Released(bytes32,bytes32,bytes32,address,uint256)').hex()
 
@@ -190,6 +234,10 @@ def read_release_state(rpc, lock, values):
     reads['token.liveCodeHash'] = rpc.code_hash(reads['lock.token'])
     reads['verifier.priorCommitteeRootCommitment'] = rpc.call(verifier, 'checkpointCommitteeRootCommitment(bytes32)',
                                                                prior)
+    reads['verifier.resultingCommitteeRootCommitment'] = (
+        rpc.call(verifier, 'checkpointCommitteeRootCommitment(bytes32)',
+                 commitment(values['resulting_checkpoint_block_id']))
+        if values.get('resulting_checkpoint_block_id') else '0x' + '00' * 32)
     reads['verifier.withdrawalConsumed'] = as_int(rpc.call(verifier, 'consumedWithdrawalIdCommitment(bytes32)',
                                                            withdrawal)) != 0
     reads['verifier.nullifierConsumed'] = as_int(rpc.call(verifier, 'consumedProofNullifier(bytes32)',
@@ -256,9 +304,8 @@ def release_refusals(reads, values, *, proof_bytes, public_values_bytes, expecte
     prior_root = reads['verifier.priorCommitteeRootCommitment']
     check(as_int(prior_root) != 0, 'unknown_prior_checkpoint',
           f'the verifier has not accepted the prior checkpoint {values["prior_checkpoint_block_id"]}')
-    if as_int(prior_root) != 0 and not values['committee_transition_commitment']:
-        check(commitment(values['committee_root']) == prior_root, 'wrong_committee_root',
-              'the committee root differs from the one recorded for the prior checkpoint')
+    for refusal in committee_refusals(reads, values):
+        refusals.append(refusal)
     check(not reads['verifier.withdrawalConsumed'], 'already_consumed',
           f'withdrawal id {values["withdrawal_id"]} is already consumed')
     check(not reads['verifier.nullifierConsumed'], 'proof_already_consumed', 'the proof nullifier is already consumed')
@@ -268,25 +315,147 @@ def release_refusals(reads, values, *, proof_bytes, public_values_bytes, expecte
     return refusals
 
 
-def mock_proof_refusal(proof, *, loopback, anvil, sp1_code_hash, mock_code_hash, lock_verifier, acknowledged):
-    """The rule for a placeholder proof: the verifier the lock calls must use the
-    repository's mock SP1 verifier (the runtime code hash at its `sp1Verifier`
-    equals the mock artifact's), AND either the RPC is a loopback Anvil or the
-    operator names that verifier with --i-know-this-is-a-mock-verifier."""
-    if not proof.get('mock_verifier_only'):
+def committee_refusals(reads, values):
+    """`_requireCommitteeProgression` and `_recordCheckpoint`
+    (PFTLFinalityVerifierV1.sol:306-333): without a transition the committee
+    root must be the prior checkpoint's; with one, the transition must start
+    there; and a resulting checkpoint already recorded under another committee
+    root is refused."""
+    refusals = []
+    prior_root = reads['verifier.priorCommitteeRootCommitment']
+    if as_int(prior_root) == 0:
+        return refusals
+    if not values['committee_transition_commitment']:
+        if commitment(values['committee_root']) != prior_root:
+            refusals.append({'code': 'wrong_committee_root',
+                             'message': 'the committee root differs from the one recorded for the prior checkpoint'})
+    elif commitment(values['committee_transition_commitment']) != prior_root:
+        refusals.append({'code': 'wrong_committee_transition_start',
+                         'message': 'the committee transition does not start at the prior checkpoint\'s committee'})
+    recorded = reads.get('verifier.resultingCommitteeRootCommitment', '0x' + '00' * 32)
+    if as_int(recorded) != 0 and recorded != commitment(values['committee_root']):
+        refusals.append({'code': 'recorded_committee_root',
+                         'message': 'the resulting checkpoint is already recorded under another committee root'})
+    return refusals
+
+
+def checkpoint_refusals(reads, values, *, proof_bytes, public_values_bytes):
+    """The reverts of `advanceCheckpoint` the reads can show before sending."""
+    refusals = []
+
+    def check(condition, code, message):
+        if not condition:
+            refusals.append({'code': code, 'message': message})
+
+    check(0 < proof_bytes <= reads['verifier.maxProofBytes'], 'proof_too_large',
+          f'the proof has {proof_bytes} bytes; the verifier takes 1 to {reads["verifier.maxProofBytes"]}')
+    check(0 < public_values_bytes <= reads['verifier.maxPublicValuesBytes'], 'public_values_too_large',
+          f'the public values have {public_values_bytes} bytes')
+    check('0x' + keccak256(values['pftl_chain_id'].encode()).hex() == reads['verifier.pftlChainIdHash'],
+          'wrong_pftl_chain', 'the PFTL chain id is not the one the verifier pins')
+    check(commitment(values['pftl_genesis_hash']) == reads['verifier.pftlGenesisHashCommitment'],
+          'wrong_genesis', 'the PFTL genesis hash is not the one the verifier pins')
+    check(values['pftl_protocol_version'] == reads['verifier.pftlProtocolVersion'], 'wrong_protocol_version',
+          'the protocol version is not the one the verifier pins')
+    check(as_int(reads['verifier.priorCommitteeRootCommitment']) != 0, 'unknown_prior_checkpoint',
+          f'the verifier has not accepted the prior checkpoint {values["prior_checkpoint_block_id"]}')
+    refusals.extend(committee_refusals(reads, values))
+    # PFTLFinalityVerifierV1.sol:239-244: the prior checkpoint must be the latest one, the height higher.
+    if 'verifier.latestCheckpointCommitment' in reads:
+        check(commitment(values['prior_checkpoint_block_id']) == reads['verifier.latestCheckpointCommitment'],
+              'prior_not_latest', 'the prior checkpoint is not the verifier\'s latest checkpoint')
+    check(values['finalized_block_height'] > reads['verifier.latestFinalizedHeight'], 'height_not_higher',
+          f'the target height {values["finalized_block_height"]} is not above the verifier\'s '
+          f'{reads["verifier.latestFinalizedHeight"]}')
+    return refusals
+
+
+def decode_public_values(data, *, schema, fields, tags):
+    """The verifier's canonical encoding: magic, u32 schema length, schema, then
+    tags 1..`tags` in order, each a big-endian u16 tag, u32 length and the bytes,
+    and nothing after. Returns the named fields in the JSON document's form;
+    raises RelayRefusal on what the verifier's decoder reverts on."""
+    def take(cursor, length, what):
+        require(cursor + length <= len(data), f'non-canonical public values: {what}')
+        return data[cursor:cursor + length], cursor + length
+
+    magic, cursor = take(0, len(CANONICAL_MAGIC), 'prefix')
+    require(magic == CANONICAL_MAGIC, 'non-canonical public values: magic')
+    length, cursor = take(cursor, 4, 'prefix')
+    found, cursor = take(cursor, int.from_bytes(length, 'big'), 'schema_prefix')
+    require(found == schema, 'non-canonical public values: schema_prefix')
+    out = {}
+    for tag in range(1, tags + 1):
+        header, cursor = take(cursor, 6, 'field_header')
+        require(int.from_bytes(header[:2], 'big') == tag, f'non-canonical public values: tag {tag}')
+        value, cursor = take(cursor, int.from_bytes(header[2:], 'big'), f'field {tag}')
+        if tag == 1:
+            require(value == schema, 'non-canonical public values: schema')
+        if tag not in fields:
+            continue
+        name, kind = fields[tag]
+        out[name] = {'u32': lambda v: int.from_bytes(v, 'big'), 'u64': lambda v: int.from_bytes(v, 'big'),
+                     'text': lambda v: v.decode(), 'h': lambda v: v.hex(), 'raw': lambda v: v,
+                     'address': lambda v: '0x' + v.hex()}[kind](value)
+    require(cursor == len(data), 'non-canonical public values: trailing_bytes')
+    return out
+
+
+def decoded_value_refusals(decoded, values):
+    """The decoded bytes that will be sent must say what the JSON document says."""
+    refusals = []
+    if decoded.get('receipt_code', b'accepted') != b'accepted':
+        refusals.append({'code': 'receipt_code', 'message': 'the public values do not carry the accepted receipt code'})
+    for name, value in decoded.items():
+        if name == 'receipt_code' or name not in values:
+            continue
+        want = values[name]
+        same = (str(value).lower().removeprefix('0x') == str(want).lower().removeprefix('0x')
+                if isinstance(value, str) else value == want)
+        if not same:
+            refusals.append({'code': 'public_values_differ',
+                             'message': f'the hex that would be sent has {name} = {value}, the document {want}'})
+    return refusals
+
+
+def is_placeholder(proof_bytes, flagged):
+    return bool(flagged) or proof_bytes == PLACEHOLDER_PROOF
+
+
+def mock_proof_refusal(*, placeholder, loopback, anvil, sp1_code_hash):
+    """Placeholder bytes go only to a loopback Anvil whose verifier's
+    `sp1Verifier` is the repository's mock (pinned runtime code hash). No
+    override: a placeholder never reaches a public network."""
+    if not placeholder:
         return None
-    if mock_code_hash is None:
-        return 'a placeholder proof needs --mock-sp1-artifact (the Foundry artifact of Tier4MockSP1Verifier)'
-    if sp1_code_hash != mock_code_hash:
-        return ('the verifier\'s sp1Verifier is not the mock SP1 verifier (runtime code hash '
-                f'{sp1_code_hash}, mock {mock_code_hash}); a placeholder proof would be refused or, worse, mean '
-                'a real verifier is misconfigured')
-    if loopback and anvil:
-        return None
-    if acknowledged and acknowledged.lower() == lock_verifier.lower():
-        return None
-    return ('the proof is a placeholder and the RPC is not a loopback Anvil; pass '
-            f'--i-know-this-is-a-mock-verifier {lock_verifier} to send it to that mock-SP1 verifier anyway')
+    if not (loopback and anvil):
+        return 'the proof is a placeholder; placeholder bytes are sent only to a loopback Anvil'
+    if sp1_code_hash != MOCK_SP1_VERIFIER_RUNTIME_CODE_HASH:
+        return ('the verifier\'s sp1Verifier is not the repository\'s mock SP1 verifier (runtime code hash '
+                f'{sp1_code_hash}, mock {MOCK_SP1_VERIFIER_RUNTIME_CODE_HASH}); refusing the placeholder')
+    return None
+
+
+def classify_send_failure(stderr, stdout=''):
+    """What a failed `cast send` means: (sent, reason). Foundry 1.7.1 writes the
+    error to stderr; 1.8.1 with --json writes an error document to stdout."""
+    text = (stderr + '\n' + stdout).lower()
+    if any(s in text for s in ('password', 'keystore', 'decrypt', 'mac mismatch', 'no such file')):
+        return False, 'the keystore or its password did not open; nothing was sent'
+    if any(s in text for s in ('insufficient funds', 'gas required exceeds')):
+        return False, 'the sender lacks the funds for gas; nothing was sent'
+    if any(s in text for s in ('timeout', 'timed out', 'deadline')):
+        return None, 'cast timed out: the transaction may be pending; check the sender\'s nonce before resending'
+    if 'revert' in text and ('transactionhash' in text or 'status' in text):
+        return True, 'the transaction was mined and reverted on chain'
+    if 'revert' in text:
+        return False, 'the node refused the call in its gas estimate (it would revert); nothing was sent'
+    return None, 'cast send failed for another reason; check the sender\'s nonce before resending'
+
+
+def is_revert(reason):
+    """The call reverts: mined and reverted, or refused in the node's gas estimate."""
+    return 'revert' in reason
 
 
 def signer_args(args, local_anvil):
@@ -298,7 +467,22 @@ def signer_args(args, local_anvil):
         return ['--private-key', key], key
     require(args.account and args.password_file, 'name --account and --password-file (or, on a loopback Anvil, '
                                                  '--private-key-file)')
-    return ['--account', args.account, '--password-file', str(args.password_file)], None
+    return ['--account', args.account, '--password-file', str(args.password_file)], [args.account,
+                                                                                     str(args.password_file)]
+
+
+def send_caps(args, *, local_anvil):
+    """The `cast send` fee caps of a release: its gas limit and max fee per gas. Off a
+    loopback Anvil both are required, so a release spends at most their product plus
+    Base's L1 data fee."""
+    given = (args.gas_limit, args.max_fee_per_gas)
+    if given == (None, None):
+        require(local_anvil, 'off a loopback Anvil a release needs --gas-limit and --max-fee-per-gas: they bound what '
+                             'it can spend; nothing was sent')
+        return []
+    require(all(value is not None and value > 0 for value in given),
+            'name both --gas-limit and --max-fee-per-gas, each positive; nothing was sent')
+    return ['--gas-limit', str(args.gas_limit), '--gas-price', str(args.max_fee_per_gas)]
 
 
 def decode_released(receipt, lock):
@@ -312,10 +496,12 @@ def decode_released(receipt, lock):
             'packet_digest': log['topics'][3], 'recipient': '0x' + data[24:64], 'amount': int(data[64:128], 16)}
 
 
-def mock_code_hash(args):
-    if not args.mock_sp1_artifact:
-        return None
-    return artifact_code_hash(json.loads(Path(args.mock_sp1_artifact).read_text()))
+def check_mock_artifact(args):
+    """`--mock-sp1-artifact`, when named, must be the pinned mock: a cross-check only."""
+    if args.mock_sp1_artifact:
+        found = artifact_code_hash(json.loads(Path(args.mock_sp1_artifact).read_text()))
+        require(found == MOCK_SP1_VERIFIER_RUNTIME_CODE_HASH,
+                f'the mock artifact has runtime code hash {found}, not the pinned {MOCK_SP1_VERIFIER_RUNTIME_CODE_HASH}')
 
 
 def release_result(receipt, lock, values, *, balance_before, balance_after):
@@ -356,7 +542,11 @@ def load_values(input_dir):
 
 
 def redact(text, secret):
-    return text.replace(secret, '<redacted>') if secret else text
+    """`secret` is one string or several (a key, or a keystore name and its password file)."""
+    for value in ([secret] if isinstance(secret, str) else list(secret or [])):
+        if value:
+            text = text.replace(value, '<redacted>')
+    return text
 
 
 def run(argv, *, secret=None, timeout=1800, **kwargs):
@@ -375,6 +565,21 @@ def run(argv, *, secret=None, timeout=1800, **kwargs):
 
 
 # --- subcommands -------------------------------------------------------------
+
+
+def run_prover(command, env, timeout=36000):
+    """The prover command, with its credentials in `env`. Its command line is
+    never echoed: a failure reports the exit code and the end of its stderr."""
+    try:
+        p = subprocess.run(command, shell=True, env=env, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise RelayRefusal(f'the prover command timed out after {timeout} s') from None
+    except OSError as error:
+        raise RelayRefusal(f'the prover command did not start ({error.strerror})') from None
+    # Every longer word of the command line is redacted from its stderr too.
+    words = [command] + [w for w in command.replace('=', ' ').replace("'", ' ').replace('"', ' ').split() if len(w) >= 6]
+    require(p.returncode == 0, f'the prover command exited {p.returncode}: {redact(p.stderr, words).strip()[-2000:]}')
+    return p
 
 
 def cmd_input(args):
@@ -425,12 +630,7 @@ def cmd_prove(args):
         proof_path = out / 'proof.bin'
         env = dict(os.environ, PFT_LANE_EXPORT_INPUT=str(input_dir / 'input.cbor'),
                    PFT_LANE_EXPORT_PROOF_OUT=str(proof_path))
-        try:
-            p = subprocess.run(args.prover_command, shell=True, env=env, capture_output=True, text=True,
-                               timeout=36000)
-        except (subprocess.TimeoutExpired, OSError) as error:
-            raise RelayRefusal(f'prover command failed: {error}') from None
-        require(p.returncode == 0, f'prover command failed: {p.stderr.strip()[-2000:]}')
+        p = run_prover(args.prover_command, env)
         committed = Path(str(proof_path) + '.public-values').read_bytes().hex()
         require(committed == expected_hex, 'the prover committed other bytes than the expected public values')
         require(proof_path.stat().st_size > 0, 'the prover command wrote an empty proof')
@@ -442,23 +642,29 @@ def cmd_prove(args):
 
 def cmd_release(args):
     rpc = Rpc(args.rpc)
+    loopback, anvil = is_local_anvil(rpc)
+    local = loopback and anvil
+    caps = send_caps(args, local_anvil=local)
     values, expected_hex = load_values(args.input)
     proof = json.loads(Path(args.proof).read_text())
     require(proof.get('schema') == PROOF_SCHEMA and proof['public_values_hex'] == expected_hex,
             'the proof file is not for these public values')
-    loopback, anvil = is_local_anvil(rpc)
-    local = loopback and anvil
+    require(local or not args.force_send, '--force-send is accepted only on a loopback Anvil')
+    check_mock_artifact(args)
+    # The checks run on the hex that will be sent, decoded; it must say what the document says.
+    sent_hex = expected_hex
+    decoded = decode_public_values(bytes.fromhex(sent_hex), schema=EGRESS_SCHEMA, fields=EGRESS_FIELDS,
+                                   tags=EGRESS_TAGS)
+    document = values
+    values = {**document, **{k: v for k, v in decoded.items() if k != 'receipt_code'}}
     reads = read_release_state(rpc, args.lock, values)
-    refusal = mock_proof_refusal(proof, loopback=loopback, anvil=anvil,
-                                 sp1_code_hash=reads['verifier.sp1VerifierCodeHash'],
-                                 mock_code_hash=mock_code_hash(args), lock_verifier=reads['lock.finalityVerifier'],
-                                 acknowledged=args.i_know_this_is_a_mock_verifier)
+    proof_raw = bytes.fromhex(proof['proof_hex'].removeprefix('0x'))
+    refusal = mock_proof_refusal(placeholder=is_placeholder(proof_raw, proof.get('mock_verifier_only')),
+                                 loopback=loopback, anvil=anvil, sp1_code_hash=reads['verifier.sp1VerifierCodeHash'])
     require(refusal is None, refusal or '')
-    proof_bytes = len(bytes.fromhex(proof['proof_hex'].removeprefix('0x')))
-    refusals = release_refusals(reads, values, proof_bytes=proof_bytes,
-                                public_values_bytes=len(bytes.fromhex(expected_hex)),
-                                expected={'program_vkey': args.expect_program_vkey,
-                                          'sp1_verifier': args.expect_sp1_verifier})
+    refusals = decoded_value_refusals(decoded, document) + release_refusals(
+        reads, values, proof_bytes=len(proof_raw), public_values_bytes=len(bytes.fromhex(sent_hex)),
+        expected={'program_vkey': args.expect_program_vkey, 'sp1_verifier': args.expect_sp1_verifier})
     result = {'reads_before': reads, 'checkpoint': checkpoint_report(reads, values), 'refusals': refusals,
               'sent': False}
     if refusals and not args.force_send:
@@ -467,14 +673,15 @@ def cmd_release(args):
     recipient = values['recipient']
     balance_before = as_int(rpc.call(reads['lock.token'], 'balanceOf(address)', recipient))
     signer, secret = signer_args(args, local)
-    p = run(['cast', 'send', args.lock, 'release(bytes,bytes)', '0x' + expected_hex, proof['proof_hex'],
-             '--rpc-url', args.rpc, '--json', *signer], secret=secret)
-    stderr = p.stderr
-    result['sent'] = True
+    p = run(['cast', 'send', args.lock, 'release(bytes,bytes)', '0x' + sent_hex, proof['proof_hex'],
+             '--rpc-url', args.rpc, '--json', *caps, *signer], secret=secret)
     if p.returncode != 0:
-        result['reverted'] = stderr.strip()[-1500:]
+        sent, reason = classify_send_failure(p.stderr, p.stdout)
+        result.update(sent=sent if sent is not None else 'unknown', failure=reason, reverted=is_revert(reason),
+                      cast_output=(p.stderr.strip() or p.stdout.strip())[-1500:])
         print(json.dumps(result, indent=2))
-        raise RelayRefusal('release reverted on chain')
+        raise RelayRefusal(f'release: {reason}')
+    result['sent'] = True
     receipt = json.loads(p.stdout)
     balance_after = as_int(rpc.call(reads['lock.token'], 'balanceOf(address)', recipient))
     result.update(release_result(receipt, args.lock, values, balance_before=balance_before,
@@ -488,35 +695,85 @@ def cmd_release(args):
 
 
 def cmd_advance_checkpoint(args):
-    """The Checkpoint variant: witness from the node, execute, then `advanceCheckpoint`."""
+    """The Checkpoint variant through the steps of `prove` and `release`: the node's
+    witness; a proof (execute-only with the mock rule, an external prover, or a
+    proof file with its public values); the verifier's bindings and sizes checked
+    before sending; the verifier's checkpoint checked after."""
     out = confined(args.output, fresh=True)
     out.mkdir(parents=True)
     p = run([args.node_bin, 'pfusdc-checkpoint-witness', '--data-dir', args.data_dir,
              '--prior-checkpoint', args.prior_checkpoint, '--target-block', args.target_block])
     require(p.returncode == 0, f'pfusdc-checkpoint-witness refused: {p.stderr.strip()}')
-    (out / 'input.json').write_text(json.dumps({'kind': 'checkpoint', 'witness': json.loads(p.stdout)}))
-    p = run([args.prover_tool, 'execute', '--elf', args.elf, '--input-json', out / 'input.json',
-             '--output-dir', out / 'execute'], env=dict(os.environ, SP1_PROVER='cpu'))
-    require(p.returncode == 0, f'SP1 execute failed: {p.stderr.strip()[-2000:]}')
-    public_values = '0x' + (out / 'execute' / 'public-values.bin').read_bytes().hex()
+    witness = json.loads(p.stdout)
+    (out / 'input.json').write_text(json.dumps({'kind': 'checkpoint', 'witness': witness}))
+    header = witness['block']['header']
+    values = {'pftl_chain_id': witness['chain_id'], 'pftl_genesis_hash': witness['genesis_hash'],
+              'pftl_protocol_version': witness['protocol_version'],
+              'prior_checkpoint_block_id': witness['prior_checkpoint_block_id'],
+              'resulting_checkpoint_block_id': header['block_hash'],
+              'committee_root': header['consensus_v2_commit']['proposal']['domain']['committee_root'],
+              'committee_transition_commitment': '', 'finalized_block_height': header['height']}
+    require(values['resulting_checkpoint_block_id'] == args.target_block, 'the witness proves another block')
+    require(not any(step.get('next_committee') for step in witness.get('finality_ancestry') or []),
+            'a committee transition in the ancestry is not supported by this command yet')
+    mock = False
+    if args.mode == 'execute-only':
+        require(args.elf and args.prover_tool, 'execute-only needs --elf and --prover-tool')
+        p = run([args.prover_tool, 'execute', '--elf', args.elf, '--input-json', out / 'input.json',
+                 '--output-dir', out / 'execute'], env=dict(os.environ, SP1_PROVER='cpu'))
+        require(p.returncode == 0, f'SP1 execute failed: {p.stderr.strip()[-2000:]}')
+        public_values = (out / 'execute' / 'public-values.bin').read_bytes()
+        proof_bytes, mock = PLACEHOLDER_PROOF, True
+    elif args.mode == 'command':
+        require(args.prover_command, '--mode command needs --prover-command')
+        proof_path = out / 'proof.bin'
+        run_prover(args.prover_command, dict(os.environ, PFT_LANE_EXPORT_INPUT_JSON=str(out / 'input.json'),
+                                             PFT_LANE_EXPORT_PROOF_OUT=str(proof_path)))
+        proof_bytes = proof_path.read_bytes()
+        public_values = Path(str(proof_path) + '.public-values').read_bytes()
+    else:
+        require(args.proof_file and args.public_values_file, 'proof-file needs --proof-file and --public-values-file')
+        proof_bytes, public_values = args.proof_file.read_bytes(), args.public_values_file.read_bytes()
+    # The public values that will be sent, decoded, must be the ones built from the node's witness.
+    decoded = decode_public_values(public_values, schema=CHECKPOINT_SCHEMA, fields=CHECKPOINT_FIELDS,
+                                   tags=CHECKPOINT_TAGS)
+    differ = decoded_value_refusals(decoded, values)
+    if differ:
+        print(json.dumps({'refusals': differ}, indent=2))
+        raise RelayRefusal('the public values to send are not the witness\'s: '
+                           + '; '.join(r['message'] for r in differ))
     rpc = Rpc(args.rpc)
     loopback, anvil = is_local_anvil(rpc)
-    local = loopback and anvil
+    check_mock_artifact(args)
     verifier = as_address(rpc.call(args.lock, 'finalityVerifier()'))
-    refusal = mock_proof_refusal({'mock_verifier_only': True}, loopback=loopback, anvil=anvil,
-                                 sp1_code_hash=code_hash_at(rpc, as_address(rpc.call(verifier, 'sp1Verifier()'))),
-                                 mock_code_hash=mock_code_hash(args), lock_verifier=verifier,
-                                 acknowledged=args.i_know_this_is_a_mock_verifier)
+    refusal = mock_proof_refusal(placeholder=is_placeholder(proof_bytes, mock), loopback=loopback, anvil=anvil,
+                                 sp1_code_hash=code_hash_at(rpc, as_address(rpc.call(verifier, 'sp1Verifier()'))))
     require(refusal is None, refusal or '')
-    require(as_int(rpc.call(verifier, 'acceptedCheckpointCommitment(bytes32)', commitment(args.prior_checkpoint))),
-            'the verifier has not accepted the prior checkpoint')
-    signer, secret = signer_args(args, local)
-    p = run(['cast', 'send', verifier, 'advanceCheckpoint(bytes,bytes)', public_values, '0x' + PLACEHOLDER_PROOF.hex(),
-             '--rpc-url', args.rpc, '--json', *signer], secret=secret)
+    reads = {'chain_id': rpc.chain_id()}
+    for getter in ('pftlChainIdHash', 'pftlGenesisHashCommitment'):
+        reads[f'verifier.{getter}'] = rpc.call(verifier, f'{getter}()')
+    for getter in ('pftlProtocolVersion', 'maxProofBytes', 'maxPublicValuesBytes', 'latestFinalizedHeight'):
+        reads[f'verifier.{getter}'] = as_int(rpc.call(verifier, f'{getter}()'))
+    reads['verifier.priorCommitteeRootCommitment'] = rpc.call(
+        verifier, 'checkpointCommitteeRootCommitment(bytes32)', commitment(values['prior_checkpoint_block_id']))
+    reads['verifier.resultingCommitteeRootCommitment'] = rpc.call(
+        verifier, 'checkpointCommitteeRootCommitment(bytes32)', commitment(values['resulting_checkpoint_block_id']))
+    reads['verifier.latestCheckpointCommitment'] = rpc.call(verifier, 'latestCheckpointCommitment()')
+    refusals = checkpoint_refusals(reads, values, proof_bytes=len(proof_bytes), public_values_bytes=len(public_values))
+    if refusals:
+        print(json.dumps({'reads_before': reads, 'refusals': refusals}, indent=2))
+        raise RelayRefusal('advanceCheckpoint would revert: ' + '; '.join(r['code'] for r in refusals))
+    signer, secret = signer_args(args, loopback and anvil)
+    p = run(['cast', 'send', verifier, 'advanceCheckpoint(bytes,bytes)', '0x' + public_values.hex(),
+             '0x' + proof_bytes.hex(), '--rpc-url', args.rpc, '--json', *signer], secret=secret)
     require(p.returncode == 0, 'advanceCheckpoint reverted: ' + p.stderr.strip()[-1500:])
-    latest = rpc.call(verifier, 'latestCheckpointCommitment()')
-    require(latest == commitment(args.target_block), 'the verifier did not move to the target checkpoint')
-    result = {'transaction': json.loads(p.stdout)['transactionHash'], 'latest_checkpoint_commitment': latest}
+    target = commitment(values['resulting_checkpoint_block_id'])
+    # The contract records only a newer checkpoint that extends its latest one: it must have moved.
+    require(rpc.call(verifier, 'latestCheckpointCommitment()') == target,
+            'the verifier did not move to the target checkpoint')
+    require(as_int(rpc.call(verifier, 'acceptedCheckpointCommitment(bytes32)', target)) != 0,
+            'the verifier did not accept the target checkpoint')
+    result = {'transaction': json.loads(p.stdout)['transactionHash'], 'latest_checkpoint_commitment': target}
     print(json.dumps(result, indent=2))
     return result
 
@@ -572,19 +829,20 @@ def parser():
         p.add_argument('--private-key-file', type=Path, help='loopback Anvil only')
         p.add_argument('--account')
         p.add_argument('--password-file', type=Path)
-        p.add_argument('--i-know-this-is-a-mock-verifier', metavar='VERIFIER',
-                       help='send a placeholder proof off a loopback Anvil, to this verifier only, and only if its '
-                            'sp1Verifier has the mock\'s code hash')
         p.add_argument('--mock-sp1-artifact', type=Path,
-                       help='Foundry artifact of Tier4MockSP1Verifier; required to send a placeholder proof')
+                       help='Foundry artifact of Tier4MockSP1Verifier; optional cross-check of the pinned code hash')
 
     p = sub.add_parser('release', help='check the reverts that can be read before sending, then call release and report Released')
     base(p)
     p.add_argument('--input', type=Path, required=True)
     p.add_argument('--proof', type=Path, required=True)
-    p.add_argument('--force-send', action='store_true', help='send despite refusals (to show the on-chain revert)')
+    p.add_argument('--force-send', action='store_true',
+                   help='loopback Anvil only: send despite refusals (to show the on-chain revert)')
     p.add_argument('--expect-program-vkey', help="refuse unless the verifier's programVKey is this")
     p.add_argument('--expect-sp1-verifier', help="refuse unless the verifier's sp1Verifier is this")
+    p.add_argument('--gas-limit', type=int, help='the release\'s gas limit; required off a loopback Anvil')
+    p.add_argument('--max-fee-per-gas', type=int,
+                   help='the release\'s max fee per gas in wei; required off a loopback Anvil')
     p.set_defaults(func=cmd_release)
 
     p = sub.add_parser('advance-checkpoint', help="move the verifier's checkpoint with the Checkpoint variant")
@@ -593,8 +851,12 @@ def parser():
     p.add_argument('--data-dir', type=Path, required=True)
     p.add_argument('--prior-checkpoint', required=True)
     p.add_argument('--target-block', required=True)
-    p.add_argument('--elf', type=Path, required=True)
-    p.add_argument('--prover-tool', type=Path, required=True)
+    p.add_argument('--mode', choices=('execute-only', 'command', 'proof-file'), required=True)
+    p.add_argument('--elf', type=Path)
+    p.add_argument('--prover-tool', type=Path)
+    p.add_argument('--prover-command')
+    p.add_argument('--proof-file', type=Path, help='raw SP1 proof bytes (proof-file mode)')
+    p.add_argument('--public-values-file', type=Path, help='the committed public values (proof-file mode)')
     p.add_argument('--output', type=Path, required=True)
     p.set_defaults(func=cmd_advance_checkpoint)
 

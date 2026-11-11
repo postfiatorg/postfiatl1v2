@@ -2759,6 +2759,14 @@ pub struct OwnedObjectsOptions {
     pub owner_public_key_hex: String,
     pub asset: Option<String>,
     pub limit: Option<usize>,
+    /// `next_cursor` of the previous page; `None` reads the first page.
+    pub cursor: Option<String>,
+    /// Omit `owner_pubkey_hex` from each object (the key is the top-level
+    /// `owner_public_key_hex`).
+    pub omit_owner_keys: bool,
+    /// Lowers the page byte bound below `OWNED_OBJECTS_PAGE_MAX_BYTES`;
+    /// never raises it. Not an RPC parameter.
+    pub max_page_bytes: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2829,6 +2837,25 @@ pub struct AssetFeeQuoteReport {
     pub sender_balance_after_fee: Option<u64>,
     pub sender_meets_reserve_after_fee: bool,
     pub operation: AssetTransactionOperation,
+    /// For `external_lane_export_v1`: the refusal execution returns for the
+    /// export on the ledger asset admission executes it on (the pending
+    /// plain transfers, `payment_v2` entries and asset transactions; later
+    /// families excluded). Absent when the export would apply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export_refusal: Option<AssetOperationRefusal>,
+    /// `true` for `external_lane_export_v1` only: this node ran the export
+    /// check, so an absent `export_refusal` means the export would apply.
+    /// Not serialized for any other kind. A quote without it comes from a
+    /// node too old to check an export; the holder's commands refuse it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub export_checked: bool,
+}
+
+/// A refusal code and message from an execution dry run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetOperationRefusal {
+    pub code: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -3256,8 +3283,62 @@ pub struct OwnedObjectsReport {
     pub limit: u64,
     pub truncated: bool,
     pub object_count: u64,
+    /// Sum over every matching object at `height`, not only this page.
     pub total_value: u64,
-    pub objects: Vec<OwnedObject>,
+    pub objects: Vec<OwnedObjectsRow>,
+    /// The request cursor this page continues from; `None` on the first page.
+    pub cursor: Option<String>,
+    /// Opaque cursor for the next page; `None` on the last page.
+    pub next_cursor: Option<String>,
+    /// Finalized tip height and state root when the page was read. They
+    /// are information only: FastPay effects change the objects without a
+    /// new block, so they do not identify the object view.
+    pub height: u64,
+    pub state_root: String,
+    /// SHA-256 over every object matching the owner and asset filter
+    /// (asset, id, version, value, in page order): identifies the view the
+    /// page was read from; equal on every page of one consistent read.
+    pub view_digest: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub owner_keys_omitted: bool,
+}
+
+/// One `owned_objects` row: an `OwnedObject`, serialized identically unless
+/// the caller asked to omit the per-object owner key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnedObjectsRow {
+    pub id: String,
+    pub version: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_pubkey_hex: Option<String>,
+    pub value: u64,
+    pub asset: String,
+}
+
+impl OwnedObjectsRow {
+    pub fn from_object(object: OwnedObject, omit_owner_key: bool) -> Self {
+        Self {
+            id: object.id,
+            version: object.version,
+            owner_pubkey_hex: (!omit_owner_key).then_some(object.owner_pubkey_hex),
+            value: object.value,
+            asset: object.asset,
+        }
+    }
+
+    /// The full object; an omitted owner key is the report's owner.
+    pub fn as_object(&self, report: &OwnedObjectsReport) -> OwnedObject {
+        OwnedObject {
+            id: self.id.clone(),
+            version: self.version,
+            owner_pubkey_hex: self
+                .owner_pubkey_hex
+                .clone()
+                .unwrap_or_else(|| report.owner_public_key_hex.clone()),
+            value: self.value,
+            asset: self.asset.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

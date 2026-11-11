@@ -1439,6 +1439,7 @@ class WalletHelperTests(unittest.TestCase):
             ):
                 create_result = create_offer(
                     client,
+                    max_fee_atoms=200,
                     wallet=owner_wallet,
                     taker_gets_asset_id="PFT",
                     taker_gets_amount=25,
@@ -2204,6 +2205,7 @@ class WalletHelperTests(unittest.TestCase):
             self.assertEqual(
                 place_offer(
                     client,
+                    max_fee_atoms=200,
                     wallet=owner_wallet,
                     taker_gets_asset_id="PFT",
                     taker_gets_value=25,
@@ -2360,6 +2362,7 @@ class WalletHelperTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             create_offer(
                 client,
+                max_fee_atoms=200,
                 wallet=wallet,
                 taker_gets_asset_id="PFT",
                 taker_gets_amount=1,
@@ -2369,6 +2372,7 @@ class WalletHelperTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             create_offer(
                 client,
+                max_fee_atoms=200,
                 wallet=wallet,
                 taker_gets_asset_id="PFT",
                 taker_gets_amount=0,
@@ -2417,6 +2421,10 @@ class WalletHelperTests(unittest.TestCase):
             "ok": True,
             "result": {
                 "schema": "postfiat-transfer-fee-quote-v1",
+                "transaction_kind": "transparent_transfer",
+                "from": "pf-from",
+                "to": "pf-to",
+                "amount": 1_000_000,
                 "chain_id": "postfiat-local",
                 "genesis_hash": "01" * 48,
                 "protocol_version": 1,
@@ -2473,6 +2481,10 @@ class WalletHelperTests(unittest.TestCase):
             "ok": True,
             "result": {
                 "schema": "postfiat-transfer-fee-quote-v1",
+                "transaction_kind": "transparent_transfer",
+                "from": "pf-from",
+                "to": "pf-to",
+                "amount": 1_000_000,
                 "chain_id": "postfiat-local",
                 "genesis_hash": "01" * 48,
                 "protocol_version": 1,
@@ -2624,6 +2636,10 @@ class WalletHelperTests(unittest.TestCase):
             "ok": True,
             "result": {
                 "schema": "postfiat-transfer-fee-quote-v1",
+                "transaction_kind": "transparent_transfer",
+                "from": "pf-from",
+                "to": "pf-to",
+                "amount": 1_000_000,
                 "chain_id": "postfiat-local",
                 "genesis_hash": "01" * 48,
                 "protocol_version": 1,
@@ -2693,6 +2709,10 @@ class WalletHelperTests(unittest.TestCase):
             "ok": True,
             "result": {
                 "schema": "postfiat-transfer-fee-quote-v1",
+                "transaction_kind": "transparent_transfer",
+                "from": "pf-from",
+                "to": "pf-to",
+                "amount": 1_000_000,
                 "chain_id": "postfiat-local",
                 "genesis_hash": "01" * 48,
                 "protocol_version": 1,

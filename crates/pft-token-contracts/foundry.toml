@@ -42,9 +42,14 @@ base-sepolia = { key = "${BASESCAN_API_KEY}", chain = 84532 }
 # test/DeployPFTLock.t.sol's import from ../ethereum-contracts and fails the
 # build; solc compiles it and forge test runs it. A remapping would change the
 # metadata, hence the bytecode, of PFTToken and PFTLockV1.
-# test/ExternalLaneLockRelease.t.sol imports the verifier the same way.
+# test/ExternalLaneLockRelease.t.sol and test/ExternalLaneWitnessRelease.t.sol
+# import the verifier the same way.
 [lint]
-ignore = ["test/DeployPFTLock.t.sol", "test/ExternalLaneLockRelease.t.sol"]
+ignore = [
+    "test/DeployPFTLock.t.sol",
+    "test/ExternalLaneLockRelease.t.sol",
+    "test/ExternalLaneWitnessRelease.t.sol",
+]
 
 [fuzz]
 runs = 1000

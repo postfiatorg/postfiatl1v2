@@ -12,6 +12,9 @@ pub(super) fn rpc_dispatch_error_response_parts(error: &str) -> (&'static str, &
     if let Some(code) = postfiat_node::fastpay_recovery_committee_error_code(error) {
         return (code, error);
     }
+    if let Some(code) = postfiat_node::owned_objects_error_code(error) {
+        return (code, error);
+    }
     ("rpc_error", error)
 }
 
@@ -1431,6 +1434,9 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 owner_public_key_hex: owner_public_key_hex.to_string(),
                 asset: flag_value(flags, "--asset").map(ToString::to_string),
                 limit,
+                cursor: flag_value(flags, "--cursor").map(ToString::to_string),
+                omit_owner_keys: flags.iter().any(|flag| flag == "--omit-owner-keys"),
+                max_page_bytes: None,
             })
             .map_err(|error| format!("rpc owned_objects failed: {error}"))?;
             print_rpc_success(

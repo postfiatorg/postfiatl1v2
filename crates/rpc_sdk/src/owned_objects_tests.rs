@@ -86,6 +86,8 @@ mod owned_objects {
                 owner_public_key_hex: owner(),
                 asset: None,
                 limit: None,
+                cursor: None,
+                omit_owner_keys: false,
             },
         );
         assert_eq!(request.method, METHOD_OWNED_OBJECTS);
@@ -108,6 +110,8 @@ mod owned_objects {
                 owner_public_key_hex: "AB".repeat(1952),
                 asset: Some("USDX".to_string()),
                 limit: Some(2048),
+                cursor: None,
+                omit_owner_keys: false,
             },
         );
         assert_eq!(request.params["asset"], json!("USDX"));
@@ -118,6 +122,71 @@ mod owned_objects {
             Some(RpcRequestKind::OwnedObjects),
         )
         .expect("owned objects request with uppercase key, asset, and limit");
+    }
+
+    #[test]
+    fn accepts_the_cursor_and_owner_key_omission_in_a_request() {
+        let cursor = format!("ooc2.{}.-.{}.505654.{}.1", "aa".repeat(16), "cc".repeat(32), "01".repeat(32));
+        let raw = RpcRequest::empty("owned-objects-raw", METHOD_OWNED_OBJECTS)
+            .with_param_value("owner_public_key_hex", string_value(owner()))
+            .with_param_value("cursor", string_value(cursor.clone()))
+            .with_param_value("omit_owner_keys", Value::Bool(true));
+        validate_request(&raw, None, Some(RpcRequestKind::OwnedObjects))
+            .expect("cursor and omit_owner_keys are accepted");
+        let rejects = |name: &str, value: Value| {
+            let request = RpcRequest::empty("owned-objects-bad", METHOD_OWNED_OBJECTS)
+                .with_param_value("owner_public_key_hex", string_value(owner()))
+                .with_param_value(name, value);
+            assert!(
+                validate_request(&request, None, Some(RpcRequestKind::OwnedObjects)).is_err(),
+                "{name}"
+            );
+        };
+        rejects("cursor", json!(""));
+        rejects("cursor", json!(7));
+        rejects("cursor", json!(" ooc2"));
+        rejects("omit_owner_keys", json!("yes"));
+    }
+
+    #[test]
+    fn builds_a_continuation_request_with_the_typed_params() {
+        let cursor = format!("ooc2.{}.-.{}.505654.{}.1", "aa".repeat(16), "cc".repeat(32), "01".repeat(32));
+        let request = owned_objects_request(
+            "owned-objects-next",
+            OwnedObjectsParams {
+                owner_public_key_hex: owner(),
+                asset: None,
+                limit: Some(128),
+                cursor: Some(cursor.clone()),
+                omit_owner_keys: true,
+            },
+        );
+        assert_eq!(request.params["cursor"], json!(cursor));
+        assert_eq!(request.params["omit_owner_keys"], json!(true));
+        validate_request(&request, None, Some(RpcRequestKind::OwnedObjects)).expect("typed request");
+        let first = owned_objects_request(
+            "owned-objects-first",
+            OwnedObjectsParams {
+                owner_public_key_hex: owner(),
+                asset: None,
+                limit: None,
+                cursor: None,
+                omit_owner_keys: false,
+            },
+        );
+        assert!(first.params.get("cursor").is_none());
+        assert!(first.params.get("omit_owner_keys").is_none());
+    }
+
+    #[test]
+    fn requires_a_view_digest_on_every_paged_answer() {
+        let mut missing = paged_fixture();
+        missing.as_object_mut().unwrap().remove("view_digest");
+        assert_eq!(rejected_field(missing), "view_digest");
+        assert_eq!(
+            rejected_field(with(paged_fixture(), "/view_digest", json!("CC".repeat(32)))),
+            "view_digest"
+        );
     }
 
     #[test]
@@ -144,6 +213,8 @@ mod owned_objects {
                 owner_public_key_hex: owner(),
                 asset: Some(" USDX".to_string()),
                 limit: None,
+                cursor: None,
+                omit_owner_keys: false,
             },
         ));
         rejects(owned_objects_request(
@@ -152,6 +223,8 @@ mod owned_objects {
                 owner_public_key_hex: owner(),
                 asset: None,
                 limit: Some(0),
+                cursor: None,
+                omit_owner_keys: false,
             },
         ));
         rejects(owned_objects_request(
@@ -160,6 +233,8 @@ mod owned_objects {
                 owner_public_key_hex: owner(),
                 asset: None,
                 limit: Some(2049),
+                cursor: None,
+                omit_owner_keys: false,
             },
         ));
         rejects(
@@ -169,6 +244,8 @@ mod owned_objects {
                     owner_public_key_hex: owner(),
                     asset: None,
                     limit: None,
+                    cursor: None,
+                    omit_owner_keys: false,
                 },
             )
             .with_param_value("state", string_value("open")),
@@ -295,8 +372,31 @@ mod owned_objects {
                 owner_public_key_hex: owner,
                 asset: asset.map(str::to_string),
                 limit,
+                cursor: None,
+                omit_owner_keys: false,
             },
         )
+    }
+
+    #[test]
+    fn binds_a_continuation_to_its_cursor_and_key_omission() {
+        let cursor = format!("ooc2.{}.-.{}.505654.{}.1", "aa".repeat(16), "cc".repeat(32), "01".repeat(32));
+        let request = |cursor: Option<&str>, omit: bool| {
+            owned_objects_request(
+                "owned-objects-1",
+                OwnedObjectsParams {
+                    owner_public_key_hex: owner(),
+                    asset: None,
+                    limit: Some(5),
+                    cursor: cursor.map(str::to_string),
+                    omit_owner_keys: omit,
+                },
+            )
+        };
+        let page = with(paged_fixture(), "/cursor", json!(cursor));
+        bind(&page, &request(Some(&cursor), false)).expect("the page answers its cursor");
+        assert_eq!(bind_rejected_field(&paged_fixture(), &request(Some(&cursor), false)), "cursor");
+        assert_eq!(bind_rejected_field(&page, &request(Some(&cursor), true)), "owner_keys_omitted");
     }
 
     fn bind(report: &Value, request: &RpcRequest) -> Result<(), RpcResponseValidationError> {
@@ -404,5 +504,56 @@ mod owned_objects {
         assert_eq!(bind_rejected_field(&fixture(), &malformed), "request");
         let zero_limit = request_for("owned-objects-1", owner(), None, Some(0));
         assert_eq!(bind_rejected_field(&fixture(), &zero_limit), "request");
+    }
+
+    /// A cursor-era page: the node's byte bound ended it at 2 of limit 5.
+    fn paged_fixture() -> Value {
+        let mut report = with(truncated_fixture(), "/limit", json!(5));
+        let map = report.as_object_mut().unwrap();
+        map.insert("cursor".into(), Value::Null);
+        map.insert("next_cursor".into(), json!("ooc2.opaque"));
+        map.insert("height".into(), json!(40));
+        map.insert("state_root".into(), json!("bb".repeat(48)));
+        map.insert("view_digest".into(), json!("cc".repeat(32)));
+        report
+    }
+
+    #[test]
+    fn accepts_byte_bounded_continued_and_keyless_pages() {
+        assert!(validate(&paged_fixture()).is_ok());
+        // The last page after a cursor holds part of the summed value.
+        let last = with(paged_fixture(), "/cursor", json!("ooc2.opaque"));
+        let last = with(last, "/next_cursor", Value::Null);
+        let last = with(last, "/truncated", json!(false));
+        assert!(validate(&last).is_ok());
+        let mut keyless = paged_fixture();
+        keyless["owner_keys_omitted"] = json!(true);
+        for row in keyless["objects"].as_array_mut().unwrap() {
+            row.as_object_mut().unwrap().remove("owner_pubkey_hex");
+        }
+        assert!(validate(&keyless).is_ok());
+        // A keyless page must not carry a per-object key.
+        let mut keyed = paged_fixture();
+        keyed["owner_keys_omitted"] = json!(true);
+        assert_eq!(rejected_field(keyed), "objects[0].owner_pubkey_hex");
+        // next_cursor and truncated must agree.
+        assert_eq!(
+            rejected_field(with(paged_fixture(), "/next_cursor", Value::Null)),
+            "next_cursor"
+        );
+        // A first page without a cursor still sums exactly when complete.
+        let first = with(last_unpaged(), "/total_value", json!(999));
+        assert_eq!(rejected_field(first), "total_value");
+    }
+
+    fn last_unpaged() -> Value {
+        let mut report = fixture();
+        let map = report.as_object_mut().unwrap();
+        map.insert("cursor".into(), Value::Null);
+        map.insert("next_cursor".into(), Value::Null);
+        map.insert("height".into(), json!(40));
+        map.insert("state_root".into(), json!("bb".repeat(48)));
+        map.insert("view_digest".into(), json!("cc".repeat(32)));
+        report
     }
 }

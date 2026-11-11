@@ -21,6 +21,8 @@ from typing import Any, Callable
 from .client import PostFiatWebSocketRpcClient
 from .wallet import (
     TransparentWallet,
+    check_signing_quote,
+    default_max_fee_atoms,
     _read_json,
     _run,
     _sdk_bin,
@@ -287,7 +289,12 @@ def run_native_or_payment(
     work_dir: Path,
     memo: bool,
     review_delay_ms: float = 0.0,
+    max_fee_atoms: int | None = None,
 ) -> dict[str, Any]:
+    """Quote, sign and submit one transfer (or payment_v2 when `memo`); the
+    quote must be for this transfer with a fee at most `max_fee_atoms`
+    (default `default_max_fee_atoms("transfer", ...)`), or QuoteRefusedError
+    is raised before signing."""
     work_dir.mkdir(parents=True, exist_ok=True)
     attempts: list[dict[str, Any]] = []
     for attempt in range(1, 3):
@@ -313,6 +320,19 @@ def run_native_or_payment(
                 request_id=quote_request_id,
             )
             timings["quote_ms"] = monotonic_ms_since(started)
+            check_signing_quote(
+                quote_response,
+                wallet=wallet_a,
+                kind="payment_v2" if memo else "transparent_transfer",
+                sequence=None,
+                max_fee_atoms=(
+                    max_fee_atoms
+                    if max_fee_atoms is not None
+                    else default_max_fee_atoms("transfer", None, memo_type, memo_format, memo_data)
+                ),
+                to_address=wallet_b.address,
+                amount=amount,
+            )
 
             quote_file = work_dir / f"quote-{secrets.token_hex(8)}.response.json"
             quote_request_file = work_dir / f"quote-{secrets.token_hex(8)}.request.json"

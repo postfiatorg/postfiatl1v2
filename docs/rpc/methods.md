@@ -90,7 +90,7 @@ launch config digests.
 | `transfer_fee_quote` | Quote native PFT payment fees. |
 | `mempool_submit_signed_transfer` | Submit signed native PFT transfer. |
 | `mempool_submit_signed_payment_v2` | Submit signed native PFT payment with memos. |
-| `asset_fee_quote` | Quote issued-asset and TrustSet-style transactions. |
+| `asset_fee_quote` | Quote issued-asset and TrustSet-style transactions. For `external_lane_export_v1`, `export_refusal` (`code`, `message`) is execution's refusal of the export on the ledger asset admission executes it on (pending plain transfers, `payment_v2` entries and asset transactions; later families excluded), and `sender_balance` is read there too (for `external_lane_export_above_released`, the message names released and exported on that ledger); absent when it would apply. The export's quote also carries `export_checked: true` (no other kind's quote has it); the holder's commands refuse a quote without it (`external_lane_export_not_checked`), which comes from a node too old to check an export. |
 | `mempool_submit_signed_asset_transaction` | Submit signed asset create, TrustSet, issued payment (`issued_payment`, or `issued_payment_v2` with memos), clawback, or `account_set` (owner account flags). |
 | `escrow_fee_quote` | Quote escrow create, finish, or cancel. |
 | `mempool_submit_signed_escrow_transaction` | Submit signed escrow transaction. |
@@ -114,6 +114,11 @@ adds `address_checksummed`, the display form of `address`.
 
 The fee quotes take the next sequence from the mempool and price the
 transaction on a ledger that includes pending entries.
+
+A quote is the node's answer, not the request: the asset, escrow, NFT and
+offer signers sign the quote's `operation`, `minimum_fee` and `sequence`.
+Compare them with your request before you sign; the Python client does
+([what it checks](../integrate/exchange-guide.md#what-the-python-client-checks-before-it-signs)).
 
 - `transfer_fee_quote` prices on the ledger admission dry-runs the transfer
   on. Its base is the committed ledger with the confirmed FastPay effects
@@ -163,7 +168,7 @@ Both behaviours are governed; see
 
 | Method | Purpose |
 | --- | --- |
-| `owned_objects` | Read FastPay owned objects for an owner public key. Wallet-owned-object lookups use a 2048 object limit so fragmented wallets can still build standard unwraps. |
+| `owned_objects` | Read one page of the FastPay owned objects of `owner_public_key_hex` (optional `asset`, `limit` up to 2048, `cursor`, `omit_owner_keys`). See [Owned objects pages](#owned-objects-pages). |
 | `owned_recovery_capabilities` | Read the active v3 recovery domain, committee, and bounded validity/reveal windows. |
 | `fastpay_recovery_committee` | Read the committed FastPay recovery committee (validator ids, ML-DSA-65 public keys, `registry_root`, `valid_from_height`..`new_orders_through_height`) and the recovery policy, with `chain_id`, `genesis_hash` and the `height` read. No params returns the committee admitting new orders (`active: true`); `epoch` returns that epoch, and an epoch the ledger lacks is refused with `fastpay_recovery_committee_unknown_epoch`. Public keys only. |
 | `owned_certificate` | Retrieve a persisted complete certificate by digest or lock ID for permissionless recovery. |
@@ -176,6 +181,40 @@ Both behaviours are governed; see
 | `owned_unwrap_sign`, `owned_unwrap_apply` | Versioned legacy signed/certified unwrap compatibility below the governed v3 activation boundary. |
 | `wrap_owned` | Disabled unsafe compatibility path. FastPay funding uses a source-signed `mempool_submit_fastlane_primary` deposit committed by consensus. |
 | `unwrap_owned` | Disabled compatibility path. Public wallet flows must use signed/certified unwrap instead. |
+
+### Owned objects pages
+
+`owned_objects` returns objects in (asset, object id, version) order. A page
+ends after `limit` objects (default 2048) or earlier, so that the compact JSON
+result never exceeds 960 KiB (`OWNED_OBJECTS_PAGE_MAX_BYTES`): with the owner
+key each object is about 4 KB, so a page holds about 235 objects, well inside a
+2 MiB WebSocket message. When objects remain, `truncated` is true and
+`next_cursor` is set; pass it back as `cursor` with the same owner and `asset`
+to read the next page. The last page has `next_cursor: null`. A call without
+`cursor` answers as before, plus the new fields.
+
+- `total_value`: the sum of every matching object in this view, not only this page.
+- `view_digest`: SHA-256 (64 hex) over every object matching the owner and `asset` filter, by asset, id, version and value, in page order. It identifies the object view; every page of one consistent read has the same `view_digest`.
+- `cursor`: the cursor this page continues from; `null` on the first page.
+- `next_cursor`: opaque; `null` on the last page. Bound to the owner, the `asset` filter, the `view_digest` and the last object returned.
+- `height`, `state_root`: the finalized tip when the page was read; information only. They do not identify the object view: FastPay effects create and spend objects without a new block. The page and `view_digest` are read under the store's ordered-commit lock, so they are one moment.
+- `owner_keys_omitted`: present and `true` when `omit_owner_keys` was sent. Objects then omit `owner_pubkey_hex` (the key is the top-level `owner_public_key_hex`; about 160 bytes per object).
+
+The node keeps no snapshot per client: a cursor names a position in the order
+and the view it was issued from, so validators hold no per-client state. When
+the owner's objects changed since the cursor was issued (a block or a FastPay
+apply), the continuation is refused with `owned_objects_view_changed` instead
+of mixing two views; restart from the first page. A cursor from before the
+view digest (`ooc1.`) gets the same refusal. The Python client's
+`owned_objects_all` and the web wallet restart at most 3 times, then fail with
+an error; a truncated answer without `next_cursor` or `view_digest` (a node
+from before paging) is an error, never a complete set. Refusals carry typed
+codes and are never ignored: `owned_objects_view_changed`,
+`owned_objects_cursor_malformed`,
+`owned_objects_cursor_owner_mismatch` (issued for another owner),
+`owned_objects_cursor_asset_mismatch` (issued for another `asset` filter),
+`owned_objects_cursor_invalid_object_id`, and `owned_objects_foreign_owner_key`
+(`omit_owner_keys` with an object of another key on the page).
 
 ## FastSwap Methods
 

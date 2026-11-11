@@ -1659,12 +1659,77 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
     let genesis = store.read_genesis()?;
     let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
-    let ledger_sender = ledger.account(&options.source).ok_or_else(|| {
+    let source_not_found = || {
         io::Error::new(
             io::ErrorKind::NotFound,
             format!("source account `{}` not found", options.source),
         )
-    })?;
+    };
+    let is_export = matches!(
+        operation,
+        AssetTransactionOperation::ExternalLaneExportV1(_)
+    );
+    // Every other kind needs the source in the base ledger; an export's source
+    // is read on the pending prefix below, which may create it.
+    let base_sequence = if is_export {
+        None
+    } else {
+        Some(
+            ledger
+                .account(&options.source)
+                .ok_or_else(source_not_found)?
+                .sequence,
+        )
+    };
+    let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
+    let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
+    // An export is quoted and checked on the ledger asset admission executes
+    // it on (`apply_pending_before_new_asset_transaction`), its source's
+    // existence, balance and sequence included: a pending release or transfer
+    // may create the source. Every other kind keeps the ledger after the
+    // executable mempool.
+    let quote_ledger = if is_export {
+        let shielded = store.read_shielded()?;
+        let orchard_balances = shielded
+            .orchard
+            .as_ref()
+            .map_or(&[][..], |pool| pool.asset_orchard_balances.as_slice());
+        let mut export_ledger = ledger;
+        apply_pending_before_new_asset_transaction(
+            &genesis,
+            &mut export_ledger,
+            &mempool,
+            block_height,
+            asset_execution_compatibility,
+            orchard_balances,
+            "asset fee quote",
+        )?;
+        export_ledger
+    } else {
+        ledger_after_executable_mempool(
+            &genesis,
+            ledger,
+            &mempool,
+            block_height,
+            asset_execution_compatibility,
+        )?
+    };
+    let sender = match quote_ledger.account(&options.source) {
+        Some(sender) => sender,
+        None if is_export => return Err(source_not_found()),
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "source account `{}` not found after pending mempool dry-run",
+                    options.source
+                ),
+            ))
+        }
+    };
+    // The next sequence above every pending entry of the source, later
+    // families included; execution's dry run below refuses a sequence a later
+    // family holds (`bad_sequence`).
     let sequence = match options.sequence {
         Some(sequence) if sequence > 0 => sequence,
         Some(_) => {
@@ -1673,26 +1738,12 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
                 "sequence must be nonzero",
             ));
         }
-        None => next_pending_sender_sequence(&mempool, &options.source, ledger_sender.sequence)?,
+        None => next_pending_sender_sequence(
+            &mempool,
+            &options.source,
+            base_sequence.unwrap_or(sender.sequence),
+        )?,
     };
-    let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
-    let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
-    let quote_ledger = ledger_after_executable_mempool(
-        &genesis,
-        ledger,
-        &mempool,
-        block_height,
-        asset_execution_compatibility,
-    )?;
-    let sender = quote_ledger.account(&options.source).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            format!(
-                "source account `{}` not found after pending mempool dry-run",
-                options.source
-            ),
-        )
-    })?;
     let mempool_pending_for_sender = mempool_pending_count_for_sender(&mempool, &options.source);
 
     let mut fee = MIN_TRANSFER_FEE;
@@ -1727,6 +1778,39 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
     } else {
         "ledger_mempool".to_string()
     };
+    // An export's check, as admission orders it: the mempool limits, then
+    // execution's export rules. `Some` exactly when the check ran, so
+    // `export_checked` cannot be true without it.
+    let export_check = match &operation {
+        AssetTransactionOperation::ExternalLaneExportV1(export) => Some(
+            mempool_admission_limit_refusal(&mempool, &options.source)
+                .map(|(_, code, message)| AssetOperationRefusal {
+                    code: code.to_string(),
+                    message,
+                })
+                .or_else(|| {
+                    postfiat_execution::dry_run_external_lane_export(
+                        &genesis,
+                        &quote_ledger,
+                        export,
+                        &options.source,
+                        sequence,
+                        minimum_fee,
+                        block_height,
+                        asset_execution_compatibility,
+                    )
+                    .err()
+                    .map(|(code, message)| AssetOperationRefusal {
+                        code: code.to_string(),
+                        message: export_above_released_message(&quote_ledger, export, code)
+                            .unwrap_or(message),
+                    })
+                }),
+        ),
+        _ => None,
+    };
+    let export_checked = export_check.is_some();
+    let export_refusal = export_check.flatten();
 
     Ok(AssetFeeQuoteReport {
         schema: "postfiat-asset-fee-quote-v1".to_string(),
@@ -1750,7 +1834,33 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
         sender_balance_after_fee,
         sender_meets_reserve_after_fee,
         operation,
+        export_refusal,
+        export_checked,
     })
+}
+
+/// For `external_lane_export_above_released`: the amount against released
+/// and exported on the ledger asset admission executes the export on.
+fn export_above_released_message(
+    quote_ledger: &LedgerState,
+    export: &postfiat_types::ExternalLaneExportOperationV1,
+    code: &str,
+) -> Option<String> {
+    if code != postfiat_types::EXTERNAL_LANE_EXPORT_ABOVE_RELEASED || export.amount_atoms == 0 {
+        return None;
+    }
+    let state = quote_ledger
+        .external_lanes
+        .iter()
+        .find(|state| state.lane_id == export.lane_id)?;
+    Some(format!(
+        "{} atoms is above what external lane `{}` can take back after the pending transfers, payment_v2 entries and asset transactions (pending releases and exports included): released {} minus exported {} is {}",
+        export.amount_atoms,
+        export.lane_id,
+        state.released_atoms,
+        state.exported_atoms,
+        state.released_atoms.saturating_sub(state.exported_atoms)
+    ))
 }
 
 pub fn escrow_fee_quote(options: EscrowFeeQuoteOptions) -> io::Result<EscrowFeeQuoteReport> {
@@ -3070,6 +3180,182 @@ pub fn account_assets(options: AccountAssetsOptions) -> io::Result<AccountAssets
     })
 }
 
+/// Upper bound on the compact JSON of one `owned_objects` result: 960 KiB,
+/// under half the wallet's 2 MiB WebSocket message limit and with room for
+/// the RPC envelope (about 4 KB with the owner key in its event) and
+/// pretty-printing inside the Python CLI's default 1 MiB response cap. At
+/// about 4 KB per object with the owner key a page holds about 235 objects;
+/// without the key (about 160 bytes each), every `limit` up to 2048.
+pub const OWNED_OBJECTS_PAGE_MAX_BYTES: usize = 960 * 1024;
+const OWNED_OBJECTS_CURSOR_PREFIX: &str = "ooc2";
+/// The cursor format before the view digest; such a cursor is answered
+/// with `owned_objects_view_changed` so the caller restarts.
+const OWNED_OBJECTS_CURSOR_PREFIX_V1: &str = "ooc1";
+const OWNED_OBJECTS_CURSOR_OWNER_DOMAIN: &[u8] = b"postfiat-owned-objects-cursor-owner-v1\0";
+const OWNED_OBJECTS_VIEW_DOMAIN: &[u8] = b"postfiat-owned-objects-view-v1\0";
+/// Typed error codes for an `owned_objects` request the node refuses.
+pub const OWNED_OBJECTS_CURSOR_MALFORMED: &str = "owned_objects_cursor_malformed";
+pub const OWNED_OBJECTS_CURSOR_OWNER_MISMATCH: &str = "owned_objects_cursor_owner_mismatch";
+pub const OWNED_OBJECTS_CURSOR_ASSET_MISMATCH: &str = "owned_objects_cursor_asset_mismatch";
+pub const OWNED_OBJECTS_CURSOR_INVALID_OBJECT_ID: &str = "owned_objects_cursor_invalid_object_id";
+pub const OWNED_OBJECTS_FOREIGN_OWNER_KEY: &str = "owned_objects_foreign_owner_key";
+pub const OWNED_OBJECTS_VIEW_CHANGED: &str = "owned_objects_view_changed";
+const OWNED_OBJECTS_ERROR_CODES: [&str; 6] = [
+    OWNED_OBJECTS_CURSOR_MALFORMED,
+    OWNED_OBJECTS_CURSOR_OWNER_MISMATCH,
+    OWNED_OBJECTS_CURSOR_ASSET_MISMATCH,
+    OWNED_OBJECTS_CURSOR_INVALID_OBJECT_ID,
+    OWNED_OBJECTS_FOREIGN_OWNER_KEY,
+    OWNED_OBJECTS_VIEW_CHANGED,
+];
+
+/// The typed RPC error code carried by an `owned_objects` refusal.
+pub fn owned_objects_error_code(message: &str) -> Option<&'static str> {
+    OWNED_OBJECTS_ERROR_CODES
+        .into_iter()
+        .find(|code| message.contains(&format!("{code}: ")))
+}
+
+fn owned_objects_refusal(code: &str, detail: &str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidInput, format!("{code}: {detail}"))
+}
+
+pub(crate) fn owned_objects_owner_tag(owner_public_key_hex: &str) -> String {
+    let mut hasher = Sha256::new();
+    Sha2Digest::update(&mut hasher, OWNED_OBJECTS_CURSOR_OWNER_DOMAIN);
+    Sha2Digest::update(&mut hasher, owner_public_key_hex.as_bytes());
+    postfiat_crypto_provider::bytes_to_hex(&hasher.finalize()[..16])
+}
+
+fn owned_objects_asset_field(asset: Option<&str>) -> String {
+    asset.map_or_else(
+        || "-".to_string(),
+        |asset| postfiat_crypto_provider::bytes_to_hex(asset.as_bytes()),
+    )
+}
+
+/// Digest of the object view a page is read from: every object matching
+/// the owner and asset filter, in (asset, id, version) order, by asset, id,
+/// version and value. Any spend, creation or value change alters it, with
+/// or without a new block.
+fn owned_objects_view_digest(owner: &str, filter: &str, objects: &[OwnedObject]) -> String {
+    let mut hasher = Sha256::new();
+    let mut field = |bytes: &[u8]| {
+        Sha2Digest::update(&mut hasher, (bytes.len() as u64).to_be_bytes());
+        Sha2Digest::update(&mut hasher, bytes);
+    };
+    field(OWNED_OBJECTS_VIEW_DOMAIN);
+    field(owner.as_bytes());
+    field(filter.as_bytes());
+    field(&(objects.len() as u64).to_be_bytes());
+    for object in objects {
+        field(object.asset.as_bytes());
+        field(object.id.as_bytes());
+        field(&object.version.to_be_bytes());
+        field(&object.value.to_be_bytes());
+    }
+    postfiat_crypto_provider::bytes_to_hex(&hasher.finalize())
+}
+
+/// The opaque cursor after `last`: owner tag, asset filter, view digest,
+/// then the order key (asset, id, version) of the last object returned.
+fn owned_objects_cursor(owner_tag: &str, filter: &str, view: &str, last: &OwnedObject) -> String {
+    format!(
+        "{OWNED_OBJECTS_CURSOR_PREFIX}.{owner_tag}.{filter}.{view}.{}.{}.{}",
+        postfiat_crypto_provider::bytes_to_hex(last.asset.as_bytes()),
+        last.id,
+        last.version
+    )
+}
+
+/// A parsed cursor: the view digest it was issued from and the order key
+/// (asset, id, version) it resumes after.
+struct OwnedObjectsCursor {
+    view: String,
+    after: (String, String, u64),
+}
+
+/// Parses a cursor issued for this owner and asset filter. Anything else is
+/// refused, never ignored.
+fn parse_owned_objects_cursor(
+    cursor: &str,
+    owner_tag: &str,
+    filter: &str,
+) -> io::Result<OwnedObjectsCursor> {
+    let malformed =
+        || owned_objects_refusal(OWNED_OBJECTS_CURSOR_MALFORMED, "cursor does not parse");
+    let parts = cursor.split('.').collect::<Vec<_>>();
+    if parts.len() == 6 && parts[0] == OWNED_OBJECTS_CURSOR_PREFIX_V1 {
+        return Err(owned_objects_refusal(
+            OWNED_OBJECTS_VIEW_CHANGED,
+            "cursor predates the view digest; restart from the first page",
+        ));
+    }
+    let [prefix, tag, cursor_filter, view, asset_hex, id, version] = parts.as_slice() else {
+        return Err(malformed());
+    };
+    if *prefix != OWNED_OBJECTS_CURSOR_PREFIX
+        || tag.len() != 32
+        || view.len() != 64
+        || !view
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return Err(malformed());
+    }
+    if *tag != owner_tag {
+        return Err(owned_objects_refusal(
+            OWNED_OBJECTS_CURSOR_OWNER_MISMATCH,
+            "cursor was issued for another owner",
+        ));
+    }
+    if *cursor_filter != filter {
+        return Err(owned_objects_refusal(
+            OWNED_OBJECTS_CURSOR_ASSET_MISMATCH,
+            "cursor was issued for another asset filter",
+        ));
+    }
+    let asset = hex_to_bytes(asset_hex)
+        .ok()
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+        .filter(|asset| !asset.is_empty())
+        .ok_or_else(malformed)?;
+    if id.len() != 64 || !id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(owned_objects_refusal(
+            OWNED_OBJECTS_CURSOR_INVALID_OBJECT_ID,
+            "cursor names an object id that is not 64 hex characters",
+        ));
+    }
+    let version = version
+        .parse::<u64>()
+        .ok()
+        .filter(|parsed| parsed.to_string() == *version)
+        .ok_or_else(malformed)?;
+    Ok(OwnedObjectsCursor {
+        view: view.to_string(),
+        after: (asset, id.to_string(), version),
+    })
+}
+
+fn owned_objects_json_len<T: serde::Serialize>(value: &T) -> io::Result<usize> {
+    serde_json::to_vec(value)
+        .map(|bytes| bytes.len())
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("owned objects serialization failed: {error}"),
+            )
+        })
+}
+
+/// One page of the owner's objects in (asset, id, version) order, read under
+/// the ordered-commit lock so the page, `view_digest`, `height` and
+/// `state_root` are from one moment. `view_digest` identifies the object
+/// view (FastPay effects change it without a new block); a continuation
+/// whose cursor carries another view digest is refused with
+/// `owned_objects_view_changed` instead of mixing two views. The page ends at `limit` objects or before the compact JSON
+/// result would exceed `OWNED_OBJECTS_PAGE_MAX_BYTES`; `next_cursor` is set
+/// when objects remain. `total_value` sums every matching object.
 pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsReport> {
     validate_owner_public_key_hex(&options.owner_public_key_hex)?;
     let owner_public_key = hex_to_bytes(&options.owner_public_key_hex).map_err(|error| {
@@ -3092,12 +3378,27 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
         "owned_objects",
         postfiat_types::MAX_OWNED_INPUTS_PER_TRANSFER,
     )?;
+    let owner_tag = owned_objects_owner_tag(&options.owner_public_key_hex);
+    let filter = owned_objects_asset_field(options.asset.as_deref());
+    let cursor = options
+        .cursor
+        .as_deref()
+        .map(|cursor| parse_owned_objects_cursor(cursor, &owner_tag, &filter))
+        .transpose()?;
+    let max_bytes = options
+        .max_page_bytes
+        .map_or(OWNED_OBJECTS_PAGE_MAX_BYTES, |bytes| {
+            bytes.min(OWNED_OBJECTS_PAGE_MAX_BYTES)
+        });
     let store = NodeStore::new(&options.data_dir);
+    let commit_lock = store.lock_ordered_commit()?;
     let genesis = store.read_genesis()?;
     let ledger = read_fastpay_ledger(&store)?;
+    let tip = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?;
+    drop(commit_lock);
     let mut objects = ledger
         .owned_objects
-        .iter()
+        .into_iter()
         .filter(|object| {
             object.owner_pubkey_hex == options.owner_public_key_hex
                 && options
@@ -3105,7 +3406,6 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
                     .as_ref()
                     .is_none_or(|asset| object.asset == *asset)
         })
-        .cloned()
         .collect::<Vec<_>>();
     objects.sort_by(|left, right| {
         left.asset
@@ -3113,6 +3413,16 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
             .then_with(|| left.id.cmp(&right.id))
             .then_with(|| left.version.cmp(&right.version))
     });
+    let view_digest = owned_objects_view_digest(&options.owner_public_key_hex, &filter, &objects);
+    if cursor
+        .as_ref()
+        .is_some_and(|cursor| cursor.view != view_digest)
+    {
+        return Err(owned_objects_refusal(
+            OWNED_OBJECTS_VIEW_CHANGED,
+            "the owner's objects changed since the cursor was issued; restart from the first page",
+        ));
+    }
     let total_value = objects.iter().try_fold(0u64, |sum, object| {
         sum.checked_add(object.value).ok_or_else(|| {
             io::Error::new(
@@ -3121,8 +3431,19 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
             )
         })
     })?;
-    let truncated = truncate_reports(&mut objects, limit);
-    Ok(OwnedObjectsReport {
+    let start = cursor.map_or(
+        0,
+        |OwnedObjectsCursor {
+             after: (asset, id, version),
+             ..
+         }| {
+            objects.partition_point(|object| {
+                (object.asset.as_str(), object.id.as_str(), object.version)
+                    <= (asset.as_str(), id.as_str(), version)
+            })
+        },
+    );
+    let mut report = OwnedObjectsReport {
         schema: "postfiat-owned-objects-v1".to_string(),
         chain_id: genesis.chain_id.clone(),
         genesis_hash: genesis_hash(&genesis),
@@ -3130,11 +3451,51 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
         owner_public_key_hex: options.owner_public_key_hex,
         asset: options.asset,
         limit: limit as u64,
-        truncated,
-        object_count: objects.len() as u64,
+        truncated: false,
+        object_count: 0,
         total_value,
-        objects,
-    })
+        objects: Vec::new(),
+        cursor: options.cursor,
+        next_cursor: None,
+        height: tip.height,
+        state_root: tip.state_root,
+        view_digest,
+        owner_keys_omitted: options.omit_owner_keys,
+    };
+    // `null` (4 bytes) becomes the quoted cursor when a next page exists.
+    let mut used = owned_objects_json_len(&report)?.saturating_sub(4);
+    let remaining = objects.len() - start;
+    for object in objects.into_iter().skip(start).take(limit) {
+        if report.owner_keys_omitted && object.owner_pubkey_hex != report.owner_public_key_hex {
+            return Err(owned_objects_refusal(
+                OWNED_OBJECTS_FOREIGN_OWNER_KEY,
+                "an object on this page belongs to another key",
+            ));
+        }
+        let row = OwnedObjectsRow::from_object(object, report.owner_keys_omitted);
+        let cursor_len = owned_objects_cursor(
+            &owner_tag,
+            &filter,
+            &report.view_digest,
+            &row.as_object(&report),
+        )
+        .len()
+            + 2;
+        let row_len = owned_objects_json_len(&row)? + 1;
+        if !report.objects.is_empty() && used + row_len + cursor_len > max_bytes {
+            break;
+        }
+        used += row_len;
+        report.objects.push(row);
+    }
+    report.object_count = report.objects.len() as u64;
+    report.truncated = report.objects.len() < remaining;
+    report.next_cursor = report
+        .truncated
+        .then(|| report.objects.last().map(|row| row.as_object(&report)))
+        .flatten()
+        .map(|last| owned_objects_cursor(&owner_tag, &filter, &report.view_digest, &last));
+    Ok(report)
 }
 
 pub fn issuer_assets(options: IssuerAssetsOptions) -> io::Result<IssuerAssetsReport> {
@@ -4074,14 +4435,25 @@ pub fn fastpay_recovery_committee_error_code(message: &str) -> Option<&'static s
         .then_some(FASTPAY_RECOVERY_COMMITTEE_UNKNOWN_EPOCH)
 }
 
+/// Reads under the ordered-commit lock, as `owned_recovery_capabilities_v3`
+/// does, so the ledger, the tip and the committee come from one commit.
 pub fn fastpay_recovery_committee(
     data_dir: &Path,
     epoch: Option<u64>,
 ) -> io::Result<FastPayRecoveryCommitteeReport> {
     let store = NodeStore::new(data_dir);
+    let commit_lock = store.lock_ordered_commit()?;
+    fastpay_recovery_committee_locked(&store, epoch, &commit_lock)
+}
+
+fn fastpay_recovery_committee_locked(
+    store: &NodeStore,
+    epoch: Option<u64>,
+    _commit_lock: &StorageMutationLock,
+) -> io::Result<FastPayRecoveryCommitteeReport> {
     let genesis = store.read_genesis()?;
     let ledger = store.read_ledger()?;
-    let height = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?.height;
+    let height = read_chain_tip_or_reconstruct_for_genesis_read_only(store, &genesis)?.height;
     let invalid = |error: String| io::Error::new(io::ErrorKind::InvalidData, error);
     let policy = ledger.fastpay_recovery_policy.clone().ok_or_else(|| {
         io::Error::new(
@@ -4180,14 +4552,12 @@ pub fn fastpay_admission_differences(
 
 /// Builds the admission file from the active committee and refuses unless it
 /// equals what `owned_recovery_capabilities` serves (domain, epoch, validator
-/// count, quorum, policy).
+/// count, quorum, policy). Both reads share one ordered-commit lock.
 pub fn fastpay_admission_export(data_dir: &Path) -> io::Result<FastPayAdmissionFile> {
-    let report = fastpay_recovery_committee(data_dir, None)?;
-    let caps: postfiat_types::FastPayRecoveryCapabilitiesV1 =
-        serde_json::from_str(&owned_recovery_capabilities_v3(NodeOptions {
-            data_dir: data_dir.to_path_buf(),
-        })?)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    let store = NodeStore::new(data_dir);
+    let commit_lock = store.lock_ordered_commit()?;
+    let report = fastpay_recovery_committee_locked(&store, None, &commit_lock)?;
+    let caps = owned_recovery_capabilities_v3_locked(&store, &commit_lock)?;
     let committee = report.committee;
     let differences = fastpay_admission_differences(&caps, &committee, &report.policy);
     if !differences.is_empty() {

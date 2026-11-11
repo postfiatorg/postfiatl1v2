@@ -3080,11 +3080,18 @@ fn fastpay_active_storage_transfer_restart_and_six_validator_anchor() {
                 data_dir: dir.clone(),
                 owner_public_key_hex: expected[0].owner_pubkey_hex.clone(),
                 asset: None,
-                limit: None
+                limit: None,
+                cursor: None,
+                omit_owner_keys: false,
+                max_page_bytes: None,
             })
             .unwrap()
             .objects,
             expected
+                .iter()
+                .cloned()
+                .map(|object| OwnedObjectsRow::from_object(object, false))
+                .collect::<Vec<_>>()
         );
         verify_finalized_checkpoint(options).unwrap();
     }

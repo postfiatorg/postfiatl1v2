@@ -261,7 +261,7 @@ requires the finality submit capability.
 | `account_lines` | `account` | Read. |
 | `account_offers` | `account` | Read. |
 | `asset_info` | `asset_id` | Read. |
-| `owned_objects` | `owner_public_key_hex`, optional `asset`, `limit` | Read. |
+| `owned_objects` | `owner_public_key_hex`, optional `asset`, `limit`, `cursor`, `omit_owner_keys` | Read, one page; follow `next_cursor` (see [Owned objects pages](../rpc/methods.md#owned-objects-pages)). |
 | `owned_recovery_capabilities` | none | Read active v3 FastPay committee/domain/windows. |
 | `owned_certificate` | `certificate_digest` or `lock_id` | Read persisted recovery evidence. |
 | `owned_recovery_status` | `lock_id` | Read ordered recovery state. |
@@ -377,7 +377,12 @@ public wallet flows.
 
 The current unwrap flow is:
 
-1. Load the FastPay object snapshot with `owned_objects`.
+1. Load the FastPay object snapshot with `owned_objects`
+   (`fetchOwnedObjectsSnapshot`): `omit_owner_keys`, every page through
+   `next_cursor`, and a restart from the first page (at most 3) on
+   `owned_objects_view_changed` or another `view_digest`. A truncated answer
+   without `next_cursor` (a node from before paging) or a view that keeps
+   changing is an error, never a partial list. Selection uses every page.
 2. Select one or more PFT objects that cover `amount + fee`, up to `2048`
    inputs. Exact match and smallest-covering-object are preferred before
    largest-first multi-input selection.

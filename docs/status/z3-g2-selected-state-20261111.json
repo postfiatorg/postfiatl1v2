@@ -1,0 +1,455 @@
+{
+ "schema": "postfiat.z3.g2_selected_state.v1",
+ "purpose": "Frozen read-back of the Z3 selected state (A666 primary route, current-v2 Arc pair) for gate G2 of docs/plans/active/z3-navcoin-roundtrip-plan.md. Read-only; nothing was signed or submitted.",
+ "replayed_by": "crates/bridge/tests/z3_g2_selected_state_replay.rs",
+ "fleet": {
+  "method": "postfiat-local-rpc-v1 through SSH local forwarding to each validator loopback RPC; python/postfiat_rpc PostFiatRpcClient; the same 13 reads on every validator",
+  "reads": [
+   "status",
+   "navcoin_bridge_supply_status",
+   "navcoin_bridge_routes",
+   "asset_info (A666, pfUSDC family, Arc series)",
+   "nav_reserve_proof_status (A666, pfUSDC family)",
+   "vault_bridge_route (pfUSDC family, Arc series)",
+   "vault_bridge_status (pfUSDC family)",
+   "mempool_status",
+   "status"
+  ],
+  "read_window_utc": [
+   "2026-11-11T10:00:58.914+00:00",
+   "2026-11-11T10:01:18.353+00:00"
+  ],
+  "release": "vote-records-20261030",
+  "chain_id": "postfiat-wan-devnet-2",
+  "protocol_version": 1,
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "height": 1177,
+  "tip_hash": "661a1ec2b9e99c3fc6dc6bed4103287ef85675804a5668a8a1d19af0ea44406a9edfab9807a98aa70c142c4cb2020821",
+  "state_root": "c6dfd0ebea8c2bdb5f51821418a023870deaafe03791e61155bc5740a5cb3df6bd96d754cb9000e566e056aee251a2d4",
+  "build_git_revision": "ae70d66d",
+  "binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+  "all_six_agree": true,
+  "agreement_rule": "normalized_reads_sha256 is SHA-256 of the canonical JSON of all reads except status_before, without per-node fields (node and validator ids, run time, storage, deployment artifacts and manifest); equal on all six, and height did not move during any read",
+  "validators": [
+   {
+    "validator": "validator-0",
+    "first_read_utc": "2026-11-11T10:00:59.617+00:00",
+    "last_read_utc": "2026-11-11T10:01:05.524+00:00",
+    "height_before": 1177,
+    "height_after": 1177,
+    "tip_hash": "661a1ec2b9e99c3fc6dc6bed4103287ef85675804a5668a8a1d19af0ea44406a9edfab9807a98aa70c142c4cb2020821",
+    "state_root": "c6dfd0ebea8c2bdb5f51821418a023870deaafe03791e61155bc5740a5cb3df6bd96d754cb9000e566e056aee251a2d4",
+    "build_git_revision": "ae70d66d",
+    "binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+    "deployment_manifest_sha256": "ee1df5b3c71640df4fe04d95306ec6e6e8cf628f766f5ddacaed5e31ef9a2eec",
+    "deployment_manifest_verified": true,
+    "mempool_pending": 0,
+    "normalized_reads_sha256": "ca3b587b5a8682e019ad618f0f01a12a0c8b78721f2557d135fc7f843ac18a29"
+   },
+   {
+    "validator": "validator-1",
+    "first_read_utc": "2026-11-11T10:00:58.914+00:00",
+    "last_read_utc": "2026-11-11T10:01:04.336+00:00",
+    "height_before": 1177,
+    "height_after": 1177,
+    "tip_hash": "661a1ec2b9e99c3fc6dc6bed4103287ef85675804a5668a8a1d19af0ea44406a9edfab9807a98aa70c142c4cb2020821",
+    "state_root": "c6dfd0ebea8c2bdb5f51821418a023870deaafe03791e61155bc5740a5cb3df6bd96d754cb9000e566e056aee251a2d4",
+    "build_git_revision": "ae70d66d",
+    "binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+    "deployment_manifest_sha256": "ee1df5b3c71640df4fe04d95306ec6e6e8cf628f766f5ddacaed5e31ef9a2eec",
+    "deployment_manifest_verified": true,
+    "mempool_pending": 0,
+    "normalized_reads_sha256": "ca3b587b5a8682e019ad618f0f01a12a0c8b78721f2557d135fc7f843ac18a29"
+   },
+   {
+    "validator": "validator-2",
+    "first_read_utc": "2026-11-11T10:01:01.225+00:00",
+    "last_read_utc": "2026-11-11T10:01:18.353+00:00",
+    "height_before": 1177,
+    "height_after": 1177,
+    "tip_hash": "661a1ec2b9e99c3fc6dc6bed4103287ef85675804a5668a8a1d19af0ea44406a9edfab9807a98aa70c142c4cb2020821",
+    "state_root": "c6dfd0ebea8c2bdb5f51821418a023870deaafe03791e61155bc5740a5cb3df6bd96d754cb9000e566e056aee251a2d4",
+    "build_git_revision": "ae70d66d",
+    "binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+    "deployment_manifest_sha256": "ee1df5b3c71640df4fe04d95306ec6e6e8cf628f766f5ddacaed5e31ef9a2eec",
+    "deployment_manifest_verified": true,
+    "mempool_pending": 0,
+    "normalized_reads_sha256": "ca3b587b5a8682e019ad618f0f01a12a0c8b78721f2557d135fc7f843ac18a29"
+   },
+   {
+    "validator": "validator-3",
+    "first_read_utc": "2026-11-11T10:00:59.618+00:00",
+    "last_read_utc": "2026-11-11T10:01:09.016+00:00",
+    "height_before": 1177,
+    "height_after": 1177,
+    "tip_hash": "661a1ec2b9e99c3fc6dc6bed4103287ef85675804a5668a8a1d19af0ea44406a9edfab9807a98aa70c142c4cb2020821",
+    "state_root": "c6dfd0ebea8c2bdb5f51821418a023870deaafe03791e61155bc5740a5cb3df6bd96d754cb9000e566e056aee251a2d4",
+    "build_git_revision": "ae70d66d",
+    "binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+    "deployment_manifest_sha256": "ee1df5b3c71640df4fe04d95306ec6e6e8cf628f766f5ddacaed5e31ef9a2eec",
+    "deployment_manifest_verified": true,
+    "mempool_pending": 0,
+    "normalized_reads_sha256": "ca3b587b5a8682e019ad618f0f01a12a0c8b78721f2557d135fc7f843ac18a29"
+   },
+   {
+    "validator": "validator-4",
+    "first_read_utc": "2026-11-11T10:00:58.915+00:00",
+    "last_read_utc": "2026-11-11T10:01:04.029+00:00",
+    "height_before": 1177,
+    "height_after": 1177,
+    "tip_hash": "661a1ec2b9e99c3fc6dc6bed4103287ef85675804a5668a8a1d19af0ea44406a9edfab9807a98aa70c142c4cb2020821",
+    "state_root": "c6dfd0ebea8c2bdb5f51821418a023870deaafe03791e61155bc5740a5cb3df6bd96d754cb9000e566e056aee251a2d4",
+    "build_git_revision": "ae70d66d",
+    "binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+    "deployment_manifest_sha256": "ee1df5b3c71640df4fe04d95306ec6e6e8cf628f766f5ddacaed5e31ef9a2eec",
+    "deployment_manifest_verified": true,
+    "mempool_pending": 0,
+    "normalized_reads_sha256": "ca3b587b5a8682e019ad618f0f01a12a0c8b78721f2557d135fc7f843ac18a29"
+   },
+   {
+    "validator": "validator-5",
+    "first_read_utc": "2026-11-11T10:01:00.321+00:00",
+    "last_read_utc": "2026-11-11T10:01:18.136+00:00",
+    "height_before": 1177,
+    "height_after": 1177,
+    "tip_hash": "661a1ec2b9e99c3fc6dc6bed4103287ef85675804a5668a8a1d19af0ea44406a9edfab9807a98aa70c142c4cb2020821",
+    "state_root": "c6dfd0ebea8c2bdb5f51821418a023870deaafe03791e61155bc5740a5cb3df6bd96d754cb9000e566e056aee251a2d4",
+    "build_git_revision": "ae70d66d",
+    "binary_sha256": "87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7",
+    "deployment_manifest_sha256": "ee1df5b3c71640df4fe04d95306ec6e6e8cf628f766f5ddacaed5e31ef9a2eec",
+    "deployment_manifest_verified": true,
+    "mempool_pending": 0,
+    "normalized_reads_sha256": "ca3b587b5a8682e019ad618f0f01a12a0c8b78721f2557d135fc7f843ac18a29"
+   }
+  ]
+ },
+ "a666_primary_route": {
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "route_epoch": 11,
+  "route_schema_version": 2,
+  "route_config_digest": "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933",
+  "policy_epoch": 11,
+  "policy_hash": "32c970e915ece738269cc89463577fd0e017f326abce856d74ff37e7f2e08d263eacf0b9a007dee44255c28d4755408b",
+  "policy_valid_from_height": 1110,
+  "policy_expires_at_height": 10000,
+  "issue_multiplier_bps": 10050,
+  "redeem_multiplier_bps": 9995,
+  "max_order_atoms": 1000000000000,
+  "min_order_atoms": 1000000,
+  "max_nav_age_blocks": 1000,
+  "pricing_nav_epoch": 9,
+  "pricing_reserve_packet_hash": "15628936bfd5c9f608a24f499bc44c4023f2c29b1b19de226699da15cadab4b08e698f84e139d94895e1bec693dfd8ef",
+  "issue_capacity_remaining_atoms": 2000000000000,
+  "redeem_capacity_remaining_atoms": 2000000000000,
+  "route_supply_cap_atoms": 2000000000000,
+  "native_nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "settlement_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "outbound_verification_class": "TRUSTLESS_FINALITY",
+  "return_verification_class": "BFT_CHECKPOINT",
+  "route_trust_class": "BFT_CHECKPOINT",
+  "ethereum_chain_id": 1,
+  "wrapped_navcoin_token": "0xee4c92edb03efdd9b519339edc19ad70c69a9be5",
+  "handoff_controller": "0x9a0262c0572fb4db08765408eb225e207f40c3d9",
+  "live_value_enabled": true,
+  "paused": false,
+  "invariant_holds": true,
+  "settlement_reserve_atoms": 140344262,
+  "available_redeem_atoms": 101000000,
+  "available_issue_atoms": 1000000000000,
+  "export_entitlement_atoms": 0,
+  "active_reservation_count": 0,
+  "wrapped_exposure_atoms": 31418438511,
+  "ledger_hash": "57da38373813c34b9629fa56123eed8ebb49433d71ff4021400cabe673c5943977065f14f3a18f726941edef03ee78f5",
+  "route_family": "primary_pftl_mint",
+  "settlement_adapter": "0x9a0262c0572fb4db08765408eb225e207f40c3d9",
+  "route_live": true,
+  "latest_finalized_nav_epoch": 9,
+  "source_settlement_custody": [
+   {
+    "asset_id": "2bae082a6703375b9405af44715e1e64623265392627767b040fa2c30abb100a09da403724a6f105317292d9c0073df7",
+    "enabled_for_issue": true,
+    "principal_atoms": 12419,
+    "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+    "spread_atoms": 54721
+   }
+  ],
+  "authority": {
+   "route_operator": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+   "basis": "A666 asset issuer (asset_info); the route-epoch advance at block 1110 was signed by this account"
+  }
+ },
+ "a666_asset": {
+  "asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "code": "A666",
+  "issuer": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+  "precision": 6,
+  "outstanding_supply": 101000000,
+  "holder_count": 1,
+  "requires_authorization": true,
+  "freeze_enabled": true,
+  "clawback_enabled": false,
+  "version": 2
+ },
+ "a666_nav": {
+  "active_profile": {
+   "challenge_window_blocks": 1,
+   "max_epoch_gap_blocks": 128,
+   "max_proof_bytes": 4096,
+   "max_public_values_bytes": 16384,
+   "max_snapshot_age_blocks": 900,
+   "min_attestations": 0,
+   "min_challenge_bond": 0,
+   "profile_id": "a94a392926967722b2cceb88b19c4108726381f5b184007185a27e91f3e27c63dcc713a28f6cc4cf765826564e2b5f52",
+   "registered_by": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+   "settle_deadline_blocks": 256,
+   "source_class": "stakehub-six-leg-reserves-v3",
+   "sp1_program_vkey": "0x00580ee8c389192568a29dc23d54c22e73a3a45203b22e3d5a934801871e11a7",
+   "sp1_proof_encoding": "groth16",
+   "tolerance_bp": 0,
+   "valuation_policy_hash": "076c071e44127158ef82350e7feeb64e0be0a06bf8ba4be5f0374ac36b992ac7",
+   "verifier_kind": "sp1-groth16"
+  },
+  "public_values_schema": null,
+  "source_manifest_hash": null,
+  "finalized_epoch": 9,
+  "finalized_packet": {
+   "epoch": 9,
+   "state": "finalized",
+   "reserve_packet_hash": "15628936bfd5c9f608a24f499bc44c4023f2c29b1b19de226699da15cadab4b08e698f84e139d94895e1bec693dfd8ef",
+   "packet_id": "b3dcb599a1eb402467c7a2eadb7fd3dd43f445d4e9e899b32dabd0ceb793356370db132b386555c1da09ad5b33d4afb7",
+   "nav_per_unit": 116736912,
+   "circulating_supply": 31519438511,
+   "verified_net_assets": 3679481931346,
+   "proof_verified_net_assets": 0,
+   "source_count": 0,
+   "submitted_at_height": 1108
+  },
+  "packet_epochs": [
+   [
+    9,
+    "finalized",
+    "15628936bfd5c9f608a24f499bc44c4023f2c29b1b19de226699da15cadab4b08e698f84e139d94895e1bec693dfd8ef"
+   ],
+   [
+    8,
+    "finalized",
+    "f670ad00bfdcf838a5d551988a2f750bd118deae03ea8042a2ff3879bc2fd7d3664c22a87ff40e8aab2260b17685ac96"
+   ],
+   [
+    7,
+    "finalized",
+    "31e2d0a8ff0da29469bb72219f99dd85cef34fa08c3d861ad5f23ba058c240de82e02fe13e3470287cfb4591f0676140"
+   ],
+   [
+    6,
+    "finalized",
+    "b06262a1e6e4eba7851b7326638cba350f8deffbc0bdd9069595ae9e0f56475e05fd1b4804a1e40a8948ac344c49951a"
+   ],
+   [
+    5,
+    "finalized",
+    "78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289"
+   ],
+   [
+    4,
+    "finalized",
+    "d9a798a26732f377c48bc38876b969df6deb2227bdbc5792721052a9db80df227a20a50de369604097868d8851e9d8d2"
+   ],
+   [
+    3,
+    "finalized",
+    "559da38033e4c523f86b7d7570b6a2e828548dbf4fa54729ed9bfa9d3f5964ff68ebd657ffdd098fd06867c0ef9831f7"
+   ],
+   [
+    2,
+    "finalized",
+    "60334589ab27d9a7d9ef3c02b8b5f345ce6e13792c48af14b02e2cf219b638be9b14be6a938d0e406865ae64276887e7"
+   ],
+   [
+    1,
+    "finalized",
+    "c8bbb35b7b0eb4a567f04945eb977b3fe5dc539cd7d845f1266d39959eb301ffbe263ebec9ceb985ef09370f314e5b3e"
+   ]
+  ]
+ },
+ "pfusdc_family": {
+  "asset": {
+   "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+   "code": "PFUSDC",
+   "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+   "precision": 6,
+   "outstanding_supply": 126974842,
+   "max_supply": 1000000000000000,
+   "version": 1
+  },
+  "nav": {
+   "active_profile": {
+    "challenge_window_blocks": 64,
+    "max_epoch_gap_blocks": 128,
+    "max_proof_bytes": 4096,
+    "max_public_values_bytes": 4096,
+    "max_snapshot_age_blocks": 900,
+    "min_attestations": 0,
+    "min_challenge_bond": 1,
+    "profile_id": "e0bc0d58e1a53fa6061f3618fb11bad2e7ccf17d04570957a52212864773419f3300440bf5f3cdfc8fb36ed6b45d28c5",
+    "registered_by": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+    "settle_deadline_blocks": 256,
+    "source_class": "vault_bridge:erc20_bridge_vault:1:0xe7a432a28b20621a70e845c7f202004cf98e7a2c:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "sp1_program_vkey": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
+    "sp1_proof_encoding": "groth16",
+    "tolerance_bp": 10,
+    "valuation_policy_hash": "44a402a3df72ee8da6f23737becef04fd0ce55e683706e929606a6aea1f05b25",
+    "vault_bridge_route_policy_hash": "b2ca6cda737d68955b951deb223018b850b8d0ed6b4a2f1c451bd0eff9da76060d5a6eec3d46618616e630ef67859211",
+    "verifier_kind": "sp1-groth16"
+   }
+  },
+  "active_vault_bridge_route": {
+   "active": true,
+   "governance_route_epoch": 10,
+   "governance_activation_height": 1008,
+   "governance_amendment_id": "863eeb92e00f6c088bf219cc7615e301cb6b0e385f75c9f00ec532fbdf29761f96f6e9d0df8de8ccf6b5529e9359b5f2",
+   "profile_hash": "b2ca6cda737d68955b951deb223018b850b8d0ed6b4a2f1c451bd0eff9da76060d5a6eec3d46618616e630ef67859211",
+   "route_binding": "35ec9274bdad13f7c53edac615b160ca668a10cc22d7dcef1f6f79d20a3dd8c4",
+   "route_trust_class": "TRUSTLESS_FINALITY",
+   "nav_profile_id": "e0bc0d58e1a53fa6061f3618fb11bad2e7ccf17d04570957a52212864773419f3300440bf5f3cdfc8fb36ed6b45d28c5",
+   "route_id": "ethereum-mainnet-usdc-v1",
+   "source_chain_id": 1,
+   "vault_address": "0xe7a432a28b20621a70e845c7f202004cf98e7a2c"
+  },
+  "source_series_enforced": true,
+  "finalized_epoch": 54,
+  "finalized_reserve_packet_hash": "5efb1d631df5ff36eb5d3ccf42ebaeb1c0f2feed9a3aab3100853c43428e5516c088993e134a2d1283f262f1fbc92ebd"
+ },
+ "arc_source_series": {
+  "asset": {
+   "asset_id": "3923511d5be0557a61051e099b606d3decc11a5ba274c7d551168735accad8ed18d89c9200efc4bfbbbab6e85d4c173f",
+   "asset_family_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+   "source_series_id": "3923511d5be0557a61051e099b606d3decc11a5ba274c7d551168735accad8ed18d89c9200efc4bfbbbab6e85d4c173f",
+   "source_bucket_id": "fcc209605f8cfda895acbf78047f83f97b0bc1cee3927582fb262efb46e7d136b098183d5f83e19a82d34c218bab67a7",
+   "code": "PFUSDC",
+   "display_name": "PFUSDC \u00b7 source epoch 9",
+   "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+   "precision": 6,
+   "outstanding_supply": 0,
+   "holder_count": 0
+  },
+  "bucket": {
+   "bucket_id": "fcc209605f8cfda895acbf78047f83f97b0bc1cee3927582fb262efb46e7d136b098183d5f83e19a82d34c218bab67a7",
+   "counted_value_atoms": 1000000,
+   "gross_receipt_atoms": 1000000,
+   "impairment_factor_bps": 10000,
+   "last_packet_epoch": 0,
+   "last_updated_height": 948,
+   "nav_subscription_allocations_atoms": 0,
+   "other_allocations_atoms": 0,
+   "outstanding_vault_bridge_atoms": 0,
+   "policy_hash": "f7ce6d3cce3bd058a218db6bd829b01be13c576a2270aed362052d12654fc7a911a8423ee2d961ca45dbf72c08df6ae2",
+   "redeemable_at_par": true,
+   "redeemable_claim_atoms": 1000000,
+   "redemption_queue_atoms": 1000000,
+   "source_domain": "erc20_bridge_vault:5042002:0x160307f3efead79b6a3629c4b8d90e8301fc250f:0x3600000000000000000000000000000000000000",
+   "source_series_id": "3923511d5be0557a61051e099b606d3decc11a5ba274c7d551168735accad8ed18d89c9200efc4bfbbbab6e85d4c173f",
+   "status": "active",
+   "unallocated_counted_capacity_atoms": 0
+  },
+  "derivation_inputs": {
+   "pftl_chain_id": "postfiat-wan-devnet-2",
+   "asset_family_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+   "source_chain_id": 5042002,
+   "vault_address": "0x160307f3efead79b6a3629c4b8d90e8301fc250f",
+   "token_address": "0x3600000000000000000000000000000000000000",
+   "route_epoch": 9,
+   "policy_hash": "f7ce6d3cce3bd058a218db6bd829b01be13c576a2270aed362052d12654fc7a911a8423ee2d961ca45dbf72c08df6ae2",
+   "source_domain": "erc20_bridge_vault:5042002:0x160307f3efead79b6a3629c4b8d90e8301fc250f:0x3600000000000000000000000000000000000000"
+  },
+  "vault_bridge_route_error": "vault bridge route has no active governed profile"
+ },
+ "arc_testnet": {
+  "rpc": "https://rpc.testnet.arc.network",
+  "chain_id": 5042002,
+  "block": 71859953,
+  "block_hash": "0x1edb685cecde7264100ec6a04e955e7dc4b86b0e7cb7a6ba09c43414554ca09a",
+  "read_window_utc": [
+   "2026-11-11T10:01:21.637489925Z",
+   "2026-11-11T10:01:25.983583987Z"
+  ],
+  "route_id": "pfusdc-arc-testnet-tier4-epoch9",
+  "anchor": {
+   "address": "0x92390d3a2102cb74e4746c05b4d91f61093475d0",
+   "code_bytes": 3084,
+   "code_hash": "0x3782655d3b1faac7889003995a6bf461bde994bb3968ab832c213f64675625f0",
+   "governed_route_binding": "0xd9e0cd409c5d1e118d65c78ee059adcbba937616353e9675e350d52ee8d498b2"
+  },
+  "vault": {
+   "address": "0x160307f3efead79b6a3629c4b8d90e8301fc250f",
+   "code_bytes": 5284,
+   "code_hash": "0x8d15bb9dc20c416db72c724eeeb725b8b395cb850a889cde130645dcc752764e",
+   "paused": false,
+   "token": "0x3600000000000000000000000000000000000000",
+   "ingress_anchor": "0x92390d3a2102cb74e4746c05b4d91f61093475d0",
+   "finality_verifier": "0x1d436908516d15e3c55a936899b47a885e047f27",
+   "direct_ingress": true,
+   "usdc_balance_atoms": 1000000
+  },
+  "verifier": {
+   "address": "0x1d436908516d15e3c55a936899b47a885e047f27",
+   "code_bytes": 11319,
+   "code_hash": "0xf660662865cc6bb1302a5605134bde6bad7922a68482b37e0f2fff84d32a4ba1",
+   "program_vkey": "0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852",
+   "route_epoch": 9,
+   "latest_finalized_height": 948,
+   "latest_checkpoint_commitment": "0x2e64ef8e780c00ffb7b94272143f7d03f3655111f806b33e0a9b7e47b7dfa3da",
+   "route_profile_hash_commitment": "0x43b718931b64e6087a04346821c4fb9ffa5779fa38436fb335053448825ae1f7",
+   "vault_runtime_code_hash": "0x8d15bb9dc20c416db72c724eeeb725b8b395cb850a889cde130645dcc752764e",
+   "token_runtime_code_hash": "0xc9987bd3af6b26a030951faa7eacc017b68343aeedf3ce5fe68f821c4b93939d"
+  },
+  "usdc": {
+   "address": "0x3600000000000000000000000000000000000000",
+   "code_bytes": 1798,
+   "code_hash": "0xc9987bd3af6b26a030951faa7eacc017b68343aeedf3ce5fe68f821c4b93939d"
+  },
+  "test_wallet": {
+   "address": "0xC75Bf05Ce82d6f4b6139dd9446D6De5F5994a4CB",
+   "usdc_atoms": 20000000,
+   "allowance_to_vault_atoms": 0,
+   "native_wei": "20000000000000000000"
+  }
+ },
+ "ethereum_route_bindings": {
+  "chain_id": 1,
+  "block": 26390966,
+  "block_hash": "0xa1ee93659abc041581fea9d425613b5bf6e3016e465c1e7bf96e90f8e96535c4",
+  "read_utc": "2026-11-11T10:04:51.708079198Z",
+  "wrapped_navcoin_token": {
+   "address": "0xee4c92edb03efdd9b519339edc19ad70c69a9be5",
+   "code_bytes": 3043,
+   "code_hash": "0x671ee905050e2969995a8c6db8b05e4c2f30bd690eeff55093c03f9722be66b0",
+   "total_supply_atoms": 31418438511
+  },
+  "handoff_controller": {
+   "address": "0x9a0262c0572fb4db08765408eb225e207f40c3d9",
+   "code_bytes": 7094,
+   "code_hash": "0x4c62b7d8b3a7928fd9667445f8fd68b3336ba0ec9a8f3e59b463b684fe6ceaaf"
+  }
+ },
+ "missing_preconditions": [
+  {
+   "what": "Arc source custody row on the A666 primary route",
+   "read_back": "a666_primary_route.source_settlement_custody has one row, the Ethereum pfUSDC source 2bae082a...; no row names the Arc series 3923511d...",
+   "needs": "pftl_uniswap_route_epoch_advance with settlement_source_asset_ids, signed by the A666 issuer pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+   "first_asked": "2026-09-28"
+  },
+  {
+   "what": "Governed A666 NAV profile bound to a registered reserve-proof profile, with fresh proofs",
+   "read_back": "a666_nav.active_profile is a94a3929..., verifier_kind sp1-groth16, with no public_values_schema and no source_manifest_hash; the epoch-9 packet has proof_verified_net_assets 0 and source_count 0",
+   "needs": "registration and binding of an sp1-nav-reserve-v1 profile (BMNRC shape) by the A666 issuer, then fresh opening and post-subscription proofs",
+   "first_asked": "2026-09-22"
+  },
+  {
+   "what": "Active governed vault-bridge route for the Arc series",
+   "read_back": "vault_bridge_route for the Arc series returns no active governed profile; the family active route is ethereum-mainnet-usdc-v1 epoch 10",
+   "needs": "operator decision on an Arc ingress route (inputs blocker 5); not an identity of G2",
+   "first_asked": "2026-09-28"
+  }
+ ]
+}

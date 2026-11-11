@@ -26,6 +26,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -72,6 +73,19 @@ SOURCE_FILES = (
     'python/tests/test_rehearse_lane_roundtrip.py',
 )
 PUBLISHED = ('summary.json', 'manifest.json')
+
+
+PROGRAM_INFO = ROOT / 'programs/pft-lane-export/program-info.json'
+
+
+def elf_note(elf_sha256, program_info=PROGRAM_INFO):
+    """What ELF the run used: the committed release build when the sha256 matches, a local build otherwise."""
+    committed = json.loads(Path(program_info).read_text())['elf_sha256']
+    if elf_sha256 == committed:
+        return (f'the committed reproducible release ELF sha256:{committed} '
+                f'(programs/pft-lane-export/program-info.json), used in execute mode only; no key is committed')
+    return (f'a local build sha256:{elf_sha256}, not the committed reproducible release ELF sha256:{committed} '
+            f'(programs/pft-lane-export/program-info.json), used in execute mode only; no key is committed')
 
 
 def fresh_base_address(label):
@@ -125,6 +139,25 @@ def forged_public_values(public_values_hex, values, fresh):
         require(forged.count(old) == 1, f'{field} does not occur once in the public values')
         forged = forged.replace(old, fresh(len(old) // 2).hex())
     return forged
+
+
+# The driver (cargo, and the test binary it runs) starts in its own session so that
+# stopping it stops the whole group: terminating cargo alone leaves the binary running.
+DRIVER_POPEN = {'start_new_session': True}
+
+
+def stop_driver(process):
+    """Stops the driver's whole process group, then reaps cargo."""
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(process.pid, sig)
+        except ProcessLookupError:
+            break
+        try:
+            process.wait(timeout=10)
+            break
+        except subprocess.TimeoutExpired:
+            continue
 
 
 def roundtrip_verifier_config(*, sp1_verifier, pins, checkpoint, token, token_code_hash, lock_code_hash):
@@ -200,7 +233,7 @@ def main(argv=None):
                'not_real': ['SP1 proof: a mock SP1 verifier accepted placeholder bytes; no proof was generated',
                             'Base: a local Anvil with chain id 84532',
                             'guest ELF: a local build; no ELF or key is committed']}
-    secrets, children = [], []
+    secrets, children, drivers = [], [], []
     state = {'url': None, 'data_dir': None}
 
     roles = {}
@@ -258,8 +291,7 @@ def main(argv=None):
         roles[str(args.elf)] = roles[str(args.elf.resolve())]
         roles[str(args.prover_tool.resolve())] = f'<prover-tool sha256:{ORDER.sha256_file(args.prover_tool)}>'
         roles[sys.executable] = '<python>'
-        toolchain['elf_note'] = ('a local native SP1 6.3.1 build of programs/pft-lane-export for execute mode only; '
-                                 'not the Docker-reproducible release build, and no key is committed')
+        toolchain['elf_note'] = elf_note(toolchain['elf_sha256'])
         toolchain['prover_tool_sha256'] = ORDER.sha256_file(args.prover_tool)
         forge_env = {}
         for crate in (ORDER.TOKEN_CRATE, ORDER.VERIFIER_CRATE):
@@ -350,8 +382,9 @@ def main(argv=None):
         driver_out = (out / 'pftl-driver.stdout').open('w')
         driver = subprocess.Popen(['cargo', 'test', '--locked', '-p', 'postfiat-node', '--lib', 'local_evm_lane_roundtrip',
                                    '--', '--ignored', '--nocapture'], cwd=ROOT, env=driver_env, stdout=driver_out,
-                                  stderr=(out / 'pftl-driver.stderr').open('w'))
+                                  stderr=(out / 'pftl-driver.stderr').open('w'), **DRIVER_POPEN)
         children.append(driver)
+        drivers.append(driver)
         ready = wait_for('pftl-ready.json', seconds=2400)
         state['data_dir'] = Path(ready['data_dir'])
         pins = ready['pins']
@@ -477,16 +510,18 @@ def main(argv=None):
                            *relay, 'status', '--rpc', url, '--lock', lock, '--input', work / 'input',
                            '--proof', work / 'proof/proof.json', '--from-block', str(locked_block)]))}
             if index == 1:
-                # (e) The same packet again: refused before sending, and reverted when forced.
+                # (e) The same packet again: refused before sending; forced, it reverts (in the gas estimate).
                 command('relay-1-release-again', release_argv, expected=2)
                 again = (out / 'relay-1-release-again.stdout').read_text()
                 require('already_consumed' in again, 'the second release was not refused as already consumed')
                 command('relay-1-release-forced', [*release_argv, '--force-send'], expected=2)
                 forced = (out / 'relay-1-release-forced.stdout').read_text()
-                require('"reverted"' in forced, 'the forced second release did not revert')
+                forced_result = json.loads(forced)
+                require(forced_result.get('reverted') is True, 'the forced second release did not revert')
                 require(base_state(token, lock) == base, 'the refused release moved Base state')
                 outcome['second_release'] = {'refused_before_sending': 'already_consumed',
-                                             'forced_send_reverted': True}
+                                             'forced_send_reverted': True, 'forced_send_sent': forced_result['sent'],
+                                             'forced_send_failure': forced_result['failure']}
             outcome['watcher'] = export_watch_summary(export_watch(f'watcher-exports-{index}'), paid=index)
             if index == 1:
                 # (4) The unsound-verifier case on a snapshot: a payout for a packet PFTL never recorded.
@@ -546,6 +581,8 @@ def main(argv=None):
     except Exception as error:
         results['error'] = portable(error)
     finally:
+        for driver_process in drivers:
+            stop_driver(driver_process)
         for child in reversed(children):
             if child.poll() is None:
                 child.terminate()

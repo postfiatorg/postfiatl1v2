@@ -339,11 +339,12 @@ use lifecycle_queries::{
     write_history_checkpoint_state_file, write_history_prune_pending_file,
 };
 mod mempool_proposals;
+use mempool_proposals::mempool_admission_limit_refusal;
 use mempool_proposals::{
-    admission_base_ledger, apply_pending_before_new_transfer,
-    build_ordered_batch_proposal_with_timings, ledger_after_executable_mempool,
-    mempool_pending_count_for_sender, normalize_block_proposal_batch_kind, proposed_ordered_state,
-    PendingPrefix,
+    admission_base_ledger, apply_pending_before_new_asset_transaction,
+    apply_pending_before_new_transfer, build_ordered_batch_proposal_with_timings,
+    ledger_after_executable_mempool, mempool_pending_count_for_sender,
+    normalize_block_proposal_batch_kind, proposed_ordered_state, PendingPrefix,
 };
 pub use mempool_proposals::{
     admit_fastlane_primary_to_mempool, create_mempool_batch, create_signed_asset_transaction_batch,
@@ -595,6 +596,7 @@ mod consensus_v2_store;
 mod ethereum_checkpoint_signing;
 mod ethereum_receipt_proof_builder;
 mod external_lane_checkpoint_source;
+mod external_lane_export_cli;
 mod fastpay_committee_prepare;
 mod fastpay_recovery_node;
 mod fastswap_control_signing;
@@ -656,6 +658,7 @@ pub use consensus_v2_store::*;
 pub use ethereum_checkpoint_signing::*;
 pub use ethereum_receipt_proof_builder::*;
 pub use external_lane_checkpoint_source::*;
+pub use external_lane_export_cli::*;
 pub use fastpay_committee_prepare::*;
 pub use fastpay_recovery_node::*;
 pub use fastswap_control_signing::*;

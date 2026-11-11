@@ -179,6 +179,42 @@ The SDK's quote-bound flow
 5. Submit through a write-enabled RPC, then poll `tx` by transaction ID.
 6. Store the finality evidence listed above.
 
+### What the Python client checks before it signs
+
+Every Python signing helper (`send_pft`, `send_pft_and_poll_finality`,
+`submit_asset_transaction`, `submit_escrow_transaction`,
+`submit_nft_transaction`, `submit_offer_transaction` and the wrappers built
+on them) passes the node's quote through `check_signing_quote` before the
+key is touched. It raises `QuoteRefusedError` (code `quote_mismatch`,
+`quote_invalid` or `quote_fee_above_ceiling`) and signs and submits nothing
+when:
+
+- the quote's `transaction_kind`, `source` (or a transfer's `from`) or any
+  field of the requested operation differs from the request, in value or
+  type; a field on one side only is a difference unless it holds the default
+  the node fills in for an absent field (`null`, `""`, `0`, `false`), which
+  signs the same bytes;
+- a transfer's `to` or `amount` differs;
+- a requested `sequence` is not the quoted one, or the chain id (and the
+  genesis hash, when the wallet knows it) is not the wallet's;
+- `sequence`, `minimum_fee` or a quoted amount is not a non-negative integer
+  within u64 (nothing is coerced with `int()`);
+- `minimum_fee` is above `max_fee_atoms`.
+
+`max_fee_atoms` is the caller's. The default, `default_max_fee_atoms`, is 4 x
+(23 atoms for the signing envelope + the family's largest state-expansion
+part + 1 atom per started 512 bytes of the requested operation or memos):
+132 for transfers, escrows and NFTs, 212 for asset transactions (more for a
+`trust_set` with a larger `reserve_paid`), 92 for `offer_cancel`. An
+`offer_create`'s match fee grows with the number of fills, which the fee
+rule does not bound, so `create_offer` and `place_offer` require
+`max_fee_atoms`. `python -m postfiat_rpc.pftl_transfer send` takes `--max-fee-atoms`.
+
+If you call the signer yourself (`postfiat-rpc-sdk wallet-sign-*` or the Rust
+SDK), compare the quote with your request before you sign: only
+`wallet-sign-quote` (plain transfers) is given the request; the asset,
+escrow, NFT and offer signers sign the quote's operation, fee and sequence.
+
 Sequence and mempool rules (`crates/execution/src/entrypoints.rs`,
 `crates/node/src/mempool_proposals.rs`, `crates/node/src/lifecycle_queries.rs`):
 
