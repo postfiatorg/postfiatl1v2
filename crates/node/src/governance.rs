@@ -574,11 +574,37 @@ fn decode_tier4_finality_bootstrap(
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
             Ok((None, Some(state)))
         }
+        // A beacon anchor is a valid bootstrap file, just not for these two
+        // lanes; decode_beacon_finality_bootstrap below picks it up.
+        Some(postfiat_types::PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1) => Ok((None, None)),
         _ => Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "unsupported Tier-4 finality bootstrap schema",
         )),
     }
+}
+
+/// Decode an Ethereum beacon finality anchor (R2-1) from the same bootstrap
+/// file. Returns None when the file holds an Arbitrum or Arc anchor instead.
+fn decode_beacon_finality_bootstrap(
+    raw: Option<&str>,
+) -> io::Result<Option<postfiat_types::PfUsdcBeaconFinalityStateV1>> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let value: serde_json::Value = serde_json::from_str(raw)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    if value.get("schema").and_then(serde_json::Value::as_str)
+        != Some(postfiat_types::PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1)
+    {
+        return Ok(None);
+    }
+    let state: postfiat_types::PfUsdcBeaconFinalityStateV1 = serde_json::from_value(value)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    state
+        .validate()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    Ok(Some(state))
 }
 
 pub fn create_vault_bridge_route_profile_governance(
@@ -599,6 +625,8 @@ pub fn create_vault_bridge_route_profile_governance(
         .transpose()?;
     let (tier4_finality_bootstrap, arc_finality_bootstrap) =
         decode_tier4_finality_bootstrap(finality_bootstrap_raw.as_deref())?;
+    let beacon_finality_bootstrap =
+        decode_beacon_finality_bootstrap(finality_bootstrap_raw.as_deref())?;
     let kind = match arc_finality_bootstrap.as_ref() {
         Some(state) => postfiat_types::vault_bridge_arc_route_amendment_kind_v2(&profile, state),
         None => postfiat_types::vault_bridge_route_amendment_kind(&profile),
@@ -630,6 +658,7 @@ pub fn create_vault_bridge_route_profile_governance(
         amendment,
         tier4_finality_bootstrap,
         arc_finality_bootstrap,
+        beacon_finality_bootstrap,
     };
     let batch = build_governance_action_batch_with_vault_bridge_route_profile_activation(
         &genesis,
@@ -660,6 +689,8 @@ pub fn assemble_signed_vault_bridge_route_profile_governance(
         .transpose()?;
     let (tier4_finality_bootstrap, arc_finality_bootstrap) =
         decode_tier4_finality_bootstrap(finality_bootstrap_raw.as_deref())?;
+    let beacon_finality_bootstrap =
+        decode_beacon_finality_bootstrap(finality_bootstrap_raw.as_deref())?;
     let activation = postfiat_types::VaultBridgeRouteProfileActivationV1 {
         schema: if arc_finality_bootstrap.is_some() {
             postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2
@@ -670,6 +701,7 @@ pub fn assemble_signed_vault_bridge_route_profile_governance(
         amendment,
         tier4_finality_bootstrap,
         arc_finality_bootstrap,
+        beacon_finality_bootstrap,
     };
     let batch = build_governance_action_batch_with_vault_bridge_route_profile_activation(
         &genesis,

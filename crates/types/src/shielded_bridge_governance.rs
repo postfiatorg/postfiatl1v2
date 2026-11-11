@@ -811,6 +811,10 @@ pub struct VaultBridgeRouteProfileActivationV1 {
     pub tier4_finality_bootstrap: Option<EthereumArbitrumFinalityStateV2>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arc_finality_bootstrap: Option<PfUsdcArcFinalityStateV1>,
+    /// Beacon anchor for the `sp1-ethereum-finality-v1` lane (R2-1). Without
+    /// one pinned here, that lane admits no deposit at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub beacon_finality_bootstrap: Option<PfUsdcBeaconFinalityStateV1>,
 }
 
 impl VaultBridgeRouteProfileActivationV1 {
