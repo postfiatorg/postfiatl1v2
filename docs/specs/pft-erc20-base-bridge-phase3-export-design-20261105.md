@@ -298,6 +298,116 @@ The full values, their verifier commitments and an 8453 example with synthetic a
 
 **Not done.** No proof was generated. The export proof program, the proof-input command, the relay and the deployment are still to do.
 
+## Base half, step 3 (2026-11-10)
+
+**The lane export proof program.** The lane needs its own program and key. The pfUSDC egress program requires `receipt.tx_id == burn_tx_id` and binds the bridge-exit root, which a lane export does not satisfy. Its source and key stay as on main.
+
+**The statement.** `verify_external_lane_export_witness_v1` (`crates/pft_lane_proofs/src/lib.rs`) takes an `ExternalLaneExportProofWitnessV1` (`crates/types/src/external_lane_export_proof_types.rs`) and returns exactly `external_lane_export_egress_public_values` for it:
+
+1. **Finality.** One block is final from the checkpoint the Base verifier already accepts, by `verify_pftl_finality_segment_v1` of `crates/pfusdc_proofs`, called unchanged. Nothing is copied from that crate.
+2. **The export's block is the proven block.** The consensus v2 block id is recomputed from the witness block's fields with its `external_lane_export_root` (`postfiat.consensus.block-id.external-lane-export-root.v1`). It must equal the finalized id and the header's hash. The commit must bind the same root, and the block height must be the packet's `exported_at_height`.
+3. **Membership.** The leaf is recomputed from the chain id, the lane id, the nonce and the packet digest. It must be in the header root (`verify_external_lane_export_root_proof_v1`). The index and leaf count are not unique under one root: the tree pairs an odd node with itself and the root does not commit the count, so a three-leaf proof for index 2 also verifies as index 3 of 4. The index in the public values is therefore advisory. The Base verifier does not use it, and replay protection rests on the withdrawal and burn commitments, which come from the packet alone.
+4. **The lane policy.** The witness carries the chain's genesis. Its hash, chain id and protocol version must be the ones the finality domain signed. Its lane gives the route profile hash and the asset id (`Genesis::external_lane_verifier_pins`).
+5. **The transaction.** The accepted transaction id in the public values is the packet's `tx_id`. The packet digest inside the leaf binds it, the header root binds the leaf, and the block id the committee signed binds the root. The block's `receipt_ids` are not checked: neither the block id nor the finality check covers them, so a witness could list any id there. A review found that the first version of this check proved nothing and removed it.
+
+**Why "accepted" holds.** "Accepted" in the public values is true for every packet whose leaf is in a signed export root:
+
+- a packet is recorded only by an accepted export transaction;
+- the root is built only from packets with an accepted receipt in that block;
+- every validator rebuilds the proposal from its own execution before it votes;
+- replay recomputes the root.
+
+So the claim rests on a quorum of validators running correct, version-compatible execution, as every statement of the light client does.
+
+**Before any verifier uses this key.** All of the following must hold before any verifier is constructed with the program's key:
+
+1. The committed identity: `programs/pft-lane-export/elf/` and `program-info.json`.
+2. The program's entry in the proof public-input inventory.
+3. The identity check (`pft-lane-export-identity`) green on the commit being deployed.
+4. The verifier's `programVKey` taken from the committed program info and cross-checked in the deployment record.
+5. Before production: at least one real SP1 proof generated and verified against the versioned SP1 verifier. None exists yet.
+
+The result is then compared field by field with what the finality check returned: prior and resulting checkpoint, committee root and transition, heights, view, block ids, parent, state root, export root and leaf index. The Checkpoint variant calls `verify_checkpoint_witness_v1` unchanged.
+
+**The witness.** It holds the chain id, the genesis hash, the protocol version and the prior checkpoint. It also holds the finality ancestry and committee (the pfUSDC bounds: at most 64 ancestry blocks and 64 validators), the export's block, the genesis, the packet and the membership proof (at most 12 siblings, so 4,096 leaves).
+
+**The program.** `programs/pft-lane-export` has the shape of `programs/pfusdc-egress`. It reads the versioned CBOR `ExternalLaneExportProgramInputV1` (`withdrawal` or `checkpoint`) and commits `canonical_bytes_without_commitment()`. It has its own `Cargo.lock`.
+
+**The input command.** `postfiat-node external-lane-export-proof-input --lane-id ID (--export-nonce N | --tx-id HEX) --prior-checkpoint HEX --output-dir PATH` writes `input.cbor` and `expected-public-values.json`. It works on a data directory only, not over RPC. The prior checkpoint is the Base verifier's latest accepted checkpoint. The command runs the statement before it writes anything. When the block's packets are pruned from the lane records, it rebuilds them by replaying the batch archive. Without the archive it refuses and names what the operator needs. It refuses an unknown nonce or transaction id, an export that is not final yet, a lane with exports off, and a chain without the export root.
+
+**The cost of the genesis in the witness.** The witness carries the whole genesis, and the guest serialises and hashes it for every export. The cost was measured with `external_lane_export_witness_cost_inputs` (`crates/node/src/tests/external_lane_export_proof_tests.rs`): the same export, the same 4-validator chain and no ancestry, in SP1 execute mode with the ELF built at `bc36bd1df`.
+
+| Genesis | Witness bytes (CBOR) | Instructions |
+|---|---|---|
+| The test genesis as it is (1 lane) | 153,345 | 33,577,987 |
+| With 1,000 or 10,000 extra funded accounts | 153,345 | 33,577,987 |
+| With the most lanes `validate` accepts (8, `EXTERNAL_LANE_MAX_LANES`) | 157,440 | 34,211,389 (+1.9 %) |
+
+A `Genesis` has no account field (`crates/types/src/core_chain.rs:303`). Funded accounts start from the faucet after genesis and never enter the witness, so the account rows equal the base row by construction. The only part of a genesis that can grow is its lane list, which is capped at 8 lanes; at that size the cost rises by 1.9 %. That is within the 10 % rule, so the witness keeps the full genesis.
+
+**Key and cycles.** No ELF and no key are committed. The CI proof-identity jobs reproduce programs with the Docker build (`cargo prove build --docker --tag v6.3.1`), and this host has no Docker. A local SP1 6.3.1 native build ran in execute mode only (`tools/pft-lane-export-prover execute`, `SP1_PROVER=cpu`). On the node test chain it committed exactly the expected public values for all three exports, 1,491 bytes each. It took 33,618,449 and 33,618,734 instructions for the two exports proven from their own block, and 43,034,593 for the export one block later, with one ancestry block. Next comes a Docker build on a host with Docker. Commit its ELF and `program-info` in the neighbours' format, then add the program to the proof public-input inventory and the proof-identity CI job.
+
+**Tests.** The node test chain (`crates/node/src/tests/external_lane_export_proof_tests.rs`) has the lane fixture, consensus v2, `exports_enabled` and the export root. It runs a release, two exports in one block and one in the next. The statement accepts each proof input and returns the binding's public values, recomputed from the block's header and commit alone. It refuses a changed amount, recipient, nonce, transaction id, lane policy, leaf index, leaf count, header root, block id, parent or lane, a commit of another block, a prior checkpoint the witness does not chain from, and an export from an older block. Removing one check at a time (the genesis check, a receipt-list check since removed as vacuous, the commit's root check, the tree's sibling-depth check) makes the test fail. A second chain's lane names the lock and token that `crates/pft-token-contracts/test/ExternalLaneWitnessRelease.t.sol` deploys. Its proof input is recorded in `crates/pft_lane_proofs/testdata/witness-release-input.cbor`, because the chain's keys are fresh on every run. A test in `crates/pft_lane_proofs` runs the statement on that input and derives the Foundry fixture from its result (`ExternalLaneWitnessReleaseFixture.sol`). The fixture releases through the real `PFTLockV1` and `PFTLFinalityVerifierV1`. Executed in SP1, the recorded input takes 33,704,387 instructions and commits the same bytes.
+
+**Limits.** The export's block must be the proven block. An export from an older block than the finalized one is refused in this version. No proof was generated. There is no relay and no deployment yet.
+
+## Base half, step 4 (2026-11-10)
+
+**The relay.** `scripts/pft-lane-export-relay.py` takes the A666 relay's four steps (wait for PFTL finality, prove, call `release`, wait for the receipt):
+
+- `input` runs `postfiat-node external-lane-export-proof-input` for a lane and a nonce or transaction id. With `--wait-seconds` it retries while the export's block is not final, and it stops on any other refusal.
+- `prove --mode execute-only` runs the guest in SP1's CPU executor (`tools/pft-lane-export-prover`). It checks the committed bytes against the expected public values and writes a PLACEHOLDER proof. The proof file says so in `mock_verifier_only` and `note`. Only a verifier built with a mock SP1 verifier accepts it.
+- `prove --mode command --prover-command CMD` hands the input to an external prover. This mode has not been run.
+- `release` reads the lock's `finalityVerifier`, `token`, `totalLocked` and `totalReleased`, the verifier's pins and checkpoint records, and the live code before it sends. It refuses on any revert those reads show (see **Release checks**), sends `release(publicValues, proofBytes)` and reports the `Released` event.
+- `advance-checkpoint` runs the Checkpoint variant through the same steps (`pfusdc-checkpoint-witness`, execute, `advanceCheckpoint`). Use it when the verifier's checkpoint is too far behind for a bounded proof. It was not run in the rehearsal.
+- `status` reports one packet: exported, final, proven, released, and the Base transaction.
+
+**Release checks.** Before sending, `release` checks these reverts:
+
+- **Sizes:** a proof or public values that are empty or larger than `maxProofBytes` or `maxPublicValuesBytes`, including an empty proof from an external prover.
+- **Program version** other than 1.
+- **Bindings and pins:** the wrong vault, token, chain id, PFTL chain, genesis or protocol version, route profile or epoch, asset id, or pinned code hashes.
+- **Live code:** a lock or token runtime code hash, read with `eth_getCode`, that differs from the pins.
+- **Checkpoint:** an unknown prior checkpoint, or a committee root other than the one recorded for it.
+- **Consumed:** a withdrawal id or proof nullifier the verifier already consumed.
+- **Payout:** a zero recipient, an export height of zero or above the finalized height, or an amount above locked minus released.
+
+The pre-send report prints the verifier's `programVKey` and `sp1Verifier`. When the caller passes `--expect-program-vkey` or `--expect-sp1-verifier`, the relay compares them too.
+
+Three reverts have no pre-send check:
+
+- **The lock's consumed burn-tx commitment.** It is a private mapping with no getter. The verifier's withdrawal and nullifier records cover the same packet.
+- **The SP1 proof itself.**
+- **A race with another relay** between the reads and the send. The losing transaction reverts and costs gas only.
+
+After a successful send, the relay takes the decoded `Released` event of the expected lock as the result: recipient, amount and the three commitments. The recipient's balance change is corroboration. It is reported with a warning when it differs, because an unrelated transfer can move the balance between the two reads.
+
+**Cost and checkpoint cadence.** The finality ancestry of one proof is bounded at 64 blocks (`PFUSDC_EGRESS_MAX_ANCESTRY_BLOCKS_V1`). So the Base verifier's checkpoint must advance at least every 64 PFTL blocks: through releases, or through `advance-checkpoint` before an export more than 64 blocks past it. Guest instruction counts measured in execute mode:
+
+| Run | Validators | Ancestry blocks | Instructions |
+|---|---|---|---|
+| Step 3 node test, exports 0 and 1 | 4 | 0 | 33.6 M |
+| Step 3 node test, export 2 | 4 | 1 | 43.0 M |
+| Round trip, second export | 6 | 0 | 48.9 M |
+| Round trip, first export | 6 | 2 | 76.7 M |
+
+A private key is accepted only for a loopback Anvil; on any other chain the relay takes `--account` and `--password-file`. A placeholder proof (flagged, or the placeholder's bytes) goes only to a loopback Anvil whose verifier's `sp1Verifier` has the pinned runtime code hash of `Tier4MockSP1Verifier`; there is no override.
+
+**The prover-command contract.** The relay runs `CMD` through the shell with `PFT_LANE_EXPORT_INPUT` (the CBOR program input) and `PFT_LANE_EXPORT_PROOF_OUT` (a path) in its environment. The command writes the raw SP1 proof bytes to that path and the committed public values to the same path plus `.public-values`, then exits 0. The relay refuses public values that differ from the expected ones. The proof is then sent as `proofBytes` unchanged.
+
+**The round trip.** `scripts/rehearse-lane-roundtrip.py` runs one round trip on local chains. It imports the deployment-order and Base-lock rehearsals and the relay; it does not copy them. The record is in `docs/review/lane-roundtrip-rehearsal-20261110/`.
+
+1. It deploys the token on a fresh Anvil (chain id 84532), predicts the verifier's and the lock's addresses and the lock's code hash, and pins them in the lane genesis.
+2. A generated six-validator PFTL chain starts from that genesis (`local_evm_lane_roundtrip`, an ignored node test that the script drives step by step). The chain has `exports_enabled`, and consensus v2 and the export root from block 2. Block 1 is the committee bootstrap.
+3. It deploys the real `PFTLFinalityVerifierV1` with the genesis-owned pins and the first PFTL checkpoint, using the Foundry tests' `Tier4MockSP1Verifier` and a placeholder program key. Then it deploys the real `PFTLockV1`, and reads every constructor value back.
+4. It locks 1,000,000 units, releases them on PFTL, exports 400,000 and relays them, refuses a second release of the same packet, exports and relays 600,000, and refuses a third export of one atom. It checks conservation on both chains at every step.
+
+The exports are signed with `wallet-sign-asset-transaction --operation-json`.
+
+**Limits.** No SP1 proof exists: a mock SP1 verifier accepted placeholder bytes, and the guest only ran in execute mode. Anvil stands in for Base. The ELF is a local build without a committed key. The rehearsal's "six-validator fleet" is one data directory driven by an ignored node test: every block carries consensus v2 commits from all six validators, but no separate node processes or network ran. The exports are applied by that driver, not submitted through a running node's RPC. The recipient got 10,000 native atoms from the faucet for the two export fees. The Phase 2 release watcher still reports the one release as backed. It has no export view, so it reports nothing about exports or their Base releases.
+
+**The Base Sepolia dry run (2026-11-10).** `scripts/rehearse-lane-base-sepolia.py` runs the section 5 order on Base Sepolia as one resumable command. The verifier's SP1 verifier is Succinct's versioned `V6_1_0_SP1_VERIFIER_GROTH16`, and the program key comes from `program-info.json`. Without a real proof it stops at `prove-and-release`. The program is built with SP1 6.3.1. The repository's evidence that an SP1 6.3.1 Groth16 proof verifies against the v6.1.0 verifier (`docs/evidence/arc-mvp-20260828/deployments.md:107` and `conformance-test.log`) is for the Arc egress program only, not for the lane export program. One real proof of the lane export program verified against `V6_1_0_SP1_VERIFIER_GROTH16` is the acceptance gate of `prove-and-release`. Until that proof exists, no verifier meant to last (anything beyond a rehearsal pair) is constructed with this pairing. It has run once with `--fork` on a local Anvil fork, and nothing was sent to Base Sepolia (`docs/review/lane-base-sepolia-fork-rehearsal-20261110/`, runbook `docs/runbooks/lane-base-sepolia-dry-run.md`).
+
 ## 10. Sources
 
 - `docs/specs/pft-erc20-base-bridge-phase2-design-20261026.md`, sections 5.1, 6 and 7.

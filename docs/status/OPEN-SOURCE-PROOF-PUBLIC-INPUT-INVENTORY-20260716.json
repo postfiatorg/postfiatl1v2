@@ -99,7 +99,11 @@
     "crates/execution/src/nav_vault_asset_execution.rs": "4463592336d5e5cbf9237c83da5efbf4a36ba812ef6197d6891777a8d3246d50",
     "tools/eth-l1-mainnet-fast-lane-p0/src/main.rs": "aae5805fcd10b42c0429f096e850ee7eb7e0bbaafbee43c1344c289ca37fa979",
     "crates/ethereum-contracts/src/WETHBridgeVaultL1.sol": "7d6a25df0f73e832ea15d2743f110974648323fc574ff78e74f548a7d25eeb12",
-    "crates/ethereum-contracts/src/PFTLFinalityVerifierV1.sol": "8e0139eeb4cb41030234c34293099bd8722d2ca53998b5be3b42906dafe60da7"
+    "crates/ethereum-contracts/src/PFTLFinalityVerifierV1.sol": "8e0139eeb4cb41030234c34293099bd8722d2ca53998b5be3b42906dafe60da7",
+    "crates/pft_lane_proofs/src/lib.rs": "27976ace6354d94176807bb2b85578b515f2838ea4fe262170f39b412ba8841e",
+    "crates/types/src/external_lane_export_proof_types.rs": "8cadf889856f3224317837a90ed481574e9a499ee8365d34bfa8cc6d8b32407a",
+    "crates/types/src/external_lane_egress_types.rs": "fcfe3758c93f8c62bc673249bb2246df9d147d367ab34bd1daa6656221912274",
+    "programs/pft-lane-export/src/main.rs": "40f142081eab3add4bc0aa3f015d27f1e1af41494c543689d3d8fa06b71a8214"
   },
   "systems": [
     {
@@ -1038,6 +1042,302 @@
         "proof/public-value size bounds and exact immutable program vkey",
         "vault balance and withdrawal-consumption accounting",
         "permissionless relayer transaction receipt and recipient postcondition"
+      ]
+    },
+    {
+      "name": "PFT lane export egress",
+      "status": "guest identity committed from two matching reproducible builds; no proof generated and no verifier constructed with this key yet",
+      "proof_system_id": "sp1-pft-lane-export-v1",
+      "program_vkey": "0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414",
+      "elf_sha256": "e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab",
+      "program": "programs/pft-lane-export",
+      "withdrawal_public_values_schema": "postfiat.pfusdc.egress_public_values.v1",
+      "checkpoint_public_values_schema": "postfiat.pfusdc.checkpoint_public_values.v1",
+      "encoding": "versioned canonical tagged fields; the final commitment field is recomputed and omitted from committed bytes",
+      "withdrawal_public_values": [
+        {
+          "tag": 1,
+          "name": "schema",
+          "binding": "exact egress schema"
+        },
+        {
+          "tag": 2,
+          "name": "proof_program_version",
+          "binding": "nonzero guest version"
+        },
+        {
+          "tag": 3,
+          "name": "pftl_chain_id",
+          "binding": "immutable verifier chain hash"
+        },
+        {
+          "tag": 4,
+          "name": "pftl_genesis_hash",
+          "binding": "immutable verifier genesis commitment"
+        },
+        {
+          "tag": 5,
+          "name": "pftl_protocol_version",
+          "binding": "immutable verifier protocol version"
+        },
+        {
+          "tag": 6,
+          "name": "route_profile_hash",
+          "binding": "immutable verifier route-profile commitment, derived from the genesis lane"
+        },
+        {
+          "tag": 7,
+          "name": "route_epoch",
+          "binding": "immutable verifier route epoch"
+        },
+        {
+          "tag": 8,
+          "name": "prior_checkpoint_block_id",
+          "binding": "must equal verifier checkpoint"
+        },
+        {
+          "tag": 9,
+          "name": "resulting_checkpoint_block_id",
+          "binding": "advances verifier checkpoint to the finalized block"
+        },
+        {
+          "tag": 10,
+          "name": "committee_epoch",
+          "binding": "finalized block authority epoch"
+        },
+        {
+          "tag": 11,
+          "name": "committee_root",
+          "binding": "verified committee and verifier checkpoint authority"
+        },
+        {
+          "tag": 12,
+          "name": "committee_transition_commitment",
+          "binding": "optional proved committee transition"
+        },
+        {
+          "tag": 13,
+          "name": "finalized_block_height",
+          "binding": "strictly advances verifier finalized height"
+        },
+        {
+          "tag": 14,
+          "name": "finalized_block_view",
+          "binding": "consensus certificate view"
+        },
+        {
+          "tag": 15,
+          "name": "finalized_block_id",
+          "binding": "certificate and block identity"
+        },
+        {
+          "tag": 16,
+          "name": "finalized_parent_block_id",
+          "binding": "bounded ancestry continuity"
+        },
+        {
+          "tag": 17,
+          "name": "finalized_state_root",
+          "binding": "committed PFTL state at exit finality"
+        },
+        {
+          "tag": 18,
+          "name": "bridge_exit_root",
+          "binding": "the export block's external_lane_export_root (export root in the egress field)"
+        },
+        {
+          "tag": 19,
+          "name": "exit_leaf_index",
+          "binding": "advisory leaf index: not unique under one root, unused by the verifier"
+        },
+        {
+          "tag": 20,
+          "name": "exit_leaf_commitment",
+          "binding": "recomputed export leaf: chain id, lane id, nonce and packet digest"
+        },
+        {
+          "tag": 21,
+          "name": "accepted_receipt_id",
+          "binding": "the packet's tx_id, bound by the packet digest inside the leaf"
+        },
+        {
+          "tag": 22,
+          "name": "accepted_receipt_code",
+          "binding": "constant accepted: a packet is recorded only by an accepted export"
+        },
+        {
+          "tag": 23,
+          "name": "asset_id",
+          "binding": "immutable verifier PFT asset commitment, derived from the genesis lane"
+        },
+        {
+          "tag": 24,
+          "name": "burn_tx_id",
+          "binding": "burn-transaction commitment of the export (chain id, lane id, tx id)"
+        },
+        {
+          "tag": 25,
+          "name": "withdrawal_id",
+          "binding": "withdrawal-id commitment of the export (chain id, lane id, nonce, digest)"
+        },
+        {
+          "tag": 26,
+          "name": "source_bucket_id",
+          "binding": "the lane route configuration digest"
+        },
+        {
+          "tag": 27,
+          "name": "amount_atoms",
+          "binding": "u64 PFT atoms paid 1:1 in the ERC-20 by the lock"
+        },
+        {
+          "tag": 28,
+          "name": "recipient",
+          "binding": "Base recipient paid by the lock"
+        },
+        {
+          "tag": 29,
+          "name": "destination_hash",
+          "binding": "unused for lanes: 48 zero bytes"
+        },
+        {
+          "tag": 30,
+          "name": "evidence_root",
+          "binding": "unused for lanes: 48 zero bytes"
+        },
+        {
+          "tag": 31,
+          "name": "withdrawal_finalized_height",
+          "binding": "the export block height, which is the proven block in v1"
+        },
+        {
+          "tag": 32,
+          "name": "source_chain_id",
+          "binding": "legacy field name arbitrum_chain_id; immutable verifier requires the lane Base chain id"
+        },
+        {
+          "tag": 33,
+          "name": "vault_address",
+          "binding": "the lane lock (vault) runtime address"
+        },
+        {
+          "tag": 34,
+          "name": "vault_runtime_code_hash",
+          "binding": "immutable verifier vault runtime binding"
+        },
+        {
+          "tag": 35,
+          "name": "token_address",
+          "binding": "immutable verifier ERC-20 PFT address"
+        },
+        {
+          "tag": 36,
+          "name": "token_runtime_code_hash",
+          "binding": "immutable verifier ERC-20 PFT code identity"
+        },
+        {
+          "tag": 37,
+          "name": "withdrawal_packet_digest",
+          "binding": "EVM digest of the export packet emitted by the lock"
+        },
+        {
+          "tag": 38,
+          "name": "withdrawal_packet_hash",
+          "binding": "canonical export packet digest"
+        },
+        {
+          "tag": 39,
+          "name": "proof_nullifier",
+          "binding": "route-separated burn/withdrawal/finalized-block replay key"
+        }
+      ],
+      "checkpoint_public_values": [
+        {
+          "tag": 1,
+          "name": "schema",
+          "binding": "exact checkpoint schema"
+        },
+        {
+          "tag": 2,
+          "name": "proof_program_version",
+          "binding": "nonzero guest version"
+        },
+        {
+          "tag": 3,
+          "name": "pftl_chain_id",
+          "binding": "immutable verifier chain hash"
+        },
+        {
+          "tag": 4,
+          "name": "pftl_genesis_hash",
+          "binding": "immutable verifier genesis commitment"
+        },
+        {
+          "tag": 5,
+          "name": "pftl_protocol_version",
+          "binding": "immutable verifier protocol version"
+        },
+        {
+          "tag": 6,
+          "name": "prior_checkpoint_block_id",
+          "binding": "must equal verifier checkpoint"
+        },
+        {
+          "tag": 7,
+          "name": "resulting_checkpoint_block_id",
+          "binding": "new finalized checkpoint"
+        },
+        {
+          "tag": 8,
+          "name": "committee_epoch",
+          "binding": "finalized block authority epoch"
+        },
+        {
+          "tag": 9,
+          "name": "committee_root",
+          "binding": "verified committee root"
+        },
+        {
+          "tag": 10,
+          "name": "committee_transition_commitment",
+          "binding": "optional proved committee transition"
+        },
+        {
+          "tag": 11,
+          "name": "finalized_block_height",
+          "binding": "strictly advances verifier finalized height"
+        },
+        {
+          "tag": 12,
+          "name": "finalized_block_view",
+          "binding": "consensus certificate view"
+        },
+        {
+          "tag": 13,
+          "name": "finalized_block_id",
+          "binding": "certificate and block identity"
+        },
+        {
+          "tag": 14,
+          "name": "finalized_parent_block_id",
+          "binding": "bounded ancestry continuity"
+        },
+        {
+          "tag": 15,
+          "name": "finalized_state_root",
+          "binding": "committed PFTL state"
+        }
+      ],
+      "private_witnesses": [
+        "bounded finalized PFTL ancestry and exact consensus certificates",
+        "the export block with its external_lane_export_root and the chain genesis",
+        "the export packet and its export-root membership proof"
+      ],
+      "proof_binding": "The lane export guest (verify_external_lane_export_witness_v1) proves PFTL finality of the export's block, the block id recomputed with its export root, the packet leaf in that root and the lane policy of the signed genesis, and returns external_lane_export_egress_public_values. PFTLFinalityVerifierV1 pins chain, genesis, route, asset, source chain, lock, token, program vkey, checkpoint and committee, then enforces replay protection before the lock releases.",
+      "host_only_checks": [
+        "proof/public-value size bounds and exact immutable program vkey",
+        "lock balance (locked minus released) and withdrawal and burn consumption",
+        "relay pre-send checks and the Released event postcondition"
       ]
     },
     {

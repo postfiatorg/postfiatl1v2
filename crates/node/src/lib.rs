@@ -368,6 +368,7 @@ pub use storage_migration::*;
 mod batch_snapshot;
 mod lifecycle_checkpoint;
 pub use lifecycle_checkpoint::*;
+mod external_lane_export_proof;
 mod market_bridge;
 mod pfusdc_tier4;
 mod vault_bridge_conservation;
@@ -380,6 +381,7 @@ use batch_snapshot::{
     read_deployment_validator_bindings_file, sha256_file_hex, storage_work_report,
     validate_deployment_identifier, validate_unique_receipt_ids, BlockProposalPlan,
 };
+pub use external_lane_export_proof::*;
 pub use market_bridge::*;
 pub use pfusdc_tier4::*;
 pub use vault_bridge_conservation::*;

@@ -1600,6 +1600,39 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "external-lane-export-proof-input" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let input = external_lane_export_proof_input(ExternalLaneExportProofInputOptions {
+                data_dir: PathBuf::from(data_dir),
+                lane_id: flag_value(flags, "--lane-id").ok_or("missing --lane-id")?.to_string(),
+                export_nonce: flag_value(flags, "--export-nonce")
+                    .map(|value| {
+                        value
+                            .parse::<u64>()
+                            .map_err(|_| "--export-nonce must be a u64".to_string())
+                    })
+                    .transpose()?,
+                tx_id: flag_value(flags, "--tx-id").map(str::to_string),
+                prior_checkpoint_block_id: flag_value(flags, "--prior-checkpoint")
+                    .ok_or("missing --prior-checkpoint")?
+                    .to_string(),
+            })
+            .map_err(|error| format!("external-lane-export-proof-input failed: {error}"))?;
+            let output_dir = flag_value(flags, "--output-dir").ok_or("missing --output-dir")?;
+            write_external_lane_export_proof_input(&input, Path::new(output_dir))
+                .map_err(|error| format!("external-lane-export-proof-input failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::json!({
+                    "input": format!("{output_dir}/input.cbor"),
+                    "expected_public_values": format!("{output_dir}/expected-public-values.json"),
+                    "export_nonce": input.witness.packet.export_nonce,
+                    "block_height": input.witness.block.header.height,
+                    "rebuilt_from_archive": input.rebuilt_from_archive,
+                })
+            );
+            Ok(())
+        }
         "fx-fix-info" | "fx_fix_info" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let fix_packet_hash =
