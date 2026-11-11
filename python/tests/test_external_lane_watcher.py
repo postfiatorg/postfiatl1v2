@@ -1250,6 +1250,36 @@ class PaidRecordTests(unittest.TestCase):
         self.assertEqual([(entry["export_nonce"], entry["block"]) for entry in new["paid"]], [(0, 950), (1, 1_050)])
         self.assertEqual(new["lock_from_block"], 900)
 
+    def test_the_round_trip_rehearsals_watcher_sequence_with_a_state_file(self):
+        # scripts/rehearse-lane-roundtrip.py's export-view runs, resumed from a
+        # state file: after export 1, the forged payout on a snapshot, after
+        # export 2 (the snapshot reverted) and at the end.
+        a, b = export_entry(0), export_entry(1, amount=600_000)
+        paid_a = released_log(a, block=135, transaction="0x" + "a1" * 32)
+        paid_b = released_log(b, block=264, transaction="0x" + "b2" * 32)
+        forged = released_log(export_entry(9), block=200, transaction="0x" + "f0" * 32)
+        with tempfile.TemporaryDirectory() as directory:
+            options = ("--state-file", str(Path(directory) / "state.json"), "--unpaid-warning-blocks", "64")
+
+            def watch(exports, logs, finalized):
+                return run_exports(ExportPftl(exports), ExportBase(logs, finalized=finalized), *options)
+
+            def paid(lines):
+                return [(line["export_nonce"], line["status"], line.get("base_block"))
+                        for line in lines if line["kind"] == "export"]
+
+            code, lines, _ = watch([a], [paid_a], 150)
+            self.assertEqual((code, alarm_codes(lines), paid(lines)), (0, [], [(0, "paid", 135)]))
+            code, lines, _ = watch([a], [paid_a, forged], 250)
+            self.assertEqual((code, sorted(alarm_codes(lines))), (2, ["exported_below_paid", "payout_without_export"]))
+            code, lines, _ = watch([a, b], [paid_a, paid_b], 300)
+            self.assertEqual((code, alarm_codes(lines), paid(lines)), (0, [], [(0, "paid", 135), (1, "paid", 264)]))
+            self.assertEqual(lines[-1]["exports"]["scanned_from_block"], 151)
+            code, lines, _ = watch([a, b], [paid_a, paid_b], 400)
+            self.assertEqual((code, alarm_codes(lines), paid(lines)), (0, [], [(0, "paid", 135), (1, "paid", 264)]))
+            self.assertEqual((lines[-1]["exports"]["scanned_from_block"], lines[-1]["exports"]["payouts_checked"]),
+                             (301, 0))
+
 
 class IntervalMalformedTests(unittest.TestCase):
     def test_a_malformed_answer_in_interval_mode_is_an_error_line_and_the_loop_goes_on(self):
