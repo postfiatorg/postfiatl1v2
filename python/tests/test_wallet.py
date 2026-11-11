@@ -4112,5 +4112,121 @@ class FastPayFlowTests(unittest.TestCase):
         self.assertEqual(cert["votes"][0]["validator_id"], "v0")
 
 
+class FastPayPagedInventoryTests(unittest.TestCase):
+    """Wallet helpers select from every owned-object page, not the first."""
+
+    class Selected(Exception):
+        pass
+
+    @staticmethod
+    def _page(objects, cursor, view="v1", total=101):
+        return {
+            "objects": objects,
+            "object_count": len(objects),
+            "total_value": total,
+            "truncated": cursor is not None,
+            "cursor": None,
+            "next_cursor": cursor,
+            "view_digest": view,
+        }
+
+    def _wallet(self, public_key_hex="ab" * 1952):
+        return TransparentWallet(
+            chain_id="postfiat-local",
+            account_index=0,
+            address="pf-owner",
+            public_key_hex=public_key_hex,
+            key_file=Path("wallet.key.json"),
+            backup_file=Path("wallet.backup.json"),
+            key_report={},
+        )
+
+    def _selects_from_page_two(self, run) -> None:
+        # A first page worth 1 of a total 101; the covering object (100) is on page 2.
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        pages = [
+            self._page([{"id": "one", "version": 1, "value": 1, "asset": "PFT"}], "c1"),
+            self._page([{"id": "hundred", "version": 1, "value": 100, "asset": "PFT"}], None),
+        ]
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(client, "owned_objects", side_effect=pages) as owned,
+            mock.patch.object(client, "validators", side_effect=self.Selected),
+        ):
+            with self.assertRaises(self.Selected):
+                run(client, tmp)
+        self.assertEqual(owned.call_count, 2)
+        self.assertEqual(owned.call_args_list[1].kwargs["cursor"], "c1")
+
+    def test_unwrap_selects_an_object_from_a_later_page(self) -> None:
+        self._selects_from_page_two(
+            lambda client, tmp: unwrap_fastpay(
+                client, wallet=self._wallet(), amount=50, fee=1, work_dir=tmp, check_capabilities=False
+            )
+        )
+
+    def test_send_selects_an_object_from_a_later_page(self) -> None:
+        self._selects_from_page_two(
+            lambda client, tmp: send_fastpay(
+                client,
+                wallet=self._wallet(),
+                recipient_public_key_hex="cd" * 1952,
+                amount=50,
+                fee=1,
+                work_dir=tmp,
+                check_capabilities=False,
+            )
+        )
+
+    def test_wrap_compares_every_page_before_and_after(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        key = "ab" * 1952
+        obj = lambda ident: {"id": ident, "version": 1, "owner_pubkey_hex": key, "value": 10, "asset": "PFT"}
+        pages = [
+            self._page([obj("a")], "c1", "v1", 20),
+            self._page([obj("c")], None, "v1", 20),
+            self._page([obj("a")], "c2", "v2", 30),  # the new object "b" is on page 2
+            self._page([obj("b")], "c3", "v2", 30),
+            self._page([obj("c")], None, "v2", 30),
+        ]
+        capabilities = {
+            "fastpay_bridge_enabled": True,
+            "fastpay_bridge_mode": "proxy_broadcast_devnet",
+            "fastpay_owned_apply_broadcast_enabled": True,
+            "chain_id": "postfiat-local",
+            "genesis_hash": "cd" * 48,
+            "protocol_version": 3,
+            "block_height": 20,
+        }
+
+        def fake_run(args, *, json_output, cwd=wallet_module.REPO_ROOT):
+            del cwd, json_output
+            command = list(args)
+            Path(command[command.index("--output") + 1]).write_text(
+                json.dumps({"operation": {"owned_deposit": {"signed": {}}}}), encoding="utf-8"
+            )
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(client, "server_capabilities", return_value=capabilities),
+            mock.patch.object(client, "account", return_value={"account": {"sequence": 7, "balance": 100}}),
+            mock.patch.object(client, "owned_objects", side_effect=pages) as owned,
+            mock.patch.object(wallet_module, "_run", side_effect=fake_run),
+            mock.patch.object(
+                client, "mempool_submit_fastlane_primary_finality", return_value={"tx_id": "deposit-1"}
+            ),
+            mock.patch.object(
+                client,
+                "receipts",
+                return_value=[{"tx_id": "deposit-1", "accepted": True, "code": "owned_deposit_applied"}],
+            ),
+        ):
+            result = wrap_fastpay(
+                client, wallet=self._wallet(key), amount=10, work_dir=tmp, check_capabilities=False
+            )
+        self.assertEqual(owned.call_count, 5)
+        self.assertEqual(result.object_id, "b")
+
+
 if __name__ == "__main__":
     unittest.main()

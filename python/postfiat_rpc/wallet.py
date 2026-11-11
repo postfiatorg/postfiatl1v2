@@ -994,10 +994,8 @@ def wrap_fastpay(
     started = time.monotonic()
     capabilities = client.server_capabilities()
     account_result = client.account(wallet.address)
-    before_snapshot = client.owned_objects(
-        wallet.public_key_hex,
-        asset=asset,
-        limit=object_limit,
+    before_snapshot = client.owned_objects_all(
+        wallet.public_key_hex, asset=asset, page_limit=object_limit
     )
     timings["deposit_preflight_ms"] = _elapsed_ms(started)
     if not (
@@ -1092,10 +1090,8 @@ def wrap_fastpay(
         )
 
     started = time.monotonic()
-    after_snapshot = client.owned_objects(
-        wallet.public_key_hex,
-        asset=asset,
-        limit=object_limit,
+    after_snapshot = client.owned_objects_all(
+        wallet.public_key_hex, asset=asset, page_limit=object_limit
     )
     timings["snapshot_ms"] = _elapsed_ms(started)
     before_objects = before_snapshot.get("objects", []) if isinstance(before_snapshot, dict) else []
@@ -1169,7 +1165,9 @@ def unwrap_fastpay(
     available_objects = list(owned_objects or [])
     if not available_objects:
         started = time.monotonic()
-        objects_snapshot = client.owned_objects(wallet.public_key_hex, asset=asset, limit=object_limit)
+        objects_snapshot = client.owned_objects_all(
+            wallet.public_key_hex, asset=asset, page_limit=object_limit
+        )
         timings["object_lookup_ms"] = _elapsed_ms(started)
         objects = objects_snapshot.get("objects") if isinstance(objects_snapshot, dict) else None
         available_objects = list(objects) if isinstance(objects, list) else []
@@ -1322,8 +1320,8 @@ def send_fastpay(
     available_objects = list(owned_objects or [])
     if not available_objects:
         started = time.monotonic()
-        objects_snapshot = client.owned_objects(
-            wallet.public_key_hex, asset=asset, limit=object_limit
+        objects_snapshot = client.owned_objects_all(
+            wallet.public_key_hex, asset=asset, page_limit=object_limit
         )
         timings["object_lookup_ms"] = _elapsed_ms(started)
         objects = objects_snapshot.get("objects") if isinstance(objects_snapshot, dict) else None
