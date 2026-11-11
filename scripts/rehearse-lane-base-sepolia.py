@@ -566,13 +566,37 @@ def payout_recipient(named, *, fork_block):
     return named.lower()
 
 
+ZERO_ADDRESS = '0x' + '00' * 20
+
+
+def plan_payout_recipient(named, *, fork_block, plan):
+    """The recipient, checked and normalised in plan, before anything is deployed:
+    never the zero address, the token, or the verifier or lock this plan deploys."""
+    recipient = payout_recipient(named, fork_block=fork_block)
+    for what, address in (('the zero address', ZERO_ADDRESS), ('the token', TOKEN),
+                          ('the verifier', plan['verifier']['predicted']), ('the lock', plan['lock']['predicted'])):
+        require(recipient != address.lower(),
+                f'--payout-recipient {recipient} is {what}: nothing could use a payout there; nothing was sent')
+    return recipient
+
+
+def resolve_payout_recipient(named, *, plan):
+    """A later invocation keeps the plan's recipient: omit --payout-recipient or name the same one."""
+    planned = plan.get('payout_recipient')
+    require(planned, 'this plan names no payout recipient; start a fresh output directory; nothing was sent')
+    require(named is None or payout_recipient(named, fork_block=None) == planned,
+            f'--payout-recipient {named} differs from the plan\'s {planned}; nothing was sent')
+    return planned
+
+
 def key_balances(keys, balance):
     """Each key's ETH balance read from the chain, for the record."""
     return {key: {'address': address, 'wei': balance(address) if address else 'not known: no address recorded'}
             for key, address in keys.items()}
 
 
-def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_identity=None, relayer_ceiling_wei=None):
+def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_identity=None, relayer_ceiling_wei=None,
+                 payout_recipient=None, payout_recipient_key=None):
     """Every address, nonce, constructor value, gas figure and the bounded funding plan for the four keys."""
     keys = {
         'verifier deployer': ('deploy-verifier',),
@@ -593,6 +617,8 @@ def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_iden
                                 'set with --relayer-ceiling-wei'}
     return {'chain_id': CHAIN_ID, 'plan': plan, 'verifier_constructor': verifier_config,
             'program_identity': program_identity,
+            'payout_recipient': None if payout_recipient is None else {'address': payout_recipient,
+                                                                       'key': payout_recipient_key},
             'sp1_verifier': SP1_VERIFIER, 'gas_price_wei': gas_price_wei, 'gas_margin': GAS_MARGIN,
             'gas_used_on_fork': gas_used, 'test_eth_per_key': needs,
             'funding': funding_plan(needs, gas_price_wei=gas_price_wei, relayer_ceiling_wei=relayer_ceiling_wei),
@@ -625,6 +651,9 @@ def sheet_markdown(sheet):
                   'deployer + relayer |',
                   f'| holder, starting balance | {holder["starting_balance_wei"]} | {holder["formula"]} |',
                   '', f'The holder also needs {holder["token_units"]} token units. {sheet["fee_note"]}']
+    recipient = sheet.get('payout_recipient')
+    if recipient:
+        lines += ['', f'Payout recipient on Base: `{recipient["address"]}` (key: {recipient["key"]}).']
     identity = sheet.get('program_identity') or {}
     if identity:
         lines += ['', f'Program: ELF sha256 `{identity["elf_sha256"]}`, key `{identity["program_vkey"]}`, source '
@@ -663,8 +692,9 @@ def parser():
     p.add_argument('--leftover-eth', choices=('returned-to-holder', 'kept-on-keys'),
                    help='what was done with the ETH left on the one-time keys; stated in the record')
     p.add_argument('--payout-recipient',
-                   help='the Base address the export pays, one you control; default: an address derived from a '
-                        'label that nobody holds a key for, so the payout can never be moved')
+                   help='the Base address the export pays, one you control; checked and fixed in plan (not the zero '
+                        'address, the token, the verifier or the lock); default: an address derived from a label '
+                        'that nobody holds a key for, so the payout can never be moved')
     p.add_argument('--verifier-deployer', help='address of the one-time verifier keystore')
     p.add_argument('--lock-deployer', help='address of the one-time lock keystore')
     return p
@@ -680,6 +710,10 @@ def main(argv=None):
     # Before anything is read, started or written: a real run's plan always carries its ceiling.
     relayer_ceiling = resolve_relayer_ceiling(fork=args.fork, requested=args.relayer_ceiling_wei,
                                               plan=data.get('plan'))
+    if args.payout_recipient is not None:
+        payout_recipient(args.payout_recipient, fork_block=None)
+    if data.get('plan'):
+        resolve_payout_recipient(args.payout_recipient, plan=data['plan'])
     out.mkdir(parents=True, exist_ok=True, mode=0o700)
     state.setdefault('mode', 'fork' if args.fork else 'base-sepolia')
     require(state['mode'] == ('fork' if args.fork else 'base-sepolia'), 'this output directory is for another mode')
@@ -846,10 +880,14 @@ def main(argv=None):
                           for r, a in deployers.items()}
                 plan = ORDER.deployment_plan(verifier_deployer=deployers['verifier'], verifier_nonce=nonces['verifier'],
                                              lock_deployer=deployers['lock'], lock_nonce=nonces['lock'])
+                recipient = plan_payout_recipient(args.payout_recipient, fork_block=head, plan=plan)
                 fixture = json.loads((ROOT / ORDER.GENESIS_FIXTURE).read_text())
                 data['plan'] = {**plan, 'fork_block': head, 'token': TOKEN, 'token_runtime_code_hash': token_code_hash,
                                 'holder': HOLDER, 'max_lock_amount': ORDER.lane_window_cap(fixture),
-                                'gas_price_wei': gas_price, 'relayer_ceiling_wei': relayer_ceiling}
+                                'gas_price_wei': gas_price, 'relayer_ceiling_wei': relayer_ceiling,
+                                'payout_recipient': recipient,
+                                'payout_recipient_key': 'named by the operator' if args.payout_recipient else
+                                'none: derived from a label, the payout can never be moved'}
                 # The lock's code hash: a probe on a throwaway fork (the lock holds the verifier's address).
                 probe_url = start_fork('probe-fork', head)
                 for role in ('verifier', 'lock'):
@@ -946,7 +984,9 @@ def main(argv=None):
                 sheet = deploy_sheet(plan={r: plan[r] for r in ('verifier', 'lock')},
                                      verifier_config=data['verifier_config'], gas_used=gas,
                                      gas_price_wei=plan['gas_price_wei'], program_identity=identity,
-                                     relayer_ceiling_wei=relayer_ceiling)
+                                     relayer_ceiling_wei=relayer_ceiling,
+                                     payout_recipient=plan['payout_recipient'],
+                                     payout_recipient_key=plan['payout_recipient_key'])
                 data['relayer_ceiling_wei'] = relayer_ceiling
                 (out / 'deploy-sheet.json').write_text(json.dumps(sheet, indent=2) + '\n')
                 (out / 'deploy-sheet.md').write_text(sheet_markdown(sheet))
@@ -1127,7 +1167,7 @@ def main(argv=None):
                                                                      'checkpoint_votes', 'lane_after_release')}
             elif stage == 'export':
                 released = json.loads((out / 'handshake/pftl-released.json').read_text())
-                base_recipient = payout_recipient(args.payout_recipient, fork_block=data['plan']['fork_block'])
+                base_recipient = resolve_payout_recipient(args.payout_recipient, plan=data['plan'])
                 signed = command('export-sign', [
                     args.node_bin, 'wallet-sign-asset-transaction', '--key-file', data['private']['recipient_key_file'],
                     '--chain-id', data['fleet']['chain_id'], '--genesis-hash', data['fleet']['genesis_hash'],
@@ -1144,8 +1184,7 @@ def main(argv=None):
                                         data['fleet']['checkpoint']['block_id'], '--output', out / 'relay-input'])
                 document = json.loads((out / 'relay-input/expected-public-values.json').read_text())
                 data['export'] = {'amount': EXPORT_AMOUNT, 'base_recipient': base_recipient,
-                                  'base_recipient_key': 'named by the operator' if args.payout_recipient else
-                                  'none: derived from a label, the payout can never be moved',
+                                  'base_recipient_key': data['plan']['payout_recipient_key'],
                                   'block_height': applied['block_height'], 'lane': applied['lane'],
                                   'input_sha256': ORDER.sha256_file(out / 'relay-input/input.cbor'),
                                   'public_values_sha256': hashlib.sha256(

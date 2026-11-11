@@ -637,3 +637,41 @@ class RelayerCeilingPlanTests(unittest.TestCase):
                 dry_run.main(["--output", str(out), "--through", "export"])
             self.assertFalse(out.exists())
 
+
+class PayoutRecipientPlanTests(unittest.TestCase):
+    """N3: the payout recipient is checked, normalised and fixed in plan."""
+
+    PLAN = DeployAddressTests.PLAN
+
+    def test_known_contracts_and_the_zero_address_are_refused_in_plan(self):
+        self.assertEqual(dry_run.plan_payout_recipient("0x" + "aB" * 20, fork_block=5, plan=self.PLAN),
+                         "0x" + "ab" * 20)
+        self.assertEqual(dry_run.plan_payout_recipient(None, fork_block=5, plan=self.PLAN),
+                         dry_run.RT.fresh_base_address("base-sepolia-dry-run-5"))
+        for bad in ("0x" + "00" * 20, self.PLAN["verifier"]["predicted"], self.PLAN["lock"]["predicted"].upper()
+                    .replace("0X", "0x"), dry_run.TOKEN, "0x12"):
+            with self.subTest(bad=bad), self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.plan_payout_recipient(bad, fork_block=5, plan=self.PLAN)
+
+    def test_a_malformed_recipient_stops_before_anything(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "run"
+            with no_network(), self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.main(["--output", str(out), "--fork", "--payout-recipient", "0x12"])
+            self.assertFalse(out.exists())
+
+    def test_a_later_invocation_keeps_the_plans_recipient(self):
+        plan = {"payout_recipient": "0x" + "ab" * 20}
+        self.assertEqual(dry_run.resolve_payout_recipient(None, plan=plan), "0x" + "ab" * 20)
+        self.assertEqual(dry_run.resolve_payout_recipient("0x" + "AB" * 20, plan=plan), "0x" + "ab" * 20)
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.resolve_payout_recipient("0x" + "cd" * 20, plan=plan)
+
+    def test_the_sheet_the_operator_confirms_names_the_recipient(self):
+        sheet = dry_run.deploy_sheet(plan=self.PLAN, verifier_config={}, gas_used={}, gas_price_wei=1,
+                                     relayer_ceiling_wei=10 ** 15, payout_recipient="0x" + "ab" * 20,
+                                     payout_recipient_key="named by the operator")
+        self.assertEqual(sheet["payout_recipient"], {"address": "0x" + "ab" * 20, "key": "named by the operator"})
+        self.assertIn("0x" + "ab" * 20, dry_run.sheet_markdown(sheet))
+
