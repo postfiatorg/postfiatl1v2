@@ -518,3 +518,63 @@ class ExactAllowanceTests(unittest.TestCase):
             dry_run.reconcile_after_restart(state, chain, amount=10)
         self.assertEqual(state["intents"][0]["reconciled"], "spent by the mined Lock")
         self.assertEqual(state["intents"][1]["reconciled"], "mined and matches the plan")
+
+
+class FundingPlanTests(unittest.TestCase):
+    """B2: one bounded funding plan for the four keys."""
+
+    GAS = {"deploy-verifier": 3_000_000, "deploy-lock": 2_000_000, "approve": 50_000, "lock": 150_000}
+    PRICE = 6_000_000
+
+    def sheet(self, ceiling):
+        return dry_run.deploy_sheet(plan=DeployAddressTests.PLAN, verifier_config={}, gas_used=self.GAS,
+                                    gas_price_wei=self.PRICE, relayer_ceiling_wei=ceiling)
+
+    def test_every_key_has_an_amount_and_its_formula(self):
+        funding = self.sheet(5 * 10 ** 15)["funding"]
+        verifier, lock = 3_000_000 * self.PRICE * 3, 2_000_000 * self.PRICE * 3
+        own = (200_000 + 3 * 21_000) * self.PRICE * 3
+        self.assertEqual(funding["verifier deployer"]["fund_wei"], verifier)
+        self.assertEqual(funding["lock deployer"]["fund_wei"], lock)
+        self.assertEqual(funding["relayer"]["fund_wei"], 5 * 10 ** 15)
+        holder = funding["holder"]
+        self.assertEqual(holder["own_gas_wei"], own)
+        self.assertEqual(holder["passed_on_wei"], verifier + lock + 5 * 10 ** 15)
+        self.assertEqual(holder["starting_balance_wei"], own + verifier + lock + 5 * 10 ** 15)
+        for row in funding.values():
+            self.assertTrue(row["formula"])
+        markdown = dry_run.sheet_markdown(self.sheet(5 * 10 ** 15))
+        self.assertIn("starting balance", markdown)
+        self.assertIn("estimate", markdown)
+
+    def test_without_a_relayer_ceiling_the_plan_says_it_is_incomplete(self):
+        funding = self.sheet(None)["funding"]
+        self.assertIsNone(funding["relayer"]["fund_wei"])
+        self.assertIsNone(funding["holder"]["starting_balance_wei"])
+        self.assertIn("--relayer-ceiling-wei", funding["relayer"]["formula"])
+
+    def test_gas_times_price_is_called_an_estimate(self):
+        note = self.sheet(1)["fee_note"]
+        self.assertIn("estimate", note)
+        self.assertIn("L1 data", note)
+
+    def test_a_real_release_needs_an_explicit_relayer_ceiling(self):
+        for ceiling in (None, 0):
+            with self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.check_relayer_ceiling(fork=False, through="record", ceiling=ceiling)
+            with self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.check_relayer_ceiling(fork=False, through="prove-and-release", ceiling=ceiling)
+            dry_run.check_relayer_ceiling(fork=False, through="export", ceiling=ceiling)
+            dry_run.check_relayer_ceiling(fork=True, through="record", ceiling=ceiling)
+        dry_run.check_relayer_ceiling(fork=False, through="record", ceiling=10 ** 15)
+
+    def test_the_record_reads_each_keys_balance(self):
+        keys = {"verifier deployer": "0xa", "lock deployer": "0xb", "holder": "0xc", "relayer": None}
+        balances = dry_run.key_balances(keys, lambda address: {"0xa": 1, "0xb": 2, "0xc": 3}[address])
+        self.assertEqual(balances["holder"], {"address": "0xc", "wei": 3})
+        self.assertIn("not known", balances["relayer"]["wei"])
+
+    def test_the_runbook_says_what_happens_to_what_is_left(self):
+        text = (ROOT / "docs/runbooks/lane-base-sepolia-dry-run.md").read_text()
+        for phrase in ("--relayer-ceiling-wei", "--leftover-eth", "returned to the holder", "kept on the"):
+            self.assertIn(phrase, text)

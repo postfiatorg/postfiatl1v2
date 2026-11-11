@@ -8,19 +8,31 @@ The dry-run lock on Base Sepolia is bound to a PFTL chain whose committee keys c
 
 - **Program key:** the lane export program's ELF and `program-info.json` are committed under `programs/pft-lane-export/` from two matching Docker builds (workflow `pft-lane-export-identity`). The identity check must be green on the commit you run. By default the command reads the committed `program-info.json` (`--program-info` overrides it) and never a constant. `plan` refuses when the committed ELF's sha256 differs from the program info.
 - **Review:** this script and the deploy sheet of a `--fork` run have been reviewed.
-- **Holder:** the rehearsal-token holder `0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17` (keystore `pft-sepolia-lock-deployer`) has enough test ETH to fund the two deployers and pay for its own approve and Lock. The deploy sheet gives the amounts.
-- **Keystores:** three one-time Foundry keystores exist and are funded from the holder: the verifier deployer, the lock deployer and a separate relayer. The two deployers have never been used. The operator who holds them is named before the run. The command takes `--verifier-account`, `--lock-account`, `--holder-account` and `--relayer-account`, each with its `--*-password-file`. It has no raw-key option, and it redacts account names and password-file paths from every error.
+- **Holder:** the rehearsal-token holder `0x6E4E8e0ed73f807D8e8479cb8f25D87Ce8811E17` (keystore `pft-sepolia-lock-deployer`) holds the starting balance of the deploy sheet's funding plan (see Funding) and the Lock amount.
+- **Keystores:** three one-time Foundry keystores exist and are funded from the holder with the sheet's amounts: the verifier deployer, the lock deployer and a separate relayer. The two deployers have never been used. The operator who holds them is named before the run. The command takes `--verifier-account`, `--lock-account`, `--holder-account` and `--relayer-account`, each with its `--*-password-file`. It has no raw-key option, and it redacts account names and password-file paths from every error.
 - **Checks before the first transaction:** `plan` refuses deployers equal to the holder or to each other. Before the first intent, `deploy` requires: each deployer keystore's address equals the planned deployer; the holder keystore's address equals the holder; the relayer keystore opens; the two deployers and the holder hold the ETH their steps need at the current gas price; the holder holds the Lock amount; the node binary exists; the PFTL driver is alive. It re-reads both deployer nonces, latest and pending, and asserts chain id 84532. The gas price may be at most 3x the plan's, the margin the sheet funds; the guard runs again before approve and Lock. After the Lock, the `Locked` event must name the holder.
 - **Committed key only:** off the fork, the program key comes only from the committed `programs/pft-lane-export/program-info.json`, in a clean worktree at a commit. The committed ELF must hash to its `elf_sha256`, and `releases.json` must name the same identity and its two runs. `--program-info` is accepted only with `--fork`. The ELF hash, key and source commit go into the deploy sheet and the constructor record.
 - **Not the mock:** the SP1 verifier is Succinct's versioned `V6_1_0_SP1_VERIFIER_GROTH16` at `0xb69f2584CBcFf99a58C4e7002E8b89Af54a6f4e2` (sp1-contracts `v6.1.0`, `contracts/deployments/84532.json`). This command never deploys a mock SP1 verifier.
 - **Untested pairing:** the lane export program is built with SP1 6.3.1. The repository's evidence that an SP1 6.3.1 Groth16 proof verifies against the v6.1.0 verifier (`docs/evidence/arc-mvp-20260828/deployments.md:107` and `conformance-test.log`) is for the Arc egress program only, not for the lane export program. One real proof of the lane export program verified against `V6_1_0_SP1_VERIFIER_GROTH16` is the acceptance gate of `prove-and-release`. Until that proof exists, no verifier meant to last (anything beyond a rehearsal pair) is constructed with this pairing.
 - **Source verification:** Sourcify needs no API key. `crates/pft-token-contracts/foundry.toml` names `BASESCAN_API_KEY` for Basescan on chain 84532 only; whether forge 1.7.1 asks for it during a Sourcify verification was not tested. A failed verification is recorded, the run goes on, and `record` retries it.
 
+## Funding
+
+`preflight` writes a funding plan into the sheet (`funding` in `deploy-sheet.json`, a table in `deploy-sheet.md`), one row per key with its amount in wei and its formula:
+
+- **Verifier deployer, lock deployer:** the fork's gas for the deployment x the plan's gas price x 3.
+- **Relayer:** a ceiling the operator sets with `--relayer-ceiling-wei`, because the proof transaction's gas is not known before a real proof. A real run through `prove-and-release` refuses to start without it, and the release refuses a ceiling other than the sheet's.
+- **Holder:** its own gas (approve, Lock, three funding transfers) x the gas price x 3, plus what it passes on to the three keys; the sum is its starting balance. It also holds the 1,000,000 token units.
+
+Gas x gas price is an estimate, not the exact fee: a Base transaction also pays an L1 data fee. The 3x margin covers it and a price rise up to the gas guard.
+
+After the run, `record` reads each key's balance from the chain into `summary.json` (`key_balances_after_run`). What is left on the one-time keys is either kept on the keys, which then hold test ETH nobody needs, or returned to the holder with one plain transfer from each key. Returning it is recommended. State which was done with `--leftover-eth returned-to-holder` or `--leftover-eth kept-on-keys` on the invocation that writes the record; it is recorded as `leftover_eth`.
+
 ## The one order that works
 
 1. `--through plan`, then review `lane-genesis-pins.json`.
-2. One invocation through `record` with every keystore flag and `--i-accept-no-resume-between-deploy-and-export`. After `preflight` it prints the real sheet (the real deployers, the constructor values, the funding amounts) and waits up to 24 hours. Fund the keys from that sheet, then write the sheet's sha256 (printed with it) to `confirm-deploy` in the output directory. The run then deploys, locks, waits for Base finality (up to 4 hours) and exports. Without `--proof` it stops at `prove-and-release` (exit 3) after writing nothing more.
-3. Later, `--proof PROOF` on the same output directory, from the same commit: the release, then the record again.
+2. One invocation through `record` with every keystore flag, `--relayer-ceiling-wei` and `--i-accept-no-resume-between-deploy-and-export`. After `preflight` it prints the real sheet (the real deployers, the constructor values, the funding amounts) and waits up to 24 hours. Fund the keys from that sheet, then write the sheet's sha256 (printed with it) to `confirm-deploy` in the output directory. The run then deploys, locks, waits for Base finality (up to 4 hours) and exports. Without `--proof` it stops at `prove-and-release` (exit 3) after writing nothing more.
+3. Later, `--proof PROOF` with the same `--relayer-ceiling-wei` on the same output directory, from the same commit: the release, then the record again.
 
 Off the fork, `--through deploy`, `lock` and `release-on-pftl` are refused: a stop there ends the PFTL chain the contracts are bound to. The driver waits 31 hours for `base-locked.json`, longer than the confirmation, send and finality budgets together, and the command requires the driver before every transaction and in the finality wait.
 
@@ -32,7 +44,7 @@ A stage runs once, and only after the stages before it (`state.json`, written at
    - Check: `lane-genesis-pins.json` names the predicted lock.
 2. **`fleet`.** Starts the PFTL chain from those pins and takes its first finalized checkpoint. The fleet is the round-trip driver: one data directory driven by an ignored node test, with all six validators signing every block's consensus v2 commit, but no separate node processes or network.
    - Check: the verifier constructor values in `state.json`. The driver's protocol version (1) and lane cap must equal the verifier's and the lock's.
-3. **`preflight`.** On a fork at the planned block, deploys both contracts at the planned nonces with the real constructor values, reads every value back, and runs one approve and Lock. Refuses unless the fork matches the predictions. Writes `deploy-sheet.json` and `deploy-sheet.md` with gas and test ETH per key.
+3. **`preflight`.** On a fork at the planned block, deploys both contracts at the planned nonces with the real constructor values, reads every value back, and runs one approve and Lock. Refuses unless the fork matches the predictions. Writes `deploy-sheet.json` and `deploy-sheet.md` with gas per key and the funding plan.
    - Off the fork: the pause for the confirmation (see above).
 4. **`deploy`.** The verifier, then the lock, at the pinned nonces. After the verifier, it requires the predicted address and the preflight's code hash before the lock is sent; if they differ, the plan is dead and the lock is not deployed. The same check runs for the lock before the stage is marked complete. Then it reads back every constructor value on the real chain, the verifier's first checkpoint, height and committee root included, and verifies both on Sourcify. `deploy` starts only with `--i-accept-no-resume-between-deploy-and-export` (see Recovery).
    - Check: the addresses equal the sheet's.
@@ -43,7 +55,7 @@ A stage runs once, and only after the stages before it (`state.json`, written at
 7. **`export`.** Exports 400,000 atoms to a fresh Base address, then builds the proof input with the relay.
    - Check: the export block carries the lane export root.
 8. **`prove-and-release`.** Without `--proof` it stops. It prints the prover-command contract, the program key, the input's sha256 and the expected public-values hash. With a proof it records an intent and runs the relay's `release` with every pre-send check.
-9. **`record`.** Writes the summary (with the intents) and the manifest; rewritten after a release.
+9. **`record`.** Writes the summary (with the intents, each key's balance read from the chain and what was done with what is left) and the manifest; rewritten after a release.
 
 Stages 2 to 7 share the fleet driver, so they run in one invocation. A crash between them restarts from a fresh output directory, but already deployed contracts cannot be redeployed at the same nonces.
 

@@ -505,8 +505,54 @@ def check_gas_price(*, plan_wei, current_wei):
             'were already deployed they are bound to this chain, and a new run needs new deployer keys')
 
 
-def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_identity=None):
-    """Every address, nonce, constructor value, gas figure and the test ETH each key needs."""
+FEE_NOTE = ('gas x gas price is an estimate, not the exact fee: a Base transaction also pays an L1 data fee. The '
+            f'{GAS_MARGIN}x margin covers it and a price rise up to the gas guard.')
+
+
+def check_relayer_ceiling(*, fork, through, ceiling):
+    """A real run that reaches prove-and-release needs the relayer's ETH ceiling set
+    explicitly: the proof transaction's gas is not known before a real proof."""
+    if fork or STAGES.index(through) < STAGES.index('prove-and-release'):
+        return
+    require(ceiling is not None and ceiling > 0,
+            'a real run through prove-and-release needs --relayer-ceiling-wei: the most test ETH the holder passes '
+            'to the relayer for the release (its gas is not known before a real proof); nothing was sent')
+
+
+def funding_plan(needs, *, gas_price_wei, relayer_ceiling_wei):
+    """The amount to fund each key with, its formula, and the holder's total starting balance."""
+    def row(key):
+        gas = needs[key]['gas']
+        return {'fund_wei': gas * gas_price_wei * GAS_MARGIN,
+                'formula': f'gas {gas} ({" + ".join(needs[key]["steps"])}) x plan gas price {gas_price_wei} wei '
+                           f'x margin {GAS_MARGIN}'}
+    plan = {'verifier deployer': row('verifier deployer'), 'lock deployer': row('lock deployer')}
+    plan['relayer'] = {
+        'fund_wei': relayer_ceiling_wei,
+        'formula': 'the ceiling the operator sets with --relayer-ceiling-wei; the release\'s gas is not known before '
+                   'a real proof' + ('' if relayer_ceiling_wei else ' (not set: required before prove-and-release)')}
+    own = needs['holder']['gas'] * gas_price_wei * GAS_MARGIN
+    passed_on = (None if relayer_ceiling_wei is None else
+                 plan['verifier deployer']['fund_wei'] + plan['lock deployer']['fund_wei'] + relayer_ceiling_wei)
+    plan['holder'] = {
+        'own_gas_wei': own,
+        'own_gas_formula': f'gas {needs["holder"]["gas"]} (approve + lock + {FUNDING_TRANSFERS} funding transfers of '
+                           f'{TRANSFER_GAS}) x plan gas price {gas_price_wei} wei x margin {GAS_MARGIN}',
+        'passed_on_wei': passed_on,
+        'starting_balance_wei': None if passed_on is None else own + passed_on,
+        'formula': 'starting balance = own gas + verifier deployer + lock deployer + relayer ceiling',
+        'token_units': LOCK_AMOUNT}
+    return plan
+
+
+def key_balances(keys, balance):
+    """Each key's ETH balance read from the chain, for the record."""
+    return {key: {'address': address, 'wei': balance(address) if address else 'not known: no address recorded'}
+            for key, address in keys.items()}
+
+
+def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_identity=None, relayer_ceiling_wei=None):
+    """Every address, nonce, constructor value, gas figure and the bounded funding plan for the four keys."""
     keys = {
         'verifier deployer': ('deploy-verifier',),
         'lock deployer': ('deploy-lock',),
@@ -522,11 +568,14 @@ def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_iden
                       'eth_with_margin': f'{gas * gas_price_wei * GAS_MARGIN / 1e18:.9f}'}
     needs['holder']['steps'].append(f'{FUNDING_TRANSFERS} funding transfers')
     needs['relayer'] = {'steps': ['release'], 'gas': None, 'wei_with_margin': None, 'eth_with_margin': None,
-                        'note': 'release gas cannot be estimated without a real proof; fund it separately'}
+                        'note': 'release gas cannot be estimated without a real proof; funded up to the ceiling '
+                                'set with --relayer-ceiling-wei'}
     return {'chain_id': CHAIN_ID, 'plan': plan, 'verifier_constructor': verifier_config,
             'program_identity': program_identity,
             'sp1_verifier': SP1_VERIFIER, 'gas_price_wei': gas_price_wei, 'gas_margin': GAS_MARGIN,
             'gas_used_on_fork': gas_used, 'test_eth_per_key': needs,
+            'funding': funding_plan(needs, gas_price_wei=gas_price_wei, relayer_ceiling_wei=relayer_ceiling_wei),
+            'fee_note': FEE_NOTE,
             'release_gas': 'not estimated: a release needs a real proof',
             'funding_transfers': {'count': FUNDING_TRANSFERS, 'gas_each': TRANSFER_GAS,
                                   'to': ['verifier deployer', 'lock deployer', 'relayer'],
@@ -544,6 +593,17 @@ def sheet_markdown(sheet):
     for key, need in sheet['test_eth_per_key'].items():
         lines.append(f'| {key} | {need["gas"] if need["gas"] is not None else "n/a"} | '
                      f'{need["eth_with_margin"] or need.get("note")} |')
+    funding = sheet.get('funding')
+    if funding:
+        holder = funding['holder']
+        lines += ['', '## Funding plan (wei)', '', '| Key | Fund with | Formula |', '|---|---|---|']
+        for key in ('verifier deployer', 'lock deployer', 'relayer'):
+            lines.append(f'| {key} | {funding[key]["fund_wei"]} | {funding[key]["formula"]} |')
+        lines += [f'| holder, own gas | {holder["own_gas_wei"]} | {holder["own_gas_formula"]} |',
+                  f'| holder, passed on to the three keys | {holder["passed_on_wei"]} | verifier deployer + lock '
+                  'deployer + relayer |',
+                  f'| holder, starting balance | {holder["starting_balance_wei"]} | {holder["formula"]} |',
+                  '', f'The holder also needs {holder["token_units"]} token units. {sheet["fee_note"]}']
     identity = sheet.get('program_identity') or {}
     if identity:
         lines += ['', f'Program: ELF sha256 `{identity["elf_sha256"]}`, key `{identity["program_vkey"]}`, source '
@@ -576,6 +636,11 @@ def parser():
         p.add_argument(f'--{role}-password-file', type=Path)
     p.add_argument('--i-accept-no-resume-between-deploy-and-export', action='store_true',
                    help='deploy goes on knowing the in-process PFTL fleet cannot be reopened after a crash')
+    p.add_argument('--relayer-ceiling-wei', type=int,
+                   help='the most test ETH the holder passes to the relayer for the release; required for a real '
+                        'run through prove-and-release')
+    p.add_argument('--leftover-eth', choices=('returned-to-holder', 'kept-on-keys'),
+                   help='what was done with the ETH left on the one-time keys; stated in the record')
     p.add_argument('--verifier-deployer', help='address of the one-time verifier keystore')
     p.add_argument('--lock-deployer', help='address of the one-time lock keystore')
     return p
@@ -594,6 +659,7 @@ def main(argv=None):
     require(args.fork or (args.fork_finality_wait == 0 and args.fork_driver_timeout is None),
             '--fork-finality-wait and --fork-driver-timeout are fork-only')
     refuse_through_off_fork(fork=args.fork, through=args.through)
+    check_relayer_ceiling(fork=args.fork, through=args.through, ceiling=args.relayer_ceiling_wei)
     head_commit = ORDER.git('rev-parse', 'HEAD')
     check_commit(state, head_commit)
     identity = load_program_identity(
@@ -853,7 +919,9 @@ def main(argv=None):
                                      'constructor_values_read_back': len(read), 'matches_predictions': True}
                 sheet = deploy_sheet(plan={r: plan[r] for r in ('verifier', 'lock')},
                                      verifier_config=data['verifier_config'], gas_used=gas,
-                                     gas_price_wei=plan['gas_price_wei'], program_identity=identity)
+                                     gas_price_wei=plan['gas_price_wei'], program_identity=identity,
+                                     relayer_ceiling_wei=args.relayer_ceiling_wei)
+                data['relayer_ceiling_wei'] = args.relayer_ceiling_wei
                 (out / 'deploy-sheet.json').write_text(json.dumps(sheet, indent=2) + '\n')
                 (out / 'deploy-sheet.md').write_text(sheet_markdown(sheet))
                 children.pop().terminate()
@@ -883,7 +951,8 @@ def main(argv=None):
                                                                        getattr(args, f'{role}_password_file'))]).strip()
                     check_deployer_keystores(plan, keystore_address)
                     try:
-                        relayer_opens = bool(keystore_address('relayer'))
+                        data['relayer_address'] = keystore_address('relayer').lower()
+                        relayer_opens = bool(data['relayer_address'])
                     except RehearsalFailure:
                         relayer_opens = False
                     check_real_run_ready(
@@ -1074,6 +1143,10 @@ def main(argv=None):
                         break
                     continue
                 require(not args.fork, 'a real proof is released on Base Sepolia, not on the fork')
+                check_relayer_ceiling(fork=False, through=stage, ceiling=args.relayer_ceiling_wei)
+                require(args.relayer_ceiling_wei == data.get('relayer_ceiling_wei'),
+                        f'--relayer-ceiling-wei {args.relayer_ceiling_wei} differs from the sheet\'s '
+                        f'{data.get("relayer_ceiling_wei")}; nothing was sent')
                 release = begin_intent(state, stage='prove-and-release', role='release', sender='relayer keystore',
                                        nonce=None, purpose=f'release {EXPORT_AMOUNT} to {data["export"]["base_recipient"]}')
                 require(release['outcome'] in (None, 'not sent'),
@@ -1106,6 +1179,17 @@ def main(argv=None):
                 deployed = data.get('deploy', {})
                 if not args.fork and any(str(v).startswith('failed') for v in deployed.get('sourcify', {}).values()):
                     deployed['sourcify'] = verify_sources(deployed['verifier'], deployed['lock'])
+                keys = {'verifier deployer': data['plan']['verifier']['deployer'],
+                        'lock deployer': data['plan']['lock']['deployer'], 'holder': HOLDER,
+                        'relayer': data.get('relayer_address')}
+                try:
+                    data['key_balances_after_run'] = key_balances(
+                        keys, lambda a: int(rpc(target_url(), 'eth_getBalance', [a, 'latest']), 16))
+                except (OSError, ValueError, RehearsalFailure) as error:
+                    data['key_balances_after_run'] = f'not read: {error}'
+                data['leftover_eth'] = args.leftover_eth or (
+                    'not applicable: fork' if args.fork else 'not stated: pass --leftover-eth when the record is '
+                                                            'written')
                 summary = {'mode': state['mode'], 'public_network_transaction': not args.fork,
                            'proof_network_request': False, **{k: v for k, v in data.items() if k != 'private'},
                            'intents': state.get('intents', []),
