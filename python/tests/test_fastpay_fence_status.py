@@ -90,34 +90,44 @@ class FenceStatusQuorumTests(unittest.TestCase):
         proved = check(statuses[:5])
         self.assertEqual((proved["anchored_at_or_before_height"], len(proved["signers"])), (7, 5))
 
-    def test_each_refusal_is_named(self) -> None:
-        honest = [status(i) for i in range(5)]
+    def test_each_faulty_status_is_reported_beside_the_quorum(self) -> None:
+        honest = [status(i) for i in range(6)]
         cases = {
-            "non_member": lambda s: s[0].update(validator_id="validator-9"),
-            "duplicate_validator": lambda s: s.append(copy.deepcopy(s[0])),
-            "wrong_epoch": lambda s: s[1].update(committee_epoch=4),
-            "wrong_domain": lambda s: s[2].update(chain_id="other"),
-            "bad_signature": lambda s: s[3].update(signature_hex="00"),
-            "conflicting": lambda s: s[4].update(fence_digest="77" * 48),
-            "malformed": lambda s: s[0].update(fence_digest=None),
-            "wrong_lock": lambda s: s[0].update(lock_id="77" * 48),
+            "non_member": (0, lambda s: s.update(validator_id="validator-9")),
+            "wrong_epoch": (1, lambda s: s.update(committee_epoch=4)),
+            "wrong_domain": (2, lambda s: s.update(chain_id="other")),
+            "bad_signature": (3, lambda s: s.update(signature_hex="00")),
+            "malformed": (4, lambda s: s.update(fence_digest=None)),
+            "wrong_lock": (5, lambda s: s.update(lock_id="77" * 48)),
         }
-        for reason, mutate in cases.items():
+        for reason, (index, mutate) in cases.items():
             statuses = copy.deepcopy(honest)
-            mutate(statuses)
-            with self.assertRaises(FenceStatusRefused, msg=reason) as refused:
-                check(statuses)
-            self.assertEqual(refused.exception.reason, reason)
-        # "Not yet" at or above the anchored height contradicts it; below it
-        # is a lagging validator.
-        with self.assertRaises(FenceStatusRefused):
-            check(honest + [status(5, None, 7)])
-        self.assertEqual(check(honest + [status(5, None, 6)])["anchored_at_or_before_height"], 7)
+            mutate(statuses[index])
+            proved = check(statuses)
+            self.assertEqual(len(proved["signers"]), 5, reason)
+            self.assertEqual(proved["invalid"], [{"validator_id": statuses[index]["validator_id"], "reason": reason}])
+        proved = check(honest[:5] + [copy.deepcopy(honest[0])])
+        self.assertEqual((len(proved["signers"]), proved["invalid"][0]["reason"]), (5, "duplicate_validator"))
+
+    def test_minority_contradiction_is_reported_not_a_veto(self) -> None:
+        # P1-N1, the reviewer's case: five terminal, the sixth "not terminal"
+        # at the anchored height.
+        five = [status(i) for i in range(5)]
+        late = status(5, None, 7)
+        proved = check(five + [late])
+        self.assertEqual((len(proved["signers"]), proved["contradicting"]), (5, [late]))
+        other = dict(status(5), fence_digest="77" * 48)
+        self.assertEqual(check(five + [other])["contradicting"], [other])
+        self.assertEqual(check(five + [status(5, None, 6)])["contradicting"], [])
+        equivocated = [dict(status(i), fence_digest="77" * 48) for i in range(1, 6)]
+        with self.assertRaises(FenceStatusRefused) as refused:
+            check(five + equivocated)
+        self.assertEqual(refused.exception.reason, "conflicting")
 
     def test_shared_acceptance_vectors(self) -> None:
         # The same file runs in postfiat_types::fence_status_shared_acceptance_vectors.
         cases = json.loads(VECTORS.read_text())["cases"]
-        self.assertGreaterEqual(len(cases), 20)
+        self.assertGreaterEqual(len(cases), 30)
         for case in cases:
             with self.subTest(case["name"]):
                 try:

@@ -369,19 +369,32 @@ showing an unwrap credit as ordered:
   members, the protocol quorum for its member count, its schema, order range
   and canonical member order (`invalid_committee`), then its root against the
   pinned one (`untrusted_committee`);
-- verify each ML-DSA-65 signature against that committee's keys and count
-  only distinct members, refusing non-members, duplicates, other epochs and
-  any member a status does not sign (`malformed`);
-- require the committee's `quorum` of statuses with the same decision,
-  operation and `fence_digest`; anchored and observed heights may differ. The
-  proved `anchored_at_or_before_height` is the highest in that quorum, the
-  height by which the quorum agrees the effect was anchored. A "not terminal"
-  observed at or above any signer's `anchored_at_or_before_height` is
-  `conflicting`.
+- check each status on its own (shape, lock, domain, epoch and root,
+  membership, ML-DSA-65 signature against that committee's keys); a status
+  that fails is listed in the result's `invalid` with its `validator_id` and
+  reason and counts for nothing, without refusing the others;
+- require the committee's `quorum` of distinct members with the same
+  decision, operation and `fence_digest`; anchored and observed heights may
+  differ. The proved `anchored_at_or_before_height` is the highest in that
+  quorum, the height by which the quorum agrees the effect was anchored.
+
+The rule assumes at most the committee's fault bound, `(n - 1) / 3` of `n`
+members, is faulty, so a faulty minority can neither prove an answer nor veto
+one. A valid status that contradicts the proved answer (another terminal
+result, or "not terminal" observed at or above the quorum's lowest
+`anchored_at_or_before_height`) is returned unchanged in `contradicting`.
+Nothing changes for the user: the wallet acts on the proved answer and logs
+`contradicting` (and `invalid`) for operators, since a signed contradiction
+is evidence of a faulty or misconfigured validator. Only when the
+contradicting statuses also come from a quorum of distinct members (more
+faulty members than the bound) is the set refused as `conflicting`; with no
+answer at quorum it is `below_quorum`.
 
 The Rust check is `postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v2`
-(rules in `postfiat_types::verify_fastpay_fence_status_quorum_v2`; parse with
-`FastPayFenceStatusV2::from_json_strict`); the Python check is
+(rules in `postfiat_types::verify_fastpay_fence_status_quorum_v2`; for statuses
+as received, `verify_fastpay_fence_status_quorum_v2_json` parses each with
+`FastPayFenceStatusV2::from_json_strict` and reports one that does not parse
+as `malformed`); the Python check is
 `postfiat_rpc.fastpay_fence_status.verify_fence_status_quorum`, with an
 ML-DSA verifier supplied by the caller. Both run the same acceptance vectors,
 `crates/types/test-vectors/fastpay_fence_status_acceptance_v2.json`. A

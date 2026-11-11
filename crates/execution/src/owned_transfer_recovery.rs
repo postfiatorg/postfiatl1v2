@@ -1838,16 +1838,22 @@ mod owned_transfer_recovery_tests {
         let mut altered = statuses.clone();
         altered[1].anchored_at_or_before_height = Some(3);
         altered[1].observed_height = 5;
-        assert!(matches!(
+        // A badly signed status counts for nothing and is reported.
+        assert_eq!(
             verify_fastpay_fence_status_quorum_ml_dsa_v2(&altered, &committee, &committee.registry_root, &lock_id),
-            Err(postfiat_types::FastPayFenceStatusRefusalV2::BadSignature { .. })
-        ));
+            Err(postfiat_types::FastPayFenceStatusRefusalV2::BelowQuorum { agreeing: 2, quorum: 3 })
+        );
+        let mut beside = statuses.clone();
+        beside.push(altered[1].clone());
+        let reported =
+            verify_fastpay_fence_status_quorum_ml_dsa_v2(&beside, &committee, &committee.registry_root, &lock_id).unwrap();
+        assert_eq!(reported.invalid[0].reason, postfiat_types::FastPayFenceStatusFaultV2::BadSignature);
         // The same bytes signed under another FastPay context do not count.
         let mut cross = statuses;
         cross[2] = sign(2, FASTPAY_APPLY_ACK_CONTEXT_V1);
-        assert!(matches!(
+        assert_eq!(
             verify_fastpay_fence_status_quorum_ml_dsa_v2(&cross, &committee, &committee.registry_root, &lock_id),
-            Err(postfiat_types::FastPayFenceStatusRefusalV2::BadSignature { .. })
-        ));
+            Err(postfiat_types::FastPayFenceStatusRefusalV2::BelowQuorum { agreeing: 2, quorum: 3 })
+        );
     }
 }

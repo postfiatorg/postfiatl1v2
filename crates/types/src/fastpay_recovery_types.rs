@@ -1282,18 +1282,36 @@ pub enum FastPayFenceStatusRefusalV2 {
     InvalidCommittee,
     /// A valid committee whose registry root is not the caller's pinned one.
     UntrustedCommittee,
-    Malformed { validator_id: String },
-    WrongLock { validator_id: String },
-    WrongDomain { validator_id: String },
-    WrongEpoch { validator_id: String },
-    NonMember { validator_id: String },
-    DuplicateValidator { validator_id: String },
-    BadSignature { validator_id: String },
-    /// Two answers that cannot both be true: different terminal answers, or
-    /// "not terminal" observed at or above a terminal answer's
-    /// `anchored_at_or_before_height`.
+    /// An answer reached the quorum, but the valid statuses contradicting it
+    /// also come from at least a quorum of distinct members (for example two
+    /// terminal answers each signed by a quorum). That needs more faulty
+    /// members than the committee's fault bound, so nothing is proved.
     Conflicting,
+    /// No answer was signed by a quorum of distinct members; `agreeing` is
+    /// the largest number of distinct members behind one valid answer.
     BelowQuorum { agreeing: usize, quorum: usize },
+}
+
+/// Why one status was set aside; it counts for no answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FastPayFenceStatusFaultV2 {
+    Malformed,
+    WrongLock,
+    WrongDomain,
+    WrongEpoch,
+    NonMember,
+    BadSignature,
+    /// A second valid status of a member for an answer it already signed.
+    DuplicateValidator,
+}
+
+/// A status that failed its own checks, reported beside the result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FastPayFenceStatusInvalidV2 {
+    /// The claimed id (empty when the status carries none).
+    pub validator_id: String,
+    pub reason: FastPayFenceStatusFaultV2,
 }
 
 /// A fence status answer proved by `signers`, a quorum of distinct members.
@@ -1311,20 +1329,135 @@ pub struct FastPayFenceStatusQuorumV2 {
     pub observed_height: u64,
     pub signers: Vec<String>,
     pub quorum: usize,
+    /// Valid, signed statuses that contradict the proved answer: another
+    /// terminal answer, or "not terminal" at or above the quorum's lowest
+    /// `anchored_at_or_before_height` (for a "not terminal" answer: a
+    /// terminal answer anchored at or below the quorum's highest observed
+    /// height). Signed evidence of a faulty member for operators; it never
+    /// changes the proved answer.
+    pub contradicting: Vec<FastPayFenceStatusV2>,
+    /// Statuses that failed their own checks, in input order.
+    pub invalid: Vec<FastPayFenceStatusInvalidV2>,
 }
 
-/// Accepts only when a quorum of distinct `committee` members signed the
-/// same decision, operation and fence digest for `lock_id`
-/// on the committee's chain, genesis, protocol version and epoch. The
-/// committee must validate and its registry root must equal
+/// Accepts when a quorum of distinct `committee` members signed the same
+/// decision, operation and fence digest for `lock_id` on the committee's
+/// chain, genesis, protocol version and epoch.
+///
+/// The committee must validate and its registry root must equal
 /// `pinned_registry_root`, which the caller takes from its own trusted
 /// configuration, never from the answer carrying the statuses; the root
-/// commits to the chain, genesis, protocol version, epoch and members. Any
-/// non-member, duplicate, wrong-epoch, wrong-domain or badly signed status
-/// refuses the whole set. `verify(public_key_hex, message, signature_hex)`
-/// checks one ML-DSA-65 signature under `FASTPAY_FENCE_STATUS_CONTEXT_V2`.
+/// commits to the chain, genesis, protocol version, epoch and members.
+///
+/// Each status is checked on its own (shape, lock, domain, epoch and root,
+/// membership, signature); one that fails is reported in `invalid` and does
+/// not affect the others. Valid statuses are grouped by answer, counting
+/// each member once per answer. A terminal answer reaching the quorum is
+/// proved, else "not terminal" if it reaches the quorum. Valid statuses that
+/// contradict the proved answer are returned in `contradicting`.
+///
+/// Assumption: at most the committee's fault bound, `(n - 1) / 3` of `n`
+/// members, is faulty. Then a faulty minority can neither prove an answer
+/// (a quorum always holds more than the bound of honest members) nor veto
+/// one; two contradicting quorums need more faulty members than that, so
+/// the set is refused as `Conflicting`.
+///
+/// `verify(public_key_hex, message, signature_hex)` checks one ML-DSA-65
+/// signature under `FASTPAY_FENCE_STATUS_CONTEXT_V2`.
 pub fn verify_fastpay_fence_status_quorum_v2(
     statuses: &[FastPayFenceStatusV2],
+    committee: &FastPayRecoveryCommitteeV1,
+    pinned_registry_root: &str,
+    lock_id: &str,
+    verify: impl Fn(&str, &[u8], &str) -> bool,
+) -> Result<FastPayFenceStatusQuorumV2, FastPayFenceStatusRefusalV2> {
+    verify_fence_status_entries(
+        statuses.iter().map(Ok).collect(),
+        committee,
+        pinned_registry_root,
+        lock_id,
+        verify,
+    )
+}
+
+/// `verify_fastpay_fence_status_quorum_v2` over statuses as received: each
+/// is parsed with `FastPayFenceStatusV2::from_json_strict`, and one that
+/// does not parse is reported as `Malformed` beside the others.
+pub fn verify_fastpay_fence_status_quorum_v2_json(
+    statuses: &[serde_json::Value],
+    committee: &FastPayRecoveryCommitteeV1,
+    pinned_registry_root: &str,
+    lock_id: &str,
+    verify: impl Fn(&str, &[u8], &str) -> bool,
+) -> Result<FastPayFenceStatusQuorumV2, FastPayFenceStatusRefusalV2> {
+    let parsed = statuses
+        .iter()
+        .map(|value| {
+            FastPayFenceStatusV2::from_json_strict(value).map_err(|_| {
+                value["validator_id"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string()
+            })
+        })
+        .collect::<Vec<_>>();
+    verify_fence_status_entries(
+        parsed.iter().map(Result::as_ref).collect(),
+        committee,
+        pinned_registry_root,
+        lock_id,
+        verify,
+    )
+}
+
+/// One status's own checks; `Ok` carries nothing, the status is valid.
+fn fence_status_fault(
+    status: &FastPayFenceStatusV2,
+    committee: &FastPayRecoveryCommitteeV1,
+    lock_id: &str,
+    verify: &impl Fn(&str, &[u8], &str) -> bool,
+) -> Result<(), FastPayFenceStatusFaultV2> {
+    let bytes = status
+        .validate_shape()
+        .and_then(|()| status.signing_bytes())
+        .map_err(|_| FastPayFenceStatusFaultV2::Malformed)?;
+    if status.lock_id != lock_id {
+        return Err(FastPayFenceStatusFaultV2::WrongLock);
+    }
+    if status.chain_id != committee.chain_id
+        || status.genesis_hash != committee.genesis_hash
+        || status.protocol_version != committee.protocol_version
+    {
+        return Err(FastPayFenceStatusFaultV2::WrongDomain);
+    }
+    if status.committee_epoch != committee.committee_epoch
+        || status.registry_root != committee.registry_root
+    {
+        return Err(FastPayFenceStatusFaultV2::WrongEpoch);
+    }
+    let member = committee
+        .validators
+        .iter()
+        .find(|member| member.validator_id == status.validator_id)
+        .ok_or(FastPayFenceStatusFaultV2::NonMember)?;
+    if !verify(&member.public_key_hex, &bytes, &status.signature_hex) {
+        return Err(FastPayFenceStatusFaultV2::BadSignature);
+    }
+    Ok(())
+}
+
+/// Whether two valid statuses cannot both be true.
+fn fence_statuses_contradict(a: &FastPayFenceStatusV2, b: &FastPayFenceStatusV2) -> bool {
+    match (a.anchored_at_or_before_height, b.anchored_at_or_before_height) {
+        (Some(_), Some(_)) => a.terminal_answer() != b.terminal_answer(),
+        (Some(anchored), None) => b.observed_height >= anchored,
+        (None, Some(anchored)) => a.observed_height >= anchored,
+        (None, None) => false,
+    }
+}
+
+fn verify_fence_status_entries(
+    entries: Vec<Result<&FastPayFenceStatusV2, &String>>,
     committee: &FastPayRecoveryCommitteeV1,
     pinned_registry_root: &str,
     lock_id: &str,
@@ -1336,105 +1469,93 @@ pub fn verify_fastpay_fence_status_quorum_v2(
     if committee.registry_root != pinned_registry_root {
         return Err(FastPayFenceStatusRefusalV2::UntrustedCommittee);
     }
-    let mut seen = BTreeSet::new();
-    // (first status, signers, lowest observed, highest anchored-at-or-before)
-    let mut groups: Vec<(&FastPayFenceStatusV2, Vec<String>, u64, Option<u64>)> = Vec::new();
-    for status in statuses {
-        let validator_id = status.validator_id.clone();
-        let bytes = status
-            .validate_shape()
-            .and_then(|()| status.signing_bytes())
-            .map_err(|_| FastPayFenceStatusRefusalV2::Malformed {
-                validator_id: validator_id.clone(),
-            })?;
-        if status.lock_id != lock_id {
-            return Err(FastPayFenceStatusRefusalV2::WrongLock { validator_id });
-        }
-        if status.chain_id != committee.chain_id
-            || status.genesis_hash != committee.genesis_hash
-            || status.protocol_version != committee.protocol_version
-        {
-            return Err(FastPayFenceStatusRefusalV2::WrongDomain { validator_id });
-        }
-        if status.committee_epoch != committee.committee_epoch
-            || status.registry_root != committee.registry_root
-        {
-            return Err(FastPayFenceStatusRefusalV2::WrongEpoch { validator_id });
-        }
-        let Some(member) = committee
-            .validators
-            .iter()
-            .find(|member| member.validator_id == validator_id)
-        else {
-            return Err(FastPayFenceStatusRefusalV2::NonMember { validator_id });
+    let mut invalid = Vec::new();
+    let mut valid: Vec<&FastPayFenceStatusV2> = Vec::new();
+    // One group per answer, in first-seen order; each member counts once.
+    let mut groups: Vec<Vec<&FastPayFenceStatusV2>> = Vec::new();
+    for entry in entries {
+        let fault = match entry {
+            Err(validator_id) => Err((validator_id.clone(), FastPayFenceStatusFaultV2::Malformed)),
+            Ok(status) => fence_status_fault(status, committee, lock_id, &verify)
+                .map(|()| status)
+                .map_err(|fault| (status.validator_id.clone(), fault)),
         };
-        if !seen.insert(validator_id.clone()) {
-            return Err(FastPayFenceStatusRefusalV2::DuplicateValidator { validator_id });
-        }
-        if !verify(&member.public_key_hex, &bytes, &status.signature_hex) {
-            return Err(FastPayFenceStatusRefusalV2::BadSignature { validator_id });
-        }
+        let status = match fault {
+            Ok(status) => status,
+            Err((validator_id, reason)) => {
+                invalid.push(FastPayFenceStatusInvalidV2 {
+                    validator_id,
+                    reason,
+                });
+                continue;
+            }
+        };
         match groups
             .iter_mut()
-            .find(|(first, ..)| first.terminal_answer() == status.terminal_answer())
+            .find(|group| group[0].terminal_answer() == status.terminal_answer())
         {
-            Some((_, signers, lowest, highest)) => {
-                signers.push(validator_id);
-                *lowest = (*lowest).min(status.observed_height);
-                *highest = (*highest).max(status.anchored_at_or_before_height);
+            Some(group) if group.iter().any(|s| s.validator_id == status.validator_id) => {
+                invalid.push(FastPayFenceStatusInvalidV2 {
+                    validator_id: status.validator_id.clone(),
+                    reason: FastPayFenceStatusFaultV2::DuplicateValidator,
+                });
+                continue;
             }
-            None => groups.push((
-                status,
-                vec![validator_id],
-                status.observed_height,
-                status.anchored_at_or_before_height,
-            )),
+            Some(group) => group.push(status),
+            None => groups.push(vec![status]),
         }
-    }
-    let terminal_groups = groups
-        .iter()
-        .filter(|(first, ..)| first.decision.is_some())
-        .count();
-    let lowest_anchored = statuses
-        .iter()
-        .filter_map(|status| status.anchored_at_or_before_height)
-        .min();
-    let highest_not_terminal = statuses
-        .iter()
-        .filter(|status| status.decision.is_none())
-        .map(|status| status.observed_height)
-        .max();
-    if terminal_groups > 1
-        || lowest_anchored
-            .zip(highest_not_terminal)
-            .is_some_and(|(anchored, observed)| observed >= anchored)
-    {
-        return Err(FastPayFenceStatusRefusalV2::Conflicting);
+        valid.push(status);
     }
     let quorum = committee.quorum;
-    let best = groups
-        .into_iter()
-        .max_by_key(|(_, signers, ..)| signers.len());
-    match best {
-        Some((first, mut signers, lowest, highest)) if signers.len() >= quorum => {
-            signers.sort();
-            Ok(FastPayFenceStatusQuorumV2 {
-                lock_id: lock_id.to_string(),
-                committee_epoch: committee.committee_epoch,
-                decision: first.decision.clone(),
-                operation: first.operation,
-                fence_digest: first.fence_digest.clone(),
-                anchored_at_or_before_height: highest,
-                observed_height: lowest,
-                signers,
-                quorum,
-            })
-        }
-        best => Err(FastPayFenceStatusRefusalV2::BelowQuorum {
-            agreeing: best.map_or(0, |(_, signers, ..)| signers.len()),
+    let candidate = groups
+        .iter()
+        .filter(|group| group.len() >= quorum)
+        .min_by_key(|group| group[0].decision.is_none());
+    let Some(group) = candidate else {
+        return Err(FastPayFenceStatusRefusalV2::BelowQuorum {
+            agreeing: groups.iter().map(Vec::len).max().unwrap_or(0),
             quorum,
-        }),
+        });
+    };
+    let first = group[0];
+    // A status contradicts the group when it contradicts any of its members.
+    let contradicting = valid
+        .into_iter()
+        .filter(|status| group.iter().any(|member| fence_statuses_contradict(member, status)))
+        .collect::<Vec<_>>();
+    let contradictors = contradicting
+        .iter()
+        .map(|status| status.validator_id.as_str())
+        .collect::<BTreeSet<_>>();
+    if contradictors.len() >= quorum {
+        return Err(FastPayFenceStatusRefusalV2::Conflicting);
     }
+    let mut signers = group
+        .iter()
+        .map(|status| status.validator_id.clone())
+        .collect::<Vec<_>>();
+    signers.sort();
+    Ok(FastPayFenceStatusQuorumV2 {
+        lock_id: lock_id.to_string(),
+        committee_epoch: committee.committee_epoch,
+        decision: first.decision.clone(),
+        operation: first.operation,
+        fence_digest: first.fence_digest.clone(),
+        anchored_at_or_before_height: group
+            .iter()
+            .map(|status| status.anchored_at_or_before_height)
+            .max()
+            .flatten(),
+        observed_height: group
+            .iter()
+            .map(|status| status.observed_height)
+            .min()
+            .unwrap_or_default(),
+        signers,
+        quorum,
+        contradicting: contradicting.into_iter().cloned().collect(),
+        invalid,
+    })
 }
 
 #[cfg(test)]
@@ -1923,75 +2044,82 @@ mod fastpay_recovery_type_tests {
     }
 
     #[test]
-    fn fence_status_quorum_refuses_each_named_reason() {
+    fn fence_status_quorum_reports_each_faulty_status_beside_the_quorum() {
         let committee = fence_status_committee();
-        let honest = (0..5)
+        let honest = (0..6)
             .map(|index| fence_status(&committee, index, Some(7), 9))
             .collect::<Vec<_>>();
-        let named = |validator_id: &str| validator_id.to_string();
-        let mut stranger = honest.clone();
-        stranger[0].validator_id = "validator-9".into();
-        assert_eq!(
-            check(&stranger, &committee),
-            Err(FastPayFenceStatusRefusalV2::NonMember {
-                validator_id: named("validator-9")
-            })
-        );
-        let mut duplicate = honest.clone();
+        type Mutation = fn(&mut FastPayFenceStatusV2);
+        let faults: [(usize, Mutation, FastPayFenceStatusFaultV2); 6] = [
+            (0, |s| s.validator_id = "validator-9".into(), FastPayFenceStatusFaultV2::NonMember),
+            (1, |s| s.committee_epoch = 4, FastPayFenceStatusFaultV2::WrongEpoch),
+            (2, |s| s.chain_id = "other".into(), FastPayFenceStatusFaultV2::WrongDomain),
+            (3, |s| s.signature_hex = "00".into(), FastPayFenceStatusFaultV2::BadSignature),
+            (4, |s| s.fence_digest = None, FastPayFenceStatusFaultV2::Malformed),
+            (5, |s| s.lock_id = "77".repeat(48), FastPayFenceStatusFaultV2::WrongLock),
+        ];
+        for (index, mutate, reason) in faults {
+            let mut statuses = honest.clone();
+            mutate(&mut statuses[index]);
+            let accepted = check(&statuses, &committee).expect("five valid of six");
+            assert_eq!(accepted.signers.len(), 5, "{reason:?}");
+            assert_eq!(
+                accepted.invalid,
+                vec![FastPayFenceStatusInvalidV2 {
+                    validator_id: statuses[index].validator_id.clone(),
+                    reason
+                }]
+            );
+        }
+        let mut duplicate = honest[..5].to_vec();
         duplicate.push(honest[0].clone());
-        assert_eq!(
-            check(&duplicate, &committee),
-            Err(FastPayFenceStatusRefusalV2::DuplicateValidator {
-                validator_id: named("validator-0")
-            })
-        );
-        let mut epoch = honest.clone();
-        epoch[1].committee_epoch = 4;
-        assert_eq!(
-            check(&epoch, &committee),
-            Err(FastPayFenceStatusRefusalV2::WrongEpoch {
-                validator_id: named("validator-1")
-            })
-        );
-        let mut chain = honest.clone();
-        chain[2].chain_id = "other".into();
-        assert_eq!(
-            check(&chain, &committee),
-            Err(FastPayFenceStatusRefusalV2::WrongDomain {
-                validator_id: named("validator-2")
-            })
-        );
-        let mut forged = honest.clone();
-        forged[3].signature_hex = "00".into();
+        let accepted = check(&duplicate, &committee).expect("counted once");
+        assert_eq!(accepted.signers.len(), 5);
+        assert_eq!(accepted.invalid[0].reason, FastPayFenceStatusFaultV2::DuplicateValidator);
+        let mut forged = honest[..4].to_vec();
+        forged.push(honest[4].clone());
+        forged[4].signature_hex = "00".into();
         assert_eq!(
             check(&forged, &committee),
-            Err(FastPayFenceStatusRefusalV2::BadSignature {
-                validator_id: named("validator-3")
+            Err(FastPayFenceStatusRefusalV2::BelowQuorum {
+                agreeing: 4,
+                quorum: 5
             })
         );
-        let mut digest = honest.clone();
-        digest[4].fence_digest = Some("77".repeat(48));
-        assert_eq!(
-            check(&digest, &committee),
-            Err(FastPayFenceStatusRefusalV2::Conflicting)
-        );
-        let mut late = honest.clone();
+    }
+
+    /// P1-N1: one member cannot veto five; its signed contradiction is
+    /// returned, and only two contradicting quorums refuse the set.
+    #[test]
+    fn fence_status_minority_contradiction_is_reported_not_a_veto() {
+        let committee = fence_status_committee();
+        let five = (0..5)
+            .map(|index| fence_status(&committee, index, Some(7), 9))
+            .collect::<Vec<_>>();
+        let mut late = five.clone();
         late.push(fence_status(&committee, 5, None, 7));
-        assert_eq!(
-            check(&late, &committee),
-            Err(FastPayFenceStatusRefusalV2::Conflicting)
-        );
-        // A lagging "not yet" below the anchored height is no conflict.
-        let mut lagging = honest.clone();
+        let accepted = check(&late, &committee).expect("the reviewer's five plus one");
+        assert_eq!(accepted.signers.len(), 5);
+        assert_eq!(accepted.contradicting, vec![late[5].clone()]);
+        let mut other = five.clone();
+        other.push(fence_status(&committee, 5, Some(7), 9));
+        other[5].fence_digest = Some("77".repeat(48));
+        let accepted = check(&other, &committee).expect("another terminal minority");
+        assert_eq!(accepted.contradicting, vec![other[5].clone()]);
+        // A lagging "not yet" below the anchored height is no contradiction.
+        let mut lagging = five.clone();
         lagging.push(fence_status(&committee, 5, None, 6));
-        assert_eq!(check(&lagging, &committee).unwrap().anchored_at_or_before_height, Some(7));
-        let mut inconsistent = honest;
-        inconsistent[0].fence_digest = None;
+        assert!(check(&lagging, &committee).unwrap().contradicting.is_empty());
+        // Four members equivocate: two answers each reach the quorum.
+        let mut two = five;
+        two.extend((1..6).map(|index| {
+            let mut status = fence_status(&committee, index, Some(7), 9);
+            status.fence_digest = Some("77".repeat(48));
+            status
+        }));
         assert_eq!(
-            check(&inconsistent, &committee),
-            Err(FastPayFenceStatusRefusalV2::Malformed {
-                validator_id: named("validator-0")
-            })
+            check(&two, &committee),
+            Err(FastPayFenceStatusRefusalV2::Conflicting)
         );
     }
 
@@ -2003,42 +2131,31 @@ mod fastpay_recovery_type_tests {
         ))
         .unwrap();
         let cases = doc["cases"].as_array().unwrap();
-        assert!(cases.len() >= 20);
+        assert!(cases.len() >= 30);
+        let mut failed = Vec::new();
         for case in cases {
-            let name = case["name"].as_str().unwrap();
-            let outcome = (|| {
-                let committee: FastPayRecoveryCommitteeV1 =
-                    serde_json::from_value(case["committee"].clone())
-                        .map_err(|_| FastPayFenceStatusRefusalV2::InvalidCommittee)?;
-                let statuses = case["statuses"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|value| {
-                        FastPayFenceStatusV2::from_json_strict(value).map_err(|_| {
-                            FastPayFenceStatusRefusalV2::Malformed {
-                                validator_id: value["validator_id"]
-                                    .as_str()
-                                    .unwrap_or_default()
-                                    .to_string(),
-                            }
-                        })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                verify_fastpay_fence_status_quorum_v2(
-                    &statuses,
+            let outcome = serde_json::from_value::<FastPayRecoveryCommitteeV1>(
+                case["committee"].clone(),
+            )
+            .map_err(|_| FastPayFenceStatusRefusalV2::InvalidCommittee)
+            .and_then(|committee| {
+                verify_fastpay_fence_status_quorum_v2_json(
+                    case["statuses"].as_array().unwrap(),
                     &committee,
                     case["pinned_registry_root"].as_str().unwrap(),
                     case["lock_id"].as_str().unwrap(),
                     |key, _, signature| key == signature,
                 )
-            })();
+            });
             let got = match outcome {
                 Ok(accepted) => serde_json::json!({ "accepted": accepted }),
                 Err(refused) => serde_json::json!({ "refused": refused }),
             };
-            assert_eq!(got, case["expected"], "{name}");
+            if got != case["expected"] {
+                failed.push(format!("{}: {got}", case["name"]));
+            }
         }
+        assert!(failed.is_empty(), "{failed:#?}");
     }
 
     #[test]
@@ -2068,13 +2185,13 @@ mod fastpay_recovery_type_tests {
         assert_eq!(accepted.anchored_at_or_before_height, Some(12));
         assert_eq!(accepted.observed_height, 20);
         assert_eq!(accepted.signers.len(), 3);
-        // "Not yet" at or above any signer's bound still contradicts it.
+        // "Not yet" at or above any signer's bound contradicts it; alone it
+        // leaves the quorum short, beside a quorum it is reported.
         let mut late = statuses[..2].to_vec();
         late.push(fence_status(&committee, 2, None, 7));
-        assert_eq!(
-            check(&late, &committee),
-            Err(FastPayFenceStatusRefusalV2::Conflicting)
-        );
+        assert_eq!(check(&late, &committee).unwrap_err(), FastPayFenceStatusRefusalV2::BelowQuorum { agreeing: 2, quorum: 3 });
+        late.push(statuses[2].clone());
+        assert_eq!(check(&late, &committee).unwrap().contradicting, vec![late[2].clone()]);
     }
 
     #[test]

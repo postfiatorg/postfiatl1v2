@@ -5,7 +5,9 @@ proved only when a quorum of distinct committee members signed the same
 decision, operation and fence digest for the lock, on the committee's chain,
 genesis, protocol version and epoch. Anchored and observed heights may differ
 between honest signers; the proved `anchored_at_or_before_height` is the
-highest one in the agreeing quorum.
+highest one in the agreeing quorum. A faulty minority (at most the
+committee's fault bound) cannot veto that quorum: its invalid or
+contradicting statuses are reported beside the answer.
 
 The committee is validated as the Rust type validates it (registry root
 recomputed from the members, the protocol quorum for the member count,
@@ -255,8 +257,49 @@ def _answer(status: dict[str, Any]) -> tuple[Any, ...]:
     return (_decision_key(status["decision"]), status["operation"], status["fence_digest"])
 
 
+def _contradict(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Whether two valid statuses cannot both be true."""
+    a_bound, b_bound = a["anchored_at_or_before_height"], b["anchored_at_or_before_height"]
+    if a_bound is not None and b_bound is not None:
+        return _answer(a) != _answer(b)
+    if a_bound is not None:
+        return b["observed_height"] >= a_bound
+    if b_bound is not None:
+        return a["observed_height"] >= b_bound
+    return False
+
+
+def _fault(status: Any, committee: dict[str, Any], members: dict[str, str], lock_id: str, verify) -> str | None:
+    """One status's own checks: ``None`` when valid, else the fault's name."""
+    try:
+        message = signing_bytes(status)
+    except (KeyError, TypeError, ValueError, struct.error):
+        return "malformed"
+    signature = status["signature_hex"]
+    if len(signature) > MAX_SIGNATURE_HEX_LEN or not _LOWER_HEX.match(signature):
+        return "malformed"
+    if status["lock_id"] != lock_id:
+        return "wrong_lock"
+    if (status["chain_id"], status["genesis_hash"], status["protocol_version"]) != (
+        committee["chain_id"],
+        committee["genesis_hash"],
+        committee["protocol_version"],
+    ):
+        return "wrong_domain"
+    if (status["committee_epoch"], status["registry_root"]) != (
+        committee["committee_epoch"],
+        committee["registry_root"],
+    ):
+        return "wrong_epoch"
+    if status["validator_id"] not in members:
+        return "non_member"
+    if not verify(members[status["validator_id"]], message, signature):
+        return "bad_signature"
+    return None
+
+
 def verify_fence_status_quorum(
-    statuses: Iterable[dict[str, Any]],
+    statuses: Iterable[Any],
     committee: dict[str, Any],
     lock_id: str,
     verify: Callable[[str, bytes, str], bool],
@@ -268,50 +311,49 @@ def verify_fence_status_quorum(
     ``pinned_registry_root`` is required and must come from the caller's
     trusted configuration (a pinned committee or root), not from the gateway
     or RPC answer that supplied ``committee`` or ``statuses``.
+
+    Each status is checked on its own; one that fails is listed in the
+    result's ``invalid`` (``validator_id``, ``reason``) and does not affect
+    the others. Valid statuses are grouped by answer, each member counted
+    once per answer. A terminal answer reaching the quorum is proved, else
+    "not terminal" if it does. Valid statuses that contradict the proved
+    answer (another terminal answer, or "not terminal" at or above the
+    quorum's lowest bound) are returned unchanged in ``contradicting``:
+    signed evidence for operators that never changes the answer.
+
+    Assumes at most the committee's fault bound, ``(n - 1) // 3`` of ``n``
+    members, is faulty: a faulty minority can neither prove nor veto an
+    answer. When the contradicting statuses also come from a quorum of
+    distinct members, more members than that are faulty and the set is
+    refused as ``conflicting``. No answer at quorum: ``below_quorum``.
     """
     statuses = list(statuses)
     members = validate_committee(committee, pinned_registry_root)
     quorum = committee["quorum"]
-    seen: set[str] = set()
+    invalid: list[dict[str, str]] = []
+    valid: list[dict[str, Any]] = []
     groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     for status in statuses:
-        validator_id = status.get("validator_id") if isinstance(status, dict) else None
-        try:
-            message = signing_bytes(status)
-        except (KeyError, TypeError, ValueError, struct.error):
-            raise FenceStatusRefused("malformed", validator_id) from None
-        signature = status["signature_hex"]
-        if len(signature) > MAX_SIGNATURE_HEX_LEN or not _LOWER_HEX.match(signature):
-            raise FenceStatusRefused("malformed", validator_id)
-        if status["lock_id"] != lock_id:
-            raise FenceStatusRefused("wrong_lock", validator_id)
-        if (status["chain_id"], status["genesis_hash"], status["protocol_version"]) != (
-            committee["chain_id"],
-            committee["genesis_hash"],
-            committee["protocol_version"],
-        ):
-            raise FenceStatusRefused("wrong_domain", validator_id)
-        if (status["committee_epoch"], status["registry_root"]) != (
-            committee["committee_epoch"],
-            committee["registry_root"],
-        ):
-            raise FenceStatusRefused("wrong_epoch", validator_id)
-        if validator_id not in members:
-            raise FenceStatusRefused("non_member", validator_id)
-        if validator_id in seen:
-            raise FenceStatusRefused("duplicate_validator", validator_id)
-        seen.add(validator_id)
-        if not verify(members[validator_id], message, status["signature_hex"]):
-            raise FenceStatusRefused("bad_signature", validator_id)
+        claimed = status.get("validator_id") if isinstance(status, dict) else None
+        claimed = claimed if isinstance(claimed, str) else ""
+        reason = _fault(status, committee, members, lock_id, verify)
+        group = groups.get(_answer(status), []) if reason is None else []
+        if reason is None and any(s["validator_id"] == claimed for s in group):
+            reason = "duplicate_validator"
+        if reason is not None:
+            invalid.append({"validator_id": claimed, "reason": reason})
+            continue
         groups.setdefault(_answer(status), []).append(status)
-    terminal_groups = [answer for answer in groups if answer[0] != ("none",)]
-    anchored = [s["anchored_at_or_before_height"] for s in statuses if s["decision"] is not None]
-    not_terminal = [s["observed_height"] for s in statuses if s["decision"] is None]
-    if len(terminal_groups) > 1 or (anchored and not_terminal and max(not_terminal) >= min(anchored)):
+        valid.append(status)
+    reached = [group for group in groups.values() if len(group) >= quorum]
+    reached.sort(key=lambda group: group[0]["decision"] is None)
+    if not reached:
+        agreeing = max((len(group) for group in groups.values()), default=0)
+        raise FenceStatusRefused("below_quorum", agreeing=agreeing, quorum=quorum)
+    best = reached[0]
+    contradicting = [s for s in valid if any(_contradict(member, s) for member in best)]
+    if len({s["validator_id"] for s in contradicting}) >= quorum:
         raise FenceStatusRefused("conflicting")
-    best = max(groups.values(), key=len, default=[])
-    if len(best) < quorum:
-        raise FenceStatusRefused("below_quorum", agreeing=len(best), quorum=quorum)
     first = best[0]
     heights = [s["anchored_at_or_before_height"] for s in best]
     return {
@@ -324,4 +366,6 @@ def verify_fence_status_quorum(
         "observed_height": min(s["observed_height"] for s in best),
         "signers": sorted(s["validator_id"] for s in best),
         "quorum": quorum,
+        "contradicting": contradicting,
+        "invalid": invalid,
     }
