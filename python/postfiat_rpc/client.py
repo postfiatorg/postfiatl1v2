@@ -1217,6 +1217,10 @@ class PostFiatRpcClient:
         first page, at most `max_restarts` times, then raises
         `RpcClientError`. A truncated answer without `next_cursor` or
         `view_digest` comes from a node too old for paging and raises.
+
+        The result is the first page's fields with `objects`, `object_count`
+        (all objects), `truncated: false`, `cursor` and `next_cursor` both
+        `None`, `view_digest` of the view read, and `pages` (pages read).
         """
         for _ in range(max_restarts + 1):
             first = self.owned_objects(
@@ -1254,6 +1258,10 @@ class PostFiatRpcClient:
                     "objects": objects,
                     "object_count": len(objects),
                     "truncated": False,
+                    "cursor": None,
+                    "next_cursor": None,
+                    "view_digest": view,
+                    "pages": pages,
                 }
         raise RpcClientError(
             f"owned objects kept changing between pages ({max_restarts + 1} attempts); "

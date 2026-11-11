@@ -446,7 +446,13 @@ class RemainingReadWrapperTests(unittest.TestCase):
         self.assertEqual(sum(o["value"] for o in result["objects"]), result["total_value"])
         self.assertEqual(call.call_args_list[1].args[1]["cursor"], "c1")
         self.assertNotIn("cursor", call.call_args_list[2].args[1])
-        self.assertEqual((result["object_count"], result["truncated"]), (3, False))
+        # The aggregate is not a page: no continuation fields, one view.
+        self.assertEqual(
+            (result["view_digest"], result["object_count"], result["truncated"]), ("v2", 3, False)
+        )
+        self.assertIsNone(result["next_cursor"])
+        self.assertIsNone(result["cursor"])
+        self.assertEqual(result["pages"], 2)
 
     def test_owned_objects_all_restarts_on_a_view_changed_refusal_within_the_bound(self) -> None:
         from postfiat_rpc.client import OWNED_OBJECTS_ALL_MAX_RESTARTS, RpcError
