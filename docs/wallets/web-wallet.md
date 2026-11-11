@@ -265,6 +265,7 @@ requires the finality submit capability.
 | `owned_recovery_capabilities` | none | Read active v3 FastPay committee/domain/windows. |
 | `owned_certificate` | `certificate_digest` or `lock_id` | Read persisted recovery evidence. |
 | `owned_recovery_status` | `lock_id` | Read ordered recovery state. |
+| `owned_fence_status` | `lock_id` | Read; the gateway returns every validator's signed fence status (see [FastPay Terminal Proofs](#fastpay-terminal-proofs)). |
 | `owned_sign_v3` | `order_json`, `validator_id` | Persist-before-sign vote for a complete v3 owner-authorized transfer envelope. |
 | `owned_apply_v3` | `cert_json` | Apply a v3 transfer certificate and return authenticated durable acknowledgements. |
 | `owned_unwrap_sign_v3` | `order_json`, `validator_id` | Persist-before-sign vote for a complete v3 signed unwrap envelope. |
@@ -332,6 +333,38 @@ with live keys and fail closed on drift. Reviewing the file and building it
 into a signed app is the release owner's step. The pin is valid only while
 its epoch admits orders (`new_orders_through_height`); every committee
 rotation needs a fresh export, review and build.
+
+## FastPay Terminal Proofs
+
+`owned_fence_status` lets a wallet prove, without trusting the gateway or one
+node, that an unwrap or transfer is ordered (anchored by a certified block) or
+that its lock was cancelled by ordered recovery. Each validator signs a
+`FastPayFenceStatusV1` from its certified blocks only, under its own context
+`postfiat-l1-v2/fastpay-fence-status/v1`: the decision, the `fence_digest`
+(equal to the apply acknowledgement's `terminal_state_digest`), the
+`anchored_height` of the certified block, and the `observed_height` it answered
+at. A speculative apply, a mempool decision or an effect that a certified block
+rolled back is answered, and signed, as "not terminal at `observed_height`".
+The gateway asks every validator and returns each answer with its validator and
+`answered_count`; a partial answer is marked `partial`. It never merges them.
+
+The wallet must, before releasing a reservation after a cancelled fence or
+showing an unwrap credit as ordered:
+
+- have the committee of the order's epoch, pinned or read with
+  `fastpay_recovery_committee`, and compare chain, genesis, epoch and
+  registry root;
+- verify each ML-DSA-65 signature against that committee's keys and count
+  only distinct members, refusing non-members, duplicates and other epochs;
+- require the committee's `quorum` of statuses with the same decision,
+  `fence_digest` and `anchored_height` (observed heights may differ).
+
+The Rust check is `postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v1`
+(rules in `postfiat_types::verify_fastpay_fence_status_quorum_v1`); the Python
+check is `postfiat_rpc.fastpay_fence_status.verify_fence_status_quorum`, with an
+ML-DSA verifier supplied by the caller. A validator whose rpc-serve signs
+through the signer socket answers `fastpay_fence_status_signer_unavailable`
+and does not count.
 
 ## FastPay Funding
 
