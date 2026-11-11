@@ -339,6 +339,7 @@ use lifecycle_queries::{
     write_history_checkpoint_state_file, write_history_prune_pending_file,
 };
 mod mempool_proposals;
+use mempool_proposals::mempool_admission_limit_refusal;
 use mempool_proposals::{
     admission_base_ledger, apply_pending_before_new_asset_transaction,
     apply_pending_before_new_transfer, build_ordered_batch_proposal_with_timings,

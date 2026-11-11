@@ -956,6 +956,59 @@ fn external_lane_export_command_refuses_a_sequence_held_by_a_later_family_before
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
+/// Fills the stored mempool with `count` copies of the faucet's one pending
+/// escrow (fresh tx ids and sequences; `source` replaced when given). Escrows
+/// run after asset transactions, so the export's quote never executes them:
+/// only admission's limits see them.
+fn fill_mempool_with_escrow_copies(chain: &Chain, count: usize, source: Option<&str>) {
+    let store = NodeStore::new(&chain.data_dir);
+    let mut mempool = store.read_mempool().expect("mempool");
+    let template = mempool.pending_escrow_transactions[0].clone();
+    for index in 0..count {
+        let mut entry = template.clone();
+        entry.tx_id = format!("{:096x}", index + 1);
+        entry.transaction.unsigned.sequence += 1 + index as u64;
+        if let Some(source) = source {
+            entry.transaction.unsigned.source = source.to_string();
+        }
+        mempool.pending_escrow_transactions.push(entry);
+    }
+    store.write_mempool(&mempool).expect("write mempool");
+}
+
+fn submit_faucet_escrow(chain: &Chain, condition: &str) {
+    let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    let create = EscrowTransactionOperation::EscrowCreate(EscrowCreateOperation {
+        owner: faucet.address.clone(),
+        recipient: chain.recipient.clone(),
+        asset_id: postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+        amount: 10_000,
+        condition: condition.to_string(),
+        finish_after: 0,
+        cancel_after: 50,
+    });
+    submit_escrow_tx(chain, &faucet, create, ESCROW_CREATE_TRANSACTION_KIND);
+}
+
+/// Admission's mempool limits are refused before signing: the sender's
+/// pending count at its limit, and a full mempool.
+#[test]
+fn external_lane_export_command_refuses_the_mempool_limits_before_signing() {
+    let chain = released_export_chain("export-command-sender-limit", ACCOUNT_RESERVE + 1_000);
+    submit_faucet_escrow(&chain, "sender-limit");
+    fill_mempool_with_escrow_copies(&chain, crate::MAX_MEMPOOL_PENDING_PER_SENDER - 1, None);
+    let error = faucet_refused(&chain, "base-erc20", 1, &base_recipient(), "mempool_sender_pending_limit");
+    assert!(error.contains(&format!("{}", crate::MAX_MEMPOOL_PENDING_PER_SENDER)), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+
+    let chain = released_export_chain("export-command-mempool-full", ACCOUNT_RESERVE + 1_000);
+    submit_faucet_escrow(&chain, "mempool-full");
+    fill_mempool_with_escrow_copies(&chain, crate::MAX_MEMPOOL_PENDING_TRANSACTIONS - 1, Some(&chain.recipient));
+    let error = faucet_refused(&chain, "base-erc20", 1, &base_recipient(), "mempool_full");
+    assert!(error.contains(&format!("{}", crate::MAX_MEMPOOL_PENDING_TRANSACTIONS)), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
 /// Pending exports count before signing: the lane's committed
 /// `released - exported` is not what admission checks, the ledger after the
 /// executable mempool is. Two and three pending exports that exhaust the

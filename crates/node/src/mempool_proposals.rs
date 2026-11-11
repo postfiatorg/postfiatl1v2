@@ -2274,35 +2274,49 @@ pub(super) fn enforce_mempool_admission_limits(
     mempool: &MempoolState,
     sender: &str,
 ) -> io::Result<()> {
+    match mempool_admission_limit_refusal(mempool, sender) {
+        Some((kind, _, message)) => Err(io::Error::new(kind, message)),
+        None => Ok(()),
+    }
+}
+
+/// The refusal `enforce_mempool_admission_limits` returns, with a code: the
+/// mempool full (`mempool_full`), the sender in a pending atomic swap
+/// (`mempool_sender_in_pending_atomic_swap`) or at its pending limit
+/// (`mempool_sender_pending_limit`). The export quote reports it before
+/// signing.
+pub(super) fn mempool_admission_limit_refusal(
+    mempool: &MempoolState,
+    sender: &str,
+) -> Option<(io::ErrorKind, &'static str, String)> {
     if mempool.len() >= MAX_MEMPOOL_PENDING_TRANSACTIONS {
-        return Err(io::Error::new(
+        return Some((
             io::ErrorKind::InvalidInput,
-            format!(
-                "mempool pending limit reached: {}",
-                MAX_MEMPOOL_PENDING_TRANSACTIONS
-            ),
+            "mempool_full",
+            format!("mempool pending limit reached: {MAX_MEMPOOL_PENDING_TRANSACTIONS}"),
         ));
     }
     if mempool.pending_atomic_swaps.iter().any(|entry| {
         entry.transaction.unsigned.leg_0.owner == sender
             || entry.transaction.unsigned.leg_1.owner == sender
     }) {
-        return Err(io::Error::new(
+        return Some((
             io::ErrorKind::AlreadyExists,
+            "mempool_sender_in_pending_atomic_swap",
             format!("sender `{sender}` already participates in a pending atomic swap"),
         ));
     }
     let sender_pending = mempool_pending_count_for_sender(mempool, sender);
     if sender_pending >= MAX_MEMPOOL_PENDING_PER_SENDER as u64 {
-        return Err(io::Error::new(
+        return Some((
             io::ErrorKind::InvalidInput,
+            "mempool_sender_pending_limit",
             format!(
-                "mempool sender pending limit reached for `{sender}`: {}",
-                MAX_MEMPOOL_PENDING_PER_SENDER
+                "mempool sender pending limit reached for `{sender}`: {MAX_MEMPOOL_PENDING_PER_SENDER}"
             ),
         ));
     }
-    Ok(())
+    None
 }
 
 pub(super) fn enforce_mempool_state_limits(mempool: &MempoolState) -> io::Result<()> {

@@ -1752,31 +1752,39 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
     } else {
         "ledger_mempool".to_string()
     };
-    let export_checked = matches!(
-        operation,
-        AssetTransactionOperation::ExternalLaneExportV1(_)
-    );
-    let export_refusal = match &operation {
-        AssetTransactionOperation::ExternalLaneExportV1(export) => {
-            postfiat_execution::dry_run_external_lane_export(
-                &genesis,
-                &quote_ledger,
-                export,
-                &options.source,
-                sequence,
-                minimum_fee,
-                block_height,
-                asset_execution_compatibility,
-            )
-            .err()
-            .map(|(code, message)| AssetOperationRefusal {
-                code: code.to_string(),
-                message: export_above_released_message(&quote_ledger, export, code)
-                    .unwrap_or(message),
-            })
-        }
+    // An export's check, as admission orders it: the mempool limits, then
+    // execution's export rules. `Some` exactly when the check ran, so
+    // `export_checked` cannot be true without it.
+    let export_check = match &operation {
+        AssetTransactionOperation::ExternalLaneExportV1(export) => Some(
+            mempool_admission_limit_refusal(&mempool, &options.source)
+                .map(|(_, code, message)| AssetOperationRefusal {
+                    code: code.to_string(),
+                    message,
+                })
+                .or_else(|| {
+                    postfiat_execution::dry_run_external_lane_export(
+                        &genesis,
+                        &quote_ledger,
+                        export,
+                        &options.source,
+                        sequence,
+                        minimum_fee,
+                        block_height,
+                        asset_execution_compatibility,
+                    )
+                    .err()
+                    .map(|(code, message)| AssetOperationRefusal {
+                        code: code.to_string(),
+                        message: export_above_released_message(&quote_ledger, export, code)
+                            .unwrap_or(message),
+                    })
+                }),
+        ),
         _ => None,
     };
+    let export_checked = export_check.is_some();
+    let export_refusal = export_check.flatten();
 
     Ok(AssetFeeQuoteReport {
         schema: "postfiat-asset-fee-quote-v1".to_string(),
