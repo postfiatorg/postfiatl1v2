@@ -1179,6 +1179,10 @@ pub struct OwnedObjectsParams {
     pub owner_public_key_hex: String,
     pub asset: Option<String>,
     pub limit: Option<usize>,
+    /// `next_cursor` of the previous page; `None` for the first page.
+    pub cursor: Option<String>,
+    /// Omit the per-object owner key (sent only when `true`).
+    pub omit_owner_keys: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1219,6 +1223,12 @@ pub fn owned_objects_request(id: impl Into<String>, params: OwnedObjectsParams) 
     }
     if let Some(limit) = params.limit {
         request = request.with_param_value("limit", usize_value(limit));
+    }
+    if let Some(cursor) = params.cursor {
+        request = request.with_param_value("cursor", string_value(cursor));
+    }
+    if params.omit_owner_keys {
+        request = request.with_param_value("omit_owner_keys", Value::Bool(true));
     }
     request
 }
@@ -4437,7 +4447,16 @@ fn validate_owned_objects_request_params(
     params: &Value,
 ) -> Result<(), RpcRequestValidationError> {
     let params = request_params(params)?;
-    require_only_params(params, &["owner_public_key_hex", "asset", "limit"])?;
+    require_only_params(
+        params,
+        &[
+            "owner_public_key_hex",
+            "asset",
+            "limit",
+            "cursor",
+            "omit_owner_keys",
+        ],
+    )?;
     // The node decodes the key case-insensitively (crypto_provider hex_to_bytes)
     // and requires exactly ML_DSA_65_PUBLIC_KEY_BYTES * 2 characters, so this
     // mirrors that rather than the lowercase-only rule used for asset ids.
@@ -4469,6 +4488,24 @@ fn validate_owned_objects_request_params(
         }
     }
     optional_bounded_nonzero_usize_param(params, "limit", OWNED_OBJECTS_MAX_LIMIT)?;
+    if params.contains_key("cursor") {
+        // Opaque to the client; the node parses and binds it.
+        let cursor = string_param(params, "cursor")?;
+        if cursor.is_empty() || !cursor.bytes().all(|byte| byte.is_ascii_graphic()) {
+            return Err(invalid_request_params(
+                "cursor",
+                "expected the nonempty next_cursor of a previous page",
+            ));
+        }
+    }
+    if let Some(value) = params.get("omit_owner_keys") {
+        if !value.is_boolean() {
+            return Err(invalid_request_params(
+                "omit_owner_keys",
+                "expected a boolean",
+            ));
+        }
+    }
     Ok(())
 }
 

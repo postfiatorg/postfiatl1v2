@@ -768,6 +768,8 @@ fn write_request(flags: &[String]) -> Result<(), String> {
                     owner_public_key_hex: owner_public_key_hex.to_string(),
                     asset: optional_string(flags, "--asset"),
                     limit: optional_usize_flag(flags, "--limit")?,
+                    cursor: optional_string(flags, "--cursor"),
+                    omit_owner_keys: has_flag(flags, "--omit-owner-keys"),
                 },
             )
         }
@@ -2708,7 +2710,7 @@ Nft_info request supports --nft-id. Account_nfts request supports --account, --i
 Blocks request supports --from-height and --limit.
 Vault_bridge_status request supports --asset-id (96 lowercase hex characters).
 Market_ops_status request supports --asset-id (96 lowercase hex characters) and optional --epoch (nonzero u64; latest finalized envelope when omitted). Validating its response requires --request-file: the report asset_id must equal the requested asset and, when the request names an epoch, envelope_epoch must equal it.
-Owned_objects request supports --owner-public-key-hex (hex ML-DSA-65 public key, 3904 characters), optional --asset, and optional --limit (1..=2048). Validating its response requires --request-file: the report owner, asset filter (absent when the request has none), and limit (the request value, or the node default 2048) must match the request.
+Owned_objects request supports --owner-public-key-hex (hex ML-DSA-65 public key, 3904 characters), optional --asset, optional --limit (1..=2048), optional --cursor (the next_cursor of a previous page), and --omit-owner-keys. Validating its response requires --request-file: the report owner, asset filter (absent when the request has none), and limit (the request value, or the node default 2048) must match the request.
 Owned_recovery_status request supports --lock-id (96 lowercase hex characters). Validating its response requires --request-file: the report lock_id must equal the requested lock_id.
 Owned_recovery_capabilities request takes no flags.
 Owned_certificate request supports exactly one of --lock-id or --certificate-digest (96 lowercase hex characters); validating its response requires --request-file so the certificate is bound to the requested selector.
