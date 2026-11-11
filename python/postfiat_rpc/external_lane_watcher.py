@@ -586,6 +586,11 @@ PAID_KEYS = ("export_nonce", "evm_digest", "block", "transaction", "log_index", 
 BASELINE_KEYS = ("unverified_payouts", "unverified_atoms", "pruned_export_count", "pruned_exported_atoms")
 # The export snapshot a clean run used: its PFTL height and counters, each a
 # high-water mark (a run on a lower snapshot is refused).
+# The EVM digests of the most recently pruned paid exports, oldest first: a
+# payout of one is `payout_duplicate` in every run. 4,096 digests are about
+# 290 KB, under 2% of MAX_STATE_BYTES (several release windows of pruning on
+# a busy lane).
+RECENT_PRUNED_PAID = 4096
 SNAPSHOT_KEYS = ("height", "export_count", "exported_atoms", "pruned_export_count", "pruned_exported_atoms")
 
 
@@ -618,6 +623,9 @@ def _export_state(state: Any) -> dict[str, Any] | None:
             or len({entry["export_nonce"] for entry in paid}) != len(paid)
             or len({entry["evm_digest"] for entry in paid}) != len(paid)):
         raise WatcherError("state_file_invalid", "the state file's paid record is malformed")
+    recent = state.get("pruned_paid_recent", [])
+    if not isinstance(recent, list) or not all(hash32(digest) for digest in recent) or len(set(recent)) != len(recent):
+        raise WatcherError("state_file_invalid", "the state file's recently pruned paid digests are malformed")
     marks = state.get("snapshot")
     if marks is not None and (not isinstance(marks, dict) or set(marks) != set(SNAPSHOT_KEYS)
                               or not all(count(value) for value in marks.values())
@@ -647,8 +655,10 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
 
     The paid record holds every verified payout of a retained export (nonce,
     EVM digest, block, transaction, log index, amount, withdrawal-id
-    commitment). A payout whose digest is in it is `payout_duplicate`, in
-    any run, and a retained export in it is `paid` with its reference. An
+    commitment). A payout whose digest is in it, or among the last
+    RECENT_PRUNED_PAID folded ones (`pruned_paid_recent`), is
+    `payout_duplicate` in any run, also under `accept_baseline`; a retained
+    export in it is `paid` with its reference. An
     entry is dropped only once PFTL has pruned its packet (nonce below the
     pruned count) and is then folded into `pruned_paid_count` and
     `pruned_paid_atoms`, which the bounds of unknown payouts subtract from
@@ -707,9 +717,10 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
         start, prior_count, prior_sum = kept["scanned_through_block"] + 1, kept["payout_count"], kept["payout_sum"]
         record = {entry["evm_digest"]: dict(entry) for entry in kept["paid"]}
         pruned_paid_count, pruned_paid_atoms = kept["pruned_paid_count"], kept["pruned_paid_atoms"]
+        recent = list(kept.get("pruned_paid_recent", []))
         baseline = kept.get("baseline")
     else:
-        start, prior_count, prior_sum, record = from_block, 0, 0, {}
+        start, prior_count, prior_sum, record, recent = from_block, 0, 0, {}, []
         pruned_paid_count = pruned_paid_atoms = 0
         baseline = None
     if accept_baseline and baseline is not None and not (
@@ -720,11 +731,14 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     # Entries whose packets PFTL has pruned: folded into the two numbers. The
     # pruned count is at or above its mark, and the record holds no nonce
     # below the mark, so each nonce is folded once.
-    for digest, entry in list(record.items()):
+    for digest, entry in sorted(record.items(), key=lambda item: item[1]["export_nonce"]):
         if entry["export_nonce"] < pruned:
             del record[digest]
             pruned_paid_count += 1
             pruned_paid_atoms += entry["amount"]
+            recent.append(digest)
+    recent = recent[-RECENT_PRUNED_PAID:] if RECENT_PRUNED_PAID else []
+    recently_pruned = set(recent)
     prior_accepted = (baseline["unverified_payouts"], baseline["unverified_atoms"]) if baseline else (0, 0)
     free_count = pruned - pruned_paid_count - prior_accepted[0]
     free_atoms = pruned_atoms - pruned_paid_atoms - prior_accepted[1]
@@ -743,13 +757,15 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     for event in events:
         result = {"schema": LINE_SCHEMA, "kind": "payout", "lane_id": lane_id, **event}
         digest = event["packet_digest"]
-        if digest in seen or digest in record:
+        if digest in seen or digest in record or digest in recently_pruned:
+            # Also under --accept-export-baseline: the alarm keeps any baseline from being saved.
             result["status"] = "alarm"
             lines.append(result)
             first = record.get(digest)
             alarm("payout_duplicate", **event,
                   **({"paid_block": first["block"], "paid_transaction": first["transaction"],
-                      "paid_log_index": first["log_index"]} if first else {}))
+                      "paid_log_index": first["log_index"]} if first else {}),
+                  **({"paid_export_pruned": True} if digest in recently_pruned else {}))
             continue
         seen.add(digest)
         packet = by_digest.get(digest)
@@ -858,7 +874,7 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
                  "payout_count": prior_count + len(events), "payout_sum": payout_total,
                  "paid": sorted(record.values(), key=lambda entry: entry["export_nonce"]),
                  "pruned_paid_count": pruned_paid_count, "pruned_paid_atoms": pruned_paid_atoms,
-                 "snapshot": now}
+                 "pruned_paid_recent": recent, "snapshot": now}
     if accepted_count:
         baseline = {"baseline_accepted": True,
                     "accepted_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

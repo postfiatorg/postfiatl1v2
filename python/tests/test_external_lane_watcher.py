@@ -1333,7 +1333,7 @@ class ExportSnapshotTests(unittest.TestCase):
             self.assertEqual(json.loads(state_file.read_text())["exports"], exports)
             # A current node again: A's second payout alarms and A is not folded twice.
             code, lines, _ = self.check(state_file, self.new(601), [self.FIRST, self.SECOND], 1_300)
-            self.assertEqual((code, alarm_codes(lines)), (2, ["payout_pruned_before_check"]))
+            self.assertEqual((code, alarm_codes(lines)), (2, ["payout_duplicate"]))
             summary = lines[-1]["exports"]
             self.assertEqual((summary["pruned_paid_count"], summary["pruned_paid_atoms"]), (1, 400_000))
             self.assertEqual(json.loads(state_file.read_text())["exports"], exports)
@@ -1384,6 +1384,54 @@ class ExportSnapshotTests(unittest.TestCase):
             run_export_view(ExportPftl([b], pruned=1, current_height=504), ExportBase([log], finalized=1_400),
                             state=forged, current_height=504)
         self.assertEqual(caught.exception.code, "state_file_invalid")
+
+
+class RecentPrunedPaidTests(unittest.TestCase):
+    """F3: a payout of a recently pruned paid export is a duplicate in every run."""
+
+    def test_f3_a_duplicate_of_a_pruned_paid_export_is_never_accepted_as_a_baseline(self):
+        a, b, c = export_entry(0), export_entry(1, amount=600_000), export_entry(2, amount=500_000)
+        first = released_log(a, block=950, transaction="0x" + "a1" * 32)
+        again = released_log(a, block=1_150, transaction="0x" + "a2" * 32)
+        pruned = ExportPftl([c], pruned=2, pruned_atoms=1_000_000, released=1_500_000)
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            options = ("--state-file", str(state_file))
+
+            def check(pftl, logs, finalized, *extra):
+                return run_exports(pftl, ExportBase(logs, locked=1_500_000, finalized=finalized), *options, *extra)
+
+            self.assertEqual(check(ExportPftl([a, b, c], released=1_500_000), [first], 1_000)[0], 0)
+            self.assertEqual(check(pruned, [first], 1_100)[0], 0)
+            kept = json.loads(state_file.read_text())["exports"]
+            self.assertEqual((kept["paid"], kept["pruned_paid_count"], kept["pruned_paid_recent"]),
+                             ([], 1, [watcher.export_evm_digest(a["packet_digest"])]))
+            for extra in ((), ("--accept-export-baseline",)):
+                with self.subTest(extra=extra):
+                    code, lines, _ = check(pruned, [first, again], 1_200, *extra)
+                    self.assertEqual((code, alarm_codes(lines)), (2, ["payout_duplicate"]))
+                    self.assertEqual([line for line in lines if line["kind"] == "baseline_payout"], [])
+                    self.assertEqual(json.loads(state_file.read_text())["exports"], kept)
+
+    def test_the_recent_list_is_bounded_and_an_older_duplicate_still_alarms(self):
+        entries = [export_entry(nonce, amount=100_000) for nonce in range(4)]
+        logs = [released_log(entry, block=900 + nonce, log_index=nonce) for nonce, entry in enumerate(entries)]
+        digests = [watcher.export_evm_digest(entry["packet_digest"]) for entry in entries]
+        with unittest.mock.patch.object(watcher, "RECENT_PRUNED_PAID", 2):
+            _, _, _, kept = run_export_view(ExportPftl(entries, released=400_000), ExportBase(logs, locked=400_000))
+            pftl = ExportPftl([entries[3]], pruned=3, pruned_atoms=300_000, released=400_000)
+            _, codes, _, kept = run_export_view(pftl, ExportBase(logs, locked=400_000, finalized=1_100), state=kept)
+            self.assertEqual((codes, kept["pruned_paid_count"], kept["pruned_paid_recent"]), ([], 3, digests[1:3]))
+            again = [released_log(entries[n], block=1_150, transaction="0x" + f"{n:02x}" * 32) for n in (0, 2)]
+            # A second payout also exceeds the exports (exported_below_paid); the older one also exceeds
+            # the pruned room left (every pruned packet was paid and verified).
+            for paid, expected in ((again[1], ["payout_duplicate", "exported_below_paid"]),
+                                   (again[0], ["payout_pruned_before_check", "payout_unknown_above_pruned",
+                                               "exported_below_paid"])):
+                with self.subTest(expected=expected):
+                    _, codes, _, _ = run_export_view(
+                        pftl, ExportBase([*logs, paid], locked=500_000, finalized=1_200), state=kept)
+                    self.assertEqual(codes, expected)
 
 
 class StateSizeTests(unittest.TestCase):
