@@ -341,6 +341,40 @@ class ExternalLaneExportTests(unittest.TestCase):
                                              base_recipient=RECIPIENT, dry_run=dry_run)
                     signer.assert_not_called()
 
+    def test_an_amount_above_u64_is_refused_before_any_quote(self) -> None:
+        """B9: 1..=u64::MAX before any quote is requested, in a dry run too,
+        also when a malformed quote would echo it."""
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        for amount in (2**64, 2**64 + 5):
+            quote = _quote(operation=_operation(amount_atoms=amount), sender_balance=2**70)
+            for dry_run in (False, True):
+                with self.subTest(amount=amount, dry_run=dry_run):
+                    error, signer, submit, quote_call = self._export(client, quote, amount_atoms=amount,
+                                                                     dry_run=dry_run)
+                    self.assertIsInstance(error, ValueError)
+                    self.assertIn("amount_atoms", str(error))
+                    quote_call.assert_not_called()
+                    signer.assert_not_called()
+                    submit.assert_not_called()
+
+    def test_every_monetary_field_of_the_quote_must_be_a_bounded_non_negative_integer(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        for field in ("minimum_fee", "sender_balance", "account_reserve", "amount_atoms"):
+            for bad in (22.0, "22", -1, True, 2**64):
+                if field == "amount_atoms":
+                    quote = _quote(operation=_operation(amount_atoms=bad))
+                else:
+                    quote = _quote(**{field: bad})
+                for dry_run in (False, True):
+                    with self.subTest(field=field, value=bad, dry_run=dry_run):
+                        error, signer, submit, _ = self._export(client, quote, amount_atoms=600, dry_run=dry_run)
+                        self.assertIsInstance(error, ValueError)
+                        self.assertRegex(
+                            str(error),
+                            "^refused before signing: external_lane_export_quote_(invalid|mismatch): ")
+                        signer.assert_not_called()
+                        submit.assert_not_called()
+
 
 class ExternalLaneExportStatusTests(unittest.TestCase):
     def test_status_by_nonce_reads_one_page_and_reports_finality(self) -> None:

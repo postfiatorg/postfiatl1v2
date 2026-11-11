@@ -1548,6 +1548,8 @@ def _export_quote_mismatch(
     quoted = quote.get("operation")
     if not isinstance(quoted, dict) or set(quoted) != set(operation):
         return "the quote's operation does not have the requested export's fields"
+    if not _is_u64(quoted["amount_atoms"]) or quoted["amount_atoms"] == 0:
+        return f"the quote's amount_atoms `{quoted['amount_atoms']!r}` is not an integer between 1 and 2**64 - 1"
     for field in ("operation", "sender", "lane_id", "amount_atoms", "base_recipient"):
         if quoted[field] != operation[field] or type(quoted[field]) is not type(operation[field]):
             return f"the quote's {field} `{quoted[field]}` is not the requested `{operation[field]}`"
@@ -1581,9 +1583,14 @@ def external_lane_export(
     quote, then the balance (amount + minimum fee + account reserve) and the
     quote's `export_refusal` (execution's export rules on the ledger asset
     admission executes the export on: the pending transfers, payment_v2 entries
-    and asset transactions), and only then sign and submit. A quote whose
-    kind, source or operation is not the requested export is refused with
-    `external_lane_export_quote_mismatch`. A quoted minimum fee above
+    and asset transactions), and only then sign and submit. `amount_atoms`
+    must be within 1..=u64::MAX before any quote is requested. A quote whose
+    kind, source, operation, sequence (the requested one, or a u64 when none
+    is requested), chain id or genesis hash (when the wallet's key report
+    names one) is not the requested export's is refused with
+    `external_lane_export_quote_mismatch`; a minimum fee, balance or reserve
+    that is not a non-negative integer within u64 with
+    `external_lane_export_quote_invalid`. A quoted minimum fee above
     `max_fee_atoms` (default `EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS`, a
     safety ceiling) is refused with `external_lane_export_fee_above_ceiling`.
     Every refusal raises `ValueError("refused before signing: CODE: ...")`
@@ -1601,6 +1608,8 @@ def external_lane_export(
 
     if isinstance(amount_atoms, bool) or not isinstance(amount_atoms, int):
         raise ValueError("amount_atoms must be an integer")
+    if amount_atoms > _U64_MAX:
+        raise ValueError("amount_atoms must be between 1 and 2**64 - 1 (u64)")
     if isinstance(max_fee_atoms, bool) or not isinstance(max_fee_atoms, int) or max_fee_atoms < 0:
         raise ValueError("max_fee_atoms must be a non-negative integer")
     if sequence is not None and (not _is_u64(sequence) or sequence == 0):
@@ -1633,9 +1642,15 @@ def external_lane_export(
             "refused before signing: external_lane_export_not_checked: "
             "the node is too old to check an export: its asset_fee_quote carries no export_checked"
         )
-    balance = int(quote.get("sender_balance", 0))
-    fee = int(quote["minimum_fee"])
-    reserve = int(quote["account_reserve"])
+    for field in ("minimum_fee", "sender_balance", "account_reserve"):
+        if not _is_u64(quote.get(field)):
+            raise ValueError(
+                "refused before signing: external_lane_export_quote_invalid: "
+                f"the quote's {field} `{quote.get(field)!r}` is not a non-negative integer within u64"
+            )
+    balance = quote["sender_balance"]
+    fee = quote["minimum_fee"]
+    reserve = quote["account_reserve"]
     if fee > max_fee_atoms:
         raise ValueError(
             "refused before signing: external_lane_export_fee_above_ceiling: "
