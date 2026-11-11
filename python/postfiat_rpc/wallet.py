@@ -1524,35 +1524,44 @@ def _export_quote_mismatch(
     operation: dict[str, Any],
     wallet: TransparentWallet,
     sequence: int | None,
-) -> str | None:
-    """Why the quote is not for `operation` from `wallet`, or `None`. The
-    signer signs the quote's operation, source, kind, sequence and chain, so a
-    node that answers with another recipient, amount, lane, sender, sequence
-    or chain gets nothing signed and no dry run reported."""
+) -> tuple[str, str] | None:
+    """`(code, reason)` when the quote is not for `operation` from `wallet`, or
+    `None`. The signer signs the quote's operation, source, kind, sequence and
+    chain, so a node that answers with another recipient, amount, lane,
+    sender, sequence or chain gets nothing signed and no dry run reported. A
+    malformed or out-of-range echoed amount is
+    `external_lane_export_quote_invalid`, like the other monetary values; a
+    well-formed value that differs from the request is
+    `external_lane_export_quote_mismatch`."""
+
+    mismatch = "external_lane_export_quote_mismatch"
 
     address = wallet.address
     quoted_sequence = quote.get("sequence")
     if not _is_u64(quoted_sequence):
-        return f"the quote's sequence `{quoted_sequence!r}` is not a non-negative integer within u64"
+        return mismatch, f"the quote's sequence `{quoted_sequence!r}` is not a non-negative integer within u64"
     if sequence is not None and quoted_sequence != sequence:
-        return f"the quote's sequence {quoted_sequence} is not the requested {sequence}"
+        return mismatch, f"the quote's sequence {quoted_sequence} is not the requested {sequence}"
     if quote.get("chain_id") != wallet.chain_id:
-        return f"the quote's chain id `{quote.get('chain_id')}` is not the wallet's `{wallet.chain_id}`"
+        return mismatch, f"the quote's chain id `{quote.get('chain_id')}` is not the wallet's `{wallet.chain_id}`"
     known_genesis = wallet.key_report.get("genesis_hash") if isinstance(wallet.key_report, dict) else None
     if isinstance(known_genesis, str) and quote.get("genesis_hash") != known_genesis:
-        return f"the quote's genesis hash `{quote.get('genesis_hash')}` is not the wallet's `{known_genesis}`"
+        return mismatch, f"the quote's genesis hash `{quote.get('genesis_hash')}` is not the wallet's `{known_genesis}`"
     if quote.get("transaction_kind") != operation["operation"]:
-        return f"the quote is for `{quote.get('transaction_kind')}`, not `{operation['operation']}`"
+        return mismatch, f"the quote is for `{quote.get('transaction_kind')}`, not `{operation['operation']}`"
     if quote.get("source") != address:
-        return f"the quote's source `{quote.get('source')}` is not the wallet's address `{address}`"
+        return mismatch, f"the quote's source `{quote.get('source')}` is not the wallet's address `{address}`"
     quoted = quote.get("operation")
     if not isinstance(quoted, dict) or set(quoted) != set(operation):
-        return "the quote's operation does not have the requested export's fields"
+        return mismatch, "the quote's operation does not have the requested export's fields"
     if not _is_u64(quoted["amount_atoms"]) or quoted["amount_atoms"] == 0:
-        return f"the quote's amount_atoms `{quoted['amount_atoms']!r}` is not an integer between 1 and 2**64 - 1"
+        return (
+            "external_lane_export_quote_invalid",
+            f"the quote's amount_atoms `{quoted['amount_atoms']!r}` is not an integer between 1 and 2**64 - 1",
+        )
     for field in ("operation", "sender", "lane_id", "amount_atoms", "base_recipient"):
         if quoted[field] != operation[field] or type(quoted[field]) is not type(operation[field]):
-            return f"the quote's {field} `{quoted[field]}` is not the requested `{operation[field]}`"
+            return mismatch, f"the quote's {field} `{quoted[field]}` is not the requested `{operation[field]}`"
     return None
 
 
@@ -1588,9 +1597,10 @@ def external_lane_export(
     kind, source, operation, sequence (the requested one, or a u64 when none
     is requested), chain id or genesis hash (when the wallet's key report
     names one) is not the requested export's is refused with
-    `external_lane_export_quote_mismatch`; a minimum fee, balance or reserve
-    that is not a non-negative integer within u64 with
-    `external_lane_export_quote_invalid`. A quoted minimum fee above
+    `external_lane_export_quote_mismatch`; a monetary value that is malformed
+    or out of range (an echoed amount not within 1..=u64::MAX, or a minimum
+    fee, balance or reserve that is not a non-negative integer within u64)
+    with `external_lane_export_quote_invalid`. A quoted minimum fee above
     `max_fee_atoms` (default `EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS`, a
     safety ceiling) is refused with `external_lane_export_fee_above_ceiling`.
     Every refusal the helper can know from the node's current state raises
@@ -1639,7 +1649,8 @@ def external_lane_export(
     quote = quote_response.get("result", {})
     mismatch = _export_quote_mismatch(quote, operation, wallet, sequence)
     if mismatch is not None:
-        raise ValueError(f"refused before signing: external_lane_export_quote_mismatch: {mismatch}")
+        code, reason = mismatch
+        raise ValueError(f"refused before signing: {code}: {reason}")
     if quote.get("export_checked") is not True:
         raise ValueError(
             "refused before signing: external_lane_export_not_checked: "

@@ -369,11 +369,20 @@ class ExternalLaneExportTests(unittest.TestCase):
                     with self.subTest(field=field, value=bad, dry_run=dry_run):
                         error, signer, submit, _ = self._export(client, quote, amount_atoms=600, dry_run=dry_run)
                         self.assertIsInstance(error, ValueError)
-                        self.assertRegex(
-                            str(error),
-                            "^refused before signing: external_lane_export_quote_(invalid|mismatch): ")
+                        self.assertRegex(str(error), "^refused before signing: external_lane_export_quote_invalid: ")
                         signer.assert_not_called()
                         submit.assert_not_called()
+
+    def test_a_zero_echoed_amount_is_invalid_and_a_well_formed_other_amount_a_mismatch(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        for amount, code in ((0, "invalid"), (601, "mismatch"), (2**64 - 1, "mismatch")):
+            for dry_run in (False, True):
+                with self.subTest(amount=amount, dry_run=dry_run):
+                    quote = _quote(operation=_operation(amount_atoms=amount))
+                    error, signer, submit, _ = self._export(client, quote, amount_atoms=600, dry_run=dry_run)
+                    self.assertRegex(str(error), f"^refused before signing: external_lane_export_quote_{code}: ")
+                    signer.assert_not_called()
+                    submit.assert_not_called()
 
 
 class ExternalLaneExportStatusTests(unittest.TestCase):
