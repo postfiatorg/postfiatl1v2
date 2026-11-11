@@ -1642,6 +1642,105 @@ class StateLifeTests(unittest.TestCase):
 
 
 U64_MAX = (1 << 64) - 1
+MODEL_AMOUNTS = (400_000, 300_000, 200_000, 100_000)  # older unpaid exports leave room in atoms too
+
+
+class ExportModelTests(unittest.TestCase):
+    """The property the merge depends on, over every sequence of honest
+    answers up to DEPTH runs: a second payout of one export, or a payout with
+    no export, never makes a run exit 0 and is never `backed`, in that run or
+    a later one; a legitimate payout of a retained export is never an alarm.
+
+    The lane: exports 0..3, export n at PFTL time n (height 100 + n), each
+    pruned two steps later, the newest never. Each run the PFTL time advances
+    or stays, and the export pages may come from a node one or two steps
+    behind; Base may finalize a legitimate payout (the newest unpaid export, so older unpaid ones leave pruned room),
+    a second payout of a paid export, or a payout with no export. The state
+    is carried from run to run as the CLI carries its file; no baseline flag,
+    no discard flag, no change of the scan start. Exhaustive: nothing random."""
+
+    DEPTH = 4
+    AMOUNTS = MODEL_AMOUNTS
+    ENTRIES = [export_entry(n, amount=MODEL_AMOUNTS[n], height=100 + n) for n in range(4)]
+    ORPHAN = export_entry(9, amount=50_000)
+
+    def snapshot(self, time: int) -> ExportPftl:
+        exported = min(time, 3) + 1
+        pruned = min(max(0, time - 1), exported - 1)
+        return ExportPftl(self.ENTRIES[pruned:exported], pruned=pruned, pruned_atoms=sum(self.AMOUNTS[:pruned]),
+                          released=1_000_000, current_height=100 + time)
+
+    def test_no_sequence_of_honest_answers_backs_a_bad_payout(self):
+        import functools
+        counted = {"sequences": 0, "runs": 0}
+        with unittest.mock.patch.object(watcher, "keccak256", functools.lru_cache(maxsize=None)(watcher.keccak256)):
+            self.explore(0, 0, None, [], frozenset(), [], counted)
+        print(f"\nexport model: depth {self.DEPTH}, {counted['sequences']} sequences, {counted['runs']} runs checked")
+        self.assertGreater(counted["sequences"], 1_000)
+
+    def explore(self, run_index, time, state, logs, paid, bad, counted, trail=()):
+        if run_index == self.DEPTH:
+            counted["sequences"] += 1
+            return
+        for step in ("advance", "stay", "lag1", "lag2"):
+            now = time + 1 if step == "advance" else time
+            answer = now - {"lag1": 1, "lag2": 2}.get(step, 0)
+            if answer < 0:
+                continue
+            for payout in ("none", "legit", "duplicate", "orphan"):
+                block = 1_000 + 10 * run_index + 5
+                transaction = "0x" + f"{run_index * 16 + len(logs):064x}"
+                exists = [n for n in range(min(now, 3) + 1) if n not in paid]
+                if payout == "legit" and not exists or payout == "duplicate" and not paid:
+                    continue
+                new_logs, new_paid, new_bad = list(logs), paid, list(bad)
+                if payout == "legit":
+                    new_logs.append(released_log(self.ENTRIES[exists[-1]], block=block, transaction=transaction))
+                    new_paid = paid | {exists[-1]}
+                elif payout != "none":
+                    entry = self.ENTRIES[min(paid)] if payout == "duplicate" else self.ORPHAN
+                    new_logs.append(released_log(entry, block=block, transaction=transaction))
+                    new_bad.append((block, transaction))
+                counted["runs"] += 1
+                path = (*trail, (step, payout))
+                new_state = self.run_once(state, now, answer, new_logs, 1_000 + 10 * run_index + 9, new_bad,
+                                          new_paid, path)
+                self.explore(run_index + 1, now, new_state, new_logs, new_paid, new_bad, counted, path)
+
+    def run_once(self, state, now, answer, logs, finalized, bad, paid, path):
+        current, lagging = self.snapshot(now), self.snapshot(answer)
+
+        class Answers:
+            # The first lane page from a current node, the export pages from one `answer` behind.
+            def external_lane_info(self, *args, **kwargs):
+                return (lagging if "export_limit" in kwargs else current).external_lane_info(*args, **kwargs)
+
+        base = ExportBase(logs, locked=10_000_000, finalized=finalized)
+        loaded = json.loads(json.dumps(state)) if state is not None else None
+        try:
+            lines, alarms, new_state = watcher.watch_once(Answers(), base, LANE, state=loaded, exports=True)
+        except watcher.WatcherError:
+            return state  # exit 1: the file is kept
+        failed = any(line["kind"] == "error" for line in lines)
+        code = 2 if alarms else 1 if failed else 0
+        summary = lines[-1].get("exports")
+        retained = {watcher.export_evm_digest(entry["packet_digest"])
+                    for entry in self.ENTRIES[lagging.pruned:lagging.pruned + len(lagging.exports)]}
+        for line in lines:
+            if line["kind"] != "payout":
+                continue
+            if (line["block"], line["transaction"]) in bad:
+                self.assertNotIn(line["status"], ("backed", "verified_earlier"), path)
+            elif line["packet_digest"] in retained:
+                self.assertNotEqual(line["status"], "alarm", path)
+        if summary is not None and any(summary["scanned_from_block"] <= block <= finalized for block, _ in bad):
+            self.assertNotEqual(code, 0, path)
+        saved = (new_state or state or {}).get("exports") or {}
+        kept_transactions = {entry["transaction"] for entry in [*saved.get("paid", []),
+                                                                 *saved.get("pruned_paid_recent", [])]}
+        self.assertFalse(kept_transactions & {transaction for _, transaction in bad}, path)
+        self.assertLessEqual(saved.get("pruned_paid_count", 0) + len(saved.get("paid", [])), len(paid), path)
+        return new_state if new_state is not None else state
 
 
 class IntervalMalformedTests(unittest.TestCase):
