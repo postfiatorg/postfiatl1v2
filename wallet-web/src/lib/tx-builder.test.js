@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { TxBuilder, buildTrustSetOperation } from './tx-builder.js';
+import { OWNED_OBJECTS_MAX_RESTARTS, fetchOwnedObjectsSnapshot } from './rpc-client.js';
 
 const quote = {
   chain_id: 'postfiat-wan-devnet',
@@ -2101,4 +2102,98 @@ test('buildTrustSetOperation rejects zero, negative, unsafe, and fractional limi
     assert.throws(() => buildTrustSetOperation({ ...base, limit }), /positive safe integer/);
   }
   assert.throws(() => buildTrustSetOperation({ ...base }), /positive safe integer/);
+});
+
+// Owned-object paging: the wallet reads every page of one object view.
+function ownedPage(view, objects, nextCursor) {
+  return {
+    ok: true,
+    result: {
+      schema: 'postfiat-owned-objects-v1',
+      objects,
+      object_count: objects.length,
+      total_value: 2_300_000,
+      truncated: nextCursor !== null,
+      cursor: null,
+      next_cursor: nextCursor,
+      view_digest: view,
+      height: 7,
+      state_root: 'root',
+      owner_keys_omitted: true,
+    },
+  };
+}
+
+function scriptedOwnedObjects(answers) {
+  const calls = [];
+  return {
+    calls,
+    async ownedObjects(owner, opts) {
+      calls.push(opts);
+      return answers.shift();
+    },
+  };
+}
+
+test('an unwrap that needs an object from a later page selects it', async () => {
+  const small = Array.from({ length: 3 }, (_, index) => ({ id: `small-${index}`, version: 1, value: 100_000, asset: 'PFT' }));
+  const big = { id: 'big', version: 2, value: 2_000_000, asset: 'PFT' };
+  const paging = scriptedOwnedObjects([ownedPage('v1', small, 'c1'), ownedPage('v1', [big], null)]);
+  const snapshot = await fetchOwnedObjectsSnapshot(paging, 'owner-pk', { asset: 'PFT', limit: 3 });
+  assert.deepEqual(paging.calls.map(call => [call.cursor, call.omit_owner_keys]), [[undefined, true], ['c1', true]]);
+  assert.deepEqual(snapshot.objects.map(object => object.id), ['small-0', 'small-1', 'small-2', 'big']);
+  assert.equal(snapshot.truncated, false);
+  assert.equal(snapshot.next_cursor, null);
+  const wasm = {
+    wallet_sign_owned_unwrap(_backupJson, orderJson) {
+      assert.deepEqual(JSON.parse(orderJson).inputs, [{ id: 'big', version: 2 }]);
+      return { owner_pubkey_hex: 'owner-pk', owner_signature_hex: 'sig' };
+    },
+  };
+  const rpc = {
+    serverCapabilities: fastPayCapabilities,
+    async ownedUnwrapSign(_orderJson, validatorId) {
+      return { ok: true, result: { validator_id: validatorId, signature_hex: `sig-${validatorId}` } };
+    },
+    async ownedUnwrapApply() {
+      return { ok: true, result: { credited: 1_950_000, credited_to: 'pf-account', change_object: { value: 50_000 } } };
+    },
+  };
+  const validators = Array.from({ length: 6 }, (_, index) => ({ node_id: `validator-${index}` }));
+  const result = await new TxBuilder(rpc, () => wasm).unwrapOwnedTransfer(
+    'backup-json', 'owner-pk', snapshot.objects, 'pf-account', 1.95, 0, validators,
+  );
+  assert.deepEqual(result.order.inputs, [{ id: 'big', version: 2 }]);
+});
+
+test('a view change between pages restarts the read, within a bound', async () => {
+  const one = { id: 'one', version: 1, value: 10, asset: 'PFT' };
+  const two = { id: 'two', version: 1, value: 10, asset: 'PFT' };
+  const four = { id: 'four', version: 1, value: 10, asset: 'PFT' };
+  const changed = { ok: false, error: { code: 'owned_objects_view_changed', message: 'moved' } };
+  const paging = scriptedOwnedObjects([
+    ownedPage('v1', [one], 'c1'),
+    changed,
+    ownedPage('v2', [two], 'c2'),
+    ownedPage('v3', [four], null), // another view mid-read: restart again
+    ownedPage('v3', [two], 'c3'),
+    ownedPage('v3', [four], null),
+  ]);
+  const snapshot = await fetchOwnedObjectsSnapshot(paging, 'owner-pk');
+  assert.deepEqual(snapshot.objects.map(object => object.id), ['two', 'four']);
+  assert.equal(snapshot.view_digest, 'v3');
+  assert.deepEqual(paging.calls.map(call => call.cursor), [undefined, 'c1', undefined, 'c2', undefined, 'c3']);
+  const busy = scriptedOwnedObjects(Array.from({ length: 2 * (OWNED_OBJECTS_MAX_RESTARTS + 1) }, (_, index) => (
+    index % 2 === 0 ? ownedPage('v', [one], 'c') : changed
+  )));
+  await assert.rejects(fetchOwnedObjectsSnapshot(busy, 'owner-pk'), /kept changing/);
+  assert.equal(busy.calls.length, 2 * (OWNED_OBJECTS_MAX_RESTARTS + 1));
+});
+
+test('a truncated answer from a node without paging is an error, not a partial list', async () => {
+  const legacy = { ok: true, result: { objects: [{ id: 'one', version: 1, value: 10 }], truncated: true, total_value: 30 } };
+  await assert.rejects(fetchOwnedObjectsSnapshot(scriptedOwnedObjects([legacy]), 'owner-pk'), /too old for paging/);
+  const complete = { ok: true, result: { objects: [{ id: 'one', version: 1, value: 10 }], truncated: false, total_value: 10 } };
+  const snapshot = await fetchOwnedObjectsSnapshot(scriptedOwnedObjects([complete]), 'owner-pk');
+  assert.equal(snapshot.objects.length, 1);
 });

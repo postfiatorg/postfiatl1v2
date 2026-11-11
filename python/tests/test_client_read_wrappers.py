@@ -417,34 +417,74 @@ class RemainingReadWrapperTests(unittest.TestCase):
             {"owner_public_key_hex": "ab", "limit": 128, "cursor": "ooc1.x", "omit_owner_keys": True},
         )
 
-    def test_owned_objects_all_follows_cursors_and_restarts_on_a_new_height(self) -> None:
+    def test_owned_objects_all_follows_cursors_and_restarts_on_a_new_view(self) -> None:
         client = _client()
 
-        def page(height, ids, next_cursor):
+        def page(view, ids, next_cursor, height=5):
             return {
                 "height": height,
-                "state_root": f"root-{height}",
-                "objects": [{"id": i} for i in ids],
+                "state_root": "root",
+                "view_digest": view,
+                "objects": [{"id": i, "value": 10} for i in ids],
                 "object_count": len(ids),
+                "total_value": 30,
                 "truncated": next_cursor is not None,
+                "cursor": None,
                 "next_cursor": next_cursor,
             }
 
+        # The reviewer's sequence: same height and root, object 1 replaced by 4.
         pages = [
-            page(5, ["a", "b"], "c1"),
-            page(6, ["c"], None),  # the set changed: restart
-            page(6, ["a", "b"], "c1"),
-            page(6, ["c", "d"], None),
+            page("v1", ["1"], "c1"),
+            page("v2", ["2", "3", "4"], None),  # the view changed: restart
+            page("v2", ["2"], "c2"),
+            page("v2", ["3", "4"], None),
         ]
         with mock.patch.object(client, "_call", side_effect=pages) as call:
-            result = client.owned_objects_all("ab", page_limit=2)
-        self.assertEqual([o["id"] for o in result["objects"]], ["a", "b", "c", "d"])
-        self.assertEqual((result["height"], result["object_count"], result["truncated"]), (6, 4, False))
+            result = client.owned_objects_all("ab", page_limit=1)
+        self.assertEqual([o["id"] for o in result["objects"]], ["2", "3", "4"])
+        self.assertEqual(sum(o["value"] for o in result["objects"]), result["total_value"])
         self.assertEqual(call.call_args_list[1].args[1]["cursor"], "c1")
         self.assertNotIn("cursor", call.call_args_list[2].args[1])
-        with mock.patch.object(client, "_call", side_effect=[page(5, ["a"], "c"), page(6, ["b"], None)] * 2):
-            with self.assertRaisesRegex(Exception, "changed between pages"):
-                client.owned_objects_all("ab", max_restarts=1)
+        # The aggregate is not a page: no continuation fields, one view.
+        self.assertEqual(
+            (result["view_digest"], result["object_count"], result["truncated"]), ("v2", 3, False)
+        )
+        self.assertIsNone(result["next_cursor"])
+        self.assertIsNone(result["cursor"])
+        self.assertEqual(result["pages"], 2)
+
+    def test_owned_objects_all_restarts_on_a_view_changed_refusal_within_the_bound(self) -> None:
+        from postfiat_rpc.client import OWNED_OBJECTS_ALL_MAX_RESTARTS, RpcError
+
+        client = _client()
+        first = {"view_digest": "v", "objects": [{"id": "1"}], "object_count": 1,
+                 "truncated": True, "next_cursor": "c", "height": 1, "state_root": "r"}
+        last = {**first, "objects": [{"id": "2"}], "truncated": False, "next_cursor": None}
+        changed = RpcError("owned_objects", {"code": "owned_objects_view_changed", "message": "moved"})
+        with mock.patch.object(client, "_call", side_effect=[first, changed, first, last]):
+            result = client.owned_objects_all("ab")
+        self.assertEqual([o["id"] for o in result["objects"]], ["1", "2"])
+        busy = [first, changed] * (OWNED_OBJECTS_ALL_MAX_RESTARTS + 1)
+        with mock.patch.object(client, "_call", side_effect=busy) as call:
+            with self.assertRaisesRegex(Exception, "kept changing"):
+                client.owned_objects_all("ab")
+        self.assertEqual(call.call_count, 2 * (OWNED_OBJECTS_ALL_MAX_RESTARTS + 1))
+        other = RpcError("owned_objects", {"code": "owned_objects_cursor_malformed", "message": "x"})
+        with mock.patch.object(client, "_call", side_effect=[first, other]):
+            with self.assertRaises(RpcError):
+                client.owned_objects_all("ab")
+
+    def test_owned_objects_all_refuses_a_truncated_answer_from_a_node_without_paging(self) -> None:
+        client = _client()
+        legacy = {"objects": [{"id": "1"}], "object_count": 1, "truncated": True, "total_value": 20}
+        with mock.patch.object(client, "_call", return_value=legacy):
+            with self.assertRaisesRegex(Exception, "too old for paging"):
+                client.owned_objects_all("ab")
+        no_view = {**legacy, "next_cursor": "c", "height": 1, "state_root": "r"}
+        with mock.patch.object(client, "_call", return_value=no_view):
+            with self.assertRaisesRegex(Exception, "too old for paging"):
+                client.owned_objects_all("ab")
 
     def test_fastpay_recovery_committee_sends_only_the_optional_epoch(self) -> None:
         client = _client()

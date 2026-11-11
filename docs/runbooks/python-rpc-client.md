@@ -145,8 +145,13 @@ public read as a `--method` value, with the node's parameter names as flags
 - `owned_objects(owner_public_key_hex, asset=None, limit=None, cursor=None,
   omit_owner_keys=False)`: one page; follow `next_cursor`.
 - `owned_objects_all(owner_public_key_hex, asset=None, page_limit=128,
-  omit_owner_keys=False)`: every page from one `height` and `state_root`,
-  restarting when they change between pages. The CLI form is
+  omit_owner_keys=False)`: every page of one object view (`view_digest`),
+  restarting from the first page on `owned_objects_view_changed` or another
+  `view_digest`, at most `OWNED_OBJECTS_ALL_MAX_RESTARTS` (3) times, then
+  `RpcClientError`. A truncated answer without `next_cursor` or `view_digest`
+  (a node from before paging) raises. The result is the first page's fields
+  with every object, `object_count` of all objects, `truncated: false`,
+  `cursor` and `next_cursor` `None`, and `pages`. The CLI form is
   `--method owned_objects --owner-public-key-hex HEX [--cursor C]
   [--omit-owner-keys] [--all-pages]`.
 - `wrap_owned(from_address, owner_public_key_hex, amount, asset="PFT")`

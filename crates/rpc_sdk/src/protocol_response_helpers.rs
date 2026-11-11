@@ -790,6 +790,31 @@ pub fn validate_owned_objects_response(
             "expected the requested limit, or the node default when the request omitted it",
         ));
     }
+
+    // A continuation answers the cursor it was asked for, and a keyless
+    // request gets a keyless page (a pre-cursor node echoes neither).
+    let requested_cursor = params.get("cursor").and_then(Value::as_str);
+    let result_cursor = result.get("cursor").and_then(Value::as_str);
+    if requested_cursor.is_some() && result_cursor != requested_cursor {
+        return Err(invalid_result(
+            "cursor",
+            "expected the cursor selected by the request",
+        ));
+    }
+    let omit_requested = params
+        .get("omit_owner_keys")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let omitted = result
+        .get("owner_keys_omitted")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if omit_requested != omitted {
+        return Err(invalid_result(
+            "owner_keys_omitted",
+            "expected owner keys omitted exactly when the request asked",
+        ));
+    }
     Ok(())
 }
 

@@ -189,18 +189,24 @@ key each object is about 4 KB, so a page holds about 235 objects, well inside a
 to read the next page. The last page has `next_cursor: null`. A call without
 `cursor` answers as before, plus the new fields.
 
-- `total_value`: the sum of every matching object at `height`, not only this page.
+- `total_value`: the sum of every matching object in this view, not only this page.
+- `view_digest`: SHA-256 (64 hex) over every object matching the owner and `asset` filter, by asset, id, version and value, in page order. It identifies the object view; every page of one consistent read has the same `view_digest`.
 - `cursor`: the cursor this page continues from; `null` on the first page.
-- `next_cursor`: opaque; `null` on the last page. Bound to the owner, the `asset` filter and the last object returned.
-- `height`, `state_root`: the finalized tip the page was read at. The page is read under the store's ordered-commit lock, so it is one moment.
+- `next_cursor`: opaque; `null` on the last page. Bound to the owner, the `asset` filter, the `view_digest` and the last object returned.
+- `height`, `state_root`: the finalized tip when the page was read; information only. They do not identify the object view: FastPay effects create and spend objects without a new block. The page and `view_digest` are read under the store's ordered-commit lock, so they are one moment.
 - `owner_keys_omitted`: present and `true` when `omit_owner_keys` was sent. Objects then omit `owner_pubkey_hex` (the key is the top-level `owner_public_key_hex`; about 160 bytes per object).
 
-The node keeps no snapshot per client: a cursor names a position in the order,
-not a stored view, so validators hold no per-client state. If a page reports a
-different `height` or `state_root` than the first page, objects may have been
-created or spent between pages; restart from the first page. The Python
-client's `owned_objects_all` does this. Refusals carry typed codes and are
-never ignored: `owned_objects_cursor_malformed`,
+The node keeps no snapshot per client: a cursor names a position in the order
+and the view it was issued from, so validators hold no per-client state. When
+the owner's objects changed since the cursor was issued (a block or a FastPay
+apply), the continuation is refused with `owned_objects_view_changed` instead
+of mixing two views; restart from the first page. A cursor from before the
+view digest (`ooc1.`) gets the same refusal. The Python client's
+`owned_objects_all` and the web wallet restart at most 3 times, then fail with
+an error; a truncated answer without `next_cursor` or `view_digest` (a node
+from before paging) is an error, never a complete set. Refusals carry typed
+codes and are never ignored: `owned_objects_view_changed`,
+`owned_objects_cursor_malformed`,
 `owned_objects_cursor_owner_mismatch` (issued for another owner),
 `owned_objects_cursor_asset_mismatch` (issued for another `asset` filter),
 `owned_objects_cursor_invalid_object_id`, and `owned_objects_foreign_owner_key`

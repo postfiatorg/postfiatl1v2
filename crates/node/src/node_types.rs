@@ -3271,9 +3271,15 @@ pub struct OwnedObjectsReport {
     pub cursor: Option<String>,
     /// Opaque cursor for the next page; `None` on the last page.
     pub next_cursor: Option<String>,
-    /// Finalized tip height and state root the page was read at.
+    /// Finalized tip height and state root when the page was read. They
+    /// are information only: FastPay effects change the objects without a
+    /// new block, so they do not identify the object view.
     pub height: u64,
     pub state_root: String,
+    /// SHA-256 over every object matching the owner and asset filter
+    /// (asset, id, version, value, in page order): identifies the view the
+    /// page was read from; equal on every page of one consistent read.
+    pub view_digest: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub owner_keys_omitted: bool,
 }

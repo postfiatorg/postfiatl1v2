@@ -6131,6 +6131,9 @@ fn validate_owned_objects_result(result: &Value) -> Result<(), RpcResponseValida
     if paged {
         u64_field(result, "height")?;
         clean_string_field(result, "state_root")?;
+        // The object view the page was read from (height/root do not
+        // identify it); a cursor-era page always carries it.
+        lower_hex_field(result, "view_digest", 64)?;
         if truncated != next_cursor.is_some() {
             return Err(invalid_result(
                 "next_cursor",
