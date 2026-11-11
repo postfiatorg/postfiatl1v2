@@ -685,10 +685,6 @@ class WatcherTests(unittest.TestCase):
                 self.assertNotEqual(code, 0)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 # --- The export view (--exports): Base payouts against PFTL export packets. ---
 
 TOKEN = "0x" + "2b" * 20
@@ -706,123 +702,369 @@ def export_entry(nonce: int, *, amount: int = 400_000, to: str = BASE_TO, height
 
 
 def released_log(entry: dict[str, Any], *, amount: int | None = None, to: str | None = None,
-                 withdrawal: str | None = None, block: int = 950) -> dict[str, Any]:
+                 withdrawal: str | None = None, burn: str | None = None, block: int = 950,
+                 address: str = LOCK) -> dict[str, Any]:
     packet = entry["packet"]
     amount = packet["amount_atoms"] if amount is None else amount
     to = packet["base_recipient"] if to is None else to
     return {
-        "address": LOCK, "blockNumber": hex(block), "transactionHash": "0x" + "ee" * 32,
+        "address": address, "blockNumber": hex(block), "transactionHash": "0x" + "ee" * 32,
         "topics": [watcher.RELEASED_TOPIC,
                    withdrawal or watcher.commitment_of(entry["withdrawal_id_commitment"]),
-                   watcher.commitment_of(entry["burn_tx_commitment"]),
+                   burn or watcher.commitment_of(entry["burn_tx_commitment"]),
                    watcher.export_evm_digest(entry["packet_digest"])],
         "data": "0x" + to.removeprefix("0x").rjust(64, "0") + f"{amount:064x}",
     }
 
 
-class ExportPftl:
-    def __init__(self, exports: list[dict[str, Any]], *, pruned: int = 0, exported: int | None = None,
-                 released: int = 1_000_000) -> None:
+class ExportPftl(FakePftl):
+    """`external_lane_info` paging exports as the node does: newest first, the
+    cursor the page's oldest nonce, absent on the last stored page, and the
+    lane state (`released_atoms`; `exported_atoms` and the pruned count and
+    atoms, left out while zero) on every page."""
+
+    def __init__(self, exports: list[dict[str, Any]], *, pruned: int = 0, pruned_atoms: int | None = None,
+                 exported: int | None = None, released: int = 1_000_000, current_height: int = 500) -> None:
+        super().__init__([], current_height=current_height)
         self.exports, self.pruned, self.released = exports, pruned, released
-        self.exported = sum(entry["packet"]["amount_atoms"] for entry in exports) if exported is None else exported
+        self.pruned_atoms = 400_000 * pruned if pruned_atoms is None else pruned_atoms
+        stored = sum(entry["packet"]["amount_atoms"] for entry in exports)
+        self.exported = self.pruned_atoms + stored if exported is None else exported
+        self.export_cursors: list[int | None] = []
+        self.page_hook: Any = None
 
-    def external_lane_info(self, lane_id: str | None = None, *, export_cursor: int | None = None,
-                           export_limit: int | None = None, **_: Any) -> dict[str, Any]:
-        page = [entry for entry in self.exports
-                if export_cursor is None or entry["packet"]["export_nonce"] < export_cursor]
+    def external_lane_info(self, lane_id: str | None = None, *, release_cursor: int | None = None,
+                           release_limit: int | None = None, export_cursor: int | None = None,
+                           export_limit: int | None = None) -> dict[str, Any]:
+        saved, self.pruned = self.pruned, 0  # the release paging has no pruned releases
+        info = super().external_lane_info(lane_id, release_cursor=release_cursor, release_limit=release_limit)
+        self.pruned = saved
+        self.export_cursors.append(export_cursor)
+        count = self.pruned + len(self.exports)
+        end = count if export_cursor is None else export_cursor
+        start = max(self.pruned, end - (export_limit or 100))
+        page = [entry for entry in self.exports if start <= entry["packet"]["export_nonce"] < end]
         page.sort(key=lambda entry: entry["packet"]["export_nonce"], reverse=True)
-        page = page[: export_limit or 100]
-        more = page and page[-1]["packet"]["export_nonce"] > self.pruned
-        return {"lanes": [{"lane_id": LANE, "exports": page, "pruned_export_count": self.pruned,
-                           "next_export_cursor": page[-1]["packet"]["export_nonce"] if more else None,
-                           "state": {"exported_atoms": self.exported, "released_atoms": self.released}}]}
+        state = {"released_atoms": self.released}
+        for key, value in (("exported_atoms", self.exported), ("pruned_export_count", self.pruned),
+                           ("pruned_exported_atoms", self.pruned_atoms)):
+            if value:
+                state[key] = value
+        row = info["lanes"][0]
+        row.update(state=state, export_count=count, pruned_export_count=self.pruned,
+                   export_history_root="0x" + "cd" * 48 if count else None, exports=page)
+        if start > self.pruned:
+            row["next_export_cursor"] = start
+        if self.page_hook is not None:
+            self.page_hook(info, export_cursor)
+        return info
 
 
-class ExportBase:
+class ExportBase(FakeBase):
+    """A Base node that honours the log filter's block range and each state
+    read's block tag: `totalReleased` at block N is the sum of the payouts up
+    to N, and `latest` is no block number."""
+
     def __init__(self, logs: list[dict[str, Any]], *, locked: int = 1_000_000, released: int | None = None,
-                 balance: int | None = None) -> None:
-        self.logs = logs
-        self.locked = locked
-        paid = sum(int(log["data"][-64:], 16) for log in logs)
-        self.released = paid if released is None else released
-        self.balance = self.locked - self.released if balance is None else balance
+                 balance: int | None = None, finalized: int = FINALIZED, max_span: int | None = None) -> None:
+        super().__init__({}, finalized=finalized)
+        self.logs, self.locked, self.released, self.balance = logs, locked, released, balance
+        self.max_span = max_span
+        self.log_ranges: list[tuple[int, int]] = []
+        self.total_tags: list[str] = []
+
+    def paid_through(self, block: int) -> int:
+        return sum(int(log["data"][-64:], 16) for log in self.logs
+                   if log["address"].lower() == LOCK and int(log["blockNumber"], 16) <= block)
 
     def call(self, method: str, params: list[Any]) -> Any:
         if method == "eth_getLogs":
-            return self.logs
-        if method == "eth_call":
-            data = params[0]["data"]
+            (query,) = params
+            assert query["address"].lower() == LOCK and query["topics"] == [watcher.RELEASED_TOPIC], query
+            start, end = int(query["fromBlock"], 16), int(query["toBlock"], 16)
+            assert start <= end <= self.finalized, "Released events are read in finalized blocks only"
+            self.log_ranges.append((start, end))
+            if self.max_span is not None and end - start + 1 > self.max_span:
+                raise watcher.pft_token.PftTokenRefused("eth_getLogs: the answer is larger than 1048576 bytes")
+            # A node that ignores the address filter: the watcher must check it.
+            return [log for log in self.logs if start <= int(log["blockNumber"], 16) <= end]
+        if method == "eth_call" and not params[0]["data"].startswith("0x" + watcher.LOCK_RECORD_SELECTOR):
+            call, tag = params
+            self.total_tags.append(tag)
+            block = int(tag, 16)
+            released = self.paid_through(block) if self.released is None else self.released
+            balance = self.locked - released if self.balance is None else self.balance
             words = {watcher._selector("token()"): int(TOKEN, 16), watcher._selector("totalLocked()"): self.locked,
-                     watcher._selector("totalReleased()"): self.released}
-            if data.startswith(watcher._selector("balanceOf(address)")):
-                return "0x" + f"{self.balance:064x}"
-            return "0x" + f"{words[data]:064x}"
-        raise AssertionError(method)
+                     watcher._selector("totalReleased()"): released}
+            if call["data"].startswith(watcher._selector("balanceOf(address)")):
+                assert call["to"].lower() == TOKEN
+                return "0x" + f"{balance:064x}"
+            return "0x" + f"{words[call['data']]:064x}"
+        return super().call(method, params)
 
 
 def run_export_view(pftl: ExportPftl, base: ExportBase, *, warning: int | None = None,
-                    current_height: int = 500) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
+                    current_height: int = 500, state: dict[str, Any] | None = None, released: int | None = None,
+                    ) -> tuple[list[dict[str, Any]], list[str], dict[str, Any], dict[str, Any]]:
     lines: list[dict[str, Any]] = []
     codes: list[str] = []
 
     def alarm(code: str, **fields: Any) -> None:
+        assert code in watcher.ALARM_CODES, code
         codes.append(code)
         lines.append({"kind": "alarm", "code": code, **fields})
 
-    summary = watcher.export_view(pftl, base, LANE, lock=LOCK, finalized=FINALIZED, current_height=current_height,
-                                  from_block=0, unpaid_warning_blocks=warning, alarm=alarm, lines=lines)
-    return lines, codes, summary
+    summary, kept = watcher.export_view(
+        pftl, base, LANE, lock=LOCK, finalized=base.finalized, current_height=current_height,
+        released_atoms=pftl.released if released is None else released, from_block=0, state=state,
+        unpaid_warning_blocks=warning, alarm=alarm, lines=lines)
+    return lines, codes, summary, kept
+
+
+def run_exports(pftl: ExportPftl, base: ExportBase, *extra: str) -> tuple[int, list[dict[str, Any]], str]:
+    return run(pftl, base, "--exports", "--lock-from-block", "0", *extra)
 
 
 class ExportViewTests(unittest.TestCase):
     def test_a_paid_export(self):
         entry = export_entry(0)
-        lines, codes, summary = run_export_view(ExportPftl([entry]), ExportBase([released_log(entry)]))
+        lines, codes, summary, kept = run_export_view(ExportPftl([entry]), ExportBase([released_log(entry)]))
         self.assertEqual(codes, [])
         exports = [line for line in lines if line["kind"] == "export"]
         self.assertEqual([(line["status"], line["base_block"]) for line in exports], [("paid", 950)])
         self.assertEqual(summary["totals"]["paid_sum"], 400_000)
+        self.assertEqual((kept["scanned_through_block"], kept["payout_count"], kept["payout_sum"]),
+                         (FINALIZED, 1, 400_000))
 
     def test_unpaid_below_and_above_the_threshold(self):
         entry = export_entry(0, height=490)
-        lines, codes, _ = run_export_view(ExportPftl([entry]), ExportBase([]), warning=20)
+        lines, codes, _, _ = run_export_view(ExportPftl([entry]), ExportBase([]), warning=20)
         self.assertEqual(codes, [])
         self.assertEqual([line["status"] for line in lines if line["kind"] == "export"], ["unpaid"])
         self.assertFalse([line for line in lines if line["kind"] == "warning"])
-        lines, codes, _ = run_export_view(ExportPftl([entry]), ExportBase([]), warning=5)
+        lines, codes, _, _ = run_export_view(ExportPftl([entry]), ExportBase([]), warning=5)
         self.assertEqual(codes, [])
         self.assertEqual([line["code"] for line in lines if line["kind"] == "warning"], ["export_unpaid_too_long"])
 
     def test_a_payout_with_no_packet(self):
         stranger = export_entry(7)
-        lines, codes, _ = run_export_view(ExportPftl([]), ExportBase([released_log(stranger)]))
+        _, codes, _, _ = run_export_view(ExportPftl([]), ExportBase([released_log(stranger)]))
         self.assertIn("payout_without_export", codes)
         self.assertIn("exported_below_paid", codes)
 
-    def test_a_payout_with_another_amount_or_recipient_or_withdrawal(self):
+    def test_a_payout_with_another_amount_recipient_withdrawal_or_burn(self):
         entry = export_entry(0)
-        _, codes, _ = run_export_view(ExportPftl([entry]), ExportBase([released_log(entry, amount=400_001)]))
+        _, codes, _, _ = run_export_view(ExportPftl([entry]), ExportBase([released_log(entry, amount=400_001)]))
         self.assertIn("payout_amount_mismatch", codes)
-        _, codes, _ = run_export_view(ExportPftl([entry]), ExportBase([released_log(entry, to="0x" + "5e" * 20)]))
-        self.assertEqual(codes, ["payout_recipient_mismatch"])
-        _, codes, _ = run_export_view(ExportPftl([entry]),
-                                      ExportBase([released_log(entry, withdrawal="0x" + "99" * 32)]))
-        self.assertEqual(codes, ["payout_withdrawal_mismatch"])
+        for field, value, code in (("to", "0x" + "5e" * 20, "payout_recipient_mismatch"),
+                                   ("withdrawal", "0x" + "99" * 32, "payout_withdrawal_mismatch"),
+                                   ("burn", "0x" + "98" * 32, "payout_burn_mismatch")):
+            with self.subTest(code):
+                _, codes, _, _ = run_export_view(ExportPftl([entry]),
+                                                 ExportBase([released_log(entry, **{field: value})]))
+                self.assertEqual(codes, [code])
+
+    def test_a_second_payout_with_the_same_digest_is_an_alarm(self):
+        entry = export_entry(0, amount=200_000)
+        logs = [released_log(entry, block=900), released_log(entry, block=950)]
+        _, codes, _, _ = run_export_view(ExportPftl([entry]), ExportBase(logs))
+        self.assertEqual(codes, ["payout_duplicate", "exported_below_paid"])
 
     def test_broken_totals(self):
         entry = export_entry(0)
-        _, codes, _ = run_export_view(ExportPftl([entry]), ExportBase([released_log(entry)], released=500_000))
+        _, codes, _, _ = run_export_view(ExportPftl([entry]), ExportBase([released_log(entry)], released=500_000))
         self.assertIn("total_released_mismatch", codes)
-        _, codes, _ = run_export_view(ExportPftl([entry]), ExportBase([released_log(entry)], balance=1))
+        _, codes, _, _ = run_export_view(ExportPftl([entry]), ExportBase([released_log(entry)], balance=1))
         self.assertEqual(codes, ["lock_balance_mismatch"])
-        _, codes, _ = run_export_view(ExportPftl([entry], released=2_000_000), ExportBase([released_log(entry)]))
+        _, codes, _, _ = run_export_view(ExportPftl([entry], released=2_000_000), ExportBase([released_log(entry)]))
         self.assertEqual(codes, ["released_above_locked"])
 
-    def test_a_pruned_packet_is_unknown_not_backed(self):
-        pruned_entry = export_entry(0)
-        lines, codes, summary = run_export_view(ExportPftl([], pruned=1, exported=400_000),
-                                                ExportBase([released_log(pruned_entry)]))
+    def test_a_balance_above_the_locked_remainder_is_a_surplus_not_an_alarm(self):
+        # Tokens sent to the lock by a plain transfer: PFTLockV1 promises only "at least".
+        entry = export_entry(0)
+        _, codes, summary, _ = run_export_view(ExportPftl([entry]),
+                                               ExportBase([released_log(entry)], balance=600_001))
         self.assertEqual(codes, [])
-        self.assertEqual([line["status"] for line in lines if line["kind"] == "payout"], ["unknown_pruned"])
-        self.assertEqual([line["code"] for line in lines if line["kind"] == "warning"], ["payout_unknown_pruned"])
+        self.assertEqual(summary["totals"]["lock_surplus"], 1)
+
+    def test_a_pruned_packet_paid_before_any_check_is_an_alarm(self):
+        pruned_entry = export_entry(0)
+        lines, codes, summary, _ = run_export_view(ExportPftl([], pruned=1),
+                                                   ExportBase([released_log(pruned_entry)]))
+        self.assertEqual(codes, ["payout_pruned_before_check"])
+        self.assertEqual([line["status"] for line in lines if line["kind"] == "payout"], ["alarm"])
         self.assertEqual(summary["pruned_export_count"], 1)
+
+    def test_unknown_payouts_above_the_pruned_count_or_atoms_are_an_alarm(self):
+        first, second = export_entry(0), export_entry(1)
+        logs = [released_log(first), released_log(second, block=960)]
+        _, codes, _, _ = run_export_view(ExportPftl([], pruned=1, pruned_atoms=800_000), ExportBase(logs))
+        self.assertIn("payout_unknown_above_pruned", codes)
+        _, codes, _, _ = run_export_view(ExportPftl([], pruned=2, pruned_atoms=500_000), ExportBase(logs))
+        self.assertIn("payout_unknown_above_pruned", codes)
+
+    def test_verified_payouts_are_not_read_again_and_a_new_unknown_one_is_an_alarm(self):
+        first, second = export_entry(0), export_entry(1)
+        pftl = ExportPftl([first, second])
+        base = ExportBase([released_log(first, block=900)], finalized=920)
+        _, codes, _, kept = run_export_view(pftl, base)
+        self.assertEqual(codes, [])
+        # The first packet is pruned; the second is paid in a later block.
+        pftl = ExportPftl([second], pruned=1)
+        base = ExportBase([released_log(first, block=900), released_log(second, block=950)])
+        lines, codes, _, kept = run_export_view(pftl, base, state=kept)
+        self.assertEqual(codes, [])
+        self.assertEqual(base.log_ranges, [(921, FINALIZED)])
+        self.assertEqual([line["status"] for line in lines if line["kind"] == "payout"], ["backed"])
+        self.assertEqual((kept["payout_count"], kept["payout_sum"]), (2, 800_000))
+        # A payout for a packet pruned before this watcher saw it paid.
+        forged = export_entry(5)
+        base = ExportBase([released_log(first, block=900), released_log(second, block=950),
+                           released_log(forged, block=1_100)], finalized=1_200, locked=1_400_000)
+        _, codes, _, _ = run_export_view(ExportPftl([second], pruned=1, pruned_atoms=800_000), base, state=kept)
+        self.assertIn("payout_pruned_before_check", codes)
+
+    def test_logs_are_read_in_chunks_halved_on_an_rpc_error(self):
+        entry = export_entry(0)
+        base = ExportBase([released_log(entry)], max_span=300)
+        _, codes, _, kept = run_export_view(ExportPftl([entry]), base)
+        self.assertEqual(codes, [])
+        spans = [end - start + 1 for start, end in base.log_ranges]
+        self.assertTrue(all(span <= 300 for start, end in base.log_ranges[-3:] for span in [end - start + 1]))
+        self.assertEqual(base.log_ranges[-1][1], FINALIZED)
+        self.assertGreater(len(spans), 2)
+        # The floor: a node that fails every range fails the view.
+        with self.assertRaises(watcher.WatcherRpcError):
+            run_export_view(ExportPftl([entry]), ExportBase([released_log(entry)], max_span=0))
+
+    def test_only_finalized_blocks_are_read(self):
+        entry, late = export_entry(0), export_entry(1)
+        # A payout above the finalized block is not counted, in the events or the totals.
+        base = ExportBase([released_log(entry), released_log(late, block=FINALIZED + 5)])
+        _, codes, summary, _ = run_export_view(ExportPftl([entry, late]), base)
+        self.assertEqual(codes, [])
+        self.assertEqual(summary["totals"]["total_released"], 400_000)
+        self.assertEqual(max(end for _, end in base.log_ranges), FINALIZED)
+        self.assertEqual(set(base.total_tags), {hex(FINALIZED)})
+
+    def test_a_log_from_another_address_or_topic_is_malformed(self):
+        entry = export_entry(0)
+        stray = released_log(entry, address="0x" + "77" * 20)
+        with self.assertRaises(watcher.WatcherError) as caught:
+            run_export_view(ExportPftl([entry]), ExportBase([stray]))
+        self.assertEqual(caught.exception.code, "base_answer_malformed")
+
+    def test_upper_case_hex_in_topics_matches(self):
+        entry = export_entry(0)
+        log = released_log(entry)
+        log["topics"] = ["0x" + topic[2:].upper() for topic in log["topics"]]
+        log["address"] = LOCK.upper().replace("0X", "0x")
+        _, codes, _, _ = run_export_view(ExportPftl([entry]), ExportBase([log]))
+        self.assertEqual(codes, [])
+
+    def test_exports_are_read_across_pages(self):
+        entries = [export_entry(nonce, amount=1_000) for nonce in range(3, 3 + 150)]
+        pftl = ExportPftl(entries, pruned=3, pruned_atoms=3_000, released=10**9)
+        logs = [released_log(entry, block=500 + index) for index, entry in enumerate(entries)]
+        lines, codes, summary, _ = run_export_view(pftl, ExportBase(logs, locked=10**9))
+        self.assertEqual(codes, [])
+        self.assertEqual(summary["exports_checked"], 150)
+        self.assertEqual(pftl.export_cursors, [None, 53])
+
+    def test_export_paging_is_checked_like_release_paging(self):
+        entries = [export_entry(nonce, amount=1_000) for nonce in range(150)]
+
+        def gap(info, cursor):
+            info["lanes"][0]["exports"] = [entry for entry in info["lanes"][0]["exports"]
+                                           if entry["packet"]["export_nonce"] != 120]
+
+        def wrong_cursor(info, cursor):
+            if cursor is None:
+                info["lanes"][0]["next_export_cursor"] = 49
+
+        def repeated_cursor(info, cursor):
+            info["lanes"][0]["next_export_cursor"] = 50
+            if cursor == 50:
+                info["lanes"][0]["exports"] = []
+
+        def changed(info, cursor):
+            if cursor is not None:
+                info["lanes"][0]["export_count"] += 1
+
+        def missing(info, cursor):
+            info["lanes"][0]["state"].pop("released_atoms")
+
+        def string_count(info, cursor):
+            info["lanes"][0]["pruned_export_count"] = "0"
+
+        for name, hook in (("gap", gap), ("cursor", wrong_cursor), ("repeated", repeated_cursor),
+                           ("snapshot", changed), ("released_atoms", missing), ("count", string_count)):
+            with self.subTest(name):
+                pftl = ExportPftl(entries, released=10**9)
+                pftl.page_hook = hook
+                with self.assertRaises(watcher.WatcherError):
+                    run_export_view(pftl, ExportBase([], locked=10**9))
+
+    def test_malformed_answers_are_error_lines_not_tracebacks(self):
+        entry = export_entry(0)
+        bad_digest = export_entry(0)
+        bad_digest["packet_digest"] = "0x" + "zz" * 48
+        log = released_log(entry)
+        log["data"] = "0x" + "zz" * 64
+        for name, pftl, base, code in (
+            ("packet digest", ExportPftl([bad_digest]), ExportBase([]), "export_record_malformed"),
+            ("log data", ExportPftl([entry]), ExportBase([log]), "base_answer_malformed"),
+            ("log not an object", ExportPftl([entry]), ExportBase([]), "base_answer_malformed"),
+        ):
+            with self.subTest(name):
+                if name == "log not an object":
+                    base.logs = ["0x00"]
+                    base.call = (lambda original: lambda method, params: ["0x00"] if method == "eth_getLogs"
+                                 else original(method, params))(base.call)
+                code_, lines, stderr = run_exports(pftl, base)
+                self.assertEqual(code_, 1)
+                self.assertIn(code, [json.loads(line)["code"] for line in stderr.splitlines()])
+                self.assertEqual(lines[-1]["kind"], "summary")
+
+    def test_an_export_view_failure_does_not_hide_a_release_alarm(self):
+        entry = export_entry(0)
+        pftl = ExportPftl([entry])
+        pftl.releases = [release(0)]
+        pftl.history_root = "0x" + "ab" * 48
+        base = ExportBase([released_log(entry)], max_span=0)
+        code, lines, stderr = run_exports(pftl, base)
+        self.assertEqual(code, 2)
+        self.assertEqual(alarm_codes(lines), ["release_without_lock"])
+        self.assertEqual(json.loads(stderr)["code"], "base_rpc_failed")
+        self.assertEqual(lines[-1]["export_error"], "base_rpc_failed")
+
+    def test_the_command_line_wires_the_export_options(self):
+        entry = export_entry(0, height=100)
+        stranger = export_entry(9)
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            code, lines, _ = run_exports(ExportPftl([entry]), ExportBase([released_log(entry)]),
+                                         "--state-file", str(state_file))
+            self.assertEqual(code, 0)
+            kept = json.loads(state_file.read_text())
+            self.assertEqual(kept["exports"]["scanned_through_block"], FINALIZED)
+            self.assertEqual(kept["exports"]["payout_count"], 1)
+            code, lines, _ = run_exports(ExportPftl([entry]), ExportBase([released_log(stranger)]),
+                                         "--unpaid-warning-blocks", "10")
+            self.assertEqual(code, 2)
+            self.assertIn("payout_without_export", alarm_codes(lines))
+            self.assertIn("export_unpaid_too_long", [line["code"] for line in lines if line["kind"] == "warning"])
+        base = ExportBase([released_log(entry, block=950)])
+        code, _, _ = run(ExportPftl([entry]), base, "--exports", "--lock-from-block", "951")
+        self.assertEqual(base.log_ranges, [(951, FINALIZED)])
+        self.assertEqual(code, 2)  # totalReleased counts the payout below the scan
+
+    def test_a_lagging_finalized_answer_and_a_new_base_are_refused_not_hidden(self):
+        entry = export_entry(0)
+        _, _, _, kept = run_export_view(ExportPftl([entry]), ExportBase([released_log(entry)]))
+        with self.assertRaises(watcher.WatcherError):
+            run_export_view(ExportPftl([entry]), ExportBase([released_log(entry)], finalized=900), state=kept)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -57,6 +57,9 @@ HASH32 = re.compile(r"^0x[0-9a-fA-F]{64}$")
 GENESIS_HASH = re.compile(r"^[0-9a-f]{96}$")
 HISTORY_ROOT = re.compile(r"^0x[0-9a-f]{96}$")
 U32 = 1 << 32
+HEX48 = re.compile(r"^0x[0-9a-fA-F]{96}$")
+LOG_CHUNK_BLOCKS = 10_000
+MIN_LOG_CHUNK_BLOCKS = 16
 
 ALARM_CODES = (
     "release_without_lock",
@@ -71,12 +74,16 @@ ALARM_CODES = (
     "payout_amount_mismatch",
     "payout_recipient_mismatch",
     "payout_withdrawal_mismatch",
+    "payout_burn_mismatch",
+    "payout_duplicate",
+    "payout_pruned_before_check",
+    "payout_unknown_above_pruned",
     "total_released_mismatch",
     "lock_balance_mismatch",
     "exported_below_paid",
     "released_above_locked",
 )
-WARNING_CODES = ("payout_unknown_pruned", "export_unpaid_too_long")
+WARNING_CODES = ("export_unpaid_too_long",)
 
 
 # --- Keccak-256 (Ethereum's, padding 0x01): not in the standard library. ---
@@ -140,7 +147,9 @@ def export_evm_digest(packet_digest: str) -> str:
     """`external_lane_export_evm_digest`: the `packetDigest` the lock emits,
     Keccak-256 over the domain tag, a zero byte and the 48-byte packet digest."""
 
-    raw = bytes.fromhex(packet_digest.removeprefix("0x"))
+    if not isinstance(packet_digest, str) or not HEX48.match(packet_digest):
+        raise WatcherError("export_record_malformed", "packet_digest is not 48 bytes of hex")
+    raw = bytes.fromhex(packet_digest[2:])
     if len(raw) != 48:
         raise WatcherError("export_record_malformed", "packet_digest is not 48 bytes")
     return "0x" + keccak256(EXPORT_EVM_DIGEST_DOMAIN + b"\x00" + raw).hex()
@@ -149,7 +158,9 @@ def export_evm_digest(packet_digest: str) -> str:
 def commitment_of(hex48: str) -> str:
     """keccak256 of a 48-byte PFTL commitment: what the verifier and the lock record."""
 
-    raw = bytes.fromhex(hex48.removeprefix("0x"))
+    if not isinstance(hex48, str) or not HEX48.match(hex48):
+        raise WatcherError("export_record_malformed", "a commitment is not 48 bytes of hex")
+    raw = bytes.fromhex(hex48[2:])
     if len(raw) != 48:
         raise WatcherError("export_record_malformed", "a commitment is not 48 bytes")
     return "0x" + keccak256(raw).hex()
@@ -373,13 +384,19 @@ def _export(entry: Any) -> dict[str, Any]:
     if not isinstance(recipient, str) or not ADDRESS.match(recipient):
         raise WatcherError("export_record_malformed", "base_recipient is not an address")
     for field in ("packet_digest", "withdrawal_id_commitment", "burn_tx_commitment"):
-        if not isinstance(entry.get(field), str):
-            raise WatcherError("export_record_malformed", f"{field} is not text")
+        if not isinstance(entry.get(field), str) or not HEX48.match(entry[field]):
+            raise WatcherError("export_record_malformed", f"{field} is not 0x and 96 hex digits")
+    try:
+        nonce = _u64(packet.get("export_nonce"), "export_nonce")
+        amount = _u64(packet.get("amount_atoms"), "amount_atoms")
+        height = _u64(packet.get("exported_at_height"), "exported_at_height")
+    except WatcherError as error:
+        raise WatcherError("export_record_malformed", str(error)) from None
     return {
-        "export_nonce": _u64(packet.get("export_nonce"), "export_nonce"),
-        "amount_atoms": _u64(packet.get("amount_atoms"), "amount_atoms"),
+        "export_nonce": nonce,
+        "amount_atoms": amount,
         "base_recipient": recipient.lower(),
-        "exported_at_height": _u64(packet.get("exported_at_height"), "exported_at_height"),
+        "exported_at_height": height,
         "tx_id": packet.get("tx_id"),
         "packet_digest": entry["packet_digest"],
         "evm_digest": export_evm_digest(entry["packet_digest"]),
@@ -388,46 +405,142 @@ def _export(entry: Any) -> dict[str, Any]:
     }
 
 
+def _export_snapshot(info: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
+    """The export counters every page must share. `export_count`,
+    `pruned_export_count` and `state.released_atoms` are always reported;
+    `exported_atoms` and `pruned_exported_atoms` are left out while zero."""
+
+    state = row.get("state")
+    if not isinstance(state, dict):
+        raise WatcherError("export_record_malformed", "the lane row has no state")
+    try:
+        snapshot = {
+            "chain_id": info.get("chain_id"),
+            "genesis_hash": info.get("genesis_hash"),
+            "current_height": _u64(info.get("current_height"), "current_height"),
+            "export_count": _u64(row.get("export_count"), "export_count"),
+            "pruned_export_count": _u64(row.get("pruned_export_count"), "pruned_export_count"),
+            "export_history_root": row.get("export_history_root"),
+            "released_atoms": _u64(state.get("released_atoms"), "state.released_atoms"),
+            "exported_atoms": _u64(state.get("exported_atoms", 0), "state.exported_atoms"),
+            "pruned_exported_atoms": _u64(state.get("pruned_exported_atoms", 0), "state.pruned_exported_atoms"),
+        }
+    except WatcherError as error:
+        raise WatcherError("export_record_malformed", str(error)) from None
+    if snapshot["pruned_export_count"] > snapshot["export_count"]:
+        raise WatcherError("export_record_malformed", "more exports pruned than exported")
+    return snapshot
+
+
 def _exports_of(pftl: Any, lane_id: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Every stored export packet of the lane, oldest first, and the first page's row."""
+    """Every stored export packet of the lane, oldest first, and the snapshot
+    it was paged from. As for releases: every page from the first page's
+    snapshot, nonces contiguous from `export_count - 1` down to the pruned
+    count, each cursor the page's oldest nonce and strictly decreasing."""
 
     exports: list[dict[str, Any]] = []
-    cursor = None
-    first_row: dict[str, Any] | None = None
+    cursor: int | None = None
+    first: dict[str, Any] | None = None
+    seen: set[int] = set()
     while True:
         try:
             info = pftl.external_lane_info(lane_id, export_cursor=cursor, export_limit=PAGE_SIZE)
         except RpcClientError as error:
             raise WatcherRpcError("pftl_rpc_failed", f"external_lane_info: {error}") from None
+        if not isinstance(info, dict):
+            raise WatcherError("export_record_malformed", "external_lane_info is not an object")
         rows = [row for row in info.get("lanes") or [] if isinstance(row, dict) and row.get("lane_id") == lane_id]
         if len(rows) != 1:
             raise WatcherError("external_lane_not_reported", f"the PFTL node reports no lane `{lane_id}`")
         row = rows[0]
-        first_row = first_row or row
+        snapshot = _export_snapshot(info, row)
+        if first is None:
+            first = snapshot
+            expected = first["export_count"] - 1  # the next nonce, newest first
+        elif snapshot != first:
+            changed = sorted(key for key in first if first[key] != snapshot.get(key))
+            raise WatcherTransientError("external_lane_info_inconsistent",
+                                        f"the lane report changed while exports were paged: {', '.join(changed)}")
         page = [_export(entry) for entry in row.get("exports") or []]
+        for entry in page:
+            if entry["export_nonce"] != expected:
+                raise WatcherError("export_record_malformed",
+                                   f"export nonce {entry['export_nonce']} where {expected} was due")
+            expected -= 1
         exports.extend(page)
-        cursor = row.get("next_export_cursor")
-        if cursor is None or not page:
+        next_cursor = row.get("next_export_cursor")
+        if next_cursor is None or not page:
+            if expected != first["pruned_export_count"] - 1:
+                raise WatcherError("export_record_malformed",
+                                   f"the stored exports end at {expected + 1}, not at the pruned count "
+                                   f"{first['pruned_export_count']}")
             break
-    return sorted(exports, key=lambda entry: entry["export_nonce"]), first_row or {}
+        try:
+            next_cursor = _u64(next_cursor, "next_export_cursor")
+        except WatcherError as error:
+            raise WatcherError("export_record_malformed", str(error)) from None
+        if next_cursor != page[-1]["export_nonce"] or next_cursor in seen:
+            raise WatcherError("export_record_malformed",
+                               "next_export_cursor is not the page's oldest nonce, or repeats")
+        seen.add(next_cursor)
+        cursor = next_cursor
+    assert first is not None
+    stored = sum(entry["amount_atoms"] for entry in exports)
+    if first["exported_atoms"] != first["pruned_exported_atoms"] + stored:
+        raise WatcherError("export_record_malformed",
+                           "exported_atoms is not the pruned atoms plus the stored packets' amounts")
+    return list(reversed(exports)), first
 
 
-def _released_events(base: Any, lock: str, from_block: int, finalized: int) -> list[dict[str, Any]]:
-    """Every `Released` event of the lock in finalized blocks from `from_block`."""
+def _released_logs(base: Any, lock: str, start: int, end: int) -> list[Any]:
+    """`Released` logs of the lock in blocks `start..end`, read in chunks; a
+    failed request (an RPC error or an answer above the size limit) is
+    retried with half the chunk, down to `MIN_LOG_CHUNK_BLOCKS`."""
 
-    logs = _base(base, "eth_getLogs", [{"address": lock, "topics": [RELEASED_TOPIC],
-                                        "fromBlock": hex(from_block), "toBlock": hex(finalized)}])
+    logs: list[Any] = []
+    block, size = start, LOG_CHUNK_BLOCKS
+    while block <= end:
+        to = min(end, block + size - 1)
+        try:
+            answer = _base(base, "eth_getLogs", [{"address": lock, "topics": [RELEASED_TOPIC],
+                                                  "fromBlock": hex(block), "toBlock": hex(to)}])
+        except WatcherRpcError:
+            if size <= MIN_LOG_CHUNK_BLOCKS:
+                raise
+            size = max(MIN_LOG_CHUNK_BLOCKS, size // 2)
+            continue
+        if not isinstance(answer, list):
+            raise WatcherError("base_answer_malformed", "eth_getLogs did not return a list")
+        logs.extend((log, block, to) for log in answer)
+        block = to + 1
+    return logs
+
+
+def _released_events(base: Any, lock: str, start: int, end: int) -> list[dict[str, Any]]:
+    """Every `Released` event of the lock in finalized blocks `start..end`."""
+
     events = []
-    for log in logs or []:
-        topics = log.get("topics") or []
-        data = str(log.get("data", "")).removeprefix("0x")
-        if len(topics) != 4 or len(data) != 128 or str(log.get("address", "")).lower() != lock:
-            raise WatcherError("base_answer_malformed", "a Released log is not (3 topics, address, uint256)")
+    for log, first, last in _released_logs(base, lock, start, end):
+        try:
+            if not isinstance(log, dict):
+                raise ValueError("a log is not an object")
+            topics = log.get("topics")
+            data = log.get("data")
+            if (not isinstance(topics, list) or len(topics) != 4
+                    or not all(isinstance(topic, str) and HASH32.match(topic) for topic in topics)
+                    or topics[0].lower() != RELEASED_TOPIC
+                    or not isinstance(data, str) or not re.fullmatch(r"0x[0-9a-fA-F]{128}", data)
+                    or str(log.get("address", "")).lower() != lock or any(int(data[2:26], 16).to_bytes(12, "big"))):
+                raise ValueError("a log is not Released(3 topics, address, uint256) of the lock")
+            number = pft_token.hex_quantity(log.get("blockNumber"), "log blockNumber")
+            if not first <= number <= last:
+                raise ValueError(f"a log of block {number} outside the range {first}..{last}")
+        except (ValueError, pft_token.PftTokenRefused) as error:
+            raise WatcherError("base_answer_malformed", f"eth_getLogs: {error}") from None
         events.append({
             "withdrawal_id_commitment": topics[1].lower(), "burn_tx_id_commitment": topics[2].lower(),
-            "packet_digest": topics[3].lower(), "recipient": "0x" + data[24:64].lower(),
-            "amount": int(data[64:128], 16), "transaction": log.get("transactionHash"),
-            "block": pft_token.hex_quantity(log.get("blockNumber"), "log blockNumber"),
+            "packet_digest": topics[3].lower(), "recipient": "0x" + data[26:66].lower(),
+            "amount": int(data[66:130], 16), "transaction": log.get("transactionHash"), "block": number,
         })
     return events
 
@@ -446,37 +559,85 @@ def _selector(signature: str) -> str:
     return "0x" + keccak256(signature.encode()).hex()[:8]
 
 
-def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int, current_height: int,
-                from_block: int, unpaid_warning_blocks: int | None, alarm: Callable[..., None],
-                lines: list[dict[str, Any]]) -> dict[str, Any]:
-    """The outbound direction: every finalized `Released` payout must stand on a
-    PFTL export packet (same digest, recipient, amount and withdrawal-id
-    commitment); every final export is `paid` or `unpaid`; the totals of the
-    lock and the lane must agree."""
+def _export_state(state: Any) -> dict[str, Any] | None:
+    """The export view's kept state, or None when absent (an older file)."""
 
-    exports, row = _exports_of(pftl, lane_id)
+    if state is None:
+        return None
+    keys = ("lock_from_block", "scanned_through_block", "payout_count", "payout_sum")
+    if (not isinstance(state, dict)
+            or not all(isinstance(state.get(key), int) and not isinstance(state.get(key), bool)
+                       and state[key] >= 0 for key in keys)
+            or not isinstance(state.get("verified_payouts_root"), str)
+            or not HASH32.match(state["verified_payouts_root"])):
+        raise WatcherError("state_file_invalid", "the state file's exports entry is malformed")
+    return state
+
+
+def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int, current_height: int,
+                released_atoms: int, from_block: int, state: dict[str, Any] | None = None,
+                unpaid_warning_blocks: int | None, alarm: Callable[..., None],
+                lines: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The outbound direction: every finalized `Released` payout must stand on a
+    PFTL export packet (same digest, recipient, amount, withdrawal-id and
+    burn commitments); every final export is `paid` or `unpaid`; the totals
+    of the lock and the lane must agree. Returns the summary and the state
+    to keep: the finalized block scanned through, the payout count and sum
+    up to it and a running commitment of the verified payout digests; a run
+    with that state reads only later blocks.
+
+    `released_atoms` comes from the run's first lane page, read before the
+    finalized Base block was fixed, and `exported_atoms` from the export
+    pages, read after it; both only grow, so `released_atoms <= totalLocked`
+    and `payouts <= exported_atoms` can only err towards an alarm, never
+    towards silence, when the two chains move between the reads."""
+
+    def warning(code: str, **fields: Any) -> None:
+        if code not in WARNING_CODES:
+            raise AssertionError(f"undeclared warning code {code}")
+        lines.append({"schema": LINE_SCHEMA, "kind": "warning", "code": code, "lane_id": lane_id, **fields})
+
+    exports, snapshot = _exports_of(pftl, lane_id)
     by_digest = {entry["evm_digest"]: entry for entry in exports}
-    pruned = int(row.get("pruned_export_count", 0) or 0)
-    events = _released_events(base, lock, from_block, finalized)
+    pruned = snapshot["pruned_export_count"]
+    kept = _export_state(state)
+    if kept is not None and kept["lock_from_block"] == from_block:
+        if kept["scanned_through_block"] > finalized:
+            raise WatcherTransientError("base_finalized_behind_state",
+                                        f"the Base node's finalized block {finalized} is below the state's "
+                                        f"{kept['scanned_through_block']}: a lagging node or another chain")
+        start, prior_count, prior_sum = kept["scanned_through_block"] + 1, kept["payout_count"], kept["payout_sum"]
+        root = kept["verified_payouts_root"]
+    else:
+        start, prior_count, prior_sum, root = from_block, 0, 0, "0x" + "00" * 32
+    events = _released_events(base, lock, start, finalized)
     paid: dict[int, dict[str, Any]] = {}
-    paid_total = 0
+    seen: set[str] = set()
+    paid_total = unknown_count = unknown_sum = 0
     # Every payout counts in the totals, matched or not: a payout without an
     # export must show in totalReleased and against exported_atoms as well.
-    payout_total = sum(event["amount"] for event in events)
+    payout_total = prior_sum + sum(event["amount"] for event in events)
     for event in events:
-        packet = by_digest.get(event["packet_digest"])
         result = {"schema": LINE_SCHEMA, "kind": "payout", "lane_id": lane_id, **event}
-        if packet is None:
-            if pruned:
-                result["status"] = "unknown_pruned"
-                lines.append(result)
-                lines.append({"schema": LINE_SCHEMA, "kind": "warning", "code": "payout_unknown_pruned",
-                              "lane_id": lane_id, "packet_digest": event["packet_digest"],
-                              "pruned_export_count": pruned})
-                continue
+        if event["packet_digest"] in seen:
             result["status"] = "alarm"
             lines.append(result)
-            alarm("payout_without_export", **event)
+            alarm("payout_duplicate", **event)
+            continue
+        seen.add(event["packet_digest"])
+        packet = by_digest.get(event["packet_digest"])
+        if packet is None:
+            # Not stored, and not verified by an earlier run either (those are
+            # behind the scanned-through block): a packet pruned before this
+            # watcher checked its payout, or a payout PFTL never exported.
+            unknown_count += 1
+            unknown_sum += event["amount"]
+            result["status"] = "alarm"
+            lines.append(result)
+            if pruned:
+                alarm("payout_pruned_before_check", pruned_export_count=pruned, **event)
+            else:
+                alarm("payout_without_export", **event)
             continue
         codes = []
         if event["amount"] != packet["amount_atoms"]:
@@ -485,6 +646,8 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
             codes.append("payout_recipient_mismatch")
         if event["withdrawal_id_commitment"] != packet["withdrawal_id_commitment"]:
             codes.append("payout_withdrawal_mismatch")
+        if event["burn_tx_id_commitment"] != packet["burn_tx_id_commitment"]:
+            codes.append("payout_burn_mismatch")
         result.update(status="alarm" if codes else "backed", export_nonce=packet["export_nonce"])
         lines.append(result)
         for code in codes:
@@ -492,7 +655,11 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
                   packet_base_recipient=packet["base_recipient"], **event)
         if not codes:
             paid[packet["export_nonce"]] = event
+            root = "0x" + keccak256(bytes.fromhex(root[2:] + event["packet_digest"][2:])).hex()
         paid_total += event["amount"]
+    if unknown_count and (unknown_count > pruned or unknown_sum > snapshot["pruned_exported_atoms"]):
+        alarm("payout_unknown_above_pruned", unknown_payouts=unknown_count, unknown_atoms=unknown_sum,
+              pruned_export_count=pruned, pruned_exported_atoms=snapshot["pruned_exported_atoms"])
     unpaid = 0
     for packet in exports:
         if packet["exported_at_height"] > current_height:
@@ -503,39 +670,46 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
                                                 "exported_at_height", "packet_digest", "evm_digest")}}
         if event is not None:
             line.update(status="paid", base_transaction=event["transaction"], base_block=event["block"])
-        else:
-            unpaid += 1
-            age = current_height - packet["exported_at_height"]
-            line.update(status="unpaid", age_blocks=age)
-            if unpaid_warning_blocks is not None and age > unpaid_warning_blocks:
-                lines.append(line)
-                line = {"schema": LINE_SCHEMA, "kind": "warning", "code": "export_unpaid_too_long",
-                        "lane_id": lane_id, "export_nonce": packet["export_nonce"], "age_blocks": age,
-                        "threshold_blocks": unpaid_warning_blocks}
+            lines.append(line)
+            continue
+        unpaid += 1
+        age = current_height - packet["exported_at_height"]
+        line.update(status="unpaid", age_blocks=age)
         lines.append(line)
-    # The totals, at the finalized block.
+        if unpaid_warning_blocks is not None and age > unpaid_warning_blocks:
+            warning("export_unpaid_too_long", export_nonce=packet["export_nonce"], age_blocks=age,
+                    threshold_blocks=unpaid_warning_blocks)
+    # The totals, at the finalized block only.
     tag = hex(finalized)
-    token = "0x" + f"{_u256_call(base, lock, _selector('token()'), tag):040x}"[-40:]
+    token = "0x" + f"{_u256_call(base, lock, _selector('token()'), tag):064x}"[-40:]
     total_locked = _u256_call(base, lock, _selector("totalLocked()"), tag)
     total_released = _u256_call(base, lock, _selector("totalReleased()"), tag)
     lock_balance = _u256_call(base, token, _selector("balanceOf(address)") + lock.removeprefix("0x").rjust(64, "0"),
                               tag)
-    state = row.get("state") or {}
-    exported_atoms = int(state.get("exported_atoms", 0) or 0)
-    released_atoms = int(state.get("released_atoms", 0) or 0)
+    exported_atoms = snapshot["exported_atoms"]
+    expected_balance = total_locked - total_released
     totals = {"total_locked": total_locked, "total_released": total_released, "lock_balance": lock_balance,
-              "payout_sum": payout_total, "paid_sum": paid_total, "exported_atoms": exported_atoms,
-              "released_atoms": released_atoms}
+              "lock_surplus": max(0, lock_balance - expected_balance), "payout_sum": payout_total,
+              "paid_sum": paid_total, "exported_atoms": exported_atoms, "released_atoms": released_atoms,
+              "pruned_exported_atoms": snapshot["pruned_exported_atoms"]}
+    # totalReleased(finalized) - totalReleased(saved block) must be the new
+    # events' sum; the saved block's value is the payout sum a clean run
+    # verified against it, so no archive state is read.
     if total_released != payout_total:
-        alarm("total_released_mismatch", **totals, from_block=from_block)
-    if lock_balance != total_locked - total_released:
+        alarm("total_released_mismatch", **totals, from_block=from_block, scanned_from_block=start)
+    # PFTLockV1 holds at least totalLocked - totalReleased: a plain transfer
+    # to the lock adds a surplus, which is reported, not raised.
+    if lock_balance < expected_balance:
         alarm("lock_balance_mismatch", **totals)
     if exported_atoms < payout_total:
         alarm("exported_below_paid", **totals)
     if released_atoms > total_locked:
         alarm("released_above_locked", **totals)
-    return {"exports_checked": len(exports), "payouts_checked": len(events), "unpaid_exports": unpaid,
-            "pruned_export_count": pruned, "totals": totals}
+    new_state = {"lock_from_block": from_block, "scanned_through_block": finalized,
+                 "payout_count": prior_count + len(events), "payout_sum": payout_total,
+                 "verified_payouts_root": root}
+    return ({"exports_checked": len(exports), "payouts_checked": len(events), "unpaid_exports": unpaid,
+             "pruned_export_count": pruned, "scanned_from_block": start, "totals": totals}, new_state)
 
 
 # --- One run. ---
@@ -592,15 +766,26 @@ def _save_state(path: Path, state: dict[str, Any]) -> None:
 
 def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = None,
                state: dict[str, Any] | None = None, exports: bool = False, lock_from_block: int = 0,
-               unpaid_warning_blocks: int | None = None,
+               unpaid_warning_blocks: int | None = None, emit: Callable[[dict[str, Any]], None] | None = None,
                ) -> tuple[list[dict[str, Any]], int, dict[str, Any] | None]:
     """One run: the output lines, the alarm count and the state to keep.
 
-    The state advances only after a clean run, so an alarm is raised again on
-    every run until an operator starts past it with `from_height`.
+    Each view's state advances only after a clean run of that view, so an
+    alarm is raised again on every run until an operator starts past it
+    with `from_height`. With `emit`, the release view's lines are handed to
+    it before the export view starts, and only the rest is returned; a
+    failure of the export view is an `error` line and `export_error` in the
+    summary, never a lost release alarm.
     """
 
     row, snapshot = _lane_page(pftl, lane_id, None)
+    released_atoms = None
+    if exports:
+        # Read before the finalized Base block is fixed (see export_view).
+        try:
+            released_atoms = _u64((row.get("state") or {}).get("released_atoms"), "state.released_atoms")
+        except WatcherError as error:
+            raise WatcherError("external_lane_info_malformed", str(error)) from None
     current_height = snapshot["current_height"]
     policy = _lane_policy(row)
     release_count, pruned = snapshot["release_count"], snapshot["pruned_release_count"]
@@ -693,11 +878,24 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
                   source_block_number=entry["source_block_number"],
                   source_block_hash=entry["source_block_hash"], finalized_block=finalized, **extra)
 
-    export_summary = None
+    release_alarms = sum(1 for line in lines if line["kind"] == "alarm")
+    emitted = 0
+    if emit is not None:
+        for line in lines:
+            emit(line)
+        emitted = len(lines)
+    export_summary = export_state = export_error = None
     if exports:
-        export_summary = export_view(pftl, base, lane_id, lock=policy["lock"], finalized=finalized,
-                                     current_height=current_height, from_block=lock_from_block,
-                                     unpaid_warning_blocks=unpaid_warning_blocks, alarm=alarm, lines=lines)
+        assert released_atoms is not None
+        try:
+            export_summary, export_state = export_view(
+                pftl, base, lane_id, lock=policy["lock"], finalized=finalized, current_height=current_height,
+                released_atoms=released_atoms, from_block=lock_from_block,
+                state=(state or {}).get("exports") if from_height is None else None,
+                unpaid_warning_blocks=unpaid_warning_blocks, alarm=alarm, lines=lines)
+        except WatcherError as error:
+            export_error = error
+            lines.append({"schema": LINE_SCHEMA, "kind": "error", "code": error.code, "message": str(error)})
     alarms = sum(1 for line in lines if line["kind"] == "alarm")
     lines.append({
         "schema": LINE_SCHEMA,
@@ -716,10 +914,17 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
         "alarms": alarms,
         "alarm_codes": {code_: sum(1 for line in lines if line["kind"] == "alarm" and line["code"] == code_)
                         for code_ in ALARM_CODES},
-        **({"exports": export_summary,
-            "warnings": sum(1 for line in lines if line["kind"] == "warning")} if export_summary else {}),
+        **({"exports": export_summary} if export_summary else {}),
+        **({"export_error": export_error.code} if export_error else {}),
+        **({"warnings": sum(1 for line in lines if line["kind"] == "warning"),
+            "warning_codes": {code_: sum(1 for line in lines if line["kind"] == "warning" and line["code"] == code_)
+                              for code_ in WARNING_CODES}} if exports else {}),
     })
-    new_state = None if alarms else {
+    if any(line["kind"] == "warning" and line["code"] not in WARNING_CODES for line in lines):
+        raise AssertionError("undeclared warning code")
+    # The release part advances after a clean release view; the export part
+    # after a clean export view, else the kept one is carried.
+    new_state = None if release_alarms else {
         "schema": STATE_SCHEMA,
         "lane_id": lane_id,
         "pftl_chain_id": snapshot["chain_id"],
@@ -729,7 +934,14 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
         "checked_through_height": current_height,
         "release_count": release_count,
     }
-    return lines, alarms, new_state
+    if new_state is not None:
+        export_clean = export_state is not None and alarms == release_alarms
+        carried = (state or {}).get("exports") if from_height is None else None
+        if exports and export_clean:
+            new_state["exports"] = export_state
+        elif carried is not None:
+            new_state["exports"] = carried
+    return lines[emitted:], alarms, new_state
 
 
 # --- Command line. ---
@@ -764,6 +976,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--unpaid-warning-blocks", type=int, metavar="N",
                         help="warn when a final export stays unpaid for more than N PFTL blocks")
     return parser
+
+
+RETRIED_CODES = ("base_answer_malformed", "export_record_malformed", "external_lane_info_malformed")
+
+
+def _print_line(line: dict[str, Any]) -> None:
+    print(json.dumps(line, sort_keys=True), flush=True)
 
 
 def _error_line(error: WatcherError) -> None:
@@ -804,8 +1023,9 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
                 state = memory_state
             lines, alarms, new_state = watch_once(pftl, base, args.lane_id, from_height=from_height, state=state,
                                                   exports=args.exports, lock_from_block=args.lock_from_block,
-                                                  unpaid_warning_blocks=args.unpaid_warning_blocks)
-            # Progress is saved before the run's lines are emitted, so a clean
+                                                  unpaid_warning_blocks=args.unpaid_warning_blocks,
+                                                  emit=_print_line if args.exports else None)
+            # Progress is saved before the summary is printed, so a clean
             # summary always means the state advanced.
             if new_state is not None and state_path is not None:
                 _save_state(state_path, new_state)
@@ -815,15 +1035,22 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
                 return 1
         except WatcherError as error:
             _error_line(error)
-            return 1
+            # A malformed answer may be a node's passing fault: --interval keeps watching.
+            if args.interval is None or error.code not in RETRIED_CODES:
+                return 1
         else:
+            failed = False
             for line in lines:
-                print(json.dumps(line, sort_keys=True), flush=True)
+                if line["kind"] == "error":
+                    failed = True
+                    print(json.dumps(line, sort_keys=True), file=sys.stderr, flush=True)
+                else:
+                    _print_line(line)
             if new_state is not None:
                 from_height = None  # a clean run moves the start to the kept height
                 memory_state = new_state
             if args.interval is None:
-                return 2 if alarms else 0
+                return 2 if alarms else 1 if failed else 0
         if max_runs is not None and runs >= max_runs:
             return 0
         sleep(args.interval)
