@@ -15,8 +15,9 @@ finalized Base blocks must match a stored PFTL export packet (digest,
 recipient, amount, withdrawal-id and burn commitments); every final export is
 ``paid`` or ``unpaid``; and the lock's and the lane's totals must agree at the
 finalized block. A payout whose packet is not stored and that no earlier run
-verified is an alarm; ``--accept-export-baseline`` is the one-shot way past
-payouts pruned before the view ever ran.
+verified is an alarm; ``--accept-export-baseline`` is the recovery path past
+payouts pruned before the view checked them, taken once per growth of the
+lane's pruned count and atoms.
 
 It only reads, on both chains: no key, no signature, no transaction.
 
@@ -582,7 +583,7 @@ def _selector(signature: str) -> str:
 
 PAID_KEYS = ("export_nonce", "evm_digest", "block", "transaction", "log_index", "amount",
              "withdrawal_id_commitment")
-BASELINE_KEYS = ("unverified_payouts", "unverified_atoms")
+BASELINE_KEYS = ("unverified_payouts", "unverified_atoms", "pruned_export_count", "pruned_exported_atoms")
 
 
 def _export_state(state: Any) -> dict[str, Any] | None:
@@ -655,8 +656,10 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
     verified is a `baseline_payout` line instead of an alarm, as long as the
     unknown payouts stay within the pruned count and atoms left after the
     verified-then-pruned payouts and any earlier baseline; a clean run keeps
-    a `baseline` entry (time, cumulative count and atoms accepted) that every
-    later summary repeats."""
+    a `baseline` entry (time, cumulative count and atoms accepted, and the
+    lane's pruned count and atoms then) that every later summary repeats. A
+    second acceptance is refused (`export_baseline_already_taken`) unless the
+    lane has pruned more count and atoms since the last one."""
 
     def warning(code: str, **fields: Any) -> None:
         if code not in WARNING_CODES:
@@ -687,6 +690,11 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
         start, prior_count, prior_sum, record = from_block, 0, 0, {}
         pruned_paid_count = pruned_paid_atoms = 0
         baseline = None
+    if accept_baseline and baseline is not None and not (
+            pruned > baseline["pruned_export_count"] and pruned_atoms > baseline["pruned_exported_atoms"]):
+        raise WatcherError("export_baseline_already_taken",
+                           f"a baseline of {baseline['unverified_payouts']} payouts was accepted at "
+                           f"{baseline['accepted_at']} and the lane has pruned no more since")
     # Entries whose packets PFTL has pruned: folded into the two numbers.
     for digest, entry in list(record.items()):
         if entry["export_nonce"] < pruned:
@@ -694,8 +702,8 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
             pruned_paid_count += 1
             pruned_paid_atoms += entry["amount"]
     prior_accepted = (baseline["unverified_payouts"], baseline["unverified_atoms"]) if baseline else (0, 0)
-    free_count = pruned - pruned_paid_count
-    free_atoms = pruned_atoms - pruned_paid_atoms
+    free_count = pruned - pruned_paid_count - prior_accepted[0]
+    free_atoms = pruned_atoms - pruned_paid_atoms - prior_accepted[1]
     events = _released_events(base, lock, start, finalized)
     seen: set[str] = set()
     paid_total = unknown_count = unknown_sum = accepted_count = accepted_sum = 0
@@ -824,7 +832,8 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, lock: str, finalized: int
         baseline = {"baseline_accepted": True,
                     "accepted_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     "unverified_payouts": prior_accepted[0] + accepted_count,
-                    "unverified_atoms": prior_accepted[1] + accepted_sum}
+                    "unverified_atoms": prior_accepted[1] + accepted_sum,
+                    "pruned_export_count": pruned, "pruned_exported_atoms": pruned_atoms}
     if baseline is not None:
         new_state["baseline"] = baseline
     summary = {"exports_checked": len(exports), "payouts_checked": len(events), "unpaid_exports": unpaid,
@@ -1100,9 +1109,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="scan Released events from this Base block; at or below the lock's deployment "
                              "block, or totalReleased cannot be matched")
     parser.add_argument("--accept-export-baseline", action="store_true",
-                        help="one-shot recovery for a lane whose export view starts late: accept the payouts "
-                             "whose packets were pruned before any check, within the pruned count and atoms, "
-                             f"list them, keep the scan position and exit {BASELINE_EXIT}; nothing else is accepted")
+                        help="recovery for an export view that starts late or was not run for longer than a "
+                             "release window: accept the payouts whose packets were pruned before any check, "
+                             "within the pruned count and atoms not already verified or accepted, list them, keep "
+                             f"the scan position and exit {BASELINE_EXIT}; refused (export_baseline_already_taken) "
+                             "after an earlier baseline unless the lane has pruned more since")
     parser.add_argument("--unpaid-warning-blocks", type=int, metavar="N",
                         help="warn when a final export stays unpaid for more than N PFTL blocks")
     return parser

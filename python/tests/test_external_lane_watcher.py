@@ -1181,6 +1181,35 @@ class PaidRecordTests(unittest.TestCase):
         self.assertEqual(exports[1]["status"], "unpaid")
         self.assertEqual([line["export_nonce"] for line in lines if line["kind"] == "warning"], [1])
 
+    def test_b6_a_baseline_is_taken_once_and_pruned_capacity_is_not_used_twice(self):
+        old, live = export_entry(0), export_entry(1, amount=600_000)
+        pftl = ExportPftl([live], pruned=1, pruned_atoms=400_000)
+        first = released_log(old, block=900)
+        second = released_log(export_entry(5), block=1_050, transaction="0x" + "ef" * 32)
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            options = ("--state-file", str(state_file))
+            code, lines, _ = run_exports(pftl, ExportBase([first]), *options, "--accept-export-baseline")
+            self.assertEqual((code, alarm_codes(lines)), (watcher.BASELINE_EXIT, []))
+            baseline = json.loads(state_file.read_text())["exports"]["baseline"]
+            self.assertEqual((baseline["unverified_payouts"], baseline["unverified_atoms"]), (1, 400_000))
+            base = ExportBase([first, second], finalized=1_100)
+            code, lines, stderr = run_exports(pftl, base, *options, "--accept-export-baseline")
+            self.assertEqual(code, 1)
+            self.assertEqual(lines[-1]["export_error"], "export_baseline_already_taken")
+            self.assertEqual(json.loads(state_file.read_text())["exports"]["baseline"], baseline)
+            code, lines, _ = run_exports(pftl, base, *options)
+            self.assertEqual((code, sorted(alarm_codes(lines))),
+                             (2, ["payout_pruned_before_check", "payout_unknown_above_pruned"]))
+            self.assertEqual(json.loads(state_file.read_text())["exports"]["baseline"], baseline)
+            # Once the lane has pruned more, the cumulative baseline may grow within it.
+            code, lines, _ = run_exports(ExportPftl([], pruned=2, pruned_atoms=1_000_000), base, *options,
+                                         "--accept-export-baseline")
+            self.assertEqual((code, alarm_codes(lines)), (watcher.BASELINE_EXIT, []))
+            grown = json.loads(state_file.read_text())["exports"]["baseline"]
+            self.assertEqual((grown["unverified_payouts"], grown["unverified_atoms"], grown["pruned_export_count"],
+                              grown["pruned_exported_atoms"]), (2, 800_000, 2, 1_000_000))
+
     def test_a_paid_export_whose_packet_is_pruned_stays_accounted(self):
         a, b = export_entry(0), export_entry(1, amount=600_000)
         log = released_log(a, block=950)
