@@ -122,9 +122,13 @@ pub fn parse_export_amount_atoms(text: &str) -> Result<u64, String> {
 /// nothing), signs and submits it. Every refusal is returned before the
 /// key signs anything, against the ledger asset admission executes the export
 /// on: the pending plain transfers, `payment_v2` entries and asset
-/// transactions (`asset_fee_quote`'s `export_refusal`). A transaction another
-/// submitter gets admitted between that check and the submission can still
-/// make admission refuse this one; a refused admission charges no fee.
+/// transactions (`asset_fee_quote`'s `export_refusal`, after admission's
+/// mempool limits). The one refusal that can still come after signing: a
+/// pending escrow, NFT or offer entry the export makes stale (admission
+/// re-runs them after it); no fee is charged and the holder sends the export
+/// again once that entry is in a block or has left the mempool. A transaction
+/// another submitter gets admitted between the check and the submission can
+/// also make admission refuse this one, without a fee.
 pub fn external_lane_export(
     options: ExternalLaneExportOptions,
 ) -> io::Result<ExternalLaneExportReport> {

@@ -1549,8 +1549,12 @@ def external_lane_export(
     kind, source or operation is not the requested export is refused with
     `external_lane_export_quote_mismatch`. Every refusal
     raises `ValueError("refused before signing: CODE: ...")` before the signer
-    runs. A transaction admitted between the quote and the submission can
-    still make admission refuse this one (raised by the submit call, no fee).
+    runs. The one refusal that can still come after signing is a pending
+    escrow, NFT or offer entry the export makes stale ("blocked by stale
+    pending", raised by the submit call, no fee): send the export again once
+    that entry is in a block or has left the mempool. A transaction admitted
+    between the quote and the submission can also make admission refuse this
+    one, without a fee.
     `dry_run=True` stops after the checks: it returns the quote and the
     unsigned operation with no signed transaction, no tx id and an empty
     `submit_result`, and never reads the key or calls the submit method."""
