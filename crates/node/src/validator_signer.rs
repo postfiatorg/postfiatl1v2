@@ -1506,6 +1506,60 @@ mod validator_signer_tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
+    /// The FastPay committee key is read in the serving process; the signer
+    /// process signs only consensus and transport contexts. So in socket
+    /// mode the fence status read refuses by name before it reads a key file,
+    /// and the signer refuses the fence status context if asked directly.
+    #[test]
+    fn validator_signer_socket_mode_refuses_fastpay_fence_status_by_name() {
+        let root = temp_root("fence-status");
+        let (socket, _) = serve(&root, vec![current_euid()], 5_000);
+        let data_dir = root.join("node");
+        std::fs::create_dir_all(&data_dir).expect("data dir");
+        let signer =
+            Arc::new(SocketSigner::connect(&socket, Duration::from_secs(5)).expect("connect"));
+        registry_lock(data_dir_signers()).insert(canonical(&data_dir), signer);
+        let refused = crate::owned_fence_status_v3(
+            NodeOptions {
+                data_dir: data_dir.clone(),
+            },
+            "validator-0",
+            &"22".repeat(48),
+        )
+        .expect_err("socket mode refuses");
+        assert_eq!(refused.kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(
+            crate::fastpay_fence_status_error_code(&refused.to_string()),
+            Some(crate::FASTPAY_FENCE_STATUS_SIGNER_UNAVAILABLE),
+            "{refused}"
+        );
+        registry_lock(data_dir_signers()).remove(&canonical(&data_dir));
+        assert_eq!(
+            validator_signer_key_for_context(postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V1),
+            None
+        );
+        let direct = raw_request(
+            &socket,
+            serde_json::to_vec(&ValidatorSignerRequest {
+                schema: VALIDATOR_SIGNER_REQUEST_SCHEMA.to_string(),
+                method: "sign".to_string(),
+                validator_id: Some("validator-0".to_string()),
+                context: Some(
+                    String::from_utf8(postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V1.to_vec())
+                        .expect("ascii"),
+                ),
+                message_hex: Some(bytes_to_hex(b"fence status")),
+            })
+            .expect("json")
+            .as_slice(),
+        );
+        assert_eq!(
+            direct.error.expect("refusal").code,
+            "validator_signer_context_refused"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     #[test]
     fn two_different_same_slot_requests_at_once_get_one_signature_and_one_refusal() {
         let root = temp_root("concurrent");
