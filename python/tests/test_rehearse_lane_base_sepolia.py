@@ -532,8 +532,9 @@ class FundingPlanTests(unittest.TestCase):
 
     def test_every_key_has_an_amount_and_its_formula(self):
         funding = self.sheet(5 * 10 ** 15)["funding"]
-        verifier, lock = 3_000_000 * self.PRICE * 3, 2_000_000 * self.PRICE * 3
-        own = (200_000 + 3 * 21_000) * self.PRICE * 3
+        allowance = dry_run.L1_DATA_FEE_ALLOWANCE_WEI
+        verifier, lock = 3_000_000 * self.PRICE * 3 + allowance, 2_000_000 * self.PRICE * 3 + allowance
+        own = (200_000 + 3 * 21_000) * self.PRICE * 3 + 5 * allowance
         self.assertEqual(funding["verifier deployer"]["fund_wei"], verifier)
         self.assertEqual(funding["lock deployer"]["fund_wei"], lock)
         self.assertEqual(funding["relayer"]["fund_wei"], 5 * 10 ** 15)
@@ -674,4 +675,55 @@ class PayoutRecipientPlanTests(unittest.TestCase):
                                      payout_recipient_key="named by the operator")
         self.assertEqual(sheet["payout_recipient"], {"address": "0x" + "ab" * 20, "key": "named by the operator"})
         self.assertIn("0x" + "ab" * 20, dry_run.sheet_markdown(sheet))
+
+
+class L1DataFeeTests(unittest.TestCase):
+    """N4: the L1 data fee is its own line; the 3x margin is the execution part's."""
+
+    GAS = FundingPlanTests.GAS
+    PRICE = FundingPlanTests.PRICE
+
+    def test_each_key_budgets_its_l1_data_fee_per_transaction(self):
+        allowance = dry_run.L1_DATA_FEE_ALLOWANCE_WEI
+        self.assertGreater(allowance, 0)
+        funding = dry_run.deploy_sheet(plan=DeployAddressTests.PLAN, verifier_config={}, gas_used=self.GAS,
+                                       gas_price_wei=self.PRICE, relayer_ceiling_wei=10 ** 15)["funding"]
+        for key, gas, transactions in (("verifier deployer", 3_000_000, 1), ("lock deployer", 2_000_000, 1)):
+            row = funding[key]
+            self.assertEqual(row["execution_wei"], gas * self.PRICE * dry_run.GAS_MARGIN)
+            self.assertEqual(row["l1_data_fee_wei"], transactions * allowance)
+            self.assertEqual(row["fund_wei"], row["execution_wei"] + row["l1_data_fee_wei"])
+        holder = funding["holder"]
+        self.assertEqual(holder["own_l1_data_fee_wei"], 5 * allowance)
+        self.assertEqual(holder["own_gas_wei"], (200_000 + 3 * 21_000) * self.PRICE * 3 + 5 * allowance)
+        self.assertIn("L1 data fee", dry_run.sheet_markdown(dry_run.deploy_sheet(
+            plan=DeployAddressTests.PLAN, verifier_config={}, gas_used=self.GAS, gas_price_wei=self.PRICE,
+            relayer_ceiling_wei=10 ** 15)))
+
+    def test_at_the_guard_execution_takes_the_margin_and_the_l1_line_is_left(self):
+        gas, plan_price = 100, 10
+        current = plan_price * dry_run.GAS_PRICE_FACTOR
+        dry_run.check_gas_price(plan_wei=plan_price, current_wei=current)
+        funding = dry_run.funding_plan({"verifier deployer": {"gas": gas, "steps": ["deploy-verifier"]},
+                                        "lock deployer": {"gas": gas, "steps": ["deploy-lock"]},
+                                        "holder": {"gas": gas, "steps": ["approve", "lock"]}},
+                                       gas_price_wei=plan_price, relayer_ceiling_wei=1)
+        row = funding["verifier deployer"]
+        self.assertEqual(row["fund_wei"] - gas * current, dry_run.L1_DATA_FEE_ALLOWANCE_WEI)
+
+    def test_the_text_says_what_the_numbers_do(self):
+        for text in (dry_run.FEE_NOTE, (ROOT / "docs/runbooks/lane-base-sepolia-dry-run.md").read_text()):
+            self.assertNotIn("covers it and a price rise", text)
+            self.assertIn("L1 data fee", text)
+            self.assertIn("allowance", text)
+
+    def test_readiness_needs_the_l1_line_too(self):
+        plan = DeployAddressTests.PLAN
+        sheet = RealRunReadinessTests.SHEET
+        allowance = dry_run.L1_DATA_FEE_ALLOWANCE_WEI
+        values = dict(plan=plan, sheet=sheet, holder_address=dry_run.HOLDER, relayer_opens=True,
+                      token_balance=lambda address: 10 ** 9, gas_price_wei=7, node_bin=Path(__file__),
+                      driver_alive=lambda: True)
+        with self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.check_real_run_ready(eth_balance=lambda address: 100 * 7 + allowance - 1, **values)
 

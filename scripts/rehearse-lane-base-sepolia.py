@@ -74,8 +74,18 @@ SP1_VERIFIER = {
 }
 GAS_MARGIN = 3
 # deploy, approve and Lock refuse when the gas price is more than this factor
-# above the plan's: at most the sheet's funding margin.
+# above the plan's: the margin the sheet funds for execution gas. At the guard the
+# execution part uses all of it; the L1 data fee is paid from its own line.
 GAS_PRICE_FACTOR = GAS_MARGIN
+# Base charges each transaction an L1 data fee beside its execution gas. The sheet
+# budgets it as its own line: this allowance per transaction (basis below).
+L1_DATA_FEE_ALLOWANCE_WEI = 2 * 10 ** 14
+L1_DATA_FEE_BASIS = ('a stated allowance, not a measurement: Base\'s GasPriceOracle '
+                     '(0x420000000000000000000000000000000000000F) sets the fee from Ethereum\'s base and blob fees '
+                     'and the transaction\'s compressed size; its Fjord formula gives about 1.9 x 10^14 wei for a '
+                     '49,152-byte transaction (the largest contract creation) at a 100 gwei base fee and a 1 gwei '
+                     'blob fee under Base mainnet\'s scalars 2,269 and 1,055,762, assumed here, not read from Base '
+                     'Sepolia')
 # Bounded waits of a real run, all while the in-process PFTL chain waits for
 # base-locked.json: the operator's confirmation of the sheet, deployments,
 # verification, approve and Lock, and Base finality of the Lock's block.
@@ -89,6 +99,9 @@ PFTL_PROTOCOL_VERSION = 1
 # The holder funds the verifier deployer, the lock deployer and the relayer.
 FUNDING_TRANSFERS = 3
 TRANSFER_GAS = 21_000
+# The transactions each funded key sends, each paying one L1 data fee: a deployment
+# each; the holder's approve, Lock and funding transfers.
+KEY_TRANSACTIONS = {'verifier deployer': 1, 'lock deployer': 1, 'holder': 2 + FUNDING_TRANSFERS}
 PROGRAM_INFO = ROOT / 'programs/pft-lane-export/program-info.json'
 COMMITTED_ELF = ROOT / 'programs/pft-lane-export/elf/pft-lane-export-program'
 
@@ -138,13 +151,16 @@ def check_real_run_ready(*, plan, sheet, holder_address, relayer_opens, eth_bala
             f'the holder keystore is {holder_address}, not the holder {HOLDER}; nothing was sent')
     require(relayer_opens, 'the relayer keystore does not open; nothing was sent')
     holder_gas = sheet['test_eth_per_key']['holder']['gas'] - FUNDING_TRANSFERS * TRANSFER_GAS
-    for key, address, gas in (
-            ('verifier deployer', plan['verifier']['deployer'], sheet['test_eth_per_key']['verifier deployer']['gas']),
-            ('lock deployer', plan['lock']['deployer'], sheet['test_eth_per_key']['lock deployer']['gas']),
-            ('holder', HOLDER, holder_gas)):
-        need, have = gas * gas_price_wei, eth_balance(address)
+    for key, address, gas, transactions in (
+            ('verifier deployer', plan['verifier']['deployer'], sheet['test_eth_per_key']['verifier deployer']['gas'],
+             1),
+            ('lock deployer', plan['lock']['deployer'], sheet['test_eth_per_key']['lock deployer']['gas'], 1),
+            ('holder', HOLDER, holder_gas, 2)):
+        need = gas * gas_price_wei + transactions * L1_DATA_FEE_ALLOWANCE_WEI
+        have = eth_balance(address)
         require(have >= need, f'the {key} {address} holds {have} wei, but its steps need {need} wei at the current '
-                              f'gas price {gas_price_wei}; nothing was sent')
+                              f'gas price {gas_price_wei} with {transactions} L1 data fee allowance(s); nothing was '
+                              'sent')
     tokens = token_balance(HOLDER)
     require(tokens >= LOCK_AMOUNT, f'the holder holds {tokens} token units, less than the Lock {LOCK_AMOUNT}; '
                                    'nothing was sent')
@@ -505,8 +521,11 @@ def check_gas_price(*, plan_wei, current_wei):
             'were already deployed they are bound to this chain, and a new run needs new deployer keys')
 
 
-FEE_NOTE = ('gas x gas price is an estimate, not the exact fee: a Base transaction also pays an L1 data fee. The '
-            f'{GAS_MARGIN}x margin covers it and a price rise up to the gas guard.')
+FEE_NOTE = ('gas x gas price is an estimate of the execution fee only: a Base transaction also pays an L1 data fee. '
+            f'The {GAS_MARGIN}x margin funds execution gas up to the gas guard (a price at most {GAS_PRICE_FACTOR}x '
+            'the plan\'s), where it is used up; the L1 data fee is its own line, an allowance of '
+            f'{L1_DATA_FEE_ALLOWANCE_WEI} wei per transaction ({L1_DATA_FEE_BASIS}). A fee above the allowance at a '
+            'price at the guard leaves the key short: its transaction is refused for want of funds and the run stops.')
 
 
 def resolve_relayer_ceiling(*, fork, requested, plan):
@@ -531,22 +550,27 @@ def resolve_relayer_ceiling(*, fork, requested, plan):
 def funding_plan(needs, *, gas_price_wei, relayer_ceiling_wei):
     """The amount to fund each key with, its formula, and the holder's total starting balance."""
     def row(key):
-        gas = needs[key]['gas']
-        return {'fund_wei': gas * gas_price_wei * GAS_MARGIN,
+        gas, transactions = needs[key]['gas'], KEY_TRANSACTIONS[key]
+        execution, l1 = gas * gas_price_wei * GAS_MARGIN, transactions * L1_DATA_FEE_ALLOWANCE_WEI
+        return {'fund_wei': execution + l1, 'execution_wei': execution, 'l1_data_fee_wei': l1,
                 'formula': f'gas {gas} ({" + ".join(needs[key]["steps"])}) x plan gas price {gas_price_wei} wei '
-                           f'x margin {GAS_MARGIN}'}
+                           f'x margin {GAS_MARGIN} + {transactions} x L1 data fee allowance '
+                           f'{L1_DATA_FEE_ALLOWANCE_WEI} wei'}
     plan = {'verifier deployer': row('verifier deployer'), 'lock deployer': row('lock deployer')}
     plan['relayer'] = {
         'fund_wei': relayer_ceiling_wei,
         'formula': 'the ceiling the operator sets with --relayer-ceiling-wei; the release\'s gas is not known before '
                    'a real proof' + ('' if relayer_ceiling_wei else ' (not set: a fork run; a real run needs it)')}
-    own = needs['holder']['gas'] * gas_price_wei * GAS_MARGIN
+    own_l1 = KEY_TRANSACTIONS['holder'] * L1_DATA_FEE_ALLOWANCE_WEI
+    own = needs['holder']['gas'] * gas_price_wei * GAS_MARGIN + own_l1
     passed_on = (None if relayer_ceiling_wei is None else
                  plan['verifier deployer']['fund_wei'] + plan['lock deployer']['fund_wei'] + relayer_ceiling_wei)
     plan['holder'] = {
         'own_gas_wei': own,
+        'own_l1_data_fee_wei': own_l1,
         'own_gas_formula': f'gas {needs["holder"]["gas"]} (approve + lock + {FUNDING_TRANSFERS} funding transfers of '
-                           f'{TRANSFER_GAS}) x plan gas price {gas_price_wei} wei x margin {GAS_MARGIN}',
+                           f'{TRANSFER_GAS}) x plan gas price {gas_price_wei} wei x margin {GAS_MARGIN} + '
+                           f'{KEY_TRANSACTIONS["holder"]} x L1 data fee allowance {L1_DATA_FEE_ALLOWANCE_WEI} wei',
         'passed_on_wei': passed_on,
         'starting_balance_wei': None if passed_on is None else own + passed_on,
         'formula': 'starting balance = own gas + verifier deployer + lock deployer + relayer ceiling',
@@ -610,7 +634,8 @@ def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_iden
             gas += FUNDING_TRANSFERS * TRANSFER_GAS
         needs[key] = {'steps': list(steps), 'gas': gas,
                       'wei_with_margin': gas * gas_price_wei * GAS_MARGIN,
-                      'eth_with_margin': f'{gas * gas_price_wei * GAS_MARGIN / 1e18:.9f}'}
+                      'eth_with_margin': f'{gas * gas_price_wei * GAS_MARGIN / 1e18:.9f}',
+                      'l1_data_fee_allowance_wei': KEY_TRANSACTIONS[key] * L1_DATA_FEE_ALLOWANCE_WEI}
     needs['holder']['steps'].append(f'{FUNDING_TRANSFERS} funding transfers')
     needs['relayer'] = {'steps': ['release'], 'gas': None, 'wei_with_margin': None, 'eth_with_margin': None,
                         'note': 'release gas cannot be estimated without a real proof; funded up to the ceiling '
@@ -623,6 +648,8 @@ def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_iden
             'gas_used_on_fork': gas_used, 'test_eth_per_key': needs,
             'funding': funding_plan(needs, gas_price_wei=gas_price_wei, relayer_ceiling_wei=relayer_ceiling_wei),
             'fee_note': FEE_NOTE,
+            'l1_data_fee': {'allowance_wei_per_transaction': L1_DATA_FEE_ALLOWANCE_WEI, 'basis': L1_DATA_FEE_BASIS,
+                            'transactions': KEY_TRANSACTIONS},
             'release_gas': 'not estimated: a release needs a real proof',
             'funding_transfers': {'count': FUNDING_TRANSFERS, 'gas_each': TRANSFER_GAS,
                                   'to': ['verifier deployer', 'lock deployer', 'relayer'],
@@ -636,10 +663,12 @@ def sheet_markdown(sheet):
     for role in ('verifier', 'lock'):
         lines.append(f'| {role} deployer | `{plan[role]["deployer"]}` | {plan[role]["planned_nonce"]} | '
                      f'`{plan[role]["predicted"]}` |')
-    lines += ['', '| Key | Gas on the fork | Test ETH (x3 margin) |', '|---|---|---|']
+    lines += ['', '| Key | Gas on the fork | Execution test ETH (x3 margin) | L1 data fee allowance (wei) |',
+              '|---|---|---|---|']
     for key, need in sheet['test_eth_per_key'].items():
         lines.append(f'| {key} | {need["gas"] if need["gas"] is not None else "n/a"} | '
-                     f'{need["eth_with_margin"] or need.get("note")} |')
+                     f'{need["eth_with_margin"] or need.get("note")} | '
+                     f'{need.get("l1_data_fee_allowance_wei", "within the ceiling")} |')
     funding = sheet.get('funding')
     if funding:
         holder = funding['holder']

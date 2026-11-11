@@ -20,11 +20,11 @@ The dry-run lock on Base Sepolia is bound to a PFTL chain whose committee keys c
 
 `preflight` writes a funding plan into the sheet (`funding` in `deploy-sheet.json`, a table in `deploy-sheet.md`), one row per key with its amount in wei and its formula:
 
-- **Verifier deployer, lock deployer:** the fork's gas for the deployment x the plan's gas price x 3.
+- **Verifier deployer, lock deployer:** the fork's gas for the deployment x the plan's gas price x 3, plus one L1 data fee allowance.
 - **Relayer:** a ceiling the operator sets with `--relayer-ceiling-wei`, because the proof transaction's gas is not known before a real proof. A real run refuses to start without a positive one, whatever `--through` says, so the plan and the sheet always carry it; later invocations omit it (the plan's is used) or name the same value, and any other value is refused.
-- **Holder:** its own gas (approve, Lock, three funding transfers) x the gas price x 3, plus what it passes on to the three keys; the sum is its starting balance. It also holds the 1,000,000 token units.
+- **Holder:** its own gas (approve, Lock, three funding transfers) x the gas price x 3 plus five L1 data fee allowances, plus what it passes on to the three keys; the sum is its starting balance. It also holds the 1,000,000 token units.
 
-Gas x gas price is an estimate, not the exact fee: a Base transaction also pays an L1 data fee. The 3x margin covers it and a price rise up to the gas guard.
+Gas x gas price estimates the execution fee only: a Base transaction also pays an L1 data fee. The 3x margin funds execution gas up to the gas guard (deploy, approve and Lock refuse a price above 3x the plan's), and at the guard execution uses all of it. The L1 data fee is its own line: an allowance of 2 x 10^14 wei per transaction. That is a stated allowance, not a measurement: Base's GasPriceOracle sets the fee from Ethereum's base and blob fees and the transaction's compressed size, and its Fjord formula gives about 1.9 x 10^14 wei for a 49,152-byte transaction (the largest contract creation) at a 100 gwei base fee and a 1 gwei blob fee under Base mainnet's scalars, assumed for Base Sepolia, not read from it. The readiness check before deploy requires each key to hold its execution gas at the current price plus its allowances. A fee above the allowance at a price at the guard leaves the key short: its transaction is refused for want of funds and the run stops.
 
 After the run, `record` reads each key's balance from the chain into `summary.json` (`key_balances_after_run`). What is left on the one-time keys is either kept on the keys, which then hold test ETH nobody needs, or returned to the holder with one plain transfer from each key. Returning it is recommended. State which was done with `--leftover-eth returned-to-holder` or `--leftover-eth kept-on-keys` on the invocation that writes the record; it is recorded as `leftover_eth`.
 
