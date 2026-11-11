@@ -127,7 +127,7 @@ class FenceStatusQuorumTests(unittest.TestCase):
     def test_shared_acceptance_vectors(self) -> None:
         # The same file runs in postfiat_types::fence_status_shared_acceptance_vectors.
         cases = json.loads(VECTORS.read_text())["cases"]
-        self.assertGreaterEqual(len(cases), 30)
+        self.assertGreaterEqual(len(cases), 50)
         for case in cases:
             with self.subTest(case["name"]):
                 try:

@@ -71,8 +71,9 @@ COMMITTEE_FIELDS = frozenset(
         "validators",
     )
 )
-_HEX96 = re.compile(r"^[0-9a-f]{96}$")
-_LOWER_HEX = re.compile(r"^(?:[0-9a-f]{2})+$")
+# Matched with `fullmatch` and lengths checked first: `$` would also accept
+# a trailing newline, which the Rust checks refuse.
+_HEX = re.compile(r"[0-9a-f]+")
 _OPERATIONS = {None: 0, "transfer": 1, "unwrap": 2}
 _U32 = 2**32
 _U64 = 2**64
@@ -94,7 +95,17 @@ def _text(value: str) -> bytes:
 
 
 def _hex96(value: Any) -> bool:
-    return isinstance(value, str) and bool(_HEX96.match(value))
+    return isinstance(value, str) and len(value) == 96 and _HEX.fullmatch(value) is not None
+
+
+def _lower_hex(value: Any, max_len: int) -> bool:
+    """Nonempty, even-length lowercase hex of at most ``max_len`` characters."""
+    return (
+        isinstance(value, str)
+        and 0 < len(value) <= max_len
+        and len(value) % 2 == 0
+        and _HEX.fullmatch(value) is not None
+    )
 
 
 def _uint(value: Any, bound: int) -> bool:
@@ -142,7 +153,7 @@ def committee_root(committee: dict[str, Any]) -> str:
             raise ValueError("member_shape")
         if previous is not None and previous.encode() >= validator_id.encode():
             raise ValueError("member_order")
-        if not isinstance(key, str) or len(key) > MAX_PUBLIC_KEY_HEX_LEN or not _LOWER_HEX.match(key):
+        if not _lower_hex(key, MAX_PUBLIC_KEY_HEX_LEN):
             raise ValueError("member_key")
         out += _text(validator_id) + _text(ML_DSA_65) + _text(key)
         previous = validator_id
@@ -276,7 +287,7 @@ def _fault(status: Any, committee: dict[str, Any], members: dict[str, str], lock
     except (KeyError, TypeError, ValueError, struct.error):
         return "malformed"
     signature = status["signature_hex"]
-    if len(signature) > MAX_SIGNATURE_HEX_LEN or not _LOWER_HEX.match(signature):
+    if not _lower_hex(signature, MAX_SIGNATURE_HEX_LEN):
         return "malformed"
     if status["lock_id"] != lock_id:
         return "wrong_lock"

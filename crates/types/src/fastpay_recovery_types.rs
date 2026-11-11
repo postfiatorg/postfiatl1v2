@@ -2131,7 +2131,7 @@ mod fastpay_recovery_type_tests {
         ))
         .unwrap();
         let cases = doc["cases"].as_array().unwrap();
-        assert!(cases.len() >= 30);
+        assert!(cases.len() >= 50);
         let mut failed = Vec::new();
         for case in cases {
             let outcome = serde_json::from_value::<FastPayRecoveryCommitteeV1>(
