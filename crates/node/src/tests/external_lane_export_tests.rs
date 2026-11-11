@@ -572,9 +572,24 @@ fn export_command_with_key(
     recipient: &str,
     dry_run: bool,
 ) -> std::io::Result<crate::ExternalLaneExportReport> {
+    // A dry run opens no key file: the sender comes from `--sender`.
+    let sender = dry_run.then(|| crate::read_key_file(&key_file).expect("key").address);
+    export_command_as(chain, key_file, sender, lane_id, amount, recipient, dry_run)
+}
+
+fn export_command_as(
+    chain: &Chain,
+    key_file: PathBuf,
+    sender: Option<String>,
+    lane_id: &str,
+    amount: u64,
+    recipient: &str,
+    dry_run: bool,
+) -> std::io::Result<crate::ExternalLaneExportReport> {
     crate::external_lane_export(crate::ExternalLaneExportOptions {
         data_dir: chain.data_dir.clone(),
         key_file,
+        sender,
         lane_id: lane_id.to_string(),
         amount_atoms: amount,
         base_recipient: recipient.to_string(),
@@ -672,18 +687,40 @@ fn external_lane_export_command_runs_end_to_end_and_the_status_read_shows_the_pa
 
     let dry = export_command(&chain, "base-erc20", 400, &base_recipient(), true).expect("dry run");
     assert!(dry.dry_run && !dry.submitted, "{dry:?}");
-    assert_eq!(dry.tx_id, postfiat_execution::asset_transaction_tx_id(&dry.signed_asset_transaction));
+    // A dry run signs nothing: no signed transaction, no tx id; the quote
+    // carries the unsigned fields.
+    assert_eq!((&dry.signed_asset_transaction, &dry.tx_id), (&None, &None), "{dry:?}");
+    let quote = dry.quote.as_ref().expect("the dry run prints the quote");
+    assert_eq!((quote.sequence, quote.minimum_fee, quote.source.as_str()), (dry.sequence, dry.fee, dry.sender.as_str()));
+    assert!(
+        matches!(&quote.operation, AssetTransactionOperation::ExternalLaneExportV1(export)
+            if export.amount_atoms == 400 && export.base_recipient == base_recipient()),
+        "{quote:?}"
+    );
     assert_eq!(store.read_mempool().expect("mempool"), mempool_before, "the dry run submitted");
+    // The key file is never read in a dry run: a path that does not exist
+    // still gives a clean dry run.
+    let missing_key = chain.data_dir.join("no-such-key.json");
+    let keyless = export_command_as(&chain, missing_key.clone(), Some(dry.sender.clone()), "base-erc20", 400, &base_recipient(), true)
+        .expect("a dry run never opens the key file");
+    assert_eq!(keyless, dry);
+    let error = export_command_as(&chain, missing_key, None, "base-erc20", 400, &base_recipient(), true)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("--sender"), "{error}");
     assert_eq!(export_page(&chain.data_dir, None, None).export_count, 0);
 
     let report = export_command(&chain, "base-erc20", 400, &base_recipient(), false).expect("export");
-    assert!(report.submitted && !report.dry_run, "{report:?}");
-    assert_eq!(report.signed_asset_transaction.unsigned.fee, report.fee);
+    assert!(report.submitted && !report.dry_run && report.quote.is_none(), "{report:?}");
+    let signed = report.signed_asset_transaction.as_ref().expect("signed");
+    assert_eq!(signed.unsigned.fee, report.fee);
+    let tx_id = report.tx_id.clone().expect("tx id");
+    assert_eq!(tx_id, postfiat_execution::asset_transaction_tx_id(signed));
     let receipt = apply_mempool(&chain, "export-command");
     assert!(receipt.accepted, "{receipt:?}");
-    assert_eq!(receipt.tx_id, report.tx_id);
+    assert_eq!(receipt.tx_id, tx_id);
 
-    let status = export_status(&chain, crate::ExternalLaneExportSelector::TxId(report.tx_id.clone()));
+    let status = export_status(&chain, crate::ExternalLaneExportSelector::TxId(tx_id));
     assert_eq!(status, export_status(&chain, crate::ExternalLaneExportSelector::Nonce(0)));
     let page = export_page(&chain.data_dir, None, None);
     assert_eq!(
@@ -884,7 +921,7 @@ fn external_lane_export_command_does_not_count_a_later_family_credit_before_sign
     let report = export_command_with_key(&chain, key_file, "base-erc20", 1_000, &base_recipient(), false)
         .expect("fits once the finish is committed");
     let receipt = apply_mempool(&chain, "later-credit-export");
-    assert!(receipt.accepted && receipt.tx_id == report.tx_id, "{receipt:?}");
+    assert!(receipt.accepted && Some(&receipt.tx_id) == report.tx_id.as_ref(), "{receipt:?}");
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
@@ -915,7 +952,7 @@ fn external_lane_export_command_refuses_a_sequence_held_by_a_later_family_before
     let report = export_command(&chain, "base-erc20", 1_000, &base_recipient(), false)
         .expect("signed once the escrow is committed");
     let receipt = apply_mempool(&chain, "later-sequence-export");
-    assert!(receipt.accepted && receipt.tx_id == report.tx_id, "{receipt:?}");
+    assert!(receipt.accepted && Some(&receipt.tx_id) == report.tx_id.as_ref(), "{receipt:?}");
     let _ = fs::remove_dir_all(&chain.data_dir);
 }
 
@@ -987,7 +1024,7 @@ fn external_lane_export_command_counts_a_pending_release_before_signing() {
     );
     let receipts = apply_mempool_batch(&chain, "pending-release");
     assert!(receipts.len() == 2 && receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
-    assert_eq!(receipts[1].tx_id, report.tx_id);
+    assert_eq!(Some(&receipts[1].tx_id), report.tx_id.as_ref());
     let row = export_page(&chain.data_dir, None, None);
     assert_eq!((row.state.released_atoms, row.state.exported_atoms), (2 * released, amount));
     let _ = fs::remove_dir_all(&chain.data_dir);

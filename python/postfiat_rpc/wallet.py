@@ -138,7 +138,7 @@ class AssetTransactionResult:
     tx_id: str | None
     operation: dict[str, Any]
     quote_response: dict[str, Any]
-    signed_asset_transaction: dict[str, Any]
+    signed_asset_transaction: dict[str, Any] | None
     submit_result: dict[str, Any]
     finalized_batch_file: Path | None
     receipts_by_validator: tuple[Any, ...]
@@ -1551,8 +1551,9 @@ def external_lane_export(
     raises `ValueError("refused before signing: CODE: ...")` before the signer
     runs. A transaction admitted between the quote and the submission can
     still make admission refuse this one (raised by the submit call, no fee).
-    `dry_run=True` returns the quote and the signed transaction with no tx id
-    and an empty `submit_result`, and never calls the submit method."""
+    `dry_run=True` stops after the checks: it returns the quote and the
+    unsigned operation with no signed transaction, no tx id and an empty
+    `submit_result`, and never reads the key or calls the submit method."""
 
     if isinstance(amount_atoms, bool) or not isinstance(amount_atoms, int):
         raise ValueError("amount_atoms must be an integer")
@@ -1595,17 +1596,17 @@ def external_lane_export(
     export_refusal = quote.get("export_refusal")
     if export_refusal:
         raise ValueError(f"refused before signing: {export_refusal['code']}: {export_refusal['message']}")
-    signed_asset_transaction = _sign_asset_quote(wallet, quote_response, _work_dir(work_dir))
     if dry_run:
         return AssetTransactionResult(
             tx_id=None,
             operation=operation,
             quote_response=quote_response,
-            signed_asset_transaction=signed_asset_transaction,
+            signed_asset_transaction=None,
             submit_result={},
             finalized_batch_file=None,
             receipts_by_validator=(),
         )
+    signed_asset_transaction = _sign_asset_quote(wallet, quote_response, _work_dir(work_dir))
     submit_result = client.mempool_submit_signed_asset_transaction(
         signed_asset_transaction,
         request_id=f"py-export-submit-{secrets.token_hex(4)}",

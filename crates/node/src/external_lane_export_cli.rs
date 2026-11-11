@@ -36,11 +36,15 @@ pub const EXTERNAL_LANE_EXPORT_BASE_PAYOUT_NOTE: &str =
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalLaneExportOptions {
     pub data_dir: PathBuf,
+    /// Read only when the export is signed; a dry run never opens it.
     pub key_file: PathBuf,
+    /// The sender's address: required for a dry run, which opens no key
+    /// file; when signing, it must be the key's address.
+    pub sender: Option<String>,
     pub lane_id: String,
     pub amount_atoms: u64,
     pub base_recipient: String,
-    /// Sign and return the transaction without submitting it.
+    /// Stop after the checks: print the quote and sign nothing.
     pub dry_run: bool,
 }
 
@@ -55,8 +59,15 @@ pub struct ExternalLaneExportReport {
     pub sequence: u64,
     pub dry_run: bool,
     pub submitted: bool,
-    pub tx_id: String,
-    pub signed_asset_transaction: SignedAssetTransaction,
+    /// Absent for a dry run, which signs nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tx_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signed_asset_transaction: Option<SignedAssetTransaction>,
+    /// A dry run's quote: the unsigned fields (chain, source, sequence, fee,
+    /// operation) a signature would cover.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quote: Option<AssetFeeQuoteReport>,
 }
 
 /// Refuses an export quote without `export_checked`: it comes from a node too
@@ -106,8 +117,9 @@ pub fn parse_export_amount_atoms(text: &str) -> Result<u64, String> {
         .map_err(|_| "--amount-atoms must fit a u64".to_string())
 }
 
-/// Checks the export against the lane and the sender's balance, then signs
-/// it and, unless `dry_run`, submits it. Every refusal is returned before the
+/// Checks the export against the lane and the sender's balance, then, unless
+/// `dry_run` (which stops after the checks, opens no key file and signs
+/// nothing), signs and submits it. Every refusal is returned before the
 /// key signs anything, against the ledger asset admission executes the export
 /// on: the pending plain transfers, `payment_v2` entries and asset
 /// transactions (`asset_fee_quote`'s `export_refusal`). A transaction another
@@ -152,7 +164,27 @@ pub fn external_lane_export(
     }
     // Whether the amount fits is the dry run's (below): the committed
     // `released - exported` misses pending releases and exports.
-    let sender = read_key_file(&options.key_file)?.address;
+    let sender = if options.dry_run {
+        options.sender.clone().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "a dry run opens no key file: pass the sender's address with --sender",
+            )
+        })?
+    } else {
+        let address = read_key_file(&options.key_file)?.address;
+        if let Some(sender) = options
+            .sender
+            .as_deref()
+            .filter(|sender| *sender != address)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("--sender `{sender}` is not the key file's address `{address}`"),
+            ));
+        }
+        address
+    };
     let operation = ExternalLaneExportOperationV1 {
         sender: sender.clone(),
         lane_id: lane.lane_id.clone(),
@@ -219,6 +251,22 @@ pub fn external_lane_export(
     }
     let fee = quote.minimum_fee;
     let sequence = quote.sequence;
+    if options.dry_run {
+        return Ok(ExternalLaneExportReport {
+            schema: "postfiat-external-lane-export-v1".to_string(),
+            lane_id: lane.lane_id,
+            sender,
+            amount_atoms: options.amount_atoms,
+            base_recipient: options.base_recipient,
+            fee,
+            sequence,
+            dry_run: true,
+            submitted: false,
+            tx_id: None,
+            signed_asset_transaction: None,
+            quote: Some(quote),
+        });
+    }
     let signed = wallet_sign_asset_transaction(WalletSignAssetTransactionOptions {
         key_file: options.key_file.clone(),
         chain_id: quote.chain_id,
@@ -229,17 +277,14 @@ pub fn external_lane_export(
         expected_source: Some(quote.source),
         operation: quote.operation,
     })?;
-    let tx_id = if options.dry_run {
-        postfiat_execution::asset_transaction_tx_id(&signed)
-    } else {
-        let signed_json = serde_json::to_string(&signed)
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let signed_json = serde_json::to_string(&signed)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let tx_id =
         submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
             data_dir: options.data_dir.clone(),
             signed_asset_transaction_json: signed_json,
         })?
-        .tx_id
-    };
+        .tx_id;
     Ok(ExternalLaneExportReport {
         schema: "postfiat-external-lane-export-v1".to_string(),
         lane_id: lane.lane_id,
@@ -248,10 +293,11 @@ pub fn external_lane_export(
         base_recipient: options.base_recipient,
         fee,
         sequence,
-        dry_run: options.dry_run,
-        submitted: !options.dry_run,
-        tx_id,
-        signed_asset_transaction: signed,
+        dry_run: false,
+        submitted: true,
+        tx_id: Some(tx_id),
+        signed_asset_transaction: Some(signed),
+        quote: None,
     })
 }
 

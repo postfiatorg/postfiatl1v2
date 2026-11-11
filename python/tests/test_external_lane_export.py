@@ -146,14 +146,17 @@ class ExternalLaneExportTests(unittest.TestCase):
         submit.assert_called_once()
         self.assertEqual(submit.call_args.args[0], SIGNED)
 
-    def test_a_dry_run_returns_the_quote_and_the_signed_transaction_and_never_submits(self) -> None:
+    def test_a_dry_run_returns_the_quote_signs_nothing_and_never_submits(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")
         quote = _quote()
-        result, signer, submit, _ = self._export(client, quote, amount_atoms=600, dry_run=True)
-        signer.assert_called_once()
+        with mock.patch("postfiat_rpc.wallet._sign_asset_quote") as sign:
+            result, signer, submit, _ = self._export(client, quote, amount_atoms=600, dry_run=True)
+        sign.assert_not_called()
+        signer.assert_not_called()
         submit.assert_not_called()
         self.assertEqual(result.quote_response, quote)
-        self.assertEqual(result.signed_asset_transaction, SIGNED)
+        self.assertEqual(result.operation, _operation())
+        self.assertIsNone(result.signed_asset_transaction)
         self.assertEqual((result.tx_id, result.submit_result), (None, {}))
         # The refusals hold for a dry run too.
         error, signer, _, _ = self._export(client, _quote(sender_balance=0), amount_atoms=600, dry_run=True)

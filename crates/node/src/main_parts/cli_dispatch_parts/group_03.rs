@@ -2474,7 +2474,12 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let report = external_lane_export(ExternalLaneExportOptions {
                 data_dir: PathBuf::from(data_dir),
-                key_file: PathBuf::from(flag_value(flags, "--key-file").ok_or("missing --key-file")?),
+                key_file: match (flag_value(flags, "--key-file"), flag_present(flags, "--dry-run")) {
+                    (Some(key_file), _) => PathBuf::from(key_file),
+                    (None, true) => PathBuf::new(),
+                    (None, false) => return Err("missing --key-file".to_string()),
+                },
+                sender: flag_value(flags, "--sender").map(str::to_string),
                 lane_id: flag_value(flags, "--lane-id").ok_or("missing --lane-id")?.to_string(),
                 amount_atoms: parse_export_amount_atoms(
                     flag_value(flags, "--amount-atoms").ok_or("missing --amount-atoms")?,
