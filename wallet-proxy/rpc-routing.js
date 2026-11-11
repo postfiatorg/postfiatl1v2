@@ -1574,8 +1574,11 @@ wss } = runtime;
     function canonicalReadResult(method, result) {
         if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
         if (method === 'owned_objects') {
-            // Validators at different heights agree on the same objects;
-            // the read point itself is not part of the answer's identity.
+            // Validators agree when they return the same object view
+            // (view_digest, over every matching object) and the same page:
+            // objects, totals and cursors. height and state_root are
+            // dropped: they do not identify the view (FastPay effects change
+            // it without a block), and equal views at two heights agree.
             const { height: _height, state_root: _stateRoot, ...copy } = result;
             if (Array.isArray(copy.objects)) {
                 copy.objects = [...copy.objects].sort((a, b) => {
