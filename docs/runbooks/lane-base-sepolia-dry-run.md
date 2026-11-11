@@ -52,7 +52,7 @@ A stage runs once, and only after the stages before it (`state.json`, written at
    - Check: after the Lock the command reads the allowance back and requires zero.
 6. **`release-on-pftl`.** The first wait: Base finality of the Lock's block, about an hour on 2026-11-06, at most 4 hours. Then the four checkpoint commands read Base Sepolia, and the release lands on the PFTL chain.
    - Check: the recipient holds 1,000,000 atoms.
-7. **`export`.** Exports 400,000 atoms to a fresh Base address, then builds the proof input with the relay.
+7. **`export`.** Exports 400,000 atoms to a fresh Base address, then builds the proof input with the relay. By default that address is derived from a label and nobody holds its key, so the 400,000 test units paid there can never be moved; for the real run, name an address you control with `--payout-recipient`.
    - Check: the export block carries the lane export root.
 8. **`prove-and-release`.** Without `--proof` it stops. It prints the prover-command contract, the program key, the input's sha256 and the expected public-values hash. With a proof it records an intent and runs the relay's `release` with every pre-send check.
 9. **`record`.** Writes the summary (with the intents, each key's balance read from the chain and what was done with what is left) and the manifest; rewritten after a release.

@@ -578,3 +578,22 @@ class FundingPlanTests(unittest.TestCase):
         text = (ROOT / "docs/runbooks/lane-base-sepolia-dry-run.md").read_text()
         for phrase in ("--relayer-ceiling-wei", "--leftover-eth", "returned to the holder", "kept on the"):
             self.assertIn(phrase, text)
+
+
+class PayoutRecipientTests(unittest.TestCase):
+    """B3: the default payout recipient has no key; a real run can name one."""
+
+    def test_the_default_is_unchanged_and_an_operator_can_name_one(self):
+        self.assertEqual(dry_run.payout_recipient(None, fork_block=5),
+                         dry_run.RT.fresh_base_address("base-sepolia-dry-run-5"))
+        self.assertEqual(dry_run.payout_recipient("0x" + "aB" * 20, fork_block=5), "0x" + "ab" * 20)
+        for bad in ("0x12", "ab" * 20, "0x" + "zz" * 20):
+            with self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.payout_recipient(bad, fork_block=5)
+
+    def test_the_docs_say_the_default_payout_can_never_be_moved(self):
+        for path in ("docs/runbooks/lane-base-sepolia-dry-run.md",
+                     "docs/review/lane-base-sepolia-fork-rehearsal-20261110/README.md"):
+            text = (ROOT / path).read_text()
+            self.assertIn("can never be moved", text)
+            self.assertIn("--payout-recipient", text)

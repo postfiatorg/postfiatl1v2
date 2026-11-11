@@ -545,6 +545,18 @@ def funding_plan(needs, *, gas_price_wei, relayer_ceiling_wei):
     return plan
 
 
+def payout_recipient(named, *, fork_block):
+    """The Base address the export pays. By default one derived from a label, for
+    which nobody holds a key: what is paid there can never be moved. A real run
+    can name an address the operator controls."""
+    if named is None:
+        return RT.fresh_base_address(f'base-sepolia-dry-run-{fork_block}')
+    require(isinstance(named, str) and len(named) == 42 and named[:2] == '0x'
+            and all(c in '0123456789abcdefABCDEF' for c in named[2:]),
+            f'--payout-recipient {named!r} is not a 20-byte 0x address')
+    return named.lower()
+
+
 def key_balances(keys, balance):
     """Each key's ETH balance read from the chain, for the record."""
     return {key: {'address': address, 'wei': balance(address) if address else 'not known: no address recorded'}
@@ -641,6 +653,9 @@ def parser():
                         'run through prove-and-release')
     p.add_argument('--leftover-eth', choices=('returned-to-holder', 'kept-on-keys'),
                    help='what was done with the ETH left on the one-time keys; stated in the record')
+    p.add_argument('--payout-recipient',
+                   help='the Base address the export pays, one you control; default: an address derived from a '
+                        'label that nobody holds a key for, so the payout can never be moved')
     p.add_argument('--verifier-deployer', help='address of the one-time verifier keystore')
     p.add_argument('--lock-deployer', help='address of the one-time lock keystore')
     return p
@@ -1101,7 +1116,7 @@ def main(argv=None):
                                                                      'checkpoint_votes', 'lane_after_release')}
             elif stage == 'export':
                 released = json.loads((out / 'handshake/pftl-released.json').read_text())
-                base_recipient = RT.fresh_base_address(f'base-sepolia-dry-run-{data["plan"]["fork_block"]}')
+                base_recipient = payout_recipient(args.payout_recipient, fork_block=data['plan']['fork_block'])
                 signed = command('export-sign', [
                     args.node_bin, 'wallet-sign-asset-transaction', '--key-file', data['private']['recipient_key_file'],
                     '--chain-id', data['fleet']['chain_id'], '--genesis-hash', data['fleet']['genesis_hash'],
@@ -1118,6 +1133,8 @@ def main(argv=None):
                                         data['fleet']['checkpoint']['block_id'], '--output', out / 'relay-input'])
                 document = json.loads((out / 'relay-input/expected-public-values.json').read_text())
                 data['export'] = {'amount': EXPORT_AMOUNT, 'base_recipient': base_recipient,
+                                  'base_recipient_key': 'named by the operator' if args.payout_recipient else
+                                  'none: derived from a label, the payout can never be moved',
                                   'block_height': applied['block_height'], 'lane': applied['lane'],
                                   'input_sha256': ORDER.sha256_file(out / 'relay-input/input.cbor'),
                                   'public_values_sha256': hashlib.sha256(
