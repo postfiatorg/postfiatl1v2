@@ -405,6 +405,47 @@ class RemainingReadWrapperTests(unittest.TestCase):
                 client.private_pool_market("t", "A", "")
         call.assert_not_called()
 
+    def test_owned_objects_passes_the_cursor_and_flag_only_when_given(self) -> None:
+        client = _client()
+        with mock.patch.object(client, "_call", return_value={}) as call:
+            client.owned_objects("ab")
+        call.assert_called_once_with("owned_objects", {"owner_public_key_hex": "ab"})
+        with mock.patch.object(client, "_call", return_value={}) as call:
+            client.owned_objects("ab", limit=128, cursor="ooc1.x", omit_owner_keys=True)
+        call.assert_called_once_with(
+            "owned_objects",
+            {"owner_public_key_hex": "ab", "limit": 128, "cursor": "ooc1.x", "omit_owner_keys": True},
+        )
+
+    def test_owned_objects_all_follows_cursors_and_restarts_on_a_new_height(self) -> None:
+        client = _client()
+
+        def page(height, ids, next_cursor):
+            return {
+                "height": height,
+                "state_root": f"root-{height}",
+                "objects": [{"id": i} for i in ids],
+                "object_count": len(ids),
+                "truncated": next_cursor is not None,
+                "next_cursor": next_cursor,
+            }
+
+        pages = [
+            page(5, ["a", "b"], "c1"),
+            page(6, ["c"], None),  # the set changed: restart
+            page(6, ["a", "b"], "c1"),
+            page(6, ["c", "d"], None),
+        ]
+        with mock.patch.object(client, "_call", side_effect=pages) as call:
+            result = client.owned_objects_all("ab", page_limit=2)
+        self.assertEqual([o["id"] for o in result["objects"]], ["a", "b", "c", "d"])
+        self.assertEqual((result["height"], result["object_count"], result["truncated"]), (6, 4, False))
+        self.assertEqual(call.call_args_list[1].args[1]["cursor"], "c1")
+        self.assertNotIn("cursor", call.call_args_list[2].args[1])
+        with mock.patch.object(client, "_call", side_effect=[page(5, ["a"], "c"), page(6, ["b"], None)] * 2):
+            with self.assertRaisesRegex(Exception, "changed between pages"):
+                client.owned_objects_all("ab", max_restarts=1)
+
     def test_fastpay_recovery_committee_sends_only_the_optional_epoch(self) -> None:
         client = _client()
         with mock.patch.object(client, "_call", return_value={"active": True}) as call:

@@ -176,6 +176,20 @@ class CliPublicReadDispatchTests(unittest.TestCase):
                 {"prior_checkpoint": "cp"},
             ),
             ("yolo_target_receipt", {"registration_id": "reg"}, "yolo_target_receipt", ("reg",), {}),
+            (
+                "owned_objects",
+                {"owner_public_key_hex": "ab", "limit": 128, "cursor": "ooc1.x", "omit_owner_keys": True},
+                "owned_objects",
+                ("ab",),
+                {"asset": None, "limit": 128, "cursor": "ooc1.x", "omit_owner_keys": True},
+            ),
+            (
+                "owned_objects",
+                {"owner_public_key_hex": "ab", "asset": "PFT", "all_pages": True},
+                "owned_objects_all",
+                ("ab",),
+                {"asset": "PFT", "page_limit": 128, "omit_owner_keys": False},
+            ),
         ]
         for method, argv, target, expected_args, expected_kwargs in cases:
             with self.subTest(method=method, argv=argv):
@@ -189,6 +203,7 @@ class CliPublicReadDispatchTests(unittest.TestCase):
         for method, argv, flag in (
             ("archive_window", {"from_height": 1}, "--to-height"),
             ("shield_scan", {}, "--owner"),
+            ("owned_objects", {}, "--owner-public-key-hex"),
             ("fx_fix_quote", {"fix_packet_hash": "ab" * 48}, "--base-atoms"),
             ("asset_orchard_pricing_claim", {"base_asset_id": "A", "quote_asset_id": "B"}, "--inclusion-height"),
             ("private_pool_snapshot", {}, "--pool-id"),

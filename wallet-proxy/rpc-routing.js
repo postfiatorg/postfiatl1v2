@@ -1574,7 +1574,9 @@ wss } = runtime;
     function canonicalReadResult(method, result) {
         if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
         if (method === 'owned_objects') {
-            const copy = { ...result };
+            // Validators at different heights agree on the same objects;
+            // the read point itself is not part of the answer's identity.
+            const { height: _height, state_root: _stateRoot, ...copy } = result;
             if (Array.isArray(copy.objects)) {
                 copy.objects = [...copy.objects].sort((a, b) => {
                     const aKey = `${a?.id || ''}:${a?.version ?? ''}`;

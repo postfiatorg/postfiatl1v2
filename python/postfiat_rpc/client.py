@@ -1168,13 +1168,57 @@ class PostFiatRpcClient:
         *,
         asset: str | None = None,
         limit: int | None = None,
+        cursor: str | None = None,
+        omit_owner_keys: bool = False,
     ) -> dict[str, Any]:
+        """One page of owned objects; pass the previous `next_cursor` as `cursor`."""
         params: dict[str, Any] = {"owner_public_key_hex": owner_public_key_hex}
         if asset is not None:
             params["asset"] = asset
         if limit is not None:
             params["limit"] = limit
+        if cursor is not None:
+            params["cursor"] = cursor
+        if omit_owner_keys:
+            params["omit_owner_keys"] = True
         return self._call("owned_objects", params)
+
+    def owned_objects_all(
+        self,
+        owner_public_key_hex: str,
+        *,
+        asset: str | None = None,
+        page_limit: int = 128,
+        omit_owner_keys: bool = False,
+        max_restarts: int = 3,
+    ) -> dict[str, Any]:
+        """Every owned object from one height and state root.
+
+        Pages follow `next_cursor`. When a page reports another `height` or
+        `state_root` than the first page, the set changed between pages, so
+        the read restarts from the first page (at most `max_restarts` times).
+        """
+        for _ in range(max_restarts + 1):
+            first = self.owned_objects(
+                owner_public_key_hex, asset=asset, limit=page_limit, omit_owner_keys=omit_owner_keys
+            )
+            point = (first.get("height"), first.get("state_root"))
+            objects = list(first.get("objects") or [])
+            page = first
+            while page.get("next_cursor") is not None:
+                page = self.owned_objects(
+                    owner_public_key_hex,
+                    asset=asset,
+                    limit=page_limit,
+                    cursor=page["next_cursor"],
+                    omit_owner_keys=omit_owner_keys,
+                )
+                if (page.get("height"), page.get("state_root")) != point:
+                    break
+                objects.extend(page.get("objects") or [])
+            else:
+                return {**first, "objects": objects, "object_count": len(objects), "truncated": False}
+        raise RpcClientError("owned objects changed between pages on every attempt; retry later")
 
     def owned_sign(
         self,
