@@ -845,7 +845,9 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
     # The totals, at the finalized block only, read before any payout is
     # judged: a scan whose payouts do not add up to totalReleased is
     # incomplete, and none of its matches is published as `backed`,
-    # `verified_earlier` or `paid` (`matched_incomplete_scan`).
+    # `verified_earlier` or `paid` (`matched_incomplete_scan`). Its alarm
+    # keeps the export part of the state unchanged; a clean release view
+    # still saves its own height, so the file as a whole may differ.
     tag = hex(finalized)
     token = "0x" + f"{_u256_call(base, lock, _selector('token()'), tag):064x}"[-40:]
     total_locked = _u256_call(base, lock, _selector("totalLocked()"), tag)

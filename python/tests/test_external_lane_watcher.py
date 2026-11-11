@@ -1732,7 +1732,7 @@ class StateLifeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             state_file = Path(directory) / "state.json"
             self.assertEqual(self.check(state_file, lane, [], 900)[0], 0)
-            before = state_file.read_bytes()
+            before = json.loads(state_file.read_text())["exports"]
             for extra in (("--lock-from-block", "1000"), ("--lock-from-block", "1000", "--from-height", "0")):
                 with self.subTest(extra=extra):
                     code, lines, _ = self.check(state_file, lane, [first, second], 1_200, *extra)
@@ -1742,11 +1742,31 @@ class StateLifeTests(unittest.TestCase):
                     self.assertEqual({line["export_nonce"]: line["status"] for line in lines
                                       if line["kind"] == "export"},
                                      {0: "matched_incomplete_scan", 1: "unpaid"})
-                    self.assertEqual(state_file.read_bytes(), before)
+                    # The export part of the state is unchanged; the clean release view may advance (below).
+                    self.assertEqual(json.loads(state_file.read_text())["exports"], before)
             # A complete scan still prints `backed`.
             code, lines, _ = self.check(Path(directory) / "fresh.json", lane, [first], 1_200)
             self.assertEqual((code, [line["status"] for line in lines if line["kind"] == "payout"]), (0, ["backed"]))
             self.assertIn("paid", [line["status"] for line in lines if line["kind"] == "export"])
+
+    def test_n3_an_incomplete_scan_keeps_the_export_part_while_the_release_part_advances(self):
+        """The release view is clean, so its height is saved; only the export
+        part of the state is unchanged, not the whole file."""
+
+        first = released_log(self.A, block=950, transaction="0x" + "a1" * 32)
+        second = released_log(self.A, block=1_150, transaction="0x" + "a2" * 32)
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            self.assertEqual(self.check(state_file, self.lane(500, [self.A, self.B], 0, 0), [], 900)[0], 0)
+            before = json.loads(state_file.read_text())
+            code, lines, _ = self.check(state_file, self.lane(501, [self.A, self.B], 0, 0), [first, second], 1_200,
+                                        "--lock-from-block", "1000")
+            self.assertEqual((code, alarm_codes(lines)), (2, ["total_released_mismatch"]))
+            self.assertEqual([line["status"] for line in lines if line["kind"] == "payout"],
+                             ["matched_incomplete_scan"])
+            after = json.loads(state_file.read_text())
+            self.assertEqual(after["exports"], before["exports"])
+            self.assertEqual((before["checked_through_height"], after["checked_through_height"]), (500, 501))
 
     def test_the_recent_list_share_of_the_size_limit(self):
         entry = {"export_nonce": U64_MAX, "evm_digest": "0x" + "ab" * 32, "block": U64_MAX,
