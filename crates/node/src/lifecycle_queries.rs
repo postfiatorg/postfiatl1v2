@@ -1659,12 +1659,77 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
     let genesis = store.read_genesis()?;
     let ledger = admission_base_ledger(&store)?;
     let mempool = store.read_mempool()?;
-    let ledger_sender = ledger.account(&options.source).ok_or_else(|| {
+    let source_not_found = || {
         io::Error::new(
             io::ErrorKind::NotFound,
             format!("source account `{}` not found", options.source),
         )
-    })?;
+    };
+    let is_export = matches!(
+        operation,
+        AssetTransactionOperation::ExternalLaneExportV1(_)
+    );
+    // Every other kind needs the source in the base ledger; an export's source
+    // is read on the pending prefix below, which may create it.
+    let base_sequence = if is_export {
+        None
+    } else {
+        Some(
+            ledger
+                .account(&options.source)
+                .ok_or_else(source_not_found)?
+                .sequence,
+        )
+    };
+    let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
+    let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
+    // An export is quoted and checked on the ledger asset admission executes
+    // it on (`apply_pending_before_new_asset_transaction`), its source's
+    // existence, balance and sequence included: a pending release or transfer
+    // may create the source. Every other kind keeps the ledger after the
+    // executable mempool.
+    let quote_ledger = if is_export {
+        let shielded = store.read_shielded()?;
+        let orchard_balances = shielded
+            .orchard
+            .as_ref()
+            .map_or(&[][..], |pool| pool.asset_orchard_balances.as_slice());
+        let mut export_ledger = ledger;
+        apply_pending_before_new_asset_transaction(
+            &genesis,
+            &mut export_ledger,
+            &mempool,
+            block_height,
+            asset_execution_compatibility,
+            orchard_balances,
+            "asset fee quote",
+        )?;
+        export_ledger
+    } else {
+        ledger_after_executable_mempool(
+            &genesis,
+            ledger,
+            &mempool,
+            block_height,
+            asset_execution_compatibility,
+        )?
+    };
+    let sender = match quote_ledger.account(&options.source) {
+        Some(sender) => sender,
+        None if is_export => return Err(source_not_found()),
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "source account `{}` not found after pending mempool dry-run",
+                    options.source
+                ),
+            ))
+        }
+    };
+    // The next sequence above every pending entry of the source, later
+    // families included; execution's dry run below refuses a sequence a later
+    // family holds (`bad_sequence`).
     let sequence = match options.sequence {
         Some(sequence) if sequence > 0 => sequence,
         Some(_) => {
@@ -1673,26 +1738,12 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
                 "sequence must be nonzero",
             ));
         }
-        None => next_pending_sender_sequence(&mempool, &options.source, ledger_sender.sequence)?,
+        None => next_pending_sender_sequence(
+            &mempool,
+            &options.source,
+            base_sequence.unwrap_or(sender.sequence),
+        )?,
     };
-    let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
-    let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
-    let quote_ledger = ledger_after_executable_mempool(
-        &genesis,
-        ledger,
-        &mempool,
-        block_height,
-        asset_execution_compatibility,
-    )?;
-    let sender = quote_ledger.account(&options.source).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            format!(
-                "source account `{}` not found after pending mempool dry-run",
-                options.source
-            ),
-        )
-    })?;
     let mempool_pending_for_sender = mempool_pending_count_for_sender(&mempool, &options.source);
 
     let mut fee = MIN_TRANSFER_FEE;
@@ -1727,6 +1778,39 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
     } else {
         "ledger_mempool".to_string()
     };
+    // An export's check, as admission orders it: the mempool limits, then
+    // execution's export rules. `Some` exactly when the check ran, so
+    // `export_checked` cannot be true without it.
+    let export_check = match &operation {
+        AssetTransactionOperation::ExternalLaneExportV1(export) => Some(
+            mempool_admission_limit_refusal(&mempool, &options.source)
+                .map(|(_, code, message)| AssetOperationRefusal {
+                    code: code.to_string(),
+                    message,
+                })
+                .or_else(|| {
+                    postfiat_execution::dry_run_external_lane_export(
+                        &genesis,
+                        &quote_ledger,
+                        export,
+                        &options.source,
+                        sequence,
+                        minimum_fee,
+                        block_height,
+                        asset_execution_compatibility,
+                    )
+                    .err()
+                    .map(|(code, message)| AssetOperationRefusal {
+                        code: code.to_string(),
+                        message: export_above_released_message(&quote_ledger, export, code)
+                            .unwrap_or(message),
+                    })
+                }),
+        ),
+        _ => None,
+    };
+    let export_checked = export_check.is_some();
+    let export_refusal = export_check.flatten();
 
     Ok(AssetFeeQuoteReport {
         schema: "postfiat-asset-fee-quote-v1".to_string(),
@@ -1750,7 +1834,33 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
         sender_balance_after_fee,
         sender_meets_reserve_after_fee,
         operation,
+        export_refusal,
+        export_checked,
     })
+}
+
+/// For `external_lane_export_above_released`: the amount against released
+/// and exported on the ledger asset admission executes the export on.
+fn export_above_released_message(
+    quote_ledger: &LedgerState,
+    export: &postfiat_types::ExternalLaneExportOperationV1,
+    code: &str,
+) -> Option<String> {
+    if code != postfiat_types::EXTERNAL_LANE_EXPORT_ABOVE_RELEASED || export.amount_atoms == 0 {
+        return None;
+    }
+    let state = quote_ledger
+        .external_lanes
+        .iter()
+        .find(|state| state.lane_id == export.lane_id)?;
+    Some(format!(
+        "{} atoms is above what external lane `{}` can take back after the pending transfers, payment_v2 entries and asset transactions (pending releases and exports included): released {} minus exported {} is {}",
+        export.amount_atoms,
+        export.lane_id,
+        state.released_atoms,
+        state.exported_atoms,
+        state.released_atoms.saturating_sub(state.exported_atoms)
+    ))
 }
 
 pub fn escrow_fee_quote(options: EscrowFeeQuoteOptions) -> io::Result<EscrowFeeQuoteReport> {

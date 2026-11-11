@@ -2837,6 +2837,25 @@ pub struct AssetFeeQuoteReport {
     pub sender_balance_after_fee: Option<u64>,
     pub sender_meets_reserve_after_fee: bool,
     pub operation: AssetTransactionOperation,
+    /// For `external_lane_export_v1`: the refusal execution returns for the
+    /// export on the ledger asset admission executes it on (the pending
+    /// plain transfers, `payment_v2` entries and asset transactions; later
+    /// families excluded). Absent when the export would apply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export_refusal: Option<AssetOperationRefusal>,
+    /// `true` for `external_lane_export_v1` only: this node ran the export
+    /// check, so an absent `export_refusal` means the export would apply.
+    /// Not serialized for any other kind. A quote without it comes from a
+    /// node too old to check an export; the holder's commands refuse it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub export_checked: bool,
+}
+
+/// A refusal code and message from an execution dry run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetOperationRefusal {
+    pub code: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

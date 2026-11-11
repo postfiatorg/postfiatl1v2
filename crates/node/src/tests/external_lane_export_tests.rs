@@ -552,6 +552,792 @@ fn external_lane_governed_inputs_are_never_serialized() {
     const { assert!(Probe::<postfiat_types::ExternalLaneState>::SERIALIZE) };
 }
 
+// ---- The holder's commands: `external-lane-export` and its status read ----
+
+fn export_command(
+    chain: &Chain,
+    lane_id: &str,
+    amount: u64,
+    recipient: &str,
+    dry_run: bool,
+) -> std::io::Result<crate::ExternalLaneExportReport> {
+    export_command_with_key(chain, chain.data_dir.join(FAUCET_KEY_FILE), lane_id, amount, recipient, dry_run)
+}
+
+fn export_command_with_key(
+    chain: &Chain,
+    key_file: PathBuf,
+    lane_id: &str,
+    amount: u64,
+    recipient: &str,
+    dry_run: bool,
+) -> std::io::Result<crate::ExternalLaneExportReport> {
+    // A dry run opens no key file: the sender comes from `--sender`.
+    let sender = dry_run.then(|| crate::read_key_file(&key_file).expect("key").address);
+    export_command_as(chain, key_file, sender, lane_id, amount, recipient, dry_run)
+}
+
+fn export_command_as(
+    chain: &Chain,
+    key_file: PathBuf,
+    sender: Option<String>,
+    lane_id: &str,
+    amount: u64,
+    recipient: &str,
+    dry_run: bool,
+) -> std::io::Result<crate::ExternalLaneExportReport> {
+    crate::external_lane_export(crate::ExternalLaneExportOptions {
+        data_dir: chain.data_dir.clone(),
+        key_file,
+        sender,
+        lane_id: lane_id.to_string(),
+        amount_atoms: amount,
+        base_recipient: recipient.to_string(),
+        dry_run,
+        max_fee_atoms: crate::EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS,
+    })
+}
+
+fn export_status(chain: &Chain, selector: crate::ExternalLaneExportSelector) -> crate::ExternalLaneExportStatusReport {
+    export_status_with(chain, selector, false, None).expect("export status")
+}
+
+fn export_status_with(
+    chain: &Chain,
+    selector: crate::ExternalLaneExportSelector,
+    audit: bool,
+    sender: Option<&str>,
+) -> std::io::Result<crate::ExternalLaneExportStatusReport> {
+    crate::external_lane_export_status(crate::ExternalLaneExportStatusOptions {
+        data_dir: chain.data_dir.clone(),
+        lane_id: "base-erc20".to_string(),
+        selector,
+        audit,
+        sender: sender.map(str::to_string),
+    })
+}
+
+/// The command refuses with `code` before signing: no report, and the
+/// mempool, the ledger and the tip are unchanged.
+fn command_refused_before_signing(
+    chain: &Chain,
+    key_file: PathBuf,
+    lane_id: &str,
+    amount: u64,
+    recipient: &str,
+    code: &str,
+) -> String {
+    let store = NodeStore::new(&chain.data_dir);
+    let ledger_before = store.read_ledger().expect("ledger");
+    let mempool_before = store.read_mempool().expect("mempool");
+    let tip_before = tip_height(chain);
+    for dry_run in [true, false] {
+        let error = export_command_with_key(chain, key_file.clone(), lane_id, amount, recipient, dry_run)
+            .expect_err("refused")
+            .to_string();
+        assert!(error.starts_with(&format!("refused before signing: {code}: ")), "{error}");
+    }
+    assert_eq!(store.read_mempool().expect("mempool"), mempool_before, "something was submitted");
+    assert_eq!(store.read_ledger().expect("ledger"), ledger_before);
+    assert_eq!(tip_height(chain), tip_before);
+    export_command_with_key(chain, key_file, lane_id, amount, recipient, true)
+        .expect_err("refused")
+        .to_string()
+}
+
+fn faucet_refused(chain: &Chain, lane_id: &str, amount: u64, recipient: &str, code: &str) -> String {
+    command_refused_before_signing(chain, chain.data_dir.join(FAUCET_KEY_FILE), lane_id, amount, recipient, code)
+}
+
+/// Proposes a batch from the mempool and applies it.
+fn apply_mempool(chain: &Chain, label: &str) -> Receipt {
+    let receipts = apply_mempool_batch(chain, label);
+    assert_eq!(receipts.len(), 1, "{receipts:?}");
+    receipts.into_iter().next().expect("receipt")
+}
+
+/// Proposes a batch from the mempool and applies it, with a consensus v2
+/// certificate once consensus v2 is active.
+fn apply_mempool_batch(chain: &Chain, label: &str) -> Vec<Receipt> {
+    let store = NodeStore::new(&chain.data_dir);
+    let next = next_block_height_from_chain_tip(&store, &chain.genesis).expect("next height");
+    let batch_file = chain.data_dir.join(format!("{label}.batch.json"));
+    create_mempool_batch(MempoolBatchOptions {
+        data_dir: chain.data_dir.clone(),
+        batch_file: batch_file.clone(),
+        max_transactions: 8,
+    })
+    .expect("mempool batch");
+    let certificate_file = consensus_v2_active_at(&chain.genesis, next)
+        .then(|| consensus_v2_certificate(&chain.data_dir, &batch_file, label));
+    apply_batch(ApplyBatchOptions {
+        data_dir: chain.data_dir.clone(),
+        batch_file,
+        certificate_file,
+    })
+    .expect("apply batch")
+}
+
+/// A release, then the export through the command (a dry run first, which
+/// submits nothing), then the status read by tx id and by nonce.
+#[test]
+fn external_lane_export_command_runs_end_to_end_and_the_status_read_shows_the_packet() {
+    let chain = released_export_chain("export-command", ACCOUNT_RESERVE + 1_000);
+    let store = NodeStore::new(&chain.data_dir);
+    let mempool_before = store.read_mempool().expect("mempool");
+
+    let dry = export_command(&chain, "base-erc20", 400, &base_recipient(), true).expect("dry run");
+    assert!(dry.dry_run && !dry.submitted, "{dry:?}");
+    // A dry run signs nothing: no signed transaction, no tx id; the quote
+    // carries the unsigned fields.
+    assert_eq!((&dry.signed_asset_transaction, &dry.tx_id), (&None, &None), "{dry:?}");
+    let quote = dry.quote.as_ref().expect("the dry run prints the quote");
+    assert_eq!((quote.sequence, quote.minimum_fee, quote.source.as_str()), (dry.sequence, dry.fee, dry.sender.as_str()));
+    assert!(
+        matches!(&quote.operation, AssetTransactionOperation::ExternalLaneExportV1(export)
+            if export.amount_atoms == 400 && export.base_recipient == base_recipient()),
+        "{quote:?}"
+    );
+    assert_eq!(store.read_mempool().expect("mempool"), mempool_before, "the dry run submitted");
+    // The key file is never read in a dry run: a path that does not exist
+    // still gives a clean dry run.
+    let missing_key = chain.data_dir.join("no-such-key.json");
+    let keyless = export_command_as(&chain, missing_key.clone(), Some(dry.sender.clone()), "base-erc20", 400, &base_recipient(), true)
+        .expect("a dry run never opens the key file");
+    assert_eq!(keyless, dry);
+    let error = export_command_as(&chain, missing_key, None, "base-erc20", 400, &base_recipient(), true)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("--sender"), "{error}");
+    assert_eq!(export_page(&chain.data_dir, None, None).export_count, 0);
+
+    let report = export_command(&chain, "base-erc20", 400, &base_recipient(), false).expect("export");
+    assert!(report.submitted && !report.dry_run && report.quote.is_none(), "{report:?}");
+    let signed = report.signed_asset_transaction.as_ref().expect("signed");
+    assert_eq!(signed.unsigned.fee, report.fee);
+    let tx_id = report.tx_id.clone().expect("tx id");
+    assert_eq!(tx_id, postfiat_execution::asset_transaction_tx_id(signed));
+    let receipt = apply_mempool(&chain, "export-command");
+    assert!(receipt.accepted, "{receipt:?}");
+    assert_eq!(receipt.tx_id, tx_id);
+
+    let status = export_status(&chain, crate::ExternalLaneExportSelector::TxId(tx_id));
+    assert_eq!(status, export_status(&chain, crate::ExternalLaneExportSelector::Nonce(0)));
+    let page = export_page(&chain.data_dir, None, None);
+    assert_eq!(
+        (status.export_nonce, status.amount_atoms, status.base_recipient.as_str(), status.exported_at_height),
+        (0, 400, base_recipient().as_str(), tip_height(&chain))
+    );
+    assert_eq!(status.packet_digest, page.exports[0].packet_digest);
+    assert!(status.in_committed_block, "{status:?}");
+    assert_eq!(status.block_log_verified, None, "no audit, no claim");
+    let audited = export_status_with(&chain, crate::ExternalLaneExportSelector::Nonce(0), true, None).expect("audit");
+    assert_eq!((audited.in_committed_block, audited.block_log_verified), (true, Some(true)));
+    assert_eq!((status.lane_exported_atoms, status.lane_export_count), (400, 1));
+    assert_eq!(page.state.exported_atoms, 400);
+    assert!(
+        status.base_payout.contains("pays out on Base only once a release relay proves this packet")
+            && !status.base_payout.contains("does not exist"),
+        "{status:?}"
+    );
+
+    let missing = export_status_with(&chain, crate::ExternalLaneExportSelector::Nonce(1), false, None)
+        .unwrap_err()
+        .to_string();
+    assert!(missing.contains("no stored export"), "{missing}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_an_unknown_lane_before_signing() {
+    let chain = released_export_chain("export-command-lane", ACCOUNT_RESERVE + 1_000);
+    let error = faucet_refused(&chain, "base-erc21", 1, &base_recipient(), postfiat_types::EXTERNAL_LANE_NOT_CONFIGURED);
+    assert!(error.contains("`base-erc21` does not exist"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_a_lane_with_exports_off_before_signing() {
+    let chain = lane_chain("export-command-off");
+    let receipt = admit_and_apply(&chain, &release_tx(&chain, "base-erc20", 1, ACCOUNT_RESERVE + 1_000, 1), "release");
+    assert!(receipt.accepted, "{receipt:?}");
+    let error = faucet_refused(&chain, "base-erc20", 1, &base_recipient(), "external_lane_export_not_supported");
+    assert!(error.contains("exports are switched off"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_a_halted_lane_before_signing() {
+    // The governance round is a legacy block, as in the halt test above.
+    let chain = released_export_chain_from("export-command-halt", ACCOUNT_RESERVE + 1_000, 4);
+    govern_release_cap(&chain, 0);
+    let error = faucet_refused(&chain, "base-erc20", 1, &base_recipient(), postfiat_types::EXTERNAL_LANE_EXPORT_HALTED);
+    assert!(error.contains("active release cap is zero"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_a_zero_amount_before_signing() {
+    let chain = released_export_chain("export-command-zero", ACCOUNT_RESERVE + 1_000);
+    let error = faucet_refused(&chain, "base-erc20", 0, &base_recipient(), "external_lane_export_amount_zero");
+    assert!(error.contains("at least one atom"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_an_amount_above_released_minus_exported_before_signing() {
+    let released = ACCOUNT_RESERVE + 1_000;
+    let chain = released_export_chain("export-command-above", released);
+    let code = postfiat_types::EXTERNAL_LANE_EXPORT_ABOVE_RELEASED;
+    let error = faucet_refused(&chain, "base-erc20", released + 1, &base_recipient(), code);
+    assert!(error.contains(&format!("released {released} minus exported 0")), "{error}");
+    export_command(&chain, "base-erc20", 400, &base_recipient(), false).expect("export");
+    assert!(apply_mempool(&chain, "export-command-above").accepted);
+    let error = faucet_refused(&chain, "base-erc20", released - 399, &base_recipient(), code);
+    assert!(error.contains(&format!("minus exported 400 is {}", released - 400)), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_a_malformed_or_zero_recipient_before_signing() {
+    let chain = released_export_chain("export-command-shape", ACCOUNT_RESERVE + 1_000);
+    for recipient in ["0x12", "2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c", &format!("0x{}", "2C".repeat(20))] {
+        faucet_refused(&chain, "base-erc20", 1, recipient, "external_lane_export_recipient_invalid");
+    }
+    let error = faucet_refused(
+        &chain,
+        "base-erc20",
+        1,
+        &format!("0x{}", "00".repeat(20)),
+        "external_lane_export_recipient_invalid",
+    );
+    assert!(error.contains("zero address"), "{error}");
+    // A malformed sender (a dry run's `--sender`) has its own code, not the
+    // recipient's.
+    let error = export_command_as(
+        &chain,
+        chain.data_dir.join("no-such-key.json"),
+        Some("not-an-address".to_string()),
+        "base-erc20",
+        1,
+        &base_recipient(),
+        true,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.starts_with("refused before signing: external_lane_export_sender_invalid: "), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_the_lock_as_recipient_before_signing() {
+    let chain = released_export_chain("export-command-lock", ACCOUNT_RESERVE + 1_000);
+    let error = faucet_refused(&chain, "base-erc20", 1, LANE_LOCK, "external_lane_export_recipient_is_lock");
+    assert!(error.contains("lock contract"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_refuses_the_token_as_recipient_before_signing() {
+    let chain = released_export_chain("export-command-token", ACCOUNT_RESERVE + 1_000);
+    let token = export_page(&chain.data_dir, None, None).config.policy.token_address;
+    let error = faucet_refused(&chain, "base-erc20", 1, &token, postfiat_types::EXTERNAL_LANE_EXPORT_RECIPIENT_IS_TOKEN);
+    assert!(error.contains("token contract"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// The release recipient holds exactly the released atoms: exporting 1,000
+/// of them leaves less than the fee and the reserve.
+#[test]
+fn external_lane_export_command_refuses_a_balance_short_of_amount_fee_and_reserve_before_signing() {
+    let chain = released_export_chain("export-command-balance", ACCOUNT_RESERVE + 1_000);
+    let key_file = release_recipient_key_file(&chain);
+    let error = command_refused_before_signing(&chain, key_file, "base-erc20", 1_000, &base_recipient(), "insufficient_funds");
+    assert!(error.contains("cannot cover the amount 1000"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// A quote whose fee is above `--max-fee-atoms` is refused before signing,
+/// with both numbers; a ceiling at the fee lets it through.
+#[test]
+fn external_lane_export_command_refuses_a_fee_above_the_ceiling_before_signing() {
+    let chain = released_export_chain("export-command-fee-ceiling", ACCOUNT_RESERVE + 1_000);
+    let fee = export_command(&chain, "base-erc20", 400, &base_recipient(), true).expect("dry run").fee;
+    let store = NodeStore::new(&chain.data_dir);
+    let mempool_before = store.read_mempool().expect("mempool");
+    let faucet = crate::read_key_file(&chain.data_dir.join(FAUCET_KEY_FILE)).expect("key").address;
+    for dry_run in [true, false] {
+        let error = crate::external_lane_export(crate::ExternalLaneExportOptions {
+            data_dir: chain.data_dir.clone(),
+            key_file: chain.data_dir.join(FAUCET_KEY_FILE),
+            sender: Some(faucet.clone()),
+            lane_id: "base-erc20".to_string(),
+            amount_atoms: 400,
+            base_recipient: base_recipient(),
+            dry_run,
+            max_fee_atoms: fee - 1,
+        })
+        .expect_err("a fee above the ceiling")
+        .to_string();
+        assert_eq!(
+            error,
+            format!(
+                "refused before signing: external_lane_export_fee_above_ceiling: the quoted minimum fee {fee} atoms is above the ceiling {} atoms (--max-fee-atoms)",
+                fee - 1
+            )
+        );
+        assert_eq!(store.read_mempool().expect("mempool"), mempool_before, "signed and submitted");
+    }
+    assert!(crate::export_fee_within_ceiling(fee, fee).is_ok());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// The default ceiling lets today's fees through: the largest export
+/// (longest chain id, lane id and numbers) pays at most
+/// `EXTERNAL_LANE_EXPORT_LARGEST_FEE_ATOMS`, and the default is 4x that.
+#[test]
+fn external_lane_export_default_fee_ceiling_covers_the_largest_export_fee() {
+    let chain = released_export_chain("export-command-fee-largest", ACCOUNT_RESERVE + 1_000);
+    let store = NodeStore::new(&chain.data_dir);
+    let mut genesis = store.read_genesis().expect("genesis");
+    let ledger = store.read_ledger().expect("ledger");
+    let today = export_command(&chain, "base-erc20", 400, &base_recipient(), true).expect("dry run").fee;
+    genesis.chain_id = "c".repeat(postfiat_types::MAX_TEXT_FIELD_BYTES);
+    let operation = AssetTransactionOperation::ExternalLaneExportV1(postfiat_types::ExternalLaneExportOperationV1 {
+        sender: chain.recipient.clone(),
+        lane_id: format!("l{}", "9".repeat(postfiat_types::EXTERNAL_LANE_ID_MAX_BYTES - 1)),
+        amount_atoms: u64::MAX,
+        base_recipient: base_recipient(),
+    });
+    let largest = crate::quote_signed_asset_transaction(&genesis, chain.recipient.clone(), u64::MAX, u64::MAX, operation)
+        .expect("the largest export");
+    let fee = postfiat_execution::minimum_asset_transaction_fee_for_ledger(&ledger, &largest);
+    assert_eq!(postfiat_execution::asset_transaction_state_expansion_fee(&ledger, &largest), 0);
+    assert_eq!((today, fee), (22, crate::EXTERNAL_LANE_EXPORT_LARGEST_FEE_ATOMS));
+    assert_eq!(crate::EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS, 4 * crate::EXTERNAL_LANE_EXPORT_LARGEST_FEE_ATOMS);
+    assert!(crate::export_fee_within_ceiling(fee, crate::EXTERNAL_LANE_EXPORT_DEFAULT_MAX_FEE_ATOMS).is_ok());
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// The key of the release recipient (`chain.recipient`), written to a file.
+fn release_recipient_key_file(chain: &Chain) -> PathBuf {
+    let key_file = chain.data_dir.join("recipient-key.json");
+    write_key_file(&key_file, &release_recipient_key(chain)).expect("recipient key");
+    key_file
+}
+
+fn release_recipient_key(chain: &Chain) -> DevKeyFile {
+    let key_pair = ml_dsa_65_keygen_from_seed(&[0x99; 32]);
+    let key = DevKeyFile {
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        address: address_from_public_key(&key_pair.public_key),
+        public_key_hex: bytes_to_hex(&key_pair.public_key),
+        private_key_hex: bytes_to_hex(&key_pair.private_key),
+    };
+    assert_eq!(key.address, chain.recipient);
+    key
+}
+
+/// Submits `operation` signed by `signer` at its next ledger sequence.
+fn submit_escrow_tx(chain: &Chain, signer: &DevKeyFile, operation: EscrowTransactionOperation, kind: &str) {
+    let ledger = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger");
+    let sequence = ledger.account(&signer.address).expect("signer").sequence + 1;
+    let signed = signed_escrow_transaction_for_test(
+        &chain.genesis,
+        &ledger,
+        &signer.address,
+        &signer.public_key_hex,
+        &signer.private_key_hex,
+        kind,
+        sequence,
+        operation,
+    );
+    submit_signed_escrow_transaction_json_to_mempool(SignedEscrowTransactionJsonSubmitOptions {
+        data_dir: chain.data_dir.clone(),
+        signed_escrow_transaction_json: serde_json::to_string(&signed).expect("escrow json"),
+    })
+    .expect("escrow admitted");
+}
+
+/// A pending entry of a family admission runs after a new asset transaction
+/// does not count before signing: the exporter's pending escrow finish that
+/// would credit it does not make an export that fits only with the credit
+/// pass, since admission executes the export on the ledger before the finish. Once the finish is
+/// committed the same export is signed and admitted.
+#[test]
+fn external_lane_export_command_does_not_count_a_later_family_credit_before_signing() {
+    let released = ACCOUNT_RESERVE + 1_000;
+    let chain = released_export_chain("export-command-later-credit", released);
+    let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    let escrow_amount = 10_000;
+    let create = EscrowTransactionOperation::EscrowCreate(EscrowCreateOperation {
+        owner: faucet.address.clone(),
+        recipient: chain.recipient.clone(),
+        asset_id: postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+        amount: escrow_amount,
+        condition: "later-credit".to_string(),
+        finish_after: 0,
+        cancel_after: 50,
+    });
+    let faucet_key = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    submit_escrow_tx(&chain, &faucet_key, create, ESCROW_CREATE_TRANSACTION_KIND);
+    assert!(apply_mempool(&chain, "later-credit-create").accepted);
+    let escrow_id = NodeStore::new(&chain.data_dir).read_ledger().expect("ledger").escrows[0]
+        .escrow_id
+        .clone();
+    let finish = EscrowTransactionOperation::EscrowFinish(EscrowFinishOperation {
+        escrow_id,
+        owner: faucet.address.clone(),
+        recipient: chain.recipient.clone(),
+        fulfillment: "later-credit".to_string(),
+    });
+    // The exporter finishes the escrow to itself: a pending credit in a
+    // family that runs after asset transactions.
+    submit_escrow_tx(&chain, &release_recipient_key(&chain), finish, ESCROW_FINISH_TRANSACTION_KIND);
+
+    let key_file = release_recipient_key_file(&chain);
+    command_refused_before_signing(&chain, key_file.clone(), "base-erc20", 1_000, &base_recipient(), "insufficient_funds");
+
+    assert!(apply_mempool(&chain, "later-credit-finish").accepted);
+    let report = export_command_with_key(&chain, key_file, "base-erc20", 1_000, &base_recipient(), false)
+        .expect("fits once the finish is committed");
+    let receipt = apply_mempool(&chain, "later-credit-export");
+    assert!(receipt.accepted && Some(&receipt.tx_id) == report.tx_id.as_ref(), "{receipt:?}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// The exporter's own pending escrow holds its next sequence: the quote
+/// signs at the sequence after it, but admission executes the export before
+/// escrows, on a ledger where the sender's sequence is unchanged, and would
+/// refuse it with `bad_sequence`. The command refuses before signing; once
+/// the escrow is committed the same export is signed and admitted.
+#[test]
+fn external_lane_export_command_refuses_a_sequence_held_by_a_later_family_before_signing() {
+    let chain = released_export_chain("export-command-later-sequence", ACCOUNT_RESERVE + 1_000);
+    let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    let create = EscrowTransactionOperation::EscrowCreate(EscrowCreateOperation {
+        owner: faucet.address.clone(),
+        recipient: chain.recipient.clone(),
+        asset_id: postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+        amount: 10_000,
+        condition: "later-sequence".to_string(),
+        finish_after: 0,
+        cancel_after: 50,
+    });
+    submit_escrow_tx(&chain, &faucet, create, ESCROW_CREATE_TRANSACTION_KIND);
+
+    let error = faucet_refused(&chain, "base-erc20", 1_000, &base_recipient(), "bad_sequence");
+    assert!(error.contains("runs after asset transactions"), "{error}");
+
+    assert!(apply_mempool(&chain, "later-sequence-escrow").accepted);
+    let report = export_command(&chain, "base-erc20", 1_000, &base_recipient(), false)
+        .expect("signed once the escrow is committed");
+    let receipt = apply_mempool(&chain, "later-sequence-export");
+    assert!(receipt.accepted && Some(&receipt.tx_id) == report.tx_id.as_ref(), "{receipt:?}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// Fills the stored mempool with `count` copies of the faucet's one pending
+/// escrow (fresh tx ids and sequences; `source` replaced when given). Escrows
+/// run after asset transactions, so the export's quote never executes them:
+/// only admission's limits see them.
+fn fill_mempool_with_escrow_copies(chain: &Chain, count: usize, source: Option<&str>) {
+    let store = NodeStore::new(&chain.data_dir);
+    let mut mempool = store.read_mempool().expect("mempool");
+    let template = mempool.pending_escrow_transactions[0].clone();
+    for index in 0..count {
+        let mut entry = template.clone();
+        entry.tx_id = format!("{:096x}", index + 1);
+        entry.transaction.unsigned.sequence += 1 + index as u64;
+        if let Some(source) = source {
+            entry.transaction.unsigned.source = source.to_string();
+        }
+        mempool.pending_escrow_transactions.push(entry);
+    }
+    store.write_mempool(&mempool).expect("write mempool");
+}
+
+fn submit_faucet_escrow(chain: &Chain, condition: &str) {
+    let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    let create = EscrowTransactionOperation::EscrowCreate(EscrowCreateOperation {
+        owner: faucet.address.clone(),
+        recipient: chain.recipient.clone(),
+        asset_id: postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+        amount: 10_000,
+        condition: condition.to_string(),
+        finish_after: 0,
+        cancel_after: 50,
+    });
+    submit_escrow_tx(chain, &faucet, create, ESCROW_CREATE_TRANSACTION_KIND);
+}
+
+/// Admission's mempool limits are refused before signing: the sender's
+/// pending count at its limit, and a full mempool.
+#[test]
+fn external_lane_export_command_refuses_the_mempool_limits_before_signing() {
+    let chain = released_export_chain("export-command-sender-limit", ACCOUNT_RESERVE + 1_000);
+    submit_faucet_escrow(&chain, "sender-limit");
+    fill_mempool_with_escrow_copies(&chain, crate::MAX_MEMPOOL_PENDING_PER_SENDER - 1, None);
+    let error = faucet_refused(&chain, "base-erc20", 1, &base_recipient(), "mempool_sender_pending_limit");
+    assert!(error.contains(&format!("{}", crate::MAX_MEMPOOL_PENDING_PER_SENDER)), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+
+    let chain = released_export_chain("export-command-mempool-full", ACCOUNT_RESERVE + 1_000);
+    submit_faucet_escrow(&chain, "mempool-full");
+    fill_mempool_with_escrow_copies(&chain, crate::MAX_MEMPOOL_PENDING_TRANSACTIONS - 1, Some(&chain.recipient));
+    let error = faucet_refused(&chain, "base-erc20", 1, &base_recipient(), "mempool_full");
+    assert!(error.contains(&format!("{}", crate::MAX_MEMPOOL_PENDING_TRANSACTIONS)), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// Pending exports count before signing: the lane's committed
+/// `released - exported` is not what admission checks, the ledger after the
+/// executable mempool is. Two and three pending exports that exhaust the
+/// lane refuse a fourth before the key signs; an export that still fits
+/// after the pending ones is signed and admitted.
+#[test]
+fn external_lane_export_command_counts_pending_exports_before_signing() {
+    let released = ACCOUNT_RESERVE + 1_000;
+    let code = postfiat_types::EXTERNAL_LANE_EXPORT_ABOVE_RELEASED;
+    let store_of = |chain: &Chain| NodeStore::new(&chain.data_dir);
+
+    let chain = released_export_chain("export-command-pending-2", released);
+    for amount in [600, released - 600] {
+        export_command(&chain, "base-erc20", amount, &base_recipient(), false).expect("pending export");
+    }
+    assert_eq!(store_of(&chain).read_mempool().expect("mempool").pending_asset_transactions.len(), 2);
+    faucet_refused(&chain, "base-erc20", 1, &base_recipient(), code);
+    let _ = fs::remove_dir_all(&chain.data_dir);
+
+    let chain = released_export_chain("export-command-pending-3", released);
+    export_command(&chain, "base-erc20", 600, &base_recipient(), false).expect("pending export");
+    export_command(&chain, "base-erc20", 1, &base_recipient(), false).expect("fits after one pending");
+    // Exactly what is left after the two pending exports.
+    export_command(&chain, "base-erc20", released - 601, &base_recipient(), false)
+        .expect("fits after two pending");
+    faucet_refused(&chain, "base-erc20", 1, &base_recipient(), code);
+    let mempool = store_of(&chain).read_mempool().expect("mempool");
+    assert_eq!(mempool.pending_asset_transactions.len(), 3);
+    let receipts = apply_mempool_batch(&chain, "pending");
+    assert!(receipts.len() == 3 && receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
+    assert_eq!(export_page(&chain.data_dir, None, None).state.exported_atoms, released);
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// A pending release counts before signing too: with `released` committed
+/// and another `released` pending, an export above the committed amount but
+/// within both fits on admission's ledger, so it is signed and admitted.
+#[test]
+fn external_lane_export_command_counts_a_pending_release_before_signing() {
+    let released = ACCOUNT_RESERVE + 1_000;
+    let chain = released_export_chain("export-command-pending-release", released);
+    submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
+        data_dir: chain.data_dir.clone(),
+        signed_asset_transaction_json: serde_json::to_string(&release_tx(&chain, "base-erc20", 2, released, 2))
+            .expect("release json"),
+    })
+    .expect("mempool admits the second release");
+    let amount = released + 500;
+    let dry_run = export_command(&chain, "base-erc20", amount, &base_recipient(), true).expect("dry run");
+    assert!(dry_run.dry_run && !dry_run.submitted);
+    let report = export_command(&chain, "base-erc20", amount, &base_recipient(), false).expect("export");
+    let mempool = NodeStore::new(&chain.data_dir).read_mempool().expect("mempool");
+    assert_eq!(mempool.pending_asset_transactions.len(), 2);
+    let error = faucet_refused(
+        &chain,
+        "base-erc20",
+        released - 499,
+        &base_recipient(),
+        postfiat_types::EXTERNAL_LANE_EXPORT_ABOVE_RELEASED,
+    );
+    let left = released - 500;
+    assert!(
+        error.contains(&format!("released {} minus exported {amount} is {left}", 2 * released))
+            && error.contains("payment_v2 entries and asset transactions (pending releases and exports included)"),
+        "{error}"
+    );
+    let receipts = apply_mempool_batch(&chain, "pending-release");
+    assert!(receipts.len() == 2 && receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
+    assert_eq!(Some(&receipts[1].tx_id), report.tx_id.as_ref());
+    let row = export_page(&chain.data_dir, None, None);
+    assert_eq!((row.state.released_atoms, row.state.exported_atoms), (2 * released, amount));
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// A sender that only a pending release creates: the quote evaluates its
+/// existence, balance and sequence on the ledger admission executes the export
+/// on (the pending prefix), so its export is signed and admitted, and one batch
+/// applies both.
+#[test]
+fn external_lane_export_command_takes_a_sender_a_pending_release_creates() {
+    let chain = export_chain("export-command-pending-holder");
+    submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
+        data_dir: chain.data_dir.clone(),
+        signed_asset_transaction_json: serde_json::to_string(&release_tx(&chain, "base-erc20", 1, 1_000_000, 1))
+            .expect("release json"),
+    })
+    .expect("mempool admits the release");
+    let store = NodeStore::new(&chain.data_dir);
+    assert!(store.read_ledger().expect("ledger").account(&chain.recipient).is_none(), "the holder is new");
+    let key_file = release_recipient_key_file(&chain);
+    let dry = export_command_with_key(&chain, key_file.clone(), "base-erc20", 400_000, &base_recipient(), true)
+        .expect("dry run of a holder the pending release creates");
+    assert_eq!(dry.sequence, 1);
+    let report = export_command_with_key(&chain, key_file, "base-erc20", 400_000, &base_recipient(), false)
+        .expect("export of a holder the pending release creates");
+    assert!(report.submitted && report.sequence == 1, "{report:?}");
+    let receipts = apply_mempool_batch(&chain, "pending-holder");
+    assert!(receipts.len() == 2 && receipts.iter().all(|receipt| receipt.accepted), "{receipts:?}");
+    assert_eq!(Some(&receipts[1].tx_id), report.tx_id.as_ref());
+    let row = export_page(&chain.data_dir, None, None);
+    assert_eq!((row.state.released_atoms, row.state.exported_atoms), (1_000_000, 400_000));
+    let holder = store.read_ledger().expect("ledger").account(&chain.recipient).expect("holder").clone();
+    assert_eq!(holder.balance, 1_000_000 - 400_000 - report.fee);
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// The control: an account no pending entry creates is still refused before
+/// signing, also while a pending release creates another one.
+#[test]
+fn external_lane_export_command_refuses_a_sender_no_pending_entry_creates() {
+    let chain = export_chain("export-command-no-holder");
+    submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
+        data_dir: chain.data_dir.clone(),
+        signed_asset_transaction_json: serde_json::to_string(&release_tx(&chain, "base-erc20", 1, 1_000_000, 1))
+            .expect("release json"),
+    })
+    .expect("mempool admits the release");
+    let key_pair = ml_dsa_65_keygen_from_seed(&[0x77; 32]);
+    let key_file = chain.data_dir.join("stranger-key.json");
+    write_key_file(
+        &key_file,
+        &DevKeyFile {
+            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            address: address_from_public_key(&key_pair.public_key),
+            public_key_hex: bytes_to_hex(&key_pair.public_key),
+            private_key_hex: bytes_to_hex(&key_pair.private_key),
+        },
+    )
+    .expect("stranger key");
+    let error =
+        command_refused_before_signing(&chain, key_file, "base-erc20", 400_000, &base_recipient(), "insufficient_funds");
+    assert!(error.contains("not found"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// The quote of an export says it was checked (`export_checked`); a quote
+/// without the marker comes from a node too old to check an export, and the
+/// command refuses it before signing. A quote of another kind is unchanged:
+/// no marker, the same fields.
+#[test]
+fn external_lane_export_command_refuses_a_quote_that_was_not_checked() {
+    let chain = released_export_chain("export-command-checked", ACCOUNT_RESERVE + 1_000);
+    let faucet = read_transfer_key_file(&chain.data_dir, None).expect("faucet key");
+    let quote_json = |operation: &AssetTransactionOperation| {
+        let quote = asset_fee_quote(AssetFeeQuoteOptions {
+            data_dir: chain.data_dir.clone(),
+            source: faucet.address.clone(),
+            operation_json: serde_json::to_string(operation).expect("operation json"),
+            sequence: None,
+        })
+        .expect("quote");
+        serde_json::to_value(&quote).expect("quote json")
+    };
+    let export = AssetTransactionOperation::ExternalLaneExportV1(postfiat_types::ExternalLaneExportOperationV1 {
+        sender: faucet.address.clone(),
+        lane_id: "base-erc20".to_string(),
+        amount_atoms: 400,
+        base_recipient: base_recipient(),
+    });
+    let mut checked = quote_json(&export);
+    assert_eq!(checked["export_checked"], serde_json::Value::Bool(true), "{checked}");
+    let report: crate::AssetFeeQuoteReport = serde_json::from_value(checked.clone()).expect("quote");
+    crate::export_quote_was_checked(&report).expect("a checked quote");
+    checked.as_object_mut().expect("object").remove("export_checked");
+    let old_node: crate::AssetFeeQuoteReport = serde_json::from_value(checked).expect("old node quote");
+    let error = crate::export_quote_was_checked(&old_node).expect_err("refused").to_string();
+    assert!(
+        error.starts_with("refused before signing: external_lane_export_not_checked: ") && error.contains("too old"),
+        "{error}"
+    );
+
+    let other = quote_json(&AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+        issuer: faucet.address.clone(),
+        code: "EUR".to_string(),
+        version: 1,
+        precision: 2,
+        display_name: "Euro".to_string(),
+        max_supply: Some(10_000),
+        requires_authorization: false,
+        freeze_enabled: false,
+        clawback_enabled: false,
+    }));
+    let keys: Vec<&str> = other.as_object().expect("object").keys().map(String::as_str).collect();
+    assert_eq!(
+        keys,
+        [
+            "account_reserve",
+            "asset_weight_bytes",
+            "base_asset_fee",
+            "chain_id",
+            "genesis_hash",
+            "mempool_pending_for_sender",
+            "minimum_fee",
+            "operation",
+            "protocol_version",
+            "schema",
+            "sender_balance",
+            "sender_balance_after_fee",
+            "sender_meets_reserve_after_fee",
+            "sender_sequence",
+            "sequence",
+            "sequence_source",
+            "source",
+            "state_expansion_fee",
+            "transaction_kind",
+            "transfer_fee_byte_quantum",
+            "transfer_fee_per_quantum",
+        ]
+    );
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+/// Before the export root's activation height the dry run returns
+/// execution's refusal, so the command refuses before signing.
+#[test]
+fn external_lane_export_command_refuses_before_the_export_root_is_active() {
+    let chain = released_export_chain_from("export-command-root", ACCOUNT_RESERVE + 1_000, 100);
+    let error = faucet_refused(&chain, "base-erc20", 1, &base_recipient(), postfiat_types::EXTERNAL_LANE_EXPORT_ROOT_NOT_ACTIVE);
+    assert!(error.contains("export root"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
+#[test]
+fn external_lane_export_command_amount_is_digits_only() {
+    assert_eq!(crate::parse_export_amount_atoms("1500"), Ok(1_500));
+    for text in ["+1500", "-1", " 1", "1_500", "", "18446744073709551616"] {
+        let error = crate::parse_export_amount_atoms(text).expect_err(text);
+        assert!(error.contains("--amount-atoms"), "{error}");
+    }
+}
+
+/// The export nonce is the lane's, not the sender's: `--sender` refuses a
+/// packet another sender's export holds.
+#[test]
+fn external_lane_export_command_status_with_a_sender_refuses_another_senders_packet() {
+    let chain = released_export_chain("export-command-sender", ACCOUNT_RESERVE + 1_000);
+    let report = export_command(&chain, "base-erc20", 400, &base_recipient(), false).expect("export");
+    assert!(apply_mempool(&chain, "export-command-sender").accepted);
+    let nonce = crate::ExternalLaneExportSelector::Nonce(0);
+    let mine = export_status_with(&chain, nonce.clone(), false, Some(&report.sender)).expect("own packet");
+    assert_eq!(mine.sender, report.sender);
+    let other = "pf0000000000000000000000000000000000000000";
+    let error = export_status_with(&chain, nonce, false, Some(other)).unwrap_err().to_string();
+    assert!(error.starts_with(crate::EXTERNAL_LANE_EXPORT_OTHER_SENDER), "{error}");
+    assert!(error.contains("the lane's, not the sender's"), "{error}");
+    let _ = fs::remove_dir_all(&chain.data_dir);
+}
+
 fn header_at(chain: &Chain, height: u64) -> BlockHeader {
     NodeStore::new(&chain.data_dir)
         .read_blocks()
