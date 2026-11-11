@@ -208,7 +208,12 @@ of mixing two views; restart from the first page. A cursor from before the
 view digest (`ooc1.`) gets the same refusal. The Python client's
 `owned_objects_all` and the web wallet restart at most 3 times, then fail with
 an error; a truncated answer without `next_cursor` or `view_digest` (a node
-from before paging) is an error, never a complete set. Refusals carry typed
+from before paging) is an error, never a complete set. The Python wallet's
+`wrap_fastpay`, `unwrap_fastpay` and `send_fastpay` read through
+`owned_objects_all`; a resumed send treats a missing input as spent only on an
+untruncated answer. The gateway's `wallet_subscribe` feed reads one page per
+validator per tick and adds `owned_complete` (`false` for a truncated page);
+never select from a partial page. Refusals carry typed
 codes and are never ignored: `owned_objects_view_changed`,
 `owned_objects_cursor_malformed`,
 `owned_objects_cursor_owner_mismatch` (issued for another owner),

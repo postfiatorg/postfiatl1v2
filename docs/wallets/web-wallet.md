@@ -368,6 +368,17 @@ matching the protocol input cap for standard unwrap. This prevents a
 fragmented wallet from hiding spendable FastPay value behind a smaller
 client-side lookup limit.
 
+The live wallet feed (`wallet_subscribe`) reads one `owned_objects` page per
+validator per tick and marks it `owned_complete` (`false` when truncated). The
+wallet selects only from a complete inventory: a complete feed answer replaces
+it; a partial page never does. When the partial page's `view_digest` equals the
+last complete read the inventory stands, otherwise the wallet reads every page
+(`fetchOwnedObjectsSnapshot`) and publishes the result in one step. When that
+read fails, the wallet shows why, either the node is too old for paging or the
+objects kept changing between pages (a busy account, or validators serving
+different views), with a Retry button; partial feed pages neither clear that
+error nor retry on their own.
+
 ## FastPay Standard Unwrap
 
 Default unwrap is amount-based and certified. The wallet no longer unwraps a
