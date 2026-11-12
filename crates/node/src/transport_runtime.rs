@@ -406,14 +406,14 @@ fn handle_transport_batch_service_line(
                 storage_work,
             )
         }
-        Err(error) if error.contains("already applied") => transport_already_applied_ack(
+        Err(error) => transport_batch_apply_error_ack(
             data_dir,
             topology,
             &local_status.node_id,
             &envelope,
             &state_after,
+            &error,
         )?,
-        Err(error) => return Err(format!("transport batch service apply failed: {error}")),
     };
     write_json_line(stream, &ack)?;
     Ok(ack)
