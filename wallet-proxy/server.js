@@ -14,7 +14,9 @@ const { promisify } = require('util');
 const { WebSocketServer } = require('ws');
 const atomicNavswapModule = require('./navswap-atomic');
 const { FastpayCertificateOutbox } = require('./fastpay-certificate-outbox');
-const { OPEN_PATH: NATIVE_SESSION_OPEN_PATH, createNativeSessions } = require('./native-session');
+const {
+    INFO_PATH: NATIVE_SESSION_INFO_PATH, OPEN_PATH: NATIVE_SESSION_OPEN_PATH, createNativeSessions,
+} = require('./native-session');
 const { createPrivateActions } = require('./private-actions');
 const { PUBLIC_READ_CACHE_METHODS, createPublicReadCache } = require('./public-read-cache');
 const {
@@ -1374,8 +1376,8 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ ok: false, code: 'proxy_token_in_query' }));
         return;
     }
-    if (url.pathname === NATIVE_SESSION_OPEN_PATH) {
-        const result = await nativeSessions.open(req);
+    if (url.pathname === NATIVE_SESSION_OPEN_PATH || url.pathname === NATIVE_SESSION_INFO_PATH) {
+        const result = url.pathname === NATIVE_SESSION_OPEN_PATH ? await nativeSessions.open(req) : nativeSessions.info(req);
         res.writeHead(result.statusCode, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(result.body));
         return;

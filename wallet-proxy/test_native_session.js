@@ -339,6 +339,21 @@ async function main() {
       assert.ok(!auditText.includes(secretish), 'audit line leaks a credential or a full identity');
     }
 
+    // Discovery: the session settings, no secret; disabled answers 404 like open.
+    const info = await request(port, 'GET', INFO_PATH);
+    assert.strictEqual(info.statusCode, 200, JSON.stringify(info.body));
+    assert.strictEqual(info.headers['cache-control'], 'no-store');
+    assert.deepStrictEqual(info.body, {
+      ok: true, schema: 'postfiat-native-session-info-v1', enabled: true, origin: NATIVE_ORIGIN, chain_id: CHAIN_ID,
+      genesis_hash_hex: GENESIS, ttl_ms: 15 * 60_000, allowlist: false, max_active_installs: DEFAULT_MAX_ACTIVE_INSTALLS,
+    });
+    assert.ok(!JSON.stringify(info.body).includes(SECRET));
+    assert.strictEqual((await request(port, 'POST', INFO_PATH, { body: {} })).statusCode, 405);
+    assert.strictEqual((await infoVia(revocable)).body.allowlist, true);
+    const disabledInfo = await infoVia(createNativeSessions({ env: {} }));
+    assert.strictEqual(disabledInfo.statusCode, 404);
+    assert.strictEqual(disabledInfo.body.code, 'native_session_disabled');
+
     // Caps: the native principal hits the same rate limit and body limit as the browser principal.
     clearMutationAdmissionForTest();
     for (const [label, token] of [['browser', BROWSER_TOKEN], ['native', native.token]]) {

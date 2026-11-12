@@ -9,6 +9,8 @@ const fs = require('fs');
 const path = require('path');
 
 const OPEN_PATH = '/api/native-session/v1/open';
+const INFO_PATH = '/api/native-session/v1/info';
+const INFO_SCHEMA = 'postfiat-native-session-info-v1';
 const OPEN_SCHEMA = 'postfiat-native-session-open-v1';
 const SESSION_SCHEMA = 'postfiat-native-session-v1';
 const ALLOWLIST_SCHEMA = 'postfiat-native-session-allowlist-v1';
@@ -421,18 +423,40 @@ function createNativeSessions({
         };
     }
 
+    // Discovery for wallets: the settings a session is bound to. No secret, no list contents.
+    function info(req) {
+        const fail = (statusCode, code) => ({ statusCode, body: { ok: false, schema: INFO_SCHEMA, code } });
+        if (!enabled) return fail(404, 'native_session_disabled');
+        if (req.method !== 'GET' && req.method !== 'HEAD') return fail(405, 'method_not_allowed');
+        return {
+            statusCode: 200,
+            body: {
+                ok: true,
+                schema: INFO_SCHEMA,
+                enabled,
+                origin,
+                chain_id: chainId,
+                genesis_hash_hex: genesisHash,
+                ttl_ms: ttlMs,
+                allowlist: allowlist !== null,
+                max_active_installs: maxActiveInstalls,
+            },
+        };
+    }
+
     // Native tokens never leave a trail in URLs; reject any request that tries.
     function queryCarriesToken(url) {
         for (const value of url.searchParams.values()) if (isNativeToken(value)) return true;
         return false;
     }
 
-    return { enabled, authenticate, isNativeToken, open, queryCarriesToken };
+    return { enabled, authenticate, info, isNativeToken, open, queryCarriesToken };
 }
 
 module.exports = {
     ALGORITHM_ID,
     DEFAULT_MAX_ACTIVE_INSTALLS,
+    INFO_PATH,
     OPEN_PATH,
     OPEN_SCHEMA,
     SESSION_SCHEMA,
