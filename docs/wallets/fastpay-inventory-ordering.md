@@ -71,20 +71,31 @@ Implemented in `wallet-web/src/lib/fastpay-inventory.js`:
   view, complete or partial, invalidates it. Selection becomes unavailable
   (`loading`) and the wallet reads.
 - Only the wallet's own all-pages read is published. It is published only
-  when a second read returns the same `view_digest` and, while an
-  invalidation stands, that digest is the latest feed view. A later read of
-  another view never lifts an invalidation. The read may have reached a
-  lagging node, or the feed answer may have been delayed. The wallet cannot
-  tell which, so it fails closed.
+  when a second read returns the same `view_digest`, that digest is the
+  latest feed view (or no feed answer has arrived), and the coordinator has
+  not already replaced it. The latest feed view is a standing constraint on
+  every later refresh, not only until the first confirmation; replaced
+  digests are kept for the session (the last 64). A read of another view
+  may have reached a lagging node, or the feed answer may have been delayed.
+  The wallet cannot tell which, so it fails closed.
 - A refresh that cannot confirm a view in three attempts reports
-  `view_unstable`. After that, feed answers only update the awaited view, and
-  the error stays until the user's Retry publishes a confirmed read.
+  `view_unstable`. After that, feed answers only update the feed view, and
+  the error stays until a refresh publishes a confirmed read.
+- Retry is that refresh plus one resynchronization. When the confirmed view
+  differs from the latest feed view, Retry needs a second confirmed read of
+  the same view; it then replaces the feed view with it and publishes it.
+  A replaced view is never adopted. Retry does not ask the gateway for a new
+  feed answer: the subscription has no resend request, and the gateway sends
+  only changed snapshots.
 
-Costs and limits: every publication needs two all-pages reads. A delayed old
-feed answer makes the inventory unavailable until a feed answer or a Retry
-shows the current view. A lagging node that agrees with a lagging feed is
-still indistinguishable from a current one. Only a revision removes that
-case. The Send screen keeps FastPay disabled.
+Costs and limits: every publication needs two all-pages reads, and a Retry
+past a stale feed view four. A plain refresh never moves past the latest
+feed view, so a genuinely newer read waits for the feed or for Retry. A
+lagging node that agrees with an equally lagging feed still looks current,
+and Retry can adopt a lagging node's view that was never published in this
+session (for example after the feed named a newer one). Only a node revision
+removes those cases. The Send screen keeps FastPay disabled.
 
-Regression tests R1-R5 in `wallet-web/src/lib/fastpay-inventory.test.js`
-reproduce the second reading's sequences.
+Regression tests R1-R5, RB1-N1 (E1, E2, E12 and the compact reproduction)
+and RB1-N2 in `wallet-web/src/lib/fastpay-inventory.test.js` reproduce the
+second reading's and its re-read's sequences.
