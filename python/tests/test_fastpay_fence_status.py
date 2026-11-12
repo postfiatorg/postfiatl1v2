@@ -159,6 +159,37 @@ class FenceStatusQuorumTests(unittest.TestCase):
                     self.assertEqual(proved["decision"], "cancelled" if terminal_world else None)
                     self.assertLessEqual({s["validator_id"] for s in proved["contradicting"]}, faulty)
 
+    def test_up_to_f_false_observed_heights_never_blame_honest_terminal_statuses(self) -> None:
+        # The other direction: the lock became terminal by 10 or 12 after every
+        # honest member said "not terminal" at 5 to 9, and fewer honest members
+        # than can reach a quorum (even with the faulty) signed the terminal
+        # answer. The last f members sign "not terminal" at false high heights
+        # or terminal answers at any bound. Each set is checked in three orders.
+        rng = random.Random(20261113)
+        for count in (4, 6, 7):
+            committee = make_committee(count)
+            pinned, faults = committee["registry_root"], (count - 1) // 3
+            honest = count - faults
+
+            def sign(index, bound, observed):
+                return dict(status(index, bound, observed), registry_root=pinned)
+
+            for _ in range(400):
+                statuses = [sign(index, None, rng.randint(5, 9)) for index in range(honest)]
+                for index in rng.sample(range(honest), rng.randint(0, committee["quorum"] - 1 - faults)):
+                    statuses.append(sign(index, rng.choice((10, 12)), 20))
+                for index in range(honest, count):
+                    for _ in range(rng.randint(1, 3)):
+                        bound = rng.choice((None, None, 1, 6, 10, 20))
+                        statuses.append(sign(index, bound, rng.choice((9, 10, 19, 20, 50)) if bound is None else 20))
+                faulty = {f"validator-{i}" for i in range(honest, count)}
+                for order in (statuses, statuses[::-1], rng.sample(statuses, len(statuses))):
+                    proved = verify_fence_status_quorum(
+                        order, committee, LOCK, lambda key, _m, sig: key == sig, pinned_registry_root=pinned
+                    )
+                    self.assertIsNone(proved["decision"])
+                    self.assertLessEqual({s["validator_id"] for s in proved["contradicting"]}, faulty)
+
     def test_shared_acceptance_vectors(self) -> None:
         # The same file runs in postfiat_types::fence_status_shared_acceptance_vectors.
         cases = json.loads(VECTORS.read_text())["cases"]

@@ -1857,11 +1857,12 @@ mod owned_transfer_recovery_tests {
         );
     }
 
-    #[test]
-    fn fence_status_false_low_bound_cannot_turn_honest_history_into_a_veto() {
-        // R3-N1 with real ML-DSA-65 signatures: six members, quorum five.
-        // Members 0-4 said "not terminal" at 6, then terminal by 7; member 5
-        // signs the same answer with a false bound 3.
+    /// Six members with real ML-DSA-65 keys (quorum five) and a signer for
+    /// their fence statuses on lock `22..`.
+    fn ml_dsa_fence_committee() -> (
+        postfiat_types::FastPayRecoveryCommitteeV1,
+        impl Fn(usize, Option<u64>, u64) -> postfiat_types::FastPayFenceStatusV2,
+    ) {
         let keys = (0..6)
             .map(|index| {
                 (
@@ -1884,15 +1885,16 @@ mod owned_transfer_recovery_tests {
         .unwrap();
         assert_eq!(committee.quorum, 5);
         let lock_id = "22".repeat(48);
-        let sign = |index: usize, bound: Option<u64>, observed: u64| {
+        let signer = committee.clone();
+        let sign = move |index: usize, bound: Option<u64>, observed: u64| {
             let terminal = bound.is_some();
             let mut status = postfiat_types::FastPayFenceStatusV2 {
                 schema: postfiat_types::FASTPAY_FENCE_STATUS_SCHEMA_V2.into(),
-                chain_id: committee.chain_id.clone(),
-                genesis_hash: committee.genesis_hash.clone(),
+                chain_id: signer.chain_id.clone(),
+                genesis_hash: signer.genesis_hash.clone(),
                 protocol_version: 1,
                 committee_epoch: 1,
-                registry_root: committee.registry_root.clone(),
+                registry_root: signer.registry_root.clone(),
                 lock_id: lock_id.clone(),
                 decision: terminal.then_some(postfiat_types::FastPayRecoveryDecisionV1::Cancelled),
                 operation: terminal.then_some(postfiat_types::FastPayOperationKindV1::Unwrap),
@@ -1912,6 +1914,16 @@ mod owned_transfer_recovery_tests {
             );
             status
         };
+        (committee, sign)
+    }
+
+    #[test]
+    fn fence_status_false_low_bound_cannot_turn_honest_history_into_a_veto() {
+        // R3-N1 with real ML-DSA-65 signatures: six members, quorum five.
+        // Members 0-4 said "not terminal" at 6, then terminal by 7; member 5
+        // signs the same answer with a false bound 3.
+        let (committee, sign) = ml_dsa_fence_committee();
+        let lock_id = "22".repeat(48);
         let current = (0..5).map(|index| sign(index, Some(7), 9)).collect::<Vec<_>>();
         let historical = (0..5).map(|index| sign(index, None, 6)).collect::<Vec<_>>();
         let liar = sign(5, Some(3), 9);
@@ -1935,5 +1947,38 @@ mod owned_transfer_recovery_tests {
         let late = sign(5, None, 7);
         let accepted = verify(&[current, vec![late.clone()]].concat()).unwrap();
         assert_eq!(accepted.contradicting, vec![late]);
+    }
+
+    #[test]
+    fn fence_status_false_high_observed_height_cannot_blame_honest_terminal_statuses() {
+        // The other direction with real ML-DSA-65 signatures: members 0-4 said
+        // "not terminal" at 6, members 0-3 then terminal by 10 (short of the
+        // quorum); member 5 signs "not terminal" at a false height 20.
+        let (committee, sign) = ml_dsa_fence_committee();
+        let lock_id = "22".repeat(48);
+        let historical = (0..5).map(|index| sign(index, None, 6)).collect::<Vec<_>>();
+        let current = (0..4).map(|index| sign(index, Some(10), 20)).collect::<Vec<_>>();
+        let liar = sign(5, None, 20);
+        let verify = |statuses: &[postfiat_types::FastPayFenceStatusV2]| {
+            verify_fastpay_fence_status_quorum_ml_dsa_v2(statuses, &committee, &committee.registry_root, &lock_id)
+        };
+        let forward = [historical.clone(), vec![liar.clone()], current.clone()].concat();
+        let reverse = forward.iter().rev().cloned().collect::<Vec<_>>();
+        for statuses in [forward, reverse] {
+            let accepted = verify(&statuses).expect("the valid not-terminal quorum stands");
+            assert_eq!(accepted.decision, None);
+            assert_eq!(accepted.signers.len(), 6);
+            assert!(accepted.contradicting.is_empty());
+            assert!(accepted.invalid.is_empty());
+            assert_eq!(accepted.inconsistent_bounds, vec![liar.clone()]);
+        }
+        // Control: the true height 6 lists nothing.
+        let control = verify(&[historical.clone(), vec![sign(5, None, 6)], current.clone()].concat()).unwrap();
+        assert!(control.contradicting.is_empty() && control.inconsistent_bounds.is_empty());
+        // A terminal status at the quorum-supported height is still a
+        // contradiction (three honest terminal statuses keep it short).
+        let early = sign(5, Some(6), 20);
+        let accepted = verify(&[historical, vec![early.clone()], current[..3].to_vec()].concat()).unwrap();
+        assert_eq!(accepted.contradicting, vec![early]);
     }
 }

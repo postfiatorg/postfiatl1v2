@@ -268,18 +268,6 @@ def _answer(status: dict[str, Any]) -> tuple[Any, ...]:
     return (_decision_key(status["decision"]), status["operation"], status["fence_digest"])
 
 
-def _contradict(a: dict[str, Any], b: dict[str, Any]) -> bool:
-    """Whether two valid statuses cannot both be true."""
-    a_bound, b_bound = a["anchored_at_or_before_height"], b["anchored_at_or_before_height"]
-    if a_bound is not None and b_bound is not None:
-        return _answer(a) != _answer(b)
-    if a_bound is not None:
-        return b["observed_height"] >= a_bound
-    if b_bound is not None:
-        return a["observed_height"] >= b_bound
-    return False
-
-
 def _fault_bound(committee: dict[str, Any]) -> int:
     """At most this many of the committee's ``n`` members are faulty."""
     return (len(committee["validators"]) - 1) // 3
@@ -334,8 +322,10 @@ def verify_fence_status_quorum(
     once per answer. A terminal answer reaching the quorum is proved, else
     "not terminal" if it does. Valid statuses that contradict the proved
     answer (another terminal answer, or "not terminal" at or above the
-    quorum-supported bound) are returned unchanged in ``contradicting``:
-    signed evidence for operators that never changes the answer.
+    quorum-supported bound; against "not terminal", a terminal answer at or
+    below the quorum-supported height) are returned unchanged in
+    ``contradicting``: signed evidence for operators that never changes the
+    answer.
 
     A "not terminal" status contradicts a terminal quorum only when observed
     at or above the quorum-supported bound, the ``(f + 1)``-th smallest bound
@@ -344,6 +334,13 @@ def verify_fence_status_quorum(
     below the true anchoring height. A signer whose own bound is below it is
     listed in ``inconsistent_bounds``, not blamed and not counted toward a
     refusal.
+
+    Likewise a terminal status contradicts a "not terminal" quorum only when
+    anchored at or below the quorum-supported height, the ``(f + 1)``-th
+    largest observed height of its distinct signers: at least one honest
+    signer observed "not terminal" at or above it, so up to ``f`` false high
+    heights cannot move it above the true one. A signer observed above it is
+    listed in ``inconsistent_bounds`` on the same terms.
 
     Assumes at most the committee's fault bound, ``(n - 1) // 3`` of ``n``
     members, is faulty: a faulty minority can neither prove nor veto an
@@ -380,8 +377,15 @@ def verify_fence_status_quorum(
     bounds = sorted(s["anchored_at_or_before_height"] for s in best if s["decision"] is not None)
     supported = bounds[min(_fault_bound(committee), len(bounds) - 1)] if bounds else None
     if supported is None:
-        contradicting = [s for s in valid if any(_contradict(member, s) for member in best)]
-        inconsistent = []
+        # The quorum-supported height: the (f + 1)-th largest of the group's
+        # observed heights, so at least one honest member observed "not
+        # terminal" at or above it.
+        heights = sorted((s["observed_height"] for s in best), reverse=True)
+        seen = heights[min(_fault_bound(committee), len(heights) - 1)]
+        contradicting = [
+            s for s in valid if s["anchored_at_or_before_height"] is not None and s["anchored_at_or_before_height"] <= seen
+        ]
+        inconsistent = [s for s in best if s["observed_height"] > seen]
     else:
         contradicting = [
             s
