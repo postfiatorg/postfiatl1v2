@@ -40,6 +40,9 @@ const OPEN_FIELDS = [
 const CHAIN_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const HEX96_RE = /^[0-9a-f]{96}$/;
 const INSTALL_ID_RE = /^[0-9a-f]{64}$/;
+const PUBLIC_KEY_RE = new RegExp(`^[0-9a-f]{${PUBLIC_KEY_HEX_LENGTH}}$`);
+// List elements must be strings: String([id]) would pass the pattern but land as an array.
+const isHexString = (value, pattern) => typeof value === 'string' && pattern.test(value);
 
 let mlDsa65Promise = null;
 function mlDsa65() {
@@ -116,7 +119,7 @@ function parseAllowlist(bytes) {
     const parsed = parseOperatorJson(bytes, ALLOWLIST_VARIABLE);
     const keys = parsed?.install_public_keys_hex;
     if (parsed?.schema !== ALLOWLIST_SCHEMA || !Array.isArray(keys)
-        || !keys.every((key) => new RegExp(`^[0-9a-f]{${PUBLIC_KEY_HEX_LENGTH}}$`).test(String(key)))) {
+        || !keys.every((key) => isHexString(key, PUBLIC_KEY_RE))) {
         throw new Error(`native session allowlist must be {"schema":"${ALLOWLIST_SCHEMA}","install_public_keys_hex":[...]}`);
     }
     return new Set(keys.map(installId));
@@ -125,7 +128,7 @@ function parseAllowlist(bytes) {
 function parseDenylist(bytes) {
     const parsed = parseOperatorJson(bytes, DENYLIST_VARIABLE);
     const ids = parsed?.install_ids_hex;
-    if (parsed?.schema !== DENYLIST_SCHEMA || !Array.isArray(ids) || !ids.every((id) => INSTALL_ID_RE.test(String(id)))) {
+    if (parsed?.schema !== DENYLIST_SCHEMA || !Array.isArray(ids) || !ids.every((id) => isHexString(id, INSTALL_ID_RE))) {
         throw new Error(`native session denylist must be {"schema":"${DENYLIST_SCHEMA}","install_ids_hex":["<64 hex install id>",...]}`);
     }
     return new Set(ids);

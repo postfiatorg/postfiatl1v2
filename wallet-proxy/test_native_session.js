@@ -331,6 +331,18 @@ async function main() {
     assert.deepStrictEqual(hashed.authenticate(hashedAlpha).failure, revoked, 'a permission-only repair is retried');
     assert.strictEqual(hashErrors.length, 1, hashErrors.join('\n'));
 
+    // An id nested in an array is malformed, not another spelling of the id: the
+    // revocation stands on reload and the file is refused at startup.
+    const alphaId = installId(alpha.publicKeyHex);
+    writeList(denylistFile, { schema: 'postfiat-native-session-denylist-v1', install_ids_hex: [[alphaId]] }, 11_000);
+    hashClock += 1_000;
+    assert.deepStrictEqual(hashed.authenticate(hashedAlpha).failure, revoked, 'a nested denylist id keeps the last good list');
+    assert.strictEqual((await openAt(hashed, alpha, hashClock)).body.code, revoked.code);
+    assert.strictEqual(hashErrors.length, 2, hashErrors.join('\n'));
+    assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile } }), /denylist/);
+    writeList(allowlistFile, { schema: 'postfiat-native-session-allowlist-v1', install_public_keys_hex: [[alpha.publicKeyHex]] }, 11_000);
+    assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile } }), /allowlist/);
+
     // A bound across installs: distinct installs with unexpired tokens.
     let capClock = Date.now();
     const capped = createNativeSessions({
