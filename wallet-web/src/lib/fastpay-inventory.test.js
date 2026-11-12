@@ -53,9 +53,8 @@ test('a partial feed page of a new view rereads every page and publishes once', 
   const { inventory, published } = inventoryOver(rpc);
   await inventory.refresh();
   await inventory.applyFeed(result('v2', [small], 'c1'), false);
-  assert.equal(published.length, 2);
-  assert.equal(published[1].status, 'ok');
-  assert.deepEqual(published[1].snapshot.objects.map(o => o.id), ['small', 'big']);
+  assert.deepEqual(published.map(p => p.status), ['ok', 'loading', 'ok'], 'selection is unavailable until the reread');
+  assert.deepEqual(published[2].snapshot.objects.map(o => o.id), ['small', 'big']);
 });
 
 test('a complete feed answer replaces the inventory', async () => {
@@ -86,4 +85,88 @@ test('the failure reasons distinguish an old node from a changing inventory', as
   assert.match(fastpayInventoryErrorMessage(error), /too old/);
   assert.match(fastpayInventoryErrorMessage({ code: 'owned_objects_view_unstable' }), /kept changing/);
   assert.doesNotMatch(fastpayInventoryErrorMessage({ code: 'owned_objects_view_unstable' }), /too old/);
+});
+
+// Races between the live feed and the all-pages read (second reading, B1).
+function deferred() {
+  let resolve; let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+function racing() {
+  const reads = [];
+  const published = [];
+  const inventory = createFastpayInventory({
+    read: () => { const d = deferred(); reads.push(d); return d.promise; },
+    publish: (state) => published.push(state),
+  });
+  const views = () => published.map(p => (p.status === 'ok' ? p.snapshot.view_digest : p.status));
+  return { inventory, reads, published, views };
+}
+
+const flush = () => new Promise(resolve => setImmediate(resolve));
+
+test('a read that completes after a newer complete feed answer is discarded', async () => {
+  const { inventory, reads, views } = racing();
+  const refreshed = inventory.refresh();
+  await inventory.applyFeed(result('new', [big], null), true, 2);
+  reads[0].resolve(result('old', [small], null));
+  assert.equal((await refreshed).view_digest, 'new');
+  assert.deepEqual(views(), ['new']);
+});
+
+test('a new partial view during a read makes selection unavailable and is read again', async () => {
+  const { inventory, reads, views } = racing();
+  const refreshed = inventory.refresh();
+  await inventory.applyFeed(result('v2', [small], 'c1'), false, 1);
+  assert.deepEqual(views(), ['loading'], 'selection is unavailable until a current view is published');
+  reads[0].resolve(result('v1', [small], null));
+  await flush();
+  assert.equal(reads.length, 2, 'the invalidation recorded during the read causes one more read');
+  reads[1].resolve(result('v2', [small, big], null));
+  assert.equal((await refreshed).view_digest, 'v2');
+  assert.deepEqual(views(), ['loading', 'v2']);
+});
+
+test('a read that already returns the invalidating view is published without another read', async () => {
+  const { inventory, reads, views } = racing();
+  const refreshed = inventory.refresh();
+  await inventory.applyFeed(result('v2', [small], 'c1'), false, 1);
+  reads[0].resolve(result('v2', [small, big], null));
+  await refreshed;
+  assert.equal(reads.length, 1);
+  assert.deepEqual(views(), ['loading', 'v2']);
+});
+
+test('an older complete feed answer does not replace a newer one', async () => {
+  const { inventory, views } = racing();
+  await inventory.applyFeed(result('new', [big], null), true, 5);
+  await inventory.applyFeed(result('old', [small], null), true, 4);
+  assert.deepEqual(views(), ['new']);
+});
+
+test('an older complete feed answer does not clear a read error; a newer one does', async () => {
+  const { inventory, reads, views } = racing();
+  await inventory.applyFeed(result('v1', [big], null), true, 5);
+  const refreshed = inventory.refresh();
+  reads[0].reject({ code: 'owned_objects_view_unstable' });
+  await assert.rejects(refreshed);
+  await inventory.applyFeed(result('v0', [small], null), true, 4);
+  assert.deepEqual(views(), ['v1', 'error'], 'the stale answer neither clears the warning nor publishes');
+  await inventory.applyFeed(result('v2', [small, big], null), true, 6);
+  assert.deepEqual(views(), ['v1', 'error', 'v2'], 'a current complete answer may clear it');
+});
+
+test('a replaced coordinator publishes nothing from its outstanding read', async () => {
+  const { inventory, reads, views } = racing();
+  const refreshed = inventory.refresh();
+  inventory.dispose();
+  reads[0].resolve(result('v1', [small], null));
+  await refreshed;
+  await inventory.applyFeed(result('v2', [big], null), true, 1);
+  assert.deepEqual(views(), []);
+  inventory.attach();
+  await inventory.applyFeed(result('v3', [big], null), true, 2);
+  assert.deepEqual(views(), ['v3'], 'a re-attached (StrictMode) coordinator publishes again');
 });
