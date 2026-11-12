@@ -29,15 +29,19 @@ REPO = Path(__file__).resolve().parents[1]
 ROUTE_ID = "ethereum-mainnet-usdc-v1"
 SOURCE_CHAIN_ID = 1
 PROOF_KIND = "sp1-ethereum-finality-v1"
-PROGRAM_VKEY = "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e"
-MANIFEST_HASH = "541a43e1f2ad0f37f6d98ea437b57f502cb888e9bba8151a50e2e5bfe5ce57a5"
-ROUTE_PROFILE_HASH = "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158"
+PROGRAM_VKEY = "0x000e93d5bd83ace0dcbabafcb793c4bcc9bae2c09b99e59c161a0a77393b2c2b"
+MANIFEST_HASH = "44a402a3df72ee8da6f23737becef04fd0ce55e683706e929606a6aea1f05b25"
+# OPS supplies the governed release identity after choosing activation height.
+# Never reuse the prior guest's profile hash, epoch or source-series asset.
+ROUTE_PROFILE_HASH = os.environ["B23_INGRESS_ROUTE_PROFILE_HASH"]
+ROUTE_EPOCH = int(os.environ["B23_INGRESS_ROUTE_EPOCH"])
+CREDITED_ASSET_ID = os.environ["B23_INGRESS_CREDITED_ASSET_ID"]
 ASSET_ID = "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b"
-VAULT = "0xaaa78fda7062efce769e95cd72fc55e507bc8183"
+VAULT = "0xe7a432a28b20621a70e845c7f202004cf98e7a2c"
 VAULT_CODE_HASH = "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05"
 TOKEN = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 TOKEN_CODE_HASH = "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505"
-ROUTE_BINDING = "0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93"
+ROUTE_BINDING = "0x" + os.environ["B23_INGRESS_ROUTE_BINDING"].removeprefix("0x")
 CREATION_BYTECODE_HASH = "0xc02403a4d05a2b4400d21b360e5787ad560c1fccd293c1ad937840f986fdcd38"
 ISSUER = "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
 
@@ -50,20 +54,17 @@ BEACON_RPC = "https://ethereum-beacon-api.publicnode.com"
 A100_HOST = os.environ["A666_A100_HOST"]
 A100_PORT = int(os.environ.get("A666_A100_PORT", "30886"))
 VALIDATOR2_HOST = os.environ["A666_VALIDATOR2_HOST"]
-A100_CAPTURE = (
-    "/workspace/a666-acceptance/bin/"
-    "eth-l1-mainnet-fast-lane-p0-depositor-fix-20260731"
-)
-A100_PROVE = "/workspace/a666-acceptance/bin/eth-l1-mainnet-fast-lane-p0-cuda-optimized"
-A100_ELF = "/workspace/a666-acceptance/witness/pfusdc-eth-mainnet-ingress-program"
+A100_CAPTURE = os.environ["B23_INGRESS_CAPTURE_BIN"]
+A100_PROVE = os.environ["B23_INGRESS_PROVE_BIN"]
+A100_ELF = os.environ["B23_INGRESS_ELF"]
 A100_HASHES = {
-    A100_CAPTURE: "3dd960c721fa82008ad6490678e7152898aa6ff42ed54fbd44e4b5c853479ee4",
-    A100_PROVE: "2e6017599d95e09541446b8e3054f2bbf3644dae24996a7327f50d3989d77fae",
-    A100_ELF: "0e59a0cf7723b9028aaa4c57f9e9c0da72119a552d62a5577223ba7b2df222d3",
+    A100_CAPTURE: os.environ["B23_INGRESS_CAPTURE_SHA256"],
+    A100_PROVE: os.environ["B23_INGRESS_PROVE_SHA256"],
+    A100_ELF: "7c1aae2440b161bb8c70643499881a0c11355c83cfe1c8c41a35cb9f9f0bb06e",
 }
-PFTL_NODE = "/opt/postfiat/releases/pnok-private-fix-2246d25/postfiat-node"
-PFTL_NODE_HASH = "05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5"
-PFTL_TOPOLOGY = "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json"
+PFTL_NODE = os.environ["PFTL_NODE_BIN"]
+PFTL_NODE_HASH = os.environ["B23_PFTL_NODE_SHA256"]
+PFTL_TOPOLOGY = os.environ["PFTL_TOPOLOGY"]
 PFTL_ISSUER_KEY = "/var/lib/postfiat/validator-2/a666-joe-e2e-20260728/pfusdc-issuer-key.json"
 PFTL_CAST = "/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast"
 PFTL_CAST_HASH = "ccd95a4607ca3ebfcb88bb90e7235cdb7f0564f5f1afa17478d5fccabbb222cb"
@@ -88,6 +89,11 @@ HASH32 = re.compile(r"^0x[0-9a-f]{64}$")
 HASH48 = re.compile(r"^[0-9a-f]{96}$")
 PFTL_ADDRESS = re.compile(r"^pf[0-9a-f]{40}$")
 EVM_ADDRESS = re.compile(r"^0x[0-9a-f]{40}$")
+
+if (not HASH48.fullmatch(ROUTE_PROFILE_HASH) or not HASH48.fullmatch(CREDITED_ASSET_ID)
+        or not HASH32.fullmatch(ROUTE_BINDING) or not 0 < ROUTE_EPOCH < (1 << 32)
+        or any(not re.fullmatch(r"[0-9a-f]{64}", value) for value in [*A100_HASHES.values(), PFTL_NODE_HASH])):
+    raise RuntimeError("invalid B23 ingress release pins")
 
 VAULT_EVENT_ABI = {
     "anonymous": False,
@@ -226,6 +232,8 @@ def common(stage: str, request: dict[str, Any]) -> dict[str, Any]:
         "program_vkey": PROGRAM_VKEY,
         "manifest_hash": MANIFEST_HASH,
         "route_profile_hash": ROUTE_PROFILE_HASH,
+        "route_epoch": ROUTE_EPOCH,
+        "credited_asset_id": CREDITED_ASSET_ID,
         "asset_id": ASSET_ID,
         "vault_address": VAULT,
         "vault_runtime_code_hash": VAULT_CODE_HASH,
@@ -276,6 +284,19 @@ def checked_web3(url: str) -> Web3:
     return w3
 
 
+def credited_asset_for_route(route: dict[str, Any]) -> str:
+    # Same domain and exact UTF-8 preimage as pfusdc_source_series_id in types.
+    chain = route["chain_id"]
+    profile = route["profile"]
+    preimage = (
+        f"pftl_chain_id_bytes={len(chain.encode())}\npftl_chain_id={chain}\n"
+        f"asset_family_id={profile['asset_id']}\nsource_chain_id={profile['source_chain_id']}\n"
+        f"vault_address={profile['vault_address']}\ntoken_address={profile['token_address']}\n"
+        f"route_epoch={profile['route_epoch']}\npolicy_hash={route['profile_hash']}\n"
+    ).encode()
+    return hashlib.sha3_384(b"postfiat.pfusdc.source_series.v1\0" + preimage).hexdigest()
+
+
 def live_route() -> dict[str, Any]:
     route = rpc_call("vault_bridge_route", {"asset_id": ASSET_ID})
     profile = route.get("profile") or {}
@@ -286,6 +307,7 @@ def live_route() -> dict[str, Any]:
         or route.get("route_binding") != ROUTE_BINDING[2:]
         or profile.get("route_id") != ROUTE_ID
         or profile.get("asset_id") != ASSET_ID
+        or int(profile.get("route_epoch", 0)) != ROUTE_EPOCH
         or int(profile.get("source_chain_id", 0)) != SOURCE_CHAIN_ID
         or profile.get("vault_address") != VAULT
         or profile.get("vault_runtime_code_hash") != VAULT_CODE_HASH
@@ -297,6 +319,8 @@ def live_route() -> dict[str, Any]:
         or profile.get("verifier_proof_encoding") != "groth16"
     ):
         raise RuntimeError("replicated PFTL route does not match the production pin set")
+    if credited_asset_for_route(route) != CREDITED_ASSET_ID:
+        raise RuntimeError("configured credited asset does not match governed source series")
     return route
 
 
@@ -388,6 +412,8 @@ def readiness() -> dict[str, Any]:
         "program_vkey": PROGRAM_VKEY,
         "manifest_hash": MANIFEST_HASH,
         "route_profile_hash": ROUTE_PROFILE_HASH,
+        "route_epoch": ROUTE_EPOCH,
+        "credited_asset_id": CREDITED_ASSET_ID,
         "asset_id": ASSET_ID,
         "vault_address": VAULT,
         "vault_runtime_code_hash": VAULT_CODE_HASH,
@@ -465,7 +491,60 @@ def confirmed_deposit(request: dict[str, Any], job_dir: Path) -> dict[str, Any]:
     return evidence
 
 
+def archive_stale_proof(job_dir: Path, job_key: str) -> None:
+    # Preserve the immutable job, deposit-result and balance baseline. Only this
+    # job's derived witness/proof are invalidated; no Ethereum deposit is sent.
+    attempt = f"stale-{time.time_ns()}"
+    remote_root = f"/workspace/a666-acceptance/wallet-bridge/{job_key}"
+    archive = f"{remote_root}/{attempt}"
+    command = f"install -d -m 700 {shlex.quote(archive)}"
+    for name in ("ingress", "proof-cuda"):
+        source = shlex.quote(f"{remote_root}/{name}")
+        command += f" && if test -d {source}; then mv {source} {shlex.quote(archive + '/' + name)}; fi"
+    ssh(A100_HOST, command, port=A100_PORT)
+    local_archive = job_dir / attempt
+    local_archive.mkdir(mode=0o700)
+    for name in ("ingress", "proof-cuda"):
+        source = job_dir / name
+        if source.exists():
+            source.rename(local_archive / name)
+
+
 def ensure_capture(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[str, Any]:
+    for _ in range(3):
+        try:
+            return capture_once(request, job_dir, job_key)
+        except RuntimeError as error:
+            if str(error) != "beacon_anchor_changed_recapture_required":
+                raise
+            archive_stale_proof(job_dir, job_key)
+    raise RuntimeError("beacon_anchor_keeps_advancing: retry this same deposit job")
+
+
+def refresh_stale_proof(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[str, Any]:
+    for attempt in range(4):
+        # Resume safely if the process stopped after archiving or recapturing.
+        if not (job_dir / "ingress/witness.public-values.json").exists():
+            ensure_capture(request, job_dir, job_key)
+        public = read_json(job_dir / "ingress/witness.public-values.json")
+        try:
+            require_witness_anchor(public, live_beacon_anchor())
+            if not (job_dir / "proof-cuda/proof-report.json").exists():
+                prove_with_lock(request, job_dir, job_key)
+                require_witness_anchor(public, live_beacon_anchor())
+            return public
+        except RuntimeError as error:
+            if str(error) != "beacon_anchor_changed_recapture_required":
+                raise
+        if attempt == 3:
+            break
+        archive_stale_proof(job_dir, job_key)
+        ensure_capture(request, job_dir, job_key)
+        prove_with_lock(request, job_dir, job_key)
+    raise RuntimeError("beacon_anchor_keeps_advancing: retry this same deposit job")
+
+
+def capture_once(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[str, Any]:
     deposit = read_json(job_dir / "deposit-result.json")
     anchor = live_beacon_anchor()
     cached = job_dir / "ingress/witness.public-values.json"
@@ -535,7 +614,7 @@ def ensure_proof(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[s
     remote_proof = f"{remote_root}/proof-cuda"
     command = (
         f"if test ! -s {shlex.quote(remote_proof + '/proof-report.json')}; then "
-        f"SP1_PROVER=cuda {shlex.quote(A100_PROVE)} prove "
+        f"SP1_PROVER=cuda PFUSDC_INGRESS_ELF={shlex.quote(A100_ELF)} {shlex.quote(A100_PROVE)} prove "
         f"--witness {shlex.quote(remote_root + '/ingress/witness.json')} "
         f"--output-dir {shlex.quote(remote_proof)} --require-prover cuda "
         "--skip-redundant-execute; fi"
@@ -560,17 +639,27 @@ def ensure_proof(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[s
     return report
 
 
+def prove_with_lock(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[str, Any]:
+    A100_PROVER_LOCK.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with A100_PROVER_LOCK.open("a", encoding="utf-8") as prover_lock:
+        fcntl.flock(prover_lock.fileno(), fcntl.LOCK_EX)
+        try:
+            return ensure_proof(request, job_dir, job_key)
+        finally:
+            fcntl.flock(prover_lock.fileno(), fcntl.LOCK_UN)
+
+
 def pftl_balance(account: str) -> int:
     command = (
         f"{shlex.quote(PFTL_NODE)} account-assets "
         "--data-dir /var/lib/postfiat/validator-2 "
-        f"--account {shlex.quote(account)} --asset-id {ASSET_ID}"
+        f"--account {shlex.quote(account)} --asset-id {CREDITED_ASSET_ID}"
     )
     result = json.loads(ssh(VALIDATOR2_HOST, command))
     return sum(
         int(row["balance"])
         for row in result.get("assets", [])
-        if row.get("asset_id") == ASSET_ID
+        if row.get("asset_id") == CREDITED_ASSET_ID
     )
 
 
@@ -655,6 +744,10 @@ def relay_phase(
             "PFTL_RELAY_PHASE": phase,
             "PFTL_SKIP_FINALIZE": "true" if skip_finalize else "false",
             "PFTL_HOLDER": request["pftl_recipient"],
+            "PFTL_ROUTE_EPOCH": str(ROUTE_EPOCH),
+            "PFTL_CLAIM_ASSET_ID": CREDITED_ASSET_ID,
+            "PFTL_POLICY_HASH": ROUTE_PROFILE_HASH,
+            "PFTL_VAULT_ADDRESS": VAULT,
             "PFTL_NODE_BIN": PFTL_NODE,
             "PFTL_TOPOLOGY": PFTL_TOPOLOGY,
             "PFTL_ISSUER_KEY": PFTL_ISSUER_KEY,
@@ -675,6 +768,31 @@ def relay_phase(
         finally:
             fcntl.flock(relay_lock.fileno(), fcntl.LOCK_UN)
     return read_json(job_dir / "pftl" / "summary.json")
+
+
+def propose_current_proof(request: dict[str, Any], job_dir: Path, job_key: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    for _ in range(3):
+        public = refresh_stale_proof(request, job_dir, job_key)
+        relay_error = None
+        try:
+            relay_phase("propose", request, job_dir, job_key)
+        except RuntimeError as error:
+            relay_error = error
+        deposit = pftl_deposit(request)
+        if deposit is not None:
+            return public, deposit
+        try:
+            require_witness_anchor(public, live_beacon_anchor())
+        except RuntimeError as error:
+            if str(error) == "beacon_anchor_changed_recapture_required":
+                # Another deposit won between our last read and admission.
+                # Next iteration recaptures/reproves this same Ethereum deposit.
+                continue
+            raise
+        if relay_error is not None:
+            raise relay_error
+        raise RuntimeError("PFTL proposal was not accepted for the current anchor")
+    raise RuntimeError("beacon_anchor_keeps_advancing: retry this same deposit job")
 
 
 def execute_stage(stage: str, job_file: Path) -> dict[str, Any]:
@@ -705,13 +823,7 @@ def execute_stage(stage: str, job_file: Path) -> dict[str, Any]:
             }
         )
     elif stage == "proving":
-        A100_PROVER_LOCK.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        with A100_PROVER_LOCK.open("a", encoding="utf-8") as prover_lock:
-            fcntl.flock(prover_lock.fileno(), fcntl.LOCK_EX)
-            try:
-                ensure_proof(request, job_dir, job_key)
-            finally:
-                fcntl.flock(prover_lock.fileno(), fcntl.LOCK_UN)
+        prove_with_lock(request, job_dir, job_key)
         result.update(
             {
                 "proof_sha256": sha256_file(job_dir / "proof-cuda/proof-calldata.bin"),
@@ -721,19 +833,27 @@ def execute_stage(stage: str, job_file: Path) -> dict[str, Any]:
             }
         )
     elif stage == "verifying":
-        public = read_json(job_dir / "ingress/witness.public-values.json")
         deposit = pftl_deposit(request)
         if deposit is None:
-            require_witness_anchor(public, live_beacon_anchor())
-            relay_phase("propose", request, job_dir, job_key)
-            deposit = pftl_deposit(request)
+            public, deposit = propose_current_proof(request, job_dir, job_key)
+        else:
+            public = read_json(job_dir / "ingress/witness.public-values.json")
         if (
             deposit is None
             or deposit.get("status") not in {"pending", "finalized"}
             or deposit.get("evidence_root") != public["evidence_root"]
         ):
             raise RuntimeError("consensus proposal evidence root differs from SP1 output")
-        result["proof_verified"] = True
+        result.update({
+            "proof_verified": True,
+            "witness_sha256": sha256_file(job_dir / "ingress/witness.json"),
+            "proof_sha256": sha256_file(job_dir / "proof-cuda/proof-calldata.bin"),
+            "public_values_sha256": sha256_file(job_dir / "proof-cuda/public-values.bin"),
+            "evidence_root": public["evidence_root"],
+            "nullifier": "0x" + public["deposit_nullifier"],
+            "finalized_block_hash": "0x" + public["finalized_execution_block_hash"],
+            "finalized_block_number": int(public["finalized_execution_block_number"]),
+        })
     elif stage == "growing_backed_cap":
         deposit = pftl_deposit(request)
         if deposit is None or deposit.get("status") not in {"pending", "finalized"}:
@@ -761,6 +881,10 @@ def execute_stage(stage: str, job_file: Path) -> dict[str, Any]:
             or receipt.get("status") != "counted"
         ):
             raise RuntimeError("PFTL pfUSDC claim balance delta is not exact")
+        baseline = read_json(job_dir / "pftl-baseline.json")
+        actual_balance = pftl_balance(request["pftl_recipient"])
+        if actual_balance != int(baseline["balance_atoms"]) + int(request["amount_atoms"]):
+            raise RuntimeError("credited source-series balance delta does not match deposit")
         result.update(
             {
                 "receipt_code": "ACCEPTED",

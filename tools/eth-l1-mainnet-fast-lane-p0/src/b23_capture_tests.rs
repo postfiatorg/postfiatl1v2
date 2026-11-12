@@ -102,3 +102,53 @@ async fn capture_requests_exact_ledger_root_and_never_falls_back_to_recent_check
         ]
     );
 }
+
+#[tokio::test]
+#[ignore = "real SP1 VM execution; run explicitly against the embedded release ELF"]
+async fn rebuilt_guest_executes_honest_witness_and_rejects_swapped_committee() {
+    let mut raw: Value = serde_json::from_str(include_str!(
+        "../../../programs/pfusdc-eth-mainnet-ingress/tests/fixtures/mainnet-deposit.json"
+    ))
+    .unwrap();
+    raw["beacon_anchor"] = serde_json::to_value(deployment().beacon_anchor).unwrap();
+    let mut witness: EthIngressWitnessV1 = serde_json::from_value(raw).unwrap();
+    let expected = serde_cbor::to_vec(&verify_witness(&witness).unwrap()).unwrap();
+    let elf = IngressRoute::Pfusdc.elf().unwrap();
+    let client = ProverClient::builder().light().build().await;
+    let mut stdin = SP1Stdin::new();
+    stdin.write_vec(serde_cbor::to_vec(&witness).unwrap());
+    let (public, report) = client.execute(elf.clone(), stdin).await.unwrap();
+    assert_eq!(report.exit_code, 0);
+    assert_eq!(public.to_vec(), expected);
+    println!(
+        "{}",
+        json!({"honest_guest_execution": "passed", "instruction_count": report.total_instruction_count(),
+        "elf_sha256": hex::encode(Sha256::digest(&*elf)), "public_values_sha256": hex::encode(Sha256::digest(&expected))})
+    );
+    witness.helios.store.current_sync_committee =
+        witness.helios.updates[0].next_sync_committee().clone();
+    assert!(verify_witness(&witness)
+        .unwrap_err()
+        .contains("sync committee"));
+    let mut bad_stdin = SP1Stdin::new();
+    bad_stdin.write_vec(serde_cbor::to_vec(&witness).unwrap());
+    // SP1 6.3 execute reports guest panic through exit_code, not necessarily Err.
+    let (bad_public, bad_report) = client.execute(elf, bad_stdin).await.unwrap();
+    assert_ne!(bad_report.exit_code, 0);
+    assert!(bad_public.to_vec().is_empty());
+    println!(
+        "{}",
+        json!({"swapped_committee_with_honest_header": "rejected",
+        "guest_exit_code": bad_report.exit_code, "committed_public_values_bytes": bad_public.to_vec().len()})
+    );
+}
+
+#[test]
+fn legacy_pfeth_guest_cannot_be_used_with_new_ingress_abi() {
+    assert!(IngressRoute::Pfeth
+        .elf()
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("must be rebuilt"));
+}

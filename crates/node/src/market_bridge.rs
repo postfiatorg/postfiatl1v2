@@ -1228,7 +1228,13 @@ pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultB
         })?;
     validate_vault_bridge_route_profile_against_ledger(&ledger, route, &record.profile_hash)
         .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, error))?;
+    let beacon_finality_anchor = VaultBridgeRouteReport::select_beacon_anchor(
+        &ledger.beacon_finality_states,
+        &record.profile_hash,
+        u64::from(route.route_epoch),
+    )?;
     Ok(VaultBridgeRouteReport {
+        beacon_finality_anchor,
         schema: "postfiat.vault_bridge.route_report.v1".to_string(),
         chain_id: genesis.chain_id.clone(),
         genesis_hash: genesis_hash(&genesis),
