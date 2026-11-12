@@ -748,12 +748,21 @@ class ReleaseCapTests(unittest.TestCase):
         return dry_run.quote_release(ceiling_wei=self.CEILING, relayer=self.RELAYER, lock=self.LOCK,
                                      calldata="0x1234", read=read)
 
-    def test_a_relayer_holding_more_than_the_ceiling_is_refused(self):
-        read, _ = self.chain(balance=self.CEILING + 1)
+    def test_the_release_is_budgeted_from_the_lesser_of_balance_and_ceiling(self):
+        for balance in (self.CEILING + 1, 10 * self.CEILING, self.CEILING // 2):
+            with self.subTest(balance=balance):
+                read, _ = self.chain(balance=balance)
+                caps = self.quote(read)
+                spendable = min(balance, self.CEILING)
+                self.assertEqual(caps["budget_wei"], spendable)
+                self.assertLessEqual(caps["gas_limit"] * caps["max_fee_per_gas_wei"]
+                                     + dry_run.L1_DATA_FEE_ALLOWANCE_WEI, spendable)
+
+    def test_a_quote_above_a_balance_below_the_ceiling_is_refused(self):
+        read, _ = self.chain(balance=dry_run.L1_DATA_FEE_ALLOWANCE_WEI + 10, estimate=200_000, price=10 ** 6)
         with self.assertRaises(dry_run.RehearsalFailure) as refused:
             self.quote(read)
-        self.assertIn("fresh relayer account", str(refused.exception))
-        self.assertIn("new plan", str(refused.exception))
+        self.assertIn("nothing was sent", str(refused.exception))
 
     def test_the_caps_keep_the_release_within_the_ceiling(self):
         read, _ = self.chain(balance=self.CEILING)
@@ -895,3 +904,70 @@ class ResumedRelayerTests(unittest.TestCase):
         text = (ROOT / "docs/runbooks/lane-base-sepolia-dry-run.md").read_text()
         self.assertIn("A change of relayer is not supported", text)
         self.assertIn("`address` field", text)
+
+
+class ReleaseBudgetTests(unittest.TestCase):
+    """C2: the ceiling is a spending budget for the run, checked in plan, not a cap on the balance."""
+
+    CEILING = 10 ** 15
+
+    def test_one_wei_above_the_ceiling_with_a_fitting_quote_is_released(self):
+        refusal, reads, children = resume_release(self, account="relayer-a", balance=self.CEILING + 1,
+                                                  estimate=200_000, price=10 ** 6, ceiling=self.CEILING)
+        self.assertIsNone(refusal, f"a dust top-up refused the release late: {refusal}")
+        (argv,) = relay_dispatch(children)
+        gas_limit = int(argv[argv.index("--gas-limit") + 1])
+        max_fee = int(argv[argv.index("--max-fee-per-gas") + 1])
+        self.assertLessEqual(gas_limit * max_fee + dry_run.L1_DATA_FEE_ALLOWANCE_WEI, self.CEILING)
+
+    def test_a_ceiling_that_cannot_fund_a_release_is_refused_before_anything(self):
+        for ceiling in (1, dry_run.L1_DATA_FEE_ALLOWANCE_WEI):
+            with self.subTest(ceiling=ceiling), self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.resolve_relayer_ceiling(fork=False, requested=ceiling, plan=None)
+
+    def test_the_planned_spend_is_checked_against_the_ceiling(self):
+        price = 10 ** 6
+        planned = dry_run.planned_release_spend(price)
+        gas_limit = -(-dry_run.RELEASE_GAS_PLANNED * 6 // 5)
+        self.assertEqual(planned, gas_limit * price * dry_run.GAS_PRICE_FACTOR + dry_run.L1_DATA_FEE_ALLOWANCE_WEI)
+        self.assertEqual(dry_run.check_release_budget(ceiling_wei=planned, gas_price_wei=price), planned)
+        with self.assertRaises(dry_run.RehearsalFailure) as refused:
+            dry_run.check_release_budget(ceiling_wei=planned - 1, gas_price_wei=price)
+        self.assertIn("nothing was deployed", str(refused.exception))
+
+    def test_plan_refuses_a_short_ceiling_before_any_fork_or_deployment(self):
+        import io
+        import json
+        import subprocess
+        import tempfile
+        from unittest import mock
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, tmp)
+        price = 10 ** 9
+        ceiling = dry_run.planned_release_spend(price) - 1
+        reads = []
+
+        def urlopen(request, timeout=None):
+            method = json.loads(request.data)["method"]
+            reads.append(method)
+            value = {"eth_blockNumber": 16, "eth_gasPrice": price}[method]
+            return io.BytesIO(json.dumps({"result": hex(value)}).encode())
+
+        def no_fork(*args, **kwargs):
+            raise AssertionError("a fork was started before the ceiling was checked")
+        with mock.patch("urllib.request.urlopen", urlopen), \
+                mock.patch.object(dry_run.subprocess, "run",
+                                  lambda argv, **k: subprocess.CompletedProcess(argv, 0, stdout="", stderr="")), \
+                mock.patch.object(dry_run.ORDER, "git", lambda *a: "c0ffee"), \
+                mock.patch.object(dry_run, "BASE_LOCK_START", no_fork), \
+                mock.patch.object(dry_run, "load_program_identity", lambda **k: {"program_vkey": "0x01"}), \
+                self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.main(["--output", str(tmp / "run"), "--through", "plan", "--relayer-ceiling-wei", str(ceiling),
+                          "--verifier-deployer", "0x" + "11" * 20, "--lock-deployer", "0x" + "22" * 20])
+        self.assertEqual(reads, ["eth_blockNumber", "eth_gasPrice"])
+
+    def test_the_runbook_says_what_the_ceiling_and_the_allowance_are(self):
+        text = (ROOT / "docs/runbooks/lane-base-sepolia-dry-run.md").read_text()
+        self.assertIn("a spending budget for this run, not a cap on the account's balance", text)
+        self.assertIn("an estimate, not a hard limit", text)
+        self.assertNotIn("refuses a relayer holding more than the ceiling", text)
