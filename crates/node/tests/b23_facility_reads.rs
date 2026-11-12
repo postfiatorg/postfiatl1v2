@@ -481,3 +481,47 @@ fn b23_receipt_rpc_dispatch_returns_json_without_state_changes() {
     );
     assert_eq!(directory_bytes(&fixture.dir), before);
 }
+
+#[test]
+fn b23_status_rpc_dispatch_preserves_existing_envelopes_and_adds_recipient() {
+    let fixture = Fixture::new(&[true], false);
+    let before = directory_bytes(&fixture.dir);
+    for (method, label) in [
+        ("navcoin_bridge_routes", "ROUTES_RPC"),
+        ("navcoin_bridge_supply_status", "SUPPLY_RPC"),
+    ] {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_postfiat-node"))
+            .args([
+                "rpc",
+                "--data-dir",
+                fixture.dir.to_str().unwrap(),
+                "--method",
+                method,
+                "--route-id",
+                &fixture.ledger.pftl_uniswap_routes[0].route_id,
+                "--id",
+                "facility-read",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(value["ok"], true);
+        let report = if method == "navcoin_bridge_routes" {
+            &value["result"]["routes"][0]
+        } else {
+            &value["result"]
+        };
+        assert_eq!(report["spread_recipient"], "current-management");
+        assert_eq!(value["events"][0]["event_type"], method);
+        println!(
+            "READ_RESPONSE_{label}={}",
+            serde_json::to_string(&value).unwrap()
+        );
+    }
+    assert_eq!(directory_bytes(&fixture.dir), before);
+}
