@@ -46,7 +46,8 @@ Object.assign(process.env, NATIVE_ENV, {
 let clearMutationAdmissionForTest;
 let server;
 const {
-  ALGORITHM_ID, OPEN_PATH, OPEN_SCHEMA, SIGNATURE_CONTEXT, createNativeSessions, installId, mlDsa65, openMessage,
+  ALGORITHM_ID, DEFAULT_MAX_ACTIVE_INSTALLS, INFO_PATH, OPEN_PATH, OPEN_SCHEMA, SIGNATURE_CONTEXT,
+  createNativeSessions, installId, mlDsa65, openMessage,
 } = require('./native-session');
 
 function request(port, method, pathname, { headers = {}, body = null } = {}) {
@@ -89,12 +90,16 @@ async function openBody(keys, overrides = {}, now = Date.now()) {
 }
 
 // Drives another gateway instance (different secret, origin, network or clock).
-async function openVia(instance, body, remoteAddress = undefined) {
+async function openVia(instance, body, remoteAddress = undefined, method = 'POST') {
   const req = Readable.from([Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))]);
-  req.method = 'POST';
+  req.method = method;
   req.headers = {};
   if (remoteAddress) req.socket = { remoteAddress };
   return instance.open(req);
+}
+
+function infoVia(instance, method = 'GET') {
+  return instance.info({ method, headers: {} });
 }
 
 function websocketSubmit(port, token, origin) {
@@ -231,13 +236,203 @@ async function main() {
     const unlisted = await openVia(listed, await openBody(beta));
     assert.strictEqual(unlisted.statusCode, 403);
     assert.strictEqual(unlisted.body.code, 'native_session_install_not_allowed');
-    const betaToken = (await openVia(createNativeSessions({ env: NATIVE_ENV }), await openBody(beta))).body.token;
-    assert.strictEqual(listed.authenticate(betaToken).failure.code, 'native_session_install_not_allowed');
+    const betaToken = (await openVia(createNativeSessions({ env: NATIVE_ENV, log: () => {} }), await openBody(beta))).body.token;
+    // A token minted by another gateway process is refused before any list check.
+    assert.strictEqual(listed.authenticate(betaToken).failure.code, 'native_session_restarted');
     const link = path.join(dir, 'link.json');
     fs.symlinkSync(allowlistFile, link);
     assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: link } }), /owner-controlled/);
     fs.chmodSync(allowlistFile, 0o666);
     assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile } }), /owner-controlled/);
+    fs.chmodSync(allowlistFile, 0o600);
+
+    // Revocation without a restart: both lists are re-read when their mtime
+    // changes, checked at most once per second; a bad file never falls open.
+    const denylistFile = path.join(dir, 'denylist.json');
+    const writeList = (file, value, mtimeSeconds) => {
+      fs.writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value), { mode: 0o600 });
+      fs.utimesSync(file, mtimeSeconds, mtimeSeconds);
+    };
+    const allow = (...keys) => ({ schema: 'postfiat-native-session-allowlist-v1', install_public_keys_hex: keys.map((k) => k.publicKeyHex) });
+    const deny = (...keys) => ({ schema: 'postfiat-native-session-denylist-v1', install_ids_hex: keys.map((k) => installId(k.publicKeyHex)) });
+    writeList(allowlistFile, allow(alpha, beta), 1_000);
+    writeList(denylistFile, deny(), 1_000);
+    let listClock = Date.now();
+    const listErrors = [];
+    const revocable = createNativeSessions({
+      env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile },
+      now: () => listClock, log: () => {}, logError: (line) => listErrors.push(line),
+    });
+    const openAt = async (instance, keys, clockMs) => openVia(instance, await openBody(keys, {}, clockMs));
+    const alphaToken = (await openAt(revocable, alpha, listClock)).body.token;
+    const betaListedToken = (await openAt(revocable, beta, listClock)).body.token;
+    const revoked = { statusCode: 403, code: 'native_session_install_revoked' };
+    writeList(denylistFile, deny(alpha), 2_000);
+    listClock += 500;
+    assert.strictEqual(revocable.authenticate(alphaToken).failure, null, 'lists are checked at most once per second');
+    listClock += 600;
+    assert.deepStrictEqual(revocable.authenticate(alphaToken).failure, revoked);
+    assert.deepStrictEqual((await openAt(revocable, alpha, listClock)).body.code, revoked.code);
+    assert.strictEqual(revocable.authenticate(betaListedToken).failure, null);
+    writeList(allowlistFile, allow(alpha), 3_000);
+    listClock += 1_000;
+    assert.deepStrictEqual(revocable.authenticate(betaListedToken).failure, revoked);
+    const betaReopen = await openAt(revocable, beta, listClock);
+    assert.strictEqual(betaReopen.statusCode, 403);
+    assert.strictEqual(betaReopen.body.code, revoked.code);
+    // Malformed files keep the last good lists and log one error line each.
+    writeList(denylistFile, '{not json', 4_000);
+    writeList(allowlistFile, { schema: 'postfiat-native-session-allowlist-v1', install_public_keys_hex: 'all' }, 4_000);
+    for (let step = 0; step < 3; step += 1) {
+      listClock += 1_000;
+      assert.deepStrictEqual(revocable.authenticate(alphaToken).failure, revoked);
+      assert.deepStrictEqual(revocable.authenticate(betaListedToken).failure, revoked);
+    }
+    assert.strictEqual(listErrors.length, 2, listErrors.join('\n'));
+    assert.ok(listErrors.some((line) => line.includes('denylist')) && listErrors.some((line) => line.includes('allowlist')));
+    writeList(denylistFile, deny(), 5_000);
+    listClock += 1_000;
+    assert.strictEqual(revocable.authenticate(alphaToken).failure, null, 'un-denied install works again');
+    writeList(denylistFile, deny(), 6_000);
+    fs.chmodSync(denylistFile, 0o666);
+    assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile } }), /owner-controlled/);
+    fs.chmodSync(denylistFile, 0o600);
+    writeList(denylistFile, { schema: 'postfiat-native-session-denylist-v1', install_ids_hex: ['zz'] }, 7_000);
+    assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile } }), /denylist/);
+
+    // An in-place edit of the same length with the mtime restored is seen, and a
+    // load refused for its permissions is retried once they are repaired.
+    writeList(allowlistFile, allow(alpha, beta), 8_000);
+    writeList(denylistFile, deny(beta), 8_000);
+    let hashClock = Date.now();
+    const hashErrors = [];
+    const hashed = createNativeSessions({
+      env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile },
+      now: () => hashClock, log: () => {}, logError: (line) => hashErrors.push(line),
+    });
+    const hashedAlpha = (await openAt(hashed, alpha, hashClock)).body.token;
+    const denyInode = fs.statSync(denylistFile).ino;
+    writeList(denylistFile, deny(alpha), 8_000);
+    assert.strictEqual(fs.statSync(denylistFile).ino, denyInode);
+    hashClock += 1_000;
+    assert.deepStrictEqual(hashed.authenticate(hashedAlpha).failure, revoked, 'same inode, size and mtime');
+    writeList(denylistFile, deny(), 9_000);
+    hashClock += 1_000;
+    assert.strictEqual(hashed.authenticate(hashedAlpha).failure, null);
+    writeList(denylistFile, deny(alpha), 10_000);
+    fs.chmodSync(denylistFile, 0o666);
+    for (let step = 0; step < 3; step += 1) {
+      hashClock += 1_000;
+      assert.strictEqual(hashed.authenticate(hashedAlpha).failure, null, 'a group-writable file is not loaded');
+    }
+    assert.strictEqual(hashErrors.length, 1, hashErrors.join('\n'));
+    fs.chmodSync(denylistFile, 0o600);
+    hashClock += 1_000;
+    assert.deepStrictEqual(hashed.authenticate(hashedAlpha).failure, revoked, 'a permission-only repair is retried');
+    assert.strictEqual(hashErrors.length, 1, hashErrors.join('\n'));
+
+    // An id nested in an array is malformed, not another spelling of the id: the
+    // revocation stands on reload and the file is refused at startup.
+    const alphaId = installId(alpha.publicKeyHex);
+    writeList(denylistFile, { schema: 'postfiat-native-session-denylist-v1', install_ids_hex: [[alphaId]] }, 11_000);
+    hashClock += 1_000;
+    assert.deepStrictEqual(hashed.authenticate(hashedAlpha).failure, revoked, 'a nested denylist id keeps the last good list');
+    assert.strictEqual((await openAt(hashed, alpha, hashClock)).body.code, revoked.code);
+    assert.strictEqual(hashErrors.length, 2, hashErrors.join('\n'));
+    assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile } }), /denylist/);
+    writeList(allowlistFile, { schema: 'postfiat-native-session-allowlist-v1', install_public_keys_hex: [[alpha.publicKeyHex]] }, 11_000);
+    assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile } }), /allowlist/);
+
+    // A reload frees the slot of every install it revokes, without that install's help.
+    writeList(allowlistFile, allow(alpha, beta), 12_000);
+    writeList(denylistFile, deny(), 12_000);
+    let slotClock = Date.now();
+    const slots = createNativeSessions({
+      env: {
+        ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS: '1',
+        WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile,
+      },
+      now: () => slotClock, log: () => {}, logError: () => {},
+    });
+    assert.strictEqual((await openAt(slots, alpha, slotClock)).statusCode, 200);
+    assert.strictEqual((await openAt(slots, beta, slotClock)).statusCode, 503);
+    writeList(denylistFile, deny(alpha), 13_000);
+    slotClock += 1_000;
+    const betaSlot = await openAt(slots, beta, slotClock);
+    assert.strictEqual(betaSlot.statusCode, 200, 'a silent denied occupant frees its slot');
+    writeList(denylistFile, deny(), 14_000);
+    writeList(allowlistFile, allow(alpha), 14_000);
+    slotClock += 1_000;
+    assert.strictEqual((await openAt(slots, alpha, slotClock)).statusCode, 200, 'a silent delisted occupant frees its slot');
+    // Listed again, beta's token may not take back a slot past the cap.
+    writeList(allowlistFile, allow(alpha, beta), 15_000);
+    slotClock += 1_000;
+    assert.deepStrictEqual(slots.authenticate(betaSlot.body.token).failure, { statusCode: 503, code: 'native_session_busy' });
+
+    // A restart ends every session: a token of an earlier process is refused, so
+    // surviving tokens cannot fill the live-install table past the cap.
+    const capOne = { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS: '1' };
+    const beforeRestart = createNativeSessions({ env: capOne, log: () => {} });
+    const survivor = (await openVia(beforeRestart, await openBody(alpha))).body.token;
+    assert.strictEqual(beforeRestart.authenticate(survivor).failure, null);
+    const afterRestart = createNativeSessions({ env: capOne, log: () => {} });
+    assert.strictEqual((await openVia(afterRestart, await openBody(beta))).statusCode, 200);
+    assert.deepStrictEqual(afterRestart.authenticate(survivor).failure, { statusCode: 401, code: 'native_session_restarted' });
+    assert.strictEqual((await openVia(afterRestart, await openBody(alpha))).body.code, 'native_session_busy');
+
+    // A bound across installs: distinct installs with unexpired tokens.
+    let capClock = Date.now();
+    const capped = createNativeSessions({
+      env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS: '1', WALLET_PROXY_NATIVE_SESSION_TTL_MS: '60000' },
+      now: () => capClock, log: () => {},
+    });
+    assert.strictEqual((await openAt(capped, alpha, capClock)).statusCode, 200);
+    const busy = await openAt(capped, beta, capClock);
+    assert.strictEqual(busy.statusCode, 503);
+    assert.strictEqual(busy.body.code, 'native_session_busy');
+    assert.strictEqual((await openAt(capped, alpha, capClock)).statusCode, 200, 'a live install renews');
+    capClock += 60_001;
+    assert.strictEqual((await openAt(capped, beta, capClock)).statusCode, 200, 'an expired install frees its slot');
+    assert.strictEqual((await openAt(capped, alpha, capClock)).statusCode, 503);
+    for (const bad of ['0', '1000001', 'many']) {
+      assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS: bad } }), /MAX_ACTIVE_INSTALLS/);
+    }
+
+    // One audit line per open: install id prefix, source address, outcome; never a credential.
+    const audit = [];
+    const audited = createNativeSessions({ env: NATIVE_ENV, log: (line) => audit.push(line) });
+    const auditedBody = await openBody(alpha);
+    const auditedOpen = await openVia(audited, auditedBody, '192.0.2.9');
+    assert.strictEqual(auditedOpen.statusCode, 200);
+    await openVia(audited, tampered, '192.0.2.10');
+    await openVia(audited, 'not json', '192.0.2.11');
+    assert.strictEqual(audit.length, 3);
+    assert.deepStrictEqual(audit.map((line) => JSON.parse(line)), [
+      { event: 'native_session_open', install_id_prefix: installId(alpha.publicKeyHex).slice(0, 16), source: '192.0.2.9', outcome: 'ok' },
+      { event: 'native_session_open', install_id_prefix: null, source: '192.0.2.10', outcome: 'native_session_bad_signature' },
+      { event: 'native_session_open', install_id_prefix: null, source: '192.0.2.11', outcome: 'invalid_json' },
+    ]);
+    const auditText = audit.join('\n');
+    const [, tokenPayload, tokenMac] = auditedOpen.body.token.split('.');
+    for (const secretish of [auditedOpen.body.token, tokenPayload, tokenMac, auditedBody.signature_hex.slice(0, 64),
+      SECRET, installId(alpha.publicKeyHex), alpha.publicKeyHex.slice(0, 64)]) {
+      assert.ok(!auditText.includes(secretish), 'audit line leaks a credential or a full identity');
+    }
+
+    // Discovery: the session settings, no secret; disabled answers 404 like open.
+    const info = await request(port, 'GET', INFO_PATH);
+    assert.strictEqual(info.statusCode, 200, JSON.stringify(info.body));
+    assert.strictEqual(info.headers['cache-control'], 'no-store');
+    assert.deepStrictEqual(info.body, {
+      ok: true, schema: 'postfiat-native-session-info-v1', enabled: true, origin: NATIVE_ORIGIN, chain_id: CHAIN_ID,
+      genesis_hash_hex: GENESIS, ttl_ms: 15 * 60_000, allowlist: false, max_active_installs: DEFAULT_MAX_ACTIVE_INSTALLS,
+    });
+    assert.ok(!JSON.stringify(info.body).includes(SECRET));
+    assert.strictEqual((await request(port, 'POST', INFO_PATH, { body: {} })).statusCode, 405);
+    assert.strictEqual((await infoVia(revocable)).body.allowlist, true);
+    const disabledInfo = await infoVia(createNativeSessions({ env: {} }));
+    assert.strictEqual(disabledInfo.statusCode, 404);
+    assert.strictEqual(disabledInfo.body.code, 'native_session_disabled');
 
     // Caps: the native principal hits the same rate limit and body limit as the browser principal.
     clearMutationAdmissionForTest();
@@ -304,10 +499,11 @@ async function main() {
     assert.strictEqual(vector.request.chain_id, CHAIN_ID);
     assert.strictEqual(vector.request.genesis_hash_hex, GENESIS);
     const atVectorTime = () => createNativeSessions({ env: NATIVE_ENV, now: () => vector.request.issued_at_ms + 1_000 });
-    const rustOpened = await openVia(atVectorTime(), vector.request);
+    const vectorGateway = atVectorTime();
+    const rustOpened = await openVia(vectorGateway, vector.request);
     assert.strictEqual(rustOpened.statusCode, 200, JSON.stringify(rustOpened.body));
     assert.strictEqual(rustOpened.body.principal, `native:${installId(vector.request.public_key_hex)}`);
-    assert.strictEqual(atVectorTime().authenticate(rustOpened.body.token).principal, rustOpened.body.principal);
+    assert.strictEqual(vectorGateway.authenticate(rustOpened.body.token).principal, rustOpened.body.principal);
     const rustTampered = await openVia(atVectorTime(), { ...vector.request, issued_at_ms: vector.request.issued_at_ms + 1 });
     assert.strictEqual(rustTampered.statusCode, 401);
     assert.strictEqual(rustTampered.body.code, 'native_session_bad_signature');
