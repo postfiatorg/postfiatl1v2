@@ -107,7 +107,7 @@ pub(super) const VALIDATOR_KEY_SELF_CHECK_CONTEXT: &[u8] =
 pub(super) const VALIDATOR_KEY_SELF_CHECK_SEED: [u8; 32] = [87u8; 32];
 pub(super) const BLOCK_PROPOSAL_FILE_SCHEMA: &str = "postfiat.block_proposal.v1";
 pub(super) const BLOCK_VOTE_FILE_SCHEMA: &str = "postfiat.block_vote.v1";
-pub(super) const BLOCK_CERTIFICATE_FILE_SCHEMA: &str = "postfiat.block_certificate.v1";
+pub const BLOCK_CERTIFICATE_FILE_SCHEMA: &str = "postfiat.block_certificate.v1";
 pub(super) const BLOCK_TIMEOUT_VOTE_FILE_SCHEMA: &str = "postfiat.block_timeout_vote.v1";
 pub(super) const BLOCK_TIMEOUT_CERTIFICATE_FILE_SCHEMA: &str =
     "postfiat.block_timeout_certificate.v1";

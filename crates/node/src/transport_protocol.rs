@@ -1532,6 +1532,45 @@ pub(super) fn transport_batch_ack(
     }
 }
 
+pub(super) const CERTIFIED_SEND_DUPLICATE_CONFLICT: &str = "certified_send_duplicate_conflict";
+
+/// True when a local apply failed only because the batch is already in the
+/// ordered history. The JSON store reports `batch '<id>' already applied`; the
+/// transactional and bounded stores report `storage_duplicate_record: ordered
+/// batch `<id>` already exists` (or `... already exists`).
+pub(super) fn transport_apply_error_is_duplicate_batch(error: &str) -> bool {
+    error.contains("already applied")
+        || (error.contains("ordered batch") && error.contains("already exists"))
+}
+
+/// Acknowledgement for a certified batch whose local apply failed.
+///
+/// A duplicate of a block the target already holds with the same content is
+/// an idempotent success (`already_applied = true`): the earlier
+/// acknowledgement was lost, not the data. A duplicate key whose stored block
+/// differs is `certified_send_duplicate_conflict`; every other error is
+/// returned unchanged.
+pub(super) fn transport_batch_apply_error_ack(
+    data_dir: &Path,
+    topology: &NetworkTopology,
+    from: &str,
+    envelope: &TransportBatchEnvelope,
+    state_after: &StatusReport,
+    error: &str,
+) -> Result<TransportBatchAck, String> {
+    if !transport_apply_error_is_duplicate_batch(error) {
+        return Err(format!("transport batch service apply failed: {error}"));
+    }
+    transport_already_applied_ack(data_dir, topology, from, envelope, state_after).map_err(
+        |detail| {
+            format!(
+                "transport batch service apply failed: {CERTIFIED_SEND_DUPLICATE_CONFLICT}: \
+                 {detail}; local apply reported: {error}"
+            )
+        },
+    )
+}
+
 pub(super) fn transport_already_applied_ack(
     data_dir: &Path,
     topology: &NetworkTopology,
@@ -1551,6 +1590,13 @@ pub(super) fn transport_already_applied_ack(
         .ok_or_else(|| "already-applied batch requires a certificate".to_string())?;
     let certificate: BlockCertificateFile = serde_json::from_str(certificate_json)
         .map_err(|error| format!("already-applied certificate parse failed: {error}"))?;
+    // The same schema check as the normal path (consensus_artifacts.rs).
+    if certificate.schema != BLOCK_CERTIFICATE_FILE_SCHEMA {
+        return Err(format!(
+            "already-applied batch `{batch_id}` was delivered with an unsupported block certificate schema `{}`",
+            certificate.schema
+        ));
+    }
     let blocks = postfiat_storage::NodeStore::new(data_dir)
         .read_blocks()
         .map_err(|error| format!("already-applied block log read failed: {error}"))?;
@@ -1568,6 +1614,51 @@ pub(super) fn transport_already_applied_ack(
     {
         return Err(format!(
             "already-applied batch `{batch_id}` conflicts with certified height/hash"
+        ));
+    }
+    // The key and the digests agree; the stored certificate content must too.
+    // Field audit of `BlockCertificateFile` against the stored block:
+    // - schema: not stored with the block; checked above exactly as the normal path does.
+    // - chain_id, genesis_hash, protocol_version: compared with this node's chain below.
+    // - block_height, certificate_id, block_hash: compared above (an absent block_hash is the legacy form).
+    // - view, proposer, certificate (legacy votes): compared below.
+    // - proposal_hash: not stored; it is a digest of the block evidence and payload, which the block hash binds.
+    // - fastpay_pre_state_effects: compared below with the block's stored effects.
+    // - consensus_v2_commit: compared below; absent on both sides is equal.
+    // Stored header fields the certificate does not carry (parent_hash, batch_kind, state and
+    // export roots, receipt_count) are bound by block_hash; batch_id is the lookup key.
+    if certificate.chain_id != state_after.chain_id
+        || certificate.genesis_hash != state_after.genesis_hash
+        || certificate.protocol_version != state_after.protocol_version
+    {
+        return Err(format!(
+            "already-applied batch `{batch_id}` was delivered with a certificate for another chain (chain id, genesis hash or protocol version)"
+        ));
+    }
+    if block.header.view != certificate.view
+        || block.header.proposer != certificate.proposer
+        || block.header.certificate != certificate.certificate
+    {
+        return Err(format!(
+            "already-applied batch `{batch_id}` at height {} differs from the delivered certificate (view, proposer or votes)",
+            block.header.height
+        ));
+    }
+    if block.header.consensus_v2_commit != certificate.consensus_v2_commit {
+        return Err(format!(
+            "already-applied batch `{batch_id}` at height {} differs from the delivered certificate (consensus-v2 commit {})",
+            block.header.height,
+            match (&block.header.consensus_v2_commit, &certificate.consensus_v2_commit) {
+                (Some(_), None) => "missing",
+                (None, Some(_)) => "unexpected",
+                _ => "altered",
+            }
+        ));
+    }
+    if block.fastpay_pre_state_effects != certificate.fastpay_pre_state_effects {
+        return Err(format!(
+            "already-applied batch `{batch_id}` at height {} differs from the delivered certificate (FastPay pre-state effects)",
+            block.header.height
         ));
     }
     if state_after.block_height == block.header.height
@@ -2647,7 +2738,7 @@ mod transport_cli_tests {
             .expect("parse receipt fixture")])
             .expect("write receipt fixture");
         let certificate = serde_json::json!({
-            "schema": "postfiat-block-certificate-v1",
+            "schema": BLOCK_CERTIFICATE_FILE_SCHEMA,
             "chain_id": "postfiat-wan-devnet",
             "genesis_hash": "11".repeat(48),
             "protocol_version": 1,
@@ -2731,6 +2822,103 @@ mod transport_cli_tests {
             "{error}"
         );
         std::fs::remove_dir_all(root).expect("cleanup conflicting ack fixture");
+    }
+
+    #[test]
+    fn transport_duplicate_with_different_certificate_content_is_not_already_applied() {
+        let (root, topology, status, envelope) = already_applied_test_fixture(10);
+        let store = postfiat_storage::NodeStore::new(&root);
+        let mut blocks = store.read_blocks().unwrap();
+        // Same key, height, certificate id and block hash; different content.
+        blocks.blocks[0].header.certificate.registry_root = "77".repeat(48);
+        store.write_blocks(&blocks).unwrap();
+        let error =
+            transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
+                .expect_err("different stored content must not be acknowledged as applied");
+        assert!(error.contains("differs from the delivered certificate"), "{error}");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn transport_duplicate_with_a_certificate_for_another_chain_is_not_already_applied() {
+        for (field, value) in [
+            ("chain_id", serde_json::json!("another-chain")),
+            ("genesis_hash", serde_json::json!("22".repeat(48))),
+            ("protocol_version", serde_json::json!(2)),
+        ] {
+            let (root, topology, status, mut envelope) = already_applied_test_fixture(10);
+            let mut certificate: serde_json::Value =
+                serde_json::from_str(envelope.certificate_json.as_deref().unwrap()).unwrap();
+            certificate[field] = value;
+            envelope.certificate_json = Some(certificate.to_string());
+            let error =
+                transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
+                    .expect_err("a certificate for another chain must not be acknowledged");
+            assert!(error.contains("another chain"), "{field}: {error}");
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn transport_duplicate_with_another_certificate_schema_is_a_conflict() {
+        let duplicate = "storage_duplicate_record: ordered batch `batch-1` already exists";
+        let (root, topology, status, mut envelope) = already_applied_test_fixture(10);
+        transport_batch_apply_error_ack(&root, &topology, "validator-0", &envelope, &status, duplicate)
+            .expect("the identical block with the supported schema is acknowledged");
+        let mut certificate: serde_json::Value =
+            serde_json::from_str(envelope.certificate_json.as_deref().unwrap()).unwrap();
+        certificate["schema"] = serde_json::json!("postfiat.block_certificate.v2");
+        envelope.certificate_json = Some(certificate.to_string());
+        let error = transport_batch_apply_error_ack(
+            &root, &topology, "validator-0", &envelope, &status, duplicate,
+        )
+        .expect_err("a redelivery with another schema is not acknowledged");
+        assert!(
+            error.starts_with(&format!(
+                "transport batch service apply failed: {CERTIFIED_SEND_DUPLICATE_CONFLICT}: "
+            )),
+            "{error}"
+        );
+        assert!(
+            error.contains("unsupported block certificate schema `postfiat.block_certificate.v2`"),
+            "{error}"
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn transport_storage_duplicate_record_is_answered_as_already_applied() {
+        let duplicate = "storage_duplicate_record: ordered batch `batch-1` already exists";
+        let (root, topology, status, envelope) = already_applied_test_fixture(10);
+        for _restart in 0..2 {
+            let ack = transport_batch_apply_error_ack(
+                &root, &topology, "validator-0", &envelope, &status, duplicate,
+            )
+            .expect("a duplicate of the identical block is an idempotent success");
+            assert!(ack.applied && ack.already_applied);
+            assert_eq!(ack.certified_state.as_ref().unwrap().block_height, 10);
+        }
+        let error = transport_batch_apply_error_ack(
+            &root, &topology, "validator-0", &envelope, &status, "execution failed: bad nonce",
+        )
+        .expect_err("other apply errors stay errors");
+        assert_eq!(error, "transport batch service apply failed: execution failed: bad nonce");
+        std::fs::remove_dir_all(root).unwrap();
+
+        let (root, topology, status, envelope) = already_applied_test_fixture(11);
+        let error = transport_batch_apply_error_ack(
+            &root, &topology, "validator-0", &envelope, &status, duplicate,
+        )
+        .expect_err("a duplicate key with different content is not applied");
+        assert!(
+            error.starts_with(&format!(
+                "transport batch service apply failed: {CERTIFIED_SEND_DUPLICATE_CONFLICT}: "
+            )),
+            "{error}"
+        );
+        assert!(error.contains("conflicts with certified height/hash"), "{error}");
+        assert!(error.contains(duplicate), "{error}");
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
