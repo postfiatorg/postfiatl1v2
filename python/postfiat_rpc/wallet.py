@@ -577,8 +577,11 @@ def check_signing_quote(
     (or `from`), the requested operation field by field (or the transfer's
     `to` and `amount`), the requested sequence, the wallet's chain id and
     genesis hash (when the wallet knows it), that sequence and minimum fee are
-    non-negative integers within u64, and the fee against `max_fee_atoms`."""
+    non-negative integers within u64, and the fee against `max_fee_atoms`,
+    which must itself be a non-negative integer within u64 (ValueError)."""
 
+    if not _is_u64(max_fee_atoms):
+        raise ValueError("max_fee_atoms must be a non-negative integer within u64")
     quote = quote_response.get("result") if isinstance(quote_response, dict) else None
     if not isinstance(quote, dict):
         raise QuoteRefusedError(QUOTE_INVALID, "the quote response has no result object")
