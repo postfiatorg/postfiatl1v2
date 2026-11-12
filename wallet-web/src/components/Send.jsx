@@ -98,7 +98,7 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
     return () => fastpayInventory.dispose();
   }, [fastpayInventory]);
 
-  const fetchFastpayBalance = useCallback(async ({ showLoading = true } = {}) => {
+  const fetchFastpayBalance = useCallback(async ({ showLoading = true, retry = false } = {}) => {
     if (!fastpayEnabled || !publicKeyHex) {
       setFastpayBalance(null);
       setFastpayObjects([]);
@@ -108,7 +108,7 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
     }
 
     if (showLoading) setFastpayStatus('loading');
-    return fastpayInventory.refresh();
+    return retry ? fastpayInventory.retry() : fastpayInventory.refresh();
   }, [publicKeyHex, fastpayInventory, fastpayEnabled]);
 
   useEffect(() => {
@@ -635,7 +635,7 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
                 {fastpayStatus === 'error' && (
                   <div className="pf-warning" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <span style={{ flex: 1 }}>{fastpayError || 'FastPay balance is unavailable.'}</span>
-                    <button className="pf-ghost" style={{ fontSize: 11, padding: '6px 10px' }} onClick={() => fetchFastpayBalance().catch(() => {})}>Retry</button>
+                    <button className="pf-ghost" style={{ fontSize: 11, padding: '6px 10px' }} onClick={() => fetchFastpayBalance({ retry: true }).catch(() => {})}>Retry</button>
                   </div>
                 )}
                 {fastpayStatus === 'ok' && fastpayObjects.length === 0 && (

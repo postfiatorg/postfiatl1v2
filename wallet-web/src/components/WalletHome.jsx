@@ -95,7 +95,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
 
   useEffect(() => refreshFastpayRecoveries(), [refreshFastpayRecoveries]);
 
-  const fetchFastpayBalance = useCallback(async ({ showLoading = true } = {}) => {
+  const fetchFastpayBalance = useCallback(async ({ showLoading = true, retry = false } = {}) => {
     if (!publicKeyHex) {
       setFastpayBalance(null);
       setFastpayObjects([]);
@@ -105,7 +105,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     }
 
     if (showLoading) setFastpayStatus('loading');
-    return fastpayInventory.refresh();
+    return retry ? fastpayInventory.retry() : fastpayInventory.refresh();
   }, [publicKeyHex, fastpayInventory]);
 
   const fetchAccount = useCallback(async () => {
@@ -762,7 +762,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
               {fastpayStatus === 'error' && fastpayError && (
                 <div className="pf-error" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ flex: 1 }}>{fastpayError}</span>
-                  <button className="pf-ghost" style={{ fontSize: 11, padding: '6px 10px' }} onClick={() => fetchFastpayBalance().catch(() => {})}>Retry</button>
+                  <button className="pf-ghost" style={{ fontSize: 11, padding: '6px 10px' }} onClick={() => fetchFastpayBalance({ retry: true }).catch(() => {})}>Retry</button>
                 </div>
               )}
             </div>

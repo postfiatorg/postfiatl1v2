@@ -235,7 +235,9 @@ test('R2: an older complete feed answer stamped later than the feed watermark do
   const { inventory, published, views, serve } = served();
   const initial = result('initial', [shared], null);
   await Promise.all([inventory.applyFeed(initial, true, 50), serve(initial)]);
-  const refreshed = inventory.refresh().catch(() => {});
+  // A plain refresh no longer moves past the latest feed view (RB1-N1); the
+  // user's Retry reaches the newer read.
+  const refreshed = inventory.retry().catch(() => {});
   await serve(NEW);
   await refreshed;
   assert.equal(views().at(-1), 'new');
@@ -286,4 +288,108 @@ test('R5: an older complete inventory from a faster gateway clock does not repla
   await fed;
   assert.ok(!after(views(), 'new').includes('old'), `history ${views()}`);
   assert.ok(!selectable(published).includes('spent@1'));
+});
+
+// Re-read RB1-N1/RB1-N2: the latest feed view is a standing constraint, a
+// replaced view never returns, and only the user's Retry resynchronizes a
+// stale feed constraint.
+test('RB1-N1 E1: a later refresh that reaches a lagging node does not roll back a feed-confirmed view', async () => {
+  const { inventory, published, views, serve } = served();
+  const feed = structuredClone(NEW);
+  await Promise.all([inventory.applyFeed(feed), serve(NEW)]);
+  assert.equal(views().at(-1), 'new');
+  const refreshed = inventory.refresh().catch(() => {});
+  await serve(OLD); // the feed still names `new`
+  await refreshed;
+  await inventory.applyFeed(feed); // a re-render repeats the same feed answer
+  assert.ok(!after(views(), 'new').includes('old'), `history ${views()}`);
+  assert.notEqual(published.at(-1).status, 'ok');
+  assert.ok(!selectable(published).includes('spent@1'));
+});
+
+test('RB1-N1 E2: an inventory replaced after its invalidation is never published again, even by Retry', async () => {
+  const { inventory, published, views, serve } = served();
+  await Promise.all([inventory.applyFeed(structuredClone(OLD)), serve(OLD)]);
+  await Promise.all([inventory.applyFeed(structuredClone(NEW)), serve(NEW)]);
+  assert.deepEqual(views(), ['loading', 'old', 'loading', 'new']);
+  const refreshed = inventory.refresh().catch(() => {});
+  await serve(OLD);
+  await refreshed;
+  const retried = inventory.retry().catch(() => {});
+  await serve(OLD);
+  await retried;
+  assert.ok(!after(views(), 'new').includes('old'), `history ${views()}`);
+  assert.ok(!selectable(published).includes('spent@1'));
+});
+
+test('RB1-N1 compact reproduction: two lagging reads with the feed current publish nothing old', async () => {
+  const s = v => ({ view_digest: v, objects: [{ id: 'coin', version: v === 'old' ? 1 : 2, asset: 'PFT', value: 10 }], total_value: 10, truncated: false, next_cursor: null });
+  let upstream = s('new');
+  const history = [];
+  const inventory = createFastpayInventory({
+    read: async () => structuredClone(upstream),
+    publish: x => history.push(x.status === 'ok' ? x.snapshot.view_digest : x.status),
+  });
+  const feed = s('new');
+  await inventory.applyFeed(feed);
+  upstream = s('old');
+  await inventory.refresh().catch(() => {});
+  await inventory.applyFeed(feed);
+  assert.deepEqual(history.slice(0, 2), ['loading', 'new']);
+  assert.ok(!history.includes('old'), `history ${history}`);
+});
+
+test('RB1-N1 E12: paged reads of a lagging node do not republish the older inventory', async () => {
+  const objs = (version) => Array.from({ length: 2049 }, (_, i) => ({ id: `o${i}`, version: i === 0 ? version : 1, value: 1, asset: 'PFT' }));
+  const pages = (view, version) => { const o = objs(version); return [page(view, o.slice(0, 2048), 'c'), page(view, o.slice(2048), null)]; };
+  const rpc = scripted([...pages('new', 2), ...pages('new', 2), ...Array.from({ length: 6 }, () => pages('old', 1)).flat()]);
+  const { inventory, published } = inventoryOver(rpc);
+  const feed = { ...result('new', objs(2).slice(0, 2048), 'c'), view_digest: 'new' };
+  await inventory.applyFeed(feed);
+  assert.equal(published.at(-1).snapshot.view_digest, 'new');
+  assert.equal(published.at(-1).snapshot.objects.length, 2049);
+  await inventory.refresh().catch(() => {});
+  await inventory.applyFeed(feed);
+  assert.notEqual(published.at(-1).status, 'ok', 'the old paged inventory is not published');
+  assert.ok(!published.some(p => p.status === 'ok' && p.snapshot.view_digest === 'old'));
+});
+
+test('RB1-N2: Retry resynchronizes a stale feed constraint after two confirmed reads of one unreplaced view', async () => {
+  const { inventory, reads, published, views, serve } = served();
+  const first = inventory.refresh();
+  await serve(NEW);
+  await first;
+  const fed = inventory.applyFeed(structuredClone(OLD)); // delayed old feed, then the feed stalls
+  await serve(NEW);
+  await fed;
+  assert.equal(published.at(-1).status, 'error');
+  const refreshed = inventory.refresh().catch(() => {}); // a visibility refresh does not resynchronize
+  await serve(NEW);
+  await refreshed;
+  assert.equal(published.at(-1).status, 'error');
+  const before = reads.length;
+  const retried = inventory.retry();
+  await serve(NEW);
+  assert.equal((await retried).view_digest, 'new');
+  assert.equal(reads.length - before, 4, 'two confirmed reads');
+  assert.equal(views().at(-1), 'new');
+  // The resynchronized view is the constraint now: a lagging node cannot roll it back.
+  const lagging = inventory.refresh().catch(() => {});
+  await serve(OLD);
+  await lagging;
+  assert.ok(!after(views(), 'new').includes('old'), `history ${views()}`);
+});
+
+test('RB1-N2: Retry publishes an honest newer view the feed has not reached yet', async () => {
+  const { inventory, views, serve } = served();
+  const mid = result('mid', [shared], null);
+  const next = result('next', [shared, replacement], null);
+  const fed = inventory.applyFeed(mid);
+  await serve(next);
+  await fed;
+  assert.deepEqual(views(), ['loading', 'error']);
+  const retried = inventory.retry();
+  await serve(next);
+  await retried;
+  assert.equal(views().at(-1), 'next');
 });
