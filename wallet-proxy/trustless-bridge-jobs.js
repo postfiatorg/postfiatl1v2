@@ -292,7 +292,11 @@ function create(runtime = {}, options = {}) {
         if (persisted?.schema === 'postfiat-trustless-bridge-readiness-cache-v2') {
             for (const [routeId, row] of Object.entries(persisted.routes || {})) {
                 if (routes.has(routeId) && Number.isFinite(Number(row.checked_at_ms))) {
-                    readiness.set(routeId, row);
+                    // Never reuse an older ready cache that predates the anchor gate.
+                    try {
+                        if (row.result?.ready === true) validateReadiness(routes.get(routeId), row.result);
+                        readiness.set(routeId, row);
+                    } catch (_) { /* fail closed and refresh */ }
                 }
             }
         }
@@ -405,6 +409,15 @@ function create(runtime = {}, options = {}) {
     }
 
     function validateReadiness(route, result) {
+        if (route.source_proof_kind === 'sp1-ethereum-finality-v1'
+            && (result?.beacon_anchor_authenticated !== true
+                || result.beacon_anchor_route_profile_hash !== route.route_profile_hash
+                || !Number.isSafeInteger(result.route_epoch) || result.route_epoch < 1
+                || result.beacon_anchor_route_epoch !== result.route_epoch)) {
+            throw Object.assign(new Error('Authenticated on-ledger beacon anchor is missing or mismatched.'), {
+                code: 'pfusdc_beacon_anchor_unavailable',
+            });
+        }
         const common = result?.ok === true && result?.ready === true
             && result?.route_id === route.route_id
             && Number(result?.source_chain_id) === route.source_chain_id
@@ -458,8 +471,10 @@ function create(runtime = {}, options = {}) {
                     source_chain_id: route.source_chain_id,
                     source_proof_kind: route.source_proof_kind,
                     trust_class: 'DISABLED',
-                    code: 'trustless_ingress_unavailable',
-                    message: `Trustless ${route.route_id} preflight is unavailable. Retry shortly.`,
+                    code: error.code === 'pfusdc_beacon_anchor_unavailable' ? error.code : 'trustless_ingress_unavailable',
+                    message: error.code === 'pfusdc_beacon_anchor_unavailable'
+                        ? 'Bridge blocked: authenticated on-ledger beacon anchor is missing or does not match the active route epoch.'
+                        : `Trustless ${route.route_id} preflight is unavailable. Retry shortly.`,
                     diagnostic_code: String(error.code || error.name || 'readiness_failed').slice(0, 64),
                     observer_attestor_enabled: false,
                 };

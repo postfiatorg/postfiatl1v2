@@ -349,6 +349,17 @@ async function readiness(configPath, routeId, dependencies = {}) {
         values,
         dependencies.execFileAsync || execFileAsyncDefault,
     );
+    if (result?.beacon_anchor_authenticated !== true
+        || result.beacon_anchor_route_profile_hash !== loaded.config.route_profile_hash
+        || !Number.isSafeInteger(result.route_epoch) || result.route_epoch < 1
+        || result.beacon_anchor_route_epoch !== result.route_epoch) {
+        return {
+            ok: false, ready: false, route_id: ROUTE_ID,
+            code: 'pfusdc_beacon_anchor_unavailable',
+            message: 'Bridge blocked: authenticated on-ledger beacon anchor is missing or does not match the active route epoch.',
+            observer_attestor_enabled: false,
+        };
+    }
     if (result?.ok !== true || result?.ready !== true
         || result.route_id !== ROUTE_ID
         || Number(result.source_chain_id) !== SOURCE_CHAIN_ID
