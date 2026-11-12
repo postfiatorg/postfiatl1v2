@@ -237,8 +237,8 @@ async function main() {
     assert.strictEqual(unlisted.statusCode, 403);
     assert.strictEqual(unlisted.body.code, 'native_session_install_not_allowed');
     const betaToken = (await openVia(createNativeSessions({ env: NATIVE_ENV, log: () => {} }), await openBody(beta))).body.token;
-    // A token whose install is not on the list was revoked, not merely never admitted.
-    assert.strictEqual(listed.authenticate(betaToken).failure.code, 'native_session_install_revoked');
+    // A token minted by another gateway process is refused before any list check.
+    assert.strictEqual(listed.authenticate(betaToken).failure.code, 'native_session_restarted');
     const link = path.join(dir, 'link.json');
     fs.symlinkSync(allowlistFile, link);
     assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: link } }), /owner-controlled/);
@@ -364,6 +364,21 @@ async function main() {
     writeList(allowlistFile, allow(alpha), 14_000);
     slotClock += 1_000;
     assert.strictEqual((await openAt(slots, alpha, slotClock)).statusCode, 200, 'a silent delisted occupant frees its slot');
+    // Listed again, beta's token may not take back a slot past the cap.
+    writeList(allowlistFile, allow(alpha, beta), 15_000);
+    slotClock += 1_000;
+    assert.deepStrictEqual(slots.authenticate(betaSlot.body.token).failure, { statusCode: 503, code: 'native_session_busy' });
+
+    // A restart ends every session: a token of an earlier process is refused, so
+    // surviving tokens cannot fill the live-install table past the cap.
+    const capOne = { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS: '1' };
+    const beforeRestart = createNativeSessions({ env: capOne, log: () => {} });
+    const survivor = (await openVia(beforeRestart, await openBody(alpha))).body.token;
+    assert.strictEqual(beforeRestart.authenticate(survivor).failure, null);
+    const afterRestart = createNativeSessions({ env: capOne, log: () => {} });
+    assert.strictEqual((await openVia(afterRestart, await openBody(beta))).statusCode, 200);
+    assert.deepStrictEqual(afterRestart.authenticate(survivor).failure, { statusCode: 401, code: 'native_session_restarted' });
+    assert.strictEqual((await openVia(afterRestart, await openBody(alpha))).body.code, 'native_session_busy');
 
     // A bound across installs: distinct installs with unexpired tokens.
     let capClock = Date.now();
@@ -484,10 +499,11 @@ async function main() {
     assert.strictEqual(vector.request.chain_id, CHAIN_ID);
     assert.strictEqual(vector.request.genesis_hash_hex, GENESIS);
     const atVectorTime = () => createNativeSessions({ env: NATIVE_ENV, now: () => vector.request.issued_at_ms + 1_000 });
-    const rustOpened = await openVia(atVectorTime(), vector.request);
+    const vectorGateway = atVectorTime();
+    const rustOpened = await openVia(vectorGateway, vector.request);
     assert.strictEqual(rustOpened.statusCode, 200, JSON.stringify(rustOpened.body));
     assert.strictEqual(rustOpened.body.principal, `native:${installId(vector.request.public_key_hex)}`);
-    assert.strictEqual(atVectorTime().authenticate(rustOpened.body.token).principal, rustOpened.body.principal);
+    assert.strictEqual(vectorGateway.authenticate(rustOpened.body.token).principal, rustOpened.body.principal);
     const rustTampered = await openVia(atVectorTime(), { ...vector.request, issued_at_ms: vector.request.issued_at_ms + 1 });
     assert.strictEqual(rustTampered.statusCode, 401);
     assert.strictEqual(rustTampered.body.code, 'native_session_bad_signature');

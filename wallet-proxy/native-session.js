@@ -215,6 +215,9 @@ function createNativeSessions({
     const seenNonces = new Map();
     const activeInstalls = new Map(); // install id -> latest token expiry
     const openWindows = new Map();
+    // Carried in every token's MAC'd payload: a token of an earlier process is
+    // refused, so the in-memory live-install table is complete after a restart.
+    const bootId = crypto.randomBytes(16).toString('hex');
 
     // Returns 0 when admitted, otherwise the milliseconds until the window reopens.
     function admitOpen(address) {
@@ -276,7 +279,6 @@ function createNativeSessions({
         return activeInstalls.size < maxActiveInstalls;
     }
 
-    // Also called on token use, so live tokens are counted again after a restart.
     function noteActive(id, expiresAtMs) {
         if (!(activeInstalls.get(id) >= expiresAtMs)) activeInstalls.set(id, expiresAtMs);
     }
@@ -287,7 +289,7 @@ function createNativeSessions({
 
     function mint(id, issuedAtMs) {
         const payload = {
-            v: 1, iid: id, org: origin, cid: chainId, gen: genesisHash,
+            v: 1, iid: id, org: origin, cid: chainId, gen: genesisHash, boot: bootId,
             iat: issuedAtMs, exp: issuedAtMs + ttlMs, jti: crypto.randomBytes(16).toString('hex'),
         };
         const payloadPart = b64url(JSON.stringify(payload));
@@ -320,8 +322,11 @@ function createNativeSessions({
         if (payload.org !== origin || (requestOrigin && requestOrigin !== origin)) return fail(403, 'native_session_wrong_origin');
         if (payload.cid !== chainId || payload.gen !== genesisHash) return fail(403, 'native_session_wrong_network');
         if (!Number.isSafeInteger(payload.exp) || payload.exp <= now()) return fail(401, 'native_session_expired');
+        if (payload.boot !== bootId) return fail(401, 'native_session_restarted');
         const refusal = installRefusal(payload.iid, true);
         if (refusal) return fail(403, refusal);
+        // An install revoked and listed again lost its slot: it needs a free one back.
+        if (!installSlotFree(payload.iid, now())) return fail(503, 'native_session_busy');
         noteActive(payload.iid, payload.exp);
         return { principal: `native:${payload.iid}`, failure: null };
     }
