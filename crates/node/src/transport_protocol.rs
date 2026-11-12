@@ -1590,6 +1590,13 @@ pub(super) fn transport_already_applied_ack(
         .ok_or_else(|| "already-applied batch requires a certificate".to_string())?;
     let certificate: BlockCertificateFile = serde_json::from_str(certificate_json)
         .map_err(|error| format!("already-applied certificate parse failed: {error}"))?;
+    // The same schema check as the normal path (consensus_artifacts.rs).
+    if certificate.schema != BLOCK_CERTIFICATE_FILE_SCHEMA {
+        return Err(format!(
+            "already-applied batch `{batch_id}` was delivered with an unsupported block certificate schema `{}`",
+            certificate.schema
+        ));
+    }
     let blocks = postfiat_storage::NodeStore::new(data_dir)
         .read_blocks()
         .map_err(|error| format!("already-applied block log read failed: {error}"))?;
@@ -1611,7 +1618,7 @@ pub(super) fn transport_already_applied_ack(
     }
     // The key and the digests agree; the stored certificate content must too.
     // Field audit of `BlockCertificateFile` against the stored block:
-    // - schema: selects the file format only; it is not stored with the block.
+    // - schema: not stored with the block; checked above exactly as the normal path does.
     // - chain_id, genesis_hash, protocol_version: compared with this node's chain below.
     // - block_height, certificate_id, block_hash: compared above (an absent block_hash is the legacy form).
     // - view, proposer, certificate (legacy votes): compared below.
@@ -2731,7 +2738,7 @@ mod transport_cli_tests {
             .expect("parse receipt fixture")])
             .expect("write receipt fixture");
         let certificate = serde_json::json!({
-            "schema": "postfiat-block-certificate-v1",
+            "schema": BLOCK_CERTIFICATE_FILE_SCHEMA,
             "chain_id": "postfiat-wan-devnet",
             "genesis_hash": "11".repeat(48),
             "protocol_version": 1,
@@ -2850,6 +2857,33 @@ mod transport_cli_tests {
             assert!(error.contains("another chain"), "{field}: {error}");
             std::fs::remove_dir_all(root).unwrap();
         }
+    }
+
+    #[test]
+    fn transport_duplicate_with_another_certificate_schema_is_a_conflict() {
+        let duplicate = "storage_duplicate_record: ordered batch `batch-1` already exists";
+        let (root, topology, status, mut envelope) = already_applied_test_fixture(10);
+        transport_batch_apply_error_ack(&root, &topology, "validator-0", &envelope, &status, duplicate)
+            .expect("the identical block with the supported schema is acknowledged");
+        let mut certificate: serde_json::Value =
+            serde_json::from_str(envelope.certificate_json.as_deref().unwrap()).unwrap();
+        certificate["schema"] = serde_json::json!("postfiat.block_certificate.v2");
+        envelope.certificate_json = Some(certificate.to_string());
+        let error = transport_batch_apply_error_ack(
+            &root, &topology, "validator-0", &envelope, &status, duplicate,
+        )
+        .expect_err("a redelivery with another schema is not acknowledged");
+        assert!(
+            error.starts_with(&format!(
+                "transport batch service apply failed: {CERTIFIED_SEND_DUPLICATE_CONFLICT}: "
+            )),
+            "{error}"
+        );
+        assert!(
+            error.contains("unsupported block certificate schema `postfiat.block_certificate.v2`"),
+            "{error}"
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
