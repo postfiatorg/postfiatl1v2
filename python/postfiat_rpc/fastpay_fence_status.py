@@ -280,6 +280,11 @@ def _contradict(a: dict[str, Any], b: dict[str, Any]) -> bool:
     return False
 
 
+def _fault_bound(committee: dict[str, Any]) -> int:
+    """At most this many of the committee's ``n`` members are faulty."""
+    return (len(committee["validators"]) - 1) // 3
+
+
 def _fault(status: Any, committee: dict[str, Any], members: dict[str, str], lock_id: str, verify) -> str | None:
     """One status's own checks: ``None`` when valid, else the fault's name."""
     try:
@@ -329,8 +334,16 @@ def verify_fence_status_quorum(
     once per answer. A terminal answer reaching the quorum is proved, else
     "not terminal" if it does. Valid statuses that contradict the proved
     answer (another terminal answer, or "not terminal" at or above the
-    quorum's lowest bound) are returned unchanged in ``contradicting``:
+    quorum-supported bound) are returned unchanged in ``contradicting``:
     signed evidence for operators that never changes the answer.
+
+    A "not terminal" status contradicts a terminal quorum only when observed
+    at or above the quorum-supported bound, the ``(f + 1)``-th smallest bound
+    of its distinct signers (``f = (n - 1) // 3``): at least one honest signer
+    claims a bound at or below it, so up to ``f`` false bounds cannot move it
+    below the true anchoring height. A signer whose own bound is below it is
+    listed in ``inconsistent_bounds``, not blamed and not counted toward a
+    refusal.
 
     Assumes at most the committee's fault bound, ``(n - 1) // 3`` of ``n``
     members, is faulty: a faulty minority can neither prove nor veto an
@@ -362,7 +375,20 @@ def verify_fence_status_quorum(
         agreeing = max((len(group) for group in groups.values()), default=0)
         raise FenceStatusRefused("below_quorum", agreeing=agreeing, quorum=quorum)
     best = reached[0]
-    contradicting = [s for s in valid if any(_contradict(member, s) for member in best)]
+    # The quorum-supported bound: the (f + 1)-th smallest of the group's
+    # bounds, so at least one honest member claims one at or below it.
+    bounds = sorted(s["anchored_at_or_before_height"] for s in best if s["decision"] is not None)
+    supported = bounds[min(_fault_bound(committee), len(bounds) - 1)] if bounds else None
+    if supported is None:
+        contradicting = [s for s in valid if any(_contradict(member, s) for member in best)]
+        inconsistent = []
+    else:
+        contradicting = [
+            s
+            for s in valid
+            if (_answer(s) != _answer(best[0]) if s["decision"] is not None else s["observed_height"] >= supported)
+        ]
+        inconsistent = [s for s in best if s["anchored_at_or_before_height"] < supported]
     if len({s["validator_id"] for s in contradicting}) >= quorum:
         raise FenceStatusRefused("conflicting")
     first = best[0]
@@ -379,4 +405,5 @@ def verify_fence_status_quorum(
         "quorum": quorum,
         "contradicting": contradicting,
         "invalid": invalid,
+        "inconsistent_bounds": inconsistent,
     }

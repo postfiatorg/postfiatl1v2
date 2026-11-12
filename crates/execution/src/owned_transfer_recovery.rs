@@ -1856,4 +1856,84 @@ mod owned_transfer_recovery_tests {
             Err(postfiat_types::FastPayFenceStatusRefusalV2::BelowQuorum { agreeing: 2, quorum: 3 })
         );
     }
+
+    #[test]
+    fn fence_status_false_low_bound_cannot_turn_honest_history_into_a_veto() {
+        // R3-N1 with real ML-DSA-65 signatures: six members, quorum five.
+        // Members 0-4 said "not terminal" at 6, then terminal by 7; member 5
+        // signs the same answer with a false bound 3.
+        let keys = (0..6)
+            .map(|index| {
+                (
+                    format!("validator-{index}"),
+                    postfiat_crypto_provider::ml_dsa_65_keygen_from_seed(&[70 + index as u8; 32]),
+                )
+            })
+            .collect::<Vec<_>>();
+        let committee = postfiat_types::FastPayRecoveryCommitteeV1::from_public_keys(
+            "fence-status-ml-dsa".into(),
+            "11".repeat(48),
+            1,
+            1,
+            1,
+            100,
+            keys.iter()
+                .map(|(id, key)| (id.clone(), postfiat_crypto_provider::bytes_to_hex(&key.public_key)))
+                .collect(),
+        )
+        .unwrap();
+        assert_eq!(committee.quorum, 5);
+        let lock_id = "22".repeat(48);
+        let sign = |index: usize, bound: Option<u64>, observed: u64| {
+            let terminal = bound.is_some();
+            let mut status = postfiat_types::FastPayFenceStatusV2 {
+                schema: postfiat_types::FASTPAY_FENCE_STATUS_SCHEMA_V2.into(),
+                chain_id: committee.chain_id.clone(),
+                genesis_hash: committee.genesis_hash.clone(),
+                protocol_version: 1,
+                committee_epoch: 1,
+                registry_root: committee.registry_root.clone(),
+                lock_id: lock_id.clone(),
+                decision: terminal.then_some(postfiat_types::FastPayRecoveryDecisionV1::Cancelled),
+                operation: terminal.then_some(postfiat_types::FastPayOperationKindV1::Unwrap),
+                fence_digest: terminal.then(|| "33".repeat(48)),
+                anchored_at_or_before_height: bound,
+                observed_height: observed,
+                validator_id: keys[index].0.clone(),
+                signature_hex: String::new(),
+            };
+            status.signature_hex = postfiat_crypto_provider::bytes_to_hex(
+                &postfiat_crypto_provider::ml_dsa_65_sign_with_context(
+                    &keys[index].1.private_key,
+                    &status.signing_bytes().unwrap(),
+                    postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V2,
+                )
+                .unwrap(),
+            );
+            status
+        };
+        let current = (0..5).map(|index| sign(index, Some(7), 9)).collect::<Vec<_>>();
+        let historical = (0..5).map(|index| sign(index, None, 6)).collect::<Vec<_>>();
+        let liar = sign(5, Some(3), 9);
+        let verify = |statuses: &[postfiat_types::FastPayFenceStatusV2]| {
+            verify_fastpay_fence_status_quorum_ml_dsa_v2(statuses, &committee, &committee.registry_root, &lock_id)
+        };
+        let forward = [current.clone(), historical.clone(), vec![liar.clone()]].concat();
+        let reverse = forward.iter().rev().cloned().collect::<Vec<_>>();
+        for statuses in [forward, reverse] {
+            let accepted = verify(&statuses).expect("the valid terminal quorum stands");
+            assert_eq!(accepted.signers.len(), 6);
+            assert_eq!(accepted.anchored_at_or_before_height, Some(7));
+            assert!(accepted.contradicting.is_empty());
+            assert!(accepted.invalid.is_empty());
+            assert_eq!(accepted.inconsistent_bounds, vec![liar.clone()]);
+        }
+        // Control: the true bound 7 lists nothing.
+        let control = verify(&[current.clone(), historical, vec![sign(5, Some(7), 9)]].concat()).unwrap();
+        assert!(control.contradicting.is_empty() && control.inconsistent_bounds.is_empty());
+        // "Not terminal" at the quorum-supported bound is still a contradiction.
+        let late = sign(5, None, 7);
+        let accepted = verify(&[current, vec![late.clone()]].concat()).unwrap();
+        assert_eq!(accepted.contradicting, vec![late]);
+    }
 }

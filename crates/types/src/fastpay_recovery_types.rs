@@ -1330,14 +1330,16 @@ pub struct FastPayFenceStatusQuorumV2 {
     pub signers: Vec<String>,
     pub quorum: usize,
     /// Valid, signed statuses that contradict the proved answer: another
-    /// terminal answer, or "not terminal" at or above the quorum's lowest
-    /// `anchored_at_or_before_height` (for a "not terminal" answer: a
-    /// terminal answer anchored at or below the quorum's highest observed
-    /// height). Signed evidence of a faulty member for operators; it never
-    /// changes the proved answer.
+    /// terminal answer, or "not terminal" at or above the quorum-supported
+    /// bound (for a "not terminal" answer: a terminal answer anchored at or
+    /// below the quorum's highest observed height). Signed evidence for
+    /// operators; it never changes the proved answer.
     pub contradicting: Vec<FastPayFenceStatusV2>,
     /// Statuses that failed their own checks, in input order.
     pub invalid: Vec<FastPayFenceStatusInvalidV2>,
+    /// Signers whose own bound is below the quorum-supported bound: listed
+    /// on their own, never counted toward a refusal or used to blame others.
+    pub inconsistent_bounds: Vec<FastPayFenceStatusV2>,
 }
 
 /// Accepts when a quorum of distinct `committee` members signed the same
@@ -1355,6 +1357,13 @@ pub struct FastPayFenceStatusQuorumV2 {
 /// each member once per answer. A terminal answer reaching the quorum is
 /// proved, else "not terminal" if it reaches the quorum. Valid statuses that
 /// contradict the proved answer are returned in `contradicting`.
+///
+/// A "not terminal" status contradicts a terminal quorum only when observed
+/// at or above the quorum-supported bound, the `(f + 1)`-th smallest bound of
+/// its distinct signers (`f = (n - 1) / 3`): at least one honest signer claims
+/// a bound at or below it, so up to `f` false bounds cannot move it below the
+/// true anchoring height. A signer whose own bound is below it is listed in
+/// `inconsistent_bounds`, not blamed and not counted toward a refusal.
 ///
 /// Assumption: at most the committee's fault bound, `(n - 1) / 3` of `n`
 /// members, is faulty. Then a faulty minority can neither prove an answer
@@ -1518,11 +1527,36 @@ fn verify_fence_status_entries(
         });
     };
     let first = group[0];
-    // A status contradicts the group when it contradicts any of its members.
+    // The quorum-supported bound: the (f + 1)-th smallest of the group's
+    // bounds, so at least one honest member claims one at or below it.
+    let mut bounds = group
+        .iter()
+        .filter_map(|status| status.anchored_at_or_before_height)
+        .collect::<Vec<_>>();
+    bounds.sort_unstable();
+    let fault_bound = committee.validators.len().saturating_sub(1) / 3;
+    let supported = bounds
+        .get(fault_bound.min(bounds.len().saturating_sub(1)))
+        .copied();
     let contradicting = valid
         .into_iter()
-        .filter(|status| group.iter().any(|member| fence_statuses_contradict(member, status)))
+        .filter(|status| match (supported, status.anchored_at_or_before_height) {
+            (Some(_), Some(_)) => status.terminal_answer() != first.terminal_answer(),
+            (Some(bound), None) => status.observed_height >= bound,
+            // A "not terminal" answer: contradicted by a terminal status
+            // anchored at or below any member's observed height.
+            (None, _) => group
+                .iter()
+                .any(|member| fence_statuses_contradict(member, status)),
+        })
         .collect::<Vec<_>>();
+    let inconsistent_bounds = group
+        .iter()
+        .filter(|status| {
+            matches!((status.anchored_at_or_before_height, supported), (Some(own), Some(bound)) if own < bound)
+        })
+        .map(|status| (*status).clone())
+        .collect();
     let contradictors = contradicting
         .iter()
         .map(|status| status.validator_id.as_str())
@@ -1555,6 +1589,7 @@ fn verify_fence_status_entries(
         quorum,
         contradicting: contradicting.into_iter().cloned().collect(),
         invalid,
+        inconsistent_bounds,
     })
 }
 
@@ -2121,6 +2156,68 @@ mod fastpay_recovery_type_tests {
             check(&two, &committee),
             Err(FastPayFenceStatusRefusalV2::Conflicting)
         );
+    }
+
+    /// R3-N1 generalised, as in the Python test of the same name: for
+    /// n = 4, 6, 7 (f = 1, 1, 2) the last f members sign false bounds (low or
+    /// high), false "not terminal" or false terminal answers; honest members
+    /// sign true upper bounds and older "not terminal" history. Each set is
+    /// checked in three orders.
+    #[test]
+    fn fence_status_up_to_f_false_bounds_never_prove_a_false_terminal_or_veto_an_honest_quorum() {
+        let mut seed = 20_261_112_u64;
+        let mut next = |below: u64| {
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            (seed >> 33) % below
+        };
+        for count in [4_usize, 6, 7] {
+            let committee = FastPayRecoveryCommitteeV1::from_public_keys(
+                "fence-status".to_string(),
+                "11".repeat(48),
+                1,
+                3,
+                2,
+                100,
+                (0..count)
+                    .map(|index| (format!("validator-{index}"), format!("{index:02x}").repeat(8)))
+                    .collect(),
+            )
+            .expect("committee");
+            let honest = count - (count - 1) / 3;
+            for _ in 0..400 {
+                let terminal_world = next(2) == 0;
+                let mut statuses = Vec::new();
+                for index in 0..honest {
+                    if terminal_world {
+                        statuses.push(fence_status(&committee, index, Some([7, 7, 12][next(3) as usize]), 20));
+                    }
+                    if !terminal_world || next(10) < 7 {
+                        statuses.push(fence_status(&committee, index, None, 5 + next(2)));
+                    }
+                }
+                for index in honest..count {
+                    for _ in 0..=next(3) {
+                        let bound = [None, Some(1), Some(3), Some(6), Some(7), Some(12), Some(20)][next(7) as usize];
+                        let observed = if bound.is_some() { 20 } else { [6, 7, 19, 20][next(4) as usize] };
+                        statuses.push(fence_status(&committee, index, bound, observed));
+                    }
+                }
+                let mut shuffled = statuses.clone();
+                for i in (1..shuffled.len()).rev() {
+                    shuffled.swap(i, next(i as u64 + 1) as usize);
+                }
+                let reversed = statuses.iter().rev().cloned().collect::<Vec<_>>();
+                for order in [statuses, reversed, shuffled] {
+                    let proved = check(&order, &committee).expect("an honest quorum stands");
+                    assert_eq!(proved.decision.is_some(), terminal_world);
+                    assert!(proved.contradicting.iter().all(|status| {
+                        status.validator_id[10..].parse::<usize>().unwrap() >= honest
+                    }));
+                }
+            }
+        }
     }
 
     /// The vectors python/tests/test_fastpay_fence_status.py also runs.
