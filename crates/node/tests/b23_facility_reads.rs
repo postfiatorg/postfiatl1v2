@@ -269,6 +269,7 @@ impl Fixture {
             })
             .unwrap();
         store.write_receipts(&receipts).unwrap();
+        store.write_ordered_batches(&[]).unwrap();
         store.write_ledger(&ledger).unwrap();
         Self {
             dir,
@@ -563,3 +564,6 @@ fn b23_route_reads_report_last_successful_funding_sequence() {
     assert_eq!(supply.funding_sequence, Some(17));
     assert_eq!(directory_bytes(&fixture.dir), before);
 }
+
+#[path = "b23_facility_reads/read_only.rs"]
+mod read_only_regressions;
