@@ -102,7 +102,9 @@ fn b23_unique_transaction_receipt<'a>(
     Ok(receipt)
 }
 
-/// Read persisted evidence only. No replay, transaction submission or index writes.
+/// Read persisted evidence through a read-only store and non-repairing tip reader.
+/// Missing directories/keys fail closed; legacy heads are verified without upgrade.
+/// No replay, transaction submission, index writes or storage metadata repair.
 /// Ambiguous same-route/owner/amount redemptions in a block fail closed because
 /// the consensus receipt schema does not persist a transaction id or nonce.
 pub fn pftl_uniswap_receipt(
@@ -119,7 +121,7 @@ pub fn pftl_uniswap_receipt(
             "tx_id must be 96 lowercase hexadecimal characters",
         ));
     }
-    let store = NodeStore::new(&options.data_dir);
+    let store = NodeStore::try_new_read_only(&options.data_dir)?;
     let blocks = store.read_blocks()?;
     let receipts = store.read_receipts()?;
     let transaction_receipt = b23_unique_transaction_receipt(&receipts, tx_id)?;
@@ -268,7 +270,10 @@ pub fn pftl_uniswap_receipt(
     } else {
         None
     };
-    if store.read_blocks()?.tip_hash() != blocks.tip_hash() {
+    let current_tip = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?;
+    if store.read_blocks()?.tip_hash() != blocks.tip_hash()
+        || current_tip.block_hash != blocks.tip_hash()
+    {
         return Err(b23_receipt_read_error(
             "concurrent_commit_retry: finalized tip changed during receipt read",
         ));
