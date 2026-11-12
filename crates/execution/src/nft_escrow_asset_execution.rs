@@ -548,6 +548,7 @@ fn release_issued_asset_escrow_to_recipient(
         ));
     }
 
+    b23_facility_transfer_offer_inventory(ledger, &escrow.asset_id, &escrow.owner, &escrow.recipient, escrow.amount)?;
     ledger.trustlines[recipient_index].balance = recipient_after;
     Ok(())
 }

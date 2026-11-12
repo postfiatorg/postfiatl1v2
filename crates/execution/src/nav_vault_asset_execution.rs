@@ -4183,6 +4183,9 @@ fn apply_pftl_uniswap_route_init_v2(
             "PFTL-Uniswap route already exists in consensus state".to_string(),
         ));
     }
+    if operation.primary_market_policy.spread_recipient.is_some() {
+        b23_facility_require_unique_route(ledger, &operation.native_nav_asset_id, &operation.route_id)?;
+    }
     let native_nav_asset = ensure_pftl_uniswap_native_asset_policy(
         ledger,
         &operation.native_nav_asset_id,
@@ -4327,6 +4330,7 @@ fn apply_pftl_uniswap_route_init_v2(
         return_imports: std::collections::BTreeMap::new(),
         paused: false,
         v2: Some(PftlUniswapRouteV2State {
+            funding_sequence: None,
             route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
             route_epoch: operation.route_epoch,
             outbound_verification_class: operation.outbound_verification_class.clone(),
@@ -4344,6 +4348,9 @@ fn apply_pftl_uniswap_route_init_v2(
     route
         .validate()
         .map_err(|error| ("bad_pftl_uniswap_route", error))?;
+    if b23_facility_enabled(&route) {
+        b23_facility_require_aligned_inventory(ledger, &route)?;
+    }
     let state_after_hash = pftl_uniswap_route_state_hash(&route);
     ledger.pftl_uniswap_routes.push(route);
     append_pftl_uniswap_consensus_receipt(
@@ -5148,6 +5155,9 @@ pub fn apply_asset_orchard_private_primary_redeem_route_transition(
 ) -> Result<(), (&'static str, String)> {
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let route = ledger.pftl_uniswap_routes[route_index].clone();
+    if b23_facility_enabled(&route) {
+        return Err(("pftl_uniswap_private_redemption_disabled", "opted-in facilities require public primary redemption with management credit".to_string()));
+    }
     // Redemption remains available while inbound issue/export is paused.
     let v2 = route.v2.as_ref().ok_or_else(|| {
         (
@@ -5323,8 +5333,15 @@ fn apply_pftl_uniswap_redemption_fund(
             "reserve funding requires a route policy with spread_recipient".to_string()));
     }
     ensure_pftl_uniswap_route_live(&route, false)?;
-    if operation.amount_atoms == 0 || route.primary_subscription_nonces.contains_key(&operation.funding_nonce) {
-        return Err(("pftl_uniswap_funding_invalid", "funding amount must be positive and nonce unused".to_string()));
+    ensure_pftl_uniswap_native_asset_policy(ledger, &route.native_nav_asset_id, &operation.funder)?;
+    let v2 = route.v2.as_ref().expect("opted-in route is v2");
+    let expected = v2.funding_sequence.unwrap_or(0).checked_add(1)
+        .ok_or_else(|| ("pftl_uniswap_funding_sequence_exhausted", "funding sequence exhausted".to_string()))?;
+    if operation.amount_atoms < v2.primary_market_policy.min_order_atoms {
+        return Err(("pftl_uniswap_funding_below_minimum", "funding must meet policy min_order_atoms".to_string()));
+    }
+    if operation.funding_sequence != Some(expected) {
+        return Err(("pftl_uniswap_funding_sequence_mismatch", "funding sequence must equal the next route funding sequence".to_string()));
     }
     let before = pftl_uniswap_route_state_hash(&route);
     b23_facility_fund_source(ledger, &route, &operation.settlement_asset_id, operation.amount_atoms)?;
@@ -5332,8 +5349,7 @@ fn apply_pftl_uniswap_redemption_fund(
         operation.amount_atoms, "PFTL-Uniswap reserve funding")?;
     route.settlement_reserve_atoms = route.settlement_reserve_atoms.checked_add(operation.amount_atoms)
         .ok_or_else(|| ("pftl_uniswap_reserve_overflow", "reserve funding would overflow".to_string()))?;
-    // Reuse the bounded, committed route nonce map; subscriptions and funds cannot reuse a nonce.
-    route.primary_subscription_nonces.insert(operation.funding_nonce.clone(), operation.funder.clone());
+    route.v2.as_mut().expect("opted-in route is v2").funding_sequence = Some(expected);
     route.validate().map_err(|e| ("bad_pftl_uniswap_route", e))?;
     let after = pftl_uniswap_route_state_hash(&route);
     ledger.pftl_uniswap_routes[index] = route;
@@ -5589,6 +5605,12 @@ fn apply_pftl_uniswap_route_epoch_advance(
             "next route epoch must pin the current finalized NAV packet and an active policy"
                 .to_string(),
         ));
+    }
+    if operation.next_primary_market_policy.spread_recipient.is_some() {
+        b23_facility_require_unique_route(ledger, &next_route.native_nav_asset_id, &next_route.route_id)?;
+        if !b23_facility_enabled(&next_route) {
+            b23_facility_require_aligned_inventory(ledger, &next_route)?;
+        }
     }
     let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
     let v2 = next_route.v2.as_mut().ok_or_else(|| {

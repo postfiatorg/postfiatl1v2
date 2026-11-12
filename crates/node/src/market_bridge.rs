@@ -1260,15 +1260,21 @@ pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultB
     })
 }
 
+include!("b23_facility_queries.rs");
+
 pub fn navcoin_bridge_routes(
     options: NavcoinBridgeRoutesOptions,
-) -> io::Result<PftlUniswapRoutesStatusReport> {
+) -> io::Result<NavcoinBridgeRoutesReadReport> {
     let store = NodeStore::new(&options.data_dir);
     match store.read_ledger() {
-        Ok(ledger) => pftl_uniswap_consensus_routes_status(&ledger),
+        Ok(ledger) => Ok(b23_routes_read_report(
+            pftl_uniswap_consensus_routes_status(&ledger)?,
+            Some(&ledger),
+        )),
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             let ledgers = read_pftl_uniswap_bridge_ledgers(&options.data_dir)?;
             pftl_uniswap_bridge_routes_status(&ledgers)
+                .map(|report| b23_routes_read_report(report, None))
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
         }
         Err(error) => Err(error),
@@ -1321,7 +1327,7 @@ pub fn navcoin_bridge_claims(
 
 pub fn navcoin_bridge_supply_status(
     options: NavcoinBridgeSupplyStatusOptions,
-) -> io::Result<PftlUniswapSupplyStatusReport> {
+) -> io::Result<NavcoinBridgeSupplyReadReport> {
     validate_navcoin_bridge_route_id(&options.route_id)?;
     let store = NodeStore::new(&options.data_dir);
     match store.read_ledger() {
@@ -1337,12 +1343,21 @@ pub fn navcoin_bridge_supply_status(
                         ),
                     )
                 })?;
-            pftl_uniswap_consensus_supply_status(&ledger, route)
+            Ok(NavcoinBridgeSupplyReadReport {
+                supply: pftl_uniswap_consensus_supply_status(&ledger, route)?,
+                spread_recipient: b23_route_spread_recipient(route),
+                funding_sequence: b23_route_funding_sequence(route),
+            })
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             let ledgers = read_pftl_uniswap_bridge_ledgers(&options.data_dir)?;
             let ledger = pftl_uniswap_bridge_ledger_for_route(&ledgers, &options.route_id)?;
             pftl_uniswap_bridge_supply_status(ledger)
+                .map(|supply| NavcoinBridgeSupplyReadReport {
+                    supply,
+                    spread_recipient: None,
+                    funding_sequence: None,
+                })
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
         }
         Err(error) => Err(error),

@@ -186,6 +186,7 @@ fn facility_fixture_for_issuer(
         return_imports: Default::default(),
         paused: true,
         v2: Some(PftlUniswapRouteV2State {
+            funding_sequence: None,
             route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
             route_epoch: 1,
             outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),
@@ -348,10 +349,25 @@ fn submit_asset(
     execute_asset_transaction_with_unverified_pftl_uniswap_fixture(genesis, ledger, &tx, 11)
 }
 
+fn add_dormant_route(ledger: &mut LedgerState) {
+    let mut route = ledger.pftl_uniswap_routes[0].clone();
+    route.route_id = "dormant-non-facility".into();
+    route.authorized_valid_supply_atoms = 0;
+    route.pftl_spendable_supply_atoms = 0;
+    route.native_spendable_balances_atoms.clear();
+    route.paused = true;
+    route.live_value_enabled = false;
+    let policy = &mut route.v2.as_mut().unwrap().primary_market_policy;
+    policy.spread_recipient = None;
+    policy.policy_hash = policy.computed_hash();
+    ledger.pftl_uniswap_routes.push(route);
+}
+
 fn market_buy_then_redeem(partial: bool) {
     let (genesis, mut ledger, alice_key, mut redeem) = facility_fixture(false);
     let alice = redeem.owner.clone();
     enable_facility(&mut ledger, &mut redeem, &alice);
+    add_dormant_route(&mut ledger);
 
     let bob_key = ml_dsa_65_keygen_from_seed(&[0x64; 32]);
     let bob = address_from_public_key(&bob_key.public_key);
@@ -572,6 +588,7 @@ fn fund_without_mint(source: bool) {
     let (genesis, mut ledger, key, mut redeem) = facility_fixture(source);
     let owner = redeem.owner.clone();
     enable_facility(&mut ledger, &mut redeem, &owner);
+    ledger.nav_assets[0].reserve_operator = owner.clone();
     let payout = redeem
         .settlement_source_asset_id
         .clone()
@@ -593,6 +610,7 @@ fn fund_without_mint(source: bool) {
         .unwrap()
         .balance;
     let op = PftlUniswapRedemptionFundOperation {
+        funding_sequence: Some(1),
         funder: owner.clone(),
         route_id: redeem.route_id.clone(),
         settlement_asset_id: payout.clone(),
@@ -647,10 +665,11 @@ fn fund_without_mint(source: bool) {
         PFTL_UNISWAP_REDEMPTION_FUND_TRANSACTION_KIND,
         AssetTransactionOperation::PftlUniswapRedemptionFund(op.clone()),
     );
-    assert_eq!(receipt.code, "pftl_uniswap_funding_invalid");
+    assert_eq!(receipt.code, "pftl_uniswap_funding_sequence_mismatch");
     assert_eq!(ledger, before, "duplicate funding must roll back");
     let mut too_much = op.clone();
     too_much.funding_nonce = "79".repeat(32);
+    too_much.funding_sequence = Some(2);
     let receipt = submit_asset(
         &genesis,
         &mut ledger,
@@ -846,6 +865,7 @@ fn b23_live_route_mint_then_redeem() {
     let (genesis, mut ledger, key, mut redeem) = facility_fixture_for_issuer(false, &issuer);
     let owner = redeem.owner.clone();
     enable_facility(&mut ledger, &mut redeem, &owner);
+    add_dormant_route(&mut ledger);
     ledger.pftl_uniswap_routes[0].live_value_enabled = true;
     ledger.pftl_uniswap_routes[0].paused = false;
     let nav = ledger.pftl_uniswap_routes[0].native_nav_asset_id.clone();
@@ -1138,3 +1158,8 @@ fn b23_mint_preserves_legacy_and_no_route_accounting() {
         );
     }
 }
+
+include!("b23_facility_revision3_tests.rs");
+
+#[path = "b23_facility_atomic_tests.rs"]
+mod atomic;

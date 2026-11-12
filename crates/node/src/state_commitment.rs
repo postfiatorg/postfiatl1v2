@@ -3629,6 +3629,9 @@ pub(super) fn append_pftl_uniswap_route(
             &format!("{prefix}.v2.return_verification_class"),
             &v2.return_verification_class,
         );
+        if let Some(sequence) = v2.funding_sequence {
+            append_canonical_u64(bytes, &format!("{prefix}.v2.funding_sequence"), sequence);
+        }
         let policy = &v2.primary_market_policy;
         if let Some(recipient) = &policy.spread_recipient {
             append_canonical_str(bytes, &format!("{prefix}.v2.spread_recipient"), recipient);

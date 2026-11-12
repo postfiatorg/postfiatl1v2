@@ -2859,6 +2859,8 @@ impl PftlUniswapConsensusReturnImport {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapRouteV2State {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub funding_sequence: Option<u64>,
     pub route_schema_version: u32,
     pub route_epoch: u64,
     pub outbound_verification_class: String,
@@ -3229,6 +3231,9 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
     }
     if let Some(v2) = &route.v2 {
         let policy = &v2.primary_market_policy;
+        if let Some(sequence) = v2.funding_sequence {
+            preimage.push_str(&format!("v2.funding_sequence={sequence}\n"));
+        }
         preimage.push_str(&format!(
             "v2.route_schema_version={}\nv2.route_epoch={}\nv2.outbound_verification_class={}\nv2.return_verification_class={}\nv2.policy_hash={}\nv2.policy_epoch={}\nv2.issue_multiplier_bps={}\nv2.redeem_multiplier_bps={}\nv2.issue_capacity_atoms={}\nv2.redeem_capacity_atoms={}\nv2.max_order_atoms={}\nv2.min_order_atoms={}\nv2.valid_from_height={}\nv2.expires_at_height={}\nv2.max_nav_age_blocks={}\nv2.pricing_nav_epoch={}\nv2.pricing_reserve_packet_hash={}\nv2.issue_capacity_used_atoms={}\nv2.redeem_capacity_used_atoms={}\nv2.non_nav_spread_atoms={}\n",
             v2.route_schema_version,
