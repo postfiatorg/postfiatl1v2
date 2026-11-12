@@ -15,7 +15,7 @@ const OPEN_SCHEMA = 'postfiat-native-session-open-v1';
 const SESSION_SCHEMA = 'postfiat-native-session-v1';
 const ALLOWLIST_SCHEMA = 'postfiat-native-session-allowlist-v1';
 const DENYLIST_SCHEMA = 'postfiat-native-session-denylist-v1';
-// The operator lists are re-read when their file changes, checked at most this often.
+// The operator lists are read and hashed at most this often; a changed hash reloads.
 const LIST_CHECK_INTERVAL_MS = 1_000;
 // FIPS 204 ML-DSA context, named like crates/crypto_provider's signature contexts.
 const SIGNATURE_CONTEXT = 'postfiat-l1-v2/native-session/v1';
@@ -81,24 +81,39 @@ function boundedInteger(raw, name, fallback, minimum, maximum) {
 }
 
 // Same checks as the other operator files: regular, not a symlink, owned by the
-// service user, not group/world writable.
+// service user, not group/world writable. Checked on the opened descriptor, so the
+// bytes returned are the file that passed.
 function readOperatorFile(file, variable) {
-    const absolute = path.resolve(file);
-    const stat = fs.lstatSync(absolute);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.uid !== process.getuid()
-        || (stat.mode & 0o022) !== 0) {
-        throw new Error(`${variable} must be an owner-controlled regular file`);
+    const refused = new Error(`${variable} must be an owner-controlled regular file`);
+    let fd;
+    try {
+        fd = fs.openSync(path.resolve(file), fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    } catch (error) {
+        throw error.code === 'ELOOP' ? refused : error;
     }
     try {
-        return JSON.parse(fs.readFileSync(absolute, 'utf8'));
+        const stat = fs.fstatSync(fd);
+        if (!stat.isFile() || stat.uid !== process.getuid() || (stat.mode & 0o022) !== 0) throw refused;
+        return fs.readFileSync(fd);
+    } finally {
+        fs.closeSync(fd);
+    }
+}
+
+function parseOperatorJson(bytes, variable) {
+    try {
+        return JSON.parse(bytes.toString('utf8'));
     } catch (error) {
         // Never echo file contents into logs.
         throw error instanceof SyntaxError ? new Error(`${variable} is not valid JSON`) : error;
     }
 }
 
-function loadAllowlist(file) {
-    const parsed = readOperatorFile(file, 'WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE');
+const ALLOWLIST_VARIABLE = 'WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE';
+const DENYLIST_VARIABLE = 'WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE';
+
+function parseAllowlist(bytes) {
+    const parsed = parseOperatorJson(bytes, ALLOWLIST_VARIABLE);
     const keys = parsed?.install_public_keys_hex;
     if (parsed?.schema !== ALLOWLIST_SCHEMA || !Array.isArray(keys)
         || !keys.every((key) => new RegExp(`^[0-9a-f]{${PUBLIC_KEY_HEX_LENGTH}}$`).test(String(key)))) {
@@ -107,8 +122,8 @@ function loadAllowlist(file) {
     return new Set(keys.map(installId));
 }
 
-function loadDenylist(file) {
-    const parsed = readOperatorFile(file, 'WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE');
+function parseDenylist(bytes) {
+    const parsed = parseOperatorJson(bytes, DENYLIST_VARIABLE);
     const ids = parsed?.install_ids_hex;
     if (parsed?.schema !== DENYLIST_SCHEMA || !Array.isArray(ids) || !ids.every((id) => INSTALL_ID_RE.test(String(id)))) {
         throw new Error(`native session denylist must be {"schema":"${DENYLIST_SCHEMA}","install_ids_hex":["<64 hex install id>",...]}`);
@@ -116,29 +131,34 @@ function loadDenylist(file) {
     return new Set(ids);
 }
 
-// An operator list re-read when its file's mtime (or size or inode) changes. A
-// file that cannot be read or parsed keeps the last good list: never fall open.
-function watchedList(file, load, label, logError) {
-    const fingerprint = () => {
-        try {
-            const stat = fs.lstatSync(path.resolve(file), { bigint: true });
-            return `${stat.mtimeNs}:${stat.size}:${stat.ino}`;
-        } catch (error) { return `unreadable:${error.code}`; }
-    };
-    let seen = fingerprint();
-    let current = load(file);
+// An operator list read and hashed on each poll; new contents are loaded. A file
+// that cannot be read or parsed keeps the last good list and is retried on the next
+// poll. Each distinct error is logged once.
+function watchedList(file, variable, parse, label, logError) {
+    const initial = readOperatorFile(file, variable);
+    let current = parse(initial);
+    let loadedHash = sha256Hex(initial);
+    let lastError = null;
     return {
         get: () => current,
         // True when a new list was loaded.
         refresh() {
-            const next = fingerprint();
-            if (next === seen) return false;
-            seen = next;
             try {
-                current = load(file);
+                const bytes = readOperatorFile(file, variable);
+                const hash = sha256Hex(bytes);
+                if (hash === loadedHash) {
+                    lastError = null;
+                    return false;
+                }
+                current = parse(bytes);
+                loadedHash = hash;
+                lastError = null;
                 return true;
             } catch (error) {
-                logError(`native session ${label} not reloaded, keeping the last good list: ${error.message}`);
+                if (error.message !== lastError) {
+                    lastError = error.message;
+                    logError(`native session ${label} not reloaded, keeping the last good list: ${error.message}`);
+                }
                 return false;
             }
         },
@@ -182,9 +202,9 @@ function createNativeSessions({
         ttlMs = boundedInteger(env.WALLET_PROXY_NATIVE_SESSION_TTL_MS,
             'WALLET_PROXY_NATIVE_SESSION_TTL_MS', 15 * 60_000, 60_000, 60 * 60_000);
         const allowlistFile = String(env.WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE || '').trim();
-        if (allowlistFile) allowlist = watchedList(allowlistFile, loadAllowlist, 'allowlist', logError);
+        if (allowlistFile) allowlist = watchedList(allowlistFile, ALLOWLIST_VARIABLE, parseAllowlist, 'allowlist', logError);
         const denylistFile = String(env.WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE || '').trim();
-        if (denylistFile) denylist = watchedList(denylistFile, loadDenylist, 'denylist', logError);
+        if (denylistFile) denylist = watchedList(denylistFile, DENYLIST_VARIABLE, parseDenylist, 'denylist', logError);
     }
     // Installs taken off the allowlist since startup: a reopen is a revocation.
     const delisted = new Set();

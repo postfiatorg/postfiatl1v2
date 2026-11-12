@@ -300,6 +300,37 @@ async function main() {
     writeList(denylistFile, { schema: 'postfiat-native-session-denylist-v1', install_ids_hex: ['zz'] }, 7_000);
     assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile } }), /denylist/);
 
+    // An in-place edit of the same length with the mtime restored is seen, and a
+    // load refused for its permissions is retried once they are repaired.
+    writeList(allowlistFile, allow(alpha, beta), 8_000);
+    writeList(denylistFile, deny(beta), 8_000);
+    let hashClock = Date.now();
+    const hashErrors = [];
+    const hashed = createNativeSessions({
+      env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile },
+      now: () => hashClock, log: () => {}, logError: (line) => hashErrors.push(line),
+    });
+    const hashedAlpha = (await openAt(hashed, alpha, hashClock)).body.token;
+    const denyInode = fs.statSync(denylistFile).ino;
+    writeList(denylistFile, deny(alpha), 8_000);
+    assert.strictEqual(fs.statSync(denylistFile).ino, denyInode);
+    hashClock += 1_000;
+    assert.deepStrictEqual(hashed.authenticate(hashedAlpha).failure, revoked, 'same inode, size and mtime');
+    writeList(denylistFile, deny(), 9_000);
+    hashClock += 1_000;
+    assert.strictEqual(hashed.authenticate(hashedAlpha).failure, null);
+    writeList(denylistFile, deny(alpha), 10_000);
+    fs.chmodSync(denylistFile, 0o666);
+    for (let step = 0; step < 3; step += 1) {
+      hashClock += 1_000;
+      assert.strictEqual(hashed.authenticate(hashedAlpha).failure, null, 'a group-writable file is not loaded');
+    }
+    assert.strictEqual(hashErrors.length, 1, hashErrors.join('\n'));
+    fs.chmodSync(denylistFile, 0o600);
+    hashClock += 1_000;
+    assert.deepStrictEqual(hashed.authenticate(hashedAlpha).failure, revoked, 'a permission-only repair is retried');
+    assert.strictEqual(hashErrors.length, 1, hashErrors.join('\n'));
+
     // A bound across installs: distinct installs with unexpired tokens.
     let capClock = Date.now();
     const capped = createNativeSessions({
