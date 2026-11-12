@@ -24,6 +24,12 @@ SOURCE_BLOCK_HASH = "0x" + "6f" * 32
 GENESIS_HASH = "ce" * 48
 
 
+def chain_block_hash(chain_id: int, number: int) -> str:
+    """The fake hash of Base block `number` on chain `chain_id`: distinct per chain."""
+
+    return "0x" + f"{chain_id:016x}" + f"{number:048x}"
+
+
 def recipient(index: int) -> str:
     return "pf" + f"{index:040x}"
 
@@ -43,7 +49,7 @@ def release(sequence: int, *, nonce: int | None = None, amount: int = 5_000, hei
             "amount_atoms": amount,
             "recipient": recipient(sequence) if to is None else to,
             "source_block_number": source_block,
-            "source_block_hash": SOURCE_BLOCK_HASH,
+            "source_block_hash": chain_block_hash(8453, source_block),
             "released_at_height": 10 + sequence if height is None else height,
         },
     }
@@ -106,8 +112,10 @@ class FakePftl:
 
 
 class FakeBase:
-    """A Base JSON-RPC that serves only reads, and records the block tag of
-    every state read."""
+    """A Base JSON-RPC that serves only reads, and records the block of every
+    state read. Each chain has its own block hashes; a state read may name
+    its block by number or EIP-1898 `{"blockHash", "requireCanonical"}`, and
+    a hash the node does not know is an RPC error (as Anvil and geth answer)."""
 
     def __init__(self, locks: dict[int, tuple[str, int, str]], *, chain_id: int = 8453,
                  code: bytes = LOCK_CODE, finalized: int = FINALIZED,
@@ -116,14 +124,46 @@ class FakeBase:
         self.chain_id = chain_id
         self.code = code
         self.finalized = finalized
-        # The canonical hash of each Base block (default: the release records'),
+        # The canonical hash of each Base block (default: chain_block_hash),
         # and the first block at which each Lock exists (default: block 0).
         self.block_hashes = block_hashes or {}
         self.lock_from = lock_from or {}
         self.state_read_tags: list[str] = []
         self.lock_read_tags: list[str] = []
         self.block_reads: list[str] = []
+        self.hash_reads: list[str] = []
+        self.unanchored_state_reads: list[Any] = []
         self.methods: list[str] = []
+
+    def canonical(self, number: int) -> str:
+        return self.block_hashes.get(number, chain_block_hash(self.chain_id, number))
+
+    def number_of(self, block_hash: str) -> int | None:
+        """The number of a canonical block this node knows, else None."""
+
+        for number, known in self.block_hashes.items():
+            if known == block_hash and number <= self.finalized:
+                return number
+        if block_hash[2:18] != f"{self.chain_id:016x}":
+            return None
+        number = int(block_hash[18:], 16)
+        return number if number <= self.finalized and number not in self.block_hashes else None
+
+    def block(self, number: int) -> dict[str, Any]:
+        return {"number": hex(number), "hash": self.canonical(number),
+                "parentHash": self.canonical(number - 1) if number else "0x" + "00" * 32}
+
+    def state_block(self, method: str, tag: Any) -> int:
+        """The block number a state read names, by number or by hash."""
+
+        if isinstance(tag, dict):
+            assert set(tag) == {"blockHash", "requireCanonical"} and tag["requireCanonical"] is True, tag
+            number = self.number_of(tag["blockHash"])
+            if number is None:
+                raise watcher.pft_token.PftTokenError(f"{method}: RPC error: Resource not found")
+            return number
+        self.unanchored_state_reads.append((method, tag))
+        return int(tag, 16)
 
     def call(self, method: str, params: list[Any]) -> Any:
         self.methods.append(method)
@@ -134,24 +174,31 @@ class FakeBase:
             assert full is False, params
             self.block_reads.append(tag)
             if tag == "finalized":
-                return {"number": hex(self.finalized), "hash": "0x" + "ab" * 32}
+                return self.block(self.finalized)
             number = int(tag, 16)
             assert number <= self.finalized, "only finalized blocks are read by number"
-            return {"number": tag, "hash": self.block_hashes.get(number, SOURCE_BLOCK_HASH)}
+            return self.block(number)
+        if method == "eth_getBlockByHash":
+            block_hash, full = params
+            assert full is False, params
+            self.hash_reads.append(block_hash)
+            number = self.number_of(block_hash)
+            return None if number is None else self.block(number)
         if method == "eth_getCode":
             assert params[0].lower() == LOCK
-            self.state_read_tags.append(params[1])
+            self.state_read_tags.append(hex(self.state_block(method, params[1])))
             return "0x" + self.code.hex()
         if method == "eth_call":
             call, tag = params
-            self.state_read_tags.append(tag)
-            self.lock_read_tags.append(tag)
+            number = self.state_block(method, tag)
+            self.state_read_tags.append(hex(number))
+            self.lock_read_tags.append(hex(number))
             assert call["to"].lower() == LOCK
             data = call["data"]
             assert data[:10] == "0x" + watcher.LOCK_RECORD_SELECTOR, data
             nonce = int(data[10:], 16)
             absent = ("0x" + "00" * 20, 0, "0x" + "00" * 32)
-            exists = nonce in self.locks and int(tag, 16) >= self.lock_from.get(nonce, 0)
+            exists = nonce in self.locks and number >= self.lock_from.get(nonce, 0)
             holder, amount, recipient_hash = self.locks[nonce] if exists else absent
             words = holder[2:].rjust(64, "0") + f"{amount:064x}" + recipient_hash[2:]
             return "0x" + words
@@ -208,7 +255,8 @@ class WatcherTests(unittest.TestCase):
         # source block, whose hash was read and matched first.
         self.assertEqual(base.state_read_tags[0], hex(FINALIZED))
         self.assertEqual(base.lock_read_tags, [hex(900)] * 3)
-        self.assertEqual(base.block_reads, ["finalized"] + [hex(900)] * 3)
+        # The anchor, each source block by number, the anchor again at the end.
+        self.assertEqual(base.block_reads, ["finalized"] + [hex(900)] * 3 + [hex(FINALIZED)])
         self.assertTrue(set(base.methods) <= {"eth_chainId", "eth_getBlockByNumber", "eth_getCode", "eth_call"})
 
     def test_each_false_release_is_a_typed_alarm(self) -> None:
@@ -249,7 +297,7 @@ class WatcherTests(unittest.TestCase):
         alarm = next(line for line in lines if line["kind"] == "alarm")
         self.assertEqual((alarm["sequence"], alarm["source_block_number"]), (1, 900))
         self.assertEqual((alarm["source_block_hash"], alarm["canonical_block_hash"]),
-                         (SOURCE_BLOCK_HASH, "0x" + "77" * 32))
+                         (chain_block_hash(8453, 900), "0x" + "77" * 32))
         # The mismatched block's Lock is not read.
         self.assertEqual(base.lock_read_tags, [hex(800)])
 
@@ -258,7 +306,7 @@ class WatcherTests(unittest.TestCase):
         base = FakeBase({})
         code, lines, _ = run(FakePftl([pending]), base)
         self.assertEqual((code, alarm_codes(lines)), (2, ["release_block_not_finalized"]))
-        self.assertEqual((base.block_reads, base.lock_read_tags), (["finalized"], []))
+        self.assertEqual((base.block_reads, base.lock_read_tags), (["finalized", hex(FINALIZED)], []))
 
     def test_a_release_whose_amount_and_recipient_both_differ_raises_both(self) -> None:
         false_release = release(0)
@@ -789,11 +837,13 @@ class ExportBase(FakeBase):
             if self.max_span is not None and end - start + 1 > self.max_span:
                 raise watcher.pft_token.PftTokenRefused("eth_getLogs: the answer is larger than 1048576 bytes")
             # A node that ignores the address filter: the watcher must check it.
-            return [log for log in self.logs if start <= int(log["blockNumber"], 16) <= end]
+            # Each log carries its block's hash on this node's chain.
+            return [{"blockHash": self.canonical(int(log["blockNumber"], 16)), "removed": False, **log}
+                    for log in self.logs if start <= int(log["blockNumber"], 16) <= end]
         if method == "eth_call" and not params[0]["data"].startswith("0x" + watcher.LOCK_RECORD_SELECTOR):
             call, tag = params
-            self.total_tags.append(tag)
-            block = int(tag, 16)
+            block = self.state_block(method, tag)
+            self.total_tags.append(hex(block))
             released = self.paid_through(block) if self.released is None else self.released
             balance = self.locked - released if self.balance is None else self.balance
             words = {watcher._selector("token()"): int(TOKEN, 16), watcher._selector("totalLocked()"): self.locked,
@@ -1895,6 +1945,95 @@ class ExportIdentityTests(unittest.TestCase):
             self.assertEqual([line["status"] for line in lines if line["kind"] in ("payout", "export")],
                              ["backed", "paid"])
             self.assertEqual(len(json.loads(state_file.read_text())["exports"]["paid"]), 1)
+
+
+FOREIGN_CHAIN = 84532
+
+
+class OneForeignRead:
+    """One Base endpoint behind which read number `index` (0-based, every
+    method counted) is answered by `foreign`, an honest node of another
+    network, and every other read by `home`."""
+
+    def __init__(self, home: Any, foreign: Any, index: int | None = None, method: str | None = None,
+                 data: str | None = None) -> None:
+        self.home, self.foreign, self.index, self.method, self.data = home, foreign, index, method, data
+        self.reads, self.used = 0, None
+
+    def call(self, method: str, params: list[Any]) -> Any:
+        if self.index is not None:
+            pick = self.reads == self.index
+        else:
+            pick = (self.used is None and method == self.method
+                    and (self.data is None or params[0]["data"] == self.data))
+        self.reads += 1
+        if pick:
+            self.used = method
+            return self.foreign.call(method, params)
+        return self.home.call(method, params)
+
+
+def foreign_base(base: FakeBase) -> FakeBase:
+    base.chain_id = FOREIGN_CHAIN
+    return base
+
+
+class BaseAnchorTests(unittest.TestCase):
+    """G1: every Base answer a run uses is bound to one anchor block (the
+    finalized block, by hash) of the chain the run validated. A single read
+    answered by an honest node of another network (same lock address, its
+    own history) ends in a refusal or in exactly the all-honest result."""
+
+    def seed(self, directory: str, lane: ExportPftl, finalized: int = 900) -> Path:
+        state_file = Path(directory) / "state.json"
+        self.assertEqual(run_exports(lane, ExportBase([], locked=2_000_000, finalized=finalized),
+                                     "--state-file", str(state_file))[0], 0)
+        return state_file
+
+    def refused(self, outcome, state_file: Path, before: bytes, code: str = "base_anchor_unknown") -> None:
+        status, lines, stderr = outcome
+        self.assertEqual(status, 1, stderr)
+        self.assertIn(code, stderr)
+        self.assertEqual([line for line in lines if line["kind"] in ("payout", "export", "summary")], [])
+        self.assertEqual(state_file.read_bytes(), before)
+
+    def test_sequence_a_a_foreign_total_released_never_backs_a_second_payout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            e = export_entry(0, height=400)
+            lane = ExportPftl([e, export_entry(1, amount=600_000, height=450)], released=2_000_000)
+            state_file = self.seed(directory, lane)
+            before = state_file.read_bytes()
+            p1 = released_log(e, block=950, transaction="0x" + "a1" * 32)
+            p2 = released_log(e, block=1_150, transaction="0x" + "a2" * 32)
+            a = ExportBase([p1, p2], locked=2_000_000, finalized=1_200, balance=1_600_000)
+            b = foreign_base(ExportBase([p1], locked=2_000_000, finalized=1_200))
+            endpoint = OneForeignRead(a, b, method="eth_call", data=watcher._selector("totalReleased()"))
+            outcome = run_exports(lane, endpoint, "--state-file", str(state_file), "--lock-from-block", "1000",
+                                  "--from-height", "0")
+            self.assertEqual(endpoint.used, "eth_call")
+            self.refused(outcome, state_file, before)
+            # All from A: the late scan is incomplete, and says so.
+            code, lines, _ = run_exports(lane, a, "--state-file", str(state_file), "--lock-from-block", "1000",
+                                         "--from-height", "0")
+            self.assertEqual(code, 2)
+            self.assertIn("total_released_mismatch", alarm_codes(lines))
+
+    def test_an_anchor_that_changes_before_the_end_of_the_run_is_refused(self):
+        e = export_entry(0, height=400)
+        with tempfile.TemporaryDirectory() as directory:
+            lane = ExportPftl([e], released=2_000_000)
+            state_file = self.seed(directory, lane)
+            before = state_file.read_bytes()
+
+            class Reorged(ExportBase):
+                def call(self, method, params):
+                    if method == "eth_getBlockByNumber" and params[0] == hex(self.finalized):
+                        return {**self.block(self.finalized), "hash": "0x" + "4e" * 32}
+                    return super().call(method, params)
+
+            self.refused(run_exports(lane, Reorged([released_log(e, block=950)], locked=2_000_000,
+                                                   finalized=1_000), "--state-file", str(state_file)),
+                         state_file, before, "base_anchor_mismatch")
 
 
 U64_MAX = (1 << 64) - 1

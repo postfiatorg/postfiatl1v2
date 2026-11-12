@@ -103,6 +103,9 @@ ALARM_CODES = (
     "base_released_above_locked",
 )
 WARNING_CODES = ("export_unpaid_too_long",)
+# Refusals of a Base answer not bound to the run's anchor block: exit 1, no
+# payout or export line, the state file unchanged.
+ANCHOR_CODES = ("base_anchor_unknown", "base_anchor_mismatch")
 
 
 # --- Keccak-256 (Ethereum's, padding 0x01): not in the standard library. ---
@@ -381,10 +384,91 @@ def _block_hash(base: Any, number: int) -> str:
     return found.lower()
 
 
-def _lock_record(base: Any, lock: str, nonce: int, block: str) -> tuple[str, int, str]:
+class BaseAnchor:
+    """The run's anchor on Base: the finalized block (number, hash and parent
+    hash) read once after the chain id check. Every state read names it, or a
+    block it binds, by hash (EIP-1898), and every log's block is bound to it
+    by hash; `blocks` caches the blocks read by hash in this run."""
+
+    def __init__(self, number: int, block_hash: str, parent_hash: str) -> None:
+        self.number, self.hash, self.parent_hash = number, block_hash, parent_hash
+        self.blocks: dict[str, int] = {block_hash: number}  # hash -> number, read by hash
+        self.numbers: dict[int, str] = {number: block_hash}  # number -> the one hash bound to it
+
+    @property
+    def param(self) -> dict[str, Any]:
+        return at_block(self.hash)
+
+
+def at_block(block_hash: str) -> dict[str, Any]:
+    """The EIP-1898 block parameter: this block, and only while canonical."""
+
+    return {"blockHash": block_hash, "requireCanonical": True}
+
+
+def _anchor(base: Any) -> BaseAnchor:
+    block = _base(base, "eth_getBlockByNumber", ["finalized", False])
+    try:
+        number = pft_token.hex_quantity((block or {}).get("number"), "finalized block number")
+    except (pft_token.PftTokenRefused, AttributeError) as error:
+        raise WatcherError("base_answer_malformed", f"the finalized block: {error}") from None
+    hashes = [block.get(key) for key in ("hash", "parentHash")]
+    if not all(isinstance(value, str) and HASH32.match(value) for value in hashes):
+        raise WatcherError("base_answer_malformed", "the finalized block has no 32-byte hash and parent hash")
+    return BaseAnchor(number, hashes[0].lower(), hashes[1].lower())
+
+
+def _bound(base: Any, method: str, params: list[Any], what: str) -> Any:
+    """A read that names its block by hash: an error answer means the node does
+    not know that block (another network, a reorg) and refuses the run."""
+
+    try:
+        return _base(base, method, params)
+    except WatcherRpcError as error:
+        raise WatcherTransientError("base_anchor_unknown",
+                                    f"{what}: the Base node does not answer at the run's anchored block ({error}): "
+                                    "another network, a reorg, or a failed request") from None
+
+
+def _bind_block(base: Any, anchor: BaseAnchor, block_hash: str, number: int, what: str) -> None:
+    """`block_hash` must name block `number` (at or below the anchor) on the
+    anchored chain: read by hash once per run, and one hash per number."""
+
+    known = anchor.blocks.get(block_hash)
+    if known is None:
+        block = _bound(base, "eth_getBlockByHash", [block_hash, False], what)
+        if block is None:
+            raise WatcherTransientError("base_anchor_unknown",
+                                        f"{what}: the Base node does not know block {block_hash}: another network "
+                                        "or a reorg")
+        try:
+            known = pft_token.hex_quantity(block.get("number") if isinstance(block, dict) else None,
+                                           f"block {block_hash} number")
+        except pft_token.PftTokenRefused as error:
+            raise WatcherError("base_answer_malformed", str(error)) from None
+        if str(block.get("hash", "")).lower() != block_hash:
+            raise WatcherTransientError("base_anchor_mismatch", f"{what}: the answer for {block_hash} is another block")
+        anchor.blocks[block_hash] = known
+    if known != number or number > anchor.number or anchor.numbers.setdefault(number, block_hash) != block_hash:
+        raise WatcherTransientError("base_anchor_mismatch",
+                                    f"{what}: block {block_hash} is block {known}, not block {number} of the chain "
+                                    f"anchored at {anchor.number} ({anchor.hash})")
+
+
+def _check_anchor(base: Any, anchor: BaseAnchor) -> None:
+    """The anchor read again by number at the end of the run: a reorg below
+    it, or another network's answer to the first read, refuses the run."""
+
+    if (found := _block_hash(base, anchor.number)) != anchor.hash:
+        raise WatcherTransientError("base_anchor_mismatch",
+                                    f"block {anchor.number} is now {found}, not the run's anchor {anchor.hash}")
+
+
+def _lock_record(base: Any, lock: str, nonce: int, block: str | dict[str, Any]) -> tuple[str, int, str]:
     data = "0x" + LOCK_RECORD_SELECTOR + f"{nonce:064x}"
     try:
-        answer = pft_token.hex_bytes(_base(base, "eth_call", [{"to": lock, "data": data}, block]), "lockRecord")
+        answer = pft_token.hex_bytes(_bound(base, "eth_call", [{"to": lock, "data": data}, block],
+                                            f"lockRecord({nonce})"), "lockRecord")
     except pft_token.PftTokenRefused as error:
         raise WatcherError("base_answer_malformed", str(error)) from None
     if len(answer) != 96 or any(answer[:12]) or any(answer[32:56]):
@@ -593,9 +677,10 @@ def _released_events(base: Any, lock: str, start: int, end: int) -> list[dict[st
     return events
 
 
-def _u256_call(base: Any, to: str, data: str, tag: str) -> int:
+def _u256_call(base: Any, to: str, data: str, block: dict[str, Any]) -> int:
     try:
-        answer = pft_token.hex_bytes(_base(base, "eth_call", [{"to": to, "data": data}, tag]), "eth_call")
+        answer = pft_token.hex_bytes(_bound(base, "eth_call", [{"to": to, "data": data}, block], f"eth_call {data[:10]}"),
+                                     "eth_call")
     except pft_token.PftTokenRefused as error:
         raise WatcherError("base_answer_malformed", str(error)) from None
     if len(answer) != 32:
@@ -689,7 +774,7 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
                 current_height: int, released_atoms: int, from_block: int, state: dict[str, Any] | None = None,
                 accept_baseline: bool = False, unpaid_warning_blocks: int | None, alarm: Callable[..., None],
                 lines: list[dict[str, Any]], rescan_all: bool = False,
-                discard_history: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
+                discard_history: bool = False, anchor: BaseAnchor | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The outbound direction: every finalized `Released` payout must stand on a
     PFTL export packet (same digest, recipient, amount, withdrawal-id and
     burn commitments); every final export is `paid` or `unpaid`; the totals
@@ -735,6 +820,11 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
             raise AssertionError(f"undeclared warning code {code}")
         lines.append({"schema": LINE_SCHEMA, "kind": "warning", "code": code, "lane_id": lane_id, **fields})
 
+    if anchor is None:
+        anchor = _anchor(base)
+    if anchor.number != finalized:
+        raise WatcherTransientError("base_anchor_mismatch",
+                                    f"the export view's finalized block {finalized} is not the anchor {anchor.number}")
     exports, snapshot = _exports_of(pftl, lane_id, identity)
     by_digest = {entry["evm_digest"]: entry for entry in exports}
     pruned, pruned_atoms = snapshot["pruned_export_count"], snapshot["pruned_exported_atoms"]
@@ -848,7 +938,7 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
     # `verified_earlier` or `paid` (`matched_incomplete_scan`). Its alarm
     # keeps the export part of the state unchanged; a clean release view
     # still saves its own height, so the file as a whole may differ.
-    tag = hex(finalized)
+    tag = anchor.param
     token = "0x" + f"{_u256_call(base, lock, _selector('token()'), tag):064x}"[-40:]
     total_locked = _u256_call(base, lock, _selector("totalLocked()"), tag)
     total_released = _u256_call(base, lock, _selector("totalReleased()"), tag)
@@ -1117,12 +1207,9 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
     if chain_id != policy["chain_id"]:
         raise WatcherError("base_chain_id_mismatch",
                            f"the Base RPC is on chain {chain_id}; lane `{lane_id}` names {policy['chain_id']}")
-    block = _base(base, "eth_getBlockByNumber", ["finalized", False])
-    try:
-        finalized = pft_token.hex_quantity((block or {}).get("number"), "finalized block number")
-    except (pft_token.PftTokenRefused, AttributeError) as error:
-        raise WatcherError("base_answer_malformed", f"the finalized block: {error}") from None
-    finalized_tag = hex(finalized)
+    # The run's anchor: every later Base answer is bound to this block.
+    anchor = _anchor(base)
+    finalized = anchor.number
 
     lines: list[dict[str, Any]] = []
 
@@ -1132,7 +1219,8 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
         lines.append({"schema": LINE_SCHEMA, "kind": "alarm", "code": code, "lane_id": lane_id, **fields})
 
     try:
-        code = pft_token.hex_bytes(_base(base, "eth_getCode", [policy["lock"], finalized_tag]), "eth_getCode")
+        code = pft_token.hex_bytes(_bound(base, "eth_getCode", [policy["lock"], anchor.param], "eth_getCode"),
+                                   "eth_getCode")
     except pft_token.PftTokenRefused as error:
         raise WatcherError("base_answer_malformed", str(error)) from None
     observed_code_hash = "0x" + keccak256(code).hex()
@@ -1218,10 +1306,13 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
                 released_atoms=released_atoms, from_block=lock_from_block,
                 state=carried, accept_baseline=accept_export_baseline, unpaid_warning_blocks=unpaid_warning_blocks,
                 alarm=alarm, lines=lines, rescan_all=from_height is not None,
-                discard_history=discard_export_history)
+                discard_history=discard_export_history, anchor=anchor)
         except WatcherError as error:
+            if error.code in ANCHOR_CODES:
+                raise  # a Base answer not bound to the anchor: the whole run is refused
             export_error = error
             lines.append({"schema": LINE_SCHEMA, "kind": "error", "code": error.code, "message": str(error)})
+    _check_anchor(base, anchor)
     alarms = sum(1 for line in lines if line["kind"] == "alarm")
     lines.append({
         "schema": LINE_SCHEMA,
