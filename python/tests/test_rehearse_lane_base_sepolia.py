@@ -748,12 +748,21 @@ class ReleaseCapTests(unittest.TestCase):
         return dry_run.quote_release(ceiling_wei=self.CEILING, relayer=self.RELAYER, lock=self.LOCK,
                                      calldata="0x1234", read=read)
 
-    def test_a_relayer_holding_more_than_the_ceiling_is_refused(self):
-        read, _ = self.chain(balance=self.CEILING + 1)
+    def test_the_release_is_budgeted_from_the_lesser_of_balance_and_ceiling(self):
+        for balance in (self.CEILING + 1, 10 * self.CEILING, self.CEILING // 2):
+            with self.subTest(balance=balance):
+                read, _ = self.chain(balance=balance)
+                caps = self.quote(read)
+                spendable = min(balance, self.CEILING)
+                self.assertEqual(caps["budget_wei"], spendable)
+                self.assertLessEqual(caps["gas_limit"] * caps["max_fee_per_gas_wei"]
+                                     + dry_run.L1_DATA_FEE_ALLOWANCE_WEI, spendable)
+
+    def test_a_quote_above_a_balance_below_the_ceiling_is_refused(self):
+        read, _ = self.chain(balance=dry_run.L1_DATA_FEE_ALLOWANCE_WEI + 10, estimate=200_000, price=10 ** 6)
         with self.assertRaises(dry_run.RehearsalFailure) as refused:
             self.quote(read)
-        self.assertIn("fresh relayer account", str(refused.exception))
-        self.assertIn("new plan", str(refused.exception))
+        self.assertIn("nothing was sent", str(refused.exception))
 
     def test_the_caps_keep_the_release_within_the_ceiling(self):
         read, _ = self.chain(balance=self.CEILING)
@@ -775,8 +784,8 @@ class ReleaseCapTests(unittest.TestCase):
         read, _ = self.chain(balance=self.CEILING)
         caps = self.quote(read)
         argv = dry_run.relay_release_argv(rpc_url="http://base", lock=self.LOCK, input_dir=Path("in"),
-                                          proof=Path("proof.json"), signer=["--account", "r"], vkey="0x01",
-                                          caps=caps)
+                                          proof=Path("proof.json"), signer=["--account", "r"],
+                                          sender=self.RELAYER, vkey="0x01", caps=caps)
         for flag, value in (("--gas-limit", caps["gas_limit"]), ("--max-fee-per-gas", caps["max_fee_per_gas_wei"])):
             self.assertEqual(argv[argv.index(flag) + 1], str(value))
         relay_args = RELAY.parser().parse_args(["release", "--rpc", "http://base", "--lock", self.LOCK,
@@ -787,3 +796,178 @@ class ReleaseCapTests(unittest.TestCase):
 
 
 RELAY = dry_run._load("pft_lane_export_relay", "scripts/pft-lane-export-relay.py")
+
+
+def resume_release(test, *, account, balance, estimate=200_000, price=10 ** 6, ceiling=10 ** 15):
+    """A resumed run's prove-and-release through main(), with every read and child
+    command mocked: keystores are files under a temporary HOME (only their public
+    `address` field exists), RPC reads answer from `balance`, `estimate` and `price`,
+    and the relay is never run. Returns (refusal, rpc methods read, child argv)."""
+    import io
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from unittest import mock
+
+    tmp = Path(tempfile.mkdtemp())
+    test.addCleanup(__import__("shutil").rmtree, tmp)
+    keystores = tmp / ".foundry/keystores"
+    keystores.mkdir(parents=True)
+    for name, address in (("relayer-a", ResumedRelayerTests.A), ("relayer-b", ResumedRelayerTests.B)):
+        (keystores / name).write_text(json.dumps({"address": address[2:], "crypto": {}, "id": name, "version": 3}))
+    (keystores / "relayer-no-address").write_text(json.dumps({"crypto": {}, "id": "n", "version": 3}))
+    out = tmp / "run"
+    out.mkdir()
+    recipient = "0x" + "ab" * 20
+    state = {"mode": "base-sepolia", "completed": list(dry_run.STAGES[:dry_run.STAGES.index("prove-and-release")]),
+             "data": {"commit": "c0ffee", "relayer_ceiling_wei": ceiling, "relayer_address": ResumedRelayerTests.A,
+                      "plan": {"relayer_ceiling_wei": ceiling, "payout_recipient": recipient},
+                      "deploy": {"lock": ResumedRelayerTests.LOCK},
+                      "export": {"base_recipient": recipient, "input_sha256": "00", "public_values_sha256": "00"}}}
+    (out / "state.json").write_text(json.dumps(state))
+    proof = tmp / "proof.json"
+    proof.write_text(json.dumps({"public_values_hex": "ab", "proof_hex": "0xcd"}))
+    password = tmp / "password"
+    password.write_text("never read")
+    reads, children = [], []
+
+    def urlopen(request, timeout=None):
+        method = json.loads(request.data)["method"]
+        reads.append(method)
+        value = {"eth_getBalance": balance, "eth_estimateGas": estimate, "eth_gasPrice": price}[method]
+        return io.BytesIO(json.dumps({"result": hex(value)}).encode())
+
+    def run(argv, **kwargs):
+        argv = [str(a) for a in argv]
+        children.append(argv)
+        if argv[:2] == ["git", "status"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        if argv[:2] == ["cast", "calldata"]:
+            kwargs["stdout"].write("0x1234\n")
+        elif argv[1].endswith("pft-lane-export-relay.py"):
+            kwargs["stdout"].write(json.dumps({"sent": True, "transaction": "0x" + "77" * 32, "block": 9,
+                                               "released": True}))
+        else:
+            raise AssertionError(f"unexpected child {argv}")
+        return subprocess.CompletedProcess(argv, 0)
+
+    refusal = None
+    with mock.patch.dict(os.environ, {"HOME": str(tmp)}), mock.patch("urllib.request.urlopen", urlopen), \
+            mock.patch.object(dry_run.subprocess, "run", run), mock.patch.object(dry_run.ORDER, "git",
+                                                                                 lambda *a: "c0ffee"), \
+            mock.patch.object(dry_run, "load_program_identity", lambda **k: {"program_vkey": "0x01"}):
+        try:
+            dry_run.main(["--output", str(out), "--proof", str(proof), "--through", "prove-and-release",
+                          "--relayer-account", account, "--relayer-password-file", str(password)])
+        except dry_run.RehearsalFailure as failure:
+            refusal = failure
+    return refusal, reads, children
+
+
+def relay_dispatch(children):
+    return [argv for argv in children if len(argv) > 1 and argv[1].endswith("pft-lane-export-relay.py")]
+
+
+class ResumedRelayerTests(unittest.TestCase):
+    """C1: the relayer whose balance and estimate are checked is the one that signs."""
+
+    A = "0x" + "a1" * 20
+    B = "0x" + "b2" * 20
+    LOCK = "0x" + "44" * 20
+
+    def test_a_resume_with_another_relayer_is_refused_before_anything_is_read_or_signed(self):
+        refusal, reads, children = resume_release(self, account="relayer-b", balance=10 ** 15)
+        self.assertIsNotNone(refusal, "the release went ahead with another relayer")
+        self.assertEqual(type(refusal).__name__, "RelayerMismatch")
+        self.assertIn(self.B, str(refusal))
+        self.assertIn(self.A, str(refusal))
+        self.assertNotIn("relayer-b", str(refusal))
+        self.assertEqual(reads, [])
+        self.assertEqual(relay_dispatch(children), [])
+
+    def test_a_keystore_without_a_public_address_is_refused(self):
+        refusal, reads, children = resume_release(self, account="relayer-no-address", balance=10 ** 15)
+        self.assertIsNotNone(refusal)
+        self.assertIn("relayer-address-unknown", str(refusal))
+        self.assertEqual((reads, relay_dispatch(children)), ([], []))
+
+    def test_the_recorded_relayer_is_quoted_and_bound_in_the_relay(self):
+        refusal, reads, children = resume_release(self, account="relayer-a", balance=10 ** 15)
+        self.assertIsNone(refusal)
+        self.assertEqual(reads, ["eth_getBalance", "eth_estimateGas", "eth_gasPrice"])
+        (argv,) = relay_dispatch(children)
+        self.assertEqual(argv[argv.index("--expect-sender") + 1], self.A)
+        self.assertEqual(argv[argv.index("--account") + 1], "relayer-a")
+
+    def test_the_runbook_says_a_change_of_relayer_is_not_supported(self):
+        text = (ROOT / "docs/runbooks/lane-base-sepolia-dry-run.md").read_text()
+        self.assertIn("A change of relayer is not supported", text)
+        self.assertIn("`address` field", text)
+
+
+class ReleaseBudgetTests(unittest.TestCase):
+    """C2: the ceiling is a spending budget for the run, checked in plan, not a cap on the balance."""
+
+    CEILING = 10 ** 15
+
+    def test_one_wei_above_the_ceiling_with_a_fitting_quote_is_released(self):
+        refusal, reads, children = resume_release(self, account="relayer-a", balance=self.CEILING + 1,
+                                                  estimate=200_000, price=10 ** 6, ceiling=self.CEILING)
+        self.assertIsNone(refusal, f"a dust top-up refused the release late: {refusal}")
+        (argv,) = relay_dispatch(children)
+        gas_limit = int(argv[argv.index("--gas-limit") + 1])
+        max_fee = int(argv[argv.index("--max-fee-per-gas") + 1])
+        self.assertLessEqual(gas_limit * max_fee + dry_run.L1_DATA_FEE_ALLOWANCE_WEI, self.CEILING)
+
+    def test_a_ceiling_that_cannot_fund_a_release_is_refused_before_anything(self):
+        for ceiling in (1, dry_run.L1_DATA_FEE_ALLOWANCE_WEI):
+            with self.subTest(ceiling=ceiling), self.assertRaises(dry_run.RehearsalFailure):
+                dry_run.resolve_relayer_ceiling(fork=False, requested=ceiling, plan=None)
+
+    def test_the_planned_spend_is_checked_against_the_ceiling(self):
+        price = 10 ** 6
+        planned = dry_run.planned_release_spend(price)
+        gas_limit = -(-dry_run.RELEASE_GAS_PLANNED * 6 // 5)
+        self.assertEqual(planned, gas_limit * price * dry_run.GAS_PRICE_FACTOR + dry_run.L1_DATA_FEE_ALLOWANCE_WEI)
+        self.assertEqual(dry_run.check_release_budget(ceiling_wei=planned, gas_price_wei=price), planned)
+        with self.assertRaises(dry_run.RehearsalFailure) as refused:
+            dry_run.check_release_budget(ceiling_wei=planned - 1, gas_price_wei=price)
+        self.assertIn("nothing was deployed", str(refused.exception))
+
+    def test_plan_refuses_a_short_ceiling_before_any_fork_or_deployment(self):
+        import io
+        import json
+        import subprocess
+        import tempfile
+        from unittest import mock
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, tmp)
+        price = 10 ** 9
+        ceiling = dry_run.planned_release_spend(price) - 1
+        reads = []
+
+        def urlopen(request, timeout=None):
+            method = json.loads(request.data)["method"]
+            reads.append(method)
+            value = {"eth_blockNumber": 16, "eth_gasPrice": price}[method]
+            return io.BytesIO(json.dumps({"result": hex(value)}).encode())
+
+        def no_fork(*args, **kwargs):
+            raise AssertionError("a fork was started before the ceiling was checked")
+        with mock.patch("urllib.request.urlopen", urlopen), \
+                mock.patch.object(dry_run.subprocess, "run",
+                                  lambda argv, **k: subprocess.CompletedProcess(argv, 0, stdout="", stderr="")), \
+                mock.patch.object(dry_run.ORDER, "git", lambda *a: "c0ffee"), \
+                mock.patch.object(dry_run, "BASE_LOCK_START", no_fork), \
+                mock.patch.object(dry_run, "load_program_identity", lambda **k: {"program_vkey": "0x01"}), \
+                self.assertRaises(dry_run.RehearsalFailure):
+            dry_run.main(["--output", str(tmp / "run"), "--through", "plan", "--relayer-ceiling-wei", str(ceiling),
+                          "--verifier-deployer", "0x" + "11" * 20, "--lock-deployer", "0x" + "22" * 20])
+        self.assertEqual(reads, ["eth_blockNumber", "eth_gasPrice"])
+
+    def test_the_runbook_says_what_the_ceiling_and_the_allowance_are(self):
+        text = (ROOT / "docs/runbooks/lane-base-sepolia-dry-run.md").read_text()
+        self.assertIn("a spending budget for this run, not a cap on the account's balance", text)
+        self.assertIn("an estimate, not a hard limit", text)
+        self.assertNotIn("refuses a relayer holding more than the ceiling", text)

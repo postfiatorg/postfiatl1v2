@@ -33,7 +33,9 @@ rehearsal's own Anvil uses 84532, Base Sepolia's public chain id. A private key 
 accepted for a loopback Anvil only; elsewhere use `--account` and
 `--password-file` (a Foundry keystore). Off a loopback Anvil `release` also
 needs `--gas-limit` and `--max-fee-per-gas`, applied to its `cast send`: the
-release spends at most their product plus Base's L1 data fee. Keys are never written or printed:
+release spends at most their product plus Base's L1 data fee. It also needs
+`--expect-sender`: the keystore's public `address` field must name it, and it
+is passed to Cast as `--from`. Keys are never written or printed:
 the pinned cast (Foundry 1.8.1) reads no raw private key from its environment,
 so on a loopback Anvil the key is a child argument, and every child failure,
 timeout included, is reported with the key replaced by `<redacted>`.
@@ -440,6 +442,8 @@ def classify_send_failure(stderr, stdout=''):
     """What a failed `cast send` means: (sent, reason). Foundry 1.7.1 writes the
     error to stderr; 1.8.1 with --json writes an error document to stdout."""
     text = (stderr + '\n' + stdout).lower()
+    if 'does not match the sender' in text:
+        return False, 'the key is not the expected sender (--from); nothing was sent'
     if any(s in text for s in ('password', 'keystore', 'decrypt', 'mac mismatch', 'no such file')):
         return False, 'the keystore or its password did not open; nothing was sent'
     if any(s in text for s in ('insufficient funds', 'gas required exceeds')):
@@ -469,6 +473,49 @@ def signer_args(args, local_anvil):
                                                  '--private-key-file)')
     return ['--account', args.account, '--password-file', str(args.password_file)], [args.account,
                                                                                      str(args.password_file)]
+
+
+def foundry_keystores():
+    """Foundry's default keystores folder, where `--account NAME` is looked up."""
+    return Path.home() / '.foundry' / 'keystores'
+
+
+def keystore_public_address(account):
+    """The address a Foundry keystore names in its public `address` field, read from
+    the file as JSON without decrypting it: no password is used and no key is opened.
+    A keystore without the field is refused: its address is not known without
+    unlocking it. The field is not covered by the keystore's MAC, so the release
+    also passes it to Cast as `--from`, which Cast compares with the decrypted key."""
+    try:
+        document = json.loads((foundry_keystores() / account).read_text())
+    except (OSError, ValueError):
+        document = None
+    address = document.get('address') if isinstance(document, dict) else None
+    digits = address.lower().removeprefix('0x') if isinstance(address, str) else ''
+    require(len(digits) == 40 and all(c in '0123456789abcdef' for c in digits),
+            'relayer-address-unknown: the keystore cannot be read or has no public `address` field, so its address '
+            'is not known without unlocking it; nothing was sent')
+    return '0x' + digits
+
+
+def sender_binding(args, *, local_anvil):
+    """`--from` for the release's `cast send`: `--expect-sender`, the address whose
+    balance the caller checked. A keystore's public address must already be it, and
+    Cast refuses a decrypted key with another address before signing. Required off a
+    loopback Anvil."""
+    if args.expect_sender is None:
+        require(local_anvil, 'off a loopback Anvil a release needs --expect-sender, the address whose balance bounds '
+                             'it; nothing was sent')
+        return []
+    expected = args.expect_sender.lower()
+    require(len(expected) == 42 and expected.startswith('0x')
+            and all(c in '0123456789abcdef' for c in expected[2:]),
+            f'--expect-sender {args.expect_sender!r} is not a 20-byte 0x address; nothing was sent')
+    if args.account:
+        current = keystore_public_address(args.account)
+        require(current == expected, f'relayer-mismatch: the keystore is {current}, not the expected sender '
+                                     f'{expected}; nothing was sent')
+    return ['--from', expected]
 
 
 def send_caps(args, *, local_anvil):
@@ -645,6 +692,7 @@ def cmd_release(args):
     loopback, anvil = is_local_anvil(rpc)
     local = loopback and anvil
     caps = send_caps(args, local_anvil=local)
+    sender = sender_binding(args, local_anvil=local)
     values, expected_hex = load_values(args.input)
     proof = json.loads(Path(args.proof).read_text())
     require(proof.get('schema') == PROOF_SCHEMA and proof['public_values_hex'] == expected_hex,
@@ -674,7 +722,7 @@ def cmd_release(args):
     balance_before = as_int(rpc.call(reads['lock.token'], 'balanceOf(address)', recipient))
     signer, secret = signer_args(args, local)
     p = run(['cast', 'send', args.lock, 'release(bytes,bytes)', '0x' + sent_hex, proof['proof_hex'],
-             '--rpc-url', args.rpc, '--json', *caps, *signer], secret=secret)
+             '--rpc-url', args.rpc, '--json', *caps, *signer, *sender], secret=secret)
     if p.returncode != 0:
         sent, reason = classify_send_failure(p.stderr, p.stdout)
         result.update(sent=sent if sent is not None else 'unknown', failure=reason, reverted=is_revert(reason),
@@ -840,6 +888,9 @@ def parser():
                    help='loopback Anvil only: send despite refusals (to show the on-chain revert)')
     p.add_argument('--expect-program-vkey', help="refuse unless the verifier's programVKey is this")
     p.add_argument('--expect-sp1-verifier', help="refuse unless the verifier's sp1Verifier is this")
+    p.add_argument('--expect-sender',
+                   help='the address the release is sent from; the keystore\'s public address must be it, and it is '
+                        'passed to cast as --from. Required off a loopback Anvil')
     p.add_argument('--gas-limit', type=int, help='the release\'s gas limit; required off a loopback Anvil')
     p.add_argument('--max-fee-per-gas', type=int,
                    help='the release\'s max fee per gas in wei; required off a loopback Anvil')

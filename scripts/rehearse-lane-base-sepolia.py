@@ -49,6 +49,7 @@ def _load(name, relative):
 
 ORDER = _load('rehearse_phase3_deployment_order', 'scripts/rehearse-phase3-deployment-order.py')
 RT = _load('rehearse_lane_roundtrip', 'scripts/rehearse-lane-roundtrip.py')
+RELAY = _load('pft_lane_export_relay', 'scripts/pft-lane-export-relay.py')
 keccak256 = ORDER.keccak256
 require = ORDER.require
 RehearsalFailure = ORDER.RehearsalFailure
@@ -123,6 +124,28 @@ def check_deployer_keystores(plan, derive):
         require(derived == plan[role]['deployer'].lower(),
                 f'the {role} keystore is {derived}, but the plan predicted from {plan[role]["deployer"]}; '
                 'nothing was sent')
+
+
+class RelayerMismatch(RehearsalFailure):
+    """The relayer keystore named now is not the relayer recorded at deploy."""
+
+
+def bound_relayer(account, *, recorded):
+    """The relayer that signs the release: the current keystore's public `address`
+    field, read without unlocking it, must be the relayer recorded at deploy, whose
+    balance and gas estimate the release is quoted from. A change of relayer is not
+    supported."""
+    require(account, 'name the relayer keystore with --relayer-account; nothing was sent')
+    try:
+        current = RELAY.keystore_public_address(account)
+    except RELAY.RelayRefusal as refusal:
+        raise RehearsalFailure(str(refusal)) from None
+    if current != recorded.lower():
+        raise RelayerMismatch(f'relayer-mismatch: the relayer keystore named now is {current}, not the relayer '
+                              f'{recorded.lower()} recorded at deploy, whose balance and gas estimate the release is '
+                              'quoted from. A change of relayer is not supported: name the recorded relayer\'s '
+                              'keystore; nothing was sent')
+    return current
 
 
 def check_planned_nonces(plan, nonce):
@@ -533,6 +556,9 @@ def resolve_relayer_ceiling(*, fork, requested, plan):
     invocation, whatever --through says, so its plan and sheet always carry it; a
     later invocation omits it (the plan's is used) or names the same one."""
     require(requested is None or requested > 0, f'--relayer-ceiling-wei {requested} is not positive; nothing was sent')
+    require(requested is None or requested > L1_DATA_FEE_ALLOWANCE_WEI,
+            f'--relayer-ceiling-wei {requested} cannot fund a release: one L1 data fee allowance alone is '
+            f'{L1_DATA_FEE_ALLOWANCE_WEI} wei; nothing was sent')
     if plan is None:
         require(fork or requested is not None,
                 'a real run needs --relayer-ceiling-wei from its first invocation, whatever --through says: the most '
@@ -549,30 +575,53 @@ def resolve_relayer_ceiling(*, fork, requested, plan):
 
 # The release's gas limit: the node's estimate plus a fifth.
 RELEASE_GAS_HEADROOM = (6, 5)
+# The release's gas for the plan's check of the ceiling: a planning figure, not a
+# measurement (no real proof of this program has been released). The release itself
+# is quoted from the node's estimate.
+RELEASE_GAS_PLANNED = 1_000_000
+
+
+def planned_release_spend(gas_price_wei):
+    """What the run plans to spend on the release: the planning gas plus a fifth, at
+    the gas guard's price (the plan's x GAS_PRICE_FACTOR), plus one L1 data fee allowance."""
+    numerator, denominator = RELEASE_GAS_HEADROOM
+    gas_limit = -(-RELEASE_GAS_PLANNED * numerator // denominator)
+    return gas_limit * gas_price_wei * GAS_PRICE_FACTOR + L1_DATA_FEE_ALLOWANCE_WEI
+
+
+def check_release_budget(*, ceiling_wei, gas_price_wei):
+    """In plan, before any fork or deployment: the ceiling must fund the planned release."""
+    planned = planned_release_spend(gas_price_wei)
+    require(ceiling_wei >= planned,
+            f'--relayer-ceiling-wei {ceiling_wei} is below the release this plan expects to fund, {planned} wei '
+            f'(planning gas {RELEASE_GAS_PLANNED} plus a fifth x the plan gas price {gas_price_wei} wei x '
+            f'{GAS_PRICE_FACTOR}, the gas guard, + one L1 data fee allowance {L1_DATA_FEE_ALLOWANCE_WEI} wei); '
+            'nothing was deployed. Plan again with a larger ceiling')
+    return planned
 
 
 def release_caps(*, ceiling_wei, relayer_balance_wei, gas_estimate, gas_price_wei,
                  l1_allowance_wei=L1_DATA_FEE_ALLOWANCE_WEI):
-    """The gas limit and max fee per gas the release is sent with, so that gas limit x
-    max fee + the L1 data fee allowance never exceeds the ceiling. The ceiling binds
-    only a one-time relayer funded with exactly its budget, so a larger balance is
-    refused; so is a quoted cost above the ceiling. Both before anything is signed."""
-    require(relayer_balance_wei <= ceiling_wei,
-            f'the relayer holds {relayer_balance_wei} wei, more than the ceiling {ceiling_wei}: the ceiling bounds a '
-            'release only on a one-time relayer funded with exactly its budget. Use a fresh relayer account, or raise '
-            'the ceiling in a new plan; nothing was sent')
+    """The gas limit and max fee per gas the release is sent with. The release is
+    budgeted from min(balance, ceiling): the ceiling bounds what this run plans to
+    spend, not what the account may hold. Gas limit x max fee + the L1 data fee
+    allowance stays within that budget, and a quoted cost above it is refused before
+    anything is signed. The allowance is an estimate, not a hard limit."""
     numerator, denominator = RELEASE_GAS_HEADROOM
     gas_limit = -(-gas_estimate * numerator // denominator)
-    budget = relayer_balance_wei - l1_allowance_wei
+    spendable = min(relayer_balance_wei, ceiling_wei)
+    budget = spendable - l1_allowance_wei
     quoted = gas_limit * gas_price_wei + l1_allowance_wei
-    require(budget > 0 and quoted <= relayer_balance_wei,
+    require(budget > 0 and quoted <= spendable,
             f'the quoted release cost {quoted} wei (gas limit {gas_limit} x gas price {gas_price_wei} wei + L1 data '
-            f'fee allowance {l1_allowance_wei} wei) exceeds what the relayer may spend, {relayer_balance_wei} wei of '
-            f'the ceiling {ceiling_wei}; nothing was sent. Raise the ceiling in a new plan')
+            f'fee allowance {l1_allowance_wei} wei) exceeds the release budget {spendable} wei, the lesser of the '
+            f'relayer\'s balance {relayer_balance_wei} wei and the ceiling {ceiling_wei} wei; nothing was sent. Fund '
+            'the relayer up to the ceiling, or raise the ceiling in a new plan')
     max_fee = budget // gas_limit
     return {'gas_limit': gas_limit, 'max_fee_per_gas_wei': max_fee, 'l1_data_fee_allowance_wei': l1_allowance_wei,
             'bound_wei': gas_limit * max_fee + l1_allowance_wei, 'quoted_wei': quoted, 'gas_estimate': gas_estimate,
-            'gas_price_wei': gas_price_wei, 'relayer_balance_wei': relayer_balance_wei, 'ceiling_wei': ceiling_wei}
+            'gas_price_wei': gas_price_wei, 'relayer_balance_wei': relayer_balance_wei, 'ceiling_wei': ceiling_wei,
+            'budget_wei': spendable}
 
 
 def quote_release(*, ceiling_wei, relayer, lock, calldata, read):
@@ -584,10 +633,10 @@ def quote_release(*, ceiling_wei, relayer, lock, calldata, read):
         gas_price_wei=int(read('eth_gasPrice', []), 16))
 
 
-def relay_release_argv(*, rpc_url, lock, input_dir, proof, signer, vkey, caps):
-    """The relay's release command, carrying the caps."""
+def relay_release_argv(*, rpc_url, lock, input_dir, proof, signer, sender, vkey, caps):
+    """The relay's release command, carrying the caps and the sender they were quoted for."""
     return [sys.executable, ROOT / 'scripts/pft-lane-export-relay.py', 'release', '--rpc', rpc_url, '--lock', lock,
-            '--input', input_dir, '--proof', proof, *signer, '--expect-program-vkey', vkey,
+            '--input', input_dir, '--proof', proof, *signer, '--expect-sender', sender, '--expect-program-vkey', vkey,
             '--expect-sp1-verifier', SP1_VERIFIER['address'], '--gas-limit', str(caps['gas_limit']),
             '--max-fee-per-gas', str(caps['max_fee_per_gas_wei'])]
 
@@ -604,8 +653,9 @@ def funding_plan(needs, *, gas_price_wei, relayer_ceiling_wei):
     plan = {'verifier deployer': row('verifier deployer'), 'lock deployer': row('lock deployer')}
     plan['relayer'] = {
         'fund_wei': relayer_ceiling_wei,
-        'formula': 'the ceiling the operator sets with --relayer-ceiling-wei; the release\'s gas is not known before '
-                   'a real proof. Fund a fresh relayer with exactly this: the release refuses a larger balance and is '
+        'formula': 'the ceiling the operator sets with --relayer-ceiling-wei, a spending budget for this run, not a '
+                   'cap on the account\'s balance; the release\'s gas is not known before a real proof. Fund the '
+                   'relayer with this: the release is budgeted from the lesser of its balance and the ceiling, and '
                    'sent with a gas limit and max fee whose product plus one L1 data fee allowance stays within it'
                    + ('' if relayer_ceiling_wei else ' (not set: a fork run; a real run needs it)')}
     own_l1 = KEY_TRANSACTIONS['holder'] * L1_DATA_FEE_ALLOWANCE_WEI
@@ -940,6 +990,9 @@ def main(argv=None):
                 data['program_identity'] = identity
                 head = int(rpc(BASE_SEPOLIA_RPC, 'eth_blockNumber'), 16)
                 gas_price = int(rpc(BASE_SEPOLIA_RPC, 'eth_gasPrice'), 16)
+                # Before any fork or deployment: the ceiling funds the release this plan expects.
+                planned_release = (None if relayer_ceiling is None else
+                                   check_release_budget(ceiling_wei=relayer_ceiling, gas_price_wei=gas_price))
                 sp1_code = ORDER.code_hash(rpc(BASE_SEPOLIA_RPC, 'eth_getCode', [SP1_VERIFIER['address'], 'latest']))
                 require(sp1_code == SP1_VERIFIER['runtime_code_hash'], f'the SP1 verifier code hash is {sp1_code}')
                 verifier_hash = rpc(BASE_SEPOLIA_RPC, 'eth_call', [{'to': SP1_VERIFIER['address'],
@@ -961,6 +1014,7 @@ def main(argv=None):
                 data['plan'] = {**plan, 'fork_block': head, 'token': TOKEN, 'token_runtime_code_hash': token_code_hash,
                                 'holder': HOLDER, 'max_lock_amount': ORDER.lane_window_cap(fixture),
                                 'gas_price_wei': gas_price, 'relayer_ceiling_wei': relayer_ceiling,
+                                'release_planned_spend_wei': planned_release,
                                 'payout_recipient': recipient,
                                 'payout_recipient_key': 'named by the operator' if args.payout_recipient else
                                 'none: derived from a label, the payout can never be moved'}
@@ -1104,6 +1158,8 @@ def main(argv=None):
                         token_balance=lambda a: int(rpc(url, 'eth_call', [{'to': TOKEN, 'data': ORDER.call_data(
                             'balanceOf(address)', a)}, 'latest']), 16),
                         gas_price_wei=gas_price, node_bin=args.node_bin, driver_alive=driver_alive)
+                    # The release reads the relayer from its keystore's public field: it must be there and agree.
+                    bound_relayer(args.relayer_account, recorded=data['relayer_address'])
                 require_driver('deploy')
                 data['commit'] = head_commit
                 expected_code = {'verifier': data['preflight']['verifier_runtime_code_hash'],
@@ -1290,12 +1346,14 @@ def main(argv=None):
                         f'the relayer ceiling {relayer_ceiling} differs from the sheet\'s '
                         f'{data.get("relayer_ceiling_wei")}; nothing was sent')
                 require(data.get('relayer_address'), 'the relayer address was not recorded at deploy; nothing was sent')
+                # The keystore that signs is the relayer recorded at deploy, before anything is read or signed.
+                relayer = bound_relayer(args.relayer_account, recorded=data['relayer_address'])
                 proof_document = json.loads(Path(args.proof).read_text())
                 calldata = command('release-calldata', [
                     'cast', 'calldata', 'release(bytes,bytes)', '0x' + proof_document['public_values_hex'],
                     proof_document['proof_hex']]).strip()
-                # Before anything is signed: the relayer holds at most the ceiling and the quoted cost fits it.
-                caps = quote_release(ceiling_wei=relayer_ceiling, relayer=data['relayer_address'],
+                # Before anything is signed: the quoted cost fits the lesser of the relayer's balance and the ceiling.
+                caps = quote_release(ceiling_wei=relayer_ceiling, relayer=relayer,
                                      lock=data['deploy']['lock'], calldata=calldata,
                                      read=lambda method, params: rpc(target_url(), method, params))
                 data['release_caps'] = caps
@@ -1311,7 +1369,7 @@ def main(argv=None):
                     relay_output = command('relay-release', relay_release_argv(
                         rpc_url=target_url(), lock=data['deploy']['lock'], input_dir=out / 'relay-input',
                         proof=args.proof, signer=signer_flags(args.relayer_account, args.relayer_password_file),
-                        vkey=vkey, caps=caps))
+                        sender=relayer, vkey=vkey, caps=caps))
                 except RehearsalFailure:
                     # The relay's JSON says whether anything was sent; only "not sent" may be retried.
                     try:

@@ -557,4 +557,62 @@ class SendCapTests(unittest.TestCase):
 
     def test_the_send_applies_the_caps(self):
         source = (ROOT / "scripts/pft-lane-export-relay.py").read_text()
-        self.assertIn("'--rpc-url', args.rpc, '--json', *caps, *signer]", source)
+        self.assertIn("'--rpc-url', args.rpc, '--json', *caps, *signer, *sender]", source)
+
+
+class SenderBindingTests(unittest.TestCase):
+    """C1: the relay signs only as the sender it was told to expect."""
+
+    A = "0x" + "a1" * 20
+    B = "0x" + "b2" * 20
+
+    def setUp(self):
+        import json
+        import os
+        import tempfile
+        from unittest import mock
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, tmp)
+        keystores = tmp / ".foundry/keystores"
+        keystores.mkdir(parents=True)
+        (keystores / "relayer-a").write_text(json.dumps({"address": self.A[2:].upper(), "crypto": {}, "version": 3}))
+        (keystores / "bare").write_text(json.dumps({"crypto": {}, "version": 3}))
+        patch = mock.patch.dict(os.environ, {"HOME": str(tmp)})
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def args(self, *extra):
+        return relay.parser().parse_args(["release", "--rpc", "https://base.invalid", "--lock", "0x" + "44" * 20,
+                                          "--input", "/nonexistent/in", "--proof", "/nonexistent/proof.json",
+                                          "--password-file", "/nonexistent/password", *extra])
+
+    def test_the_expected_sender_is_read_from_the_public_field_and_passed_as_from(self):
+        self.assertEqual(relay.sender_binding(self.args("--account", "relayer-a", "--expect-sender", self.A),
+                                              local_anvil=False), ["--from", self.A])
+
+    def test_another_sender_is_refused_by_name(self):
+        with self.assertRaises(relay.RelayRefusal) as refused:
+            relay.sender_binding(self.args("--account", "relayer-a", "--expect-sender", self.B), local_anvil=False)
+        self.assertIn("relayer-mismatch", str(refused.exception))
+        self.assertNotIn("relayer-a", str(refused.exception))
+
+    def test_a_keystore_without_a_public_address_is_refused(self):
+        with self.assertRaises(relay.RelayRefusal) as refused:
+            relay.sender_binding(self.args("--account", "bare", "--expect-sender", self.A), local_anvil=False)
+        self.assertIn("relayer-address-unknown", str(refused.exception))
+
+    def test_off_a_loopback_anvil_the_expected_sender_is_required(self):
+        with self.assertRaises(relay.RelayRefusal):
+            relay.sender_binding(self.args("--account", "relayer-a"), local_anvil=False)
+        self.assertEqual(relay.sender_binding(self.args("--account", "relayer-a"), local_anvil=True), [])
+
+    def test_casts_own_sender_check_is_classified_as_not_sent(self):
+        sent, reason = relay.classify_send_failure(
+            "Error: The specified sender via CLI/env vars does not match the sender configured via\nthe hardware "
+            "wallet's HD Path.")
+        self.assertIs(sent, False)
+        self.assertIn("nothing was sent", reason)
+
+    def test_the_send_binds_the_sender(self):
+        source = (ROOT / "scripts/pft-lane-export-relay.py").read_text()
+        self.assertIn("'--rpc-url', args.rpc, '--json', *caps, *signer, *sender]", source)
