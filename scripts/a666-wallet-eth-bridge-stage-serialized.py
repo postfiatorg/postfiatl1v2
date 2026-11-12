@@ -578,7 +578,9 @@ def capture_once(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[s
         f"if test ! -s {shlex.quote(remote_witness)}; then "
         f"{shlex.quote(A100_CAPTURE)} capture "
         f"--deployment {shlex.quote(remote_root + '/ingress/deployment.json')} "
-        f"--output {shlex.quote(remote_witness)} --wait-seconds 1800; fi"
+        f"--output {shlex.quote(remote_witness)} --wait-seconds 1800 "
+        f"--execution-rpc {shlex.quote(EXECUTION_RPCS[0])} "
+        f"--beacon-rpc {shlex.quote(BEACON_RPC)}; fi"
     )
     ssh(A100_HOST, command, port=A100_PORT, timeout=1900)
     scp(
@@ -619,6 +621,8 @@ def ensure_proof(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[s
         f"--output-dir {shlex.quote(remote_proof)} --require-prover cuda "
         "--skip-redundant-execute; fi"
     )
+    if os.environ.get("B23_GPU_PROVER_LOCK"):
+        command = f"flock {shlex.quote(os.environ['B23_GPU_PROVER_LOCK'])} bash -lc {shlex.quote(command)}"
     ssh(A100_HOST, command, port=A100_PORT, timeout=7200)
     proof = job_dir / "proof-cuda"
     proof.mkdir(parents=True, exist_ok=True, mode=0o700)
