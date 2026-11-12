@@ -1,6 +1,6 @@
 # Network Status
 
-**Guidance reviewed 2026-11-06; latest fleet observation 2026-11-11.**
+**Guidance reviewed 2026-11-06; latest fleet observation 2026-11-12.**
 This page summarizes recorded observations and separately labels newer source
 work. It is not a live query. The full, dated operating log is
 [Current State](chain-state-current.md); when the two disagree, the log wins.
@@ -30,7 +30,9 @@ position.
 
 ## Last recorded release and height
 
-The 2026-10-30 deployment is recorded in [Current State](chain-state-current.md).
+The 2026-10-30 deployment is the last one with a deployment receipt in
+[Current State](chain-state-current.md); the 2026-11-12 read found a later
+deployment running, for which no receipt is recorded yet.
 The [November 6 handoff](../handoffs/2026-11-06___dravlic__first_real_base_sepolia_lock_released_and_bridge_phase_2_complete.md)
 reports read-only probes of all six hosts with the same executable, height, tip
 and state root. This documentation refresh made no new fleet probe; the handoff
@@ -38,11 +40,13 @@ does not re-certify every October deployment check.
 
 | Item | Value |
 | --- | --- |
-| Release | `vote-records-20261030` (source `ae70d66d`, branch `release/vote-records-20261030`) |
-| Node executable SHA-256 | `87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7` on all six validators |
-| Rollout | One validator at a time with `scripts/postfiat-safe-rollout apply-next`, 2026-10-30 10:31–11:14 UTC; no rollback needed |
-| Height | 1177 on all six validators (tip `661a1ec2b9e99c3f…`, state root `c6dfd0ebea8c2bdb…`) |
-| Latest fleet observation | 2026-11-11 10:00:58–10:01:18 UTC, read-only `status`, bridge, asset and reserve reads and `mempool_status` on all six; original rollout receipt remains dated 2026-10-30 |
+| Running deployment | `r2-1-activation-bound-20261112` (source revision `5d13c775e40846aa812eca5b66a60b64596ffc83`, not yet on a branch of this repository; no deployment receipt recorded yet), restarted 2026-11-12 01:53:28–01:56:40 UTC after three earlier rollouts the same night |
+| Running node executable SHA-256 | `35513b7ce319162e070fab7ef6db8b6c75bec99201d04307bb8ffb0a9a89299a` on all six validators; deployment manifest SHA-256 `6d67831db791637fa1ee6ae86229a97e2524f62ee9bd78fe6ed8d8914a8b98a3` |
+| Previous release (last deployment receipt) | `vote-records-20261030` (source `ae70d66d`, branch `release/vote-records-20261030`) |
+| Its node executable SHA-256 | `87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7` |
+| Its rollout | One validator at a time with `scripts/postfiat-safe-rollout apply-next`, 2026-10-30 10:31–11:14 UTC; no rollback needed |
+| Height | 1209 on all six validators (state root `e101f848…`) |
+| Latest fleet observation | 2026-11-12, read-only: `status` 10:50 UTC, host and chain reads 11:06–11:30 UTC on all six; binary, units and environment files match the signed manifest; `deployment_manifest_verified` reads false because this build does not write the verified-deployment record |
 
 Changes merged after that release are not evidence of deployment. The
 [next-release plan](../plans/active/next-validator-release-plan-20261115.md)

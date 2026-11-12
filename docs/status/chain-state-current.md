@@ -1,11 +1,34 @@
 # PostFiat L1 Current State
 
-Documentation reviewed: `2026-11-11`. Latest fleet observation: the read-only
-all-six read of `2026-11-11T10:00:58Z`–`10:01:18Z`, tip 1177. Latest deployment receipt:
-`2026-10-30T11:21:09Z`, release `vote-records-20261030`, tip 1168. The dated
-rollout records below retain their original observations.
+Documentation reviewed: `2026-11-12`. Latest fleet observation: the read-only
+all-six read of 2026-11-12 (`status` 10:50Z; host and chain reads 11:06–11:30Z),
+height 1209, deployment `r2-1-activation-bound-20261112`. Latest deployment receipt:
+`2026-10-30T11:21:09Z`, release `vote-records-20261030`, tip 1168; none is recorded
+yet for the running deployment. The dated rollout records below retain their
+original observations.
 
 Status: **canonical operational-state reference**
+
+!!! note "2026-11-12: fleet observation at height 1209, deployment `r2-1-activation-bound-20261112`"
+
+    A read-only read of all six validators on 2026-11-12 (`status` at 10:50Z;
+    host and chain reads 11:06–11:30Z) found all six at height 1209 with one
+    state root `e101f848…`, view 0 at every height 1178–1209 and empty
+    mempools. The running deployment is `r2-1-activation-bound-20261112`:
+    source revision `5d13c775e40846aa812eca5b66a60b64596ffc83`, node binary
+    sha256 `35513b7ce319162e070fab7ef6db8b6c75bec99201d04307bb8ffb0a9a89299a`,
+    deployment manifest sha256
+    `6d67831db791637fa1ee6ae86229a97e2524f62ee9bd78fe6ed8d8914a8b98a3`,
+    restarted 01:53:28–01:56:40Z after three earlier rollouts the same night
+    (`r2-1-beacon-anchor-20261112`, `r2-1-anchor-bound-20261112`,
+    `r2-1-kind-bound-20261112`). The binary, the units and the environment
+    files match the signed manifest on all six, and the manifest check ran at
+    service start. `deployment_manifest_verified` reads false because this
+    build does not write the verified-deployment record. The source revision
+    is not yet on a branch of this repository, and no deployment receipt is
+    recorded yet. A tenth NAV profile was registered at heights 1178–1194, and
+    the governance transaction at 1209 was rejected
+    (`vault_bridge_route_profile_rejected`).
 
 !!! note "2026-11-11: fleet observation at height 1177, no deployment"
 
@@ -681,7 +704,7 @@ binary to the running services.
 
 | Plane | Recorded state | Exact identifier | Observed or updated at | Evidence and freshness |
 | --- | --- | --- | --- | --- |
-| Running devnet, latest reported state | All six validators agree at height 1177 with the October 30 executable. The rollout's detailed preflight results retain their original date. | Chain `postfiat-wan-devnet-2`; tip `661a1ec2b9e99c3f…`; root `c6dfd0ebea8c2bdb…`; executable `87cfe797…` on all six. | 2026-11-11T10:00:58Z–10:01:18Z, read-only read | November 11 entry above; original [October 30 after state](https://github.com/postfiatorg/postfiatl1v2/blob/release/vote-records-20261030/deployments/vote-records-20261030/observed/after-final.json). Reported observation, not a new docs-task probe. |
+| Running devnet, latest reported state | All six validators agree at height 1209 with one state root, view 0 at every height 1178–1209 and empty mempools, on deployment `r2-1-activation-bound-20261112`. The binary, the units and the environment files match the signed manifest on all six; `deployment_manifest_verified` reads false because this build does not write the verified-deployment record. | Chain `postfiat-wan-devnet-2`; root `e101f848…`; source `5d13c775…`; executable `35513b7c…`; manifest `6d67831d…` on all six. | 2026-11-12, `status` 10:50Z; host and chain reads 11:06–11:30Z, read-only | November 12 entry above. The source revision is not yet on a branch of this repository and no deployment receipt is recorded yet. Reported observation, not a new docs-task probe. |
 | Deployed runtime | Release `vote-records-20261030` on all six validators: all 12 validator and RPC processes on one executable, `deployment_manifest_verified=true` and build `ae70d66d` on every host, RPC units with `--max-requests 100000` and `RestartSec=1` and without `--allow-private-action-admission`. Rolled out one validator at a time (validator-1 canary, then 0, 2, 3, 4, 5); rollback was not needed. Governed activation heights `recipient_format`, `rejected_tx_fee` and `require_memo` all 1153 (unchanged); `account_tx` v3 index following commits. Vote outcome records live with the VR-01 fix. Private path present, switched off and ungoverned. | Source `ae70d66d`; executable `87cfe797…`; signed manifest `ee1df5b3…`; rollback release `index-v3-20261027` (`b5cf3ce4…`). | `2026-10-30T11:21Z` | 2026-10-30 entry above. |
 | Storage | Transactional `redb` storage has been the live store since height 930 (2026-08-31). This release carries the STO-07 store-handle fix (`8644f0af`); every batch the new executable accepted reports `storage_work.database_opens=0`. Storage is `OFFLINE QUALIFIED` (2026-10-23, packet-r3 `357f06ee…`); that is neither `CLONE QUALIFIED` nor a deployment decision. | Activation height 930; G5-qualified binary `eea96ba6…`; current deployed binary `87cfe797…` | October 21/23 qualification; October 30 deployment | [Storage-scaling implementation boundary](#storage-scaling-implementation-boundary) and the [storage milestone](../plans/completed/storage-scaling-milestone.md). The August `10dd9f20` canary and its rollback are in the [canary rollback report](../postmortems/devnet-storage-live-canary-rollback-2026-08-30.md). |
 | Swap and bridge committees | FastSwap committee epoch 2 on all six (`enabled: true`), migrated 2026-10-21. Bridge committee epoch 2 activated at height 1131 on 2026-10-15. The A666 and BMNRC routes stay on `authority_epoch` 1, so validators 0–4 still sign Ethereum checkpoints; neither issuer route update has been submitted. FastPay committee epoch 2 was installed at height 1123 for orders 10001–19990. | Epoch-2 committee root `72836827…`; route authority root `a2eebcba…` | 2026-10-21 | 2026-10-21, 2026-10-15 and 2026-10-12 entries above. |
