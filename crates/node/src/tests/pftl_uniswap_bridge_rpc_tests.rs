@@ -483,6 +483,7 @@
         route.validate().expect("valid terminal live route state");
 
         let consensus_receipt = PftlUniswapConsensusReceipt {
+            redemption_settlement: None,
             receipt_hash: "95".repeat(48),
             transition: "destination_consume".to_string(),
             route_id: route_id.to_string(),

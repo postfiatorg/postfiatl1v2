@@ -1,6 +1,6 @@
 use super::*;
-use postfiat_types::*;
 use postfiat_crypto_provider::*;
+use postfiat_types::*;
 
 // Synthetic ledger fixtures exercise signed public redemption admission and
 // accounting. They do not establish reserve-proof or release qualification.
@@ -112,6 +112,7 @@ fn facility_fixture(
     settlement_line.balance = 5_930_000;
     ledger.trustlines.push(settlement_line);
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
@@ -193,212 +194,635 @@ fn facility_fixture(
     (genesis, ledger, key, operation)
 }
 
-    fn signed_asset_transaction(
-        genesis: &Genesis,
-        key_pair: &MlDsa65KeyPair,
-        transaction_kind: &str,
-        fee: u64,
-        sequence: u64,
-        operation: AssetTransactionOperation,
-    ) -> SignedAssetTransaction {
-        let public_key_hex = bytes_to_hex(&key_pair.public_key);
-        let unsigned = UnsignedAssetTransaction {
-            chain_id: genesis.chain_id.clone(),
-            genesis_hash: genesis_hash(genesis),
-            protocol_version: genesis.protocol_version,
-            address_namespace: ADDRESS_NAMESPACE.to_string(),
-            transaction_kind: transaction_kind.to_string(),
-            signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
-            source: address_from_public_key(&key_pair.public_key),
+fn signed_asset_transaction(
+    genesis: &Genesis,
+    key_pair: &MlDsa65KeyPair,
+    transaction_kind: &str,
+    fee: u64,
+    sequence: u64,
+    operation: AssetTransactionOperation,
+) -> SignedAssetTransaction {
+    let public_key_hex = bytes_to_hex(&key_pair.public_key);
+    let unsigned = UnsignedAssetTransaction {
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(genesis),
+        protocol_version: genesis.protocol_version,
+        address_namespace: ADDRESS_NAMESPACE.to_string(),
+        transaction_kind: transaction_kind.to_string(),
+        signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        source: address_from_public_key(&key_pair.public_key),
+        fee,
+        sequence,
+        operation,
+    };
+    let signature = ml_dsa_65_sign(&key_pair.private_key, &unsigned.signing_bytes())
+        .expect("sign asset transaction");
+    SignedAssetTransaction {
+        unsigned,
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        public_key_hex,
+        signature_hex: bytes_to_hex(&signature),
+    }
+}
+
+fn signed_asset_transaction_with_minimum_fee(
+    genesis: &Genesis,
+    ledger: &LedgerState,
+    key_pair: &MlDsa65KeyPair,
+    transaction_kind: &str,
+    sequence: u64,
+    operation: AssetTransactionOperation,
+) -> SignedAssetTransaction {
+    let mut fee = MIN_TRANSFER_FEE;
+    for _ in 0..8 {
+        let transaction = signed_asset_transaction(
+            genesis,
+            key_pair,
+            transaction_kind,
             fee,
             sequence,
-            operation,
-        };
-        let signature = ml_dsa_65_sign(&key_pair.private_key, &unsigned.signing_bytes())
-            .expect("sign asset transaction");
-        SignedAssetTransaction {
-            unsigned,
-            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
-            public_key_hex,
-            signature_hex: bytes_to_hex(&signature),
+            operation.clone(),
+        );
+        let minimum_fee = minimum_asset_transaction_fee_for_ledger(ledger, &transaction);
+        if fee >= minimum_fee {
+            return transaction;
         }
+        fee = minimum_fee;
     }
+    panic!("minimum asset transaction fee did not converge");
+}
 
-    fn signed_asset_transaction_with_minimum_fee(
-        genesis: &Genesis,
-        ledger: &LedgerState,
-        key_pair: &MlDsa65KeyPair,
-        transaction_kind: &str,
-        sequence: u64,
-        operation: AssetTransactionOperation,
-    ) -> SignedAssetTransaction {
-        let mut fee = MIN_TRANSFER_FEE;
-        for _ in 0..8 {
-            let transaction = signed_asset_transaction(
-                genesis,
-                key_pair,
-                transaction_kind,
-                fee,
-                sequence,
-                operation.clone(),
-            );
-            let minimum_fee = minimum_asset_transaction_fee_for_ledger(ledger, &transaction);
-            if fee >= minimum_fee {
+fn signed_offer_transaction(
+    genesis: &Genesis,
+    key_pair: &MlDsa65KeyPair,
+    transaction_kind: &str,
+    fee: u64,
+    sequence: u64,
+    operation: OfferTransactionOperation,
+) -> SignedOfferTransaction {
+    let public_key_hex = bytes_to_hex(&key_pair.public_key);
+    let unsigned = UnsignedOfferTransaction {
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(genesis),
+        protocol_version: genesis.protocol_version,
+        address_namespace: ADDRESS_NAMESPACE.to_string(),
+        transaction_kind: transaction_kind.to_string(),
+        signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        source: address_from_public_key(&key_pair.public_key),
+        fee,
+        sequence,
+        operation,
+    };
+    let signature = ml_dsa_65_sign(&key_pair.private_key, &unsigned.signing_bytes())
+        .expect("sign offer transaction");
+    SignedOfferTransaction {
+        unsigned,
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        public_key_hex,
+        signature_hex: bytes_to_hex(&signature),
+    }
+}
+
+fn signed_offer_transaction_with_minimum_fee(
+    genesis: &Genesis,
+    ledger: &LedgerState,
+    key_pair: &MlDsa65KeyPair,
+    transaction_kind: &str,
+    sequence: u64,
+    operation: OfferTransactionOperation,
+    block_height: u64,
+) -> SignedOfferTransaction {
+    let mut fee = MIN_TRANSFER_FEE;
+    for _ in 0..8 {
+        let transaction = signed_offer_transaction(
+            genesis,
+            key_pair,
+            transaction_kind,
+            fee,
+            sequence,
+            operation.clone(),
+        );
+        let minimum_fee =
+            minimum_offer_transaction_fee_for_ledger(ledger, &transaction, block_height);
+        if fee >= minimum_fee {
+            let mut dry_run = ledger.clone();
+            let receipt =
+                execute_offer_transaction(genesis, &mut dry_run, &transaction, block_height);
+            if receipt.code != "fee_too_low" {
                 return transaction;
             }
-            fee = minimum_fee;
         }
-        panic!("minimum asset transaction fee did not converge");
+        fee = minimum_fee.max(fee.saturating_add(1));
     }
+    panic!("minimum offer transaction fee did not converge");
+}
 
-    fn signed_offer_transaction(
-        genesis: &Genesis,
-        key_pair: &MlDsa65KeyPair,
-        transaction_kind: &str,
-        fee: u64,
-        sequence: u64,
-        operation: OfferTransactionOperation,
-    ) -> SignedOfferTransaction {
-        let public_key_hex = bytes_to_hex(&key_pair.public_key);
-        let unsigned = UnsignedOfferTransaction {
-            chain_id: genesis.chain_id.clone(),
-            genesis_hash: genesis_hash(genesis),
-            protocol_version: genesis.protocol_version,
-            address_namespace: ADDRESS_NAMESPACE.to_string(),
-            transaction_kind: transaction_kind.to_string(),
-            signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
-            source: address_from_public_key(&key_pair.public_key),
-            fee,
-            sequence,
-            operation,
-        };
-        let signature = ml_dsa_65_sign(&key_pair.private_key, &unsigned.signing_bytes())
-            .expect("sign offer transaction");
-        SignedOfferTransaction {
-            unsigned,
-            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
-            public_key_hex,
-            signature_hex: bytes_to_hex(&signature),
-        }
-    }
-
-    fn signed_offer_transaction_with_minimum_fee(
-        genesis: &Genesis,
-        ledger: &LedgerState,
-        key_pair: &MlDsa65KeyPair,
-        transaction_kind: &str,
-        sequence: u64,
-        operation: OfferTransactionOperation,
-        block_height: u64,
-    ) -> SignedOfferTransaction {
-        let mut fee = MIN_TRANSFER_FEE;
-        for _ in 0..8 {
-            let transaction = signed_offer_transaction(
-                genesis,
-                key_pair,
-                transaction_kind,
-                fee,
-                sequence,
-                operation.clone(),
-            );
-            let minimum_fee =
-                minimum_offer_transaction_fee_for_ledger(ledger, &transaction, block_height);
-            if fee >= minimum_fee {
-                let mut dry_run = ledger.clone();
-                let receipt =
-                    execute_offer_transaction(genesis, &mut dry_run, &transaction, block_height);
-                if receipt.code != "fee_too_low" {
-                    return transaction;
-                }
-            }
-            fee = minimum_fee.max(fee.saturating_add(1));
-        }
-        panic!("minimum offer transaction fee did not converge");
-    }
-
-
-fn submit_asset(genesis: &Genesis, ledger: &mut LedgerState, key: &MlDsa65KeyPair,
-    kind: &str, operation: AssetTransactionOperation) -> Receipt {
+fn submit_asset(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    key: &MlDsa65KeyPair,
+    kind: &str,
+    operation: AssetTransactionOperation,
+) -> Receipt {
     let owner = address_from_public_key(&key.public_key);
-    let tx = signed_asset_transaction_with_minimum_fee(genesis, ledger, key, kind,
-        ledger.account(&owner).unwrap().sequence + 1, operation);
+    let tx = signed_asset_transaction_with_minimum_fee(
+        genesis,
+        ledger,
+        key,
+        kind,
+        ledger.account(&owner).unwrap().sequence + 1,
+        operation,
+    );
     execute_asset_transaction_with_unverified_pftl_uniswap_fixture(genesis, ledger, &tx, 11)
 }
 
 fn market_buy_then_redeem(partial: bool) {
     let (genesis, mut ledger, alice_key, mut redeem) = facility_fixture(false);
     let alice = redeem.owner.clone();
-    let bob_key = ml_dsa_65_keygen_from_seed(&[0x64;32]);
+    enable_facility(&mut ledger, &mut redeem, &alice);
+
+    let bob_key = ml_dsa_65_keygen_from_seed(&[0x64; 32]);
     let bob = address_from_public_key(&bob_key.public_key);
-    ledger.accounts.push(Account::new(bob.clone(),100_000,Some(bytes_to_hex(&bob_key.public_key))));
+    ledger.accounts.push(Account::new(
+        bob.clone(),
+        100_000,
+        Some(bytes_to_hex(&bob_key.public_key)),
+    ));
     let nav = ledger.pftl_uniswap_routes[0].native_nav_asset_id.clone();
     let usd = ledger.pftl_uniswap_routes[0].settlement_asset_id.clone();
     for (asset, balance) in [(&nav, 0), (&usd, 20_000_000)] {
         let issuer = ledger.asset_definition(asset).unwrap().issuer.clone();
-        let mut line = TrustLine::new(bob.clone(),issuer,asset.clone(),100_000_000,0).unwrap();
-        line.balance=balance;
+        let mut line = TrustLine::new(bob.clone(), issuer, asset.clone(), 100_000_000, 0).unwrap();
+        line.balance = balance;
         ledger.trustlines.push(line);
     }
     let before_supply = ledger.nav_assets[0].circulating_supply;
     let before_reserve = ledger.pftl_uniswap_routes[0].settlement_reserve_atoms;
-    let sell_amount = if partial {2_000_000} else {1_000_000};
-    let tx = signed_offer_transaction_with_minimum_fee(&genesis,&ledger,&alice_key,
-        OFFER_CREATE_TRANSACTION_KIND,1,OfferTransactionOperation::OfferCreate(OfferCreateOperation {
-            owner:alice.clone(),taker_gets_asset_id:nav.clone(),taker_gets_amount:sell_amount,
-            taker_pays_asset_id:usd.clone(),taker_pays_amount:sell_amount*7,expiration_height:50,
-        }),11);
-    let receipt = execute_offer_transaction(&genesis,&mut ledger,&tx,11);
-    assert!(receipt.accepted,"Alice posts: {receipt:?}");
-    let tx = signed_offer_transaction_with_minimum_fee(&genesis,&ledger,&bob_key,
-        OFFER_CREATE_TRANSACTION_KIND,1,OfferTransactionOperation::OfferCreate(OfferCreateOperation {
-            owner:bob.clone(),taker_gets_asset_id:usd.clone(),taker_gets_amount:7_000_000,
-            taker_pays_asset_id:nav.clone(),taker_pays_amount:1_000_000,expiration_height:50,
-        }),11);
-    let receipt = execute_offer_transaction(&genesis,&mut ledger,&tx,11);
-    assert!(receipt.accepted,"Bob buys: {receipt:?}");
-    assert_eq!(receipt.offer_fills.len(),1);
-    assert_eq!(ledger.trustline_for_account_asset(&bob,&nav).unwrap().balance,1_000_000);
-    assert_eq!(ledger.nav_assets[0].circulating_supply,before_supply);
-    assert_eq!(ledger.pftl_uniswap_routes[0].settlement_reserve_atoms,before_reserve);
+    let sell_amount = if partial { 2_000_000 } else { 1_000_000 };
+    let tx = signed_offer_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &alice_key,
+        OFFER_CREATE_TRANSACTION_KIND,
+        1,
+        OfferTransactionOperation::OfferCreate(OfferCreateOperation {
+            owner: alice.clone(),
+            taker_gets_asset_id: nav.clone(),
+            taker_gets_amount: sell_amount,
+            taker_pays_asset_id: usd.clone(),
+            taker_pays_amount: sell_amount * 7,
+            expiration_height: 50,
+        }),
+        11,
+    );
+    let receipt = execute_offer_transaction(&genesis, &mut ledger, &tx, 11);
+    assert!(receipt.accepted, "Alice posts: {receipt:?}");
+    let tx = signed_offer_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &bob_key,
+        OFFER_CREATE_TRANSACTION_KIND,
+        1,
+        OfferTransactionOperation::OfferCreate(OfferCreateOperation {
+            owner: bob.clone(),
+            taker_gets_asset_id: usd.clone(),
+            taker_gets_amount: 7_000_000,
+            taker_pays_asset_id: nav.clone(),
+            taker_pays_amount: 1_000_000,
+            expiration_height: 50,
+        }),
+        11,
+    );
+    let receipt = execute_offer_transaction(&genesis, &mut ledger, &tx, 11);
+    assert!(receipt.accepted, "Bob buys: {receipt:?}");
+    assert_eq!(receipt.offer_fills.len(), 1);
+    assert_eq!(
+        ledger
+            .trustline_for_account_asset(&bob, &nav)
+            .unwrap()
+            .balance,
+        1_000_000
+    );
+    assert_eq!(ledger.nav_assets[0].circulating_supply, before_supply);
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0].settlement_reserve_atoms,
+        before_reserve
+    );
     if partial {
-        let tx = signed_offer_transaction_with_minimum_fee(&genesis,&ledger,&alice_key,
-            OFFER_CANCEL_TRANSACTION_KIND,2,OfferTransactionOperation::OfferCancel(OfferCancelOperation {
-                owner:alice.clone(),offer_id:offer_id(&genesis.chain_id,&alice,1).unwrap(),
-            }),11);
-        let receipt = execute_offer_transaction(&genesis,&mut ledger,&tx,11);
-        assert!(receipt.accepted,"Alice cancels residual: {receipt:?}");
-        assert_eq!(ledger.trustline_for_account_asset(&alice,&nav).unwrap().balance,1_000_000);
+        let tx = signed_offer_transaction_with_minimum_fee(
+            &genesis,
+            &ledger,
+            &alice_key,
+            OFFER_CANCEL_TRANSACTION_KIND,
+            2,
+            OfferTransactionOperation::OfferCancel(OfferCancelOperation {
+                owner: alice.clone(),
+                offer_id: offer_id(&genesis.chain_id, &alice, 1).unwrap(),
+            }),
+            11,
+        );
+        let receipt = execute_offer_transaction(&genesis, &mut ledger, &tx, 11);
+        assert!(receipt.accepted, "Alice cancels residual: {receipt:?}");
+        assert_eq!(
+            ledger
+                .trustline_for_account_asset(&alice, &nav)
+                .unwrap()
+                .balance,
+            1_000_000
+        );
     }
-    redeem.owner=bob.clone();
-    redeem.settlement_recipient=bob.clone();
-    let receipt=submit_asset(&genesis,&mut ledger,&bob_key,PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
-        AssetTransactionOperation::PftlUniswapPrimaryRedeem(redeem));
-    assert!(receipt.accepted,"Fresh Bob must redeem purchased NAV: {receipt:?}");
-    assert_eq!(ledger.trustline_for_account_asset(&bob,&nav).unwrap().balance,0);
-    assert_eq!(ledger.nav_assets[0].circulating_supply,before_supply-1_000_000);
-    assert_eq!(ledger.pftl_uniswap_routes[0].settlement_reserve_atoms,before_reserve-7_000_000);
-    assert_eq!(ledger.pftl_uniswap_routes[0].native_spendable_balances_atoms.get(&alice),Some(&1_000_000));
-    assert!(!ledger.pftl_uniswap_routes[0].native_spendable_balances_atoms.contains_key(&bob));
+    redeem.owner = bob.clone();
+    redeem.settlement_recipient = bob.clone();
+    let receipt = submit_asset(
+        &genesis,
+        &mut ledger,
+        &bob_key,
+        PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapPrimaryRedeem(redeem),
+    );
+    assert!(
+        receipt.accepted,
+        "Fresh Bob must redeem purchased NAV: {receipt:?}"
+    );
+    assert_eq!(
+        ledger
+            .trustline_for_account_asset(&bob, &nav)
+            .unwrap()
+            .balance,
+        0
+    );
+    assert_eq!(
+        ledger.nav_assets[0].circulating_supply,
+        before_supply - 1_000_000
+    );
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0].settlement_reserve_atoms,
+        before_reserve - 7_000_000
+    );
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0]
+            .native_spendable_balances_atoms
+            .get(&alice),
+        Some(&1_000_000)
+    );
+    assert!(!ledger.pftl_uniswap_routes[0]
+        .native_spendable_balances_atoms
+        .contains_key(&bob));
 }
 
 #[test]
-fn b23_market_buyer_redeems() { market_buy_then_redeem(false); }
+fn b23_market_buyer_redeems() {
+    market_buy_then_redeem(false);
+}
 #[test]
-fn b23_partial_fill_cancel_buyer_redeems() { market_buy_then_redeem(true); }
+fn b23_partial_fill_cancel_buyer_redeems() {
+    market_buy_then_redeem(true);
+}
 
 #[test]
 fn b23_legacy_hash_baseline() {
     let (_, mut ledger, _, _) = facility_fixture(false);
     let route = &ledger.pftl_uniswap_routes[0];
     let policy = &route.v2.as_ref().unwrap().primary_market_policy;
-    println!("LEGACY_POLICY_HASH={}",policy.computed_hash());
-    println!("LEGACY_ROUTE_HASH={}",pftl_uniswap_route_state_hash(route));
+    assert_eq!(policy.computed_hash(), "d605f00ac76759780669cea1d35a99f3c31a18a318dbb2a550a1dc8353d4c980d9f3bb2492f8eb0fa8c30608de48f905");
+    assert!(serde_json::to_value(policy)
+        .unwrap()
+        .get("spread_recipient")
+        .is_none());
+    assert_eq!(pftl_uniswap_route_state_hash(route), "c889ab772a676dc93ce26c3cfd2198e3769fefbeeb6624685730e3944d537c8fee6b1ff047038559e976c903b3a2a411");
     let route_id = route.route_id.clone();
     let route_hash = pftl_uniswap_route_state_hash(route);
-    append_pftl_uniswap_consensus_receipt(&mut ledger,PftlUniswapReceiptPlan {
-        transition:"primary_redeemed",route_id:&route_id,state_before_hash:route_hash.clone(),
-        state_after_hash:route_hash,packet_hash:None,burn_event_hash:None,wallet:None,
-        amount_atoms:Some(1_000_000),block_height:11,
-    }).unwrap();
-    println!("LEGACY_RECEIPT_HASH={}",ledger.pftl_uniswap_receipts[0].receipt_hash);
+    append_pftl_uniswap_consensus_receipt(
+        &mut ledger,
+        PftlUniswapReceiptPlan {
+            transition: "primary_redeemed",
+            route_id: &route_id,
+            state_before_hash: route_hash.clone(),
+            state_after_hash: route_hash,
+            packet_hash: None,
+            burn_event_hash: None,
+            wallet: None,
+            amount_atoms: Some(1_000_000),
+            block_height: 11,
+        },
+    )
+    .unwrap();
+    let receipt = &ledger.pftl_uniswap_receipts[0];
+    assert_eq!(receipt.receipt_hash, "51ba4154deae52947c122240255bd24b27aaa48503922cbc7eec4fa4f1e37d60cc4c6bed518e594d78245124fc504090");
+    assert_eq!(
+        receipt.receipt_hash,
+        postfiat_types::pftl_uniswap_consensus_receipt_computed_hash(receipt)
+    );
+    assert!(serde_json::to_value(receipt)
+        .unwrap()
+        .get("redemption_settlement")
+        .is_none());
+}
+
+fn enable_facility(
+    ledger: &mut LedgerState,
+    redeem: &mut PftlUniswapPrimaryRedeemOperation,
+    management: &str,
+) {
+    let policy = &mut ledger.pftl_uniswap_routes[0]
+        .v2
+        .as_mut()
+        .unwrap()
+        .primary_market_policy;
+    policy.spread_recipient = Some(management.to_string());
+    policy.policy_hash = policy.computed_hash();
+    redeem.policy_hash = policy.policy_hash.clone();
+}
+
+fn management_account(ledger: &mut LedgerState, payout: &str) -> String {
+    let key = ml_dsa_65_keygen_from_seed(&[0x65; 32]);
+    let address = address_from_public_key(&key.public_key);
+    ledger.accounts.push(Account::new(
+        address.clone(),
+        100_000,
+        Some(bytes_to_hex(&key.public_key)),
+    ));
+    let issuer = ledger.asset_definition(payout).unwrap().issuer.clone();
+    ledger.trustlines.push(
+        TrustLine::new(
+            address.clone(),
+            issuer,
+            payout.to_string(),
+            2_000_000_000,
+            0,
+        )
+        .unwrap(),
+    );
+    address
+}
+
+fn fund_without_mint(source: bool) {
+    let (genesis, mut ledger, key, mut redeem) = facility_fixture(source);
+    let owner = redeem.owner.clone();
+    enable_facility(&mut ledger, &mut redeem, &owner);
+    let payout = redeem
+        .settlement_source_asset_id
+        .clone()
+        .unwrap_or_else(|| ledger.pftl_uniswap_routes[0].settlement_asset_id.clone());
+    ledger.pftl_uniswap_routes[0].paused = false;
+    ledger.pftl_uniswap_routes[0].live_value_enabled = true;
+    ledger.pftl_uniswap_routes[0].settlement_reserve_atoms = 0;
+    if source {
+        ledger.pftl_uniswap_source_custody[0].principal_atoms = 0;
+        ledger.pftl_uniswap_source_custody[0].enabled_for_issue = true;
+    }
+    let total = issued_asset_supply(&ledger, &payout).unwrap();
+    let nav_supply = ledger.nav_assets[0].circulating_supply;
+    let inventory = ledger.pftl_uniswap_routes[0]
+        .native_spendable_balances_atoms
+        .clone();
+    let balance = ledger
+        .trustline_for_account_asset(&owner, &payout)
+        .unwrap()
+        .balance;
+    let op = PftlUniswapRedemptionFundOperation {
+        funder: owner.clone(),
+        route_id: redeem.route_id.clone(),
+        settlement_asset_id: payout.clone(),
+        funding_nonce: "78".repeat(32),
+        amount_atoms: 5_000_000,
+    };
+    let receipt = submit_asset(
+        &genesis,
+        &mut ledger,
+        &key,
+        PFTL_UNISWAP_REDEMPTION_FUND_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapRedemptionFund(op.clone()),
+    );
+    assert!(receipt.accepted, "fund: {receipt:?}");
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0].settlement_reserve_atoms,
+        5_000_000
+    );
+    // NAV is 7 settlement atoms per NAV atom; reserve-limited capacity rises from zero.
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0].settlement_reserve_atoms / 7,
+        714_285
+    );
+    assert_eq!(ledger.nav_assets[0].circulating_supply, nav_supply);
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0].native_spendable_balances_atoms,
+        inventory
+    );
+    assert_eq!(
+        ledger
+            .trustline_for_account_asset(&owner, &payout)
+            .unwrap()
+            .balance,
+        balance - 5_000_000
+    );
+    assert_eq!(issued_asset_supply(&ledger, &payout).unwrap(), total);
+    if source {
+        assert_eq!(
+            ledger.pftl_uniswap_source_custody[0].principal_atoms,
+            5_000_000
+        );
+    }
+    assert_eq!(
+        ledger.pftl_uniswap_receipts.last().unwrap().transition,
+        "redemption_funded"
+    );
+    let before = ledger.clone();
+    let receipt = submit_asset(
+        &genesis,
+        &mut ledger,
+        &key,
+        PFTL_UNISWAP_REDEMPTION_FUND_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapRedemptionFund(op.clone()),
+    );
+    assert_eq!(receipt.code, "pftl_uniswap_funding_invalid");
+    assert_eq!(ledger, before, "duplicate funding must roll back");
+    let mut too_much = op.clone();
+    too_much.funding_nonce = "79".repeat(32);
+    let receipt = submit_asset(
+        &genesis,
+        &mut ledger,
+        &key,
+        PFTL_UNISWAP_REDEMPTION_FUND_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapRedemptionFund(too_much),
+    );
+    assert_eq!(receipt.code, "insufficient_issued_balance");
+    assert_eq!(
+        ledger, before,
+        "source accounting and all balances must roll back"
+    );
+    ledger.validate_pftl_source_custody().unwrap();
+    println!("D1 source={source}: accepted=true reserve=0->5000000 capacity=0->714285 B23_supply={nav_supply} unchanged; replay/insufficient-balance rollback verified");
+}
+#[test]
+fn b23_fund_without_mint_pooled() {
+    fund_without_mint(false);
+}
+#[test]
+fn b23_fund_without_mint_source() {
+    fund_without_mint(true);
+}
+
+fn thousand_b23_fixture(
+    source: bool,
+) -> (
+    Genesis,
+    LedgerState,
+    MlDsa65KeyPair,
+    PftlUniswapPrimaryRedeemOperation,
+    String,
+) {
+    let (genesis, mut ledger, key, mut redeem) = facility_fixture(source);
+    let nav = ledger.pftl_uniswap_routes[0].native_nav_asset_id.clone();
+    let payout = redeem
+        .settlement_source_asset_id
+        .clone()
+        .unwrap_or_else(|| ledger.pftl_uniswap_routes[0].settlement_asset_id.clone());
+    let management = management_account(&mut ledger, &payout);
+    enable_facility(&mut ledger, &mut redeem, &management);
+    let route = &mut ledger.pftl_uniswap_routes[0];
+    route.authorized_valid_supply_atoms = 1_000_000_000;
+    route.pftl_spendable_supply_atoms = 1_000_000_000;
+    route
+        .native_spendable_balances_atoms
+        .insert(redeem.owner.clone(), 1_000_000_000);
+    route.settlement_reserve_atoms = 1_000_000_000;
+    route.route_supply_cap_atoms = 2_000_000_000;
+    let policy = &mut route.v2.as_mut().unwrap().primary_market_policy;
+    policy.redeem_multiplier_bps = 9980;
+    policy.max_order_atoms = 1_000_000_000;
+    policy.issue_capacity_atoms = 2_000_000_000;
+    policy.redeem_capacity_atoms = 2_000_000_000;
+    policy.policy_hash = policy.computed_hash();
+    redeem.policy_hash = policy.policy_hash.clone();
+    redeem.nav_amount_atoms = 1_000_000_000;
+    redeem.min_settlement_value_atoms = 998_000_000;
+    let line = ledger
+        .trustlines
+        .iter_mut()
+        .find(|line| line.account == redeem.owner && line.asset_id == nav)
+        .unwrap();
+    line.balance = 1_000_000_000;
+    line.limit = 2_000_000_000;
+    let line = ledger
+        .trustlines
+        .iter_mut()
+        .find(|line| line.account == redeem.owner && line.asset_id == payout)
+        .unwrap();
+    line.limit = 2_000_000_000;
+    ledger.nav_assets[0].circulating_supply = 1_000_000_000;
+    ledger.nav_assets[0].nav_per_unit = 1_000_000;
+    if source {
+        ledger.pftl_uniswap_source_custody[0].principal_atoms = 1_000_000_000;
+        let bucket = &mut ledger.vault_bridge_bucket_states[0];
+        bucket.gross_receipt_atoms = 2_000_000_000;
+        bucket.counted_value_atoms = 2_000_000_000;
+        bucket.outstanding_vault_bridge_atoms = 2_000_000_000;
+    }
+    ledger.pftl_uniswap_routes[0].validate().unwrap();
+    (genesis, ledger, key, redeem, management)
+}
+
+fn two_credit_redemption(source: bool) {
+    let (genesis, mut ledger, key, redeem, management) = thousand_b23_fixture(source);
+    let payout = redeem
+        .settlement_source_asset_id
+        .clone()
+        .unwrap_or_else(|| ledger.pftl_uniswap_routes[0].settlement_asset_id.clone());
+    let balance = ledger
+        .trustline_for_account_asset(&redeem.owner, &payout)
+        .unwrap()
+        .balance;
+    let total = issued_asset_supply(&ledger, &payout).unwrap();
+    // Custody release, not issuance: exact supply cap must not block either credit.
+    ledger
+        .asset_definitions
+        .iter_mut()
+        .find(|a| a.asset_id == payout)
+        .unwrap()
+        .max_supply = Some(total);
+    let before = ledger.clone();
+    let management_index = ledger
+        .trustlines
+        .iter()
+        .position(|l| l.account == management && l.asset_id == payout)
+        .unwrap();
+    ledger.trustlines[management_index].frozen = true;
+    let frozen = ledger.clone();
+    let receipt = submit_asset(
+        &genesis,
+        &mut ledger,
+        &key,
+        PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapPrimaryRedeem(redeem.clone()),
+    );
+    assert_eq!(receipt.code, "frozen_trustline");
+    assert_eq!(
+        ledger, frozen,
+        "failed management credit must roll back redeem, reserve, nonce, and redeemer credit"
+    );
+    ledger = before;
+    let receipt = submit_asset(
+        &genesis,
+        &mut ledger,
+        &key,
+        PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapPrimaryRedeem(redeem.clone()),
+    );
+    assert!(receipt.accepted, "redeem: {receipt:?}");
+    assert_eq!(
+        ledger
+            .trustline_for_account_asset(&redeem.owner, &payout)
+            .unwrap()
+            .balance
+            - balance,
+        998_000_000
+    );
+    assert_eq!(
+        ledger
+            .trustline_for_account_asset(&management, &payout)
+            .unwrap()
+            .balance,
+        2_000_000
+    );
+    assert_eq!(issued_asset_supply(&ledger, &payout).unwrap(), total);
+    assert_eq!(ledger.pftl_uniswap_routes[0].settlement_reserve_atoms, 0);
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0]
+            .v2
+            .as_ref()
+            .unwrap()
+            .non_nav_spread_atoms,
+        70_000
+    );
+    assert_eq!(ledger.nav_assets[0].circulating_supply, 0);
+    if source {
+        assert_eq!(ledger.pftl_uniswap_source_custody[0].principal_atoms, 0);
+        assert_eq!(ledger.pftl_uniswap_source_custody[0].spread_atoms, 70_000);
+    }
+    ledger.validate_pftl_source_custody().unwrap();
+    let consensus = ledger.pftl_uniswap_receipts.last().unwrap();
+    let settlement = consensus.redemption_settlement.as_ref().unwrap();
+    assert_eq!(
+        settlement.settlement_value_atoms + settlement.spread_value_atoms,
+        1_000_000_000
+    );
+    assert_eq!(settlement.spread_recipient, management);
+    assert_eq!(settlement.settlement_asset_id, payout);
+    assert_eq!(
+        consensus.receipt_hash,
+        postfiat_types::pftl_uniswap_consensus_receipt_computed_hash(consensus)
+    );
+    println!(
+        "D2 source={source}: accepted=true {}",
+        serde_json::to_string(consensus).unwrap()
+    );
+}
+#[test]
+fn b23_redeem_1000_pays_both_pooled() {
+    two_credit_redemption(false);
+}
+#[test]
+fn b23_redeem_1000_pays_both_source() {
+    two_credit_redemption(true);
 }

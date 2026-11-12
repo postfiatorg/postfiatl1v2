@@ -5613,6 +5613,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     assert!(receipt.accepted, "{receipt:?}");
 
     let mut primary_policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: 10_050,
@@ -6582,6 +6583,7 @@ fn pftl_uniswap_v2_fixed_point_spreads_round_against_the_protocol() {
 #[test]
 fn pftl_uniswap_v2_state_binds_directional_trust_capacity_and_non_nav_spread() {
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
@@ -6696,6 +6698,7 @@ fn pftl_uniswap_v2_state_binds_directional_trust_capacity_and_non_nav_spread() {
 fn ar11_issued_asset_supply_counts_non_nav_spread_custody() {
     let settlement_asset_id = "95".repeat(48);
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
@@ -7073,6 +7076,7 @@ fn primary_redeem_source_fixture(source_mode: bool) {
     // Production-shaped primary market policy: the exact cap, order-bound,
     // and multiplier shape used by the live A666 route.
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
@@ -7833,6 +7837,7 @@ fn ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed() {
     let packet_hash = "b5".repeat(48);
     let ethereum_recipient = "0x4444444444444444444444444444444444444444".to_string();
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,

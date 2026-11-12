@@ -3620,6 +3620,9 @@ pub(super) fn append_pftl_uniswap_route(
             &v2.return_verification_class,
         );
         let policy = &v2.primary_market_policy;
+        if let Some(recipient) = &policy.spread_recipient {
+            append_canonical_str(bytes, &format!("{prefix}.v2.spread_recipient"), recipient);
+        }
         append_canonical_str(
             bytes,
             &format!("{prefix}.v2.policy_hash"),
@@ -4002,6 +4005,13 @@ pub(super) fn append_pftl_uniswap_receipt(
         &format!("{prefix}.block_height"),
         receipt.block_height,
     );
+    if let Some(settlement) = &receipt.redemption_settlement {
+        append_canonical_str(bytes, &format!("{prefix}.redemption_settlement.settlement_asset_id"), &settlement.settlement_asset_id);
+        append_canonical_str(bytes, &format!("{prefix}.redemption_settlement.settlement_recipient"), &settlement.settlement_recipient);
+        append_canonical_u64(bytes, &format!("{prefix}.redemption_settlement.settlement_value_atoms"), settlement.settlement_value_atoms);
+        append_canonical_str(bytes, &format!("{prefix}.redemption_settlement.spread_recipient"), &settlement.spread_recipient);
+        append_canonical_u64(bytes, &format!("{prefix}.redemption_settlement.spread_value_atoms"), settlement.spread_value_atoms);
+    }
 }
 
 pub(super) fn legacy_domainless_vault_bridge_withdrawal_packet_hash(
