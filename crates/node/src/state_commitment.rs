@@ -3461,6 +3461,10 @@ pub(super) fn append_vault_bridge_withdrawal_packet(
     );
 }
 
+#[cfg(test)]
+#[path = "b23_facility_commitment_tests.rs"]
+mod b23_facility_commitment_tests;
+
 pub(super) fn append_pftl_uniswap_route(
     bytes: &mut Vec<u8>,
     prefix: &str,

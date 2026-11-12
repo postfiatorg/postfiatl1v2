@@ -1095,3 +1095,46 @@ fn b23_zero_fee_and_rounding_conserve_reserve() {
         );
     }
 }
+
+#[test]
+fn b23_mint_preserves_legacy_and_no_route_accounting() {
+    for no_route in [false, true] {
+        let issuer_key = ml_dsa_65_keygen_from_seed(&[0x68; 32]);
+        let issuer = address_from_public_key(&issuer_key.public_key);
+        let (genesis, mut ledger, _, redeem) = facility_fixture_for_issuer(false, &issuer);
+        let nav = ledger.pftl_uniswap_routes[0].native_nav_asset_id.clone();
+        if no_route {
+            ledger.pftl_uniswap_routes.clear();
+        }
+        let old_routes = ledger.pftl_uniswap_routes.clone();
+        ledger.nav_assets[0].circulating_supply = 3_000_000;
+        let op = NavMintAtNavOperation {
+            issuer,
+            to: redeem.owner.clone(),
+            asset_id: nav.clone(),
+            amount: 1_000_000,
+            epoch: redeem.pricing_nav_epoch,
+            reserve_packet_hash: redeem.pricing_reserve_packet_hash,
+            settlement_asset_id: String::new(),
+            settlement_bucket_id: String::new(),
+            settlement_allocation_id: String::new(),
+            settlement_amount_atoms: 0,
+        };
+        let receipt = submit_asset(
+            &genesis,
+            &mut ledger,
+            &issuer_key,
+            NAV_MINT_AT_NAV_TRANSACTION_KIND,
+            AssetTransactionOperation::NavMintAtNav(op),
+        );
+        assert!(receipt.accepted, "legacy mint: {receipt:?}");
+        assert_eq!(ledger.pftl_uniswap_routes, old_routes);
+        assert_eq!(
+            ledger
+                .trustline_for_account_asset(&redeem.owner, &nav)
+                .unwrap()
+                .balance,
+            3_000_000
+        );
+    }
+}
