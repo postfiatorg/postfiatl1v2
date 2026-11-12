@@ -3191,6 +3191,7 @@ class FastPayFlowTests(unittest.TestCase):
             "protocol_version": 3,
             "block_height": 20,
         }
+        signed_ids: list[str] = []
 
         def fake_run(args, *, json_output, cwd=wallet_module.REPO_ROOT):
             del cwd, json_output
@@ -3203,9 +3204,10 @@ class FastPayFlowTests(unittest.TestCase):
             self.assertEqual(deposit["amount_atoms"], 10)
             self.assertEqual(deposit["fee_pft"], 1)
             self.assertEqual(deposit["valid_through_height"], 120)
+            signed_ids.append(wallet_module.owned_deposit_object_id(deposit))
             output_path = Path(command[command.index("--output") + 1])
             output_path.write_text(
-                json.dumps({"operation": {"owned_deposit": {"signed": {}}}}),
+                json.dumps({"operation": {"kind": "owned_deposit", "signed": {"deposit": deposit, "signature": [0]}}}),
                 encoding="utf-8",
             )
 
@@ -3220,12 +3222,10 @@ class FastPayFlowTests(unittest.TestCase):
                 mock.patch.object(
                     client,
                     "owned_objects",
-                    side_effect=[
-                        {"objects": [], "total_value": 0},
-                        {
+                    side_effect=lambda *_a, **_k: {
                             "objects": [
                                 {
-                                    "id": "obj1",
+                                    "id": signed_ids[0],
                                     "version": 1,
                                     "owner_pubkey_hex": public_key_hex,
                                     "value": 10,
@@ -3234,7 +3234,6 @@ class FastPayFlowTests(unittest.TestCase):
                             ],
                             "total_value": 10,
                         },
-                    ],
                 ) as owned,
                 mock.patch.object(wallet_module, "_run", side_effect=fake_run),
                 mock.patch.object(
@@ -3257,10 +3256,11 @@ class FastPayFlowTests(unittest.TestCase):
                     work_dir=tmp,
                 )
 
-        self.assertEqual(owned.call_count, 2)
+        self.assertEqual(owned.call_count, 1)
         submit.assert_called_once()
         self.assertEqual(result.operation, "wrap")
-        self.assertEqual(result.object_id, "obj1")
+        self.assertEqual(result.object_id, signed_ids[0])
+        self.assertTrue(result.result["object_in_snapshot"])
         self.assertEqual(result.result["receipt"]["code"], "owned_deposit_applied")
         self.assertEqual(result.objects_snapshot["total_value"], 10)
 
@@ -4178,17 +4178,16 @@ class FastPayPagedInventoryTests(unittest.TestCase):
             )
         )
 
-    def test_wrap_compares_every_page_before_and_after(self) -> None:
+    def test_wrap_finds_its_object_on_a_later_page_of_the_after_read(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")
         key = "ab" * 1952
         obj = lambda ident: {"id": ident, "version": 1, "owner_pubkey_hex": key, "value": 10, "asset": "PFT"}
-        pages = [
-            self._page([obj("a")], "c1", "v1", 20),
-            self._page([obj("c")], None, "v1", 20),
-            self._page([obj("a")], "c2", "v2", 30),  # the new object "b" is on page 2
-            self._page([obj("b")], "c3", "v2", 30),
-            self._page([obj("c")], None, "v2", 30),
-        ]
+        signed_ids: list[str] = []
+        pages = iter([
+            lambda: self._page([obj("a")], "c2", "v2", 30),  # the new object is on page 2
+            lambda: self._page([obj(signed_ids[0])], "c3", "v2", 30),
+            lambda: self._page([obj("c")], None, "v2", 30),
+        ])
         capabilities = {
             "fastpay_bridge_enabled": True,
             "fastpay_bridge_mode": "proxy_broadcast_devnet",
@@ -4202,15 +4201,18 @@ class FastPayPagedInventoryTests(unittest.TestCase):
         def fake_run(args, *, json_output, cwd=wallet_module.REPO_ROOT):
             del cwd, json_output
             command = list(args)
+            deposit = json.loads(Path(command[command.index("--deposit-file") + 1]).read_text(encoding="utf-8"))
+            signed_ids.append(wallet_module.owned_deposit_object_id(deposit))
             Path(command[command.index("--output") + 1]).write_text(
-                json.dumps({"operation": {"owned_deposit": {"signed": {}}}}), encoding="utf-8"
+                json.dumps({"operation": {"kind": "owned_deposit", "signed": {"deposit": deposit, "signature": [0]}}}),
+                encoding="utf-8",
             )
 
         with (
             tempfile.TemporaryDirectory() as tmp,
             mock.patch.object(client, "server_capabilities", return_value=capabilities),
             mock.patch.object(client, "account", return_value={"account": {"sequence": 7, "balance": 100}}),
-            mock.patch.object(client, "owned_objects", side_effect=pages) as owned,
+            mock.patch.object(client, "owned_objects", side_effect=lambda *_a, **_k: next(pages)()) as owned,
             mock.patch.object(wallet_module, "_run", side_effect=fake_run),
             mock.patch.object(
                 client, "mempool_submit_fastlane_primary_finality", return_value={"tx_id": "deposit-1"}
@@ -4224,8 +4226,9 @@ class FastPayPagedInventoryTests(unittest.TestCase):
             result = wrap_fastpay(
                 client, wallet=self._wallet(key), amount=10, work_dir=tmp, check_capabilities=False
             )
-        self.assertEqual(owned.call_count, 5)
-        self.assertEqual(result.object_id, "b")
+        self.assertEqual(owned.call_count, 3)
+        self.assertEqual(result.object_id, signed_ids[0])
+        self.assertTrue(result.result["object_in_snapshot"])
 
 
 if __name__ == "__main__":

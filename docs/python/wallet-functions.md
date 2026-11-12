@@ -60,7 +60,11 @@ fail-closed confirm-or-cancel decisions without giving the proxy custody.
 
 - `wrap_fastpay` constructs and locally signs `OwnedDepositV1`; funding enters
   through that consensus-committed FastLane deposit and must finish with the
-  exact accepted receipt code `owned_deposit_applied`. The legacy unsigned
+  exact accepted receipt code `owned_deposit_applied`. Its `object_id` is
+  derived from the signed deposit as the node derives it
+  (`owned_deposit_object_id`), so a concurrent incoming object is never taken
+  for it; `object_in_snapshot` is false when the new object was already spent,
+  and the deposit was still accepted. The legacy unsigned
   `wrap_owned`/`unwrap_owned` RPC methods are not exposed by the Python client.
 - `send_fastpay(client, wallet, recipient_public_key_hex, amount, fee=1)`
   binds the exact governed recovery capability and validity window, signs an
