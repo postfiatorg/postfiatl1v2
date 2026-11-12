@@ -12,10 +12,22 @@ fn facility_fixture(
     MlDsa65KeyPair,
     PftlUniswapPrimaryRedeemOperation,
 ) {
+    facility_fixture_for_issuer(source_mode, "burn6-issuer")
+}
+
+fn facility_fixture_for_issuer(
+    source_mode: bool,
+    fixture_issuer: &str,
+) -> (
+    Genesis,
+    LedgerState,
+    MlDsa65KeyPair,
+    PftlUniswapPrimaryRedeemOperation,
+) {
     let genesis = Genesis::new("burn6-swap-settlement");
     let key = ml_dsa_65_keygen_from_seed(&[0x63; 32]);
     let owner = address_from_public_key(&key.public_key);
-    let issuer = "burn6-issuer".to_string();
+    let issuer = fixture_issuer.to_string();
     let native = AssetDefinition::new(&genesis.chain_id, &issuer, "NAV", 1, 6).unwrap();
     let family = AssetDefinition::new(&genesis.chain_id, &issuer, "USD", 1, 6).unwrap();
     let mut ledger = LedgerState::new(vec![
@@ -825,4 +837,261 @@ fn b23_redeem_1000_pays_both_pooled() {
 #[test]
 fn b23_redeem_1000_pays_both_source() {
     two_credit_redemption(true);
+}
+
+#[test]
+fn b23_live_route_mint_then_redeem() {
+    let issuer_key = ml_dsa_65_keygen_from_seed(&[0x67; 32]);
+    let issuer = address_from_public_key(&issuer_key.public_key);
+    let (genesis, mut ledger, key, mut redeem) = facility_fixture_for_issuer(false, &issuer);
+    let owner = redeem.owner.clone();
+    enable_facility(&mut ledger, &mut redeem, &owner);
+    ledger.pftl_uniswap_routes[0].live_value_enabled = true;
+    ledger.pftl_uniswap_routes[0].paused = false;
+    let nav = ledger.pftl_uniswap_routes[0].native_nav_asset_id.clone();
+    // A new reserve packet authorizes a one-token top-up beyond the two issued tokens.
+    ledger.nav_assets[0].circulating_supply = 3_000_000;
+    let before_reserve = ledger.pftl_uniswap_routes[0].settlement_reserve_atoms;
+    let op = NavMintAtNavOperation {
+        issuer: issuer.clone(),
+        to: owner.clone(),
+        asset_id: nav.clone(),
+        amount: 1_000_000,
+        epoch: redeem.pricing_nav_epoch,
+        reserve_packet_hash: redeem.pricing_reserve_packet_hash.clone(),
+        settlement_asset_id: String::new(),
+        settlement_bucket_id: String::new(),
+        settlement_allocation_id: String::new(),
+        settlement_amount_atoms: 0,
+    };
+    let receipt = submit_asset(
+        &genesis,
+        &mut ledger,
+        &issuer_key,
+        NAV_MINT_AT_NAV_TRANSACTION_KIND,
+        AssetTransactionOperation::NavMintAtNav(op.clone()),
+    );
+    assert!(receipt.accepted, "mint: {receipt:?}");
+    assert_eq!(
+        ledger
+            .trustline_for_account_asset(&owner, &nav)
+            .unwrap()
+            .balance,
+        3_000_000
+    );
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0].authorized_valid_supply_atoms, 3_000_000,
+        "route must account for the new mint"
+    );
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0].pftl_spendable_supply_atoms,
+        3_000_000
+    );
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0]
+            .native_spendable_balances_atoms
+            .get(&owner),
+        Some(&3_000_000)
+    );
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0].settlement_reserve_atoms,
+        before_reserve
+    );
+    ledger.pftl_uniswap_routes[0].validate().unwrap();
+    let before = ledger.clone();
+    let receipt = submit_asset(
+        &genesis,
+        &mut ledger,
+        &issuer_key,
+        NAV_MINT_AT_NAV_TRANSACTION_KIND,
+        AssetTransactionOperation::NavMintAtNav(op),
+    );
+    assert_eq!(receipt.code, "nav_supply_cap_exceeded");
+    assert_eq!(ledger, before);
+    let receipt = submit_asset(
+        &genesis,
+        &mut ledger,
+        &key,
+        PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapPrimaryRedeem(redeem),
+    );
+    assert!(receipt.accepted, "redeem top-up: {receipt:?}");
+    assert_eq!(ledger.nav_assets[0].circulating_supply, 2_000_000);
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0].authorized_valid_supply_atoms,
+        2_000_000
+    );
+    assert_eq!(
+        ledger.pftl_uniswap_routes[0]
+            .native_spendable_balances_atoms
+            .get(&owner),
+        Some(&2_000_000)
+    );
+    ledger.pftl_uniswap_routes[0].validate().unwrap();
+    println!("C3 live route mint accepted: route/native inventory 2000000->3000000; reserve unchanged; redeem accepted ->2000000; invariant holds");
+}
+
+#[test]
+fn b23_policy_epoch_changes_next_redemption_fee() {
+    let (genesis, mut ledger, key, mut redeem, management) = thousand_b23_fixture(false);
+    let payout = ledger.pftl_uniswap_routes[0].settlement_asset_id.clone();
+    ledger.nav_assets[0].reserve_operator = redeem.owner.clone();
+    let mut next = ledger.pftl_uniswap_routes[0]
+        .v2
+        .as_ref()
+        .unwrap()
+        .primary_market_policy
+        .clone();
+    next.policy_epoch = 2;
+    next.redeem_multiplier_bps = 9900;
+    next.policy_hash = next.computed_hash();
+    let advance = PftlUniswapRouteEpochAdvanceOperation {
+        operator: redeem.owner.clone(),
+        route_id: redeem.route_id.clone(),
+        prior_route_epoch: 1,
+        next_route_epoch: 2,
+        next_route_config_digest: "79".repeat(48),
+        live_value_enabled: true,
+        next_primary_market_policy: next.clone(),
+        settlement_source_asset_ids: None,
+    };
+    let receipt = submit_asset(
+        &genesis,
+        &mut ledger,
+        &key,
+        PFTL_UNISWAP_ROUTE_EPOCH_ADVANCE_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapRouteEpochAdvance(advance),
+    );
+    assert!(receipt.accepted, "epoch advance: {receipt:?}");
+    let before = ledger.clone();
+    let receipt = submit_asset(
+        &genesis,
+        &mut ledger,
+        &key,
+        PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapPrimaryRedeem(redeem.clone()),
+    );
+    assert_eq!(receipt.code, "pftl_uniswap_redemption_policy_mismatch");
+    assert_eq!(ledger, before);
+    redeem.route_epoch = 2;
+    redeem.policy_epoch = 2;
+    redeem.policy_hash = next.policy_hash;
+    redeem.min_settlement_value_atoms = 990_000_000;
+    let balance = ledger
+        .trustline_for_account_asset(&redeem.owner, &payout)
+        .unwrap()
+        .balance;
+    let receipt = submit_asset(
+        &genesis,
+        &mut ledger,
+        &key,
+        PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapPrimaryRedeem(redeem.clone()),
+    );
+    assert!(receipt.accepted, "new fee redemption: {receipt:?}");
+    assert_eq!(
+        ledger
+            .trustline_for_account_asset(&redeem.owner, &payout)
+            .unwrap()
+            .balance
+            - balance,
+        990_000_000
+    );
+    assert_eq!(
+        ledger
+            .trustline_for_account_asset(&management, &payout)
+            .unwrap()
+            .balance,
+        10_000_000
+    );
+    println!("D7 signed route epoch advance accepted: x 20->100; old binding rejected; next redemption pays 990000000+10000000");
+}
+
+#[test]
+fn b23_reserve_cap_slippage_and_nonce_fail_atomically() {
+    let (genesis, ledger, key, redeem, _) = thousand_b23_fixture(false);
+    for mode in 0..3 {
+        let mut state = ledger.clone();
+        let mut op = redeem.clone();
+        let expected = match mode {
+            0 => {
+                state.pftl_uniswap_routes[0].settlement_reserve_atoms -= 1;
+                "pftl_uniswap_redemption_unavailable"
+            }
+            1 => {
+                op.min_settlement_value_atoms += 1;
+                "pftl_uniswap_redemption_unavailable"
+            }
+            _ => {
+                state.pftl_uniswap_routes[0]
+                    .v2
+                    .as_mut()
+                    .unwrap()
+                    .redemption_nonces
+                    .insert(op.redemption_nonce.clone(), op.owner.clone());
+                "pftl_uniswap_redemption_policy_mismatch"
+            }
+        };
+        let before = state.clone();
+        let receipt = submit_asset(
+            &genesis,
+            &mut state,
+            &key,
+            PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+            AssetTransactionOperation::PftlUniswapPrimaryRedeem(op),
+        );
+        assert_eq!(receipt.code, expected);
+        assert_eq!(state, before);
+    }
+}
+
+#[test]
+fn b23_zero_fee_and_rounding_conserve_reserve() {
+    for multiplier in [10_000, 9999, 9500] {
+        let (genesis, mut ledger, key, mut redeem, management) = thousand_b23_fixture(false);
+        let payout = ledger.pftl_uniswap_routes[0].settlement_asset_id.clone();
+        let policy = &mut ledger.pftl_uniswap_routes[0]
+            .v2
+            .as_mut()
+            .unwrap()
+            .primary_market_policy;
+        policy.redeem_multiplier_bps = multiplier;
+        policy.policy_hash = policy.computed_hash();
+        redeem.policy_hash = policy.policy_hash.clone();
+        redeem.nav_amount_atoms = 1_000_003;
+        let output = redeem.nav_amount_atoms * u64::from(multiplier) / 10_000;
+        let spread = redeem.nav_amount_atoms - output;
+        redeem.min_settlement_value_atoms = output;
+        let before = ledger
+            .trustline_for_account_asset(&redeem.owner, &payout)
+            .unwrap()
+            .balance;
+        let receipt = submit_asset(
+            &genesis,
+            &mut ledger,
+            &key,
+            PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+            AssetTransactionOperation::PftlUniswapPrimaryRedeem(redeem),
+        );
+        assert!(receipt.accepted, "rounding: {receipt:?}");
+        assert_eq!(
+            ledger
+                .trustline_for_account_asset(&management, &payout)
+                .unwrap()
+                .balance,
+            spread
+        );
+        assert_eq!(
+            ledger
+                .trustline_for_account_asset(&address_from_public_key(&key.public_key), &payout)
+                .unwrap()
+                .balance
+                - before,
+            output
+        );
+        assert_eq!(
+            ledger.pftl_uniswap_routes[0].settlement_reserve_atoms,
+            1_000_000_000 - output - spread
+        );
+    }
 }

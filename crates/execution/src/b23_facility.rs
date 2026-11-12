@@ -59,3 +59,36 @@ fn b23_facility_transfer_offer_inventory(
     }
     Ok(())
 }
+
+fn b23_facility_credit_minted_inventory(
+    ledger: &mut LedgerState,
+    operation: &postfiat_types::NavMintAtNavOperation,
+) -> Result<(), (&'static str, String)> {
+    for route in ledger.pftl_uniswap_routes.iter_mut().filter(|route| {
+        route.native_nav_asset_id == operation.asset_id && b23_facility_enabled(route)
+    }) {
+        route.authorized_valid_supply_atoms = route
+            .authorized_valid_supply_atoms
+            .checked_add(operation.amount)
+            .ok_or_else(|| {
+                (
+                    "pftl_uniswap_supply_overflow",
+                    "minted route supply would overflow".to_string(),
+                )
+            })?;
+        route.pftl_spendable_supply_atoms = route
+            .pftl_spendable_supply_atoms
+            .checked_add(operation.amount)
+            .ok_or_else(|| {
+                (
+                    "pftl_uniswap_supply_overflow",
+                    "minted native route supply would overflow".to_string(),
+                )
+            })?;
+        pftl_uniswap_credit_native_route_balance(route, &operation.to, operation.amount)?;
+        route
+            .validate()
+            .map_err(|e| ("bad_pftl_uniswap_route", e))?;
+    }
+    Ok(())
+}
