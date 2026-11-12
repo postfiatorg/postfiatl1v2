@@ -2189,6 +2189,7 @@ mod shielded_bridge_governance_tests {
         );
         amendment.activation_height = profile.activation_height;
         let activation = VaultBridgeRouteProfileActivationV1 {
+            beacon_finality_bootstrap: None,
             schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
             profile: profile.clone(),
             amendment: amendment.clone(),

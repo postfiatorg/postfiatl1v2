@@ -1614,6 +1614,7 @@ mod tests {
             1,
         );
         let route_activation = VaultBridgeRouteProfileActivationV1 {
+            beacon_finality_bootstrap: None,
             schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
             profile: route.clone(),
             amendment: route_amendment.clone(),
@@ -1627,6 +1628,7 @@ mod tests {
             5,
         );
         let current_route_activation = VaultBridgeRouteProfileActivationV1 {
+            beacon_finality_bootstrap: None,
             schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
             profile: current_route.clone(),
             amendment: current_route_amendment.clone(),

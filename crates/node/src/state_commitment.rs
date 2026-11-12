@@ -1624,6 +1624,12 @@ pub(super) fn append_ledger_state(
     }
 
     if commit_complete_nav_state && !ledger.beacon_finality_states.is_empty() {
+        let mut keys = std::collections::BTreeSet::new();
+        for state in &ledger.beacon_finality_states {
+            if !keys.insert((&state.route_profile_hash, state.route_epoch)) {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "duplicate beacon anchor key"));
+            }
+        }
         append_sorted_canonical_commitments(
             bytes,
             "ledger.beacon_finality_state",
