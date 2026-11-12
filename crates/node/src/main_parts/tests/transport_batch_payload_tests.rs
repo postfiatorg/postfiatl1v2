@@ -1430,32 +1430,69 @@ mod transport_batch_payload_tests {
         // Same batch key, different certificate content: never acknowledged.
         let other_target = (target + 1) % fleet.data_dirs.len();
         assert_ne!(other_target, source);
-        let mut conflicting: serde_json::Value =
-            serde_json::from_slice(&std::fs::read(&certificate_file).expect("certificate"))
-                .expect("certificate json");
+        let mut conflicting = certificate_json(&certificate_file);
         conflicting["certificate"]["registry_root"] = serde_json::json!("77".repeat(48));
-        let conflicting_file = fleet.root.join("height-2-conflicting-certificate.json");
-        std::fs::write(&conflicting_file, conflicting.to_string()).expect("write conflict");
-        let conflict_job_file = enqueue_durable_certified_send_job(
-            &source_dir,
+        let error = assert_redelivery_is_a_conflict(&fleet, source, other_target, &conflicting);
+        assert!(error.contains("differs from the delivered certificate"), "{error}");
+
+        // The completed job no longer holds the proposer back.
+        let _ = transactional_six_validator_round(&fleet, 3, 2);
+        std::fs::remove_dir_all(&fleet.root).expect("cleanup duplicate certified send fleet");
+    }
+
+    fn certificate_json(certificate_file: &Path) -> serde_json::Value {
+        serde_json::from_slice(&std::fs::read(certificate_file).expect("read certificate"))
+            .expect("certificate json")
+    }
+
+    /// Redeliver block 2 from `source` to `target` (which already holds it)
+    /// with `certificate`, through the real outbox and a fresh target service.
+    /// The job must stay pending with `certified_send_duplicate_conflict`; the
+    /// job is then dropped so later rounds are not held back. Returns the error.
+    fn assert_redelivery_is_a_conflict(
+        fleet: &ConsensusV2TransportFleet,
+        source: usize,
+        target: usize,
+        certificate: &serde_json::Value,
+    ) -> String {
+        let source_dir = &fleet.data_dirs[source];
+        let source_status = status(NodeOptions {
+            data_dir: source_dir.clone(),
+        })
+        .expect("source status");
+        let target_before = status(NodeOptions {
+            data_dir: fleet.data_dirs[target].clone(),
+        })
+        .expect("target status");
+        let certificate_id = certificate["certificate_id"]
+            .as_str()
+            .expect("certificate id")
+            .to_string();
+        let certificate_file = fleet
+            .root
+            .join(format!("height-2-conflict-{source}-{target}.json"));
+        std::fs::write(&certificate_file, certificate.to_string()).expect("write certificate");
+        let topology = read_topology_file(&fleet.topology_file).expect("topology");
+        let job_file = enqueue_durable_certified_send_job(
+            source_dir,
             &topology,
             &format!("validator-{source}"),
-            &format!("validator-{other_target}"),
+            &format!("validator-{target}"),
             "transparent",
             2,
-            &certificate.certificate_id,
+            &certificate_id,
             &source_status.block_tip_hash,
             &source_status.state_root,
             &fleet.root.join("height-2.batch.json"),
-            &conflicting_file,
+            &certificate_file,
             15_000,
             0,
             0,
         )
         .expect("enqueue the conflicting job");
-        let service = serve_validator_once(&fleet, other_target, 1, "conflict");
+        let service = serve_validator_once(fleet, target, 1, "conflict");
         let conflict = resume_durable_certified_send_outbox_pending_only(
-            &source_dir,
+            source_dir,
             &fleet.topology_file,
             CERTIFIED_SEND_OUTBOX_MAX_JOBS,
         )
@@ -1466,22 +1503,83 @@ mod transport_batch_payload_tests {
         let pending = conflict
             .targets
             .iter()
-            .find(|report| report.target == format!("validator-{other_target}"))
+            .find(|report| report.target == format!("validator-{target}"))
             .expect("conflicting target report");
         assert_eq!(pending.result, "pending");
         assert!(!pending.already_applied);
-        let error = pending.error.as_deref().expect("named conflict");
+        let error = pending.error.clone().expect("named conflict");
         assert!(error.contains("certified_send_duplicate_conflict"), "{error}");
-        assert!(error.contains("differs from the delivered certificate"), "{error}");
-        let conflict_job = read_durable_certified_send_job(&conflict_job_file).expect("job");
-        assert!(!conflict_job.completed);
-        assert!(conflict_job.ack.is_none());
-        std::fs::remove_dir_all(conflict_job_file.parent().expect("conflict job dir"))
+        let job = read_durable_certified_send_job(&job_file).expect("job");
+        assert!(!job.completed);
+        assert!(job.ack.is_none());
+        let target_after = status(NodeOptions {
+            data_dir: fleet.data_dirs[target].clone(),
+        })
+        .expect("target status after conflict");
+        assert_eq!(target_after.block_tip_hash, target_before.block_tip_hash);
+        assert_eq!(target_after.state_root, target_before.state_root);
+        std::fs::remove_dir_all(job_file.parent().expect("conflict job dir"))
             .expect("drop the conflicting job before the next round");
+        error
+    }
 
-        // The completed job no longer holds the proposer back.
+    /// A redelivered block whose consensus-v2 commit is missing or altered is
+    /// not the block the target holds, even when the legacy certificate
+    /// matches: the job stays pending with `certified_send_duplicate_conflict`.
+    #[test]
+    fn certified_send_redelivery_with_a_different_consensus_v2_commit_stays_pending() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        prewarm_shielded_verifier_cache("duplicate v2 commit test").expect("prewarm");
+        let fleet = consensus_v2_transport_fleet("duplicate-v2-commit", 4, Some(2));
+        let _ = transactional_six_validator_round(&fleet, 1, 1);
+        for data_dir in fleet.data_dirs.iter().skip(1) {
+            let tip = status(NodeOptions {
+                data_dir: data_dir.clone(),
+            })
+            .expect("replica status");
+            rebuild_transactional_storage(StorageMigrationOptions {
+                data_dir: data_dir.clone(),
+                output_dir: data_dir.join("transactional-generation-v1"),
+                expected_tip: tip.block_tip_hash,
+                expected_state_root: tip.state_root,
+                verify_only: false,
+            })
+            .expect("build the replica's transactional store");
+        }
+        let _ = transactional_six_validator_round(&fleet, 2, 2);
+        let ids = fleet.validators.validator_ids();
+        let next_proposer = postfiat_ordering_fast::leader_for_view(&ids, 3, 0).expect("leader");
+        let source = ids
+            .iter()
+            .position(|validator| validator == &next_proposer)
+            .expect("source index");
+        let delivered =
+            certificate_json(&fleet.root.join("height-2-artifacts/block-certificate.json"));
+        assert!(
+            delivered["consensus_v2_commit"].is_object(),
+            "block 2 must carry a consensus-v2 commit"
+        );
+
+        // The consensus-v2 commit removed.
+        let target = (source + 1) % fleet.data_dirs.len();
+        let mut removed = delivered.clone();
+        removed
+            .as_object_mut()
+            .expect("certificate object")
+            .remove("consensus_v2_commit");
+        let error = assert_redelivery_is_a_conflict(&fleet, source, target, &removed);
+        assert!(error.contains("consensus-v2 commit"), "{error}");
+
+        // The precommit votes emptied.
+        let target = (source + 2) % fleet.data_dirs.len();
+        let mut emptied = delivered;
+        emptied["consensus_v2_commit"]["precommit_qc"]["votes"] = serde_json::json!([]);
+        let error = assert_redelivery_is_a_conflict(&fleet, source, target, &emptied);
+        assert!(error.contains("consensus-v2 commit"), "{error}");
+
+        // Neither conflict holds the proposer back.
         let _ = transactional_six_validator_round(&fleet, 3, 2);
-        std::fs::remove_dir_all(&fleet.root).expect("cleanup duplicate certified send fleet");
+        std::fs::remove_dir_all(&fleet.root).expect("cleanup duplicate v2 commit fleet");
     }
 
     #[test]

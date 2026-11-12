@@ -1610,12 +1610,47 @@ pub(super) fn transport_already_applied_ack(
         ));
     }
     // The key and the digests agree; the stored certificate content must too.
+    // Field audit of `BlockCertificateFile` against the stored block:
+    // - schema: selects the file format only; it is not stored with the block.
+    // - chain_id, genesis_hash, protocol_version: compared with this node's chain below.
+    // - block_height, certificate_id, block_hash: compared above (an absent block_hash is the legacy form).
+    // - view, proposer, certificate (legacy votes): compared below.
+    // - proposal_hash: not stored; it is a digest of the block evidence and payload, which the block hash binds.
+    // - fastpay_pre_state_effects: compared below with the block's stored effects.
+    // - consensus_v2_commit: compared below; absent on both sides is equal.
+    // Stored header fields the certificate does not carry (parent_hash, batch_kind, state and
+    // export roots, receipt_count) are bound by block_hash; batch_id is the lookup key.
+    if certificate.chain_id != state_after.chain_id
+        || certificate.genesis_hash != state_after.genesis_hash
+        || certificate.protocol_version != state_after.protocol_version
+    {
+        return Err(format!(
+            "already-applied batch `{batch_id}` was delivered with a certificate for another chain (chain id, genesis hash or protocol version)"
+        ));
+    }
     if block.header.view != certificate.view
         || block.header.proposer != certificate.proposer
         || block.header.certificate != certificate.certificate
     {
         return Err(format!(
             "already-applied batch `{batch_id}` at height {} differs from the delivered certificate (view, proposer or votes)",
+            block.header.height
+        ));
+    }
+    if block.header.consensus_v2_commit != certificate.consensus_v2_commit {
+        return Err(format!(
+            "already-applied batch `{batch_id}` at height {} differs from the delivered certificate (consensus-v2 commit {})",
+            block.header.height,
+            match (&block.header.consensus_v2_commit, &certificate.consensus_v2_commit) {
+                (Some(_), None) => "missing",
+                (None, Some(_)) => "unexpected",
+                _ => "altered",
+            }
+        ));
+    }
+    if block.fastpay_pre_state_effects != certificate.fastpay_pre_state_effects {
+        return Err(format!(
+            "already-applied batch `{batch_id}` at height {} differs from the delivered certificate (FastPay pre-state effects)",
             block.header.height
         ));
     }
@@ -2795,6 +2830,26 @@ mod transport_cli_tests {
                 .expect_err("different stored content must not be acknowledged as applied");
         assert!(error.contains("differs from the delivered certificate"), "{error}");
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn transport_duplicate_with_a_certificate_for_another_chain_is_not_already_applied() {
+        for (field, value) in [
+            ("chain_id", serde_json::json!("another-chain")),
+            ("genesis_hash", serde_json::json!("22".repeat(48))),
+            ("protocol_version", serde_json::json!(2)),
+        ] {
+            let (root, topology, status, mut envelope) = already_applied_test_fixture(10);
+            let mut certificate: serde_json::Value =
+                serde_json::from_str(envelope.certificate_json.as_deref().unwrap()).unwrap();
+            certificate[field] = value;
+            envelope.certificate_json = Some(certificate.to_string());
+            let error =
+                transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
+                    .expect_err("a certificate for another chain must not be acknowledged");
+            assert!(error.contains("another chain"), "{field}: {error}");
+            std::fs::remove_dir_all(root).unwrap();
+        }
     }
 
     #[test]
