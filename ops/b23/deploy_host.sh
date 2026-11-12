@@ -5,10 +5,10 @@
 # per-host log to the evidence dir. Stops at the first failed check.
 set -euo pipefail
 N=$1; H=$2
-R=b23-release1-20261112; OLD=r2-1-activation-bound-20261112
-D=/home/postfiat/var/b23-release1; S=$D/stage/rootfs
-E=/home/postfiat/repos/b23-coord/evidence/ops/release1/deploy-v$N; mkdir -p "$E"
-SHA=c822bac5fd087eed645660d80ef50969e706f788dca9405f42597a3c6085c8a0
+R=${REL:-b23-release1-20261112}; OLD=${OLD:-r2-1-activation-bound-20261112}
+D=${STAGE_ROOT:-/home/postfiat/var/b23-release1}; S=$D/stage/rootfs
+E=${EVID:-/home/postfiat/repos/b23-coord/evidence/ops/release1}/deploy-v$N; mkdir -p "$E"
+SHA=${SHA:-c822bac5fd087eed645660d80ef50969e706f788dca9405f42597a3c6085c8a0}
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=10 root@$H"
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$E/deploy.log"; }
 
