@@ -375,13 +375,21 @@ inventory revision that orders a feed answer against a read, and block height
 does not change with FastPay effects. A feed answer whose `view_digest`
 differs from the selected view, complete or partial, makes selection
 unavailable and starts a read. The wallet publishes a read only when a second
-read returns the same `view_digest` and, after such an invalidation, that
-digest is the latest feed view; a read of another view (a lagging node, or a
-delayed feed answer) never re-enables selection. When three attempts cannot
+read returns the same `view_digest`, that digest is the latest feed view (or
+no feed answer has arrived yet), and the wallet has not already replaced that
+view this session. The latest feed view constrains every later refresh, so a
+read of another view (a lagging node, or a newer view the feed has not
+reached) never re-enables selection on its own. When three attempts cannot
 confirm a view, or a read fails, the wallet shows why (a node too old for
 paging, or objects that kept changing) with a Retry button; feed answers
-neither clear that error nor retry on their own. A replaced screen
-coordinator publishes nothing. See
+neither clear that error nor retry on their own. Retry reads again; if the
+latest feed view still differs, Retry adopts a view only after two confirmed
+reads of it, and never one the wallet already replaced. Retry does not ask
+the feed for a new answer, so a lagging node that answers all four reads can
+still pass it with a view this session never published, and a lagging node
+that agrees with an equally lagging feed still looks current; only a node
+revision closes those gaps. A replaced screen coordinator publishes nothing.
+See
 [FastPay Inventory Ordering](fastpay-inventory-ordering.md) for what a node
 revision would add.
 
