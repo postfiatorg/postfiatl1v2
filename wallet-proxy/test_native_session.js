@@ -46,7 +46,8 @@ Object.assign(process.env, NATIVE_ENV, {
 let clearMutationAdmissionForTest;
 let server;
 const {
-  ALGORITHM_ID, OPEN_PATH, OPEN_SCHEMA, SIGNATURE_CONTEXT, createNativeSessions, installId, mlDsa65, openMessage,
+  ALGORITHM_ID, DEFAULT_MAX_ACTIVE_INSTALLS, INFO_PATH, OPEN_PATH, OPEN_SCHEMA, SIGNATURE_CONTEXT,
+  createNativeSessions, installId, mlDsa65, openMessage,
 } = require('./native-session');
 
 function request(port, method, pathname, { headers = {}, body = null } = {}) {
@@ -89,12 +90,16 @@ async function openBody(keys, overrides = {}, now = Date.now()) {
 }
 
 // Drives another gateway instance (different secret, origin, network or clock).
-async function openVia(instance, body, remoteAddress = undefined) {
+async function openVia(instance, body, remoteAddress = undefined, method = 'POST') {
   const req = Readable.from([Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))]);
-  req.method = 'POST';
+  req.method = method;
   req.headers = {};
   if (remoteAddress) req.socket = { remoteAddress };
   return instance.open(req);
+}
+
+function infoVia(instance, method = 'GET') {
+  return instance.info({ method, headers: {} });
 }
 
 function websocketSubmit(port, token, origin) {
@@ -231,13 +236,69 @@ async function main() {
     const unlisted = await openVia(listed, await openBody(beta));
     assert.strictEqual(unlisted.statusCode, 403);
     assert.strictEqual(unlisted.body.code, 'native_session_install_not_allowed');
-    const betaToken = (await openVia(createNativeSessions({ env: NATIVE_ENV }), await openBody(beta))).body.token;
-    assert.strictEqual(listed.authenticate(betaToken).failure.code, 'native_session_install_not_allowed');
+    const betaToken = (await openVia(createNativeSessions({ env: NATIVE_ENV, log: () => {} }), await openBody(beta))).body.token;
+    // A token whose install is not on the list was revoked, not merely never admitted.
+    assert.strictEqual(listed.authenticate(betaToken).failure.code, 'native_session_install_revoked');
     const link = path.join(dir, 'link.json');
     fs.symlinkSync(allowlistFile, link);
     assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: link } }), /owner-controlled/);
     fs.chmodSync(allowlistFile, 0o666);
     assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile } }), /owner-controlled/);
+    fs.chmodSync(allowlistFile, 0o600);
+
+    // Revocation without a restart: both lists are re-read when their mtime
+    // changes, checked at most once per second; a bad file never falls open.
+    const denylistFile = path.join(dir, 'denylist.json');
+    const writeList = (file, value, mtimeSeconds) => {
+      fs.writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value), { mode: 0o600 });
+      fs.utimesSync(file, mtimeSeconds, mtimeSeconds);
+    };
+    const allow = (...keys) => ({ schema: 'postfiat-native-session-allowlist-v1', install_public_keys_hex: keys.map((k) => k.publicKeyHex) });
+    const deny = (...keys) => ({ schema: 'postfiat-native-session-denylist-v1', install_ids_hex: keys.map((k) => installId(k.publicKeyHex)) });
+    writeList(allowlistFile, allow(alpha, beta), 1_000);
+    writeList(denylistFile, deny(), 1_000);
+    let listClock = Date.now();
+    const listErrors = [];
+    const revocable = createNativeSessions({
+      env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile },
+      now: () => listClock, log: () => {}, logError: (line) => listErrors.push(line),
+    });
+    const openAt = async (instance, keys, clockMs) => openVia(instance, await openBody(keys, {}, clockMs));
+    const alphaToken = (await openAt(revocable, alpha, listClock)).body.token;
+    const betaListedToken = (await openAt(revocable, beta, listClock)).body.token;
+    const revoked = { statusCode: 403, code: 'native_session_install_revoked' };
+    writeList(denylistFile, deny(alpha), 2_000);
+    listClock += 500;
+    assert.strictEqual(revocable.authenticate(alphaToken).failure, null, 'lists are checked at most once per second');
+    listClock += 600;
+    assert.deepStrictEqual(revocable.authenticate(alphaToken).failure, revoked);
+    assert.deepStrictEqual((await openAt(revocable, alpha, listClock)).body.code, revoked.code);
+    assert.strictEqual(revocable.authenticate(betaListedToken).failure, null);
+    writeList(allowlistFile, allow(alpha), 3_000);
+    listClock += 1_000;
+    assert.deepStrictEqual(revocable.authenticate(betaListedToken).failure, revoked);
+    const betaReopen = await openAt(revocable, beta, listClock);
+    assert.strictEqual(betaReopen.statusCode, 403);
+    assert.strictEqual(betaReopen.body.code, revoked.code);
+    // Malformed files keep the last good lists and log one error line each.
+    writeList(denylistFile, '{not json', 4_000);
+    writeList(allowlistFile, { schema: 'postfiat-native-session-allowlist-v1', install_public_keys_hex: 'all' }, 4_000);
+    for (let step = 0; step < 3; step += 1) {
+      listClock += 1_000;
+      assert.deepStrictEqual(revocable.authenticate(alphaToken).failure, revoked);
+      assert.deepStrictEqual(revocable.authenticate(betaListedToken).failure, revoked);
+    }
+    assert.strictEqual(listErrors.length, 2, listErrors.join('\n'));
+    assert.ok(listErrors.some((line) => line.includes('denylist')) && listErrors.some((line) => line.includes('allowlist')));
+    writeList(denylistFile, deny(), 5_000);
+    listClock += 1_000;
+    assert.strictEqual(revocable.authenticate(alphaToken).failure, null, 'un-denied install works again');
+    writeList(denylistFile, deny(), 6_000);
+    fs.chmodSync(denylistFile, 0o666);
+    assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile } }), /owner-controlled/);
+    fs.chmodSync(denylistFile, 0o600);
+    writeList(denylistFile, { schema: 'postfiat-native-session-denylist-v1', install_ids_hex: ['zz'] }, 7_000);
+    assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile } }), /denylist/);
 
     // Caps: the native principal hits the same rate limit and body limit as the browser principal.
     clearMutationAdmissionForTest();

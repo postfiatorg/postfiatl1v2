@@ -12,6 +12,9 @@ const OPEN_PATH = '/api/native-session/v1/open';
 const OPEN_SCHEMA = 'postfiat-native-session-open-v1';
 const SESSION_SCHEMA = 'postfiat-native-session-v1';
 const ALLOWLIST_SCHEMA = 'postfiat-native-session-allowlist-v1';
+const DENYLIST_SCHEMA = 'postfiat-native-session-denylist-v1';
+// The operator lists are re-read when their file changes, checked at most this often.
+const LIST_CHECK_INTERVAL_MS = 1_000;
 // FIPS 204 ML-DSA context, named like crates/crypto_provider's signature contexts.
 const SIGNATURE_CONTEXT = 'postfiat-l1-v2/native-session/v1';
 const TOKEN_MAC_DOMAIN = 'postfiat-l1-v2/native-session-token/v1';
@@ -30,6 +33,7 @@ const OPEN_FIELDS = [
 ];
 const CHAIN_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const HEX96_RE = /^[0-9a-f]{96}$/;
+const INSTALL_ID_RE = /^[0-9a-f]{64}$/;
 
 let mlDsa65Promise = null;
 function mlDsa65() {
@@ -72,14 +76,23 @@ function boundedInteger(raw, name, fallback, minimum, maximum) {
 
 // Same checks as the other operator files: regular, not a symlink, owned by the
 // service user, not group/world writable.
-function loadAllowlist(file) {
+function readOperatorFile(file, variable) {
     const absolute = path.resolve(file);
     const stat = fs.lstatSync(absolute);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.uid !== process.getuid()
         || (stat.mode & 0o022) !== 0) {
-        throw new Error('WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE must be an owner-controlled regular file');
+        throw new Error(`${variable} must be an owner-controlled regular file`);
     }
-    const parsed = JSON.parse(fs.readFileSync(absolute, 'utf8'));
+    try {
+        return JSON.parse(fs.readFileSync(absolute, 'utf8'));
+    } catch (error) {
+        // Never echo file contents into logs.
+        throw error instanceof SyntaxError ? new Error(`${variable} is not valid JSON`) : error;
+    }
+}
+
+function loadAllowlist(file) {
+    const parsed = readOperatorFile(file, 'WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE');
     const keys = parsed?.install_public_keys_hex;
     if (parsed?.schema !== ALLOWLIST_SCHEMA || !Array.isArray(keys)
         || !keys.every((key) => new RegExp(`^[0-9a-f]{${PUBLIC_KEY_HEX_LENGTH}}$`).test(String(key)))) {
@@ -88,7 +101,47 @@ function loadAllowlist(file) {
     return new Set(keys.map(installId));
 }
 
-function createNativeSessions({ env = process.env, caps = {}, now = Date.now } = {}) {
+function loadDenylist(file) {
+    const parsed = readOperatorFile(file, 'WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE');
+    const ids = parsed?.install_ids_hex;
+    if (parsed?.schema !== DENYLIST_SCHEMA || !Array.isArray(ids) || !ids.every((id) => INSTALL_ID_RE.test(String(id)))) {
+        throw new Error(`native session denylist must be {"schema":"${DENYLIST_SCHEMA}","install_ids_hex":["<64 hex install id>",...]}`);
+    }
+    return new Set(ids);
+}
+
+// An operator list re-read when its file's mtime (or size or inode) changes. A
+// file that cannot be read or parsed keeps the last good list: never fall open.
+function watchedList(file, load, label, logError) {
+    const fingerprint = () => {
+        try {
+            const stat = fs.lstatSync(path.resolve(file), { bigint: true });
+            return `${stat.mtimeNs}:${stat.size}:${stat.ino}`;
+        } catch (error) { return `unreadable:${error.code}`; }
+    };
+    let seen = fingerprint();
+    let current = load(file);
+    return {
+        get: () => current,
+        // True when a new list was loaded.
+        refresh() {
+            const next = fingerprint();
+            if (next === seen) return false;
+            seen = next;
+            try {
+                current = load(file);
+                return true;
+            } catch (error) {
+                logError(`native session ${label} not reloaded, keeping the last good list: ${error.message}`);
+                return false;
+            }
+        },
+    };
+}
+
+function createNativeSessions({
+    env = process.env, caps = {}, now = Date.now, logError = (line) => console.error(line),
+} = {}) {
     const rawOrigin = String(env.WALLET_PROXY_NATIVE_SESSION_ORIGIN || '').trim();
     const enabled = rawOrigin !== '';
     let origin = null;
@@ -97,6 +150,7 @@ function createNativeSessions({ env = process.env, caps = {}, now = Date.now } =
     let genesisHash = null;
     let ttlMs = 0;
     let allowlist = null;
+    let denylist = null;
     const replayLimit = boundedInteger(env.WALLET_PROXY_NATIVE_SESSION_REPLAY_CACHE_LIMIT,
         'WALLET_PROXY_NATIVE_SESSION_REPLAY_CACHE_LIMIT', 100_000, 100, 10_000_000);
     // The open route is unauthenticated and verifies ML-DSA per call: bound it per source address.
@@ -118,8 +172,13 @@ function createNativeSessions({ env = process.env, caps = {}, now = Date.now } =
         ttlMs = boundedInteger(env.WALLET_PROXY_NATIVE_SESSION_TTL_MS,
             'WALLET_PROXY_NATIVE_SESSION_TTL_MS', 15 * 60_000, 60_000, 60 * 60_000);
         const allowlistFile = String(env.WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE || '').trim();
-        if (allowlistFile) allowlist = loadAllowlist(allowlistFile);
+        if (allowlistFile) allowlist = watchedList(allowlistFile, loadAllowlist, 'allowlist', logError);
+        const denylistFile = String(env.WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE || '').trim();
+        if (denylistFile) denylist = watchedList(denylistFile, loadDenylist, 'denylist', logError);
     }
+    // Installs taken off the allowlist since startup: a reopen is a revocation.
+    const delisted = new Set();
+    let listsCheckedAtMs = -Infinity;
     const seenNonces = new Map();
     const openWindows = new Map();
 
@@ -141,6 +200,30 @@ function createNativeSessions({ env = process.env, caps = {}, now = Date.now } =
         if (window.count >= openRateLimit) return Math.max(1, openRateWindowMs - (nowMs - window.startedAtMs));
         window.count += 1;
         return 0;
+    }
+
+    function refreshLists() {
+        const nowMs = now();
+        if (nowMs - listsCheckedAtMs < LIST_CHECK_INTERVAL_MS) return;
+        listsCheckedAtMs = nowMs;
+        const previous = allowlist?.get();
+        if (allowlist?.refresh()) {
+            const next = allowlist.get();
+            for (const id of previous) if (!next.has(id)) delisted.add(id);
+            for (const id of next) delisted.delete(id);
+        }
+        denylist?.refresh();
+    }
+
+    // Null when the install may hold a session, otherwise the refusal code. An
+    // install that holds a token, or was listed before, is revoked rather than unknown.
+    function installRefusal(id, holdsToken) {
+        refreshLists();
+        if (denylist?.get().has(id)) return 'native_session_install_revoked';
+        if (allowlist && !allowlist.get().has(id)) {
+            return holdsToken || delisted.has(id) ? 'native_session_install_revoked' : 'native_session_install_not_allowed';
+        }
+        return null;
     }
 
     function mac(payloadPart) {
@@ -182,7 +265,8 @@ function createNativeSessions({ env = process.env, caps = {}, now = Date.now } =
         if (payload.org !== origin || (requestOrigin && requestOrigin !== origin)) return fail(403, 'native_session_wrong_origin');
         if (payload.cid !== chainId || payload.gen !== genesisHash) return fail(403, 'native_session_wrong_network');
         if (!Number.isSafeInteger(payload.exp) || payload.exp <= now()) return fail(401, 'native_session_expired');
-        if (allowlist && !allowlist.has(payload.iid)) return fail(403, 'native_session_install_not_allowed');
+        const refusal = installRefusal(payload.iid, true);
+        if (refusal) return fail(403, refusal);
         return { principal: `native:${payload.iid}`, failure: null };
     }
 
@@ -270,7 +354,8 @@ function createNativeSessions({ env = process.env, caps = {}, now = Date.now } =
         } catch (_) { valid = false; }
         if (!valid) return fail(401, 'native_session_bad_signature');
         const id = installId(body.public_key_hex);
-        if (allowlist && !allowlist.has(id)) return fail(403, 'native_session_install_not_allowed');
+        const refusal = installRefusal(id, false);
+        if (refusal) return fail(403, refusal);
         const nonce = rememberNonce(body.client_nonce_hex, body.issued_at_ms + MAX_CLOCK_SKEW_MS);
         if (nonce === 'replayed') return fail(409, 'native_session_nonce_replayed');
         if (nonce === 'full') return fail(503, 'native_session_busy');
