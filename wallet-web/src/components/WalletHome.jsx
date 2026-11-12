@@ -70,7 +70,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     setFastpayError(error);
   }, []);
 
-  // Only complete inventories reach fastpayObjects; see fastpay-inventory.js.
+  // Only confirmed all-pages reads reach fastpayObjects; see fastpay-inventory.js.
   const fastpayInventory = useMemo(() => createFastpayInventory({
     read: () => fetchOwnedObjectsSnapshot(rpc, publicKeyHex, { asset: 'PFT', limit: FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT }),
     publish: publishFastpay,
@@ -177,7 +177,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     }
 
     if (liveSnapshot.owned) {
-      fastpayInventory.applyFeed(liveSnapshot.owned, liveSnapshot.owned_complete, liveSnapshot.observed_at_ms);
+      fastpayInventory.applyFeed(liveSnapshot.owned);
     } else if (liveSnapshot.owned_error && fastpayBalance === null) {
       setFastpayStatus('error');
       setFastpayError(`FastPay balance unavailable: ${humanRpcErrorMessage(liveSnapshot.owned_error)}`);

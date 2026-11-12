@@ -19,94 +19,105 @@ export function fastpayInventoryErrorMessage(error) {
   return `FastPay balance unavailable: ${humanRpcErrorMessage(error)}`;
 }
 
-// The FastPay inventory a wallet screen selects from. Only a complete answer
-// is published: the bounded all-pages read (`read`), or a live-feed answer
-// the gateway marks complete. A partial feed page is never published; when
-// its view_digest differs from the last complete view, selection becomes
-// unavailable (`loading`) and `read` runs again (one at a time) until a read
-// that started after the last invalidation completes.
+// How many confirmed-read attempts one refresh makes before it reports the
+// inventory unavailable.
+export const FASTPAY_INVENTORY_READ_ATTEMPTS = 3;
+
+// A view's identity: its view_digest, or (a node from before view digests)
+// its objects.
+function viewOf(snapshot) {
+  if (snapshot?.view_digest) return snapshot.view_digest;
+  const objects = Array.isArray(snapshot?.objects) ? snapshot.objects : [];
+  return JSON.stringify(objects.map(o => [o?.asset, o?.id, o?.version, o?.value]));
+}
+
+// The FastPay inventory a wallet screen selects from.
 //
-// Fencing: every publication and invalidation advances `generation`. A read
-// completing after a newer complete view was published is discarded; one
-// completing after an invalidation is read again (unless it already shows
-// the invalidating view). Feed answers carry the gateway's `observed_at_ms`
-// as `order`; an answer no newer than the last one is ignored, so an older
-// complete view neither replaces a newer one nor clears an error. `dispose`
-// fences a replaced coordinator: its outstanding reads publish nothing.
-// After a failed read partial pages do not retry on their own: the error
-// stays until a newer complete answer or the user's retry.
-export function createFastpayInventory({ read, publish }) {
-  let complete = null;
+// Nodes expose no inventory revision a wallet can compare, and the gateway's
+// feed and the wallet's reads are fleet answers that name no single node,
+// so neither source is ranked by time (docs/wallets/fastpay-inventory-ordering.md).
+// The interim rule:
+// - A feed answer is never published. One whose view differs from the
+//   published view (complete or partial) invalidates it: selection becomes
+//   unavailable (`loading`) and the wallet reads.
+// - Only the wallet's own all-pages read is published, and only when a
+//   second read returns the same view and, while an invalidation stands,
+//   that view is the latest feed view. An invalidation is lifted only by
+//   publishing a read of the view that caused it, never by a later read of
+//   another view (a lagging node, or a delayed feed answer of an old view).
+// - A refresh that cannot confirm such a view in
+//   FASTPAY_INVENTORY_READ_ATTEMPTS attempts reports `view_unstable`.
+//   After a failure feed answers only move the awaited view; the error
+//   stays until the user's retry publishes.
+// One refresh runs at a time; `dispose` fences a replaced coordinator, so
+// its outstanding reads publish nothing.
+export function createFastpayInventory({ read, publish, attempts = FASTPAY_INVENTORY_READ_ATTEMPTS }) {
+  let publishedView = null;
+  let awaitedView = null;
   let inflight = null;
   let failed = false;
+  let loading = false;
   let disposed = false;
-  let generation = 0;
-  let publishedAt = 0;
-  let awaitedView = null;
   let lastFeed = null;
-  let lastOrder = null;
 
   function emit(state) {
     if (!disposed) publish(state);
   }
 
-  function publishComplete(snapshot) {
-    complete = snapshot;
-    failed = false;
-    awaitedView = null;
-    generation += 1;
-    publishedAt = generation;
-    emit({ status: 'ok', snapshot, error: '' });
+  function fail(error) {
+    failed = true;
+    loading = false;
+    emit({ status: 'error', reason: REASONS[error?.code] || 'unavailable', error: fastpayInventoryErrorMessage(error) });
+    throw error;
   }
 
-  async function readCurrent() {
-    for (;;) {
-      const started = generation;
-      let snapshot;
+  async function readConfirmed() {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      let first;
+      let second;
       try {
-        snapshot = await read();
+        first = await read();
+        if (disposed) return first;
+        second = await read();
       } catch (error) {
-        if (disposed || (generation !== started && generation === publishedAt)) return complete;
-        failed = true;
-        emit({ status: 'error', reason: REASONS[error?.code] || 'unavailable', error: fastpayInventoryErrorMessage(error) });
-        throw error;
+        if (disposed) return null;
+        return fail(error);
       }
-      if (disposed) return snapshot;
-      const invalidated = generation !== publishedAt;
-      if (generation === started || (invalidated && awaitedView && snapshot?.view_digest === awaitedView)) {
-        publishComplete(snapshot);
-        return snapshot;
+      if (disposed) return second;
+      const view = viewOf(second);
+      if (viewOf(first) === view && (awaitedView === null || view === awaitedView)) {
+        publishedView = view;
+        awaitedView = null;
+        failed = false;
+        loading = false;
+        emit({ status: 'ok', snapshot: second, error: '' });
+        return second;
       }
-      if (!invalidated) return complete; // a newer complete view was published meanwhile
     }
+    return fail({ code: OWNED_OBJECTS_VIEW_UNSTABLE, message: 'no confirmed FastPay view' });
   }
 
   function refresh() {
     if (inflight) return inflight;
-    inflight = readCurrent().finally(() => { inflight = null; });
+    inflight = readConfirmed().finally(() => { inflight = null; });
     return inflight;
   }
 
   // Idempotent per feed answer, so a re-rendering caller may repeat it.
-  async function applyFeed(owned, ownedComplete, order) {
+  // Extra arguments (completeness, gateway timestamps) are ignored: neither
+  // orders a feed answer against a read.
+  async function applyFeed(owned) {
     if (disposed || !owned || owned === lastFeed) return;
-    if (order != null) {
-      if (lastOrder != null && !(order > lastOrder)) return;
-      lastOrder = order;
-    }
     lastFeed = owned;
-    const whole = ownedComplete ?? owned.truncated !== true;
-    if (whole) {
-      publishComplete(owned);
-      return;
-    }
-    const view = owned.view_digest ?? null;
-    if (complete && view && complete.view_digest === view && generation === publishedAt) return;
-    if (failed) return;
-    generation += 1;
+    const view = viewOf(owned);
+    if (awaitedView === null && view === publishedView) return;
     awaitedView = view;
-    emit({ status: 'loading', reason: 'refreshing', error: '' });
-    if (inflight) return; // the running read sees the invalidation and reads again
+    if (failed) return;
+    if (!loading) {
+      loading = true;
+      emit({ status: 'loading', reason: 'refreshing', error: '' });
+    }
+    if (inflight) return; // the running refresh checks the new awaited view
     await refresh().catch(() => {});
   }
 
