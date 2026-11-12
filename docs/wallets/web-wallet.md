@@ -81,12 +81,14 @@ The optional HTTPS dev cert paths are controlled by:
 | `WALLET_PROXY_MUTATION_RATE_LIMIT` | `120` | Authenticated mutations admitted per principal and rate window. |
 | `WALLET_PROXY_MUTATION_RATE_WINDOW_MS` | `60000` | Principal mutation-rate window. |
 | `WALLET_PROXY_MUTATION_CONCURRENCY` | `16` | Process-wide in-flight authenticated HTTP mutation ceiling. |
-| `WALLET_PROXY_NATIVE_SESSION_ORIGIN` | empty | Exact `https://host[:port]` origin native apps use. Unset disables native sessions (the open route returns 404). |
+| `WALLET_PROXY_NATIVE_SESSION_ORIGIN` | empty | Exact `https://host[:port]` origin native apps use. Unset disables native sessions (the open and info routes return 404). |
 | `WALLET_PROXY_NATIVE_SESSION_SECRET` | empty | Token HMAC key, at least 32 random bytes. Required when native sessions are enabled. Unique per gateway. |
 | `WALLET_PROXY_NATIVE_SESSION_CHAIN_ID` | empty | Network id native sessions are bound to, such as `postfiat-wan-devnet-2`. Required when enabled. |
 | `WALLET_PROXY_NATIVE_SESSION_GENESIS_HASH` | empty | 96-hex genesis hash native sessions are bound to. Required when enabled. |
 | `WALLET_PROXY_NATIVE_SESSION_TTL_MS` | `900000` | Native token lifetime, 60000 to 3600000. |
-| `WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE` | empty | Optional install allowlist. When set, only listed installs may open a session. |
+| `WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE` | empty | Optional install allowlist. When set, only listed installs may open a session. Re-read when the file changes. |
+| `WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE` | empty | Optional install denylist. Listed installs are refused on open and on every token use. Re-read when the file changes. |
+| `WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS` | `256` | Installs that may hold an unexpired token at once, 1 to 1000000. A new install past it gets 503 `native_session_busy`; a live install can renew. 256 is 16 installs per slot of the default mutation concurrency; past that the shared slots, not the per-install windows, bound throughput. |
 | `WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT` | `10` | Session opens admitted per source address and window, 1 to 100000. Further opens get 429 `native_session_rate_limited` with `retry_after_ms`. |
 | `WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_WINDOW_MS` | `60000` | Open rate window, 1000 to 86400000. |
 | `WALLET_PROXY_PRIVATE_ACTIONS_CHAIN_ID` | empty | Chain id the private action routes bind to. With the genesis hash unset as well, the routes return 404. |
@@ -169,10 +171,41 @@ origin to `ALLOWED_ORIGINS`, because authenticated writes still need an allowed
 `Origin` header. WebSocket calls carry the token as `proxy_auth_token`, with the
 same origin binding.
 
-The allowlist file must be a regular file owned by the service user, not a
-symlink and not group- or world-writable:
-`{"schema":"postfiat-native-session-allowlist-v1","install_public_keys_hex":["<3904 hex>"]}`.
-It is read at startup. Rotating the secret ends all native sessions.
+The allowlist and denylist files must each be a regular file owned by the
+service user, not a symlink and not group- or world-writable:
+
+- `{"schema":"postfiat-native-session-allowlist-v1","install_public_keys_hex":["<3904 hex>"]}`
+- `{"schema":"postfiat-native-session-denylist-v1","install_ids_hex":["<64 hex>"]}`,
+  where an install id is the `install_id` the open response returns.
+
+The gateway checks each file's mtime at most once per second and re-reads a
+changed file, so revoking an install needs no restart. A denied install, or one
+taken off the allowlist, gets 403 `native_session_install_revoked` on open and
+on every request with its token. An install never listed gets 403
+`native_session_install_not_allowed` on open. A bad file stops the gateway at
+startup; after startup it keeps the last good list and logs one error line.
+Rotating the secret ends all native sessions.
+
+The live-install count behind `WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS`
+is in memory. After a restart it rebuilds as live tokens are used.
+
+Each open writes one JSON line to stdout:
+`{"event":"native_session_open","install_id_prefix":"<16 hex>","source":"<address>","outcome":"ok"}`.
+The outcome is `ok` or the refusal code. The prefix is `null` until the
+signature is verified. The line never holds the token, the signature or the
+secret. Behind the TLS edge the source is the edge's address.
+
+`GET /api/native-session/v1/info` returns `ok`, `schema`
+(`postfiat-native-session-info-v1`), `enabled`, `origin`, `chain_id`,
+`genesis_hash_hex`, `ttl_ms`, `allowlist` (whether admission is limited to
+listed installs) and `max_active_installs`. It returns no secret and no list
+contents. With native sessions disabled it returns 404 `native_session_disabled`,
+like the open route. It is a plain HTTP read answered before the proxy's auth
+layer, like `/healthz`, not an RPC method.
+
+Switching native sessions on remains an operator decision: the secret, a TLS
+certificate the app trusts for the origin, the chain id and genesis hash, the
+TTL, allowlist or open admission, and the install cap.
 
 ### Private actions
 
