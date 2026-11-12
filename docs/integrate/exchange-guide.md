@@ -193,8 +193,9 @@ when:
   field of the requested operation differs from the request, in value or
   type; a field on one side only is a difference unless the operation's Rust
   type gives absence exactly that value: `null` for an `Option` field (never
-  `0` or `""`), or `false`, `0` or `""` of the declared type for a
-  `#[serde(default)]` scalar. The table is generated from the Rust types
+  `0` or `""`), `[]` for a `#[serde(default)]` `Vec` (an `Option<Vec>` is
+  absent only as `null`), or `false`, `0` or `""` of the declared type for a
+  `#[serde(default)]` scalar; list contents and order must match. The table is generated from the Rust types
   (`scripts/generate_operation_schemas.py`); a required field is never
   filled in;
 - a transfer's `to` or `amount` differs;
