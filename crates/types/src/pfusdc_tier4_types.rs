@@ -48,6 +48,7 @@ pub struct PfUsdcEthereumIngressPublicValuesV1 {
     pub schema: String,
     pub route_id: String,
     pub source_chain_id: u64,
+    pub route_epoch: u64,
     pub prior_finalized_beacon_root: String,
     pub prior_finalized_slot: u64,
     pub prior_sync_committee_root: String,
@@ -100,7 +101,7 @@ impl PfUsdcEthereumIngressPublicValuesV1 {
         ) {
             return Err("Ethereum ingress public values schema mismatch".to_string());
         }
-        if self.route_id.is_empty() || self.source_chain_id == 0 || self.amount_atoms == 0 {
+        if self.route_id.is_empty() || self.source_chain_id == 0 || self.amount_atoms == 0 || self.route_epoch == 0 {
             return Err("Ethereum ingress route, chain, and amount must be nonzero".to_string());
         }
         if self.finalized_slot <= self.prior_finalized_slot
@@ -307,7 +308,8 @@ impl PfUsdcBeaconFinalityStateV1 {
     ) -> Result<(), String> {
         self.validate()?;
         values.validate()?;
-        if values.source_chain_id != self.source_chain_id
+        if values.route_epoch != self.route_epoch
+            || values.source_chain_id != self.source_chain_id
             || values.vault_address != self.vault_address
             || values.token_address != self.token_address
             || values.route_binding != self.route_binding

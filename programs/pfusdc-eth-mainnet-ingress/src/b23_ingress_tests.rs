@@ -6,9 +6,11 @@ fn honest_witness() -> EthIngressWitnessV1 {
     let mut raw: serde_json::Value = serde_json::from_str(include_str!(
         "../tests/fixtures/mainnet-deposit.json")).unwrap();
     let inputs: ProofInputs = serde_json::from_value(raw["helios"].clone()).unwrap();
+    let profile: postfiat_types::VaultBridgeRouteProfileV1 = serde_json::from_str(
+        include_str!("../tests/fixtures/mainnet-route.json")).unwrap();
     raw["beacon_anchor"] = serde_json::json!({
         "schema": PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1,
-        "route_profile_hash": "ab".repeat(48), "route_epoch": 1,
+        "route_profile_hash": profile.profile_hash().unwrap(), "route_epoch": profile.route_epoch,
         "source_chain_id": 1, "vault_address": raw["evidence"]["vault_address"],
         "token_address": raw["evidence"]["token_address"],
         "route_binding": raw["evidence"]["route_binding"],
@@ -75,4 +77,31 @@ fn witness_bookkeeping_cannot_supply_a_committee_or_finality_shortcut() {
     witness.helios.store.previous_max_active_participants = u64::MAX;
     witness.helios.store.next_sync_committee = Some(Default::default());
     assert_eq!(verify_witness(&witness).unwrap(), baseline);
+}
+
+#[test]
+fn wrong_epoch_anchor_cannot_admit_a_deposit_and_order_does_not_matter() {
+    let witness = honest_witness();
+    let values = verify_witness(&witness).unwrap();
+    let decoded = PfUsdcEthereumIngressPublicValuesV1::from_canonical_bytes(
+        &serde_cbor::to_vec(&values).unwrap()).unwrap();
+    let anchor = witness.beacon_anchor;
+    let mut wrong_epoch = anchor.clone();
+    wrong_epoch.route_epoch += 1;
+    let error = PfUsdcBeaconFinalityStateV1::advance_for_deposit(
+        &[wrong_epoch.clone()], &anchor.route_profile_hash, &decoded).unwrap_err();
+    assert_eq!(error.0, "pfusdc_beacon_finality_state_missing");
+    let first = PfUsdcBeaconFinalityStateV1::advance_for_deposit(
+        &[wrong_epoch.clone(), anchor.clone()], &anchor.route_profile_hash, &decoded).unwrap();
+    let last = PfUsdcBeaconFinalityStateV1::advance_for_deposit(
+        &[anchor.clone(), wrong_epoch.clone()], &anchor.route_profile_hash, &decoded).unwrap();
+    assert_eq!(first, last);
+    let mut wrong_values = decoded.clone();
+    wrong_values.route_epoch = wrong_epoch.route_epoch;
+    let error = PfUsdcBeaconFinalityStateV1::advance_for_deposit(
+        &[wrong_epoch], &anchor.route_profile_hash, &wrong_values).unwrap_err();
+    assert_eq!(error.0, "pfusdc_beacon_route_epoch_invalid");
+    let error = PfUsdcBeaconFinalityStateV1::advance_for_deposit(
+        &[anchor.clone(), anchor.clone()], &anchor.route_profile_hash, &decoded).unwrap_err();
+    assert_eq!(error.0, "pfusdc_beacon_finality_state_ambiguous");
 }

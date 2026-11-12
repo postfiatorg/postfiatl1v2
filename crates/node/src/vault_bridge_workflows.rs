@@ -4201,6 +4201,7 @@ mod tests {
             schema: postfiat_types::PFUSDC_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string(),
             route_id: "pftl-a666-ethereum-wA666-usdc-v1".to_string(),
             source_chain_id: 1,
+            route_epoch: 1,
             prior_finalized_beacon_root: "44".repeat(32),
             prior_finalized_slot: 1,
             prior_sync_committee_root: "11".repeat(32),
