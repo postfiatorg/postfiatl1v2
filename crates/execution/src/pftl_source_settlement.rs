@@ -111,3 +111,7 @@ fn pftl_source_govern(ledger: &mut LedgerState, route: &PftlUniswapConsensusRout
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "b23_facility_tests.rs"]
+mod b23_facility_tests;
