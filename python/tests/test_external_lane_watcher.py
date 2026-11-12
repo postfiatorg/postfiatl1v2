@@ -1122,7 +1122,8 @@ class ExportViewTests(unittest.TestCase):
             self.assertIn("export_unpaid_too_long", [line["code"] for line in lines if line["kind"] == "warning"])
         base = ExportBase([released_log(entry, block=950)])
         code, _, _ = run(ExportPftl([entry]), base, "--exports", "--lock-from-block", "951")
-        self.assertEqual(base.log_ranges, [(951, FINALIZED)])
+        # The totals disagree, so the scan is read again (and agrees).
+        self.assertEqual(base.log_ranges, [(951, FINALIZED)] * 2)
         self.assertEqual(code, 2)  # totalReleased counts the payout below the scan
 
     def test_a_lagging_finalized_answer_and_a_new_base_are_refused_not_hidden(self):
@@ -2018,6 +2019,42 @@ class BaseAnchorTests(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertIn("total_released_mismatch", alarm_codes(lines))
 
+    def test_sequence_b_a_foreign_log_answer_never_hides_an_orphan(self):
+        with tempfile.TemporaryDirectory() as directory:
+            e = export_entry(0, height=400)
+            lane = ExportPftl([e], released=2_000_000)
+            state_file = self.seed(directory, lane)
+            before = state_file.read_bytes()
+            orphan = released_log(export_entry(9), block=950, transaction="0x" + "0a" * 32)
+            b_payout = released_log(e, block=950, transaction="0x" + "0b" * 32)
+            a = ExportBase([orphan], locked=2_000_000, finalized=1_000)
+            b = foreign_base(ExportBase([b_payout], locked=2_000_000, finalized=1_000))
+            endpoint = OneForeignRead(a, b, method="eth_getLogs")
+            self.refused(run_exports(lane, endpoint, "--state-file", str(state_file)), state_file, before)
+            # The next run, all from A, still sees the orphan.
+            code, lines, _ = run_exports(lane, ExportBase([orphan], locked=2_000_000, finalized=1_100),
+                                         "--state-file", str(state_file))
+            self.assertEqual(code, 2)
+            self.assertIn("payout_without_export", alarm_codes(lines))
+            self.assertFalse([line for line in lines if line.get("status") in ("backed", "paid", "verified_earlier")])
+
+    def test_a_log_not_bound_to_the_anchored_chain_is_refused(self):
+        e = export_entry(0, height=400)
+        cases = {
+            "removed": ({"removed": True}, "base_anchor_mismatch"),
+            "no hash": ({"blockHash": None}, "base_anchor_mismatch"),
+            "another block's hash": ({"blockHash": chain_block_hash(8453, 951)}, "base_anchor_mismatch"),
+            "an unknown hash": ({"blockHash": "0x" + "5e" * 32}, "base_anchor_unknown"),
+        }
+        for name, (fields, expected) in cases.items():
+            with self.subTest(name), tempfile.TemporaryDirectory() as directory:
+                lane = ExportPftl([e], released=2_000_000)
+                state_file = self.seed(directory, lane)
+                before = state_file.read_bytes()
+                log = {**released_log(e, block=950), **fields}
+                self.refused(run_exports(lane, ExportBase([log], locked=2_000_000, finalized=1_000),
+                                         "--state-file", str(state_file)), state_file, before, expected)
+
     def test_an_anchor_that_changes_before_the_end_of_the_run_is_refused(self):
         e = export_entry(0, height=400)
         with tempfile.TemporaryDirectory() as directory:
@@ -2037,6 +2074,7 @@ class BaseAnchorTests(unittest.TestCase):
 
 
 U64_MAX = (1 << 64) - 1
+NOT_USED = object()  # the model's foreign read is past the run's last Base read
 MODEL_AMOUNTS = (400_000, 300_000, 200_000, 100_000)  # older unpaid exports leave room in atoms too
 
 
@@ -2071,7 +2109,15 @@ class ExportModelTests(unittest.TestCase):
       `--from-height 0` or an alternating `--lock-from-block`; the PFTL time
       advances; depth 3. Another network's pages are refused
       (`export_identity_mismatch`) with no payout or export line and the
-      export state kept."""
+      export state kept.
+    - Base reads: any single Base read of a run (the chain id, the
+      finalized block, the code, a log chunk, a block read by hash, each
+      `eth_call`, the end re-read) may be answered by an honest node of
+      another Base network (chain 84532, the same lock address, its own
+      payouts of exports 0 and 2); at most one such read per sequence; each
+      run is normal, `--from-height 0` or an alternating `--lock-from-block`;
+      depth 3. Such a run is refused (exit 1, the state kept) or gives
+      exactly the all-honest run's lines and state."""
 
     AMOUNTS = MODEL_AMOUNTS
     ENTRIES = [export_entry(n, amount=MODEL_AMOUNTS[n], height=100 + n) for n in range(4)]
@@ -2085,15 +2131,18 @@ class ExportModelTests(unittest.TestCase):
         return ExportPftl(self.ENTRIES[pruned:exported], pruned=pruned, pruned_atoms=sum(self.AMOUNTS[:pruned]),
                           released=1_000_000, current_height=100 + time)
 
-    def model(self, depth, steps, kinds, bases, least, networks=("same",)):
+    def model(self, depth, steps, kinds, bases, least, networks=("same",), base_reads=False):
         import functools
-        counted = {"sequences": 0, "runs": 0}
-        alphabet = (steps, kinds, bases, networks)
+        counted = {"sequences": 0, "runs": 0, "foreign_runs": 0, "refused": 0}
+        alphabet = (steps, kinds, bases, networks, base_reads)
         with unittest.mock.patch.object(watcher, "keccak256", functools.lru_cache(maxsize=None)(watcher.keccak256)):
             self.explore(alphabet, depth, 0, 0, None, [], frozenset(), [], counted)
         print(f"\nexport model: {len(steps)} PFTL x {len(self.PAYOUTS)} payout x {len(kinds)} start x "
-              f"{len(bases)} Base x {len(networks)} network choices, depth {depth}: {counted['sequences']} "
-              f"sequences, {counted['runs']} runs")
+              f"{len(bases)} Base x {len(networks)} network choices"
+              f"{' x any single Base read foreign' if base_reads else ''}, depth {depth}: "
+              f"{counted['sequences']} sequences, {counted['runs']} runs"
+              + (f" ({counted['foreign_runs']} with a foreign read, {counted['refused']} refused)"
+                 if base_reads else ""))
         self.assertGreater(counted["sequences"], least)
 
     def test_no_sequence_of_honest_answers_backs_a_bad_payout(self):
@@ -2106,38 +2155,53 @@ class ExportModelTests(unittest.TestCase):
         self.model(3, ("advance",), ("normal", "from_height", "lock_alt"), ("ok",), 50_000,
                    networks=("same", *IDENTITY_FIELDS))
 
-    def explore(self, alphabet, depth, run_index, time, state, logs, paid, bad, counted, trail=()):
+    def explore(self, alphabet, depth, run_index, time, state, logs, paid, bad, counted, trail=(), spent=False):
         if run_index == depth:
             counted["sequences"] += 1
             return
-        steps, kinds, bases, networks = alphabet
+        steps, kinds, bases, networks, base_reads = alphabet
         for step, payout, kind, base_step, network in itertools.product(steps, self.PAYOUTS, kinds, bases, networks):
-            now = time + 1 if step == "advance" else time
-            answer = now - {"lag1": 1, "lag2": 2}.get(step, 0)
-            if answer < 0 or run_index == 0 and (kind == "late" or base_step == "back"):
-                continue
-            block = 1_000 + 10 * run_index + 5
-            transaction = "0x" + f"{run_index * 16 + len(logs):064x}"
-            exists = [n for n in range(min(now, 3) + 1) if n not in paid]
-            if payout == "legit" and not exists or payout == "duplicate" and not paid:
-                continue
-            new_logs, new_paid, new_bad = list(logs), paid, list(bad)
-            if payout == "legit":
-                new_logs.append(released_log(self.ENTRIES[exists[-1]], block=block, transaction=transaction))
-                new_paid = paid | {exists[-1]}
-            elif payout != "none":
-                entry = self.ENTRIES[min(paid)] if payout == "duplicate" else self.ORPHAN
-                new_logs.append(released_log(entry, block=block, transaction=transaction))
-                new_bad.append((block, transaction))
-            kept_from = ((state or {}).get("exports") or {}).get("lock_from_block", 0)
-            lock_from = {"lock_alt": 2 if kept_from == 1 else 1, "late": 1_000 + 10 * run_index}.get(kind, kept_from)
-            finalized = 1_000 + 10 * run_index + 9 - (self.BASE_BACK if base_step == "back" else 0)
-            counted["runs"] += 1
-            path = (*trail, (step, payout, kind, base_step, network))
-            new_state = self.run_once(state, now, answer, new_logs, finalized, new_bad, new_paid, path,
-                                      from_height=0 if kind == "from_height" else None, lock_from=lock_from,
-                                      network=network)
-            self.explore(alphabet, depth, run_index + 1, now, new_state, new_logs, new_paid, new_bad, counted, path)
+            # None, then each Base read of the run in turn, until one is past its last read.
+            reads = itertools.chain([None], itertools.count()) if base_reads and not spent else (None,)
+            for foreign_read in reads:
+                if not self.explore_one(alphabet, depth, run_index, time, state, logs, paid, bad, counted, trail,
+                                        spent, step, payout, kind, base_step, network, foreign_read):
+                    break
+
+    def explore_one(self, alphabet, depth, run_index, time, state, logs, paid, bad, counted, trail, spent,
+                    step, payout, kind, base_step, network, foreign_read):
+        """One run of the tree; False once `foreign_read` is past the run's last Base read."""
+
+        now = time + 1 if step == "advance" else time
+        answer = now - {"lag1": 1, "lag2": 2}.get(step, 0)
+        if answer < 0 or run_index == 0 and (kind == "late" or base_step == "back"):
+            return False
+        block = 1_000 + 10 * run_index + 5
+        transaction = "0x" + f"{run_index * 16 + len(logs):064x}"
+        exists = [n for n in range(min(now, 3) + 1) if n not in paid]
+        if payout == "legit" and not exists or payout == "duplicate" and not paid:
+            return False
+        new_logs, new_paid, new_bad = list(logs), paid, list(bad)
+        if payout == "legit":
+            new_logs.append(released_log(self.ENTRIES[exists[-1]], block=block, transaction=transaction))
+            new_paid = paid | {exists[-1]}
+        elif payout != "none":
+            entry = self.ENTRIES[min(paid)] if payout == "duplicate" else self.ORPHAN
+            new_logs.append(released_log(entry, block=block, transaction=transaction))
+            new_bad.append((block, transaction))
+        kept_from = ((state or {}).get("exports") or {}).get("lock_from_block", 0)
+        lock_from = {"lock_alt": 2 if kept_from == 1 else 1, "late": 1_000 + 10 * run_index}.get(kind, kept_from)
+        finalized = 1_000 + 10 * run_index + 9 - (self.BASE_BACK if base_step == "back" else 0)
+        path = (*trail, (step, payout, kind, base_step, network, foreign_read))
+        new_state = self.run_once(state, now, answer, new_logs, finalized, new_bad, new_paid, path,
+                                  from_height=0 if kind == "from_height" else None, lock_from=lock_from,
+                                  network=network, foreign_read=foreign_read, counted=counted)
+        if new_state is NOT_USED:
+            return False
+        counted["runs"] += 1
+        self.explore(alphabet, depth, run_index + 1, now, new_state, new_logs, new_paid, new_bad, counted, path,
+                     spent or foreign_read is not None)
+        return True
 
     def answers(self, now, answer, network="same"):
         current, lagging = self.snapshot(now), self.snapshot(answer)
@@ -2152,16 +2216,38 @@ class ExportModelTests(unittest.TestCase):
 
         return Answers(), lagging
 
+    # Another Base network's own history: payouts of exports 0 and 2, at the
+    # blocks of the first and third runs, in its own transactions.
+    FOREIGN_LOGS = [released_log(ENTRIES[0], block=1_005, transaction="0x" + "b0" * 32),
+                    released_log(ENTRIES[2], block=1_025, transaction="0x" + "b2" * 32)]
+
     def run_once(self, state, now, answer, logs, finalized, bad, paid, path, *, from_height=None, lock_from=0,
-                 network="same"):
-        pftl, lagging = self.answers(now, answer, network)
-        base = ExportBase(logs, locked=10_000_000, finalized=finalized)
-        loaded = json.loads(json.dumps(state)) if state is not None else None
-        try:
-            lines, alarms, new_state = watcher.watch_once(pftl, base, LANE, state=loaded, exports=True,
-                                                          from_height=from_height, lock_from_block=lock_from)
-        except watcher.WatcherError:
-            return state  # exit 1: the file is kept
+                 network="same", foreign_read=None, counted=None):
+        def attempt(base):
+            pftl, lagging = self.answers(now, answer, network)
+            loaded = json.loads(json.dumps(state)) if state is not None else None
+            try:
+                return lagging, watcher.watch_once(pftl, base, LANE, state=loaded, exports=True,
+                                                   from_height=from_height, lock_from_block=lock_from)
+            except watcher.WatcherError:
+                return lagging, None  # exit 1: the file is kept
+
+        lagging, outcome = attempt(ExportBase(logs, locked=10_000_000, finalized=finalized))
+        if foreign_read is not None:
+            other = foreign_base(ExportBase(self.FOREIGN_LOGS, locked=10_000_000, finalized=finalized))
+            endpoint = OneForeignRead(ExportBase(logs, locked=10_000_000, finalized=finalized), other, foreign_read)
+            honest, (lagging, outcome) = outcome, attempt(endpoint)
+            if endpoint.used is None:
+                return NOT_USED
+            counted["foreign_runs"] += 1
+            if outcome is None:
+                counted["refused"] += 1
+            else:
+                # Not refused: exactly the all-honest run, lines and state.
+                self.assertTrue(outcome == honest, f"{path} {endpoint.used}: not the all-honest result")
+        if outcome is None:
+            return state
+        lines, alarms, new_state = outcome
         failed = any(line["kind"] == "error" for line in lines)
         code = 2 if alarms else 1 if failed else 0
         summary, error = lines[-1].get("exports"), lines[-1].get("export_error")
@@ -2192,6 +2278,9 @@ class ExportModelTests(unittest.TestCase):
         self.assertFalse(kept_transactions & {transaction for _, transaction in bad}, path)
         self.assertLessEqual(saved.get("pruned_paid_count", 0) + len(saved.get("paid", [])), len(paid), path)
         return new_state if new_state is not None else state
+
+    def test_no_single_foreign_base_read_backs_a_payout_or_changes_the_result(self):
+        self.model(3, ("advance",), ("normal", "from_height", "lock_alt"), ("ok",), 20_000, base_reads=True)
 
     def test_a_state_of_another_identity_is_refused_on_every_start(self):
         """Directed, not exhaustive: through the command line, a saved model

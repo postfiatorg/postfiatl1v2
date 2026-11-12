@@ -643,8 +643,12 @@ def _released_logs(base: Any, lock: str, start: int, end: int) -> list[Any]:
     return logs
 
 
-def _released_events(base: Any, lock: str, start: int, end: int) -> list[dict[str, Any]]:
-    """Every `Released` event of the lock in finalized blocks `start..end`."""
+def _released_events(base: Any, lock: str, start: int, end: int, anchor: BaseAnchor) -> list[dict[str, Any]]:
+    """Every `Released` event of the lock in finalized blocks `start..end`
+    (`end` the anchor), each bound to the anchored chain: not removed, its
+    block hash present, and that hash read by hash as the block of its number
+    (`_bind_block`). A log of another network names a block this node does
+    not know, so the run is refused, never the log skipped."""
 
     events = []
     for log, first, last in _released_logs(base, lock, start, end):
@@ -668,6 +672,11 @@ def _released_events(base: Any, lock: str, start: int, end: int) -> list[dict[st
                 raise ValueError(f"a log of block {number} outside the range {first}..{last}")
         except (ValueError, pft_token.PftTokenRefused) as error:
             raise WatcherError("base_answer_malformed", f"eth_getLogs: {error}") from None
+        block_hash = log.get("blockHash")
+        if log.get("removed", False) is not False or not isinstance(block_hash, str) or not HASH32.match(block_hash):
+            raise WatcherTransientError("base_anchor_mismatch",
+                                        f"eth_getLogs: a log of block {number} is removed or names no block hash")
+        _bind_block(base, anchor, block_hash.lower(), number, f"the Released log in {transaction}")
         events.append({
             "withdrawal_id_commitment": topics[1].lower(), "burn_tx_id_commitment": topics[2].lower(),
             "packet_digest": topics[3].lower(), "recipient": "0x" + data[26:66].lower(),
@@ -902,7 +911,7 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
         return free
 
     room()  # before any payout is read
-    events = _released_events(base, lock, start, finalized)
+    events = _released_events(base, lock, start, finalized, anchor)
     # On a rescan, the originals of known payouts whose packets PFTL has
     # pruned since: accounted as verified before the room is computed, never
     # judged again against a packet that is gone.
@@ -945,6 +954,12 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
     lock_balance = _u256_call(base, token, _selector("balanceOf(address)") + lock.removeprefix("0x").rjust(64, "0"),
                               tag)
     complete = total_released == payout_total
+    if not complete and _released_events(base, lock, start, finalized, anchor) != events:
+        # An answer that names no log cannot be bound by its hashes: when the
+        # totals disagree, the scan is read again, and two answers that
+        # differ refuse the run (one of them was not the anchored chain's).
+        raise WatcherTransientError("base_anchor_mismatch",
+                                    f"two reads of the Released logs in blocks {start}..{finalized} differ")
     matched_now: set[str] = set()
     for event in events:
         result = {"schema": LINE_SCHEMA, "kind": "payout", "lane_id": lane_id, **event}
