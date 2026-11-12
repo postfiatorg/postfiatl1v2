@@ -25,15 +25,25 @@ Every Base answer a run uses is bound to one anchor block of the chain whose
 id it checked: the finalized block (number N, hash H), read once after
 ``eth_chainId``. State reads (``eth_getCode``, ``eth_call``) name H, or a
 release's source block, by hash (EIP-1898, ``requireCanonical``); each
-``Released`` log's block hash is read by hash and must be the block of its
-number at or below N; when the totals disagree the logs are read again and
-must agree; and N is read again by number at the end and must still be H. The
-guarantee: if any single Base read is answered by an honest node of another
-network, the run is refused (``base_anchor_unknown``, ``base_anchor_mismatch``
-or ``base_chain_id_mismatch``: exit 1, no payout or export line, the state
-file unchanged) or gives exactly the all-honest result. Assumed, not checked:
-a node that lies rather than answers for another network, and the anchor is
+``Released`` log's block, and a release's differing source block hash, must
+be canonical at its number at or below N: read by hash and read again by
+number, both naming that hash (a node also serves by hash a side block it
+kept from before a reorg, so known is not canonical); when the totals
+disagree the logs are read again and must agree; and N is read again by
+number at the end and must still be H. The guarantee: if any single Base read
+is answered by an honest node of another network, or of a fork that shares
+this chain's history and whose blocks this node keeps as side blocks, the run
+is refused (``base_anchor_unknown``, ``base_anchor_mismatch`` or
+``base_chain_id_mismatch``: exit 1, no payout or export line, the state file
+unchanged) or gives exactly the all-honest result. Assumed, not checked: a
+node that lies rather than answers for another network, and the anchor is
 "finalized" as the node reports it.
+
+The Base endpoint must support EIP-1898 (``blockHash`` with
+``requireCanonical``) for ``eth_getCode`` and ``eth_call``; one without it
+refuses every run as ``base_anchor_unknown``, by design, with no fallback to
+numbers or tags. It must also serve historical state at the finalized block
+and at release source blocks (an archive-capable endpoint).
 
     PYTHONPATH=python python -m postfiat_rpc.external_lane_watcher \\
         --pftl-rpc 127.0.0.1:27650 --lane-id base-erc20 \\
@@ -667,9 +677,10 @@ def _released_logs(base: Any, lock: str, start: int, end: int) -> list[Any]:
 def _released_events(base: Any, lock: str, start: int, end: int, anchor: BaseAnchor) -> list[dict[str, Any]]:
     """Every `Released` event of the lock in finalized blocks `start..end`
     (`end` the anchor), each bound to the anchored chain: not removed, its
-    block hash present, and that hash read by hash as the block of its number
-    (`_bind_block`). A log of another network names a block this node does
-    not know, so the run is refused, never the log skipped."""
+    block hash present, and that hash the canonical block of its number, read
+    by hash and by number (`_bind_block`). A log of another network or of a
+    fork names a block that is unknown here or not canonical, so the run is
+    refused, never the log skipped."""
 
     events = []
     for log, first, last in _released_logs(base, lock, start, end):
