@@ -1590,6 +1590,35 @@ fn arc_bootstrap_hash_v2(state: &PfUsdcArcFinalityStateV1) -> Result<String, Str
     ))
 }
 
+fn beacon_bootstrap_hash_v2(state: &PfUsdcBeaconFinalityStateV1) -> Result<String, String> {
+    Ok(hash_hex_domain(
+        "postfiat.vault_bridge.beacon_bootstrap.authorization.v2",
+        &state.state_commitment_bytes()?,
+    ))
+}
+
+/// Bind an Ethereum beacon anchor into the amendment the validators sign.
+///
+/// Without this the anchor would ride along in the activation record while the
+/// signatures covered only the profile, so whoever assembled the batch could
+/// substitute a different anchor after the validators had signed. That is the
+/// same shape as the defect this anchor exists to fix -- an unauthenticated
+/// input deciding what gets trusted -- so the anchor must be inside the signed
+/// kind, exactly as the Arc lane does it.
+pub fn vault_bridge_beacon_route_amendment_kind_v2(
+    profile: &VaultBridgeRouteProfileV1,
+    bootstrap: &PfUsdcBeaconFinalityStateV1,
+) -> Result<String, String> {
+    if profile.verifier_kind != NAV_PROFILE_VERIFIER_SP1_GROTH16 {
+        return Err("beacon bootstrap authorization requires an sp1-groth16 route".to_string());
+    }
+    Ok(format!(
+        "{}:beacon-bootstrap-v2:{}",
+        vault_bridge_route_amendment_kind(profile)?,
+        beacon_bootstrap_hash_v2(bootstrap)?,
+    ))
+}
+
 /// V1 amendment kinds remain unchanged for historical replay and other routes.
 pub fn vault_bridge_arc_route_amendment_kind_v2(
     profile: &VaultBridgeRouteProfileV1,

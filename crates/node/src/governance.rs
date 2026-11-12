@@ -627,9 +627,15 @@ pub fn create_vault_bridge_route_profile_governance(
         decode_tier4_finality_bootstrap(finality_bootstrap_raw.as_deref())?;
     let beacon_finality_bootstrap =
         decode_beacon_finality_bootstrap(finality_bootstrap_raw.as_deref())?;
-    let kind = match arc_finality_bootstrap.as_ref() {
-        Some(state) => postfiat_types::vault_bridge_arc_route_amendment_kind_v2(&profile, state),
-        None => postfiat_types::vault_bridge_route_amendment_kind(&profile),
+    // The amendment kind must commit to any bootstrap the activation carries,
+    // or the validators sign only the profile and the anchor can be swapped
+    // after signing.
+    let kind = match (arc_finality_bootstrap.as_ref(), beacon_finality_bootstrap.as_ref()) {
+        (Some(state), _) => postfiat_types::vault_bridge_arc_route_amendment_kind_v2(&profile, state),
+        (None, Some(state)) => {
+            postfiat_types::vault_bridge_beacon_route_amendment_kind_v2(&profile, state)
+        }
+        (None, None) => postfiat_types::vault_bridge_route_amendment_kind(&profile),
     }
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     let domain = cobalt_domain(&genesis);
