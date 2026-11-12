@@ -115,7 +115,10 @@ class FakeBase:
     """A Base JSON-RPC that serves only reads, and records the block of every
     state read. Each chain has its own block hashes; a state read may name
     its block by number or EIP-1898 `{"blockHash", "requireCanonical"}`, and
-    a hash the node does not know is an RPC error (as Anvil and geth answer)."""
+    a hash the node does not know, or knows only as a side block, is an RPC
+    error (as Anvil and geth answer). `side_blocks` are blocks the node keeps
+    from before a reorg: served by hash, never canonical by number or for
+    state (geth's BlockByHash)."""
 
     def __init__(self, locks: dict[int, tuple[str, int, str]], *, chain_id: int = 8453,
                  code: bytes = LOCK_CODE, finalized: int = FINALIZED,
@@ -128,6 +131,7 @@ class FakeBase:
         # and the first block at which each Lock exists (default: block 0).
         self.block_hashes = block_hashes or {}
         self.lock_from = lock_from or {}
+        self.side_blocks: dict[str, int] = {}  # hash -> number, known by hash only
         self.state_read_tags: list[str] = []
         self.lock_read_tags: list[str] = []
         self.block_reads: list[str] = []
@@ -149,8 +153,8 @@ class FakeBase:
         number = int(block_hash[18:], 16)
         return number if number <= self.finalized and number not in self.block_hashes else None
 
-    def block(self, number: int) -> dict[str, Any]:
-        return {"number": hex(number), "hash": self.canonical(number),
+    def block(self, number: int, block_hash: str | None = None) -> dict[str, Any]:
+        return {"number": hex(number), "hash": block_hash or self.canonical(number),
                 "parentHash": self.canonical(number - 1) if number else "0x" + "00" * 32}
 
     def state_block(self, method: str, tag: Any) -> int:
@@ -183,6 +187,8 @@ class FakeBase:
             assert full is False, params
             self.hash_reads.append(block_hash)
             number = self.number_of(block_hash)
+            if number is None and block_hash in self.side_blocks:
+                return self.block(self.side_blocks[block_hash], block_hash)
             return None if number is None else self.block(number)
         if method == "eth_getCode":
             assert params[0].lower() == LOCK
@@ -1976,13 +1982,15 @@ class OneForeignRead:
     network, and every other read by `home`."""
 
     def __init__(self, home: Any, foreign: Any, index: int | None = None, method: str | None = None,
-                 data: str | None = None) -> None:
+                 data: str | None = None, match: Any = None) -> None:
         self.home, self.foreign, self.index, self.method, self.data = home, foreign, index, method, data
-        self.reads, self.used = 0, None
+        self.match, self.reads, self.used = match, 0, None
 
     def call(self, method: str, params: list[Any]) -> Any:
         if self.index is not None:
             pick = self.reads == self.index
+        elif self.match is not None:
+            pick = self.used is None and self.match(method, params)
         else:
             pick = (self.used is None and method == self.method
                     and (self.data is None or params[0]["data"] == self.data))
@@ -1996,6 +2004,23 @@ class OneForeignRead:
 def foreign_base(base: FakeBase) -> FakeBase:
     base.chain_id = FOREIGN_CHAIN
     return base
+
+
+FORK_TAG = 0xF0F0  # the fork's own block hashes, above the height it shares
+
+
+def fork_of(fork: FakeBase, home: FakeBase, height: int) -> FakeBase:
+    """`fork` as an honest node of a network that shares the home chain's
+    history (chain id, blocks, state) through `height` and has its own blocks
+    above it. Each node keeps the other's blocks above `height` as side
+    blocks (seen before a reorg): known by hash, not canonical."""
+
+    fork.chain_id = home.chain_id
+    for number in range(height + 1, max(fork.finalized, home.finalized) + 1):
+        fork.block_hashes[number] = chain_block_hash(FORK_TAG, number)
+        home.side_blocks[chain_block_hash(FORK_TAG, number)] = number
+        fork.side_blocks[home.canonical(number)] = number
+    return fork
 
 
 class BaseAnchorTests(unittest.TestCase):
@@ -2057,6 +2082,98 @@ class BaseAnchorTests(unittest.TestCase):
             self.assertIn("payout_without_export", alarm_codes(lines))
             self.assertFalse([line for line in lines if line.get("status") in ("backed", "paid", "verified_earlier")])
 
+    def test_sequence_c_a_fork_log_answer_never_hides_an_orphan(self):
+        """A fork that shares Base's history through 949 pays export E at
+        950; Base pays an orphan of the same amount there and keeps the
+        fork's 950 as a side block. One log answer from the fork is refused."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            e = export_entry(0, height=400)
+            lane = ExportPftl([e], released=2_000_000)
+            state_file = self.seed(directory, lane)
+            before = state_file.read_bytes()
+            orphan = released_log(export_entry(9), block=950, transaction="0x" + "0a" * 32)
+            a = ExportBase([orphan], locked=2_000_000, finalized=1_000)
+            b = fork_of(ExportBase([released_log(e, block=950, transaction="0x" + "0b" * 32)], locked=2_000_000,
+                                   finalized=1_000), a, 949)
+            side = chain_block_hash(FORK_TAG, 950)
+            # The fixture is honest: A serves the side block by hash, never as canonical state.
+            self.assertEqual(a.call("eth_getBlockByHash", [side, False])["number"], hex(950))
+            with self.assertRaises(watcher.pft_token.PftTokenError):
+                a.call("eth_getCode", [LOCK, watcher.at_block(side)])
+            endpoint = OneForeignRead(a, b, method="eth_getLogs")
+            self.refused(run_exports(lane, endpoint, "--state-file", str(state_file)), state_file, before,
+                         "base_anchor_mismatch")
+            self.assertEqual(endpoint.used, "eth_getLogs")
+            # The next run, all from A, still sees the orphan.
+            code, lines, _ = run_exports(lane, ExportBase([orphan], locked=2_000_000, finalized=1_100),
+                                         "--state-file", str(state_file))
+            self.assertEqual(code, 2)
+            self.assertIn("payout_without_export", alarm_codes(lines))
+            self.assertFalse([line for line in lines if line.get("status") in ("backed", "paid", "verified_earlier")])
+
+    def test_sequence_d_a_fork_log_answer_never_hides_a_second_payout(self):
+        """Base pays E0 twice (950, 1150); a fork sharing history through 949
+        pays E0 and E1 once each at the same blocks, kept at home as side
+        blocks. One log answer from the fork is refused."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            e0, e1 = export_entry(0, height=400), export_entry(1, height=410)
+            lane = ExportPftl([e0, e1], released=2_000_000)
+            state_file = self.seed(directory, lane)
+            before = state_file.read_bytes()
+            home_logs = [released_log(e0, block=950, transaction="0x" + "a1" * 32),
+                         released_log(e0, block=1_150, transaction="0x" + "a2" * 32)]
+            a = ExportBase(home_logs, locked=2_000_000, finalized=1_200)
+            b = fork_of(ExportBase([released_log(e0, block=950, transaction="0x" + "b1" * 32),
+                                    released_log(e1, block=1_150, transaction="0x" + "b2" * 32)],
+                                   locked=2_000_000, finalized=1_200), a, 949)
+            endpoint = OneForeignRead(a, b, method="eth_getLogs")
+            self.refused(run_exports(lane, endpoint, "--state-file", str(state_file)), state_file, before,
+                         "base_anchor_mismatch")
+            # The next run, all from A, sees the duplicate.
+            code, lines, _ = run_exports(lane, ExportBase(home_logs, locked=2_000_000, finalized=1_300),
+                                         "--state-file", str(state_file))
+            self.assertEqual(code, 2)
+            self.assertIn("payout_duplicate", alarm_codes(lines))
+
+    def test_a_fork_source_block_answer_never_raises_a_false_release_alarm(self):
+        """The release's source block 900 read by number from a fork that
+        shares history through 899 (its 900 kept at home as a side block):
+        refused, not `release_source_block_mismatch`; so is a fork's answer
+        to the second, confirming read of a real mismatch."""
+
+        good = release(0)
+        cases = {
+            "first read": ({}, 0),
+            "confirming read": ({900: "0x" + "77" * 32}, 1),
+        }
+        for name, (home_hashes, nth) in cases.items():
+            with self.subTest(name), tempfile.TemporaryDirectory() as directory:
+                state_file = Path(directory) / "state.json"
+                a = FakeBase(backed(good), block_hashes=dict(home_hashes))
+                b = fork_of(FakeBase(backed(good)), a, 899)
+                seen = []
+
+                def nth_read(method, params, nth=nth):
+                    if method == "eth_getBlockByNumber" and params[0] == hex(900):
+                        seen.append(params)
+                        return len(seen) == nth + 1
+                    return False
+
+                endpoint = OneForeignRead(a, b, match=nth_read)
+                code, lines, stderr = run(FakePftl([good]), endpoint, "--state-file", str(state_file))
+                self.assertEqual(endpoint.used, "eth_getBlockByNumber")
+                self.assertEqual(code, 1, stderr)
+                self.assertIn("base_anchor_mismatch", stderr)
+                self.assertEqual(alarm_codes(lines), [])
+                self.assertFalse(state_file.exists())
+                # All from A afterwards: the honest result.
+                code, lines, _ = run(FakePftl([good]), FakeBase(backed(good), block_hashes=dict(home_hashes)),
+                                     "--state-file", str(state_file))
+                expected = (2, ["release_source_block_mismatch"]) if home_hashes else (0, [])
+                self.assertEqual((code, alarm_codes(lines)), expected)
+
     def test_every_state_read_names_the_anchor_by_hash(self):
         releases = [release(0), release(1, source_block=800)]
         e = export_entry(0, height=400)
@@ -2108,13 +2225,15 @@ class BaseAnchorTests(unittest.TestCase):
     def test_any_single_foreign_read_of_a_release_run_is_refused_or_changes_nothing(self):
         """Every read of a release-view run (with --exports or without),
         answered in turn by another network whose Locks back every release
-        or none, against a Base whose Locks back all or all but one."""
+        or none, or by a fork that shares Base's history (and Locks) through
+        block 899, each keeping the other's later blocks as side blocks,
+        against a Base whose Locks back all or all but one."""
 
         releases = [release(0), release(1, source_block=800), release(2, source_block=FINALIZED + 1)]
         e = export_entry(0, height=400)
         counted = 0
         for exports, home_locks, foreign_locks in itertools.product(
-                (False, True), ("all", "one missing"), ("all", "none")):
+                (False, True), ("all", "one missing"), ("all", "none", "fork")):
             def node(chain_id, locks):
                 base = ExportBase([released_log(e, block=950)], locked=2_000_000)
                 base.chain_id = chain_id
@@ -2134,7 +2253,10 @@ class BaseAnchorTests(unittest.TestCase):
                 honest = attempt(node(8453, home_locks), directory)
             index = 0
             while True:
-                endpoint = OneForeignRead(node(8453, home_locks), node(FOREIGN_CHAIN, foreign_locks), index)
+                home = node(8453, home_locks)
+                other = (fork_of(node(8453, home_locks), home, 899) if foreign_locks == "fork"
+                         else node(FOREIGN_CHAIN, foreign_locks))
+                endpoint = OneForeignRead(home, other, index)
                 with tempfile.TemporaryDirectory() as directory:
                     (code, lines, stderr), saved = attempt(endpoint, directory)
                 if endpoint.used is None:
@@ -2192,7 +2314,10 @@ class ExportModelTests(unittest.TestCase):
       finalized block, the code, a log chunk, a block read by hash, each
       `eth_call`, the end re-read) may be answered by an honest node of
       another Base network (chain 84532, the same lock address, its own
-      payouts of exports 0 and 2); at most one such read per sequence; each
+      payouts of exports 0 and 2), or of a fork that shares the home chain's
+      history through block 1000 with those payouts above it, each node
+      keeping the other's blocks as side blocks (known by hash, not
+      canonical); at most one such read per sequence; each
       run is normal, `--from-height 0` or an alternating `--lock-from-block`;
       depth 3. Such a run is refused (exit 1, the state kept) or gives
       exactly the all-honest run's lines and state."""
@@ -2209,18 +2334,18 @@ class ExportModelTests(unittest.TestCase):
         return ExportPftl(self.ENTRIES[pruned:exported], pruned=pruned, pruned_atoms=sum(self.AMOUNTS[:pruned]),
                           released=1_000_000, current_height=100 + time)
 
-    def model(self, depth, steps, kinds, bases, least, networks=("same",), base_reads=False):
+    def model(self, depth, steps, kinds, bases, least, networks=("same",), base_reads=()):
         import functools
-        counted = {"sequences": 0, "runs": 0, "foreign_runs": 0, "refused": 0}
+        counted = {"sequences": 0, "runs": 0, "foreign_runs": 0, "refused": 0, "fork_runs": 0}
         alphabet = (steps, kinds, bases, networks, base_reads)
         with unittest.mock.patch.object(watcher, "keccak256", functools.lru_cache(maxsize=None)(watcher.keccak256)):
             self.explore(alphabet, depth, 0, 0, None, [], frozenset(), [], counted)
         print(f"\nexport model: {len(steps)} PFTL x {len(self.PAYOUTS)} payout x {len(kinds)} start x "
               f"{len(bases)} Base x {len(networks)} network choices"
-              f"{' x any single Base read foreign' if base_reads else ''}, depth {depth}: "
-              f"{counted['sequences']} sequences, {counted['runs']} runs"
-              + (f" ({counted['foreign_runs']} with a foreign read, {counted['refused']} refused)"
-                 if base_reads else ""))
+              f"{' x any single Base read foreign (' + ', '.join(base_reads) + ')' if base_reads else ''}, "
+              f"depth {depth}: {counted['sequences']} sequences, {counted['runs']} runs"
+              + (f" ({counted['foreign_runs']} with a foreign read, {counted['fork_runs']} of them from the fork, "
+                 f"{counted['refused']} refused)" if base_reads else ""))
         self.assertGreater(counted["sequences"], least)
 
     def test_no_sequence_of_honest_answers_backs_a_bad_payout(self):
@@ -2239,12 +2364,17 @@ class ExportModelTests(unittest.TestCase):
             return
         steps, kinds, bases, networks, base_reads = alphabet
         for step, payout, kind, base_step, network in itertools.product(steps, self.PAYOUTS, kinds, bases, networks):
-            # None, then each Base read of the run in turn, until one is past its last read.
-            reads = itertools.chain([None], itertools.count()) if base_reads and not spent else (None,)
-            for foreign_read in reads:
-                if not self.explore_one(alphabet, depth, run_index, time, state, logs, paid, bad, counted, trail,
-                                        spent, step, payout, kind, base_step, network, foreign_read):
-                    break
+            # No foreign read, then each Base read of the run in turn from each
+            # foreign network, until one is past the run's last read.
+            if not self.explore_one(alphabet, depth, run_index, time, state, logs, paid, bad, counted, trail,
+                                    spent, step, payout, kind, base_step, network, None):
+                continue
+            for foreign_kind in () if spent else base_reads:
+                for index in itertools.count():
+                    if not self.explore_one(alphabet, depth, run_index, time, state, logs, paid, bad, counted,
+                                            trail, spent, step, payout, kind, base_step, network,
+                                            (foreign_kind, index)):
+                        break
 
     def explore_one(self, alphabet, depth, run_index, time, state, logs, paid, bad, counted, trail, spent,
                     step, payout, kind, base_step, network, foreign_read):
@@ -2298,6 +2428,7 @@ class ExportModelTests(unittest.TestCase):
     # blocks of the first and third runs, in its own transactions.
     FOREIGN_LOGS = [released_log(ENTRIES[0], block=1_005, transaction="0x" + "b0" * 32),
                     released_log(ENTRIES[2], block=1_025, transaction="0x" + "b2" * 32)]
+    FORK_HEIGHT = 1_000  # the fork shares the home chain through this block
 
     def run_once(self, state, now, answer, logs, finalized, bad, paid, path, *, from_height=None, lock_from=0,
                  network="same", foreign_read=None, counted=None):
@@ -2312,12 +2443,19 @@ class ExportModelTests(unittest.TestCase):
 
         lagging, outcome = attempt(ExportBase(logs, locked=10_000_000, finalized=finalized))
         if foreign_read is not None:
-            other = foreign_base(ExportBase(self.FOREIGN_LOGS, locked=10_000_000, finalized=finalized))
-            endpoint = OneForeignRead(ExportBase(logs, locked=10_000_000, finalized=finalized), other, foreign_read)
+            foreign_kind, index = foreign_read
+            home = ExportBase(logs, locked=10_000_000, finalized=finalized)
+            other = ExportBase(self.FOREIGN_LOGS, locked=10_000_000, finalized=finalized)
+            if foreign_kind == "fork":
+                fork_of(other, home, self.FORK_HEIGHT)
+            else:
+                foreign_base(other)
+            endpoint = OneForeignRead(home, other, index)
             honest, (lagging, outcome) = outcome, attempt(endpoint)
             if endpoint.used is None:
                 return NOT_USED
             counted["foreign_runs"] += 1
+            counted["fork_runs"] += foreign_kind == "fork"
             if outcome is None:
                 counted["refused"] += 1
             else:
@@ -2358,7 +2496,8 @@ class ExportModelTests(unittest.TestCase):
         return new_state if new_state is not None else state
 
     def test_no_single_foreign_base_read_backs_a_payout_or_changes_the_result(self):
-        self.model(3, ("advance",), ("normal", "from_height", "lock_alt"), ("ok",), 20_000, base_reads=True)
+        self.model(3, ("advance",), ("normal", "from_height", "lock_alt"), ("ok",), 40_000,
+                   base_reads=("disjoint", "fork"))
 
     def test_a_state_of_another_identity_is_refused_on_every_start(self):
         """Directed, not exhaustive: through the command line, a saved model
