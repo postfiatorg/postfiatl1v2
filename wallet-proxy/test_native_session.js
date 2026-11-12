@@ -343,6 +343,28 @@ async function main() {
     writeList(allowlistFile, { schema: 'postfiat-native-session-allowlist-v1', install_public_keys_hex: [[alpha.publicKeyHex]] }, 11_000);
     assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile } }), /allowlist/);
 
+    // A reload frees the slot of every install it revokes, without that install's help.
+    writeList(allowlistFile, allow(alpha, beta), 12_000);
+    writeList(denylistFile, deny(), 12_000);
+    let slotClock = Date.now();
+    const slots = createNativeSessions({
+      env: {
+        ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS: '1',
+        WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile,
+      },
+      now: () => slotClock, log: () => {}, logError: () => {},
+    });
+    assert.strictEqual((await openAt(slots, alpha, slotClock)).statusCode, 200);
+    assert.strictEqual((await openAt(slots, beta, slotClock)).statusCode, 503);
+    writeList(denylistFile, deny(alpha), 13_000);
+    slotClock += 1_000;
+    const betaSlot = await openAt(slots, beta, slotClock);
+    assert.strictEqual(betaSlot.statusCode, 200, 'a silent denied occupant frees its slot');
+    writeList(denylistFile, deny(), 14_000);
+    writeList(allowlistFile, allow(alpha), 14_000);
+    slotClock += 1_000;
+    assert.strictEqual((await openAt(slots, alpha, slotClock)).statusCode, 200, 'a silent delisted occupant frees its slot');
+
     // A bound across installs: distinct installs with unexpired tokens.
     let capClock = Date.now();
     const capped = createNativeSessions({

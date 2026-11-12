@@ -236,17 +236,24 @@ function createNativeSessions({
         return 0;
     }
 
+    const listRefusal = (id) => denylist?.get().has(id) || (allowlist && !allowlist.get().has(id));
+
     function refreshLists() {
         const nowMs = now();
         if (nowMs - listsCheckedAtMs < LIST_CHECK_INTERVAL_MS) return;
         listsCheckedAtMs = nowMs;
         const previous = allowlist?.get();
-        if (allowlist?.refresh()) {
+        const allowReloaded = allowlist?.refresh();
+        if (allowReloaded) {
             const next = allowlist.get();
             for (const id of previous) if (!next.has(id)) delisted.add(id);
             for (const id of next) delisted.delete(id);
         }
-        denylist?.refresh();
+        const denyReloaded = denylist?.refresh();
+        // A revoked install frees its slot now, not when it next shows up.
+        if (allowReloaded || denyReloaded) {
+            for (const id of activeInstalls.keys()) if (listRefusal(id)) activeInstalls.delete(id);
+        }
     }
 
     // Null when the install may hold a session, otherwise the refusal code. An
@@ -255,7 +262,7 @@ function createNativeSessions({
         refreshLists();
         let refusal = null;
         if (denylist?.get().has(id)) refusal = 'native_session_install_revoked';
-        else if (allowlist && !allowlist.get().has(id)) {
+        else if (listRefusal(id)) {
             refusal = holdsToken || delisted.has(id) ? 'native_session_install_revoked' : 'native_session_install_not_allowed';
         }
         if (refusal) activeInstalls.delete(id); // a revoked install frees its slot
