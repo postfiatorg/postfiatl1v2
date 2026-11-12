@@ -36,9 +36,6 @@ use sp1_sdk::{
     SP1Stdin,
 };
 
-const PFUSDC_ELF: Elf = Elf::Static(include_bytes!(
-    "../../../programs/pfusdc-eth-mainnet-ingress/elf/pfusdc-eth-mainnet-ingress-program"
-));
 const PFETH_ELF: Elf = Elf::Static(include_bytes!(
     "../../../programs/pfeth-eth-mainnet-ingress/elf/pfeth-eth-mainnet-ingress-program"
 ));
@@ -69,10 +66,14 @@ impl IngressRoute {
         }
     }
 
-    fn elf(self) -> Elf {
+    fn elf(self) -> Result<Elf> {
         match self {
-            Self::Pfusdc => PFUSDC_ELF,
-            Self::Pfeth => PFETH_ELF,
+            Self::Pfusdc => {
+                let path = env::var_os("PFUSDC_INGRESS_ELF")
+                    .ok_or_else(|| anyhow!("PFUSDC_INGRESS_ELF must name the rebuilt committee-authenticated guest"))?;
+                Ok(Elf::from(fs::read(PathBuf::from(path))?))
+            }
+            Self::Pfeth => Ok(PFETH_ELF),
         }
     }
 
@@ -128,6 +129,18 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Read-only: verify an Ethereum bootstrap and derive an unsigned anchor.
+    /// Governance must independently establish that beacon_root is finalized.
+    InspectBootstrap {
+        #[arg(long)]
+        route_profile: PathBuf,
+        #[arg(long)]
+        beacon_root: String,
+        #[arg(long, default_value = "https://ethereum-beacon-api.publicnode.com")]
+        beacon_rpc: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
     Capture {
         #[arg(long)]
         deployment: PathBuf,
@@ -304,6 +317,9 @@ struct BeaconData<T> {
 async fn main() -> Result<()> {
     sp1_sdk::utils::setup_logger();
     match Cli::parse().command {
+        Command::InspectBootstrap { route_profile, beacon_root, beacon_rpc, output } => {
+            inspect_bootstrap(&route_profile, &beacon_root, &beacon_rpc, &output).await
+        }
         Command::Capture {
             deployment,
             output,
@@ -551,7 +567,7 @@ async fn verify_banked_proof(
         "banked proof public values do not match the banked witness"
     );
     let client = ProverClient::from_env().await;
-    let elf = route.elf();
+    let elf = route.elf()?;
     let pk = client.setup(elf.clone()).await?;
     client
         .verify(&proof, pk.verifying_key(), None)
@@ -829,7 +845,7 @@ async fn prove(witness_path: &Path, out: &Path, skip_redundant_execute: bool) ->
     let witness: EthIngressWitnessV1 = serde_json::from_slice(&fs::read(witness_path)?)?;
     let route = IngressRoute::from_witness(&witness)?;
     let expected = serde_cbor::to_vec(&route.verify(&witness)?)?;
-    let elf = route.elf();
+    let elf = route.elf()?;
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(serde_cbor::to_vec(&witness)?);
     let client = ProverClient::from_env().await;
@@ -838,6 +854,7 @@ async fn prove(witness_path: &Path, out: &Path, skip_redundant_execute: bool) ->
     } else {
         let exec_start = Instant::now();
         let (public_values, report) = client.execute(elf.clone(), stdin.clone()).await?;
+        anyhow::ensure!(report.exit_code == 0, "SP1 guest execution failed");
         anyhow::ensure!(
             public_values.to_vec() == expected,
             "SP1 execute output mismatch"
@@ -875,8 +892,9 @@ async fn prove(witness_path: &Path, out: &Path, skip_redundant_execute: bool) ->
 }
 
 async fn program_info(route: IngressRoute) -> Result<()> {
-    let c = ProverClient::from_env().await;
-    let elf = route.elf();
+    // Real key derivation needs only the light client, not a full proving worker.
+    let c = ProverClient::builder().light().build().await;
+    let elf = route.elf()?;
     let pk = c.setup(elf.clone()).await?;
     println!(
         "{}",
@@ -1005,6 +1023,39 @@ async fn cross_vkey_audit(proof_path: &Path, foreign_elf_path: &Path, output: &P
     };
     write_atomic(output, &serde_json::to_vec_pretty(&result)?)?;
     println!("{result}");
+    Ok(())
+}
+
+async fn inspect_bootstrap(profile_path: &Path, root: &str, beacon: &str, output: &Path) -> Result<()> {
+    let raw: Value = serde_json::from_slice(&fs::read(profile_path)?)?;
+    let profile: VaultBridgeRouteProfileV1 = serde_json::from_value(
+        raw.get("route_profile").unwrap_or(&raw).clone())?;
+    profile.validate().map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(profile.route_id == ROUTE_ID && profile.source_chain_id == MAINNET_CHAIN_ID
+        && profile.token_address == USDC && profile.verifier_kind == NAV_PROFILE_VERIFIER_SP1_GROTH16,
+        "bootstrap inspection requires an Ethereum-mainnet USDC route profile");
+    let root: B256 = with_0x(root).parse()?;
+    let rpc = Rpc::new()?;
+    let bootstrap: BeaconData<Bootstrap<MainnetConsensusSpec>> = rpc.beacon(beacon,
+        &format!("eth/v1/beacon/light_client/bootstrap/{root}")).await?;
+    verify_bootstrap(&bootstrap.data, root, &mainnet_forks())
+        .map_err(|error| anyhow!("invalid bootstrap: {error}"))?;
+    let profile_hash = profile.profile_hash().map_err(anyhow::Error::msg)?;
+    let anchor = postfiat_types::PfUsdcBeaconFinalityStateV1 {
+        schema: postfiat_types::PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1.into(),
+        route_profile_hash: profile_hash.clone(), route_epoch: u64::from(profile.route_epoch),
+        source_chain_id: profile.source_chain_id, vault_address: profile.vault_address,
+        token_address: profile.token_address,
+        route_binding: postfiat_types::vault_bridge_route_binding(&profile_hash, profile.route_epoch)
+            .map_err(anyhow::Error::msg)?,
+        finalized_beacon_root: hex::encode(root),
+        finalized_slot: bootstrap.data.header().beacon().slot,
+        current_sync_committee_root: hex::encode(bootstrap.data.current_sync_committee().tree_hash_root()),
+    };
+    anchor.validate().map_err(anyhow::Error::msg)?;
+    write_atomic(output, &serde_json::to_vec_pretty(&anchor)?)?;
+    println!("{}", json!({"bootstrap_membership_verified": true, "anchor": anchor,
+        "governance_pinned": false, "root_finality_requires_independent_confirmation": true}));
     Ok(())
 }
 
