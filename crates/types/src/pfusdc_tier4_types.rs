@@ -259,6 +259,8 @@ pub struct PfUsdcBeaconFinalityStateV1 {
     /// The slot a conforming proof must declare as its starting point.
     pub finalized_slot: u64,
     /// SSZ root of the current sync committee for the finalized header period.
+    /// Legacy archived bootstraps deserialize without it, but cannot validate.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub current_sync_committee_root: String,
 }
 
@@ -2120,3 +2122,6 @@ fn pfusdc_keccak_commitment(domain: &str, bytes: &[u8]) -> String {
 
 #[path = "b23_ingress_anchor.rs"]
 mod b23_ingress_anchor;
+
+#[path = "b23_ingress_legacy.rs"]
+mod b23_ingress_legacy;

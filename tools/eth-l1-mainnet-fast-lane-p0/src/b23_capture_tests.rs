@@ -125,6 +125,7 @@ async fn rebuilt_guest_executes_honest_witness_and_rejects_swapped_committee() {
         json!({"honest_guest_execution": "passed", "instruction_count": report.total_instruction_count(),
         "elf_sha256": hex::encode(Sha256::digest(&*elf)), "public_values_sha256": hex::encode(Sha256::digest(&expected))})
     );
+    let honest_committee = witness.helios.store.current_sync_committee.clone();
     witness.helios.store.current_sync_committee =
         witness.helios.updates[0].next_sync_committee().clone();
     assert!(verify_witness(&witness)
@@ -133,13 +134,25 @@ async fn rebuilt_guest_executes_honest_witness_and_rejects_swapped_committee() {
     let mut bad_stdin = SP1Stdin::new();
     bad_stdin.write_vec(serde_cbor::to_vec(&witness).unwrap());
     // SP1 6.3 execute reports guest panic through exit_code, not necessarily Err.
-    let (bad_public, bad_report) = client.execute(elf, bad_stdin).await.unwrap();
+    let (bad_public, bad_report) = client.execute(elf.clone(), bad_stdin).await.unwrap();
     assert_ne!(bad_report.exit_code, 0);
     assert!(bad_public.to_vec().is_empty());
     println!(
         "{}",
         json!({"swapped_committee_with_honest_header": "rejected",
         "guest_exit_code": bad_report.exit_code, "committed_public_values_bytes": bad_public.to_vec().len()})
+    );
+    witness.helios.store.current_sync_committee = honest_committee;
+    witness.beacon_anchor.current_sync_committee_root.clear();
+    assert!(verify_witness(&witness).is_err());
+    let mut legacy_stdin = SP1Stdin::new();
+    legacy_stdin.write_vec(serde_cbor::to_vec(&witness).unwrap());
+    let (legacy_public, legacy_report) = client.execute(elf, legacy_stdin).await.unwrap();
+    assert_ne!(legacy_report.exit_code, 0);
+    assert!(legacy_public.to_vec().is_empty());
+    println!(
+        "{}",
+        json!({"legacy_anchor_without_committee": "rejected", "guest_exit_code": legacy_report.exit_code})
     );
 }
 

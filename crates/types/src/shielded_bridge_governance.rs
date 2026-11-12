@@ -819,6 +819,9 @@ pub struct VaultBridgeRouteProfileActivationV1 {
 
 impl VaultBridgeRouteProfileActivationV1 {
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(state) = self.beacon_finality_bootstrap.as_ref() {
+            state.validate()?;
+        }
         if self.profile.verifier_kind == NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
             && self.schema != VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2
         {
@@ -902,7 +905,10 @@ impl VaultBridgeRouteProfileActivationV1 {
                     "beacon finality bootstrap requires an sp1-groth16 route".to_string()
                 );
             }
-            state.validate()?;
+            // Decode/authenticate historical envelopes without admitting an
+            // anchor missing the committee. Execution still validates the anchor
+            // after the legacy NAV-profile rejection checks.
+            state.historical_bootstrap_commitment_bytes()?;
             let expected_route_binding =
                 vault_bridge_route_binding(&profile_hash, self.profile.route_epoch)?;
             if state.route_profile_hash != profile_hash
@@ -968,6 +974,9 @@ impl VaultBridgeRouteProfileRecordV1 {
         authorized_height: u64,
     ) -> Result<Self, String> {
         activation.validate_for_replay()?;
+        if let Some(state) = activation.beacon_finality_bootstrap.as_ref() {
+            state.validate()?;
+        }
         if authorized_height < activation.profile.activation_height {
             return Err(
                 "vault bridge route profile cannot be recorded before its activation height"
@@ -1616,7 +1625,7 @@ fn arc_bootstrap_hash_v2(state: &PfUsdcArcFinalityStateV1) -> Result<String, Str
 fn beacon_bootstrap_hash_v2(state: &PfUsdcBeaconFinalityStateV1) -> Result<String, String> {
     Ok(hash_hex_domain(
         "postfiat.vault_bridge.beacon_bootstrap.authorization.v2",
-        &state.state_commitment_bytes()?,
+        &state.historical_bootstrap_commitment_bytes()?,
     ))
 }
 
