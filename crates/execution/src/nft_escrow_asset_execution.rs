@@ -2249,6 +2249,7 @@ fn apply_asset_operation(
                 apply_nav_mint_vault_bridge_settlement(ledger, &nav_asset, operation, block_height)?;
             }
             apply_prepared_issued_asset_credit(ledger, to_index, recipient_after, required_limit);
+            b23_facility_credit_minted_inventory(ledger, operation)?;
             Ok(())
         }
         AssetTransactionOperation::NavRedeemAtNav(operation) => {

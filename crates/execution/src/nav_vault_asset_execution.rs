@@ -5327,15 +5327,38 @@ pub fn apply_asset_orchard_private_primary_redeem_route_transition(
 }
 
 fn apply_pftl_uniswap_redemption_fund(
-    _ledger: &mut LedgerState,
-    _operation: &PftlUniswapRedemptionFundOperation,
-    _block_height: u64,
+    ledger: &mut LedgerState,
+    operation: &PftlUniswapRedemptionFundOperation,
+    block_height: u64,
 ) -> Result<(), (&'static str, String)> {
-    Err((
-        "pftl_uniswap_redemption_fund_retired",
-        "separate redemption funding is retired; primary redemption releases subscription-funded NAV reserve principal"
-            .to_string(),
-    ))
+    let index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
+    let mut route = ledger.pftl_uniswap_routes[index].clone();
+    // Explicit policy opt-in preserves historical rejected funding transactions.
+    if !b23_facility_enabled(&route) {
+        return Err(("pftl_uniswap_redemption_fund_retired",
+            "reserve funding requires a route policy with spread_recipient".to_string()));
+    }
+    ensure_pftl_uniswap_route_live(&route, false)?;
+    if operation.amount_atoms == 0 || route.primary_subscription_nonces.contains_key(&operation.funding_nonce) {
+        return Err(("pftl_uniswap_funding_invalid", "funding amount must be positive and nonce unused".to_string()));
+    }
+    let before = pftl_uniswap_route_state_hash(&route);
+    b23_facility_fund_source(ledger, &route, &operation.settlement_asset_id, operation.amount_atoms)?;
+    debit_issued_asset_balance(ledger, &operation.funder, &operation.settlement_asset_id,
+        operation.amount_atoms, "PFTL-Uniswap reserve funding")?;
+    route.settlement_reserve_atoms = route.settlement_reserve_atoms.checked_add(operation.amount_atoms)
+        .ok_or_else(|| ("pftl_uniswap_reserve_overflow", "reserve funding would overflow".to_string()))?;
+    // Reuse the bounded, committed route nonce map; subscriptions and funds cannot reuse a nonce.
+    route.primary_subscription_nonces.insert(operation.funding_nonce.clone(), operation.funder.clone());
+    route.validate().map_err(|e| ("bad_pftl_uniswap_route", e))?;
+    let after = pftl_uniswap_route_state_hash(&route);
+    ledger.pftl_uniswap_routes[index] = route;
+    append_pftl_uniswap_consensus_receipt(ledger, PftlUniswapReceiptPlan {
+        transition: "redemption_funded", route_id: &operation.route_id,
+        state_before_hash: before, state_after_hash: after, packet_hash: None,
+        burn_event_hash: None, wallet: Some(operation.funder.clone()),
+        amount_atoms: Some(operation.amount_atoms), block_height,
+    })
 }
 
 fn apply_pftl_uniswap_primary_redeem(
@@ -5355,6 +5378,7 @@ fn apply_pftl_uniswap_primary_redeem(
         )
     })?;
     let policy = &v2.primary_market_policy;
+    let spread_recipient = policy.spread_recipient.clone();
     if block_height > operation.expires_at_height
         || block_height < policy.valid_from_height
         || block_height > policy.expires_at_height
@@ -5419,7 +5443,7 @@ fn apply_pftl_uniswap_primary_redeem(
             "redemption output exceeds base NAV".to_string(),
         )
     })?;
-    let payout_asset = pftl_source_redeem(ledger, &route, operation.settlement_source_asset_id.as_deref(), base_value, spread)?;
+    let payout_asset = pftl_source_redeem(ledger, &route, operation.settlement_source_asset_id.as_deref(), base_value, if spread_recipient.is_some() { 0 } else { spread })?;
     debit_issued_asset_balance(
         ledger,
         &operation.owner,
@@ -5427,6 +5451,7 @@ fn apply_pftl_uniswap_primary_redeem(
         operation.nav_amount_atoms,
         "PFTL-Uniswap primary redemption NAV debit",
     )?;
+    if spread_recipient.is_none() {
     credit_issued_asset_balance_from_custody(
         ledger,
         &operation.settlement_recipient,
@@ -5434,6 +5459,7 @@ fn apply_pftl_uniswap_primary_redeem(
         settlement_output,
         "PFTL-Uniswap primary redemption settlement credit",
     )?;
+    }
     let mut next_route = route;
     let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
     pftl_uniswap_debit_native_route_balance(
@@ -5472,7 +5498,7 @@ fn apply_pftl_uniswap_primary_redeem(
     next_v2.redeem_capacity_used_atoms = redeemed_after;
     next_v2.non_nav_spread_atoms = next_v2
         .non_nav_spread_atoms
-        .checked_add(spread)
+        .checked_add(if spread_recipient.is_some() { 0 } else { spread })
         .ok_or_else(|| {
             (
                 "pftl_uniswap_spread_overflow",
@@ -5506,6 +5532,17 @@ fn apply_pftl_uniswap_primary_redeem(
         })?
         .circulating_supply = circulating_after;
     ledger.pftl_uniswap_routes[route_index] = next_route;
+    // Release reserve custody before credits so a fully issued settlement asset
+    // does not transiently exceed its supply cap. The transaction executor rolls
+    // back the entire candidate ledger if either credit fails.
+    if let Some(recipient) = &spread_recipient {
+        credit_issued_asset_balance_from_custody(ledger, &operation.settlement_recipient,
+            &payout_asset, settlement_output, "PFTL-Uniswap redeemer credit")?;
+        if spread > 0 {
+            credit_issued_asset_balance_from_custody(ledger, recipient, &payout_asset,
+                spread, "PFTL-Uniswap management credit")?;
+        }
+    }
     append_pftl_uniswap_consensus_receipt(
         ledger,
         PftlUniswapReceiptPlan {
@@ -5519,7 +5556,20 @@ fn apply_pftl_uniswap_primary_redeem(
             amount_atoms: Some(operation.nav_amount_atoms),
             block_height,
         },
-    )
+    )?;
+    if let Some(recipient) = spread_recipient {
+        let receipt = ledger.pftl_uniswap_receipts.last_mut().expect("receipt just appended");
+        receipt.redemption_settlement = Some(postfiat_types::PftlUniswapRedemptionSettlement {
+            settlement_asset_id: payout_asset,
+            settlement_recipient: operation.settlement_recipient.clone(),
+            settlement_value_atoms: settlement_output,
+            spread_recipient: recipient,
+            spread_value_atoms: spread,
+        });
+        receipt.receipt_hash = postfiat_types::pftl_uniswap_consensus_receipt_computed_hash(receipt);
+        receipt.validate().map_err(|e| ("bad_pftl_uniswap_receipt", e))?;
+    }
+    Ok(())
 }
 
 fn apply_pftl_uniswap_route_epoch_advance(
@@ -6350,6 +6400,7 @@ fn append_pftl_uniswap_consensus_receipt(
         ));
     }
     let receipt = PftlUniswapConsensusReceipt {
+        redemption_settlement: None,
         receipt_hash,
         transition: plan.transition.to_string(),
         route_id: plan.route_id.to_string(),
