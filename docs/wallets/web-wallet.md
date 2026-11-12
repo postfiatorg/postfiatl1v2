@@ -403,7 +403,10 @@ cannot move it above what an honest signer observed. A valid status that
 contradicts the proved answer (another terminal result, or such a "not
 terminal" or terminal status) is returned unchanged in `contradicting`; a
 signer whose own bound is below the quorum-supported one, or whose observed
-height is above it, is returned in `inconsistent_bounds`.
+height is above it, is returned in `inconsistent_bounds`. An entry there can
+be an honest member whose bound or observed height is simply tighter than the
+quorum's `(f + 1)`-th statistic, so the list is a note for operators, never a
+finding against the member.
 From heights the verifier concludes only this: a "not terminal" below that
 bound (or a terminal status anchored above that height) is compatible
 history, and one on the other side conflicts with an honest signer's claim.
