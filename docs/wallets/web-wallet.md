@@ -395,16 +395,22 @@ one. A "not terminal" status contradicts a terminal quorum only when observed
 at or above the quorum-supported bound, the `(f + 1)`-th smallest
 `anchored_at_or_before_height` of its distinct signers (`f = (n - 1) / 3`): at
 least one honest signer claims a bound at or below it, so up to `f` false
-bounds, low or high, cannot move it below the true anchoring height. A valid
-status that contradicts the proved answer (another terminal result, or such a
-"not terminal") is returned unchanged in `contradicting`; a signer whose own
-bound is below the quorum-supported one is returned in `inconsistent_bounds`.
+bounds, low or high, cannot move it below the true anchoring height.
+Likewise a terminal status contradicts a "not terminal" quorum only when
+anchored at or below the quorum-supported height, the `(f + 1)`-th largest
+`observed_height` of its distinct signers, so up to `f` false high heights
+cannot move it above what an honest signer observed. A valid status that
+contradicts the proved answer (another terminal result, or such a "not
+terminal" or terminal status) is returned unchanged in `contradicting`; a
+signer whose own bound is below the quorum-supported one, or whose observed
+height is above it, is returned in `inconsistent_bounds`.
 From heights the verifier concludes only this: a "not terminal" below that
-bound is compatible older history, and one at or above it conflicts with an
-honest signer's bound. It attributes nothing from a single member's height:
-no status is judged against one signer's bound, and an inconsistent bound may
-be a lie or an honest upper bound, so it is neither counted toward a refusal
-nor used to name the others. The wallet acts on the proved answer and logs
+bound (or a terminal status anchored above that height) is compatible
+history, and one on the other side conflicts with an honest signer's claim.
+It attributes nothing from a single member's height: no status is judged
+against one signer's bound or observed height, and an inconsistent one may be
+a lie or an honest value, so it is neither counted toward a refusal nor used
+to name the others. The wallet acts on the proved answer and logs
 `contradicting`, `inconsistent_bounds` and `invalid` for operators as signed
 evidence to investigate. Only when the contradicting statuses also come from
 a quorum of distinct members (more faulty members than the bound) is the set
