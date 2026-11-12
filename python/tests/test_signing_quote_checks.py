@@ -4,6 +4,7 @@ signer runs or anything is submitted."""
 from __future__ import annotations
 
 import copy
+import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
@@ -183,25 +184,104 @@ class OperationHelperQuoteTests(unittest.TestCase):
                 submit.assert_not_called()
 
 
+SCHEMAS = wallet_module.OPERATION_SCHEMAS
+
+
+def _check(operation: dict[str, Any], quoted: dict[str, Any]) -> None:
+    quote = _operation_quote("pf-holder", operation)
+    quote["result"]["operation"] = quoted
+    wallet_module.check_signing_quote(
+        quote, wallet=_wallet(), kind=operation["operation"], sequence=7, max_fee_atoms=200, operation=operation
+    )
+
+
+def _without(operation: dict[str, Any], *keys: str) -> dict[str, Any]:
+    return {key: value for key, value in operation.items() if key not in keys}
+
+
+class SchemaTests(unittest.TestCase):
+    def test_the_committed_schema_matches_the_rust_types(self) -> None:
+        script = Path(__file__).resolve().parents[2] / "scripts/generate_operation_schemas.py"
+        spec = importlib.util.spec_from_file_location("generate_operation_schemas", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.build(), SCHEMAS, "run scripts/generate_operation_schemas.py --write")
+
+
 class DefaultFieldTests(unittest.TestCase):
-    def test_a_field_on_one_side_is_a_difference_unless_it_is_the_serde_default(self) -> None:
-        operation = {"operation": "trust_set", "account": "pf-holder", "asset_id": "aa" * 48, "limit": 5, "condition": ""}
-        quote = _operation_quote("pf-holder", operation)
-        del quote["result"]["operation"]["condition"]
-        quote["result"]["operation"]["authorized"] = False
-        quote["result"]["operation"]["reserve_paid"] = 0
-        kwargs = {"wallet": _wallet(), "kind": "trust_set", "sequence": 7, "max_fee_atoms": 200, "operation": operation}
-        wallet_module.check_signing_quote(quote, **kwargs)
+    TRUST = {"operation": "trust_set", "account": "pf-holder", "issuer": "pf-issuer", "asset_id": "aa" * 48, "limit": 5}
+
+    def test_typed_serde_defaults_equal_absence(self) -> None:
+        # Rust serializes trust_set's defaulted flags; the request may omit them.
+        _check(self.TRUST, {**self.TRUST, "authorized": False, "frozen": False, "reserve_paid": 0})
+        _check({**self.TRUST, "authorized": False, "reserve_paid": 0}, self.TRUST)
+        escrow = FAMILIES["escrow"][3]
+        _check({**escrow, "condition": "", "cancel_after": 0}, escrow)
         for field, value in (("authorized", True), ("reserve_paid", 50), ("frozen", True), ("extra", "x")):
             with self.subTest(field=field):
-                changed = _changed(quote, ("operation", field), value)
                 with self.assertRaises(QuoteRefusedError) as raised:
-                    wallet_module.check_signing_quote(changed, **kwargs)
+                    _check(self.TRUST, {**self.TRUST, field: value})
                 self.assertEqual(raised.exception.code, "quote_mismatch")
-        missing = copy.deepcopy(quote)
-        del missing["result"]["operation"]["limit"]
+
+    def test_a_wrong_typed_default_is_not_absence(self) -> None:
+        for field, value in (("authorized", None), ("authorized", 0), ("reserve_paid", False), ("reserve_paid", None)):
+            with self.subTest(field=field, value=value):
+                with self.assertRaises(QuoteRefusedError):
+                    _check({**self.TRUST, field: value}, self.TRUST)
+
+    def test_a_missing_required_field_is_not_filled_by_a_default(self) -> None:
         with self.assertRaises(QuoteRefusedError):
-            wallet_module.check_signing_quote(missing, **kwargs)
+            _check(self.TRUST, _without(self.TRUST, "limit"))
+        with self.assertRaises(QuoteRefusedError):
+            _check(_without(self.TRUST, "limit"), {**self.TRUST, "limit": 0})
+        halt = {"operation": "nav_halt", "issuer": "pf-holder", "asset_id": "aa" * 48, "reason": "r"}
+        with self.assertRaises(QuoteRefusedError):
+            _check(halt, {**halt, "halted": False})
+
+    # The review's "optional scalar fields where zero/empty is NOT absence".
+    OPTION_NOT_ABSENT = [
+        ("asset_create", "max_supply", 0),
+        ("vault_bridge_nav_subscription_allocate", "consume_supply_owner", ""),
+        ("vault_bridge_nav_subscription_allocate", "consume_supply_allocation_id", ""),
+        ("vault_bridge_nav_subscription_allocate", "nav_recipient", ""),
+        ("vault_bridge_nav_subscription_allocate", "subscription_id", ""),
+        ("pftl_uniswap_order_reserve", "settlement_source_asset_id", ""),
+        ("pftl_uniswap_primary_redeem", "settlement_source_asset_id", ""),
+        ("pftl_uniswap_export_debit", "reservation_id", ""),
+        ("pftl_uniswap_export_debit", "settlement_value_atoms", 0),
+        ("pftl_uniswap_export_debit", "ethereum_packet_digest", ""),
+        ("pftl_uniswap_export_debit", "ethereum_packet_schema_version", 0),
+    ]
+
+    def test_an_option_field_is_absent_only_as_null(self) -> None:
+        for kind, field, value in self.OPTION_NOT_ABSENT:
+            operation = {"operation": kind, "issuer": "pf-holder"}
+            with self.subTest(operation=kind, field=field):
+                _check({**operation, field: None}, operation)
+                with self.assertRaises(QuoteRefusedError) as raised:
+                    _check({**operation, field: value}, operation)
+                self.assertIn(f"operation.{field}", str(raised.exception))
+                with self.assertRaises(QuoteRefusedError):
+                    _check(operation, {**operation, field: value})
+        packet = {"operation": "fx_fix_register_v1", "operator": "pf-holder", "packet": {"packet_hash": "aa" * 48}}
+        with self.assertRaises(QuoteRefusedError):
+            _check({**packet, "packet": {**packet["packet"], "previous_fix_hash": ""}}, packet)
+
+    def test_an_invalid_zero_cap_request_is_not_signed_as_an_uncapped_asset(self) -> None:
+        create = {"operation": "asset_create", "issuer": "pf-holder", "code": "USD", "version": 1, "precision": 6}
+        quote = _operation_quote("pf-holder", create)
+        client = mock.Mock()
+        client.asset_fee_quote_response.return_value = quote
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(wallet_module, "_run") as signer, mock.patch.object(
+            wallet_module, "_run_json"
+        ) as signer_json:
+            with self.assertRaises(QuoteRefusedError) as raised:
+                wallet_module.submit_asset_transaction(
+                    client, wallet=_wallet(), operation={**create, "max_supply": 0}, work_dir=tmp, sequence=7
+                )
+        self.assertIn("operation.max_supply", str(raised.exception))
+        signer.assert_not_called()
+        signer_json.assert_not_called()
 
 
 class TransferQuoteTests(unittest.TestCase):

@@ -191,9 +191,12 @@ when:
 
 - the quote's `transaction_kind`, `source` (or a transfer's `from`) or any
   field of the requested operation differs from the request, in value or
-  type; a field on one side only is a difference unless it holds the default
-  the node fills in for an absent field (`null`, `""`, `0`, `false`), which
-  signs the same bytes;
+  type; a field on one side only is a difference unless the operation's Rust
+  type gives absence exactly that value: `null` for an `Option` field (never
+  `0` or `""`), or `false`, `0` or `""` of the declared type for a
+  `#[serde(default)]` scalar. The table is generated from the Rust types
+  (`scripts/generate_operation_schemas.py`); a required field is never
+  filled in;
 - a transfer's `to` or `amount` differs;
 - a requested `sequence` is not the quoted one, or the chain id (and the
   genesis hash, when the wallet knows it) is not the wallet's;

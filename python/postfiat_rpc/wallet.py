@@ -525,28 +525,41 @@ def default_max_fee_atoms(family: str, operation: dict[str, Any] | None = None, 
     raise ValueError(f"unknown fee family `{family}`")
 
 
-def _is_serde_default(value: Any) -> bool:
-    """null, "", 0 or false: what the node's types fill in for an absent field
-    (`#[serde(default)]`) and omit when serializing, so present-with-default
-    and absent sign the same bytes."""
+# How each field of every quoted operation (and nested struct) behaves when
+# absent, generated from the Rust types by scripts/generate_operation_schemas.py.
+OPERATION_SCHEMAS: dict[str, Any] = json.loads(
+    (Path(__file__).with_name("operation_schemas.json")).read_text(encoding="utf-8")
+)
+_ABSENT_EQUALS = {
+    "option": lambda value: value is None,
+    "bool": lambda value: value is False,
+    "int": lambda value: type(value) is int and value == 0,
+    "str": lambda value: type(value) is str and value == "",
+}
 
-    return value is None or value is False or value == "" or (type(value) is int and value == 0)
+
+def _field_rule(spec: Any) -> tuple[str, str | None]:
+    return (spec[0], spec[1]) if isinstance(spec, list) else (spec or "required", None)
 
 
-def _strict_difference(requested: Any, quoted: Any, path: str) -> str | None:
+def _strict_difference(requested: Any, quoted: Any, path: str, struct: str | None = None) -> str | None:
     """The first path where `quoted` differs from `requested` in value or type,
-    or None. A key on one side only is a difference unless its value is the
-    serde default (`_is_serde_default`)."""
+    or None. A key on one side only is a difference unless the Rust type of
+    `struct` gives absence that value: `null` for an `Option`, `false` /
+    `0` / `""` of the exact type for a defaulted scalar (`OPERATION_SCHEMAS`). Without a schema, every key must match."""
 
     if type(requested) is not type(quoted):
         return path
     if isinstance(requested, dict):
+        fields = OPERATION_SCHEMAS["structs"].get(struct, {}) if struct else {}
         for key in sorted(set(quoted) ^ set(requested)):
             value = quoted[key] if key in quoted else requested[key]
-            if not _is_serde_default(value):
+            rule, _ = _field_rule(fields.get(key))
+            if rule not in _ABSENT_EQUALS or not _ABSENT_EQUALS[rule](value):
                 return f"{path}.{key}"
-        for key in set(requested) & set(quoted):
-            found = _strict_difference(requested[key], quoted[key], f"{path}.{key}")
+        for key in sorted(set(requested) & set(quoted)):
+            _, nested = _field_rule(fields.get(key))
+            found = _strict_difference(requested[key], quoted[key], f"{path}.{key}", nested)
             if found is not None:
                 return found
         return None
@@ -554,11 +567,22 @@ def _strict_difference(requested: Any, quoted: Any, path: str) -> str | None:
         if len(requested) != len(quoted):
             return path
         for index, (left, right) in enumerate(zip(requested, quoted)):
-            found = _strict_difference(left, right, f"{path}[{index}]")
+            found = _strict_difference(left, right, f"{path}[{index}]", struct)
             if found is not None:
                 return found
         return None
     return None if requested == quoted else path
+
+
+def _operation_difference(requested: dict[str, Any], quoted: Any) -> str | None:
+    """`_strict_difference` for a whole tagged operation: the tag must match and
+    selects the operation's schema; an unknown operation is compared strictly."""
+
+    if not isinstance(quoted, dict) or quoted.get("operation") != requested.get("operation"):
+        return "operation.operation"
+    return _strict_difference(
+        requested, quoted, "operation", OPERATION_SCHEMAS["operations"].get(requested.get("operation"))
+    )
 
 
 def check_signing_quote(
@@ -608,7 +632,7 @@ def check_signing_quote(
             raise QuoteRefusedError(
                 QUOTE_MISMATCH, f"the quote's source `{quote.get('source')}` is not the wallet's address `{wallet.address}`"
             )
-        difference = _strict_difference(operation, quote.get("operation"), "operation")
+        difference = _operation_difference(operation, quote.get("operation"))
         if difference is not None:
             raise QuoteRefusedError(QUOTE_MISMATCH, f"the quote's {difference} is not the requested one")
     else:
