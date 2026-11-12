@@ -525,28 +525,43 @@ def default_max_fee_atoms(family: str, operation: dict[str, Any] | None = None, 
     raise ValueError(f"unknown fee family `{family}`")
 
 
-def _is_serde_default(value: Any) -> bool:
-    """null, "", 0 or false: what the node's types fill in for an absent field
-    (`#[serde(default)]`) and omit when serializing, so present-with-default
-    and absent sign the same bytes."""
+# How each field of every quoted operation (and nested struct) behaves when
+# absent, generated from the Rust types by scripts/generate_operation_schemas.py.
+OPERATION_SCHEMAS: dict[str, Any] = json.loads(
+    (Path(__file__).with_name("operation_schemas.json")).read_text(encoding="utf-8")
+)
+_ABSENT_EQUALS = {
+    "option": lambda value: value is None,
+    "vec": lambda value: type(value) is list and not value,
+    "bool": lambda value: value is False,
+    "int": lambda value: type(value) is int and value == 0,
+    "str": lambda value: type(value) is str and value == "",
+}
 
-    return value is None or value is False or value == "" or (type(value) is int and value == 0)
+
+def _field_rule(spec: Any) -> tuple[str, str | None]:
+    return (spec[0], spec[1]) if isinstance(spec, list) else (spec or "required", None)
 
 
-def _strict_difference(requested: Any, quoted: Any, path: str) -> str | None:
+def _strict_difference(requested: Any, quoted: Any, path: str, struct: str | None = None) -> str | None:
     """The first path where `quoted` differs from `requested` in value or type,
-    or None. A key on one side only is a difference unless its value is the
-    serde default (`_is_serde_default`)."""
+    or None. A key on one side only is a difference unless the Rust type of
+    `struct` gives absence that value: `null` for an `Option`, `[]` for a
+    defaulted `Vec`, `false` / `0` / `""` of the exact type for a defaulted
+    scalar (`OPERATION_SCHEMAS`). Without a schema, every key must match."""
 
     if type(requested) is not type(quoted):
         return path
     if isinstance(requested, dict):
+        fields = OPERATION_SCHEMAS["structs"].get(struct, {}) if struct else {}
         for key in sorted(set(quoted) ^ set(requested)):
             value = quoted[key] if key in quoted else requested[key]
-            if not _is_serde_default(value):
+            rule, _ = _field_rule(fields.get(key))
+            if rule not in _ABSENT_EQUALS or not _ABSENT_EQUALS[rule](value):
                 return f"{path}.{key}"
-        for key in set(requested) & set(quoted):
-            found = _strict_difference(requested[key], quoted[key], f"{path}.{key}")
+        for key in sorted(set(requested) & set(quoted)):
+            _, nested = _field_rule(fields.get(key))
+            found = _strict_difference(requested[key], quoted[key], f"{path}.{key}", nested)
             if found is not None:
                 return found
         return None
@@ -554,11 +569,22 @@ def _strict_difference(requested: Any, quoted: Any, path: str) -> str | None:
         if len(requested) != len(quoted):
             return path
         for index, (left, right) in enumerate(zip(requested, quoted)):
-            found = _strict_difference(left, right, f"{path}[{index}]")
+            found = _strict_difference(left, right, f"{path}[{index}]", struct)
             if found is not None:
                 return found
         return None
     return None if requested == quoted else path
+
+
+def _operation_difference(requested: dict[str, Any], quoted: Any) -> str | None:
+    """`_strict_difference` for a whole tagged operation: the tag must match and
+    selects the operation's schema; an unknown operation is compared strictly."""
+
+    if not isinstance(quoted, dict) or quoted.get("operation") != requested.get("operation"):
+        return "operation.operation"
+    return _strict_difference(
+        requested, quoted, "operation", OPERATION_SCHEMAS["operations"].get(requested.get("operation"))
+    )
 
 
 def check_signing_quote(
@@ -577,8 +603,11 @@ def check_signing_quote(
     (or `from`), the requested operation field by field (or the transfer's
     `to` and `amount`), the requested sequence, the wallet's chain id and
     genesis hash (when the wallet knows it), that sequence and minimum fee are
-    non-negative integers within u64, and the fee against `max_fee_atoms`."""
+    non-negative integers within u64, and the fee against `max_fee_atoms`,
+    which must itself be a non-negative integer within u64 (ValueError)."""
 
+    if not _is_u64(max_fee_atoms):
+        raise ValueError("max_fee_atoms must be a non-negative integer within u64")
     quote = quote_response.get("result") if isinstance(quote_response, dict) else None
     if not isinstance(quote, dict):
         raise QuoteRefusedError(QUOTE_INVALID, "the quote response has no result object")
@@ -605,7 +634,7 @@ def check_signing_quote(
             raise QuoteRefusedError(
                 QUOTE_MISMATCH, f"the quote's source `{quote.get('source')}` is not the wallet's address `{wallet.address}`"
             )
-        difference = _strict_difference(operation, quote.get("operation"), "operation")
+        difference = _operation_difference(operation, quote.get("operation"))
         if difference is not None:
             raise QuoteRefusedError(QUOTE_MISMATCH, f"the quote's {difference} is not the requested one")
     else:
@@ -994,9 +1023,6 @@ def wrap_fastpay(
     started = time.monotonic()
     capabilities = client.server_capabilities()
     account_result = client.account(wallet.address)
-    before_snapshot = client.owned_objects_all(
-        wallet.public_key_hex, asset=asset, page_limit=object_limit
-    )
     timings["deposit_preflight_ms"] = _elapsed_ms(started)
     if not (
         capabilities.get("fastpay_bridge_enabled") is True
@@ -1065,6 +1091,14 @@ def wrap_fastpay(
     )
     transaction = _read_json(signed_file)
     timings["owner_sign_ms"] = _elapsed_ms(started)
+    operation = transaction.get("operation") if isinstance(transaction, dict) else None
+    signed = operation.get("signed") if isinstance(operation, dict) else None
+    signed_deposit = signed.get("deposit") if isinstance(signed, dict) else None
+    if not isinstance(operation, dict) or operation.get("kind") != "owned_deposit" or signed_deposit != deposit:
+        raise WalletCommandError("the signed FastPay deposit is not the requested deposit")
+    # The node names the new object from these signed bytes; another object of
+    # the same value arriving meanwhile cannot be taken for it.
+    object_id = owned_deposit_object_id(signed_deposit)
     started = time.monotonic()
     submit_result = client.mempool_submit_fastlane_primary_finality(transaction)
     timings["submit_ms"] = _elapsed_ms(started)
@@ -1089,31 +1123,18 @@ def wrap_fastpay(
             f"signed FastPay deposit rejected with receipt code {receipt.get('code', 'unknown')}"
         )
 
-    started = time.monotonic()
-    after_snapshot = client.owned_objects_all(
-        wallet.public_key_hex, asset=asset, page_limit=object_limit
-    )
-    timings["snapshot_ms"] = _elapsed_ms(started)
-    before_objects = before_snapshot.get("objects", []) if isinstance(before_snapshot, dict) else []
+    after_snapshot = None
+    if refresh_snapshot:
+        started = time.monotonic()
+        after_snapshot = client.owned_objects_all(wallet.public_key_hex, asset=asset, page_limit=object_limit)
+        timings["snapshot_ms"] = _elapsed_ms(started)
     after_objects = after_snapshot.get("objects", []) if isinstance(after_snapshot, dict) else []
-    before_ids = {
-        item.get("id") for item in before_objects if isinstance(item, dict) and item.get("id")
-    }
-    created = [
-        item
-        for item in after_objects
-        if isinstance(item, dict)
-        and item.get("id") not in before_ids
-        and item.get("owner_pubkey_hex") == wallet.public_key_hex
-        and item.get("asset") == asset
-        and item.get("value") == amount
-    ]
-    if len(created) != 1 or not isinstance(created[0].get("id"), str):
-        raise WalletCommandError("signed FastPay deposit did not create one exact owned object")
-    object_id = str(created[0]["id"])
     result = {
         "tx_id": tx_id,
         "object_id": object_id,
+        # False when the object was already spent (or the read was skipped):
+        # the deposit was still accepted; do not repeat it.
+        "object_in_snapshot": any(isinstance(item, dict) and item.get("id") == object_id for item in after_objects),
         "receipt": receipt,
         "submit": submit_result,
     }
@@ -1122,9 +1143,66 @@ def wrap_fastpay(
         owner_public_key_hex=wallet.public_key_hex,
         result=result,
         object_id=object_id,
-        objects_snapshot=after_snapshot if refresh_snapshot else None,
+        objects_snapshot=after_snapshot,
         timings=timings,
     )
+
+
+OWNED_DEPOSIT_OBJECT_DOMAIN = "postfiat.owned-deposit-object.v1"
+
+
+def _deposit_bytes(value: Any, field: str, length: int | None = None) -> bytes:
+    if isinstance(value, str):
+        data = bytes.fromhex(value)
+    elif isinstance(value, list) and all(type(item) is int and 0 <= item < 256 for item in value):
+        data = bytes(value)
+    else:
+        raise WalletCommandError(f"owned deposit {field} is not a byte array")
+    if length is not None and len(data) != length:
+        raise WalletCommandError(f"owned deposit {field} is not {length} bytes")
+    return data
+
+
+def owned_deposit_object_id(deposit: dict[str, Any]) -> str:
+    """The ID of the FastPay object a signed deposit creates, derived the way
+    the node does (`owned_deposit_object_id` in
+    crates/execution/src/owned_transfer.rs): the first 32 bytes of
+    SHA3-384(`postfiat.owned-deposit-object.v1` || 0 || signing bytes)."""
+
+    def blob(data: bytes) -> bytes:
+        return len(data).to_bytes(4, "big") + data
+
+    def u64(value: Any, field: str) -> bytes:
+        if not _is_u64(value):
+            raise WalletCommandError(f"owned deposit {field} is not a u64")
+        return value.to_bytes(8, "big")
+
+    try:
+        domain = deposit["domain"]
+        version = domain["protocol_version"]
+        if type(version) is not int or not 0 <= version < 2**32:
+            raise WalletCommandError("owned deposit protocol_version is not a u32")
+        signing = b"".join(
+            [
+                b"PFOWNEDDEPOSIT",
+                blob(str(domain["chain_id"]).encode("utf-8")),
+                _deposit_bytes(domain["genesis_hash"], "genesis_hash", 48),
+                version.to_bytes(4, "big"),
+                blob(str(deposit["source_address"]).encode("utf-8")),
+                blob(_deposit_bytes(deposit["source_pubkey"], "source_pubkey")),
+                u64(deposit["sequence"], "sequence"),
+                u64(deposit["fee_pft"], "fee_pft"),
+                blob(_deposit_bytes(deposit["destination_owner_pubkey"], "destination_owner_pubkey")),
+                blob(str(deposit["asset"]).encode("utf-8")),
+                u64(deposit["amount_atoms"], "amount_atoms"),
+                u64(deposit["valid_through_height"], "valid_through_height"),
+                _deposit_bytes(deposit["nonce"], "nonce", 32),
+            ]
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise WalletCommandError(f"owned deposit is malformed: {error}") from error
+    digest = hashlib.sha3_384(OWNED_DEPOSIT_OBJECT_DOMAIN.encode("utf-8") + b"\0" + signing).digest()
+    return digest[:32].hex()
 
 
 def unwrap_fastpay(

@@ -22,8 +22,8 @@ from .client import PostFiatWebSocketRpcClient
 from .wallet import (
     TransparentWallet,
     check_signing_quote,
-    default_max_fee_atoms,
     _read_json,
+    _resolve_max_fee_atoms,
     _run,
     _sdk_bin,
     _validators_list,
@@ -294,7 +294,10 @@ def run_native_or_payment(
     """Quote, sign and submit one transfer (or payment_v2 when `memo`); the
     quote must be for this transfer with a fee at most `max_fee_atoms`
     (default `default_max_fee_atoms("transfer", ...)`), or QuoteRefusedError
-    is raised before signing."""
+    is raised before signing. An explicit ceiling that is not a u64 integer
+    raises ValueError before the quote."""
+    if max_fee_atoms is not None:
+        _resolve_max_fee_atoms(max_fee_atoms, "transfer")
     work_dir.mkdir(parents=True, exist_ok=True)
     attempts: list[dict[str, Any]] = []
     for attempt in range(1, 3):
@@ -325,11 +328,7 @@ def run_native_or_payment(
                 wallet=wallet_a,
                 kind="payment_v2" if memo else "transparent_transfer",
                 sequence=None,
-                max_fee_atoms=(
-                    max_fee_atoms
-                    if max_fee_atoms is not None
-                    else default_max_fee_atoms("transfer", None, memo_type, memo_format, memo_data)
-                ),
+                max_fee_atoms=_resolve_max_fee_atoms(max_fee_atoms, "transfer", None, memo_type, memo_format, memo_data),
                 to_address=wallet_b.address,
                 amount=amount,
             )

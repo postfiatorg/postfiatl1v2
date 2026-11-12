@@ -1,0 +1,20 @@
+{
+  "description": "OwnedDepositV1 -> created FastPay object id (postfiat.owned-deposit-object.v1 over the deposit signing bytes); shared by the Rust and Python tests. Public keys are shortened: the derivation does not check their length.",
+  "deposit": {
+    "domain": {
+      "chain_id": "postfiat-local",
+      "genesis_hash": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+      "protocol_version": 1
+    },
+    "source_address": "pf1sourcevectoraddress",
+    "source_pubkey": [1, 2, 3, 4],
+    "sequence": 7,
+    "fee_pft": 2,
+    "destination_owner_pubkey": [1, 2, 3, 4],
+    "asset": "PFT",
+    "amount_atoms": 1000,
+    "valid_through_height": 1234,
+    "nonce": [165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165]
+  },
+  "object_id": "1d11c4e8fde5088cf9597fc92c6a17e71dad7978e1c6af2b7eea48dc20d4f061"
+}

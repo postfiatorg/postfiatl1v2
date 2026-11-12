@@ -1,0 +1,982 @@
+{
+ "operations": {
+  "account_set": "AccountSetOperation",
+  "asset_burn": "AssetBurnOperation",
+  "asset_clawback": "AssetClawbackOperation",
+  "asset_create": "AssetCreateOperation",
+  "escrow_cancel": "EscrowCancelOperation",
+  "escrow_create": "EscrowCreateOperation",
+  "escrow_finish": "EscrowFinishOperation",
+  "external_lane_export_v1": "ExternalLaneExportOperationV1",
+  "external_lane_release_v1": "ExternalLaneReleaseOperationV1",
+  "fx_fix_pause_v1": "FxFixPauseOperationV1",
+  "fx_fix_register_v1": "FxFixRegisterOperationV1",
+  "fx_fix_reservation_create_v1": "FxFixReservationCreateOperationV1",
+  "fx_fix_reservation_release_v1": "FxFixReservationReleaseOperationV1",
+  "issued_payment": "IssuedPaymentOperation",
+  "issued_payment_v2": "IssuedPaymentV2Operation",
+  "market_ops_finalize": "MarketOpsFinalizeOperation",
+  "market_ops_policy_register": "MarketOpsPolicyRegisterOperation",
+  "nav_asset_register": "NavAssetRegisterOperation",
+  "nav_attestor_register": "NavAttestorRegisterOperation",
+  "nav_epoch_finalize": "NavEpochFinalizeOperation",
+  "nav_halt": "NavHaltOperation",
+  "nav_mint_at_nav": "NavMintAtNavOperation",
+  "nav_profile_register": "NavProfileRegisterOperation",
+  "nav_redeem_at_nav": "NavRedeemAtNavOperation",
+  "nav_redeem_settle": "NavRedeemSettleOperation",
+  "nav_reserve_attest": "NavReserveAttestOperation",
+  "nav_reserve_challenge": "NavReserveChallengeOperation",
+  "nav_reserve_submit": "NavReserveSubmitOperation",
+  "nft_burn": "NftBurnOperation",
+  "nft_mint": "NftMintOperation",
+  "nft_transfer": "NftTransferOperation",
+  "offer_cancel": "OfferCancelOperation",
+  "offer_create": "OfferCreateOperation",
+  "pftl_uniswap_destination_consume": "PftlUniswapDestinationConsumeOperation",
+  "pftl_uniswap_export_debit": "PftlUniswapExportDebitOperation",
+  "pftl_uniswap_order_release": "PftlUniswapOrderReleaseOperation",
+  "pftl_uniswap_order_reserve": "PftlUniswapOrderReserveOperation",
+  "pftl_uniswap_primary_redeem": "PftlUniswapPrimaryRedeemOperation",
+  "pftl_uniswap_primary_subscribe": "PftlUniswapPrimarySubscribeOperation",
+  "pftl_uniswap_primary_subscribe_v2": "PftlUniswapPrimarySubscribeV2Operation",
+  "pftl_uniswap_redemption_fund": "PftlUniswapRedemptionFundOperation",
+  "pftl_uniswap_refund_source": "PftlUniswapRefundSourceOperation",
+  "pftl_uniswap_return_import": "PftlUniswapReturnImportOperation",
+  "pftl_uniswap_route_bridge_policy_update": "PftlUniswapRouteBridgePolicyUpdateOperation",
+  "pftl_uniswap_route_epoch_advance": "PftlUniswapRouteEpochAdvanceOperation",
+  "pftl_uniswap_route_init": "PftlUniswapRouteInitOperation",
+  "pftl_uniswap_route_init_v2": "PftlUniswapRouteInitV2Operation",
+  "pftl_uniswap_route_pause": "PftlUniswapRoutePauseOperation",
+  "trust_set": "TrustSetOperation",
+  "vault_bridge_bucket_impair": "VaultBridgeBucketImpairOperation",
+  "vault_bridge_burn_to_redeem": "VaultBridgeBurnToRedeemOperation",
+  "vault_bridge_deposit_attest": "VaultBridgeDepositAttestOperation",
+  "vault_bridge_deposit_challenge": "VaultBridgeDepositChallengeOperation",
+  "vault_bridge_deposit_claim": "VaultBridgeDepositClaimOperation",
+  "vault_bridge_deposit_finalize": "VaultBridgeDepositFinalizeOperation",
+  "vault_bridge_deposit_propose": "VaultBridgeDepositProposeOperation",
+  "vault_bridge_fast_ingress_lifecycle": "VaultBridgeFastIngressLifecycleOperation",
+  "vault_bridge_mint_from_receipts": "VaultBridgeMintFromReceiptsOperation",
+  "vault_bridge_nav_subscription_allocate": "VaultBridgeNavSubscriptionAllocateOperation",
+  "vault_bridge_receipt_count": "VaultBridgeReceiptCountOperation",
+  "vault_bridge_receipt_submit": "VaultBridgeReceiptSubmitOperation",
+  "vault_bridge_redeem_settle": "VaultBridgeRedeemSettleOperation",
+  "yolo_target_register_v1": "YoloTargetRegisterOperationV1",
+  "yolo_target_submit_v1": "YoloTargetSubmitOperationV1"
+ },
+ "structs": {
+  "AccountSetOperation": {
+   "account": "required",
+   "set_flags": "int",
+   "clear_flags": "int"
+  },
+  "AssetBurnOperation": {
+   "owner": "required",
+   "issuer": "required",
+   "asset_id": "required",
+   "amount": "required"
+  },
+  "AssetClawbackOperation": {
+   "owner": "required",
+   "issuer": "required",
+   "asset_id": "required",
+   "amount": "required"
+  },
+  "AssetCreateOperation": {
+   "issuer": "required",
+   "code": "required",
+   "version": "required",
+   "precision": "required",
+   "display_name": "str",
+   "max_supply": "option",
+   "requires_authorization": "bool",
+   "freeze_enabled": "bool",
+   "clawback_enabled": "bool"
+  },
+  "EscrowCancelOperation": {
+   "escrow_id": "required",
+   "owner": "required"
+  },
+  "EscrowCreateOperation": {
+   "owner": "required",
+   "recipient": "required",
+   "asset_id": "required",
+   "amount": "required",
+   "condition": "str",
+   "finish_after": "int",
+   "cancel_after": "int"
+  },
+  "EscrowFinishOperation": {
+   "escrow_id": "required",
+   "owner": "required",
+   "recipient": "required",
+   "fulfillment": "str"
+  },
+  "EthereumCheckpointCertificateV1": {
+   "checkpoint": [
+    "required",
+    "EthereumFinalizedCheckpointV1"
+   ],
+   "votes": [
+    "required",
+    "EthereumCheckpointVoteV1"
+   ]
+  },
+  "EthereumCheckpointVoteV1": {
+   "validator_id": "required",
+   "signature": "required"
+  },
+  "EthereumExternalEventProofV1": {
+   "checkpoint_certificate": [
+    "required",
+    "EthereumCheckpointCertificateV1"
+   ],
+   "receipt_proof": [
+    "required",
+    "EthereumReceiptProofV1"
+   ],
+   "log_index": "required"
+  },
+  "EthereumFinalizedCheckpointV1": {
+   "schema_version": "required",
+   "pftl_domain": [
+    "required",
+    "FastSwapChainDomainV1"
+   ],
+   "route_id": "required",
+   "route_config_digest": "required",
+   "ethereum_chain_id": "required",
+   "block_number": "required",
+   "block_hash": "required",
+   "receipts_root": "required",
+   "observed_head_number": "required",
+   "minimum_confirmations": "required",
+   "authority_epoch": "required",
+   "committee_root": "required",
+   "handoff_controller": "required",
+   "wrapped_navcoin_token": "required",
+   "handoff_controller_code_hash": "required",
+   "wrapped_navcoin_code_hash": "required"
+  },
+  "EthereumReceiptProofV1": {
+   "transaction_index": "required",
+   "receipt_rlp": "required",
+   "proof_nodes_rlp": "required"
+  },
+  "EthereumRouteVerificationPolicyV1": {
+   "authority_epoch": "required",
+   "committee_root": "required",
+   "minimum_confirmations": "required",
+   "handoff_controller_code_hash": "required",
+   "wrapped_navcoin_code_hash": "required"
+  },
+  "ExternalLaneExportOperationV1": {
+   "sender": "required",
+   "lane_id": "required",
+   "amount_atoms": "required",
+   "base_recipient": "required"
+  },
+  "ExternalLaneReleaseOperationV1": {
+   "submitter": "required",
+   "lane_id": "required",
+   "source_chain_id": "required",
+   "lock_contract_address": "required",
+   "lock_nonce": "required",
+   "amount_atoms": "required",
+   "recipient": "required",
+   "proof": [
+    "required",
+    "EthereumExternalEventProofV1"
+   ]
+  },
+  "FastSwapChainDomainV1": {
+   "chain_id": "required",
+   "genesis_hash": "required",
+   "protocol_version": "required"
+  },
+  "FxFixPacketV1": {
+   "version": "required",
+   "schema": "required",
+   "operator": "required",
+   "base_asset_id": "required",
+   "quote_asset_id": "required",
+   "epoch": "required",
+   "ratio_numerator": "required",
+   "ratio_denominator": "required",
+   "band_bps": "required",
+   "fee_bps": "required",
+   "valid_from_height": "required",
+   "expires_at_height": "required",
+   "minimum_base_atoms": "required",
+   "capacity_base_atoms": "required",
+   "capacity_quote_atoms": "required",
+   "max_fills": "required",
+   "source_label": "required",
+   "source_observation_commitment": "required",
+   "governance_policy_hash": "required",
+   "previous_fix_hash": "option",
+   "packet_hash": "required"
+  },
+  "FxFixPauseOperationV1": {
+   "operator": "required",
+   "fix_packet_hash": "required",
+   "paused": "required"
+  },
+  "FxFixRegisterOperationV1": {
+   "operator": "required",
+   "packet": [
+    "required",
+    "FxFixPacketV1"
+   ]
+  },
+  "FxFixReservationCreateOperationV1": {
+   "operator": "required",
+   "fix_packet_hash": "required",
+   "action_binding_hash": "required",
+   "base_atoms": "required",
+   "quote_atoms": "required",
+   "wallet_intent_hash": "required",
+   "reservation_nonce": "required",
+   "expires_at_height": "required"
+  },
+  "FxFixReservationReleaseOperationV1": {
+   "operator": "required",
+   "reservation_id": "required"
+  },
+  "IssuedPaymentOperation": {
+   "from": "required",
+   "to": "required",
+   "issuer": "required",
+   "asset_id": "required",
+   "amount": "required"
+  },
+  "IssuedPaymentV2Operation": {
+   "from": "required",
+   "to": "required",
+   "issuer": "required",
+   "asset_id": "required",
+   "amount": "required",
+   "memos": [
+    "vec",
+    "PaymentMemo"
+   ]
+  },
+  "MarketOpsAlignmentParams": {
+   "policy_min_usd_e8": "required",
+   "min_alignment_bps": "required",
+   "stress_repeat_factor_14d": "required",
+   "stress_repeat_factor_90d": "required",
+   "stale_epochs_allowed": "required",
+   "max_decay_per_epoch_bps": "required"
+  },
+  "MarketOpsEnvelope": {
+   "encoding_version": "required",
+   "chain_id": "required",
+   "adapter_address": "required",
+   "vault_address": "required",
+   "mint_controller_address": "required",
+   "asset_id": "required",
+   "epoch": "required",
+   "program_id": "required",
+   "policy_hash": "required",
+   "parameter_hash": "required",
+   "reserve_packet_hash": "required",
+   "supply_packet_hash": "required",
+   "evidence_root": "required",
+   "previous_market_state_hash": "required",
+   "venue_id": "required",
+   "pool_config_hash": "required",
+   "hook_code_hash": "required",
+   "nav_floor_usd_e8": "required",
+   "valid_global_supply_atoms": "required",
+   "verified_net_assets_usd_e8": "required",
+   "funded_alignment_reserve_usd_e8": "required",
+   "required_alignment_reserve_usd_e8": "required",
+   "max_reserve_deploy_usd_e8": "required",
+   "max_mint_atoms": "required",
+   "discount_trigger_bps": "required",
+   "premium_trigger_bps": "required",
+   "data_window_start": "required",
+   "data_window_end": "required",
+   "valid_after": "required",
+   "expires_at": "required",
+   "cooldown_seconds": "required",
+   "nonce": "required"
+  },
+  "MarketOpsFinalizeOperation": {
+   "issuer": "required",
+   "asset_id": "required",
+   "envelope_hash": "required",
+   "envelope": [
+    "required",
+    "MarketOpsEnvelope"
+   ],
+   "policy_inputs": [
+    "required",
+    "MarketOpsPolicyInputs"
+   ]
+  },
+  "MarketOpsMintLimits": {
+   "policy_max_mint_atoms": "required",
+   "venue_bid_depth_atoms": "required",
+   "cooldown_mint_atoms": "required"
+  },
+  "MarketOpsPolicyInputs": {
+   "unit_scale": "required",
+   "floor_factor_bps": "required",
+   "alignment_params": [
+    "required",
+    "MarketOpsAlignmentParams"
+   ],
+   "previous_required_alignment_reserve_usd_e8": "required",
+   "cost_to_restore_14d_usd_e8": "required",
+   "cost_to_restore_90d_usd_e8": "required",
+   "reserve_limits": [
+    "required",
+    "MarketOpsReserveDeployLimits"
+   ],
+   "mint_limits": [
+    "required",
+    "MarketOpsMintLimits"
+   ],
+   "discount_observations": [
+    "required",
+    "MarketOpsVenueObservation"
+   ],
+   "premium_observations": [
+    "required",
+    "MarketOpsVenueObservation"
+   ]
+  },
+  "MarketOpsPolicyRegisterOperation": {
+   "issuer": "required",
+   "asset_id": "required",
+   "policy": [
+    "required",
+    "MarketOpsPolicyRegistration"
+   ]
+  },
+  "MarketOpsPolicyRegistration": {
+   "program_id": "required",
+   "policy_hash": "required",
+   "parameter_hash": "required",
+   "venue_id": "required",
+   "pool_config_hash": "required",
+   "hook_code_hash": "required",
+   "activation_epoch": "int",
+   "deactivation_epoch": "int"
+  },
+  "MarketOpsReserveDeployLimits": {
+   "available_alignment_reserve_usd_e8": "required",
+   "venue_policy_cap_usd_e8": "required",
+   "depth_limited_cap_usd_e8": "required",
+   "cooldown_limited_cap_usd_e8": "required"
+  },
+  "MarketOpsVenueObservation": {
+   "dt_seconds": "required",
+   "price_usd_e8": "required",
+   "volume_usd_e8": "required"
+  },
+  "NavAssetRegisterOperation": {
+   "issuer": "required",
+   "asset_id": "required",
+   "reserve_operator": "required",
+   "proof_profile": "required",
+   "valuation_unit": "required",
+   "redemption_account": "required"
+  },
+  "NavAttestorRegisterOperation": {
+   "attestor": "required",
+   "domain": "required",
+   "bond": "int"
+  },
+  "NavEpochFinalizeOperation": {
+   "issuer": "required",
+   "asset_id": "required",
+   "epoch": "required",
+   "reserve_packet_hash": "required"
+  },
+  "NavHaltOperation": {
+   "issuer": "required",
+   "asset_id": "required",
+   "halted": "required",
+   "reason": "required"
+  },
+  "NavMintAtNavOperation": {
+   "issuer": "required",
+   "to": "required",
+   "asset_id": "required",
+   "amount": "required",
+   "epoch": "required",
+   "reserve_packet_hash": "required",
+   "settlement_asset_id": "str",
+   "settlement_bucket_id": "str",
+   "settlement_allocation_id": "str",
+   "settlement_amount_atoms": "int"
+  },
+  "NavProfileRegisterOperation": {
+   "registrant": "required",
+   "verifier_kind": "required",
+   "source_class": "str",
+   "max_snapshot_age_blocks": "int",
+   "challenge_window_blocks": "int",
+   "max_epoch_gap_blocks": "int",
+   "settle_deadline_blocks": "int",
+   "min_challenge_bond": "int",
+   "min_attestations": "int",
+   "tolerance_bp": "int",
+   "bridge_observer_min_confirmations": "int",
+   "valuation_policy_hash": "str",
+   "vault_bridge_route_policy_hash": "str",
+   "sp1_program_vkey": "str",
+   "sp1_proof_encoding": "str",
+   "max_proof_bytes": "int",
+   "max_public_values_bytes": "int",
+   "public_values_schema": "str",
+   "source_manifest_hash": "str",
+   "valuation_unit_id": "str",
+   "max_observation_span_blocks": "int",
+   "allow_controlled_sources": "bool"
+  },
+  "NavRedeemAtNavOperation": {
+   "owner": "required",
+   "issuer": "required",
+   "asset_id": "required",
+   "amount": "required",
+   "epoch": "required",
+   "reserve_packet_hash": "required"
+  },
+  "NavRedeemSettleOperation": {
+   "issuer": "required",
+   "asset_id": "required",
+   "redemption_id": "required",
+   "settlement_receipt_hash": "required",
+   "settlement_asset_id": "str",
+   "settlement_bucket_id": "str",
+   "settlement_allocation_id": "str",
+   "settlement_amount_atoms": "int"
+  },
+  "NavReserveAttestOperation": {
+   "attestor": "required",
+   "asset_id": "required",
+   "epoch": "required",
+   "reserve_packet_hash": "required",
+   "pass": "required",
+   "observation_root": "required"
+  },
+  "NavReserveChallengeOperation": {
+   "challenger": "required",
+   "asset_id": "required",
+   "epoch": "required",
+   "reserve_packet_hash": "required",
+   "challenge_hash": "required",
+   "bond": "int"
+  },
+  "NavReserveSubmitOperation": {
+   "issuer": "required",
+   "submitter": "required",
+   "asset_id": "required",
+   "epoch": "required",
+   "nav_per_unit": "required",
+   "circulating_supply": "required",
+   "verified_net_assets": "required",
+   "proof_profile": "required",
+   "source_root": "required",
+   "attestor_root": "required",
+   "reserve_packet_hash": "required",
+   "reserve_accounts": "vec",
+   "sp1_proof_bytes": "vec",
+   "sp1_public_values": "vec"
+  },
+  "NftBurnOperation": {
+   "nft_id": "required",
+   "owner": "required"
+  },
+  "NftMintOperation": {
+   "issuer": "required",
+   "collection_id": "required",
+   "serial": "required",
+   "owner": "required",
+   "metadata_hash": "required",
+   "metadata_uri": "str",
+   "flags": "int",
+   "collection_flags": "int",
+   "issuer_transfer_fee": "int"
+  },
+  "NftTransferOperation": {
+   "nft_id": "required",
+   "from": "required",
+   "to": "required",
+   "issuer": "str",
+   "issuer_transfer_fee": "int"
+  },
+  "OfferCancelOperation": {
+   "offer_id": "required",
+   "owner": "required"
+  },
+  "OfferCreateOperation": {
+   "owner": "required",
+   "taker_gets_asset_id": "required",
+   "taker_gets_amount": "required",
+   "taker_pays_asset_id": "required",
+   "taker_pays_amount": "required",
+   "expiration_height": "int"
+  },
+  "PaymentMemo": {
+   "memo_type": "str",
+   "memo_format": "str",
+   "memo_data": "str"
+  },
+  "PftlUniswapDestinationConsumeOperation": {
+   "operator": "required",
+   "route_id": "required",
+   "packet_hash": "required",
+   "ethereum_consume_tx_hash": "required",
+   "consumed_height": "required",
+   "finalized_height": "required",
+   "external_event_proof": [
+    "option",
+    "EthereumExternalEventProofV1"
+   ]
+  },
+  "PftlUniswapExportDebitOperation": {
+   "owner": "required",
+   "route_id": "required",
+   "packet_hash": "required",
+   "export_nonce": "required",
+   "ethereum_recipient": "required",
+   "amount_atoms": "required",
+   "reservation_id": "option",
+   "settlement_value_atoms": "option",
+   "destination_deadline_seconds": "required",
+   "refund_delay_blocks": "required",
+   "ethereum_packet_digest": "option",
+   "ethereum_packet_schema_version": "option"
+  },
+  "PftlUniswapOrderReleaseOperation": {
+   "releaser": "required",
+   "route_id": "required",
+   "reservation_id": "required"
+  },
+  "PftlUniswapOrderReserveOperation": {
+   "settlement_source_asset_id": "option",
+   "subscriber": "required",
+   "route_id": "required",
+   "reservation_id": "required",
+   "ethereum_recipient": "required",
+   "route_epoch": "required",
+   "policy_epoch": "required",
+   "policy_hash": "required",
+   "mint_amount_atoms": "required",
+   "max_settlement_value_atoms": "required",
+   "expires_at_height": "required"
+  },
+  "PftlUniswapPrimaryMarketPolicyV2": {
+   "policy_hash": "required",
+   "policy_epoch": "required",
+   "issue_multiplier_bps": "required",
+   "redeem_multiplier_bps": "required",
+   "issue_capacity_atoms": "required",
+   "redeem_capacity_atoms": "required",
+   "max_order_atoms": "required",
+   "min_order_atoms": "required",
+   "valid_from_height": "required",
+   "expires_at_height": "required",
+   "max_nav_age_blocks": "required",
+   "pricing_nav_epoch": "required",
+   "pricing_reserve_packet_hash": "required"
+  },
+  "PftlUniswapPrimaryRedeemOperation": {
+   "settlement_source_asset_id": "option",
+   "owner": "required",
+   "settlement_recipient": "required",
+   "route_id": "required",
+   "redemption_nonce": "required",
+   "nav_amount_atoms": "required",
+   "min_settlement_value_atoms": "required",
+   "route_epoch": "required",
+   "policy_epoch": "required",
+   "policy_hash": "required",
+   "pricing_nav_epoch": "required",
+   "pricing_reserve_packet_hash": "required",
+   "expires_at_height": "required"
+  },
+  "PftlUniswapPrimarySubscribeOperation": {
+   "subscriber": "required",
+   "route_id": "required",
+   "settlement_asset_id": "required",
+   "subscription_nonce": "required",
+   "settlement_value_atoms": "required",
+   "nav_price_settlement_atoms_per_nav_atom": "required",
+   "pricing_nav_epoch": "required",
+   "pricing_reserve_packet_hash": "required"
+  },
+  "PftlUniswapPrimarySubscribeV2Operation": {
+   "subscriber": "required",
+   "route_id": "required",
+   "reservation_id": "required",
+   "subscription_nonce": "required",
+   "settlement_asset_id": "required",
+   "settlement_value_atoms": "required",
+   "pricing_nav_epoch": "required",
+   "pricing_reserve_packet_hash": "required"
+  },
+  "PftlUniswapRedemptionFundOperation": {
+   "funder": "required",
+   "route_id": "required",
+   "settlement_asset_id": "required",
+   "funding_nonce": "required",
+   "amount_atoms": "required"
+  },
+  "PftlUniswapRefundSourceOperation": {
+   "operator": "required",
+   "route_id": "required",
+   "packet_hash": "required",
+   "non_consumption_proof_hash": "required",
+   "external_event_proof": [
+    "option",
+    "EthereumExternalEventProofV1"
+   ]
+  },
+  "PftlUniswapReturnImportOperation": {
+   "operator": "required",
+   "route_id": "required",
+   "burn_event_hash": "required",
+   "ethereum_chain_id": "required",
+   "bridge_controller": "required",
+   "wrapped_navcoin_token": "required",
+   "native_nav_asset_id": "required",
+   "ethereum_sender": "required",
+   "pftl_recipient": "required",
+   "amount_atoms": "required",
+   "return_nonce": "required",
+   "burn_height": "required",
+   "finalized_height": "required",
+   "external_event_proof": [
+    "option",
+    "EthereumExternalEventProofV1"
+   ]
+  },
+  "PftlUniswapRouteBridgePolicyUpdateOperation": {
+   "issuer": "required",
+   "route_id": "required",
+   "authority_epoch": "required",
+   "committee_root": "required",
+   "minimum_confirmations": "required",
+   "handoff_controller_code_hash": "required",
+   "wrapped_navcoin_code_hash": "required"
+  },
+  "PftlUniswapRouteEpochAdvanceOperation": {
+   "settlement_source_asset_ids": "option",
+   "operator": "required",
+   "route_id": "required",
+   "prior_route_epoch": "required",
+   "next_route_epoch": "required",
+   "next_route_config_digest": "required",
+   "live_value_enabled": "required",
+   "next_primary_market_policy": [
+    "required",
+    "PftlUniswapPrimaryMarketPolicyV2"
+   ]
+  },
+  "PftlUniswapRouteInitOperation": {
+   "operator": "required",
+   "route_id": "required",
+   "route_config_digest": "required",
+   "route_trust_class": "required",
+   "native_nav_asset_id": "required",
+   "settlement_asset_id": "required",
+   "handoff_controller": "required",
+   "settlement_adapter": "required",
+   "wrapped_navcoin_token": "required",
+   "ethereum_chain_id": "required",
+   "route_supply_cap_atoms": "required",
+   "packet_notional_cap_atoms": "required",
+   "latest_finalized_nav_epoch": "required",
+   "return_finality_blocks": "required",
+   "live_value_enabled": "bool",
+   "ethereum_verification_policy": [
+    "option",
+    "EthereumRouteVerificationPolicyV1"
+   ]
+  },
+  "PftlUniswapRouteInitV2Operation": {
+   "operator": "required",
+   "route_id": "required",
+   "route_config_digest": "required",
+   "native_nav_asset_id": "required",
+   "settlement_asset_id": "required",
+   "opening_inventory_atoms": "int",
+   "opening_inventory_holder": "str",
+   "handoff_controller": "required",
+   "settlement_adapter": "required",
+   "wrapped_navcoin_token": "required",
+   "ethereum_chain_id": "required",
+   "route_supply_cap_atoms": "required",
+   "packet_notional_cap_atoms": "required",
+   "latest_finalized_nav_epoch": "required",
+   "return_finality_blocks": "required",
+   "route_epoch": "required",
+   "outbound_verification_class": "required",
+   "return_verification_class": "required",
+   "live_value_enabled": "required",
+   "ethereum_verification_policy": [
+    "required",
+    "EthereumRouteVerificationPolicyV1"
+   ],
+   "primary_market_policy": [
+    "required",
+    "PftlUniswapPrimaryMarketPolicyV2"
+   ]
+  },
+  "PftlUniswapRoutePauseOperation": {
+   "operator": "required",
+   "route_id": "required",
+   "paused": "required"
+  },
+  "TrustSetOperation": {
+   "account": "required",
+   "issuer": "required",
+   "asset_id": "required",
+   "limit": "required",
+   "authorized": "bool",
+   "frozen": "bool",
+   "reserve_paid": "int"
+  },
+  "VaultBridgeBucketImpairOperation": {
+   "operator": "required",
+   "asset_id": "required",
+   "bucket_id": "required",
+   "updated_counted_value_atoms": "required",
+   "impairment_factor_bps": "required",
+   "reason_hash": "required",
+   "policy_hash": "required"
+  },
+  "VaultBridgeBurnToRedeemOperation": {
+   "owner": "required",
+   "issuer": "required",
+   "asset_id": "required",
+   "bucket_id": "required",
+   "amount_atoms": "required",
+   "epoch": "required",
+   "reserve_packet_hash": "required",
+   "destination_ref": "required"
+  },
+  "VaultBridgeDepositAttestOperation": {
+   "attestor": "required",
+   "asset_id": "required",
+   "evidence_root": "required",
+   "pass": "required",
+   "observation_root": "required",
+   "observation": [
+    "option",
+    "VaultBridgeDepositObservation"
+   ]
+  },
+  "VaultBridgeDepositChallengeOperation": {
+   "challenger": "required",
+   "asset_id": "required",
+   "evidence_root": "required",
+   "challenge_hash": "required",
+   "bond": "required"
+  },
+  "VaultBridgeDepositClaimOperation": {
+   "claimer": "required",
+   "asset_id": "required",
+   "evidence_root": "required",
+   "policy_hash": "required",
+   "route_epoch": "int",
+   "recipient": "required",
+   "amount_atoms": "required"
+  },
+  "VaultBridgeDepositEvidence": {
+   "source_chain_id": "required",
+   "vault_address": "required",
+   "token_address": "required",
+   "depositor": "required",
+   "pftl_recipient": "required",
+   "pftl_recipient_hash": "required",
+   "amount_atoms": "required",
+   "nonce": "required",
+   "route_binding": "str",
+   "deposit_id": "required",
+   "block_hash": "required",
+   "tx_hash": "required",
+   "log_index": "required"
+  },
+  "VaultBridgeDepositFinalizeOperation": {
+   "finalizer": "required",
+   "asset_id": "required",
+   "evidence_root": "required"
+  },
+  "VaultBridgeDepositObservation": {
+   "tx_exists": "required",
+   "receipt_status": "required",
+   "source_chain_id": "required",
+   "vault_address": "required",
+   "token_address": "required",
+   "depositor": "required",
+   "amount_atoms": "required",
+   "deposit_id": "required",
+   "block_hash": "required",
+   "tx_hash": "required",
+   "log_index": "required",
+   "confirmation_depth": "int"
+  },
+  "VaultBridgeDepositProposeOperation": {
+   "proposer": "required",
+   "asset_id": "required",
+   "evidence_root": "required",
+   "evidence": [
+    "required",
+    "VaultBridgeDepositEvidence"
+   ],
+   "policy_hash": "required",
+   "source_proof_kind": "str",
+   "source_proof_hash": "str",
+   "source_public_values_hash": "str",
+   "source_proof_bytes": "vec",
+   "source_public_values": "vec",
+   "expires_at_height": "required"
+  },
+  "VaultBridgeFastIngressLifecycleOperation": {
+   "operator": "required",
+   "asset_id": "required",
+   "route_profile_hash": "required",
+   "source_assertion_id": "required",
+   "source_proof_kind": "required",
+   "source_proof_hash": "required",
+   "source_public_values_hash": "required",
+   "source_proof_bytes": "required",
+   "source_public_values": "required"
+  },
+  "VaultBridgeMintFromReceiptsOperation": {
+   "issuer": "required",
+   "to": "required",
+   "asset_id": "required",
+   "bucket_id": "required",
+   "amount_atoms": "required",
+   "receipt_ids": "required",
+   "epoch": "required",
+   "reserve_packet_hash": "required"
+  },
+  "VaultBridgeNavSubscriptionAllocateOperation": {
+   "operator": "required",
+   "nav_asset_id": "required",
+   "settlement_asset_id": "required",
+   "settlement_bucket_id": "required",
+   "settlement_receipt_id": "required",
+   "settlement_amount_atoms": "required",
+   "consume_supply_owner": "option",
+   "consume_supply_allocation_id": "option",
+   "nav_recipient": "option",
+   "subscription_id": "option"
+  },
+  "VaultBridgeReceiptCountOperation": {
+   "operator": "required",
+   "asset_id": "required",
+   "receipt_id": "required",
+   "haircut_bps": "required",
+   "counted_value_atoms": "required",
+   "evidence_root": "required",
+   "policy_hash": "required"
+  },
+  "VaultBridgeReceiptSubmitOperation": {
+   "operator": "required",
+   "asset_id": "required",
+   "source_domain": "required",
+   "source_asset": "required",
+   "claim_type": "required",
+   "amount_atoms": "required",
+   "source_tx_or_attestation": "required",
+   "finality_ref": "required",
+   "vault_id": "required",
+   "policy_hash": "required",
+   "expires_at_height": "required",
+   "bridge_deposit_evidence": [
+    "option",
+    "VaultBridgeDepositEvidence"
+   ]
+  },
+  "VaultBridgeRedeemSettleOperation": {
+   "issuer_or_redemption_account": "required",
+   "asset_id": "required",
+   "redemption_id": "required",
+   "settlement_receipt_hash": "required",
+   "settled_atoms": "required",
+   "withdrawal_observations": [
+    "vec",
+    "VaultBridgeWithdrawalExecutionAttestation"
+   ]
+  },
+  "VaultBridgeWithdrawalExecutionAttestation": {
+   "attestor": "required",
+   "observation_root": "required",
+   "signature_hex": "required",
+   "observation": [
+    "required",
+    "VaultBridgeWithdrawalExecutionObservation"
+   ]
+  },
+  "VaultBridgeWithdrawalExecutionObservation": {
+   "tx_exists": "required",
+   "receipt_status": "required",
+   "source_chain_id": "required",
+   "vault_address": "required",
+   "token_address": "required",
+   "recipient": "required",
+   "amount_atoms": "required",
+   "withdrawal_id": "required",
+   "withdrawal_packet_hash": "required",
+   "block_hash": "required",
+   "tx_hash": "required",
+   "log_index": "required",
+   "confirmation_depth": "int"
+  },
+  "YoloTargetPublicValuesV1": {
+   "schema": "required",
+   "program_sha256": "required",
+   "methodology_sha256": "required",
+   "parameter_manifest_sha256": "required",
+   "collection_manifest_sha256": "required",
+   "series_id_sha256": "required",
+   "underlier_id_sha256": "required",
+   "epoch_sha256": "required",
+   "collection_sha256": "required",
+   "aggregate_attestation_sha256": "required",
+   "prior_state_sha256": "required",
+   "selected_expiration_sha256": "required",
+   "target_sha256": "required",
+   "status": "required",
+   "snapshot_count": "required",
+   "selected_contract_count": "required"
+  },
+  "YoloTargetRegisterOperationV1": {
+   "registrant": "required",
+   "submitter": "required",
+   "program_sha256": "required",
+   "sp1_program_vkey": "required",
+   "methodology_sha256": "required",
+   "parameter_manifest_sha256": "required",
+   "collection_manifest_sha256": "required",
+   "series_id_sha256": "required",
+   "underlier_id_sha256": "required",
+   "epoch_sha256": "required",
+   "prior_state_sha256": "required",
+   "replay_id_sha256": "required",
+   "activation_height": "required"
+  },
+  "YoloTargetSubmitOperationV1": {
+   "submitter": "required",
+   "registration_id": "required",
+   "replay_id_sha256": "required",
+   "values": [
+    "required",
+    "YoloTargetPublicValuesV1"
+   ],
+   "sp1_proof_bytes": "required",
+   "sp1_public_values": "required"
+  }
+ }
+}

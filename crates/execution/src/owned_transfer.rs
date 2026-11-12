@@ -706,6 +706,21 @@ pub fn wrap_to_owned(
     Ok(obj)
 }
 
+/// The ID of the FastPay object a signed deposit creates: the first 32 bytes of
+/// `postfiat.owned-deposit-object.v1` over the deposit's signing bytes. Wallets
+/// derive it from what they signed; `tests/fixtures/owned_deposit_object_v1.json`
+/// pins it for the Python wallet.
+pub fn owned_deposit_object_id(
+    deposit: &postfiat_types::OwnedDepositV1,
+) -> Result<String, OwnedTransferError> {
+    let signing_bytes = deposit
+        .signing_bytes()
+        .map_err(|_| OwnedTransferError::InvalidDomain)?;
+    let object_hash =
+        postfiat_crypto_provider::hash_bytes("postfiat.owned-deposit-object.v1", &signing_bytes);
+    Ok(postfiat_crypto_provider::bytes_to_hex(&object_hash[..32]))
+}
+
 /// Apply a source-account-signed deposit through the consensus-ordered primary
 /// lane. The transition is constructed on a clone and published only after all
 /// authorization, sequence, expiry, balance, and collision checks succeed.
@@ -743,14 +758,7 @@ pub fn apply_owned_deposit(
     {
         return Err(OwnedTransferError::OwnerAuthFailed);
     }
-    let signing_bytes = deposit
-        .signing_bytes()
-        .map_err(|_| OwnedTransferError::InvalidDomain)?;
-    let object_hash = postfiat_crypto_provider::hash_bytes(
-        "postfiat.owned-deposit-object.v1",
-        &signing_bytes,
-    );
-    let object_id = postfiat_crypto_provider::bytes_to_hex(&object_hash[..32]);
+    let object_id = owned_deposit_object_id(deposit)?;
     if ledger
         .owned_objects
         .iter()
