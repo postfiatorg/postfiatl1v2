@@ -379,6 +379,12 @@ objects kept changing between pages (a busy account, or validators serving
 different views), with a Retry button; partial feed pages neither clear that
 error nor retry on their own.
 
+Feed and read races are fenced. A new partial view makes selection unavailable
+until a read that started after it completes; a read finishing after a newer
+complete view was published is discarded. Feed answers are ordered by the
+gateway's `observed_at_ms`, so an older complete answer neither replaces a
+newer one nor clears an error. A replaced screen coordinator publishes nothing.
+
 ## FastPay Standard Unwrap
 
 Default unwrap is amount-based and certified. The wallet no longer unwraps a

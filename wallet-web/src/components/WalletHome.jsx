@@ -75,6 +75,11 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     read: () => fetchOwnedObjectsSnapshot(rpc, publicKeyHex, { asset: 'PFT', limit: FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT }),
     publish: publishFastpay,
   }), [rpc, publicKeyHex, publishFastpay]);
+  // A replaced coordinator's outstanding read must not publish over its successor.
+  useEffect(() => {
+    fastpayInventory.attach();
+    return () => fastpayInventory.dispose();
+  }, [fastpayInventory]);
 
   const refreshFastpayRecoveries = useCallback(() => {
     if (!publicKeyHex || typeof window === 'undefined') {
@@ -172,7 +177,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     }
 
     if (liveSnapshot.owned) {
-      fastpayInventory.applyFeed(liveSnapshot.owned, liveSnapshot.owned_complete);
+      fastpayInventory.applyFeed(liveSnapshot.owned, liveSnapshot.owned_complete, liveSnapshot.observed_at_ms);
     } else if (liveSnapshot.owned_error && fastpayBalance === null) {
       setFastpayStatus('error');
       setFastpayError(`FastPay balance unavailable: ${humanRpcErrorMessage(liveSnapshot.owned_error)}`);
