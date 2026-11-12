@@ -28,7 +28,7 @@ REPO = Path(__file__).resolve().parents[1]
 ROUTE_ID = "ethereum-mainnet-usdc-v1"
 SOURCE_CHAIN_ID = 1
 PROOF_KIND = "sp1-ethereum-finality-v1"
-PROGRAM_VKEY = "0x000e93d5bd83ace0dcbabafcb793c4bcc9bae2c09b99e59c161a0a77393b2c2b"
+PROGRAM_VKEY = "0x00d8cbf06d5640adde0fef863b3c689c4ab3442b0dc91d28ac4cc5f9c9b2ccbb"
 MANIFEST_HASH = "44a402a3df72ee8da6f23737becef04fd0ce55e683706e929606a6aea1f05b25"
 # OPS supplies the governed release identity after choosing activation height.
 # Never reuse the prior guest's profile hash, epoch or source-series asset.
@@ -59,7 +59,7 @@ A100_ELF = os.environ["B23_INGRESS_ELF"]
 A100_HASHES = {
     A100_CAPTURE: os.environ["B23_INGRESS_CAPTURE_SHA256"],
     A100_PROVE: os.environ["B23_INGRESS_PROVE_SHA256"],
-    A100_ELF: "7c1aae2440b161bb8c70643499881a0c11355c83cfe1c8c41a35cb9f9f0bb06e",
+    A100_ELF: "b6a06cb90ee81477a33c9a5902458db5b379cc40b765988cebb0ec46d08766fe",
 }
 PFTL_NODE = os.environ["PFTL_NODE_BIN"]
 PFTL_NODE_HASH = os.environ["B23_PFTL_NODE_SHA256"]

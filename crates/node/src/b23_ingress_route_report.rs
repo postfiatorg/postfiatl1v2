@@ -124,7 +124,7 @@ mod tests {
         profile.verifier_policy_hash =
             "44a402a3df72ee8da6f23737becef04fd0ce55e683706e929606a6aea1f05b25".into();
         profile.verifier_program_vkey =
-            "0x000e93d5bd83ace0dcbabafcb793c4bcc9bae2c09b99e59c161a0a77393b2c2b".into();
+            "0x00d8cbf06d5640adde0fef863b3c689c4ab3442b0dc91d28ac4cc5f9c9b2ccbb".into();
         let profile_hash = profile.profile_hash().unwrap();
         let binding =
             postfiat_types::vault_bridge_route_binding(&profile_hash, profile.route_epoch).unwrap();
@@ -193,3 +193,7 @@ mod tests {
         println!("{}", String::from_utf8_lossy(&output.stdout));
     }
 }
+
+#[cfg(test)]
+#[path = "b23_ingress_legacy_tests.rs"]
+mod legacy_tests;
