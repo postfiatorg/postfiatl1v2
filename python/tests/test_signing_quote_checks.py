@@ -292,6 +292,53 @@ class FeeCeilingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "required for offer_create"):
             default_max_fee_atoms("offer", {"operation": "offer_create"})
 
+    INVALID_CEILINGS = (float("nan"), -1, 132.0, True, 2**64)
+
+    def test_latency_refuses_an_invalid_ceiling_before_the_quote(self) -> None:
+        for ceiling in self.INVALID_CEILINGS:
+            for memo in (False, True):
+                with self.subTest(ceiling=ceiling, memo=memo):
+                    client = mock.Mock()
+                    client.transfer_fee_quote_response.return_value = _transfer_quote(
+                        "payment_v2" if memo else "transparent_transfer", "pf-dest", 5, fee=2**64 - 1
+                    )
+                    signer = mock.Mock(side_effect=AssertionError("signer called"))
+                    with tempfile.TemporaryDirectory() as tmp, mock.patch.object(latency_module, "_run", signer):
+                        with self.assertRaisesRegex(ValueError, "max_fee_atoms"):
+                            latency_module.run_native_or_payment(
+                                client=client,
+                                wallet_a=_wallet(),
+                                wallet_b=_wallet("pf-dest"),
+                                amount=5,
+                                work_dir=Path(tmp),
+                                memo=memo,
+                                max_fee_atoms=ceiling,
+                            )
+                    client.transfer_fee_quote_response.assert_not_called()
+                    signer.assert_not_called()
+
+    def test_latency_explicit_ceiling_is_applied(self) -> None:
+        client = mock.Mock()
+        client.transfer_fee_quote_response.return_value = _transfer_quote("transparent_transfer", "pf-dest", 5, fee=50)
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(latency_module, "_run") as signer:
+            with self.assertRaises(QuoteRefusedError) as raised:
+                latency_module.run_native_or_payment(
+                    client=client, wallet_a=_wallet(), wallet_b=_wallet("pf-dest"), amount=5,
+                    work_dir=Path(tmp), memo=False, max_fee_atoms=49,
+                )
+        self.assertEqual(raised.exception.code, "quote_fee_above_ceiling")
+        signer.assert_not_called()
+
+    def test_check_signing_quote_refuses_an_invalid_ceiling(self) -> None:
+        quote = _transfer_quote("transparent_transfer", "pf-dest", 5, fee=2**64 - 1)
+        for ceiling in self.INVALID_CEILINGS:
+            with self.subTest(ceiling=ceiling):
+                with self.assertRaisesRegex(ValueError, "max_fee_atoms"):
+                    wallet_module.check_signing_quote(
+                        quote, wallet=_wallet(), kind="transparent_transfer", sequence=7,
+                        max_fee_atoms=ceiling, to_address="pf-dest", amount=5,
+                    )
+
     def test_offer_create_without_a_ceiling_is_refused_before_the_quote(self) -> None:
         client = mock.Mock()
         with self.assertRaisesRegex(ValueError, "required for offer_create"):
