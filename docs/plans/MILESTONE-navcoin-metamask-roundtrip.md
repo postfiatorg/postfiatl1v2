@@ -107,6 +107,23 @@ redemption beyond the posted reserve. No end-to-end mainnet withdrawal is claime
   contract currently requires a nonzero `multiplierPolicyCommitment` so the fee policy is bound
   into the proof, but the guest side that computes it is not yet written.
 
+- 2026-11-12 — **CORRECTION: R2-1 IS NOT CLOSED.** The entry below overstates what the
+  deployed change does, and the review that found this is in `/tmp/astra-review.md`
+  (Finding 1, critical). The pinned anchor authenticates the beacon *header* only:
+  `PfUsdcBeaconFinalityStateV1` (`crates/types/src/pfusdc_tier4_types.rs:251-333`) stores
+  `finalized_beacon_root` and `finalized_slot` and so blocks replay and non-monotonic
+  advancement, but it stores no authenticated sync committee. The guest
+  (`programs/pfusdc-eth-mainnet-ingress/src/lib.rs:313-316`) still clones the witness store,
+  and clearing `next_sync_committee` does not authenticate `current_sync_committee`. An
+  attacker keeps the honest pinned header so the prior root and slot match exactly, swaps in
+  512 of their own BLS keys, signs a later header and forges tries under an invented execution
+  state root. The circuit's starting committee remains attacker-selected.
+  **Do not pin the anchor.** With no anchor the ingress arm fails closed
+  (`pfusdc_beacon_finality_state_missing`), which is the only reason the vault is not exposed
+  to this. Pinning would activate the path. Fix: commit the starting sync committee into the
+  anchor and have the guest take it from there. See
+  `docs/plans/HANDOFF-navcoin-metamask-roundtrip.md` §1.
+
 - 2026-11-12 (early hours) — R2-1 fix DEPLOYED to all six validators.
   Release `r2-1-beacon-anchor-20261112`, binary sha256 `973734620ee6a15b...`,
   signed with the trusted publisher `pfc531e00ffefecb8fabe40c6f47c69148df31e49c`.
