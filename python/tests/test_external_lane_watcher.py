@@ -1947,6 +1947,25 @@ class ExportIdentityTests(unittest.TestCase):
                              ["backed", "paid"])
             self.assertEqual(len(json.loads(state_file.read_text())["exports"]["paid"]), 1)
 
+    def test_g2_an_export_made_between_the_two_reads_is_printed(self):
+        made = export_entry(0, height=501)
+        for paid in (True, False):
+            with self.subTest(paid=paid), tempfile.TemporaryDirectory() as directory:
+                state_file, _ = self.seeded(directory)
+                a = ExportPftl([], released=1_500_000, current_height=500)
+                later = ExportPftl([made], released=2_000_000, current_height=501)
+                logs = [released_log(made, block=950)] if paid else []
+                code, lines, stderr = run_exports(Failover(a, later), ExportBase(logs, locked=2_000_000,
+                                                                                 finalized=1_000),
+                                                  "--state-file", str(state_file))
+                self.assertEqual((code, stderr), (0, ""))
+                exported = [line for line in lines if line["kind"] == "export"]
+                self.assertEqual([(line["export_nonce"], line["status"]) for line in exported],
+                                 [(0, "paid" if paid else "unpaid")])
+                if not paid:
+                    self.assertEqual(exported[0]["age_blocks"], 0)
+                self.assertEqual(lines[-1]["exports"]["unpaid_exports"], 0 if paid else 1)
+
 
 FOREIGN_CHAIN = 84532
 

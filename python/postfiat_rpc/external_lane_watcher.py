@@ -1042,8 +1042,12 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
             record[digest] = entry
     by_nonce = {entry["export_nonce"]: entry for entry in record.values()}
     unpaid = 0
+    # Every export of the accepted export snapshot, which may be later than
+    # the release view's (`current_height`): an export made between the two
+    # reads is classified too, and its age counted at the export snapshot.
+    export_height = max(current_height, snapshot["current_height"])
     for packet in exports:
-        if packet["exported_at_height"] > current_height:
+        if packet["exported_at_height"] > export_height:
             continue
         entry = by_nonce.get(packet["export_nonce"])
         line = {"schema": LINE_SCHEMA, "kind": "export", "lane_id": lane_id,
@@ -1056,7 +1060,7 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
             lines.append(line)
             continue
         unpaid += 1
-        age = current_height - packet["exported_at_height"]
+        age = export_height - packet["exported_at_height"]
         line.update(status="unpaid", age_blocks=age)
         lines.append(line)
         if unpaid_warning_blocks is not None and age > unpaid_warning_blocks:
