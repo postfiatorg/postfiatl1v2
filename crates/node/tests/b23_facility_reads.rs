@@ -324,6 +324,19 @@ fn b23_read_reports_expose_nullable_management_and_do_not_write() {
             serde_json::to_value(&supply).unwrap()["spread_recipient"],
             expected
         );
+        let sequence = if legacy {
+            serde_json::Value::Null
+        } else {
+            serde_json::json!(0)
+        };
+        assert_eq!(
+            serde_json::to_value(&routes).unwrap()["routes"][0]["funding_sequence"],
+            sequence
+        );
+        assert_eq!(
+            serde_json::to_value(&supply).unwrap()["funding_sequence"],
+            sequence
+        );
         assert_eq!(directory_bytes(&fixture.dir), before);
         if !legacy {
             emit_response("ROUTES", &routes);
@@ -517,11 +530,36 @@ fn b23_status_rpc_dispatch_preserves_existing_envelopes_and_adds_recipient() {
             &value["result"]
         };
         assert_eq!(report["spread_recipient"], "current-management");
+        assert_eq!(report["funding_sequence"], 0);
         assert_eq!(value["events"][0]["event_type"], method);
         println!(
             "READ_RESPONSE_{label}={}",
             serde_json::to_string(&value).unwrap()
         );
     }
+    assert_eq!(directory_bytes(&fixture.dir), before);
+}
+
+#[test]
+fn b23_route_reads_report_last_successful_funding_sequence() {
+    let mut fixture = Fixture::new(&[true], false);
+    fixture.ledger.pftl_uniswap_routes[0]
+        .v2
+        .as_mut()
+        .unwrap()
+        .funding_sequence = Some(17);
+    fixture.store().write_ledger(&fixture.ledger).unwrap();
+    let before = directory_bytes(&fixture.dir);
+    let routes = navcoin_bridge_routes(NavcoinBridgeRoutesOptions {
+        data_dir: fixture.dir.clone(),
+    })
+    .unwrap();
+    let supply = navcoin_bridge_supply_status(NavcoinBridgeSupplyStatusOptions {
+        data_dir: fixture.dir.clone(),
+        route_id: fixture.ledger.pftl_uniswap_routes[0].route_id.clone(),
+    })
+    .unwrap();
+    assert_eq!(routes.routes[0].funding_sequence, Some(17));
+    assert_eq!(supply.funding_sequence, Some(17));
     assert_eq!(directory_bytes(&fixture.dir), before);
 }

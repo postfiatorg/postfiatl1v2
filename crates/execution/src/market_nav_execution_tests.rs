@@ -5939,6 +5939,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         ledger.account(&operator).expect("operator").sequence + 1,
         AssetTransactionOperation::PftlUniswapRedemptionFund(
             PftlUniswapRedemptionFundOperation {
+                funding_sequence: None,
                 funder: operator.clone(),
                 route_id: v2_route_id.clone(),
                 settlement_asset_id: settlement_asset_id.clone(),
@@ -6631,6 +6632,7 @@ fn pftl_uniswap_v2_state_binds_directional_trust_capacity_and_non_nav_spread() {
         return_imports: std::collections::BTreeMap::new(),
         paused: false,
         v2: Some(PftlUniswapRouteV2State {
+            funding_sequence: None,
             route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
             route_epoch: 1,
             outbound_verification_class:
@@ -6745,6 +6747,7 @@ fn ar11_issued_asset_supply_counts_non_nav_spread_custody() {
         return_imports: std::collections::BTreeMap::new(),
         paused: false,
         v2: Some(PftlUniswapRouteV2State {
+            funding_sequence: None,
             route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
             route_epoch: 1,
             outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),
@@ -7914,6 +7917,7 @@ fn ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed() {
         return_imports: std::collections::BTreeMap::new(),
         paused: false,
         v2: Some(PftlUniswapRouteV2State {
+            funding_sequence: None,
             route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
             route_epoch: 1,
             outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),

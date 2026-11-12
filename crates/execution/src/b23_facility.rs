@@ -44,11 +44,8 @@ fn b23_facility_transfer_offer_inventory(
     to: &str,
     amount: u64,
 ) -> Result<(), (&'static str, String)> {
-    for route in ledger
-        .pftl_uniswap_routes
-        .iter_mut()
-        .filter(|route| route.native_nav_asset_id == asset_id && b23_facility_enabled(route))
-    {
+    if let Some(index) = b23_facility_unique_route_index(ledger, asset_id)? {
+        let route = &mut ledger.pftl_uniswap_routes[index];
         // Offer custody stays attributed to its owner until filled. Cancel and
         // expiration only return that custody, so neither moves route inventory.
         pftl_uniswap_debit_native_route_balance(route, from, amount)?;
@@ -64,9 +61,8 @@ fn b23_facility_credit_minted_inventory(
     ledger: &mut LedgerState,
     operation: &postfiat_types::NavMintAtNavOperation,
 ) -> Result<(), (&'static str, String)> {
-    for route in ledger.pftl_uniswap_routes.iter_mut().filter(|route| {
-        route.native_nav_asset_id == operation.asset_id && b23_facility_enabled(route)
-    }) {
+    if let Some(index) = b23_facility_unique_route_index(ledger, &operation.asset_id)? {
+        let route = &mut ledger.pftl_uniswap_routes[index];
         route.authorized_valid_supply_atoms = route
             .authorized_valid_supply_atoms
             .checked_add(operation.amount)
@@ -89,6 +85,74 @@ fn b23_facility_credit_minted_inventory(
         route
             .validate()
             .map_err(|e| ("bad_pftl_uniswap_route", e))?;
+    }
+    Ok(())
+}
+
+fn b23_facility_unique_route_index(
+    ledger: &LedgerState,
+    asset_id: &str,
+) -> Result<Option<usize>, (&'static str, String)> {
+    let mut matching = ledger
+        .pftl_uniswap_routes
+        .iter()
+        .enumerate()
+        .filter(|(_, route)| route.native_nav_asset_id == asset_id && b23_facility_enabled(route));
+    let index = matching.next().map(|(index, _)| index);
+    if matching.next().is_some() {
+        return Err((
+            "multiple_pftl_uniswap_facility_routes",
+            "a native asset may have only one opted-in facility route".to_string(),
+        ));
+    }
+    Ok(index)
+}
+
+fn b23_facility_require_unique_route(
+    ledger: &LedgerState,
+    asset_id: &str,
+    route_id: &str,
+) -> Result<(), (&'static str, String)> {
+    if ledger.pftl_uniswap_routes.iter().any(|route| {
+        route.native_nav_asset_id == asset_id
+            && route.route_id != route_id
+            && b23_facility_enabled(route)
+    }) {
+        return Err((
+            "multiple_pftl_uniswap_facility_routes",
+            "a native asset may have only one opted-in facility route".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn b23_facility_require_aligned_inventory(
+    ledger: &LedgerState,
+    route: &PftlUniswapConsensusRouteState,
+) -> Result<(), (&'static str, String)> {
+    // Opt-in is deliberately strict: all native custody must first be on public
+    // trust lines. Cancel outstanding sell offers/escrows before activating.
+    let mut positions = std::collections::BTreeMap::new();
+    for line in ledger
+        .trustlines
+        .iter()
+        .filter(|line| line.asset_id == route.native_nav_asset_id && line.balance > 0)
+    {
+        if positions
+            .insert(line.account.clone(), line.balance)
+            .is_some()
+        {
+            return Err((
+                "pftl_uniswap_inventory_mismatch",
+                "duplicate holder trust lines".to_string(),
+            ));
+        }
+    }
+    if positions != route.native_spendable_balances_atoms
+        || issued_asset_supply(ledger, &route.native_nav_asset_id)?
+            != route.pftl_spendable_supply_atoms
+    {
+        return Err(("pftl_uniswap_inventory_mismatch", "opt-in requires exact public holder/route inventory equality and no untracked native custody".to_string()));
     }
     Ok(())
 }

@@ -119,3 +119,19 @@ fn b23_node_receipt_commitment_preserves_legacy_bytes_and_binds_both_credits() {
         assert_ne!(base, modified);
     }
 }
+
+#[test]
+fn b23_node_funding_sequence_is_committed_only_when_present() {
+    let mut route = legacy_route();
+    let mut before = Vec::new();
+    append_pftl_uniswap_route(&mut before, "route", &route);
+    assert_eq!(format!("{:x}",Sha384::digest(&before)),"760f18f32fb93d302ba6c5b01f8be5373a3642291c72641960846601bc8df52ef7dfcb76621ed59f8938d79ea49814b3");
+    route.v2.as_mut().unwrap().funding_sequence = Some(1);
+    let mut after = Vec::new();
+    append_pftl_uniswap_route(&mut after, "route", &route);
+    assert_ne!(before, after);
+    route.v2.as_mut().unwrap().funding_sequence = None;
+    let mut restored = Vec::new();
+    append_pftl_uniswap_route(&mut restored, "route", &route);
+    assert_eq!(before, restored);
+}

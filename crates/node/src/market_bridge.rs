@@ -1340,6 +1340,7 @@ pub fn navcoin_bridge_supply_status(
             Ok(NavcoinBridgeSupplyReadReport {
                 supply: pftl_uniswap_consensus_supply_status(&ledger, route)?,
                 spread_recipient: b23_route_spread_recipient(route),
+                funding_sequence: b23_route_funding_sequence(route),
             })
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
@@ -1349,6 +1350,7 @@ pub fn navcoin_bridge_supply_status(
                 .map(|supply| NavcoinBridgeSupplyReadReport {
                     supply,
                     spread_recipient: None,
+                    funding_sequence: None,
                 })
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
         }

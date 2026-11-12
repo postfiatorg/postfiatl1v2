@@ -4,6 +4,7 @@ pub struct NavcoinBridgeRouteReadRow {
     #[serde(flatten)]
     pub route: PftlUniswapRouteStatusRow,
     pub spread_recipient: Option<String>,
+    pub funding_sequence: Option<u64>,
 }
 impl std::ops::Deref for NavcoinBridgeRouteReadRow {
     type Target = PftlUniswapRouteStatusRow;
@@ -22,6 +23,7 @@ pub struct NavcoinBridgeSupplyReadReport {
     #[serde(flatten)]
     pub supply: PftlUniswapSupplyStatusReport,
     pub spread_recipient: Option<String>,
+    pub funding_sequence: Option<u64>,
 }
 impl std::ops::Deref for NavcoinBridgeSupplyReadReport {
     type Target = PftlUniswapSupplyStatusReport;
@@ -34,6 +36,13 @@ fn b23_route_spread_recipient(route: &PftlUniswapConsensusRouteState) -> Option<
         .v2
         .as_ref()
         .and_then(|v2| v2.primary_market_policy.spread_recipient.clone())
+}
+fn b23_route_funding_sequence(route: &PftlUniswapConsensusRouteState) -> Option<u64> {
+    route
+        .v2
+        .as_ref()
+        .filter(|v2| v2.primary_market_policy.spread_recipient.is_some())
+        .map(|v2| v2.funding_sequence.unwrap_or(0))
 }
 fn b23_routes_read_report(
     report: PftlUniswapRoutesStatusReport,
@@ -49,7 +58,11 @@ fn b23_routes_read_report(
                 let spread_recipient = ledger
                     .and_then(|ledger| ledger.pftl_uniswap_route(&route.route_id))
                     .and_then(b23_route_spread_recipient);
+                let funding_sequence = ledger
+                    .and_then(|ledger| ledger.pftl_uniswap_route(&route.route_id))
+                    .and_then(b23_route_funding_sequence);
                 NavcoinBridgeRouteReadRow {
+                    funding_sequence,
                     route,
                     spread_recipient,
                 }
