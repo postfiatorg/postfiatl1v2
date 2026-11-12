@@ -165,7 +165,9 @@ file must also be mounted into the container.
 The token has the browser relay's caps: the same routes, per-principal rate
 window, concurrency and body limits. It is refused when expired (401
 `native_session_expired`), minted for another origin or network (403), signed by
-another gateway's secret (401), or sent with a foreign `Origin` header (403).
+another gateway's secret (401), minted before the gateway last restarted (401
+`native_session_restarted`), or sent with a foreign `Origin` header (403).
+On either 401 code the wallet opens a new session.
 Any request that carries a token in its query string gets 400. Add the native
 origin to `ALLOWED_ORIGINS`, because authenticated writes still need an allowed
 `Origin` header. WebSocket calls carry the token as `proxy_auth_token`, with the
@@ -176,18 +178,23 @@ service user, not a symlink and not group- or world-writable:
 
 - `{"schema":"postfiat-native-session-allowlist-v1","install_public_keys_hex":["<3904 hex>"]}`
 - `{"schema":"postfiat-native-session-denylist-v1","install_ids_hex":["<64 hex>"]}`,
-  where an install id is the `install_id` the open response returns.
+  where an install id is the `install_id` the open response returns. Every
+  element must be a lowercase hex string of that length.
 
-The gateway checks each file's mtime at most once per second and re-reads a
-changed file, so revoking an install needs no restart. A denied install, or one
+The gateway reads and hashes each file at most once per second and loads new
+contents, so revoking an install needs no restart. A denied install, or one
 taken off the allowlist, gets 403 `native_session_install_revoked` on open and
-on every request with its token. An install never listed gets 403
-`native_session_install_not_allowed` on open. A bad file stops the gateway at
-startup; after startup it keeps the last good list and logs one error line.
-Rotating the secret ends all native sessions.
+on every request with its token, and its live-install slot is freed at once. An
+install never listed gets 403 `native_session_install_not_allowed` on open. A bad
+file stops the gateway at startup; after startup it keeps the last good list,
+retries on each check and logs each distinct error once. Rotating the secret
+ends all native sessions.
 
 The live-install count behind `WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS`
-is in memory. After a restart it rebuilds as live tokens are used.
+is in memory. Each token carries the gateway's boot generation, so a restart
+ends every native session and each install takes a slot again by opening. An
+install revoked and then listed again needs a free slot before its token works
+again (503 `native_session_busy`).
 
 Each open writes one JSON line to stdout:
 `{"event":"native_session_open","install_id_prefix":"<16 hex>","source":"<address>","outcome":"ok"}`.
