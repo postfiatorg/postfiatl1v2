@@ -106,3 +106,48 @@ redemption beyond the posted reserve. No end-to-end mainnet withdrawal is claime
   `crates/pftl_uniswap_proofs`, the CLI and interface (step 5), and close-out (step 6). The
   contract currently requires a nonzero `multiplierPolicyCommitment` so the fee policy is bound
   into the proof, but the guest side that computes it is not yet written.
+
+- 2026-11-12 (early hours) — R2-1 fix DEPLOYED to all six validators.
+  Release `r2-1-beacon-anchor-20261112`, binary sha256 `973734620ee6a15b...`,
+  signed with the trusted publisher `pfc531e00ffefecb8fabe40c6f47c69148df31e49c`.
+  Rolled canary-first (validator-1), one node at a time, convergence verified
+  between each. No divergence at any point; height 1194, identical state roots.
+  A post-deploy transaction moved 1 pfUSDC -> 1 B23 with reserve, supply and
+  invariant all correct, so the chain writes correctly under the new code.
+
+  Corrections recorded:
+  - **The live vault was never paused.** Earlier status reports (including mine)
+    cited `0x8583409d...`. The route the chain actually uses is
+    `ethereum-mainnet-usdc-v1`, vault `0xe7a432a28b20621a70e845c7f202004cf98e7a2c`,
+    `paused() = false`, holding 76.062020 USDC. Its verifier_kind is
+    `sp1-groth16`, which is the branch R2-1 lives in
+    (`nav_vault_asset_execution.rs:7502`), so that balance was exposed until this
+    deploy landed.
+  - **validator-5's RPC was left on the pre-fix binary** by an earlier hand-written
+    restart script of mine (`/usr/local/bin/rpc5-start.sh`, now removed). Its
+    systemd unit was in `failed` because the stray process held port 27655. Since
+    rpc-serve performs mempool admission, that node could have admitted deposits
+    under pre-fix rules. Found via `build_git_revision: ae70d66d` and fixed; all
+    six now report the new release.
+
+  Standing exposure after the deploy, for the record: fake pfUSDC $0 (lane
+  fail-closed, no anchor pinned); vault drain bounded at 76.06 USDC and only by
+  burning genuine pfUSDC; wrapped-token forgery $0 while both pauses hold;
+  stale-NAV buying up to ~$140 of A666 principal plus held pfUSDC; private pool
+  $0 (`admission_switch: off`, survived the restarts, re-arms on host reboot).
+
+- [ ] **Pin the first beacon anchor — STAGED, NOT SUBMITTED.**
+  Anchor built from live finality and the live route: slot 15634944, root
+  `e54a9a9ccfd16c722b1df16e0eee1b3890adc298b57a01469dc7d99cd4c22844`, route epoch
+  11, bound to the real vault and route_binding
+  `35ec9274bdad13f7c53edac615b160ca668a10cc22d7dcef1f6f79d20a3dd8c4`.
+  Files on validator-0: `/tmp/beacon-anchor.json`, `/tmp/gov-batch.json`,
+  `/tmp/gov-amendment.json`. All four values verified present in the signed batch.
+  Blocked on: the activation requires one `SignedGovernanceAuthorizationV2` per
+  support vote (`consensus_artifacts.rs:2858`), i.e. a signature ceremony across
+  the validators via `vault-bridge-route-profile-governance-assemble`
+  (`--signed-amendment-file`, `--proposal-slot`). Not attempted further at 01:00;
+  this is a consensus governance action and should be done with fresh attention,
+  not by trial and error.
+  **Until it is pinned the ingress admits nothing, so USDC -> pfUSDC remains
+  unavailable. That is the fail-closed posture, not a regression.**
