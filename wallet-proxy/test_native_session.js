@@ -300,6 +300,24 @@ async function main() {
     writeList(denylistFile, { schema: 'postfiat-native-session-denylist-v1', install_ids_hex: ['zz'] }, 7_000);
     assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile } }), /denylist/);
 
+    // A bound across installs: distinct installs with unexpired tokens.
+    let capClock = Date.now();
+    const capped = createNativeSessions({
+      env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS: '1', WALLET_PROXY_NATIVE_SESSION_TTL_MS: '60000' },
+      now: () => capClock, log: () => {},
+    });
+    assert.strictEqual((await openAt(capped, alpha, capClock)).statusCode, 200);
+    const busy = await openAt(capped, beta, capClock);
+    assert.strictEqual(busy.statusCode, 503);
+    assert.strictEqual(busy.body.code, 'native_session_busy');
+    assert.strictEqual((await openAt(capped, alpha, capClock)).statusCode, 200, 'a live install renews');
+    capClock += 60_001;
+    assert.strictEqual((await openAt(capped, beta, capClock)).statusCode, 200, 'an expired install frees its slot');
+    assert.strictEqual((await openAt(capped, alpha, capClock)).statusCode, 503);
+    for (const bad of ['0', '1000001', 'many']) {
+      assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS: bad } }), /MAX_ACTIVE_INSTALLS/);
+    }
+
     // Caps: the native principal hits the same rate limit and body limit as the browser principal.
     clearMutationAdmissionForTest();
     for (const [label, token] of [['browser', BROWSER_TOKEN], ['native', native.token]]) {

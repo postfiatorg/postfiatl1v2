@@ -27,6 +27,10 @@ const MAX_OPEN_BODY_BYTES = 16 * 1024;
 const MAX_TOKEN_BYTES = 1024;
 const MAX_CLOCK_SKEW_MS = 5 * 60_000;
 const MAX_RATE_WINDOW_ADDRESSES = 100_000;
+// Sixteen live installs per mutation-concurrency slot (WALLET_PROXY_MUTATION_CONCURRENCY
+// defaults to 16). Past that the shared slots, not the per-install windows, decide
+// throughput, so more installs only add Sybil budget and memory.
+const DEFAULT_MAX_ACTIVE_INSTALLS = 256;
 const OPEN_FIELDS = [
     'schema', 'algorithm_id', 'public_key_hex', 'client_nonce_hex', 'origin',
     'chain_id', 'genesis_hash_hex', 'issued_at_ms', 'signature_hex',
@@ -158,6 +162,9 @@ function createNativeSessions({
         'WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_LIMIT', 10, 1, 100_000);
     const openRateWindowMs = boundedInteger(env.WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_WINDOW_MS,
         'WALLET_PROXY_NATIVE_SESSION_OPEN_RATE_WINDOW_MS', 60_000, 1_000, 86_400_000);
+    // Each install gets its own mutation window; this bounds how many hold one at a time.
+    const maxActiveInstalls = boundedInteger(env.WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS,
+        'WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS', DEFAULT_MAX_ACTIVE_INSTALLS, 1, 1_000_000);
     if (enabled) {
         origin = normalizeOrigin(rawOrigin);
         secret = String(env.WALLET_PROXY_NATIVE_SESSION_SECRET || '');
@@ -180,6 +187,7 @@ function createNativeSessions({
     const delisted = new Set();
     let listsCheckedAtMs = -Infinity;
     const seenNonces = new Map();
+    const activeInstalls = new Map(); // install id -> latest token expiry
     const openWindows = new Map();
 
     // Returns 0 when admitted, otherwise the milliseconds until the window reopens.
@@ -219,11 +227,25 @@ function createNativeSessions({
     // install that holds a token, or was listed before, is revoked rather than unknown.
     function installRefusal(id, holdsToken) {
         refreshLists();
-        if (denylist?.get().has(id)) return 'native_session_install_revoked';
-        if (allowlist && !allowlist.get().has(id)) {
-            return holdsToken || delisted.has(id) ? 'native_session_install_revoked' : 'native_session_install_not_allowed';
+        let refusal = null;
+        if (denylist?.get().has(id)) refusal = 'native_session_install_revoked';
+        else if (allowlist && !allowlist.get().has(id)) {
+            refusal = holdsToken || delisted.has(id) ? 'native_session_install_revoked' : 'native_session_install_not_allowed';
         }
-        return null;
+        if (refusal) activeInstalls.delete(id); // a revoked install frees its slot
+        return refusal;
+    }
+
+    // A live install may always renew; a new one needs a free slot.
+    function installSlotFree(id, nowMs) {
+        if (activeInstalls.get(id) > nowMs || activeInstalls.size < maxActiveInstalls) return true;
+        for (const [key, expiry] of activeInstalls) if (expiry <= nowMs) activeInstalls.delete(key);
+        return activeInstalls.size < maxActiveInstalls;
+    }
+
+    // Also called on token use, so live tokens are counted again after a restart.
+    function noteActive(id, expiresAtMs) {
+        if (!(activeInstalls.get(id) >= expiresAtMs)) activeInstalls.set(id, expiresAtMs);
     }
 
     function mac(payloadPart) {
@@ -267,6 +289,7 @@ function createNativeSessions({
         if (!Number.isSafeInteger(payload.exp) || payload.exp <= now()) return fail(401, 'native_session_expired');
         const refusal = installRefusal(payload.iid, true);
         if (refusal) return fail(403, refusal);
+        noteActive(payload.iid, payload.exp);
         return { principal: `native:${payload.iid}`, failure: null };
     }
 
@@ -356,10 +379,12 @@ function createNativeSessions({
         const id = installId(body.public_key_hex);
         const refusal = installRefusal(id, false);
         if (refusal) return fail(403, refusal);
+        if (!installSlotFree(id, nowMs)) return fail(503, 'native_session_busy');
         const nonce = rememberNonce(body.client_nonce_hex, body.issued_at_ms + MAX_CLOCK_SKEW_MS);
         if (nonce === 'replayed') return fail(409, 'native_session_nonce_replayed');
         if (nonce === 'full') return fail(503, 'native_session_busy');
         const { token, payload } = mint(id, nowMs);
+        noteActive(id, payload.exp);
         return {
             statusCode: 200,
             body: {
@@ -389,6 +414,7 @@ function createNativeSessions({
 
 module.exports = {
     ALGORITHM_ID,
+    DEFAULT_MAX_ACTIVE_INSTALLS,
     OPEN_PATH,
     OPEN_SCHEMA,
     SESSION_SCHEMA,
