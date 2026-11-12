@@ -402,11 +402,10 @@ class BaseAnchor:
     """The run's anchor on Base: the finalized block (number, hash and parent
     hash) read once after the chain id check. Every state read names it, or a
     block it binds, by hash (EIP-1898), and every log's block is bound to it
-    by hash; `blocks` caches the blocks read by hash in this run."""
+    (`_bind_block`); `numbers` caches the blocks bound in this run."""
 
     def __init__(self, number: int, block_hash: str, parent_hash: str) -> None:
         self.number, self.hash, self.parent_hash = number, block_hash, parent_hash
-        self.blocks: dict[str, int] = {block_hash: number}  # hash -> number, read by hash
         self.numbers: dict[int, str] = {number: block_hash}  # number -> the one hash bound to it
 
     @property
@@ -445,28 +444,36 @@ def _bound(base: Any, method: str, params: list[Any], what: str) -> Any:
 
 
 def _bind_block(base: Any, anchor: BaseAnchor, block_hash: str, number: int, what: str) -> None:
-    """`block_hash` must name block `number` (at or below the anchor) on the
-    anchored chain: read by hash once per run, and one hash per number."""
+    """`block_hash` must be the canonical block `number` (at or below the
+    anchor) of the anchored chain. A node also serves by hash a side block it
+    saw before a reorg (EIP-1898: known is not canonical), so the block is
+    read by hash and the canonical block at its number is read by number,
+    and both must name `block_hash`. One hash per number, cached only once
+    both reads agree; anything else refuses the run."""
 
-    known = anchor.blocks.get(block_hash)
-    if known is None:
-        block = _bound(base, "eth_getBlockByHash", [block_hash, False], what)
+    bound = anchor.numbers.get(number)
+    if bound == block_hash:
+        return
+    if bound is not None or number > anchor.number:
+        raise WatcherTransientError("base_anchor_mismatch",
+                                    f"{what}: block {block_hash} is not block {number} of the chain anchored at "
+                                    f"{anchor.number} ({anchor.hash})")
+    for method, param in (("eth_getBlockByHash", block_hash), ("eth_getBlockByNumber", hex(number))):
+        block = _bound(base, method, [param, False], what)
         if block is None:
             raise WatcherTransientError("base_anchor_unknown",
-                                        f"{what}: the Base node does not know block {block_hash}: another network "
+                                        f"{what}: the Base node does not know block {param}: another network "
                                         "or a reorg")
         try:
-            known = pft_token.hex_quantity(block.get("number") if isinstance(block, dict) else None,
-                                           f"block {block_hash} number")
+            found = pft_token.hex_quantity(block.get("number") if isinstance(block, dict) else None,
+                                           f"block {param} number")
         except pft_token.PftTokenRefused as error:
             raise WatcherError("base_answer_malformed", str(error)) from None
-        if str(block.get("hash", "")).lower() != block_hash:
-            raise WatcherTransientError("base_anchor_mismatch", f"{what}: the answer for {block_hash} is another block")
-        anchor.blocks[block_hash] = known
-    if known != number or number > anchor.number or anchor.numbers.setdefault(number, block_hash) != block_hash:
-        raise WatcherTransientError("base_anchor_mismatch",
-                                    f"{what}: block {block_hash} is block {known}, not block {number} of the chain "
-                                    f"anchored at {anchor.number} ({anchor.hash})")
+        if found != number or str(block.get("hash", "")).lower() != block_hash:
+            raise WatcherTransientError("base_anchor_mismatch",
+                                        f"{what}: block {block_hash} is not the canonical block {number} of the "
+                                        f"chain anchored at {anchor.number} ({anchor.hash})")
+    anchor.numbers[number] = block_hash
 
 
 def _check_anchor(base: Any, anchor: BaseAnchor) -> None:
@@ -1293,8 +1300,9 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
             # Not final yet: re-checked by a later run, not judged now.
             codes.append("release_block_not_finalized")
         elif (canonical_hash := _block_hash(base, entry["source_block_number"])) != entry["source_block_hash"]:
-            # The differing hash is the anchored chain's (read by hash), or
-            # the run is refused: another network's answer raises no alarm.
+            # That answer may be another network's: the differing hash is
+            # confirmed by hash and by a second read by number (`_bind_block`),
+            # or the run is refused and raises no alarm.
             _bind_block(base, anchor, canonical_hash, entry["source_block_number"],
                         f"release {entry['sequence']}'s source block")
             codes.append("release_source_block_mismatch")
