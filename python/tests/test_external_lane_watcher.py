@@ -2038,6 +2038,20 @@ class BaseAnchorTests(unittest.TestCase):
             self.assertIn("payout_without_export", alarm_codes(lines))
             self.assertFalse([line for line in lines if line.get("status") in ("backed", "paid", "verified_earlier")])
 
+    def test_every_state_read_names_the_anchor_by_hash(self):
+        releases = [release(0), release(1, source_block=800)]
+        e = export_entry(0, height=400)
+        base = ExportBase([released_log(e, block=950)], locked=2_000_000, finalized=1_000)
+        base.locks = backed(*releases)
+        pftl = ExportPftl([e], released=2_000_000)
+        pftl.releases, pftl.history_root = releases, "0x" + "ab" * 48
+        code, lines, stderr = run_exports(pftl, base)
+        self.assertEqual((code, stderr), (0, ""))
+        self.assertEqual(base.unanchored_state_reads, [])
+        self.assertEqual(base.hash_reads, [chain_block_hash(8453, 950)])
+        self.assertEqual(base.block_reads[0], "finalized")
+        self.assertEqual(base.block_reads[-1], hex(1_000), "the anchor is read again by number at the end")
+
     def test_a_log_not_bound_to_the_anchored_chain_is_refused(self):
         e = export_entry(0, height=400)
         cases = {
@@ -2071,6 +2085,51 @@ class BaseAnchorTests(unittest.TestCase):
             self.refused(run_exports(lane, Reorged([released_log(e, block=950)], locked=2_000_000,
                                                    finalized=1_000), "--state-file", str(state_file)),
                          state_file, before, "base_anchor_mismatch")
+
+    def test_any_single_foreign_read_of_a_release_run_is_refused_or_changes_nothing(self):
+        """Every read of a release-view run (with --exports or without),
+        answered in turn by another network whose Locks back every release
+        or none, against a Base whose Locks back all or all but one."""
+
+        releases = [release(0), release(1, source_block=800), release(2, source_block=FINALIZED + 1)]
+        e = export_entry(0, height=400)
+        counted = 0
+        for exports, home_locks, foreign_locks in itertools.product(
+                (False, True), ("all", "one missing"), ("all", "none")):
+            def node(chain_id, locks):
+                base = ExportBase([released_log(e, block=950)], locked=2_000_000)
+                base.chain_id = chain_id
+                base.locks = backed(*releases) if locks == "all" else (
+                    backed(*releases[:1], *releases[2:]) if locks == "one missing" else {})
+                return base
+
+            def attempt(endpoint, directory):
+                state_file = Path(directory) / "state.json"
+                pftl = ExportPftl([e], released=2_000_000)
+                pftl.releases, pftl.history_root = releases, "0x" + "ab" * 48
+                outcome = run(pftl, endpoint, "--state-file", str(state_file),
+                              *(("--exports", "--lock-from-block", "0") if exports else ()))
+                return outcome, state_file.read_bytes() if state_file.exists() else None
+
+            with tempfile.TemporaryDirectory() as directory:
+                honest = attempt(node(8453, home_locks), directory)
+            index = 0
+            while True:
+                endpoint = OneForeignRead(node(8453, home_locks), node(FOREIGN_CHAIN, foreign_locks), index)
+                with tempfile.TemporaryDirectory() as directory:
+                    (code, lines, stderr), saved = attempt(endpoint, directory)
+                if endpoint.used is None:
+                    break
+                with self.subTest(exports=exports, home=home_locks, foreign=foreign_locks, read=index,
+                                  method=endpoint.used):
+                    if code == 1:
+                        self.assertIsNone(saved)
+                        self.assertFalse([line for line in lines if line["kind"] in ("payout", "export")])
+                    else:
+                        self.assertTrue(((code, lines, stderr), saved) == honest, "not the all-honest result")
+                counted += 1
+                index += 1
+        self.assertGreater(counted, 50)
 
 
 U64_MAX = (1 << 64) - 1

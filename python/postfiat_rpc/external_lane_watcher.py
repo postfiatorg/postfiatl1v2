@@ -464,7 +464,7 @@ def _check_anchor(base: Any, anchor: BaseAnchor) -> None:
                                     f"block {anchor.number} is now {found}, not the run's anchor {anchor.hash}")
 
 
-def _lock_record(base: Any, lock: str, nonce: int, block: str | dict[str, Any]) -> tuple[str, int, str]:
+def _lock_record(base: Any, lock: str, nonce: int, block: dict[str, Any]) -> tuple[str, int, str]:
     data = "0x" + LOCK_RECORD_SELECTOR + f"{nonce:064x}"
     try:
         answer = pft_token.hex_bytes(_bound(base, "eth_call", [{"to": lock, "data": data}, block],
@@ -1275,13 +1275,18 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
             # Not final yet: re-checked by a later run, not judged now.
             codes.append("release_block_not_finalized")
         elif (canonical_hash := _block_hash(base, entry["source_block_number"])) != entry["source_block_hash"]:
+            # The differing hash is the anchored chain's (read by hash), or
+            # the run is refused: another network's answer raises no alarm.
+            _bind_block(base, anchor, canonical_hash, entry["source_block_number"],
+                        f"release {entry['sequence']}'s source block")
             codes.append("release_source_block_mismatch")
             result["canonical_block_hash"] = canonical_hash
         else:
-            # The Lock as it stood at the release's own source block: a Lock
-            # made after it cannot back it.
+            # The Lock as it stood at the release's own source block, named by
+            # its hash and only while canonical: a Lock made after it cannot
+            # back it, and a node of another network does not know the block.
             holder, amount, recipient_hash = _lock_record(
-                base, policy["lock"], entry["lock_nonce"], hex(entry["source_block_number"]))
+                base, policy["lock"], entry["lock_nonce"], at_block(entry["source_block_hash"]))
             expected_hash = "0x" + keccak256(entry["recipient"].encode("utf-8")).hex()
             if holder == ZERO_ADDRESS:
                 codes.append("release_without_lock")
