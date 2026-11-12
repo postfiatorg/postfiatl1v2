@@ -237,6 +237,7 @@ enum Command {
 
 #[derive(Deserialize)]
 struct Deployment {
+    beacon_anchor: postfiat_types::PfUsdcBeaconFinalityStateV1,
     #[serde(default)]
     route_id: Option<String>,
     vault: String,
@@ -743,6 +744,7 @@ async fn capture(
             manifest_hash: keccak256(manifest),
         },
         helios,
+        beacon_anchor: d.beacon_anchor,
         vault_storage,
         token_storage,
         evidence,

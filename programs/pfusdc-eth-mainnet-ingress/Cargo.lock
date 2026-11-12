@@ -2883,6 +2883,7 @@ dependencies = [
  "postfiat-types",
  "serde",
  "serde_cbor",
+ "serde_json",
  "sp1-helios-primitives",
  "sp1-zkvm",
  "tree_hash",

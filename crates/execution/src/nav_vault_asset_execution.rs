@@ -1420,27 +1420,11 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
                 advanced_arc_finality = Some(state);
             }
             VerifiedIngressPublicValues::Ethereum(values) => {
-                // R2-1: this lane used to take the nullifier and discard the
-                // proof's declared starting point, so a prover could begin from
-                // a light-client store they invented. Require a
-                // governance-pinned anchor and make the proof start exactly
-                // there, the same way the Arbitrum and Arc arms above do. No
-                // pinned anchor means no admission.
-                let mut state = ledger
-                    .beacon_finality_states
-                    .iter()
-                    .find(|state| state.route_profile_hash == operation.policy_hash)
-                    .ok_or_else(|| {
-                        (
-                            "pfusdc_beacon_finality_state_missing",
-                            "proof-native pfUSDC Ethereum ingress requires a governance-pinned beacon finality anchor"
-                                .to_string(),
-                        )
-                    })?
-                    .clone();
-                state
-                    .verify_and_advance(&values)
-                    .map_err(|error| ("pfusdc_beacon_finality_state_rejected", error))?;
+                let state = postfiat_types::PfUsdcBeaconFinalityStateV1::advance_for_deposit(
+                    &ledger.beacon_finality_states,
+                    &operation.policy_hash,
+                    &values,
+                )?;
                 source_nullifier = values.deposit_nullifier.clone();
                 advanced_beacon_finality = Some(state);
             }

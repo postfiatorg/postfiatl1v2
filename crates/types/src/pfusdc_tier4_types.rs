@@ -50,8 +50,10 @@ pub struct PfUsdcEthereumIngressPublicValuesV1 {
     pub source_chain_id: u64,
     pub prior_finalized_beacon_root: String,
     pub prior_finalized_slot: u64,
+    pub prior_sync_committee_root: String,
     pub finalized_beacon_root: String,
     pub finalized_slot: u64,
+    pub current_sync_committee_root: String,
     pub finalized_execution_block_hash: String,
     pub finalized_execution_block_number: u64,
     pub execution_state_root: String,
@@ -111,6 +113,8 @@ impl PfUsdcEthereumIngressPublicValuesV1 {
         validate_evm_address_text("ethereum_ingress.depositor", &self.depositor)?;
         pfusdc_validate_hex_fields(&[
             ("ethereum_ingress.prior_finalized_beacon_root", &self.prior_finalized_beacon_root, 64),
+            ("ethereum_ingress.prior_sync_committee_root", &self.prior_sync_committee_root, 64),
+            ("ethereum_ingress.current_sync_committee_root", &self.current_sync_committee_root, 64),
             ("ethereum_ingress.finalized_beacon_root", &self.finalized_beacon_root, 64),
             ("ethereum_ingress.finalized_execution_block_hash", &self.finalized_execution_block_hash, 64),
             ("ethereum_ingress.execution_state_root", &self.execution_state_root, 64),
@@ -235,21 +239,11 @@ impl PfUsdcArcIngressPublicValuesV1 {
 
 /// Governance-pinned Ethereum beacon finality anchor for one route epoch.
 ///
-/// Closes R2-1. The `sp1-ethereum-finality-v1` guest copies its whole starting
-/// light-client store from the prover's own input, including the sync committee
-/// (`programs/pfusdc-eth-mainnet-ingress/src/lib.rs::verify_finality`), and
-/// publishes where it started as `prior_finalized_beacon_root` /
-/// `prior_finalized_slot`. Those two fields were never compared with anything on
-/// chain, so a prover could invent a starting state with their own 512 sync
-/// committee keys, "prove" a deposit that never happened, and be credited.
-///
-/// This type is the missing comparison. It is the same shape the Arbitrum and
-/// Arc lanes already use: the chain holds the anchor, a proof must start exactly
-/// where the chain says the last one finished, and finality only moves forward.
-///
-/// Fail-closed consequence: a route with no pinned anchor cannot admit an
-/// Ethereum-finality deposit at all, which is review-02's containment item 3
-/// enforced in code rather than by configuration.
+/// The anchor binds both the finalized beacon header and its current sync
+/// committee. The guest reconstructs a fresh store from those authenticated
+/// inputs, and publishes the authenticated committee after advancement.
+/// A header root alone does not authenticate a prover-selected committee.
+/// Missing anchors fail closed at deposit admission.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PfUsdcBeaconFinalityStateV1 {
     pub schema: String,
@@ -263,6 +257,8 @@ pub struct PfUsdcBeaconFinalityStateV1 {
     pub finalized_beacon_root: String,
     /// The slot a conforming proof must declare as its starting point.
     pub finalized_slot: u64,
+    /// SSZ root of the current sync committee for the finalized header period.
+    pub current_sync_committee_root: String,
 }
 
 impl PfUsdcBeaconFinalityStateV1 {
@@ -271,6 +267,7 @@ impl PfUsdcBeaconFinalityStateV1 {
             || self.route_epoch == 0
             || self.source_chain_id == 0
             || self.finalized_slot == 0
+            || self.finalized_slot == u64::MAX
         {
             return Err("pfUSDC beacon finality state has invalid schema or scalars".to_string());
         }
@@ -288,6 +285,11 @@ impl PfUsdcBeaconFinalityStateV1 {
                 64,
             ),
             (
+                "pfusdc_beacon_finality.current_sync_committee_root",
+                &self.current_sync_committee_root,
+                64,
+            ),
+            (
                 "pfusdc_beacon_finality.finalized_beacon_root",
                 &self.finalized_beacon_root,
                 64,
@@ -297,9 +299,8 @@ impl PfUsdcBeaconFinalityStateV1 {
 
     /// Require the proof to start exactly at the pinned anchor, then advance it.
     ///
-    /// The prior fields are the ones R2-1 showed were ignored. Equality against
-    /// the pinned anchor is what stops an invented starting state; the strict
-    /// slot increase is what stops replaying or rewinding finality.
+    /// Both the header and committee must match; strict slot increase prevents
+    /// replaying or rewinding finality.
     pub fn verify_and_advance(
         &mut self,
         values: &PfUsdcEthereumIngressPublicValuesV1,
@@ -317,6 +318,7 @@ impl PfUsdcBeaconFinalityStateV1 {
         }
         if values.prior_finalized_beacon_root != self.finalized_beacon_root
             || values.prior_finalized_slot != self.finalized_slot
+            || values.prior_sync_committee_root != self.current_sync_committee_root
         {
             return Err(
                 "pfUSDC Ethereum proof does not start from the pinned beacon finality anchor"
@@ -330,6 +332,7 @@ impl PfUsdcBeaconFinalityStateV1 {
         }
         self.finalized_beacon_root = values.finalized_beacon_root.clone();
         self.finalized_slot = values.finalized_slot;
+        self.current_sync_committee_root = values.current_sync_committee_root.clone();
         self.validate()
     }
 
@@ -351,6 +354,7 @@ impl PfUsdcBeaconFinalityStateV1 {
         pfusdc_append_hex(&mut out, 7, &self.route_binding)?;
         pfusdc_append_hex(&mut out, 8, &self.finalized_beacon_root)?;
         pfusdc_append_u64(&mut out, 9, self.finalized_slot);
+        pfusdc_append_hex(&mut out, 10, &self.current_sync_committee_root)?;
         Ok(out)
     }
 }
@@ -2111,3 +2115,6 @@ fn pfusdc_keccak_commitment(domain: &str, bytes: &[u8]) -> String {
     hasher.update(bytes);
     bytes_to_hex(&hasher.finalize())
 }
+
+#[path = "b23_ingress_anchor.rs"]
+mod b23_ingress_anchor;
