@@ -151,3 +151,59 @@ redemption beyond the posted reserve. No end-to-end mainnet withdrawal is claime
   not by trial and error.
   **Until it is pinned the ingress admits nothing, so USDC -> pfUSDC remains
   unavailable. That is the fail-closed posture, not a regression.**
+
+## Anchor pinning — where it stopped, 2026-11-12 ~03:30
+
+Five releases shipped tonight, each fixing a layer the previous one exposed. All
+six validators are current and converged at height 1209, root `e101f848597ed4`.
+Nothing regressed; the chain accepts transactions throughout.
+
+| release | fixes |
+|---|---|
+| `r2-1-beacon-anchor-20261112` | the R2-1 anchor itself + state-root coverage |
+| `r2-1-anchor-bound-20261112` | bind the anchor into the amendment kind |
+| `r2-1-kind-bound-20261112` | teach the consensus kind validator the beacon suffix |
+| `r2-1-activation-bound-20261112` | validate the anchor against its profile; expect its kind |
+
+Commits: `830e75b3b`, `58d19f725`, `f650b32eb`, `5c74be411`, `4bd388d44`,
+`f4a0a757b`, `5d13c775e`.
+
+### The ceremony works
+
+Amendment created with the anchor bound (`beacon-bootstrap-v2` in the kind), six
+validators signed, assembled, and the batch carries the anchor root
+`e54a9a9ccfd16c722b1df16e0eee1b3890adc298b57a01469dc7d99cd4c22844`, slot
+15634944, route epoch 11, with all six authorizations.
+
+Things learned the hard way, all now known-good:
+- the proposal slot in the authorizations must equal the submission height;
+- the round must run on the deterministic proposer for that height
+  (validator-3 for 1209), not whichever node holds the files;
+- the anchor must carry the epoch-11 profile hash and route binding, not the
+  live epoch-10 ones. There is no CLI for those; they were derived from
+  `canonical_preimage` and **verified against the chain's own epoch-10 values
+  first** (`b2ca6cda...`, `35ec9274...` both reproduced exactly) before being
+  trusted for epoch 11. Epoch-11 values: profile hash `84c2aeb51bbf021d...`,
+  binding `5b79e3defb54c65e...`.
+
+### Open: the batch is not in the block
+
+The round at height 1209 returned `round_ok: true` and all six converged, but
+`/tmp/gov3-art/block-proposal.json` on validator-3 does NOT contain the anchor,
+the beacon kind or route epoch 11, and the route still reports
+`governance_route_epoch: 10`. So a block was produced without the governance
+batch in it. `round_ok` means a block was made, not that the batch was included.
+
+Next step is to find why the batch was dropped rather than rejected — likely the
+governance batch needs to reach the mempool/batch-dir the round reads, rather
+than being passed as `--batch-file` to a round that then proposes an empty block.
+`postfiat-node run --mode peer-certified --batch-kind governance --batch-dir`
+looks like the intended path.
+
+Staged and ready on validator-3: `/tmp/gov3-batch.signed.json` (signed, slot
+1209). On validator-0: `/tmp/beacon-anchor.json`, `/tmp/route-profile-epoch11.json`,
+`/tmp/gov2-amendment.json`. Re-signing is needed for any new submission height.
+
+**Until the anchor is pinned the Ethereum ingress admits nothing, so
+USDC -> pfUSDC stays unavailable. That is the fail-closed posture.** Buying and
+selling B23 works: 2,013 coins held, 13.0 pfUSDC reserve, invariant holding.
