@@ -369,21 +369,21 @@ fragmented wallet from hiding spendable FastPay value behind a smaller
 client-side lookup limit.
 
 The live wallet feed (`wallet_subscribe`) reads one `owned_objects` page per
-validator per tick and marks it `owned_complete` (`false` when truncated). The
-wallet selects only from a complete inventory: a complete feed answer replaces
-it; a partial page never does. When the partial page's `view_digest` equals the
-last complete read the inventory stands, otherwise the wallet reads every page
-(`fetchOwnedObjectsSnapshot`) and publishes the result in one step. When that
-read fails, the wallet shows why, either the node is too old for paging or the
-objects kept changing between pages (a busy account, or validators serving
-different views), with a Retry button; partial feed pages neither clear that
-error nor retry on their own.
-
-Feed and read races are fenced. A new partial view makes selection unavailable
-until a read that started after it completes; a read finishing after a newer
-complete view was published is discarded. Feed answers are ordered by the
-gateway's `observed_at_ms`, so an older complete answer neither replaces a
-newer one nor clears an error. A replaced screen coordinator publishes nothing.
+validator per tick. The wallet selects only from its own all-pages read
+(`fetchOwnedObjectsSnapshot`), never from a feed answer: nodes expose no
+inventory revision that orders a feed answer against a read, and block height
+does not change with FastPay effects. A feed answer whose `view_digest`
+differs from the selected view, complete or partial, makes selection
+unavailable and starts a read. The wallet publishes a read only when a second
+read returns the same `view_digest` and, after such an invalidation, that
+digest is the latest feed view; a read of another view (a lagging node, or a
+delayed feed answer) never re-enables selection. When three attempts cannot
+confirm a view, or a read fails, the wallet shows why (a node too old for
+paging, or objects that kept changing) with a Retry button; feed answers
+neither clear that error nor retry on their own. A replaced screen
+coordinator publishes nothing. See
+[FastPay Inventory Ordering](fastpay-inventory-ordering.md) for what a node
+revision would add.
 
 ## FastPay Standard Unwrap
 

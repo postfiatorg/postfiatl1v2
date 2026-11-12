@@ -152,6 +152,7 @@ nav:
       - Wallets:
           - Transparent Wallet: wallets/transparent-wallet.md
           - Web Wallet: wallets/web-wallet.md
+          - FastPay Inventory Ordering: wallets/fastpay-inventory-ordering.md
           - Recovery Phrase Design: wallets/recovery-phrase-design.md
           - Shielded Wallet: wallets/shielded-wallet.md
           - Custody And Exchange: wallets/custody-and-exchange.md
