@@ -18,7 +18,7 @@ const TERMINAL_STAGES = new Set(['accepted', 'failed']);
 const WORKER_STATE_SCHEMA = 'postfiat-trustless-bridge-worker-state-v2';
 const WORKER_STATE_PUBLIC_FIELDS = new Set([
     'status', 'route_id', 'source_chain_id', 'source_proof_kind',
-    'program_vkey', 'manifest_hash', 'route_profile_hash', 'asset_id',
+    'program_vkey', 'manifest_hash', 'route_profile_hash', 'asset_id', 'route_asset_id',
     'observer_attestor_enabled', 'updated_at_unix', 'stage_index', 'retryable',
     'code', 'message', 'receipt_code', 'receipt_id', 'tx_id',
     'terminal_checkpoint_sha256', 'stage_history',
@@ -317,12 +317,13 @@ function create(runtime = {}, options = {}) {
             && state.program_vkey === route.program_vkey
             && state.manifest_hash === route.manifest_hash
             && state.route_profile_hash === route.route_profile_hash
-            && state.asset_id === route.asset_id
+            && (state.status === 'accepted' ? state.route_asset_id : state.asset_id) === route.asset_id
             && state.observer_attestor_enabled === false
             && Number.isSafeInteger(Number(state.updated_at_unix));
         let terminalValid = true;
         if (state?.status === 'accepted') {
             terminalValid = state.retryable === false
+                && HASH48_RE.test(String(state.asset_id || ''))
                 && state.receipt_code === 'ACCEPTED'
                 && RECEIPT_ID_RE.test(String(state.receipt_id || state.tx_id || ''))
                 && FILE_HASH_RE.test(String(state.terminal_checkpoint_sha256 || ''));

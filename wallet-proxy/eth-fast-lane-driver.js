@@ -36,7 +36,7 @@ const RESULT_FIELDS = new Set([
     'deposit_confirmed', 'ethereum_finalized', 'finalized_block_hash',
     'finalized_block_number', 'witness_sha256', 'evidence_root', 'nullifier',
     'proof_sha256', 'public_values_sha256', 'program_vkey', 'manifest_hash',
-    'proof_verified', 'backed_cap_ready', 'receipt_code', 'receipt_id', 'tx_id',
+    'proof_verified', 'backed_cap_ready', 'receipt_code', 'receipt_id', 'tx_id', 'credited_asset_id',
 ]);
 
 function stableJson(value) {
@@ -249,6 +249,7 @@ function assertCommonBinding(result, stage, request, config) {
     if (stage === 'verifying' && result.proof_verified !== true) throw terminalError('proof verification failed');
     if (stage === 'growing_backed_cap' && result.backed_cap_ready !== true) throw terminalError('backed cap growth incomplete');
     if (stage === 'claiming' && (result.receipt_code !== 'ACCEPTED'
+        || !/^[0-9a-f]{96}$/.test(String(result.credited_asset_id || ''))
         || !RECEIPT_ID_RE.test(String(result.receipt_id || result.tx_id || '')))) throw terminalError('claim was not accepted');
 }
 
@@ -488,6 +489,8 @@ async function runJob(jobPath, configPath, dependencies = {}) {
         }
         writeWorkerState(context, 'accepted', {
             retryable: false,
+            route_asset_id: context.config.asset_id,
+            asset_id: claimResult.credited_asset_id,
             receipt_code: claimResult.receipt_code,
             receipt_id: claimResult.receipt_id || null,
             tx_id: claimResult.tx_id || null,
