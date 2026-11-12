@@ -37,7 +37,11 @@ is refused (``base_anchor_unknown``, ``base_anchor_mismatch`` or
 ``base_chain_id_mismatch``: exit 1, no payout or export line, the state file
 unchanged) or gives exactly the all-honest result. Assumed, not checked: a
 node that lies rather than answers for another network, and the anchor is
-"finalized" as the node reports it.
+"finalized" as the node reports it. The PFTL endpoint is assumed to be a
+node of the validated fleet: a PFTL node of a fork that shares this chain's
+genesis and lane identity is not detected, so an export page from such a fork
+can back a payout. Binding export pages to an independently confirmed PFTL
+snapshot is the next step.
 
 The Base endpoint must support EIP-1898 (``blockHash`` with
 ``requireCanonical``) for ``eth_getCode`` and ``eth_call``; one without it
