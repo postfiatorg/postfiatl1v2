@@ -77,25 +77,29 @@ def _changed(quote: dict[str, Any], path: tuple[str, ...], value: Any) -> dict[s
     return quote
 
 
-# family -> (helper, client quote method, client submit method, operation, field that names the recipient/asset)
+# family -> (helper, client quote method, client submit method, operation).
+# Operations are serialized as the Rust types serialize them
+# (crates/types/src/transactions_mempool_receipts.rs): defaulted fields with
+# `skip_serializing_if` are omitted; `AuthenticFixtureTests` checks each
+# against the generated schema.
 FAMILIES: dict[str, tuple[Callable[..., Any], str, str, dict[str, Any]]] = {
     "asset": (
         wallet_module.submit_asset_transaction,
         "asset_fee_quote_response",
         "mempool_submit_signed_asset_transaction",
-        {"operation": "issued_payment", "source": "pf-holder", "destination": "pf-dest", "asset_id": "aa" * 48, "amount": 5},
+        {"operation": "issued_payment", "from": "pf-holder", "to": "pf-dest", "issuer": "pf-issuer", "asset_id": "aa" * 48, "amount": 5},
     ),
     "escrow": (
         wallet_module.submit_escrow_transaction,
         "escrow_fee_quote_response",
         "mempool_submit_signed_escrow_transaction",
-        {"operation": "escrow_create", "owner": "pf-holder", "recipient": "pf-dest", "asset_id": "PFT", "amount": 5},
+        {"operation": "escrow_create", "owner": "pf-holder", "recipient": "pf-dest", "asset_id": "PFT", "amount": 5, "finish_after": 100},
     ),
     "nft": (
         wallet_module.submit_nft_transaction,
         "nft_fee_quote_response",
         "mempool_submit_signed_nft_transaction",
-        {"operation": "nft_transfer", "owner": "pf-holder", "nft_id": "cc" * 48, "destination": "pf-dest"},
+        {"operation": "nft_transfer", "nft_id": "cc" * 48, "from": "pf-holder", "to": "pf-dest"},
     ),
     "offer": (
         wallet_module.submit_offer_transaction,
@@ -108,12 +112,11 @@ FAMILIES: dict[str, tuple[Callable[..., Any], str, str, dict[str, Any]]] = {
             "taker_gets_amount": 5,
             "taker_pays_asset_id": "dd" * 48,
             "taker_pays_amount": 6,
-            "expiration_height": 0,
         },
     ),
 }
 
-RECIPIENT_FIELD = {"asset": "destination", "escrow": "recipient", "nft": "destination", "offer": "taker_pays_asset_id"}
+RECIPIENT_FIELD = {"asset": "to", "escrow": "recipient", "nft": "to", "offer": "taker_pays_asset_id"}
 ASSET_FIELD = {"asset": "asset_id", "escrow": "asset_id", "nft": "nft_id", "offer": "taker_gets_asset_id"}
 AMOUNT_FIELD = {"asset": "amount", "escrow": "amount", "nft": None, "offer": "taker_gets_amount"}
 
@@ -199,7 +202,15 @@ def _without(operation: dict[str, Any], *keys: str) -> dict[str, Any]:
     return {key: value for key, value in operation.items() if key not in keys}
 
 
-class SchemaTests(unittest.TestCase):
+class AuthenticFixtureTests(unittest.TestCase):
+    def test_fixtures_use_the_rust_field_names_and_every_required_field(self) -> None:
+        for family, (_, _, _, operation) in FAMILIES.items():
+            with self.subTest(family=family):
+                fields = SCHEMAS["structs"][SCHEMAS["operations"][operation["operation"]]]
+                self.assertLessEqual(set(operation) - {"operation"}, set(fields))
+                required = {key for key, rule in fields.items() if rule == "required"}
+                self.assertLessEqual(required, set(operation))
+
     def test_the_committed_schema_matches_the_rust_types(self) -> None:
         script = Path(__file__).resolve().parents[2] / "scripts/generate_operation_schemas.py"
         spec = importlib.util.spec_from_file_location("generate_operation_schemas", script)
@@ -399,6 +410,30 @@ class TransferQuoteTests(unittest.TestCase):
                     signer.assert_not_called()
                     client.mempool_submit_signed_transfer_finality.assert_not_called()
                     client.mempool_submit_signed_payment_v2_finality.assert_not_called()
+
+
+class SecondAttemptTests(unittest.TestCase):
+    def test_latency_rechecks_the_quote_of_its_bad_sequence_retry(self) -> None:
+        for memo, kind in ((False, "transparent_transfer"), (True, "payment_v2")):
+            for name, path, value, code in TransferQuoteTests.CASES[:2] + TransferQuoteTests.CASES[5:6]:
+                with self.subTest(memo=memo, case=name):
+                    client = mock.Mock()
+                    client.transfer_fee_quote_response.side_effect = [
+                        RuntimeError("bad_sequence: stale account sequence"),
+                        _changed(_transfer_quote(kind, "pf-dest", 5), path, value),
+                    ]
+                    signer = mock.Mock(side_effect=AssertionError("signer called"))
+                    with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+                        latency_module, "_run", signer
+                    ), mock.patch.object(latency_module.time, "sleep"):
+                        with self.assertRaises(QuoteRefusedError) as raised:
+                            latency_module.run_native_or_payment(
+                                client=client, wallet_a=_wallet(), wallet_b=_wallet("pf-dest"),
+                                amount=5, work_dir=Path(tmp), memo=memo,
+                            )
+                    self.assertEqual(raised.exception.code, code)
+                    self.assertEqual(client.transfer_fee_quote_response.call_count, 2)
+                    signer.assert_not_called()
 
 
 class FeeCeilingTests(unittest.TestCase):
