@@ -46,10 +46,10 @@ def readiness():
     result.update(ok=True, ready=False, observer_attestor_enabled=False,
         prover_authenticated=False, prover_healthy=False, beacon_anchor_authenticated=False,
         route_manifest_active=False, program_vkey_active=False, nav_cap_growth_enabled=False,
-        vault_paused=True, vault_code_hash_matches=False, token_code_hash_matches=False,
-        execution_rpc_sources_reachable=0, beacon_finality_current=False,
+        vault_paused=None, vault_code_hash_matches=None, token_code_hash_matches=None,
+        execution_rpc_sources_reachable=None, beacon_finality_current=None,
         trust_class="TRUSTLESS_FINALITY")
-    checks = {}
+    checks = {"ethereum": "not checked until the exact governed anchor is available"}
     try:
         gpu_preflight()
         result.update(prover_authenticated=True, prover_healthy=True)
@@ -64,6 +64,7 @@ def readiness():
         checks["anchor"] = "authenticated on-ledger"
         if result["prover_healthy"]:
             result.update(full_readiness())
+            checks["ethereum"] = "two execution sources, code hashes, unpaused vault and current beacon verified"
             checks["route_and_relay"] = "active route, Ethereum RPCs/beacon/contracts and validator relay preflight passed"
     except Exception as error:
         checks["route_and_relay"] = str(error)
