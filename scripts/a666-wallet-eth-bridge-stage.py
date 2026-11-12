@@ -478,7 +478,60 @@ def confirmed_deposit(request: dict[str, Any], job_dir: Path) -> dict[str, Any]:
     return evidence
 
 
+def archive_stale_proof(job_dir: Path, job_key: str) -> None:
+    # Preserve the immutable job, deposit-result and balance baseline. Only this
+    # job's derived witness/proof are invalidated; no Ethereum deposit is sent.
+    attempt = f"stale-{time.time_ns()}"
+    remote_root = f"/workspace/a666-acceptance/wallet-bridge/{job_key}"
+    archive = f"{remote_root}/{attempt}"
+    command = f"install -d -m 700 {shlex.quote(archive)}"
+    for name in ("ingress", "proof-cuda"):
+        source = shlex.quote(f"{remote_root}/{name}")
+        command += f" && if test -d {source}; then mv {source} {shlex.quote(archive + '/' + name)}; fi"
+    ssh(A100_HOST, command, port=A100_PORT)
+    local_archive = job_dir / attempt
+    local_archive.mkdir(mode=0o700)
+    for name in ("ingress", "proof-cuda"):
+        source = job_dir / name
+        if source.exists():
+            source.rename(local_archive / name)
+
+
 def ensure_capture(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[str, Any]:
+    for _ in range(3):
+        try:
+            return capture_once(request, job_dir, job_key)
+        except RuntimeError as error:
+            if str(error) != "beacon_anchor_changed_recapture_required":
+                raise
+            archive_stale_proof(job_dir, job_key)
+    raise RuntimeError("beacon_anchor_keeps_advancing: retry this same deposit job")
+
+
+def refresh_stale_proof(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[str, Any]:
+    for attempt in range(4):
+        # Resume safely if the process stopped after archiving or recapturing.
+        if not (job_dir / "ingress/witness.public-values.json").exists():
+            ensure_capture(request, job_dir, job_key)
+        public = read_json(job_dir / "ingress/witness.public-values.json")
+        try:
+            require_witness_anchor(public, live_beacon_anchor())
+            if not (job_dir / "proof-cuda/proof-report.json").exists():
+                prove_with_lock(request, job_dir, job_key)
+                require_witness_anchor(public, live_beacon_anchor())
+            return public
+        except RuntimeError as error:
+            if str(error) != "beacon_anchor_changed_recapture_required":
+                raise
+        if attempt == 3:
+            break
+        archive_stale_proof(job_dir, job_key)
+        ensure_capture(request, job_dir, job_key)
+        prove_with_lock(request, job_dir, job_key)
+    raise RuntimeError("beacon_anchor_keeps_advancing: retry this same deposit job")
+
+
+def capture_once(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[str, Any]:
     deposit = read_json(job_dir / "deposit-result.json")
     anchor = live_beacon_anchor()
     cached = job_dir / "ingress/witness.public-values.json"
@@ -571,6 +624,10 @@ def ensure_proof(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[s
     ):
         raise RuntimeError("SP1 proof report does not match the production proof policy")
     return report
+
+
+def prove_with_lock(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[str, Any]:
+    return ensure_proof(request, job_dir, job_key)
 
 
 def pftl_balance(account: str) -> int:
@@ -688,6 +745,31 @@ def relay_phase(
     return read_json(job_dir / "pftl" / "summary.json")
 
 
+def propose_current_proof(request: dict[str, Any], job_dir: Path, job_key: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    for _ in range(3):
+        public = refresh_stale_proof(request, job_dir, job_key)
+        relay_error = None
+        try:
+            relay_phase("propose", request, job_dir, job_key)
+        except RuntimeError as error:
+            relay_error = error
+        deposit = pftl_deposit(request)
+        if deposit is not None:
+            return public, deposit
+        try:
+            require_witness_anchor(public, live_beacon_anchor())
+        except RuntimeError as error:
+            if str(error) == "beacon_anchor_changed_recapture_required":
+                # Another deposit won between our last read and admission.
+                # Next iteration recaptures/reproves this same Ethereum deposit.
+                continue
+            raise
+        if relay_error is not None:
+            raise relay_error
+        raise RuntimeError("PFTL proposal was not accepted for the current anchor")
+    raise RuntimeError("beacon_anchor_keeps_advancing: retry this same deposit job")
+
+
 def execute_stage(stage: str, job_file: Path) -> dict[str, Any]:
     _, request, job_dir, job_key = load_job(job_file)
     result = common(stage, request)
@@ -726,19 +808,27 @@ def execute_stage(stage: str, job_file: Path) -> dict[str, Any]:
             }
         )
     elif stage == "verifying":
-        public = read_json(job_dir / "ingress/witness.public-values.json")
         deposit = pftl_deposit(request)
         if deposit is None:
-            require_witness_anchor(public, live_beacon_anchor())
-            relay_phase("propose", request, job_dir, job_key)
-            deposit = pftl_deposit(request)
+            public, deposit = propose_current_proof(request, job_dir, job_key)
+        else:
+            public = read_json(job_dir / "ingress/witness.public-values.json")
         if (
             deposit is None
             or deposit.get("status") not in {"pending", "finalized"}
             or deposit.get("evidence_root") != public["evidence_root"]
         ):
             raise RuntimeError("consensus proposal evidence root differs from SP1 output")
-        result["proof_verified"] = True
+        result.update({
+            "proof_verified": True,
+            "witness_sha256": sha256_file(job_dir / "ingress/witness.json"),
+            "proof_sha256": sha256_file(job_dir / "proof-cuda/proof-calldata.bin"),
+            "public_values_sha256": sha256_file(job_dir / "proof-cuda/public-values.bin"),
+            "evidence_root": public["evidence_root"],
+            "nullifier": "0x" + public["deposit_nullifier"],
+            "finalized_block_hash": "0x" + public["finalized_execution_block_hash"],
+            "finalized_block_number": int(public["finalized_execution_block_number"]),
+        })
     elif stage == "growing_backed_cap":
         deposit = pftl_deposit(request)
         if deposit is None or deposit.get("status") not in {"pending", "finalized"}:

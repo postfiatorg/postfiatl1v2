@@ -110,4 +110,86 @@ mod tests {
             .contains_key("beacon_finality_anchor"));
         assert!(encoded["beacon_finality_anchor"].is_null());
     }
+    #[test]
+    fn b23_rpc_real_report_reaches_python_live_beacon_anchor() {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let mut profile: postfiat_types::VaultBridgeRouteProfileV1 =
+            serde_json::from_str(include_str!(
+                "../../../programs/pfusdc-eth-mainnet-ingress/tests/fixtures/mainnet-route.json"
+            ))
+            .unwrap();
+        profile.vault_address = anchor().vault_address;
+        profile.route_epoch = 11;
+        profile.verifier_policy_hash =
+            "44a402a3df72ee8da6f23737becef04fd0ce55e683706e929606a6aea1f05b25".into();
+        profile.verifier_program_vkey =
+            "0x000e93d5bd83ace0dcbabafcb793c4bcc9bae2c09b99e59c161a0a77393b2c2b".into();
+        let profile_hash = profile.profile_hash().unwrap();
+        let binding =
+            postfiat_types::vault_bridge_route_binding(&profile_hash, profile.route_epoch).unwrap();
+        let mut state = anchor();
+        state.route_profile_hash = profile_hash.clone();
+        state.route_binding = binding.clone();
+        let credited = postfiat_types::pfusdc_source_series_id(
+            "postfiat-wan-devnet-2",
+            &profile.asset_id,
+            1,
+            &profile.vault_address,
+            &profile.token_address,
+            profile.route_epoch,
+            &profile_hash,
+        )
+        .unwrap();
+        let report = VaultBridgeRouteReport {
+            schema: "postfiat.vault_bridge.route_report.v1".into(),
+            chain_id: "postfiat-wan-devnet-2".into(),
+            genesis_hash: String::new(),
+            current_height: 400,
+            profile,
+            profile_hash: profile_hash.clone(),
+            route_binding: binding,
+            governance_amendment_id: String::new(),
+            governance_activation_height: 318,
+            governance_route_epoch: 11,
+            nav_profile_id: String::new(),
+            nav_profile_source_class: String::new(),
+            nav_profile_verifier_kind: "sp1-groth16".into(),
+            nav_profile_policy_hash: profile_hash.clone(),
+            route_trust_class: "TRUSTLESS_FINALITY".into(),
+            live_value_enabled: true,
+            active: true,
+            beacon_finality_anchor: VaultBridgeRouteReport::select_beacon_anchor(
+                &[state],
+                &profile_hash,
+                11,
+            )
+            .unwrap(),
+        };
+        let mut child = Command::new("python3")
+            .arg(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../scripts/a666-wallet-eth-bridge-stage-tests.py"
+            ))
+            .arg("--report-stdin")
+            .arg(credited)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(&serde_json::to_vec(&report).unwrap())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        println!("{}", String::from_utf8_lossy(&output.stdout));
+    }
 }
