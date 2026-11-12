@@ -36,3 +36,5 @@ ethereum_hashing = { git = "https://github.com/ncitron/ethereum_hashing", rev = 
 
 [dev-dependencies]
 serde_json = "1.0"
+blst = "0.3.16"
+sha2 = "0.10"

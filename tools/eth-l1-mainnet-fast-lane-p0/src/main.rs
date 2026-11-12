@@ -36,8 +36,8 @@ use sp1_sdk::{
     SP1Stdin,
 };
 
-const PFETH_ELF: Elf = Elf::Static(include_bytes!(
-    "../../../programs/pfeth-eth-mainnet-ingress/elf/pfeth-eth-mainnet-ingress-program"
+const PFUSDC_ELF: Elf = Elf::Static(include_bytes!(
+    "../../../programs/pfusdc-eth-mainnet-ingress/elf/pfusdc-eth-mainnet-ingress-program"
 ));
 const MAX_UPDATES: u8 = 8;
 const USDC: &str = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
@@ -68,12 +68,11 @@ impl IngressRoute {
 
     fn elf(self) -> Result<Elf> {
         match self {
-            Self::Pfusdc => {
-                let path = env::var_os("PFUSDC_INGRESS_ELF")
-                    .ok_or_else(|| anyhow!("PFUSDC_INGRESS_ELF must name the rebuilt committee-authenticated guest"))?;
-                Ok(Elf::from(fs::read(PathBuf::from(path))?))
-            }
-            Self::Pfeth => Ok(PFETH_ELF),
+            Self::Pfusdc => match env::var_os("PFUSDC_INGRESS_ELF") {
+                Some(path) => Ok(Elf::from(fs::read(PathBuf::from(path))?)),
+                None => Ok(PFUSDC_ELF),
+            },
+            Self::Pfeth => bail!("pfETH guest shares the changed ingress ABI and must be rebuilt and verified before re-enabling proving"),
         }
     }
 
