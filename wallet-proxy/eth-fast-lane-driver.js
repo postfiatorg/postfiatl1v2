@@ -489,8 +489,7 @@ async function runJob(jobPath, configPath, dependencies = {}) {
         }
         writeWorkerState(context, 'accepted', {
             retryable: false,
-            route_asset_id: context.config.asset_id,
-            asset_id: claimResult.credited_asset_id,
+            credited_asset_id: claimResult.credited_asset_id,
             receipt_code: claimResult.receipt_code,
             receipt_id: claimResult.receipt_id || null,
             tx_id: claimResult.tx_id || null,
