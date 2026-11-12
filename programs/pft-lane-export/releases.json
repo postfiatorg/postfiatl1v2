@@ -28,6 +28,40 @@
       "program_vkey": "0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414",
       "cargo_lock_sha256": "d34ce6ca28550ab6caa959a0827c30587ead1614ec73026476a35103724938f7",
       "expected": "programs/pft-lane-export/program-info.json"
+    },
+    {
+      "id": "pft-lane-export-v1-20261112",
+      "build_mode": "docker",
+      "build_command": "cargo prove build --docker --tag v6.3.1 --locked --workspace-directory <checkout> --output-directory elf",
+      "source_commit": "c1a8a7f7ab4893f695384ecc21ad079035e9f795",
+      "workflow": ".github/workflows/pft-lane-export-identity.yml",
+      "reason": "rebuilt after crates/types changed through the fence status merge c1a8a7f7a; guest source unchanged",
+      "runs": [
+        {
+          "run_id": 43226356342,
+          "attempt": 1,
+          "builds": 2,
+          "clean_source_trees": 2
+        },
+        {
+          "run_id": 43227408081,
+          "attempt": 1,
+          "builds": 2,
+          "clean_source_trees": 2,
+          "note": "at 32c7db71bc4f050cc72816978e27e45eaf118f5c; nothing the guest links changed since c1a8a7f7a"
+        },
+        {
+          "run_id": 43227528337,
+          "attempt": 1,
+          "builds": 2,
+          "clean_source_trees": 2,
+          "note": "at 2181cc42c874bc63af11f38bb5aae4f0aa80dd59; nothing the guest links changed since c1a8a7f7a"
+        }
+      ],
+      "elf_sha256": "8ac7696a5912eea37715b80798124baae0b81f8762d9351d1236737a980a1188",
+      "program_vkey": "0x00d5ebebe8e4551cf99ecfcea71f48957e61ad2fde1eab96357ddee66148ab65",
+      "cargo_lock_sha256": "d34ce6ca28550ab6caa959a0827c30587ead1614ec73026476a35103724938f7",
+      "expected": "programs/pft-lane-export/program-info.json"
     }
   ]
 }

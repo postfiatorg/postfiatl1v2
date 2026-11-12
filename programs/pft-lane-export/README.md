@@ -8,13 +8,13 @@ It has its own key. The pfUSDC egress program (`programs/pfusdc-egress`) binds a
 
 `elf/pft-lane-export-program` and `program-info.json` are the program's identity:
 
-- ELF sha256: `e92f20046c20761bb7a26ec47540000a88fad28b51874453437c3dd390f448ab`
-- Verifying key: `0x000cef5bfa4586cfb79e255a950ae8c1dbb15c4270a968ad5bfcbe32d0a81414`
+- ELF sha256: `8ac7696a5912eea37715b80798124baae0b81f8762d9351d1236737a980a1188`
+- Verifying key: `0x00d5ebebe8e4551cf99ecfcea71f48957e61ad2fde1eab96357ddee66148ab65`
 
-`releases.json` records how they were produced:
+`releases.json` records how they were produced, the latest release last:
 
-- **Workflow:** `pft-lane-export-identity`, run 42818337185 at commit `439803aaa`, attempts 1 and 2 on separate runner machines.
-- **Builds:** each attempt built the guest twice from two clean trees in the pinned SP1 image `ghcr.io/succinctlabs/sp1@sha256:0942a27d…3400`, with `cargo prove build --docker --tag v6.3.1 --locked`. All four ELFs were byte-identical, and both attempts derived the same key.
+- **Workflow:** `pft-lane-export-identity`, runs 43226356342, 43227408081 and 43227528337 at `c1a8a7f7a`, `32c7db71b` and `2181cc42c`. The guest source did not change; the fence status merge `c1a8a7f7a` grew `crates/types`, which the guest links, and moved the ELF and the key. The first release (`e92f2004…`, key `0x000cef5b…0a81414`, run 42818337185 at `439803aaa`) is pinned by no verifier on any network; only the local fork rehearsal of 2026-11-10 used it.
+- **Builds:** each run built the guest twice from two clean trees in the pinned SP1 image `ghcr.io/succinctlabs/sp1@sha256:0942a27d…3400`, with `cargo prove build --docker --tag v6.3.1 --locked`. All six ELFs were byte-identical, and all three runs derived the same key.
 - **Rebuild check:** the workflow rebuilds the guest on every push and pull request and fails when the ELF or the key differs from `program-info.json`.
 
 **No proof has been generated with this key yet.**
