@@ -896,6 +896,27 @@ impl VaultBridgeRouteProfileActivationV1 {
             }
             (_, None, None) => {}
         }
+        if let Some(state) = self.beacon_finality_bootstrap.as_ref() {
+            if self.profile.verifier_kind != NAV_PROFILE_VERIFIER_SP1_GROTH16 {
+                return Err(
+                    "beacon finality bootstrap requires an sp1-groth16 route".to_string()
+                );
+            }
+            state.validate()?;
+            let expected_route_binding =
+                vault_bridge_route_binding(&profile_hash, self.profile.route_epoch)?;
+            if state.route_profile_hash != profile_hash
+                || state.route_epoch != u64::from(self.profile.route_epoch)
+                || state.source_chain_id != self.profile.source_chain_id
+                || state.vault_address != self.profile.vault_address
+                || state.token_address != self.profile.token_address
+                || state.route_binding != expected_route_binding
+            {
+                return Err(
+                    "beacon finality bootstrap does not match route profile".to_string()
+                );
+            }
+        }
         let expected_kind = if self.schema == VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2 {
             vault_bridge_arc_route_amendment_kind_v2(
                 &self.profile,
@@ -903,6 +924,8 @@ impl VaultBridgeRouteProfileActivationV1 {
                     "route activation v2 requires an Arc bootstrap".to_string()
                 })?,
             )?
+        } else if let Some(state) = self.beacon_finality_bootstrap.as_ref() {
+            vault_bridge_beacon_route_amendment_kind_v2(&self.profile, state)?
         } else {
             vault_bridge_route_amendment_kind(&self.profile)?
         };
