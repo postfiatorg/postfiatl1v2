@@ -397,6 +397,7 @@ const PUBLIC_READ_RPC_METHODS = new Set([
     'owned_recovery_capabilities',
     'owned_certificate',
     'owned_recovery_status',
+    'owned_fence_status',
     'fastpay_recovery_committee',
     'blocks',
     'receipt',
@@ -1005,6 +1006,7 @@ Object.assign(walletProxyRuntime, {
 });
 Object.assign(walletProxyRuntime, require('./rpc-routing').create(walletProxyRuntime));
 const { UpstreamRpcConnection,
+readFastpayFenceStatuses,
 addProxyRouteEvent,
 bftQuorumThreshold,
 broadcastFastpayMutation,
@@ -1422,6 +1424,11 @@ wss.on('connection', (ws, req) => {
 
     // Track pending upstream requests for this WS client.
     let activeTcpConnections = 0;
+    const fenceStatusCaller = Symbol('fence-status-caller');
+    // The owned_fence_status budget's source: the socket's peer address. No
+    // proxy header is trusted; behind a reverse proxy every client shares
+    // the proxy's address and so one source budget.
+    const fenceStatusSource = String(req.socket?.remoteAddress || 'unknown').replace(/^::ffff:/, '');
     const walletSubscriptions = new Map();
 
     ws.on('close', () => {
@@ -1632,6 +1639,18 @@ wss.on('connection', (ws, req) => {
                 events: []
             }));
             mutationAdmission?.release();
+            return;
+        }
+
+        if (parsed.method === 'owned_fence_status') {
+            // Counted like every other upstream request: the permit is taken
+            // before the fan-out and released whatever happens.
+            activeTcpConnections++;
+            try {
+                ws.send(JSON.stringify(await readFastpayFenceStatuses(parsed, undefined, undefined, fenceStatusCaller, fenceStatusSource)));
+            } finally {
+                activeTcpConnections = Math.max(0, activeTcpConnections - 1);
+            }
             return;
         }
 

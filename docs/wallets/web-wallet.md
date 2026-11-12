@@ -265,6 +265,7 @@ requires the finality submit capability.
 | `owned_recovery_capabilities` | none | Read active v3 FastPay committee/domain/windows. |
 | `owned_certificate` | `certificate_digest` or `lock_id` | Read persisted recovery evidence. |
 | `owned_recovery_status` | `lock_id` | Read ordered recovery state. |
+| `owned_fence_status` | `lock_id` | Read; the gateway returns every validator's signed fence status (see [FastPay Terminal Proofs](#fastpay-terminal-proofs)). |
 | `owned_sign_v3` | `order_json`, `validator_id` | Persist-before-sign vote for a complete v3 owner-authorized transfer envelope. |
 | `owned_apply_v3` | `cert_json` | Apply a v3 transfer certificate and return authenticated durable acknowledgements. |
 | `owned_unwrap_sign_v3` | `order_json`, `validator_id` | Persist-before-sign vote for a complete v3 signed unwrap envelope. |
@@ -332,6 +333,101 @@ with live keys and fail closed on drift. Reviewing the file and building it
 into a signed app is the release owner's step. The pin is valid only while
 its epoch admits orders (`new_orders_through_height`); every committee
 rotation needs a fresh export, review and build.
+
+## FastPay Terminal Proofs
+
+`owned_fence_status` lets a wallet prove, without trusting the gateway or one
+node, that an unwrap or transfer is ordered (anchored by a certified block) or
+that its lock was cancelled by ordered recovery. Each validator signs a
+`FastPayFenceStatusV2` from its certified blocks only, under its own context
+`postfiat-l1-v2/fastpay-fence-status/v2`: the decision, the `fence_digest`
+(equal to the apply acknowledgement's `terminal_state_digest`),
+`anchored_at_or_before_height` and the `observed_height` it answered at.
+`anchored_at_or_before_height` is the lowest certified height at which that
+validator can show the effect anchored: the anchoring block's height while it
+holds that block, or its history checkpoint's height after a prune or a
+checkpoint restore, so honest validators may sign different values. (v1 signed
+it as an exact `anchored_height` and refused honest pruned validators as
+conflicting; v1 was never merged.) A speculative apply, a mempool decision or
+an effect that a certified block rolled back is answered, and signed, as "not
+terminal at `observed_height`". The gateway asks every validator and returns
+each answer with its validator and `answered_count`; a partial answer is
+marked `partial`. It never merges them. It takes a connection permit per read,
+shares one fan-out between identical reads in flight, and answers
+`proxy_fence_status_busy` (with `retry_after_ms`) above
+`FASTPAY_FENCE_STATUS_MAX_FANOUTS_PER_CALLER` (default 2 per connection) or
+`FASTPAY_FENCE_STATUS_MAX_FANOUTS` (default 16) fan-outs in flight. Because
+each new fan-out costs every validator a signature, it also spends one token
+of its source address's budget and one of the gateway's, and is answered
+`proxy_fence_status_busy` with the wait for the next token when either is
+empty. A budget holds `FASTPAY_FENCE_STATUS_SOURCE_BURST` (default 8) tokens
+per address and regains one every `FASTPAY_FENCE_STATUS_SOURCE_REFILL_MS`
+(default 2000), and `FASTPAY_FENCE_STATUS_GLOBAL_BURST` (default 64) and
+`FASTPAY_FENCE_STATUS_GLOBAL_REFILL_MS` (default 250) for the gateway. A read
+joining a fan-out in flight spends nothing; the gateway caches no answer. The
+source address is the socket's peer address; the gateway trusts no
+forwarding header, so behind a reverse proxy every client shares the proxy's
+budget until a trusted proxy header rule is added and configured.
+
+The wallet must, before releasing a reservation after a cancelled fence or
+showing an unwrap credit as ordered:
+
+- pin the registry root of the order's committee in its own configuration
+  (the root commits to chain, genesis, protocol version, epoch and members)
+  and pass it as the required `pinned_registry_root`; a committee read with
+  `fastpay_recovery_committee` through the gateway is only a candidate;
+- validate that committee completely: its registry root recomputed from the
+  members, the protocol quorum for its member count, its schema, order range
+  and canonical member order (`invalid_committee`), then its root against the
+  pinned one (`untrusted_committee`);
+- check each status on its own (shape, lock, domain, epoch and root,
+  membership, ML-DSA-65 signature against that committee's keys); a status
+  that fails is listed in the result's `invalid` with its `validator_id` and
+  reason and counts for nothing, without refusing the others;
+- require the committee's `quorum` of distinct members with the same
+  decision, operation and `fence_digest`; anchored and observed heights may
+  differ. The proved `anchored_at_or_before_height` is the highest in that
+  quorum, the height by which the quorum agrees the effect was anchored.
+
+The rule assumes at most the committee's fault bound, `(n - 1) / 3` of `n`
+members, is faulty, so a faulty minority can neither prove an answer nor veto
+one. A "not terminal" status contradicts a terminal quorum only when observed
+at or above the quorum-supported bound, the `(f + 1)`-th smallest
+`anchored_at_or_before_height` of its distinct signers (`f = (n - 1) / 3`): at
+least one honest signer claims a bound at or below it, so up to `f` false
+bounds, low or high, cannot move it below the true anchoring height.
+Likewise a terminal status contradicts a "not terminal" quorum only when
+anchored at or below the quorum-supported height, the `(f + 1)`-th largest
+`observed_height` of its distinct signers, so up to `f` false high heights
+cannot move it above what an honest signer observed. A valid status that
+contradicts the proved answer (another terminal result, or such a "not
+terminal" or terminal status) is returned unchanged in `contradicting`; a
+signer whose own bound is below the quorum-supported one, or whose observed
+height is above it, is returned in `inconsistent_bounds`.
+From heights the verifier concludes only this: a "not terminal" below that
+bound (or a terminal status anchored above that height) is compatible
+history, and one on the other side conflicts with an honest signer's claim.
+It attributes nothing from a single member's height: no status is judged
+against one signer's bound or observed height, and an inconsistent one may be
+a lie or an honest value, so it is neither counted toward a refusal nor used
+to name the others. The wallet acts on the proved answer and logs
+`contradicting`, `inconsistent_bounds` and `invalid` for operators as signed
+evidence to investigate. Only when the contradicting statuses also come from
+a quorum of distinct members (more faulty members than the bound) is the set
+refused as `conflicting`; with no answer at quorum it is `below_quorum`.
+
+The Rust check is `postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v2`
+(rules in `postfiat_types::verify_fastpay_fence_status_quorum_v2`; for statuses
+as received, `verify_fastpay_fence_status_quorum_v2_json` parses each with
+`FastPayFenceStatusV2::from_json_strict` and reports one that does not parse
+as `malformed`); the Python check is
+`postfiat_rpc.fastpay_fence_status.verify_fence_status_quorum`, with an
+ML-DSA verifier supplied by the caller. Both run the same acceptance vectors,
+`crates/types/test-vectors/fastpay_fence_status_acceptance_v2.json`. A
+validator whose rpc-serve signs through the signer socket answers
+`fastpay_fence_status_signer_unavailable` and does not count.
+
+The limitation is FastPay-wide, not this read alone: no FastPay transfer or unwrap vote, signed apply acknowledgement or fence status can be signed on the two-user signer shape: rpc-serve signs all of them with the validator key file (`sign_for_fastpay_committee`, `crates/node/src/fastpay_recovery_node.rs`; `crates/node/src/consensus_artifacts.rs`), which it cannot read there, and the signer process signs only consensus and transport contexts. Enough validators on that shape and FastPay collects no vote or acknowledgement quorum at all, not only no terminal-status quorum. This lasts until the signer process gets a design that lets it check certified-state evidence itself; a key copy readable by rpc-serve would make the old paths work and defeat the isolation.
 
 ## FastPay Funding
 

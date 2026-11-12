@@ -79,15 +79,15 @@ async function startProxyFixture(options = {}) {
           socket.destroy();
           return;
         }
-        const outcome = rpcHandler(request);
-        socket.write(`${JSON.stringify({
+        // A handler may answer later by returning a promise.
+        Promise.resolve(rpcHandler(request)).then(outcome => socket.write(`${JSON.stringify({
           version: 'postfiat-local-rpc-v1',
           id: request.id,
           ok: outcome.ok === true,
           result: outcome.result || null,
           error: outcome.error || null,
           events: [],
-        })}\n`);
+        })}\n`));
       }
     });
   });
@@ -104,9 +104,12 @@ async function startProxyFixture(options = {}) {
       FASTPAY_CERTIFICATE_OUTBOX_PATH: path.join(tempDir, 'fastpay-outbox.json'),
       LISTEN_HOST: '127.0.0.1',
       LISTEN_PORT: String(proxyPort),
-      RPC_FLEET: `validator-0=127.0.0.1:${rpcPort}`,
+      // `fleetSize` validators, all served by the one fixture RPC server.
+      RPC_FLEET: Array.from({ length: options.fleetSize || 1 }, (_, index) => (
+        `validator-${index}=127.0.0.1:${rpcPort}`)).join(','),
       RPC_HOST: '127.0.0.1',
       RPC_PORT: String(rpcPort),
+      ...(options.env || {}),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

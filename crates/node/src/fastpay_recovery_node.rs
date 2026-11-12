@@ -1200,6 +1200,232 @@ pub fn owned_recovery_status_v3(options: NodeOptions, lock_id: &str) -> io::Resu
     .map_err(invalid_data)
 }
 
+pub const FASTPAY_FENCE_STATUS_SIGNER_UNAVAILABLE: &str = "fastpay_fence_status_signer_unavailable";
+pub const FASTPAY_FENCE_STATUS_NOT_A_SIGNER: &str = "fastpay_fence_status_not_a_signer";
+/// Distinct (data dir, validator, lock) answers kept per process. An entry is
+/// served only while the certified tip it was signed at is still the tip and
+/// the history base is unchanged: a prune or checkpoint restore at the same
+/// tip changes the height this validator can show an effect anchored at.
+const FASTPAY_FENCE_STATUS_CACHE_ENTRIES: usize = 4096;
+
+type FastPayFenceStatusCache =
+    BTreeMap<(PathBuf, String, String), (FenceStatusTipMark, postfiat_types::FastPayFenceStatusV2)>;
+
+/// Certified tip height, its block hash and the retained-history base.
+type FenceStatusTipMark = (u64, String, u64);
+
+fn fastpay_fence_status_cache() -> &'static std::sync::Mutex<FastPayFenceStatusCache> {
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<FastPayFenceStatusCache>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(Default::default)
+}
+
+#[cfg(test)]
+pub(super) fn clear_fastpay_fence_status_cache() {
+    fastpay_fence_status_cache()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clear();
+}
+
+pub fn fastpay_fence_status_error_code(message: &str) -> Option<&'static str> {
+    [
+        FASTPAY_FENCE_STATUS_SIGNER_UNAVAILABLE,
+        FASTPAY_FENCE_STATUS_NOT_A_SIGNER,
+    ]
+    .into_iter()
+    .find(|code| message.contains(&format!("{code}: ")))
+}
+
+/// The certified fence for `lock_id` and the height of the certified block
+/// that made it terminal. An ordered recovery (a cancellation, or a
+/// confirmation of a revealed certificate) exists only by executing a
+/// certified block, at its `decided_at_height`. A consensusless effect counts
+/// only once a certified block's `fastpay_pre_state_effects` anchored it; a
+/// speculative effect, applied or rolled back, never does.
+fn certified_fastpay_fence(
+    store: &NodeStore,
+    ledger: &LedgerState,
+    lock_id: &str,
+) -> io::Result<Option<(postfiat_types::FastPayVersionFenceV1, u64)>> {
+    let Some(fence) = ledger
+        .fastpay_version_fences
+        .iter()
+        .find(|fence| fence.lock_id == lock_id)
+    else {
+        return Ok(None);
+    };
+    if fence.origin == postfiat_types::FastPayFenceOriginV1::OrderedRecovery {
+        return Ok(Some((fence.clone(), fence.decided_at_height)));
+    }
+    let anchored = if store.transactional_storage_active()? {
+        store
+            .transactional_store()?
+            .anchored_fastpay_effect_at(lock_id)?
+    } else {
+        // Legacy storage keeps speculative effects in the ledger file, so
+        // the block log is the only certified evidence.
+        let mut found = store.read_blocks()?.blocks.into_iter().find_map(|block| {
+            let height = block.header.height;
+            block
+                .fastpay_pre_state_effects
+                .into_iter()
+                .find(|effect| effect.lock_id == lock_id)
+                .map(|effect| (height, effect))
+        });
+        if found.is_none() {
+            found = read_history_checkpoint_state_optional(store)?.and_then(|checkpoint| {
+                let height = checkpoint.pruned_up_to_height;
+                checkpoint
+                    .ledger
+                    .fastpay_version_fences
+                    .into_iter()
+                    .find(|effect| {
+                        effect.lock_id == lock_id
+                            && effect.origin == postfiat_types::FastPayFenceOriginV1::Consensusless
+                    })
+                    .map(|effect| (height, effect))
+            });
+        }
+        found
+    };
+    match anchored {
+        Some((height, effect)) if effect == *fence => Ok(Some((effect, height))),
+        Some(_) => Err(fastpay_invalid_data(
+            "anchored FastPay effect conflicts with the certified ledger",
+        )),
+        None => Ok(None),
+    }
+}
+
+/// A fence status this validator signs from its certified state only: the
+/// finalized ledger and the certified blocks at the certified tip, never the
+/// speculative journal or the mempool. The caller chooses only the lock; the
+/// validator is the serving node and every signed byte comes from that state.
+///
+/// The FastPay committee key is the validator key in
+/// `<data-dir>/validator_keys.json`, read by `sign_for_fastpay_committee` in
+/// this process. In socket mode (`rpc-serve --finality-signer-socket`, the
+/// two-user shape) the key belongs to the signer process, which signs only
+/// consensus and transport contexts, so this read refuses with
+/// `fastpay_fence_status_signer_unavailable` instead of reading a key file.
+///
+/// Cost: under the ordered-commit lock, one ledger read and one anchor lookup
+/// (one index read; a block-log scan on legacy storage); then, outside it,
+/// one ML-DSA-65 signature and its self-check. A repeat for the same lock at
+/// the same certified tip is served from a bounded per-process cache
+/// (4,096 answers) without signing.
+pub fn owned_fence_status_v3(
+    options: NodeOptions,
+    validator_id: &str,
+    lock_id: &str,
+) -> io::Result<postfiat_types::FastPayFenceStatusV2> {
+    validate_hex_string("FastPay lock ID", lock_id, Some(96))?;
+    crate::validator_signer::refuse_key_file_in_socket_mode(
+        &options.data_dir.join(VALIDATOR_KEYS_FILE),
+    )
+    .map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!("{FASTPAY_FENCE_STATUS_SIGNER_UNAVAILABLE}: {error}"),
+        )
+    })?;
+    let store = NodeStore::new(&options.data_dir);
+    let commit_lock = store.lock_ordered_commit()?;
+    let genesis = store.read_genesis()?;
+    let tip = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?;
+    let cache_key = (
+        std::fs::canonicalize(&options.data_dir).unwrap_or_else(|_| options.data_dir.clone()),
+        validator_id.to_string(),
+        lock_id.to_string(),
+    );
+    let tip_mark: FenceStatusTipMark =
+        (tip.height, tip.block_hash.clone(), tip.history_base_height);
+    if let Some((mark, status)) = fastpay_fence_status_cache()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(&cache_key)
+    {
+        if *mark == tip_mark {
+            return Ok(status.clone());
+        }
+    }
+    let ledger = store.read_ledger()?;
+    let certified = certified_fastpay_fence(&store, &ledger, lock_id)?;
+    let committee = match &certified {
+        Some((fence, _)) => {
+            fastpay_recovery_committee(&ledger, fence.committee_epoch, &fence.registry_root)?
+        }
+        None => active_fastpay_recovery_committee(&ledger, tip.height)?,
+    };
+    let domain = fastpay_domain_for_committee(&options.data_dir, &committee)?;
+    if !fastpay_local_signer_eligible(&options.data_dir, &committee, validator_id)? {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "{FASTPAY_FENCE_STATUS_NOT_A_SIGNER}: validator {validator_id} holds no key of FastPay committee epoch {}",
+                committee.committee_epoch
+            ),
+        ));
+    }
+    let mut status = postfiat_types::FastPayFenceStatusV2 {
+        schema: postfiat_types::FASTPAY_FENCE_STATUS_SCHEMA_V2.to_string(),
+        chain_id: domain.chain_id,
+        genesis_hash: domain.genesis_hash,
+        protocol_version: domain.protocol_version,
+        committee_epoch: committee.committee_epoch,
+        registry_root: committee.registry_root.clone(),
+        lock_id: lock_id.to_string(),
+        decision: None,
+        operation: None,
+        fence_digest: None,
+        anchored_at_or_before_height: None,
+        observed_height: tip.height,
+        validator_id: validator_id.to_string(),
+        signature_hex: String::new(),
+    };
+    if let Some((fence, height)) = certified {
+        if height == 0 || height > tip.height {
+            return Err(fastpay_invalid_data(
+                "certified FastPay fence height is outside the certified chain",
+            ));
+        }
+        let terminal_bytes = fence
+            .state_commitment_bytes()
+            .map_err(fastpay_invalid_data)?;
+        status.fence_digest = Some(bytes_to_hex(&hash_bytes(
+            "postfiat.fastpay.terminal-state.v1",
+            &terminal_bytes,
+        )));
+        status.decision = Some(fence.decision);
+        status.operation = Some(fence.operation);
+        status.anchored_at_or_before_height = Some(height);
+    }
+    // Every signed byte is fixed; sign outside the lock so a flood of reads
+    // does not hold up block commits.
+    drop(commit_lock);
+    let signing_bytes = status.signing_bytes().map_err(fastpay_invalid_data)?;
+    status.signature_hex = bytes_to_hex(&sign_for_fastpay_committee(
+        &options.data_dir,
+        &committee,
+        validator_id,
+        &signing_bytes,
+        postfiat_types::FASTPAY_FENCE_STATUS_CONTEXT_V2,
+    )?);
+    status.validate_shape().map_err(fastpay_invalid_data)?;
+    let mut cache = fastpay_fence_status_cache()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if cache.len() >= FASTPAY_FENCE_STATUS_CACHE_ENTRIES {
+        cache.retain(|_, (mark, _)| *mark == tip_mark);
+        if cache.len() >= FASTPAY_FENCE_STATUS_CACHE_ENTRIES {
+            cache.clear();
+        }
+    }
+    cache.insert(cache_key, (tip_mark, status.clone()));
+    Ok(status)
+}
+
 #[cfg(test)]
 mod burn5_recovery_tests {
     use super::*;

@@ -1310,6 +1310,17 @@ class PostFiatRpcClient:
             raise ValueError("lock_id is required")
         return self._call("owned_recovery_status", {"lock_id": lock_id})
 
+    def owned_fence_status(self, lock_id: str) -> dict[str, Any]:
+        """This node's signed FastPay fence status for a lock (one validator).
+
+        A status proves nothing alone: collect one per validator and check them
+        with `postfiat_rpc.fastpay_fence_status.verify_fence_status_quorum`
+        against the committee from `fastpay_recovery_committee`.
+        """
+        if not lock_id:
+            raise ValueError("lock_id is required")
+        return self._object_read("owned_fence_status", {"lock_id": lock_id})
+
     def owned_certificate(
         self,
         *,

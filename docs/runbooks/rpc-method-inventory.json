@@ -13,9 +13,9 @@
     "operator_or_local_only": 42,
     "owned_lane_gated": 8,
     "privacy_alpha_gated": 4,
-    "read_only_public": 86,
+    "read_only_public": 87,
     "sdk_only_or_unknown": 0,
-    "total_methods": 167
+    "total_methods": 168
   },
   "gaps": [
     {
@@ -34,10 +34,10 @@
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-11-10T11:18:14Z",
+  "generated_utc": "2026-11-11T10:53:32Z",
   "git": {
     "dirty": true,
-    "revision": "5c8f693ca1d1603da1fde07cbcd82463b8ad92a7"
+    "revision": "a5687874f8e508f5ce4768dee2983a5411a01cf9"
   },
   "methods": [
     {
@@ -1779,6 +1779,21 @@
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
       "sdk_constant": true
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "owned_fence_status",
+      "node_dispatch": true,
+      "notes": "this validator's ML-DSA-signed FastPay fence status for a lock, from certified blocks only; typed refusal in signer-socket mode",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "sdk_constant": false
     },
     {
       "authorized_protocol_mutation_public": false,

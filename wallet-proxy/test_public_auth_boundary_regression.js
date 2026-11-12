@@ -202,6 +202,7 @@ async function main() {
     'owned_recovery_capabilities',
     'owned_certificate',
     'owned_recovery_status',
+    'owned_fence_status',
     'fastpay_recovery_committee',
     'navcoin_bridge_supply_status',
     'nav_reserve_proof_status',
@@ -224,6 +225,8 @@ async function main() {
   }
   // The committee read is small and changes only at a rotation: no 2-second shared answer.
   assert(!require('./public-read-cache').PUBLIC_READ_CACHE_METHODS.has('fastpay_recovery_committee'));
+  // Fence statuses are signed per validator and per certified tip: never shared.
+  assert(!require('./public-read-cache').PUBLIC_READ_CACHE_METHODS.has('owned_fence_status'));
   // Pin the whole public-read list: any addition is a deliberate review decision.
   assert.deepStrictEqual([...PUBLIC_READ_RPC_METHODS].sort(), [
     'account', 'account_assets', 'account_lines', 'account_tx', 'asset_fee_quote', 'asset_info',
@@ -232,7 +235,8 @@ async function main() {
     'fee', 'fx_fix_info',
     'fx_fix_list', 'fx_fix_quote', 'fx_fix_reservation_info', 'mempool', 'nav_reserve_proof_status',
     'navcoin_bridge_routes', 'navcoin_bridge_supply_status', 'nft_fee_quote', 'offer_fee_quote',
-    'owned_certificate', 'owned_objects', 'owned_recovery_capabilities', 'owned_recovery_status',
+    'owned_certificate', 'owned_fence_status', 'owned_objects', 'owned_recovery_capabilities',
+    'owned_recovery_status',
     'private_pool_page', 'private_pool_snapshot', 'private_readiness', 'receipt', 'server_info',
     'status', 'transfer_fee_quote', 'validators', 'vault_bridge_route', 'vault_bridge_status',
   ]);

@@ -1658,6 +1658,57 @@ fn handle_rpc_serve_connection(
                 ),
             }
         }
+    } else if method == "owned_fence_status" {
+        // The caller names only the lock; the node signs as itself, from its
+        // certified state (`owned_fence_status_v3`).
+        let params = request.params.as_object();
+        let lock_id = params
+            .and_then(|params| params.get("lock_id"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
+        if let Some(extra) =
+            params.and_then(|params| params.keys().find(|key| key.as_str() != "lock_id"))
+        {
+            rpc_serve_error_response(
+                &id,
+                "invalid_params",
+                &format!("unknown owned_fence_status param `{extra}`"),
+            )
+        } else if lock_id.is_empty() {
+            rpc_serve_error_response(
+                &id,
+                "rpc_protocol_error",
+                "owned_fence_status requires lock_id",
+            )
+        } else if context.finality_signer_socket.is_some() {
+            rpc_serve_error_response(
+                &id,
+                postfiat_node::FASTPAY_FENCE_STATUS_SIGNER_UNAVAILABLE,
+                "rpc-serve signs through a validator signer socket and holds no FastPay committee key; the signer process does not sign fence statuses",
+            )
+        } else {
+            match postfiat_node::owned_fence_status_v3(
+                NodeOptions {
+                    data_dir: context.data_dir.clone(),
+                },
+                &context.node_id,
+                lock_id,
+            ) {
+                Ok(status) => success_response(&id, &status, vec![]).unwrap_or_else(|_| {
+                    rpc_serve_error_response(
+                        &id,
+                        "rpc_internal",
+                        "FastPay fence status serialization failed",
+                    )
+                }),
+                Err(error) => {
+                    let message = error.to_string();
+                    let code = postfiat_node::fastpay_fence_status_error_code(&message)
+                        .unwrap_or("owned_fence_status_failed");
+                    rpc_serve_error_response(&id, code, &message)
+                }
+            }
+        }
     } else if method == "owned_sign" {
         let validator_id = request
             .params
@@ -4164,6 +4215,7 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "owned_recovery_capabilities"
             | "owned_certificate"
             | "owned_recovery_status"
+            | "owned_fence_status"
             | "fastpay_recovery_committee"
     ) || (allow_mempool_submit
         && is_mempool_submit_signed_method(method)
@@ -4473,6 +4525,7 @@ mod remote_method_policy_tests {
             "owned_recovery_capabilities",
             "owned_certificate",
             "owned_recovery_status",
+            "owned_fence_status",
             "fastpay_recovery_committee",
         ] {
             assert!(rpc_serve_method_allowed_with_owned_lane(

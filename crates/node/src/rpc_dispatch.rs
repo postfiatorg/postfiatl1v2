@@ -12,6 +12,9 @@ pub(super) fn rpc_dispatch_error_response_parts(error: &str) -> (&'static str, &
     if let Some(code) = postfiat_node::fastpay_recovery_committee_error_code(error) {
         return (code, error);
     }
+    if let Some(code) = postfiat_node::fastpay_fence_status_error_code(error) {
+        return (code, error);
+    }
     if let Some(code) = postfiat_node::owned_objects_error_code(error) {
         return (code, error);
     }
@@ -724,6 +727,30 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                     "fastpay_recovery_committee",
                     report.committee.committee_epoch.to_string(),
                     "FastPay recovery committee queried",
+                )],
+            )
+        }
+        "owned_fence_status" => {
+            // Local operator read: the operator names which of its own keys
+            // signs; rpc-serve always signs as its node id.
+            let lock_id = flag_value(flags, "--lock-id").ok_or("missing --lock-id")?;
+            let validator_id =
+                flag_value(flags, "--validator-id").ok_or("missing --validator-id")?;
+            let status = postfiat_node::owned_fence_status_v3(
+                NodeOptions {
+                    data_dir: data_dir.clone(),
+                },
+                validator_id,
+                lock_id,
+            )
+            .map_err(|error| format!("rpc owned_fence_status failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &status,
+                vec![RpcEvent::new(
+                    "owned_fence_status",
+                    status.lock_id.clone(),
+                    "FastPay fence status signed",
                 )],
             )
         }
