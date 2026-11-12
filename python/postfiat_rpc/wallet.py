@@ -532,6 +532,7 @@ OPERATION_SCHEMAS: dict[str, Any] = json.loads(
 )
 _ABSENT_EQUALS = {
     "option": lambda value: value is None,
+    "vec": lambda value: type(value) is list and not value,
     "bool": lambda value: value is False,
     "int": lambda value: type(value) is int and value == 0,
     "str": lambda value: type(value) is str and value == "",
@@ -545,8 +546,9 @@ def _field_rule(spec: Any) -> tuple[str, str | None]:
 def _strict_difference(requested: Any, quoted: Any, path: str, struct: str | None = None) -> str | None:
     """The first path where `quoted` differs from `requested` in value or type,
     or None. A key on one side only is a difference unless the Rust type of
-    `struct` gives absence that value: `null` for an `Option`, `false` /
-    `0` / `""` of the exact type for a defaulted scalar (`OPERATION_SCHEMAS`). Without a schema, every key must match."""
+    `struct` gives absence that value: `null` for an `Option`, `[]` for a
+    defaulted `Vec`, `false` / `0` / `""` of the exact type for a defaulted
+    scalar (`OPERATION_SCHEMAS`). Without a schema, every key must match."""
 
     if type(requested) is not type(quoted):
         return path

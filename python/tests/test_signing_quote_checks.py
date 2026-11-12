@@ -284,6 +284,47 @@ class DefaultFieldTests(unittest.TestCase):
         signer_json.assert_not_called()
 
 
+class EmptyVectorTests(unittest.TestCase):
+    PAYMENT = {"operation": "issued_payment_v2", "from": "pf-holder", "to": "pf-dest", "issuer": "pf-issuer", "asset_id": "aa" * 48, "amount": 5}
+    MEMO = {"memo_type": "", "memo_format": "", "memo_data": "6869"}
+
+    def test_an_empty_default_vector_equals_absence(self) -> None:
+        _check(self.PAYMENT, {**self.PAYMENT, "memos": []})
+        _check({**self.PAYMENT, "memos": []}, self.PAYMENT)
+        reserve = {"operation": "nav_reserve_submit", "issuer": "pf-holder", "reserve_accounts": []}
+        _check({**reserve, "sp1_proof_bytes": [], "sp1_public_values": []}, reserve)
+        settle = {"operation": "vault_bridge_redeem_settle", "asset_id": "aa" * 48}
+        _check({**settle, "withdrawal_observations": []}, settle)
+        propose = {"operation": "vault_bridge_deposit_propose", "proposer": "pf-holder"}
+        _check(propose, {**propose, "source_proof_bytes": [], "source_public_values": []})
+
+    def test_nested_defaults_follow_the_nested_type(self) -> None:
+        _check({**self.PAYMENT, "memos": [{"memo_data": "6869"}]}, {**self.PAYMENT, "memos": [self.MEMO]})
+        with self.assertRaises(QuoteRefusedError):
+            _check({**self.PAYMENT, "memos": [{"memo_data": "6869", "memo_type": None}]}, {**self.PAYMENT, "memos": [self.MEMO]})
+
+    def test_a_changed_or_reordered_list_is_refused(self) -> None:
+        other = {**self.MEMO, "memo_data": "6a6a"}
+        cases = [
+            ([self.MEMO], []),
+            ([], [self.MEMO]),
+            ([self.MEMO], [other]),
+            ([self.MEMO, other], [other, self.MEMO]),
+        ]
+        for requested, quoted in cases:
+            with self.subTest(requested=requested, quoted=quoted):
+                with self.assertRaises(QuoteRefusedError):
+                    _check({**self.PAYMENT, "memos": requested}, {**self.PAYMENT, "memos": quoted})
+        with self.assertRaises(QuoteRefusedError):
+            _check(self.PAYMENT, {**self.PAYMENT, "memos": None})
+
+    def test_an_empty_optional_vector_is_not_absence(self) -> None:
+        advance = {"operation": "pftl_uniswap_route_epoch_advance", "operator": "pf-holder"}
+        with self.assertRaises(QuoteRefusedError):
+            _check({**advance, "settlement_source_asset_ids": []}, advance)
+        _check({**advance, "settlement_source_asset_ids": None}, advance)
+
+
 class TransferQuoteTests(unittest.TestCase):
     CASES = [
         ("recipient", ("to",), "pf-attacker", "quote_mismatch"),
