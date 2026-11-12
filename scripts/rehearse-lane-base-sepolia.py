@@ -49,6 +49,7 @@ def _load(name, relative):
 
 ORDER = _load('rehearse_phase3_deployment_order', 'scripts/rehearse-phase3-deployment-order.py')
 RT = _load('rehearse_lane_roundtrip', 'scripts/rehearse-lane-roundtrip.py')
+RELAY = _load('pft_lane_export_relay', 'scripts/pft-lane-export-relay.py')
 keccak256 = ORDER.keccak256
 require = ORDER.require
 RehearsalFailure = ORDER.RehearsalFailure
@@ -123,6 +124,28 @@ def check_deployer_keystores(plan, derive):
         require(derived == plan[role]['deployer'].lower(),
                 f'the {role} keystore is {derived}, but the plan predicted from {plan[role]["deployer"]}; '
                 'nothing was sent')
+
+
+class RelayerMismatch(RehearsalFailure):
+    """The relayer keystore named now is not the relayer recorded at deploy."""
+
+
+def bound_relayer(account, *, recorded):
+    """The relayer that signs the release: the current keystore's public `address`
+    field, read without unlocking it, must be the relayer recorded at deploy, whose
+    balance and gas estimate the release is quoted from. A change of relayer is not
+    supported."""
+    require(account, 'name the relayer keystore with --relayer-account; nothing was sent')
+    try:
+        current = RELAY.keystore_public_address(account)
+    except RELAY.RelayRefusal as refusal:
+        raise RehearsalFailure(str(refusal)) from None
+    if current != recorded.lower():
+        raise RelayerMismatch(f'relayer-mismatch: the relayer keystore named now is {current}, not the relayer '
+                              f'{recorded.lower()} recorded at deploy, whose balance and gas estimate the release is '
+                              'quoted from. A change of relayer is not supported: name the recorded relayer\'s '
+                              'keystore; nothing was sent')
+    return current
 
 
 def check_planned_nonces(plan, nonce):
@@ -584,10 +607,10 @@ def quote_release(*, ceiling_wei, relayer, lock, calldata, read):
         gas_price_wei=int(read('eth_gasPrice', []), 16))
 
 
-def relay_release_argv(*, rpc_url, lock, input_dir, proof, signer, vkey, caps):
-    """The relay's release command, carrying the caps."""
+def relay_release_argv(*, rpc_url, lock, input_dir, proof, signer, sender, vkey, caps):
+    """The relay's release command, carrying the caps and the sender they were quoted for."""
     return [sys.executable, ROOT / 'scripts/pft-lane-export-relay.py', 'release', '--rpc', rpc_url, '--lock', lock,
-            '--input', input_dir, '--proof', proof, *signer, '--expect-program-vkey', vkey,
+            '--input', input_dir, '--proof', proof, *signer, '--expect-sender', sender, '--expect-program-vkey', vkey,
             '--expect-sp1-verifier', SP1_VERIFIER['address'], '--gas-limit', str(caps['gas_limit']),
             '--max-fee-per-gas', str(caps['max_fee_per_gas_wei'])]
 
@@ -1104,6 +1127,8 @@ def main(argv=None):
                         token_balance=lambda a: int(rpc(url, 'eth_call', [{'to': TOKEN, 'data': ORDER.call_data(
                             'balanceOf(address)', a)}, 'latest']), 16),
                         gas_price_wei=gas_price, node_bin=args.node_bin, driver_alive=driver_alive)
+                    # The release reads the relayer from its keystore's public field: it must be there and agree.
+                    bound_relayer(args.relayer_account, recorded=data['relayer_address'])
                 require_driver('deploy')
                 data['commit'] = head_commit
                 expected_code = {'verifier': data['preflight']['verifier_runtime_code_hash'],
@@ -1290,12 +1315,14 @@ def main(argv=None):
                         f'the relayer ceiling {relayer_ceiling} differs from the sheet\'s '
                         f'{data.get("relayer_ceiling_wei")}; nothing was sent')
                 require(data.get('relayer_address'), 'the relayer address was not recorded at deploy; nothing was sent')
+                # The keystore that signs is the relayer recorded at deploy, before anything is read or signed.
+                relayer = bound_relayer(args.relayer_account, recorded=data['relayer_address'])
                 proof_document = json.loads(Path(args.proof).read_text())
                 calldata = command('release-calldata', [
                     'cast', 'calldata', 'release(bytes,bytes)', '0x' + proof_document['public_values_hex'],
                     proof_document['proof_hex']]).strip()
                 # Before anything is signed: the relayer holds at most the ceiling and the quoted cost fits it.
-                caps = quote_release(ceiling_wei=relayer_ceiling, relayer=data['relayer_address'],
+                caps = quote_release(ceiling_wei=relayer_ceiling, relayer=relayer,
                                      lock=data['deploy']['lock'], calldata=calldata,
                                      read=lambda method, params: rpc(target_url(), method, params))
                 data['release_caps'] = caps
@@ -1311,7 +1338,7 @@ def main(argv=None):
                     relay_output = command('relay-release', relay_release_argv(
                         rpc_url=target_url(), lock=data['deploy']['lock'], input_dir=out / 'relay-input',
                         proof=args.proof, signer=signer_flags(args.relayer_account, args.relayer_password_file),
-                        vkey=vkey, caps=caps))
+                        sender=relayer, vkey=vkey, caps=caps))
                 except RehearsalFailure:
                     # The relay's JSON says whether anything was sent; only "not sent" may be retried.
                     try:
