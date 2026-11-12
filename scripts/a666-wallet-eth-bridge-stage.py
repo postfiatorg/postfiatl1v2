@@ -287,7 +287,38 @@ def live_route() -> dict[str, Any]:
     return route
 
 
+def live_beacon_anchor() -> dict[str, Any]:
+    route = live_route()
+    anchor = route.get("beacon_finality_anchor")
+    if not isinstance(anchor, dict):
+        raise RuntimeError("beacon_finality_anchor_missing: ingress is blocked")
+    if (
+        anchor.get("route_profile_hash") != ROUTE_PROFILE_HASH
+        or int(anchor.get("route_epoch", 0)) != int(route["profile"]["route_epoch"])
+        or int(anchor.get("source_chain_id", 0)) != SOURCE_CHAIN_ID
+        or anchor.get("vault_address") != VAULT
+        or anchor.get("token_address") != TOKEN
+        or anchor.get("route_binding") != ROUTE_BINDING[2:]
+        or not re.fullmatch(r"[0-9a-f]{64}", str(anchor.get("current_sync_committee_root", "")))
+        or not re.fullmatch(r"[0-9a-f]{64}", str(anchor.get("finalized_beacon_root", "")))
+        or not 0 < int(anchor.get("finalized_slot", 0)) < (1 << 64) - 1
+    ):
+        raise RuntimeError("beacon_finality_anchor_invalid: ingress is blocked")
+    return anchor
+
+
+def require_witness_anchor(public: dict[str, Any], anchor: dict[str, Any]) -> None:
+    if (
+        public.get("prior_finalized_beacon_root") != anchor["finalized_beacon_root"]
+        or int(public.get("prior_finalized_slot", 0)) != int(anchor["finalized_slot"])
+        or public.get("prior_sync_committee_root") != anchor["current_sync_committee_root"]
+        or int(public.get("route_epoch", 0)) != int(anchor["route_epoch"])
+    ):
+        raise RuntimeError("beacon_anchor_changed_recapture_required")
+
+
 def readiness() -> dict[str, Any]:
+    live_beacon_anchor()
     reachable = 0
     primary: Web3 | None = None
     for url in EXECUTION_RPCS:
@@ -423,7 +454,12 @@ def confirmed_deposit(request: dict[str, Any], job_dir: Path) -> dict[str, Any]:
 
 def ensure_capture(request: dict[str, Any], job_dir: Path, job_key: str) -> dict[str, Any]:
     deposit = read_json(job_dir / "deposit-result.json")
+    anchor = live_beacon_anchor()
+    cached = job_dir / "ingress/witness.public-values.json"
+    if cached.exists():
+        require_witness_anchor(read_json(cached), anchor)
     capture = {
+        "beacon_anchor": anchor,
         "vault": VAULT,
         "deposit_tx": request["deposit_tx_hash"],
         "amount_atoms": int(request["amount_atoms"]),
@@ -464,6 +500,7 @@ def ensure_capture(request: dict[str, Any], job_dir: Path, job_key: str) -> dict
         port=A100_PORT,
     )
     public = read_json(ingress / "witness.public-values.json")
+    require_witness_anchor(public, anchor)
     if (
         public.get("route_id") != ROUTE_ID
         or int(public.get("source_chain_id", 0)) != SOURCE_CHAIN_ID
@@ -662,6 +699,7 @@ def execute_stage(stage: str, job_file: Path) -> dict[str, Any]:
         public = read_json(job_dir / "ingress/witness.public-values.json")
         deposit = pftl_deposit(request)
         if deposit is None:
+            require_witness_anchor(public, live_beacon_anchor())
             relay_phase("propose", request, job_dir, job_key)
             deposit = pftl_deposit(request)
         if (
