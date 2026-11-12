@@ -21,7 +21,7 @@ const WORKER_STATE_PUBLIC_FIELDS = new Set([
     'program_vkey', 'manifest_hash', 'route_profile_hash', 'asset_id',
     'observer_attestor_enabled', 'updated_at_unix', 'stage_index', 'retryable',
     'code', 'message', 'receipt_code', 'receipt_id', 'tx_id',
-    'terminal_checkpoint_sha256',
+    'terminal_checkpoint_sha256', 'stage_history',
 ]);
 const ETH_STAGES = new Set([
     'queued', 'confirming_deposit', 'waiting_for_ethereum_finality',
@@ -332,7 +332,14 @@ function create(runtime = {}, options = {}) {
         } else {
             terminalValid = state?.retryable === true;
         }
-        if (!common || !terminalValid) {
+        const stageOrder = [...route?.stages || []].filter((stage) => !['queued', 'accepted', 'failed'].includes(stage));
+        const historyValid = state?.stage_history === undefined || (Array.isArray(state.stage_history)
+            && state.stage_history.length <= stageOrder.length
+            && state.stage_history.every((row, index) => row && row.stage === stageOrder[index]
+                && ['running', 'complete', 'failed', 'retrying'].includes(row.status)
+                && [row.started_at_unix, row.completed_at_unix].every((time) => time === null || (Number.isSafeInteger(time) && time > 0))
+                && (row.completed_at_unix === null || row.started_at_unix === null || row.completed_at_unix >= row.started_at_unix)));
+        if (!common || !terminalValid || !historyValid) {
             throw Object.assign(new Error('durable bridge worker state failed validation'), {
                 code: 'bridge_worker_state_invalid',
             });

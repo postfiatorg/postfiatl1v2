@@ -291,6 +291,7 @@ function writeWorkerState(context, status, extra = {}) {
         asset_id: context.config.asset_id,
         observer_attestor_enabled: false,
         updated_at_unix: Math.floor(Date.now() / 1000),
+        stage_history: context.stageHistory || [],
         ...extra,
     });
 }
@@ -434,7 +435,8 @@ async function runJob(jobPath, configPath, dependencies = {}) {
     } catch (error) {
         throw Object.assign(error, { code: 'driver_config_invalid', terminal: true });
     }
-    const context = { ...loaded, ...job };
+    const context = { ...loaded, ...job, stageHistory: [] };
+    let activeIndex = -1;
     const values = commandValues(context);
     const execFileAsync = dependencies.execFileAsync || execFileAsyncDefault;
     let prior = '0'.repeat(64);
@@ -443,6 +445,7 @@ async function runJob(jobPath, configPath, dependencies = {}) {
     try {
         for (let index = 0; index < STAGES.length; index += 1) {
             const stage = STAGES[index];
+            activeIndex = index;
             const file = checkpointFile(context.jobDir, index, stage);
             let checkpoint;
             if (fs.existsSync(file)) {
@@ -451,6 +454,13 @@ async function runJob(jobPath, configPath, dependencies = {}) {
                     fingerprint: context.fingerprint, configSha256: context.configSha256,
                 });
             } else {
+                let startedAt = Math.floor(Date.now() / 1000);
+                try {
+                    const previous = JSON.parse(fs.readFileSync(path.join(context.jobDir, 'worker-state.json'), 'utf8'));
+                    const recorded = previous.stage_history?.find((row) => row.stage === stage)?.started_at_unix;
+                    if (Number.isSafeInteger(recorded) && recorded > 0) startedAt = recorded;
+                } catch (_) { /* first attempt */ }
+                context.stageHistory[index] = { stage, status: 'running', started_at_unix: startedAt, completed_at_unix: null };
                 writeWorkerState(context, stage, { stage_index: index, retryable: true });
                 const result = await executeCommand(loaded.config.stages[index], values, execFileAsync);
                 assertCommonBinding(result, stage, context.request, loaded.config);
@@ -461,11 +471,18 @@ async function runJob(jobPath, configPath, dependencies = {}) {
                     request_fingerprint: context.fingerprint,
                     config_sha256: context.configSha256,
                     prior_checkpoint_sha256: prior,
+                    started_at_unix: startedAt,
+                    completed_at_unix: Math.floor(Date.now() / 1000),
                     result: publicResult(result),
                 };
                 checkpoint.checkpoint_sha256 = checkpointHash(checkpoint);
                 atomicWrite(file, checkpoint);
             }
+            context.stageHistory[index] = {
+                stage, status: 'complete',
+                started_at_unix: checkpoint.started_at_unix ?? null,
+                completed_at_unix: checkpoint.completed_at_unix ?? null,
+            };
             prior = checkpoint.checkpoint_sha256;
             if (stage === 'claiming') claimResult = checkpoint.result;
         }
@@ -479,6 +496,13 @@ async function runJob(jobPath, configPath, dependencies = {}) {
         return { ok: true, status: 'accepted', receipt_code: claimResult.receipt_code };
     } catch (error) {
         const terminal = error.terminal === true;
+        if (activeIndex >= 0) {
+            const stage = STAGES[activeIndex];
+            context.stageHistory[activeIndex] = {
+                stage, started_at_unix: null, completed_at_unix: null,
+                ...context.stageHistory[activeIndex], status: terminal ? 'failed' : 'retrying',
+            };
+        }
         writeWorkerState(context, terminal ? 'failed' : (readCurrentStage(context.jobDir) || 'queued'), {
             retryable: !terminal,
             code: String(error.code || (terminal ? 'bridge_job_failed' : 'bridge_job_retryable')).slice(0, 64),
