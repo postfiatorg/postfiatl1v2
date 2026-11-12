@@ -318,6 +318,27 @@ async function main() {
       assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_MAX_ACTIVE_INSTALLS: bad } }), /MAX_ACTIVE_INSTALLS/);
     }
 
+    // One audit line per open: install id prefix, source address, outcome; never a credential.
+    const audit = [];
+    const audited = createNativeSessions({ env: NATIVE_ENV, log: (line) => audit.push(line) });
+    const auditedBody = await openBody(alpha);
+    const auditedOpen = await openVia(audited, auditedBody, '192.0.2.9');
+    assert.strictEqual(auditedOpen.statusCode, 200);
+    await openVia(audited, tampered, '192.0.2.10');
+    await openVia(audited, 'not json', '192.0.2.11');
+    assert.strictEqual(audit.length, 3);
+    assert.deepStrictEqual(audit.map((line) => JSON.parse(line)), [
+      { event: 'native_session_open', install_id_prefix: installId(alpha.publicKeyHex).slice(0, 16), source: '192.0.2.9', outcome: 'ok' },
+      { event: 'native_session_open', install_id_prefix: null, source: '192.0.2.10', outcome: 'native_session_bad_signature' },
+      { event: 'native_session_open', install_id_prefix: null, source: '192.0.2.11', outcome: 'invalid_json' },
+    ]);
+    const auditText = audit.join('\n');
+    const [, tokenPayload, tokenMac] = auditedOpen.body.token.split('.');
+    for (const secretish of [auditedOpen.body.token, tokenPayload, tokenMac, auditedBody.signature_hex.slice(0, 64),
+      SECRET, installId(alpha.publicKeyHex), alpha.publicKeyHex.slice(0, 64)]) {
+      assert.ok(!auditText.includes(secretish), 'audit line leaks a credential or a full identity');
+    }
+
     // Caps: the native principal hits the same rate limit and body limit as the browser principal.
     clearMutationAdmissionForTest();
     for (const [label, token] of [['browser', BROWSER_TOKEN], ['native', native.token]]) {

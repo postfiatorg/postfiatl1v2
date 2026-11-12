@@ -144,7 +144,8 @@ function watchedList(file, load, label, logError) {
 }
 
 function createNativeSessions({
-    env = process.env, caps = {}, now = Date.now, logError = (line) => console.error(line),
+    env = process.env, caps = {}, now = Date.now,
+    log = (line) => console.log(line), logError = (line) => console.error(line),
 } = {}) {
     const rawOrigin = String(env.WALLET_PROXY_NATIVE_SESSION_ORIGIN || '').trim();
     const enabled = rawOrigin !== '';
@@ -332,9 +333,25 @@ function createNativeSessions({
         });
     }
 
+    // One audit line per open: the install id's first 16 hex characters (only once
+    // the signature proves the key), the source address and the outcome code.
+    // Never the token, the signature or the secret.
     async function open(req) {
+        // A disabled gateway has no session surface to audit.
+        if (!enabled) return { statusCode: 404, body: { ok: false, schema: SESSION_SCHEMA, code: 'native_session_disabled' } };
+        const audit = { id: null };
+        const result = await openSession(req, audit);
+        log(JSON.stringify({
+            event: 'native_session_open',
+            install_id_prefix: audit.id ? audit.id.slice(0, 16) : null,
+            source: String(req.socket?.remoteAddress || 'unknown'),
+            outcome: result.body.ok ? 'ok' : result.body.code,
+        }));
+        return result;
+    }
+
+    async function openSession(req, audit) {
         const fail = (statusCode, code) => ({ statusCode, body: { ok: false, schema: SESSION_SCHEMA, code } });
-        if (!enabled) return fail(404, 'native_session_disabled');
         if (req.method !== 'POST') return fail(405, 'method_not_allowed');
         // Before any body read or signature check. Behind a reverse proxy the
         // source address is the proxy's, so the window is shared by its clients.
@@ -377,6 +394,7 @@ function createNativeSessions({
         } catch (_) { valid = false; }
         if (!valid) return fail(401, 'native_session_bad_signature');
         const id = installId(body.public_key_hex);
+        audit.id = id;
         const refusal = installRefusal(id, false);
         if (refusal) return fail(403, refusal);
         if (!installSlotFree(id, nowMs)) return fail(503, 'native_session_busy');
