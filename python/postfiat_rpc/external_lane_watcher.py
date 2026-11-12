@@ -21,6 +21,20 @@ lane's pruned count and atoms.
 
 It only reads, on both chains: no key, no signature, no transaction.
 
+Every Base answer a run uses is bound to one anchor block of the chain whose
+id it checked: the finalized block (number N, hash H), read once after
+``eth_chainId``. State reads (``eth_getCode``, ``eth_call``) name H, or a
+release's source block, by hash (EIP-1898, ``requireCanonical``); each
+``Released`` log's block hash is read by hash and must be the block of its
+number at or below N; when the totals disagree the logs are read again and
+must agree; and N is read again by number at the end and must still be H. The
+guarantee: if any single Base read is answered by an honest node of another
+network, the run is refused (``base_anchor_unknown``, ``base_anchor_mismatch``
+or ``base_chain_id_mismatch``: exit 1, no payout or export line, the state
+file unchanged) or gives exactly the all-honest result. Assumed, not checked:
+a node that lies rather than answers for another network, and the anchor is
+"finalized" as the node reports it.
+
     PYTHONPATH=python python -m postfiat_rpc.external_lane_watcher \\
         --pftl-rpc 127.0.0.1:27650 --lane-id base-erc20 \\
         --base-rpc http://127.0.0.1:8545 --state-file watcher-state.json --exports --once
