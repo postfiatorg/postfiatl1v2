@@ -291,3 +291,38 @@ pub fn pftl_uniswap_receipt(
         consensus_receipt,
     })
 }
+
+/// RPC admission preview only: run the unchanged offer executor against the
+/// same pending-mempool projection used by ordinary offer admission. Persist nothing.
+pub fn b23_facility_offer_preview(
+    options: SignedOfferTransactionJsonSubmitOptions,
+) -> io::Result<Receipt> {
+    if options.signed_offer_transaction_json.len() > MAX_SIGNED_TRANSFER_JSON_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "signed offer transaction JSON exceeds admission size limit",
+        ));
+    }
+    let signed: SignedOfferTransaction =
+        serde_json::from_str(&options.signed_offer_transaction_json).map_err(invalid_data)?;
+    signed
+        .validate()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    let store = NodeStore::try_new_read_only(options.data_dir)?;
+    let genesis = store.read_genesis()?;
+    let ledger = read_fastpay_ledger(&store)?;
+    let mempool = store.read_mempool()?;
+    let height = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?
+        .height
+        .checked_add(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height exhausted"))?;
+    let compatibility = asset_execution_compatibility_from_store(&store)?;
+    let mut candidate =
+        ledger_after_executable_mempool(&genesis, ledger, &mempool, height, compatibility)?;
+    Ok(execute_offer_transaction(
+        &genesis,
+        &mut candidate,
+        &signed,
+        height,
+    ))
+}
