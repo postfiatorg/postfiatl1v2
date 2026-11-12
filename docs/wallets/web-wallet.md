@@ -391,15 +391,24 @@ showing an unwrap credit as ordered:
 
 The rule assumes at most the committee's fault bound, `(n - 1) / 3` of `n`
 members, is faulty, so a faulty minority can neither prove an answer nor veto
-one. A valid status that contradicts the proved answer (another terminal
-result, or "not terminal" observed at or above the quorum's lowest
-`anchored_at_or_before_height`) is returned unchanged in `contradicting`.
-Nothing changes for the user: the wallet acts on the proved answer and logs
-`contradicting` (and `invalid`) for operators, since a signed contradiction
-is evidence of a faulty or misconfigured validator. Only when the
-contradicting statuses also come from a quorum of distinct members (more
-faulty members than the bound) is the set refused as `conflicting`; with no
-answer at quorum it is `below_quorum`.
+one. A "not terminal" status contradicts a terminal quorum only when observed
+at or above the quorum-supported bound, the `(f + 1)`-th smallest
+`anchored_at_or_before_height` of its distinct signers (`f = (n - 1) / 3`): at
+least one honest signer claims a bound at or below it, so up to `f` false
+bounds, low or high, cannot move it below the true anchoring height. A valid
+status that contradicts the proved answer (another terminal result, or such a
+"not terminal") is returned unchanged in `contradicting`; a signer whose own
+bound is below the quorum-supported one is returned in `inconsistent_bounds`.
+From heights the verifier concludes only this: a "not terminal" below that
+bound is compatible older history, and one at or above it conflicts with an
+honest signer's bound. It attributes nothing from a single member's height:
+no status is judged against one signer's bound, and an inconsistent bound may
+be a lie or an honest upper bound, so it is neither counted toward a refusal
+nor used to name the others. The wallet acts on the proved answer and logs
+`contradicting`, `inconsistent_bounds` and `invalid` for operators as signed
+evidence to investigate. Only when the contradicting statuses also come from
+a quorum of distinct members (more faulty members than the bound) is the set
+refused as `conflicting`; with no answer at quorum it is `below_quorum`.
 
 The Rust check is `postfiat_execution::verify_fastpay_fence_status_quorum_ml_dsa_v2`
 (rules in `postfiat_types::verify_fastpay_fence_status_quorum_v2`; for statuses
