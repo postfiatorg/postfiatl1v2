@@ -38,6 +38,9 @@ impl Drop for Server {
 }
 impl Server {
     fn new(finality: bool, max_submits: u64) -> Self {
+        Self::with_backend(finality, max_submits, false)
+    }
+    fn with_backend(finality: bool, max_submits: u64, redb: bool) -> Self {
         let root = std::env::temp_dir().join(format!(
             "b23-offer-rpc-{}-{}",
             std::process::id(),
@@ -47,13 +50,25 @@ impl Server {
                 .as_nanos()
         ));
         let dir = root.join("node");
-        init(InitOptions {
-            data_dir: dir.clone(),
-            chain_id: "b23-offer-rpc".into(),
-            node_id: "validator-0".into(),
-            validator_count: 2,
-        })
-        .unwrap();
+        if redb {
+            postfiat_node::init_consensus_v2(postfiat_node::InitConsensusV2Options {
+                data_dir: dir.clone(),
+                chain_id: "b23-offer-rpc".into(),
+                node_id: "validator-0".into(),
+                validator_count: 2,
+                activation_height: 1,
+                storage_activation_height: Some(1),
+            })
+            .unwrap();
+        } else {
+            init(InitOptions {
+                data_dir: dir.clone(),
+                chain_id: "b23-offer-rpc".into(),
+                node_id: "validator-0".into(),
+                validator_count: 2,
+            })
+            .unwrap();
+        }
         let store = NodeStore::new(&dir);
         let genesis = store.read_genesis().unwrap();
         let mut ledger = store.read_ledger().unwrap();
@@ -74,6 +89,9 @@ impl Server {
         let tip = dir.join("chain_tip.json");
         if tip.exists() {
             fs::remove_file(tip).unwrap();
+        }
+        if redb {
+            redb_tests::initialize_fixture_storage(&store);
         }
         fn copy_dir(source: &std::path::Path, target: &std::path::Path) {
             fs::create_dir_all(target).unwrap();
@@ -154,7 +172,15 @@ impl Server {
                 fs::set_permissions(&key_file, fs::Permissions::from_mode(0o600)).unwrap();
             }
             let log = server.root.join(format!("{index}.transport.err"));
-            let child = Command::new(env!("CARGO_BIN_EXE_postfiat-node"))
+            let mut transport = Command::new(env!("CARGO_BIN_EXE_postfiat-node"));
+            if !redb {
+                transport
+                    .arg("transport-validator-serve")
+                    .arg("--unsafe-devnet-json-storage");
+            } else {
+                transport.arg("transport-validator-serve");
+            }
+            let child = transport
                 .env("POSTFIAT_PREWARM_SHIELDED_VERIFIER", "1")
                 .env("POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER", "1")
                 .env(
@@ -162,9 +188,7 @@ impl Server {
                     "1",
                 )
                 .args([
-                    "transport-validator-serve",
                     "--unsafe-devnet-file-signer",
-                    "--unsafe-devnet-json-storage",
                     "--data-dir",
                     data.to_str().unwrap(),
                     "--topology",
@@ -197,10 +221,12 @@ impl Server {
             let ready = server.root.join(format!("{index}.rpc.ready"));
             let log = server.root.join(format!("{index}.rpc.err"));
             let mut cmd = Command::new(env!("CARGO_BIN_EXE_postfiat-node"));
+            cmd.arg("rpc-serve");
+            if !redb {
+                cmd.arg("--unsafe-devnet-json-storage");
+            }
             cmd.args([
-                "rpc-serve",
                 "--unsafe-devnet-file-signer",
-                "--unsafe-devnet-json-storage",
                 "--disable-owned-lane",
                 "--data-dir",
                 data.to_str().unwrap(),
@@ -265,7 +291,7 @@ impl Server {
         let req = RpcRequest::new(method, method, params);
         let proposer = postfiat_node::block_proposer(postfiat_node::BlockProposerOptions {
             data_dir: self.dir.clone(),
-            block_height: NodeStore::try_new_read_only(&self.dir)
+            block_height: NodeStore::try_new(&self.dir)
                 .unwrap()
                 .read_blocks()
                 .unwrap()
@@ -305,7 +331,7 @@ impl Server {
                 let ready = [self.dir.clone(), self.root.join("node1")]
                     .iter()
                     .all(|dir| {
-                        NodeStore::try_new_read_only(dir)
+                        NodeStore::try_new(dir)
                             .unwrap()
                             .read_blocks()
                             .is_ok_and(|blocks| blocks.tip_hash() == target)
@@ -389,7 +415,7 @@ fn b23_rpc_serve_offer_create_cancel_finality_returns_literal_receipts() {
         "RELEASE2_CREATE_RESPONSE={}",
         serde_json::to_string(&response).unwrap()
     );
-    let store = NodeStore::try_new_read_only(&server.dir).unwrap();
+    let store = NodeStore::try_new(&server.dir).unwrap();
     let ledger = store.read_ledger().unwrap();
     assert_eq!(ledger.offers.len(), 1);
     let id = ledger.offers[0].offer_id.clone();
@@ -439,7 +465,7 @@ fn b23_rpc_serve_offer_create_cancel_finality_returns_literal_receipts() {
 fn b23_rpc_serve_rejected_offer_has_false_receipt_and_no_commit() {
     let server = Server::new(true, 20);
     let tx = server.sign_quoted(server.create(2_000_000));
-    let store = NodeStore::try_new_read_only(&server.dir).unwrap();
+    let store = NodeStore::try_new(&server.dir).unwrap();
     let before = store.read_ledger().unwrap();
     let response = server.submit(&tx);
     assert!(response.ok, "reject: {:?}", response.error);
@@ -521,3 +547,6 @@ fn b23_rpc_serve_offer_json_uses_bounded_signed_payload_limit() {
         assert!(request.validate_protocol().is_err());
     }
 }
+
+#[path = "b23_facility_offer_redb/mod.rs"]
+mod redb_tests;

@@ -192,3 +192,7 @@ fn run_rpc_serve_mempool_submit_signed_offer_transaction_finality_inner(
         )
     })
 }
+
+#[cfg(test)]
+#[path = "b23_facility_offer_rpc_tests.rs"]
+mod b23_facility_offer_rpc_tests;

@@ -293,7 +293,10 @@ pub fn pftl_uniswap_receipt(
 }
 
 /// RPC admission preview only: run the unchanged offer executor against the
-/// same pending-mempool projection used by ordinary offer admission. Persist nothing.
+/// same pending-mempool projection used by ordinary offer admission. The live
+/// submission path must share admission's process-local redb handle/writer lease;
+/// the offline read-only constructor opens a competing handle. Candidate execution
+/// stays in memory and never persists ledger, mempool, receipts, or a repaired tip.
 pub fn b23_facility_offer_preview(
     options: SignedOfferTransactionJsonSubmitOptions,
 ) -> io::Result<Receipt> {
@@ -308,7 +311,7 @@ pub fn b23_facility_offer_preview(
     signed
         .validate()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-    let store = NodeStore::try_new_read_only(options.data_dir)?;
+    let store = NodeStore::try_new(options.data_dir)?;
     let genesis = store.read_genesis()?;
     let ledger = read_fastpay_ledger(&store)?;
     let mempool = store.read_mempool()?;
