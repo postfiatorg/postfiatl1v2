@@ -740,6 +740,7 @@ const FINALITY_METHODS = new Set([
     'mempool_submit_signed_transfer_finality',
     'mempool_submit_signed_payment_v2_finality',
     'mempool_submit_signed_asset_transaction_finality',
+    'mempool_submit_signed_offer_transaction_finality',
     'mempool_submit_signed_escrow_transaction_finality',
     'mempool_submit_fastlane_primary_finality',
     atomicNavswapModule.ATOMIC_FINALITY_METHOD,
