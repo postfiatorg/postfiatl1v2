@@ -1579,7 +1579,17 @@ wss } = runtime;
             // objects, totals and cursors. height and state_root are
             // dropped: they do not identify the view (FastPay effects change
             // it without a block), and equal views at two heights agree.
-            const { height: _height, state_root: _stateRoot, ...copy } = result;
+            // node_id and inventory_revision are dropped too: node_id differs
+            // on every validator and fastpay_sequence can differ between
+            // honest ones. readFleetRpcMajority returns them beside the
+            // answer (fleetRevisions).
+            const {
+                height: _height,
+                state_root: _stateRoot,
+                node_id: _nodeId,
+                inventory_revision: _inventoryRevision,
+                ...copy
+            } = result;
             if (Array.isArray(copy.objects)) {
                 copy.objects = [...copy.objects].sort((a, b) => {
                     const aKey = `${a?.id || ''}:${a?.version ?? ''}`;
@@ -1594,6 +1604,17 @@ wss } = runtime;
 
     function readGroupKey(method, result) {
         return JSON.stringify(canonicalReadResult(method, result));
+    }
+
+    // Each agreeing validator's {node_id, inventory_revision}, in fleet order;
+    // a node that sends neither (or only one) has no entry.
+    function fleetRevisions(group) {
+        return group
+            .map((entry) => entry.result)
+            .filter((result) => typeof result?.node_id === 'string'
+                && result.inventory_revision
+                && typeof result.inventory_revision === 'object')
+            .map((result) => ({ node_id: result.node_id, inventory_revision: result.inventory_revision }));
     }
 
     function conciseRpcError(error, fallback = 'RPC request failed') {
@@ -1668,6 +1689,7 @@ wss } = runtime;
                 consensus_count: group.length,
                 fleet_count: RPC_FLEET.length,
                 validators: group.map((entry) => entry.validator_id),
+                ...(method === 'owned_objects' ? { fleet_revisions: fleetRevisions(group) } : {}),
             },
             error: null,
         };
