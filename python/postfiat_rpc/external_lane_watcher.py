@@ -37,11 +37,21 @@ is refused (``base_anchor_unknown``, ``base_anchor_mismatch`` or
 ``base_chain_id_mismatch``: exit 1, no payout or export line, the state file
 unchanged) or gives exactly the all-honest result. Assumed, not checked: a
 node that lies rather than answers for another network, and the anchor is
-"finalized" as the node reports it. The PFTL endpoint is assumed to be a
-node of the validated fleet: a PFTL node of a fork that shares this chain's
-genesis and lane identity is not detected, so an export page from such a fork
-can back a payout. Binding export pages to an independently confirmed PFTL
-snapshot is the next step.
+"finalized" as the node reports it.
+
+Every PFTL export page a run uses is bound to one PFTL snapshot: the tip
+(``status``: height, tip hash, state root, of the validated chain id and
+genesis), which ``blocks`` at that height must report as the same block; each
+page must report that height and is read twice, both answers equal; and the
+block is read again by height after the last page. Any difference refuses the
+run (``pftl_snapshot_mismatch``, exit 1, no payout or export line, the state
+file unchanged). A carried payout is joined to its packet by digest, and a
+retained nonce that now names another packet refuses the run
+(``pftl_export_digest_mismatch``). The guarantee: when any single PFTL read of
+the export view is answered by a node of a fork that shares this chain's
+genesis, the run is refused or uses only the snapshot node's answers. Assumed,
+not checked: the block's certificate (its ML-DSA votes are not verified), so a
+snapshot node that is itself on such a fork, for every read, is not detected.
 
 The Base endpoint must support EIP-1898 (``blockHash`` with
 ``requireCanonical``) for ``eth_getCode`` and ``eth_call``; one without it
@@ -134,6 +144,10 @@ WARNING_CODES = ("export_unpaid_too_long",)
 # Refusals of a Base answer not bound to the run's anchor block: exit 1, no
 # payout or export line, the state file unchanged.
 ANCHOR_CODES = ("base_anchor_unknown", "base_anchor_mismatch")
+# Refusals of a PFTL export read not bound to the run's PFTL snapshot (see
+# `_pftl_snapshot`), and of a carried payout whose export nonce now names
+# another packet: exit 1, no payout or export line, the state file unchanged.
+PFTL_SNAPSHOT_CODES = ("pftl_snapshot_mismatch", "pftl_export_digest_mismatch")
 
 
 # --- Keccak-256 (Ethereum's, padding 0x01): not in the standard library. ---
@@ -578,6 +592,61 @@ def _run_identity(lane_id: str, snapshot: dict[str, Any], policy: dict[str, Any]
             "source_chain_id": policy["chain_id"], "lock": policy["lock"], "code_hash": policy["code_hash"]}
 
 
+def _pftl_block(pftl: Any, height: int) -> dict[str, Any]:
+    """The committed block `height` as the node's block log reports it:
+    height, block hash, state root and the certificate's id."""
+
+    try:
+        blocks = pftl.blocks(from_height=height, limit=1)
+    except (RpcClientError, ValueError) as error:
+        raise WatcherRpcError("pftl_rpc_failed", f"blocks: {error}") from None
+    header = blocks[0].get("header") if isinstance(blocks, list) and blocks and isinstance(blocks[0], dict) else None
+    if not isinstance(header, dict) or header.get("height") != height:
+        raise WatcherTransientError("pftl_snapshot_mismatch", f"the PFTL node reports no block {height}")
+    fields = {key: header.get(key) for key in ("block_hash", "state_root", "certificate_id")}
+    if not all(isinstance(value, str) and value for value in fields.values()):
+        raise WatcherTransientError("pftl_snapshot_mismatch",
+                                    f"block {height} has no block hash, state root or certificate id")
+    return {"height": height, **fields}
+
+
+def _pftl_snapshot(pftl: Any, identity: dict[str, Any]) -> dict[str, Any]:
+    """The PFTL block every export page of a run is bound to: the tip
+    (`status`: height, tip hash, state root) of this run's chain and genesis,
+    which the block log must report as the same block (`blocks` at that
+    height: hash, state root, certificate id). The node exposes the block's
+    certificate, but its ML-DSA votes are not verified here: this binds the
+    pages to one block of one node's view, it does not prove the block final."""
+
+    try:
+        status = pftl.status()
+    except RpcClientError as error:
+        raise WatcherRpcError("pftl_rpc_failed", f"status: {error}") from None
+    if not isinstance(status, dict):
+        raise WatcherTransientError("pftl_snapshot_mismatch", "status is not an object")
+    if (status.get("chain_id"), status.get("genesis_hash")) != (identity["pftl_chain_id"], identity["genesis_hash"]):
+        raise WatcherError("export_identity_mismatch",
+                           "the PFTL tip is not of the release view's chain id and genesis")
+    height = status.get("block_height")
+    if not isinstance(height, int) or isinstance(height, bool) or not 0 <= height < U64:
+        raise WatcherTransientError("pftl_snapshot_mismatch", "status has no block_height")
+    block = _pftl_block(pftl, height)
+    if (status.get("block_tip_hash"), status.get("state_root")) != (block["block_hash"], block["state_root"]):
+        raise WatcherTransientError("pftl_snapshot_mismatch",
+                                    f"the PFTL tip and block {height} of the block log differ in hash or state root")
+    return block
+
+
+def _export_page(pftl: Any, lane_id: str, cursor: int | None) -> dict[str, Any]:
+    try:
+        info = pftl.external_lane_info(lane_id, export_cursor=cursor, export_limit=PAGE_SIZE)
+    except RpcClientError as error:
+        raise WatcherRpcError("pftl_rpc_failed", f"external_lane_info: {error}") from None
+    if not isinstance(info, dict):
+        raise WatcherError("export_record_malformed", "external_lane_info is not an object")
+    return info
+
+
 def _exports_of(pftl: Any, lane_id: str, identity: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Every stored export packet of the lane, oldest first, and the snapshot
     it was paged from. Every page, the first one included, must carry the
@@ -588,19 +657,26 @@ def _exports_of(pftl: Any, lane_id: str, identity: dict[str, Any]) -> tuple[list
     differ from the release view's (honest progress between the reads). As
     for releases: every page from the first page's snapshot, nonces
     contiguous from `export_count - 1` down to the pruned count, each cursor
-    the page's oldest nonce and strictly decreasing."""
+    the page's oldest nonce and strictly decreasing.
 
+    Every page is bound to the run's PFTL snapshot (`pftl_snapshot_mismatch`):
+    it must report the snapshot's height, it is read twice and both answers
+    must be equal (a page reports no block hash, so a page from another
+    block at that height differs from the snapshot node's), and the
+    snapshot's block is read again by height after the last page and must
+    still have its hash and state root."""
+
+    pftl_snapshot = _pftl_snapshot(pftl, identity)
     exports: list[dict[str, Any]] = []
     cursor: int | None = None
     first: dict[str, Any] | None = None
     seen: set[int] = set()
     while True:
-        try:
-            info = pftl.external_lane_info(lane_id, export_cursor=cursor, export_limit=PAGE_SIZE)
-        except RpcClientError as error:
-            raise WatcherRpcError("pftl_rpc_failed", f"external_lane_info: {error}") from None
-        if not isinstance(info, dict):
-            raise WatcherError("export_record_malformed", "external_lane_info is not an object")
+        info = _export_page(pftl, lane_id, cursor)
+        if info.get("current_height") != pftl_snapshot["height"]:
+            raise WatcherTransientError("pftl_snapshot_mismatch",
+                                        f"an export page reports height {info.get('current_height')!r}, not the "
+                                        f"PFTL snapshot's {pftl_snapshot['height']}")
         rows = [row for row in info.get("lanes") or [] if isinstance(row, dict) and row.get("lane_id") == lane_id]
         if len(rows) != 1:
             raise WatcherError("external_lane_not_reported", f"the PFTL node reports no lane `{lane_id}`")
@@ -615,6 +691,10 @@ def _exports_of(pftl: Any, lane_id: str, identity: dict[str, Any]) -> tuple[list
             raise WatcherError("export_identity_mismatch",
                                f"an export page is not of the release view's network, lane or policy: "
                                f"{', '.join(changed)}")
+        if _export_page(pftl, lane_id, cursor) != info:
+            raise WatcherTransientError("pftl_snapshot_mismatch",
+                                        f"two reads of the export page at cursor {cursor} differ at height "
+                                        f"{pftl_snapshot['height']}")
         snapshot = _export_snapshot(info, row)
         if first is None:
             first = snapshot
@@ -651,6 +731,10 @@ def _exports_of(pftl: Any, lane_id: str, identity: dict[str, Any]) -> tuple[list
     if first["exported_atoms"] != first["pruned_exported_atoms"] + stored:
         raise WatcherError("export_record_malformed",
                            "exported_atoms is not the pruned atoms plus the stored packets' amounts")
+    if _pftl_block(pftl, pftl_snapshot["height"]) != pftl_snapshot:
+        raise WatcherTransientError("pftl_snapshot_mismatch",
+                                    f"PFTL block {pftl_snapshot['height']} changed while the exports were paged")
+    first["pftl_snapshot"] = pftl_snapshot
     return list(reversed(exports)), first
 
 
@@ -934,6 +1018,16 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
             pruned_paid_atoms += entry["amount"]
             recent.append({key: entry[key] for key in RECENT_KEYS})
     recently_pruned = {entry["evm_digest"]: entry for entry in recent}
+    # A carried payout is joined to its packet by digest: a retained nonce
+    # that now names another packet (a node of a fork, or another history)
+    # refuses the run rather than lending the payout to that packet.
+    stored_digests = {entry["export_nonce"]: entry["evm_digest"] for entry in exports}
+    for entry in [*record.values(), *known_paid.values()]:
+        found = stored_digests.get(entry["export_nonce"])
+        if found is not None and found != entry["evm_digest"]:
+            raise WatcherTransientError("pftl_export_digest_mismatch",
+                                        f"export {entry['export_nonce']} was paid as {entry['evm_digest']}, and the "
+                                        f"PFTL snapshot names packet {found} at that nonce")
     prior_accepted = (baseline["unverified_payouts"], baseline["unverified_atoms"]) if baseline else (0, 0)
 
     def room() -> tuple[int, int]:
@@ -1076,7 +1170,6 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
     for digest, entry in known_paid.items():
         if digest not in record and digest not in seen and entry["export_nonce"] >= pruned:
             record[digest] = entry
-    by_nonce = {entry["export_nonce"]: entry for entry in record.values()}
     unpaid = 0
     # Every export of the accepted export snapshot, which may be later than
     # the release view's (`current_height`): an export made between the two
@@ -1085,7 +1178,7 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
     for packet in exports:
         if packet["exported_at_height"] > export_height:
             continue
-        entry = by_nonce.get(packet["export_nonce"])
+        entry = record.get(packet["evm_digest"])
         line = {"schema": LINE_SCHEMA, "kind": "export", "lane_id": lane_id,
                 **{key: packet[key] for key in ("export_nonce", "amount_atoms", "base_recipient",
                                                 "exported_at_height", "packet_digest", "evm_digest")}}
@@ -1145,6 +1238,7 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
     if baseline is not None:
         new_state["baseline"] = baseline
     summary = {"exports_checked": len(exports), "payouts_checked": len(events), "unpaid_exports": unpaid,
+               "pftl_snapshot": snapshot["pftl_snapshot"],
                "pruned_export_count": pruned, "scanned_from_block": start, "totals": totals,
                "paid_recorded": len(record), "pruned_paid_count": pruned_paid_count,
                "pruned_paid_atoms": pruned_paid_atoms, "rescan": rescan, "known_payouts_carried": len(known),
@@ -1369,8 +1463,8 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
                 alarm=alarm, lines=lines, rescan_all=from_height is not None,
                 discard_history=discard_export_history, anchor=anchor)
         except WatcherError as error:
-            if error.code in ANCHOR_CODES:
-                raise  # a Base answer not bound to the anchor: the whole run is refused
+            if error.code in ANCHOR_CODES or error.code in PFTL_SNAPSHOT_CODES:
+                raise  # an answer not bound to the run's anchor or PFTL snapshot: the whole run is refused
             export_error = error
             lines.append({"schema": LINE_SCHEMA, "kind": "error", "code": error.code, "message": str(error)})
     _check_anchor(base, anchor)
