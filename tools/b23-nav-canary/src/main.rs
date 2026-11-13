@@ -32,7 +32,9 @@ struct Step {
     label: String,
     height: u64,
     transaction: SignedAssetTransaction,
-    expect_status: String,
+    expect_accepted: bool,
+    #[serde(default)]
+    expect_code: Option<String>,
 }
 fn save(path: PathBuf, value: &serde_json::Value) -> Result<()> {
     use std::io::Write;
@@ -80,9 +82,13 @@ fn main() -> Result<()> {
                     step.height,
                 );
                 let value = serde_json::to_value(&receipt)?;
-                let accepted = value["status"].as_str() == Some(&step.expect_status);
+                let accepted = receipt.accepted == step.expect_accepted
+                    && step
+                        .expect_code
+                        .as_ref()
+                        .is_none_or(|code| code == &receipt.code);
                 pass &= accepted;
-                receipts.push(serde_json::json!({"label":step.label,"height":step.height,"expected_status":step.expect_status,"matched":accepted,"ledger_changed":before!=serde_json::to_value(&ledger)?,"receipt":value}));
+                receipts.push(serde_json::json!({"label":step.label,"height":step.height,"expected_accepted":step.expect_accepted,"expected_code":step.expect_code,"matched":accepted,"ledger_changed":before!=serde_json::to_value(&ledger)?,"receipt":value}));
                 if !accepted {
                     break;
                 }
