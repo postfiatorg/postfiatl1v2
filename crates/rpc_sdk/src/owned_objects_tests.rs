@@ -556,4 +556,50 @@ mod owned_objects {
         map.insert("view_digest".into(), json!("cc".repeat(32)));
         report
     }
+
+    /// A revision-era page: `inventory_revision` and `node_id` beside the
+    /// cursor fields. Older nodes omit both and stay valid.
+    fn revision_fixture() -> Value {
+        let mut report = paged_fixture();
+        let map = report.as_object_mut().unwrap();
+        map.insert(
+            "inventory_revision".into(),
+            json!({"finalized_height": 40, "fastpay_sequence": 3}),
+        );
+        map.insert("node_id".into(), json!("validator-0"));
+        report
+    }
+
+    #[test]
+    fn accepts_and_checks_the_inventory_revision_and_node_id() {
+        assert!(validate(&revision_fixture()).is_ok());
+        assert!(validate(&paged_fixture()).is_ok(), "older nodes omit both");
+        let mut no_id = revision_fixture();
+        no_id.as_object_mut().unwrap().remove("node_id");
+        assert!(validate(&no_id).is_ok());
+        assert_eq!(
+            rejected_field(with(
+                revision_fixture(),
+                "/inventory_revision/finalized_height",
+                json!(41)
+            )),
+            "inventory_revision.finalized_height"
+        );
+        assert_eq!(
+            rejected_field(with(
+                revision_fixture(),
+                "/inventory_revision/fastpay_sequence",
+                json!(-1)
+            )),
+            "inventory_revision.fastpay_sequence"
+        );
+        assert_eq!(
+            rejected_field(with(revision_fixture(), "/inventory_revision", json!(7))),
+            "inventory_revision"
+        );
+        assert_eq!(
+            rejected_field(with(revision_fixture(), "/node_id", json!(" v0"))),
+            "node_id"
+        );
+    }
 }

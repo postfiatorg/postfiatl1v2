@@ -6185,6 +6185,30 @@ fn validate_owned_objects_result(result: &Value) -> Result<(), RpcResponseValida
             ));
         }
     }
+    // Revision-era nodes add `inventory_revision` (read with the page, at
+    // the page's finalized `height`) and the answering `node_id`.
+    match result.get("inventory_revision") {
+        None | Some(Value::Null) => {}
+        Some(Value::Object(_)) => {
+            let finalized_height = u64_field(result, "inventory_revision.finalized_height")?;
+            u64_field(result, "inventory_revision.fastpay_sequence")?;
+            if result.get("height").and_then(Value::as_u64) != Some(finalized_height) {
+                return Err(invalid_result(
+                    "inventory_revision.finalized_height",
+                    "expected the revision height to equal the page height",
+                ));
+            }
+        }
+        Some(_) => {
+            return Err(invalid_result(
+                "inventory_revision",
+                "expected an object with finalized_height and fastpay_sequence",
+            ));
+        }
+    }
+    if result.get("node_id").is_some() {
+        optional_clean_string_result_field(result, "node_id")?;
+    }
     if truncated && object_count != limit && !paged {
         return Err(invalid_result(
             "truncated",

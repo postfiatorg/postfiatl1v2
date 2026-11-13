@@ -454,6 +454,34 @@ class RemainingReadWrapperTests(unittest.TestCase):
         self.assertIsNone(result["cursor"])
         self.assertEqual(result["pages"], 2)
 
+    def test_owned_objects_revision_is_typed_and_optional(self) -> None:
+        from postfiat_rpc import OwnedObjectsRevision, RpcClientError
+        from postfiat_rpc.client import owned_objects_revision
+
+        page = {"height": 7, "view_digest": "v", "node_id": "validator-0",
+                "inventory_revision": {"finalized_height": 7, "fastpay_sequence": 2}}
+        node, revision = owned_objects_revision(page)
+        self.assertEqual((node, revision), ("validator-0", OwnedObjectsRevision(7, 2)))
+        self.assertLess(OwnedObjectsRevision(7, 2), OwnedObjectsRevision(8, 0))
+        self.assertIsNone(owned_objects_revision({"height": 7, "view_digest": "v"}))
+        for bad in ({"finalized_height": 6, "fastpay_sequence": 2},
+                    {"finalized_height": 7, "fastpay_sequence": -1},
+                    {"finalized_height": 7, "fastpay_sequence": True}, 3):
+            with self.assertRaises(RpcClientError):
+                owned_objects_revision({**page, "inventory_revision": bad})
+        with self.assertRaises(RpcClientError):
+            owned_objects_revision({**page, "node_id": " "})
+        # owned_objects_all checks every page and keeps the first page's revision.
+        client = _client()
+        last = {**page, "objects": [], "object_count": 0, "truncated": False, "next_cursor": None}
+        with mock.patch.object(client, "_call", return_value=last):
+            result = client.owned_objects_all("ab")
+        self.assertEqual(result["inventory_revision"], page["inventory_revision"])
+        broken = {**last, "inventory_revision": {"finalized_height": 1}}
+        with mock.patch.object(client, "_call", return_value=broken):
+            with self.assertRaises(RpcClientError):
+                client.owned_objects_all("ab")
+
     def test_owned_objects_all_restarts_on_a_view_changed_refusal_within_the_bound(self) -> None:
         from postfiat_rpc.client import OWNED_OBJECTS_ALL_MAX_RESTARTS, RpcError
 

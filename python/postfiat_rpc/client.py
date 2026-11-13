@@ -286,6 +286,36 @@ def _require_owned_objects_paging(page: dict[str, Any]) -> None:
             "owned_objects answered a truncated page without next_cursor and view_digest: "
             "the node is too old for paging; upgrade it or read from another node"
         )
+    owned_objects_revision(page)
+
+
+@dataclass(frozen=True, order=True)
+class OwnedObjectsRevision:
+    """`owned_objects` `inventory_revision`: orders two answers of one node.
+
+    Compare as (`finalized_height`, `fastpay_sequence`) and only between
+    answers carrying the same `node_id`.
+    """
+
+    finalized_height: int
+    fastpay_sequence: int
+
+
+def owned_objects_revision(page: dict[str, Any]) -> tuple[str | None, OwnedObjectsRevision] | None:
+    """`(node_id, revision)` of an `owned_objects` page; `None` from older nodes."""
+    raw = page.get("inventory_revision")
+    if raw is None:
+        return None
+    values = [raw.get(name) if isinstance(raw, dict) else None
+              for name in ("finalized_height", "fastpay_sequence")]
+    node_id = page.get("node_id")
+    if (
+        any(type(value) is not int or value < 0 for value in values)
+        or ("height" in page and page["height"] != values[0])
+        or (node_id is not None and (not isinstance(node_id, str) or not node_id.strip()))
+    ):
+        raise RpcClientError(f"owned_objects answered a malformed inventory_revision: {raw!r}")
+    return node_id, OwnedObjectsRevision(values[0], values[1])
 
 
 class PostFiatRpcClient:
@@ -1226,6 +1256,8 @@ class PostFiatRpcClient:
         The result is the first page's fields with `objects`, `object_count`
         (all objects), `truncated: false`, `cursor` and `next_cursor` both
         `None`, `view_digest` of the view read, and `pages` (pages read).
+        `inventory_revision` and `node_id`, when the node sends them, are
+        the first page's; see `owned_objects_revision`.
         """
         for _ in range(max_restarts + 1):
             first = self.owned_objects(
