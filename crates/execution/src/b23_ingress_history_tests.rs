@@ -5,9 +5,11 @@ use postfiat_types::NAV_SP1_PROOF_ENCODING_GROTH16;
 // beacon route: block 319 of postfiat-wan-devnet-2 carries an accepted deposit
 // whose proof commits the 26-field public values.
 
-const H319_FIXTURE: &str = include_str!("../tests/fixtures/ethereum_ingress_h319_legacy_deposit.json");
+const H319_FIXTURE: &str =
+    include_str!("../tests/fixtures/ethereum_ingress_h319_legacy_deposit.json");
 /// Verifying key of the pre-anchor Ethereum-finality guest that proved block 319.
-const H319_PROGRAM_VKEY: &str = "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e";
+const H319_PROGRAM_VKEY: &str =
+    "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e";
 
 struct H319Deposit {
     evidence: VaultBridgeDepositEvidence,
@@ -120,8 +122,11 @@ fn h319_legacy_deposit_is_admitted_on_its_unanchored_route_as_main_did() {
     assert_eq!(values.deposit_id, deposit.evidence.deposit_id);
     // No anchor existed for this route at 319, nor for any other route profile.
     ensure_ethereum_ingress_route_unanchored(&[], &deposit.policy_hash).expect("no anchors");
-    ensure_ethereum_ingress_route_unanchored(&[h319_anchor(&"ab".repeat(48))], &deposit.policy_hash)
-        .expect("an anchor on another route profile does not gate this one");
+    ensure_ethereum_ingress_route_unanchored(
+        &[h319_anchor(&"ab".repeat(48))],
+        &deposit.policy_hash,
+    )
+    .expect("an anchor on another route profile does not gate this one");
 }
 
 #[test]
@@ -132,5 +137,8 @@ fn legacy_layout_deposit_on_an_anchored_route_is_refused() {
         &deposit.policy_hash,
     )
     .expect_err("anchored routes require the 29-field values");
-    assert_eq!(refused.0, "ethereum_ingress_legacy_public_values_on_anchored_route");
+    assert_eq!(
+        refused.0,
+        "ethereum_ingress_legacy_public_values_on_anchored_route"
+    );
 }

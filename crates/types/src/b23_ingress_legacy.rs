@@ -84,11 +84,13 @@ pub struct PfUsdcEthereumIngressPublicValuesLegacyV1 {
 impl PfUsdcEthereumIngressPublicValuesLegacyV1 {
     /// Byte-for-byte the decoder main used before the anchored route.
     pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, String> {
-        let values: Self = serde_cbor::from_slice(bytes)
-            .map_err(|error| format!("Ethereum ingress public values CBOR decode failed: {error}"))?;
+        let values: Self = serde_cbor::from_slice(bytes).map_err(|error| {
+            format!("Ethereum ingress public values CBOR decode failed: {error}")
+        })?;
         values.validate()?;
-        let canonical = serde_cbor::to_vec(&values)
-            .map_err(|error| format!("Ethereum ingress public values CBOR encode failed: {error}"))?;
+        let canonical = serde_cbor::to_vec(&values).map_err(|error| {
+            format!("Ethereum ingress public values CBOR encode failed: {error}")
+        })?;
         if canonical != bytes {
             return Err("Ethereum ingress public values are not canonical CBOR".to_string());
         }
@@ -116,23 +118,59 @@ impl PfUsdcEthereumIngressPublicValuesLegacyV1 {
         validate_evm_address_text("ethereum_ingress.token_address", &self.token_address)?;
         validate_evm_address_text("ethereum_ingress.depositor", &self.depositor)?;
         pfusdc_validate_hex_fields(&[
-            ("ethereum_ingress.prior_finalized_beacon_root", &self.prior_finalized_beacon_root, 64),
-            ("ethereum_ingress.finalized_beacon_root", &self.finalized_beacon_root, 64),
-            ("ethereum_ingress.finalized_execution_block_hash", &self.finalized_execution_block_hash, 64),
-            ("ethereum_ingress.execution_state_root", &self.execution_state_root, 64),
-            ("ethereum_ingress.vault_runtime_code_hash", &self.vault_runtime_code_hash, 64),
-            ("ethereum_ingress.token_runtime_code_hash", &self.token_runtime_code_hash, 64),
-            ("ethereum_ingress.pftl_recipient_hash", &self.pftl_recipient_hash, 64),
+            (
+                "ethereum_ingress.prior_finalized_beacon_root",
+                &self.prior_finalized_beacon_root,
+                64,
+            ),
+            (
+                "ethereum_ingress.finalized_beacon_root",
+                &self.finalized_beacon_root,
+                64,
+            ),
+            (
+                "ethereum_ingress.finalized_execution_block_hash",
+                &self.finalized_execution_block_hash,
+                64,
+            ),
+            (
+                "ethereum_ingress.execution_state_root",
+                &self.execution_state_root,
+                64,
+            ),
+            (
+                "ethereum_ingress.vault_runtime_code_hash",
+                &self.vault_runtime_code_hash,
+                64,
+            ),
+            (
+                "ethereum_ingress.token_runtime_code_hash",
+                &self.token_runtime_code_hash,
+                64,
+            ),
+            (
+                "ethereum_ingress.pftl_recipient_hash",
+                &self.pftl_recipient_hash,
+                64,
+            ),
             ("ethereum_ingress.nonce", &self.nonce, 64),
             ("ethereum_ingress.route_binding", &self.route_binding, 64),
             ("ethereum_ingress.deposit_id", &self.deposit_id, 64),
             ("ethereum_ingress.evidence_root", &self.evidence_root, 96),
             ("ethereum_ingress.manifest_hash", &self.manifest_hash, 64),
-            ("ethereum_ingress.deposit_nullifier", &self.deposit_nullifier, 64),
+            (
+                "ethereum_ingress.deposit_nullifier",
+                &self.deposit_nullifier,
+                64,
+            ),
         ])?;
-        let obligations = self.total_obligations_atoms.parse::<u128>()
+        let obligations = self
+            .total_obligations_atoms
+            .parse::<u128>()
             .map_err(|_| "Ethereum ingress obligations are not an integer".to_string())?;
-        let balance = self.vault_token_balance_atoms.parse::<u128>()
+        let balance = self
+            .vault_token_balance_atoms
+            .parse::<u128>()
             .map_err(|_| "Ethereum ingress token balance is not an integer".to_string())?;
         if obligations < u128::from(self.amount_atoms) || balance < obligations {
             return Err("Ethereum ingress backing is insufficient".to_string());
