@@ -1428,6 +1428,13 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
                 source_nullifier = values.deposit_nullifier.clone();
                 advanced_beacon_finality = Some(state);
             }
+            VerifiedIngressPublicValues::EthereumUnanchored(values) => {
+                ensure_ethereum_ingress_route_unanchored(
+                    &ledger.beacon_finality_states,
+                    &operation.policy_hash,
+                )?;
+                source_nullifier = values.deposit_nullifier.clone();
+            }
         }
     }
     if !source_nullifier.is_empty()
@@ -7630,6 +7637,8 @@ enum VerifiedIngressPublicValues {
     Confirmed(postfiat_types::PfUsdcIngressPublicValuesV3),
     Bonded(postfiat_types::PfUsdcBondedIngressPublicValuesV1),
     Ethereum(Box<postfiat_types::PfUsdcEthereumIngressPublicValuesV1>),
+    /// Pre-anchor 26-field layout; admitted only on routes without a beacon anchor.
+    EthereumUnanchored(Box<postfiat_types::PfUsdcEthereumIngressPublicValuesLegacyV1>),
     Arc(postfiat_types::PfUsdcArcIngressPublicValuesV1),
 }
 
@@ -7708,10 +7717,31 @@ fn ensure_vault_bridge_deposit_source_proof(
             source_public_values,
         )
         .map_err(|error| (error.code(), error.message()))?;
-        let values = postfiat_types::PfUsdcEthereumIngressPublicValuesV1::from_canonical_bytes(
+        let values = match postfiat_types::PfUsdcEthereumIngressPublicValuesV1::from_canonical_bytes(
             source_public_values,
-        )
-        .map_err(|error| ("ethereum_ingress_public_values_invalid", error))?;
+        ) {
+            Ok(values) => values,
+            Err(error) => {
+                // History: before the anchored beacon route the guest committed
+                // the 26-field layout. Decode it exactly as main did; the caller
+                // admits it only when the deposit's route has no beacon anchor.
+                let legacy =
+                    postfiat_types::PfUsdcEthereumIngressPublicValuesLegacyV1::from_canonical_bytes(
+                        source_public_values,
+                    )
+                    .map_err(|_| ("ethereum_ingress_public_values_invalid", error))?;
+                ensure_ethereum_ingress_public_values_match(
+                    profile,
+                    evidence,
+                    evidence_root,
+                    policy_hash,
+                    &legacy.unanchored_comparison_view(),
+                )?;
+                return Ok(Some(VerifiedIngressPublicValues::EthereumUnanchored(Box::new(
+                    legacy,
+                ))));
+            }
+        };
         ensure_ethereum_ingress_public_values_match(
             profile,
             evidence,
@@ -7954,6 +7984,28 @@ fn ensure_pfusdc_arc_ingress_public_values_match(
         return Err((
             "pfusdc_arc_ingress_public_values_mismatch",
             "proof-verified Arc ingress public values do not exactly match the governed route and deposit evidence"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// The gate for the pre-anchor 26-field layout: the deposit's route profile
+/// (`policy_hash`) must hold no governance-pinned beacon anchor. Anchors exist
+/// in replicated state exactly from the activation that pinned them, so replay
+/// admits history as main did while every anchored-route deposit must carry the
+/// 29-field values and pass the anchor comparison.
+fn ensure_ethereum_ingress_route_unanchored(
+    beacon_finality_states: &[postfiat_types::PfUsdcBeaconFinalityStateV1],
+    policy_hash: &str,
+) -> Result<(), (&'static str, String)> {
+    if beacon_finality_states
+        .iter()
+        .any(|state| state.route_profile_hash == policy_hash)
+    {
+        return Err((
+            "ethereum_ingress_legacy_public_values_on_anchored_route",
+            "anchored Ethereum routes require public values with the route epoch and sync committee roots"
                 .to_string(),
         ));
     }
@@ -8708,3 +8760,7 @@ fn to_venue_observations(
         })
         .collect()
 }
+
+#[cfg(test)]
+#[path = "b23_ingress_history_tests.rs"]
+mod b23_ingress_history_tests;

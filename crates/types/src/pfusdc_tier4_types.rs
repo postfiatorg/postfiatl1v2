@@ -2125,3 +2125,4 @@ mod b23_ingress_anchor;
 
 #[path = "b23_ingress_legacy.rs"]
 mod b23_ingress_legacy;
+pub use b23_ingress_legacy::PfUsdcEthereumIngressPublicValuesLegacyV1;
