@@ -66,7 +66,7 @@ mod tests {
             None
         );
         assert_eq!(
-            VaultBridgeRouteReport::select_beacon_anchor(&[state.clone()], &"ff".repeat(48), 11)
+            VaultBridgeRouteReport::select_beacon_anchor(std::slice::from_ref(&state), &"ff".repeat(48), 11)
                 .unwrap(),
             None
         );

@@ -110,7 +110,6 @@ fn b23_read_only_v1_head_is_verified_without_upgrade_on_success_or_failure() {
         .unwrap(),
     )
     .unwrap();
-    drop(key);
     drop(store);
     // Prove this is authenticated, usable legacy storage before exercising RPC.
     assert_eq!(
