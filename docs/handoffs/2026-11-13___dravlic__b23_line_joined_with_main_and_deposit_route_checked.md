@@ -123,3 +123,7 @@ Then the client's, each with the date first asked:
 - **Public branch:** [`w1/fastpay-inventory-revision-20261113`](https://github.com/postfiatorg/postfiatl1v2/tree/w1/fastpay-inventory-revision-20261113) (`b1c813f8c`).
 - **Private repository** (`postfiatorg/postfiatl1v2-private-archive-20260717`): `integration/main-with-b23-20261113` (`145426666`); `b23/redelivery-ack-20261113` (`208ee8687`, PR #28) against `b23/integration` (`abc228eda`); `docs/client-lane-branch-reviews-20261111` (`2759b42a7`); the B23 line's own handoff `docs/plans/HANDOFF-navcoin-metamask-roundtrip.md` on `b23/integration`.
 - **Previous handoff:** [2026-11-12: overnight release recorded, and fence status, watcher and delivery fix merged](2026-11-12___dravlic__overnight_release_recorded_and_fence_status_watcher_and_delivery_fix_merged.md).
+
+## End of session (14:20 UTC)
+
+I also read the B23 facility's money paths on the running line: the public mint, funding, redemption and market paths check their signers and keep the balances they move. Six follow-ups on adjacent paths are listed in the private note `docs/review/client-lane-branch-reviews-20261111/b23-facility-money-paths-20261113.md` on `docs/client-lane-branch-reviews-20261111` (`f4470fb97`). The inventory revision branch got its client-side fixes (`b1c813f8c`), and its node-side fix round is running.
