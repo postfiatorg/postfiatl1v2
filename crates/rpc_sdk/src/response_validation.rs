@@ -6186,10 +6186,28 @@ fn validate_owned_objects_result(result: &Value) -> Result<(), RpcResponseValida
         }
     }
     // Revision-era nodes add `inventory_revision` (read with the page, at
-    // the page's finalized `height`) and the answering `node_id`.
+    // the page's finalized `height`, with the data directory's
+    // `incarnation`) or the reason it is unavailable, and the answering
+    // `node_id`.
+    let revision_present = !matches!(
+        result.get("inventory_revision"),
+        None | Some(Value::Null)
+    );
+    if !matches!(
+        result.get("inventory_revision_unavailable"),
+        None | Some(Value::Null)
+    ) {
+        clean_string_field(result, "inventory_revision_unavailable")?;
+        if revision_present {
+            return Err(invalid_result(
+                "inventory_revision_unavailable",
+                "expected no reason beside an inventory revision",
+            ));
+        }
+    }
     match result.get("inventory_revision") {
         None | Some(Value::Null) => {}
-        Some(Value::Object(_)) => {
+        Some(Value::Object(revision)) => {
             let finalized_height = u64_field(result, "inventory_revision.finalized_height")?;
             u64_field(result, "inventory_revision.fastpay_sequence")?;
             if result.get("height").and_then(Value::as_u64) != Some(finalized_height) {
@@ -6197,6 +6215,9 @@ fn validate_owned_objects_result(result: &Value) -> Result<(), RpcResponseValida
                     "inventory_revision.finalized_height",
                     "expected the revision height to equal the page height",
                 ));
+            }
+            if revision.contains_key("incarnation") {
+                lower_hex_field(result, "inventory_revision.incarnation", 32)?;
             }
         }
         Some(_) => {

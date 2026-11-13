@@ -1580,14 +1580,17 @@ wss } = runtime;
             // dropped: they do not identify the view (FastPay effects change
             // it without a block), and equal views at two heights agree.
             // node_id and inventory_revision are dropped too: node_id differs
-            // on every validator and fastpay_sequence can differ between
-            // honest ones. readFleetRpcMajority returns them beside the
-            // answer (fleetRevisions).
+            // on every validator, fastpay_sequence can differ between honest
+            // ones, and the incarnation is per data directory.
+            // readFleetRpcMajority returns them beside the answer
+            // (fleetRevisions). inventory_revision_unavailable follows each
+            // server's owned-lane configuration, so it is dropped as well.
             const {
                 height: _height,
                 state_root: _stateRoot,
                 node_id: _nodeId,
                 inventory_revision: _inventoryRevision,
+                inventory_revision_unavailable: _inventoryRevisionUnavailable,
                 ...copy
             } = result;
             if (Array.isArray(copy.objects)) {
@@ -1626,8 +1629,10 @@ wss } = runtime;
     // it asked; node_id is what the node says about itself (not
     // authenticated). A node that sends no pair, or a malformed one (unclean
     // id, a revision that is not {finalized_height, fastpay_sequence} as
-    // exact unsigned integers, or a finalized_height other than the page's
-    // height), has no entry.
+    // exact unsigned integers, a finalized_height other than the page's
+    // height, or an incarnation that is not 32 lowercase hex digits), has no
+    // entry. A present incarnation passes on: revisions compare only within
+    // one (node_id, incarnation).
     function fleetRevisions(group) {
         const revisions = [];
         for (const entry of group) {
@@ -1635,14 +1640,24 @@ wss } = runtime;
             const revision = result?.inventory_revision;
             if (!cleanNodeId(result?.node_id)
                 || !revision || typeof revision !== 'object' || Array.isArray(revision)) continue;
-            const { finalized_height: finalizedHeight, fastpay_sequence: fastpaySequence } = revision;
+            const {
+                finalized_height: finalizedHeight,
+                fastpay_sequence: fastpaySequence,
+                incarnation,
+            } = revision;
             if (!exactUnsignedInteger(finalizedHeight)
                 || !exactUnsignedInteger(fastpaySequence)
-                || result.height !== finalizedHeight) continue;
+                || result.height !== finalizedHeight
+                || (incarnation !== undefined
+                    && !(typeof incarnation === 'string' && /^[0-9a-f]{32}$/.test(incarnation)))) continue;
             revisions.push({
                 endpoint_validator_id: entry.validator_id,
                 node_id: result.node_id,
-                inventory_revision: { finalized_height: finalizedHeight, fastpay_sequence: fastpaySequence },
+                inventory_revision: {
+                    finalized_height: finalizedHeight,
+                    fastpay_sequence: fastpaySequence,
+                    ...(incarnation !== undefined ? { incarnation } : {}),
+                },
             });
         }
         return revisions;

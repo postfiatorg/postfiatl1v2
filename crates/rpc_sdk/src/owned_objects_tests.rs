@@ -564,7 +564,11 @@ mod owned_objects {
         let map = report.as_object_mut().unwrap();
         map.insert(
             "inventory_revision".into(),
-            json!({"finalized_height": 40, "fastpay_sequence": 3}),
+            json!({
+                "finalized_height": 40,
+                "fastpay_sequence": 3,
+                "incarnation": "0f".repeat(16),
+            }),
         );
         map.insert("node_id".into(), json!("validator-0"));
         report
@@ -601,5 +605,41 @@ mod owned_objects {
             rejected_field(with(revision_fixture(), "/node_id", json!(" v0"))),
             "node_id"
         );
+    }
+
+    /// The incarnation is optional, lowercase hex of 16 bytes; a page
+    /// without a revision may say why, and never both.
+    #[test]
+    fn accepts_and_checks_the_incarnation_and_the_unavailable_reason() {
+        let mut no_incarnation = revision_fixture();
+        no_incarnation["inventory_revision"]
+            .as_object_mut()
+            .unwrap()
+            .remove("incarnation");
+        assert!(validate(&no_incarnation).is_ok());
+        for bad in [json!("0F".repeat(16)), json!("0f".repeat(15)), json!(7)] {
+            assert_eq!(
+                rejected_field(with(revision_fixture(), "/inventory_revision/incarnation", bad)),
+                "inventory_revision.incarnation"
+            );
+        }
+        let mut unavailable = revision_fixture();
+        let map = unavailable.as_object_mut().unwrap();
+        map.remove("inventory_revision");
+        map.insert(
+            "inventory_revision_unavailable".into(),
+            json!("legacy_owned_applies_enabled"),
+        );
+        assert!(validate(&unavailable).is_ok());
+        assert_eq!(
+            rejected_field(with(unavailable.clone(), "/inventory_revision_unavailable", json!(""))),
+            "inventory_revision_unavailable"
+        );
+        let mut both = revision_fixture();
+        both.as_object_mut().unwrap().insert(
+            "inventory_revision_unavailable".into(),
+            json!("legacy_owned_applies_enabled"),
+        );
+        assert_eq!(rejected_field(both), "inventory_revision_unavailable");
     }
 }

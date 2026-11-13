@@ -513,6 +513,37 @@ class RemainingReadWrapperTests(unittest.TestCase):
             with self.assertRaises(RpcClientError):
                 client.owned_objects_all("ab")
 
+    def test_owned_objects_revision_incarnation_and_unavailable_reason(self) -> None:
+        from postfiat_rpc import OwnedObjectsRevision, RpcClientError
+        from postfiat_rpc.client import owned_objects_revision
+
+        incarnation = "0f" * 16
+        page = {"height": 7, "view_digest": "v", "node_id": "validator-0",
+                "inventory_revision": {"finalized_height": 7, "fastpay_sequence": 2,
+                                       "incarnation": incarnation}}
+        _, revision = owned_objects_revision(page)
+        self.assertEqual(revision, OwnedObjectsRevision(7, 2, incarnation))
+        self.assertEqual(revision.incarnation, incarnation)
+        for bad in ("0F" * 16, "0f" * 15, "", 7):
+            with self.assertRaises(RpcClientError):
+                owned_objects_revision({**page, "inventory_revision": {
+                    **page["inventory_revision"], "incarnation": bad}})
+        unavailable = {k: v for k, v in page.items() if k != "inventory_revision"}
+        unavailable["inventory_revision_unavailable"] = "legacy_owned_applies_enabled"
+        self.assertIsNone(owned_objects_revision(unavailable))
+        for bad_reason in ("", " x", 3):
+            with self.assertRaises(RpcClientError):
+                owned_objects_revision({**unavailable, "inventory_revision_unavailable": bad_reason})
+        with self.assertRaises(RpcClientError):
+            owned_objects_revision({**page, "inventory_revision_unavailable": "legacy_owned_applies_enabled"})
+        # owned_objects_all keeps the last page's reason with its other tip fields.
+        client = _client()
+        last = {**unavailable, "objects": [], "object_count": 0, "truncated": False, "next_cursor": None}
+        with mock.patch.object(client, "_call", return_value=last):
+            result = client.owned_objects_all("ab")
+        self.assertEqual(result["inventory_revision_unavailable"], "legacy_owned_applies_enabled")
+        self.assertNotIn("inventory_revision", result)
+
     def test_owned_objects_all_restarts_on_a_view_changed_refusal_within_the_bound(self) -> None:
         from postfiat_rpc.client import OWNED_OBJECTS_ALL_MAX_RESTARTS, RpcError
 
