@@ -535,24 +535,47 @@ class FundingPlanTests(unittest.TestCase):
         allowance = dry_run.L1_DATA_FEE_ALLOWANCE_WEI
         verifier, lock = 3_000_000 * self.PRICE * 3 + allowance, 2_000_000 * self.PRICE * 3 + allowance
         own = (200_000 + 3 * 21_000) * self.PRICE * 3 + 5 * allowance
+        relayer = 5 * 10 ** 15 + allowance
         self.assertEqual(funding["verifier deployer"]["fund_wei"], verifier)
         self.assertEqual(funding["lock deployer"]["fund_wei"], lock)
-        self.assertEqual(funding["relayer"]["fund_wei"], 5 * 10 ** 15)
+        self.assertEqual(funding["relayer"]["fund_wei"], relayer)
         holder = funding["holder"]
         self.assertEqual(holder["own_gas_wei"], own)
-        self.assertEqual(holder["passed_on_wei"], verifier + lock + 5 * 10 ** 15)
-        self.assertEqual(holder["starting_balance_wei"], own + verifier + lock + 5 * 10 ** 15)
+        self.assertEqual(holder["passed_on_wei"], verifier + lock + relayer)
+        self.assertEqual(holder["starting_balance_wei"], own + verifier + lock + relayer)
+        self.assertEqual(holder["formula"], "starting balance = own gas + verifier deployer + lock deployer + "
+                                            "relayer (ceiling + one L1 data fee allowance)")
         for row in funding.values():
             self.assertTrue(row["formula"])
         markdown = dry_run.sheet_markdown(self.sheet(5 * 10 ** 15))
         self.assertIn("starting balance", markdown)
         self.assertIn("estimate", markdown)
 
+    def test_the_relayer_row_recommends_the_ceiling_plus_one_allowance(self):
+        allowance = dry_run.L1_DATA_FEE_ALLOWANCE_WEI
+        sheet = self.sheet(5 * 10 ** 15)
+        relayer = sheet["funding"]["relayer"]
+        self.assertEqual((relayer["ceiling_wei"], relayer["surplus_wei"]), (5 * 10 ** 15, allowance))
+        lines = dry_run.sheet_markdown(sheet).splitlines()
+        funding_table = lines[lines.index("## Funding plan (wei)"):]
+        row = next(line for line in funding_table if line.startswith("| relayer |"))
+        print(f"\n{row}")
+        self.assertEqual(row, (
+            f"| relayer | {5 * 10 ** 15 + allowance} | ceiling 5000000000000000 wei (--relayer-ceiling-wei, a "
+            "spending budget for this run, not a cap on the account's balance; the release's gas is not known "
+            f"before a real proof) + one L1 data fee allowance {allowance} wei as surplus. Fund the relayer with "
+            "this: the release never spends more than the ceiling, so the surplus is harmless slack for an L1 data "
+            "fee above its allowance. The release is budgeted from the lesser of the relayer's balance and the "
+            "ceiling, and sent with a gas limit and max fee whose product plus one L1 data fee allowance stays "
+            "within it |"))
+        self.assertNotIn("funded up to the ceiling", dry_run.sheet_markdown(sheet))
+
     def test_without_a_relayer_ceiling_the_plan_says_it_is_incomplete(self):
         funding = self.sheet(None)["funding"]
         self.assertIsNone(funding["relayer"]["fund_wei"])
         self.assertIsNone(funding["holder"]["starting_balance_wei"])
         self.assertIn("--relayer-ceiling-wei", funding["relayer"]["formula"])
+        self.assertIn("not set: a fork run", funding["relayer"]["formula"])
 
     def test_the_sheet_prints_the_planned_release_spend_and_its_basis(self):
         planned = dry_run.planned_release_spend(self.PRICE)
