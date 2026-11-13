@@ -86,13 +86,14 @@ fn b23_legacy_block_1209_replays_identical_rejection_receipt_bytes() {
     assert!(!expected.accepted);
     assert_eq!(expected.code, "vault_bridge_route_profile_rejected");
     for archived in [true, false] {
-        let (_, mut governance, _, mut ledger) = context();
+        let (genesis, mut governance, _, mut ledger) = context();
         let before_ledger = ledger.clone();
         let before_governance = governance.clone();
         let receipts = if archived {
             crate::execution_actions::execute_archived_governance_batch(
                 &mut governance,
                 Some(&mut ledger),
+                Some(&genesis),
                 &batch,
                 1209,
             )
@@ -100,6 +101,7 @@ fn b23_legacy_block_1209_replays_identical_rejection_receipt_bytes() {
             crate::execution_actions::execute_governance_batch(
                 &mut governance,
                 Some(&mut ledger),
+                Some(&genesis),
                 &batch,
                 1209,
             )
@@ -121,7 +123,7 @@ fn b23_legacy_anchor_cannot_activate_even_after_nav_profile_matches() {
     assert!(activation.validate().is_err());
     assert!(VaultBridgeRouteProfileRecordV1::new_for_replay(activation, 1209).is_err());
     for archived in [true, false] {
-        let (_, mut governance, _, mut ledger) = context();
+        let (genesis, mut governance, _, mut ledger) = context();
         let hash = activation.profile.profile_hash().unwrap();
         ledger.nav_proof_profiles[0].vault_bridge_route_policy_hash = hash.clone();
         crate::execution_actions::validate_vault_bridge_route_profile_against_ledger(
@@ -135,6 +137,7 @@ fn b23_legacy_anchor_cannot_activate_even_after_nav_profile_matches() {
             crate::execution_actions::execute_archived_governance_batch(
                 &mut governance,
                 Some(&mut ledger),
+                Some(&genesis),
                 &batch,
                 1209,
             )
@@ -142,6 +145,7 @@ fn b23_legacy_anchor_cannot_activate_even_after_nav_profile_matches() {
             crate::execution_actions::execute_governance_batch(
                 &mut governance,
                 Some(&mut ledger),
+                Some(&genesis),
                 &batch,
                 1209,
             )

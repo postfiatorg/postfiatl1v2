@@ -72,6 +72,7 @@ fn b23_release4_real_1256_replay_preserves_accepted_receipt_and_stored_bytes() {
             crate::execution_actions::execute_archived_governance_batch(
                 &mut replay,
                 Some(&mut state),
+                Some(&fixture().0),
                 &batch,
                 1256,
             )
@@ -79,6 +80,7 @@ fn b23_release4_real_1256_replay_preserves_accepted_receipt_and_stored_bytes() {
             crate::execution_actions::execute_governance_batch(
                 &mut replay,
                 Some(&mut state),
+                Some(&fixture().0),
                 &batch,
                 1256,
             )
