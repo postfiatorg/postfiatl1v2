@@ -36,6 +36,7 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__)
     for name in ('snapshot','capture','proof','native_cli','canary_bin','node','output'):
         ap.add_argument('--'+name.replace('_','-'),type=Path,required=True)
+    ap.add_argument('--daily',action='store_true',help='Existing-profile reserve update; no market or cash-in action')
     args=ap.parse_args();args.output.mkdir(mode=0o700,parents=True,exist_ok=False)
     base=load(args.snapshot);m=load(args.capture/'manifest.json');profile=load(args.capture/'profile.json')
     public=bytes.fromhex(load(args.capture/'result.json')['body']['public_values_hex'])
@@ -77,6 +78,9 @@ def main():
         next_route_config_digest=f.sha48(b'b23.route.policy',policy['policy_hash'].encode()),
         live_value_enabled=route['live_value_enabled'],next_primary_market_policy=policy)
     operations=[('register-profile',register),('rebind',rebind),('submit',submit),('finalize',finalize),('route-pricing',advance)]
+    if args.daily:
+        assert nav['proof_profile']==profile['profile_id'],'daily reading must use the registered profile'
+        operations=operations[2:]
     save(args.output/'authorized-live-operations.json',[{'label':label,'source':issuer,'operation':op} for label,op in operations])
     save(args.output/'expected.json',dict(supply_atoms=supply,verified_net_assets=amount,nav_per_unit=price,
         conservative_rounding_numerator=amount*1_000_000-supply*price,profile=profile['profile_id'],
@@ -122,10 +126,16 @@ def main():
         assert state['offers']==base['ledger']['offers']
     before=load(current)['ledger'];newnav=item(before['nav_assets'],'asset_id',asset)
     assert newnav['nav_per_unit']==price and not newnav['halted']
+    assert newnav['finalized_epoch']==m['observation_epoch']
     newroute=item(before['pftl_uniswap_routes'],'route_id',f.ROUTE_ID)
     assert newroute['v2']['primary_market_policy']['pricing_nav_epoch']==m['observation_epoch']
     assert newroute['authorized_valid_supply_atoms']==supply
     assert invariant(newroute)
+    if args.daily:
+        save(args.output/'result.json',dict(passed=True,daily_update=True,no_live_transactions=True,
+            checks=dict(route_invariant=True,finalized_epoch=newnav['finalized_epoch']==m['observation_epoch']),
+            base_tip=base['tip'],authorized_operations_sha256=hashlib.sha256((args.output/'authorized-live-operations.json').read_bytes()).hexdigest()))
+        print(json.dumps({'daily_canary_passed':True,'nav_per_unit':price,'supply_atoms':supply}));return
     # The existing maker sets the market price independently of the NAV fix.
     # Use Bob's actual quote balance; no fixture funding or live buy occurs.
     maker=item(before['offers'],'offer_id',ALICE_OFFER);quote_asset=maker['taker_pays_asset_id']

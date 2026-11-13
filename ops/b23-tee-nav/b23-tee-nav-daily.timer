@@ -1,0 +1,14 @@
+[Unit]
+Description=Prepare at 17:55 UTC for B23 18:15 UTC reading, starting 2026-11-14
+
+[Timer]
+OnCalendar=*-*-* 17:55:00 UTC
+AccuracySec=1s
+RandomizedDelaySec=0
+Persistent=false
+Unit=b23-tee-nav-daily.service
+# daily.py refuses any date before the registered first daily fix, 2026-11-14.
+# AWS caps: $9 per attempt and $250 per UTC calendar month; never auto-retry.
+
+[Install]
+WantedBy=timers.target

@@ -40,30 +40,33 @@ def runtime(peer):
     hashes=[line.split()[0] for line in r.stdout.splitlines()]
     return name,dict(returncode=r.returncode,hashes=hashes,matches=r.returncode==0 and hashes==[RELEASE_SHA]*2)
 
-def reads(peer,asset):
+def reads(peer,asset,include_offer=True):
     name=peer[0]
     return name,{method:pftl.rpc(method,params,'tee-final-'+method,peer) for method,params in [
         ('server_info',{}),('status',{}),('asset_info',{'asset_id':asset}),('nav_reserve_proof_status',{'asset_id':asset}),
-        ('navcoin_bridge_supply_status',{'route_id':f.ROUTE_ID}),('offer_info',{'offer_id':ALICE_OFFER})]}
+        ('navcoin_bridge_supply_status',{'route_id':f.ROUTE_ID})]+([('offer_info',{'offer_id':ALICE_OFFER})] if include_offer else [])}
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--canary',type=Path,required=True)
     ap.add_argument('--output',type=Path,required=True);ap.add_argument('--execute',action='store_true')
     ap.add_argument('--canary-bin',type=Path,default=Path('/mnt/HC_Volume_106212907/sec-fundamentals-proxy/b23-tee-nav-canary-target/release/postfiat-b23-nav-canary'))
+    ap.add_argument('--daily',action='store_true',help='Only submit/finalize/route pricing on the existing profile')
     args=ap.parse_args();gate=load(args.canary/'result.json');expected=load(args.canary/'expected.json')
     plan_path=args.canary/'authorized-live-operations.json';plan=load(plan_path)
     assert gate['passed'] is True and gate['no_live_transactions'] is True
-    assert gate['checks']['market_buy'] and gate['checks']['route_invariant']
+    assert gate['checks']['route_invariant']
+    assert gate.get('daily_update',False)==args.daily
+    if not args.daily:assert gate['checks']['market_buy']
     assert gate['authorized_operations_sha256']==hashlib.sha256(plan_path.read_bytes()).hexdigest()
-    assert [r['operation']['operation'] for r in plan]==EXPECTED_OPS
+    assert [r['operation']['operation'] for r in plan]==(EXPECTED_OPS[2:] if args.daily else EXPECTED_OPS)
     assert all(r['source']==f.ISSUER for r in plan)
-    asset=plan[1]['operation']['asset_id']
+    asset=next(r['operation']['asset_id'] for r in plan if r['operation']['operation']=='nav_reserve_submit')
     assert asset=='ca7845134c8e95819082fcd2f1612808e20a37dfabab98dab120f99fd2c54c18ffb50d98c0664480420c881773244627'
-    assert all(plan[i]['operation']['asset_id']==asset for i in (1,2,3))
-    assert plan[4]['operation']['route_id']==f.ROUTE_ID
+    assert all(r['operation']['asset_id']==asset for r in plan if 'asset_id' in r['operation'])
+    assert plan[-1]['operation']['route_id']==f.ROUTE_ID
     assert hashlib.sha256(NODE.read_bytes()).hexdigest()==RELEASE_SHA
     if not args.execute:
-        print(json.dumps({'canary_gate_passed':True,'operation_count':5,'chain_writes':0}));return
+        print(json.dumps({'canary_gate_passed':True,'operation_count':len(plan),'chain_writes':0}));return
     args.output.mkdir(parents=True,exist_ok=False,mode=0o700)
     pftl.NODE=NODE;pftl.EVIDENCE=args.output;pftl.require_chain_lock=require_lock
     deadline=time.monotonic()+3600;handle=LOCK.open('a+')
@@ -84,9 +87,11 @@ def main():
         pftl.assert_identity(before)
         assert pftl.converged_point(before)==(gate['base_tip']['height'],gate['base_tip']['state_root']),'live parent changed; refresh canary before writing'
         assert all(v['mempool']['pending']==0 for v in before.values())
-        offer_before=pftl.rpc('offer_info',{'offer_id':ALICE_OFFER},'tee-live-offer-before')
-        save(args.output/'before-offer.json',offer_before)
-        assert offer_before['offer']['state']=='open'
+        offer_before=None
+        if not args.daily:
+            offer_before=pftl.rpc('offer_info',{'offer_id':ALICE_OFFER},'tee-live-offer-before')
+            save(args.output/'before-offer.json',offer_before)
+            assert offer_before['offer']['state']=='open'
         for row in plan:
             require_lock()
             top('PHASE 3 STEP 3 IN PROGRESS: '+row['label']+'; full six-validator completion is pending.')
@@ -107,7 +112,7 @@ def main():
                 assert context['attested_value']==expected['attested_value']
             receipt=pftl.asset_op('tee-'+row['label'],f.ISSUER,f.ISSUER_KEY,row['operation'])
             print(json.dumps({'operation':row['label'],'height':receipt['height'],'receipt_codes':receipt['receipt_codes']}),flush=True)
-        with ThreadPoolExecutor(max_workers=6) as pool:after=dict(pool.map(lambda peer:reads(peer,asset),pftl.PEERS))
+        with ThreadPoolExecutor(max_workers=6) as pool:after=dict(pool.map(lambda peer:reads(peer,asset,not args.daily),pftl.PEERS))
         save(args.output/'after-six-node.json',after)
         checks={}
         for name,row in after.items():
@@ -134,7 +139,7 @@ def main():
                 route_supply=route['authorized_valid_supply_atoms']==expected['supply_atoms'],
                 route_live=route['live_value_enabled'] is True,
                 route_invariant=route['invariant_holds'] is True,
-                alice_offer_unchanged=row['offer_info']['offer']==offer_before['offer'])
+                alice_offer_unchanged=args.daily or row['offer_info']['offer']==offer_before['offer'])
         assert all(all(v.values()) for v in checks.values())
         fleet={k:v['server_info'] for k,v in after.items()};pftl.assert_identity(fleet)
         assert pftl.converged_point(fleet) is not None
