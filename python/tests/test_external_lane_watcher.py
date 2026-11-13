@@ -1917,6 +1917,33 @@ class OneForkPftlRead:
         return self.home.blocks(**kwargs)
 
 
+class OnePftlForkRead:
+    """One PFTL endpoint behind which read number `index` (0-based) of the
+    export view (the tip, a block, each read of an export page) is answered by
+    `fork`; release pages and every other read by `home`."""
+
+    def __init__(self, home: Any, fork: ExportPftl, index: int) -> None:
+        self.home, self.fork, self.index, self.reads, self.used = home, fork, index, 0, None
+
+    def pick(self, method: str) -> Any:
+        node = self.home
+        if self.reads == self.index:
+            node, self.used = self.fork, method
+        self.reads += 1
+        return node
+
+    def external_lane_info(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        if "export_limit" not in kwargs:
+            return self.home.external_lane_info(*args, **kwargs)
+        return self.pick("external_lane_info").external_lane_info(*args, **kwargs)
+
+    def status(self) -> dict[str, Any]:
+        return self.pick("status").status()
+
+    def blocks(self, **kwargs: Any) -> list[dict[str, Any]]:
+        return self.pick("blocks").blocks(**kwargs)
+
+
 def fork_export(nonce: int) -> dict[str, Any]:
     """An export the validated chain never made: its own packet digest."""
 
@@ -2478,13 +2505,30 @@ class ExportModelTests(unittest.TestCase):
       canonical); at most one such read per sequence; each
       run is normal, `--from-height 0` or an alternating `--lock-from-block`;
       depth 3. Such a run is refused (exit 1, the state kept) or gives
-      exactly the all-honest run's lines and state."""
+      exactly the all-honest run's lines and state.
+    - PFTL reads: any single PFTL read of the export view (the tip, a block,
+      either read of an export page) may be answered by a node of a fork
+      that shares this chain's genesis and lane at the same height, holding
+      one more export, the orphan payout's packet; at most one per
+      sequence; depth 3. Refused or exactly the all-honest result, as above."""
 
     AMOUNTS = MODEL_AMOUNTS
     ENTRIES = [export_entry(n, amount=MODEL_AMOUNTS[n], height=100 + n) for n in range(4)]
     ORPHAN = export_entry(9, amount=50_000)
     PAYOUTS = ("none", "legit", "duplicate", "orphan")
     BASE_BACK = 20
+
+    def pftl_fork(self, home: ExportPftl) -> ExportPftl:
+        """A node of a fork that shares this chain's genesis and lane, at the
+        same height: the validated chain's exports and one more it never
+        made, the orphan payout's packet, so its counters do not go back."""
+
+        extra = json.loads(json.dumps(self.ORPHAN))
+        extra["packet"].update(export_nonce=home.pruned + len(home.exports), exported_at_height=home.current_height)
+        fork = ExportPftl([*home.exports, extra], pruned=home.pruned, pruned_atoms=home.pruned_atoms,
+                          released=home.released, current_height=home.current_height)
+        fork.fork = "b"
+        return fork
 
     def snapshot(self, time: int) -> ExportPftl:
         exported = min(time, 3) + 1
@@ -2500,7 +2544,7 @@ class ExportModelTests(unittest.TestCase):
             self.explore(alphabet, depth, 0, 0, None, [], frozenset(), [], counted)
         print(f"\nexport model: {len(steps)} PFTL x {len(self.PAYOUTS)} payout x {len(kinds)} start x "
               f"{len(bases)} Base x {len(networks)} network choices"
-              f"{' x any single Base read foreign (' + ', '.join(base_reads) + ')' if base_reads else ''}, "
+              f"{' x any single read foreign (' + ', '.join(base_reads) + ')' if base_reads else ''}, "
               f"depth {depth}: {counted['sequences']} sequences, {counted['runs']} runs"
               + (f" ({counted['foreign_runs']} with a foreign read, {counted['fork_runs']} of them from the fork, "
                  f"{counted['refused']} refused)" if base_reads else ""))
@@ -2596,8 +2640,10 @@ class ExportModelTests(unittest.TestCase):
 
     def run_once(self, state, now, answer, logs, finalized, bad, paid, path, *, from_height=None, lock_from=0,
                  network="same", foreign_read=None, counted=None):
-        def attempt(base):
+        def attempt(base, wrap=None):
             pftl, lagging = self.answers(now, answer, network)
+            if wrap is not None:
+                pftl = wrap(pftl, lagging)
             loaded = json.loads(json.dumps(state)) if state is not None else None
             try:
                 return lagging, watcher.watch_once(pftl, base, LANE, state=loaded, exports=True,
@@ -2606,7 +2652,18 @@ class ExportModelTests(unittest.TestCase):
                 return lagging, None  # exit 1: the file is kept
 
         lagging, outcome = attempt(ExportBase(logs, locked=10_000_000, finalized=finalized))
-        if foreign_read is not None:
+        if foreign_read is not None and foreign_read[0] == "pftl_fork":
+            made: list[OnePftlForkRead] = []
+
+            def wrap(pftl, lagging):
+                made.append(OnePftlForkRead(pftl, self.pftl_fork(lagging), foreign_read[1]))
+                return made[-1]
+
+            honest, (lagging, outcome) = outcome, attempt(ExportBase(logs, locked=10_000_000, finalized=finalized),
+                                                          wrap)
+            endpoint = made[-1]
+            foreign_kind = "pftl_fork"
+        elif foreign_read is not None:
             foreign_kind, index = foreign_read
             home = ExportBase(logs, locked=10_000_000, finalized=finalized)
             other = ExportBase(self.FOREIGN_LOGS, locked=10_000_000, finalized=finalized)
@@ -2616,10 +2673,11 @@ class ExportModelTests(unittest.TestCase):
                 foreign_base(other)
             endpoint = OneForeignRead(home, other, index)
             honest, (lagging, outcome) = outcome, attempt(endpoint)
+        if foreign_read is not None:
             if endpoint.used is None:
                 return NOT_USED
             counted["foreign_runs"] += 1
-            counted["fork_runs"] += foreign_kind == "fork"
+            counted["fork_runs"] += foreign_kind in ("fork", "pftl_fork")
             if outcome is None:
                 counted["refused"] += 1
             else:
@@ -2662,6 +2720,10 @@ class ExportModelTests(unittest.TestCase):
     def test_no_single_foreign_base_read_backs_a_payout_or_changes_the_result(self):
         self.model(3, ("advance",), ("normal", "from_height", "lock_alt"), ("ok",), 40_000,
                    base_reads=("disjoint", "fork"))
+
+    def test_no_single_pftl_read_from_a_same_genesis_fork_backs_a_payout(self):
+        self.model(3, ("advance",), ("normal", "from_height", "lock_alt"), ("ok",), 15_000,
+                   base_reads=("pftl_fork",))
 
     def test_a_state_of_another_identity_is_refused_on_every_start(self):
         """Directed, not exhaustive: through the command line, a saved model
