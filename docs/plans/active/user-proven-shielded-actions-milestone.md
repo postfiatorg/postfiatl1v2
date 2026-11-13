@@ -170,6 +170,8 @@ halt flag and the ratio within the band.
 - [ ] FastPay inventory ordering, gateway and wallet (items 3 and 4 of `docs/wallets/fastpay-inventory-ordering.md` on `wallet/second-reading-fixes-20261112`), on branch `w1/fastpay-inventory-revision-20261113` (not merged; [Owned objects pages](../../rpc/methods.md#owned-objects-pages)):
   - [x] The node returns `inventory_revision` and `node_id` with each page; the Rust and Python clients accept both.
   - [x] Item 3, grouping: `canonicalReadResult` (`wallet-proxy/rpc-routing.js`) leaves both fields out of the fleet grouping key, and `readFleetRpcMajority` returns each agreeing validator's pair in `source.fleet_revisions` (`wallet-proxy/test_owned_objects_fleet_agreement.js`).
+  - [x] Client-side points of the first reading: the gateway passes on only well-formed pairs with `endpoint_validator_id`, and a revision-only change sends a `wallet_update` (`wallet-proxy/test_wallet_feed_revision_notification.js`); the Python client checks node ids and u64 bounds like the Rust validator, and `owned_objects_all` returns the last page's revision.
+  - [ ] Node-side points of the first reading: a restore from an older snapshot reuses a revision, legacy applies change objects without a fence, a read during an interrupted commit.
   - [ ] Item 3, rest: a subscription epoch, and the wallet's pages pinned to a named node.
   - [ ] Item 4: the wallet orders answers by (`node_id`, `inventory_revision`).
 
