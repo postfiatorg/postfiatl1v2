@@ -51,7 +51,11 @@ retained nonce that now names another packet refuses the run
 the export view is answered by a node of a fork that shares this chain's
 genesis, the run is refused or uses only the snapshot node's answers. Assumed,
 not checked: the block's certificate (its ML-DSA votes are not verified), so a
-snapshot node that is itself on such a fork, for every read, is not detected.
+snapshot node that is itself on such a fork, for every read, is not detected;
+nor is a node that answers both reads of a page from such a fork while
+answering ``status`` and ``blocks`` honestly. A snapshot below the release
+view's height (its page from a node ahead) refuses the run
+(``pftl_snapshot_behind_release``) before any state is saved.
 
 The Base endpoint must support EIP-1898 (``blockHash`` with
 ``requireCanonical``) for ``eth_getCode`` and ``eth_call``; one without it
@@ -69,7 +73,11 @@ per run. A one-shot run exits 0 when clean, 2 on any alarm, 3 when it accepted
 an export baseline, and 1 on an input or RPC error (an ``error`` line on
 stderr). With ``--interval`` it runs until stopped: it keeps running after an
 alarm, so the alert signal is the ``alarm`` line itself, and it retries after
-an RPC error, a malformed answer or a failed state write.
+an RPC error, a malformed answer or a failed state write. After a PFTL
+snapshot refusal (a block made during the scan) it retries at once, once,
+and every ``PFTL_NO_PROGRESS_REFUSALS`` such refusals in a row print a
+``pftl_snapshot_no_progress`` warning: a scan needs a quiet window of one
+PFTL block for its export pages.
 
 The state file keeps each view's position: the release view's checked
 height and count, and the export view's scanned-through finalized Base block
@@ -147,7 +155,12 @@ ANCHOR_CODES = ("base_anchor_unknown", "base_anchor_mismatch")
 # Refusals of a PFTL export read not bound to the run's PFTL snapshot (see
 # `_pftl_snapshot`), and of a carried payout whose export nonce now names
 # another packet: exit 1, no payout or export line, the state file unchanged.
-PFTL_SNAPSHOT_CODES = ("pftl_snapshot_mismatch", "pftl_export_digest_mismatch")
+PFTL_SNAPSHOT_CODES = ("pftl_snapshot_mismatch", "pftl_export_digest_mismatch", "pftl_snapshot_behind_release")
+# Snapshot refusals an honest chain that makes a block during a scan can
+# cause: with --interval the next attempt is immediate once, and this many in
+# a row print a `pftl_snapshot_no_progress` warning (again every this many).
+PFTL_PROGRESS_CODES = ("pftl_snapshot_mismatch", "pftl_snapshot_behind_release")
+PFTL_NO_PROGRESS_REFUSALS = 5
 
 
 # --- Keccak-256 (Ethereum's, padding 0x01): not in the standard library. ---
@@ -236,9 +249,10 @@ def commitment_of(hex48: str) -> str:
 class WatcherError(ValueError):
     """An input error or a malformed answer: the run stops (exit 1)."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, **heights: int) -> None:
         super().__init__(message)
         self.code = code
+        self.heights = heights  # the PFTL heights a snapshot refusal saw
 
 
 class WatcherTransientError(WatcherError):
@@ -633,7 +647,8 @@ def _pftl_snapshot(pftl: Any, identity: dict[str, Any]) -> dict[str, Any]:
     block = _pftl_block(pftl, height)
     if (status.get("block_tip_hash"), status.get("state_root")) != (block["block_hash"], block["state_root"]):
         raise WatcherTransientError("pftl_snapshot_mismatch",
-                                    f"the PFTL tip and block {height} of the block log differ in hash or state root")
+                                    f"the PFTL tip and block {height} of the block log differ in hash or state root",
+                                    pftl_snapshot_height=height)
     return block
 
 
@@ -647,7 +662,8 @@ def _export_page(pftl: Any, lane_id: str, cursor: int | None) -> dict[str, Any]:
     return info
 
 
-def _exports_of(pftl: Any, lane_id: str, identity: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _exports_of(pftl: Any, lane_id: str, identity: dict[str, Any],
+                release_height: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Every stored export packet of the lane, oldest first, and the snapshot
     it was paged from. Every page, the first one included, must carry the
     run's validated `identity` (`export_identity_mismatch`), checked before
@@ -664,9 +680,19 @@ def _exports_of(pftl: Any, lane_id: str, identity: dict[str, Any]) -> tuple[list
     must be equal (a page reports no block hash, so a page from another
     block at that height differs from the snapshot node's), and the
     snapshot's block is read again by height after the last page and must
-    still have its hash and state root."""
+    still have its hash and state root.
+
+    A snapshot below the release view's height (`release_height`, read
+    first) is refused (`pftl_snapshot_behind_release`): the release page came
+    from a node ahead of this one, and its height must not become the kept
+    release cursor."""
 
     pftl_snapshot = _pftl_snapshot(pftl, identity)
+    height = pftl_snapshot["height"]
+    if height < release_height:
+        raise WatcherTransientError("pftl_snapshot_behind_release",
+                                    f"the PFTL snapshot at {height} is below the release view's height "
+                                    f"{release_height}", pftl_snapshot_height=height)
     exports: list[dict[str, Any]] = []
     cursor: int | None = None
     first: dict[str, Any] | None = None
@@ -674,9 +700,11 @@ def _exports_of(pftl: Any, lane_id: str, identity: dict[str, Any]) -> tuple[list
     while True:
         info = _export_page(pftl, lane_id, cursor)
         if info.get("current_height") != pftl_snapshot["height"]:
+            page_height = info.get("current_height")
             raise WatcherTransientError("pftl_snapshot_mismatch",
-                                        f"an export page reports height {info.get('current_height')!r}, not the "
-                                        f"PFTL snapshot's {pftl_snapshot['height']}")
+                                        f"an export page reports height {page_height!r}, not the "
+                                        f"PFTL snapshot's {height}", pftl_snapshot_height=height,
+                                        **({"page_height": page_height} if isinstance(page_height, int) else {}))
         rows = [row for row in info.get("lanes") or [] if isinstance(row, dict) and row.get("lane_id") == lane_id]
         if len(rows) != 1:
             raise WatcherError("external_lane_not_reported", f"the PFTL node reports no lane `{lane_id}`")
@@ -694,7 +722,7 @@ def _exports_of(pftl: Any, lane_id: str, identity: dict[str, Any]) -> tuple[list
         if _export_page(pftl, lane_id, cursor) != info:
             raise WatcherTransientError("pftl_snapshot_mismatch",
                                         f"two reads of the export page at cursor {cursor} differ at height "
-                                        f"{pftl_snapshot['height']}")
+                                        f"{height}", pftl_snapshot_height=height)
         snapshot = _export_snapshot(info, row)
         if first is None:
             first = snapshot
@@ -733,7 +761,8 @@ def _exports_of(pftl: Any, lane_id: str, identity: dict[str, Any]) -> tuple[list
                            "exported_atoms is not the pruned atoms plus the stored packets' amounts")
     if _pftl_block(pftl, pftl_snapshot["height"]) != pftl_snapshot:
         raise WatcherTransientError("pftl_snapshot_mismatch",
-                                    f"PFTL block {pftl_snapshot['height']} changed while the exports were paged")
+                                    f"PFTL block {height} changed while the exports were paged",
+                                    pftl_snapshot_height=height)
     first["pftl_snapshot"] = pftl_snapshot
     return list(reversed(exports)), first
 
@@ -954,7 +983,7 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
     if anchor.number != finalized:
         raise WatcherTransientError("base_anchor_mismatch",
                                     f"the export view's finalized block {finalized} is not the anchor {anchor.number}")
-    exports, snapshot = _exports_of(pftl, lane_id, identity)
+    exports, snapshot = _exports_of(pftl, lane_id, identity, current_height)
     by_digest = {entry["evm_digest"]: entry for entry in exports}
     pruned, pruned_atoms = snapshot["pruned_export_count"], snapshot["pruned_exported_atoms"]
     # An entry of an earlier format is never used (see EXPORT_STATE_FORMAT):
@@ -1171,10 +1200,10 @@ def export_view(pftl: Any, base: Any, lane_id: str, *, identity: dict[str, Any],
         if digest not in record and digest not in seen and entry["export_nonce"] >= pruned:
             record[digest] = entry
     unpaid = 0
-    # Every export of the accepted export snapshot, which may be later than
-    # the release view's (`current_height`): an export made between the two
-    # reads is classified too, and its age counted at the export snapshot.
-    export_height = max(current_height, snapshot["current_height"])
+    # Every export of the accepted export snapshot, at or after the release
+    # view's height (`_exports_of`): an export made between the two reads is
+    # classified too, and its age counted at the export snapshot only.
+    export_height = snapshot["current_height"]
     for packet in exports:
         if packet["exported_at_height"] > export_height:
             continue
@@ -1464,6 +1493,7 @@ def watch_once(pftl: Any, base: Any, lane_id: str, *, from_height: int | None = 
                 discard_history=discard_export_history, anchor=anchor)
         except WatcherError as error:
             if error.code in ANCHOR_CODES or error.code in PFTL_SNAPSHOT_CODES:
+                error.heights.setdefault("release_height", current_height)
                 raise  # an answer not bound to the run's anchor or PFTL snapshot: the whole run is refused
             export_error = error
             lines.append({"schema": LINE_SCHEMA, "kind": "error", "code": error.code, "message": str(error)})
@@ -1596,9 +1626,11 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
     state_path = Path(args.state_file).expanduser() if args.state_file else None
     from_height = args.from_height
     memory_state: dict[str, Any] | None = None  # the state between runs without a state file
-    runs = 0
+    runs = refusals = 0
+    immediate = False  # the next attempt follows a snapshot refusal at once
     while True:
         runs += 1
+        retried, immediate = immediate, False  # `retried`: this attempt is that immediate one
         try:
             # --from-height overrides the kept release cursor, and a clean run
             # replaces a file of an earlier schema; a current file's identity
@@ -1622,12 +1654,25 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
             _error_line(error)
             if args.interval is None:
                 return 1
+            # A chain that made a block during the scan: fail closed, retry at
+            # once (once), and make a run of such refusals visible.
+            if error.code in PFTL_PROGRESS_CODES:
+                refusals += 1
+                immediate = not retried
+                if refusals % PFTL_NO_PROGRESS_REFUSALS == 0:
+                    _print_line({"schema": LINE_SCHEMA, "kind": "warning", "code": "pftl_snapshot_no_progress",
+                                 "lane_id": args.lane_id, "consecutive_refusals": refusals,
+                                 "last_refusal": error.code, **error.heights})
+            else:
+                refusals = 0
         except WatcherError as error:
+            refusals = 0
             _error_line(error)
             # A malformed answer may be a node's passing fault: --interval keeps watching.
             if args.interval is None or error.code not in RETRIED_CODES:
                 return 1
         else:
+            refusals = 0
             failed = False
             for line in lines:
                 if line["kind"] == "error":
@@ -1647,7 +1692,8 @@ def main(argv: Sequence[str] | None = None, *, pftl: Any = None, base: Any = Non
                 return BASELINE_EXIT if summary.get("baseline_accepted_now") and new_state is not None else 0
         if max_runs is not None and runs >= max_runs:
             return 0
-        sleep(args.interval)
+        if not immediate:
+            sleep(args.interval)
 
 
 if __name__ == "__main__":

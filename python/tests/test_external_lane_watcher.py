@@ -1433,7 +1433,8 @@ class ExportSnapshotTests(unittest.TestCase):
                                                        exported=900_000, current_height=600)}
         for field, pftl in lagging.items():
             with self.subTest(field=field), self.assertRaises(watcher.WatcherError) as caught:
-                run_export_view(pftl, ExportBase([]), state=kept, current_height=600)
+                # A release view at the lagging node's height: not refused as behind the release.
+                run_export_view(pftl, ExportBase([]), state=kept, current_height=pftl.current_height)
             self.assertEqual(caught.exception.code, "export_snapshot_behind_state")
             self.assertIn(field, str(caught.exception))
 
