@@ -4660,7 +4660,20 @@ fn validate_bridge_status_result(result: &Value) -> Result<(), RpcResponseValida
 }
 
 fn validate_navcoin_bridge_routes_result(result: &Value) -> Result<(), RpcResponseValidationError> {
-    expect_string_eq(result, "schema", "postfiat-pftl-uniswap-routes-status-v1")?;
+    // Both producers emit v2; v1 is still accepted from older nodes. The same
+    // row checks, including the optional authority fields, apply to either.
+    let schema = string_field(result, "schema")?;
+    if !matches!(
+        schema,
+        "postfiat-pftl-uniswap-routes-status-v1" | "postfiat-pftl-uniswap-routes-status-v2"
+    ) {
+        return Err(invalid_result(
+            "schema",
+            format!(
+                "expected `postfiat-pftl-uniswap-routes-status-v1` or `postfiat-pftl-uniswap-routes-status-v2`, found `{schema}`"
+            ),
+        ));
+    }
     let route_count = u64_field(result, "route_count")?;
     let routes = array_field(result, "routes")?;
     if route_count != routes.len() as u64 {

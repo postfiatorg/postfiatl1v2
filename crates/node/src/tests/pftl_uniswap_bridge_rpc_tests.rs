@@ -501,9 +501,7 @@
         route
     }
 
-    fn route_authority_test_rows(
-        committee_epochs: &[u64],
-    ) -> Vec<serde_json::Map<String, serde_json::Value>> {
+    fn route_authority_test_report(committee_epochs: &[u64]) -> serde_json::Value {
         let data_dir = unique_test_dir("postfiat-navcoin-bridge-route-authority-test");
         std::fs::create_dir_all(&data_dir).expect("test dir");
         let mut ledger = LedgerState::new(Vec::new());
@@ -521,7 +519,13 @@
             .expect("write consensus ledger");
         let report = navcoin_bridge_routes(NavcoinBridgeRoutesOptions { data_dir })
             .expect("consensus routes status");
-        match serde_json::to_value(report).expect("report json") {
+        serde_json::to_value(report).expect("report json")
+    }
+
+    fn route_authority_test_rows(
+        committee_epochs: &[u64],
+    ) -> Vec<serde_json::Map<String, serde_json::Value>> {
+        match route_authority_test_report(committee_epochs) {
             serde_json::Value::Object(mut report) => match report.remove("routes") {
                 Some(serde_json::Value::Array(routes)) => routes
                     .into_iter()
@@ -580,6 +584,40 @@
                 json!("route_has_no_ethereum_verification_policy")
             )
         );
+    }
+
+    #[test]
+    fn navcoin_bridge_routes_report_route_two_epochs_behind_as_not_current() {
+        use serde_json::{json, Value};
+        // Newest governed committee is epoch 3: the epoch-2 route is one
+        // behind and the epoch-1 route two behind. Both read false; only the
+        // first could be caught up by an ordinary policy update.
+        let rows = route_authority_test_rows(&[1, 2, 3]);
+        assert_eq!(
+            route_authority_fields(&rows[0]),
+            (json!(2), json!(false), Value::Null)
+        );
+        assert_eq!(
+            route_authority_fields(&rows[1]),
+            (json!(1), json!(false), Value::Null)
+        );
+    }
+
+    #[test]
+    fn navcoin_bridge_routes_node_output_passes_rust_sdk_validation() {
+        for committee_epochs in [&[][..], &[1, 2][..], &[1, 2, 3][..]] {
+            let report = route_authority_test_report(committee_epochs);
+            let response =
+                postfiat_rpc_sdk::success_response("navcoin-bridge-routes-node", &report, vec![])
+                    .expect("routes response");
+            postfiat_rpc_sdk::validate_response_kind(
+                &response,
+                postfiat_rpc_sdk::RpcResponseKind::NavcoinBridgeRoutes,
+            )
+            .unwrap_or_else(|error| {
+                panic!("SDK rejects node output for committees {committee_epochs:?}: {error:?}")
+            });
+        }
     }
 
     #[test]
