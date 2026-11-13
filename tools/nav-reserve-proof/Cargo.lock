@@ -4643,6 +4643,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d20d5497ef88037a52ff98267d066e7f11fcc5e99bbfbd58a42336193aacec3"
 
 [[package]]
+name = "postfiat-b23-nav"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "clap",
+ "hex",
+ "postfiat-types",
+ "reserve-proof-types",
+ "serde_json",
+ "sha2 0.10.9",
+ "sp1-sdk",
+ "tokio",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "postfiat-crypto-provider"
 version = "0.1.0"
 dependencies = [
