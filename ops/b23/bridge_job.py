@@ -39,7 +39,7 @@ def poll(job_id, out):
                 f.write(json.dumps({"t": time.time(), "http": st, "job": j}) + "\n")
             last = key
         status = str((j or {}).get("status", "")).lower()
-        if status in ("complete", "completed", "succeeded", "failed", "error") or (j or {}).get("terminal") is True:
+        if status in ("accepted", "failed") or (j or {}).get("terminal") is True:
             print("TERMINAL", json.dumps(j)[:1500], flush=True)
             return j
         time.sleep(10)
