@@ -97,9 +97,16 @@ Each row also carries three additive route-authority fields:
   `route_authority_epoch_ahead_of_active_committee` or
   `consensus_ledger_unavailable` (a node without a consensus ledger).
 
-A `false` flag means the route still names an older committee: its Ethereum
-checkpoints are signed by that committee until the issuer submits a
-`pftl_uniswap_route_bridge_policy_update`. Older nodes omit the three fields.
+The flag only says whether the route's epoch matches the newest governed
+checkpoint-committee epoch; it is not update eligibility. A `false` route
+still names an older committee. A `pftl_uniswap_route_bridge_policy_update`
+moves a route exactly one epoch, to the newest governed committee (exact
+epoch, root and domain, a valid committee), and only with no prepare fence
+on that epoch and no open route handoff. A route two or more epochs behind
+therefore cannot be caught up by updates, and no recovery path exists today:
+the update is the only operation that changes a stored route policy, and
+route initialization refuses an existing route id. Older nodes omit the
+three fields.
 
 ## Controlled Write Methods
 
