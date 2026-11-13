@@ -21,6 +21,11 @@ def canonical(value):return json.dumps(value,sort_keys=True,separators=(',',':')
 def save(path,value):path.write_text(json.dumps(value,indent=2)+'\n')
 def load(path):return json.loads(path.read_bytes())
 def item(rows,key,value):return next(x for x in rows if x[key]==value)
+def outstanding(ledger,asset):
+    # Exact issued_asset_stats basis used by the released node's asset_info.
+    return (sum(x['balance'] for x in ledger.get('trustlines',[]) if x['asset_id']==asset)
+        +sum(x['amount'] for x in ledger.get('escrows',[]) if x['asset_id']==asset and x['state']=='open')
+        +sum(x['taker_gets_amount_remaining'] for x in ledger.get('offers',[]) if x['taker_gets_asset_id']==asset and x['state']=='open'))
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
@@ -34,8 +39,7 @@ def main():
     proof=(args.proof/'proof-calldata.bin').read_bytes()
     asset=m['nav_asset_id'];issuer=f.ISSUER
     nav=item(base['ledger']['nav_assets'],'asset_id',asset)
-    definition=item(base['ledger']['asset_definitions'],'asset_id',asset)
-    supply=definition['outstanding_supply']
+    supply=outstanding(base['ledger'],asset)
     assert supply==nav['circulating_supply'] and supply>0
     assert values['observation_epoch']==nav['finalized_epoch']+1
     amount=values['verified_net_assets'];price=amount*1_000_000//supply
@@ -99,8 +103,9 @@ def main():
                 apply(label_bad,bad,h+offset,accepted=False,code='sp1_proof_invalid')
         current=apply(label,op,h+offset)
         state=load(current)['ledger']
-        assert item(state['asset_definitions'],'asset_id',asset)['outstanding_supply']==supply
+        assert outstanding(state,asset)==supply
         assert item(state['nav_assets'],'asset_id',asset)['circulating_supply']==supply
+        assert state['offers']==base['ledger']['offers']
     before=load(current)['ledger'];newnav=item(before['nav_assets'],'asset_id',asset)
     assert newnav['nav_per_unit']==price and not newnav['halted']
     newroute=item(before['pftl_uniswap_routes'],'route_id',f.ROUTE_ID)
@@ -124,9 +129,10 @@ def main():
         holder_b23_delta=balance(after,f.HOLDER,asset)-balance(before,f.HOLDER,asset)==-redeemed,
         management_pfusdc_delta=balance(after,policy['spread_recipient'],f.PFUSDC)-balance(before,policy['spread_recipient'],f.PFUSDC)==gross-payout,
         reserve_delta=afterroute['settlement_reserve_atoms']-newroute['settlement_reserve_atoms']==-gross,
-        supply_delta=item(after['asset_definitions'],'asset_id',asset)['outstanding_supply']-supply==-redeemed,
+        supply_delta=outstanding(after,asset)-supply==-redeemed,
         route_supply_delta=afterroute['authorized_valid_supply_atoms']-supply==-redeemed)
     save(args.output/'result.json',dict(passed=all(checks.values()),checks=checks,base_tip=base['tip'],
+        authorized_operations_sha256=hashlib.sha256((args.output/'authorized-live-operations.json').read_bytes()).hexdigest(),
         cash_in=dict(b23_atoms=redeemed,gross_pfusdc_atoms=gross,payout_pfusdc_atoms=payout),
         no_live_transactions=True))
     assert all(checks.values()),'CANARY FAILED: cash-in deltas'
