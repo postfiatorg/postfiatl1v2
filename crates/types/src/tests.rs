@@ -2994,6 +2994,7 @@ fn pftl_uniswap_receipt_merkle_proof_is_bounded_and_tamper_evident() {
     let mut receipts = (1_u64..=5)
         .map(|height| {
             let mut receipt = PftlUniswapConsensusReceipt {
+                redemption_settlement: None,
                 receipt_hash: "00".repeat(48),
                 transition: "export_debit".to_string(),
                 route_id: "a666-mainnet".to_string(),
@@ -3032,6 +3033,7 @@ fn pftl_uniswap_receipt_merkle_proof_is_bounded_and_tamper_evident() {
 #[test]
 fn pftl_uniswap_private_primary_subscription_receipt_is_canonical() {
     let mut receipt = PftlUniswapConsensusReceipt {
+        redemption_settlement: None,
         receipt_hash: "00".repeat(48),
         transition: "private_primary_subscription".to_string(),
         route_id: "a666-mainnet".to_string(),
@@ -3512,6 +3514,7 @@ fn pftl_source_selections_are_signed() {
 #[test]
 fn pftl_source_governance_signs_unchanged_disabled_and_selected_states() {
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(), policy_epoch: 2, issue_multiplier_bps: 10050,
         redeem_multiplier_bps: 9995, issue_capacity_atoms: 100000000,
         redeem_capacity_atoms: 100000000, max_order_atoms: 10000000, min_order_atoms: 1,
@@ -3661,6 +3664,7 @@ fn beacon_anchor_rejects_a_proof_for_another_route() {
 /// mint packet commits it. So the rule is now a guardrail, not a pinned number.
 fn spread_policy(issue_bps: u32, redeem_bps: u32) -> PftlUniswapPrimaryMarketPolicyV2 {
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 2,
         issue_multiplier_bps: issue_bps,

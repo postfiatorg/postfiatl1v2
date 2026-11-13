@@ -3467,6 +3467,10 @@ pub(super) fn append_vault_bridge_withdrawal_packet(
     );
 }
 
+#[cfg(test)]
+#[path = "b23_facility_commitment_tests.rs"]
+mod b23_facility_commitment_tests;
+
 pub(super) fn append_pftl_uniswap_route(
     bytes: &mut Vec<u8>,
     prefix: &str,
@@ -3625,7 +3629,13 @@ pub(super) fn append_pftl_uniswap_route(
             &format!("{prefix}.v2.return_verification_class"),
             &v2.return_verification_class,
         );
+        if let Some(sequence) = v2.funding_sequence {
+            append_canonical_u64(bytes, &format!("{prefix}.v2.funding_sequence"), sequence);
+        }
         let policy = &v2.primary_market_policy;
+        if let Some(recipient) = &policy.spread_recipient {
+            append_canonical_str(bytes, &format!("{prefix}.v2.spread_recipient"), recipient);
+        }
         append_canonical_str(
             bytes,
             &format!("{prefix}.v2.policy_hash"),
@@ -4008,6 +4018,13 @@ pub(super) fn append_pftl_uniswap_receipt(
         &format!("{prefix}.block_height"),
         receipt.block_height,
     );
+    if let Some(settlement) = &receipt.redemption_settlement {
+        append_canonical_str(bytes, &format!("{prefix}.redemption_settlement.settlement_asset_id"), &settlement.settlement_asset_id);
+        append_canonical_str(bytes, &format!("{prefix}.redemption_settlement.settlement_recipient"), &settlement.settlement_recipient);
+        append_canonical_u64(bytes, &format!("{prefix}.redemption_settlement.settlement_value_atoms"), settlement.settlement_value_atoms);
+        append_canonical_str(bytes, &format!("{prefix}.redemption_settlement.spread_recipient"), &settlement.spread_recipient);
+        append_canonical_u64(bytes, &format!("{prefix}.redemption_settlement.spread_value_atoms"), settlement.spread_value_atoms);
+    }
 }
 
 pub(super) fn legacy_domainless_vault_bridge_withdrawal_packet_hash(

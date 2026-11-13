@@ -2343,6 +2343,8 @@ pub fn pftl_uniswap_keccak_commitment48(field: &str, value: &str) -> Result<Stri
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapPrimaryMarketPolicyV2 {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spread_recipient: Option<String>,
     pub policy_hash: String,
     pub policy_epoch: u64,
     pub issue_multiplier_bps: u32,
@@ -2360,7 +2362,7 @@ pub struct PftlUniswapPrimaryMarketPolicyV2 {
 
 impl PftlUniswapPrimaryMarketPolicyV2 {
     pub fn computed_hash(&self) -> String {
-        let preimage = format!(
+        let mut preimage = format!(
             "policy_epoch={}\nissue_multiplier_bps={}\nredeem_multiplier_bps={}\nissue_capacity_atoms={}\nredeem_capacity_atoms={}\nmax_order_atoms={}\nmin_order_atoms={}\nvalid_from_height={}\nexpires_at_height={}\nmax_nav_age_blocks={}\npricing_nav_epoch={}\npricing_reserve_packet_hash={}\n",
             self.policy_epoch,
             self.issue_multiplier_bps,
@@ -2375,6 +2377,9 @@ impl PftlUniswapPrimaryMarketPolicyV2 {
             self.pricing_nav_epoch,
             self.pricing_reserve_packet_hash,
         );
+        if let Some(recipient) = &self.spread_recipient {
+            preimage.push_str(&format!("spread_recipient={recipient}\n"));
+        }
         bytes_to_hex(&hash48(
             b"postfiat.pftl_uniswap.primary_market_policy.v2",
             preimage.as_bytes(),
@@ -2382,6 +2387,12 @@ impl PftlUniswapPrimaryMarketPolicyV2 {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(recipient) = &self.spread_recipient {
+            validate_text_field("pftl_uniswap_primary_policy.spread_recipient", recipient)?;
+            if recipient.contains(['\n', '\r']) {
+                return Err("spread_recipient must not contain line breaks".to_string());
+            }
+        }
         validate_lower_hex_len(
             "pftl_uniswap_primary_policy.policy_hash",
             &self.policy_hash,
@@ -2848,6 +2859,8 @@ impl PftlUniswapConsensusReturnImport {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapRouteV2State {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub funding_sequence: Option<u64>,
     pub route_schema_version: u32,
     pub route_epoch: u64,
     pub outbound_verification_class: String,
@@ -3218,6 +3231,9 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
     }
     if let Some(v2) = &route.v2 {
         let policy = &v2.primary_market_policy;
+        if let Some(sequence) = v2.funding_sequence {
+            preimage.push_str(&format!("v2.funding_sequence={sequence}\n"));
+        }
         preimage.push_str(&format!(
             "v2.route_schema_version={}\nv2.route_epoch={}\nv2.outbound_verification_class={}\nv2.return_verification_class={}\nv2.policy_hash={}\nv2.policy_epoch={}\nv2.issue_multiplier_bps={}\nv2.redeem_multiplier_bps={}\nv2.issue_capacity_atoms={}\nv2.redeem_capacity_atoms={}\nv2.max_order_atoms={}\nv2.min_order_atoms={}\nv2.valid_from_height={}\nv2.expires_at_height={}\nv2.max_nav_age_blocks={}\nv2.pricing_nav_epoch={}\nv2.pricing_reserve_packet_hash={}\nv2.issue_capacity_used_atoms={}\nv2.redeem_capacity_used_atoms={}\nv2.non_nav_spread_atoms={}\n",
             v2.route_schema_version,
@@ -3241,6 +3257,9 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
             v2.redeem_capacity_used_atoms,
             v2.non_nav_spread_atoms,
         ));
+        if let Some(recipient) = &policy.spread_recipient {
+            preimage.push_str(&format!("v2.spread_recipient={recipient}\n"));
+        }
         for (reservation_id, reservation) in &v2.active_reservations {
             preimage.push_str(&format!(
                 "v2.reservation.{reservation_id}.subscriber={}\nv2.reservation.{reservation_id}.ethereum_recipient={}\nv2.reservation.{reservation_id}.route_epoch={}\nv2.reservation.{reservation_id}.policy_epoch={}\nv2.reservation.{reservation_id}.policy_hash={}\nv2.reservation.{reservation_id}.mint_amount_atoms={}\nv2.reservation.{reservation_id}.max_settlement_value_atoms={}\nv2.reservation.{reservation_id}.created_at_height={}\nv2.reservation.{reservation_id}.expires_at_height={}\nv2.reservation.{reservation_id}.status={}\n",
@@ -3353,8 +3372,12 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
     bytes_to_hex(&hash48(domain, preimage.as_bytes()))
 }
 
+include!("b23_facility_types.rs");
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapConsensusReceipt {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redemption_settlement: Option<PftlUniswapRedemptionSettlement>,
     pub receipt_hash: String,
     pub transition: String,
     pub route_id: String,
@@ -3373,6 +3396,12 @@ pub struct PftlUniswapConsensusReceipt {
 
 impl PftlUniswapConsensusReceipt {
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(settlement) = &self.redemption_settlement {
+            if self.transition != "primary_redeemed" {
+                return Err("redemption settlement requires primary_redeemed receipt".to_string());
+            }
+            settlement.validate()?;
+        }
         validate_lower_hex_len(
             "pftl_uniswap_receipt.receipt_hash",
             &self.receipt_hash,
@@ -3432,7 +3461,7 @@ impl PftlUniswapConsensusReceipt {
 pub fn pftl_uniswap_consensus_receipt_computed_hash(
     receipt: &PftlUniswapConsensusReceipt,
 ) -> String {
-    let preimage = format!(
+    let mut preimage = format!(
         "transition={}\nroute_id={}\nstate_before_hash={}\nstate_after_hash={}\npacket_hash={}\nburn_event_hash={}\nwallet={}\namount_atoms={}\nblock_height={}\n",
         receipt.transition,
         receipt.route_id,
@@ -3446,6 +3475,9 @@ pub fn pftl_uniswap_consensus_receipt_computed_hash(
             .map_or_else(String::new, |amount| amount.to_string()),
         receipt.block_height,
     );
+    if let Some(settlement) = &receipt.redemption_settlement {
+        preimage.push_str(&settlement.canonical_fields());
+    }
     bytes_to_hex(&hash48(
         b"postfiat.pftl_uniswap.consensus_receipt.v1",
         preimage.as_bytes(),

@@ -2910,6 +2910,8 @@ impl PftlUniswapPrimarySubscribeV2Operation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapRedemptionFundOperation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub funding_sequence: Option<u64>,
     pub funder: String,
     pub route_id: String,
     pub settlement_asset_id: String,
@@ -2938,7 +2940,7 @@ impl PftlUniswapRedemptionFundOperation {
     }
 
     fn signing_bytes(&self) -> Vec<u8> {
-        format!(
+        let mut bytes = format!(
             "funder={}\nroute_id={}\nsettlement_asset_id={}\nfunding_nonce={}\namount_atoms={}\n",
             self.funder,
             self.route_id,
@@ -2946,7 +2948,11 @@ impl PftlUniswapRedemptionFundOperation {
             self.funding_nonce,
             self.amount_atoms,
         )
-        .into_bytes()
+        .into_bytes();
+        if let Some(sequence) = self.funding_sequence {
+            bytes.extend_from_slice(format!("funding_sequence={sequence}\n").as_bytes());
+        }
+        bytes
     }
 }
 

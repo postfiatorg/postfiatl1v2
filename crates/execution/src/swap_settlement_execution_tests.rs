@@ -108,6 +108,7 @@ fn burn6_redeem_fixture(
     settlement_line.balance = 5_930_000;
     ledger.trustlines.push(settlement_line);
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
@@ -169,6 +170,7 @@ fn burn6_redeem_fixture(
         return_imports: Default::default(),
         paused: true,
         v2: Some(PftlUniswapRouteV2State {
+            funding_sequence: None,
             route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
             route_epoch: 1,
             outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),

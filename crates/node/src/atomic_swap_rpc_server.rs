@@ -44,6 +44,8 @@ fn run_serialized_rpc_mempool_submit(
             request,
             context,
         )
+    } else if method == "mempool_submit_signed_offer_transaction_finality" {
+        run_rpc_serve_mempool_submit_signed_offer_transaction_finality(request_index, request, context)
     } else if method == "mempool_submit_signed_transfer_finality" {
         run_rpc_serve_mempool_submit_signed_transfer_finality(request_index, request, context)
     } else {

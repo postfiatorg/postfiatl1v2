@@ -2040,6 +2040,7 @@ fn is_mempool_submit_signed_method(method: &str) -> bool {
             | "mempool_submit_signed_escrow_transaction_finality"
             | "mempool_submit_signed_nft_transaction"
             | "mempool_submit_signed_offer_transaction"
+            | "mempool_submit_signed_offer_transaction_finality"
             | "shield_batch_finality"
     )
 }
@@ -2055,6 +2056,7 @@ fn is_mempool_submit_signed_transfer_finality_method(method: &str) -> bool {
             | "mempool_submit_signed_atomic_swap_transaction_finality"
             | "mempool_submit_fastlane_primary_finality"
             | "mempool_submit_signed_escrow_transaction_finality"
+            | "mempool_submit_signed_offer_transaction_finality"
             | "shield_batch_finality"
     )
 }
@@ -3797,6 +3799,7 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "navcoin_bridge_routes"
             | "navcoin_bridge_packet"
             | "navcoin_bridge_claims"
+            | "pftl_uniswap_receipt"
             | "navcoin_bridge_supply_status"
             | "navcoin_bridge_receipt_replay"
             | "escrow_info"
@@ -4868,3 +4871,5 @@ mod child_dispatch_limit_tests {
         );
     }
 }
+
+include!("b23_facility_offer_rpc.rs");

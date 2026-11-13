@@ -677,6 +677,10 @@ fn apply_offer_fills(
             }
         }
 
+        b23_facility_transfer_offer_inventory(ledger, &maker.taker_gets_asset_id,
+            &maker.owner, &operation.owner, fill.maker_sends_amount)?;
+        b23_facility_transfer_offer_inventory(ledger, &maker.taker_pays_asset_id,
+            &operation.owner, &maker.owner, fill.taker_sends_amount)?;
         credit_offer_received_asset(
             ledger,
             &operation.owner,
