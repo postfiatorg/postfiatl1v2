@@ -197,3 +197,7 @@ mod tests {
 #[cfg(test)]
 #[path = "b23_ingress_legacy_tests.rs"]
 mod legacy_tests;
+
+#[cfg(test)]
+#[path = "b23_ingress_release4_tests.rs"]
+mod release4_tests;

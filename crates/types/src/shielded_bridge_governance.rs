@@ -1,3 +1,6 @@
+#[path = "b23_ingress_route_authorization.rs"]
+mod b23_ingress_route_authorization;
+
 pub const GOVERNANCE_KIND_YOLO_TARGET_ACTIVATION_HEIGHT: &str = "yolo_target_activation_height";
 
 pub const DEFAULT_SHIELDED_ASSET_ID: &str = "POSTFIAT";
@@ -1439,7 +1442,7 @@ impl GovernanceState {
             .ok_or_else(|| {
                 "vault bridge route profile authorization amendment is missing".to_string()
             })?;
-        if amendment.kind != record.amendment_kind()?
+        if !b23_ingress_route_authorization::matches(record, amendment)?
             || amendment.value != record.profile.route_epoch
             || amendment.activation_height != record.profile.activation_height
             || amendment.paused
@@ -1477,7 +1480,7 @@ impl GovernanceState {
             .ok_or_else(|| {
                 "vault bridge route profile authorization amendment is missing".to_string()
             })?;
-        if amendment.kind != record.amendment_kind()?
+        if !b23_ingress_route_authorization::matches(record, amendment)?
             || amendment.value != record.profile.route_epoch
             || amendment.activation_height != record.profile.activation_height
             || amendment.paused
