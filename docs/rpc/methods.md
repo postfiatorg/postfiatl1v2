@@ -27,6 +27,7 @@ authorization inventory is
 | `navcoin_bridge_claims` | Bounded outstanding export and return-claim status for a bridge route. |
 | `navcoin_bridge_supply_status` | Supply, per-wallet native NAV balances, and invariant status for a bridge route. |
 | `navcoin_bridge_receipt_replay` | Deterministic receipt replay verification for a bridge route. |
+| `pftl_uniswap_receipt` | Read-only PFTL-Uniswap facility receipt for a finalized transaction id. |
 | `shield_turnstile` | Shielded turnstile accounting. |
 | `orchard_pool_report` | Public Orchard pool counters. |
 | `account` | Account state. |
