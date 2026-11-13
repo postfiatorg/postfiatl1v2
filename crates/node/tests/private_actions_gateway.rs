@@ -366,6 +366,56 @@ fn spawn_rpc_serve(
         .expect("spawn rpc-serve")
 }
 
+/// Opens a native session for a Rust-signed install identity, the way the
+/// wallet does, and returns its bearer token and the open response.
+fn open_native_session(
+    port: u16,
+    private_key: &[u8],
+    public_key_hex: &str,
+    chain_id: &str,
+    genesis_hash_hex: &str,
+    nonce: &str,
+) -> (String, Value) {
+    let issued_at_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_millis() as u64;
+    let message = [
+        "postfiat-native-session-open-v1",
+        ORIGIN,
+        chain_id,
+        genesis_hash_hex,
+        public_key_hex,
+        nonce,
+        &issued_at_ms.to_string(),
+    ]
+    .join("\n");
+    let signature = ml_dsa_65_sign_with_context_seed(
+        private_key,
+        message.as_bytes(),
+        b"postfiat-l1-v2/native-session/v1",
+        &[0x53; 32],
+    )
+    .expect("sign open");
+    let (status, session) = http(
+        port,
+        "/api/native-session/v1/open",
+        &json!({
+            "schema": "postfiat-native-session-open-v1", "algorithm_id": "ML-DSA-65",
+            "public_key_hex": public_key_hex, "client_nonce_hex": nonce, "origin": ORIGIN,
+            "chain_id": chain_id, "genesis_hash_hex": genesis_hash_hex,
+            "issued_at_ms": issued_at_ms, "signature_hex": bytes_to_hex(&signature),
+        }),
+        "",
+    );
+    assert_eq!(status, 200, "native session open: {session}");
+    let token = session["token"]
+        .as_str()
+        .expect("session token")
+        .to_string();
+    (token, session)
+}
+
 /// The wallet proxy with `env` as its whole environment, once it listens.
 fn spawn_proxy(root: &Path, env: &[(String, String)], port: u16) -> Child {
     let log = |name: &str| {
@@ -658,44 +708,22 @@ fn gateway_admits_a_user_proven_ingress_through_the_real_node() {
     // A native session opened with a Rust-signed install identity.
     let install = ml_dsa_65_keygen().expect("install key");
     let public_key_hex = bytes_to_hex(&install.public_key);
-    let nonce = bytes_to_hex(&nanos.to_le_bytes().repeat(2));
-    let issued_at_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("clock")
-        .as_millis() as u64;
-    let message = [
-        "postfiat-native-session-open-v1",
-        ORIGIN,
-        &genesis.chain_id,
-        &genesis_hash_hex,
-        &public_key_hex,
-        &nonce,
-        &issued_at_ms.to_string(),
-    ]
-    .join("\n");
-    let signature = ml_dsa_65_sign_with_context_seed(
-        &install.private_key,
-        message.as_bytes(),
-        b"postfiat-l1-v2/native-session/v1",
-        &[0x53; 32],
-    )
-    .expect("sign open");
-    let (status, session) = http(
-        proxy_port,
-        "/api/native-session/v1/open",
-        &json!({
-            "schema": "postfiat-native-session-open-v1", "algorithm_id": "ML-DSA-65",
-            "public_key_hex": public_key_hex, "client_nonce_hex": nonce, "origin": ORIGIN,
-            "chain_id": genesis.chain_id, "genesis_hash_hex": genesis_hash_hex,
-            "issued_at_ms": issued_at_ms, "signature_hex": bytes_to_hex(&signature),
-        }),
-        "",
-    );
-    assert_eq!(status, 200, "native session open: {session}");
-    let token = session["token"]
-        .as_str()
-        .expect("session token")
-        .to_string();
+    // A token is bound to one gateway process: after a restart the wallet opens
+    // a new session the same way, with a fresh nonce.
+    let open_session = |nonce: &str| {
+        open_native_session(
+            proxy_port,
+            &install.private_key,
+            &public_key_hex,
+            &genesis.chain_id,
+            &genesis_hash_hex,
+            nonce,
+        )
+    };
+    let reopen_nonce = |domain: &str| {
+        bytes_to_hex(&postfiat_crypto_provider::hash_bytes(domain, &nanos.to_le_bytes())[..32])
+    };
+    let (token, session) = open_session(&bytes_to_hex(&nanos.to_le_bytes().repeat(2)));
 
     // Snapshot of the empty pool.
     let (status, empty) = http(
@@ -1125,6 +1153,13 @@ fn gateway_admits_a_user_proven_ingress_through_the_real_node() {
         "the proxy is down"
     );
     harness.children[proxy_index] = spawn_proxy(&harness.root, &proxy_env, proxy_port);
+    let (status, refused) = http(proxy_port, "/api/private/v1/receipt", &restart_body, &token);
+    assert_eq!(
+        status, 401,
+        "condition: the pre-restart token after the restart; observed: {status} {refused}; expected: 401"
+    );
+    assert_eq!(refused["code"], "native_session_restarted", "{refused}");
+    let (token, _) = open_session(&reopen_nonce("gateway-test-restart-session-nonce"));
     let (status, kept) = http(proxy_port, "/api/private/v1/receipt", &restart_body, &token);
     assert_eq!(
         status, 200,
@@ -1259,6 +1294,18 @@ fn gateway_admits_a_user_proven_ingress_through_the_real_node() {
     replaced.kill().expect("stop the proxy");
     replaced.wait().expect("reap the proxy");
     harness.children[proxy_index] = spawn_proxy(&harness.root, &lagging_env, proxy_port);
+    let (status, refused) = http(
+        proxy_port,
+        "/api/private/v1/snapshot",
+        &snapshot_body,
+        &token,
+    );
+    assert_eq!(
+        status, 401,
+        "condition: the pre-restart token after the lagging-source restart; observed: {status} {refused}; expected: 401"
+    );
+    assert_eq!(refused["code"], "native_session_restarted", "{refused}");
+    let (token, _) = open_session(&reopen_nonce("gateway-test-lagging-session-nonce"));
     let (status, mixed) = http(
         proxy_port,
         "/api/private/v1/snapshot",
