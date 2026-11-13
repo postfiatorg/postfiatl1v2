@@ -7990,11 +7990,10 @@ fn ensure_pfusdc_arc_ingress_public_values_match(
     Ok(())
 }
 
-/// The gate for the pre-anchor 26-field layout: the deposit's route profile
-/// (`policy_hash`) must hold no governance-pinned beacon anchor. Anchors exist
-/// in replicated state exactly from the activation that pinned them, so replay
-/// admits history as main did while every anchored-route deposit must carry the
-/// 29-field values and pass the anchor comparison.
+/// The gate for the pre-anchor 26-field layout, live and in replay alike: a
+/// route profile (`policy_hash`) with no beacon anchor admits it, as main did.
+/// A profile with an anchor refuses it; its deposits must carry the 29-field
+/// values and pass the anchor comparison.
 fn ensure_ethereum_ingress_route_unanchored(
     beacon_finality_states: &[postfiat_types::PfUsdcBeaconFinalityStateV1],
     policy_hash: &str,

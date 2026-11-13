@@ -3779,8 +3779,9 @@ pub struct LedgerState {
     pub ethereum_arbitrum_finality_states: Vec<EthereumArbitrumFinalityStateV2>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub arc_finality_states: Vec<PfUsdcArcFinalityStateV1>,
-    /// Governance-pinned Ethereum beacon anchors. Empty means the Ethereum
-    /// finality lane admits nothing: see PfUsdcBeaconFinalityStateV1 (R2-1).
+    /// Governance-pinned Ethereum beacon anchors (R2-1). A route profile with
+    /// no anchor here admits old 26-field deposits, as main did; a profile with
+    /// an anchor admits only 29-field proofs that start from it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub beacon_finality_states: Vec<PfUsdcBeaconFinalityStateV1>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

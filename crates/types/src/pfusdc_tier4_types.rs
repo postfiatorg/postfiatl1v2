@@ -244,7 +244,8 @@ impl PfUsdcArcIngressPublicValuesV1 {
 /// committee. The guest reconstructs a fresh store from those authenticated
 /// inputs, and publishes the authenticated committee after advancement.
 /// A header root alone does not authenticate a prover-selected committee.
-/// Missing anchors fail closed at deposit admission.
+/// A 29-field deposit fails closed when its profile and epoch have no anchor.
+/// A profile with no anchor at all still admits old 26-field deposits.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PfUsdcBeaconFinalityStateV1 {
     pub schema: String,

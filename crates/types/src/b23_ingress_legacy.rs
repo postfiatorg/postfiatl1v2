@@ -49,8 +49,8 @@ impl PfUsdcBeaconFinalityStateV1 {
 
 /// Ethereum ingress public values in the 26-field layout that the guest
 /// committed before the anchored beacon route (no route epoch, no sync
-/// committee roots). Decoded only to replay history on routes without a
-/// governance-pinned beacon anchor; anchored routes require the current layout.
+/// committee roots). A route profile with no beacon anchor admits deposits in
+/// this layout, as main did; a profile with an anchor refuses them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PfUsdcEthereumIngressPublicValuesLegacyV1 {
     pub schema: String,

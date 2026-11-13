@@ -1059,7 +1059,8 @@ pub struct VaultBridgeRouteReport {
     pub live_value_enabled: bool,
     pub active: bool,
     /// Current ledger anchor for this exact governed profile and epoch.
-    /// Explicit null means Ethereum ingress remains blocked.
+    /// Null means 29-field proofs for this epoch are refused; old 26-field
+    /// deposits are admitted only if the profile has no anchor in any epoch.
     #[serde(default)]
     pub beacon_finality_anchor: Option<postfiat_types::PfUsdcBeaconFinalityStateV1>,
 }
