@@ -1,8 +1,9 @@
 //! Read-only live export and isolated strict release-4 execution. No RPC writer.
 use anyhow::{ensure, Result};
 use clap::{Parser, Subcommand};
+use postfiat_execution::AssetExecutionCompatibility;
 use postfiat_storage::NodeStore;
-use postfiat_types::{Genesis, LedgerState, SignedAssetTransaction};
+use postfiat_types::{Genesis, GovernanceState, LedgerState, SignedAssetTransaction};
 use serde::Deserialize;
 use std::{fs, path::PathBuf};
 #[derive(Parser)]
@@ -69,17 +70,53 @@ fn main() -> Result<()> {
         } => {
             let mut snapshot: serde_json::Value = serde_json::from_slice(&fs::read(snapshot)?)?;
             let genesis: Genesis = serde_json::from_value(snapshot["genesis"].clone())?;
+            let governance: GovernanceState =
+                serde_json::from_value(snapshot["governance"].clone())?;
+            // Exact release-4 execution_actions.rs configuration, including
+            // source-series activation. Never use replay/fixture exceptions.
+            let compatibility = AssetExecutionCompatibility::strict()
+                .with_bridge_verification_activation_height(
+                    governance
+                        .bridge_verification_activation_height()
+                        .or(genesis.bridge_verification_activation_height),
+                )
+                .with_orchard_aware_bridge_claim_activation_height(
+                    governance
+                        .orchard_aware_bridge_claim_activation_height()
+                        .or(genesis.orchard_aware_bridge_claim_activation_height),
+                )
+                .with_pfusdc_source_series_activation_height(
+                    governance
+                        .pfusdc_source_series_activation_height()
+                        .or(genesis.pfusdc_source_series_activation_height),
+                )
+                .with_atomic_swap_activation_height(
+                    governance
+                        .atomic_swap_activation_height()
+                        .or(genesis.atomic_swap_activation_height),
+                )
+                .with_yolo_target_activation_height(governance.yolo_target_activation_height())
+                .with_atomic_swap_paused(governance.atomic_swap_paused);
+            snapshot["canary_activations"] = serde_json::json!({
+                "bridge_verification":compatibility.bridge_verification_activation_height,
+                "orchard_aware_bridge_claim":compatibility.orchard_aware_bridge_claim_activation_height,
+                "pfusdc_source_series":compatibility.pfusdc_source_series_activation_height,
+                "atomic_swap":compatibility.atomic_swap_activation_height,
+                "yolo_target":compatibility.yolo_target_activation_height,
+                "atomic_swap_paused":compatibility.atomic_swap_paused,
+                "replay_or_fixture_exceptions":false});
             let mut ledger: LedgerState = serde_json::from_value(snapshot["ledger"].clone())?;
             let steps: Vec<Step> = serde_json::from_slice(&fs::read(steps)?)?;
             let mut receipts = vec![];
             let mut pass = true;
             for step in steps {
                 let before = serde_json::to_value(&ledger)?;
-                let receipt = postfiat_execution::execute_asset_transaction(
+                let receipt = postfiat_execution::execute_asset_transaction_with_compatibility(
                     &genesis,
                     &mut ledger,
                     &step.transaction,
                     step.height,
+                    compatibility,
                 );
                 let value = serde_json::to_value(&receipt)?;
                 let accepted = receipt.accepted == step.expect_accepted
