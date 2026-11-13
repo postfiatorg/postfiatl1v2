@@ -71,6 +71,23 @@ class FakePftl:
         self.history_root: str | None = "0x" + "ab" * 48 if releases else None
         self.protocol_version: Any = 1
         self.calls: list[tuple[str | None, int | None, int | None]] = []
+        self.fork = ""  # a fork of the same genesis: its blocks hash differently
+
+    def block_header(self, height: int) -> dict[str, Any]:
+        tag = f"{self.pftl_chain_id}/{self.genesis_hash}/{self.fork}/{height}"
+        return {"height": height, "block_hash": keccak_hex(b"block/" + tag.encode()),
+                "state_root": keccak_hex(b"root/" + tag.encode()), "certificate_id": keccak_hex(b"cert/" + tag.encode())}
+
+    def status(self) -> dict[str, Any]:
+        header = self.block_header(self.current_height)
+        return {"chain_id": self.pftl_chain_id, "genesis_hash": self.genesis_hash,
+                "block_height": self.current_height, "block_tip_hash": header["block_hash"],
+                "state_root": header["state_root"]}
+
+    def blocks(self, *, from_height: int | None = None, limit: int | None = None) -> list[dict[str, Any]]:
+        if from_height is None or from_height > self.current_height:
+            return []
+        return [{"header": self.block_header(from_height), "receipt_ids": []}]
 
     def external_lane_info(self, lane_id: str | None = None, *, release_cursor: int | None = None,
                            release_limit: int | None = None) -> dict[str, Any]:
@@ -1041,7 +1058,7 @@ class ExportViewTests(unittest.TestCase):
         lines, codes, summary, _ = run_export_view(pftl, ExportBase(logs, locked=10**9))
         self.assertEqual(codes, [])
         self.assertEqual(summary["exports_checked"], 150)
-        self.assertEqual(pftl.export_cursors, [None, 53])
+        self.assertEqual(pftl.export_cursors, [None, None, 53, 53])  # each page read twice
 
     def test_export_paging_is_checked_like_release_paging(self):
         entries = [export_entry(nonce, amount=1_000) for nonce in range(150)]
@@ -1370,6 +1387,12 @@ class ExportSnapshotTests(unittest.TestCase):
             def external_lane_info(self, *args, **kwargs):
                 pftl = test.new(600) if "export_limit" in kwargs else test.old(599)
                 return pftl.external_lane_info(*args, **kwargs)
+
+            def status(self):
+                return test.new(600).status()
+
+            def blocks(self, **kwargs):
+                return test.new(600).blocks(**kwargs)
 
         with tempfile.TemporaryDirectory() as directory:
             state_file = Path(directory) / "state.json"
@@ -1862,8 +1885,143 @@ class Failover:
         if "export_limit" not in kwargs:
             return self.release.external_lane_info(*args, **kwargs)
         self.pages += 1
-        node = self.later if self.later is not None and self.pages > self.switch else self.export
+        # Each page is read twice: page k is reads 2k and 2k + 1.
+        node = self.later if self.later is not None and (self.pages + 1) // 2 > self.switch else self.export
         return node.external_lane_info(*args, **kwargs)
+
+    def status(self) -> dict[str, Any]:
+        return self.export.status()
+
+    def blocks(self, **kwargs: Any) -> list[dict[str, Any]]:
+        return self.export.blocks(**kwargs)
+
+
+class OneForkPftlRead:
+    """One PFTL endpoint: export-page read number `index` (0-based) is
+    answered by `fork`, a node of a fork that shares this chain's genesis and
+    lane; every other read (release pages, the tip, blocks) by `home`."""
+
+    def __init__(self, home: ExportPftl, fork: ExportPftl, index: int) -> None:
+        self.home, self.fork, self.index, self.reads = home, fork, index, 0
+
+    def external_lane_info(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        if "export_limit" not in kwargs:
+            return self.home.external_lane_info(*args, **kwargs)
+        self.reads += 1
+        return (self.fork if self.reads - 1 == self.index else self.home).external_lane_info(*args, **kwargs)
+
+    def status(self) -> dict[str, Any]:
+        return self.home.status()
+
+    def blocks(self, **kwargs: Any) -> list[dict[str, Any]]:
+        return self.home.blocks(**kwargs)
+
+
+def fork_export(nonce: int) -> dict[str, Any]:
+    """An export the validated chain never made: its own packet digest."""
+
+    entry = export_entry(nonce, amount=50_000, height=505)
+    entry["packet_digest"] = "0x" + "f7" * 48
+    return entry
+
+
+class PftlSnapshotTests(unittest.TestCase):
+    """R7-N1: an export page answered by a node of a same-genesis fork, or
+    from another block, must not back a payout; a carried payout is joined to
+    its packet by digest, not by nonce."""
+
+    E0, E1 = export_entry(0, height=100), export_entry(1, amount=600_000, height=200)
+    P0 = released_log(E0, block=950)
+
+    def home(self, height: int = 510) -> ExportPftl:
+        return ExportPftl([self.E0, self.E1], current_height=height)
+
+    def fork(self, height: int = 510) -> ExportPftl:
+        node = ExportPftl([self.E0, self.E1, fork_export(2)], current_height=height)
+        node.fork = "b"
+        return node
+
+    def two_runs(self, second: Any, logs: list[dict[str, Any]]) -> tuple[int, list[dict[str, Any]], str, bytes, bytes]:
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            options = ("--state-file", str(state_file))
+            code, lines, _ = run_exports(self.home(500), ExportBase([self.P0]), *options)
+            self.assertEqual((code, alarm_codes(lines)), (0, []))
+            before = state_file.read_bytes()
+            code, lines, stderr = run_exports(second, ExportBase(logs, finalized=1_100), *options)
+            return code, lines, stderr, before, state_file.read_bytes()
+
+    def assert_refused(self, result: tuple[int, list[dict[str, Any]], str, bytes, bytes], code: str) -> None:
+        exit_code, lines, stderr, before, after = result
+        self.assertEqual(exit_code, 1)
+        self.assertEqual([line for line in lines if line["kind"] in ("payout", "export", "summary")], [])
+        self.assertEqual(json.loads(stderr)["code"], code)
+        self.assertEqual(after, before)
+
+    def test_the_reviewers_sequence_a_fork_page_backing_an_orphan_payout_is_refused(self):
+        orphan = released_log(fork_export(2), block=1_050, transaction="0x" + "ef" * 32)
+        for height in (510, 511):  # the fork at the snapshot's height, and one block ahead
+            with self.subTest(height=height):
+                pftl = OneForkPftlRead(self.home(), self.fork(height), 0)
+                self.assert_refused(self.two_runs(pftl, [self.P0, orphan]), "pftl_snapshot_mismatch")
+
+    def test_honest_progress_between_two_runs_passes(self):
+        later = ExportPftl([self.E0, self.E1, export_entry(2, amount=50_000, height=505)], current_height=510)
+        payout = released_log(export_entry(2, amount=50_000), block=1_050, transaction="0x" + "ef" * 32)
+        code, lines, stderr, _, _ = self.two_runs(later, [self.P0, payout])
+        self.assertEqual((code, alarm_codes(lines), stderr), (0, [], ""))
+        self.assertEqual([line["status"] for line in lines if line["kind"] == "payout"], ["backed"])
+        snapshot = lines[-1]["exports"]["pftl_snapshot"]
+        self.assertEqual((snapshot["height"], snapshot["block_hash"]), (510, later.block_header(510)["block_hash"]))
+
+    def test_a_page_from_another_block_at_the_same_height_is_refused(self):
+        exports = [export_entry(n, amount=1_000, height=100 + n) for n in range(5)]
+        fork_exports = [*exports[:4], fork_export(4)]
+        fork_exports[4]["packet"]["amount_atoms"] = 1_000
+        home, fork = ExportPftl(exports, current_height=510), ExportPftl(fork_exports, current_height=510)
+        fork.fork = "b"
+        # Its history root chains the divergent export, so every page of it differs.
+        fork.page_hook = lambda info, cursor: info["lanes"][0].update(export_history_root="0x" + "ce" * 48)
+        with unittest.mock.patch.object(watcher, "PAGE_SIZE", 2):
+            for index in range(6):  # either read of each of the three pages
+                with self.subTest(read=index):
+                    pftl = OneForkPftlRead(home, fork, index)
+                    code, lines, stderr = run_exports(pftl, ExportBase([], finalized=1_100))
+                    self.assertEqual((code, [line for line in lines if line["kind"] in ("export", "summary")]),
+                                     (1, []))
+                    self.assertEqual(json.loads(stderr)["code"], "pftl_snapshot_mismatch")
+            code, _, stderr = run_exports(home, ExportBase([], finalized=1_100))
+            self.assertEqual((code, stderr), (0, ""))
+
+    def test_a_tip_the_block_log_does_not_confirm_or_a_block_that_changes_is_refused(self):
+        class Moved(ExportPftl):
+            def __init__(self, change: str) -> None:
+                super().__init__([PftlSnapshotTests.E0], current_height=510)
+                self.change, self.block_reads = change, 0
+
+            def status(self):
+                answer = super().status()
+                if self.change == "status":
+                    answer["state_root"] = "0x" + "00" * 32
+                return answer
+
+            def blocks(self, **kwargs):
+                self.block_reads += 1
+                if self.change == "end" and self.block_reads == 2:
+                    self.fork = "b"
+                return super().blocks(**kwargs)
+
+        for change in ("status", "end"):
+            with self.subTest(change):
+                code, lines, stderr = run_exports(Moved(change), ExportBase([self.P0], finalized=1_100))
+                self.assertEqual((code, [line for line in lines if line["kind"] in ("payout", "summary")]), (1, []))
+                self.assertEqual(json.loads(stderr)["code"], "pftl_snapshot_mismatch")
+
+    def test_a_retained_nonce_naming_another_packet_is_refused(self):
+        other = export_entry(0, amount=400_000, height=100)
+        other["packet_digest"] = "0x" + "f0" * 48
+        node = ExportPftl([other, self.E1], current_height=510)
+        self.assert_refused(self.two_runs(node, [self.P0]), "pftl_export_digest_mismatch")
 
 
 class ExportIdentityTests(unittest.TestCase):
@@ -1925,7 +2083,7 @@ class ExportIdentityTests(unittest.TestCase):
                 code, lines, stderr = run_exports(pftl, ExportBase([released_log(entries[0], block=950)],
                                                                    locked=2_000_000, finalized=1_000),
                                                   "--state-file", str(state_file))
-                self.assertEqual(pftl.pages, switch + 1)
+                self.assertEqual(pftl.pages, 2 * switch + 1)  # each earlier page read twice
                 self.refused(code, lines, stderr, state_file, before)
 
     def test_a_first_run_without_a_state_file_is_refused_and_saves_no_export_part(self):
@@ -2421,6 +2579,12 @@ class ExportModelTests(unittest.TestCase):
             # of the same network or of another (`network`: the identity field that differs).
             def external_lane_info(self, *args, **kwargs):
                 return (lagging if "export_limit" in kwargs else current).external_lane_info(*args, **kwargs)
+
+            def status(self):
+                return lagging.status()
+
+            def blocks(self, **kwargs):
+                return lagging.blocks(**kwargs)
 
         return Answers(), lagging
 
