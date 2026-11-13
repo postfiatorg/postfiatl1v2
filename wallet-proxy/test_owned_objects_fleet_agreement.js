@@ -43,6 +43,18 @@ assert.notStrictEqual(
   key(revised('validator-0', 7)),
   key(revised('validator-1', 7, { view_digest: 'ee'.repeat(32) })),
 );
+// The incarnation and the unavailable reason never split a group.
+const INCARNATION = '0f'.repeat(16);
+assert.strictEqual(
+  key(revised('validator-0', 7, {
+    inventory_revision: { finalized_height: 40, fastpay_sequence: 7, incarnation: INCARNATION },
+  })),
+  key(answer({ node_id: 'validator-1', inventory_revision_unavailable: 'legacy_owned_applies_enabled' })),
+);
+assert.strictEqual(
+  key(answer({ inventory_revision_unavailable: 'legacy_owned_applies_enabled' })),
+  key(answer()),
+);
 console.log('PASS owned_objects fleet agreement compares the view digest and the objects');
 
 function validator(result) {
@@ -145,6 +157,24 @@ const expectedAnswer = (() => {
   })]);
   assert.deepStrictEqual(extra.source.fleet_revisions, [
     { endpoint_validator_id: 'v0', node_id: 'node-0', inventory_revision: { finalized_height: 40, fastpay_sequence: 7 } },
+  ]);
+  // The incarnation passes on when well formed; a malformed one drops the
+  // entry; a node that says why it has no revision has no entry and still
+  // agrees.
+  const incarnated = await fleetRead([
+    revised('node-0', 7, { inventory_revision: { finalized_height: 40, fastpay_sequence: 7, incarnation: INCARNATION } }),
+    revised('node-1', 7, { inventory_revision: { finalized_height: 40, fastpay_sequence: 7, incarnation: '0F'.repeat(16) } }),
+    revised('node-2', 7, { inventory_revision: { finalized_height: 40, fastpay_sequence: 7, incarnation: 7 } }),
+    answer({ node_id: 'node-3', inventory_revision_unavailable: 'legacy_owned_applies_enabled' }),
+  ]);
+  assert.strictEqual(incarnated.source.consensus_count, 4);
+  assert.deepStrictEqual(incarnated.result, expectedAnswer);
+  assert.deepStrictEqual(incarnated.source.fleet_revisions, [
+    {
+      endpoint_validator_id: 'v0',
+      node_id: 'node-0',
+      inventory_revision: { finalized_height: 40, fastpay_sequence: 7, incarnation: INCARNATION },
+    },
   ]);
   console.log('PASS the fleet feed groups owned_objects pages without node ids and returns their revisions');
 })().catch((error) => {

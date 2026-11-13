@@ -295,18 +295,21 @@ class OwnedObjectsRevision:
     """`owned_objects` `inventory_revision`: orders two answers of one node.
 
     Compare as (`finalized_height`, `fastpay_sequence`) and only between
-    answers of one node's uninterrupted v3 history (same `node_id`); the
-    node-side guarantees across restores and legacy applies are not
-    complete yet.
+    answers with the same `node_id` and `incarnation` (the data directory's
+    history; new on every snapshot import). `incarnation` is `None` from
+    nodes that predate it and takes no part in the comparison.
     """
 
     finalized_height: int
     fastpay_sequence: int
+    incarnation: str | None = field(default=None, compare=False)
 
 
 _U64_MAX = 2**64 - 1
 # Fields of the moment a page was read; an all-pages result takes the last page's.
-_OWNED_OBJECTS_TIP_FIELDS = ("height", "state_root", "inventory_revision", "node_id")
+_OWNED_OBJECTS_TIP_FIELDS = (
+    "height", "state_root", "inventory_revision", "inventory_revision_unavailable", "node_id",
+)
 
 
 def _is_u64(value: Any) -> bool:
@@ -327,13 +330,20 @@ def owned_objects_revision(page: dict[str, Any]) -> tuple[str | None, OwnedObjec
     """`(node_id, revision)` of an `owned_objects` page; `None` from older nodes.
 
     Checks like the Rust validator: a present `node_id` is null or a clean
-    string, also without a revision; a revision holds two u64 values and its
-    `finalized_height` equals the page `height`.
+    string, also without a revision; a revision holds two u64 values, its
+    `finalized_height` equals the page `height`, and a present `incarnation`
+    is 32 lowercase hex digits. `inventory_revision_unavailable` (why a
+    server omits the revision) is a clean string and never beside one.
     """
     node_id = page.get("node_id")
     if node_id is not None and not _is_clean_string(node_id):
         raise RpcClientError(f"owned_objects answered a malformed node_id: {node_id!r}")
     raw = page.get("inventory_revision")
+    reason = page.get("inventory_revision_unavailable")
+    if reason is not None and (not _is_clean_string(reason) or raw is not None):
+        raise RpcClientError(
+            f"owned_objects answered a malformed inventory_revision_unavailable: {reason!r}"
+        )
     if raw is None:
         return None
     values = [raw.get(name) if isinstance(raw, dict) else None
@@ -341,7 +351,14 @@ def owned_objects_revision(page: dict[str, Any]) -> tuple[str | None, OwnedObjec
     height = page.get("height")
     if not all(_is_u64(value) for value in values) or not _is_u64(height) or height != values[0]:
         raise RpcClientError(f"owned_objects answered a malformed inventory_revision: {raw!r}")
-    return node_id, OwnedObjectsRevision(values[0], values[1])
+    incarnation = raw.get("incarnation")
+    if incarnation is not None and not (
+        isinstance(incarnation, str)
+        and len(incarnation) == 32
+        and all(char in "0123456789abcdef" for char in incarnation)
+    ):
+        raise RpcClientError(f"owned_objects answered a malformed inventory_revision: {raw!r}")
+    return node_id, OwnedObjectsRevision(values[0], values[1], incarnation)
 
 
 class PostFiatRpcClient:
