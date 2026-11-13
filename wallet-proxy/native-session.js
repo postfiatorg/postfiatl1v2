@@ -17,6 +17,11 @@ const ALLOWLIST_SCHEMA = 'postfiat-native-session-allowlist-v1';
 const DENYLIST_SCHEMA = 'postfiat-native-session-denylist-v1';
 // The operator lists are read and hashed at most this often; a changed hash reloads.
 const LIST_CHECK_INTERVAL_MS = 1_000;
+// Each list is read and hashed on every check, so its size bounds that pause.
+// 4 MiB holds about 1,070 allowlisted keys (3,904 hex each, four times the
+// default live-install cap) or about 58,000 denylisted ids; reading and hashing
+// it takes a few milliseconds.
+const MAX_LIST_FILE_BYTES = 4 * 1024 * 1024;
 // FIPS 204 ML-DSA context, named like crates/crypto_provider's signature contexts.
 const SIGNATURE_CONTEXT = 'postfiat-l1-v2/native-session/v1';
 const TOKEN_MAC_DOMAIN = 'postfiat-l1-v2/native-session-token/v1';
@@ -84,8 +89,8 @@ function boundedInteger(raw, name, fallback, minimum, maximum) {
 }
 
 // Same checks as the other operator files: regular, not a symlink, owned by the
-// service user, not group/world writable. Checked on the opened descriptor, so the
-// bytes returned are the file that passed.
+// service user, not group/world writable, and no larger than MAX_LIST_FILE_BYTES.
+// Checked on the opened descriptor, so the bytes returned are the file that passed.
 function readOperatorFile(file, variable) {
     const refused = new Error(`${variable} must be an owner-controlled regular file`);
     let fd;
@@ -97,7 +102,12 @@ function readOperatorFile(file, variable) {
     try {
         const stat = fs.fstatSync(fd);
         if (!stat.isFile() || stat.uid !== process.getuid() || (stat.mode & 0o022) !== 0) throw refused;
-        return fs.readFileSync(fd);
+        const tooLarge = (size) => new Error(`${variable} is ${size} bytes, past the ${MAX_LIST_FILE_BYTES}-byte limit`);
+        if (stat.size > MAX_LIST_FILE_BYTES) throw tooLarge(stat.size);
+        const bytes = fs.readFileSync(fd);
+        // A file that grew after the stat is refused too.
+        if (bytes.length > MAX_LIST_FILE_BYTES) throw tooLarge(bytes.length);
+        return bytes;
     } finally {
         fs.closeSync(fd);
     }
@@ -492,6 +502,7 @@ module.exports = {
     ALGORITHM_ID,
     DEFAULT_MAX_ACTIVE_INSTALLS,
     INFO_PATH,
+    MAX_LIST_FILE_BYTES,
     OPEN_PATH,
     OPEN_SCHEMA,
     SESSION_SCHEMA,
