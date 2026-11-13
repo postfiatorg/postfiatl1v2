@@ -17,6 +17,8 @@ import time
 sys.path.insert(0,'/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch-deposit')
 import pftl
 import facility as f
+from live_snapshot import export_snapshot
+from run_canary import ALICE_OFFER
 
 COORD=Path('/home/postfiat/repos/b23-coord')
 LOCK=COORD/'chain.lock'
@@ -42,14 +44,16 @@ def reads(peer,asset):
     name=peer[0]
     return name,{method:pftl.rpc(method,params,'tee-final-'+method,peer) for method,params in [
         ('server_info',{}),('status',{}),('asset_info',{'asset_id':asset}),('nav_reserve_proof_status',{'asset_id':asset}),
-        ('navcoin_bridge_supply_status',{'route_id':f.ROUTE_ID})]}
+        ('navcoin_bridge_supply_status',{'route_id':f.ROUTE_ID}),('offer_info',{'offer_id':ALICE_OFFER})]}
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--canary',type=Path,required=True)
     ap.add_argument('--output',type=Path,required=True);ap.add_argument('--execute',action='store_true')
+    ap.add_argument('--canary-bin',type=Path,default=Path('/mnt/HC_Volume_106212907/sec-fundamentals-proxy/b23-tee-nav-canary-target/release/postfiat-b23-nav-canary'))
     args=ap.parse_args();gate=load(args.canary/'result.json');expected=load(args.canary/'expected.json')
     plan_path=args.canary/'authorized-live-operations.json';plan=load(plan_path)
     assert gate['passed'] is True and gate['no_live_transactions'] is True
+    assert gate['checks']['market_buy'] and gate['checks']['route_invariant']
     assert gate['authorized_operations_sha256']==hashlib.sha256(plan_path.read_bytes()).hexdigest()
     assert [r['operation']['operation'] for r in plan]==EXPECTED_OPS
     assert all(r['source']==f.ISSUER for r in plan)
@@ -70,19 +74,37 @@ def main():
             if not holder:
                 handle.seek(0);handle.truncate();handle.write('TEE\n');handle.flush();acquired=True;break
             fcntl.flock(handle,fcntl.LOCK_UN)
-            top('PHASE 2 STEP 5 IN PROGRESS: waiting for chain.lock; no TEE live writes yet.')
+            top('PHASE 3 STEP 3 IN PROGRESS: waiting for chain.lock; no TEE live writes yet.')
             time.sleep(5)
         if not acquired:raise TimeoutError('chain.lock remained occupied for 60 minutes')
-        top('PHASE 2 STEP 5 IN PROGRESS: chain.lock=TEE; checking fleet and canary parent before authorized writes.')
+        top('PHASE 3 STEP 3 IN PROGRESS: chain.lock=TEE; checking fleet and canary parent before authorized writes.')
         with ThreadPoolExecutor(max_workers=6) as pool:versions=dict(pool.map(runtime,pftl.PEERS))
         save(args.output/'runtime-hashes.json',versions);assert all(v['matches'] for v in versions.values())
         before=pftl.fleet_snapshot('tee-live-parent');save(args.output/'before-six-node.json',before)
         pftl.assert_identity(before)
         assert pftl.converged_point(before)==(gate['base_tip']['height'],gate['base_tip']['state_root']),'live parent changed; refresh canary before writing'
         assert all(v['mempool']['pending']==0 for v in before.values())
+        offer_before=pftl.rpc('offer_info',{'offer_id':ALICE_OFFER},'tee-live-offer-before')
+        save(args.output/'before-offer.json',offer_before)
+        assert offer_before['offer']['state']=='open'
         for row in plan:
             require_lock()
-            top('PHASE 2 STEP 5 IN PROGRESS: '+row['label']+'; full six-validator completion is pending.')
+            top('PHASE 3 STEP 3 IN PROGRESS: '+row['label']+'; full six-validator completion is pending.')
+            if row['operation']['operation']=='nav_reserve_submit':
+                # Re-derive at submission time from a fresh, read-only live export.
+                # The lock prevents cooperating lanes from changing the reserve.
+                snapshot=args.output/'submit-time-snapshot.json'
+                export_snapshot(args.canary_bin,snapshot)
+                public=args.output/'submit-public-values.bin';public.write_bytes(bytes(row['operation']['sp1_public_values']))
+                context_path=args.output/'submit-time-context.json'
+                subprocess.run([str(args.canary_bin),'packet-context','--snapshot',str(snapshot),
+                    '--public-values',str(public),'--output',str(context_path)],check=True)
+                context=load(context_path);op=row['operation']
+                assert context['source_root']==op['source_root']
+                assert context['verified_net_assets']==op['verified_net_assets']
+                assert context['supply_atoms']==op['circulating_supply'] and context['nav_per_unit']==op['nav_per_unit']
+                assert context['overlay_value']==expected['consensus_overlay_value']
+                assert context['attested_value']==expected['attested_value']
             receipt=pftl.asset_op('tee-'+row['label'],f.ISSUER,f.ISSUER_KEY,row['operation'])
             print(json.dumps({'operation':row['label'],'height':receipt['height'],'receipt_codes':receipt['receipt_codes']}),flush=True)
         with ThreadPoolExecutor(max_workers=6) as pool:after=dict(pool.map(lambda peer:reads(peer,asset),pftl.PEERS))
@@ -105,10 +127,14 @@ def main():
                 quantity_trust=packet['quantity_trust_counts']==dict(attested=1,controlled=0,cryptographic=0),
                 valuation_trust=packet['valuation_trust_counts']==dict(attested=1,controlled=0,cryptographic=0),
                 verified_net_assets=packet['verified_net_assets']==expected['verified_net_assets'],
+                proof_verified_net_assets=packet['proof_verified_net_assets']==expected['proof_verified_net_assets'],
+                consensus_overlay=packet['consensus_overlay_value']==expected['consensus_overlay_value'],
                 route_epoch=route['pricing_nav_epoch']==expected['epoch'],
                 route_packet=route['pricing_reserve_packet_hash']==expected['reserve_packet_hash'],
                 route_supply=route['authorized_valid_supply_atoms']==expected['supply_atoms'],
-                route_live=route['live_value_enabled'] is True)
+                route_live=route['live_value_enabled'] is True,
+                route_invariant=route['invariant_holds'] is True,
+                alice_offer_unchanged=row['offer_info']['offer']==offer_before['offer'])
         assert all(all(v.values()) for v in checks.values())
         fleet={k:v['server_info'] for k,v in after.items()};pftl.assert_identity(fleet)
         assert pftl.converged_point(fleet) is not None
@@ -116,7 +142,7 @@ def main():
         top(f"B23 PROFILE ON CHAIN: sp1-nav-reserve-v1 {expected['profile']} epoch {expected['epoch']} attested_value {expected['attested_value']} atoms; six validators verified.")
     except BaseException as error:
         save(args.output/'failure.json',{'error_type':type(error).__name__,'message':str(error)[:1200]})
-        top('PHASE 2 STEP 5 BLOCKED: live sequence stopped; inspect literal receipts and failure.json before further writes.')
+        top('PHASE 3 STEP 3 BLOCKED: live sequence stopped; inspect literal receipts and failure.json before further writes.')
         raise
     finally:
         if acquired and LOCK.read_text().strip()=='TEE':handle.seek(0);handle.truncate();handle.flush()
