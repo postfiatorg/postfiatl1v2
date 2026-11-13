@@ -338,6 +338,12 @@
         assert_eq!(routes.routes[0].route_id, "pftl-uniswap-a666");
         assert_eq!(routes.routes[0].route_family, "primary_pftl_mint");
         assert_eq!(routes.routes[0].outstanding_bridge_claims_atoms, 40);
+        assert_eq!(routes.routes[0].authority_epoch, None);
+        assert_eq!(routes.routes[0].authority_committee_current, None);
+        assert_eq!(
+            routes.routes[0].authority_committee_unknown_reason.as_deref(),
+            Some("consensus_ledger_unavailable")
+        );
 
         let packet = navcoin_bridge_packet(NavcoinBridgePacketOptions {
             data_dir: data_dir.clone(),
@@ -458,6 +464,244 @@
         assert_eq!(supply.source_debited_export_packet_atoms, 40);
         assert_eq!(supply.available_return_import_atoms, 0);
         assert!(supply.invariant_holds);
+    }
+
+    fn route_authority_test_committee(epoch: u64) -> postfiat_types::FastSwapCommitteeV1 {
+        postfiat_types::FastSwapCommitteeV1 {
+            domain: postfiat_types::FastSwapCommitteeDomainV1 {
+                chain: postfiat_types::FastSwapChainDomainV1 {
+                    chain_id: "postfiat-local".to_string(),
+                    genesis_hash: postfiat_types::FastSwapOpaqueHashV1([0x31; 48]),
+                    protocol_version: 1,
+                },
+                fastswap_schema_version: postfiat_types::FASTSWAP_SCHEMA_VERSION_V1,
+                committee_epoch: epoch,
+                committee_root: FastSwapCommitteeRootV1([0x30 + epoch as u8; 48]),
+                validator_count: 0,
+                quorum: 0,
+            },
+            validators: Vec::new(),
+        }
+    }
+
+    fn route_authority_test_route(
+        route_id: &str,
+        authority_epoch: Option<u64>,
+    ) -> PftlUniswapConsensusRouteState {
+        let (legacy_ledger, _) = pftl_uniswap_test_ledger(route_id);
+        let mut route = pftl_uniswap_consensus_route_from_legacy_fixture(&legacy_ledger);
+        route.ethereum_verification_policy =
+            authority_epoch.map(|epoch| EthereumRouteVerificationPolicyV1 {
+                authority_epoch: epoch,
+                committee_root: FastSwapCommitteeRootV1([0x30 + epoch as u8; 48]),
+                minimum_confirmations: 12,
+                handoff_controller_code_hash: [0x92; 32],
+                wrapped_navcoin_code_hash: [0x93; 32],
+            });
+        route
+    }
+
+    fn route_authority_test_report(committee_epochs: &[u64]) -> serde_json::Value {
+        let data_dir = unique_test_dir("postfiat-navcoin-bridge-route-authority-test");
+        std::fs::create_dir_all(&data_dir).expect("test dir");
+        let mut ledger = LedgerState::new(Vec::new());
+        ledger.pftl_uniswap_routes.extend([
+            route_authority_test_route("pftl-uniswap-auth-a-current", Some(2)),
+            route_authority_test_route("pftl-uniswap-auth-b-stale", Some(1)),
+            route_authority_test_route("pftl-uniswap-auth-c-no-policy", None),
+        ]);
+        ledger.fastswap_committees = committee_epochs
+            .iter()
+            .map(|epoch| route_authority_test_committee(*epoch))
+            .collect();
+        postfiat_storage::NodeStore::new(&data_dir)
+            .write_ledger(&ledger)
+            .expect("write consensus ledger");
+        let report = navcoin_bridge_routes(NavcoinBridgeRoutesOptions { data_dir })
+            .expect("consensus routes status");
+        serde_json::to_value(report).expect("report json")
+    }
+
+    fn route_authority_test_rows(
+        committee_epochs: &[u64],
+    ) -> Vec<serde_json::Map<String, serde_json::Value>> {
+        match route_authority_test_report(committee_epochs) {
+            serde_json::Value::Object(mut report) => match report.remove("routes") {
+                Some(serde_json::Value::Array(routes)) => routes
+                    .into_iter()
+                    .map(|row| match row {
+                        serde_json::Value::Object(row) => row,
+                        other => panic!("route row is not an object: {other}"),
+                    })
+                    .collect(),
+                other => panic!("routes is not an array: {other:?}"),
+            },
+            other => panic!("report is not an object: {other}"),
+        }
+    }
+
+    const ROUTE_AUTHORITY_FIELDS: [&str; 3] = [
+        "authority_epoch",
+        "authority_committee_current",
+        "authority_committee_unknown_reason",
+    ];
+
+    fn route_authority_fields(
+        row: &serde_json::Map<String, serde_json::Value>,
+    ) -> (serde_json::Value, serde_json::Value, serde_json::Value) {
+        (
+            row.get("authority_epoch").cloned().expect("authority_epoch present"),
+            row.get("authority_committee_current")
+                .cloned()
+                .expect("authority_committee_current present"),
+            row.get("authority_committee_unknown_reason")
+                .cloned()
+                .expect("authority_committee_unknown_reason present"),
+        )
+    }
+
+    #[test]
+    fn navcoin_bridge_routes_report_route_authority_against_active_committee() {
+        use serde_json::{json, Value};
+        let rows = route_authority_test_rows(&[1, 2]);
+        assert_eq!(rows.len(), 3);
+        // Route on the active (newest governed) committee epoch.
+        assert_eq!(
+            route_authority_fields(&rows[0]),
+            (json!(2), json!(true), Value::Null)
+        );
+        // Route one authority epoch behind the active committee.
+        assert_eq!(
+            route_authority_fields(&rows[1]),
+            (json!(1), json!(false), Value::Null)
+        );
+        // Route without a governed Ethereum verification policy.
+        assert_eq!(
+            route_authority_fields(&rows[2]),
+            (
+                Value::Null,
+                Value::Null,
+                json!("route_has_no_ethereum_verification_policy")
+            )
+        );
+    }
+
+    #[test]
+    fn navcoin_bridge_routes_report_route_two_epochs_behind_as_not_current() {
+        use serde_json::{json, Value};
+        // Newest governed committee is epoch 3: the epoch-2 route is one
+        // behind and the epoch-1 route two behind. Both read false; only the
+        // first could be caught up by an ordinary policy update.
+        let rows = route_authority_test_rows(&[1, 2, 3]);
+        assert_eq!(
+            route_authority_fields(&rows[0]),
+            (json!(2), json!(false), Value::Null)
+        );
+        assert_eq!(
+            route_authority_fields(&rows[1]),
+            (json!(1), json!(false), Value::Null)
+        );
+    }
+
+    #[test]
+    fn navcoin_bridge_routes_node_output_passes_rust_sdk_validation() {
+        for committee_epochs in [&[][..], &[1, 2][..], &[1, 2, 3][..]] {
+            let report = route_authority_test_report(committee_epochs);
+            let response =
+                postfiat_rpc_sdk::success_response("navcoin-bridge-routes-node", &report, vec![])
+                    .expect("routes response");
+            postfiat_rpc_sdk::validate_response_kind(
+                &response,
+                postfiat_rpc_sdk::RpcResponseKind::NavcoinBridgeRoutes,
+            )
+            .unwrap_or_else(|error| {
+                panic!("SDK rejects node output for committees {committee_epochs:?}: {error:?}")
+            });
+        }
+    }
+
+    #[test]
+    fn navcoin_bridge_routes_report_unknown_authority_without_active_committee() {
+        use serde_json::{json, Value};
+        let rows = route_authority_test_rows(&[]);
+        assert_eq!(
+            route_authority_fields(&rows[0]),
+            (
+                json!(2),
+                Value::Null,
+                json!("no_active_checkpoint_committee_recorded")
+            )
+        );
+        assert_eq!(
+            route_authority_fields(&rows[1]),
+            (
+                json!(1),
+                Value::Null,
+                json!("no_active_checkpoint_committee_recorded")
+            )
+        );
+    }
+
+    #[test]
+    fn navcoin_bridge_routes_authority_fields_leave_existing_row_fields_unchanged() {
+        // The row shape before the authority fields were added.
+        const EXISTING_ROW_FIELDS: [&str; 37] = [
+            "route_id",
+            "route_family",
+            "route_config_digest",
+            "route_trust_class",
+            "movement_model",
+            "refund_model",
+            "live_value_enabled",
+            "route_live",
+            "paused",
+            "native_nav_asset_id",
+            "settlement_asset_id",
+            "wrapped_navcoin_token",
+            "handoff_controller",
+            "settlement_adapter",
+            "ethereum_chain_id",
+            "latest_finalized_nav_epoch",
+            "route_supply_cap_atoms",
+            "packet_notional_cap_atoms",
+            "authorized_valid_supply_atoms",
+            "supply_cap_remaining_atoms",
+            "outstanding_bridge_claims_atoms",
+            "pending_return_import_claims_atoms",
+            "primary_subscription_count",
+            "export_packet_count",
+            "outstanding_export_packet_count",
+            "consumed_export_packet_count",
+            "refunded_export_packet_count",
+            "return_burn_count",
+            "pending_return_burn_count",
+            "imported_return_burn_count",
+            "ledger_hash",
+            // Optional asset metadata is omitted when the asset is unknown.
+            "native_nav_asset_code",
+            "native_nav_asset_display_name",
+            "native_nav_asset_precision",
+            "settlement_asset_code",
+            "settlement_asset_display_name",
+            "settlement_asset_precision",
+        ];
+        let with_committee = route_authority_test_rows(&[1, 2]);
+        let without_committee = route_authority_test_rows(&[]);
+        for (left, right) in with_committee.iter().zip(&without_committee) {
+            let mut left = left.clone();
+            let mut right = right.clone();
+            for field in ROUTE_AUTHORITY_FIELDS {
+                assert!(left.remove(field).is_some(), "{field} missing");
+                assert!(right.remove(field).is_some(), "{field} missing");
+            }
+            assert!(
+                left.keys().all(|key| EXISTING_ROW_FIELDS.contains(&key.as_str())),
+                "unexpected row fields: {:?}",
+                left.keys().collect::<Vec<_>>()
+            );
+            assert_eq!(left.len(), 31, "required pre-existing fields: {left:?}");
+            assert_eq!(left, right);
+        }
     }
 
     #[test]

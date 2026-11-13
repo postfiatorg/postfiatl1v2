@@ -9,6 +9,7 @@ import {
   navcoinMarketForAsset,
   navcoinMarketForSettlementAsset,
   navcoinMarketsFromRoutes,
+  navcoinRouteAuthorityNotice,
   loadNavcoinMarkets,
 } from './navcoin-markets.js';
 
@@ -32,6 +33,27 @@ const route = {
   handoff_controller: `0x${'55'.repeat(20)}`,
   ethereum_chain_id: 1,
 };
+
+test('route authority freshness is read from the registry row', () => {
+  const marketFor = row => navcoinMarketsFromRoutes({
+    schema: 'postfiat-pftl-uniswap-routes-status-v2', route_count: 1, routes: [row],
+  })[0];
+  const current = marketFor({ ...route, authority_epoch: 2, authority_committee_current: true, authority_committee_unknown_reason: null });
+  const stale = marketFor({ ...route, authority_epoch: 1, authority_committee_current: false, authority_committee_unknown_reason: null });
+  const unknown = marketFor({ ...route, authority_epoch: 1, authority_committee_current: null, authority_committee_unknown_reason: 'no_active_checkpoint_committee_recorded' });
+  const older = marketFor(route);
+  assert.equal(current.authorityEpoch, 2);
+  assert.equal(current.authorityCommitteeCurrent, true);
+  assert.equal(stale.authorityEpoch, 1);
+  assert.equal(stale.authorityCommitteeCurrent, false);
+  assert.equal(unknown.authorityCommitteeCurrent, null);
+  assert.equal(older.authorityEpoch, null);
+  assert.equal(older.authorityCommitteeCurrent, null);
+  assert.equal(navcoinRouteAuthorityNotice(stale), 'authority out of date');
+  for (const market of [current, unknown, older, null]) {
+    assert.equal(navcoinRouteAuthorityNotice(market), '');
+  }
+});
 
 test('governed NAVCoin markets are derived from bounded chain registry rows', () => {
   const markets = navcoinMarketsFromRoutes({

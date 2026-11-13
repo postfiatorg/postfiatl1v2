@@ -1416,6 +1416,18 @@ fn pftl_uniswap_consensus_route_status_row(
         .count() as u64;
     let native_asset = ledger.asset_definition(&route.native_nav_asset_id);
     let settlement_asset = ledger.asset_definition(&route.settlement_asset_id);
+    // Execution treats the newest governed committee as the active one (see
+    // `pftl_uniswap_route_bridge_policy_update` in postfiat-execution).
+    let authority_epoch = route
+        .ethereum_verification_policy
+        .as_ref()
+        .map(|policy| policy.authority_epoch);
+    let active_committee_epoch = ledger
+        .fastswap_committees
+        .last()
+        .map(|committee| committee.domain.committee_epoch);
+    let (authority_committee_current, authority_committee_unknown_reason) =
+        postfiat_bridge::route_authority_committee_current(authority_epoch, active_committee_epoch);
     Ok(PftlUniswapRouteStatusRow {
         route_id: route.route_id.clone(),
         route_family: route.route_family.clone(),
@@ -1462,6 +1474,9 @@ fn pftl_uniswap_consensus_route_status_row(
         pending_return_burn_count: 0,
         imported_return_burn_count,
         ledger_hash: pftl_uniswap_route_state_hash(route),
+        authority_epoch,
+        authority_committee_current,
+        authority_committee_unknown_reason,
     })
 }
 

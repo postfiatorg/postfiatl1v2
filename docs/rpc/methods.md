@@ -22,7 +22,7 @@ authorization inventory is
 | `tx` | Transaction finality lookup, with the transaction's `account_tx` rows (`transaction_rows`), including native and issued payment memo contents. |
 | `mempool_status` | Mempool status. |
 | `bridge_status` | Bridge-simulation status. |
-| `navcoin_bridge_routes` | PFTL-to-Uniswap NAVCoin bridge route status. |
+| `navcoin_bridge_routes` | PFTL-to-Uniswap NAVCoin bridge route status, including each route's Ethereum `authority_epoch` and whether it matches the active checkpoint committee. |
 | `navcoin_bridge_packet` | PFTL-to-Uniswap export packet status by route and packet hash. |
 | `navcoin_bridge_claims` | Bounded outstanding export and return-claim status for a bridge route. |
 | `navcoin_bridge_supply_status` | Supply, per-wallet native NAV balances, and invariant status for a bridge route. |
@@ -82,6 +82,31 @@ the index rebuild that backfills them are documented in
 the `settlement_adapter` separately. Wallets must not treat either as the
 Uniswap router/path; those execution fields are bound by the route config and
 launch config digests.
+
+Each row also carries three additive route-authority fields:
+
+- `authority_epoch`: the route's Ethereum verification `authority_epoch` as
+  stored; `null` when the route has no governed Ethereum verification policy.
+- `authority_committee_current`: `true` when that epoch is the epoch of the
+  newest governed checkpoint committee (`fastswap_committees`, the committee
+  execution treats as current), `false` when it is older, `null` when the node
+  cannot tell.
+- `authority_committee_unknown_reason`: `null` when the flag is known;
+  otherwise `route_has_no_ethereum_verification_policy`,
+  `no_active_checkpoint_committee_recorded`,
+  `route_authority_epoch_ahead_of_active_committee` or
+  `consensus_ledger_unavailable` (a node without a consensus ledger).
+
+The flag only says whether the route's epoch matches the newest governed
+checkpoint-committee epoch; it is not update eligibility. A `false` route
+still names an older committee. A `pftl_uniswap_route_bridge_policy_update`
+moves a route exactly one epoch, to the newest governed committee (exact
+epoch, root and domain, a valid committee), and only with no prepare fence
+on that epoch and no open route handoff. A route two or more epochs behind
+therefore cannot be caught up by updates, and no recovery path exists today:
+the update is the only operation that changes a stored route policy, and
+route initialization refuses an existing route id. Older nodes omit the
+three fields.
 
 ## Controlled Write Methods
 
