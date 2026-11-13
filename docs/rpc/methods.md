@@ -22,7 +22,7 @@ authorization inventory is
 | `tx` | Transaction finality lookup, with the transaction's `account_tx` rows (`transaction_rows`), including native and issued payment memo contents. |
 | `mempool_status` | Mempool status. |
 | `bridge_status` | Bridge-simulation status. |
-| `navcoin_bridge_routes` | PFTL-to-Uniswap NAVCoin bridge route status. |
+| `navcoin_bridge_routes` | PFTL-to-Uniswap NAVCoin bridge route status, including each route's Ethereum `authority_epoch` and whether it matches the active checkpoint committee. |
 | `navcoin_bridge_packet` | PFTL-to-Uniswap export packet status by route and packet hash. |
 | `navcoin_bridge_claims` | Bounded outstanding export and return-claim status for a bridge route. |
 | `navcoin_bridge_supply_status` | Supply, per-wallet native NAV balances, and invariant status for a bridge route. |
@@ -82,6 +82,24 @@ the index rebuild that backfills them are documented in
 the `settlement_adapter` separately. Wallets must not treat either as the
 Uniswap router/path; those execution fields are bound by the route config and
 launch config digests.
+
+Each row also carries three additive route-authority fields:
+
+- `authority_epoch`: the route's Ethereum verification `authority_epoch` as
+  stored; `null` when the route has no governed Ethereum verification policy.
+- `authority_committee_current`: `true` when that epoch is the epoch of the
+  newest governed checkpoint committee (`fastswap_committees`, the committee
+  execution treats as current), `false` when it is older, `null` when the node
+  cannot tell.
+- `authority_committee_unknown_reason`: `null` when the flag is known;
+  otherwise `route_has_no_ethereum_verification_policy`,
+  `no_active_checkpoint_committee_recorded`,
+  `route_authority_epoch_ahead_of_active_committee` or
+  `consensus_ledger_unavailable` (a node without a consensus ledger).
+
+A `false` flag means the route still names an older committee: its Ethereum
+checkpoints are signed by that committee until the issuer submits a
+`pftl_uniswap_route_bridge_policy_update`. Older nodes omit the three fields.
 
 ## Controlled Write Methods
 
