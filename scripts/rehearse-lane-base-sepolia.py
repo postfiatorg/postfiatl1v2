@@ -584,9 +584,13 @@ RELEASE_GAS_PLANNED = 1_000_000
 def planned_release_spend(gas_price_wei):
     """What the run plans to spend on the release: the planning gas plus a fifth, at
     the gas guard's price (the plan's x GAS_PRICE_FACTOR), plus one L1 data fee allowance."""
+    return gas_limit_planned() * gas_price_wei * GAS_PRICE_FACTOR + L1_DATA_FEE_ALLOWANCE_WEI
+
+
+def gas_limit_planned():
+    """The planning gas plus a fifth, rounded up."""
     numerator, denominator = RELEASE_GAS_HEADROOM
-    gas_limit = -(-RELEASE_GAS_PLANNED * numerator // denominator)
-    return gas_limit * gas_price_wei * GAS_PRICE_FACTOR + L1_DATA_FEE_ALLOWANCE_WEI
+    return -(-RELEASE_GAS_PLANNED * numerator // denominator)
 
 
 def check_release_budget(*, ceiling_wei, gas_price_wei):
@@ -716,8 +720,21 @@ def key_balances(keys, balance):
             for key, address in keys.items()}
 
 
+def release_planned_spend_line(sheet):
+    """The sheet line for what the run plans to spend on the release, with its basis."""
+    planned = sheet.get('release_planned_spend') or {}
+    if planned.get('wei') is None:
+        return ('Release planned spend: not planned (no --relayer-ceiling-wei: a fork run; a real run checks its '
+                'ceiling against it in plan).')
+    return (f'Release planned spend: {planned["wei"]} wei = {planned["gas_limit"]} gas (the planning figure '
+            f'{planned["planning_gas"]}, not a measurement, plus a fifth) x the plan gas price '
+            f'{planned["gas_price_wei"]} wei x {planned["price_multiple"]} (the gas guard) + one L1 data fee allowance '
+            f'{planned["l1_data_fee_allowance_wei"]} wei. The ceiling {planned["ceiling_wei"]} wei covers it; the '
+            'release itself is quoted from the node\'s gas estimate.')
+
+
 def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_identity=None, relayer_ceiling_wei=None,
-                 payout_recipient=None, payout_recipient_key=None):
+                 payout_recipient=None, payout_recipient_key=None, release_planned_spend_wei=None):
     """Every address, nonce, constructor value, gas figure and the bounded funding plan for the four keys."""
     keys = {
         'verifier deployer': ('deploy-verifier',),
@@ -748,6 +765,11 @@ def deploy_sheet(*, plan, verifier_config, gas_used, gas_price_wei, program_iden
             'l1_data_fee': {'allowance_wei_per_transaction': L1_DATA_FEE_ALLOWANCE_WEI, 'basis': L1_DATA_FEE_BASIS,
                             'transactions': KEY_TRANSACTIONS},
             'release_gas': 'not estimated: a release needs a real proof',
+            'release_planned_spend': {'wei': release_planned_spend_wei, 'gas_limit': gas_limit_planned(),
+                                      'planning_gas': RELEASE_GAS_PLANNED, 'gas_price_wei': gas_price_wei,
+                                      'price_multiple': GAS_PRICE_FACTOR,
+                                      'l1_data_fee_allowance_wei': L1_DATA_FEE_ALLOWANCE_WEI,
+                                      'ceiling_wei': relayer_ceiling_wei},
             'funding_transfers': {'count': FUNDING_TRANSFERS, 'gas_each': TRANSFER_GAS,
                                   'to': ['verifier deployer', 'lock deployer', 'relayer'],
                                   'from': 'holder'}}
@@ -777,6 +799,7 @@ def sheet_markdown(sheet):
                   'deployer + relayer |',
                   f'| holder, starting balance | {holder["starting_balance_wei"]} | {holder["formula"]} |',
                   '', f'The holder also needs {holder["token_units"]} token units. {sheet["fee_note"]}']
+    lines += ['', release_planned_spend_line(sheet)]
     recipient = sheet.get('payout_recipient')
     if recipient:
         lines += ['', f'Payout recipient on Base: `{recipient["address"]}` (key: {recipient["key"]}).']
@@ -1116,7 +1139,8 @@ def main(argv=None):
                                      gas_price_wei=plan['gas_price_wei'], program_identity=identity,
                                      relayer_ceiling_wei=relayer_ceiling,
                                      payout_recipient=plan['payout_recipient'],
-                                     payout_recipient_key=plan['payout_recipient_key'])
+                                     payout_recipient_key=plan['payout_recipient_key'],
+                                     release_planned_spend_wei=plan.get('release_planned_spend_wei'))
                 data['relayer_ceiling_wei'] = relayer_ceiling
                 (out / 'deploy-sheet.json').write_text(json.dumps(sheet, indent=2) + '\n')
                 (out / 'deploy-sheet.md').write_text(sheet_markdown(sheet))

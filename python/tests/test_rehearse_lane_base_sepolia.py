@@ -554,6 +554,27 @@ class FundingPlanTests(unittest.TestCase):
         self.assertIsNone(funding["holder"]["starting_balance_wei"])
         self.assertIn("--relayer-ceiling-wei", funding["relayer"]["formula"])
 
+    def test_the_sheet_prints_the_planned_release_spend_and_its_basis(self):
+        planned = dry_run.planned_release_spend(self.PRICE)
+        sheet = dry_run.deploy_sheet(plan=DeployAddressTests.PLAN, verifier_config={}, gas_used=self.GAS,
+                                     gas_price_wei=self.PRICE, relayer_ceiling_wei=10 ** 16,
+                                     release_planned_spend_wei=planned)
+        self.assertEqual(sheet["release_planned_spend"]["wei"], planned)
+        self.assertEqual(planned, 1_200_000 * self.PRICE * 3 + dry_run.L1_DATA_FEE_ALLOWANCE_WEI)
+        line = next(line for line in dry_run.sheet_markdown(sheet).splitlines()
+                    if line.startswith("Release planned spend"))
+        print(f"\n{line}")
+        self.assertEqual(line, (
+            f"Release planned spend: {planned} wei = 1200000 gas (the planning figure 1000000, not a measurement, "
+            f"plus a fifth) x the plan gas price {self.PRICE} wei x 3 (the gas guard) + one L1 data fee allowance "
+            f"{dry_run.L1_DATA_FEE_ALLOWANCE_WEI} wei. The ceiling 10000000000000000 wei covers it; the release "
+            "itself is quoted from the node's gas estimate."))
+
+    def test_a_fork_run_without_a_ceiling_says_the_spend_was_not_planned(self):
+        line = next(line for line in dry_run.sheet_markdown(self.sheet(None)).splitlines()
+                    if line.startswith("Release planned spend"))
+        self.assertIn("not planned", line)
+
     def test_gas_times_price_is_called_an_estimate(self):
         note = self.sheet(1)["fee_note"]
         self.assertIn("estimate", note)
