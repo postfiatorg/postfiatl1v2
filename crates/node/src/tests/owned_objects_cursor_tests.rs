@@ -313,6 +313,12 @@ fn owned_objects_default_call_answers_as_before() {
         .map(|key| json.as_object_mut().expect("object").remove(key).expect(key));
     let view = json.as_object_mut().expect("object").remove("view_digest");
     assert_eq!(view.and_then(|v| v.as_str().map(str::len)), Some(64));
+    // Revision-era field; `node_id` is absent without node state.
+    assert_eq!(
+        json.as_object_mut().expect("object").remove("inventory_revision"),
+        Some(serde_json::json!({"finalized_height": 40, "fastpay_sequence": 0}))
+    );
+    assert_eq!(json.get("node_id"), None);
     assert_eq!(json, before);
     assert_eq!(
         added,
