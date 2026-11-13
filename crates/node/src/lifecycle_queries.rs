@@ -3395,7 +3395,17 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
     let genesis = store.read_genesis()?;
     let ledger = read_fastpay_ledger(&store)?;
     let tip = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?;
+    let node_id = match store.read_node_state() {
+        Ok(state) => Some(state.node_id),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error),
+    };
     drop(commit_lock);
+    let inventory_revision = OwnedObjectsInventoryRevision {
+        finalized_height: tip.height,
+        fastpay_sequence: u64::try_from(ledger.fastpay_version_fences.len())
+            .map_err(invalid_data)?,
+    };
     let mut objects = ledger
         .owned_objects
         .into_iter()
@@ -3461,6 +3471,8 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
         state_root: tip.state_root,
         view_digest,
         owner_keys_omitted: options.omit_owner_keys,
+        inventory_revision,
+        node_id,
     };
     // `null` (4 bytes) becomes the quoted cursor when a next page exists.
     let mut used = owned_objects_json_len(&report)?.saturating_sub(4);

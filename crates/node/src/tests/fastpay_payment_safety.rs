@@ -768,7 +768,7 @@ fn owned_safe_unlock_is_structurally_disabled_and_preserves_old_locks() {
     let _ = std::fs::remove_dir_all(data_dir);
 }
 
-fn fastpay_committee_fixture(count: usize) -> (
+pub(super) fn fastpay_committee_fixture(count: usize) -> (
     std::path::PathBuf,
     postfiat_crypto_provider::MlDsa65KeyPair,
     Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)>,
@@ -2749,7 +2749,7 @@ fn fastpay_replay_schedules_same_block_object_dependencies_before_lock_id_order(
 
 // Activated storage is essential here: legacy JSON fixtures cannot detect a
 // signed acknowledgement whose effect never reaches the business read view.
-fn active_fastpay_certify(
+pub(super) fn active_fastpay_certify(
     data_dir: &Path,
     root: &Path,
     batch_file: PathBuf,

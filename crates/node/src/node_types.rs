@@ -3301,6 +3301,24 @@ pub struct OwnedObjectsReport {
     pub view_digest: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub owner_keys_omitted: bool,
+    /// Orders two answers of the same node: read from the same view as the
+    /// page. Compare as (`finalized_height`, `fastpay_sequence`).
+    pub inventory_revision: OwnedObjectsInventoryRevision,
+    /// The answering node's id (`status.node_id`); absent only when the
+    /// data directory has no node state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_id: Option<String>,
+}
+
+/// Revision of one node's object view. `fastpay_sequence` is the number of
+/// FastPay version fences in the view (finalized plus pending effects), the
+/// same count each journal effect records as its `application_sequence`. At
+/// one finalized height it only grows; pending minority effects are dropped
+/// only when a new height finalizes. Field order gives the comparison order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct OwnedObjectsInventoryRevision {
+    pub finalized_height: u64,
+    pub fastpay_sequence: u64,
 }
 
 /// One `owned_objects` row: an `OwnedObject`, serialized identically unless
