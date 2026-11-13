@@ -548,6 +548,7 @@ fn release_issued_asset_escrow_to_recipient(
         ));
     }
 
+    b23_facility_transfer_offer_inventory(ledger, &escrow.asset_id, &escrow.owner, &escrow.recipient, escrow.amount)?;
     ledger.trustlines[recipient_index].balance = recipient_after;
     Ok(())
 }
@@ -2477,6 +2478,7 @@ fn apply_asset_operation(
                 apply_nav_mint_vault_bridge_settlement(ledger, &nav_asset, operation, block_height)?;
             }
             apply_prepared_issued_asset_credit(ledger, to_index, recipient_after, required_limit);
+            b23_facility_credit_minted_inventory(ledger, operation)?;
             Ok(())
         }
         AssetTransactionOperation::NavRedeemAtNav(operation) => {

@@ -1058,7 +1058,14 @@ pub struct VaultBridgeRouteReport {
     pub route_trust_class: String,
     pub live_value_enabled: bool,
     pub active: bool,
+    /// Current ledger anchor for this exact governed profile and epoch.
+    /// Explicit null means Ethereum ingress remains blocked.
+    #[serde(default)]
+    pub beacon_finality_anchor: Option<postfiat_types::PfUsdcBeaconFinalityStateV1>,
 }
+
+#[path = "b23_ingress_route_report.rs"]
+mod b23_ingress_route_report;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VaultBridgeReceiptsReport {

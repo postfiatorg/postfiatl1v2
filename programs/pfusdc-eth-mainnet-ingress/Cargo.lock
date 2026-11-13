@@ -2879,10 +2879,13 @@ name = "pfusdc-eth-mainnet-ingress-program"
 version = "0.1.0"
 dependencies = [
  "alloy-primitives",
+ "blst",
  "helios-consensus-core",
  "postfiat-types",
  "serde",
  "serde_cbor",
+ "serde_json",
+ "sha2 0.10.9",
  "sp1-helios-primitives",
  "sp1-zkvm",
  "tree_hash",

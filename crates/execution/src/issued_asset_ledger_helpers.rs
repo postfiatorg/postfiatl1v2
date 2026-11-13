@@ -104,6 +104,12 @@ fn apply_issued_payment(
         }
     }
 
+    if b23_facility_unique_route_index(ledger, &operation.asset_id)?.is_some() {
+        if operation.from == operation.issuer || operation.to == operation.issuer {
+            return Err(("pftl_uniswap_issuer_payment_disabled", "opted-in NAV assets require NAV mint or primary redemption for issuer-sided transfers".to_string()));
+        }
+        b23_facility_transfer_offer_inventory(ledger, &operation.asset_id, &operation.from, &operation.to, operation.amount)?;
+    }
     if let Some(index) = from_index {
         ledger.trustlines[index].balance -= operation.amount;
     }
@@ -882,6 +888,7 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
         fast_ingress_campaigns: _,
         arc_finality_states: _,
         external_lanes: _, // native PFT reserve, never issued-asset custody
+        beacon_finality_states: _,
     } = ledger;
 }
 

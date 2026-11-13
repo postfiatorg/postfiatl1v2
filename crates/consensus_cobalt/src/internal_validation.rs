@@ -1777,6 +1777,18 @@ fn validate_amendment_kind(kind: &str) -> Result<(), String> {
                 return Err("Arc route governance kind must bind a lowercase bootstrap hash".to_string());
             }
             profile
+        } else if let Some((profile, bootstrap)) =
+            manifest_hash.split_once(":beacon-bootstrap-v2:")
+        {
+            // An Ethereum beacon anchor is bound into the kind the same way the
+            // Arc bootstrap is, so the validators sign over the anchor rather
+            // than over the profile alone (R2-1).
+            if !canonical_hash(bootstrap) {
+                return Err(
+                    "beacon route governance kind must bind a lowercase bootstrap hash".to_string(),
+                );
+            }
+            profile
         } else {
             manifest_hash
         };

@@ -11,7 +11,7 @@ use alloy::{
 use anyhow::{anyhow, bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use helios_consensus_core::{
-    apply_bootstrap, calc_sync_period,
+    apply_bootstrap, apply_update, calc_sync_period, verify_update,
     consensus_spec::MainnetConsensusSpec,
     types::{Bootstrap, FinalityUpdate, Fork, Forks, LightClientStore, Update},
     verify_bootstrap,
@@ -29,6 +29,7 @@ use postfiat_types::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+use tree_hash::TreeHash;
 use sp1_helios_primitives::types::{ContractStorage, ProofInputs, StorageSlotWithProof};
 use sp1_sdk::{
     Elf, HashableKey, ProveRequest, Prover, ProverClient, ProvingKey, SP1ProofWithPublicValues,
@@ -38,10 +39,6 @@ use sp1_sdk::{
 const PFUSDC_ELF: Elf = Elf::Static(include_bytes!(
     "../../../programs/pfusdc-eth-mainnet-ingress/elf/pfusdc-eth-mainnet-ingress-program"
 ));
-const PFETH_ELF: Elf = Elf::Static(include_bytes!(
-    "../../../programs/pfeth-eth-mainnet-ingress/elf/pfeth-eth-mainnet-ingress-program"
-));
-const CHECKPOINTS_BEHIND: u64 = 16;
 const MAX_UPDATES: u8 = 8;
 const USDC: &str = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
 const WETH: &str = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
@@ -69,10 +66,13 @@ impl IngressRoute {
         }
     }
 
-    fn elf(self) -> Elf {
+    fn elf(self) -> Result<Elf> {
         match self {
-            Self::Pfusdc => PFUSDC_ELF,
-            Self::Pfeth => PFETH_ELF,
+            Self::Pfusdc => match env::var_os("PFUSDC_INGRESS_ELF") {
+                Some(path) => Ok(Elf::from(fs::read(PathBuf::from(path))?)),
+                None => Ok(PFUSDC_ELF),
+            },
+            Self::Pfeth => bail!("pfETH guest shares the changed ingress ABI and must be rebuilt and verified before re-enabling proving"),
         }
     }
 
@@ -128,6 +128,18 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Read-only: verify an Ethereum bootstrap and derive an unsigned anchor.
+    /// Governance must independently establish that beacon_root is finalized.
+    InspectBootstrap {
+        #[arg(long)]
+        route_profile: PathBuf,
+        #[arg(long)]
+        beacon_root: String,
+        #[arg(long, default_value = "https://ethereum-beacon-api.publicnode.com")]
+        beacon_rpc: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
     Capture {
         #[arg(long)]
         deployment: PathBuf,
@@ -237,6 +249,8 @@ enum Command {
 
 #[derive(Deserialize)]
 struct Deployment {
+    /// Fresh ledger anchor from vault_bridge_route.beacon_finality_anchor.
+    beacon_anchor: postfiat_types::PfUsdcBeaconFinalityStateV1,
     #[serde(default)]
     route_id: Option<String>,
     vault: String,
@@ -290,41 +304,21 @@ impl Rpc {
             .json()
             .await?)
     }
-    async fn root(&self, url: &str, slot: u64) -> Result<Option<B256>> {
-        let r = self
-            .http
-            .get(format!(
-                "{}/eth/v1/beacon/blocks/{slot}/root",
-                url.trim_end_matches('/')
-            ))
-            .send()
-            .await?;
-        if r.status() == reqwest::StatusCode::NOT_FOUND {
-            return Ok(None);
-        }
-        Ok(Some(
-            r.error_for_status()?
-                .json::<BeaconData<BeaconRoot>>()
-                .await?
-                .data
-                .root,
-        ))
-    }
+
 }
 
 #[derive(Deserialize)]
 struct BeaconData<T> {
     data: T,
 }
-#[derive(Deserialize)]
-struct BeaconRoot {
-    root: B256,
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     sp1_sdk::utils::setup_logger();
     match Cli::parse().command {
+        Command::InspectBootstrap { route_profile, beacon_root, beacon_rpc, output } => {
+            inspect_bootstrap(&route_profile, &beacon_root, &beacon_rpc, &output).await
+        }
         Command::Capture {
             deployment,
             output,
@@ -572,7 +566,7 @@ async fn verify_banked_proof(
         "banked proof public values do not match the banked witness"
     );
     let client = ProverClient::from_env().await;
-    let elf = route.elf();
+    let elf = route.elf()?;
     let pk = client.setup(elf.clone()).await?;
     client
         .verify(&proof, pk.verifying_key(), None)
@@ -593,6 +587,7 @@ async fn capture(
 ) -> Result<()> {
     let d: Deployment = serde_json::from_slice(&fs::read(deployment_path)?)?;
     let route = IngressRoute::from_deployment(d.route_id.as_deref())?;
+    validate_capture_anchor(&d)?;
     let rpc = Rpc::new()?;
     let tx = with_0x(&d.deposit_tx);
     let receipt: Value = rpc
@@ -630,7 +625,7 @@ async fn capture(
 
     let deadline = Instant::now() + Duration::from_secs(wait_seconds);
     let (helios, final_block, final_hash) = loop {
-        let inputs = capture_helios(&rpc, beacon_rpc).await?;
+        let inputs = capture_helios(&rpc, beacon_rpc, &d.beacon_anchor).await?;
         let e = inputs
             .finality_update
             .finalized_header()
@@ -638,12 +633,14 @@ async fn capture(
             .map_err(|_| anyhow!("no finalized execution payload"))?;
         let block_number = *e.block_number();
         let block_hash = *e.block_hash();
-        if block_number >= deposit_block {
+        if block_number >= deposit_block
+            && inputs.finality_update.finalized_header().beacon().slot > d.beacon_anchor.finalized_slot
+        {
             break (inputs, block_number, block_hash);
         }
         anyhow::ensure!(
             Instant::now() < deadline,
-            "deposit block {deposit_block} not finalized before timeout; latest finalized {}",
+            "deposit block {deposit_block} or fresh beacon advancement not available before timeout; latest finalized {}",
             e.block_number()
         );
         eprintln!(
@@ -743,6 +740,7 @@ async fn capture(
             manifest_hash: keccak256(manifest),
         },
         helios,
+        beacon_anchor: d.beacon_anchor,
         vault_storage,
         token_storage,
         evidence,
@@ -846,7 +844,7 @@ async fn prove(witness_path: &Path, out: &Path, skip_redundant_execute: bool) ->
     let witness: EthIngressWitnessV1 = serde_json::from_slice(&fs::read(witness_path)?)?;
     let route = IngressRoute::from_witness(&witness)?;
     let expected = serde_cbor::to_vec(&route.verify(&witness)?)?;
-    let elf = route.elf();
+    let elf = route.elf()?;
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(serde_cbor::to_vec(&witness)?);
     let client = ProverClient::from_env().await;
@@ -855,6 +853,7 @@ async fn prove(witness_path: &Path, out: &Path, skip_redundant_execute: bool) ->
     } else {
         let exec_start = Instant::now();
         let (public_values, report) = client.execute(elf.clone(), stdin.clone()).await?;
+        anyhow::ensure!(report.exit_code == 0, "SP1 guest execution failed");
         anyhow::ensure!(
             public_values.to_vec() == expected,
             "SP1 execute output mismatch"
@@ -892,8 +891,9 @@ async fn prove(witness_path: &Path, out: &Path, skip_redundant_execute: bool) ->
 }
 
 async fn program_info(route: IngressRoute) -> Result<()> {
-    let c = ProverClient::from_env().await;
-    let elf = route.elf();
+    // Real key derivation needs only the light client, not a full proving worker.
+    let c = ProverClient::builder().light().build().await;
+    let elf = route.elf()?;
     let pk = c.setup(elf.clone()).await?;
     println!(
         "{}",
@@ -1025,21 +1025,67 @@ async fn cross_vkey_audit(proof_path: &Path, foreign_elf_path: &Path, output: &P
     Ok(())
 }
 
-async fn capture_helios(rpc: &Rpc, beacon: &str) -> Result<ProofInputs> {
+async fn inspect_bootstrap(profile_path: &Path, root: &str, beacon: &str, output: &Path) -> Result<()> {
+    let raw: Value = serde_json::from_slice(&fs::read(profile_path)?)?;
+    let profile: VaultBridgeRouteProfileV1 = serde_json::from_value(
+        raw.get("route_profile").unwrap_or(&raw).clone())?;
+    profile.validate().map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(profile.route_id == ROUTE_ID && profile.source_chain_id == MAINNET_CHAIN_ID
+        && profile.token_address == USDC && profile.verifier_kind == NAV_PROFILE_VERIFIER_SP1_GROTH16,
+        "bootstrap inspection requires an Ethereum-mainnet USDC route profile");
+    let root: B256 = with_0x(root).parse()?;
+    let rpc = Rpc::new()?;
+    let bootstrap: BeaconData<Bootstrap<MainnetConsensusSpec>> = rpc.beacon(beacon,
+        &format!("eth/v1/beacon/light_client/bootstrap/{root}")).await?;
+    verify_bootstrap(&bootstrap.data, root, &mainnet_forks())
+        .map_err(|error| anyhow!("invalid bootstrap: {error}"))?;
+    let profile_hash = profile.profile_hash().map_err(anyhow::Error::msg)?;
+    let anchor = postfiat_types::PfUsdcBeaconFinalityStateV1 {
+        schema: postfiat_types::PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1.into(),
+        route_profile_hash: profile_hash.clone(), route_epoch: u64::from(profile.route_epoch),
+        source_chain_id: profile.source_chain_id, vault_address: profile.vault_address,
+        token_address: profile.token_address,
+        route_binding: postfiat_types::vault_bridge_route_binding(&profile_hash, profile.route_epoch)
+            .map_err(anyhow::Error::msg)?,
+        finalized_beacon_root: hex::encode(root),
+        finalized_slot: bootstrap.data.header().beacon().slot,
+        current_sync_committee_root: hex::encode(bootstrap.data.current_sync_committee().tree_hash_root()),
+    };
+    anchor.validate().map_err(anyhow::Error::msg)?;
+    write_atomic(output, &serde_json::to_vec_pretty(&anchor)?)?;
+    println!("{}", json!({"bootstrap_membership_verified": true, "anchor": anchor,
+        "governance_pinned": false, "root_finality_requires_independent_confirmation": true}));
+    Ok(())
+}
+
+fn validate_capture_anchor(d: &Deployment) -> Result<()> {
+    let anchor = &d.beacon_anchor;
+    anchor.validate().map_err(anyhow::Error::msg)?;
+    let epoch = u32::try_from(anchor.route_epoch)?;
+    anyhow::ensure!(anchor.source_chain_id == MAINNET_CHAIN_ID
+        && anchor.vault_address == d.vault
+        && anchor.token_address == IngressRoute::from_deployment(d.route_id.as_deref())?.token()
+        && anchor.route_binding == d.route_binding
+        && postfiat_types::vault_bridge_route_binding(&anchor.route_profile_hash, epoch)
+            .map_err(anyhow::Error::msg)? == d.route_binding,
+        "ledger beacon anchor does not match capture deployment/epoch");
+    Ok(())
+}
+
+async fn capture_helios(
+    rpc: &Rpc,
+    beacon: &str,
+    anchor: &postfiat_types::PfUsdcBeaconFinalityStateV1,
+) -> Result<ProofInputs> {
+    anchor.validate().map_err(anyhow::Error::msg)?;
     let f: BeaconData<FinalityUpdate<MainnetConsensusSpec>> = rpc
         .beacon(beacon, "eth/v1/beacon/light_client/finality_update")
         .await?;
     let finality_update = f.data;
-    let final_slot = finality_update.finalized_header().beacon().slot;
-    let mut slot = final_slot.saturating_sub(CHECKPOINTS_BEHIND * 32) / 32 * 32;
-    let root = loop {
-        if let Some(r) = rpc.root(beacon, slot).await? {
-            break r;
-        }
-        slot = slot
-            .checked_sub(32)
-            .ok_or_else(|| anyhow!("checkpoint underflow"))?;
-    };
+    // Never substitute a convenient recent checkpoint. Consensus accepts only
+    // this exact ledger root and committee, including after the prior deposit.
+    let root: B256 = with_0x(&anchor.finalized_beacon_root).parse()?;
+    let slot = anchor.finalized_slot;
     let b: BeaconData<Bootstrap<MainnetConsensusSpec>> = rpc
         .beacon(
             beacon,
@@ -1050,6 +1096,9 @@ async fn capture_helios(rpc: &Rpc, beacon: &str) -> Result<ProofInputs> {
     verify_bootstrap(&b.data, root, &forks).map_err(|e| anyhow!("bootstrap: {e}"))?;
     let mut store = LightClientStore::default();
     apply_bootstrap(&mut store, &b.data);
+    anyhow::ensure!(store.finalized_header.beacon().slot == slot
+        && hex::encode(store.current_sync_committee.tree_hash_root()) == anchor.current_sync_committee_root,
+        "beacon bootstrap slot/committee does not match ledger anchor");
     let period = calc_sync_period::<MainnetConsensusSpec>(slot);
     let u: Vec<BeaconData<Update<MainnetConsensusSpec>>> = rpc
         .beacon(
@@ -1068,6 +1117,20 @@ async fn capture_helios(rpc: &Rpc, beacon: &str) -> Result<ProofInputs> {
         })
         .collect();
     updates.sort_by_key(|x| *x.signature_slot());
+    let mut advanced = store.clone();
+    updates.retain(|update| {
+        if *update.signature_slot() > *finality_update.signature_slot()
+            || update.finalized_header().beacon().slot > finality_update.finalized_header().beacon().slot
+        {
+            return false;
+        }
+        if verify_update(update, *finality_update.signature_slot(), &advanced,
+            MAINNET_GENESIS_VALIDATORS_ROOT, &forks).is_err() {
+            return false;
+        }
+        apply_update(&mut advanced, update);
+        true
+    });
     Ok(ProofInputs {
         updates,
         expected_current_slot: *finality_update.signature_slot(),
@@ -1434,3 +1497,6 @@ mod tests {
         assert!(reject_arbitrum_scope("route_id", "ethereum-mainnet-usdc-v1").is_ok());
     }
 }
+
+#[cfg(test)]
+mod b23_capture_tests;

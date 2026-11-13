@@ -110,6 +110,7 @@ fn arc_route_activation_binds_profile_bootstrap_and_runtime_code() {
     let profile = corrected_arc_profile();
     let bootstrap = corrected_arc_bootstrap();
     let activation = VaultBridgeRouteProfileActivationV1 {
+        beacon_finality_bootstrap: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2.to_string(),
         amendment: arc_route_amendment(&profile),
         profile: profile.clone(),
@@ -139,6 +140,7 @@ fn arc_route_activation_binds_profile_bootstrap_and_runtime_code() {
 fn arc_route_activation_rejects_each_unsigned_bootstrap_trust_change() {
     let profile = corrected_arc_profile();
     let activation = VaultBridgeRouteProfileActivationV1 {
+        beacon_finality_bootstrap: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2.to_string(),
         amendment: arc_route_amendment(&profile),
         profile,
@@ -182,6 +184,7 @@ fn arc_route_v1_authorization_is_replay_only_and_keeps_historical_record_bytes()
     let mut amendment = arc_route_amendment(&profile);
     amendment.kind = vault_bridge_route_amendment_kind(&profile).unwrap();
     let activation = VaultBridgeRouteProfileActivationV1 {
+        beacon_finality_bootstrap: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         amendment,
         profile,

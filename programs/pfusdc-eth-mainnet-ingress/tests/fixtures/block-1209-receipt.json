@@ -1,0 +1,11 @@
+{
+  "accepted": false,
+  "account_reserve": 0,
+  "code": "vault_bridge_route_profile_rejected",
+  "fee_burned": 0,
+  "fee_charged": 0,
+  "message": "vault bridge route does not exactly match the active NAV proof profile",
+  "minimum_fee": 0,
+  "state_expansion_fee": 0,
+  "tx_id": "8d5f3cb096606375037064e3ece44fcabd6487ea50e7255f73dcfbf104c20a6b9cf87b7598e8b6be64a473d643b03c45"
+}

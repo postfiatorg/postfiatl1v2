@@ -2776,10 +2776,13 @@ fn ethereum_ingress_public_values_are_canonical_and_source_kind_is_proof_native(
         schema: PFUSDC_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string(),
         route_id: VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1.to_string(),
         source_chain_id: 1,
+        route_epoch: 1,
         prior_finalized_beacon_root: "01".repeat(32),
         prior_finalized_slot: 100,
+        prior_sync_committee_root: "11".repeat(32),
         finalized_beacon_root: "02".repeat(32),
         finalized_slot: 132,
+        current_sync_committee_root: "11".repeat(32),
         finalized_execution_block_hash: "03".repeat(32),
         finalized_execution_block_number: 1_000,
         execution_state_root: "04".repeat(32),
@@ -3010,6 +3013,7 @@ fn pftl_uniswap_receipt_merkle_proof_is_bounded_and_tamper_evident() {
     let mut receipts = (1_u64..=5)
         .map(|height| {
             let mut receipt = PftlUniswapConsensusReceipt {
+                redemption_settlement: None,
                 receipt_hash: "00".repeat(48),
                 transition: "export_debit".to_string(),
                 route_id: "a666-mainnet".to_string(),
@@ -3048,6 +3052,7 @@ fn pftl_uniswap_receipt_merkle_proof_is_bounded_and_tamper_evident() {
 #[test]
 fn pftl_uniswap_private_primary_subscription_receipt_is_canonical() {
     let mut receipt = PftlUniswapConsensusReceipt {
+        redemption_settlement: None,
         receipt_hash: "00".repeat(48),
         transition: "private_primary_subscription".to_string(),
         route_id: "a666-mainnet".to_string(),
@@ -3528,6 +3533,7 @@ fn pftl_source_selections_are_signed() {
 #[test]
 fn pftl_source_governance_signs_unchanged_disabled_and_selected_states() {
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(), policy_epoch: 2, issue_multiplier_bps: 10050,
         redeem_multiplier_bps: 9995, issue_capacity_atoms: 100000000,
         redeem_capacity_atoms: 100000000, max_order_atoms: 10000000, min_order_atoms: 1,
@@ -3604,4 +3610,238 @@ fn pftl_uniswap_route_bridge_policy_update_json_and_preimage_are_canonical() {
         let decoded: AssetTransactionOperation = serde_json::from_value(bad).expect("decode");
         assert!(decoded.validate().is_err(), "{field} must be rejected");
     }
+}
+
+/// R2-1: the Ethereum ingress lane published where its light-client proof
+/// started (`prior_finalized_beacon_root` / `prior_finalized_slot`) and the
+/// chain never compared those fields with anything, so a prover could begin from
+/// a store they invented -- their own sync committee -- and "prove" a deposit
+/// that never happened. These tests pin the comparison that closes it.
+fn beacon_anchor_fixture() -> (PfUsdcBeaconFinalityStateV1, PfUsdcEthereumIngressPublicValuesV1) {
+    let state = PfUsdcBeaconFinalityStateV1 {
+        schema: PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1.to_string(),
+        route_profile_hash: "ab".repeat(48),
+        route_epoch: 1,
+        source_chain_id: 1,
+        vault_address: "0x1111111111111111111111111111111111111111".to_string(),
+        token_address: "0x2222222222222222222222222222222222222222".to_string(),
+        route_binding: "09".repeat(32),
+        finalized_beacon_root: "01".repeat(32),
+        finalized_slot: 100,
+        current_sync_committee_root: "11".repeat(32),
+    };
+    let values = PfUsdcEthereumIngressPublicValuesV1 {
+        schema: PFUSDC_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+        route_id: VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1.to_string(),
+        source_chain_id: 1,
+        route_epoch: 1,
+        prior_finalized_beacon_root: "01".repeat(32),
+        prior_finalized_slot: 100,
+        prior_sync_committee_root: "11".repeat(32),
+        finalized_beacon_root: "02".repeat(32),
+        finalized_slot: 132,
+        current_sync_committee_root: "11".repeat(32),
+        finalized_execution_block_hash: "03".repeat(32),
+        finalized_execution_block_number: 1_000,
+        execution_state_root: "04".repeat(32),
+        vault_address: "0x1111111111111111111111111111111111111111".to_string(),
+        vault_runtime_code_hash: "05".repeat(32),
+        token_address: "0x2222222222222222222222222222222222222222".to_string(),
+        token_runtime_code_hash: "06".repeat(32),
+        depositor: "0x3333333333333333333333333333333333333333".to_string(),
+        pftl_recipient: "pf-eth-ingress-test".to_string(),
+        pftl_recipient_hash: vault_bridge_pftl_recipient_hash("pf-eth-ingress-test")
+            .expect("recipient hash"),
+        amount_atoms: 10,
+        nonce: "08".repeat(32),
+        route_binding: "09".repeat(32),
+        deposit_id: "0a".repeat(32),
+        evidence_root: "0c".repeat(48),
+        manifest_hash: "0d".repeat(32),
+        deposit_nullifier: "0e".repeat(32),
+        total_obligations_atoms: "10".to_string(),
+        vault_token_balance_atoms: "10".to_string(),
+    };
+    (state, values)
+}
+
+#[test]
+fn beacon_anchor_accepts_a_proof_that_starts_at_the_anchor_and_advances_it() {
+    let (mut state, values) = beacon_anchor_fixture();
+    state.verify_and_advance(&values).expect("conforming proof");
+    assert_eq!(state.finalized_beacon_root, "02".repeat(32));
+    assert_eq!(state.finalized_slot, 132);
+}
+
+#[test]
+fn beacon_anchor_rejects_an_invented_starting_state() {
+    // The R2-1 attack: the prover begins from a light-client store of their own
+    // making. Every other field is well formed.
+    let (mut state, mut values) = beacon_anchor_fixture();
+    values.prior_finalized_beacon_root = "ff".repeat(32);
+    let error = state.verify_and_advance(&values).expect_err("must reject");
+    assert!(error.contains("does not start from the pinned beacon finality anchor"), "{error}");
+    assert_eq!(state.finalized_slot, 100, "anchor must not move on rejection");
+}
+
+#[test]
+fn beacon_anchor_rejects_a_starting_slot_that_is_not_the_pinned_one() {
+    let (mut state, mut values) = beacon_anchor_fixture();
+    values.prior_finalized_slot = 99;
+    let error = state.verify_and_advance(&values).expect_err("must reject");
+    assert!(error.contains("does not start from the pinned beacon finality anchor"), "{error}");
+    assert_eq!(state.finalized_slot, 100, "anchor must not move on rejection");
+}
+
+#[test]
+fn beacon_anchor_rejects_replayed_or_rewound_finality() {
+    let (mut state, mut values) = beacon_anchor_fixture();
+    // Two layers reject this, and that is deliberate: the public values
+    // validator refuses a non-advancing slot on its own ("must advance"), and
+    // the anchor refuses it again against the pinned slot. Either message is a
+    // correct rejection; what matters is that nothing is credited and the
+    // anchor does not move.
+    values.finalized_slot = 100; // equal to the anchor
+    let error = state.verify_and_advance(&values).expect_err("must reject equal");
+    assert!(
+        error.contains("monotonically advance") || error.contains("must advance"),
+        "{error}"
+    );
+
+    values.finalized_slot = 99; // below the anchor
+    let error = state.verify_and_advance(&values).expect_err("must reject below");
+    assert!(
+        error.contains("monotonically advance") || error.contains("must advance"),
+        "{error}"
+    );
+    assert_eq!(state.finalized_slot, 100, "anchor must not move on rejection");
+}
+
+#[test]
+fn beacon_anchor_rejects_a_proof_for_another_route() {
+    let (mut state, mut values) = beacon_anchor_fixture();
+    values.vault_address = "0x9999999999999999999999999999999999999999".to_string();
+    let error = state.verify_and_advance(&values).expect_err("must reject");
+    assert!(error.contains("does not match its pinned finality-state route"), "{error}");
+}
+
+/// The export proof used to require the A666 multipliers exactly
+/// (10050/9995), so no other fee could mint into MetaMask -- the 20 bps
+/// one-click target was unreachable. The fee is already bound
+/// cryptographically: policy_hash is computed over both multipliers and the
+/// mint packet commits it. So the rule is now a guardrail, not a pinned number.
+fn spread_policy(issue_bps: u32, redeem_bps: u32) -> PftlUniswapPrimaryMarketPolicyV2 {
+    let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
+        policy_hash: String::new(),
+        policy_epoch: 2,
+        issue_multiplier_bps: issue_bps,
+        redeem_multiplier_bps: redeem_bps,
+        issue_capacity_atoms: 100_000_000,
+        redeem_capacity_atoms: 100_000_000,
+        max_order_atoms: 50_000_000,
+        min_order_atoms: 1_000_000,
+        valid_from_height: 10,
+        expires_at_height: 500_000,
+        max_nav_age_blocks: 1_000,
+        pricing_nav_epoch: 1,
+        pricing_reserve_packet_hash: "4a".repeat(48),
+    };
+    policy.policy_hash = policy.computed_hash();
+    policy
+}
+
+#[test]
+fn primary_policy_accepts_a_twenty_bps_route() {
+    // 20 bps on the buy, 0 on the sell: the one-click checkout target.
+    spread_policy(10_020, 10_000)
+        .validate()
+        .expect("a 20 bps route must be expressible");
+}
+
+#[test]
+fn primary_policy_still_accepts_the_a666_fee() {
+    spread_policy(
+        PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
+        PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS,
+    )
+    .validate()
+    .expect("the existing A666 fee must remain valid");
+}
+
+#[test]
+fn primary_policy_rejects_an_extortionate_spread() {
+    let error = spread_policy(10_000 + PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS + 1, 10_000)
+        .validate()
+        .expect_err("issue spread beyond the guardrail must be refused");
+    assert!(error.contains("spread exceeds the protocol guardrail"), "{error}");
+
+    let error = spread_policy(10_000, 10_000 - PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS - 1)
+        .validate()
+        .expect_err("redemption spread beyond the guardrail must be refused");
+    assert!(error.contains("spread exceeds the protocol guardrail"), "{error}");
+}
+
+#[test]
+fn primary_policy_still_rejects_pricing_on_the_wrong_side_of_nav() {
+    let error = spread_policy(9_999, 10_000)
+        .validate()
+        .expect_err("issuing below NAV must stay refused");
+    assert!(error.contains("at or above NAV"), "{error}");
+
+    let error = spread_policy(10_000, 10_001)
+        .validate()
+        .expect_err("redeeming above NAV must stay refused");
+    assert!(error.contains("at or above NAV"), "{error}");
+}
+
+#[test]
+fn changing_a_multiplier_changes_the_policy_hash() {
+    // This is why the proof no longer needs to pin the numbers: the fee is
+    // already committed, so a proof generated under one fee cannot be redeemed
+    // under another.
+    let a = spread_policy(10_020, 10_000);
+    let b = spread_policy(10_050, 10_000);
+    assert_ne!(a.policy_hash, b.policy_hash, "fee must be bound into policy_hash");
+}
+
+#[test]
+fn an_unpinned_beacon_anchor_does_not_change_the_replicated_encoding() {
+    // The field is skipped when empty, and state_commitment only appends when
+    // non-empty. So a validator running this build produces byte-identical
+    // state to one running the old build until an anchor is actually pinned.
+    // That is what makes this a rolling deploy rather than a consensus
+    // migration: the encoding changes at the moment governance pins an anchor,
+    // deliberately and visibly, not at the moment the binary ships.
+    let ledger = LedgerState::new(Vec::new());
+    assert!(ledger.beacon_finality_states.is_empty());
+    let encoded = serde_cbor::to_vec(&ledger).expect("encode empty ledger");
+    let decoded: LedgerState = serde_cbor::from_slice(&encoded).expect("decode");
+    assert!(decoded.beacon_finality_states.is_empty());
+    let json = serde_json::to_string(&ledger).expect("json");
+    assert!(
+        !json.contains("beacon_finality_states"),
+        "an empty anchor list must not appear in the serialized ledger"
+    );
+}
+
+#[test]
+fn a_pinned_beacon_anchor_is_covered_by_the_state_commitment() {
+    // If the anchor were not committed, two validators could hold different
+    // anchors, agree on the same state root, and disagree about which Ethereum
+    // history is trusted -- reopening R2-1 behind the state root.
+    let (state, _) = beacon_anchor_fixture();
+    let first = state.state_commitment_bytes().expect("commitment");
+    let mut moved = state.clone();
+    moved.finalized_slot += 1;
+    let second = moved.state_commitment_bytes().expect("commitment");
+    assert_ne!(first, second, "advancing the anchor must change its commitment");
+
+    let mut other_root = state.clone();
+    other_root.finalized_beacon_root = "ff".repeat(32);
+    assert_ne!(
+        first,
+        other_root.state_commitment_bytes().expect("commitment"),
+        "a different beacon root must change the commitment"
+    );
 }

@@ -271,6 +271,7 @@ fn activate_route(
     route: &VaultBridgeRouteProfileV1,
 ) -> Receipt {
     let activation = VaultBridgeRouteProfileActivationV1 {
+        beacon_finality_bootstrap: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile: route.clone(),
         amendment: amendment(
@@ -295,6 +296,7 @@ fn activate_route(
 fn route_profile_may_commit_late_but_never_before_scheduled_activation() {
     let profile = route(1, 2, "22");
     let activation = VaultBridgeRouteProfileActivationV1 {
+        beacon_finality_bootstrap: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile: profile.clone(),
         amendment: amendment(
@@ -424,6 +426,7 @@ fn archived_governance_identity_accepts_only_the_pre_age_release_schema() {
     )
     .expect("ratified route amendment");
     let activation = VaultBridgeRouteProfileActivationV1 {
+        beacon_finality_bootstrap: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile: profile.clone(),
         amendment,
@@ -463,6 +466,7 @@ fn governed_fast_ingress_verifier_update_preserves_route_and_finality() {
     let mut ledger = route_ledger(&profile);
     let initial_state = tier4_state(&profile, &"01".repeat(32));
     let initial_activation = VaultBridgeRouteProfileActivationV1 {
+        beacon_finality_bootstrap: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile: profile.clone(),
         amendment: amendment(
@@ -490,6 +494,7 @@ fn governed_fast_ingress_verifier_update_preserves_route_and_finality() {
     );
     replacement_amendment.amendment_id = "fast-ingress-verifier-update".to_string();
     let update = VaultBridgeRouteProfileActivationV1 {
+        beacon_finality_bootstrap: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile: profile.clone(),
         amendment: replacement_amendment,
@@ -534,6 +539,7 @@ fn governed_age_release_enablement_preserves_existing_escrow_and_cap() {
     let mut ledger = route_ledger(&profile);
     let initial_state = tier4_state(&profile, &"01".repeat(32));
     let initial_activation = VaultBridgeRouteProfileActivationV1 {
+        beacon_finality_bootstrap: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile: profile.clone(),
         amendment: amendment(
@@ -602,6 +608,7 @@ fn governed_age_release_enablement_preserves_existing_escrow_and_cap() {
     );
     replacement_amendment.amendment_id = "enable-age-release-after-escrow".to_string();
     let update = VaultBridgeRouteProfileActivationV1 {
+        beacon_finality_bootstrap: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile,
         amendment: replacement_amendment,
@@ -939,6 +946,7 @@ fn activated_route_authority_rejects_unruled_and_rotated_deposits_without_mutati
 fn route_profile_record_commits_every_field_and_is_order_independent() {
     let first = route(1, 2, "22");
     let activation = VaultBridgeRouteProfileActivationV1 {
+        beacon_finality_bootstrap: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile: first.clone(),
         amendment: amendment(
@@ -1032,6 +1040,7 @@ fn route_profile_record_commits_every_field_and_is_order_independent() {
 
     let second = route(2, 3, "55");
     let second_activation = VaultBridgeRouteProfileActivationV1 {
+        beacon_finality_bootstrap: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile: second.clone(),
         amendment: amendment(

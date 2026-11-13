@@ -1762,7 +1762,11 @@ fn execute_governance_batch_with_replay(
             continue;
         }
         let validated = (|| -> Result<postfiat_types::VaultBridgeRouteProfileRecordV1, String> {
-            if historical_replay {
+            // Old archived envelopes must reach the same NAV-profile rejection
+            // as the base binary. They still cannot pass state.validate() below.
+            if historical_replay || activation.beacon_finality_bootstrap.as_ref()
+                .is_some_and(|state| state.current_sync_committee_root.is_empty())
+            {
                 activation.validate_for_replay()?;
             } else {
                 activation.validate()?;
@@ -1850,6 +1854,18 @@ fn execute_governance_batch_with_replay(
                     );
                 }
             }
+            if let Some(state) = activation.beacon_finality_bootstrap.as_ref() {
+                state.validate()?;
+                if ledger.beacon_finality_states.iter().any(|existing| {
+                    existing.route_profile_hash == state.route_profile_hash
+                        && existing.route_epoch == state.route_epoch
+                }) {
+                    return Err(
+                        "Ethereum beacon finality anchor already exists for route epoch"
+                            .to_string(),
+                    );
+                }
+            }
             if historical_replay {
                 postfiat_types::VaultBridgeRouteProfileRecordV1::new_for_replay(
                     activation,
@@ -1871,6 +1887,11 @@ fn execute_governance_batch_with_replay(
                 if let Some(state) = activation.arc_finality_bootstrap.clone() {
                     if let Some(ledger) = ledger.as_deref_mut() {
                         ledger.arc_finality_states.push(state);
+                    }
+                }
+                if let Some(state) = activation.beacon_finality_bootstrap.clone() {
+                    if let Some(ledger) = ledger.as_deref_mut() {
+                        ledger.beacon_finality_states.push(state);
                     }
                 }
                 apply_governance_amendment_with_lifecycle_records(

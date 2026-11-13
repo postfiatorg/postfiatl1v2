@@ -1,3 +1,6 @@
+#[path = "b23_ingress_route_authorization.rs"]
+mod b23_ingress_route_authorization;
+
 pub const GOVERNANCE_KIND_YOLO_TARGET_ACTIVATION_HEIGHT: &str = "yolo_target_activation_height";
 
 pub const DEFAULT_SHIELDED_ASSET_ID: &str = "POSTFIAT";
@@ -864,10 +867,17 @@ pub struct VaultBridgeRouteProfileActivationV1 {
     pub tier4_finality_bootstrap: Option<EthereumArbitrumFinalityStateV2>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arc_finality_bootstrap: Option<PfUsdcArcFinalityStateV1>,
+    /// Beacon anchor for the `sp1-ethereum-finality-v1` lane (R2-1). Without
+    /// one pinned here, that lane admits no deposit at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub beacon_finality_bootstrap: Option<PfUsdcBeaconFinalityStateV1>,
 }
 
 impl VaultBridgeRouteProfileActivationV1 {
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(state) = self.beacon_finality_bootstrap.as_ref() {
+            state.validate()?;
+        }
         if self.profile.verifier_kind == NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
             && self.schema != VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2
         {
@@ -945,6 +955,30 @@ impl VaultBridgeRouteProfileActivationV1 {
             }
             (_, None, None) => {}
         }
+        if let Some(state) = self.beacon_finality_bootstrap.as_ref() {
+            if self.profile.verifier_kind != NAV_PROFILE_VERIFIER_SP1_GROTH16 {
+                return Err(
+                    "beacon finality bootstrap requires an sp1-groth16 route".to_string()
+                );
+            }
+            // Decode/authenticate historical envelopes without admitting an
+            // anchor missing the committee. Execution still validates the anchor
+            // after the legacy NAV-profile rejection checks.
+            state.historical_bootstrap_commitment_bytes()?;
+            let expected_route_binding =
+                vault_bridge_route_binding(&profile_hash, self.profile.route_epoch)?;
+            if state.route_profile_hash != profile_hash
+                || state.route_epoch != u64::from(self.profile.route_epoch)
+                || state.source_chain_id != self.profile.source_chain_id
+                || state.vault_address != self.profile.vault_address
+                || state.token_address != self.profile.token_address
+                || state.route_binding != expected_route_binding
+            {
+                return Err(
+                    "beacon finality bootstrap does not match route profile".to_string()
+                );
+            }
+        }
         let expected_kind = if self.schema == VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2 {
             vault_bridge_arc_route_amendment_kind_v2(
                 &self.profile,
@@ -952,6 +986,8 @@ impl VaultBridgeRouteProfileActivationV1 {
                     "route activation v2 requires an Arc bootstrap".to_string()
                 })?,
             )?
+        } else if let Some(state) = self.beacon_finality_bootstrap.as_ref() {
+            vault_bridge_beacon_route_amendment_kind_v2(&self.profile, state)?
         } else {
             vault_bridge_route_amendment_kind(&self.profile)?
         };
@@ -994,6 +1030,9 @@ impl VaultBridgeRouteProfileRecordV1 {
         authorized_height: u64,
     ) -> Result<Self, String> {
         activation.validate_for_replay()?;
+        if let Some(state) = activation.beacon_finality_bootstrap.as_ref() {
+            state.validate()?;
+        }
         if authorized_height < activation.profile.activation_height {
             return Err(
                 "vault bridge route profile cannot be recorded before its activation height"
@@ -1456,7 +1495,7 @@ impl GovernanceState {
             .ok_or_else(|| {
                 "vault bridge route profile authorization amendment is missing".to_string()
             })?;
-        if amendment.kind != record.amendment_kind()?
+        if !b23_ingress_route_authorization::matches(record, amendment)?
             || amendment.value != record.profile.route_epoch
             || amendment.activation_height != record.profile.activation_height
             || amendment.paused
@@ -1494,7 +1533,7 @@ impl GovernanceState {
             .ok_or_else(|| {
                 "vault bridge route profile authorization amendment is missing".to_string()
             })?;
-        if amendment.kind != record.amendment_kind()?
+        if !b23_ingress_route_authorization::matches(record, amendment)?
             || amendment.value != record.profile.route_epoch
             || amendment.activation_height != record.profile.activation_height
             || amendment.paused
@@ -1807,6 +1846,35 @@ fn arc_bootstrap_hash_v2(state: &PfUsdcArcFinalityStateV1) -> Result<String, Str
     Ok(hash_hex_domain(
         "postfiat.vault_bridge.arc_bootstrap.authorization.v2",
         &state.state_commitment_bytes()?,
+    ))
+}
+
+fn beacon_bootstrap_hash_v2(state: &PfUsdcBeaconFinalityStateV1) -> Result<String, String> {
+    Ok(hash_hex_domain(
+        "postfiat.vault_bridge.beacon_bootstrap.authorization.v2",
+        &state.historical_bootstrap_commitment_bytes()?,
+    ))
+}
+
+/// Bind an Ethereum beacon anchor into the amendment the validators sign.
+///
+/// Without this the anchor would ride along in the activation record while the
+/// signatures covered only the profile, so whoever assembled the batch could
+/// substitute a different anchor after the validators had signed. That is the
+/// same shape as the defect this anchor exists to fix -- an unauthenticated
+/// input deciding what gets trusted -- so the anchor must be inside the signed
+/// kind, exactly as the Arc lane does it.
+pub fn vault_bridge_beacon_route_amendment_kind_v2(
+    profile: &VaultBridgeRouteProfileV1,
+    bootstrap: &PfUsdcBeaconFinalityStateV1,
+) -> Result<String, String> {
+    if profile.verifier_kind != NAV_PROFILE_VERIFIER_SP1_GROTH16 {
+        return Err("beacon bootstrap authorization requires an sp1-groth16 route".to_string());
+    }
+    Ok(format!(
+        "{}:beacon-bootstrap-v2:{}",
+        vault_bridge_route_amendment_kind(profile)?,
+        beacon_bootstrap_hash_v2(bootstrap)?,
     ))
 }
 
@@ -2517,6 +2585,7 @@ mod shielded_bridge_governance_tests {
         );
         amendment.activation_height = profile.activation_height;
         let activation = VaultBridgeRouteProfileActivationV1 {
+            beacon_finality_bootstrap: None,
             schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
             profile: profile.clone(),
             amendment: amendment.clone(),

@@ -2788,6 +2788,7 @@ pub fn native_pft_supply_breakdown(
         fast_ingress_campaigns: _,
         arc_finality_states: _,
         external_lanes, // native PFT held outside circulation, counted below
+        beacon_finality_states: _,
     } = ledger;
     let ShieldedState {
         next_note_position: _,

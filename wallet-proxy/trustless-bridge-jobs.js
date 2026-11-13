@@ -18,10 +18,10 @@ const TERMINAL_STAGES = new Set(['accepted', 'failed']);
 const WORKER_STATE_SCHEMA = 'postfiat-trustless-bridge-worker-state-v2';
 const WORKER_STATE_PUBLIC_FIELDS = new Set([
     'status', 'route_id', 'source_chain_id', 'source_proof_kind',
-    'program_vkey', 'manifest_hash', 'route_profile_hash', 'asset_id',
+    'program_vkey', 'manifest_hash', 'route_profile_hash', 'asset_id', 'credited_asset_id',
     'observer_attestor_enabled', 'updated_at_unix', 'stage_index', 'retryable',
     'code', 'message', 'receipt_code', 'receipt_id', 'tx_id',
-    'terminal_checkpoint_sha256',
+    'terminal_checkpoint_sha256', 'stage_history',
 ]);
 const ETH_STAGES = new Set([
     'queued', 'confirming_deposit', 'waiting_for_ethereum_finality',
@@ -306,7 +306,11 @@ function create(runtime = {}, options = {}) {
         if (persisted?.schema === 'postfiat-trustless-bridge-readiness-cache-v2') {
             for (const [routeId, row] of Object.entries(persisted.routes || {})) {
                 if (routes.has(routeId) && Number.isFinite(Number(row.checked_at_ms))) {
-                    readiness.set(routeId, row);
+                    // Never reuse an older ready cache that predates the anchor gate.
+                    try {
+                        if (row.result?.ready === true) validateReadiness(routes.get(routeId), row.result);
+                        readiness.set(routeId, row);
+                    } catch (_) { /* fail closed and refresh */ }
                 }
             }
         }
@@ -333,6 +337,7 @@ function create(runtime = {}, options = {}) {
         let terminalValid = true;
         if (state?.status === 'accepted') {
             terminalValid = state.retryable === false
+                && HASH48_RE.test(String(state.credited_asset_id || ''))
                 && state.receipt_code === 'ACCEPTED'
                 && RECEIPT_ID_RE.test(String(state.receipt_id || state.tx_id || ''))
                 && FILE_HASH_RE.test(String(state.terminal_checkpoint_sha256 || ''));
@@ -342,7 +347,14 @@ function create(runtime = {}, options = {}) {
         } else {
             terminalValid = state?.retryable === true;
         }
-        if (!common || !terminalValid) {
+        const stageOrder = [...route?.stages || []].filter((stage) => !['queued', 'accepted', 'failed'].includes(stage));
+        const historyValid = state?.stage_history === undefined || (Array.isArray(state.stage_history)
+            && state.stage_history.length <= stageOrder.length
+            && state.stage_history.every((row, index) => row && row.stage === stageOrder[index]
+                && ['running', 'complete', 'failed', 'retrying'].includes(row.status)
+                && [row.started_at_unix, row.completed_at_unix].every((time) => time === null || (Number.isSafeInteger(time) && time > 0))
+                && (row.completed_at_unix === null || row.started_at_unix === null || row.completed_at_unix >= row.started_at_unix)));
+        if (!common || !terminalValid || !historyValid) {
             throw Object.assign(new Error('durable bridge worker state failed validation'), {
                 code: 'bridge_worker_state_invalid',
             });
@@ -419,6 +431,15 @@ function create(runtime = {}, options = {}) {
     }
 
     function validateReadiness(route, result) {
+        if (route.source_proof_kind === 'sp1-ethereum-finality-v1'
+            && (result?.beacon_anchor_authenticated !== true
+                || result.beacon_anchor_route_profile_hash !== route.route_profile_hash
+                || !Number.isSafeInteger(result.route_epoch) || result.route_epoch < 1
+                || result.beacon_anchor_route_epoch !== result.route_epoch)) {
+            throw Object.assign(new Error('Authenticated on-ledger beacon anchor is missing or mismatched.'), {
+                code: 'pfusdc_beacon_anchor_unavailable',
+            });
+        }
         const common = result?.ok === true && result?.ready === true
             && result?.route_id === route.route_id
             && Number(result?.source_chain_id) === route.source_chain_id
@@ -472,8 +493,10 @@ function create(runtime = {}, options = {}) {
                     source_chain_id: route.source_chain_id,
                     source_proof_kind: route.source_proof_kind,
                     trust_class: 'DISABLED',
-                    code: 'trustless_ingress_unavailable',
-                    message: `Trustless ${route.route_id} preflight is unavailable. Retry shortly.`,
+                    code: error.code === 'pfusdc_beacon_anchor_unavailable' ? error.code : 'trustless_ingress_unavailable',
+                    message: error.code === 'pfusdc_beacon_anchor_unavailable'
+                        ? 'Bridge blocked: authenticated on-ledger beacon anchor is missing or does not match the active route epoch.'
+                        : `Trustless ${route.route_id} preflight is unavailable. Retry shortly.`,
                     diagnostic_code: String(error.code || error.name || 'readiness_failed').slice(0, 64),
                     observer_attestor_enabled: false,
                 };

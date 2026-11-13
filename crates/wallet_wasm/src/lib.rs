@@ -4,6 +4,10 @@
 
 use wasm_bindgen::prelude::*;
 
+mod b23_signing;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod b23_signing_tests;
+
 use postfiat_crypto_provider::{bytes_to_hex, ml_dsa_65_sign_with_context, ML_DSA_65_ALGORITHM};
 use postfiat_rpc_sdk::{
     derive_wallet_key_pair, validate_owned_certificate_domain_for_wallet,
@@ -12,13 +16,13 @@ use postfiat_rpc_sdk::{
     wallet_fastpay_unwrap_lock_id_v1, wallet_identity_from_backup,
     wallet_sign_asset_transaction_from_fields, wallet_sign_asset_transaction_from_quote,
     wallet_sign_escrow_transaction_from_fields, wallet_sign_escrow_transaction_from_quote,
-    wallet_sign_offer_transaction_from_fields, wallet_sign_offer_transaction_from_quote,
+    wallet_sign_offer_transaction_from_quote,
     wallet_sign_owned_deposit as sdk_wallet_sign_owned_deposit,
     wallet_sign_owned_transfer_order_v3, wallet_sign_owned_unwrap_order_v3,
     wallet_sign_payment_v2_from_fields, wallet_sign_transfer_from_fields,
     wallet_verify_fastpay_apply_ack_v1, RpcRequest, RpcResponse, TransferFeeQuoteSummary,
     WalletBackupFile, WalletSignAssetTransactionFields, WalletSignEscrowTransactionFields,
-    WalletSignOfferTransactionFields, WalletSignPaymentV2Fields, WalletSignTransferFields,
+    WalletSignPaymentV2Fields, WalletSignTransferFields,
 };
 use postfiat_types::{
     FastPayApplyAckV1, FastPayRecoveryCapabilitiesV1, OwnedCertificateDomain, OwnedDepositV1,
@@ -465,8 +469,13 @@ pub fn wallet_sign_offer_transaction(
 
     let signed = wallet_sign_offer_transaction_from_quote(&backup, &quote_response)
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-    to_json_js_value(&signed)
+    let reviewed_operation = &quote_response
+        .result
+        .as_ref()
+        .ok_or_else(|| JsValue::from_str("offer quote result missing"))?["operation"];
+    let envelope = b23_signing::offer_envelope_for_browser(&signed, reviewed_operation)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&envelope)
 }
 
 /// Sign an offer transaction from explicit fields (no quote needed).
@@ -481,13 +490,9 @@ pub fn wallet_sign_offer_transaction_fields(
 ) -> Result<JsValue, JsValue> {
     let backup: WalletBackupFile = serde_json::from_str(backup_json)
         .map_err(|e| JsValue::from_str(&format!("backup parse: {e}")))?;
-    let fields: WalletSignOfferTransactionFields = serde_json::from_str(fields_json)
-        .map_err(|e| JsValue::from_str(&format!("fields parse: {e}")))?;
-
-    let signed = wallet_sign_offer_transaction_from_fields(&backup, fields)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-    to_json_js_value(&signed)
+    let envelope = b23_signing::sign_offer_fields_for_browser(&backup, fields_json)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&envelope)
 }
 
 /// Sign a FastPay owned-transfer order with the wallet owner's key.
