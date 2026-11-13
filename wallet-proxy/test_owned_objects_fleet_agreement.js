@@ -5,7 +5,8 @@
 // page from two different views (view_digest) or two different object sets
 // never agree. The answering node's id and its inventory revision are left
 // out of the grouping key and returned beside the answer, one entry per
-// agreeing validator that sent both.
+// agreeing validator that sent a well-formed pair, with the configured
+// endpoint's validator id beside the node's own (unauthenticated) id.
 const assert = require('assert');
 const net = require('net');
 const { readGroupKey } = require('./rpc-routing').create({});
@@ -86,6 +87,7 @@ const expectedAnswer = (() => {
   assert.strictEqual(six.source.consensus_count, 6);
   assert.deepStrictEqual(six.result, expectedAnswer, 'the agreed answer keeps its fields');
   assert.deepStrictEqual(six.source.fleet_revisions, [0, 1, 2, 3, 4, 5].map((index) => ({
+    endpoint_validator_id: `v${index}`,
     node_id: `node-${index}`,
     inventory_revision: { finalized_height: 40, fastpay_sequence: index < 3 ? 7 : 8 },
   })));
@@ -100,8 +102,8 @@ const expectedAnswer = (() => {
   assert.strictEqual(split.source.consensus_count, 3);
   assert.deepStrictEqual(split.source.validators, ['v0', 'v2', 'v3']);
   assert.deepStrictEqual(split.source.fleet_revisions, [
-    { node_id: 'node-0', inventory_revision: { finalized_height: 40, fastpay_sequence: 7 } },
-    { node_id: 'node-2', inventory_revision: { finalized_height: 40, fastpay_sequence: 8 } },
+    { endpoint_validator_id: 'v0', node_id: 'node-0', inventory_revision: { finalized_height: 40, fastpay_sequence: 7 } },
+    { endpoint_validator_id: 'v2', node_id: 'node-2', inventory_revision: { finalized_height: 40, fastpay_sequence: 8 } },
   ]);
 
   // Older nodes without the fields group as before and have no entries.
@@ -109,6 +111,41 @@ const expectedAnswer = (() => {
   assert.strictEqual(older.source.consensus_count, 3);
   assert.deepStrictEqual(older.result, expectedAnswer);
   assert.deepStrictEqual(older.source.fleet_revisions, []);
+
+  // Malformed pairs are omitted, never repaired; the page still agrees.
+  const malformed = [
+    { node_id: '' },
+    { node_id: ' node-x' },
+    { node_id: 'node-x\n' },
+    { node_id: ['node-x'] },
+    { node_id: {} },
+    { inventory_revision: [] },
+    { inventory_revision: [40, 7] },
+    { inventory_revision: {} },
+    { inventory_revision: null },
+    { inventory_revision: { finalized_height: 40 } },
+    { inventory_revision: { finalized_height: 40, fastpay_sequence: -1 } },
+    { inventory_revision: { finalized_height: 40, fastpay_sequence: 1.5 } },
+    { inventory_revision: { finalized_height: 40, fastpay_sequence: '7' } },
+    { inventory_revision: { finalized_height: 40, fastpay_sequence: 2 ** 64 } },
+    // Above 2^53 - 1 the parsed JSON number may be rounded: omit, not pass on.
+    { inventory_revision: { finalized_height: 40, fastpay_sequence: 2 ** 53 } },
+    { inventory_revision: { finalized_height: 39, fastpay_sequence: 7 } },
+    { height: 41 },
+    { height: undefined },
+  ];
+  const bad = await fleetRead([revised('node-ok', 7), ...malformed.map((fields) => revised('node-x', 7, fields))]);
+  assert.strictEqual(bad.source.consensus_count, malformed.length + 1);
+  assert.deepStrictEqual(bad.source.fleet_revisions, [
+    { endpoint_validator_id: 'v0', node_id: 'node-ok', inventory_revision: { finalized_height: 40, fastpay_sequence: 7 } },
+  ]);
+  // Only the two revision fields pass on.
+  const extra = await fleetRead([revised('node-0', 7, {
+    inventory_revision: { finalized_height: 40, fastpay_sequence: 7, note: 'x' },
+  })]);
+  assert.deepStrictEqual(extra.source.fleet_revisions, [
+    { endpoint_validator_id: 'v0', node_id: 'node-0', inventory_revision: { finalized_height: 40, fastpay_sequence: 7 } },
+  ]);
   console.log('PASS the fleet feed groups owned_objects pages without node ids and returns their revisions');
 })().catch((error) => {
   console.error(error);

@@ -1606,15 +1606,46 @@ wss } = runtime;
         return JSON.stringify(canonicalReadResult(method, result));
     }
 
-    // Each agreeing validator's {node_id, inventory_revision}, in fleet order;
-    // a node that sends neither (or only one) has no entry.
+    // A u64 the parsed JSON carries exactly; above 2^53 - 1 JSON.parse may
+    // have rounded it, and a rounded revision is an invented one.
+    function exactUnsignedInteger(value) {
+        return Number.isSafeInteger(value) && value >= 0;
+    }
+
+    // Like the Rust validator's clean string: nonempty, no surrounding
+    // whitespace, no control characters.
+    function cleanNodeId(value) {
+        return typeof value === 'string'
+            && value.length > 0
+            && value === value.trim()
+            && !/[\u0000-\u001f\u007f-\u009f]/.test(value);
+    }
+
+    // Each agreeing validator's well-formed pair, in fleet order:
+    // endpoint_validator_id is the gateway's configured id for the endpoint
+    // it asked; node_id is what the node says about itself (not
+    // authenticated). A node that sends no pair, or a malformed one (unclean
+    // id, a revision that is not {finalized_height, fastpay_sequence} as
+    // exact unsigned integers, or a finalized_height other than the page's
+    // height), has no entry.
     function fleetRevisions(group) {
-        return group
-            .map((entry) => entry.result)
-            .filter((result) => typeof result?.node_id === 'string'
-                && result.inventory_revision
-                && typeof result.inventory_revision === 'object')
-            .map((result) => ({ node_id: result.node_id, inventory_revision: result.inventory_revision }));
+        const revisions = [];
+        for (const entry of group) {
+            const result = entry.result;
+            const revision = result?.inventory_revision;
+            if (!cleanNodeId(result?.node_id)
+                || !revision || typeof revision !== 'object' || Array.isArray(revision)) continue;
+            const { finalized_height: finalizedHeight, fastpay_sequence: fastpaySequence } = revision;
+            if (!exactUnsignedInteger(finalizedHeight)
+                || !exactUnsignedInteger(fastpaySequence)
+                || result.height !== finalizedHeight) continue;
+            revisions.push({
+                endpoint_validator_id: entry.validator_id,
+                node_id: result.node_id,
+                inventory_revision: { finalized_height: finalizedHeight, fastpay_sequence: fastpaySequence },
+            });
+        }
+        return revisions;
     }
 
     function conciseRpcError(error, fallback = 'RPC request failed') {
@@ -1891,6 +1922,9 @@ wss } = runtime;
     }
 
     function walletSnapshotDigest(snapshot) {
+        // The validated revisions count too: a newer revision with identical
+        // objects is news to a wallet. Feeds without them digest as before.
+        const revisions = snapshot.sources?.owned?.fleet_revisions;
         return crypto.createHash('sha256').update(JSON.stringify({
             account: snapshot.account,
             account_error: snapshot.account_error,
@@ -1898,6 +1932,7 @@ wss } = runtime;
             owned_error: snapshot.owned_error,
             assets: snapshot.assets,
             assets_error: snapshot.assets_error,
+            ...(Array.isArray(revisions) && revisions.length > 0 ? { owned_revisions: revisions } : {}),
         })).digest('hex');
     }
 

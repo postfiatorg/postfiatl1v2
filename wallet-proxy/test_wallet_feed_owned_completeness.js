@@ -66,7 +66,7 @@ async function snapshotFor(result) {
   assert.strictEqual(revised.snapshot.owned.node_id, undefined);
   assert.strictEqual(revised.snapshot.owned.inventory_revision, undefined);
   assert.deepStrictEqual(revised.snapshot.sources.owned.fleet_revisions, [
-    { node_id: 'node-1', inventory_revision: revision },
+    { endpoint_validator_id: 'v1', node_id: 'node-1', inventory_revision: revision },
   ]);
   console.log('PASS the wallet feed marks a truncated owned_objects page as partial');
 })().catch((error) => {
