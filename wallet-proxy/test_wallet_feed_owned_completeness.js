@@ -59,6 +59,15 @@ async function snapshotFor(result) {
 
   const whole = await snapshotFor(page({ truncated: false, next_cursor: null }));
   assert.strictEqual(whole.snapshot.owned_complete, true);
+
+  // The feed passes the node's id and inventory revision beside the page.
+  const revision = { finalized_height: 40, fastpay_sequence: 3 };
+  const revised = await snapshotFor(page({ node_id: 'node-1', inventory_revision: revision }));
+  assert.strictEqual(revised.snapshot.owned.node_id, undefined);
+  assert.strictEqual(revised.snapshot.owned.inventory_revision, undefined);
+  assert.deepStrictEqual(revised.snapshot.sources.owned.fleet_revisions, [
+    { node_id: 'node-1', inventory_revision: revision },
+  ]);
   console.log('PASS the wallet feed marks a truncated owned_objects page as partial');
 })().catch((error) => {
   console.error(error);
