@@ -2050,6 +2050,94 @@ class PftlSnapshotTests(unittest.TestCase):
         node = ExportPftl([other, self.E1], current_height=510)
         self.assert_refused(self.two_runs(node, [self.P0]), "pftl_export_digest_mismatch")
 
+    def test_the_reviewers_sequence_a_fork_release_page_ahead_of_the_snapshot_is_refused(self):
+        """R-2: the release page from a same-genesis fork at 600, every other
+        read from the home node at 500. The run is refused before any state is
+        saved, so the next honest run at 500 is not `state_file_invalid`."""
+
+        class ForkReleasePage(ExportPftl):
+            def __init__(self, fork: ExportPftl) -> None:
+                super().__init__([PftlSnapshotTests.E0, PftlSnapshotTests.E1], current_height=500)
+                self.fork_node = fork
+
+            def external_lane_info(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+                if "export_limit" not in kwargs:
+                    return self.fork_node.external_lane_info(*args, **kwargs)
+                return super().external_lane_info(*args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            options = ("--state-file", str(state_file))
+            code, lines, stderr = run_exports(ForkReleasePage(self.fork(600)), ExportBase([self.P0]), *options)
+            self.assertEqual((code, [line for line in lines if line["kind"] in ("payout", "export", "summary")]),
+                             (1, []))
+            error = json.loads(stderr)
+            self.assertEqual(error["code"], "pftl_snapshot_behind_release")
+            self.assertIn("pftl_snapshot_behind_release", watcher.PFTL_SNAPSHOT_CODES)
+            self.assertFalse(state_file.exists())
+            code, lines, stderr = run_exports(self.home(500), ExportBase([self.P0]), *options)
+            self.assertEqual((code, alarm_codes(lines), stderr), (0, [], ""))
+            self.assertEqual(json.loads(state_file.read_text())["checked_through_height"], 500)
+            self.assertEqual([line["age_blocks"] for line in lines if line.get("status") == "unpaid"], [300])
+
+
+class AdvancingPftl(ExportPftl):
+    """An honest node that makes a block right after answering `status` on
+    each of its first `advances` attempts, so those attempts' pages report
+    the next height."""
+
+    def __init__(self, advances: int) -> None:
+        super().__init__([export_entry(0, height=100)], current_height=500)
+        self.advances = advances
+
+    def status(self) -> dict[str, Any]:
+        answer = super().status()
+        if self.advances:
+            self.advances -= 1
+            self.current_height += 1
+        return answer
+
+
+def run_interval(pftl: ExportPftl, runs: int) -> tuple[int, list[dict[str, Any]], list[dict[str, Any]], list[float]]:
+    sleeps: list[float] = []
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        code = watcher.main(["--pftl-rpc", "127.0.0.1:27650", "--lane-id", LANE, "--base-rpc",
+                             "http://127.0.0.1:8545", "--exports", "--lock-from-block", "0", "--interval", "30"],
+                            pftl=pftl, base=ExportBase([released_log(export_entry(0, height=100))]),
+                            sleep=sleeps.append, max_runs=runs)
+    return (code, [json.loads(line) for line in stdout.getvalue().splitlines() if line.strip()],
+            [json.loads(line) for line in stderr.getvalue().splitlines() if line.strip()], sleeps)
+
+
+class PftlSnapshotIntervalTests(unittest.TestCase):
+    """R-1: snapshot refusals stay fail-closed, but in interval mode the next
+    attempt after one is immediate once, and a run of them is a warning."""
+
+    def test_an_advancing_chain_gives_a_no_progress_warning_after_n_refusals(self):
+        n = watcher.PFTL_NO_PROGRESS_REFUSALS
+        self.assertEqual(n, 5)
+        code, out, err, sleeps = run_interval(AdvancingPftl(advances=n), n)
+        self.assertEqual(code, 0)
+        self.assertEqual([line["code"] for line in err], ["pftl_snapshot_mismatch"] * n)
+        self.assertEqual([line for line in out if line["kind"] == "summary"], [])
+        # Immediate after a refusal, then the interval: two attempts per interval.
+        self.assertEqual(sleeps, [30.0] * ((n - 1) // 2))
+        warnings = [line for line in out if line["kind"] == "warning"]
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual({key: warnings[0][key] for key in ("code", "consecutive_refusals", "last_refusal",
+                                                            "release_height", "pftl_snapshot_height", "page_height")},
+                         {"code": "pftl_snapshot_no_progress", "consecutive_refusals": n,
+                          "last_refusal": "pftl_snapshot_mismatch", "release_height": 504,
+                          "pftl_snapshot_height": 504, "page_height": 505})
+
+    def test_a_chain_that_pauses_once_succeeds_on_the_immediate_retry(self):
+        code, out, err, sleeps = run_interval(AdvancingPftl(advances=1), 2)
+        self.assertEqual((code, sleeps), (0, []))
+        self.assertEqual([line["code"] for line in err], ["pftl_snapshot_mismatch"])
+        self.assertEqual([line["kind"] for line in out if line["kind"] in ("summary", "warning")], ["summary"])
+        self.assertEqual(out[-1]["exports"]["pftl_snapshot"]["height"], 501)
+
 
 class ExportIdentityTests(unittest.TestCase):
     """F1: the export pages must come from the network, lane and policy the
