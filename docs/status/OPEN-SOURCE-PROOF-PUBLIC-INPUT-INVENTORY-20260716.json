@@ -619,7 +619,7 @@
         {
           "index": 0,
           "name": "schema",
-          "binding": "host requires the pfETH Ethereum ingress schema"
+          "binding": "the pfETH guest emits the pfETH schema (lib.rs:118); the shared host decoders accept the pfUSDC or pfETH schema (crates/types/src/pfusdc_tier4_types.rs:97-101, crates/types/src/b23_ingress_legacy.rs:103-105; assumption A4)"
         },
         {
           "index": 1,
@@ -674,7 +674,7 @@
         {
           "index": 11,
           "name": "vault_runtime_code_hash",
-          "binding": "proved account code hash and governed profile binding"
+          "binding": "authenticated vault account code hash, compared with the witness policy (lib.rs:191-197, 422); not compared with the governed profile's expected runtime hash (assumption A1)"
         },
         {
           "index": 12,
@@ -684,7 +684,7 @@
         {
           "index": 13,
           "name": "token_runtime_code_hash",
-          "binding": "proved WETH9 account code hash and governed profile binding"
+          "binding": "authenticated WETH9 account code hash, compared with the witness policy (lib.rs:198-204, 422), which the guest requires to equal its WETH9 runtime code hash constant (lib.rs:434-441); not compared with a governed profile hash. A1 applies to the vault hash only"
         },
         {
           "index": 14,
@@ -729,7 +729,7 @@
         {
           "index": 22,
           "name": "manifest_hash",
-          "binding": "policy commitment to route domain, vault, WETH9 and vault creation bytecode hash"
+          "binding": "guest requires nonzero (lib.rs:164) and copies the witness value (lib.rs:304); the host compares it with the profile valuation_policy_hash (crates/execution/src/nav_vault_asset_execution.rs:8038). The preimage (route domain, vault, WETH9, vault creation bytecode hash) is built by the capture tool and not recomputed (assumption A3)"
         },
         {
           "index": 23,
@@ -744,7 +744,7 @@
         {
           "index": 25,
           "name": "vault_token_balance_atoms",
-          "binding": "proved WETH9 balance floor-divided by 10^9; backing check uses the unfloored wei balance"
+          "binding": "proved WETH9 balanceOf(vault) slot: the guest requires the witness key to equal mapping slot 3 of the policy vault (lib.rs:228, 441); floor-divided by 10^9 (lib.rs:307); the backing check uses the unfloored wei balance (lib.rs:253). A2 does not apply"
         }
       ],
       "private_witnesses": [
@@ -752,7 +752,14 @@
         "vault account proof plus five storage-slot proofs",
         "WETH9 account proof plus balanceOf(vault) slot-3 proof"
       ],
-      "proof_binding": "The guest verifies Ethereum mainnet finality, code identities, exact storage keys, the persisted deposit record and WETH backing before committing the CBOR public values. The governed route pins the program vkey and policy hash.",
+      "proof_binding": "The guest verifies Ethereum mainnet finality, the vault code hash against the witness policy, the WETH9 address, code hash and balanceOf(vault) key against guest constants, the deposit-record storage keys, the persisted deposit record and WETH backing, then commits the CBOR public values. The governed route pins the program vkey and policy hash.",
+      "binding_note": "lib.rs is programs/pfusdc-eth-mainnet-ingress/src/lib.rs at the pinned hash; the committed ELF was built from its da00621ff version, which has the same checks at earlier lines.",
+      "assumptions": [
+        "A1: the proved vault runtime code hash is compared with the witness policy only (programs/pfusdc-eth-mainnet-ingress/src/lib.rs:191-197, 422); neither the guest nor the Ethereum host matcher (crates/execution/src/nav_vault_asset_execution.rs:8036-8052) compares it with the governed profile's expected runtime hash. The WETH9 code hash is fixed by a guest constant (lib.rs:434-441).",
+        "A2: does not apply. The guest requires the WETH9 balance key to equal balanceOf(vault) mapping slot 3 of the policy vault (programs/pfusdc-eth-mainnet-ingress/src/lib.rs:228, 441), so the witness cannot select another slot.",
+        "A3: the manifest preimage is built by the capture tool (tools/eth-l1-mainnet-fast-lane-p0/src/main.rs:713-726); the guest checks the manifest hash is nonzero and copies it (programs/pfusdc-eth-mainnet-ingress/src/lib.rs:164, 304), and the host compares only that hash with valuation_policy_hash (crates/execution/src/nav_vault_asset_execution.rs:8038). The preimage excludes the vault runtime code hash.",
+        "A4: the shared host decoders accept the pfUSDC or pfETH schema (crates/types/src/pfusdc_tier4_types.rs:97-101, crates/types/src/b23_ingress_legacy.rs:103-105); the route is told apart by route_id (crates/execution/src/nav_vault_asset_execution.rs:8037) and the active profile, not by the schema check."
+      ],
       "host_only_checks": [
         "active route profile, route epoch and route binding",
         "proof and public-value byte bounds",
@@ -1583,7 +1590,7 @@
   "b23_source_refresh": {
     "date": "2026-11-13",
     "branch": "integration/main-with-b23-20261113",
-    "scope": "Pins of four sources changed by the B23 line, the pfUSDC ingress entry and the pfETH build state; then the pfUSDC bindings described as the code enforces them (assumptions A1-A4) and five further statement sources pinned. No ELF was rebuilt.",
+    "scope": "Pins of four sources changed by the B23 line, the pfUSDC ingress entry and the pfETH build state; then the pfUSDC bindings described as the code enforces them (assumptions A1-A4) and five further statement sources pinned; then the pfETH bindings described the same way (A1 for the vault code hash only, A2 not applicable). No ELF was rebuilt.",
     "sources": {
       "programs/pfusdc-eth-mainnet-ingress/src/lib.rs": "The witness gains a governance-pinned beacon anchor; the guest rebuilds a fresh light-client store from the anchored header and sync committee instead of trusting the witness store, and the public values grow from 26 to 29 fields (route_epoch, prior_sync_committee_root, current_sync_committee_root). The pfETH guest shares this library, so its committed ELF predates the change.",
       "crates/types/src/pfusdc_tier4_types.rs": "Adds the 29-field host type (route_epoch must be nonzero, both committee roots are checked hex), PfUsdcBeaconFinalityStateV1 with verify_and_advance and its state-commitment bytes, and the module of the old 26-field decoder. The egress public-value encoding is unchanged.",

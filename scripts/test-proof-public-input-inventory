@@ -122,6 +122,9 @@ def main() -> None:
         raise SystemExit("pfETH ingress fields must cover exactly indices 0..25")
     if any(not field.get("name") or not field.get("binding") for field in ingress_fields):
         raise SystemExit("pfETH ingress public fields need names and bindings")
+    labels = [a.split(":", 1)[0] for a in pfeth_ingress.get("assumptions", [])]
+    if labels != ["A1", "A2", "A3", "A4"]:
+        raise SystemExit("pfETH ingress must record binding assumptions A1-A4 (or why one does not apply)")
     ingress_guest = (
         ROOT / "programs/pfeth-eth-mainnet-ingress/src/main.rs"
     ).read_text(encoding="utf-8")
