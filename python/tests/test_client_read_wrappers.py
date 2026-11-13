@@ -464,19 +464,50 @@ class RemainingReadWrapperTests(unittest.TestCase):
         self.assertEqual((node, revision), ("validator-0", OwnedObjectsRevision(7, 2)))
         self.assertLess(OwnedObjectsRevision(7, 2), OwnedObjectsRevision(8, 0))
         self.assertIsNone(owned_objects_revision({"height": 7, "view_digest": "v"}))
+        self.assertEqual(
+            owned_objects_revision({**page, "height": 2**64 - 1, "inventory_revision": {
+                "finalized_height": 2**64 - 1, "fastpay_sequence": 2**64 - 1}})[1],
+            OwnedObjectsRevision(2**64 - 1, 2**64 - 1),
+        )
         for bad in ({"finalized_height": 6, "fastpay_sequence": 2},
                     {"finalized_height": 7, "fastpay_sequence": -1},
-                    {"finalized_height": 7, "fastpay_sequence": True}, 3):
+                    {"finalized_height": 7, "fastpay_sequence": True},
+                    {"finalized_height": 7, "fastpay_sequence": 2**64}, 3):
             with self.assertRaises(RpcClientError):
                 owned_objects_revision({**page, "inventory_revision": bad})
         with self.assertRaises(RpcClientError):
-            owned_objects_revision({**page, "node_id": " "})
-        # owned_objects_all checks every page and keeps the first page's revision.
+            owned_objects_revision({**page, "height": 2**64, "inventory_revision": {
+                "finalized_height": 2**64, "fastpay_sequence": 0}})
+        with self.assertRaises(RpcClientError):
+            owned_objects_revision({k: v for k, v in page.items() if k != "height"})
+        # node_id is checked like the Rust validator: clean, nonempty, and
+        # also when the revision is absent.
+        for bad_node in (" ", "", " validator-0", "validator-0 ", "validator\n0", 3, ["v"]):
+            with self.assertRaises(RpcClientError):
+                owned_objects_revision({**page, "node_id": bad_node})
+            with self.assertRaises(RpcClientError):
+                owned_objects_revision({"height": 7, "view_digest": "v", "node_id": bad_node})
+        self.assertIsNone(owned_objects_revision({"height": 7, "node_id": None}))
+        # owned_objects_all checks every page and returns the last page's revision.
         client = _client()
         last = {**page, "objects": [], "object_count": 0, "truncated": False, "next_cursor": None}
         with mock.patch.object(client, "_call", return_value=last):
             result = client.owned_objects_all("ab")
         self.assertEqual(result["inventory_revision"], page["inventory_revision"])
+        first = {**page, "objects": [{"id": "1"}], "object_count": 1, "truncated": True, "next_cursor": "c"}
+        newer = {**last, "objects": [{"id": "2"}], "object_count": 1, "height": 8, "node_id": "validator-0",
+                 "inventory_revision": {"finalized_height": 8, "fastpay_sequence": 0}}
+        with mock.patch.object(client, "_call", side_effect=[first, newer]):
+            result = client.owned_objects_all("ab", page_limit=1)
+        self.assertEqual(result["inventory_revision"], newer["inventory_revision"])
+        # The tip fields come from the same page, so the result stays valid.
+        self.assertEqual(result["height"], 8)
+        self.assertEqual(owned_objects_revision(result)[1], OwnedObjectsRevision(8, 0))
+        older_last = {k: v for k, v in last.items() if k not in ("inventory_revision", "node_id")}
+        with mock.patch.object(client, "_call", side_effect=[first, older_last]):
+            result = client.owned_objects_all("ab", page_limit=1)
+        self.assertNotIn("inventory_revision", result)
+        self.assertNotIn("node_id", result)
         broken = {**last, "inventory_revision": {"finalized_height": 1}}
         with mock.patch.object(client, "_call", return_value=broken):
             with self.assertRaises(RpcClientError):
