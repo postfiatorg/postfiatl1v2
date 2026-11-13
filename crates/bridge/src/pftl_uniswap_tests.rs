@@ -1793,3 +1793,28 @@ fn rejects_malformed_witness_chain_domain() {
         "empty_field"
     );
 }
+
+#[test]
+fn route_authority_committee_current_compares_with_active_committee_epoch() {
+    let reason = |text: &str| Some(text.to_string());
+    assert_eq!(
+        route_authority_committee_current(Some(2), Some(2)),
+        (Some(true), None)
+    );
+    assert_eq!(
+        route_authority_committee_current(Some(1), Some(2)),
+        (Some(false), None)
+    );
+    assert_eq!(
+        route_authority_committee_current(Some(1), None),
+        (None, reason(ROUTE_AUTHORITY_UNKNOWN_NO_COMMITTEE))
+    );
+    assert_eq!(
+        route_authority_committee_current(None, Some(2)),
+        (None, reason(ROUTE_AUTHORITY_UNKNOWN_NO_POLICY))
+    );
+    assert_eq!(
+        route_authority_committee_current(Some(3), Some(2)),
+        (None, reason(ROUTE_AUTHORITY_UNKNOWN_AHEAD_OF_COMMITTEE))
+    );
+}
