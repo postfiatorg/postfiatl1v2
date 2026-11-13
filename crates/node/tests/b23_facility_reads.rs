@@ -249,6 +249,7 @@ impl Fixture {
                         pftl_uniswap_consensus_receipt_root(&ledger.pftl_uniswap_receipts).unwrap(),
                     )
                 },
+                external_lane_export_root: None,
                 receipt_count: tx_ids.len() as u64,
                 certificate_id: "11".repeat(48),
                 certificate: BlockCertificate {
