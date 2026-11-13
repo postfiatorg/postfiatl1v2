@@ -11,6 +11,7 @@ import hashlib
 import json
 import socket
 import threading
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -294,26 +295,51 @@ class OwnedObjectsRevision:
     """`owned_objects` `inventory_revision`: orders two answers of one node.
 
     Compare as (`finalized_height`, `fastpay_sequence`) and only between
-    answers carrying the same `node_id`.
+    answers of one node's uninterrupted v3 history (same `node_id`); the
+    node-side guarantees across restores and legacy applies are not
+    complete yet.
     """
 
     finalized_height: int
     fastpay_sequence: int
 
 
+_U64_MAX = 2**64 - 1
+# Fields of the moment a page was read; an all-pages result takes the last page's.
+_OWNED_OBJECTS_TIP_FIELDS = ("height", "state_root", "inventory_revision", "node_id")
+
+
+def _is_u64(value: Any) -> bool:
+    return type(value) is int and 0 <= value <= _U64_MAX
+
+
+def _is_clean_string(value: Any) -> bool:
+    """Nonempty, no surrounding whitespace, no control characters (Rust `clean_string_field`)."""
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and value == value.strip()
+        and not any(unicodedata.category(char) == "Cc" for char in value)
+    )
+
+
 def owned_objects_revision(page: dict[str, Any]) -> tuple[str | None, OwnedObjectsRevision] | None:
-    """`(node_id, revision)` of an `owned_objects` page; `None` from older nodes."""
+    """`(node_id, revision)` of an `owned_objects` page; `None` from older nodes.
+
+    Checks like the Rust validator: a present `node_id` is null or a clean
+    string, also without a revision; a revision holds two u64 values and its
+    `finalized_height` equals the page `height`.
+    """
+    node_id = page.get("node_id")
+    if node_id is not None and not _is_clean_string(node_id):
+        raise RpcClientError(f"owned_objects answered a malformed node_id: {node_id!r}")
     raw = page.get("inventory_revision")
     if raw is None:
         return None
     values = [raw.get(name) if isinstance(raw, dict) else None
               for name in ("finalized_height", "fastpay_sequence")]
-    node_id = page.get("node_id")
-    if (
-        any(type(value) is not int or value < 0 for value in values)
-        or ("height" in page and page["height"] != values[0])
-        or (node_id is not None and (not isinstance(node_id, str) or not node_id.strip()))
-    ):
+    height = page.get("height")
+    if not all(_is_u64(value) for value in values) or not _is_u64(height) or height != values[0]:
         raise RpcClientError(f"owned_objects answered a malformed inventory_revision: {raw!r}")
     return node_id, OwnedObjectsRevision(values[0], values[1])
 
@@ -1256,8 +1282,10 @@ class PostFiatRpcClient:
         The result is the first page's fields with `objects`, `object_count`
         (all objects), `truncated: false`, `cursor` and `next_cursor` both
         `None`, `view_digest` of the view read, and `pages` (pages read).
-        `inventory_revision` and `node_id`, when the node sends them, are
-        the first page's; see `owned_objects_revision`.
+        The pages are bound by the view digest, not by one revision: the
+        revision can grow between pages of one view. `height`, `state_root`,
+        and, when the node sends them, `inventory_revision` and `node_id` are
+        the last page read's; see `owned_objects_revision`.
         """
         for _ in range(max_restarts + 1):
             first = self.owned_objects(
@@ -1290,8 +1318,10 @@ class PostFiatRpcClient:
                 pages += 1
                 objects.extend(page.get("objects") or [])
             if not changed:
+                tip = {key: page[key] for key in _OWNED_OBJECTS_TIP_FIELDS if key in page}
                 return {
-                    **first,
+                    **{key: value for key, value in first.items() if key not in _OWNED_OBJECTS_TIP_FIELDS},
+                    **tip,
                     "objects": objects,
                     "object_count": len(objects),
                     "truncated": False,
