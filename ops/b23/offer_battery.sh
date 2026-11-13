@@ -3,7 +3,7 @@
 # mempool_submit_signed_offer_transaction_finality. Six-node checks before/after each.
 set -uo pipefail
 cd /home/postfiat/repos/postfiatl1v2-b23-ops
-E=/home/postfiat/repos/b23-coord/evidence/ops/release2/offer-battery; mkdir -p $E
+E=${OFFER_EVID:-/home/postfiat/repos/b23-coord/evidence/ops/release2/offer-battery}; mkdir -p $E
 I=/home/postfiat/repos/b23-coord/evidence/ops/ops-inputs
 A=pfab9b9228942e5c529633a13aa271d5297bec6353
 K=/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json
@@ -15,7 +15,7 @@ python3 -u ops/b23/offer_op.py r2-offer-create-$T $A $K $I/r2-offer-create.json 
 H=$(python3 -c "import json;print(json.load(open('/home/postfiat/repos/b23-coord/evidence/ops/submissions/r2-offer-create-$T/finality.json'))['height'])")
 python3 -u ops/b23/check_block.py $E/create-check.json $H $A || exit 4
 echo "=== state with open offer"; python3 -u ops/b23/offer_state.py $E/state-1-open.json || exit 5
-OID=$(python3 -c "import json;d=json.load(open('$E/state-1-open.json'));o=d['validator-0']['alice_offers'];print(o[0]['offer_id'] if len(o)==1 else '')")
+OID=$(python3 -c "import json;d=json.load(open('$E/state-1-open.json'));o=[x for x in d['validator-0']['alice_offers'] if x.get('state')=='open'];print(o[0]['offer_id'] if len(o)==1 else '')")
 [ -n "$OID" ] || { echo "EXPECTED EXACTLY ONE OPEN OFFER"; exit 6; }
 echo "offer_id=$OID"
 python3 -c "import json;json.dump({'operation':'offer_cancel','owner':'$A','offer_id':'$OID'},open('$I/r2-offer-cancel-$T.json','w'))"
