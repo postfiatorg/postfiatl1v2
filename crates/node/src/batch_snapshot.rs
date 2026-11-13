@@ -3872,6 +3872,9 @@ fn import_snapshot_into_staging(
         state.node_id = node_id;
         store.write_node_state(&state)?;
     }
+    // A restore may rewind this node id's owned objects: start a new
+    // inventory incarnation so no earlier revision is ordered against it.
+    renew_inventory_incarnation(data_dir)?;
 
     let imported_store = NodeStore::new(data_dir);
     let imported_genesis = imported_store.read_genesis()?;

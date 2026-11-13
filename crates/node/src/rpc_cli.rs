@@ -1860,6 +1860,19 @@ fn handle_rpc_serve_connection(
             merge_rpc_serve_runtime_metrics(result, context.runtime_metrics.snapshot());
         }
     }
+    if method == "owned_objects" && response.ok {
+        if let Some(result) = response.result.as_mut() {
+            gate_owned_objects_inventory_revision(
+                result,
+                rpc_serve_owned_lane_admits_legacy_applies(
+                    context.allow_mempool_submit,
+                    context.allow_mempool_submit_finality,
+                    context.allow_orchard_batch_create,
+                    context.owned_lane_enabled,
+                ),
+            );
+        }
+    }
     let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
     let mut event = rpc_serve_event(
         &context.node_id,
@@ -4107,6 +4120,47 @@ fn rpc_serve_method_allowed(
         allow_orchard_batch_create,
         true,
     )
+}
+
+/// Why an `owned_objects` page carries no `inventory_revision`.
+pub(crate) const OWNED_OBJECTS_REVISION_LEGACY_APPLIES: &str = "legacy_owned_applies_enabled";
+
+/// Whether this server's method gate admits a legacy (non-v3) certified
+/// owned apply or unwrap. Those change objects without a FastPay fence, so
+/// the inventory revision would not move.
+fn rpc_serve_owned_lane_admits_legacy_applies(
+    allow_mempool_submit: bool,
+    allow_mempool_submit_finality: bool,
+    allow_orchard_batch_create: bool,
+    owned_lane_enabled: bool,
+) -> bool {
+    ["owned_apply", "owned_unwrap_apply"].into_iter().any(|method| {
+        rpc_serve_method_allowed_with_owned_lane(
+            method,
+            allow_mempool_submit,
+            allow_mempool_submit_finality,
+            allow_orchard_batch_create,
+            owned_lane_enabled,
+        )
+    })
+}
+
+/// Keeps `inventory_revision` only where every admitted object mutation
+/// advances it; otherwise replaces it with the reason.
+fn gate_owned_objects_inventory_revision(
+    result: &mut serde_json::Value,
+    legacy_applies_admitted: bool,
+) {
+    if !legacy_applies_admitted {
+        return;
+    }
+    if let Some(result) = result.as_object_mut() {
+        result.remove("inventory_revision");
+        result.insert(
+            "inventory_revision_unavailable".to_string(),
+            serde_json::json!(OWNED_OBJECTS_REVISION_LEGACY_APPLIES),
+        );
+    }
 }
 
 fn rpc_serve_method_allowed_with_owned_lane(

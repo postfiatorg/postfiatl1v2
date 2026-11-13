@@ -395,6 +395,7 @@ pub(super) fn init_with_genesis(
         Some(faucet_key.public_key_hex.clone()),
     );
     store.init(&genesis, &state)?;
+    renew_inventory_incarnation(&data_dir)?;
     store.write_ledger(&genesis_ledger_state(&genesis, faucet_account.clone())?)?;
     write_faucet_account_file(&data_dir.join(FAUCET_ACCOUNT_FILE), &faucet_account)?;
     write_key_file(&data_dir.join(FAUCET_KEY_FILE), &faucet_key)?;
@@ -3348,9 +3349,48 @@ fn owned_objects_json_len<T: serde::Serialize>(value: &T) -> io::Result<usize> {
         })
 }
 
+/// Node-local file beside the node state; never replicated, exported in a
+/// snapshot or committed in a state root.
+pub(super) const INVENTORY_INCARNATION_FILE: &str = "inventory-incarnation";
+
+/// Gives the data directory a new random inventory incarnation: on creation
+/// and on every snapshot import, so a restored directory never answers
+/// revisions comparable with the history it replaced.
+pub(super) fn renew_inventory_incarnation(data_dir: &Path) -> io::Result<String> {
+    use std::io::Read;
+    let mut bytes = [0u8; 16];
+    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+    let incarnation = bytes_to_hex(&bytes);
+    atomic_write(
+        data_dir.join(INVENTORY_INCARNATION_FILE),
+        incarnation.as_bytes(),
+    )?;
+    Ok(incarnation)
+}
+
+/// The data directory's incarnation, kept across restarts. A directory
+/// created before incarnations existed gets one on its first read. Called
+/// under the ordered-commit lock.
+fn inventory_incarnation(data_dir: &Path) -> io::Result<String> {
+    match std::fs::read_to_string(data_dir.join(INVENTORY_INCARNATION_FILE)) {
+        Ok(value) if value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit()) => {
+            Ok(value)
+        }
+        Ok(_) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "inventory incarnation file is malformed",
+        )),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            renew_inventory_incarnation(data_dir)
+        }
+        Err(error) => Err(error),
+    }
+}
+
 /// One page of the owner's objects in (asset, id, version) order, read under
 /// the ordered-commit lock so the page, `view_digest`, `height` and
-/// `state_root` are from one moment. `view_digest` identifies the object
+/// `state_root` are from one moment, after any interrupted ordered commit
+/// is recovered as `status` does. `view_digest` identifies the object
 /// view (FastPay effects change it without a new block); a continuation
 /// whose cursor carries another view digest is refused with
 /// `owned_objects_view_changed` instead of mixing two views. The page ends at `limit` objects or before the compact JSON
@@ -3391,7 +3431,11 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
             bytes.min(OWNED_OBJECTS_PAGE_MAX_BYTES)
         });
     let store = NodeStore::new(&options.data_dir);
+    let _store_lease = store.transactional_store_lease()?;
     let commit_lock = store.lock_ordered_commit()?;
+    // As `status` does: finish an interrupted ordered commit first, so the
+    // ledger and the tip read below belong to one commit.
+    recover_ordered_commit_journal_locked(&store, &commit_lock)?;
     let genesis = store.read_genesis()?;
     let ledger = read_fastpay_ledger(&store)?;
     let tip = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?;
@@ -3400,11 +3444,13 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
         Err(error) if error.kind() == io::ErrorKind::NotFound => None,
         Err(error) => return Err(error),
     };
+    let incarnation = inventory_incarnation(&options.data_dir)?;
     drop(commit_lock);
     let inventory_revision = OwnedObjectsInventoryRevision {
         finalized_height: tip.height,
         fastpay_sequence: u64::try_from(ledger.fastpay_version_fences.len())
             .map_err(invalid_data)?,
+        incarnation,
     };
     let mut objects = ledger
         .owned_objects
@@ -3471,7 +3517,8 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
         state_root: tip.state_root,
         view_digest,
         owner_keys_omitted: options.omit_owner_keys,
-        inventory_revision,
+        inventory_revision: Some(inventory_revision),
+        inventory_revision_unavailable: None,
         node_id,
     };
     // `null` (4 bytes) becomes the quoted cursor when a next page exists.

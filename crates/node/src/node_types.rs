@@ -3302,8 +3302,16 @@ pub struct OwnedObjectsReport {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub owner_keys_omitted: bool,
     /// Orders two answers of the same node: read from the same view as the
-    /// page. Compare as (`finalized_height`, `fastpay_sequence`).
-    pub inventory_revision: OwnedObjectsInventoryRevision,
+    /// page. Compare as (`finalized_height`, `fastpay_sequence`), and only
+    /// between answers with the same `node_id` and `incarnation`. Absent,
+    /// with `inventory_revision_unavailable` set, when the answering server
+    /// can change objects without advancing it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inventory_revision: Option<OwnedObjectsInventoryRevision>,
+    /// Why `inventory_revision` is absent (e.g.
+    /// `legacy_owned_applies_enabled`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inventory_revision_unavailable: Option<String>,
     /// The answering node's id (`status.node_id`); absent only when the
     /// data directory has no node state.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3314,11 +3322,15 @@ pub struct OwnedObjectsReport {
 /// FastPay version fences in the view (finalized plus pending effects), the
 /// same count each journal effect records as its `application_sequence`. At
 /// one finalized height it only grows; pending minority effects are dropped
-/// only when a new height finalizes. Field order gives the comparison order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+/// only when a new height finalizes. `incarnation` names the data
+/// directory's history: created with the directory, replaced on every
+/// snapshot import, kept across restarts. Revisions of different
+/// incarnations are not comparable.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct OwnedObjectsInventoryRevision {
     pub finalized_height: u64,
     pub fastpay_sequence: u64,
+    pub incarnation: String,
 }
 
 /// One `owned_objects` row: an `OwnedObject`, serialized identically unless
