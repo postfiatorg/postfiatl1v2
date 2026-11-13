@@ -176,7 +176,7 @@ fn browser_b23_asset_fields_and_payments_preserve_review_and_verify() {
     policy.policy_hash = policy.computed_hash();
     let operations = [
         json!({"operation":"pftl_uniswap_primary_redeem", "owner":identity.address,
-            "settlement_recipient":"redeemer-credit", "settlement_source_asset_id":"12".repeat(48),
+            "settlement_recipient":format!("pf{}", "a1".repeat(20)), "settlement_source_asset_id":"12".repeat(48),
             "route_id":"b23-route", "redemption_nonce":"44".repeat(32), "nav_amount_atoms":1_000_000,
             "min_settlement_value_atoms":998_000, "route_epoch":1,"policy_epoch":2,
             "policy_hash":policy.policy_hash,"pricing_nav_epoch":1,"pricing_reserve_packet_hash":"33".repeat(48),"expires_at_height":100}),
@@ -187,7 +187,7 @@ fn browser_b23_asset_fields_and_payments_preserve_review_and_verify() {
             "route_id":"b23-route", "prior_route_epoch":1, "next_route_epoch":2,
             "next_route_config_digest":"55".repeat(48),"live_value_enabled":true,
             "settlement_source_asset_ids":["12".repeat(48)], "next_primary_market_policy":policy}),
-        json!({"operation":"issued_payment", "from":identity.address,"to":"recipient",
+        json!({"operation":"issued_payment", "from":identity.address,"to":format!("pf{}", "b2".repeat(20)),
             "asset_id":"12".repeat(48),"issuer":"issuer", "amount":1_000_000}),
     ];
     for operation in operations {
@@ -208,7 +208,7 @@ fn browser_b23_asset_fields_and_payments_preserve_review_and_verify() {
         ));
     }
     let transfer = json!({"chain_id":backup.chain_id,"genesis_hash":"22".repeat(48),"protocol_version":1,
-        "to":"recipient", "amount":1_000_000,"fee":100,"sequence":1});
+        "to":format!("pf{}", "b2".repeat(20)), "amount":1_000_000,"fee":100,"sequence":1});
     let signed = wallet_sign_transfer_from_fields(
         &backup,
         serde_json::from_str(&transfer.to_string()).unwrap(),
