@@ -1,7 +1,7 @@
 //! `owned_objects` carries `inventory_revision` {finalized_height,
-//! fastpay_sequence} and the answering `node_id`, both read under the same
-//! ordered-commit lock as the page, so a page and its revision always belong
-//! to one view.
+//! fastpay_sequence, incarnation} and the answering `node_id`, all read under
+//! the same ordered-commit lock as the page (after recovering a pending
+//! ordered journal), so a page and its revision always belong to one view.
 
 use super::*;
 
@@ -18,10 +18,15 @@ fn read(data_dir: &Path, owner: &str, limit: Option<usize>) -> OwnedObjectsOptio
 }
 
 fn revision(report: &OwnedObjectsReport) -> (u64, u64) {
-    (
-        report.inventory_revision.finalized_height,
-        report.inventory_revision.fastpay_sequence,
-    )
+    let revision = report.inventory_revision.as_ref().expect("inventory revision");
+    (revision.finalized_height, revision.fastpay_sequence)
+}
+
+fn incarnation(report: &OwnedObjectsReport) -> &str {
+    let incarnation = &report.inventory_revision.as_ref().expect("inventory revision").incarnation;
+    assert_eq!(incarnation.len(), 32, "{incarnation:?}");
+    assert!(incarnation.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    incarnation
 }
 
 fn copy_dir(source: &Path, target: &Path) {
@@ -109,14 +114,15 @@ fn owned_inventory_revision_grows_at_one_height_and_drops_minority_only_at_a_new
 
     let before = owned_objects(read(&dirs[0], &owner_hex, None)).unwrap();
     assert_eq!(before.node_id.as_deref(), Some("validator-0"));
-    assert_eq!(before.inventory_revision.finalized_height, before.height);
+    assert_eq!(revision(&before).0, before.height);
 
     apply(&dirs[0], &certificate, "validator-0");
     let applied = owned_objects(read(&dirs[0], &owner_hex, None)).unwrap();
     assert_eq!((applied.height, &applied.state_root), (before.height, &before.state_root));
     assert_ne!(applied.view_digest, before.view_digest);
     assert_eq!(revision(&applied), (before.height, revision(&before).1 + 1));
-    assert!(applied.inventory_revision > before.inventory_revision);
+    assert!(revision(&applied) > revision(&before));
+    assert_eq!(incarnation(&applied), incarnation(&before));
 
     // Replaying the same certificate is no new effect.
     apply(&dirs[0], &certificate, "validator-0");
@@ -130,6 +136,7 @@ fn owned_inventory_revision_grows_at_one_height_and_drops_minority_only_at_a_new
         (revision(&after_restart), &after_restart.view_digest, &after_restart.node_id),
         (revision(&applied), &applied.view_digest, &applied.node_id)
     );
+    assert_eq!(incarnation(&after_restart), incarnation(&applied));
 
     // The omitting block finalizes: the minority effect is dropped here, at
     // the new height, and nowhere else.
@@ -140,18 +147,21 @@ fn owned_inventory_revision_grows_at_one_height_and_drops_minority_only_at_a_new
     })
     .unwrap();
     let dropped = owned_objects(read(&dirs[0], &owner_hex, None)).unwrap();
-    assert_eq!(dropped.inventory_revision.finalized_height, before.height + 1);
+    assert_eq!(revision(&dropped).0, before.height + 1);
     assert_eq!(dropped.objects, before.objects);
-    assert!(dropped.inventory_revision.fastpay_sequence < applied.inventory_revision.fastpay_sequence);
-    assert!(dropped.inventory_revision > applied.inventory_revision);
+    assert!(revision(&dropped).1 < revision(&applied).1);
+    assert!(revision(&dropped) > revision(&applied));
+    assert_eq!(incarnation(&dropped), incarnation(&before));
     std::fs::remove_dir_all(root).unwrap();
 }
 
 /// (c) A snapshot restore answers the revision of the restored view: the
 /// journal travels with the snapshot, so the restored node reads the same
 /// objects, view digest and revision. The node id is the snapshot's unless
-/// the import names another, which changes only the id. A second effect
-/// at the same height then raises the sequence by one again.
+/// the import names another; the incarnation is new on every import. A
+/// second effect at the same height then raises the sequence by one again,
+/// and restoring the older snapshot under the same node id afterwards
+/// answers the lower revision under a different incarnation.
 #[test]
 fn owned_inventory_revision_follows_the_restored_view_after_snapshot_restore() {
     let (root, dirs, owner) = super::fastpay_payment_safety::active_fastpay_fixture();
@@ -170,6 +180,7 @@ fn owned_inventory_revision_follows_the_restored_view_after_snapshot_restore() {
         snapshot_dir: snapshot_dir.clone(),
     })
     .unwrap();
+    let mut incarnations = vec![incarnation(&source).to_string()];
     for (name, node_id) in [("same-id", None), ("new-id", Some("validator-restored"))] {
         let restored = root.join(format!("restored-{name}"));
         import_snapshot_from_finalized_checkpoint(SnapshotImportOptions {
@@ -189,6 +200,9 @@ fn owned_inventory_revision_follows_the_restored_view_after_snapshot_restore() {
             node_id.or(source.node_id.as_deref()),
             "{name}"
         );
+        let restored_incarnation = incarnation(&answer).to_string();
+        assert!(!incarnations.contains(&restored_incarnation), "{name}");
+        incarnations.push(restored_incarnation);
     }
 
     // A dependent effect at the same finalized height.
@@ -224,6 +238,27 @@ fn owned_inventory_revision_follows_the_restored_view_after_snapshot_restore() {
     let second = owned_objects(read(&dirs[0], &recipient_hex, None)).unwrap();
     assert_eq!(second.object_count, 0);
     assert_eq!(revision(&second), (source.height, revision(&source).1 + 1));
+    assert_eq!(incarnation(&second), incarnation(&source));
+
+    // The same validator restored from the older snapshot: same node id,
+    // the older revision, a new incarnation, so a client never orders the
+    // restored answers against the earlier ones.
+    let older = root.join("restored-older");
+    import_snapshot_from_finalized_checkpoint(SnapshotImportOptions {
+        data_dir: older.clone(),
+        snapshot_dir: snapshot_dir.clone(),
+        node_id: None,
+    })
+    .unwrap();
+    let rolled_back = owned_objects(read(&older, &recipient_hex, None)).unwrap();
+    assert_eq!(rolled_back.node_id, second.node_id);
+    assert_eq!(revision(&rolled_back), revision(&source));
+    assert!(!incarnations.contains(&incarnation(&rolled_back).to_string()));
+    // An intact restart of the restored directory keeps its incarnation.
+    let older_restarted = root.join("restored-older-restarted");
+    copy_dir(&older, &older_restarted);
+    let after_restart = owned_objects(read(&older_restarted, &recipient_hex, None)).unwrap();
+    assert_eq!(incarnation(&after_restart), incarnation(&rolled_back));
     std::fs::remove_dir_all(root).unwrap();
 }
 
@@ -347,4 +382,63 @@ fn owned_inventory_revision_on_every_page_and_on_the_non_transactional_store() {
     );
     std::fs::remove_dir_all(data_dir).unwrap();
     std::fs::remove_dir_all(restarted).unwrap();
+}
+
+/// A read after an interrupted non-transactional commit (journal written,
+/// new ledger written, tip not yet advanced) recovers the journal under the
+/// commit lock first, as `status` does, so the page and its revision carry
+/// the new tip with the new ledger instead of the old tip.
+#[test]
+fn owned_objects_recovers_a_pending_ordered_journal_before_reading() {
+    let data_dir = std::env::temp_dir().join(format!(
+        "postfiat-owned-objects-pending-journal-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-owned-objects-pending-journal".to_owned(),
+        node_id: "validator-0".to_owned(),
+        validator_count: 1,
+    })
+    .unwrap();
+    let store = NodeStore::new(&data_dir);
+    assert!(!store.transactional_storage_active().unwrap());
+    let genesis = store.read_genesis().unwrap();
+    let governance = store.read_governance().unwrap();
+    let ledger = store.read_ledger().unwrap();
+    let batch =
+        postfiat_mempool_dag::build_transaction_batch(&mempool_batch_domain(&genesis), Vec::new())
+            .unwrap()
+            .batch;
+    let journal = super::replicated_state_activation::activation_test_journal(
+        &store,
+        &genesis,
+        &governance,
+        &ledger,
+        BATCH_KIND_TRANSPARENT,
+        &batch.batch_id,
+        &batch,
+        &[],
+        false,
+    );
+    let old_height = store.read_chain_tip().unwrap().height;
+    let owner_hex = bytes_to_hex(&ml_dsa_65_keygen_from_seed(&[82; 32]).public_key);
+    let before = owned_objects(read(&data_dir, &owner_hex, None)).unwrap();
+    assert_eq!(revision(&before).0, old_height);
+
+    // The ledger-written prefix of an ordered commit.
+    store.write_ordered_commit_journal(&journal).unwrap();
+    store.write_ledger(journal.ledger.as_ref().unwrap()).unwrap();
+
+    let answer = owned_objects(read(&data_dir, &owner_hex, None)).unwrap();
+    assert_eq!(answer.height, old_height + 1);
+    assert_eq!(revision(&answer).0, old_height + 1);
+    assert_eq!(incarnation(&answer), incarnation(&before));
+    assert_eq!(store.read_ordered_commit_journal_raw().unwrap(), None);
+    assert_eq!(store.read_chain_tip().unwrap().height, old_height + 1);
+    std::fs::remove_dir_all(data_dir).unwrap();
 }
