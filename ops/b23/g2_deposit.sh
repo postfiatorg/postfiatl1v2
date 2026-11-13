@@ -23,7 +23,7 @@ echo "== Bob balances before"; bal $O/bob-before.json
 echo "== readiness"; python3 ops/b23/bridge_job.py readiness $O/readiness.json
 python3 -c "import json,sys;d=json.load(open('$O/readiness.json'));sys.exit(0 if d.get('ready') is True else 1)" || { echo "NOT READY - stopping before any deposit"; exit 2; }
 echo "== Ethereum deposit (1 USDC, test EOA)"
-/home/postfiat/repos/StakeHub/.venv/bin/python -u ops/b23/eth_deposit.py --amount-atoms 1000000 --recipient $BOB --route-binding $BIND --readiness-json $O/readiness.json --out $O/eth || { echo "ETH DEPOSIT FAILED"; exit 3; }
+/home/postfiat/repos/StakeHub/.venv/bin/python -u ops/b23/eth_deposit.py --amount-atoms 1000000 --recipient $BOB --route-binding $BIND --readiness-json $O/readiness.json --credited-asset $S --out $O/eth || { echo "ETH DEPOSIT FAILED"; exit 3; }
 echo "== bridge job"
 python3 -u ops/b23/bridge_job.py submit $O/eth/deposit-record.json $O/job || { echo "JOB FAILED"; exit 4; }
 echo "== Bob balances after"; bal $O/bob-after.json
