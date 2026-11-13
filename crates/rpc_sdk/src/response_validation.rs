@@ -5156,7 +5156,38 @@ fn validate_navcoin_bridge_route_status_row(
         ));
     }
     lower_hex_field(route, "ledger_hash", 96)?;
-    Ok(())
+    validate_navcoin_bridge_route_authority_fields(route)
+}
+
+/// Route authority fields are optional because older nodes omit them.
+fn validate_navcoin_bridge_route_authority_fields(
+    route: &Value,
+) -> Result<(), RpcResponseValidationError> {
+    let present = |name: &str| route.get(name).is_some();
+    if !present("authority_epoch")
+        && !present("authority_committee_current")
+        && !present("authority_committee_unknown_reason")
+    {
+        return Ok(());
+    }
+    let authority_epoch = optional_u64_field_value(route, "authority_epoch")?;
+    if authority_epoch == Some(0) {
+        return Err(invalid_result(
+            "authority_epoch",
+            "expected null or a nonzero authority epoch",
+        ));
+    }
+    optional_bool_result_field(route, "authority_committee_current")?;
+    let current = field(route, "authority_committee_current")?.as_bool();
+    let reason = optional_reason_field(route, "authority_committee_unknown_reason")?;
+    match (current, reason) {
+        (Some(_), None) if authority_epoch.is_some() => Ok(()),
+        (None, Some(_)) => Ok(()),
+        _ => Err(invalid_result(
+            "authority_committee_current",
+            "expected a boolean with an authority epoch and no reason, or null with a reason",
+        )),
+    }
 }
 
 fn validate_navcoin_bridge_route_family_field(

@@ -4610,6 +4610,55 @@
         validate_response_kind(&navcoin_routes, RpcResponseKind::NavcoinBridgeRoutes)
             .expect("valid NAVCoin bridge routes");
 
+        // Route authority fields are optional (older nodes omit them) and,
+        // when present, must be self-consistent.
+        let navcoin_routes_with_authority = |fields: serde_json::Value| {
+            let mut result = navcoin_routes.result.clone().expect("routes result");
+            let row = result["routes"][0].as_object_mut().expect("route row");
+            for (key, value) in fields.as_object().expect("fields object") {
+                row.insert(key.clone(), value.clone());
+            }
+            success_response("navcoin-bridge-routes-authority", &result, vec![])
+                .expect("NAVCoin bridge routes response")
+        };
+        for valid in [
+            json!({"authority_epoch": 2, "authority_committee_current": true,
+                   "authority_committee_unknown_reason": null}),
+            json!({"authority_epoch": 1, "authority_committee_current": false,
+                   "authority_committee_unknown_reason": null}),
+            json!({"authority_epoch": 1, "authority_committee_current": null,
+                   "authority_committee_unknown_reason": "no_active_checkpoint_committee_recorded"}),
+            json!({"authority_epoch": null, "authority_committee_current": null,
+                   "authority_committee_unknown_reason": "route_has_no_ethereum_verification_policy"}),
+        ] {
+            validate_response_kind(
+                &navcoin_routes_with_authority(valid.clone()),
+                RpcResponseKind::NavcoinBridgeRoutes,
+            )
+            .unwrap_or_else(|error| panic!("valid route authority {valid}: {error:?}"));
+        }
+        for invalid in [
+            json!({"authority_epoch": 1, "authority_committee_current": null,
+                   "authority_committee_unknown_reason": null}),
+            json!({"authority_epoch": 1, "authority_committee_current": "false",
+                   "authority_committee_unknown_reason": null}),
+            json!({"authority_epoch": null, "authority_committee_current": true,
+                   "authority_committee_unknown_reason": null}),
+            json!({"authority_epoch": 0, "authority_committee_current": true,
+                   "authority_committee_unknown_reason": null}),
+            json!({"authority_epoch": 2, "authority_committee_current": true,
+                   "authority_committee_unknown_reason": "no_active_checkpoint_committee_recorded"}),
+        ] {
+            assert!(
+                validate_response_kind(
+                    &navcoin_routes_with_authority(invalid.clone()),
+                    RpcResponseKind::NavcoinBridgeRoutes,
+                )
+                .is_err(),
+                "route authority {invalid} must be rejected"
+            );
+        }
+
         let navcoin_packet = success_response(
             "navcoin-bridge-packet-1",
             &json!({
