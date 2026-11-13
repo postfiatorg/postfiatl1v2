@@ -1643,7 +1643,10 @@ pub(super) fn append_ledger_state(
         let mut keys = std::collections::BTreeSet::new();
         for state in &ledger.beacon_finality_states {
             if !keys.insert((&state.route_profile_hash, state.route_epoch)) {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "duplicate beacon anchor key"));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "duplicate beacon anchor key",
+                ));
             }
         }
         append_sorted_canonical_commitments(
@@ -4045,11 +4048,31 @@ pub(super) fn append_pftl_uniswap_receipt(
         receipt.block_height,
     );
     if let Some(settlement) = &receipt.redemption_settlement {
-        append_canonical_str(bytes, &format!("{prefix}.redemption_settlement.settlement_asset_id"), &settlement.settlement_asset_id);
-        append_canonical_str(bytes, &format!("{prefix}.redemption_settlement.settlement_recipient"), &settlement.settlement_recipient);
-        append_canonical_u64(bytes, &format!("{prefix}.redemption_settlement.settlement_value_atoms"), settlement.settlement_value_atoms);
-        append_canonical_str(bytes, &format!("{prefix}.redemption_settlement.spread_recipient"), &settlement.spread_recipient);
-        append_canonical_u64(bytes, &format!("{prefix}.redemption_settlement.spread_value_atoms"), settlement.spread_value_atoms);
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.redemption_settlement.settlement_asset_id"),
+            &settlement.settlement_asset_id,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.redemption_settlement.settlement_recipient"),
+            &settlement.settlement_recipient,
+        );
+        append_canonical_u64(
+            bytes,
+            &format!("{prefix}.redemption_settlement.settlement_value_atoms"),
+            settlement.settlement_value_atoms,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.redemption_settlement.spread_recipient"),
+            &settlement.spread_recipient,
+        );
+        append_canonical_u64(
+            bytes,
+            &format!("{prefix}.redemption_settlement.spread_value_atoms"),
+            settlement.spread_value_atoms,
+        );
     }
 }
 

@@ -4,11 +4,10 @@ use postfiat_types::{
     pftl_uniswap_consensus_receipt_computed_hash, pftl_uniswap_route_state_hash,
     verify_pftl_uniswap_consensus_receipt_merkle_proof, BlockRecord, PfUsdcEgressFinalityStepV1,
     PftlUniswapConsensusReceipt, PftlUniswapConsensusRouteState, PftlUniswapMintPacketV2,
-    PftlUniswapReceiptMerkleProofV1, ValidatorRegistryEntry,
-    PFTL_UNISWAP_BPS_DENOMINATOR, PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS,
+    PftlUniswapReceiptMerkleProofV1, ValidatorRegistryEntry, PFTL_UNISWAP_BPS_DENOMINATOR,
     PFTL_UNISWAP_EXPORT_STATUS_SOURCE_DEBITED, PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2,
-    PFTL_UNISWAP_ROUTE_SCHEMA_V2, PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT,
-    PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY,
+    PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS, PFTL_UNISWAP_ROUTE_SCHEMA_V2,
+    PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT, PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY,
 };
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};

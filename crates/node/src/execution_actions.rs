@@ -1764,8 +1764,11 @@ fn execute_governance_batch_with_replay(
         let validated = (|| -> Result<postfiat_types::VaultBridgeRouteProfileRecordV1, String> {
             // Old archived envelopes must reach the same NAV-profile rejection
             // as the base binary. They still cannot pass state.validate() below.
-            if historical_replay || activation.beacon_finality_bootstrap.as_ref()
-                .is_some_and(|state| state.current_sync_committee_root.is_empty())
+            if historical_replay
+                || activation
+                    .beacon_finality_bootstrap
+                    .as_ref()
+                    .is_some_and(|state| state.current_sync_committee_root.is_empty())
             {
                 activation.validate_for_replay()?;
             } else {
