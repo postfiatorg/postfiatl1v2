@@ -12,6 +12,13 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 INVENTORY = ROOT / "docs/status/OPEN-SOURCE-PROOF-PUBLIC-INPUT-INVENTORY-20260716.json"
 PFETH_STALE = "source_changed_after_committed_build"
+PFUSDC_STATEMENT_SOURCES = (
+    "crates/types/src/account_owned_asset_types.rs",
+    "crates/types/src/market_nav_asset_types.rs",
+    "crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol",
+    "crates/execution/src/vault_bridge_profile_resolution.rs",
+    "crates/node/src/execution_actions.rs",
+)
 
 
 def sha256_file(relative: str) -> str:
@@ -169,6 +176,13 @@ def main() -> None:
     missing = [s for s in pfusdc["sources"] if s not in document["source_hashes"]]
     if missing:
         raise SystemExit(f"pfUSDC ingress sources are not pinned: {missing}")
+    # Statement and binding owners outside the guest crate: deposit-record
+    # helpers, route allowlist, vault storage layout and active-policy selectors.
+    unlisted = [s for s in PFUSDC_STATEMENT_SOURCES if s not in pfusdc["sources"]]
+    if unlisted:
+        raise SystemExit(f"pfUSDC ingress statement sources are not listed: {unlisted}")
+    if len(pfusdc.get("assumptions", [])) != 4:
+        raise SystemExit("pfUSDC ingress must record its four binding assumptions A1-A4")
     pfusdc_fields = pfusdc["public_values"]
     if [field["index"] for field in pfusdc_fields] != list(range(29)):
         raise SystemExit("pfUSDC ingress fields must cover exactly indices 0..28")
