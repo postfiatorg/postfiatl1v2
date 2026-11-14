@@ -8,7 +8,7 @@ from snapshot import export
 PEERS=[('validator-0','64.176.220.75'),('validator-1','95.179.184.122'),('validator-2','66.42.48.39'),('validator-3','149.28.63.106'),('validator-4','95.179.179.206'),('validator-5','45.32.110.170')]
 REMOTE_NODE='/opt/postfiat/releases/b23-release4-20261113/postfiat-node'
 RELEASE_SHA='3039c21af67420a9842b5644eb580b2809081a97419e3e8e1f849d49a487cb6f'
-def main():
+def acknowledge():
     from phase6_reads import read_six
     live.read_six=read_six
     os.umask(0o077);mint=load(OUT/'mainnet-small-mint/result.json');assert mint['passed'];tx=next(r for r in mint['receipts'] if r['label']=='consumeMintOnly-one-B24');d=OUT/'destination-ack';d.mkdir(mode=0o700,exist_ok=False);remote='/tmp/b24-phase6-ack-'+tx['tx_hash'][2:18]
@@ -41,12 +41,16 @@ def main():
     for peer in PEERS[1:]:up(PEERS[0],d/(peer[0]+'.vote.json'),peer[0]+'.vote.json')
     node(PEERS[0],'ethereum-checkpoint-certificate-assemble',['--checkpoint-file',remote+'/checkpoint.json','--vote-files',','.join(remote+'/'+n+'.vote.json' for n in validators),'--certificate-file',remote+'/certificate.json'],'certificate');down(PEERS[0],'certificate.json',d/'certificate.json')
     proof=load(d/'receipt-proof.json');assert proof['transaction_hash'].lower()==tx['tx_hash'].lower() and proof['block_number']==tx['block'];op=dict(operation='pftl_uniswap_destination_consume',operator=ISSUER,route_id=ROUTE,packet_hash=load(OUT/'real-export/result.json')['packet_hash'],ethereum_consume_tx_hash=tx['tx_hash'][2:],consumed_height=tx['block'],finalized_height=checkpoint['observed_head_number'],external_event_proof=dict(checkpoint_certificate=load(d/'certificate.json'),receipt_proof=proof['proof'],log_index=index));save(d/'operation.json',op)
+    before=d/'before.json';s=export(before);r0=item(s['ledger']['pftl_uniswap_routes'],'route_id',ROUTE);assert r0['outstanding_bridge_claims_atoms']==1000000
+    last,receipts=live.run_operations([dict(label='ack-real-mainnet-mint',source=ISSUER,kind='asset',operation=op)],before,d/'live');r=item(load(last)['ledger']['pftl_uniswap_routes'],'route_id',ROUTE);assert invariant(r) and r['outstanding_bridge_claims_atoms']==0 and r['ethereum_spendable_supply_atoms']==1000000 and r['authorized_valid_supply_atoms']==r0['authorized_valid_supply_atoms']
+    save(d/'result.json',dict(passed=True,six_independent_Ethereum_votes=True,real_receipt_MPT_proof=True,receipts=receipts,final_snapshot=str(last),outstanding_bridge_claims_atoms=0,ethereum_spendable_supply_atoms=1000000,invariant=True))
+def main():
+    # Existing CLI observation/proof commands open the native store while reading.
+    # Hold the lane lock for their whole run, including guarded vote journals,
+    # so they cannot contend with another lane's native transaction workflow.
     with live.LOCK.open('a+') as lock:
         live.acquire_tee_lock(lock)
-        try:
-            before=d/'before.json';s=export(before);r0=item(s['ledger']['pftl_uniswap_routes'],'route_id',ROUTE);assert r0['outstanding_bridge_claims_atoms']==1000000
-            last,receipts=live.run_operations([dict(label='ack-real-mainnet-mint',source=ISSUER,kind='asset',operation=op)],before,d/'live');r=item(load(last)['ledger']['pftl_uniswap_routes'],'route_id',ROUTE);assert invariant(r) and r['outstanding_bridge_claims_atoms']==0 and r['ethereum_spendable_supply_atoms']==1000000 and r['authorized_valid_supply_atoms']==r0['authorized_valid_supply_atoms']
-            save(d/'result.json',dict(passed=True,six_independent_Ethereum_votes=True,real_receipt_MPT_proof=True,receipts=receipts,final_snapshot=str(last),outstanding_bridge_claims_atoms=0,ethereum_spendable_supply_atoms=1000000,invariant=True))
+        try:acknowledge()
         finally:
             lock.seek(0)
             if lock.read().strip()=='TEE':lock.seek(0);lock.truncate();lock.flush()
