@@ -9,6 +9,8 @@ PEERS=[('validator-0','64.176.220.75'),('validator-1','95.179.184.122'),('valida
 REMOTE_NODE='/opt/postfiat/releases/b23-release4-20261113/postfiat-node'
 RELEASE_SHA='3039c21af67420a9842b5644eb580b2809081a97419e3e8e1f849d49a487cb6f'
 def main():
+    from phase6_reads import read_six
+    live.read_six=read_six
     os.umask(0o077);mint=load(OUT/'mainnet-small-mint/result.json');assert mint['passed'];tx=next(r for r in mint['receipts'] if r['label']=='consumeMintOnly-one-B24');d=OUT/'destination-ack';d.mkdir(mode=0o700,exist_ok=False);remote='/tmp/b24-phase6-ack-'+tx['tx_hash'][2:18]
     w=Web3(Web3.HTTPProvider(PUBLIC_RPC,request_kwargs={'timeout':60}));receipt=w.eth.get_transaction_receipt(tx['tx_hash']);assert receipt.status==1 and receipt.blockNumber==tx['block'];o=load(OUT/'operator.json');logs=[(i,x) for i,x in enumerate(receipt.logs) if x['address'].lower()==o['controller'].lower()];assert len(logs)==1;index,event=logs[0];assert hx(event['topics'][0])==hx(Web3.keccak(text='PacketConsumed(bytes32,bytes32,bytes32,address,uint256)'))
     save(d/'mint-receipt.json',json.loads(w.to_json(receipt)));assert w.eth.block_number>=receipt.blockNumber+12

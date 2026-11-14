@@ -8,3 +8,13 @@ def call(method,params=None,node=0):
     r=envelope(method,params,node)
     if not r.get('ok'):raise RuntimeError(method+': '+json.dumps(r.get('error')))
     return r['result']
+
+def read(method,params=None,node=0):
+    """Retry only bounded, idempotent status/receipt reads after lease failures."""
+    assert method in ('status','receipts')
+    for attempt in range(12):
+        try:return call(method,params,node)
+        except RuntimeError as error:
+            if not any(x in str(error) for x in ('storage_writer_busy','rpc_child_timeout','rpc_server_error','Database already open. Cannot acquire lock.')) or attempt==11:
+                raise RuntimeError(f'validator-{node}: {error}') from error
+            time.sleep(2)

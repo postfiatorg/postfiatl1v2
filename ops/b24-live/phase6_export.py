@@ -45,10 +45,15 @@ def qualify(start,d):
 
 def execute():
     assert (DAILY/'complete.json').exists(),'Daily run must finish successfully first'
-    assert not (DAILY/'failure.json').exists()
     daily=load(DAILY/'complete.json');assert daily['epoch']==2 and daily['six_validator_verified']
     unit=subprocess.check_output(['systemctl','--user','show','b24-tee-nav-daily.service','--property=ActiveState,SubState,Result,MainPID'],text=True)
-    assert 'ActiveState=inactive' in unit and 'MainPID=0' in unit and 'Result=success' in unit
+    assert 'MainPID=0' in unit
+    if (DAILY/'failure.json').exists():
+        recovery=load(OUT/'daily-recovery/result.json');assert recovery['passed'] and daily==recovery and recovery['completion_mode']=='verified_native_tail_resume_after_service_exit'
+        assert 'ActiveState=failed' in unit or 'ActiveState=inactive' in unit
+    else:assert 'ActiveState=inactive' in unit and 'Result=success' in unit
+    from phase6_reads import read_six
+    live.read_six=read_six;archive.read_six=read_six
     assert load(OUT/'mainnet-deployment/result.json')['passed']
     from phase6_deploy import PUBLIC_RPC,verify
     w=Web3(Web3.HTTPProvider(PUBLIC_RPC,request_kwargs={'timeout':60}));e=load(OUT/'deployment-expected.json');verify(w,e,5)
@@ -58,8 +63,11 @@ def execute():
     d=OUT/'real-export';d.mkdir(mode=0o700,exist_ok=False);save(d/'gate.json',dict(daily=daily,unit=unit,fee_cap_wei=fee,combined_future_gas_allowance=4500000,required_wei=allowance,checked_at=datetime.now(timezone.utc).isoformat()))
     live.OUT=OUT
     with live.LOCK.open('a+') as lock:
-        fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);lock.seek(0);assert not lock.read().strip(),'Another lane owns chain.lock'
-        lock.seek(0);lock.truncate();lock.write('TEE\n');lock.flush()
+        deadline=time.monotonic()+3600
+        while True:
+            fcntl.flock(lock,fcntl.LOCK_EX);lock.seek(0);holder=lock.read().strip()
+            if not holder:lock.seek(0);lock.truncate();lock.write('TEE\n');lock.flush();break
+            fcntl.flock(lock,fcntl.LOCK_UN);assert time.monotonic()<deadline,'Other lane retained lock';time.sleep(5)
         try:
             start=d/'before.json';s=export(start);assert item(s['ledger']['nav_assets'],'asset_id',B24)['finalized_epoch']==2
             ops=qualify(start,d);last,receipts=live.run_operations(ops,start,d/'live')

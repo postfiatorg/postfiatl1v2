@@ -11,15 +11,21 @@ import argparse,fcntl,time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timezone
 from sign import *
-from rpc import call,envelope
+from rpc import call,envelope,read
 from snapshot import export
 OUT=COORD/'evidence/tee/phase5'
 LOCK=COORD/'chain.lock'
 def require_lock():assert LOCK.read_text().strip()=='TEE','TEE lock lost'
 def read_six(tx=None):
     def one(i):
-        r=dict(server=call('server_info',node=i),status=call('status',node=i))
-        if tx:r['receipts']=call('receipts',{'tx_id':tx,'limit':10},i)
+        status=read('status',{},i)
+        # Release 4's resident status refresh has a one-second bounded cache;
+        # server_info starts a costly isolated worker and can take a writer lease.
+        # Keep the existing internal shape, explicitly labeling its provenance.
+        server={k:status[k] for k in ('chain_id','genesis_hash','protocol_version','node_id')}
+        server.update(ledger=dict(height=status['block_height'],hash=status['block_tip_hash'],state_root=status['state_root']),mempool=dict(pending=status['mempool_pending']))
+        r=dict(server=server,status=status,server_source='normalized resident status RPC; cache max 1000 ms')
+        if tx:r['receipts']=read('receipts',{'tx_id':tx,'limit':10},i)
         return r
     with ThreadPoolExecutor(max_workers=6) as pool:return list(pool.map(one,range(6)))
 def points(rows):return {(r['server']['ledger']['height'],r['server']['ledger']['state_root'],r['server']['ledger']['hash']) for r in rows}
