@@ -14,6 +14,10 @@ def operations(state,amount,label,source_asset=None):
     r=item(state['ledger']['pftl_uniswap_routes'],'route_id',ROUTE);p=r['v2']['primary_market_policy'];n=item(state['ledger']['nav_assets'],'asset_id',B24)
     assert n['finalized_epoch']==p['pricing_nav_epoch'] and n['finalized_reserve_packet_hash']==p['pricing_reserve_packet_hash']
     assert invariant(r) and not r['paused'] and r['live_value_enabled'] and not n['halted']
+    # Frozen V2 guest and release-4 canonical hashes agree only with these
+    # optional extensions absent. Refuse before any native debit if they change.
+    assert r['v2'].get('funding_sequence') is None and p.get('spread_recipient') is None
+    assert not r['ethereum_verification_policy'].get('require_route_bound_returns',False) and not r.get('return_imports',{})
     # Six-decimal B24 and PFUSDC, both valued in micro-USD. Round each stage up.
     assert all(item(state['ledger']['asset_definitions'],'asset_id',a)['precision']==6 for a in (B24,PFUSDC))
     base=(amount*n['nav_per_unit']+999999)//1000000;due=(base*p['issue_multiplier_bps']+9999)//10000
