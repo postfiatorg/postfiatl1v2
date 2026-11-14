@@ -1,0 +1,25 @@
+{
+  "borrowed_sources": {
+    "PFTLUniswapPrimaryMarketV2.sol": {
+      "source": "/home/postfiat/repos/postfiatl1v2-b23-pool-phase2/ops/new-navcoin/receipt-qualification/src/PFTLUniswapPrimaryMarketV2.sol",
+      "sha256": "a51b19d93f3fd4ec8483f836c4a0cb203d93c06038749e7611a1c4b876232193"
+    },
+    "PFTLUniswapPrimaryMarketV3.sol": {
+      "source": "/home/postfiat/repos/postfiatl1v2-b23-pool-phase2/ops/new-navcoin/receipt-qualification/src/PFTLUniswapPrimaryMarketV3.sol",
+      "sha256": "f5f6f26540d2d81bf90f4e8679474a43807dda7a22aa9264c9413571bbcf010a"
+    },
+    "PFTLReturnRouteV3.sol": {
+      "source": "/home/postfiat/repos/postfiatl1v2-b23-pool-phase2/ops/new-navcoin/receipt-qualification/src/PFTLReturnRouteV3.sol",
+      "sha256": "a7214ebca6bfae837ffd5372ea05d1eb08561313352e6d9ddbc16e0e25953200"
+    },
+    "PFTLReceiptFinalityVerifierV2.sol": {
+      "source": "/home/postfiat/repos/postfiatl1v2-b23-pool-phase2/ops/new-navcoin/receipt-qualification/src/PFTLReceiptFinalityVerifierV2.sol",
+      "sha256": "c6a586888c0886f76bb1edcd30f7dc2d10f5e0d3ea19acbde9b9cf441e61d338"
+    },
+    "PFTLUniswapHandoffController.sol": {
+      "source": "/home/postfiat/repos/postfiatl1v2-b23-pool-phase2/ops/new-navcoin/receipt-qualification/src/PFTLUniswapHandoffController.sol",
+      "sha256": "9c7416ce76643b9ed336141955125f7c73a05725055626e9fae18992f0b32eee"
+    }
+  },
+  "local_change": "V2 base adds governance-controlled returnPaused=true, checked before burn/nonces; V3 inherits it. Verifier and packet ABI unchanged. Not deployed."
+}
