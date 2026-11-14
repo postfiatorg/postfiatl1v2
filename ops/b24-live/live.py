@@ -3,8 +3,9 @@
 
 Each exact signed transaction first executes on a read-only copy. After its sole
 submission, require a literal accepted receipt and six-validator convergence,
-then compare a fresh full live ledger to the expected copy. Never retry a write
-except a node's explicit wrong-proposer redirect with the identical signature.
+then compare a fresh full live ledger to the expected copy. Retries reuse the
+identical signature and require either an explicit wrong-proposer redirect or
+the Phase 5c caller's authorized, verified U4 repair after an outbox refusal.
 """
 import argparse,fcntl,time
 from concurrent.futures import ThreadPoolExecutor
@@ -28,10 +29,11 @@ def receipt_rows(value):
         for v in value.values():yield from receipt_rows(v)
     elif isinstance(value,list):
         for v in value:yield from receipt_rows(v)
-def run_operations(operations,start,output):
+def run_operations(operations,start,output,repair_callback=None):
     output.mkdir(mode=0o700,parents=True,exist_ok=False);current=start;summary=[]
     for n,row in enumerate(operations,1):
         require_lock();label=f'{n:02d}-'+row['label'];d=output/label;d.mkdir(mode=0o700)
+        if repair_callback:repair_callback('before-'+label,current)
         state=load(current);before=read_six();save(d/'before-six.json',before)
         assert len(points(before))==1 and before[0]['server']['ledger']['height']==state['tip']['height'] and before[0]['server']['ledger']['state_root']==state['tip']['state_root']
         assert all(r['server']['mempool']['pending']==0 for r in before),'Pending transactions before cutover step'
@@ -48,14 +50,29 @@ def run_operations(operations,start,output):
         assert quote['sequence']==item(state['ledger']['accounts'],'address',source)['sequence']+1
         assert all(quote['operation'].get(k)==v for k,v in op.items()),'quote operation differs'
         f=dict(chain_id=quote['chain_id'],genesis_hash=quote['genesis_hash'],protocol_version=quote['protocol_version'],source=source,fee=quote['minimum_fee'],sequence=quote['sequence'],operation=quote['operation'])
-        signed=sign_fields(f,kind,d/'transaction');height=state['tip']['height']+1
+        if row.get('signed_transaction_file'):
+            signed=load(row['signed_transaction_file']);u=signed['unsigned']
+            assert all(u[k]==f[k] for k in ('chain_id','genesis_hash','protocol_version','source','fee','sequence'))
+            assert all(u.get(k)==v for k,v in quote['operation'].items())
+            save(d/'transaction-signed.json',signed);save(d/'signature-reused.json',dict(source_file=row['signed_transaction_file'],sha256=hashlib.sha256(Path(row['signed_transaction_file']).read_bytes()).hexdigest()))
+        else:signed=sign_fields(f,kind,d/'transaction')
+        height=state['tip']['height']+1
         save(d/'copy-steps.json',[dict(label=label,height=height,transaction=signed,kind=kind,expect_accepted=True)])
         projected=d/'expected-state.json';subprocess.run([str(CANARY),'apply','--snapshot',str(current),'--steps',str(d/'copy-steps.json'),'--output',str(projected)],check=True,capture_output=True)
         expected=load(projected);expected_receipt=expected['canary_receipts'][0]['receipt'];assert expected_receipt['accepted']
         require_lock();params={'signed_'+kind+'_transaction_json':json.dumps(signed,separators=(',',':')),'proxy_required_current_height':state['tip']['height'],'proxy_required_parent_hash':state['tip']['block_hash'],'proxy_required_state_root':state['tip']['state_root']}
         method='mempool_submit_signed_'+kind+'_transaction_finality';result=None
         for i in range(6):
-            response=envelope(method,params,i,150);save(d/f'submit-validator-{i}.json',response)
+            for attempt in range(7):
+                response=envelope(method,params,i,180);save(d/f'submit-validator-{i}-attempt-{attempt}.json',response)
+                error=response.get('error') or {};message=error.get('message','')
+                if repair_callback and error.get('code')=='rpc_finality_submit_failed' and 'certified delivery outbox still has' in message and 'refusing a new proposal' in message:
+                    refused=read_six(expected_receipt['tx_id']);save(d/f'outbox-refusal-{i}-{attempt}-six.json',refused)
+                    assert points(refused)==points(before) and all(not list(receipt_rows(r['receipts'])) for r in refused)
+                    repaired=repair_callback(label+f'-retry-{i}-{attempt}',current);assert repaired,'No verified U4 job repaired; no retry';continue
+                break
+            else:raise RuntimeError('Bounded U4 repair retries exhausted')
+            save(d/f'submit-validator-{i}.json',response)
             if response.get('ok'):result=response['result'];break
             if (response.get('error') or {}).get('code')!='rpc_finality_wrong_proposer':raise RuntimeError('Unexpected submission response; no retry')
         assert result is not None,'No designated proposer accepted';save(d/'finality.json',result)
