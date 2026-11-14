@@ -61,18 +61,18 @@ def export_operation(route,amount,label,reservation=None):
     return op
 
 class Copy:
-    def __init__(self,snapshot,output):
+    def __init__(self,snapshot,output,signer=None):
         self.start=Path(snapshot);self.current=self.start;self.output=Path(output)
         self.output.mkdir(parents=True,exist_ok=False);self.base=load(snapshot);self.receipts=[];self.operations=[]
-        self.height=self.base['tip']['height']
+        self.height=self.base['tip']['height'];self.signer=signer
     def ledger(self):return load(self.current)['ledger']
     def apply(self,label,op,source=ISSUER,accepted=True,code=None,kind='asset',advance=True,height=None):
         state=load(self.current);account=item(state['ledger']['accounts'],'address',source)
-        args=[str(NODE),'wallet-sign-'+kind+'-transaction','--key-file',str(KEYS[source]),
+        args=[str(NODE),'wallet-sign-'+kind+'-transaction','--key-file',str(KEYS.get(source,'')),
             '--chain-id',self.base['tip']['chain_id'],'--genesis-hash',self.base['tip']['genesis_hash'],
             '--protocol-version',str(self.base['tip']['protocol_version']),'--fee','1000','--sequence',str(account['sequence']+1),
             '--operation-json',json.dumps(op,separators=(',',':'))]
-        signed=json.loads(subprocess.check_output(args,stderr=subprocess.PIPE))
+        signed=self.signer(state,op,source,kind,self.output/label) if self.signer else json.loads(subprocess.check_output(args,stderr=subprocess.PIPE))
         h=height or self.height+1;steps=self.output/(label+'-steps.json');target=self.output/(label+'-state.json')
         save(steps,[dict(label=label,height=h,transaction=signed,kind=kind,expect_accepted=accepted,expect_code=code)])
         result=subprocess.run([str(CANARY),'apply','--snapshot',str(self.current),'--steps',str(steps),'--output',str(target)],capture_output=True)
