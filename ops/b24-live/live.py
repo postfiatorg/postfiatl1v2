@@ -15,6 +15,17 @@ from rpc import call,envelope,read
 from snapshot import export
 OUT=COORD/'evidence/tee/phase5'
 LOCK=COORD/'chain.lock'
+def acquire_tee_lock(lock,timeout=3600):
+    """Wait without stealing either an OS lock or another lane's marker."""
+    deadline=time.monotonic()+timeout
+    while time.monotonic()<deadline:
+        try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:time.sleep(2);continue
+        lock.seek(0)
+        if not lock.read().strip():
+            lock.seek(0);lock.truncate();lock.write('TEE\n');lock.flush();return
+        fcntl.flock(lock,fcntl.LOCK_UN);time.sleep(2)
+    raise RuntimeError('Other lane retained chain.lock; no write performed')
 def require_lock():assert LOCK.read_text().strip()=='TEE','TEE lock lost'
 def read_six(tx=None):
     def one(i):

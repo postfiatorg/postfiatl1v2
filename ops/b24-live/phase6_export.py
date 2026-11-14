@@ -63,11 +63,7 @@ def execute():
     d=OUT/'real-export';d.mkdir(mode=0o700,exist_ok=False);save(d/'gate.json',dict(daily=daily,unit=unit,fee_cap_wei=fee,combined_future_gas_allowance=4500000,required_wei=allowance,checked_at=datetime.now(timezone.utc).isoformat()))
     live.OUT=OUT
     with live.LOCK.open('a+') as lock:
-        deadline=time.monotonic()+3600
-        while True:
-            fcntl.flock(lock,fcntl.LOCK_EX);lock.seek(0);holder=lock.read().strip()
-            if not holder:lock.seek(0);lock.truncate();lock.write('TEE\n');lock.flush();break
-            fcntl.flock(lock,fcntl.LOCK_UN);assert time.monotonic()<deadline,'Other lane retained lock';time.sleep(5)
+        live.acquire_tee_lock(lock)
         try:
             start=d/'before.json';s=export(start);assert item(s['ledger']['nav_assets'],'asset_id',B24)['finalized_epoch']==2
             ops=qualify(start,d);last,receipts=live.run_operations(ops,start,d/'live')
