@@ -1,0 +1,29 @@
+{
+  "phase5c_complete_to_prescribed_funding_gate": true,
+  "native_cutover_complete": true,
+  "completed_at": "2026-11-14T15:10:22.843391+00:00",
+  "height": 1331,
+  "state_root": "887c0af9b6b0ce4b0bd9c41b6035f5b8472393f1f400fe5274d380e43ddc7a69f6555f2fc1820f75b29bc3c5e950bda2",
+  "asset_id": "52285e4ded1d58113cfaa12bbc034b8b10213f699b3224c74160450229d6bf7ccfe505c78f2599d975ae2ecf98f7d8af",
+  "NAV_atoms": 1000000,
+  "supply_atoms": 420322380000,
+  "reserve_atoms": 20000000,
+  "mainnet_transactions": 0,
+  "aws_cumulative_reserved_upper_usd": "40.18",
+  "aws_remaining_lane_usd": "59.82",
+  "remaining_gaps": [
+    "Founder must create B24 trustline before delivery of held 1 B24.",
+    "WALLET must publish the live handover; no served wallet change by TEE.",
+    "Book buyers cannot use legacy route cash-in; tracked inventory is required.",
+    "Daily timer enabled; first new observation has not run yet.",
+    "Ethereum operator unfunded: no B24 contracts, actual export proof, wrapper mint or LP.",
+    "ReturnBurnedV3 remains unsupported and returns remain disabled.",
+    "Underlying release-4 duplicate-delivery acknowledgment defect remains; documented repair and watchdogs are operational mitigation."
+  ],
+  "evidence": "/home/postfiat/repos/b23-coord/evidence/tee/phase5c",
+  "accepted_transactions": 14,
+  "verified_repairs": 3,
+  "daily_enabled": true,
+  "funding_ETH": "0.01",
+  "operator": "0xF77B1876803c01967C5a62EF28C5f6de4574F7E1"
+}
