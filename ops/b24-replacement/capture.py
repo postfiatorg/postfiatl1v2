@@ -52,7 +52,7 @@ def main():
         if aws.client('sts').get_caller_identity()['Account']!=plan['accountId']: raise ValueError('AWS account differs')
         cost=runner.cost_preflight(aws,plan)
         reservation=Decimal(str(cost['resource_time_bound_usd'])).quantize(Decimal('.01'),rounding=ROUND_CEILING)
-        prior=sum((Decimal(str(r['reserved_upper_usd'])) for r in ledger['prior_phase2']['runs']),Decimal(0))
+        prior=sum((Decimal(str(r['reserved_upper_usd'])) for r in ledger['prior_phase2']['runs']),Decimal(0)).quantize(Decimal('.01'),rounding=ROUND_CEILING)
         used=sum((Decimal(x['reserved_upper_usd']) for x in ledger['runs']),Decimal(0))
         daily_path=COORD/'evidence/tee/daily/monthly-budget.json'
         daily=sum((Decimal(r['reserved_usd']) for rows in load(daily_path)['months'].values() for r in rows),Decimal(0)) if daily_path.exists() else Decimal(0)
