@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""Regression check for #26: every devnet start path runs the node with the
+devnet storage acknowledgement.
+
+`postfiat-node run` refuses a bounded JSON/JSONL store unless it is given
+`--unsafe-devnet-json-storage` (`require_transactional_or_unsafe_devnet_json_storage`
+in crates/node/src/main_parts/runtime_helpers.rs, called for "node run service"
+in crates/node/src/main_parts/cli_dispatch_parts/group_03.rs). The devnet
+scripts create such stores (`init`), so each of their `run` commands must pass
+the flag, and a `cargo run` of the node package must also pick the
+`postfiat-node` binary (crates/node/Cargo.toml declares several). Paths that
+are not devnet (transactional storage, generated testnet bundles) are not
+checked here and are not changed by it.
+"""
+
+from __future__ import annotations
+
+import shlex
+import sys
+import tempfile
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+FLAG = "--unsafe-devnet-json-storage"
+BIN = "--bin postfiat-node"
+
+# Every script that starts a fresh devnet node. Scripts that start a node only
+# through one of these (scripts/node-helper-smoke via node-run; the doctor and
+# monitor smokes via testnet-local-harness) are covered through them.
+DEVNET_ENTRY_POINTS = (
+    "scripts/node-run",
+    "scripts/devnet-up",
+    "scripts/devnet-restart",
+    "scripts/testnet-local-harness",
+)
+
+# The node's own check, which makes the flag necessary.
+DISPATCH = ROOT / "crates/node/src/main_parts/cli_dispatch_parts/group_03.rs"
+REQUIREMENT = 'require_transactional_or_unsafe_devnet_json_storage(flags, "node run service")'
+
+
+
+def commands(line: str) -> list[list[str]]:
+    """A logical line's commands, each as its arguments the way the shell
+    reads them: quotes removed, a comment dropped (`"run"` is `run`; `#
+    --unsafe-devnet-json-storage` is nothing), split at unquoted `;`, `&`,
+    `|`, `&&`, `||` and parentheses, so one command's flag never counts for
+    another, and without redirections (`> file`, `2>&1`), whose words are not
+    arguments. A line shlex cannot split falls back to blanks."""
+    try:
+        # posix=False keeps the quotes, so a quoted `;` is not an operator.
+        lexer = shlex.shlex(line, posix=False, punctuation_chars=True)
+        lexer.whitespace_split = True
+        lexer.commenters = "#"
+        tokens = list(lexer)
+    except ValueError:
+        tokens = line.split("#", 1)[0].split()
+    found: list[list[str]] = [[]]
+    redirect_target = False
+    for token in tokens:
+        if token and set(token) <= set(";&|()"):
+            found.append([])
+            redirect_target = False
+        elif token and set(token) <= set("<>&|") and set(token) & set("<>"):
+            redirect_target = True
+        elif redirect_target:
+            redirect_target = False
+        else:
+            found[-1].append(unquote(token))
+    return [command for command in found if command]
+
+
+def unquote(token: str) -> str:
+    """`"run"` is `run`, `'--x'` is `--x`, `"$d"/x` is `$d/x`."""
+    return token.replace('"', "").replace("'", "")
+
+
+def node_runs(tokens: list[str]) -> list[int]:
+    """Where the words start the node's `run` subcommand: the built binary
+    (`target/debug/postfiat-node run`), a variable holding it (`"$POSTFIAT_NODE_BIN"
+    run`, `"$NODE" run`: any variable in front of `run` counts, so a renamed one
+    is checked too) or `cargo run -p postfiat-node ... -- run`."""
+    found = []
+    for at, token in enumerate(tokens[:-1]):
+        if tokens[at + 1] != "run":
+            continue
+        if token.rsplit("/", 1)[-1] == "postfiat-node" or token.startswith("$"):
+            found.append(at)
+        elif token == "--" and is_node_cargo_run(tokens[:at]):
+            found.append(at)
+    return found
+
+
+def is_node_cargo_run(tokens: list[str]) -> bool:
+    if "cargo" not in tokens:
+        return False
+    after = tokens[tokens.index("cargo") + 1 :]
+    return "run" in after and any(
+        after[at] == "-p" and after[at + 1] == "postfiat-node" for at in range(len(after) - 1)
+    )
+
+
+def pins_node_bin(tokens: list[str]) -> bool:
+    return any(tokens[at] == "--bin" and tokens[at + 1] == "postfiat-node" for at in range(len(tokens) - 1))
+
+
+def logical_lines(text: str) -> list[tuple[int, str]]:
+    """Shell lines with backslash continuations joined, numbered by first line."""
+    lines: list[tuple[int, str]] = []
+    pending: list[str] = []
+    start = 0
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not pending:
+            start = number
+        stripped = line.rstrip()
+        if stripped.endswith("\\"):
+            pending.append(stripped[:-1])
+            continue
+        pending.append(stripped)
+        lines.append((start, " ".join(part.strip() for part in pending)))
+        pending = []
+    if pending:
+        lines.append((start, " ".join(part.strip() for part in pending)))
+    return lines
+
+
+def check_script(path: Path, label: str) -> list[str]:
+    """Problems with one devnet entry point; an empty list means it is fine."""
+    problems: list[str] = []
+    runs = 0
+    for number, line in logical_lines(path.read_text(encoding="utf-8")):
+        for tokens in commands(line):
+            for at in node_runs(tokens):
+                runs += 1
+                if FLAG not in tokens[at + 2 :]:
+                    problems.append(f"{label}:{number}: node run without {FLAG}: {line.strip()}")
+            if is_node_cargo_run(tokens) and not pins_node_bin(tokens):
+                problems.append(f"{label}:{number}: cargo run of postfiat-node without {BIN}")
+    if runs == 0:
+        problems.append(f"{label}: no postfiat-node run command found (update this check)")
+    return problems
+
+
+def check_tree(root: Path) -> list[str]:
+    problems: list[str] = []
+    for relative in DEVNET_ENTRY_POINTS:
+        path = root / relative
+        if not path.is_file():
+            problems.append(f"{relative}: missing devnet entry point (update this check)")
+            continue
+        problems.extend(check_script(path, relative))
+    return problems
+
+
+def self_test() -> None:
+    """The check must catch a dropped flag, a dropped --bin and a hidden run."""
+    cases = {
+        "dropped flag (binary)": 'target/debug/postfiat-node run \\\n  --data-dir "$d" >log\n',
+        "dropped flag (variable)": '"$POSTFIAT_NODE_BIN" run \\\n  --data-dir "$d"\n',
+        "dropped flag (renamed variable, quoted run)": '"$NODE" "run" --data-dir "$d"\n',
+        "dropped flag (cargo)": 'cargo run -p postfiat-node --bin postfiat-node -- run --data-dir "$d"\n',
+        "flag only in a comment": 'target/debug/postfiat-node run --data-dir "$d"  # --unsafe-devnet-json-storage\n',
+        "flag on the next command": f'target/debug/postfiat-node run ; echo {FLAG}\n',
+        "flag on a background sibling": f'"$NODE" run & "$NODE" run {FLAG}\n',
+        "flag only as a redirection target": f'target/debug/postfiat-node run > {FLAG}\n',
+        "dropped --bin": f'cargo run -p postfiat-node -- run {FLAG} --data-dir "$d"\n',
+        "no run at all": 'echo "nothing here"\n',
+    }
+    with tempfile.TemporaryDirectory() as directory:
+        for name, body in cases.items():
+            path = Path(directory) / "script"
+            path.write_text("#!/usr/bin/env bash\n" + body, encoding="utf-8")
+            if not check_script(path, name):
+                raise SystemExit(f"self-test failed: the check accepted a script with a {name}")
+        good = Path(directory) / "good"
+        good.write_text(
+            f'#!/usr/bin/env bash\ncargo run -p postfiat-node --bin postfiat-node -- run {FLAG} \\\n'
+            f'  --data-dir "$d"\n"$POSTFIAT_NODE_BIN" run {FLAG} \\\n  --data-dir "$d"\n'
+            f'target/debug/postfiat-node "run" "{FLAG}" --data-dir "$d"  # quoted is fine\n'
+            f'target/debug/postfiat-node run --data-dir ";" {FLAG} >"$log" 2>&1\n',
+            encoding="utf-8",
+        )
+        if check_script(good, "good"):
+            raise SystemExit("self-test failed: the check rejected correct run commands")
+
+
+def main() -> int:
+    self_test()
+    problems = check_tree(ROOT)
+    if REQUIREMENT not in DISPATCH.read_text(encoding="utf-8"):
+        problems.append(
+            f"{DISPATCH.relative_to(ROOT)}: the node run storage requirement moved (update this check)"
+        )
+    if problems:
+        print("devnet start paths are missing the storage acknowledgement (#26):", file=sys.stderr)
+        for problem in problems:
+            print(f"  {problem}", file=sys.stderr)
+        return 1
+    print(f"devnet start flags: {len(DEVNET_ENTRY_POINTS)} entry points pass {FLAG}; self-test ok")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
