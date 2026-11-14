@@ -40,5 +40,8 @@ def main():
         'Verify actual NFTs/ownership/liquidity, exact token debits and dust, pool price, all supply and reserve invariants. Report live receipts and pause state; no return support is implied.'
     ]
     result=dict(prepared=True,executed=False,operator=o['address'],operator_USDC_atoms=int.from_bytes(w.eth.call({'to':USDC,'data':Web3.keccak(text='balanceOf(address)')[:4]+encode(['address'],[o['address']])}),'big'),native_snapshot_height=s['tip']['height'],NAV_atoms=item(s['ledger']['nav_assets'],'asset_id',B24)['nav_per_unit'],deposit_USDC_atoms=amount,LP_USDC_atoms=2000000000,total_USDC_atoms=7025000000,subscribe_B24_atoms=5000000000,current_subscription_due_atoms=due,extra_USDC_required_if_NAV_changed=max(0,due-amount),conditional_S_copy_passed=qualified,source_conversion_needed=False,bridge_ready_now=True,real_deposit_claim_unexecuted=True,LP_fork_proof=str(OUT/'lp-qualification/result.json'),steps=steps)
+    ack_path=OUT/'destination-ack/result.json'
+    if ack_path.exists():
+        ack=load(ack_path);result['Ethereum_ack_authority']=dict(governed_quorum=ack['governed_quorum'],available_votes_in_real_test=ack['checkpoint_vote_count'],validator_count=ack['authority_validator_count'],unrepaired_key_mismatch=ack['unavailable_authority_validator'],refresh_availability_before_launch=True,authority_change_executed=False)
     save(d/'sequence.json',result);print(json.dumps({k:v for k,v in result.items() if k!='steps'}),flush=True)
 if __name__=='__main__':main()
