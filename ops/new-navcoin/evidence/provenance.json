@@ -1,0 +1,54 @@
+{
+  "recorded_utc": "2026-11-14T00:30:38.290345+00:00",
+  "release4_commit": "abc228eda0599256c4a760e575e43f9fd1914508",
+  "core_diff_empty": true,
+  "files": {
+    "snapshot": {
+      "path": "/home/postfiat/repos/b23-coord/evidence/pool/phase2/live-snapshot.json",
+      "sha256": "e491107906f9b086f44089ee6a2f2315960da99f8c19c5bdea37696fa35c3fbd",
+      "bytes": 6042670
+    },
+    "release4_node": {
+      "path": "/home/postfiat/repos/b23-coord/artifacts/release4/postfiat-node",
+      "sha256": "3039c21af67420a9842b5644eb580b2809081a97419e3e8e1f849d49a487cb6f",
+      "bytes": 64134208
+    },
+    "canary_binary": {
+      "path": "/mnt/HC_Volume_106212907/sec-fundamentals-proxy/b23-tee-nav-canary-target/release/postfiat-b23-nav-canary",
+      "sha256": "4f6ca76da2a6ba06cd3041551245c0c3cc75f7a89f839841a6173f58d5bef40f",
+      "bytes": 12768768
+    },
+    "receipt_v2_final_elf": {
+      "path": "/mnt/HC_Volume_106212907/stakehub-hyperliquid/l1-security-evidence-20261031/receipt-v2-final-elf/pftl-uniswap-receipt-v2-program",
+      "sha256": "803d64902ec32aa5371119c01525a026a3955a7378ffdf729e5473d1bb569208",
+      "bytes": 4878904
+    },
+    "receipt_cuda_host": {
+      "path": "/mnt/HC_Volume_106212907/stakehub-hyperliquid/l1-security-target-20261031/release/pftl-uniswap-prover",
+      "sha256": "fc9eb55b4c2967c1a4ba6736e11db98802256b7e0b59cb902ab24285a3bcc659",
+      "bytes": 76018536
+    },
+    "reserve_proof": {
+      "path": "/home/postfiat/repos/b23-coord/evidence/tee/phase2/real-proof/proof-calldata.bin",
+      "sha256": "113bdae3f52b0ed25c6896f305868d1286ff9d8d1682426ac4fa196f3e81ffd5",
+      "bytes": 356
+    },
+    "reserve_public_values": {
+      "path": "/home/postfiat/repos/b23-coord/evidence/tee/phase2/real-proof/public-values.bin",
+      "sha256": "f2785a20aae4432f00be5ff53d329fe50a2f425b6d65e98b395995e710d60b55",
+      "bytes": 584
+    }
+  },
+  "snapshot_tip": {
+    "block_hash": "2beaa5ae9ee90cc99c3240a33d96631d93cb25a2cfbd911966d9d1727aefb14df862035269825064ee6d1baf7bd22673",
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "height": 1310,
+    "history_base_height": 0,
+    "ordered_batch_count": 1310,
+    "protocol_version": 1,
+    "receipt_count": 1359,
+    "schema": "postfiat-chain-tip-v1",
+    "state_root": "1c37d8877e4a507c5b1c8f238689377949ff7289506eb52370c1d5f241494177b9b0c23729525b3ad161251874318907"
+  }
+}

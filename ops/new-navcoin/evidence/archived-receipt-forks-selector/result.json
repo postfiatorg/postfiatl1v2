@@ -1,0 +1,27 @@
+{
+  "passed": true,
+  "runs": [
+    {
+      "run": 1,
+      "passed": true,
+      "tests_passed": 13,
+      "block": 26409602,
+      "sp1_runtime_sha256": "1737176c32d30d81e72e7902d887a3bdcd5aef8be64cddeb93a82c5ca31f59ae",
+      "program_vkey": "0x0060d83567657466eaac782e0be174b57277df6ac349f42288852a93d72f0fe1"
+    },
+    {
+      "run": 2,
+      "passed": true,
+      "tests_passed": 13,
+      "block": 26409602,
+      "sp1_runtime_sha256": "1737176c32d30d81e72e7902d887a3bdcd5aef8be64cddeb93a82c5ca31f59ae",
+      "program_vkey": "0x0060d83567657466eaac782e0be174b57277df6ac349f42288852a93d72f0fe1"
+    }
+  ],
+  "scope": "Archived synthetic-committee receipt and rotation proofs; actual mainnet SP1 runtime in disposable Anvil forks",
+  "new_navcoin_export_proved": false,
+  "pool_swap_run": false,
+  "native_return_import": false,
+  "mainnet_transactions": 0,
+  "real_keys_loaded": 0
+}
