@@ -6,7 +6,7 @@ from phase6_deploy import *
 
 def inputs():
     q=load(OUT/'real-receipt-proof/qualification.json');assert q['passed'] and q['real_live_export']
-    witness=load(OUT/'real-export/archive/receipt-witness-v2.json')['witness'];p=witness['mint_packet'];e=load(OUT/'deployment-expected.json')
+    witness=load(OUT/'real-export/archive/receipt-witness-v2.json');assert witness['schema']=='postfiat-pftl-uniswap-receipt-proof-witness-v2';p=witness['mint_packet'];e=load(OUT/'deployment-expected.json')
     values=(OUT/'real-receipt-proof/public-values.bin').read_bytes();proof=(OUT/'real-receipt-proof/proof-calldata.bin').read_bytes()
     assert len(values)==1120 and len(proof)==356 and proof[:4].hex()=='4388a21c'
     assert p['mint_amount_atoms']==1000000 and p['source_packet_hash']==load(OUT/'real-export/result.json')['packet_hash'] and p['ethereum_recipient'].lower()==e['operator']['address'].lower()
