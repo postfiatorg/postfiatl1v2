@@ -72,6 +72,10 @@ def execute(now):
                     if __import__('time').monotonic()>deadline:raise TimeoutError('chain lock held for 60 minutes')
                     __import__('time').sleep(5)
                 try:
+                    sys.path.insert(0,str(TOOLS));import submit_live
+                    from concurrent.futures import ThreadPoolExecutor
+                    with ThreadPoolExecutor(max_workers=6) as pool:versions=dict(pool.map(submit_live.runtime,submit_live.pftl.PEERS))
+                    save(d/'runtime-hashes.json',versions);assert all(v['matches'] for v in versions.values()),'Daily execution requires the qualified release-4 runtimes'
                     current=d/'before-submit.json';export(current);ops=prepare(current,capture,d/'proof',d/'canary');final,receipts=run_operations(ops,current,d/'live')
                     save(d/'complete.json',dict(epoch=manifest['observation_epoch'],six_validator_verified=True,budget=budget,final_snapshot=str(final),receipts=receipts))
                     nav=item(load(final)['ledger']['nav_assets'],'asset_id',B24);status=COORD/'status/tee.md';lines=status.read_text().splitlines();lines[0]=f"B24 PROFILE ON CHAIN: sp1-nav-reserve-v1 {nav['proof_profile']} epoch {nav['finalized_epoch']} finalized; NAV {nav['nav_per_unit']/1e6:.6f}; six validators verified. B23 retired/halted; founder legacy reserve retained.";status.write_text('\n'.join(lines)+'\n')
