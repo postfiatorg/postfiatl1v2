@@ -9,7 +9,7 @@ from snapshot import export
 OUT=COORD/'evidence/tee/phase5c'
 OLD=COORD/'evidence/tee/phase5'
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--execute',action='store_true',required=True);ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--execute',action='store_true',required=True);ap.add_argument('--resume-after-create',action='store_true');args=ap.parse_args()
     gate=load(OUT/'continue-canary/result.json');plan=OUT/'continue-canary/operations.json'
     assert gate['passed'] and gate['live_transactions']==0 and gate['release4_freshness_accepted'] and gate['same_burn_signature']
     assert hashlib.sha256(plan.read_bytes()).hexdigest()==gate['operations_sha256'];ops=load(plan);assert len(ops)==14
@@ -19,14 +19,25 @@ def main():
     sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'tools/b23-nav-canary'));import submit_live
     with ThreadPoolExecutor(max_workers=6) as pool:versions=dict(pool.map(submit_live.runtime,submit_live.pftl.PEERS))
     save(OUT/'runtime-before.json',versions);assert all(v['matches'] for v in versions.values())
-    live.OUT=OUT
+    live.OUT=OUT;prior=[];parent=OUT/'before-state.json';output=OUT/'live';base=OUT/'live-before.json'
+    if args.resume_after_create:
+        prior=load(OUT/'live/receipts-index.json');assert len(prior)==2 and [r['height'] for r in prior]==[1318,1319]
+        assert all(r['accepted'] and r['six_validators'] and r['full_ledger_match'] for r in prior)
+        assert not (OUT/'live/03-profile/transaction-signed.json').exists(),'Profile was already signed; cannot use this preparation-only resume'
+        for n,row in enumerate(prior):
+            assert row['label']==f'{n+1:02d}-'+ops[n]['label']
+        parent=OUT/'live/02-create/actual-state.json';output=OUT/'live-resume-after-create';base=OUT/'resume-before.json';ops=ops[2:]
     with live.LOCK.open('a+') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX);lock.seek(0);assert not lock.read().strip(),'Another lane holds chain.lock'
         lock.seek(0);lock.truncate();lock.write('TEE\n');lock.flush()
         try:
-            repair_u4.enable_watchdogs();base=OUT/'live-before.json';actual=export(base);expected=load(OUT/'before-state.json')
+            repair_u4.enable_watchdogs();actual=export(base);expected=load(parent)
             assert actual['tip']==expected['tip'] and actual['ledger']==expected['ledger'],'Parent changed; qualify again'
-            current,receipts=live.run_operations(ops,base,OUT/'live',repair_callback=repair_u4.callback)
+            for row in prior:
+                six=live.read_six(row['tx_id']);assert len(live.points(six))==1
+                assert all(any(x['tx_id']==row['tx_id'] and x['accepted'] for x in live.receipt_rows(r['receipts'])) for r in six)
+                save(OUT/('resume-confirm-'+str(row['height'])+'.json'),six)
+            current,receipts=live.run_operations(ops,base,output,repair_callback=repair_u4.callback);receipts=prior+receipts
             for attempt in range(10):
                 repair_u4.callback('final-drain-'+str(attempt),current)
                 if not any(repair_u4.fleet_scan('final-check-'+str(attempt))):break

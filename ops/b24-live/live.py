@@ -29,6 +29,13 @@ def receipt_rows(value):
         for v in value.values():yield from receipt_rows(v)
     elif isinstance(value,list):
         for v in value:yield from receipt_rows(v)
+def quote_matches(operation,quoted):
+    # NavProfileRegisterOperation's serde(default, skip_serializing_if="is_false")
+    # omits this false bool. No other field or non-false value is normalized.
+    expected=dict(operation)
+    if expected.get('operation')=='nav_profile_register' and expected.get('allow_controlled_sources') is False and 'allow_controlled_sources' not in quoted:
+        expected.pop('allow_controlled_sources')
+    return all(quoted.get(k)==v for k,v in expected.items())
 def run_operations(operations,start,output,repair_callback=None):
     output.mkdir(mode=0o700,parents=True,exist_ok=False);current=start;summary=[]
     for n,row in enumerate(operations,1):
@@ -48,7 +55,7 @@ def run_operations(operations,start,output,repair_callback=None):
         quote=call(kind+'_fee_quote',{'source':source,'operation_json':json.dumps(op,separators=(',',':'))});save(d/'quote.json',quote)
         assert quote['source']==source and quote['chain_id']==state['tip']['chain_id'] and quote['genesis_hash']==state['tip']['genesis_hash']
         assert quote['sequence']==item(state['ledger']['accounts'],'address',source)['sequence']+1
-        assert all(quote['operation'].get(k)==v for k,v in op.items()),'quote operation differs'
+        assert quote_matches(op,quote['operation']),'quote operation differs'
         f=dict(chain_id=quote['chain_id'],genesis_hash=quote['genesis_hash'],protocol_version=quote['protocol_version'],source=source,fee=quote['minimum_fee'],sequence=quote['sequence'],operation=quote['operation'])
         if row.get('signed_transaction_file'):
             signed=load(row['signed_transaction_file']);u=signed['unsigned']
