@@ -74,7 +74,8 @@ def main():
                 if resume(f'normal-redelivery-after-restart-{node}'):
                     save(OUT/'recovery-result.json',dict(cleared=True,method=f'normal-redelivery-after-restart-{node}',burn_committed=False,trivial_transaction_required=True));return
             rows=pending('outbox-after-allowed-recovery');assert len(rows)==1
-            save(OUT/'recovery-result.json',dict(cleared=False,stopped=True,reason='Persistent duplicate-record rejection survives normal redelivery, identical burn replay, and sequential affected-service restarts. No permitted data/binary repair remains.',pending_job=rows[0],burn_committed=False,manual_outbox_edits=False,data_deletion=False,binary_changes=False,restarted_nodes=[4,5]))
+            reports=[load(OUT/(name+'.json')) for name in ('normal-redelivery-1','normal-redelivery-after-restart-4','normal-redelivery-after-restart-5')]
+            save(OUT/'recovery-result.json',dict(cleared=False,stopped=True,reason='Persistent duplicate-record rejection survives normal redelivery, identical burn replay, and sequential affected-service restarts. No permitted data/binary repair remains.',pending_job=rows[0],burn_committed=False,manual_outbox_edits=False,manual_data_deletion=False,binary_changes=False,restarted_nodes=[4,5],normal_cli_completed_jobs_compacted=sum(r['jobs_compacted'] for r in reports),normal_cli_jobs_pruned=sum(r['jobs_pruned'] for r in reports)))
         except BaseException as e:save(OUT/'recovery-failure.json',dict(error_type=type(e).__name__,message=str(e)[:1500]));raise
         finally:
             lock.seek(0)
