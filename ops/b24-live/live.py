@@ -34,6 +34,7 @@ def run_operations(operations,start,output):
         require_lock();label=f'{n:02d}-'+row['label'];d=output/label;d.mkdir(mode=0o700)
         state=load(current);before=read_six();save(d/'before-six.json',before)
         assert len(points(before))==1 and before[0]['server']['ledger']['height']==state['tip']['height'] and before[0]['server']['ledger']['state_root']==state['tip']['state_root']
+        assert all(r['server']['mempool']['pending']==0 for r in before),'Pending transactions before cutover step'
         if row['label']=='create':
             old=item(state['ledger']['nav_assets'],'asset_id',B23);route=item(state['ledger']['pftl_uniswap_routes'],'route_id',OLD_ROUTE)
             assert old['halted'] and route['paused'] and not route.get('live_value_enabled',False)
@@ -59,6 +60,7 @@ def run_operations(operations,start,output):
             if (response.get('error') or {}).get('code')!='rpc_finality_wrong_proposer':raise RuntimeError('Unexpected submission response; no retry')
         assert result is not None,'No designated proposer accepted';save(d/'finality.json',result)
         final=result.get('finality') or {};receipt=final.get('receipt') or {};assert final.get('confirmed') is True and receipt.get('accepted') is True and receipt.get('tx_id')==expected_receipt['tx_id']
+        assert result.get('tx_id')==receipt['tx_id']
         assert receipt['code']==expected_receipt['code'] and final['block']['header']['height']==height
         deadline=time.monotonic()+180
         while True:
