@@ -9,7 +9,7 @@ from snapshot import export
 OUT=COORD/'evidence/tee/phase5c'
 OLD=COORD/'evidence/tee/phase5'
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--execute',action='store_true',required=True);ap.add_argument('--resume-after-create',action='store_true');args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--execute',action='store_true',required=True);g=ap.add_mutually_exclusive_group();g.add_argument('--resume-after-create',action='store_true');g.add_argument('--resume-before-offer',action='store_true');args=ap.parse_args()
     gate=load(OUT/'continue-canary/result.json');plan=OUT/'continue-canary/operations.json'
     assert gate['passed'] and gate['live_transactions']==0 and gate['release4_freshness_accepted'] and gate['same_burn_signature']
     assert hashlib.sha256(plan.read_bytes()).hexdigest()==gate['operations_sha256'];ops=load(plan);assert len(ops)==14
@@ -27,6 +27,14 @@ def main():
         for n,row in enumerate(prior):
             assert row['label']==f'{n+1:02d}-'+ops[n]['label']
         parent=OUT/'live/02-create/actual-state.json';output=OUT/'live-resume-after-create';base=OUT/'resume-before.json';ops=ops[2:]
+    if args.resume_before_offer:
+        prior=load(OUT/'live/receipts-index.json')+load(OUT/'live-resume-after-create/receipts-index.json')
+        assert len(prior)==10 and [r['height'] for r in prior]==list(range(1318,1328))
+        assert all(r['accepted'] and r['six_validators'] and r['full_ledger_match'] for r in prior)
+        assert [r['label'].split('-',1)[1] for r in prior]==[r['label'] for r in ops[:10]]
+        assert not (OUT/'live-resume-after-create/09-alice-resting-100-B24/transaction-signed.json').exists()
+        assert load(OUT/'offer-serialization-check/result.json')['passed']
+        parent=OUT/'live-resume-after-create/08-route-enable/actual-state.json';output=OUT/'live-resume-before-offer';base=OUT/'resume-before-offer.json';ops=ops[10:]
     with live.LOCK.open('a+') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX);lock.seek(0);assert not lock.read().strip(),'Another lane holds chain.lock'
         lock.seek(0);lock.truncate();lock.write('TEE\n');lock.flush()

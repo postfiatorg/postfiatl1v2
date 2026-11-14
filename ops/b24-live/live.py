@@ -31,10 +31,12 @@ def receipt_rows(value):
         for v in value:yield from receipt_rows(v)
 def quote_matches(operation,quoted):
     # NavProfileRegisterOperation's serde(default, skip_serializing_if="is_false")
-    # omits this false bool. No other field or non-false value is normalized.
+    # omits this false bool. OfferCreateOperation similarly omits zero expiry.
     expected=dict(operation)
     if expected.get('operation')=='nav_profile_register' and expected.get('allow_controlled_sources') is False and 'allow_controlled_sources' not in quoted:
         expected.pop('allow_controlled_sources')
+    if expected.get('operation')=='offer_create' and expected.get('expiration_height')==0 and 'expiration_height' not in quoted:
+        expected.pop('expiration_height')
     return all(quoted.get(k)==v for k,v in expected.items())
 def run_operations(operations,start,output,repair_callback=None):
     output.mkdir(mode=0o700,parents=True,exist_ok=False);current=start;summary=[]
