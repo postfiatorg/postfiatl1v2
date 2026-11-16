@@ -5,6 +5,7 @@ import copy
 import hashlib
 import json
 import subprocess
+import shutil
 import tarfile
 from pathlib import Path
 from clear_launch_stall import verify_candidate
@@ -56,6 +57,9 @@ def main():
                   six_finalized_blocks_verified=True, mismatch_negative_rejected=True,
                   local_repair_completed=True, live_changes=0, commands=rows)
     (args.output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+    (args.output / 'job-after.json').write_text(json.dumps(repaired, indent=2) + '\n')
+    (args.output / 'tombstone-after.json').write_text(json.dumps(send, indent=2) + '\n')
+    shutil.rmtree(args.output / 'certified-send-outbox')
     print(json.dumps({k: v for k, v in result.items() if k != 'commands'}))
 
 
