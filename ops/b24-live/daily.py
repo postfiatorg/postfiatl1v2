@@ -20,6 +20,7 @@ TOOLS=ROOT/'tools/b23-nav-canary'
 spec=importlib.util.spec_from_file_location('b23_daily_helpers',ROOT/'ops/b23-tee-nav/daily.py');helpers=importlib.util.module_from_spec(spec);spec.loader.exec_module(helpers)
 helpers.NAV=NAV
 NATIVE=DEPLOYMENT/'postfiat-b24-nav'
+GPU_NATIVE=DEPLOYMENT/'postfiat-b24-nav-cuda'
 helpers.NATIVE=NATIVE
 helpers.ELF=DEPLOYMENT/'b24-nav.elf'
 
@@ -72,6 +73,7 @@ def execute(now,on_demand=False):
         stamp=now.strftime('%Y%m%dt%H%M%S%f');mode='now' if on_demand else 'daily'
         d=DAILY/(mode+'-'+stamp);d.mkdir(mode=0o700,exist_ok=False)
         try:
+            if not GPU_NATIVE.is_file():raise ValueError('On-demand CUDA prover CLI is not built')
             before=d/'before-capture.json';state=export(before);seed=load(SEED/'manifest.json');manifest=next_manifest(seed,now,state,on_demand);nav=item(state['ledger']['nav_assets'],'asset_id',B24)
             assert nav['proof_profile']==seed['proof_profile_id'] and nav['finalized_epoch']+1==manifest['observation_epoch'] and not nav['halted']
             runner=helpers.runner_module();plan=load(DEPLOYMENT/'capture-plan.json')
@@ -86,10 +88,10 @@ def execute(now,on_demand=False):
             cost=runner.cost_preflight(aws,plan);budget=reserve_lane(plan['runId'],cost['resource_time_bound_usd'],now.strftime('%Y-%m'));save(d/'budget.json',budget);helpers.oauth_baseline(d/'oauth-baseline.json')
             capture=d/'capture';runner.execute(plan,manifest,capture,aws,profile_operation=load(DEPLOYMENT/'profile-template.json'),profile_cli=NATIVE,on_demand=on_demand);assert load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']
             manifest=load(capture/'manifest.json')
-            helpers.command([NAV/'.venv/bin/python',NAV/'containers/yolo-nitro/aws/verify_nav_archive.py','--capture',capture,'--recovery-key',helpers.RECOVERY,'--oauth-baseline',d/'oauth-baseline.json','--output',d/'archive-verification.json'])
+            helpers.command([sys.executable,NAV/'containers/yolo-nitro/aws/verify_nav_archive.py','--capture',capture,'--recovery-key',helpers.RECOVERY,'--oauth-baseline',d/'oauth-baseline.json','--output',d/'archive-verification.json'])
             helpers.command(['systemctl','--user','disable','--now',plan['cleanupTimer']])
-            helpers.command([NAV/'.venv/bin/python',TOOLS/'qualify_reading.py','--capture',capture,'--collector-repo',NAV,'--native-cli',NATIVE,'--root-der',COORD/'evidence/tee/aws-nitro-root.der','--output',d/'negative-reading'])
-            helpers.command([sys.executable,TOOLS/'prove_remote.py','--capture',capture,'--elf',helpers.ELF,'--native-cli',NATIVE,'--output',d/'proof'])
+            helpers.command([sys.executable,TOOLS/'qualify_reading.py','--capture',capture,'--collector-repo',NAV,'--native-cli',NATIVE,'--root-der',COORD/'evidence/tee/aws-nitro-root.der','--output',d/'negative-reading'])
+            helpers.command([sys.executable,TOOLS/'prove_remote.py','--capture',capture,'--elf',helpers.ELF,'--native-cli',NATIVE,'--prover-cli',GPU_NATIVE,'--output',d/'proof'])
             with LOCK.open('a+') as lock:
                 deadline=__import__('time').monotonic()+3600
                 while True:

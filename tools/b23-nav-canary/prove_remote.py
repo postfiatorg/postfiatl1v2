@@ -19,6 +19,7 @@ def command(argv,*,log=None):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     for name in ('capture','elf','native_cli','output'):p.add_argument('--'+name.replace('_','-'),type=Path,required=True)
+    p.add_argument('--prover-cli',type=Path,help='Upload this CUDA-enabled CLI to the isolated job; preserve the shared prover CLI')
     args=p.parse_args();args.output.mkdir(parents=True,exist_ok=False,mode=0o700)
     assert json.loads((args.capture/'completion.json').read_bytes())['nativeVerified'] is True
     assert json.loads((args.capture/'final-inventory.json').read_bytes())['noOwnedBillableComputeRemaining'] is True
@@ -31,13 +32,19 @@ def main():
     command([*SSH,'mkdir -m 700 '+shlex.quote(remote)])
     command([*SCP,str(witness),HOST+':'+remote+'/witness.json'])
     command([*SCP,str(args.elf),HOST+':'+remote+'/guest.elf'])
+    prover='/workspace/b23-tee-nav/target/release/postfiat-b23-nav'
+    if args.prover_cli:
+        prover=remote+'/postfiat-b24-nav'
+        command([*SCP,str(args.prover_cli),HOST+':'+prover])
+        digest=hashlib.sha256(args.prover_cli.read_bytes()).hexdigest()
+        command([*SSH,'chmod 700 '+shlex.quote(prover)+' && test "$(sha256sum '+shlex.quote(prover)+' | cut -d\" \" -f1)" = '+digest])
     # Shared bridge lock and matching SDK server version avoid concurrent GPU
     # work or replacement/stopping of the bridge's shared GPU server binary.
     script='set -e; cd '+shlex.quote(remote)+'; '
     script+='test "$(sha256sum guest.elf | cut -d\" \" -f1)" = '+identity['elf_sha256']+'; '
     script+='test "$(/root/.sp1/bin/sp1-gpu-server --version)" = 6.3.1; '
     script+='exec 9>>/workspace/b23-gpu/prover.lock; flock -w 600 9; '
-    script+='RAYON_NUM_THREADS=16 timeout 1200 /workspace/b23-tee-nav/target/release/postfiat-b23-nav prove '
+    script+='RAYON_NUM_THREADS=16 timeout 1200 '+shlex.quote(prover)+' prove '
     script+='--elf guest.elf --witness witness.json --output proof > prove.log 2>&1'
     command([*SSH,script],log=args.output/'remote-command.log')
     for name in ('proof.bin','proof-calldata.bin','public-values.bin','proof-report.json'):

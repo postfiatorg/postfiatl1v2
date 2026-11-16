@@ -1,0 +1,12 @@
+{
+  "elf_sha256": "0facb37ea5203ac0286e40529b2adee50f9b74b39b4668de3a8d374647db86fe",
+  "program_vkey": "0x0093793629c2d83d50eb440e0146df9f345d796a41c0ade6a868a6b5bf45b06b",
+  "sp1_version": "6.3.1",
+  "source_commit": "164391b4f839cad669046adbba779aea8e838b74",
+  "collector_commit": "353b42ed282fcf9490a0a2c46776ce7b1eec4a9c",
+  "build": "existing pinned native cargo-prove toolchain, --locked; existing guest target reused",
+  "production_profile_id": null,
+  "enclave_measurements_pending": true,
+  "live_activated": false,
+  "synthetic_guest_checks": "evidence/now/synthetic-guest/report.json"
+}
