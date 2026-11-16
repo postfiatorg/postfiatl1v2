@@ -26,7 +26,7 @@ def acquire_tee_lock(lock,timeout=3600):
             lock.seek(0);lock.truncate();lock.write('TEE\n');lock.flush();return
         fcntl.flock(lock,fcntl.LOCK_UN);time.sleep(2)
     raise RuntimeError('Other lane retained chain.lock; no write performed')
-def require_lock():assert LOCK.read_text().strip()=='TEE','TEE lock lost'
+def require_lock(owner='TEE'):assert LOCK.read_text().strip()==owner,owner+' lock lost'
 def read_six(tx=None):
     def one(i):
         status=read('status',{},i)
@@ -55,10 +55,10 @@ def quote_matches(operation,quoted):
     if expected.get('operation')=='offer_create' and expected.get('expiration_height')==0 and 'expiration_height' not in quoted:
         expected.pop('expiration_height')
     return all(quoted.get(k)==v for k,v in expected.items())
-def run_operations(operations,start,output,repair_callback=None):
+def run_operations(operations,start,output,repair_callback=None,lock_owner='TEE'):
     output.mkdir(mode=0o700,parents=True,exist_ok=False);current=start;summary=[]
     for n,row in enumerate(operations,1):
-        require_lock();label=f'{n:02d}-'+row['label'];d=output/label;d.mkdir(mode=0o700)
+        require_lock(lock_owner);label=f'{n:02d}-'+row['label'];d=output/label;d.mkdir(mode=0o700)
         if repair_callback:repair_callback('before-'+label,current)
         state=load(current);before=read_six();save(d/'before-six.json',before)
         assert len(points(before))==1 and before[0]['server']['ledger']['height']==state['tip']['height'] and before[0]['server']['ledger']['state_root']==state['tip']['state_root']
@@ -86,7 +86,7 @@ def run_operations(operations,start,output,repair_callback=None):
         save(d/'copy-steps.json',[dict(label=label,height=height,transaction=signed,kind=kind,expect_accepted=True)])
         projected=d/'expected-state.json';subprocess.run([str(CANARY),'apply','--snapshot',str(current),'--steps',str(d/'copy-steps.json'),'--output',str(projected)],check=True,capture_output=True)
         expected=load(projected);expected_receipt=expected['canary_receipts'][0]['receipt'];assert expected_receipt['accepted']
-        require_lock();params={'signed_'+kind+'_transaction_json':json.dumps(signed,separators=(',',':')),'proxy_required_current_height':state['tip']['height'],'proxy_required_parent_hash':state['tip']['block_hash'],'proxy_required_state_root':state['tip']['state_root']}
+        require_lock(lock_owner);params={'signed_'+kind+'_transaction_json':json.dumps(signed,separators=(',',':')),'proxy_required_current_height':state['tip']['height'],'proxy_required_parent_hash':state['tip']['block_hash'],'proxy_required_state_root':state['tip']['state_root']}
         method='mempool_submit_signed_'+kind+'_transaction_finality';result=None
         for i in range(6):
             for attempt in range(7):
