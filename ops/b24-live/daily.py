@@ -24,6 +24,11 @@ GPU_NATIVE=DEPLOYMENT/'postfiat-b24-nav-cuda'
 helpers.NATIVE=NATIVE
 helpers.ELF=DEPLOYMENT/'b24-nav.elf'
 
+def require_runtime():
+    paths=[SEED/'manifest.json',SEED/'profile.json',DEPLOYMENT/'profile-template.json',DEPLOYMENT/'capture-plan.json',NATIVE,GPU_NATIVE,helpers.ELF]
+    missing=[str(p) for p in paths if not p.is_file()]
+    if missing:raise ValueError('On-demand deployment is not qualified; missing: '+', '.join(missing))
+
 def previous_cutoff(state):
     return helpers.finalized_cutoff(state,B24,[COORD/'evidence/tee/phase5/capture',DAILY,COORD/'evidence/now'])
 
@@ -64,6 +69,7 @@ def prepare(state_path,capture,proof,out):
     after=c.ledger();route=item(after['pftl_uniswap_routes'],'route_id',ROUTE);nav=item(after['nav_assets'],'asset_id',B24);assert invariant(route) and nav['finalized_epoch']==m['observation_epoch'] and nav['circulating_supply']==n['circulating_supply']
     save(out/'operations.json',ops);save(out/'result.json',dict(passed=True,epoch=m['observation_epoch'],nav_per_unit=x['nav_per_unit'],attested_value=x['attested_value'],consensus_overlay=x['overlay_value'],no_live_transactions=True));return ops
 def execute(now,on_demand=False):
+    require_runtime()
     DAILY.mkdir(mode=0o700,parents=True,exist_ok=True)
     with (DAILY/'run.lock').open('a') as running:
         fcntl.flock(running,fcntl.LOCK_EX|fcntl.LOCK_NB)
@@ -73,7 +79,6 @@ def execute(now,on_demand=False):
         stamp=now.strftime('%Y%m%dt%H%M%S%f');mode='now' if on_demand else 'daily'
         d=DAILY/(mode+'-'+stamp);d.mkdir(mode=0o700,exist_ok=False)
         try:
-            if not GPU_NATIVE.is_file():raise ValueError('On-demand CUDA prover CLI is not built')
             before=d/'before-capture.json';state=export(before);seed=load(SEED/'manifest.json');manifest=next_manifest(seed,now,state,on_demand);nav=item(state['ledger']['nav_assets'],'asset_id',B24)
             assert nav['proof_profile']==seed['proof_profile_id'] and nav['finalized_epoch']+1==manifest['observation_epoch'] and not nav['halted']
             runner=helpers.runner_module();plan=load(DEPLOYMENT/'capture-plan.json')
@@ -116,6 +121,7 @@ def execute(now,on_demand=False):
 def main():
     ap=argparse.ArgumentParser(description=__doc__);g=ap.add_mutually_exclusive_group(required=True);g.add_argument('--check',action='store_true');g.add_argument('--execute',action='store_true');g.add_argument('--now',action='store_true');a=ap.parse_args();now=datetime.now(timezone.utc)
     if a.check:
+        require_runtime()
         seed=load(SEED/'manifest.json');m=helpers.reading_manifest(seed,max(int(now.timestamp()*1000)+120000,seed['cutoff_unix_ms']+1),seed['observation_height'],seed['observation_epoch'],seed['cutoff_unix_ms'])
         plan=load(DEPLOYMENT/'capture-plan.json');helpers.runner_module().check_inputs(helpers.runner_module().reviewed_plan(plan),m)
         identity=json.loads(subprocess.check_output([str(NATIVE),'identity','--elf',str(helpers.ELF)]));assert identity['program_vkey']==load(SEED/'profile.json')['sp1_program_vkey']
