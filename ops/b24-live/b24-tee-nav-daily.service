@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/postfiat/repos/postfiatl1v2-b24-tee-nav
-ExecStart=/home/postfiat/repos/navstrategies-b23-tee-nav/.venv/bin/python /home/postfiat/repos/postfiatl1v2-b24-tee-nav/ops/b24-live/daily.py --execute
+WorkingDirectory=/home/postfiat/repos/postfiatl1v2-now
+ExecStart=/home/postfiat/repos/navstrategies-b23-tee-nav/.venv/bin/python /home/postfiat/repos/postfiatl1v2-now/ops/b24-live/daily.py --execute
 Environment=PYTHONDONTWRITEBYTECODE=1
 UMask=0077
 TimeoutStartSec=3h
