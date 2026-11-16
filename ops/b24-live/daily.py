@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B24 scheduled or --now update: $9/run, $250/month, $100 cumulative lane cap.
+"""B24 scheduled or --now update: $9/run, $250/month, $250 cumulative lane cap.
 
 No retry/backfill. --check is local only; --execute uses real time, the pinned
 collector, shared GPU lock, strict copy verification and three live operations.
@@ -51,9 +51,9 @@ def reserve_lane(run_id,cost,month):
         for path in (COORD/'evidence/tee/daily/monthly-budget.json',DAILY/'monthly-budget.json'):
             if path.exists():used+=sum((Decimal(x['reserved_usd']) for rows in load(path)['months'].values() for x in rows),Decimal(0))
         reservation=Decimal(str(cost)).quantize(Decimal('.01'),rounding=ROUND_CEILING)
-        if fixed+used+reservation>Decimal('100'):raise ValueError('Cumulative lane cap $100 exhausted; no new AWS run')
+        if fixed+used+reservation>Decimal('250'):raise ValueError('Cumulative lane cap $250 exhausted; no new AWS run')
         b=helpers.reserve_budget(DAILY/'monthly-budget.json',month,run_id,reservation)
-        b['cumulative_lane_reserved_usd']=str(fixed+used+reservation);b['lane_cap_usd']='100.00';return b
+        b['cumulative_lane_reserved_usd']=str(fixed+used+reservation);b['lane_cap_usd']='250.00';return b
 def prepare(state_path,capture,proof,out):
     out.mkdir(mode=0o700);s=load(state_path);m=load(capture/'manifest.json');n=item(s['ledger']['nav_assets'],'asset_id',B24);r=item(s['ledger']['pftl_uniswap_routes'],'route_id',ROUTE)
     assert n['proof_profile']==m['proof_profile_id'] and n['finalized_epoch']+1==m['observation_epoch'] and not n['halted'] and r.get('live_value_enabled')
@@ -125,7 +125,7 @@ def main():
         seed=load(SEED/'manifest.json');m=helpers.reading_manifest(seed,max(int(now.timestamp()*1000)+120000,seed['cutoff_unix_ms']+1),seed['observation_height'],seed['observation_epoch'],seed['cutoff_unix_ms'])
         plan=load(DEPLOYMENT/'capture-plan.json');helpers.runner_module().check_inputs(helpers.runner_module().reviewed_plan(plan),m)
         identity=json.loads(subprocess.check_output([str(NATIVE),'identity','--elf',str(helpers.ELF)]));assert identity['program_vkey']==load(SEED/'profile.json')['sp1_program_vkey']
-        print(json.dumps(dict(local_check=True,asset_id=m['nav_asset_id'],profile=m['proof_profile_id'],epoch=m['observation_epoch'],cutoff_unix_ms=m['cutoff_unix_ms'],run_cap_usd='9',month_cap_usd='250',cumulative_lane_cap_usd='100',aws_calls=0,chain_writes=0)));return
+        print(json.dumps(dict(local_check=True,asset_id=m['nav_asset_id'],profile=m['proof_profile_id'],epoch=m['observation_epoch'],cutoff_unix_ms=m['cutoff_unix_ms'],run_cap_usd='9',month_cap_usd='250',cumulative_lane_cap_usd='250',aws_calls=0,chain_writes=0)));return
     os.umask(0o077)
     def stop(signum,frame):raise SystemExit(128+signum)
     signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop);execute(now,a.now)

@@ -1,5 +1,5 @@
 [Unit]
-Description=B24 measured Schwab NAV at 18:15 UTC; AWS $9/run $250/month and $100 cumulative lane cap
+Description=B24 measured Schwab NAV at 18:15 UTC; AWS $9/run $250/month and $250 cumulative lane cap
 After=network-online.target
 Wants=network-online.target
 
