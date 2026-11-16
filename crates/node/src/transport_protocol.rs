@@ -2664,6 +2664,41 @@ mod transport_cli_tests {
     }
 
     #[test]
+    fn transport_duplicate_certified_batch_storage_error_reaches_verified_ack() {
+        let (root, topology, status, envelope) = already_applied_test_fixture(10);
+        // Exact error emitted by TransactionalStore::next_ordered_history_commitment
+        // after the first delivery committed but its acknowledgement was lost.
+        let error = "storage_duplicate_record: ordered batch `batch-1` already exists";
+        assert!(!error.contains("already applied"), "old handler missed this replay");
+        assert!(transport_apply_error_is_duplicate(error));
+        let ack = transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
+            .expect("matching durable history must acknowledge redelivery");
+        assert!(ack.applied && ack.already_applied);
+        assert_eq!((ack.receipt_count, ack.accepted_count), (1, 1));
+        let mut conflicting = envelope;
+        let mut certificate: serde_json::Value =
+            serde_json::from_str(conflicting.certificate_json.as_ref().unwrap()).unwrap();
+        certificate["block_hash"] = serde_json::json!("99".repeat(48));
+        conflicting.certificate_json = Some(certificate.to_string());
+        assert!(transport_already_applied_ack(&root, &topology, "validator-0", &conflicting, &status).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn transport_duplicate_certified_batch_does_not_mask_other_storage_failures() {
+        assert!(transport_apply_error_is_duplicate("batch `x` already applied"));
+        for error in [
+            "storage_duplicate_record: receipt `x` already exists",
+            "storage_duplicate_record: ordered batch `` already exists",
+            "storage_integrity_mismatch: ordered batch `x` already exists",
+            "storage_duplicate_record: ordered batch `x` already exists; corrupt record",
+            "storage_writer_busy: ordered batch `x` already exists",
+        ] {
+            assert!(!transport_apply_error_is_duplicate(error), "{error}");
+        }
+    }
+
+    #[test]
     fn transport_duplicate_certified_batch_returns_typed_idempotent_ack() {
         let (root, topology, status, envelope) = already_applied_test_fixture(10);
         let ack =

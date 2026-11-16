@@ -439,7 +439,7 @@ fn handle_transport_batch_service_line(
                 storage_work,
             )
         }
-        Err(error) if error.contains("already applied") => transport_already_applied_ack(
+        Err(error) if transport_apply_error_is_duplicate(&error) => transport_already_applied_ack(
             data_dir,
             topology,
             &local_status.node_id,
@@ -450,6 +450,18 @@ fn handle_transport_batch_service_line(
     };
     write_json_line(stream, &ack)?;
     Ok(ack)
+}
+
+pub(super) fn transport_apply_error_is_duplicate(error: &str) -> bool {
+    // The transactional ordered-history store detects replay before execution
+    // and uses DuplicateRecord, unlike the legacy "already applied" path.
+    // This only selects the historical verification path: a duplicate error
+    // alone is never evidence that the certified block/receipts were committed.
+    error.contains("already applied")
+        || error
+            .strip_prefix("storage_duplicate_record: ordered batch `")
+            .and_then(|rest| rest.strip_suffix("` already exists"))
+            .is_some_and(|batch| !batch.is_empty() && !batch.contains('`'))
 }
 
 pub(super) fn apply_transport_batch(
