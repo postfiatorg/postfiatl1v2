@@ -424,6 +424,40 @@ pub struct PftlUniswapRouteStatusRow {
     pub pending_return_burn_count: u64,
     pub imported_return_burn_count: u64,
     pub ledger_hash: String,
+    /// The route's Ethereum verification `authority_epoch` as stored; null when
+    /// the route has no governed Ethereum verification policy.
+    #[serde(default)]
+    pub authority_epoch: Option<u64>,
+    /// True when `authority_epoch` is the epoch of the active (newest governed)
+    /// checkpoint committee, false when it is older, null when unknown.
+    #[serde(default)]
+    pub authority_committee_current: Option<bool>,
+    /// Why `authority_committee_current` is null; null when it is known.
+    #[serde(default)]
+    pub authority_committee_unknown_reason: Option<String>,
+}
+
+pub const ROUTE_AUTHORITY_UNKNOWN_NO_POLICY: &str = "route_has_no_ethereum_verification_policy";
+pub const ROUTE_AUTHORITY_UNKNOWN_NO_COMMITTEE: &str = "no_active_checkpoint_committee_recorded";
+pub const ROUTE_AUTHORITY_UNKNOWN_AHEAD_OF_COMMITTEE: &str =
+    "route_authority_epoch_ahead_of_active_committee";
+pub const ROUTE_AUTHORITY_UNKNOWN_NO_CONSENSUS_LEDGER: &str = "consensus_ledger_unavailable";
+
+/// Compares a route's Ethereum authority epoch with the active checkpoint
+/// committee epoch. Returns `(authority_committee_current, unknown_reason)`.
+pub fn route_authority_committee_current(
+    authority_epoch: Option<u64>,
+    active_committee_epoch: Option<u64>,
+) -> (Option<bool>, Option<String>) {
+    let unknown = |reason: &str| (None, Some(reason.to_string()));
+    match (authority_epoch, active_committee_epoch) {
+        (None, _) => unknown(ROUTE_AUTHORITY_UNKNOWN_NO_POLICY),
+        (Some(_), None) => unknown(ROUTE_AUTHORITY_UNKNOWN_NO_COMMITTEE),
+        (Some(route), Some(active)) if route > active => {
+            unknown(ROUTE_AUTHORITY_UNKNOWN_AHEAD_OF_COMMITTEE)
+        }
+        (Some(route), Some(active)) => (Some(route == active), None),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2957,6 +2991,12 @@ fn pftl_uniswap_route_status_row(
         pending_return_burn_count,
         imported_return_burn_count,
         ledger_hash: pftl_uniswap_bridge_ledger_hash(ledger)?,
+        // A local bridge ledger file carries no checkpoint committee state.
+        authority_epoch: None,
+        authority_committee_current: None,
+        authority_committee_unknown_reason: Some(
+            ROUTE_AUTHORITY_UNKNOWN_NO_CONSENSUS_LEDGER.to_string(),
+        ),
     })
 }
 

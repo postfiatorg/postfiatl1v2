@@ -174,7 +174,9 @@ origin to `ALLOWED_ORIGINS`, because authenticated writes still need an allowed
 same origin binding.
 
 The allowlist and denylist files must each be a regular file owned by the
-service user, not a symlink and not group- or world-writable:
+service user, not a symlink, not group- or world-writable and no larger than
+4 MiB (4194304 bytes, about 1,070 allowlisted keys or 58,000 denylisted ids).
+The size is checked before the file is read; a larger file counts as a bad file:
 
 - `{"schema":"postfiat-native-session-allowlist-v1","install_public_keys_hex":["<3904 hex>"]}`
 - `{"schema":"postfiat-native-session-denylist-v1","install_ids_hex":["<64 hex>"]}`,

@@ -33,4 +33,5 @@ mod tests {
     include!("owned_recovery_capabilities_tests.rs");
     include!("owned_certificate_tests.rs");
     include!("atomic_swap_wallet_tests.rs");
+    include!("navcoin_bridge_routes_contract_tests.rs");
 }

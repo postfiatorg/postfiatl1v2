@@ -46,7 +46,7 @@ Object.assign(process.env, NATIVE_ENV, {
 let clearMutationAdmissionForTest;
 let server;
 const {
-  ALGORITHM_ID, DEFAULT_MAX_ACTIVE_INSTALLS, INFO_PATH, OPEN_PATH, OPEN_SCHEMA, SIGNATURE_CONTEXT,
+  ALGORITHM_ID, DEFAULT_MAX_ACTIVE_INSTALLS, INFO_PATH, MAX_LIST_FILE_BYTES, OPEN_PATH, OPEN_SCHEMA, SIGNATURE_CONTEXT,
   createNativeSessions, installId, mlDsa65, openMessage,
 } = require('./native-session');
 
@@ -368,6 +368,37 @@ async function main() {
     writeList(allowlistFile, allow(alpha, beta), 15_000);
     slotClock += 1_000;
     assert.deepStrictEqual(slots.authenticate(betaSlot.body.token).failure, { statusCode: 503, code: 'native_session_busy' });
+
+    // A list file past MAX_LIST_FILE_BYTES is refused before it is read, like a
+    // malformed one: at startup, and on reload, where the last good list stays.
+    const padTo = (value, bytes) => {
+      const text = JSON.stringify(value);
+      return text + ' '.repeat(bytes - Buffer.byteLength(text));
+    };
+    const bothLists = { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile };
+    writeList(allowlistFile, padTo(allow(alpha, beta), MAX_LIST_FILE_BYTES), 16_000);
+    writeList(denylistFile, padTo(deny(beta), MAX_LIST_FILE_BYTES), 16_000);
+    assert.strictEqual(fs.statSync(allowlistFile).size, MAX_LIST_FILE_BYTES);
+    let sizeClock = Date.now();
+    const sizeErrors = [];
+    const sized = createNativeSessions({
+      env: bothLists, now: () => sizeClock, log: () => {}, logError: (line) => sizeErrors.push(line),
+    });
+    const sizedAlpha = await openAt(sized, alpha, sizeClock);
+    assert.strictEqual(sizedAlpha.statusCode, 200, 'an allowlist of exactly the limit loads');
+    assert.strictEqual((await openAt(sized, beta, sizeClock)).body.code, revoked.code, 'a denylist of exactly the limit loads');
+    writeList(allowlistFile, padTo(allow(beta), MAX_LIST_FILE_BYTES + 1), 17_000);
+    writeList(denylistFile, padTo(deny(alpha), MAX_LIST_FILE_BYTES + 1), 17_000);
+    for (let step = 0; step < 3; step += 1) {
+      sizeClock += 1_000;
+      assert.strictEqual(sized.authenticate(sizedAlpha.body.token).failure, null, 'oversize lists keep the last good lists');
+    }
+    assert.strictEqual(sizeErrors.length, 2, sizeErrors.join('\n'));
+    for (const label of ['allowlist', 'denylist']) {
+      assert.ok(sizeErrors.some((line) => line.includes(label) && line.includes(`${MAX_LIST_FILE_BYTES}-byte limit`)), sizeErrors.join('\n'));
+    }
+    assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_ALLOWLIST_FILE: allowlistFile } }), /ALLOWLIST_FILE .*byte limit/);
+    assert.throws(() => createNativeSessions({ env: { ...NATIVE_ENV, WALLET_PROXY_NATIVE_SESSION_DENYLIST_FILE: denylistFile } }), /DENYLIST_FILE .*byte limit/);
 
     // A restart ends every session: a token of an earlier process is refused, so
     // surviving tokens cannot fill the live-install table past the cap.

@@ -202,6 +202,69 @@ class MonitorSnapshotTest(unittest.TestCase):
         self.assertEqual(unavailable["status"], "warning")
         self.assertIn("proof_latency_unavailable", unavailable["warnings"])
 
+    def proof_checks(self, *proofs: dict[str, object]) -> dict[str, object]:
+        return self.module["monitor_checks"](
+            [self.monitor(proofs=endpoint_proofs) for endpoint_proofs in proofs],
+            {
+                "doctor_ok": True,
+                "checks": {"chain_consistent": True, "registry_root_consistent": True},
+            },
+            {"passed": None, "endpoints": []},
+            self.args(),
+        )
+
+    def test_proof_latency_unavailable_when_any_endpoint_lacks_valid_timing(self) -> None:
+        valid = {"last_verify_micros": 1000, "last_observed_unix_ms": 1000}
+        for broken in (
+            {},
+            {"last_verify_micros": None, "last_observed_unix_ms": None},
+            {"last_verify_micros": 0, "last_observed_unix_ms": 5000},
+            {"last_verify_micros": -1, "last_observed_unix_ms": 1000},
+            {"last_verify_micros": "1000", "last_observed_unix_ms": 1000},
+        ):
+            with self.subTest(broken=broken):
+                for order in ((valid, broken), (broken, valid)):
+                    report = self.proof_checks(*order)
+                    self.assertEqual(report["status"], "warning")
+                    self.assertIn("proof_latency_unavailable", report["warnings"])
+
+        slow = {"last_verify_micros": 15_000_001, "last_observed_unix_ms": 1000}
+        critical_with_missing = self.proof_checks(slow, {})
+        self.assertEqual(critical_with_missing["status"], "critical")
+        self.assertIn("proof_verify_latency_critical", critical_with_missing["criticals"])
+        self.assertIn("proof_latency_unavailable", critical_with_missing["warnings"])
+
+    def test_proof_latency_all_zero_no_history_stays_ok(self) -> None:
+        no_history = {"last_verify_micros": 0, "last_observed_unix_ms": 0}
+        valid = {"last_verify_micros": 1000, "last_observed_unix_ms": 1000}
+        for endpoints in ((no_history, no_history), (valid, no_history)):
+            with self.subTest(endpoints=endpoints):
+                report = self.proof_checks(*endpoints)
+                self.assertEqual(report["status"], "ok")
+                self.assertNotIn("proof_latency_unavailable", report["warnings"])
+
+    def test_proof_latency_thresholds_apply_across_endpoints(self) -> None:
+        def proofs(micros: int) -> dict[str, object]:
+            return {"last_verify_micros": micros, "last_observed_unix_ms": 1000}
+
+        fast = proofs(1000)
+        at_warn = self.proof_checks(fast, proofs(5_000_000))
+        self.assertEqual(at_warn["status"], "ok")
+
+        warn = self.proof_checks(fast, proofs(5_000_001))
+        self.assertEqual(warn["status"], "warning")
+        self.assertIn("proof_verify_latency_warn", warn["warnings"])
+        self.assertNotIn("proof_verify_latency_critical", warn["criticals"])
+
+        at_critical = self.proof_checks(fast, proofs(15_000_000))
+        self.assertIn("proof_verify_latency_warn", at_critical["warnings"])
+        self.assertNotIn("proof_verify_latency_critical", at_critical["criticals"])
+
+        critical = self.proof_checks(fast, proofs(15_000_001))
+        self.assertEqual(critical["status"], "critical")
+        self.assertIn("proof_verify_latency_critical", critical["criticals"])
+        self.assertNotIn("proof_verify_latency_warn", critical["warnings"])
+
     def test_endpoint_monitor_reads_metrics_from_their_actual_sections(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
+import { navcoinRouteAuthorityNotice } from '../lib/navcoin-markets.js';
 import { formatNavcoinNav, formatNavcoinUnits } from '../lib/navcoin-primary-route.js';
 import { formatAssetBalance, shortenAssetId } from '../lib/utils.js';
 
@@ -94,7 +95,10 @@ export default function NavList({ markets = [], rpc, address, go }) {
       name: market.name,
       holding: assetBalance(assets, market.navAssetId),
       assetId: market.navAssetId,
-      status: marketIsVerified(market, route, nav) ? `${formatNavcoinNav(nav?.nav_per_unit)} verified NAV` : 'NAV verification blocked',
+      status: [
+        marketIsVerified(market, route, nav) ? `${formatNavcoinNav(nav?.nav_per_unit)} verified NAV` : 'NAV verification blocked',
+        navcoinRouteAuthorityNotice(market),
+      ].filter(Boolean).join(' · '),
     })),
     ...settlementMarkets.map(market => ({
       id: String(market.settlementSymbol).toUpperCase() === 'PFUSDC' ? 'pfUSDC' : market.settlementSymbol,

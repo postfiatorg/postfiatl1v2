@@ -84,8 +84,15 @@ export function navcoinMarketFromRoute(row, assetMetadata = []) {
     routeTrustClass: String(row.route_trust_class || ''),
     liveValueEnabled: row.live_value_enabled === true,
     paused: row.paused === true,
+    authorityEpoch: Number.isSafeInteger(row.authority_epoch) && row.authority_epoch > 0 ? row.authority_epoch : null,
+    authorityCommitteeCurrent: typeof row.authority_committee_current === 'boolean' ? row.authority_committee_current : null,
     transactionAdapter: 'pftl-uniswap-primary-v2',
   });
+}
+
+/** Older nodes omit the authority fields; only an explicit `false` is flagged. */
+export function navcoinRouteAuthorityNotice(market) {
+  return market?.authorityCommitteeCurrent === false ? 'authority out of date' : '';
 }
 
 export function navcoinMarketsFromRoutes(report, assetMetadata = []) {

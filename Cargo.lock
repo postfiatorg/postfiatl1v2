@@ -3296,6 +3296,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "flate2",
+ "postfiat-bridge",
  "postfiat-crypto-provider",
  "postfiat-execution",
  "postfiat-types",

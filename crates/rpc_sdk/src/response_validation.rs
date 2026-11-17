@@ -4660,7 +4660,20 @@ fn validate_bridge_status_result(result: &Value) -> Result<(), RpcResponseValida
 }
 
 fn validate_navcoin_bridge_routes_result(result: &Value) -> Result<(), RpcResponseValidationError> {
-    expect_string_eq(result, "schema", "postfiat-pftl-uniswap-routes-status-v1")?;
+    // Both producers emit v2; v1 is still accepted from older nodes. The same
+    // row checks, including the optional authority fields, apply to either.
+    let schema = string_field(result, "schema")?;
+    if !matches!(
+        schema,
+        "postfiat-pftl-uniswap-routes-status-v1" | "postfiat-pftl-uniswap-routes-status-v2"
+    ) {
+        return Err(invalid_result(
+            "schema",
+            format!(
+                "expected `postfiat-pftl-uniswap-routes-status-v1` or `postfiat-pftl-uniswap-routes-status-v2`, found `{schema}`"
+            ),
+        ));
+    }
     let route_count = u64_field(result, "route_count")?;
     let routes = array_field(result, "routes")?;
     if route_count != routes.len() as u64 {
@@ -5156,7 +5169,38 @@ fn validate_navcoin_bridge_route_status_row(
         ));
     }
     lower_hex_field(route, "ledger_hash", 96)?;
-    Ok(())
+    validate_navcoin_bridge_route_authority_fields(route)
+}
+
+/// Route authority fields are optional because older nodes omit them.
+fn validate_navcoin_bridge_route_authority_fields(
+    route: &Value,
+) -> Result<(), RpcResponseValidationError> {
+    let present = |name: &str| route.get(name).is_some();
+    if !present("authority_epoch")
+        && !present("authority_committee_current")
+        && !present("authority_committee_unknown_reason")
+    {
+        return Ok(());
+    }
+    let authority_epoch = optional_u64_field_value(route, "authority_epoch")?;
+    if authority_epoch == Some(0) {
+        return Err(invalid_result(
+            "authority_epoch",
+            "expected null or a nonzero authority epoch",
+        ));
+    }
+    optional_bool_result_field(route, "authority_committee_current")?;
+    let current = field(route, "authority_committee_current")?.as_bool();
+    let reason = optional_reason_field(route, "authority_committee_unknown_reason")?;
+    match (current, reason) {
+        (Some(_), None) if authority_epoch.is_some() => Ok(()),
+        (None, Some(_)) => Ok(()),
+        _ => Err(invalid_result(
+            "authority_committee_current",
+            "expected a boolean with an authority epoch and no reason, or null with a reason",
+        )),
+    }
 }
 
 fn validate_navcoin_bridge_route_family_field(
