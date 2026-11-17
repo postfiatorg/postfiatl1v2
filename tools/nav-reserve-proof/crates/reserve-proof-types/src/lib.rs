@@ -32,6 +32,7 @@ pub mod yolo_broker;
 pub mod yolo_cbor;
 pub mod yolo_collection;
 pub mod yolo_nitro;
+pub mod b23_nav;
 pub mod yolo_target;
 pub mod yolo_target_proof;
 pub mod yolo_witness;

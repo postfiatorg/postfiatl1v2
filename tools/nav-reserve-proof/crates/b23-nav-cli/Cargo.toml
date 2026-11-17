@@ -1,0 +1,23 @@
+[package]
+name = "postfiat-b23-nav"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+sp1 = ["dep:sp1-sdk", "dep:tokio", "dep:bincode", "dep:tracing-subscriber"]
+cuda = ["sp1", "sp1-sdk/cuda"]
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+hex.workspace = true
+reserve-proof-types = { path = "../reserve-proof-types", default-features = false }
+serde_json.workspace = true
+sha2.workspace = true
+postfiat-types.workspace = true
+bincode = { workspace = true, optional = true }
+sp1-sdk = { version = "=6.3.1", default-features = false, optional = true }
+tokio = { workspace = true, optional = true }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"], optional = true }
