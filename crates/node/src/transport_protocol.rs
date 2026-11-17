@@ -1535,12 +1535,27 @@ pub(super) fn transport_batch_ack(
 pub(super) const CERTIFIED_SEND_DUPLICATE_CONFLICT: &str = "certified_send_duplicate_conflict";
 
 /// True when a local apply failed only because the batch is already in the
-/// ordered history. The JSON store reports `batch '<id>' already applied`; the
-/// transactional and bounded stores report `storage_duplicate_record: ordered
-/// batch `<id>` already exists` (or `... already exists`).
+/// ordered history. Each store has one exact form: the legacy JSON store reports
+/// `batch '<id>' already applied`, the bounded store `ordered batch '<id>' already
+/// exists`, and the transactional store `storage_duplicate_record: ordered batch
+/// `<id>` already exists`. Other storage codes (integrity mismatch, busy writer)
+/// with the same words are not duplicates. This only selects the check against
+/// durable history; a duplicate error alone never proves the block was committed.
 pub(super) fn transport_apply_error_is_duplicate_batch(error: &str) -> bool {
+    fn batch_id_between(error: &str, prefix: &str, suffix: &str, quote: char) -> bool {
+        error
+            .strip_prefix(prefix)
+            .and_then(|rest| rest.strip_suffix(suffix))
+            .is_some_and(|batch| !batch.is_empty() && !batch.contains(quote))
+    }
     error.contains("already applied")
-        || (error.contains("ordered batch") && error.contains("already exists"))
+        || batch_id_between(error, "ordered batch '", "' already exists", '\'')
+        || batch_id_between(
+            error,
+            "storage_duplicate_record: ordered batch `",
+            "` already exists",
+            '`',
+        )
 }
 
 /// Acknowledgement for a certified batch whose local apply failed.
@@ -2771,6 +2786,45 @@ mod transport_cli_tests {
             test_status("validator-0"),
             envelope,
         )
+    }
+
+    #[test]
+    fn transport_duplicate_certified_batch_storage_error_reaches_verified_ack() {
+        let (root, topology, status, envelope) = already_applied_test_fixture(10);
+        // Exact error emitted by TransactionalStore::next_ordered_history_commitment
+        // after the first delivery committed but its acknowledgement was lost.
+        let error = "storage_duplicate_record: ordered batch `batch-1` already exists";
+        assert!(!error.contains("already applied"), "old handler missed this replay");
+        assert!(transport_apply_error_is_duplicate_batch(error));
+        let ack = transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
+            .expect("matching durable history must acknowledge redelivery");
+        assert!(ack.applied && ack.already_applied);
+        assert_eq!((ack.receipt_count, ack.accepted_count), (1, 1));
+        let mut conflicting = envelope;
+        let mut certificate: serde_json::Value =
+            serde_json::from_str(conflicting.certificate_json.as_ref().unwrap()).unwrap();
+        certificate["block_hash"] = serde_json::json!("99".repeat(48));
+        conflicting.certificate_json = Some(certificate.to_string());
+        assert!(transport_already_applied_ack(&root, &topology, "validator-0", &conflicting, &status).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn transport_duplicate_certified_batch_does_not_mask_other_storage_failures() {
+        assert!(transport_apply_error_is_duplicate_batch("batch `x` already applied"));
+        // Bounded store form, crates/storage/src/ordered_history.rs.
+        assert!(transport_apply_error_is_duplicate_batch("ordered batch 'x' already exists"));
+        for error in [
+            "ordered batch '' already exists",
+            "ordered batch 'x' already exists out of order",
+            "storage_duplicate_record: receipt `x` already exists",
+            "storage_duplicate_record: ordered batch `` already exists",
+            "storage_integrity_mismatch: ordered batch `x` already exists",
+            "storage_duplicate_record: ordered batch `x` already exists; corrupt record",
+            "storage_writer_busy: ordered batch `x` already exists",
+        ] {
+            assert!(!transport_apply_error_is_duplicate_batch(error), "{error}");
+        }
     }
 
     #[test]

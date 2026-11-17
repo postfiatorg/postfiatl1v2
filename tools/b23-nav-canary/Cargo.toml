@@ -11,4 +11,5 @@ clap = {version="4",features=["derive"]}
 postfiat-types = {path="../../crates/types"}
 postfiat-storage = {path="../../crates/storage"}
 postfiat-execution = {path="../../crates/execution"}
+postfiat-crypto-provider = {path="../../crates/crypto_provider"}
 

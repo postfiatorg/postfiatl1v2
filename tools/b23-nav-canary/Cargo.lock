@@ -1187,6 +1187,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "postfiat-crypto-provider",
  "postfiat-execution",
  "postfiat-storage",
  "postfiat-types",
