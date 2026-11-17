@@ -1,0 +1,17 @@
+[
+  {
+    "label": "original-reading",
+    "returncode": 0,
+    "stderr": ""
+  },
+  {
+    "label": "changed-asset",
+    "returncode": 1,
+    "stderr": "Error: manifest differs from measured account policy"
+  },
+  {
+    "label": "changed-asset-and-policy",
+    "returncode": 1,
+    "stderr": "Error: manifest digest mismatch"
+  }
+]
