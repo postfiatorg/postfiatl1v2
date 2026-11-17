@@ -21,7 +21,7 @@ def main():
     load=lambda name:json.loads((args.capture/name).read_bytes())
     m,e,p=load('manifest.json'),load('result.json'),load('pcrs.json')
     root=x509.load_der_x509_certificate(args.root_der.read_bytes()).public_bytes(serialization.Encoding.PEM)
-    # Explicit replay at the immutable window end, with the guest's 65s bound.
+    # Verify at this reading's window end, retaining the guest's 65s bound.
     at=m['cutoff_unix_ms']+65000
     verify_reading(e,manifest=m,root_pem=root,expected_pcrs=p,now_ms=at,max_age_ms=65000)
     checks={}

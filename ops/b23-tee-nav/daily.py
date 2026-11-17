@@ -42,14 +42,46 @@ def save(path,value):
         json.dump(value,stream,indent=2);stream.write('\n');stream.flush();os.fsync(stream.fileno())
     temporary.replace(path)
 
-def daily_manifest(seed,day,height):
-    m=copy.deepcopy(seed);schedule=m['schedule']
-    cutoff=int(datetime(day.year,day.month,day.day,18,15,tzinfo=timezone.utc).timestamp()*1000)
-    delta=cutoff-schedule['first_daily_unix_ms']
-    if delta<0 or delta%86400000:raise ValueError('date precedes the registered daily schedule')
-    m.update(cutoff_unix_ms=cutoff,observation_epoch=schedule['first_daily_epoch']+delta//86400000,
+def reading_manifest(seed,cutoff,height,finalized_epoch,previous_cutoff):
+    """Use ledger ordering, independently of the number of readings that day."""
+    if cutoff<=previous_cutoff:raise ValueError('cutoff must strictly follow the finalized reading')
+    if finalized_epoch<seed['schedule']['opening_epoch']:raise ValueError('epoch precedes opening')
+    m=copy.deepcopy(seed)
+    m.update(cutoff_unix_ms=cutoff,observation_epoch=finalized_epoch+1,
         observation_height=height,challenge_sha256=secrets.token_hex(32))
     return m
+
+def daily_manifest(seed,day,height,finalized_epoch,previous_cutoff):
+    cutoff=int(datetime(day.year,day.month,day.day,18,15,tzinfo=timezone.utc).timestamp()*1000)
+    return reading_manifest(seed,cutoff,height,finalized_epoch,previous_cutoff)
+
+def finalized_cutoff(state,asset,capture_roots):
+    """Recover the cutoff from a reading committed by the finalized proof.
+
+    Ledger ABI v1 exposes the reading hash, not its Unix timestamp. Match public
+    bytes and the reading commitment; a loose local timestamp is insufficient.
+    """
+    nav=next(n for n in state['ledger']['nav_assets'] if n['asset_id']==asset)
+    packet=next(p for p in state['ledger']['nav_reserve_packets']
+        if p['asset_id']==asset and p['epoch']==nav['finalized_epoch']
+        and p['reserve_packet_hash']==nav['finalized_reserve_packet_hash'] and p['state']=='finalized')
+    public=bytes(packet['sp1_public_values'])
+    for root in capture_roots:
+        for path in root.glob('**/manifest.json'):
+            result=path.with_name('result.json')
+            if not result.is_file():continue
+            manifest=load(path)
+            if manifest.get('nav_asset_id')!=asset or manifest.get('observation_epoch')!=nav['finalized_epoch']:continue
+            envelope=load(result);body=envelope.get('body',{})
+            if body.get('public_values_hex')!=public.hex():continue
+            reading=body['reading']
+            # source_observation_root is bytes 316..364 in fixed PFNAV001 ABI.
+            encoded=json.dumps(reading,sort_keys=True,separators=(',',':')).encode()
+            digest=hashlib.sha3_384(b'postfiat.b23.nitro_nav_reading.v1.source\0'+encoded).digest()
+            if len(public)!=584 or digest!=public[316:364]:continue
+            if manifest['cutoff_unix_ms']!=reading['cutoff_unix_ms']:continue
+            return reading['cutoff_unix_ms']
+    raise ValueError('No reading matching the finalized proof commitment; cannot order cutoff')
 
 def reserve_budget(path,month,run_id,reservation,run_cap=RUN_CAP,month_cap=MONTH_CAP):
     """Caller holds the exclusive run lock. Reservations never get refunded."""
@@ -90,8 +122,9 @@ def execute(now,run_cap,month_cap):
             sys.path.insert(0,str(TOOLS));from live_snapshot import export_snapshot
             export_snapshot(CANARY,directory/'before-capture-state.json')
             state=load(directory/'before-capture-state.json');seed=load(SEED/'manifest.json')
-            manifest=daily_manifest(seed,now.date(),state['tip']['height'])
-            nav=next(x for x in state['ledger']['nav_assets'] if x['asset_id']==manifest['nav_asset_id'])
+            nav=next(x for x in state['ledger']['nav_assets'] if x['asset_id']==seed['nav_asset_id'])
+            previous=finalized_cutoff(state,seed['nav_asset_id'],[SEED,EVIDENCE])
+            manifest=daily_manifest(seed,now.date(),state['tip']['height'],nav['finalized_epoch'],previous)
             if nav['proof_profile']!=seed['proof_profile_id'] or nav['finalized_epoch']+1!=manifest['observation_epoch']:
                 raise ValueError('daily epoch/profile is not the next registered reading; no backfill or rebind')
             runner=runner_module();plan=load(COORD/'evidence/tee/phase2/opening3-plan.json')
@@ -144,7 +177,8 @@ def main():
     run_cap=Decimal(os.environ.get('B23_DAILY_RUN_CAP_USD',str(RUN_CAP)))
     month_cap=Decimal(os.environ.get('B23_DAILY_MONTH_CAP_USD',str(MONTH_CAP)))
     if args.check:
-        manifest=daily_manifest(load(SEED/'manifest.json'),now.date(),1296)
+        seed=load(SEED/'manifest.json')
+        manifest=daily_manifest(seed,now.date(),1296,seed['observation_epoch'],seed['cutoff_unix_ms'])
         print(json.dumps({'mode':'local_check','epoch':manifest['observation_epoch'],'cutoff_unix_ms':manifest['cutoff_unix_ms'],
             'per_run_cap_usd':str(run_cap),'monthly_cap_usd':str(month_cap),'aws_calls':0,'chain_writes':0}));return
     def stop(signum,frame):raise SystemExit(128+signum)

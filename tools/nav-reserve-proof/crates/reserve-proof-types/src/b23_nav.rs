@@ -167,34 +167,19 @@ pub fn execute(witness: &Witness) -> Result<NavReservePublicValuesV1, String> {
         s.opening_epoch > 0
             && s.opening_unix_ms > 0
             && s.opening_epoch.checked_add(1) == Some(s.first_daily_epoch)
-            && s.first_daily_unix_ms % 86_400_000 == 65_700_000,
+            && s.first_daily_unix_ms > 0
+            && m.observation_epoch >= s.opening_epoch
+            && m.cutoff_unix_ms >= s.opening_unix_ms,
         "invalid NAV schedule",
     )?;
-    let gap = s
-        .first_daily_unix_ms
-        .checked_sub(s.opening_unix_ms)
-        .ok_or("opening after first daily fix")?;
-    require(
-        gap > 65_000 && gap < 86_400_000,
-        "opening outside approved day",
-    )?;
-    let cutoff = if m.observation_epoch == s.opening_epoch {
-        s.opening_unix_ms
-    } else {
-        m.observation_epoch
-            .checked_sub(s.first_daily_epoch)
-            .and_then(|n| n.checked_mul(86_400_000))
-            .and_then(|n| n.checked_add(s.first_daily_unix_ms))
-            .ok_or("invalid scheduled epoch")?
-    };
+    let cutoff = m.cutoff_unix_ms;
     let end = cutoff.checked_add(65_000).ok_or("cutoff overflow")?;
     require(
-        m.cutoff_unix_ms == cutoff
-            && r.cutoff_unix_ms == cutoff
+        r.cutoff_unix_ms == cutoff
             && r.started_unix_ms >= cutoff
             && r.observed_unix_ms >= r.started_unix_ms
             && r.observed_unix_ms <= end - 5000,
-        "stale or wrong scheduled reading",
+        "stale or wrong cutoff reading",
     )?;
     require(
         r.account_commitment_sha256 == m.account_commitment_sha256 && r.source_field == FIELD,
