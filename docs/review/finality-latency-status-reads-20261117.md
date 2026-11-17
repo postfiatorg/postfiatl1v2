@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-17 UTC
 - **Branch:** `perf/finality-status-reuse-20261117`, based on `43ddc7d6` (the commit the live validators run)
-- **Status:** change written and tested locally. **Not deployed.** Deploying it means a new validator binary on the live network.
+- **Status:** deployed to all six validators on 2026-11-17 as release `b24-release5-20261117` (binary sha256 `69de5ce0…bcd18`, revision `ac91a1f4`). Measured results are in the last section.
 
 ## Measurements
 
@@ -106,3 +106,37 @@ cheap there. The numbers below are derived from the live report, not measured.
 Earlier measurements on this network were under a second. What changed has not been
 established. The two vote phases of consensus v2 and ledger growth (status cost grows with
 the ledger) are both candidates.
+
+## Deployed and measured (2026-11-17, 14:28 to 15:22 UTC)
+
+Rolled with the release 1 to 4 procedure (`ops/b23/rollout_one.sh`): validator-1 first, then
+0, 2, 3, 4, 5, each followed by a test transfer accepted on all six with one state root.
+Records: `b23-coord/evidence/ops/release5/`. Rollback units are saved on each host under
+`/etc/postfiat/releases/b23-release4-20261113/rollback-units/`, and the release 4 binary is
+still in place.
+
+Before any host was touched, both binaries were run on a copy of validator-1's data
+(key files excluded, copy deleted afterwards): `status` gave the same height and state root,
+`verify-finalized-checkpoint` verified with both, and `verify-state` and `verify-blocks`
+failed identically with both (`unsupported governance amendment kind
+rejected_tx_fee_activation_height`), which is a gap in the running line, not in this change.
+
+| Round | Proposer build | Round ms | Submit ms |
+| --- | --- | ---: | ---: |
+| 1422 | old | 10,670 | 14,699 |
+| 1423 | new, peers old | 7,040 | 10,870 |
+| 1424 to 1427 | old (four rounds) | 8,296 to 10,386 | 12,172 to 15,167 |
+| 1428 | new, one peer old | 7,129 | 10,675 |
+| 1429 | all new | 5,450 | 9,410 |
+| 1430 | all new | 6,931 | 13,691 |
+| 1431 | all new | 6,378 | 11,527 |
+
+Average round: about 10.0 seconds before, 6.3 after. The estimate above (4.2) was too
+optimistic. Round 1431 by stage: setup 658, proposal 944, prepare votes 1,855, precommit
+votes 1,511, apply 417, status after apply 559. `status_ms` in every vote request is now 0
+and the proposer's wait equals the peer's reported handling. What bounds the vote phases now
+is the slowest peer (1,062 ms of handling plus 235 ms to connect on the farthest host).
+
+The submit call did not improve as much as the round (about 14.3 to 11.5 seconds): the
+wrapper's own status reads are untouched and one of the three took 6.8 seconds outside the
+round.
