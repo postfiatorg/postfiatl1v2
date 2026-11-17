@@ -1146,23 +1146,63 @@ fn handle_transport_validator_connection(
     require_signed_proposal: bool,
 ) -> Result<(), String> {
     let mut handled_request_count = 0u64;
-    // One store open per request (STO-07): the lease spans the request and the
-    // next status read, and is released before blocking on the connection.
     let mut store_lease = None;
     loop {
         if handled_request_count >= TRANSPORT_VALIDATOR_MAX_REQUESTS_PER_CONNECTION {
             break;
         }
-        let local_status = status(NodeOptions {
-            data_dir: data_dir.clone(),
-        })
-        .map_err(|error| {
-            format!("transport validator service connection status failed: {error}")
-        })?;
-        validate_status_matches_topology(&local_status, &topology)?;
+        // One store open per request (STO-07): released before blocking on the
+        // connection, taken again once a request has arrived so that the status
+        // read and the request share it.
         drop(store_lease.take());
         let read_start = Instant::now();
-        let line = match read_transport_line(&stream, "transport validator service read") {
+        let line_result = read_transport_line(&stream, "transport validator service read");
+        let transport_read_ms = monotonic_elapsed_ms(read_start);
+        store_lease = postfiat_node::hold_transactional_store(&data_dir)?;
+        // A full status read decodes the whole ledger. The block-vote path only
+        // uses identity fields from it (node id, chain id, genesis hash, protocol
+        // version), which are fixed for a data directory, so vote requests reuse
+        // the first status this service read. Every other request kind still gets
+        // a fresh status, read after the request arrives.
+        let is_block_vote_request = line_result
+            .as_ref()
+            .ok()
+            .and_then(|line| transport_envelope_schema(line).ok())
+            .is_some_and(|schema| schema == TRANSPORT_BLOCK_VOTE_REQUEST_SCHEMA);
+        let cached_identity_status = if is_block_vote_request {
+            shared_state
+                .lock()
+                .map_err(|_| "transport validator service state lock poisoned".to_string())?
+                .identity_status
+                .clone()
+        } else {
+            None
+        };
+        let local_status = match cached_identity_status {
+            Some(identity_status) => {
+                // status() recovers an interrupted ordered commit before reading;
+                // keep that guarantee ahead of vote creation.
+                recover_interrupted_ordered_commit(&data_dir).map_err(|error| {
+                    format!("transport validator service commit recovery failed: {error}")
+                })?;
+                identity_status
+            }
+            None => {
+                let local_status = status(NodeOptions {
+                    data_dir: data_dir.clone(),
+                })
+                .map_err(|error| {
+                    format!("transport validator service connection status failed: {error}")
+                })?;
+                validate_status_matches_topology(&local_status, &topology)?;
+                shared_state
+                    .lock()
+                    .map_err(|_| "transport validator service state lock poisoned".to_string())?
+                    .identity_status = Some(local_status.clone());
+                local_status
+            }
+        };
+        let line = match line_result {
             Ok(line) => line,
             Err(error) => {
                 if handled_request_count > 0 && transport_connection_idle_or_closed(&error) {
@@ -1201,9 +1241,7 @@ fn handle_transport_validator_connection(
             }
         };
         handled_request_count = handled_request_count.saturating_add(1);
-        let transport_read_ms = monotonic_elapsed_ms(read_start);
         let kind = transport_envelope_schema(&line).unwrap_or_else(|_| "unknown".to_string());
-        store_lease = postfiat_node::hold_transactional_store(&data_dir)?;
         match kind.as_str() {
             TRANSPORT_BATCH_SCHEMA => match handle_transport_batch_service_line(
                 &mut stream,
@@ -1995,10 +2033,13 @@ pub(super) fn transport_block_vote_request(
     timings.topology_read_ms = monotonic_elapsed_ms(stage_start);
 
     let stage_start = Instant::now();
-    let local_status = status(NodeOptions {
-        data_dir: options.data_dir.clone(),
-    })
-    .map_err(|error| format!("transport block vote request status failed: {error}"))?;
+    let local_status = match options.local_status.clone() {
+        Some(local_status) => local_status,
+        None => status(NodeOptions {
+            data_dir: options.data_dir.clone(),
+        })
+        .map_err(|error| format!("transport block vote request status failed: {error}"))?,
+    };
     validate_status_matches_topology(&local_status, &topology)?;
     timings.status_ms = monotonic_elapsed_ms(stage_start);
 
@@ -2571,6 +2612,7 @@ fn transport_block_vote_request_with_retries(
     send_retries: usize,
     retry_backoff_ms: u64,
     consensus_v2: Option<TransportConsensusV2VoteRequest>,
+    local_status: Option<&StatusReport>,
 ) -> Result<TransportBlockVoteRequestReport, String> {
     if send_retries > MAX_TRANSPORT_SEND_RETRIES {
         return Err(format!(
@@ -2596,6 +2638,7 @@ fn transport_block_vote_request_with_retries(
             block_height,
             timeout_ms,
             consensus_v2: consensus_v2.clone(),
+            local_status: local_status.cloned(),
         }) {
             Ok(mut report) => {
                 report.attempts = attempt as u64;
@@ -2680,6 +2723,7 @@ fn collect_consensus_v2_precommit_votes(
                     send_retries,
                     retry_backoff_ms,
                     consensus_v2,
+                    Some(local_status),
                 );
                 (target, result)
             }));
@@ -3390,6 +3434,7 @@ pub(super) fn transport_peer_certified_batch_round(
                 }
             });
             let sender = sender.clone();
+            let local_status = local_status.clone();
             let _ = std::thread::spawn(move || {
                 let vote_request_start = Instant::now();
                 let result = transport_block_vote_request_with_retries(
@@ -3406,6 +3451,7 @@ pub(super) fn transport_peer_certified_batch_round(
                     send_retries,
                     retry_backoff_ms,
                     consensus_v2,
+                    Some(&local_status),
                 );
                 let _ = sender.send(TransportPeerVoteRequestOutcome {
                     target,
@@ -3464,6 +3510,7 @@ pub(super) fn transport_peer_certified_batch_round(
                         prepare_qc: None,
                     }
                 });
+                let local_status = local_status.clone();
                 handles.push(scope.spawn(move || {
                     let vote_request_start = Instant::now();
                     let result = transport_block_vote_request_with_retries(
@@ -3480,6 +3527,7 @@ pub(super) fn transport_peer_certified_batch_round(
                         send_retries,
                         retry_backoff_ms,
                         consensus_v2,
+                        Some(&local_status),
                     );
                     TransportPeerVoteRequestOutcome {
                         target,

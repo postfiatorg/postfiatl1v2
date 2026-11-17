@@ -395,6 +395,11 @@ struct TransportBlockVoteRequestOptions {
     block_height: Option<u64>,
     timeout_ms: u64,
     consensus_v2: Option<TransportConsensusV2VoteRequest>,
+    /// Status already read by the caller for this round. Only identity fields
+    /// (node id, chain id, genesis hash, protocol version) are used here, and they
+    /// do not change while a round runs, so a round reads the store once, not once
+    /// per peer per phase.
+    local_status: Option<StatusReport>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -595,6 +600,9 @@ struct TransportValidatorServeSharedState {
     block_proposal_responses: Vec<TransportBlockProposalResponseEnvelope>,
     health_responses: Vec<TransportHealthResponseEnvelope>,
     rejected: Vec<TransportValidatorServeRejection>,
+    /// First status read by this service, reused for block-vote requests,
+    /// which only need identity fields from it.
+    identity_status: Option<StatusReport>,
 }
 
 impl TransportValidatorServeSharedState {

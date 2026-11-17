@@ -424,6 +424,7 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
                 block_height,
                 timeout_ms,
                 consensus_v2: None,
+                local_status: None,
             })?;
             let json = serde_json::to_string_pretty(&report).map_err(|error| {
                 format!("transport block vote request serialization failed: {error}")
