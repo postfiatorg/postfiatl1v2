@@ -624,6 +624,13 @@ pub fn run_once(options: NodeOptions) -> io::Result<StatusReport> {
     status(options)
 }
 
+/// Completes an interrupted ordered commit, exactly as [`status`] does before it
+/// reads. For callers that reuse an earlier status and still need the store
+/// recovered before they read from it.
+pub fn recover_interrupted_ordered_commit(data_dir: &std::path::Path) -> io::Result<()> {
+    recover_ordered_commit_journal(&NodeStore::new(data_dir))
+}
+
 pub fn status(options: NodeOptions) -> io::Result<StatusReport> {
     let store = NodeStore::new(options.data_dir);
     recover_ordered_commit_journal(&store)?;

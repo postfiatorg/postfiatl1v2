@@ -121,7 +121,7 @@ use postfiat_node::{
     sign_verified_block_proposal,
     sign_cobalt_authority_transition, sign_governance_amendment_authorization,
     sign_validator_registry_update_authorization,
-    simulate_shielded_batch, stage_deployment_validator_units, stage_validator_key, status,
+    simulate_shielded_batch, stage_deployment_validator_units, stage_validator_key, status, recover_interrupted_ordered_commit,
     submit_signed_asset_transaction_json_to_mempool,
     submit_signed_atomic_swap_transaction_json_to_mempool,
     submit_signed_escrow_transaction_json_to_mempool,
