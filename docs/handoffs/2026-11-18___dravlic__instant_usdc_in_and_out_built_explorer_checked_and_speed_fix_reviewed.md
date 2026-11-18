@@ -89,3 +89,4 @@ Only the owner can do these (date first asked):
 
 - I made the three changes to money in that the final re-read asked for: `a16030571` on `instant/deposit-advance-20261118` (fast-forwarded from `2d5e98294` through `6cad89678`). A refusal now needs another accepted transaction at the payment's sequence, the burn command keeps its own transaction id as evidence, and the evidence lookup pages back. The README has a four-point pilot runbook.
 - The same screen fix as pull request 412, for an unfinished Create at NAV attempt and a stalled withdrawal, is Task Node pull request 413.
+- Before any pilot of instant money in, the expiry height 2000 in the deposit relay scripts on the main machine must be raised or removed. After block 2000 a deposit can no longer be finished, so a deposit the float has already paid would never repay it. The chain was at 1,437 on 18 November.
