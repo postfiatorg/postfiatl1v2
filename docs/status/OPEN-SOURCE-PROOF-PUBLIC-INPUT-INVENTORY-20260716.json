@@ -28,7 +28,9 @@
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/monero_adapter.rs": "200f267c2dadd95ce56310523bc640a86ef97fc7d668da0b4c66e9be44c4ce37",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/solana_adapter.rs": "bb33cd5eb56ca68edb1d05e2b48077db91f5d0762e29f7e6df00c10afedee3ae",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/source_checkpoint.rs": "bcf53545c023a936719ab69a7c167661a311cdfe0aecf59a7cf73924446c03b3",
-    "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "614c149f6fd91bb33544a656d5248696ed0e846044b86922b1944fd6eacb7666",
+    "tools/nav-reserve-proof/crates/b23-nav-cli/src/main.rs": "08a22ed31a87f3bb204ad86159527109695e070e3e0c8fbccbfbea1000f2b4e2",
+    "tools/nav-reserve-proof/crates/b23-nav-cli/src/sp1.rs": "9395fc6195837cb6782042651e86b7011da0e0a221bf7e784dbdfd5d416e5fd0",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "efccbb2414bc0ec8d05fa88b8981c7d59631eaca1dd4d41a24397fb1640c78ae",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/yolo_broker.rs": "aa6e5145b60cfcd2c593360ec7ea6bbb82e67f980eec46d6a36afceff30d0c9b",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/portfolio_valuation.rs": "80353517f72aed076732a75ca6bd6a21b0363bb9f7601bc54cb28cfcc7c60227",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/bft_checkpoint.rs": "9f59ccb44da5b3a66adbe5945b340bfc15551854aa9998c90ac0f15522c3b73b",
@@ -39,6 +41,7 @@
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/near_receipt.rs": "9021e87e62147b0d38adef0e7eeb4239ff0adc284c851cbc45dd3adf48e4337d",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/solana_stake.rs": "c9dd7c30d8ad0509149cfe0c75495459223ed86fd81c2fdfa91bf80f1f06b9ab",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/monero_reserve.rs": "fcb8564adf3d9e61e3b1f4a0d7d3d15015d71f78d8a0782e6da5007b6a2fe777",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/b23_nav.rs": "e13e732a764ff4b149cfd96ab4414bd8fb56791d9aac169f339b30b562b26193",
     "tools/nav-reserve-proof/fuzz/Cargo.toml": "db1cdb4c1492532649c69f7f3634aa80e3991797d1873ee16baac7ce7977218e",
     "tools/nav-reserve-proof/fuzz/Cargo.lock": "bfc2d34bb3450058dc005c1076876115133353f0c05525e4f6c77025cbbb25e2",
     "tools/nav-reserve-proof/fuzz/README.md": "c275abec755ed49e92eb67a2d866ebdbc728d580c50e53164abf5d2240c04181",
@@ -56,6 +59,9 @@
     "tools/nav-reserve-proof/fuzz/seeds/manifest-build-invalid.json": "56701cdf4ba0a417de5fe750c72bd5732109f47e3b0a09ff8ecb3a2e11d609a8",
     "tools/nav-reserve-proof/fixtures/a666-historical/aave-arbitrum-state-proof-20260728.json": "12d8d1b0a0d1ed652702e7ca8a101f9aada1c9b56ef2163ee7fdb0ccf540518a",
     "tools/nav-reserve-proof/programs/reserve-proof-guest/src/main.rs": "1f3caf2e7b1adb64afc14c5f5e81a4690d25a232d116ad95b3e0126420b8c655",
+    "tools/nav-reserve-proof/programs/b23-nav-guest/src/main.rs": "ec1a5219b3b5e067b90b9b5b98f2885f1feded191e13fd932d2c297c43d4972c",
+    "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.toml": "13d3a3355e03cab74057d08f28a7f7ca79a56e592810b76fd2eaf26109c47bf4",
+    "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.lock": "0e134c30334848a3c0bdd02210ee68406689c1343e136169550b2d52c681d1bc",
     "tools/nav-reserve-proof/contracts/near-stake-reader/Cargo.toml": "519305ac57289aa55220e66f30a4a986dad907df9212109d428ab9d1dd061166",
     "tools/nav-reserve-proof/contracts/near-stake-reader/src/lib.rs": "11acff4790b45168a81323700c419fccc3555e678dfddbc376bf2a5b44b6312c",
     "tools/nav-reserve-proof/contracts/solana-stake-reader/Cargo.toml": "15ff163a724a4ef2185b8a9d52cb4334e81e48533e9613a2e43ccea2ea82e719",
@@ -606,7 +612,27 @@
         "profile policy forbidding controlled sources",
         "floating-NAV reserve floor and consensus state-transition invariants"
       ],
-      "reproduction_evidence": "The repository contains the guest, shared types, adapters, CLI, fixture vectors, build metadata and pinned ELF. A clean public checkout reproduced execution and a CPU Groth16 proof with this program vkey on 2026-08-01."
+      "reproduction_evidence": "The repository contains the guest, shared types, adapters, CLI, fixture vectors, build metadata and pinned ELF. A clean public checkout reproduced execution and a CPU Groth16 proof with this program vkey on 2026-08-01.",
+      "b23_nav_reading_guest": {
+        "program": "tools/nav-reserve-proof/programs/b23-nav-guest",
+        "cli": "tools/nav-reserve-proof/crates/b23-nav-cli",
+        "sources": [
+          "tools/nav-reserve-proof/crates/reserve-proof-types/src/b23_nav.rs",
+          "tools/nav-reserve-proof/programs/b23-nav-guest/src/main.rs",
+          "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.toml",
+          "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.lock",
+          "tools/nav-reserve-proof/crates/b23-nav-cli/src/main.rs",
+          "tools/nav-reserve-proof/crates/b23-nav-cli/src/sp1.rs"
+        ],
+        "public_values": "The same 584-byte postfiat.nav_reserve_public_values.v1 values listed above; no new public field. One attested source, no cryptographic or controlled source.",
+        "private_witnesses": [
+          "canonical JSON witness bounded to 64 KiB: source policy, manifest and the signed reading envelope",
+          "AWS Nitro attestation document over the statement binding digest",
+          "Ed25519 statement signature by the enclave-attested key"
+        ],
+        "proof_binding": "The guest checks the manifest, policy and reading schemas, the cutoff and reading window, the valuation policy and the statement digest, verifies the Nitro document against the policy root and enclave policy and the statement signature with the attested key, then commits the 584 bytes. Nitro verification uses yolo_nitro.rs and canonical encoding yolo_collection.rs, which are not pinned here.",
+        "build_state": "No ELF or program vkey for this guest is committed in this repository; the NAV profile that uses it pins its key, which this inventory does not reproduce."
+      }
     },
     {
       "name": "Ethereum mainnet pfETH ingress",
@@ -1601,6 +1627,20 @@
       "crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol": "Newly pinned. The vault storage layout the guest reads (slot 0 obligations, deposit records from slot 1).",
       "crates/execution/src/vault_bridge_profile_resolution.rs": "Newly pinned. Selects the active route policy and NAV profile for a deposit.",
       "crates/node/src/execution_actions.rs": "Newly pinned. Node-side selection and checks of the active route policy for ingress transactions."
+    }
+  },
+  "b23_nav_source_refresh": {
+    "date": "2026-11-18",
+    "branch": "release/joined-r5-prep-20261118",
+    "scope": "Classifies the B23 NAV reading proof program under the provider-neutral NAV reserve proof, whose 584-byte ABI it commits: its statement module, guest and CLI pinned and reserve-proof-types lib.rs re-pinned. No proof program code changed and no ELF was built.",
+    "sources": {
+      "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "Re-pinned. Only change: pub mod b23_nav.",
+      "tools/nav-reserve-proof/crates/reserve-proof-types/src/b23_nav.rs": "Newly pinned. The B23 NAV reading statement: witness decoding and the checks that produce the reserve public values.",
+      "tools/nav-reserve-proof/programs/b23-nav-guest/src/main.rs": "Newly pinned. Guest entry: decode, execute and commit the encoded public values, halting on any error.",
+      "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.toml": "Newly pinned. Guest manifest with the SP1 6.3.1 zkVM and patched hash crates.",
+      "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.lock": "Newly pinned. Guest lock file.",
+      "tools/nav-reserve-proof/crates/b23-nav-cli/src/main.rs": "Newly pinned. Native run, profile and public-value decoding commands.",
+      "tools/nav-reserve-proof/crates/b23-nav-cli/src/sp1.rs": "Newly pinned. SP1 identity, execute, prove and verify commands."
     }
   }
 }
