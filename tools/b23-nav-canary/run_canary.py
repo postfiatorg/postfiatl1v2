@@ -10,6 +10,8 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import os
+import shutil
 import sys
 
 HELPERS=Path('/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch-deposit')
@@ -18,6 +20,18 @@ import pftl
 import facility as f
 BOB='pf5c266a1bdb18320e140961411a8c4d8383eaafb2'
 ALICE_OFFER='b977656dc454ba65115483de717ed08af9905f9e29be9d8369173ba230387d4213d5f18fe04a41b601ba3266ddce1fd2'
+
+
+def wallet_python():
+    """The interpreter that can import the wallet library used to sign as Bob: PFT_WALLET_PYTHON,
+    or the one the installed `pft` launcher runs under. No default path is assumed."""
+    chosen=os.environ.get('PFT_WALLET_PYTHON')
+    if not chosen:
+        launcher=shutil.which('pft')
+        if not launcher:raise SystemExit('set PFT_WALLET_PYTHON or install the pft wallet tool')
+        chosen=str(Path(launcher).resolve().parent/'python')
+    if not Path(chosen).is_file():raise SystemExit('wallet interpreter not found: '+chosen)
+    return chosen
 
 def canonical(value):return json.dumps(value,sort_keys=True,separators=(',',':')).encode()
 def save(path,value):path.write_text(json.dumps(value,indent=2)+'\n')
@@ -95,7 +109,7 @@ def main():
         quote=pftl.rpc(kind+'_fee_quote',dict(source=source,sequence=account['sequence']+1,
             operation_json=json.dumps(op,separators=(',',':'))),'tee-canary-'+label)
         q=args.output/(label+'-quote.json');save(q,quote)
-        command=([str(Path('/home/postfiat/repos/StakeHub/.venv/bin/python')),str(Path(__file__).with_name('sign_canary_offer.py')),str(args.node),str(q)]
+        command=([wallet_python(),str(Path(__file__).with_name('sign_canary_offer.py')),str(args.node),str(q)]
             if source==BOB else [str(args.node),'wallet-sign-'+kind+'-transaction','--key-file',str(key),'--quote-file',str(q)])
         signed=json.loads(subprocess.check_output(command,stderr=subprocess.PIPE))
         steps=args.output/(label+'-steps.json');save(steps,[dict(label=label,height=height,

@@ -644,8 +644,9 @@
 
     #[test]
     fn navcoin_bridge_routes_authority_fields_leave_existing_row_fields_unchanged() {
-        // The row shape before the authority fields were added.
-        const EXISTING_ROW_FIELDS: [&str; 37] = [
+        // The row shape apart from the authority fields. The joined line added two fields from
+        // the B24 route work: `funding_sequence` and `spread_recipient`.
+        const EXISTING_ROW_FIELDS: [&str; 39] = [
             "route_id",
             "route_family",
             "route_config_digest",
@@ -677,6 +678,8 @@
             "pending_return_burn_count",
             "imported_return_burn_count",
             "ledger_hash",
+            "funding_sequence",
+            "spread_recipient",
             // Optional asset metadata is omitted when the asset is unknown.
             "native_nav_asset_code",
             "native_nav_asset_display_name",
@@ -699,7 +702,7 @@
                 "unexpected row fields: {:?}",
                 left.keys().collect::<Vec<_>>()
             );
-            assert_eq!(left.len(), 31, "required pre-existing fields: {left:?}");
+            assert_eq!(left.len(), 33, "required fields other than the authority fields: {left:?}");
             assert_eq!(left, right);
         }
     }

@@ -3,7 +3,8 @@ import json
 from pathlib import Path
 import subprocess
 import sys
-sys.path.insert(0,'/home/postfiat/repos/StakeHub')
+# Run under the interpreter of the installed `pft` wallet tool, which provides pft_wallet.
+# run_canary.py selects it; PFT_WALLET_PYTHON overrides.
 from pft_wallet.wallets import signing_files
 
 node,quote=map(Path,sys.argv[1:])
