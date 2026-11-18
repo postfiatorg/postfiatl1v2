@@ -84,3 +84,8 @@ Only the owner can do these (date first asked):
 - **Private repository:** the handoff of 17 November and its reply branch `docs/navcoin-handoff-solana-spec-20261117`; the branches named above.
 - **Status:** [Current State](../status/chain-state-current.md).
 - **Previous handoff:** [2026-11-17: NAVCoin checklist first pass, wallet round trip and one code line](2026-11-17___dravlic__navcoin_checklist_first_pass_wallet_round_trip_and_one_code_line.md).
+
+## End of session
+
+- I made the three changes to money in that the final re-read asked for: `a16030571` on `instant/deposit-advance-20261118` (fast-forwarded from `2d5e98294` through `6cad89678`). A refusal now needs another accepted transaction at the payment's sequence, the burn command keeps its own transaction id as evidence, and the evidence lookup pages back. The README has a four-point pilot runbook.
+- The same screen fix as pull request 412, for an unfinished Create at NAV attempt and a stalled withdrawal, is Task Node pull request 413.
