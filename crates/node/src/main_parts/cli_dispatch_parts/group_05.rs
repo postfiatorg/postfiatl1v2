@@ -1821,6 +1821,7 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                     timeout_ms,
                     send_retries,
                     retry_backoff_ms,
+                    vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                     local_apply_before_certified_send,
                     defer_certified_sends,
                     commit_processed_dir: None,

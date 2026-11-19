@@ -154,6 +154,7 @@ fn rpc_serve_inner(
             finality_timeout_ms: options.finality_timeout_ms,
             finality_send_retries: options.finality_send_retries,
             finality_retry_backoff_ms: options.finality_retry_backoff_ms,
+            finality_vote_phase_deadline_ms: options.finality_vote_phase_deadline_ms,
             finality_quorum_early_full_propagation: options
                 .finality_quorum_early_full_propagation,
             max_mempool_submit_per_peer: options.max_mempool_submit_per_peer,

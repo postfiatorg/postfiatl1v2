@@ -2690,14 +2690,18 @@ fn transport_block_vote_request_with_retries(
                 return Ok(report);
             }
             Err(error) => {
-                // An explicit refusal is the peer's answer for this round;
-                // asking again cannot change it and only holds the round.
-                let refused = error.starts_with(TRANSPORT_BLOCK_VOTE_REFUSAL_PREFIX);
+                // A refusal is often "not yet": the peer has not applied the
+                // parent block (certified delivery is deferred) or its prepare
+                // vote is still being made. An early-quorum phase asks again
+                // within its retry budget and deadline; an all-votes round,
+                // which has no phase deadline, takes a refusal as final.
+                let final_refusal =
+                    phase.is_none() && error.starts_with(TRANSPORT_BLOCK_VOTE_REFUSAL_PREFIX);
                 retry_errors.push(format!("attempt {attempt}: {error}"));
-                if refused || attempt == max_attempts {
+                if final_refusal || attempt == max_attempts {
                     return Err(format!(
                         "transport block vote request to `{to}` failed after {attempt} attempts{}: {}",
-                        if refused { " (refused, not retried)" } else { "" },
+                        if final_refusal { " (refused, not retried)" } else { "" },
                         retry_errors.join("; ")
                     ));
                 }
@@ -2714,16 +2718,16 @@ fn transport_block_vote_request_with_retries(
     Err("transport block vote request retry loop exited unexpectedly".to_string())
 }
 
-/// Overall deadline of one vote phase (prepare or precommit) in an
-/// early-quorum round, which is also the total time any one vote request in
+/// Default overall deadline of one vote phase (prepare or precommit) in an
+/// early-quorum round (`rpc-serve --finality-vote-phase-deadline-ms`), which is also the total time any one vote request in
 /// that phase may take: connect, write, read, the pooled-stream fallback and
 /// every retry. Rounds since release 5 finish in about 6 s end to end, and the
 /// slowest prepare measured (validator-2, 18 November) took about 14.3 s end
 /// to end; 20 s keeps that inside the deadline with margin. A phase without
 /// quorum at the deadline ends the round as a missing quorum always has: no
 /// certificate, a round error, and the caller releases the mempool lock. The
-/// lock is then held at most 20 s per phase instead of (retries + 1) x the
-/// transport timeout (17 x 20 s with the deployed 16 retries). All-votes
+/// lock is then held at most the deadline per phase instead of (retries + 1) x
+/// the transport timeout (17 x 30 s with the deployed units). All-votes
 /// rounds keep their configured `--timeout-ms` and no phase deadline.
 pub(super) const PEER_VOTE_PHASE_DEADLINE_MS: u64 = 20_000;
 
@@ -2738,9 +2742,9 @@ pub(super) struct PeerVotePhase {
 }
 
 impl PeerVotePhase {
-    fn start() -> Self {
+    fn start(deadline_ms: u64) -> Self {
         Self {
-            deadline: Instant::now() + Duration::from_millis(PEER_VOTE_PHASE_DEADLINE_MS),
+            deadline: Instant::now() + Duration::from_millis(deadline_ms),
             finished: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
@@ -2789,6 +2793,51 @@ fn consensus_v2_vote_counts_toward_quorum(
     Ok(())
 }
 
+/// Prepare requests still outstanding when an early-quorum prepare phase
+/// reached quorum, with the receiver their replies arrive on.
+struct LatePrepareOutcomes {
+    outcomes: mpsc::Receiver<TransportPeerVoteRequestOutcome>,
+    targets: Vec<String>,
+}
+
+/// Whether an early-quorum prepare reply is a vote the legacy certificate and
+/// the prepare QC will accept: the target's own vote and, when consensus v2 is
+/// active, a valid v2 prepare vote for this proposal.
+fn prepare_reply_counts_toward_quorum(
+    target: &str,
+    request: &TransportBlockVoteRequestReport,
+    consensus_v2: Option<(
+        &postfiat_types::ConsensusV2Proposal,
+        &(
+            postfiat_types::ConsensusV2Domain,
+            postfiat_ordering_fast::ConsensusV2ValidatorSet,
+        ),
+    )>,
+    counted: &BTreeSet<String>,
+) -> Result<(), String> {
+    if request.response.vote.vote.validator != target {
+        return Err(format!(
+            "remote vote validator `{}` did not match expected `{target}`",
+            request.response.vote.vote.validator
+        ));
+    }
+    let Some((proposal, (domain, validators))) = consensus_v2 else {
+        return Ok(());
+    };
+    let vote = request.response.consensus_v2_vote.as_ref().ok_or_else(|| {
+        format!("remote validator `{target}` omitted consensus v2 prepare vote")
+    })?;
+    consensus_v2_vote_counts_toward_quorum(
+        domain,
+        validators,
+        proposal,
+        postfiat_types::ConsensusV2Phase::Prepare,
+        target,
+        vote,
+        counted,
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn collect_consensus_v2_precommit_votes(
     options: &TransportPeerCertifiedBatchRoundOptions,
@@ -2798,9 +2847,17 @@ fn collect_consensus_v2_precommit_votes(
     prepare_qc: &postfiat_types::ConsensusV2QuorumCertificate,
     proposal_file: &Path,
     vote_dir: &Path,
-    targets: &[String],
+    prepared_targets: &[String],
+    late_prepares: Option<LatePrepareOutcomes>,
     local_status: &StatusReport,
 ) -> Result<Vec<postfiat_types::ConsensusV2Vote>, String> {
+    type PrecommitReply = (String, Result<TransportBlockVoteRequestReport, String>);
+    type PrecommitRequest = Box<dyn FnOnce() -> PrecommitReply + Send>;
+    fn spawn_precommit_request(request: PrecommitRequest, sender: mpsc::Sender<PrecommitReply>) {
+        let _ = std::thread::spawn(move || {
+            let _ = sender.send(request());
+        });
+    }
     let local_vote = create_consensus_v2_precommit_vote(
         &options.data_dir,
         prepare_qc,
@@ -2809,7 +2866,7 @@ fn collect_consensus_v2_precommit_votes(
     )
     .map_err(|error| format!("local consensus v2 precommit failed: {error}"))?;
     let quorum_early = options.allow_peer_failures || options.quorum_early_full_propagation;
-    let phase = quorum_early.then(PeerVotePhase::start);
+    let phase = quorum_early.then(|| PeerVotePhase::start(options.vote_phase_deadline_ms));
     let precommit_request = |target: &str| {
         let consensus_v2 = Some(TransportConsensusV2VoteRequest {
             phase: postfiat_types::ConsensusV2Phase::Precommit,
@@ -2831,7 +2888,6 @@ fn collect_consensus_v2_precommit_votes(
         let target = target.to_string();
         let local_status = local_status.clone();
         let phase = phase.clone();
-        let height = proposal.block_height;
         move || {
             let result = transport_block_vote_request_with_retries(
                 data_dir,
@@ -2850,22 +2906,17 @@ fn collect_consensus_v2_precommit_votes(
                 Some(&local_status),
                 phase.as_ref(),
             );
-            if let Err(error) = &result {
-                if !error.starts_with(PEER_VOTE_PHASE_FINISHED) {
-                    eprintln!(
-                        "WARN consensus v2 precommit vote from `{target}` at height {height} failed: {error}"
-                    );
-                }
-            }
             (target, result)
         }
     };
     let mut votes = vec![local_vote];
     if let Some(phase) = phase.as_ref() {
-        // Stop at the quorum the precommit QC requires (certify_consensus_v2_votes),
-        // counting only votes that pass its checks, or at the phase deadline.
-        // Outstanding requests then stop retrying; a late validator receives
-        // the block via certified delivery.
+        // Ask the validators whose prepare vote was accepted, and each late
+        // prepare responder as its vote arrives: a validator without its own
+        // prepare vote can only refuse. Stop at the quorum the precommit QC
+        // requires (certify_consensus_v2_votes), counting only votes that pass
+        // its checks, or at the phase deadline. Outstanding requests then stop
+        // retrying; a late validator receives the block via certified delivery.
         let (domain, validators) = live_consensus_v2_context(&options.data_dir)
             .map_err(|error| format!("consensus v2 precommit context failed: {error}"))?;
         let mut counted = votes
@@ -2873,65 +2924,111 @@ fn collect_consensus_v2_precommit_votes(
             .map(|vote| vote.validator.clone())
             .collect::<BTreeSet<_>>();
         let (sender, receiver) = mpsc::channel();
-        for target in targets {
-            let request = precommit_request(target);
+        for target in prepared_targets {
+            spawn_precommit_request(Box::new(precommit_request(target)), sender.clone());
+        }
+        if let Some(LatePrepareOutcomes { outcomes, targets }) = late_prepares {
+            let mut late_requests = targets
+                .iter()
+                .map(|target| {
+                    let request: PrecommitRequest = Box::new(precommit_request(target));
+                    (target.clone(), request)
+                })
+                .collect::<BTreeMap<_, _>>();
             let sender = sender.clone();
+            let phase = phase.clone();
             let _ = std::thread::spawn(move || {
-                let _ = sender.send(request());
+                while !late_requests.is_empty() && !phase.finished() {
+                    let wait = phase.remaining().min(Duration::from_millis(100));
+                    if wait.is_zero() {
+                        break;
+                    }
+                    match outcomes.recv_timeout(wait) {
+                        Ok(outcome) if outcome.result.is_ok() => {
+                            if let Some(request) = late_requests.remove(&outcome.target) {
+                                spawn_precommit_request(request, sender.clone());
+                            }
+                        }
+                        Ok(_) | Err(mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    }
+                }
             });
         }
         drop(sender);
-        let countable = |target: String,
-                         result: Result<TransportBlockVoteRequestReport, String>,
-                         counted: &BTreeSet<String>| {
-            let vote = result.ok()?.response.consensus_v2_vote?;
-            match consensus_v2_vote_counts_toward_quorum(
-                &domain,
-                &validators,
-                consensus_v2_proposal,
-                postfiat_types::ConsensusV2Phase::Precommit,
-                &target,
-                &vote,
-                counted,
-            ) {
-                Ok(()) => Some(vote),
-                Err(error) => {
-                    eprintln!(
-                        "WARN consensus v2 precommit vote at height {} not counted: {error}",
-                        proposal.block_height
-                    );
-                    None
+        let mut failures = Vec::new();
+        let mut take = |target: String,
+                        result: Result<TransportBlockVoteRequestReport, String>,
+                        counted: &mut BTreeSet<String>,
+                        votes: &mut Vec<postfiat_types::ConsensusV2Vote>| {
+            let vote = result.and_then(|report| {
+                report
+                    .response
+                    .consensus_v2_vote
+                    .ok_or_else(|| "reply omitted the consensus v2 precommit vote".to_string())
+            });
+            let counts = vote.and_then(|vote| {
+                consensus_v2_vote_counts_toward_quorum(
+                    &domain,
+                    &validators,
+                    consensus_v2_proposal,
+                    postfiat_types::ConsensusV2Phase::Precommit,
+                    &target,
+                    &vote,
+                    counted,
+                )
+                .map(|()| vote)
+            });
+            match counts {
+                Ok(vote) => {
+                    counted.insert(vote.validator.clone());
+                    votes.push(vote);
                 }
+                Err(error) => failures.push(format!("`{target}`: {error}")),
             }
         };
-        let mut pending = targets.len();
-        while pending > 0 && counted.len() < validators.quorum {
+        let mut workers_exited = false;
+        while counted.len() < validators.quorum {
             match receiver.recv_timeout(phase.remaining()) {
-                Ok((target, result)) => {
-                    pending -= 1;
-                    if let Some(vote) = countable(target, result, &counted) {
-                        counted.insert(vote.validator.clone());
-                        votes.push(vote);
-                    }
-                }
+                Ok((target, result)) => take(target, result, &mut counted, &mut votes),
                 Err(mpsc::RecvTimeoutError::Timeout) => break,
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    phase.finish();
-                    return Err("consensus v2 precommit workers exited before quorum".to_string());
+                    workers_exited = true;
+                    break;
                 }
             }
         }
         while let Ok((target, result)) = receiver.try_recv() {
-            if let Some(vote) = countable(target, result, &counted) {
-                counted.insert(vote.validator.clone());
-                votes.push(vote);
-            }
+            take(target, result, &mut counted, &mut votes);
         }
         phase.finish();
+        // One line per round, only when a peer failed or the phase ended
+        // without quorum; peers still unanswered at quorum are not failures.
+        if !failures.is_empty() || counted.len() < validators.quorum {
+            eprintln!(
+                "WARN consensus v2 precommit at height {}: {} votes, quorum {}{}{}",
+                proposal.block_height,
+                counted.len(),
+                validators.quorum,
+                if failures.is_empty() {
+                    String::new()
+                } else {
+                    format!("; failed: {}", failures.join("; "))
+                },
+                if counted.len() < validators.quorum && !workers_exited {
+                    "; vote phase deadline reached"
+                } else {
+                    ""
+                },
+            );
+        }
+        if workers_exited && counted.len() < validators.quorum {
+            return Err("consensus v2 precommit workers exited before quorum".to_string());
+        }
         return Ok(votes);
     }
     let outcomes = std::thread::scope(|scope| {
-        let handles = targets
+        let handles = prepared_targets
             .iter()
             .map(|target| scope.spawn(precommit_request(target)))
             .collect::<Vec<_>>();
@@ -3364,12 +3461,44 @@ pub(super) fn transport_peer_certified_batch_round(
     let mut vote_request_failures = Vec::new();
     let mut vote_request_timings = Vec::with_capacity(targets.len());
     let mut unresolved_vote_targets = Vec::new();
+    let mut prepared_targets = Vec::with_capacity(targets.len());
     let mut vote_request_quorum_early = false;
     let vote_requests_start = Instant::now();
     let quorum_early_vote_collection =
         options.allow_peer_failures || options.quorum_early_full_propagation;
+    // Prepare replies still outstanding when the prepare phase stops at
+    // quorum; their validators are asked for precommit once they arrive.
+    let mut late_prepare_outcomes = None;
     let vote_request_outcomes = if quorum_early_vote_collection {
-        let prepare_phase = PeerVotePhase::start();
+        let prepare_phase = PeerVotePhase::start(options.vote_phase_deadline_ms);
+        let prepare_vote_context = consensus_v2_proposal
+            .as_ref()
+            .map(|_| live_consensus_v2_context(&options.data_dir))
+            .transpose()
+            .map_err(|error| format!("consensus v2 prepare context failed: {error}"))?;
+        let mut counted_prepare_votes = BTreeSet::from([local_status.node_id.clone()]);
+        // Count only replies the certificates will accept; any other reply
+        // becomes a failed outcome, a missing vote like a failed request.
+        let mut admit = |outcome: &mut TransportPeerVoteRequestOutcome| {
+            let Ok(request) = &outcome.result else {
+                return false;
+            };
+            match prepare_reply_counts_toward_quorum(
+                &outcome.target,
+                request,
+                consensus_v2_proposal.as_ref().zip(prepare_vote_context.as_ref()),
+                &counted_prepare_votes,
+            ) {
+                Ok(()) => {
+                    counted_prepare_votes.insert(outcome.target.clone());
+                    true
+                }
+                Err(error) => {
+                    outcome.result = Err(error);
+                    false
+                }
+            }
+        };
         let (sender, receiver) = mpsc::channel();
         let mut pending = targets.iter().cloned().collect::<BTreeSet<_>>();
         // The current sync transport has no cancellable request primitive. In
@@ -3434,7 +3563,7 @@ pub(super) fn transport_peer_certified_batch_round(
         while !pending.is_empty() {
             // At the phase deadline the unanswered peers stay unresolved and
             // the prepare certificate below fails for lack of quorum.
-            let outcome = match receiver.recv_timeout(prepare_phase.remaining()) {
+            let mut outcome = match receiver.recv_timeout(prepare_phase.remaining()) {
                 Ok(outcome) => outcome,
                 Err(mpsc::RecvTimeoutError::Timeout) => break,
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
@@ -3442,13 +3571,14 @@ pub(super) fn transport_peer_certified_batch_round(
                 }
             };
             pending.remove(&outcome.target);
-            if outcome.result.is_ok() {
+            if admit(&mut outcome) {
                 successful_remote_votes = successful_remote_votes.saturating_add(1);
             }
             outcomes.push(outcome);
             if successful_remote_votes >= required_remote_vote_count {
-                while let Ok(outcome) = receiver.try_recv() {
+                while let Ok(mut outcome) = receiver.try_recv() {
                     pending.remove(&outcome.target);
+                    admit(&mut outcome);
                     outcomes.push(outcome);
                 }
                 vote_request_quorum_early = !pending.is_empty();
@@ -3456,6 +3586,10 @@ pub(super) fn transport_peer_certified_batch_round(
             }
         }
         unresolved_vote_targets = pending.into_iter().collect();
+        late_prepare_outcomes = Some(LatePrepareOutcomes {
+            outcomes: receiver,
+            targets: unresolved_vote_targets.clone(),
+        });
         outcomes
     } else {
         std::thread::scope(|scope| {
@@ -3591,7 +3725,7 @@ pub(super) fn transport_peer_certified_batch_round(
             consensus_v2_prepare_votes.push(vote);
         }
         vote_request_timings.push(TransportPeerTargetTimingReport {
-            target: outcome.target,
+            target: outcome.target.clone(),
             duration_ms: outcome.duration_ms,
             result: "ok".to_string(),
             vote_request_breakdown: Some(request.timings.clone()),
@@ -3600,6 +3734,7 @@ pub(super) fn transport_peer_certified_batch_round(
             storage_work: None,
         });
         remote_vote_files.push(outcome.vote_file);
+        prepared_targets.push(outcome.target);
         vote_requests.push(request);
     }
     let vote_requests_ms = monotonic_elapsed_ms(vote_requests_start);
@@ -3650,7 +3785,8 @@ pub(super) fn transport_peer_certified_batch_round(
             &prepare_qc,
             &proposal_file,
             &vote_dir,
-            &targets,
+            &prepared_targets,
+            late_prepare_outcomes,
             &local_status,
         )?;
         consensus_v2_precommit_votes_ms = monotonic_elapsed_ms(stage_start);
@@ -4374,6 +4510,7 @@ pub(super) fn transport_peer_certified_mempool_round(
         timeout_ms: options.timeout_ms,
         send_retries: options.send_retries,
         retry_backoff_ms: options.retry_backoff_ms,
+        vote_phase_deadline_ms: options.vote_phase_deadline_ms,
         local_apply_before_certified_send: options.local_apply_before_certified_send,
         defer_certified_sends: options.defer_certified_sends,
         commit_processed_dir: None,
@@ -4635,6 +4772,7 @@ pub(super) fn transport_peer_certified_batch_loop(
                 timeout_ms: options.timeout_ms,
                 send_retries: options.send_retries,
                 retry_backoff_ms: options.retry_backoff_ms,
+                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 local_apply_before_certified_send: options.local_apply_before_certified_send,
                 defer_certified_sends: options.defer_certified_sends,
                 commit_processed_dir: options.processed_dir.clone(),
@@ -4977,6 +5115,7 @@ pub(super) fn transport_peer_certified_private_egress_loop(
                 timeout_ms: options.timeout_ms,
                 send_retries: options.send_retries,
                 retry_backoff_ms: options.retry_backoff_ms,
+                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 local_apply_before_certified_send: options.local_apply_before_certified_send,
                 defer_certified_sends: options.defer_certified_sends,
                 commit_processed_dir: None,

@@ -165,6 +165,7 @@ mod transport_batch_payload_tests {
             timeout_ms: 15_000,
             send_retries: 2,
             retry_backoff_ms: 50,
+            vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
             local_apply_before_certified_send: false,
             defer_certified_sends: false,
             commit_processed_dir: None,
@@ -416,6 +417,7 @@ mod transport_batch_payload_tests {
                 finality_timeout_ms: 15_000,
                 finality_send_retries: 2,
                 finality_retry_backoff_ms: 50,
+                finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 finality_quorum_early_full_propagation: false,
                 max_mempool_submit_per_peer: 4,
                 max_mempool_submit_total: 8,
@@ -1204,6 +1206,7 @@ mod transport_batch_payload_tests {
                 timeout_ms: 15_000,
                 send_retries: 2,
                 retry_backoff_ms: 50,
+                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 local_apply_before_certified_send: true,
                 defer_certified_sends: false,
                 commit_processed_dir: Some(processed_dir.clone()),
@@ -1718,12 +1721,14 @@ mod transport_batch_payload_tests {
             retry_backoff_ms,
             quorum_early,
             false,
+            PEER_VOTE_PHASE_DEADLINE_MS,
             bound,
         )
     }
 
     /// `run_vote_phase_round`, choosing whether certified sends are deferred
-    /// to durable jobs as on the RPC finality paths.
+    /// to durable jobs as on the RPC finality paths, and the phase deadline.
+    #[allow(clippy::too_many_arguments)]
     fn run_vote_phase_round_with_sends(
         fixture: &VotePhaseRoundFixture,
         timeout_ms: u64,
@@ -1731,6 +1736,7 @@ mod transport_batch_payload_tests {
         retry_backoff_ms: u64,
         quorum_early: bool,
         defer_certified_sends: bool,
+        vote_phase_deadline_ms: u64,
         bound: Duration,
     ) -> (
         Option<Result<TransportPeerCertifiedBatchRoundReport, String>>,
@@ -1765,6 +1771,7 @@ mod transport_batch_payload_tests {
             timeout_ms,
             send_retries,
             retry_backoff_ms,
+            vote_phase_deadline_ms,
             local_apply_before_certified_send: true,
             defer_certified_sends,
             commit_processed_dir: None,
@@ -1975,6 +1982,7 @@ mod transport_batch_payload_tests {
             UNIT_RETRY_BACKOFF_MS,
             true,
             true,
+            PEER_VOTE_PHASE_DEADLINE_MS,
             Duration::from_secs(30),
         );
         let round = result
@@ -2052,6 +2060,38 @@ mod transport_batch_payload_tests {
             "silent peers were asked again after the deadline"
         );
         assert!(!fixture.artifact_dir.join("block-certificate.json").exists());
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    #[test]
+    fn the_configured_vote_phase_deadline_ends_a_phase_without_quorum() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture = vote_phase_round_fixture(
+            "vote-phase-deadline-flag",
+            &[
+                (1, ProxyVote::Silent, forward),
+                (2, ProxyVote::Silent, forward),
+            ],
+        );
+        let (result, elapsed, lock_free) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            3_000,
+            Duration::from_secs(15),
+        );
+        eprintln!("vote phase deadline 3 s: elapsed={elapsed:?} lock_free={lock_free}");
+        result
+            .expect("round still running")
+            .expect_err("two silent peers leave the round below quorum");
+        assert!(lock_free);
+        assert!(elapsed >= Duration::from_secs(3) && elapsed < Duration::from_secs(10));
         clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
     }
 
@@ -2326,6 +2366,7 @@ mod transport_batch_payload_tests {
                 timeout_ms: transport_timeout_ms,
                 send_retries: 1,
                 retry_backoff_ms: 50,
+                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 local_apply_before_certified_send: true,
                 defer_certified_sends: false,
                 commit_processed_dir: None,

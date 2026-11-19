@@ -107,6 +107,7 @@ fn run_rpc_serve_mempool_submit_signed_offer_transaction_finality_inner(
             timeout_ms: context.finality_timeout_ms,
             send_retries: context.finality_send_retries,
             retry_backoff_ms: context.finality_retry_backoff_ms,
+            vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
             local_apply_before_certified_send: true,
             defer_certified_sends: true,
             required_parent: None,

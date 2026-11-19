@@ -102,6 +102,7 @@ struct RpcServeOptions {
     finality_timeout_ms: u64,
     finality_send_retries: usize,
     finality_retry_backoff_ms: u64,
+    finality_vote_phase_deadline_ms: u64,
     finality_quorum_early_full_propagation: bool,
     max_mempool_submit_per_peer: u64,
     max_mempool_submit_total: u64,
@@ -131,6 +132,7 @@ struct RpcServeConnectionContext {
     finality_timeout_ms: u64,
     finality_send_retries: usize,
     finality_retry_backoff_ms: u64,
+    finality_vote_phase_deadline_ms: u64,
     finality_quorum_early_full_propagation: bool,
     max_mempool_submit_per_peer: u64,
     max_mempool_submit_total: u64,
@@ -2218,6 +2220,7 @@ fn run_rpc_serve_shield_batch_finality_inner(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         commit_processed_dir: None,
@@ -2254,12 +2257,14 @@ fn finish_rpc_serve_shield_batch_finality(
     result_file: &Path,
     quorum_early_full_propagation: bool,
 ) -> Result<RpcResponse, (String, String)> {
-    let _ = quorum_early_full_propagation;
     let deferred_job_count = round.deferred_certified_send_jobs.len();
+    // An early-quorum round certifies without the peers whose vote request
+    // failed, as the other finality paths accept; they get the block through
+    // their deferred send job like every other peer.
     if !round.certification.round_ok
         || !round.local_apply_verified
         || !round.all_vote_requests_verified
-        || !round.vote_request_failures.is_empty()
+        || (!quorum_early_full_propagation && !round.vote_request_failures.is_empty())
         || !round.send_failures.is_empty()
         || deferred_job_count != round.target_peer_count
     {
@@ -2427,6 +2432,7 @@ fn run_rpc_serve_mempool_submit_fastlane_primary_finality_inner(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         required_parent: None,
@@ -2808,6 +2814,7 @@ fn run_rpc_serve_mempool_submit_signed_transfer_finality_round(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         required_parent: None,
@@ -2975,6 +2982,7 @@ fn run_rpc_serve_mempool_submit_signed_payment_v2_finality_inner(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         required_parent: None,
@@ -3140,6 +3148,7 @@ fn run_rpc_serve_mempool_submit_signed_asset_transaction_finality_inner(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         required_parent: None,
@@ -3306,6 +3315,7 @@ fn run_rpc_serve_mempool_submit_signed_escrow_transaction_finality_inner(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         required_parent: None,
@@ -4828,6 +4838,7 @@ mod child_dispatch_limit_tests {
             finality_timeout_ms: 1_000,
             finality_send_retries: 0,
             finality_retry_backoff_ms: 0,
+            finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
             finality_quorum_early_full_propagation: false,
             max_mempool_submit_per_peer: 8,
             max_mempool_submit_total: 32,
