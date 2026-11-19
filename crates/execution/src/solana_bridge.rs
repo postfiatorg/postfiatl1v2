@@ -13,7 +13,9 @@ pub(super) fn apply_proof(
     compatibility: AssetExecutionCompatibility,
     orchard_balances: &[AssetOrchardAssetBalance],
 ) -> Result<(), Rejection> {
-    let route = ledger.solana_route.clone().ok_or((
+    let secondary = ledger.additional_solana_routes.contains_key(&operation.profile_hash);
+    let route = ledger.additional_solana_routes.get(&operation.profile_hash)
+        .or(ledger.solana_route.as_ref()).cloned().ok_or((
         "solana_bridge_disabled",
         "Solana route has no activation".into(),
     ))?;
@@ -67,11 +69,12 @@ pub(super) fn apply_proof(
         let next = route
             .handoff_successor(&operation.public_values)
             .map_err(|e| ("invalid_solana_handoff", e))?;
-        ledger
-            .solana_route
-            .as_mut()
-            .expect("route loaded above")
-            .client = next;
+        let client = if secondary {
+            ledger.additional_solana_routes.get_mut(&operation.profile_hash)
+        } else {
+            ledger.solana_route.as_mut()
+        };
+        client.expect("route loaded above").client = next;
         return Ok(());
     }
     credit_verified(

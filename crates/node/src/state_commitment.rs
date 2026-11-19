@@ -831,6 +831,7 @@ fn validate_issued_supply_custody_inventory(
         arc_finality_states: _,
         beacon_finality_states: _,
         solana_route: _,
+        additional_solana_routes: _,
     } = ledger;
     let ShieldedState {
         next_note_position: _,
@@ -1628,6 +1629,10 @@ pub(super) fn append_ledger_state(
         append_canonical_bytes_commitment(bytes, "ledger.solana_route.v1", &serde_json::to_vec(route)?);
     }
 
+    if !ledger.additional_solana_routes.is_empty() {
+        append_canonical_bytes_commitment(bytes, "ledger.additional_solana_routes.v1", &serde_json::to_vec(&ledger.additional_solana_routes)?);
+    }
+
     if commit_complete_nav_state && !ledger.beacon_finality_states.is_empty() {
         let mut keys = std::collections::BTreeSet::new();
         for state in &ledger.beacon_finality_states {
@@ -1836,6 +1841,7 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
         arc_finality_states: _,
         beacon_finality_states: _,
         solana_route: _,
+        additional_solana_routes: _,
     } = ledger;
 }
 

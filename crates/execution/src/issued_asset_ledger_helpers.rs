@@ -889,6 +889,7 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
         arc_finality_states: _,
         beacon_finality_states: _,
         solana_route: _,
+        additional_solana_routes: _,
     } = ledger;
 }
 

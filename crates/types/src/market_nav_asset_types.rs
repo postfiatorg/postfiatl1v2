@@ -3785,11 +3785,35 @@ pub struct LedgerState {
     pub beacon_finality_states: Vec<PfUsdcBeaconFinalityStateV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub solana_route: Option<SolanaRouteState>,
+    /// The first client retains its release-6 encoding and commitment.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub additional_solana_routes: BTreeMap<String, SolanaRouteState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fast_ingress_campaigns: Vec<FastIngressCampaignStateV1>,
 }
 
 impl LedgerState {
+    pub fn solana_clients(&self) -> impl Iterator<Item = &SolanaRouteState> {
+        self.solana_route.iter().chain(self.additional_solana_routes.values())
+    }
+
+    fn solana_policies(&self) -> Result<BTreeMap<String, &SolanaRouteState>, String> {
+        let mut policies = BTreeMap::new();
+        let mut names = BTreeSet::new();
+        for route in self.solana_clients() {
+            if !names.insert(&route.profile.route_id) {
+                return Err("duplicate Solana route id".into());
+            }
+            policies.insert(route.profile.profile_hash()?, route);
+        }
+        for (hash, route) in &self.additional_solana_routes {
+            if self.solana_route.is_none() || hash != &route.profile.profile_hash()? {
+                return Err("inconsistent additional Solana client".into());
+            }
+        }
+        Ok(policies)
+    }
+
     pub fn vault_bridge_route_backing(
         &self,
         asset_id: &str,
@@ -3827,21 +3851,19 @@ impl LedgerState {
                     .ok_or_else(|| "route claimed backing overflow".to_string())?;
             }
         }
-        let mut solana_total = 0u64;
+        let policies = self.solana_policies()?;
         for receipt in self.vault_bridge_receipts.iter()
             .filter(|r| r.asset_id == asset_id && r.solana_deposit_evidence.is_some())
         {
-            solana_total = solana_total.checked_add(receipt.amount_atoms).ok_or("Solana backing overflow")?;
-        }
-        if solana_total != 0 {
-            // Admission verifies and mints in one atomic transition.
-            let route = self.solana_route.as_ref().ok_or("missing Solana receipt route")?;
+            let route = policies.get(&receipt.policy_hash).ok_or("missing Solana receipt route")?;
             let route_id = &route.profile.route_id;
-            routes.insert(route_id.clone(), VaultBridgeRouteBackingStateV1 {
+            let row = routes.entry(route_id.clone()).or_insert_with(|| VaultBridgeRouteBackingStateV1 {
                 route_id: route_id.clone(), asset_id: asset_id.into(),
-                deposits_verified: solana_total, claims_minted: solana_total,
+                deposits_verified: 0, claims_minted: 0,
                 withdrawals_reserved: 0, withdrawals_paid: 0,
             });
+            row.deposits_verified = row.deposits_verified.checked_add(receipt.amount_atoms).ok_or("Solana backing overflow")?;
+            row.claims_minted = row.deposits_verified;
         }
         for redemption in self.vault_bridge_redemptions.iter().filter(|r| r.asset_id == asset_id) {
             let Some(bucket) = self.vault_bridge_bucket(&redemption.bucket_id) else { continue; };
@@ -3917,6 +3939,7 @@ impl LedgerState {
             arc_finality_states: Vec::new(),
             beacon_finality_states: Vec::new(),
             solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -3971,6 +3994,7 @@ impl LedgerState {
             arc_finality_states: Vec::new(),
             beacon_finality_states: Vec::new(),
             solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -4026,6 +4050,7 @@ impl LedgerState {
             arc_finality_states: Vec::new(),
             beacon_finality_states: Vec::new(),
             solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -4076,6 +4101,7 @@ impl LedgerState {
             arc_finality_states: Vec::new(),
             beacon_finality_states: Vec::new(),
             solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -4131,6 +4157,7 @@ impl LedgerState {
             arc_finality_states: Vec::new(),
             beacon_finality_states: Vec::new(),
             solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -4181,6 +4208,7 @@ impl LedgerState {
             arc_finality_states: Vec::new(),
             beacon_finality_states: Vec::new(),
             solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -4594,7 +4622,8 @@ impl LedgerState {
             }
         }
 
-        let solana_policy = self.solana_route.as_ref().map(|route| {
+        let solana_policies = self.solana_policies()?;
+        for route in solana_policies.values() {
             let pins = route.profile.solana.as_ref().ok_or("missing Solana pins")?;
             route.client.validate()?;
             if route.client.epoch < pins.anchor.epoch
@@ -4603,18 +4632,16 @@ impl LedgerState {
             {
                 return Err("Solana client is inconsistent with its route anchor".to_string());
             }
-            route.profile.profile_hash()
-        }).transpose()?;
+        }
         let mut solana_deposit_ids = BTreeSet::new();
         let mut vault_bridge_receipt_ids = BTreeSet::new();
         for receipt in &self.vault_bridge_receipts {
             if let Some(evidence) = &receipt.solana_deposit_evidence {
-                let route = self.solana_route.as_ref().ok_or("missing Solana receipt route")?;
+                let route = solana_policies.get(&receipt.policy_hash).ok_or("missing Solana receipt route")?;
                 let profile = &route.profile;
                 let pins = profile.solana.as_ref().ok_or("missing Solana receipt profile")?;
                 if !solana_deposit_ids.insert(&evidence.deposit_id)
                     || evidence.program_id != profile.vault_address || receipt.asset_id != profile.asset_id
-                    || solana_policy.as_ref() != Some(&receipt.policy_hash)
                     || receipt.source_domain != profile.source_domain()
                     || receipt.source_asset != format!("spl:{}:{}", pins.genesis_hash, profile.token_address)
                 {

@@ -1597,7 +1597,8 @@ fn execute_governance_batch_with_replay(
                 .vault_bridge_route_profiles
                 .iter()
                 .filter(|existing| existing.profile.asset_id == activation.profile.asset_id
-                    && existing.profile.solana.is_some() == activation.profile.solana.is_some())
+                    && existing.profile.solana.is_some() == activation.profile.solana.is_some()
+                    && (activation.profile.solana.is_none() || existing.profile.route_id == activation.profile.route_id))
                 .any(|existing| {
                     existing.profile.route_epoch >= activation.profile.route_epoch
                         || existing.profile.activation_height
@@ -1622,7 +1623,7 @@ fn execute_governance_batch_with_replay(
                 if block_height >= activation.profile.expires_at_height {
                     return Err("Solana route already expired".into());
                 }
-                if ledger.solana_route.is_some() {
+                if ledger.solana_clients().any(|route| route.profile.route_id == activation.profile.route_id) {
                     return Err("Solana light client already anchored".into());
                 }
             }
@@ -1677,10 +1678,15 @@ fn execute_governance_batch_with_replay(
         match validated {
             Ok(record) => {
                 if let (Some(ledger), Some(pins)) = (ledger.as_deref_mut(), &activation.profile.solana) {
-                    ledger.solana_route = Some(postfiat_types::SolanaRouteState {
+                    let route = postfiat_types::SolanaRouteState {
                         profile: activation.profile.clone(),
                         client: pins.anchor.clone(),
-                    });
+                    };
+                    if ledger.solana_route.is_none() {
+                        ledger.solana_route = Some(route);
+                    } else {
+                        ledger.additional_solana_routes.insert(record.profile_hash.clone(), route);
+                    }
                 }
                 if let Some(state) = activation.tier4_finality_bootstrap.clone() {
                     // The validation closure required canonical ledger context;

@@ -202,3 +202,28 @@ fn real_proof_refused_under_wrong_program_key_set_or_route_binding() {
         assert_eq!(ledger, before);
     }
 }
+
+#[test]
+fn separate_solana_clusters_keep_their_governed_clients() {
+    let key = ml_dsa_65_keygen().unwrap();
+    let (genesis, mut governance, mut ledger) = initial(&key);
+    governance.apply(amendment(SOLANA_ACTIVATION_HEIGHT, 10, 0));
+    let first = profile();
+    assert!(activate_route(&mut governance, &mut ledger, &first).accepted);
+    let mut second = first.clone();
+    second.route_id = "solana-devnet-usdc-v1".into();
+    let pins = second.solana.as_mut().unwrap();
+    pins.genesis_hash = "ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab".into();
+    pins.route_binding = postfiat_types::solana_deposit_route_binding(
+        &genesis.chain_id, &genesis_hash(&genesis), &second.route_id, &pins.genesis_hash, &second.vault_address
+    ).unwrap();
+    let receipt = activate_route(&mut governance, &mut ledger, &second);
+    assert!(receipt.accepted, "{}", receipt.message);
+    assert!(!activate_route(&mut governance, &mut ledger, &second).accepted);
+    let previous = ledger.solana_route.clone();
+    let handoff = signed_proof(&genesis, &ledger, &second, &key, SOLANA_HANDOFF_PROOF, 1);
+    let receipt = execute_route_candidate(&genesis, &governance, &mut ledger, handoff, 12);
+    assert!(receipt.accepted, "{}", receipt.message);
+    assert_eq!(ledger.solana_route, previous);
+    assert_eq!(ledger.additional_solana_routes[&second.profile_hash().unwrap()].client.epoch, 1);
+}

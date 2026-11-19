@@ -2720,6 +2720,7 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
         arc_finality_states: _,
         beacon_finality_states: _,
         solana_route: _,
+        additional_solana_routes: _,
     } = ledger;
     let ShieldedState {
         next_note_position: _,
