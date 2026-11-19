@@ -2657,7 +2657,12 @@ fn transport_block_vote_request_with_retries(
     let mut retry_errors = Vec::with_capacity(send_retries);
     let retry_loop_start = Instant::now();
     let mut retry_sleep_ms_total = 0.0;
-    for attempt in 1..=max_attempts {
+    // Attempts that used the retry budget; an early-quorum phase retries a
+    // refusal until its deadline without using it.
+    let mut budgeted_attempts = 0usize;
+    let mut attempt = 0usize;
+    loop {
+        attempt += 1;
         if let Some(phase) = phase {
             if phase.finished() {
                 return Err(format!(
@@ -2702,19 +2707,38 @@ fn transport_block_vote_request_with_retries(
                 // A refusal is often "not yet": the peer has not applied the
                 // parent block (certified delivery is deferred) or its prepare
                 // vote is still being made. An early-quorum phase asks again
-                // within its retry budget and deadline; an all-votes round,
-                // which has no phase deadline, takes a refusal as final.
-                let final_refusal =
-                    phase.is_none() && error.starts_with(TRANSPORT_BLOCK_VOTE_REFUSAL_PREFIX);
-                retry_errors.push(format!("attempt {attempt}: {error}"));
-                if final_refusal || attempt == max_attempts {
+                // until its deadline, outside the retry budget, unless the
+                // refusal is permanent; an all-votes round, which has no
+                // phase deadline, takes a refusal as final.
+                let refusal = error.starts_with(TRANSPORT_BLOCK_VOTE_REFUSAL_PREFIX);
+                let final_refusal = refusal
+                    && (phase.is_none()
+                        || PERMANENT_VOTE_REFUSALS
+                            .iter()
+                            .any(|permanent| error.contains(permanent)));
+                let retry_until_deadline = refusal && !final_refusal;
+                if !retry_until_deadline {
+                    budgeted_attempts += 1;
+                }
+                let entry = format!("attempt {attempt}: {error}");
+                if retry_errors.len() < max_attempts {
+                    retry_errors.push(entry);
+                } else if let Some(last) = retry_errors.last_mut() {
+                    *last = entry;
+                }
+                if final_refusal || budgeted_attempts == max_attempts {
                     return Err(format!(
                         "transport block vote request to `{to}` failed after {attempt} attempts{}: {}",
                         if final_refusal { " (refused, not retried)" } else { "" },
                         retry_errors.join("; ")
                     ));
                 }
-                let backoff = Duration::from_millis(retry_backoff_ms)
+                let backoff_ms = if retry_until_deadline {
+                    retry_backoff_ms.max(MIN_REFUSAL_RETRY_BACKOFF_MS)
+                } else {
+                    retry_backoff_ms
+                };
+                let backoff = Duration::from_millis(backoff_ms)
                     .min(phase.map_or(Duration::MAX, PeerVotePhase::remaining));
                 if !backoff.is_zero() {
                     let sleep_start = Instant::now();
@@ -2724,8 +2748,16 @@ fn transport_block_vote_request_with_retries(
             }
         }
     }
-    Err("transport block vote request retry loop exited unexpectedly".to_string())
 }
+
+/// Refusals that cannot clear for this proposal; every other refusal (most
+/// often a peer that has not applied the parent block yet) is retried until
+/// the phase deadline.
+const PERMANENT_VOTE_REFUSALS: &[&str] = &["conflicting block proposal vote already recorded"];
+
+/// Lowest pause between refusals retried until the phase deadline, so a
+/// zero `--retry-backoff-ms` does not turn them into a busy loop.
+const MIN_REFUSAL_RETRY_BACKOFF_MS: u64 = 50;
 
 /// Default overall deadline of one vote phase (prepare or precommit) in an
 /// early-quorum round (`rpc-serve --finality-vote-phase-deadline-ms`), which is also the total time any one vote request in
@@ -2849,6 +2881,33 @@ fn prepare_reply_counts_toward_quorum(
     )
 }
 
+/// Error prefix of a vote reply that arrived but that the certificates would
+/// not accept (for example a bad consensus v2 signature).
+pub(super) const REJECTED_VOTE_REPLY_PREFIX: &str = "vote reply rejected";
+
+/// Turns a late prepare reply the prepare QC would not accept into a failed
+/// outcome, as the prepare phase does for a reply that arrives in time.
+fn reject_late_prepare_reply(
+    outcome: &mut TransportPeerVoteRequestOutcome,
+    proposal: &postfiat_types::ConsensusV2Proposal,
+    context: &(
+        postfiat_types::ConsensusV2Domain,
+        postfiat_ordering_fast::ConsensusV2ValidatorSet,
+    ),
+) {
+    let Ok(request) = &outcome.result else {
+        return;
+    };
+    if let Err(error) = prepare_reply_counts_toward_quorum(
+        &outcome.target,
+        request,
+        Some((proposal, context)),
+        &BTreeSet::new(),
+    ) {
+        outcome.result = Err(format!("{REJECTED_VOTE_REPLY_PREFIX}: {error}"));
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn collect_consensus_v2_precommit_votes(
     options: &TransportPeerCertifiedBatchRoundOptions,
@@ -2938,6 +2997,9 @@ fn collect_consensus_v2_precommit_votes(
         for target in prepared_targets {
             spawn_precommit_request(Box::new(precommit_request(target)), sender.clone());
         }
+        let late_target_count = late_prepares
+            .as_ref()
+            .map_or(0, |late| late.targets.len());
         if let Some(LatePrepareOutcomes {
             outcomes,
             targets,
@@ -2953,6 +3015,8 @@ fn collect_consensus_v2_precommit_votes(
                 .collect::<BTreeMap<_, _>>();
             let sender = sender.clone();
             let phase = phase.clone();
+            let prepare_context = (domain.clone(), validators.clone());
+            let proposal = consensus_v2_proposal.clone();
             let _ = std::thread::spawn(move || {
                 while !late_requests.is_empty() && !phase.finished() {
                     let wait = phase.remaining().min(Duration::from_millis(100));
@@ -2960,10 +3024,19 @@ fn collect_consensus_v2_precommit_votes(
                         break;
                     }
                     match outcomes.recv_timeout(wait) {
-                        Ok(outcome) => {
-                            if outcome.result.is_ok() {
-                                if let Some(request) = late_requests.remove(&outcome.target) {
-                                    spawn_precommit_request(request, sender.clone());
+                        Ok(mut outcome) => {
+                            reject_late_prepare_reply(&mut outcome, &proposal, &prepare_context);
+                            if let Some(request) = late_requests.remove(&outcome.target) {
+                                match &outcome.result {
+                                    Ok(_) => spawn_precommit_request(request, sender.clone()),
+                                    // No prepare vote, so no precommit: one
+                                    // answer fewer the precommit quorum can use.
+                                    Err(error) => {
+                                        let _ = sender.send((
+                                            outcome.target.clone(),
+                                            Err(format!("no prepare vote: {error}")),
+                                        ));
+                                    }
                                 }
                             }
                             let _ = relay.send(outcome);
@@ -2975,7 +3048,8 @@ fn collect_consensus_v2_precommit_votes(
                 // Precommit no longer needs them; keep relaying the replies
                 // to the vote record until every prepare request has ended.
                 drop(sender);
-                while let Ok(outcome) = outcomes.recv() {
+                while let Ok(mut outcome) = outcomes.recv() {
+                    reject_late_prepare_reply(&mut outcome, &proposal, &prepare_context);
                     let _ = relay.send(outcome);
                 }
             });
@@ -3013,9 +3087,21 @@ fn collect_consensus_v2_precommit_votes(
             }
         };
         let mut workers_exited = false;
+        // Every prepared or late target answers at most once (a precommit
+        // reply, or a late prepare failure); stop once the answers still
+        // possible cannot complete the quorum.
+        let mut possible = prepared_targets.len() + late_target_count;
+        let mut out_of_reach = false;
         while counted.len() < validators.quorum {
+            if counted.len() + possible < validators.quorum {
+                out_of_reach = true;
+                break;
+            }
             match receiver.recv_timeout(phase.remaining()) {
-                Ok((target, result)) => take(target, result, &mut counted, &mut votes),
+                Ok((target, result)) => {
+                    possible = possible.saturating_sub(1);
+                    take(target, result, &mut counted, &mut votes);
+                }
                 Err(mpsc::RecvTimeoutError::Timeout) => break,
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     workers_exited = true;
@@ -3040,10 +3126,12 @@ fn collect_consensus_v2_precommit_votes(
                 } else {
                     format!("; failed: {}", failures.join("; "))
                 },
-                if counted.len() < validators.quorum && !workers_exited {
-                    "; vote phase deadline reached"
-                } else {
+                if counted.len() >= validators.quorum || workers_exited {
                     ""
+                } else if out_of_reach {
+                    "; quorum out of reach"
+                } else {
+                    "; vote phase deadline reached"
                 },
             );
         }
@@ -3757,7 +3845,7 @@ pub(super) fn transport_peer_certified_batch_round(
                     true
                 }
                 Err(error) => {
-                    outcome.result = Err(error);
+                    outcome.result = Err(format!("{REJECTED_VOTE_REPLY_PREFIX}: {error}"));
                     false
                 }
             }
@@ -3845,6 +3933,12 @@ pub(super) fn transport_peer_certified_batch_round(
                     outcomes.push(outcome);
                 }
                 vote_request_quorum_early = !pending.is_empty();
+                break;
+            }
+            if successful_remote_votes + pending.len() < required_remote_vote_count {
+                // The quorum can no longer form: end the phase now instead of
+                // at its deadline, and stop the requests still retrying.
+                prepare_phase.finish();
                 break;
             }
         }
