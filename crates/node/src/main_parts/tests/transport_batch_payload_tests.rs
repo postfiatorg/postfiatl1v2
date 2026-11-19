@@ -1397,6 +1397,12 @@ mod transport_batch_payload_tests {
         /// Refuse the first request of the phase like `Refuse` (a peer that is
         /// not ready yet), then forward the requests that follow.
         RefuseFirst,
+        /// Refuse like `Refuse` until this long after the phase's first
+        /// request (a peer lagging that long), then forward.
+        RefuseFor(Duration),
+        /// Answer with the validator's permanent refusal: it already voted for
+        /// a conflicting proposal at this height.
+        RefuseConflicting,
         /// Hold the request this long before the validator sees it (a peer
         /// still busy with the phase), then forward it.
         Hold(Duration),
@@ -1418,9 +1424,14 @@ mod transport_batch_payload_tests {
         requests: std::sync::Arc<[std::sync::atomic::AtomicUsize; 2]>,
     ) {
         std::thread::spawn(move || {
+            let first_requests = std::sync::Arc::new([
+                std::sync::OnceLock::<Instant>::new(),
+                std::sync::OnceLock::<Instant>::new(),
+            ]);
             for client in listener.incoming() {
                 let Ok(client) = client else { return };
                 let requests = std::sync::Arc::clone(&requests);
+                let first_requests = std::sync::Arc::clone(&first_requests);
                 std::thread::spawn(move || {
                     let mut client_writer = client.try_clone().expect("clone proxy client");
                     let mut client_reader = BufReader::new(client);
@@ -1443,9 +1454,16 @@ mod transport_batch_payload_tests {
                         let earlier = phase.map(|phase| {
                             requests[phase].fetch_add(1, std::sync::atomic::Ordering::SeqCst)
                         });
+                        let since_first = phase.map(|phase| {
+                            first_requests[phase].get_or_init(Instant::now).elapsed()
+                        });
                         let action = match configured {
                             ProxyVote::RefuseFirst if earlier == Some(0) => ProxyVote::Refuse,
                             ProxyVote::RefuseFirst => ProxyVote::Forward(Duration::ZERO),
+                            ProxyVote::RefuseFor(lag) if since_first.is_some_and(|since| since < lag) => {
+                                ProxyVote::Refuse
+                            }
+                            ProxyVote::RefuseFor(_) => ProxyVote::Forward(Duration::ZERO),
                             ProxyVote::Hold(hold) => {
                                 std::thread::sleep(hold);
                                 ProxyVote::Forward(Duration::ZERO)
@@ -1463,13 +1481,15 @@ mod transport_batch_payload_tests {
                                 std::thread::sleep(hold);
                                 return;
                             }
-                            ProxyVote::Refuse => {
+                            ProxyVote::Refuse | ProxyVote::RefuseConflicting => {
                                 request["block_height"] = serde_json::json!(1_000_000u64);
                                 line = format!("{request}\n");
                                 upstream_stream = None;
                                 Duration::ZERO
                             }
-                            ProxyVote::RefuseFirst | ProxyVote::Hold(_) => unreachable!(),
+                            ProxyVote::RefuseFirst | ProxyVote::RefuseFor(_) | ProxyVote::Hold(_) => {
+                                unreachable!()
+                            }
                         };
                         if upstream_stream.is_none() {
                             let Ok(stream) = TcpStream::connect(upstream) else {
@@ -1495,11 +1515,19 @@ mod transport_batch_payload_tests {
                             }
                             response = format!("{reply}\n");
                         }
+                        if matches!(action, ProxyVote::RefuseConflicting) {
+                            let mut reply: serde_json::Value =
+                                serde_json::from_str(&response).expect("rejection json");
+                            reply["error"] = serde_json::json!(
+                                "transport block vote signing failed: conflicting block proposal vote already recorded"
+                            );
+                            response = format!("{reply}\n");
+                        }
                         std::thread::sleep(delay);
                         if client_writer.write_all(response.as_bytes()).is_err() {
                             return;
                         }
-                        if matches!(action, ProxyVote::Refuse) {
+                        if matches!(action, ProxyVote::Refuse | ProxyVote::RefuseConflicting) {
                             return;
                         }
                     }
@@ -1659,7 +1687,9 @@ mod transport_batch_payload_tests {
                     data_dir.join(VALIDATOR_KEYS_FILE),
                     data_dir.join("vote-phase-transport-votes"),
                     Some("127.0.0.1".to_string()),
-                    16,
+                    // A refused request closes its connection, and a refusal
+                    // is retried until the phase deadline.
+                    1024,
                     60_000,
                     None,
                     true,
@@ -1801,7 +1831,7 @@ mod transport_batch_payload_tests {
     const UNIT_RETRY_BACKOFF_MS: u64 = 250;
 
     #[test]
-    fn persistently_refused_prepare_votes_end_a_round_without_quorum_before_the_deadline() {
+    fn persistently_refused_prepare_votes_are_asked_until_the_phase_deadline() {
         let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -1834,15 +1864,109 @@ mod transport_batch_payload_tests {
             .expect_err("two refusals leave the round below quorum");
         assert!(lock_free);
         // A refusal may be a peer that is not ready yet, so it is asked again
-        // within the retry budget; a persistent refusal still ends the round
-        // well inside the 20 s phase deadline.
+        // past the retry budget until the phase deadline ends the round.
         assert!(
-            refusing.iter().all(|requests| *requests > 1),
-            "a refused prepare vote was not requested again: {refusing:?} {error}"
+            refusing.iter().all(|requests| *requests > UNIT_SEND_RETRIES + 1),
+            "a refused prepare vote was not asked past the retry budget: {refusing:?} {error}"
         );
-        assert!(elapsed < Duration::from_secs(20));
+        assert!(elapsed >= Duration::from_secs(19), "phase ended early: {elapsed:?}");
         assert!(!fixture.artifact_dir.join("block-certificate.json").exists());
         clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    /// Six validators, quorum 5, one silent: the round needs a lagging peer
+    /// that refuses for longer than the retry budget lasts (about 5.5 s).
+    #[test]
+    fn a_peer_refusing_past_the_retry_budget_is_asked_until_the_deadline_and_the_round_certifies() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture = vote_phase_round_fixture(
+            "vote-refuse-8s",
+            &[
+                (1, ProxyVote::RefuseFor(Duration::from_secs(8)), forward),
+                (2, ProxyVote::Silent, forward),
+            ],
+        );
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        let lagging = fixture.requests(fixture.proxied[0].0, 0);
+        eprintln!("refuse 8 s: elapsed={elapsed:?} prepare_requests_to_lagging_peer={lagging}");
+        let round = result
+            .expect("round still running")
+            .expect("a peer that refuses for 8 s and then votes completes the quorum");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        assert!(lagging > UNIT_SEND_RETRIES + 1, "{lagging}");
+        assert!(elapsed >= Duration::from_secs(8) && elapsed < Duration::from_secs(19));
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    /// Two permanent refusals and one silent peer: four remote votes are
+    /// needed and at most three remain possible.
+    fn assert_round_ends_once_quorum_is_out_of_reach(tag: &str, phase: usize) {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let failing = |vote: ProxyVote| {
+            if phase == 0 {
+                (vote, forward)
+            } else {
+                (forward, vote)
+            }
+        };
+        let proxies = [
+            ProxyVote::RefuseConflicting,
+            ProxyVote::RefuseConflicting,
+            ProxyVote::Silent,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, vote)| {
+            let (prepare, precommit) = failing(vote);
+            (index + 1, prepare, precommit)
+        })
+        .collect::<Vec<_>>();
+        let fixture = vote_phase_round_fixture(tag, &proxies);
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        eprintln!("{tag}: elapsed={elapsed:?} lock_free={lock_free}");
+        result
+            .expect("round still running")
+            .expect_err("two refusals and a silent peer leave the round below quorum");
+        assert!(lock_free);
+        assert!(
+            elapsed < Duration::from_secs(10),
+            "the phase waited {elapsed:?} for a quorum that could no longer form"
+        );
+        if phase == 0 {
+            assert!(!fixture.artifact_dir.join("block-certificate.json").exists());
+        }
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    #[test]
+    fn a_prepare_phase_ends_once_its_quorum_is_out_of_reach() {
+        assert_round_ends_once_quorum_is_out_of_reach("prepare-out-of-reach", 0);
+    }
+
+    #[test]
+    fn a_precommit_phase_ends_once_its_quorum_is_out_of_reach() {
+        assert_round_ends_once_quorum_is_out_of_reach("precommit-out-of-reach", 1);
     }
 
     #[test]
@@ -1966,12 +2090,12 @@ mod transport_batch_payload_tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let forward = ProxyVote::Forward(Duration::ZERO);
-        // No retries: the refusal is a recorded failure before the slow
-        // fifth vote completes the quorum, as on the RPC finality paths.
+        // A permanent refusal is a recorded failure before the slow fifth
+        // vote completes the quorum, as on the RPC finality paths.
         let fixture = vote_phase_round_fixture(
             "vote-refused-final",
             &[
-                (1, ProxyVote::Refuse, forward),
+                (1, ProxyVote::RefuseConflicting, forward),
                 (2, ProxyVote::Forward(Duration::from_secs(2)), forward),
             ],
         );
@@ -2184,6 +2308,8 @@ mod transport_batch_payload_tests {
         let transport_timeout_ms = 60_000u64;
         let round_bound = Duration::from_secs(12);
         let precommit_hold = Duration::from_secs(20);
+        // The late prepare vote lands after the round's precommit quorum.
+        let prepare_delay = round_bound / 2;
         let root = std::env::temp_dir().join(format!(
             "postfiat-height-1453-stall-{}-{}",
             std::process::id(),
@@ -2280,7 +2406,7 @@ mod transport_batch_payload_tests {
         spawn_late_refusing_validator_proxy(
             late_topology_listener,
             late_upstream_addr,
-            Duration::from_secs(3),
+            prepare_delay,
             precommit_hold,
             std::sync::Arc::clone(&precommit_requests),
         );
@@ -2421,8 +2547,9 @@ mod transport_batch_payload_tests {
             "late validator was counted in the precommit QC: {precommit_voters:?}"
         );
         // The late validator is asked for its precommit only once its prepare
-        // vote has arrived, and the round does not wait for that answer.
-        assert!(precommit_requests.load(std::sync::atomic::Ordering::SeqCst) <= 1);
+        // vote has arrived; here the round certified before that, so never.
+        assert!(round_elapsed < prepare_delay, "{round_elapsed:?}");
+        assert_eq!(precommit_requests.load(std::sync::atomic::Ordering::SeqCst), 0);
 
         // The late validator still receives the certified block through the
         // existing certified delivery path.
@@ -2582,6 +2709,39 @@ mod transport_batch_payload_tests {
             assert!(
                 error.contains("--unsafe-devnet-json-storage"),
                 "{command}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn rpc_serve_vote_phase_deadline_is_positive_and_at_most_the_finality_timeout() {
+        // A later invalid flag stops rpc-serve right after the deadline is
+        // parsed, so an accepted deadline reports that flag instead.
+        let parse = |finality_timeout_ms: &str, deadline_ms: Option<&str>| {
+            let mut flags = vec![
+                "--unsafe-devnet-json-storage",
+                "--port",
+                "1",
+                "--finality-timeout-ms",
+                finality_timeout_ms,
+            ];
+            if let Some(deadline_ms) = deadline_ms {
+                flags.extend(["--finality-vote-phase-deadline-ms", deadline_ms]);
+            }
+            flags.extend(["--max-mempool-submit-per-peer", "0"]);
+            let flags = flags.into_iter().map(str::to_string).collect::<Vec<_>>();
+            run_cli_group_03("rpc-serve", &flags).expect_err("rpc-serve must not start")
+        };
+        let accepted = |error: String| error.contains("--max-mempool-submit-per-peer");
+        assert!(accepted(parse("30000", None)), "default");
+        assert!(accepted(parse("5000", None)), "default above a short finality timeout");
+        assert!(accepted(parse("30000", Some("20000"))));
+        assert!(accepted(parse("30000", Some("30000"))));
+        for deadline_ms in ["0", "-1", "20s", "30001", "600000"] {
+            let error = parse("30000", Some(deadline_ms));
+            assert!(
+                error.contains("--finality-vote-phase-deadline-ms"),
+                "{deadline_ms}: {error}"
             );
         }
     }
