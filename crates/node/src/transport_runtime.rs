@@ -223,42 +223,9 @@ pub(super) fn transport_batch_listen(
             .accept()
             .map_err(|error| format!("transport batch accept failed: {error}"))?;
         set_stream_timeout(&stream, timeout_ms)?;
-        let line = read_transport_line(&stream, "transport batch read")?;
-        let envelope = parse_transport_batch_envelope(&line)?;
-        validate_transport_batch_envelope(&envelope, &topology, &local_status)?;
-        validate_transport_envelope_auth(
-            envelope.auth.as_ref(),
-            &data_dir,
-            &topology,
-            &envelope.frame,
+        let ack = handle_transport_batch_service_connection(
+            &mut stream, &data_dir, &topology, &local_status,
         )?;
-        let inbox = write_transport_batch_payload(&data_dir, &envelope)?;
-        let apply_result = apply_transport_batch_with_timings(
-            &data_dir,
-            &envelope.batch_kind,
-            inbox.batch_file,
-            inbox.certificate_file,
-            None,
-        )
-        .map_err(|error| format!("transport batch apply failed: {error}"))?;
-        let storage_work = apply_result
-            .local_apply_breakdown
-            .as_ref()
-            .map(|timings| timings.storage_work.clone());
-        let receipts = apply_result.receipts;
-        let state_after = status(NodeOptions {
-            data_dir: data_dir.clone(),
-        })
-        .map_err(|error| format!("transport batch post-apply status failed: {error}"))?;
-        let ack = transport_batch_ack(
-            &topology,
-            &local_status.node_id,
-            &envelope,
-            &state_after,
-            &receipts,
-            storage_work,
-        );
-        write_json_line(&mut stream, &ack)?;
         accepted.push(ack);
     }
 
@@ -392,7 +359,7 @@ pub(super) fn transport_batch_serve(
     })
 }
 
-fn handle_transport_batch_service_connection(
+pub(super) fn handle_transport_batch_service_connection(
     stream: &mut TcpStream,
     data_dir: &Path,
     topology: &NetworkTopology,
@@ -439,7 +406,8 @@ fn handle_transport_batch_service_line(
                 storage_work,
             )
         }
-        Err(error) if error.contains("already applied") => transport_already_applied_ack(
+        Err(error) if error.contains("already applied")
+            || is_ordered_batch_duplicate(&error, &envelope)? => transport_already_applied_ack(
             data_dir,
             topology,
             &local_status.node_id,
@@ -609,8 +577,12 @@ fn transport_batch_send(
     let mut stream = connect_transport_stream(&peer_address, timeout_ms, "transport batch dial")?;
     set_stream_timeout(&stream, timeout_ms)?;
     write_json_line(&mut stream, &envelope)?;
+    // The peer acknowledges only after durable apply. Limit connect and write separately
+    // so a slow verifier or a contended store does not trigger overlapping redeliveries.
+    stream.set_read_timeout(Some(Duration::from_millis(timeout_ms.max(90_000))))
+        .map_err(|error| format!("transport batch apply timeout: {error}"))?;
     let line = read_transport_line(&stream, "transport batch ack read")?;
-    let ack = parse_transport_batch_ack(&line)?;
+    let ack = certified_delivery_response(&line, &data_dir, &topology, &local_status, &to, &envelope)?;
     validate_transport_batch_ack(&ack, &topology, &local_status, &to, &envelope)?;
     let sent = TransportBatchSummary {
         from: local_status.node_id.clone(),
@@ -1160,17 +1132,17 @@ fn handle_transport_validator_connection(
         let read_start = Instant::now();
         let line_result = read_transport_line(&stream, "transport validator service read");
         let transport_read_ms = monotonic_elapsed_ms(read_start);
-        // A full status read decodes the whole ledger. The block-vote path only
+        // A full status read decodes the whole ledger. Batch and block-vote validation only
         // uses identity fields from it (node id, chain id, genesis hash, protocol
         // version), which are fixed for a data directory, so vote requests reuse
-        // the first status this service read. Every other request kind still gets
+        // the first status this service read. Batch ACKs read fresh post-apply state. Other request kinds get
         // a fresh status, read after the request arrives.
-        let is_block_vote_request = line_result
+        let uses_identity_only = line_result
             .as_ref()
             .ok()
             .and_then(|line| transport_envelope_schema(line).ok())
-            .is_some_and(|schema| schema == TRANSPORT_BLOCK_VOTE_REQUEST_SCHEMA);
-        let cached_identity_status = if is_block_vote_request {
+            .is_some_and(|schema| matches!(schema.as_str(), TRANSPORT_BLOCK_VOTE_REQUEST_SCHEMA | TRANSPORT_BATCH_SCHEMA));
+        let cached_identity_status = if uses_identity_only {
             shared_state
                 .lock()
                 .map_err(|_| "transport validator service state lock poisoned".to_string())?
@@ -2453,6 +2425,32 @@ fn transport_authenticated_health_request(
         .map_err(|_| "transport health stream pool lock poisoned".to_string())?
         .insert(peer_address, stream);
     Ok(response)
+}
+
+/// Read-only evidence before an operator archives a delivery. Every remote tip is
+/// bound to a fresh nonce by the validator's authenticated health response.
+pub(super) fn certified_delivery_witness(
+    data_dir: &Path, topology_file: &PathBuf, job_file: &Path,
+) -> Result<Vec<TransportHello>, String> {
+    let job = read_durable_certified_send_job(job_file)?;
+    validate_durable_certified_send_payloads(job_file, &job)?;
+    let topology = read_topology_file(topology_file)?;
+    let local = status(NodeOptions { data_dir: data_dir.to_owned() }).map_err(|e| e.to_string())?;
+    validate_durable_certified_send_current_deployment(&job, &topology, &local)?;
+    let mut witnesses = Vec::new();
+    for peer in &topology.peers {
+        let state = if peer.node_id == local.node_id {
+            transport_hello(&topology, &local)
+        } else {
+            transport_authenticated_health_request(data_dir, &topology, &local, &peer.node_id, job.timeout_ms)?.state
+        };
+        if state.block_height != job.block_height || state.block_tip_hash != job.block_hash
+            || state.state_root != job.expected_state_root {
+            return Err(format!("peer {} does not witness the job's finalized height/hash/root", peer.node_id));
+        }
+        witnesses.push(state);
+    }
+    Ok(witnesses)
 }
 
 pub(super) fn transport_authenticated_peer_health(

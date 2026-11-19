@@ -27,6 +27,14 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             }
             Ok(())
         }
+        "transport-certified-send-outbox-witness" => {
+            let data_dir = PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let topology = PathBuf::from(flag_value(flags, "--topology").ok_or("missing --topology")?);
+            let job = Path::new(flag_value(flags, "--job-file").ok_or("missing --job-file")?);
+            let witnesses = certified_delivery_witness(&data_dir, &topology, job)?;
+            println!("{}", serde_json::to_string(&witnesses).map_err(|e| e.to_string())?);
+            Ok(())
+        }
         "transport-certified-send-outbox-verify" => {
             let data_dir =
                 PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
