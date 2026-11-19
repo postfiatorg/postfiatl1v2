@@ -33,3 +33,19 @@ done
 rsync -rzt --sparse --no-links --stats --include=/owned_locks.wal "${args[@]}" --exclude='*' \
   -e "ssh -i $identity -o BatchMode=yes -o StrictHostKeyChecking=yes" \
   "$host:/var/lib/postfiat/validator-$n/" "$dir/"
+# Never mistake a migration-era generation for the one the source selected.
+python3 - "$dir" "$n" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+store = Path(sys.argv[1])
+pointer, _ = json.JSONDecoder().raw_decode((store / "transactional_generation.json").read_text())
+source = Path(pointer["database_directory"])
+if (source.parent != Path("/var/lib/postfiat") / f"validator-{sys.argv[2]}"
+        or pointer["database_file"] != "postfiat-state-v1.redb"
+        or source.name not in {"transactional-generation", "transactional-generation-927"}
+        or not (store / source.name / pointer["database_file"]).is_file()):
+    raise SystemExit("the source selected a generation outside this release 5 capture")
+print(f"captured selected generation {source.name}")
+PY
