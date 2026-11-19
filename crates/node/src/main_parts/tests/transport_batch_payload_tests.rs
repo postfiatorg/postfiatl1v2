@@ -1292,6 +1292,374 @@ mod transport_batch_payload_tests {
         std::fs::remove_dir_all(root).expect("cleanup remote proposer test");
     }
 
+    /// Line proxy in front of one validator, modelling validator-2 at height
+    /// 1453: its prepare vote reaches the proposer late, and every precommit
+    /// request is held and then refused.
+    fn spawn_late_refusing_validator_proxy(
+        listener: TcpListener,
+        upstream: std::net::SocketAddr,
+        prepare_delay: Duration,
+        precommit_hold: Duration,
+        precommit_requests: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    ) {
+        std::thread::spawn(move || {
+            for client in listener.incoming() {
+                let Ok(client) = client else { return };
+                let precommit_requests = std::sync::Arc::clone(&precommit_requests);
+                std::thread::spawn(move || {
+                    let mut client_writer = client.try_clone().expect("clone proxy client");
+                    let mut client_reader = BufReader::new(client);
+                    let mut upstream_stream: Option<(TcpStream, BufReader<TcpStream>)> = None;
+                    loop {
+                        let mut line = String::new();
+                        if client_reader.read_line(&mut line).unwrap_or(0) == 0 {
+                            return;
+                        }
+                        let request: serde_json::Value =
+                            serde_json::from_str(&line).unwrap_or(serde_json::Value::Null);
+                        let phase = request
+                            .pointer("/consensus_v2/phase")
+                            .and_then(serde_json::Value::as_str);
+                        if phase == Some("precommit") {
+                            precommit_requests.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                            std::thread::sleep(precommit_hold);
+                            let refusal = serde_json::json!({
+                                "schema": "postfiat-transport-validator-rejection-v1",
+                                "error": "transport consensus v2 precommit signing failed: consensus v2 precommit vote is not authorized by a newer non-nil prepare QC",
+                            });
+                            let _ = client_writer.write_all(format!("{refusal}\n").as_bytes());
+                            return;
+                        }
+                        if upstream_stream.is_none() {
+                            let stream = TcpStream::connect(upstream).expect("proxy upstream");
+                            let reader =
+                                BufReader::new(stream.try_clone().expect("clone upstream"));
+                            upstream_stream = Some((stream, reader));
+                        }
+                        let (stream, reader) = upstream_stream.as_mut().expect("upstream");
+                        if stream.write_all(line.as_bytes()).is_err() {
+                            return;
+                        }
+                        let mut response = String::new();
+                        if reader.read_line(&mut response).unwrap_or(0) == 0 {
+                            return;
+                        }
+                        if phase == Some("prepare") {
+                            std::thread::sleep(prepare_delay);
+                        }
+                        if client_writer.write_all(response.as_bytes()).is_err() {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    fn certificate_qc_voters(certificate_file: &Path, qc: &str) -> Vec<String> {
+        fn find<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+            match value {
+                serde_json::Value::Object(map) => map
+                    .get(key)
+                    .or_else(|| map.values().find_map(|value| find(value, key))),
+                serde_json::Value::Array(items) => items.iter().find_map(|value| find(value, key)),
+                _ => None,
+            }
+        }
+        let certificate: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(certificate_file).expect("read block certificate"),
+        )
+        .expect("parse block certificate");
+        find(&certificate, qc)
+            .and_then(|qc| qc.get("votes"))
+            .and_then(serde_json::Value::as_array)
+            .expect("QC votes")
+            .iter()
+            .map(|vote| {
+                vote.get("validator")
+                    .and_then(serde_json::Value::as_str)
+                    .expect("QC vote validator")
+                    .to_string()
+            })
+            .collect()
+    }
+
+    /// Height 1453 (2026-11-18): the proposer held a precommit quorum (5 of 6)
+    /// but waited on one late validator that refused precommit, holding the
+    /// mempool mutation lock for the whole wait.
+    #[test]
+    fn height_1453_round_certifies_at_precommit_quorum_without_late_refusing_peer() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        prewarm_shielded_verifier_cache("height 1453 stall test").expect("prewarm verifier");
+        let validator_count = 6usize;
+        // The incident's transport timeout was 900 s; 60 s keeps the failing
+        // run short while staying far above the asserted round bound.
+        let transport_timeout_ms = 60_000u64;
+        let round_bound = Duration::from_secs(12);
+        let precommit_hold = Duration::from_secs(20);
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-height-1453-stall-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let data_dirs = (0..validator_count)
+            .map(|index| {
+                let data_dir = root.join(format!("validator-{index}"));
+                init_consensus_v2(InitConsensusV2Options {
+                    data_dir: data_dir.clone(),
+                    chain_id: "postfiat-height-1453-stall-test".to_string(),
+                    node_id: format!("validator-{index}"),
+                    validator_count: validator_count as u32,
+                    activation_height: 1,
+                    storage_activation_height: None,
+                })
+                .expect("init validator");
+                data_dir
+            })
+            .collect::<Vec<_>>();
+        let shared_keys: ValidatorKeyFile = serde_json::from_slice(
+            &std::fs::read(data_dirs[0].join(VALIDATOR_KEYS_FILE)).expect("read keys"),
+        )
+        .expect("parse keys");
+        let bootstrap_snapshot = root.join("bootstrap-snapshot");
+        export_snapshot(SnapshotExportOptions {
+            data_dir: data_dirs[0].clone(),
+            snapshot_dir: bootstrap_snapshot.clone(),
+        })
+        .expect("export common state");
+        for (index, data_dir) in data_dirs.iter().enumerate().skip(1) {
+            std::fs::remove_dir_all(data_dir).expect("clear initialized replica");
+            import_snapshot(SnapshotImportOptions {
+                data_dir: data_dir.clone(),
+                snapshot_dir: bootstrap_snapshot.clone(),
+                node_id: Some(format!("validator-{index}")),
+            })
+            .expect("import common state");
+        }
+        for (index, data_dir) in data_dirs.iter().enumerate() {
+            let record = shared_keys
+                .validators
+                .iter()
+                .find(|record| record.node_id == format!("validator-{index}"))
+                .expect("local validator key")
+                .clone();
+            let key_path = data_dir.join(VALIDATOR_KEYS_FILE);
+            std::fs::write(
+                &key_path,
+                serde_json::to_vec_pretty(&ValidatorKeyFile {
+                    validators: vec![record],
+                })
+                .expect("serialize isolated key"),
+            )
+            .expect("write isolated key");
+            #[cfg(unix)]
+            std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600))
+                .expect("protect isolated key");
+        }
+        let topology_file = root.join("topology.json");
+        let (base_port, mut listeners, _rpc_listeners) =
+            reserve_consensus_v2_test_ports(validator_count);
+        write_consensus_v2_topology(TopologyConsensusV2Options {
+            chain_id: "postfiat-height-1453-stall-test".to_string(),
+            validators: validator_count as u32,
+            base_port,
+            rpc_base_port: Some(base_port.saturating_add(100)),
+            hosts: Some(vec!["127.0.0.1".to_string(); validator_count]),
+            output_file: topology_file.clone(),
+            activation_height: 1,
+            storage_activation_height: None,
+        })
+        .expect("write topology");
+        let (_, validators) = live_consensus_v2_context(&data_dirs[0]).expect("context");
+        let validator_ids = validators.validator_ids();
+        let proposer =
+            postfiat_ordering_fast::leader_for_view(&validator_ids, 1, 0).expect("height-1 leader");
+        let proposer_index = validator_ids
+            .iter()
+            .position(|validator| validator == &proposer)
+            .expect("proposer index");
+        let late_index = (proposer_index + 1) % validator_count;
+        let late_validator = format!("validator-{late_index}");
+
+        // The late validator's real service listens on a private port; its
+        // topology port is served by the late/refusing proxy.
+        let late_upstream = TcpListener::bind(("127.0.0.1", 0)).expect("late upstream port");
+        let late_upstream_addr = late_upstream.local_addr().expect("late upstream addr");
+        let late_topology_listener = std::mem::replace(&mut listeners[late_index], late_upstream);
+        let precommit_requests = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        spawn_late_refusing_validator_proxy(
+            late_topology_listener,
+            late_upstream_addr,
+            Duration::from_secs(3),
+            precommit_hold,
+            std::sync::Arc::clone(&precommit_requests),
+        );
+        // Detached services: the late validator's connection count depends on
+        // how many vote streams the proposer opens, so none is joined.
+        for (index, data_dir) in data_dirs.iter().enumerate() {
+            if index == proposer_index {
+                continue;
+            }
+            let data_dir = data_dir.clone();
+            let topology_file = topology_file.clone();
+            let listener = listeners[index]
+                .try_clone()
+                .expect("clone reserved listener");
+            std::thread::spawn(move || {
+                let shutdown_requested = std::sync::atomic::AtomicBool::new(false);
+                crate::transport_runtime::transport_validator_serve_inner(
+                    data_dir.clone(),
+                    topology_file,
+                    data_dir.join(VALIDATOR_KEYS_FILE),
+                    data_dir.join("height-1453-transport-votes"),
+                    Some("127.0.0.1".to_string()),
+                    16,
+                    transport_timeout_ms,
+                    None,
+                    true,
+                    Some(TransportShieldedVerifierPrewarmReport {
+                        schema: "postfiat-transport-shielded-verifier-prewarm-v1".to_string(),
+                        requested: true,
+                        total_ms: 0.0,
+                        asset_orchard_swap_verifier_warm: true,
+                        asset_orchard_swap_verifier_ms: Some(0.0),
+                        asset_orchard_private_egress_verifier_warm: true,
+                        asset_orchard_private_egress_verifier_ms: Some(0.0),
+                        asset_orchard_private_egress_verifier_breakdown: None,
+                    }),
+                    Some(listener),
+                    &shutdown_requested,
+                )
+            });
+        }
+
+        let proposer_dir = data_dirs[proposer_index].clone();
+        let batch_file = root.join("height-1.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: proposer_dir.clone(),
+            key_file: Some(data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "d".repeat(40)),
+            amount: 1_000_000,
+            batch_file: batch_file.clone(),
+        })
+        .expect("create batch");
+        let topology = read_topology_file(&topology_file).expect("read topology");
+        let local_status = status(NodeOptions {
+            data_dir: proposer_dir.clone(),
+        })
+        .expect("proposer status");
+        transport_authenticated_peer_health(&proposer_dir, &topology, &local_status, 15_000)
+            .expect("authenticated peer health");
+
+        // The RPC finality path runs the round under the mempool mutation lock
+        // (run_serialized_rpc_mempool_submit); model it with the same try_lock.
+        let mempool_mutation_lock = std::sync::Arc::new(Mutex::new(()));
+        let artifact_dir = root.join("height-1-artifacts");
+        let round_start = Instant::now();
+        let round = {
+            let lock = std::sync::Arc::clone(&mempool_mutation_lock);
+            let options = TransportPeerCertifiedBatchRoundOptions {
+                data_dir: proposer_dir.clone(),
+                topology_file: topology_file.clone(),
+                batch_kind: Some("transparent".to_string()),
+                batch_file: batch_file.clone(),
+                key_file: proposer_dir.join(VALIDATOR_KEYS_FILE),
+                proposal_key_file: Some(proposer_dir.join(VALIDATOR_KEYS_FILE)),
+                require_local_proposer: true,
+                require_signed_proposal: true,
+                allow_peer_failures: false,
+                quorum_early_full_propagation: true,
+                artifact_dir: artifact_dir.clone(),
+                block_height: Some(1),
+                view: Some(0),
+                timeout_certificate_file: None,
+                timeout_ms: transport_timeout_ms,
+                send_retries: 1,
+                retry_backoff_ms: 50,
+                local_apply_before_certified_send: true,
+                defer_certified_sends: false,
+                commit_processed_dir: None,
+                required_parent: None,
+            };
+            std::thread::spawn(move || {
+                let _mutation_guard = lock.try_lock().expect("mempool mutation lock free");
+                transport_peer_certified_batch_round(options)
+            })
+        };
+        let mut busy_until_round_end = false;
+        while !round.is_finished() && round_start.elapsed() < round_bound * 2 {
+            busy_until_round_end |= matches!(
+                mempool_mutation_lock.try_lock(),
+                Err(std::sync::TryLockError::WouldBlock)
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let mempool_lock_free_after = round_start.elapsed();
+        let mempool_lock_free = mempool_mutation_lock.try_lock().is_ok();
+        let report = round
+            .join()
+            .expect("round thread")
+            .expect("height 1453 round must certify at quorum");
+        let round_elapsed = round_start.elapsed();
+        eprintln!(
+            "height-1453 repro: round_elapsed={round_elapsed:?} mempool_lock_free_after={mempool_lock_free_after:?} \
+             precommit_requests_to_late_peer={} busy_seen={busy_until_round_end}",
+            precommit_requests.load(std::sync::atomic::Ordering::SeqCst)
+        );
+        assert!(
+            mempool_lock_free,
+            "mempool mutation lock still held {mempool_lock_free_after:?} into the round"
+        );
+        assert!(
+            round_elapsed < round_bound,
+            "round took {round_elapsed:?}: it waited on the late peer instead of certifying at precommit quorum"
+        );
+        assert!(
+            report.round_ok,
+            "round_ok false: {:?}",
+            report.send_failures
+        );
+
+        let certificate_file = artifact_dir.join("block-certificate.json");
+        let prepare_voters = certificate_qc_voters(&certificate_file, "prepare_qc");
+        let precommit_voters = certificate_qc_voters(&certificate_file, "precommit_qc");
+        assert!(prepare_voters.len() >= validators.quorum);
+        assert!(precommit_voters.len() >= validators.quorum);
+        assert!(
+            !precommit_voters.contains(&late_validator),
+            "late validator was counted in the precommit QC: {precommit_voters:?}"
+        );
+        assert!(precommit_requests.load(std::sync::atomic::Ordering::SeqCst) >= 1);
+
+        // The late validator still receives the certified block through the
+        // existing certified delivery path.
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            let late = status(NodeOptions {
+                data_dir: data_dirs[late_index].clone(),
+            })
+            .expect("late validator status");
+            if late.block_height == 1 {
+                let proposer_state = status(NodeOptions {
+                    data_dir: proposer_dir.clone(),
+                })
+                .expect("proposer status");
+                assert_eq!(late.block_tip_hash, proposer_state.block_tip_hash);
+                assert_eq!(late.state_root, proposer_state.state_root);
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "late validator never received block 1"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
     #[test]
     fn certified_transport_payload_commits_batch_kind() {
         let payload_json = r#"{"schema":"test-batch","batch_id":"batch-1"}"#;
