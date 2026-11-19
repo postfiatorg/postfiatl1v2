@@ -2659,6 +2659,18 @@ fn transport_block_vote_request_with_retries(
     Err("transport block vote request retry loop exited unexpectedly".to_string())
 }
 
+/// Upper bound on one vote request (prepare or precommit) to one peer in a
+/// peer-certified round. Healthy peers vote in under 1 s and the slowest vote
+/// seen on the devnet took 9 s (height 1453), so 20 s leaves 2x headroom over
+/// that while keeping a silent peer from holding a round for the 900 s
+/// transport timeout. A timed-out request counts as a missing vote: the
+/// quorum rule is unchanged and a round never certifies below it.
+const PEER_VOTE_REQUEST_TIMEOUT_MS: u64 = 20_000;
+
+pub(super) fn peer_vote_request_timeout_ms(transport_timeout_ms: u64) -> u64 {
+    transport_timeout_ms.min(PEER_VOTE_REQUEST_TIMEOUT_MS)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn collect_consensus_v2_precommit_votes(
     options: &TransportPeerCertifiedBatchRoundOptions,
@@ -2678,47 +2690,90 @@ fn collect_consensus_v2_precommit_votes(
         &local_status.node_id,
     )
     .map_err(|error| format!("local consensus v2 precommit failed: {error}"))?;
-    let outcomes = std::thread::scope(|scope| {
-        let mut handles = Vec::with_capacity(targets.len());
-        for target in targets {
-            let target = target.clone();
-            let data_dir = options.data_dir.clone();
-            let topology_file = options.topology_file.clone();
-            let batch_kind = Some(proposal.batch_kind.clone());
-            let batch_file = options.batch_file.clone();
-            let proposal_file = proposal_file.to_path_buf();
-            let timeout_certificate_file = options.timeout_certificate_file.clone();
-            let vote_file = vote_dir.join(format!("{target}.precommit.block_vote.json"));
-            let block_height = Some(proposal.block_height);
-            let timeout_ms = options.timeout_ms;
-            let send_retries = options.send_retries;
-            let retry_backoff_ms = options.retry_backoff_ms;
-            let consensus_v2 = Some(TransportConsensusV2VoteRequest {
-                phase: postfiat_types::ConsensusV2Phase::Precommit,
-                proposal: consensus_v2_proposal.clone(),
-                timeout_certificate: timeout_certificate.cloned(),
-                prepare_qc: Some(prepare_qc.clone()),
-            });
-            handles.push(scope.spawn(move || {
-                let result = transport_block_vote_request_with_retries(
-                    data_dir,
-                    topology_file,
-                    target.clone(),
-                    batch_kind,
-                    batch_file,
-                    proposal_file,
-                    timeout_certificate_file,
-                    vote_file,
-                    block_height,
-                    timeout_ms,
-                    send_retries,
-                    retry_backoff_ms,
-                    consensus_v2,
-                    Some(local_status),
-                );
-                (target, result)
-            }));
+    let precommit_request = |target: &str| {
+        let consensus_v2 = Some(TransportConsensusV2VoteRequest {
+            phase: postfiat_types::ConsensusV2Phase::Precommit,
+            proposal: consensus_v2_proposal.clone(),
+            timeout_certificate: timeout_certificate.cloned(),
+            prepare_qc: Some(prepare_qc.clone()),
+        });
+        let data_dir = options.data_dir.clone();
+        let topology_file = options.topology_file.clone();
+        let batch_kind = Some(proposal.batch_kind.clone());
+        let batch_file = options.batch_file.clone();
+        let proposal_file = proposal_file.to_path_buf();
+        let timeout_certificate_file = options.timeout_certificate_file.clone();
+        let vote_file = vote_dir.join(format!("{target}.precommit.block_vote.json"));
+        let block_height = Some(proposal.block_height);
+        let timeout_ms = peer_vote_request_timeout_ms(options.timeout_ms);
+        let send_retries = options.send_retries;
+        let retry_backoff_ms = options.retry_backoff_ms;
+        let target = target.to_string();
+        let local_status = local_status.clone();
+        move || {
+            let result = transport_block_vote_request_with_retries(
+                data_dir,
+                topology_file,
+                target.clone(),
+                batch_kind,
+                batch_file,
+                proposal_file,
+                timeout_certificate_file,
+                vote_file,
+                block_height,
+                timeout_ms,
+                send_retries,
+                retry_backoff_ms,
+                consensus_v2,
+                Some(&local_status),
+            );
+            (target, result)
         }
+    };
+    let mut votes = vec![local_vote];
+    if options.allow_peer_failures || options.quorum_early_full_propagation {
+        // Stop at the quorum the precommit QC requires (certify_consensus_v2_votes).
+        // Unanswered workers are detached and bounded by the per-peer vote
+        // timeout; a late validator receives the block via certified delivery.
+        let (_, validators) = live_consensus_v2_context(&options.data_dir)
+            .map_err(|error| format!("consensus v2 precommit context failed: {error}"))?;
+        let (sender, receiver) = mpsc::channel();
+        for target in targets {
+            let request = precommit_request(target);
+            let sender = sender.clone();
+            let _ = std::thread::spawn(move || {
+                let _ = sender.send(request());
+            });
+        }
+        drop(sender);
+        let mut pending = targets.len();
+        while pending > 0 && votes.len() < validators.quorum {
+            let (_target, result) = receiver
+                .recv()
+                .map_err(|_| "consensus v2 precommit workers exited before quorum".to_string())?;
+            pending -= 1;
+            if let Some(vote) = result
+                .ok()
+                .and_then(|report| report.response.consensus_v2_vote)
+            {
+                votes.push(vote);
+            }
+        }
+        while let Ok((_target, result)) = receiver.try_recv() {
+            if let Some(vote) = result
+                .ok()
+                .and_then(|report| report.response.consensus_v2_vote)
+            {
+                votes.push(vote);
+            }
+        }
+        return Ok(votes);
+    }
+    let outcomes = std::thread::scope(|scope| {
+        let handles = targets
+            .iter()
+            .map(|target| scope.spawn(precommit_request(target)))
+            .collect::<Vec<_>>();
         handles
             .into_iter()
             .map(|handle| {
@@ -2728,19 +2783,12 @@ fn collect_consensus_v2_precommit_votes(
             })
             .collect::<Result<Vec<_>, String>>()
     })?;
-    let mut votes = vec![local_vote];
     for (target, result) in outcomes {
-        match result {
-            Ok(report) => {
-                let vote = report.response.consensus_v2_vote.ok_or_else(|| {
-                    format!("validator `{target}` omitted consensus v2 precommit vote")
-                })?;
-                votes.push(vote);
-            }
-            Err(_error)
-                if options.allow_peer_failures || options.quorum_early_full_propagation => {}
-            Err(error) => return Err(error),
-        }
+        let vote = result?
+            .response
+            .consensus_v2_vote
+            .ok_or_else(|| format!("validator `{target}` omitted consensus v2 precommit vote"))?;
+        votes.push(vote);
     }
     Ok(votes)
 }
@@ -3176,7 +3224,7 @@ pub(super) fn transport_peer_certified_batch_round(
             let proposal_file = proposal_file.clone();
             let timeout_certificate_file = options.timeout_certificate_file.clone();
             let block_height = Some(proposal.block_height);
-            let timeout_ms = options.timeout_ms;
+            let timeout_ms = peer_vote_request_timeout_ms(options.timeout_ms);
             let send_retries = options.send_retries;
             let retry_backoff_ms = options.retry_backoff_ms;
             let consensus_v2 = consensus_v2_proposal.clone().map(|proposal| {
@@ -3252,7 +3300,7 @@ pub(super) fn transport_peer_certified_batch_round(
                 let proposal_file = proposal_file.clone();
                 let timeout_certificate_file = options.timeout_certificate_file.clone();
                 let block_height = Some(proposal.block_height);
-                let timeout_ms = options.timeout_ms;
+                let timeout_ms = peer_vote_request_timeout_ms(options.timeout_ms);
                 let send_retries = options.send_retries;
                 let retry_backoff_ms = options.retry_backoff_ms;
                 let consensus_v2 = consensus_v2_proposal.clone().map(|proposal| {

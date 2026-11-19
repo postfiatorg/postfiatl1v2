@@ -1384,6 +1384,14 @@ mod transport_batch_payload_tests {
             .collect()
     }
 
+    #[test]
+    fn peer_vote_requests_are_bounded_below_the_transport_timeout() {
+        use crate::transport_runtime::peer_vote_request_timeout_ms;
+        assert_eq!(peer_vote_request_timeout_ms(900_000), 20_000);
+        assert_eq!(peer_vote_request_timeout_ms(20_000), 20_000);
+        assert_eq!(peer_vote_request_timeout_ms(15_000), 15_000);
+    }
+
     /// Height 1453 (2026-11-18): the proposer held a precommit quorum (5 of 6)
     /// but waited on one late validator that refused precommit, holding the
     /// mempool mutation lock for the whole wait.
