@@ -25,6 +25,15 @@ pub struct SolanaLightClient {
     // Canonical decimal supports the guest's full u128 in JSON and CBOR.
     pub total_stake: String,
     pub known_key_table_hash: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handoff: Option<SolanaRankedHandoff>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SolanaRankedHandoff {
+    pub predecessor_set_hash: String,
+    pub predecessor_key_table_hash: String,
+    pub listed_stake: u64,
 }
 
 impl SolanaLightClient {
@@ -37,6 +46,19 @@ impl SolanaLightClient {
             .map_err(|_| "invalid Solana stake")?;
         if stake == 0 || stake.to_string() != self.total_stake {
             return Err("invalid Solana stake".into());
+        }
+        if let Some(handoff) = &self.handoff {
+            solana_hash("predecessor_set_hash", &handoff.predecessor_set_hash)?;
+            solana_hash(
+                "predecessor_key_table_hash",
+                &handoff.predecessor_key_table_hash,
+            )?;
+            if handoff.listed_stake == 0
+                || u128::from(handoff.listed_stake) > stake
+                || handoff.predecessor_key_table_hash != self.known_key_table_hash
+            {
+                return Err("invalid Solana ranked handoff".into());
+            }
         }
         Ok(())
     }
@@ -69,7 +91,8 @@ impl SolanaRoutePins {
     }
 
     pub fn validate(&self, profile: &VaultBridgeRouteProfileV1) -> Result<(), String> {
-        if profile.route_id != SOLANA_USDC_ROUTE
+        if self.anchor.handoff.is_some()
+            || profile.route_id != SOLANA_USDC_ROUTE
             || profile.verifier_kind != SOLANA_DEPOSIT_PROOF
             || profile.source_chain_id != 0
             || !profile.vault_runtime_code_hash.is_empty()
@@ -237,39 +260,73 @@ impl SolanaProofOperation {
     }
 }
 
-// HandoffPublicValues::encode and RecorderContext::encode in the recorder
-// guest (programs/pfusdc-sol-ingress/src/handoff.rs at 6c1caee1d).
+// The governed verifying key authenticates the entire journal before this transition.
 impl SolanaRouteState {
     pub fn handoff_successor(&self, journal: &[u8]) -> Result<SolanaLightClient, String> {
-        if journal.len() != 171 || &journal[..8] != b"PFSOLHP1" {
-            return Err("invalid Solana handoff journal domain or length".into());
-        }
         let pins = self.profile.solana.as_ref().ok_or("missing Solana pins")?;
+        let listed_stake = match journal.len() {
+            179 if &journal[..8] == b"PFSOLHP2" => {
+                Some(u64::from_le_bytes(journal[139..147].try_into().unwrap()))
+            }
+            171 if &journal[..8] == b"PFSOLHP1"
+                && self.client.handoff.is_none()
+                && pins.handoff_program_vkey != SOLANA_RELEASE_HANDOFF_VKEY =>
+            {
+                None
+            }
+            _ => return Err("invalid Solana handoff journal domain or length".into()),
+        };
         let slot = u64::from_le_bytes(journal[40..48].try_into().unwrap());
         let epoch = u64::from_le_bytes(journal[59..67].try_into().unwrap());
+        let total = u64::from_le_bytes(journal[131..139].try_into().unwrap());
+        let set_hash = bytes_to_lower_hex(&journal[67..99]);
+        let key_hash = bytes_to_lower_hex(&journal[journal.len() - 32..]);
         if bytes_to_lower_hex(&journal[8..40]) != pins.recorder_program
             || u16::from_le_bytes(journal[48..50].try_into().unwrap()) != pins.shred_version
             || u64::from_le_bytes(journal[50..58].try_into().unwrap()) != pins.slots_per_epoch
             || journal[58] != u8::from(pins.epoch_warmup)
             || slot < pins.anchor_slot
             || pins.slot_epoch(slot) != Some(epoch)
-            || self.client.epoch.checked_add(1) != Some(epoch)
-            || bytes_to_lower_hex(&journal[67..99]) != self.client.validator_set_hash
-            || bytes_to_lower_hex(&journal[139..171]) != self.client.known_key_table_hash
         {
-            return Err(
-                "Solana handoff differs from pinned recorder, epoch, set or known keys".into(),
-            );
+            return Err("Solana handoff differs from its recorder or epoch schedule".into());
         }
-        // The trusted set hash commits to its u128 denominator. The recorder
-        // journal authenticates its table as an input, it does not replace it.
+        if epoch == self.client.epoch {
+            let prior = self
+                .client
+                .handoff
+                .as_ref()
+                .ok_or("no predecessor for Solana replacement")?;
+            if listed_stake.is_none_or(|stake| stake <= prior.listed_stake)
+                || self.client.total_stake != total.to_string()
+                || set_hash != prior.predecessor_set_hash
+                || key_hash != prior.predecessor_key_table_hash
+            {
+                return Err(
+                    "Solana replacement must extend the same predecessor with more stake".into(),
+                );
+            }
+        } else if self.client.epoch.checked_add(1) != Some(epoch)
+            || set_hash != self.client.validator_set_hash
+            || key_hash != self.client.known_key_table_hash
+        {
+            return Err("Solana handoff differs from the expected predecessor".into());
+        }
         let next = SolanaLightClient {
             epoch,
             validator_set_hash: bytes_to_lower_hex(&journal[99..131]),
-            total_stake: u64::from_le_bytes(journal[131..139].try_into().unwrap()).to_string(),
-            known_key_table_hash: self.client.known_key_table_hash.clone(),
+            total_stake: total.to_string(),
+            known_key_table_hash: key_hash.clone(),
+            handoff: listed_stake.map(|listed_stake| SolanaRankedHandoff {
+                predecessor_set_hash: set_hash,
+                predecessor_key_table_hash: key_hash,
+                listed_stake,
+            }),
         };
         next.validate()?;
         Ok(next)
     }
 }
+
+// programs/pfusdc-sol-ingress/program-info.json, reproduced release handoff guest.
+pub const SOLANA_RELEASE_HANDOFF_VKEY: &str =
+    "0x0030b8018a18de3eec41e3b5afb5a282b1796055ba680bcc95ab216bd403f584";

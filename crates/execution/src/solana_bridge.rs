@@ -255,6 +255,7 @@ mod tests {
             validator_set_hash: "04".repeat(32),
             total_stake: "600".into(),
             known_key_table_hash: "05".repeat(32),
+            handoff: None,
         };
         let profile = VaultBridgeRouteProfileV1 {
             schema: postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.into(),
@@ -477,5 +478,103 @@ mod tests {
         assert!(route.handoff_successor(&journal[..170]).is_err());
         journal.push(0);
         assert!(route.handoff_successor(&journal).is_err());
+    }
+    #[test]
+    fn solana_pinned_guest_journals_match_release_admission() {
+        use guest::handoff::{HandoffPublicValues, RecorderContext};
+        use pfusdc_sol_ingress_program as guest;
+
+        let (_, _, mut route, _) = setup();
+        let info: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../programs/pfusdc-sol-ingress/program-info.json"
+        ))
+        .unwrap();
+        let handoff_key = info["programs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["kind"] == "handoff")
+            .unwrap()["program_vkey"]
+            .as_str()
+            .unwrap();
+        assert_eq!(handoff_key, postfiat_types::SOLANA_RELEASE_HANDOFF_VKEY);
+        route.profile.solana.as_mut().unwrap().handoff_program_vkey = handoff_key.into();
+        let mut proof = HandoffPublicValues {
+            context: RecorderContext {
+                recorder_program: [6; 32],
+                slot: 1100,
+                shred_version: 50093,
+                slots_per_epoch: 100,
+                warmup: false,
+                epoch: 11,
+                trusted_set_hash: [4; 32],
+            },
+            new_set_hash: [7; 32],
+            new_total_stake: 900,
+            listed_stake: 720,
+            known_key_table_hash: [5; 32],
+        };
+        let encoded = proof.encode();
+        let mut obsolete = encoded.clone();
+        obsolete[7] = b'1';
+        obsolete.drain(139..147);
+        assert!(route.handoff_successor(&obsolete).is_err());
+        route.client = route.handoff_successor(&encoded).unwrap();
+        assert!(route.handoff_successor(&encoded).is_err());
+        proof.listed_stake = 719;
+        assert!(route.handoff_successor(&proof.encode()).is_err());
+        proof.listed_stake = 850;
+        proof.new_total_stake = 901;
+        assert!(route.handoff_successor(&proof.encode()).is_err());
+        proof.new_total_stake = 900;
+        proof.context.trusted_set_hash = [7; 32];
+        assert!(route.handoff_successor(&proof.encode()).is_err());
+        proof.context.trusted_set_hash = [4; 32];
+        proof.new_set_hash = [8; 32];
+        route.client = route.handoff_successor(&proof.encode()).unwrap();
+        assert_eq!(route.client.handoff.as_ref().unwrap().listed_stake, 850);
+        proof.context.trusted_set_hash = [8; 32];
+        proof.context.epoch = 12;
+        proof.context.slot = 1200;
+        proof.new_set_hash = [9; 32];
+        route.client = route.handoff_successor(&proof.encode()).unwrap();
+        assert_eq!(route.client.epoch, 12);
+        assert!(route.handoff_successor(&encoded).is_err());
+
+        let journal = guest::DepositPublicValues {
+            validator_set_hash: [9; 32],
+            total_stake: 900,
+            fast_finality: true,
+            block: guest::BlockPublicValues {
+                slot: 1201,
+                block_id: [1; 32],
+                shred_version: 50093,
+                state: guest::StatePublicValues {
+                    bank_hash: [2; 32],
+                    parent_bank_hash: [3; 32],
+                    vault_program: [4; 32],
+                    route_binding: [5; 32],
+                    changed_accounts: 2,
+                    receipts: vec![guest::Receipt {
+                        address: [6; 32],
+                        pftl_recipient: [7; 20],
+                        amount: 42,
+                        nonce: [8; 32],
+                        depositor: [10; 32],
+                        deposit_id: [11; 32],
+                    }],
+                },
+            },
+        };
+        let decoded = SolanaDepositPublicValues::decode(&journal.encode()).unwrap();
+        assert_eq!(decoded.validator_set_hash, "09".repeat(32));
+        assert_eq!(decoded.total_stake, 900);
+        assert_eq!(decoded.route_binding, "05".repeat(32));
+        let receipt = &decoded.receipts[0];
+        assert_eq!(receipt.slot, 1201);
+        assert_eq!(receipt.program_id, "04".repeat(32));
+        assert_eq!(receipt.recipient, format!("pf{}", "07".repeat(20)));
+        assert_eq!(receipt.amount_atoms, 42);
+        assert_eq!(receipt.deposit_id, "0b".repeat(32));
     }
 }

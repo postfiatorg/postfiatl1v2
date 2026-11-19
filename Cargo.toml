@@ -32,6 +32,7 @@ members = [
 exclude = [
     "programs/pfusdc-egress",
     "programs/pfusdc-ingress",
+    "programs/pfusdc-sol-ingress",
     "programs/pftl-uniswap-receipt",
     "third_party/fips204",
     "tools/pfusdc-tier4-prover",
