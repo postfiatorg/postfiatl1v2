@@ -9,6 +9,7 @@ pub const SOLANA_ACTIVATION_HEIGHT: &str = "solana_bridge_activation_height";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SolanaRoutePins {
     pub genesis_hash: String,
+    pub route_binding: String,
     pub shred_version: u16,
     pub handoff_program_vkey: String,
     pub slots_per_epoch: u64,
@@ -72,6 +73,38 @@ fn solana_hash(field: &str, value: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Binding written by the Solana vault at initialization and into each receipt.
+/// Chain and route IDs are UTF-8. Genesis hashes and program ID are raw bytes.
+pub fn solana_deposit_route_binding(
+    pftl_chain_id: &str,
+    pftl_genesis_hash: &str,
+    route_id: &str,
+    solana_genesis_hash: &str,
+    vault_program_id: &str,
+) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    let mut hash = Sha256::new();
+    hash.update(b"postfiat.pfusdc.solana.route_binding.v1");
+    hash.update(pftl_chain_id.as_bytes());
+    hash.update(decode_lower_hex_exact(
+        "Post Fiat genesis hash",
+        pftl_genesis_hash,
+        48,
+    )?);
+    hash.update(route_id.as_bytes());
+    hash.update(decode_lower_hex_exact(
+        "Solana genesis hash",
+        solana_genesis_hash,
+        32,
+    )?);
+    hash.update(decode_lower_hex_exact(
+        "Solana vault program",
+        vault_program_id,
+        32,
+    )?);
+    Ok(bytes_to_lower_hex(&hash.finalize()))
+}
+
 impl SolanaRoutePins {
     pub fn slot_epoch(&self, slot: u64) -> Option<u64> {
         use solana_epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH};
@@ -92,7 +125,10 @@ impl SolanaRoutePins {
 
     pub fn validate(&self, profile: &VaultBridgeRouteProfileV1) -> Result<(), String> {
         if self.anchor.handoff.is_some()
-            || profile.route_id != SOLANA_USDC_ROUTE
+            || !matches!(
+                profile.route_id.as_str(),
+                SOLANA_USDC_ROUTE | "solana-devnet-usdc-v1" | "solana-local-usdc-v1"
+            )
             || profile.verifier_kind != SOLANA_DEPOSIT_PROOF
             || profile.source_chain_id != 0
             || !profile.vault_runtime_code_hash.is_empty()
@@ -105,6 +141,7 @@ impl SolanaRoutePins {
         self.anchor.validate()?;
         solana_hash("recorder_program", &self.recorder_program)?;
         solana_hash("genesis_hash", &self.genesis_hash)?;
+        solana_hash("route_binding", &self.route_binding)?;
         solana_hash("vault program", &profile.vault_address)?;
         solana_hash("USDC mint", &profile.token_address)?;
         for key in [&profile.verifier_program_vkey, &self.handoff_program_vkey] {

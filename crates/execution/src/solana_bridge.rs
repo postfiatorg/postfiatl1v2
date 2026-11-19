@@ -1,7 +1,6 @@
 use super::*;
 use postfiat_types::{
     SolanaDepositPublicValues, SolanaProofOperation, SolanaRouteState, SOLANA_DEPOSIT_PROOF,
-    SOLANA_USDC_ROUTE,
 };
 
 type Rejection = (&'static str, String);
@@ -115,9 +114,18 @@ fn credit_verified(
             "Solana proof stake or validator set differs from the current client".into(),
         ));
     }
-    let binding = vault_bridge_route_binding(hash, profile.route_epoch)
-        .map_err(|e| ("invalid_solana_route", e))?;
-    if values.route_binding != binding || values.shred_version != pins.shred_version {
+    let binding = postfiat_types::solana_deposit_route_binding(
+        &genesis.chain_id,
+        &genesis_hash(genesis),
+        &profile.route_id,
+        &pins.genesis_hash,
+        &profile.vault_address,
+    )
+    .map_err(|e| ("invalid_solana_route", e))?;
+    if values.route_binding != pins.route_binding
+        || binding != pins.route_binding
+        || values.shred_version != pins.shred_version
+    {
         return Err((
             "solana_route_mismatch",
             "Solana route binding or shred version mismatch".into(),
@@ -185,7 +193,7 @@ fn credit_verified(
             Some(
                 proof_bounded_nav_cap_checkpoint_hash(
                     &family.asset_id,
-                    SOLANA_USDC_ROUTE,
+                    &profile.route_id,
                     &evidence_root,
                     cap,
                     supply,
@@ -244,7 +252,9 @@ fn credit_verified(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use postfiat_types::{Account, SolanaLightClient, SolanaRoutePins, VaultBridgeRouteProfileV1};
+    use postfiat_types::{
+        Account, SolanaLightClient, SolanaRoutePins, VaultBridgeRouteProfileV1, SOLANA_USDC_ROUTE,
+    };
 
     fn setup() -> (Genesis, LedgerState, SolanaRouteState, Vec<u8>) {
         let genesis = Genesis::new("postfiat-local");
@@ -285,6 +295,14 @@ mod tests {
             expires_at_height: 1000,
             solana: Some(SolanaRoutePins {
                 genesis_hash: "01".repeat(32),
+                route_binding: postfiat_types::solana_deposit_route_binding(
+                    &genesis.chain_id,
+                    &genesis_hash(&genesis),
+                    SOLANA_USDC_ROUTE,
+                    &"01".repeat(32),
+                    &"07".repeat(32),
+                )
+                .unwrap(),
                 shred_version: 50093,
                 handoff_program_vkey: format!("0x{}", "02".repeat(32)),
                 slots_per_epoch: 100,
@@ -294,7 +312,6 @@ mod tests {
                 anchor: client.clone(),
             }),
         };
-        let hash = profile.profile_hash().unwrap();
         let mut values = b"PFSOLDP1".to_vec();
         values.extend([4; 32]);
         values.extend(600u128.to_le_bytes());
@@ -304,7 +321,7 @@ mod tests {
         values.extend(50093u16.to_le_bytes());
         values.extend([6; 64]);
         values.extend([7; 32]);
-        values.extend(hex_to_bytes(&vault_bridge_route_binding(&hash, 1).unwrap()).unwrap());
+        values.extend(hex_to_bytes(&profile.solana.as_ref().unwrap().route_binding).unwrap());
         values.extend(1u32.to_le_bytes());
         values.extend(1u32.to_le_bytes());
         values.extend([9; 32]);
@@ -351,6 +368,46 @@ mod tests {
             AssetExecutionCompatibility::strict(),
             &[],
         )
+    }
+
+    #[test]
+    fn solana_bridge_route_binding_matches_vault_initialization_bytes() {
+        let binding = postfiat_types::solana_deposit_route_binding(
+            "postfiat-wan-devnet-2",
+            "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            SOLANA_USDC_ROUTE, &"01".repeat(32), &"07".repeat(32),
+        ).unwrap();
+        assert_eq!(
+            binding,
+            "69e3b20d329221662ff58b4f8c7060f11fee756a4f9feb02fc337e4a5762d934"
+        );
+    }
+
+    #[test]
+    fn cluster_route_binding_and_backing_agree_with_governance() {
+        for route_id in ["solana-devnet-usdc-v1", "solana-local-usdc-v1"] {
+            let (genesis, mut ledger, mut route, mut journal) = setup();
+            route.profile.route_id = route_id.into();
+            let pins = route.profile.solana.as_mut().unwrap();
+            pins.route_binding = postfiat_types::solana_deposit_route_binding(
+                &genesis.chain_id,
+                &genesis_hash(&genesis),
+                route_id,
+                &pins.genesis_hash,
+                &route.profile.vault_address,
+            )
+            .unwrap();
+            journal[195..227].copy_from_slice(&hex_to_bytes(&pins.route_binding).unwrap());
+            ledger.solana_route = Some(route.clone());
+            credit(&genesis, &mut ledger, &route, &journal).unwrap();
+            ledger.validate_asset_state(&genesis.chain_id).unwrap();
+            let rows = ledger
+                .vault_bridge_route_backing(&route.profile.asset_id)
+                .unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].route_id, route_id);
+            assert_eq!(rows[0].claims_minted, 5_000_000);
+        }
     }
 
     #[test]

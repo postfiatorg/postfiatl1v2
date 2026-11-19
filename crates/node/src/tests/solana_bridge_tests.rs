@@ -190,7 +190,7 @@ fn real_proof_refused_under_wrong_program_key_set_or_route_binding() {
         match mutation {
             "program" => profile.verifier_program_vkey = format!("0x{}", "01".repeat(32)),
             "set" => profile.solana.as_mut().unwrap().anchor.validator_set_hash = "ef".repeat(32),
-            "binding" => profile.token_address = "ed".repeat(32),
+            "binding" => profile.solana.as_mut().unwrap().route_binding = "ed".repeat(32),
             _ => unreachable!(),
         }
         governance.apply(amendment(SOLANA_ACTIVATION_HEIGHT, 10, 0));

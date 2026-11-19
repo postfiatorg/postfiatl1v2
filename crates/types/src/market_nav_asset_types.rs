@@ -3835,8 +3835,10 @@ impl LedgerState {
         }
         if solana_total != 0 {
             // Admission verifies and mints in one atomic transition.
-            routes.insert(SOLANA_USDC_ROUTE.into(), VaultBridgeRouteBackingStateV1 {
-                route_id: SOLANA_USDC_ROUTE.into(), asset_id: asset_id.into(),
+            let route = self.solana_route.as_ref().ok_or("missing Solana receipt route")?;
+            let route_id = &route.profile.route_id;
+            routes.insert(route_id.clone(), VaultBridgeRouteBackingStateV1 {
+                route_id: route_id.clone(), asset_id: asset_id.into(),
                 deposits_verified: solana_total, claims_minted: solana_total,
                 withdrawals_reserved: 0, withdrawals_paid: 0,
             });
