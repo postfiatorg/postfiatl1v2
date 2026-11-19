@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replay the release 5 rollout transfer at 1426 over six isolated release 6 RPCs."""
+"""Verify an archived ordinary transfer over six isolated release 6 RPC and transport pairs."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -31,28 +31,29 @@ def rpc(port, method, params):
 
 
 def replay(n, args, receipt_id):
+    height = args.height
     name = f"validator-{n}"
     dest = args.work / name
     cli("snapshot-import-finalized-checkpoint", "--snapshot-dir", args.snapshot, "--data-dir", dest,
         "--node-id", name)
     old = cli("verify-finalized-checkpoint", "--data-dir", dest)
-    if old["checkpoint_height"] != 1425 or not old["verified"]:
+    if old["checkpoint_height"] != height - 1 or not old["verified"]:
         raise ValueError("unexpected historical base")
     port = 42100 + n
-    block, = rpc(port, "blocks", {"from_height": 1426, "limit": 1})
+    block, = rpc(port, "blocks", {"from_height": height, "limit": 1})
     source = rpc(port, "status", {})
     recorded = args.records[name]
     if (block["header"]["height"], block["header"]["batch_kind"], block["header"]["parent_hash"],
         block["header"]["block_hash"], block["receipt_ids"]) != (
-            1426, "transparent", old["checkpoint_block_hash"], recorded["block_hash"], [receipt_id]):
-        raise ValueError(f"{name} differs from release 5 rollout record")
+            height, "transparent", old["checkpoint_block_hash"], recorded["block_hash"], [receipt_id]):
+        raise ValueError(f"{name} differs from the recorded transfer")
     run = cli("rpc-catch-up-certified-delta", "--data-dir", dest, "--source-host", "127.0.0.1",
-              "--source-rpc-port", port, "--expected-height", 1426, "--expected-block-hash", recorded["block_hash"],
+              "--source-rpc-port", port, "--expected-height", height, "--expected-block-hash", recorded["block_hash"],
               "--expected-state-root", recorded["state_root"], "--work-dir", args.work/f"delta-{n}",
               "--max-blocks", 1, "--timeout-ms", 120000)
     verified = cli("verify-finalized-checkpoint", "--data-dir", dest)
     receipt, = [r for r in cli("receipts", "--data-dir", dest) if r["tx_id"] == receipt_id]
-    if (source["node_id"] != name or run["local_height_after"] != 1426 or run["applied_count"] != 1
+    if (source["node_id"] != name or run["local_height_after"] != height or run["applied_count"] != 1
             or not verified["verified"] or verified["checkpoint_state_root"] != recorded["state_root"]
             or receipt != recorded["receipts"][0] or not receipt["accepted"]):
         raise ValueError(f"{name} failed historical transfer checks")
@@ -66,6 +67,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for arg in ["sources", "snapshot", "work", "release5_record"]:
         parser.add_argument(arg, type=Path)
+    parser.add_argument("--height", type=int, required=True)
     args = parser.parse_args()
     os.umask(0o077)
     if set(os.listdir("/sys/class/net")) != {"lo"}:
@@ -73,7 +75,7 @@ def main():
     args.records = json.loads(args.release5_record.read_text())
     receipt_ids = {r["tx_id"] for row in args.records.values() for r in row["receipts"] if r["accepted"]}
     if len(args.records) != 6 or len(receipt_ids) != 1:
-        raise ValueError("release 5 records disagree")
+        raise ValueError("source records disagree")
     receipt_id, = receipt_ids
     topology = args.work / "topology.json"
     cli("topology-consensus-v2", "--chain-id", "postfiat-wan-devnet-2", "--validators", 6,
