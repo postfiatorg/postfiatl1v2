@@ -3314,8 +3314,20 @@ pub(super) struct BlockVoteObservation {
     pub(super) duration_ms: f64,
 }
 
-/// An answered request is an accepted vote or a refusal; a request that got no
-/// validator answer (connect, read or parse failure) is `no_answer`.
+/// Transport errors for a vote reply that arrived but carried a vote the
+/// certificates would not accept (`transport_block_vote_request`,
+/// and the response checks in `transport_protocol.rs`).
+const INVALID_VOTE_REPLY_ERRORS: &[&str] = &[
+    "transport consensus v2 response vote invalid",
+    "transport consensus v2 response vote target mismatch",
+    "transport consensus v2 response omitted vote",
+    "transport block vote response vote validator mismatch",
+];
+
+/// An answered request is an accepted vote or a refusal (a reply the
+/// certificates would not accept is an `invalid_vote_response` refusal); a
+/// request that got no validator answer (connect, read or parse failure) is
+/// `no_answer`.
 fn observe_block_vote_request(
     target: &str,
     result: &Result<TransportBlockVoteRequestReport, String>,
@@ -3343,6 +3355,21 @@ fn observe_block_vote_request(
             None,
             Some(vote_refusal_class(error)),
         ),
+        // The validator answered, with a vote the certificates would not
+        // accept: checked by the transport (signature, target) or by the
+        // early-quorum count (REJECTED_VOTE_REPLY_PREFIX).
+        Err(error)
+            if error.starts_with(REJECTED_VOTE_REPLY_PREFIX)
+                || INVALID_VOTE_REPLY_ERRORS
+                    .iter()
+                    .any(|invalid| error.contains(invalid)) =>
+        {
+            (
+                BlockVoteOutcome::Refused,
+                None,
+                Some("invalid_vote_response".to_string()),
+            )
+        }
         Err(_) => (BlockVoteOutcome::NoAnswer, None, None),
     };
     BlockVoteObservation {
