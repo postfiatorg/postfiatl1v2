@@ -829,6 +829,10 @@ pub(super) fn parse_transport_block_proposal_response(
         .map_err(|error| format!("transport block proposal response parse failed: {error}"))
 }
 
+/// Prefix of the error for a vote request the peer answered with an explicit
+/// rejection, as opposed to a transport failure.
+pub(super) const TRANSPORT_BLOCK_VOTE_REFUSAL_PREFIX: &str = "transport block vote rejected by";
+
 pub(super) fn parse_transport_block_vote_response(
     line: &str,
 ) -> Result<TransportBlockVoteResponse, String> {
@@ -840,7 +844,7 @@ pub(super) fn parse_transport_block_vote_response(
         let rejection: TransportValidatorServeRejection = serde_json::from_str(line)
             .map_err(|error| format!("transport validator rejection parse failed: {error}"))?;
         return Err(format!(
-            "transport block vote rejected by `{}` for `{}`: {}",
+            "{TRANSPORT_BLOCK_VOTE_REFUSAL_PREFIX} `{}` for `{}`: {}",
             rejection.node_id, rejection.kind, rejection.error
         ));
     }

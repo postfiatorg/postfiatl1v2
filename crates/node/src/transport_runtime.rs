@@ -2135,7 +2135,12 @@ pub(super) fn transport_block_vote_request(
     timings.request_json_serde_ms += monotonic_elapsed_ms(stage_start);
 
     let (line, transport_connect_ms, transport_write_ms, transport_read_ms) =
-        transport_block_vote_request_exchange(&peer_address, &envelope_json, options.timeout_ms)?;
+        transport_block_vote_request_exchange(
+            &peer_address,
+            &envelope_json,
+            options.timeout_ms,
+            options.deadline,
+        )?;
     timings.transport_connect_ms = transport_connect_ms;
     timings.transport_write_ms = transport_write_ms;
     timings.transport_read_ms = transport_read_ms;
@@ -2266,7 +2271,7 @@ fn transport_block_proposal_request(
         .map_err(|error| format!("transport block proposal request serialization failed: {error}"))?;
     let peer_address = socket_address(&peer.host, peer.p2p_port);
     let (line, _, _, _) =
-        transport_block_vote_request_exchange(&peer_address, &request_json, timeout_ms)?;
+        transport_block_vote_request_exchange(&peer_address, &request_json, timeout_ms, None)?;
     let response = parse_transport_block_proposal_response(&line)?;
     validate_transport_block_proposal_response(
         &response,
@@ -2410,7 +2415,7 @@ fn transport_authenticated_health_request(
         Some(mut stream) => {
             let cached_result = (|| {
                 let (line, _, _) =
-                    transport_vote_exchange_on_stream(&mut stream, &request_json, timeout_ms)?;
+                    transport_vote_exchange_on_stream(&mut stream, &request_json, timeout_ms, None)?;
                 let response: TransportHealthResponseEnvelope = serde_json::from_str(&line)
                     .map_err(|error| format!("transport health response parse failed: {error}"))?;
                 validate_transport_health_response(
@@ -2436,7 +2441,7 @@ fn transport_authenticated_health_request(
     };
     set_stream_timeout(&stream, timeout_ms)?;
     let (line, _, _) =
-        transport_vote_exchange_on_stream(&mut stream, &request_json, timeout_ms)?;
+        transport_vote_exchange_on_stream(&mut stream, &request_json, timeout_ms, None)?;
     let response: TransportHealthResponseEnvelope = serde_json::from_str(&line)
         .map_err(|error| format!("transport health response parse failed: {error}"))?;
     validate_transport_health_response(
@@ -2531,15 +2536,33 @@ fn write_transport_frame(
         .map_err(|error| format!("{context} write failed: {error}"))
 }
 
+/// Socket timeout for the next operation of a vote request: `timeout_ms`,
+/// cut to what is left of `deadline`. Errors once the deadline has passed.
+fn vote_request_step_timeout_ms(timeout_ms: u64, deadline: Option<Instant>) -> Result<u64, String> {
+    let Some(deadline) = deadline else {
+        return Ok(timeout_ms);
+    };
+    let remaining_ms = deadline
+        .saturating_duration_since(Instant::now())
+        .as_millis()
+        .min(u128::from(u64::MAX)) as u64;
+    if remaining_ms == 0 {
+        return Err("transport block vote request deadline elapsed".to_string());
+    }
+    Ok(timeout_ms.min(remaining_ms))
+}
+
 fn transport_vote_exchange_on_stream(
     stream: &mut TcpStream,
     envelope_json: &str,
     timeout_ms: u64,
+    deadline: Option<Instant>,
 ) -> Result<(String, f64, f64), String> {
-    set_stream_timeout(stream, timeout_ms)?;
+    set_stream_timeout(stream, vote_request_step_timeout_ms(timeout_ms, deadline)?)?;
     let write_start = Instant::now();
     write_transport_frame(stream, envelope_json, "transport block vote request")?;
     let transport_write_ms = monotonic_elapsed_ms(write_start);
+    set_stream_timeout(stream, vote_request_step_timeout_ms(timeout_ms, deadline)?)?;
     let read_start = Instant::now();
     let line = read_transport_line(stream, "transport block vote response read")?;
     let transport_read_ms = monotonic_elapsed_ms(read_start);
@@ -2550,6 +2573,7 @@ fn transport_block_vote_request_exchange(
     peer_address: &str,
     envelope_json: &str,
     timeout_ms: u64,
+    deadline: Option<Instant>,
 ) -> Result<(String, f64, f64, f64), String> {
     let pool_enabled = persistent_vote_streams_enabled();
     if pool_enabled {
@@ -2560,7 +2584,12 @@ fn transport_block_vote_request_exchange(
                 .remove(peer_address)
         };
         if let Some(mut stream) = cached_stream {
-            match transport_vote_exchange_on_stream(&mut stream, envelope_json, timeout_ms) {
+            match transport_vote_exchange_on_stream(
+                &mut stream,
+                envelope_json,
+                timeout_ms,
+                deadline,
+            ) {
                 Ok((line, transport_write_ms, transport_read_ms)) => {
                     transport_vote_stream_pool()
                         .lock()
@@ -2577,12 +2606,14 @@ fn transport_block_vote_request_exchange(
     }
 
     let connect_start = Instant::now();
-    let mut stream =
-        connect_transport_stream(peer_address, timeout_ms, "transport block vote dial")?;
-    set_stream_timeout(&stream, timeout_ms)?;
+    let mut stream = connect_transport_stream(
+        peer_address,
+        vote_request_step_timeout_ms(timeout_ms, deadline)?,
+        "transport block vote dial",
+    )?;
     let transport_connect_ms = monotonic_elapsed_ms(connect_start);
     let (line, transport_write_ms, transport_read_ms) =
-        transport_vote_exchange_on_stream(&mut stream, envelope_json, timeout_ms)?;
+        transport_vote_exchange_on_stream(&mut stream, envelope_json, timeout_ms, deadline)?;
     if pool_enabled {
         transport_vote_stream_pool()
             .lock()
@@ -2613,6 +2644,7 @@ fn transport_block_vote_request_with_retries(
     retry_backoff_ms: u64,
     consensus_v2: Option<TransportConsensusV2VoteRequest>,
     local_status: Option<&StatusReport>,
+    phase: Option<&PeerVotePhase>,
 ) -> Result<TransportBlockVoteRequestReport, String> {
     if send_retries > MAX_TRANSPORT_SEND_RETRIES {
         return Err(format!(
@@ -2626,6 +2658,22 @@ fn transport_block_vote_request_with_retries(
     let retry_loop_start = Instant::now();
     let mut retry_sleep_ms_total = 0.0;
     for attempt in 1..=max_attempts {
+        if let Some(phase) = phase {
+            if phase.finished() {
+                return Err(format!(
+                    "{PEER_VOTE_PHASE_FINISHED}; vote request to `{to}` stopped after {} attempts",
+                    attempt - 1
+                ));
+            }
+            if phase.remaining().is_zero() {
+                retry_errors.push(format!("attempt {attempt}: vote phase deadline elapsed"));
+                return Err(format!(
+                    "transport block vote request to `{to}` reached the vote phase deadline after {} attempts: {}",
+                    attempt - 1,
+                    retry_errors.join("; ")
+                ));
+            }
+        }
         match transport_block_vote_request(TransportBlockVoteRequestOptions {
             data_dir: data_dir.clone(),
             topology_file: topology_file.clone(),
@@ -2637,6 +2685,7 @@ fn transport_block_vote_request_with_retries(
             vote_file: vote_file.clone(),
             block_height,
             timeout_ms,
+            deadline: phase.map(|phase| phase.deadline),
             consensus_v2: consensus_v2.clone(),
             local_status: local_status.cloned(),
         }) {
@@ -2650,22 +2699,103 @@ fn transport_block_vote_request_with_retries(
                 return Ok(report);
             }
             Err(error) => {
+                // An explicit refusal is the peer's answer for this round;
+                // asking again cannot change it and only holds the round.
+                let refused = error.starts_with(TRANSPORT_BLOCK_VOTE_REFUSAL_PREFIX);
                 retry_errors.push(format!("attempt {attempt}: {error}"));
-                if attempt == max_attempts {
+                if refused || attempt == max_attempts {
                     return Err(format!(
-                        "transport block vote request to `{to}` failed after {max_attempts} attempts: {}",
+                        "transport block vote request to `{to}` failed after {attempt} attempts{}: {}",
+                        if refused { " (refused, not retried)" } else { "" },
                         retry_errors.join("; ")
-                ));
+                    ));
                 }
-                if retry_backoff_ms > 0 {
+                let backoff = Duration::from_millis(retry_backoff_ms)
+                    .min(phase.map_or(Duration::MAX, PeerVotePhase::remaining));
+                if !backoff.is_zero() {
                     let sleep_start = Instant::now();
-                    std::thread::sleep(Duration::from_millis(retry_backoff_ms));
+                    std::thread::sleep(backoff);
                     retry_sleep_ms_total += monotonic_elapsed_ms(sleep_start);
                 }
             }
         }
     }
     Err("transport block vote request retry loop exited unexpectedly".to_string())
+}
+
+/// Overall deadline of one vote phase (prepare or precommit) in an
+/// early-quorum round, which is also the total time any one vote request in
+/// that phase may take: connect, write, read, the pooled-stream fallback and
+/// every retry. Rounds since release 5 finish in about 6 s end to end, and the
+/// slowest prepare measured (validator-2, 18 November) took about 14.3 s end
+/// to end; 20 s keeps that inside the deadline with margin. A phase without
+/// quorum at the deadline ends the round as a missing quorum always has: no
+/// certificate, a round error, and the caller releases the mempool lock. The
+/// lock is then held at most 20 s per phase instead of (retries + 1) x the
+/// transport timeout (17 x 20 s with the deployed 16 retries). All-votes
+/// rounds keep their configured `--timeout-ms` and no phase deadline.
+pub(super) const PEER_VOTE_PHASE_DEADLINE_MS: u64 = 20_000;
+
+/// Error prefix of a request stopped because its phase no longer needs it.
+const PEER_VOTE_PHASE_FINISHED: &str = "vote phase finished";
+
+/// Shared bound of the vote requests of one early-quorum phase.
+#[derive(Clone)]
+pub(super) struct PeerVotePhase {
+    deadline: Instant,
+    finished: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl PeerVotePhase {
+    fn start() -> Self {
+        Self {
+            deadline: Instant::now() + Duration::from_millis(PEER_VOTE_PHASE_DEADLINE_MS),
+            finished: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+
+    fn remaining(&self) -> Duration {
+        self.deadline.saturating_duration_since(Instant::now())
+    }
+
+    /// Stops retries of requests still outstanding; an attempt in flight ends
+    /// at its socket timeout, which the phase deadline bounds.
+    fn finish(&self) {
+        self.finished
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn finished(&self) -> bool {
+        self.finished.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// The checks `certify_consensus_v2_votes` applies to one vote, so the early
+/// stop counts only votes the QC will accept.
+fn consensus_v2_vote_counts_toward_quorum(
+    domain: &postfiat_types::ConsensusV2Domain,
+    validators: &postfiat_ordering_fast::ConsensusV2ValidatorSet,
+    proposal: &postfiat_types::ConsensusV2Proposal,
+    phase: postfiat_types::ConsensusV2Phase,
+    target: &str,
+    vote: &postfiat_types::ConsensusV2Vote,
+    counted: &BTreeSet<String>,
+) -> Result<(), String> {
+    postfiat_ordering_fast::verify_consensus_v2_vote(domain, validators, vote)
+        .map_err(|error| format!("vote from `{target}` is invalid: {error}"))?;
+    if vote.validator != target
+        || vote.round != proposal.round
+        || vote.phase != phase
+        || vote.block.as_ref() != Some(&proposal.block)
+    {
+        return Err(format!(
+            "vote from `{target}` does not match the round target"
+        ));
+    }
+    if counted.contains(&vote.validator) {
+        return Err(format!("duplicate vote from `{}`", vote.validator));
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2687,47 +2817,133 @@ fn collect_consensus_v2_precommit_votes(
         &local_status.node_id,
     )
     .map_err(|error| format!("local consensus v2 precommit failed: {error}"))?;
-    let outcomes = std::thread::scope(|scope| {
-        let mut handles = Vec::with_capacity(targets.len());
-        for target in targets {
-            let target = target.clone();
-            let data_dir = options.data_dir.clone();
-            let topology_file = options.topology_file.clone();
-            let batch_kind = Some(proposal.batch_kind.clone());
-            let batch_file = options.batch_file.clone();
-            let proposal_file = proposal_file.to_path_buf();
-            let timeout_certificate_file = options.timeout_certificate_file.clone();
-            let vote_file = vote_dir.join(format!("{target}.precommit.block_vote.json"));
-            let block_height = Some(proposal.block_height);
-            let timeout_ms = options.timeout_ms;
-            let send_retries = options.send_retries;
-            let retry_backoff_ms = options.retry_backoff_ms;
-            let consensus_v2 = Some(TransportConsensusV2VoteRequest {
-                phase: postfiat_types::ConsensusV2Phase::Precommit,
-                proposal: consensus_v2_proposal.clone(),
-                timeout_certificate: timeout_certificate.cloned(),
-                prepare_qc: Some(prepare_qc.clone()),
-            });
-            handles.push(scope.spawn(move || {
-                let result = transport_block_vote_request_with_retries(
-                    data_dir,
-                    topology_file,
-                    target.clone(),
-                    batch_kind,
-                    batch_file,
-                    proposal_file,
-                    timeout_certificate_file,
-                    vote_file,
-                    block_height,
-                    timeout_ms,
-                    send_retries,
-                    retry_backoff_ms,
-                    consensus_v2,
-                    Some(local_status),
-                );
-                (target, result)
-            }));
+    let quorum_early = options.allow_peer_failures || options.quorum_early_full_propagation;
+    let phase = quorum_early.then(PeerVotePhase::start);
+    let precommit_request = |target: &str| {
+        let consensus_v2 = Some(TransportConsensusV2VoteRequest {
+            phase: postfiat_types::ConsensusV2Phase::Precommit,
+            proposal: consensus_v2_proposal.clone(),
+            timeout_certificate: timeout_certificate.cloned(),
+            prepare_qc: Some(prepare_qc.clone()),
+        });
+        let data_dir = options.data_dir.clone();
+        let topology_file = options.topology_file.clone();
+        let batch_kind = Some(proposal.batch_kind.clone());
+        let batch_file = options.batch_file.clone();
+        let proposal_file = proposal_file.to_path_buf();
+        let timeout_certificate_file = options.timeout_certificate_file.clone();
+        let vote_file = vote_dir.join(format!("{target}.precommit.block_vote.json"));
+        let block_height = Some(proposal.block_height);
+        let timeout_ms = options.timeout_ms;
+        let send_retries = options.send_retries;
+        let retry_backoff_ms = options.retry_backoff_ms;
+        let target = target.to_string();
+        let local_status = local_status.clone();
+        let phase = phase.clone();
+        let height = proposal.block_height;
+        move || {
+            let result = transport_block_vote_request_with_retries(
+                data_dir,
+                topology_file,
+                target.clone(),
+                batch_kind,
+                batch_file,
+                proposal_file,
+                timeout_certificate_file,
+                vote_file,
+                block_height,
+                timeout_ms,
+                send_retries,
+                retry_backoff_ms,
+                consensus_v2,
+                Some(&local_status),
+                phase.as_ref(),
+            );
+            if let Err(error) = &result {
+                if !error.starts_with(PEER_VOTE_PHASE_FINISHED) {
+                    eprintln!(
+                        "WARN consensus v2 precommit vote from `{target}` at height {height} failed: {error}"
+                    );
+                }
+            }
+            (target, result)
         }
+    };
+    let mut votes = vec![local_vote];
+    if let Some(phase) = phase.as_ref() {
+        // Stop at the quorum the precommit QC requires (certify_consensus_v2_votes),
+        // counting only votes that pass its checks, or at the phase deadline.
+        // Outstanding requests then stop retrying; a late validator receives
+        // the block via certified delivery.
+        let (domain, validators) = live_consensus_v2_context(&options.data_dir)
+            .map_err(|error| format!("consensus v2 precommit context failed: {error}"))?;
+        let mut counted = votes
+            .iter()
+            .map(|vote| vote.validator.clone())
+            .collect::<BTreeSet<_>>();
+        let (sender, receiver) = mpsc::channel();
+        for target in targets {
+            let request = precommit_request(target);
+            let sender = sender.clone();
+            let _ = std::thread::spawn(move || {
+                let _ = sender.send(request());
+            });
+        }
+        drop(sender);
+        let countable = |target: String,
+                         result: Result<TransportBlockVoteRequestReport, String>,
+                         counted: &BTreeSet<String>| {
+            let vote = result.ok()?.response.consensus_v2_vote?;
+            match consensus_v2_vote_counts_toward_quorum(
+                &domain,
+                &validators,
+                consensus_v2_proposal,
+                postfiat_types::ConsensusV2Phase::Precommit,
+                &target,
+                &vote,
+                counted,
+            ) {
+                Ok(()) => Some(vote),
+                Err(error) => {
+                    eprintln!(
+                        "WARN consensus v2 precommit vote at height {} not counted: {error}",
+                        proposal.block_height
+                    );
+                    None
+                }
+            }
+        };
+        let mut pending = targets.len();
+        while pending > 0 && counted.len() < validators.quorum {
+            match receiver.recv_timeout(phase.remaining()) {
+                Ok((target, result)) => {
+                    pending -= 1;
+                    if let Some(vote) = countable(target, result, &counted) {
+                        counted.insert(vote.validator.clone());
+                        votes.push(vote);
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => break,
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    phase.finish();
+                    return Err("consensus v2 precommit workers exited before quorum".to_string());
+                }
+            }
+        }
+        while let Ok((target, result)) = receiver.try_recv() {
+            if let Some(vote) = countable(target, result, &counted) {
+                counted.insert(vote.validator.clone());
+                votes.push(vote);
+            }
+        }
+        phase.finish();
+        return Ok(votes);
+    }
+    let outcomes = std::thread::scope(|scope| {
+        let handles = targets
+            .iter()
+            .map(|target| scope.spawn(precommit_request(target)))
+            .collect::<Vec<_>>();
         handles
             .into_iter()
             .map(|handle| {
@@ -2737,19 +2953,12 @@ fn collect_consensus_v2_precommit_votes(
             })
             .collect::<Result<Vec<_>, String>>()
     })?;
-    let mut votes = vec![local_vote];
     for (target, result) in outcomes {
-        match result {
-            Ok(report) => {
-                let vote = report.response.consensus_v2_vote.ok_or_else(|| {
-                    format!("validator `{target}` omitted consensus v2 precommit vote")
-                })?;
-                votes.push(vote);
-            }
-            Err(_error)
-                if options.allow_peer_failures || options.quorum_early_full_propagation => {}
-            Err(error) => return Err(error),
-        }
+        let vote = result?
+            .response
+            .consensus_v2_vote
+            .ok_or_else(|| format!("validator `{target}` omitted consensus v2 precommit vote"))?;
+        votes.push(vote);
     }
     Ok(votes)
 }
@@ -3406,6 +3615,7 @@ pub(super) fn transport_peer_certified_batch_round(
     // collects their answers up to the round deadline (SCT-08 item 4).
     let mut late_vote_receiver = None;
     let vote_request_outcomes = if quorum_early_vote_collection {
+        let prepare_phase = PeerVotePhase::start();
         let (sender, receiver) = mpsc::channel();
         let mut pending = targets.iter().cloned().collect::<BTreeSet<_>>();
         // The current sync transport has no cancellable request primitive. In
@@ -3435,6 +3645,7 @@ pub(super) fn transport_peer_certified_batch_round(
             });
             let sender = sender.clone();
             let local_status = local_status.clone();
+            let phase = prepare_phase.clone();
             let _ = std::thread::spawn(move || {
                 let vote_request_start = Instant::now();
                 let result = transport_block_vote_request_with_retries(
@@ -3452,6 +3663,7 @@ pub(super) fn transport_peer_certified_batch_round(
                     retry_backoff_ms,
                     consensus_v2,
                     Some(&local_status),
+                    Some(&phase),
                 );
                 let _ = sender.send(TransportPeerVoteRequestOutcome {
                     target,
@@ -3466,9 +3678,15 @@ pub(super) fn transport_peer_certified_batch_round(
         let mut outcomes = Vec::with_capacity(targets.len());
         let mut successful_remote_votes = 0usize;
         while !pending.is_empty() {
-            let outcome = receiver
-                .recv()
-                .map_err(|_| "peer block vote request workers exited before quorum".to_string())?;
+            // At the phase deadline the unanswered peers stay unresolved and
+            // the prepare certificate below fails for lack of quorum.
+            let outcome = match receiver.recv_timeout(prepare_phase.remaining()) {
+                Ok(outcome) => outcome,
+                Err(mpsc::RecvTimeoutError::Timeout) => break,
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err("peer block vote request workers exited before quorum".to_string())
+                }
+            };
             pending.remove(&outcome.target);
             if outcome.result.is_ok() {
                 successful_remote_votes = successful_remote_votes.saturating_add(1);
@@ -3528,6 +3746,7 @@ pub(super) fn transport_peer_certified_batch_round(
                         retry_backoff_ms,
                         consensus_v2,
                         Some(&local_status),
+                        None,
                     );
                     TransportPeerVoteRequestOutcome {
                         target,

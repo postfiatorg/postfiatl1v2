@@ -423,6 +423,7 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
                 vote_file: PathBuf::from(vote_file),
                 block_height,
                 timeout_ms,
+                deadline: None,
                 consensus_v2: None,
                 local_status: None,
             })?;

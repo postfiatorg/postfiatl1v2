@@ -394,6 +394,10 @@ struct TransportBlockVoteRequestOptions {
     vote_file: PathBuf,
     block_height: Option<u64>,
     timeout_ms: u64,
+    /// Total deadline for this request across connect, write, read and the
+    /// pooled-stream fallback. Early-quorum rounds set it to the vote phase
+    /// deadline; `None` keeps `timeout_ms` per socket operation.
+    deadline: Option<Instant>,
     consensus_v2: Option<TransportConsensusV2VoteRequest>,
     /// Status already read by the caller for this round. Only identity fields
     /// (node id, chain id, genesis hash, protocol version) are used here, and they
