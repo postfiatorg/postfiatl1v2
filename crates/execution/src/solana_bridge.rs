@@ -537,6 +537,65 @@ mod tests {
         assert!(route.handoff_successor(&journal).is_err());
     }
     #[test]
+    fn solana_release_handoff_proofs_advance_two_epochs() {
+        let (genesis, mut ledger, mut route, _) = setup();
+        let anchor = SolanaLightClient {
+            epoch: 5,
+            validator_set_hash: "2aaf446972f5d12e0a090aa6c61b337676e54a90f3632524f43863830a57d7e2"
+                .into(),
+            total_stake: "100".into(),
+            known_key_table_hash:
+                "ee71934093715c8b6a08168ab84173cd6d910179471d39dd7e5dc16ba7557595".into(),
+            handoff: None,
+        };
+        let pins = route.profile.solana.as_mut().unwrap();
+        pins.anchor = anchor.clone();
+        pins.anchor_slot = 320;
+        pins.slots_per_epoch = 64;
+        pins.recorder_program = "11".repeat(32);
+        pins.handoff_program_vkey = postfiat_types::SOLANA_RELEASE_HANDOFF_VKEY.into();
+        route.client = anchor;
+        let hash = route.profile.profile_hash().unwrap();
+        ledger.solana_route = Some(route);
+        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../node/testdata/solana-bridge/ranked");
+        for (epoch, total) in [(6, "100"), (7, "105")] {
+            let operation = SolanaProofOperation {
+                submitter: format!("pf{}", "0b".repeat(20)),
+                profile_hash: hash.clone(),
+                proof_kind: postfiat_types::SOLANA_HANDOFF_PROOF.into(),
+                proof: std::fs::read(directory.join(format!("epoch-{epoch}.groth16"))).unwrap(),
+                public_values: std::fs::read(directory.join(format!("epoch-{epoch}.values")))
+                    .unwrap(),
+            };
+            apply_proof(
+                &genesis,
+                &mut ledger,
+                &operation,
+                10,
+                AssetExecutionCompatibility::strict(),
+                &[],
+            )
+            .unwrap();
+            let client = &ledger.solana_route.as_ref().unwrap().client;
+            assert_eq!((client.epoch, client.total_stake.as_str()), (epoch, total));
+            assert_eq!(client.handoff.as_ref().unwrap().listed_stake, 100);
+            let before = ledger.clone();
+            let error = apply_proof(
+                &genesis,
+                &mut ledger,
+                &operation,
+                10,
+                AssetExecutionCompatibility::strict(),
+                &[],
+            )
+            .unwrap_err();
+            assert_eq!(error.0, "invalid_solana_handoff");
+            assert_eq!(ledger, before);
+        }
+    }
+
+    #[test]
     fn solana_pinned_guest_journals_match_release_admission() {
         use guest::handoff::{HandoffPublicValues, RecorderContext};
         use pfusdc_sol_ingress_program as guest;
