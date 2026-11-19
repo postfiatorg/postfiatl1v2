@@ -1512,46 +1512,75 @@ pub(super) fn transport_batch_ack(
 
 fn delivery_batch_id(envelope: &TransportBatchEnvelope) -> Result<String, String> {
     #[derive(serde::Deserialize)]
-    struct Identity { batch_id: String }
+    struct Identity {
+        batch_id: String,
+    }
     serde_json::from_str::<Identity>(&envelope.payload_json)
         .map(|payload| payload.batch_id)
         .map_err(|e| format!("certified delivery batch identity: {e}"))
 }
 
-pub(super) fn is_ordered_batch_duplicate(error: &str, envelope: &TransportBatchEnvelope) -> Result<bool, String> {
+pub(super) fn is_ordered_batch_duplicate(
+    error: &str,
+    envelope: &TransportBatchEnvelope,
+) -> Result<bool, String> {
     if !error.starts_with("storage_duplicate_record: ") {
         return Ok(false);
     }
     let id = delivery_batch_id(envelope)?;
-    Ok(error == format!("storage_duplicate_record: ordered batch `{id}` already exists")
-        || error == format!("storage_duplicate_record: ordered batch '{id}' already exists"))
+    Ok(
+        error == format!("storage_duplicate_record: ordered batch `{id}` already exists")
+            || error == format!("storage_duplicate_record: ordered batch '{id}' already exists"),
+    )
 }
 
 fn delivery_block(store: &postfiat_storage::NodeStore, height: u64) -> Result<BlockRecord, String> {
-    let block = if store.transactional_storage_active().map_err(|e| e.to_string())? {
-        store.transactional_store().and_then(|db| db.block(height)).map_err(|e| e.to_string())?
+    let block = if store
+        .transactional_storage_active()
+        .map_err(|e| e.to_string())?
+    {
+        store
+            .transactional_store()
+            .and_then(|db| db.block(height))
+            .map_err(|e| e.to_string())?
     } else {
-        store.read_blocks().map_err(|e| e.to_string())?.blocks.into_iter()
+        store
+            .read_blocks()
+            .map_err(|e| e.to_string())?
+            .blocks
+            .into_iter()
             .find(|block| block.header.height == height)
     };
-    block.ok_or_else(|| format!("certified delivery conflicts with certified height/hash: missing block {height}"))
+    block.ok_or_else(|| {
+        format!("certified delivery conflicts with certified height/hash: missing block {height}")
+    })
 }
 
 pub(super) fn certified_delivery_response(
-    line: &str, data_dir: &Path, topology: &NetworkTopology, sender: &StatusReport,
-    target: &str, envelope: &TransportBatchEnvelope,
+    line: &str,
+    data_dir: &Path,
+    topology: &NetworkTopology,
+    sender: &StatusReport,
+    target: &str,
+    envelope: &TransportBatchEnvelope,
 ) -> Result<TransportBatchAck, String> {
     if transport_envelope_schema(line)? != "postfiat-transport-validator-serve-rejection-v1" {
         return parse_transport_batch_ack(line);
     }
     let rejection: TransportValidatorServeRejection = serde_json::from_str(line)
         .map_err(|e| format!("transport validator rejection parse failed: {e}"))?;
-    let Some(detail) = rejection.error.strip_prefix("transport batch service apply failed: ") else {
+    let Some(detail) = rejection
+        .error
+        .strip_prefix("transport batch service apply failed: ")
+    else {
         return parse_transport_batch_ack(line);
     };
-    if rejection.kind != "batch" || rejection.node_id != target
-        || rejection.topology_id != topology.topology_id || rejection.state.node_id != target
-        || !is_ordered_batch_duplicate(detail, envelope)? {
+    if rejection.kind != "batch"
+        || rejection.node_id != target
+        || rejection.topology_id != topology.topology_id
+        || rejection.state.node_id != target
+        || !is_ordered_batch_duplicate(detail, envelope)?
+    {
         return parse_transport_batch_ack(line);
     }
     validate_transport_hello(&rejection.state, topology, sender)?;
@@ -1560,33 +1589,49 @@ pub(super) fn certified_delivery_response(
     let store = postfiat_storage::NodeStore::new(data_dir);
     let peer = rejection.state;
     let mut ack = transport_already_applied_ack(data_dir, topology, target, envelope, sender)?;
-    let certified = ack.certified_state.as_ref().ok_or("missing certified delivery state")?;
+    let certified = ack
+        .certified_state
+        .as_ref()
+        .ok_or("missing certified delivery state")?;
     if peer.block_height < certified.block_height {
         return Err("legacy duplicate peer is behind the certified delivery".into());
     }
     let anchor = if peer.block_height > sender.block_height {
         // The sender cannot anchor this later peer tip in its own finalized history.
         // Query exactly the delivered height on that peer's configured read endpoint.
-        let target_peer = topology.peer(target).ok_or("unknown certified delivery peer")?;
+        let target_peer = topology
+            .peer(target)
+            .ok_or("unknown certified delivery peer")?;
         let address = socket_address(&target_peer.host, target_peer.rpc_port);
-        let mut stream = connect_transport_stream(&address, 30_000, "legacy duplicate block lookup")?;
+        let mut stream =
+            connect_transport_stream(&address, 30_000, "legacy duplicate block lookup")?;
         set_stream_timeout(&stream, 30_000)?;
         let id = &envelope.frame.message_id;
-        let request = RpcRequest::new(id.as_str(), "blocks", serde_json::json!({"from_height":certified.block_height, "limit":1}));
+        let request = RpcRequest::new(
+            id.as_str(),
+            "blocks",
+            serde_json::json!({"from_height":certified.block_height, "limit":1}),
+        );
         write_json_line(&mut stream, &request)?;
         let line = read_transport_line(&stream, "legacy duplicate peer block")?;
         let response: RpcResponse = serde_json::from_str(&line).map_err(|e| e.to_string())?;
         response.validate_protocol().map_err(|e| e.to_string())?;
         let blocks: Vec<BlockRecord> = response.result_as().map_err(|e| e.to_string())?;
-        if response.id != *id || blocks.len() != 1 || blocks[0].header.height != certified.block_height
-            || blocks[0].header.block_hash != certified.block_tip_hash || blocks[0].header.state_root != certified.state_root {
+        if response.id != *id
+            || blocks.len() != 1
+            || blocks[0].header.height != certified.block_height
+            || blocks[0].header.block_hash != certified.block_tip_hash
+            || blocks[0].header.state_root != certified.state_root
+        {
             return Err("legacy duplicate historical block conflicts with delivery".into());
         }
         None
     } else {
         Some(delivery_block(&store, peer.block_height)?)
     };
-    if anchor.is_some_and(|b| b.header.block_hash != peer.block_tip_hash || b.header.state_root != peer.state_root) {
+    if anchor.is_some_and(|b| {
+        b.header.block_hash != peer.block_tip_hash || b.header.state_root != peer.state_root
+    }) {
         return Err("legacy duplicate peer block conflicts with finalized hash/root".into());
     }
     ack.state = peer;
@@ -1611,26 +1656,38 @@ pub(super) fn transport_already_applied_ack(
     let store = postfiat_storage::NodeStore::new(data_dir);
     let block = delivery_block(&store, certificate.block_height)?;
     let header = &block.header;
-    if header.batch_id != batch_id || header.batch_kind != envelope.batch_kind
-        || certificate.chain_id != state_after.chain_id || certificate.genesis_hash != state_after.genesis_hash
+    if header.batch_id != batch_id
+        || header.batch_kind != envelope.batch_kind
+        || certificate.chain_id != state_after.chain_id
+        || certificate.genesis_hash != state_after.genesis_hash
         || certificate.protocol_version != state_after.protocol_version
-        || header.certificate_id != certificate.certificate_id || header.certificate != certificate.certificate
-        || header.view != certificate.view || header.proposer != certificate.proposer
+        || header.certificate_id != certificate.certificate_id
+        || header.certificate != certificate.certificate
+        || header.view != certificate.view
+        || header.proposer != certificate.proposer
         || header.consensus_v2_commit != certificate.consensus_v2_commit
-        || certificate.block_hash.as_ref().is_some_and(|hash| hash != &header.block_hash)
-        || certificate.consensus_v2_commit.as_ref().is_some_and(|commit| {
-            let reference = &commit.proposal.block;
-            reference.height != header.height || reference.block_id != header.block_hash
-                || reference.state_root != header.state_root
-        })
+        || certificate
+            .block_hash
+            .as_ref()
+            .is_some_and(|hash| hash != &header.block_hash)
+        || certificate
+            .consensus_v2_commit
+            .as_ref()
+            .is_some_and(|commit| {
+                let reference = &commit.proposal.block;
+                reference.height != header.height
+                    || reference.block_id != header.block_hash
+                    || reference.state_root != header.state_root
+            })
     {
         return Err(format!(
             "already-applied batch `{batch_id}` conflicts with certified height/hash"
         ));
     }
-    if state_after.block_height < block.header.height || state_after.block_height == block.header.height
-        && (state_after.state_root != block.header.state_root
-            || state_after.block_tip_hash != block.header.block_hash)
+    if state_after.block_height < block.header.height
+        || state_after.block_height == block.header.height
+            && (state_after.state_root != block.header.state_root
+                || state_after.block_tip_hash != block.header.block_hash)
     {
         return Err(format!(
             "already-applied batch `{batch_id}` conflicts with current height/root"
@@ -1642,21 +1699,51 @@ pub(super) fn transport_already_applied_ack(
             "already-applied batch `{batch_id}` has no recorded receipts"
         ));
     }
-    let receipts = if store.transactional_storage_active().map_err(|e| e.to_string())? {
-        let db = store.transactional_store().map_err(|e| e.to_string())?;
-        let archived = db.archived_batch(&envelope.batch_kind, &batch_id)
-            .map_err(|e| e.to_string())?.ok_or("missing certified delivery batch archive")?;
-        if serde_json::from_str::<serde_json::Value>(&archived.payload_json).map_err(|e| e.to_string())?
-            != serde_json::from_str::<serde_json::Value>(&envelope.payload_json).map_err(|e| e.to_string())? {
-            return Err("certified delivery payload conflicts with stored batch".into());
-        }
-        block.receipt_ids.iter().map(|id| db.receipt_at_height(id, header.height)
-            .map_err(|e| e.to_string())?.ok_or_else(|| format!("already-applied receipt `{id}` is missing")))
+    let transactional = store
+        .transactional_storage_active()
+        .map_err(|e| e.to_string())?
+        .then(|| store.transactional_store())
+        .transpose()
+        .map_err(|e| e.to_string())?;
+    let archived = if let Some(db) = &transactional {
+        db.archived_batch(&envelope.batch_kind, &batch_id)
+            .map_err(|e| e.to_string())?
+    } else {
+        store
+            .read_batch_archive()
+            .map_err(|e| e.to_string())?
+            .batches
+            .into_iter()
+            .find(|entry| entry.batch_id == batch_id && entry.batch_kind == envelope.batch_kind)
+    }
+    .ok_or("missing certified delivery batch archive")?;
+    if serde_json::from_str::<serde_json::Value>(&archived.payload_json)
+        .map_err(|e| e.to_string())?
+        != serde_json::from_str::<serde_json::Value>(&envelope.payload_json)
+            .map_err(|e| e.to_string())?
+    {
+        return Err("certified delivery payload conflicts with stored batch".into());
+    }
+    let receipts = if let Some(db) = transactional {
+        block
+            .receipt_ids
+            .iter()
+            .map(|id| {
+                db.receipt_at_height(id, header.height)
+                    .map_err(|e| e.to_string())?
+                    .ok_or_else(|| format!("already-applied receipt `{id}` is missing"))
+            })
             .collect::<Result<Vec<_>, _>>()?
     } else {
-        store.read_receipts().map_err(|error| format!("already-applied receipt read failed: {error}"))?
+        store
+            .read_receipts()
+            .map_err(|error| format!("already-applied receipt read failed: {error}"))?
     };
-    let wanted = block.receipt_ids.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    let wanted = block
+        .receipt_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
     let mut outcomes = std::collections::BTreeMap::new();
     for receipt in &receipts {
         if wanted.contains(receipt.tx_id.as_str())
@@ -1817,12 +1904,12 @@ pub(super) fn write_transport_batch_payload(
     std::fs::create_dir_all(&inbox_dir)
         .map_err(|error| format!("transport inbox create failed: {error}"))?;
     let batch_file = inbox_dir.join(format!("{}.batch.json", envelope.frame.message_id));
-    std::fs::write(&batch_file, envelope.payload_json.as_bytes())
+    postfiat_storage::atomic_write(&batch_file, envelope.payload_json.as_bytes())
         .map_err(|error| format!("transport batch payload write failed: {error}"))?;
     let certificate_file = if let Some(certificate_json) = envelope.certificate_json.as_ref() {
         let certificate_file =
             inbox_dir.join(format!("{}.certificate.json", envelope.frame.message_id));
-        std::fs::write(&certificate_file, certificate_json.as_bytes())
+        postfiat_storage::atomic_write(&certificate_file, certificate_json.as_bytes())
             .map_err(|error| format!("transport batch certificate write failed: {error}"))?;
         Some(certificate_file)
     } else {
@@ -2746,6 +2833,16 @@ mod transport_cli_tests {
             payload_json: serde_json::json!({"batch_id": "batch-1"}).to_string(),
             certificate_json: Some(certificate.to_string()),
         };
+        postfiat_storage::NodeStore::new(&root)
+            .write_batch_archive(&postfiat_types::BatchArchive {
+                batches: vec![postfiat_types::BatchArchiveEntry {
+                    batch_kind: envelope.batch_kind.clone(),
+                    batch_id: "batch-1".into(),
+                    payload_hash: "fixture".into(),
+                    payload_json: envelope.payload_json.clone(),
+                }],
+            })
+            .unwrap();
         (
             root,
             test_topology("127.0.0.1"),
@@ -2757,14 +2854,30 @@ mod transport_cli_tests {
     #[test]
     fn transport_duplicate_requires_exact_batch_and_certificate() {
         let (dir, topology, status, mut env) = already_applied_test_fixture(10);
-        assert!(is_ordered_batch_duplicate("storage_duplicate_record: ordered batch `batch-1` already exists", &env).unwrap());
-        assert!(!is_ordered_batch_duplicate("storage_duplicate_record: ordered batch `batch-10` already exists", &env).unwrap());
-        let cert: serde_json::Value = serde_json::from_str(env.certificate_json.as_ref().unwrap()).unwrap();
+        assert!(
+            is_ordered_batch_duplicate(
+                "storage_duplicate_record: ordered batch `batch-1` already exists",
+                &env
+            )
+            .unwrap()
+        );
+        assert!(
+            !is_ordered_batch_duplicate(
+                "storage_duplicate_record: ordered batch `batch-10` already exists",
+                &env
+            )
+            .unwrap()
+        );
+        let cert: serde_json::Value =
+            serde_json::from_str(env.certificate_json.as_ref().unwrap()).unwrap();
         for field in ["certificate_id", "block_hash", "genesis_hash"] {
             let mut conflict = cert.clone();
             conflict[field] = "conflict".into();
             env.certificate_json = Some(conflict.to_string());
-            assert!(transport_already_applied_ack(&dir, &topology, "validator-0", &env, &status).is_err());
+            assert!(
+                transport_already_applied_ack(&dir, &topology, "validator-0", &env, &status)
+                    .is_err()
+            );
         }
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -2779,7 +2892,16 @@ mod transport_cli_tests {
             "error":"transport batch service apply failed: storage_duplicate_record: ordered batch `batch-1` already exists",
             "state":transport_hello(&topology, &receiver)
         });
-        let response = |r: &serde_json::Value| certified_delivery_response(&r.to_string(), &dir, &topology, &sender, "validator-0", &envelope);
+        let response = |r: &serde_json::Value| {
+            certified_delivery_response(
+                &r.to_string(),
+                &dir,
+                &topology,
+                &sender,
+                "validator-0",
+                &envelope,
+            )
+        };
         let ack = response(&rejection).unwrap();
         validate_transport_batch_ack(&ack, &topology, &sender, "validator-0", &envelope).unwrap();
         assert!(ack.applied && ack.already_applied);
@@ -3408,36 +3530,56 @@ mod transport_cli_tests {
         )
         .expect("parse fresh block proposal");
         let topology = read_topology_file(&topology_file).expect("read derived hash topology");
-        let expected = durable_certified_send_expected_block_hash(
-            &topology,
-            &proposal,
-            &certificate,
-        )
-        .expect("derive expected block hash");
+        let expected =
+            durable_certified_send_expected_block_hash(&topology, &proposal, &certificate)
+                .expect("derive expected block hash");
         copy_dir_all(&data_dir, &recovery_data_dir);
         // Forward the first authenticated frame to the real receiving service and
         // discard its successful reply. The sending retry sees an empty connection.
         let server_dir = data_dir.clone();
         let server_topology = topology.clone();
         let server = std::thread::spawn(move || {
-            let status = status(NodeOptions { data_dir: server_dir.clone() }).unwrap();
+            let status = status(NodeOptions {
+                data_dir: server_dir.clone(),
+            })
+            .unwrap();
             let (first, _) = listener.accept().unwrap();
             let frame = read_transport_line(&first, "test proxy").unwrap();
             let backend = TcpListener::bind(("127.0.0.1", 0)).unwrap();
             let mut proxy = TcpStream::connect(backend.local_addr().unwrap()).unwrap();
             writeln!(proxy, "{frame}").unwrap();
             let (mut service, _) = backend.accept().unwrap();
-            let first_ack = handle_transport_batch_service_connection(&mut service, &server_dir, &server_topology, &status).unwrap();
+            let first_ack = handle_transport_batch_service_connection(
+                &mut service,
+                &server_dir,
+                &server_topology,
+                &status,
+            )
+            .unwrap();
             assert!(first_ack.applied && !first_ack.already_applied);
             drop(first);
             let (mut retry, _) = listener.accept().unwrap();
-            let replay = handle_transport_batch_service_connection(&mut retry, &server_dir, &server_topology, &status).unwrap();
+            let replay = handle_transport_batch_service_connection(
+                &mut retry,
+                &server_dir,
+                &server_topology,
+                &status,
+            )
+            .unwrap();
             assert!(replay.already_applied);
         });
         let sent = transport_batch_send_with_retries(
-            data_dir.clone(), topology_file.clone(), DEFAULT_NODE_ID.to_owned(), None, batch_file,
-            Some(artifact_dir.join("block-certificate.json")), 5_000, 1, 0,
-        ).unwrap();
+            data_dir.clone(),
+            topology_file.clone(),
+            DEFAULT_NODE_ID.to_owned(),
+            None,
+            batch_file,
+            Some(artifact_dir.join("block-certificate.json")),
+            5_000,
+            1,
+            0,
+        )
+        .unwrap();
         server.join().unwrap();
         assert_eq!(sent.attempts, 2);
         assert!(sent.ack.already_applied && sent.ack.accepted_count == 1);
