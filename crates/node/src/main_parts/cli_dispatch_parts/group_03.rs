@@ -374,6 +374,16 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 .unwrap_or("25")
                 .parse::<u64>()
                 .map_err(|_| "--finality-retry-backoff-ms must be a u64".to_string())?;
+            let finality_vote_phase_deadline_ms =
+                flag_value(flags, "--finality-vote-phase-deadline-ms")
+                    .map(str::to_string)
+                    .unwrap_or_else(|| PEER_VOTE_PHASE_DEADLINE_MS.to_string())
+                    .parse::<u64>()
+                    .ok()
+                    .filter(|deadline_ms| *deadline_ms > 0)
+                    .ok_or_else(|| {
+                        "--finality-vote-phase-deadline-ms must be a positive u64".to_string()
+                    })?;
             let finality_quorum_early_full_propagation =
                 flag_present(flags, "--finality-quorum-early-full-propagation");
             let max_mempool_submit_per_peer = flag_value(flags, "--max-mempool-submit-per-peer")
@@ -468,6 +478,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                     finality_timeout_ms,
                     finality_send_retries,
                     finality_retry_backoff_ms,
+                    finality_vote_phase_deadline_ms,
                     finality_quorum_early_full_propagation,
                     max_mempool_submit_per_peer,
                     max_mempool_submit_total,

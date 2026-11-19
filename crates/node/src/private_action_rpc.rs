@@ -407,6 +407,7 @@ mod private_action_rpc_tests {
             finality_timeout_ms: 2_000,
             finality_send_retries: 0,
             finality_retry_backoff_ms: 0,
+            finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
             finality_quorum_early_full_propagation: true,
             max_mempool_submit_per_peer: 8,
             max_mempool_submit_total: 32,

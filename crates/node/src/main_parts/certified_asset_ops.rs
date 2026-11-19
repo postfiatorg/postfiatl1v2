@@ -901,6 +901,7 @@ fn certified_asset_ops_batch(options: CertifiedAssetOpsBatchOptions) -> Result<C
             timeout_ms: options.timeout_ms,
             send_retries: options.send_retries,
             retry_backoff_ms: options.retry_backoff_ms,
+            vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
             local_apply_before_certified_send: options.local_apply_before_certified_send,
             defer_certified_sends: options.defer_certified_sends,
             required_parent: None,

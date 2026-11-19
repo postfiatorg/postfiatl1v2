@@ -902,6 +902,8 @@ struct TransportPeerCertifiedBatchRoundOptions {
     timeout_ms: u64,
     send_retries: usize,
     retry_backoff_ms: u64,
+    /// Deadline of each vote phase in an early-quorum round.
+    vote_phase_deadline_ms: u64,
     local_apply_before_certified_send: bool,
     defer_certified_sends: bool,
     commit_processed_dir: Option<PathBuf>,
@@ -925,6 +927,8 @@ struct TransportPeerCertifiedMempoolRoundOptions {
     timeout_ms: u64,
     send_retries: usize,
     retry_backoff_ms: u64,
+    /// Deadline of each vote phase in an early-quorum round.
+    vote_phase_deadline_ms: u64,
     local_apply_before_certified_send: bool,
     defer_certified_sends: bool,
     max_transactions: usize,
@@ -3496,6 +3500,7 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
                 timeout_ms: options.timeout_ms,
                 send_retries: options.send_retries,
                 retry_backoff_ms: options.retry_backoff_ms,
+                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 local_apply_before_certified_send: options.local_apply_before_certified_send,
                 defer_certified_sends: options.defer_certified_sends,
                 max_transactions: 1,

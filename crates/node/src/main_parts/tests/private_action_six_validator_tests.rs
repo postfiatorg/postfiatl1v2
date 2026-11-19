@@ -619,6 +619,7 @@ mod private_action_six_validator_tests {
                 timeout_ms: 30_000,
                 send_retries: 2,
                 retry_backoff_ms: 50,
+                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 local_apply_before_certified_send: true,
                 defer_certified_sends: false,
                 commit_processed_dir: None,

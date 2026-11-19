@@ -111,6 +111,7 @@ fn rpc_serve_offer_preview_reuses_live_redb_handle() {
                 finality_timeout_ms: 10_000,
                 finality_send_retries: 0,
                 finality_retry_backoff_ms: 0,
+                finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 finality_quorum_early_full_propagation: false,
                 max_mempool_submit_per_peer: 8,
                 max_mempool_submit_total: 8,
