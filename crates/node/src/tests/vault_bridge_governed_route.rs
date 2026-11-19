@@ -3435,3 +3435,6 @@ fn burn_bundle_uses_governed_source_series_balance() {
     assert!(vault_bridge_burn_to_redeem_bundle(options).unwrap_err().to_string().contains("duplicate source-series"));
     let _ = fs::remove_dir_all(data_dir);
 }
+
+#[path = "solana_bridge_tests.rs"]
+mod solana_bridge;
