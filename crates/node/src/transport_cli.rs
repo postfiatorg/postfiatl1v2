@@ -1186,6 +1186,24 @@ fn certified_send_disposable_file_is_canonical(name: &str) -> bool {
         || ["batch.json", "certificate.json", "job.json"]
             .iter()
             .any(|target| certified_send_atomic_temp_name_is_canonical(name, target))
+        || certified_send_deferred_report_name_is_canonical(name)
+}
+
+/// `spawn_deferred_certified_batch_send` leaves `<target>.send.json` and
+/// `<target>.send.err` beside the job. A completed job keeps them when it is retained,
+/// so cleanup must recognise them instead of failing the round that triggered it.
+fn certified_send_deferred_report_name_is_canonical(name: &str) -> bool {
+    let Some(target) = name
+        .strip_suffix(".send.json")
+        .or_else(|| name.strip_suffix(".send.err"))
+    else {
+        return false;
+    };
+    !target.is_empty()
+        && target.len() <= 128
+        && target
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
 }
 
 #[cfg(unix)]
@@ -4239,5 +4257,20 @@ mod certified_send_durability_tests {
         assert!(!interrupted_destination.exists());
 
         std::fs::remove_dir_all(root).expect("cleanup completed-retention test");
+    }
+}
+
+#[cfg(test)]
+mod certified_send_deferred_report_tests {
+    use super::certified_send_disposable_file_is_canonical as canonical;
+
+    #[test]
+    fn deferred_send_reports_are_disposable_and_other_names_are_not() {
+        for name in ["batch.json", "certificate.json", "job.json", "validator-1.send.json", "validator-5.send.err"] {
+            assert!(canonical(name), "{name}");
+        }
+        for name in [".send.json", "../x.send.json", "a/b.send.err", "validator-1.send.json.bak", "notes.txt", "validator 1.send.json"] {
+            assert!(!canonical(name), "{name}");
+        }
     }
 }
