@@ -1623,8 +1623,19 @@ fn execute_governance_batch_with_replay(
                 if block_height >= activation.profile.expires_at_height {
                     return Err("Solana route already expired".into());
                 }
-                if ledger.solana_clients().any(|route| route.profile.route_id == activation.profile.route_id) {
-                    return Err("Solana light client already anchored".into());
+                if let Some(previous) = ledger.solana_clients()
+                    .filter(|r| r.profile.route_id == activation.profile.route_id)
+                    .max_by_key(|r| r.profile.route_epoch)
+                {
+                    let old = previous.profile.solana.as_ref().ok_or("missing Solana predecessor pins")?;
+                    let new = activation.profile.solana.as_ref().unwrap();
+                    if previous.profile.asset_id != activation.profile.asset_id
+                        || previous.profile.source_domain() != activation.profile.source_domain()
+                        || new.route_binding != old.route_binding
+                        || new.anchor_slot <= old.anchor_slot || new.anchor.epoch < previous.client.epoch
+                    {
+                        return Err("Solana route revision must preserve custody and advance its governed anchor".into());
+                    }
                 }
             }
             validate_vault_bridge_route_profile_against_ledger(

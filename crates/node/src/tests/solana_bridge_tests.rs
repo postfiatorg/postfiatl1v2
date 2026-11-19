@@ -229,3 +229,26 @@ fn separate_solana_clusters_keep_their_governed_clients() {
     assert_eq!(ledger.solana_route, previous);
     assert_eq!(ledger.additional_solana_routes[&second.profile_hash().unwrap()].client.epoch, 1);
 }
+
+#[test]
+fn governed_solana_revision_keeps_backing_and_retires_the_old_client() {
+    let key = ml_dsa_65_keygen().unwrap();
+    let (genesis, mut governance, mut ledger) = initial(&key);
+    governance.apply(amendment(SOLANA_ACTIVATION_HEIGHT, 10, 0));
+    let first = profile();
+    assert!(activate_route(&mut governance, &mut ledger, &first).accepted);
+    let deposit = signed_proof(&genesis, &ledger, &first, &key, SOLANA_DEPOSIT_PROOF, 1);
+    assert!(execute_route_candidate(&genesis, &governance, &mut ledger, deposit, 10).accepted);
+    let mut second = first.clone();
+    second.route_epoch += 1;
+    second.activation_height += 1;
+    assert!(!activate_route(&mut governance, &mut ledger, &second).accepted);
+    second.solana.as_mut().unwrap().anchor_slot += 1;
+    let updated = activate_route(&mut governance, &mut ledger, &second);
+    assert!(updated.accepted, "{}", updated.message);
+    let old = signed_proof(&genesis, &ledger, &first, &key, SOLANA_DEPOSIT_PROOF, 2);
+    assert_eq!(execute_route_candidate(&genesis, &governance, &mut ledger, old, 12).code, "solana_route_superseded");
+    let replay = signed_proof(&genesis, &ledger, &second, &key, SOLANA_DEPOSIT_PROOF, 2);
+    assert_eq!(execute_route_candidate(&genesis, &governance, &mut ledger, replay, 12).code, "duplicate_solana_deposit");
+    assert_eq!(ledger.trustlines[0].balance, 5_000_000);
+}

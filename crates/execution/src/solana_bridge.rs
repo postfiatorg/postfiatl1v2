@@ -20,6 +20,11 @@ pub(super) fn apply_proof(
         "Solana route has no activation".into(),
     ))?;
     let profile = &route.profile;
+    if ledger.solana_clients().any(|other| other.profile.route_id == profile.route_id
+        && other.profile.route_epoch > profile.route_epoch)
+    {
+        return Err(("solana_route_superseded", "Solana route revision has been retired".into()));
+    }
     if !(profile.activation_height..profile.expires_at_height).contains(&height) {
         return Err((
             "solana_bridge_disabled",

@@ -3801,8 +3801,8 @@ impl LedgerState {
         let mut policies = BTreeMap::new();
         let mut names = BTreeSet::new();
         for route in self.solana_clients() {
-            if !names.insert(&route.profile.route_id) {
-                return Err("duplicate Solana route id".into());
+            if !names.insert((&route.profile.route_id, route.profile.route_epoch)) {
+                return Err("duplicate Solana route revision".into());
             }
             policies.insert(route.profile.profile_hash()?, route);
         }
