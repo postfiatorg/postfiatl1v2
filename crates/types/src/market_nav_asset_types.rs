@@ -4626,6 +4626,17 @@ impl LedgerState {
         for route in solana_policies.values() {
             let pins = route.profile.solana.as_ref().ok_or("missing Solana pins")?;
             route.client.validate()?;
+            if !route.epoch_history.is_empty() && route.epoch_history.get(&pins.anchor.epoch) != Some(&pins.anchor) {
+                return Err("Solana epoch history lacks its governed anchor".into());
+            }
+            for (&epoch, historical) in &route.epoch_history {
+                historical.validate()?;
+                if historical.epoch != epoch || epoch < pins.anchor.epoch || epoch > route.client.epoch
+                    || historical.known_key_table_hash != pins.anchor.known_key_table_hash
+                    || (epoch == route.client.epoch && historical != &route.client) {
+                    return Err("invalid historical Solana client".into());
+                }
+            }
             if route.client.epoch < pins.anchor.epoch
                 || (route.client.epoch == pins.anchor.epoch && route.client != pins.anchor)
                 || route.client.known_key_table_hash != pins.anchor.known_key_table_hash

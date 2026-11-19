@@ -1690,14 +1690,19 @@ fn execute_governance_batch_with_replay(
         match validated {
             Ok(record) => {
                 if let (Some(ledger), Some(pins)) = (ledger.as_deref_mut(), &activation.profile.solana) {
-                    let client = ledger.solana_clients()
+                    let predecessor = ledger.solana_clients()
                         .filter(|r| r.profile.route_id == activation.profile.route_id)
                         .max_by_key(|r| r.profile.route_epoch)
-                        .filter(|r| r.rotates_deposit_key(&activation.profile))
-                        .map_or_else(|| pins.anchor.clone(), |r| r.client.clone());
+                        .filter(|r| r.rotates_deposit_key(&activation.profile));
+                    let client = predecessor.map_or_else(|| pins.anchor.clone(), |r| r.client.clone());
+                    let mut epoch_history = predecessor.map(|r| r.epoch_history.clone()).unwrap_or_default();
+                    if predecessor.is_some() {
+                        epoch_history.insert(pins.anchor.epoch, pins.anchor.clone());
+                    }
                     let route = postfiat_types::SolanaRouteState {
                         profile: activation.profile.clone(),
                         client,
+                        epoch_history,
                     };
                     if ledger.solana_route.is_none() {
                         ledger.solana_route = Some(route);

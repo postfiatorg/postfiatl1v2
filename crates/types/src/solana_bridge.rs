@@ -166,6 +166,9 @@ impl SolanaRoutePins {
 pub struct SolanaRouteState {
     pub profile: VaultBridgeRouteProfileV1,
     pub client: SolanaLightClient,
+    /// Enabled by a key-only rotation. Empty on all pre-rotation chain states.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub epoch_history: std::collections::BTreeMap<u64, SolanaLightClient>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -327,14 +330,49 @@ impl SolanaRouteState {
         &expected == next
     }
 
+    pub fn client_at(&self, epoch: u64) -> Option<&SolanaLightClient> {
+        if self.client.epoch == epoch { Some(&self.client) } else { self.epoch_history.get(&epoch) }
+    }
+
+    /// Called only after the governed handoff program proof verifies. Rebuild a
+    /// missing historical set forward from a previously authenticated predecessor.
+    /// Historical handoffs cannot move the live client. A refinement must also
+    /// agree with an already authenticated successor.
+    pub fn apply_verified_handoff(&mut self, journal: &[u8]) -> Result<(), String> {
+        let epoch = u64::from_le_bytes(journal.get(59..67).ok_or("truncated Solana handoff")?.try_into().unwrap());
+        if epoch < self.client.epoch {
+            let prior = self.epoch_history.get(&epoch)
+                .or_else(|| epoch.checked_sub(1).and_then(|e| self.epoch_history.get(&e)))
+                .ok_or("missing authenticated historical predecessor")?;
+            let next = self.successor_from(prior, journal)?;
+            if self.client_at(epoch + 1).and_then(|c| c.handoff.as_ref())
+                .is_some_and(|h| h.predecessor_set_hash != next.validator_set_hash
+                    || h.predecessor_key_table_hash != next.known_key_table_hash) {
+                return Err("historical handoff differs from the authenticated successor".into());
+            }
+            self.epoch_history.insert(epoch, next);
+        } else {
+            let next = self.handoff_successor(journal)?;
+            if !self.epoch_history.is_empty() && next.epoch > self.client.epoch {
+                self.epoch_history.insert(self.client.epoch, self.client.clone());
+            }
+            self.client = next;
+        }
+        Ok(())
+    }
+
     pub fn handoff_successor(&self, journal: &[u8]) -> Result<SolanaLightClient, String> {
+        self.successor_from(&self.client, journal)
+    }
+
+    fn successor_from(&self, client: &SolanaLightClient, journal: &[u8]) -> Result<SolanaLightClient, String> {
         let pins = self.profile.solana.as_ref().ok_or("missing Solana pins")?;
         let listed_stake = match journal.len() {
             179 if &journal[..8] == b"PFSOLHP2" => {
                 Some(u64::from_le_bytes(journal[139..147].try_into().unwrap()))
             }
             171 if &journal[..8] == b"PFSOLHP1"
-                && self.client.handoff.is_none()
+                && client.handoff.is_none()
                 && pins.handoff_program_vkey != SOLANA_RELEASE_HANDOFF_VKEY =>
             {
                 None
@@ -355,14 +393,12 @@ impl SolanaRouteState {
         {
             return Err("Solana handoff differs from its recorder or epoch schedule".into());
         }
-        if epoch == self.client.epoch {
-            let prior = self
-                .client
-                .handoff
+        if epoch == client.epoch {
+            let prior = client.handoff
                 .as_ref()
                 .ok_or("no predecessor for Solana replacement")?;
             if listed_stake.is_none_or(|stake| stake <= prior.listed_stake)
-                || self.client.total_stake != total.to_string()
+                || client.total_stake != total.to_string()
                 || set_hash != prior.predecessor_set_hash
                 || key_hash != prior.predecessor_key_table_hash
             {
@@ -370,9 +406,9 @@ impl SolanaRouteState {
                     "Solana replacement must extend the same predecessor with more stake".into(),
                 );
             }
-        } else if self.client.epoch.checked_add(1) != Some(epoch)
-            || set_hash != self.client.validator_set_hash
-            || key_hash != self.client.known_key_table_hash
+        } else if client.epoch.checked_add(1) != Some(epoch)
+            || set_hash != client.validator_set_hash
+            || key_hash != client.known_key_table_hash
         {
             return Err("Solana handoff differs from the expected predecessor".into());
         }

@@ -71,15 +71,13 @@ pub(super) fn apply_proof(
     )
     .map_err(|error| (error.code(), error.message()))?;
     if operation.proof_kind == postfiat_types::SOLANA_HANDOFF_PROOF {
-        let next = route
-            .handoff_successor(&operation.public_values)
-            .map_err(|e| ("invalid_solana_handoff", e))?;
         let client = if secondary {
             ledger.additional_solana_routes.get_mut(&operation.profile_hash)
         } else {
             ledger.solana_route.as_mut()
         };
-        client.expect("route loaded above").client = next;
+        client.expect("route loaded above").apply_verified_handoff(&operation.public_values)
+            .map_err(|e| ("invalid_solana_handoff", e))?;
         return Ok(());
     }
     credit_verified(
@@ -114,8 +112,12 @@ fn credit_verified(
         .ok_or(("invalid_solana_route", "missing Solana pins".into()))?;
     let values = SolanaDepositPublicValues::decode(public_values)
         .map_err(|e| ("invalid_solana_deposit_values", e))?;
-    if values.validator_set_hash != route.client.validator_set_hash
-        || values.total_stake.to_string() != route.client.total_stake
+    let certificate_epoch = pins.slot_epoch(values.certificate_slot)
+        .ok_or(("solana_source_mismatch", "invalid Solana certificate epoch".into()))?;
+    let signing_client = route.client_at(certificate_epoch)
+        .ok_or(("solana_source_mismatch", "certificate epoch has no authenticated client".into()))?;
+    if values.validator_set_hash != signing_client.validator_set_hash
+        || values.total_stake.to_string() != signing_client.total_stake
     {
         return Err((
             "solana_validator_set_mismatch",
@@ -143,8 +145,7 @@ fn credit_verified(
     for evidence in &values.receipts {
         if evidence.program_id != profile.vault_address
             || evidence.slot < pins.anchor_slot
-            || pins.slot_epoch(values.certificate_slot) != Some(route.client.epoch)
-            || pins.slot_epoch(evidence.slot).is_none_or(|e| e < route.client.epoch.saturating_sub(1))
+            || pins.slot_epoch(evidence.slot).is_none_or(|e| e < certificate_epoch.saturating_sub(1))
         {
             return Err((
                 "solana_source_mismatch",
@@ -336,7 +337,7 @@ mod tests {
         values.extend(5_000_000u64.to_le_bytes());
         values.extend([12; 32]);
         values.extend([13; 32]);
-        let route = SolanaRouteState { profile, client };
+        let route = SolanaRouteState { profile, client, epoch_history: Default::default() };
         let mut ledger = LedgerState::new(vec![Account::new(
             format!("pf{}", "0b".repeat(20)),
             1000,
@@ -619,6 +620,27 @@ mod tests {
             assert_eq!(error.0, "invalid_solana_handoff");
             assert_eq!(ledger, before);
         }
+        let rotated = ledger.solana_route.as_mut().unwrap();
+        let live = rotated.client.clone();
+        let anchor = rotated.profile.solana.as_ref().unwrap().anchor.clone();
+        rotated.epoch_history.insert(anchor.epoch, anchor);
+        let backfill = SolanaProofOperation {
+            submitter: format!("pf{}", "0b".repeat(20)), profile_hash: hash,
+            proof_kind: postfiat_types::SOLANA_HANDOFF_PROOF.into(),
+            proof: std::fs::read(directory.join("epoch-6.groth16")).unwrap(),
+            public_values: std::fs::read(directory.join("epoch-6.values")).unwrap(),
+        };
+        apply_proof(&genesis, &mut ledger, &backfill, 10,
+            AssetExecutionCompatibility::strict(), &[]).unwrap();
+        let rotated = ledger.solana_route.as_ref().unwrap();
+        assert_eq!(rotated.client, live);
+        let six = rotated.client_at(6).unwrap();
+        assert_eq!(six.validator_set_hash, live.handoff.as_ref().unwrap().predecessor_set_hash);
+        let before = ledger.clone();
+        assert!(apply_proof(&genesis, &mut ledger, &backfill, 10,
+            AssetExecutionCompatibility::strict(), &[]).is_err());
+        assert_eq!(ledger, before);
+
     }
 
     #[test]
