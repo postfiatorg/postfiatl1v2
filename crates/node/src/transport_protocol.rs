@@ -1084,6 +1084,25 @@ pub(super) fn validate_transport_batch_ack(
             );
         }
     }
+    if ack.already_applied {
+        let certified = ack.certified_state.as_ref().unwrap_or(&ack.state);
+        let certificate: BlockCertificateFile = serde_json::from_str(
+            envelope.certificate_json.as_deref().ok_or("duplicate ack requires a certificate")?,
+        ).map_err(|e| format!("duplicate ack certificate: {e}"))?;
+        if certified.block_height != certificate.block_height
+            || (certified.block_height == ack.state.block_height
+                && (certified.block_tip_hash != ack.state.block_tip_hash
+                    || certified.state_root != ack.state.state_root))
+            || certificate.block_hash.as_ref().is_some_and(|hash| hash != &certified.block_tip_hash)
+            || certificate.consensus_v2_commit.as_ref().is_some_and(|commit| {
+                let block = &commit.proposal.block;
+                block.height != certified.block_height || block.block_id != certified.block_tip_hash
+                    || block.state_root != certified.state_root
+            })
+        {
+            return Err("duplicate ack conflicts with certified height/hash/root".into());
+        }
+    }
     Ok(())
 }
 
@@ -1656,7 +1675,9 @@ pub(super) fn transport_already_applied_ack(
     let store = postfiat_storage::NodeStore::new(data_dir);
     let block = delivery_block(&store, certificate.block_height)?;
     let header = &block.header;
-    if header.batch_id != batch_id
+    if certificate.schema != "postfiat.block_certificate.v1"
+        || certificate.fastpay_pre_state_effects != block.fastpay_pre_state_effects
+        || header.batch_id != batch_id
         || header.batch_kind != envelope.batch_kind
         || certificate.chain_id != state_after.chain_id
         || certificate.genesis_hash != state_after.genesis_hash
@@ -2806,7 +2827,7 @@ mod transport_cli_tests {
             .expect("parse receipt fixture")])
             .expect("write receipt fixture");
         let certificate = serde_json::json!({
-            "schema": "postfiat-block-certificate-v1",
+            "schema": "postfiat.block_certificate.v1",
             "chain_id": "postfiat-wan-devnet",
             "genesis_hash": "11".repeat(48),
             "protocol_version": 1,
@@ -2905,6 +2926,9 @@ mod transport_cli_tests {
         let ack = response(&rejection).unwrap();
         validate_transport_batch_ack(&ack, &topology, &sender, "validator-0", &envelope).unwrap();
         assert!(ack.applied && ack.already_applied);
+        let mut conflict = ack.clone();
+        conflict.certified_state.as_mut().unwrap().block_tip_hash = "different".into();
+        assert!(validate_transport_batch_ack(&conflict, &topology, &sender, "validator-0", &envelope).is_err());
         for field in ["block_tip_hash", "state_root", "node_id"] {
             let mut changed = rejection.clone();
             changed["state"][field] = "other".into();
@@ -3483,7 +3507,6 @@ mod transport_cli_tests {
             chain_id: DEFAULT_CHAIN_ID.to_string(),
             validators: 1,
             base_port: listener.local_addr().unwrap().port(),
-
             rpc_base_port: Some(27650),
             hosts: None,
             output_file: topology_file.clone(),
@@ -3567,19 +3590,41 @@ mod transport_cli_tests {
             )
             .unwrap();
             assert!(replay.already_applied);
+            // Release 6.1 sends its current finalized state along with this exact
+            // rejection. Exercise a matching reply and then a same-height fork.
+            for conflict in [false, true] {
+                let (mut legacy, _) = listener.accept().unwrap();
+                let frame = read_transport_line(&legacy, "legacy receiver").unwrap();
+                let env = parse_transport_batch_envelope(&frame).unwrap();
+                let id = delivery_batch_id(&env).unwrap();
+                let mut state = replay.state.clone();
+                if conflict { state.block_tip_hash = "wrong".into(); }
+                write_json_line(&mut legacy, &serde_json::json!({
+                    "schema": "postfiat-transport-validator-serve-rejection-v1",
+                    "topology_id": server_topology.topology_id, "node_id": state.node_id,
+                    "connection_index": 3, "kind": "batch", "state": state,
+                    "error": format!("transport batch service apply failed: storage_duplicate_record: ordered batch `{id}` already exists"),
+                })).unwrap();
+            }
         });
         let sent = transport_batch_send_with_retries(
             data_dir.clone(),
             topology_file.clone(),
             DEFAULT_NODE_ID.to_owned(),
             None,
-            batch_file,
+            batch_file.clone(),
             Some(artifact_dir.join("block-certificate.json")),
             5_000,
             1,
             0,
         )
         .unwrap();
+        let legacy_send = || transport_batch_send_with_retries(
+            data_dir.clone(), topology_file.clone(), DEFAULT_NODE_ID.to_owned(), None,
+            batch_file.clone(), Some(artifact_dir.join("block-certificate.json")), 5_000, 0, 0,
+        );
+        assert!(legacy_send().unwrap().ack.already_applied);
+        assert!(legacy_send().unwrap_err().contains("conflicts with finalized hash/root"));
         server.join().unwrap();
         assert_eq!(sent.attempts, 2);
         assert!(sent.ack.already_applied && sent.ack.accepted_count == 1);
