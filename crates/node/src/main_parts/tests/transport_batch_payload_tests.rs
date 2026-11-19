@@ -1391,6 +1391,14 @@ mod transport_batch_payload_tests {
         /// Forward a tampered request so the real validator sends an explicit
         /// rejection, then close like the validator does.
         Refuse,
+        /// Refuse the first request of the phase like `Refuse` (a peer that is
+        /// not ready yet), then forward the requests that follow.
+        RefuseFirst,
+        /// Hold the request this long before the validator sees it (a peer
+        /// still busy with the phase), then forward it.
+        Hold(Duration),
+        /// Forward, then drop the consensus v2 vote from the validator's reply.
+        OmitV2Vote,
         /// Read the request and never answer.
         Silent,
         /// Hold the request this long, then close without a reply.
@@ -1421,22 +1429,29 @@ mod transport_batch_payload_tests {
                         }
                         let mut request: serde_json::Value =
                             serde_json::from_str(&line).unwrap_or(serde_json::Value::Null);
-                        let action = match request
+                        let (phase, configured) = match request
                             .pointer("/consensus_v2/phase")
                             .and_then(serde_json::Value::as_str)
                         {
-                            Some("prepare") => {
-                                requests[0].fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                                prepare
+                            Some("prepare") => (Some(0), prepare),
+                            Some("precommit") => (Some(1), precommit),
+                            _ => (None, ProxyVote::Forward(Duration::ZERO)),
+                        };
+                        let earlier = phase.map(|phase| {
+                            requests[phase].fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                        });
+                        let action = match configured {
+                            ProxyVote::RefuseFirst if earlier == Some(0) => ProxyVote::Refuse,
+                            ProxyVote::RefuseFirst => ProxyVote::Forward(Duration::ZERO),
+                            ProxyVote::Hold(hold) => {
+                                std::thread::sleep(hold);
+                                ProxyVote::Forward(Duration::ZERO)
                             }
-                            Some("precommit") => {
-                                requests[1].fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                                precommit
-                            }
-                            _ => ProxyVote::Forward(Duration::ZERO),
+                            other => other,
                         };
                         let delay = match action {
                             ProxyVote::Forward(delay) => delay,
+                            ProxyVote::OmitV2Vote => Duration::ZERO,
                             ProxyVote::Silent => {
                                 std::thread::sleep(Duration::from_secs(120));
                                 return;
@@ -1451,6 +1466,7 @@ mod transport_batch_payload_tests {
                                 upstream_stream = None;
                                 Duration::ZERO
                             }
+                            ProxyVote::RefuseFirst | ProxyVote::Hold(_) => unreachable!(),
                         };
                         if upstream_stream.is_none() {
                             let Ok(stream) = TcpStream::connect(upstream) else {
@@ -1467,6 +1483,14 @@ mod transport_batch_payload_tests {
                         let mut response = String::new();
                         if reader.read_line(&mut response).unwrap_or(0) == 0 {
                             return;
+                        }
+                        if matches!(action, ProxyVote::OmitV2Vote) {
+                            let mut reply: serde_json::Value =
+                                serde_json::from_str(&response).expect("vote reply json");
+                            if let Some(reply) = reply.as_object_mut() {
+                                reply.remove("consensus_v2_vote");
+                            }
+                            response = format!("{reply}\n");
                         }
                         std::thread::sleep(delay);
                         if client_writer.write_all(response.as_bytes()).is_err() {
@@ -1687,6 +1711,32 @@ mod transport_batch_payload_tests {
         Duration,
         bool,
     ) {
+        run_vote_phase_round_with_sends(
+            fixture,
+            timeout_ms,
+            send_retries,
+            retry_backoff_ms,
+            quorum_early,
+            false,
+            bound,
+        )
+    }
+
+    /// `run_vote_phase_round`, choosing whether certified sends are deferred
+    /// to durable jobs as on the RPC finality paths.
+    fn run_vote_phase_round_with_sends(
+        fixture: &VotePhaseRoundFixture,
+        timeout_ms: u64,
+        send_retries: usize,
+        retry_backoff_ms: u64,
+        quorum_early: bool,
+        defer_certified_sends: bool,
+        bound: Duration,
+    ) -> (
+        Option<Result<TransportPeerCertifiedBatchRoundReport, String>>,
+        Duration,
+        bool,
+    ) {
         let proposer_dir = fixture.data_dirs[fixture.proposer_index].clone();
         let batch_file = fixture.artifact_dir.with_extension("batch.json");
         create_transfer_batch(BatchTransferOptions {
@@ -1716,7 +1766,7 @@ mod transport_batch_payload_tests {
             send_retries,
             retry_backoff_ms,
             local_apply_before_certified_send: true,
-            defer_certified_sends: false,
+            defer_certified_sends,
             commit_processed_dir: None,
             required_parent: None,
         };
@@ -1744,7 +1794,7 @@ mod transport_batch_payload_tests {
     const UNIT_RETRY_BACKOFF_MS: u64 = 250;
 
     #[test]
-    fn refused_prepare_votes_are_not_retried_and_a_round_without_quorum_ends() {
+    fn persistently_refused_prepare_votes_end_a_round_without_quorum_before_the_deadline() {
         let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -1776,12 +1826,186 @@ mod transport_batch_payload_tests {
             .expect("round still running")
             .expect_err("two refusals leave the round below quorum");
         assert!(lock_free);
-        assert_eq!(
-            refusing,
-            vec![1, 1],
-            "a refused prepare vote was requested again: {error}"
+        // A refusal may be a peer that is not ready yet, so it is asked again
+        // within the retry budget; a persistent refusal still ends the round
+        // well inside the 20 s phase deadline.
+        assert!(
+            refusing.iter().all(|requests| *requests > 1),
+            "a refused prepare vote was not requested again: {refusing:?} {error}"
         );
+        assert!(elapsed < Duration::from_secs(20));
         assert!(!fixture.artifact_dir.join("block-certificate.json").exists());
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    #[test]
+    fn lagging_peers_that_refuse_a_prepare_once_are_asked_again_and_the_round_certifies() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        // Six validators, quorum 5: the round needs one of the two lagging
+        // peers, each of which refuses its first prepare request.
+        let fixture = vote_phase_round_fixture(
+            "vote-refuse-once",
+            &[
+                (1, ProxyVote::RefuseFirst, forward),
+                (2, ProxyVote::RefuseFirst, forward),
+            ],
+        );
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        let lagging = fixture
+            .proxied
+            .iter()
+            .map(|(index, _)| fixture.requests(*index, 0))
+            .collect::<Vec<_>>();
+        eprintln!("refuse once: elapsed={elapsed:?} prepare_requests_to_lagging_peers={lagging:?}");
+        let round = result
+            .expect("round still running")
+            .expect("a peer that refused once and then voted completes the quorum");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        assert!(lagging.iter().any(|requests| *requests > 1));
+        assert!(fixture.artifact_dir.join("block-certificate.json").is_file());
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    #[test]
+    fn a_peer_still_preparing_is_asked_for_its_precommit_once_its_prepare_vote_lands() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        // Prepare quorum forms without the busy peer (offset 2), but precommit
+        // quorum needs it because offset 1 refuses every precommit.
+        let fixture = vote_phase_round_fixture(
+            "vote-precommit-busy",
+            &[
+                (1, forward, ProxyVote::Refuse),
+                (2, ProxyVote::Hold(Duration::from_secs(4)), forward),
+            ],
+        );
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        let busy = fixture.proxied[1].0;
+        eprintln!(
+            "busy precommit: elapsed={elapsed:?} busy_requests=[{}, {}]",
+            fixture.requests(busy, 0),
+            fixture.requests(busy, 1)
+        );
+        let round = result
+            .expect("round still running")
+            .expect("the busy peer precommits once its prepare vote exists");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        let certificate_file = fixture.artifact_dir.join("block-certificate.json");
+        assert!(certificate_qc_voters(&certificate_file, "precommit_qc")
+            .contains(&format!("validator-{busy}")));
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    #[test]
+    fn a_prepare_reply_without_a_consensus_v2_vote_counts_as_a_missing_vote() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        // Offset 1 answers its prepare without a v2 vote; offset 2 answers
+        // late, after the four fast replies that would otherwise stop the
+        // prepare phase.
+        let fixture = vote_phase_round_fixture(
+            "vote-omitted-v2",
+            &[
+                (1, ProxyVote::OmitV2Vote, forward),
+                (2, ProxyVote::Forward(Duration::from_secs(3)), forward),
+            ],
+        );
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        eprintln!("omitted v2 vote: elapsed={elapsed:?}");
+        let round = result
+            .expect("round still running")
+            .expect("a reply without a v2 vote is a missing vote, not a round error");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        let omitting = format!("validator-{}", fixture.proxied[0].0);
+        let certificate_file = fixture.artifact_dir.join("block-certificate.json");
+        assert!(!certificate_qc_voters(&certificate_file, "prepare_qc").contains(&omitting));
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    #[test]
+    fn a_shielded_batch_certified_while_a_peer_refused_is_reported_final_and_cached() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        // No retries: the refusal is a recorded failure before the slow
+        // fifth vote completes the quorum, as on the RPC finality paths.
+        let fixture = vote_phase_round_fixture(
+            "vote-refused-final",
+            &[
+                (1, ProxyVote::Refuse, forward),
+                (2, ProxyVote::Forward(Duration::from_secs(2)), forward),
+            ],
+        );
+        let (result, _, lock_free) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            0,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            true,
+            Duration::from_secs(30),
+        );
+        let round = result
+            .expect("round still running")
+            .expect("round certifies without the refusing peer");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        assert!(!round.vote_request_failures.is_empty());
+        let result_file = fixture.artifact_dir.join("shield-result.json");
+        let request = RpcRequest::new("shield-1", "shield_batch_finality", serde_json::json!({}));
+        let response = match finish_rpc_serve_shield_batch_finality(
+            &request,
+            &"a".repeat(96),
+            1,
+            0.0,
+            Instant::now(),
+            round,
+            &result_file,
+            true,
+        ) {
+            Ok(response) => response,
+            Err((code, message)) => panic!("certified shielded batch reported {code}: {message}"),
+        };
+        assert!(response.ok);
+        let cached: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&result_file).expect("cached result"))
+                .expect("cached result json");
+        let result = response.result.as_ref().expect("finality result");
+        for key in ["schema", "batch_id", "certificate"] {
+            assert!(cached[key] == result[key], "cached result differs at `{key}`");
+        }
         clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
     }
 
@@ -2155,7 +2379,9 @@ mod transport_batch_payload_tests {
             !precommit_voters.contains(&late_validator),
             "late validator was counted in the precommit QC: {precommit_voters:?}"
         );
-        assert!(precommit_requests.load(std::sync::atomic::Ordering::SeqCst) >= 1);
+        // The late validator is asked for its precommit only once its prepare
+        // vote has arrived, and the round does not wait for that answer.
+        assert!(precommit_requests.load(std::sync::atomic::Ordering::SeqCst) <= 1);
 
         // The late validator still receives the certified block through the
         // existing certified delivery path.

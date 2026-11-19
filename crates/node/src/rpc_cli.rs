@@ -2229,6 +2229,32 @@ fn run_rpc_serve_shield_batch_finality_inner(
             format!("shield_batch_finality failed: {error}"),
         )
     })?;
+    finish_rpc_serve_shield_batch_finality(
+        request,
+        batch_id,
+        request_index,
+        readiness_wait_ms,
+        total_start,
+        round,
+        &result_file,
+        context.finality_quorum_early_full_propagation,
+    )
+}
+
+/// Accepts a certified shielded batch round as final, writes the result that
+/// a retry of the same `batch_id` returns from cache, and answers the client.
+#[allow(clippy::too_many_arguments)]
+fn finish_rpc_serve_shield_batch_finality(
+    request: &RpcRequest,
+    batch_id: &str,
+    request_index: u64,
+    readiness_wait_ms: f64,
+    total_start: Instant,
+    round: TransportPeerCertifiedBatchRoundReport,
+    result_file: &Path,
+    quorum_early_full_propagation: bool,
+) -> Result<RpcResponse, (String, String)> {
+    let _ = quorum_early_full_propagation;
     let deferred_job_count = round.deferred_certified_send_jobs.len();
     if !round.certification.round_ok
         || !round.local_apply_verified
@@ -2273,7 +2299,7 @@ fn run_rpc_serve_shield_batch_finality_inner(
             format!("shield finality result serialization failed: {error}"),
         )
     })?;
-    postfiat_storage::atomic_write(&result_file, [result_bytes.as_slice(), b"\n"].concat())
+    postfiat_storage::atomic_write(result_file, [result_bytes.as_slice(), b"\n"].concat())
         .map_err(|error| {
             (
                 "rpc_finality_submit_failed".to_string(),
