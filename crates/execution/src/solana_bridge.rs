@@ -143,7 +143,8 @@ fn credit_verified(
     for evidence in &values.receipts {
         if evidence.program_id != profile.vault_address
             || evidence.slot < pins.anchor_slot
-            || pins.slot_epoch(evidence.slot) != Some(route.client.epoch)
+            || pins.slot_epoch(values.certificate_slot) != Some(route.client.epoch)
+            || pins.slot_epoch(evidence.slot).is_none_or(|e| e < route.client.epoch.saturating_sub(1))
         {
             return Err((
                 "solana_source_mismatch",
@@ -480,6 +481,26 @@ mod tests {
             );
             assert_eq!(before, ledger);
         }
+    }
+
+    #[test]
+    fn solana_bridge_descendant_epoch_selects_the_client_and_preserves_receipt_slot() {
+        let (genesis, mut ledger, mut route, mut values) = setup();
+        // B=1011 in epoch 10. D=1101 in epoch 11. The authenticated set follows D.
+        values[..8].copy_from_slice(b"PFSOLDP2");
+        values.extend(1101u64.to_le_bytes());
+        assert_eq!(credit(&genesis, &mut ledger, &route, &values).unwrap_err().0, "solana_source_mismatch");
+        route.client.epoch = 11;
+        ledger.solana_route = Some(route.clone());
+        credit(&genesis, &mut ledger, &route, &values).unwrap();
+        let receipt = ledger.vault_bridge_receipts[0].solana_deposit_evidence.as_ref().unwrap();
+        assert_eq!(receipt.slot, 1011);
+        let end = values.len();
+        values[end-8..].copy_from_slice(&1011u64.to_le_bytes());
+        assert!(SolanaDepositPublicValues::decode(&values).is_err());
+        values[end-8..].copy_from_slice(&1201u64.to_le_bytes());
+        route.client.epoch = 12;
+        assert_eq!(credit(&genesis, &mut ledger, &route, &values).unwrap_err().0, "solana_source_mismatch");
     }
 
     #[test]

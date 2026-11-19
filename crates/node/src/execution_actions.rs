@@ -1632,7 +1632,8 @@ fn execute_governance_batch_with_replay(
                     if previous.profile.asset_id != activation.profile.asset_id
                         || previous.profile.source_domain() != activation.profile.source_domain()
                         || new.route_binding != old.route_binding
-                        || new.anchor_slot <= old.anchor_slot || new.anchor.epoch < previous.client.epoch
+                        || (!previous.rotates_deposit_key(&activation.profile)
+                            && (new.anchor_slot <= old.anchor_slot || new.anchor.epoch < previous.client.epoch))
                     {
                         return Err("Solana route revision must preserve custody and advance its governed anchor".into());
                     }
@@ -1689,9 +1690,14 @@ fn execute_governance_batch_with_replay(
         match validated {
             Ok(record) => {
                 if let (Some(ledger), Some(pins)) = (ledger.as_deref_mut(), &activation.profile.solana) {
+                    let client = ledger.solana_clients()
+                        .filter(|r| r.profile.route_id == activation.profile.route_id)
+                        .max_by_key(|r| r.profile.route_epoch)
+                        .filter(|r| r.rotates_deposit_key(&activation.profile))
+                        .map_or_else(|| pins.anchor.clone(), |r| r.client.clone());
                     let route = postfiat_types::SolanaRouteState {
                         profile: activation.profile.clone(),
-                        client: pins.anchor.clone(),
+                        client,
                     };
                     if ledger.solana_route.is_none() {
                         ledger.solana_route = Some(route);
