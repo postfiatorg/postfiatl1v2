@@ -62,6 +62,27 @@
       "program_vkey": "0x00d5ebebe8e4551cf99ecfcea71f48957e61ad2fde1eab96357ddee66148ab65",
       "cargo_lock_sha256": "d34ce6ca28550ab6caa959a0827c30587ead1614ec73026476a35103724938f7",
       "expected": "programs/pft-lane-export/program-info.json"
+    },
+    {
+      "id": "pft-lane-export-v1-20261119",
+      "build_mode": "docker",
+      "build_command": "cargo prove build --docker --tag v6.3.1 --locked --workspace-directory <checkout> --output-directory elf",
+      "source_commit": "8016e9cdcbe1ea98ffc37f7465ce4e3bc97f8406",
+      "workflow": ".github/workflows/pft-lane-export-identity.yml",
+      "reason": "rebuilt on the joined line (integration/main-with-b24-20261117); crates the guest links changed through the B24 merge; guest source unchanged",
+      "runs": [
+        {
+          "run_id": 44420993427,
+          "attempt": 1,
+          "builds": 2,
+          "clean_source_trees": 2,
+          "note": "pull request merge build of 8016e9cdc; two clean trees gave byte-identical ELFs"
+        }
+      ],
+      "elf_sha256": "cdaf391297e05a1547334505dcf388545ab148ddacbc7a136eeef3ba0fbbfd58",
+      "program_vkey": "0x005a9f57832e55110036d86cebd66e1c6714b3dddca916580efae1913ae07829",
+      "cargo_lock_sha256": "d34ce6ca28550ab6caa959a0827c30587ead1614ec73026476a35103724938f7",
+      "expected": "programs/pft-lane-export/program-info.json"
     }
   ]
 }
