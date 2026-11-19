@@ -77,6 +77,13 @@
           "builds": 2,
           "clean_source_trees": 2,
           "note": "pull request merge build of 8016e9cdc; two clean trees gave byte-identical ELFs"
+        },
+        {
+          "run_id": 44427701299,
+          "attempt": 1,
+          "builds": 2,
+          "clean_source_trees": 2,
+          "note": "at 489e11707, after the identity was committed; rebuilt ELF and key equal the committed ones"
         }
       ],
       "elf_sha256": "cdaf391297e05a1547334505dcf388545ab148ddacbc7a136eeef3ba0fbbfd58",

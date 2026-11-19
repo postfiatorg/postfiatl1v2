@@ -154,7 +154,7 @@ class ProgramIdentityTests(unittest.TestCase):
         identity = dry_run.load_program_identity(fork=False, override=None, worktree_clean=True, head="abc")
         self.assertEqual(identity["elf_sha256"], "cdaf391297e05a1547334505dcf388545ab148ddacbc7a136eeef3ba0fbbfd58")
         self.assertEqual(identity["checked_out_commit"], "abc")
-        self.assertEqual(len(identity["runs"]), 1)
+        self.assertEqual(len(identity["runs"]), 2)
 
     def test_a_mismatching_elf_is_refused(self):
         with self.assertRaises(dry_run.RehearsalFailure):
