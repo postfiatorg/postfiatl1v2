@@ -1,0 +1,43 @@
+{
+  "solana": {
+    "genesis_hash": "2655079fc1e107d6a1c39d2d30301beab071b8494b3be371dc9ccd52c31bafdb",
+    "shred_version": 11702,
+    "handoff_program_vkey": "0x0030b8018a18de3eec41e3b5afb5a282b1796055ba680bcc95ab216bd403f584",
+    "slots_per_epoch": 2048,
+    "epoch_warmup": false,
+    "recorder_program": "1111111111111111111111111111111111111111111111111111111111111111",
+    "anchor_slot": 0,
+    "anchor": {
+      "epoch": 0,
+      "validator_set_hash": "df8923cd7dc315dd7fb777b2e30446807cb6ade11d0f58a99d56482da3afe4da",
+      "total_stake": "20000000000",
+      "known_key_table_hash": "36a6bb31549c13bc64fa9daa18498ae6fc5354c3222f2d9dc366f23b0d5b01fd"
+    },
+    "route_binding": "2866ca3b3e137bc1cf92187ac07ce25e07a6b586ec716cbeb6185ff1dcdcf4b1"
+  },
+  "schema": "postfiat.vault_bridge.route_profile.v1",
+  "route_id": "solana-local-usdc-v1",
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "source_chain_id": 0,
+  "vault_address": "f37d7953388e5d0aa7e42fc3005331caba1b8df5a32a713d7c3d7bb28f1d34de",
+  "vault_runtime_code_hash": "",
+  "token_address": "0000000190707bc3ef25bdc98ed75cb70d61c8b106dc248d8ef61e1d1db1ca40",
+  "token_runtime_code_hash": "",
+  "route_epoch": 1,
+  "verifier_kind": "sp1-solana-alpenglow-finality-v1",
+  "evidence_tier": "receipt-proven",
+  "verifier_policy_hash": "",
+  "verifier_program_vkey": "0x00261c92add760ef9bdb5e396780a70d473aa5cf967918af128da12a8a650226",
+  "verifier_proof_encoding": "groth16",
+  "max_proof_bytes": 4096,
+  "max_public_values_bytes": 16384,
+  "max_snapshot_age_blocks": 100,
+  "challenge_window_blocks": 1,
+  "max_epoch_gap_blocks": 100,
+  "settle_deadline_blocks": 10,
+  "min_challenge_bond": 0,
+  "min_attestations": 0,
+  "minimum_confirmations": 0,
+  "activation_height": 10,
+  "expires_at_height": 1000
+}

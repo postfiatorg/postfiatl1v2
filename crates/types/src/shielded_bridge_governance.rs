@@ -1558,7 +1558,7 @@ impl GovernanceState {
         }
         let mut latest = None::<&VaultBridgeRouteProfileRecordV1>;
         for record in &self.vault_bridge_route_profiles {
-            if record.profile.asset_id != asset_id
+            if record.profile.solana.is_some() || record.profile.asset_id != asset_id
                 || record.profile.activation_height > current_height
             {
                 continue;
@@ -2527,6 +2527,7 @@ mod shielded_bridge_governance_tests {
 
     fn vault_route(epoch: u32, activation_height: u64) -> VaultBridgeRouteProfileV1 {
         VaultBridgeRouteProfileV1 {
+            solana: None,
             schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
             route_id: "arbitrum-pfusdc".to_string(),
             asset_id: "11".repeat(48),

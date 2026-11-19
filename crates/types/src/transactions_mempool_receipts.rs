@@ -3817,6 +3817,8 @@ pub enum AssetTransactionOperation {
     VaultBridgeDepositAttest(VaultBridgeDepositAttestOperation),
     #[serde(rename = "vault_bridge_deposit_finalize")]
     VaultBridgeDepositFinalize(VaultBridgeDepositFinalizeOperation),
+    #[serde(rename = "solana_bridge_proof_v1")]
+    SolanaBridgeProof(SolanaProofOperation),
     #[serde(rename = "vault_bridge_deposit_claim")]
     VaultBridgeDepositClaim(VaultBridgeDepositClaimOperation),
     #[serde(rename = "vault_bridge_fast_ingress_lifecycle")]
@@ -3963,6 +3965,7 @@ impl<'de> Deserialize<'de> for AssetTransactionOperation {
                 VaultBridgeDepositFinalizeOperation,
                 VaultBridgeDepositFinalize
             ),
+            "solana_bridge_proof_v1" => decode_operation!(SolanaProofOperation, SolanaBridgeProof),
             "vault_bridge_deposit_claim" => {
                 decode_operation!(VaultBridgeDepositClaimOperation, VaultBridgeDepositClaim)
             }
@@ -4095,6 +4098,7 @@ impl AssetTransactionOperation {
             Self::VaultBridgeDepositChallenge(_) => VAULT_BRIDGE_DEPOSIT_CHALLENGE_TRANSACTION_KIND,
             Self::VaultBridgeDepositAttest(_) => VAULT_BRIDGE_DEPOSIT_ATTEST_TRANSACTION_KIND,
             Self::VaultBridgeDepositFinalize(_) => VAULT_BRIDGE_DEPOSIT_FINALIZE_TRANSACTION_KIND,
+            Self::SolanaBridgeProof(_) => "solana_bridge_proof_v1",
             Self::VaultBridgeDepositClaim(_) => VAULT_BRIDGE_DEPOSIT_CLAIM_TRANSACTION_KIND,
             Self::VaultBridgeFastIngressLifecycle(_) => {
                 VAULT_BRIDGE_FAST_INGRESS_LIFECYCLE_TRANSACTION_KIND
@@ -4172,6 +4176,7 @@ impl AssetTransactionOperation {
             Self::VaultBridgeDepositChallenge(operation) => operation.validate(),
             Self::VaultBridgeDepositAttest(operation) => operation.validate(),
             Self::VaultBridgeDepositFinalize(operation) => operation.validate(),
+            Self::SolanaBridgeProof(operation) => operation.validate(),
             Self::VaultBridgeDepositClaim(operation) => operation.validate(),
             Self::VaultBridgeFastIngressLifecycle(operation) => operation.validate(),
             Self::VaultBridgeReceiptSubmit(operation) => operation.validate(),
@@ -4241,6 +4246,7 @@ impl AssetTransactionOperation {
             Self::VaultBridgeDepositChallenge(operation) => operation.challenger == source,
             Self::VaultBridgeDepositAttest(operation) => operation.attestor == source,
             Self::VaultBridgeDepositFinalize(operation) => operation.finalizer == source,
+            Self::SolanaBridgeProof(operation) => operation.submitter == source,
             Self::VaultBridgeDepositClaim(operation) => operation.claimer == source,
             Self::VaultBridgeFastIngressLifecycle(operation) => operation.operator == source,
             Self::VaultBridgeReceiptSubmit(operation) => operation.operator == source,
@@ -4353,6 +4359,7 @@ impl AssetTransactionOperation {
             Self::VaultBridgeDepositFinalize(operation) => {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
+            Self::SolanaBridgeProof(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
             Self::VaultBridgeDepositClaim(operation) => {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }

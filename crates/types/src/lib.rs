@@ -11,6 +11,7 @@ include!("transactions_mempool_receipts.rs");
 include!("pfusdc_tier4_types.rs");
 include!("external_lane_egress_types.rs");
 include!("external_lane_export_proof_types.rs");
+include!("solana_bridge.rs");
 include!("pfusdc_bonded_ingress_types.rs");
 include!("nav_reserve_public_values.rs");
 include!("yolo_collection_public_values.rs");

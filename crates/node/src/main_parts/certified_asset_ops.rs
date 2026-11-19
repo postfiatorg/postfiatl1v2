@@ -358,6 +358,7 @@ fn certified_asset_op_source(
         postfiat_types::AssetTransactionOperation::VaultBridgeDepositChallenge(operation) => Ok(&operation.challenger),
         postfiat_types::AssetTransactionOperation::VaultBridgeDepositAttest(operation) => Ok(&operation.attestor),
         postfiat_types::AssetTransactionOperation::VaultBridgeDepositFinalize(operation) => Ok(&operation.finalizer),
+        postfiat_types::AssetTransactionOperation::SolanaBridgeProof(op) => Ok(&op.submitter),
         postfiat_types::AssetTransactionOperation::VaultBridgeDepositClaim(operation) => Ok(&operation.claimer),
         postfiat_types::AssetTransactionOperation::VaultBridgeFastIngressLifecycle(operation) => Ok(&operation.operator),
         postfiat_types::AssetTransactionOperation::VaultBridgeReceiptSubmit(operation) => Ok(&operation.operator),

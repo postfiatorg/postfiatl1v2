@@ -88,6 +88,7 @@ fn sign_single_validator_amendment(
 
 fn route(epoch: u32, activation_height: u64, vault_hash_byte: &str) -> VaultBridgeRouteProfileV1 {
     VaultBridgeRouteProfileV1 {
+        solana: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
         route_id: "arbitrum-pfusdc".to_string(),
         asset_id: "21".repeat(48),
@@ -118,6 +119,7 @@ fn route(epoch: u32, activation_height: u64, vault_hash_byte: &str) -> VaultBrid
 
 fn ethereum_sepolia_p0_route(activation_height: u64) -> VaultBridgeRouteProfileV1 {
     VaultBridgeRouteProfileV1 {
+        solana: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
         route_id: VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1.to_string(),
         asset_id: "21".repeat(48),
@@ -2307,6 +2309,7 @@ fn governed_route_real_anvil_deposit_withdrawal_roundtrip() {
         ],
     );
     let route = VaultBridgeRouteProfileV1 {
+        solana: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
         route_id: "anvil-pfusdc-roundtrip".to_string(),
         asset_id: asset.asset_id.clone(),
@@ -3433,3 +3436,6 @@ fn burn_bundle_uses_governed_source_series_balance() {
     assert!(vault_bridge_burn_to_redeem_bundle(options).unwrap_err().to_string().contains("duplicate source-series"));
     let _ = fs::remove_dir_all(data_dir);
 }
+
+#[path = "solana_bridge_tests.rs"]
+mod solana_bridge;

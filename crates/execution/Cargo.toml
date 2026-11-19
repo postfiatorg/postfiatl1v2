@@ -18,4 +18,5 @@ postfiat-types = { path = "../types" }
 sp1-verifier = "6.3.1"
 
 [dev-dependencies]
+pfusdc-sol-ingress-program = { path = "../../programs/pfusdc-sol-ingress" }
 serde_json = { workspace = true }

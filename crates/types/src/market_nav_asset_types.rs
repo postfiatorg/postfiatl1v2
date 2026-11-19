@@ -3784,6 +3784,11 @@ pub struct LedgerState {
     /// an anchor admits only 29-field proofs that start from it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub beacon_finality_states: Vec<PfUsdcBeaconFinalityStateV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solana_route: Option<SolanaRouteState>,
+    /// The first client retains its release-6 encoding and commitment.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub additional_solana_routes: BTreeMap<String, SolanaRouteState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fast_ingress_campaigns: Vec<FastIngressCampaignStateV1>,
     /// Genesis external lane records; empty on every chain without lanes.
@@ -3792,6 +3797,27 @@ pub struct LedgerState {
 }
 
 impl LedgerState {
+    pub fn solana_clients(&self) -> impl Iterator<Item = &SolanaRouteState> {
+        self.solana_route.iter().chain(self.additional_solana_routes.values())
+    }
+
+    fn solana_policies(&self) -> Result<BTreeMap<String, &SolanaRouteState>, String> {
+        let mut policies = BTreeMap::new();
+        let mut names = BTreeSet::new();
+        for route in self.solana_clients() {
+            if !names.insert((&route.profile.route_id, route.profile.route_epoch)) {
+                return Err("duplicate Solana route revision".into());
+            }
+            policies.insert(route.profile.profile_hash()?, route);
+        }
+        for (hash, route) in &self.additional_solana_routes {
+            if self.solana_route.is_none() || hash != &route.profile.profile_hash()? {
+                return Err("inconsistent additional Solana client".into());
+            }
+        }
+        Ok(policies)
+    }
+
     pub fn vault_bridge_route_backing(
         &self,
         asset_id: &str,
@@ -3828,6 +3854,20 @@ impl LedgerState {
                     .checked_add(receipt.allocated_value_atoms)
                     .ok_or_else(|| "route claimed backing overflow".to_string())?;
             }
+        }
+        let policies = self.solana_policies()?;
+        for receipt in self.vault_bridge_receipts.iter()
+            .filter(|r| r.asset_id == asset_id && r.solana_deposit_evidence.is_some())
+        {
+            let route = policies.get(&receipt.policy_hash).ok_or("missing Solana receipt route")?;
+            let route_id = &route.profile.route_id;
+            let row = routes.entry(route_id.clone()).or_insert_with(|| VaultBridgeRouteBackingStateV1 {
+                route_id: route_id.clone(), asset_id: asset_id.into(),
+                deposits_verified: 0, claims_minted: 0,
+                withdrawals_reserved: 0, withdrawals_paid: 0,
+            });
+            row.deposits_verified = row.deposits_verified.checked_add(receipt.amount_atoms).ok_or("Solana backing overflow")?;
+            row.claims_minted = row.deposits_verified;
         }
         for redemption in self.vault_bridge_redemptions.iter().filter(|r| r.asset_id == asset_id) {
             let Some(bucket) = self.vault_bridge_bucket(&redemption.bucket_id) else { continue; };
@@ -3902,6 +3942,8 @@ impl LedgerState {
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
             beacon_finality_states: Vec::new(),
+            solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
         }
@@ -3956,6 +3998,8 @@ impl LedgerState {
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
             beacon_finality_states: Vec::new(),
+            solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
         }
@@ -4011,6 +4055,8 @@ impl LedgerState {
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
             beacon_finality_states: Vec::new(),
+            solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
         }
@@ -4061,6 +4107,8 @@ impl LedgerState {
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
             beacon_finality_states: Vec::new(),
+            solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
         }
@@ -4116,6 +4164,8 @@ impl LedgerState {
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
             beacon_finality_states: Vec::new(),
+            solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
         }
@@ -4166,6 +4216,8 @@ impl LedgerState {
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
             beacon_finality_states: Vec::new(),
+            solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
         }
@@ -4580,8 +4632,32 @@ impl LedgerState {
             }
         }
 
+        let solana_policies = self.solana_policies()?;
+        for route in solana_policies.values() {
+            let pins = route.profile.solana.as_ref().ok_or("missing Solana pins")?;
+            route.client.validate()?;
+            if route.client.epoch < pins.anchor.epoch
+                || (route.client.epoch == pins.anchor.epoch && route.client != pins.anchor)
+                || route.client.known_key_table_hash != pins.anchor.known_key_table_hash
+            {
+                return Err("Solana client is inconsistent with its route anchor".to_string());
+            }
+        }
+        let mut solana_deposit_ids = BTreeSet::new();
         let mut vault_bridge_receipt_ids = BTreeSet::new();
         for receipt in &self.vault_bridge_receipts {
+            if let Some(evidence) = &receipt.solana_deposit_evidence {
+                let route = solana_policies.get(&receipt.policy_hash).ok_or("missing Solana receipt route")?;
+                let profile = &route.profile;
+                let pins = profile.solana.as_ref().ok_or("missing Solana receipt profile")?;
+                if !solana_deposit_ids.insert(&evidence.deposit_id)
+                    || evidence.program_id != profile.vault_address || receipt.asset_id != profile.asset_id
+                    || receipt.source_domain != profile.source_domain()
+                    || receipt.source_asset != format!("spl:{}:{}", pins.genesis_hash, profile.token_address)
+                {
+                    return Err("duplicate or misbound Solana receipt".into());
+                }
+            }
             receipt.validate_for_chain(chain_id)?;
             if !vault_bridge_receipt_ids.insert(receipt.receipt_id.clone()) {
                 return Err(format!("duplicate vault_bridge receipt id `{}`", receipt.receipt_id));
