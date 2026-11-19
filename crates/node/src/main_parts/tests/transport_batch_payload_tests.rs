@@ -2760,6 +2760,10 @@ mod transport_batch_payload_tests {
         Hold(Duration),
         /// Forward, then drop the consensus v2 vote from the validator's reply.
         OmitV2Vote,
+        /// Forward, then corrupt the consensus v2 vote signature in the reply
+        /// (which the transport accepts and the prepare QC would not) and hold
+        /// it this long.
+        CorruptV2Signature(Duration),
         /// Read the request and never answer.
         Silent,
         /// Hold the request this long, then close without a reply.
@@ -2825,6 +2829,7 @@ mod transport_batch_payload_tests {
                         let delay = match action {
                             ProxyVote::Forward(delay) => delay,
                             ProxyVote::OmitV2Vote => Duration::ZERO,
+                            ProxyVote::CorruptV2Signature(delay) => delay,
                             ProxyVote::Silent => {
                                 std::thread::sleep(Duration::from_secs(120));
                                 return;
@@ -2864,6 +2869,18 @@ mod transport_batch_payload_tests {
                                 serde_json::from_str(&response).expect("vote reply json");
                             if let Some(reply) = reply.as_object_mut() {
                                 reply.remove("consensus_v2_vote");
+                            }
+                            response = format!("{reply}\n");
+                        }
+                        if matches!(action, ProxyVote::CorruptV2Signature(_)) {
+                            let mut reply: serde_json::Value =
+                                serde_json::from_str(&response).expect("vote reply json");
+                            if let Some(signature) = reply
+                                .pointer_mut("/consensus_v2_vote/signature/signature_hex")
+                            {
+                                let hex = signature.as_str().expect("signature hex");
+                                let flipped = if hex.starts_with('0') { "1" } else { "0" };
+                                *signature = serde_json::json!(format!("{flipped}{}", &hex[1..]));
                             }
                             response = format!("{reply}\n");
                         }
@@ -2909,15 +2926,23 @@ mod transport_batch_payload_tests {
         }
     }
 
-    /// Six consensus v2 validators at height 0 with live transport services;
-    /// `proxies` puts a phase proxy in front of the validators that follow the
-    /// height-1 proposer by the given offsets.
     fn vote_phase_round_fixture(
         tag: &str,
         proxies: &[(usize, ProxyVote, ProxyVote)],
     ) -> VotePhaseRoundFixture {
+        vote_phase_round_fixture_of(tag, 6, proxies)
+    }
+
+    /// `validator_count` consensus v2 validators (active from height 1) at
+    /// height 0 with live transport services; `proxies` puts a phase proxy in
+    /// front of the validators that follow the height-1 proposer by the given
+    /// offsets.
+    fn vote_phase_round_fixture_of(
+        tag: &str,
+        validator_count: usize,
+        proxies: &[(usize, ProxyVote, ProxyVote)],
+    ) -> VotePhaseRoundFixture {
         prewarm_shielded_verifier_cache(tag).expect("prewarm verifier");
-        let validator_count = 6usize;
         let chain_id = format!("postfiat-{tag}-test");
         let root = std::env::temp_dir().join(format!(
             "postfiat-{tag}-{}-{}",
@@ -3398,6 +3423,158 @@ mod transport_batch_payload_tests {
         assert!(certificate_qc_voters(&certificate_file, "precommit_qc")
             .contains(&format!("validator-{busy}")));
         clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// The record of an early-quorum v2 round (`fixture` validators, proposer
+    /// at `fixture.proposer_index`), after its late answers were collected.
+    fn v2_round_vote_record(
+        fixture: &VotePhaseRoundFixture,
+    ) -> postfiat_node::block_vote_records::BlockVoteRecord {
+        crate::transport_runtime::wait_for_pending_block_vote_records();
+        postfiat_node::block_vote_records::read_block_vote_record(
+            &fixture.data_dirs[fixture.proposer_index],
+            1,
+        )
+        .expect("read vote record")
+        .expect("the finalized height has a vote record")
+    }
+
+    /// Consensus v2 active at height 1 (the record tests above run before its
+    /// activation): a prepare reply that arrives after the prepare quorum is
+    /// relayed by the precommit collector to the vote record exactly once.
+    #[test]
+    fn v2_vote_record_keeps_a_late_prepare_reply_once_and_a_silent_peer_as_no_answer() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        use postfiat_node::block_vote_records::BlockVoteOutcome;
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        // Ten validators, quorum 7: the six fast peers make both quorums.
+        let validator_count = 10;
+        let fixture = vote_phase_round_fixture_of(
+            "v2-vote-record-late",
+            validator_count,
+            &[
+                (1, ProxyVote::Forward(Duration::from_secs(3)), forward),
+                (2, ProxyVote::Silent, forward),
+            ],
+        );
+        let (result, _, lock_free) = run_vote_phase_round_with_sends(
+            &fixture,
+            8_000,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            8_000,
+            Duration::from_secs(30),
+        );
+        let round = result
+            .expect("round still running")
+            .expect("round certifies without the late and the silent peer");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        let record = v2_round_vote_record(&fixture);
+        let name = |offset: usize| {
+            format!("validator-{}", (fixture.proposer_index + offset) % validator_count)
+        };
+        let validators = record
+            .entries
+            .iter()
+            .map(|entry| entry.validator.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(validators.len(), validator_count, "{validators:?}");
+        assert_eq!(
+            validators.iter().collect::<BTreeSet<_>>().len(),
+            validator_count,
+            "a validator is recorded twice: {validators:?}"
+        );
+        let entry = |validator: &str| {
+            record
+                .entries
+                .iter()
+                .find(|entry| entry.validator == validator)
+                .expect("recorded validator")
+                .clone()
+        };
+        let late = entry(&name(1));
+        assert_eq!(late.outcome, BlockVoteOutcome::Accepted, "{late:?}");
+        assert!(late.answered_after_quorum, "{late:?}");
+        assert!(late.vote_id.is_some(), "{late:?}");
+        let silent = entry(&name(2));
+        assert_eq!(silent.outcome, BlockVoteOutcome::NoAnswer, "{silent:?}");
+        assert!(silent.vote_id.is_none());
+        let certificate_file = fixture.artifact_dir.join("block-certificate.json");
+        for qc in ["prepare_qc", "precommit_qc"] {
+            let voters = certificate_qc_voters(&certificate_file, qc);
+            assert_eq!(
+                voters.iter().collect::<BTreeSet<_>>().len(),
+                voters.len(),
+                "{qc} counts a validator twice: {voters:?}"
+            );
+            assert!(voters.len() >= fixture.quorum, "{qc}: {voters:?}");
+            assert!(!voters.contains(&name(2)), "{qc}: {voters:?}");
+        }
+        assert!(!certificate_qc_voters(&certificate_file, "prepare_qc").contains(&name(1)));
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file)
+            .expect("close persistent streams");
+    }
+
+    /// A prepare reply that arrives but fails the prepare QC checks (here a
+    /// bad v2 signature) is recorded as a refused, invalid vote response,
+    /// whether it arrives before or after the prepare quorum.
+    #[test]
+    fn v2_vote_record_keeps_a_rejected_prepare_reply_as_an_invalid_vote_response() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        use postfiat_node::block_vote_records::BlockVoteOutcome;
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture = vote_phase_round_fixture_of(
+            "v2-vote-record-rejected",
+            10,
+            &[
+                (1, ProxyVote::CorruptV2Signature(Duration::ZERO), forward),
+                (3, ProxyVote::CorruptV2Signature(Duration::from_secs(3)), forward),
+            ],
+        );
+        // No retries, so both rejected replies end well before the record
+        // deadline.
+        let (result, _, lock_free) = run_vote_phase_round_with_sends(
+            &fixture,
+            8_000,
+            0,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            8_000,
+            Duration::from_secs(30),
+        );
+        let round = result
+            .expect("round still running")
+            .expect("round certifies without the rejected replies");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        let record = v2_round_vote_record(&fixture);
+        let certificate_file = fixture.artifact_dir.join("block-certificate.json");
+        for offset in [1, 3] {
+            let validator = format!("validator-{}", (fixture.proposer_index + offset) % 10);
+            let entry = record
+                .entries
+                .iter()
+                .find(|entry| entry.validator == validator)
+                .expect("recorded validator");
+            assert_eq!(entry.outcome, BlockVoteOutcome::Refused, "{entry:?}");
+            assert_eq!(
+                entry.refusal_class.as_deref(),
+                Some("invalid_vote_response"),
+                "{entry:?}"
+            );
+            assert!(entry.vote_id.is_none(), "{entry:?}");
+            assert!(!certificate_qc_voters(&certificate_file, "prepare_qc").contains(&validator));
+        }
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file)
+            .expect("close persistent streams");
     }
 
     #[test]
