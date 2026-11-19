@@ -211,6 +211,7 @@ fn signed_block_record(
 
 fn route_profile() -> VaultBridgeRouteProfileRecordV1 {
     let profile = VaultBridgeRouteProfileV1 {
+        solana: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
         route_id: "arbitrum-pfusdc-tier4".to_string(),
         asset_id: "21".repeat(48),

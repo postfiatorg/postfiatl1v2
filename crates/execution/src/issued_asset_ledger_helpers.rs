@@ -888,6 +888,7 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
         fast_ingress_campaigns: _,
         arc_finality_states: _,
         beacon_finality_states: _,
+        solana_route: _,
     } = ledger;
 }
 

@@ -1302,6 +1302,15 @@ fn account_tx_rows_for_transparent_block(
                 None,
                 None,
             ),
+            AssetTransactionOperation::SolanaBridgeProof(operation) => (
+                operation.submitter.clone(),
+                operation.profile_hash.clone(),
+                0,
+                None,
+                None,
+                None,
+                None,
+            ),
             AssetTransactionOperation::VaultBridgeFastIngressLifecycle(operation) => (
                 operation.operator.clone(),
                 operation.source_assertion_id.clone(),

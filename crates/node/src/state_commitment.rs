@@ -830,6 +830,7 @@ fn validate_issued_supply_custody_inventory(
         fast_ingress_campaigns: _,
         arc_finality_states: _,
         beacon_finality_states: _,
+        solana_route: _,
     } = ledger;
     let ShieldedState {
         next_note_position: _,
@@ -1623,6 +1624,10 @@ pub(super) fn append_ledger_state(
         )?;
     }
 
+    if let Some(route) = &ledger.solana_route {
+        append_canonical_bytes_commitment(bytes, "ledger.solana_route.v1", &serde_json::to_vec(route)?);
+    }
+
     if commit_complete_nav_state && !ledger.beacon_finality_states.is_empty() {
         let mut keys = std::collections::BTreeSet::new();
         for state in &ledger.beacon_finality_states {
@@ -1830,6 +1835,7 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
         fast_ingress_campaigns: _,
         arc_finality_states: _,
         beacon_finality_states: _,
+        solana_route: _,
     } = ledger;
 }
 
@@ -2879,6 +2885,10 @@ pub(super) fn append_vault_bridge_receipt(
         &format!("{prefix}.bridge_deposit_evidence.present"),
         receipt.bridge_deposit_evidence.is_some(),
     );
+    if let Some(evidence) = &receipt.solana_deposit_evidence {
+        append_canonical_bytes_commitment(bytes, &format!("{prefix}.solana_deposit"),
+            &serde_json::to_vec(evidence).expect("Solana evidence contains JSON primitives"));
+    }
     if let Some(evidence) = &receipt.bridge_deposit_evidence {
         append_vault_bridge_deposit_evidence(
             bytes,

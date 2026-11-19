@@ -113,6 +113,8 @@ pub const RETIRED_VAULT_BRIDGE_ADDRESS: &str = "0x1a15e6103d6af4e88924f748e13b82
 /// preimage from the chain rather than supplying it through configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VaultBridgeRouteProfileV1 {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solana: Option<SolanaRoutePins>,
     pub schema: String,
     pub route_id: String,
     pub asset_id: String,
@@ -167,32 +169,44 @@ impl VaultBridgeRouteProfileV1 {
             &self.asset_id,
             ISSUED_ASSET_ID_HEX_LEN,
         )?;
-        if self.source_chain_id == 0 {
-            return Err("vault bridge route profile source_chain_id must be nonzero".to_string());
+        if let Some(pins) = &self.solana {
+            pins.validate(self)?;
+        } else {
+            if self.source_chain_id == 0 {
+                return Err("vault bridge route profile source_chain_id must be nonzero".to_string());
+            }
+            validate_evm_address_text(
+                "vault_bridge_route_profile.vault_address",
+                &self.vault_address,
+            )?;
+            validate_evm_address_text(
+                "vault_bridge_route_profile.token_address",
+                &self.token_address,
+            )?;
+            if self.vault_address == RETIRED_VAULT_BRIDGE_ADDRESS {
+                return Err("vault bridge route profile identifies a retired vault".to_string());
+            }
+            validate_vault_bridge_runtime_code_hash(
+                "vault_bridge_route_profile.vault_runtime_code_hash",
+                &self.vault_runtime_code_hash,
+            )?;
+            validate_vault_bridge_runtime_code_hash(
+                "vault_bridge_route_profile.token_runtime_code_hash",
+                &self.token_runtime_code_hash,
+            )?;
         }
-        validate_evm_address_text(
-            "vault_bridge_route_profile.vault_address",
-            &self.vault_address,
-        )?;
-        validate_evm_address_text(
-            "vault_bridge_route_profile.token_address",
-            &self.token_address,
-        )?;
-        if self.vault_address == RETIRED_VAULT_BRIDGE_ADDRESS {
-            return Err("vault bridge route profile identifies a retired vault".to_string());
-        }
-        validate_vault_bridge_runtime_code_hash(
-            "vault_bridge_route_profile.vault_runtime_code_hash",
-            &self.vault_runtime_code_hash,
-        )?;
-        validate_vault_bridge_runtime_code_hash(
-            "vault_bridge_route_profile.token_runtime_code_hash",
-            &self.token_runtime_code_hash,
-        )?;
         if self.route_epoch == 0 {
             return Err("vault bridge route profile route_epoch must be nonzero".to_string());
         }
         let expected_tier = match self.verifier_kind.as_str() {
+            SOLANA_DEPOSIT_PROOF if self.solana.is_some() => {
+                if self.min_attestations != 0 || self.minimum_confirmations != 0
+                    || self.verifier_proof_encoding != NAV_SP1_PROOF_ENCODING_GROTH16
+                {
+                    return Err("Solana route requires Groth16 deposit proofs".into());
+                }
+                VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN
+            }
             NAV_PROFILE_VERIFIER_MULTI_FETCH => {
                 if self.min_attestations == 0 || self.minimum_confirmations == 0 {
                     return Err("independently observed route profile requires nonzero attestation and confirmation thresholds".to_string());
@@ -265,6 +279,9 @@ impl VaultBridgeRouteProfileV1 {
 
     pub fn canonical_preimage(&self) -> Result<String, String> {
         self.validate()?;
+        if self.solana.is_some() {
+            return serde_json::to_string(self).map_err(|error| error.to_string());
+        }
         Ok(format!(
             "schema={}\nroute_id={}\nasset_id={}\nsource_chain_id={}\nvault_address={}\nvault_runtime_code_hash={}\ntoken_address={}\ntoken_runtime_code_hash={}\nroute_epoch={}\nverifier_kind={}\nevidence_tier={}\nverifier_policy_hash={}\nverifier_program_vkey={}\nverifier_proof_encoding={}\nmax_proof_bytes={}\nmax_public_values_bytes={}\nmax_snapshot_age_blocks={}\nchallenge_window_blocks={}\nmax_epoch_gap_blocks={}\nsettle_deadline_blocks={}\nmin_challenge_bond={}\nmin_attestations={}\nminimum_confirmations={}\nactivation_height={}\nexpires_at_height={}\n",
             self.schema,
@@ -303,6 +320,9 @@ impl VaultBridgeRouteProfileV1 {
     }
 
     pub fn source_domain(&self) -> String {
+        if let Some(pins) = &self.solana {
+            return format!("spl:{}:{}:{}", pins.genesis_hash, self.vault_address, self.token_address);
+        }
         format!(
             "erc20_bridge_vault:{}:{}:{}",
             self.source_chain_id, self.vault_address, self.token_address
@@ -1860,6 +1880,8 @@ pub struct VaultBridgeReceipt {
     pub expires_at_height: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bridge_deposit_evidence: Option<VaultBridgeDepositEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solana_deposit_evidence: Option<SolanaDepositEvidence>,
 }
 
 impl VaultBridgeReceipt {
@@ -1878,6 +1900,38 @@ impl VaultBridgeReceipt {
         created_at_height: u64,
         expires_at_height: u64,
         bridge_deposit_evidence: Option<VaultBridgeDepositEvidence>,
+    ) -> Result<Self, String> {
+        Self::with_evidence(chain_id, asset_id, source_domain, source_asset, claim_type, amount_atoms,
+            source_tx_or_attestation, finality_ref, vault_id, policy_hash, created_at_height,
+            expires_at_height, bridge_deposit_evidence, None)
+    }
+
+    pub fn from_solana(chain_id: &str, profile: &VaultBridgeRouteProfileV1, evidence: SolanaDepositEvidence,
+        height: u64) -> Result<Self, String> {
+        let pins = profile.solana.as_ref().ok_or("missing Solana profile")?;
+        Self::with_evidence(chain_id, profile.asset_id.clone(), profile.source_domain(),
+            format!("spl:{}:{}", pins.genesis_hash, profile.token_address),
+            VAULT_BRIDGE_CLAIM_TYPE_BRIDGE_DEPOSIT, evidence.amount_atoms,
+            format!("solana_deposit:{}", evidence.deposit_id), evidence.finality_ref(),
+            evidence.program_id.clone(), profile.profile_hash()?, height, profile.expires_at_height,
+            None, Some(evidence))
+    }
+
+    fn with_evidence(
+        chain_id: &str,
+        asset_id: impl Into<String>,
+        source_domain: impl Into<String>,
+        source_asset: impl Into<String>,
+        claim_type: impl Into<String>,
+        amount_atoms: u64,
+        source_tx_or_attestation: impl Into<String>,
+        finality_ref: impl Into<String>,
+        vault_id: impl Into<String>,
+        policy_hash: impl Into<String>,
+        created_at_height: u64,
+        expires_at_height: u64,
+        bridge_deposit_evidence: Option<VaultBridgeDepositEvidence>,
+        solana_deposit_evidence: Option<SolanaDepositEvidence>,
     ) -> Result<Self, String> {
         let asset_id = asset_id.into();
         let source_domain = source_domain.into();
@@ -1915,6 +1969,7 @@ impl VaultBridgeReceipt {
             counted_at_height: 0,
             expires_at_height,
             bridge_deposit_evidence,
+            solana_deposit_evidence,
         };
         receipt.validate_for_chain(chain_id)?;
         Ok(receipt)
@@ -1934,16 +1989,27 @@ impl VaultBridgeReceipt {
         validate_text_field("vault_bridge_receipt.source_domain", &self.source_domain)?;
         validate_text_field("vault_bridge_receipt.source_asset", &self.source_asset)?;
         validate_text_field("vault_bridge_receipt.claim_type", &self.claim_type)?;
-        validate_vault_bridge_receipt_bridge_deposit_fields(
-            &self.claim_type,
-            &self.source_domain,
-            &self.source_asset,
-            self.amount_atoms,
-            &self.source_tx_or_attestation,
-            &self.finality_ref,
-            &self.vault_id,
-            self.bridge_deposit_evidence.as_ref(),
-        )?;
+        if let Some(evidence) = &self.solana_deposit_evidence {
+            evidence.validate()?;
+            if self.bridge_deposit_evidence.is_some() || self.claim_type != VAULT_BRIDGE_CLAIM_TYPE_BRIDGE_DEPOSIT
+                || self.amount_atoms != evidence.amount_atoms || self.vault_id != evidence.program_id
+                || self.source_tx_or_attestation != format!("solana_deposit:{}", evidence.deposit_id)
+                || self.finality_ref != evidence.finality_ref()
+            {
+                return Err("Solana receipt fields differ from deposit evidence".into());
+            }
+        } else {
+            validate_vault_bridge_receipt_bridge_deposit_fields(
+                &self.claim_type,
+                &self.source_domain,
+                &self.source_asset,
+                self.amount_atoms,
+                &self.source_tx_or_attestation,
+                &self.finality_ref,
+                &self.vault_id,
+                self.bridge_deposit_evidence.as_ref(),
+            )?;
+        }
         if self.amount_atoms == 0 {
             return Err("vault_bridge_receipt.amount_atoms must be nonzero".to_string());
         }

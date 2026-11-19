@@ -22,6 +22,7 @@ include!("nft_escrow_asset_state.rs");
 include!("tx_hashing.rs");
 include!("owned_transfer.rs");
 include!("owned_transfer_recovery.rs");
+mod solana_bridge;
 pub mod fastlane_primary;
 pub mod fastswap;
 pub mod fastswap_asset_control;

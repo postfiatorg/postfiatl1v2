@@ -2464,31 +2464,13 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
             &operation.policy_hash,
         )
         .map_err(|error| ("pfusdc_source_series_bucket_invalid", error))?;
-        if let Some(existing) = ledger.asset_definition(&source_series_id) {
-            if existing.asset_family_id != operation.asset_id
-                || existing.source_series_id != source_series_id
-                || existing.source_bucket_id != source_bucket_id
-                || existing.issuer != asset.issuer
-                || existing.precision != asset.precision
-            {
-                return Err((
-                    "pfusdc_source_series_asset_mismatch",
-                    "existing source-series asset does not match its immutable family and source"
-                        .to_string(),
-                ));
-            }
-            (existing.clone(), None)
-        } else {
-            let display_name = format!("{} · source epoch {}", asset.code, operation.route_epoch);
-            let source_asset = AssetDefinition::new_source_series(
-                &asset,
-                source_series_id,
-                source_bucket_id,
-                display_name,
-            )
-            .map_err(|error| ("pfusdc_source_series_asset_invalid", error))?;
-            (source_asset.clone(), Some(source_asset))
-        }
+        bridge_source_series_asset(
+            ledger,
+            &asset,
+            &source_series_id,
+            &source_bucket_id,
+            format!("{} · source epoch {}", asset.code, operation.route_epoch),
+        )?
     } else {
         if operation.route_epoch != 0 {
             return Err((
@@ -2499,46 +2481,8 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
         (asset.clone(), None)
     };
 
-    let ledger_supply = issued_asset_family_supply_with_non_nav_spread(
-        ledger,
-        &operation.asset_id,
-        !compatibility.allow_legacy_non_nav_spread_supply_omission,
-    )?;
-    let orchard_live = orchard_balances
-        .iter()
-        .filter(|balance| {
-            balance.asset_id == operation.asset_id
-                || ledger
-                    .asset_definition(&balance.asset_id)
-                    .is_some_and(|definition| definition.asset_family_id == operation.asset_id)
-        })
-        .try_fold(0_u64, |total, balance| {
-            total.checked_add(balance.live_total).ok_or((
-                "issued_supply_orchard_overflow",
-                "vault bridge asset family Orchard supply overflowed".to_string(),
-            ))
-        })?;
-    let current_supply = ledger_supply.checked_add(orchard_live).ok_or_else(|| {
-        (
-            "issued_supply_orchard_overflow",
-            "vault bridge asset claim orchard-inclusive issued supply overflowed".to_string(),
-        )
-    })?;
-    let supply_after_claim = current_supply.checked_add(claim_amount).ok_or_else(|| {
-        (
-            "issued_supply_overflow",
-            "vault bridge asset bridge deposit claim would overflow issued supply".to_string(),
-        )
-    })?;
-    if let Some(max_supply) = asset.max_supply {
-        if supply_after_claim > max_supply {
-            return Err((
-                "issued_supply_cap_exceeded",
-                "vault bridge asset bridge deposit claim exceeds issued asset max_supply"
-                    .to_string(),
-            ));
-        }
-    }
+    let supply_after_claim = bridge_supply_after_claim(ledger, &asset, claim_amount,
+        orchard_balances, compatibility)?;
     let proof_bounded_cap_checkpoint = if record.source_proof_kind
         == SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
         && supply_after_claim > nav_asset.circulating_supply
@@ -2630,6 +2574,135 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
         Some(record.evidence.clone()),
     )
     .map_err(|error| ("bad_vault_bridge_receipt", error))?;
+    commit_bridge_receipt_credit(genesis, ledger, expected_receipt, &record.evidence_root,
+        &operation.asset_id, block_height, source_series_active, source_asset_to_create,
+        recipient_index, recipient_after, recipient_required)?;
+    if let Some(campaign) = claimed_fast_campaign {
+        let current = ledger
+            .fast_ingress_campaign_mut(&campaign.route_profile_hash, campaign.route_epoch)
+            .ok_or_else(|| {
+                (
+                    "pfusdc_fast_ingress_campaign_missing",
+                    "bonded ingress campaign disappeared during claim".to_string(),
+                )
+            })?;
+        *current = campaign;
+    }
+    update_bridge_cap(ledger, &operation.asset_id, supply_after_claim, block_height,
+        proof_bounded_cap_checkpoint)
+}
+
+fn update_bridge_cap(ledger: &mut LedgerState, family_id: &str, supply_after_claim: u64,
+    block_height: u64, proof_bounded_cap_checkpoint: Option<String>) -> Result<(), (&'static str, String)> {
+    if let Some(checkpoint_hash) = proof_bounded_cap_checkpoint {
+        let nav_asset = ledger.nav_asset_mut(family_id).ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                "NAV asset disappeared during cap growth".to_string(),
+            )
+        })?;
+        nav_asset.circulating_supply = supply_after_claim;
+        nav_asset.finalized_epoch = nav_asset.finalized_epoch.checked_add(1).ok_or_else(|| {
+            (
+                "nav_epoch_overflow",
+                "proof-bounded NAV epoch overflow".to_string(),
+            )
+        })?;
+        nav_asset.finalized_reserve_packet_hash = checkpoint_hash;
+        nav_asset.finalized_at_height = block_height;
+        nav_asset
+            .validate()
+            .map_err(|error| ("bad_nav_asset", error))?;
+    }
+    Ok(())
+}
+
+fn bridge_source_series_asset(
+    ledger: &LedgerState,
+    asset: &AssetDefinition,
+    source_series_id: &str,
+    source_bucket_id: &str,
+    display_name: String,
+) -> Result<(AssetDefinition, Option<AssetDefinition>), (&'static str, String)> {
+    if let Some(existing) = ledger.asset_definition(source_series_id) {
+        if existing.asset_family_id != asset.asset_id
+            || existing.source_series_id != source_series_id
+            || existing.source_bucket_id != source_bucket_id
+            || existing.issuer != asset.issuer
+            || existing.precision != asset.precision
+        {
+            return Err((
+                "pfusdc_source_series_asset_mismatch",
+                "existing source-series asset does not match its immutable family and source"
+                    .to_string(),
+            ));
+        }
+        Ok((existing.clone(), None))
+    } else {
+        let source_asset = AssetDefinition::new_source_series(
+            asset,
+            source_series_id,
+            source_bucket_id,
+            display_name,
+        )
+        .map_err(|error| ("pfusdc_source_series_asset_invalid", error))?;
+        Ok((source_asset.clone(), Some(source_asset)))
+    }
+}
+
+fn bridge_supply_after_claim(ledger: &LedgerState, asset: &AssetDefinition, claim_amount: u64,
+    orchard_balances: &[AssetOrchardAssetBalance], compatibility: AssetExecutionCompatibility)
+    -> Result<u64, (&'static str, String)> {
+    let ledger_supply = issued_asset_family_supply_with_non_nav_spread(
+        ledger,
+        &asset.asset_id,
+        !compatibility.allow_legacy_non_nav_spread_supply_omission,
+    )?;
+    let orchard_live = orchard_balances
+        .iter()
+        .filter(|balance| {
+            balance.asset_id == asset.asset_id
+                || ledger
+                    .asset_definition(&balance.asset_id)
+                    .is_some_and(|definition| definition.asset_family_id == asset.asset_id)
+        })
+        .try_fold(0_u64, |total, balance| {
+            total.checked_add(balance.live_total).ok_or((
+                "issued_supply_orchard_overflow",
+                "vault bridge asset family Orchard supply overflowed".to_string(),
+            ))
+        })?;
+    let current_supply = ledger_supply.checked_add(orchard_live).ok_or_else(|| {
+        (
+            "issued_supply_orchard_overflow",
+            "vault bridge asset claim orchard-inclusive issued supply overflowed".to_string(),
+        )
+    })?;
+    let supply_after_claim = current_supply.checked_add(claim_amount).ok_or_else(|| {
+        (
+            "issued_supply_overflow",
+            "vault bridge asset bridge deposit claim would overflow issued supply".to_string(),
+        )
+    })?;
+    if let Some(max_supply) = asset.max_supply {
+        if supply_after_claim > max_supply {
+            return Err((
+                "issued_supply_cap_exceeded",
+                "vault bridge asset bridge deposit claim exceeds issued asset max_supply"
+                    .to_string(),
+            ));
+        }
+    }
+    Ok(supply_after_claim)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn commit_bridge_receipt_credit(genesis: &Genesis, ledger: &mut LedgerState,
+    expected_receipt: VaultBridgeReceipt, evidence_root: &str, family_id: &str,
+    block_height: u64, source_series_active: bool, source_asset_to_create: Option<AssetDefinition>,
+    recipient_index: usize, recipient_after: u64, recipient_required: u64)
+    -> Result<(), (&'static str, String)> {
+    let claim_amount = expected_receipt.amount_atoms;
     let receipt_index = ledger
         .vault_bridge_receipts
         .iter()
@@ -2646,6 +2719,7 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
             || receipt.vault_id != expected_receipt.vault_id
             || receipt.policy_hash != expected_receipt.policy_hash
             || receipt.bucket_id != expected_receipt.bucket_id
+            || receipt.solana_deposit_evidence != expected_receipt.solana_deposit_evidence
             || receipt.bridge_deposit_evidence != expected_receipt.bridge_deposit_evidence
         {
             return Err((
@@ -2697,11 +2771,11 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
             "vault bridge asset bridge deposit receipt capacity is already allocated".to_string(),
         ));
     }
-    let consumer_id = format!("vault_bridge_deposit_claim:{}", record.evidence_root);
+    let consumer_id = format!("vault_bridge_deposit_claim:{}", evidence_root);
     let allocation = VaultBridgeAllocation::new(
         &genesis.chain_id,
         receipt_after.receipt_id.clone(),
-        operation.asset_id.clone(),
+        family_id.to_owned(),
         receipt_after.bucket_id.clone(),
         claim_amount,
         VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY,
@@ -2754,7 +2828,7 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
         let mut migration_buckets = ledger
             .vault_bridge_bucket_states
             .iter()
-            .filter(|bucket| bucket.asset_id == operation.asset_id)
+            .filter(|bucket| bucket.asset_id == family_id)
             .cloned()
             .collect::<Vec<_>>();
         migration_buckets.sort_by(|left, right| left.bucket_id.cmp(&right.bucket_id));
@@ -2842,37 +2916,6 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
         recipient_after,
         recipient_required,
     );
-    if let Some(campaign) = claimed_fast_campaign {
-        let current = ledger
-            .fast_ingress_campaign_mut(&campaign.route_profile_hash, campaign.route_epoch)
-            .ok_or_else(|| {
-                (
-                    "pfusdc_fast_ingress_campaign_missing",
-                    "bonded ingress campaign disappeared during claim".to_string(),
-                )
-            })?;
-        *current = campaign;
-    }
-    if let Some(checkpoint_hash) = proof_bounded_cap_checkpoint {
-        let nav_asset = ledger.nav_asset_mut(&operation.asset_id).ok_or_else(|| {
-            (
-                "missing_nav_asset",
-                "NAV asset disappeared during cap growth".to_string(),
-            )
-        })?;
-        nav_asset.circulating_supply = supply_after_claim;
-        nav_asset.finalized_epoch = nav_asset.finalized_epoch.checked_add(1).ok_or_else(|| {
-            (
-                "nav_epoch_overflow",
-                "proof-bounded NAV epoch overflow".to_string(),
-            )
-        })?;
-        nav_asset.finalized_reserve_packet_hash = checkpoint_hash;
-        nav_asset.finalized_at_height = block_height;
-        nav_asset
-            .validate()
-            .map_err(|error| ("bad_nav_asset", error))?;
-    }
     Ok(())
 }
 

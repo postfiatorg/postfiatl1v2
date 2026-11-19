@@ -2706,6 +2706,7 @@ fn proof_bounded_nav_cap_checkpoint_is_route_and_evidence_bound() {
 #[test]
 fn ethereum_sepolia_p0_route_profile_binds_manifest_program_and_domain() {
     let profile = VaultBridgeRouteProfileV1 {
+        solana: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
         route_id: VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1.to_string(),
         asset_id: "aa".repeat(48),

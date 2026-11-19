@@ -962,6 +962,7 @@ fn route_profile(
         bail!("expires_at_height must follow activation_height");
     }
     let profile = VaultBridgeRouteProfileV1 {
+        solana: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
         route_id: route.route_id().to_string(),
         asset_id,

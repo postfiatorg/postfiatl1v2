@@ -2719,6 +2719,7 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
         fast_ingress_campaigns: _,
         arc_finality_states: _,
         beacon_finality_states: _,
+        solana_route: _,
     } = ledger;
     let ShieldedState {
         next_note_position: _,

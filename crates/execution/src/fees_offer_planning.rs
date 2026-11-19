@@ -122,6 +122,13 @@ pub fn asset_transaction_state_expansion_fee(
             TRUSTLINE_STATE_EXPANSION_FEE
         }
         AssetTransactionOperation::NavRedeemAtNav(_) => TRUSTLINE_STATE_EXPANSION_FEE,
+        AssetTransactionOperation::SolanaBridgeProof(op)
+            if op.proof_kind == postfiat_types::SOLANA_DEPOSIT_PROOF
+                && op.public_values.len() <= postfiat_types::DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES as usize => {
+            let count = postfiat_types::SolanaDepositPublicValues::decode(&op.public_values)
+                .map_or(0, |values| values.receipts.len() as u64);
+            TRUSTLINE_STATE_EXPANSION_FEE.saturating_mul(3).saturating_mul(count)
+        }
         AssetTransactionOperation::VaultBridgeDepositClaim(_) => {
             TRUSTLINE_STATE_EXPANSION_FEE.saturating_mul(3)
         }

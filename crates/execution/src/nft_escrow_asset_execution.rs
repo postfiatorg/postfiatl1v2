@@ -826,6 +826,12 @@ fn apply_asset_operation(
     orchard_balances: &[AssetOrchardAssetBalance],
 ) -> Result<(), (&'static str, String)> {
     match &transaction.unsigned.operation {
+        AssetTransactionOperation::SolanaBridgeProof(operation) => {
+            if transaction.unsigned.transaction_kind != "solana_bridge_proof_v1" {
+                return Err(("wrong_transaction_kind", "Solana proof transaction kind differs".into()));
+            }
+            solana_bridge::apply_proof(genesis, ledger, operation, block_height, compatibility, orchard_balances)
+        }
         AssetTransactionOperation::YoloTargetRegisterV1(operation) => {
             if transaction.unsigned.transaction_kind != postfiat_types::YOLO_TARGET_REGISTER_TRANSACTION_KIND_V1 {
                 return Err(("wrong_transaction_kind", "target registration transaction kind differs".to_string()));

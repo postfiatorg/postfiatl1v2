@@ -1596,7 +1596,8 @@ fn execute_governance_batch_with_replay(
             if governance
                 .vault_bridge_route_profiles
                 .iter()
-                .filter(|existing| existing.profile.asset_id == activation.profile.asset_id)
+                .filter(|existing| existing.profile.asset_id == activation.profile.asset_id
+                    && existing.profile.solana.is_some() == activation.profile.solana.is_some())
                 .any(|existing| {
                     existing.profile.route_epoch >= activation.profile.route_epoch
                         || existing.profile.activation_height
@@ -1611,6 +1612,20 @@ fn execute_governance_batch_with_replay(
             let ledger = ledger.as_deref().ok_or_else(|| {
                 "vault bridge route activation requires canonical ledger context".to_string()
             })?;
+            if activation.profile.solana.is_some() {
+                let height = governance.amendments.iter()
+                    .filter(|a| a.kind == postfiat_types::SOLANA_ACTIVATION_HEIGHT)
+                    .map(|a| u64::from(a.value)).min();
+                if height.is_none_or(|at| block_height < at) {
+                    return Err("Solana bridge is not active".into());
+                }
+                if block_height >= activation.profile.expires_at_height {
+                    return Err("Solana route already expired".into());
+                }
+                if ledger.solana_route.is_some() {
+                    return Err("Solana light client already anchored".into());
+                }
+            }
             validate_vault_bridge_route_profile_against_ledger(
                 ledger,
                 &activation.profile,
@@ -1661,6 +1676,12 @@ fn execute_governance_batch_with_replay(
         })();
         match validated {
             Ok(record) => {
+                if let (Some(ledger), Some(pins)) = (ledger.as_deref_mut(), &activation.profile.solana) {
+                    ledger.solana_route = Some(postfiat_types::SolanaRouteState {
+                        profile: activation.profile.clone(),
+                        client: pins.anchor.clone(),
+                    });
+                }
                 if let Some(state) = activation.tier4_finality_bootstrap.clone() {
                     // The validation closure required canonical ledger context;
                     // therefore an accepted Tier-4 activation must have it.
@@ -1712,6 +1733,15 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
     let nav_asset = ledger
         .nav_asset(&route.asset_id)
         .ok_or_else(|| "vault bridge route asset is missing from the NAV registry".to_string())?;
+    if route.solana.is_some() {
+        // Solana is a second backing series of the same family. Its signed
+        // route pins are independent of the Ethereum NAV verifier profile.
+        let asset = ledger.asset_definition(&route.asset_id).ok_or("missing Solana pfUSDC family")?;
+        if asset.issuer != nav_asset.issuer || asset.precision != 6 || !asset.asset_family_id.is_empty() {
+            return Err("invalid Solana pfUSDC family".into());
+        }
+        return Ok(());
+    }
     let profile = ledger
         .nav_proof_profile(&nav_asset.proof_profile)
         .ok_or_else(|| "vault bridge route NAV proof profile is missing".to_string())?;
