@@ -75,33 +75,61 @@ def main():
     if len(args.records) != 6 or len(receipt_ids) != 1:
         raise ValueError("release 5 records disagree")
     receipt_id, = receipt_ids
+    topology = args.work / "topology.json"
+    cli("topology-consensus-v2", "--chain-id", "postfiat-wan-devnet-2", "--validators", 6,
+        "--activation-height", 1, "--base-port", 42000, "--rpc-base-port", 42100,
+        "--hosts", ",".join(["127.0.0.1"] * 6), "--output", topology)
     servers = []
     try:
         for n in range(6):
             data = args.sources / f"validator-{n}"
-            ready = args.work / f"rpc-{n}.ready"
-            ready.unlink(missing_ok=True)
-            with (args.work/f"rpc-{n}.log").open("w") as log:
-                proc = subprocess.Popen([BINARY, "rpc-serve", "--unsafe-devnet-json-storage", "--disable-owned-lane",
-                    "--data-dir", str(data), "--spool-dir", str(args.work/f"spool-{n}"), "--ready-file", str(ready),
-                    "--bind-host", "127.0.0.1", "--port", str(42100+n), "--timeout-ms", "120000"],
-                    stdout=log, stderr=log)
-            servers.append(proc)
-        deadline = time.monotonic() + 180
-        while len(list(args.work.glob("rpc-*.ready"))) != 6:
-            for n, proc in enumerate(servers):
+            signer = data / "validator_keys.json"
+            if signer.exists():
+                raise RuntimeError("requires a keyless restored validator")
+            # Exercise the normal finality configuration check before starting the read RPC.
+            probe = subprocess.run([BINARY, "rpc-serve", "--unsafe-devnet-json-storage", "--disable-owned-lane",
+                "--allow-mempool-submit", "--allow-mempool-submit-finality", "--data-dir", str(data),
+                "--finality-topology", str(topology), "--finality-key-file", str(signer),
+                "--spool-dir", str(args.work/f"probe-{n}"), "--ready-file", str(args.work/f"probe-{n}.json"),
+                "--bind-host", "127.0.0.1", "--port", str(42100+n)], capture_output=True, text=True, timeout=45)
+            message = probe.stderr.split("usage:")[0].strip()
+            if probe.returncode == 0 or "finality configuration files are unavailable" not in message:
+                raise RuntimeError(message[:800])
+            print(f"validator-{n} fresh finality startup exit={probe.returncode} {message}", flush=True)
+            for role in ("transport", "rpc"):
+                ready = args.work / f"{role}-{n}.ready"
+                ready.unlink(missing_ok=True)
+                env = {**os.environ, "RAYON_NUM_THREADS": "3", "POSTFIAT_PREWARM_SHIELDED_VERIFIER": "1",
+                       "POSTFIAT_TRANSPORT_VALIDATOR_READY_FILE": str(ready)}
+                if role == "rpc":
+                    command = [BINARY, "rpc-serve", "--unsafe-devnet-json-storage", "--disable-owned-lane",
+                        "--data-dir", str(data), "--spool-dir", str(args.work/f"spool-{n}"), "--ready-file", str(ready),
+                        "--bind-host", "127.0.0.1", "--port", str(42100+n), "--timeout-ms", "120000"]
+                else:
+                    command = [BINARY, "transport-validator-serve", "--unsafe-devnet-file-signer",
+                        "--unsafe-devnet-json-storage", "--data-dir", str(data), "--topology", str(topology),
+                        "--key-file", str(signer), "--vote-dir", str(args.work/f"votes-{n}"),
+                        "--bind-host", "127.0.0.1", "--timeout-ms", "120000"]
+                log_path = args.work / f"{role}-{n}.log"
+                with log_path.open("w") as log:
+                    proc = subprocess.Popen(command, stdout=log, stderr=log, env=env)
+                servers.append((proc, log_path))
+        deadline = time.monotonic() + 240
+        while len(list(args.work.glob("*.ready"))) != 12:
+            for proc, log_path in servers:
                 if proc.poll() is not None:
-                    raise RuntimeError((args.work/f"rpc-{n}.log").read_text().split("usage:")[0][-1200:])
+                    raise RuntimeError(log_path.read_text().split("usage:")[0][-1200:])
             if time.monotonic() > deadline:
-                raise TimeoutError("RPC startup")
+                raise TimeoutError("six transport and six RPC services did not become ready")
             time.sleep(.25)
+        print("six transport validators and six read RPCs ready on isolated loopback", flush=True)
         with ThreadPoolExecutor(max_workers=6) as pool:
             for result in pool.map(lambda n: replay(n, args, receipt_id), range(6)):
                 print(json.dumps(result), flush=True)
     finally:
-        for proc in servers:
+        for proc, _ in servers:
             proc.terminate()
-        for proc in servers:
+        for proc, _ in servers:
             try:
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:

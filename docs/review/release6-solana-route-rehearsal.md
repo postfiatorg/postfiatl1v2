@@ -1,6 +1,6 @@
 # Release 6 Solana route rehearsal
 
-**Hold the rollout.** The local six-node network finalized a transfer with fresh rehearsal signers. The six keyless physical fleet copies each rejected release 5 and the candidate at the genesis integrity check. A certified restore from a portable checkpoint is recorded separately below. No live unit, route or account was changed.
+**Hold the rollout.** The local six-node network finalized a transfer with fresh rehearsal signers. The six keyless physical fleet copies each rejected release 5 and the candidate at the genesis integrity check. The candidate also finalized a release-pinned deposit in a network with a new committee. A certified restore from a portable checkpoint is recorded separately below. No live unit, route or account was changed.
 
 ## Release lineage
 
@@ -14,12 +14,13 @@ The [deployed measurements](finality-latency-status-reads-20261117.md#deployed-a
 
 ## Commands and evidence
 
-Run from this worktree. Host changes in the rollout checklist belong to the orchestrator. For the rehearsal, all writes are local. The retained evidence directory is access-controlled on the build machine.
+Run from this worktree. Host changes in the rollout checklist belong to the orchestrator. For the rehearsal, all writes are local. The complete gate transcripts are retained in the evidence directory on the build machine.
 
 ```bash
 E=/mnt/HC_Volume_106212907/stakehub-hyperliquid/sol-release6
 LOG=$E/evidence
 R5=/home/postfiat/var/b24-release5-20261117/bin/postfiat-node
+R6=$E/bin/3725330d/postfiat-node
 export CARGO_TARGET_DIR=$E/target CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0
 cargo build --locked --release -p postfiat-node --bin postfiat-node
 cargo test --locked -p postfiat-execution --lib
@@ -80,6 +81,30 @@ The initial direct release 5 catch-up to 1453 stopped at 1208. It rejected the a
 ```
 
 The test creates a distinct chain ID with six fresh validator identities. It starts six real transport services, waits for their verifier readiness markers, signs an ordinary transfer, runs a certified round, then verifies the receipt and checkpoint on each node. The captured result is in `$LOG/disposable-transfer.log`. The restored live-chain registry requires its own quorum of registered signers. A fresh round on the copied chain remains a separate release gate. Replaying an existing certificate demonstrates history compatibility.
+
+### Six-node deposit with the release-pinned guest
+
+The relay worker published a rooted slot-24 vault deposit from its two-node local Solana cluster. The retained 356-byte proof has SHA-256 `064edf6a8a0e192c45d8cd745f2b5655ddedb0a931b4335659cd24abbd934a5b`. Its 391-byte journal hashes to `1edfad014f2eda4241fa8a1b73b31f6a420f7afc9eb44d5f2b7ddc04176d0461`. Both files match `sol/relay@1d9e368c1:tools/pfusdc-sol-relay/evidence/deposit-24`. The capture archive at that commit supplies the Solana genesis, vault, slot, public validator stakes and compressed BLS keys, and the common mint of the two changed SPL token accounts. The checked-in profile is a rehearsal template. Its recorder is the relay fixture recorder. This run exercised deposit admission.
+
+The binary under test is `3725330d`, SHA-256 `5238d4a486c5e84cecaa41c4cb4a3bd093c903f5debd9cd709aea3ac7d12f70c`. The locked release build took 217.44 seconds. The pinned guest subtree matches integration tree `b1c81d62201876564cd585acbdeb14b8b883f699`.
+
+```bash
+/usr/bin/time -p docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+  --user "$(id -u):$(id -g)" -v "$R6:/opt/postfiat-node:ro" \
+  -v "$PWD/ops/release6/disposable-transfer.py:/run-check.py:ro" \
+  -v "$PWD/crates/node/testdata/solana-bridge/slot24:/fixture:ro" \
+  -v "$E/copies/validator-1/validator_registry.json:/fleet-registry:ro" \
+  python:3.12-slim python -B /run-check.py --deposit-fixture /fixture --fleet-public-registry /fleet-registry
+```
+
+The proof binds to `postfiat-wan-devnet-2` and its genesis. The runner bootstrapped that domain in a loopback-only namespace, verified that all six new public validator keys were disjoint from the fleet registry, and issued its own test PFUSDC family. All eight blocks went through normal signed consensus. Heights 2–4 established the NAV profile and asset. Heights 5–7 authorized the bridge and activated the local route with six validator authorizations per amendment.
+
+| Height | Result on all six | Transaction |
+| ---: | --- | --- |
+| 1 | Ordinary transfer, 100,000 atoms. Quorum 5. | `00b5b64989bdda3ffc27b17ae4ac66435f56bcb450e2459a9b385a8e4ff872a162a3bb25a3d146e9ea11b875973f7087` |
+| 8 | Verified Groth16 deposit, 5,000,000 atoms credited to the beneficiary's new source-series balance. | `9186ac3c1be34442891d8eabdca00d54f64960082c930106e9a7ec87f80033bb7ef1c8d0d0f967be45bd5abc68ece010` |
+
+The six final checkpoint roots were `3666b55aeff51f34a4b2ff347077f10d585da510e7222c057d4bb5b61684422009a97013cf199a3e68acf1cdcf939e2d`. The run took 12.16 seconds. The genuine deposit is verified by the release program key `0x00261c92add760ef9bdb5e396780a70d473aa5cf967918af128da12a8a650226`. The accepted transaction identifiers, tip, profile and series identifiers are in `$LOG/network-pinned-final.log`. The fresh ledger began at height zero. Task J incurred no network fees or rental charges.
 
 ## Host-by-host rollout checklist for the orchestrator
 
