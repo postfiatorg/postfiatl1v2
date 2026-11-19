@@ -79,6 +79,14 @@ EXPECTED = {
     "wallet-extension/icons/icon48.png": "b2a4f3d0e8204e866c5e05d157ae734b3e84467087620b5920e1ffe32ea886a2",
     "wallet-extension/wasm/postfiat_wallet_wasm_bg.wasm": "affd340817788d45a313e60ec512493c6c56c3acbf81a4d4159636279ea0c882",
     "wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm": "affd340817788d45a313e60ec512493c6c56c3acbf81a4d4159636279ea0c882",
+    # Hash-pinned new-NAVCoin proof fixtures and receipt-qualification evidence.
+    "ops/new-navcoin/evidence/gpu-fixture/fixture-proof/proof-calldata.bin": "b3d950c859846746ed0a5ed4d88215acf7bc579bf57ae53c028058c617f2066a",
+    "ops/new-navcoin/evidence/gpu-fixture/fixture-proof/proof.bin": "5951668359ed1ff16fb22b30938fd841cfead2855b338193586fe05c828634b9",
+    "ops/new-navcoin/evidence/gpu-fixture/fixture-proof/public-values.bin": "f0af21de8e93e90c6c79e7ca23c1ae950916da88a29299384512eeb8757c33c9",
+    "ops/new-navcoin/receipt-qualification/canonical-checkpoint/proof-calldata.bin": "84cff5be3926ddb9b6fa0bcf3d1f835f51c2d3434084bd09431230c2cce72c96",
+    "ops/new-navcoin/receipt-qualification/canonical-checkpoint/public-values.bin": "e6737d595da650fd9d15f547795c91ea63b9d1568c4d5bae3be04301c67301cf",
+    "ops/new-navcoin/receipt-qualification/proof-calldata.bin": "b3d950c859846746ed0a5ed4d88215acf7bc579bf57ae53c028058c617f2066a",
+    "ops/new-navcoin/receipt-qualification/public-values.bin": "f0af21de8e93e90c6c79e7ca23c1ae950916da88a29299384512eeb8757c33c9",
 }
 
 

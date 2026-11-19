@@ -573,6 +573,7 @@
    "expires_at_height": "required"
   },
   "PftlUniswapPrimaryMarketPolicyV2": {
+   "spread_recipient": "option",
    "policy_hash": "required",
    "policy_epoch": "required",
    "issue_multiplier_bps": "required",
@@ -623,6 +624,7 @@
    "pricing_reserve_packet_hash": "required"
   },
   "PftlUniswapRedemptionFundOperation": {
+   "funding_sequence": "option",
    "funder": "required",
    "route_id": "required",
    "settlement_asset_id": "required",

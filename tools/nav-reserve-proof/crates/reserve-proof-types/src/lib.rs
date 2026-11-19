@@ -11,6 +11,7 @@ use sha3::{Digest, Sha3_384};
 
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod aave_v3;
+pub mod b23_nav;
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod bft_checkpoint;
 #[cfg(feature = "a666-public-adapters-v2")]
@@ -32,7 +33,6 @@ pub mod yolo_broker;
 pub mod yolo_cbor;
 pub mod yolo_collection;
 pub mod yolo_nitro;
-pub mod b23_nav;
 pub mod yolo_target;
 pub mod yolo_target_proof;
 pub mod yolo_witness;
