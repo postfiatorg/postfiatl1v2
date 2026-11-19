@@ -351,16 +351,23 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 .unwrap_or("25")
                 .parse::<u64>()
                 .map_err(|_| "--finality-retry-backoff-ms must be a u64".to_string())?;
+            // A phase deadline above the transport timeout would only lengthen
+            // how long a failing round holds the mempool lock.
             let finality_vote_phase_deadline_ms =
-                flag_value(flags, "--finality-vote-phase-deadline-ms")
-                    .map(str::to_string)
-                    .unwrap_or_else(|| PEER_VOTE_PHASE_DEADLINE_MS.to_string())
-                    .parse::<u64>()
-                    .ok()
-                    .filter(|deadline_ms| *deadline_ms > 0)
-                    .ok_or_else(|| {
-                        "--finality-vote-phase-deadline-ms must be a positive u64".to_string()
-                    })?;
+                match flag_value(flags, "--finality-vote-phase-deadline-ms") {
+                    Some(value) => value
+                        .parse::<u64>()
+                        .ok()
+                        .filter(|deadline_ms| {
+                            (1..=finality_timeout_ms).contains(deadline_ms)
+                        })
+                        .ok_or_else(|| {
+                            format!(
+                                "--finality-vote-phase-deadline-ms must be a positive u64 no greater than --finality-timeout-ms ({finality_timeout_ms})"
+                            )
+                        })?,
+                    None => PEER_VOTE_PHASE_DEADLINE_MS.min(finality_timeout_ms),
+                };
             let finality_quorum_early_full_propagation =
                 flag_present(flags, "--finality-quorum-early-full-propagation");
             let max_mempool_submit_per_peer = flag_value(flags, "--max-mempool-submit-per-peer")
