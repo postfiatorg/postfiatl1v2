@@ -1,6 +1,6 @@
 # Network Status
 
-**Guidance reviewed 2026-11-06; latest fleet observation 2026-11-18.**
+**Guidance reviewed 2026-11-06; latest fleet observation 2026-11-19.**
 This page summarizes recorded observations and separately labels newer source
 work. It is not a live query. The full, dated operating log is
 [Current State](chain-state-current.md); when the two disagree, the log wins.
@@ -31,9 +31,9 @@ position.
 ## Last recorded release and height
 
 The 2026-10-30 deployment is the last one with a deployment receipt in
-[Current State](chain-state-current.md); the 2026-11-18 read found release 5
-running, rolled out by the operator on 2026-11-17 and not from `main`, for
-which no receipt is recorded.
+[Current State](chain-state-current.md); the 2026-11-19 read found release 6.1
+running, rolled out by the operators on 2026-11-19 after release 6 and not from
+`main`, for which no receipt is recorded.
 The [November 6 handoff](../handoffs/2026-11-06___dravlic__first_real_base_sepolia_lock_released_and_bridge_phase_2_complete.md)
 reports read-only probes of all six hosts with the same executable, height, tip
 and state root. This documentation refresh made no new fleet probe; the handoff
@@ -41,12 +41,12 @@ does not re-certify every October deployment check.
 
 | Item | Value |
 | --- | --- |
-| Running deployment | Release 5: build revision `ac91a1f4` and deployment manifest SHA-256 `5625bffc…` on all six validators; source on a private branch, not `main`; no deployment receipt recorded |
+| Running deployment | Release 6.1: build revision `6123e64f` on all six validators, complete at height 1469, after release 6 (`cdc98a49`, 2026-11-19 02:45–03:08 UTC, one host at a time); source on private branches, not `main`; `deployment_manifest_verified` false; no deployment receipt recorded |
 | Previous release (last deployment receipt) | `vote-records-20261030` (source `ae70d66d`, branch `release/vote-records-20261030`) |
 | Its node executable SHA-256 | `87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7` |
 | Its rollout | One validator at a time with `scripts/postfiat-safe-rollout apply-next`, 2026-10-30 10:31–11:14 UTC; no rollback needed |
-| Height | 1437 on all six validators (state root `ca1b332f…`) |
-| Latest fleet observation | 2026-11-18 09:44:48–09:45:03 UTC, read-only `status` and `mempool_status` on all six: one state root, mempools empty, `deployment_manifest_verified` false. A replay from genesis to 1437 ends on the same root. `account_tx` fails on all six on this build; `main` carries the fix (`d9260e937`) |
+| Height | 1513 on all six validators (state root `133f1e28…`) |
+| Latest fleet observation | 2026-11-19 05:56:01–05:56:16 UTC, read-only `status` on all six: one tip and one state root. A new deposit route activated at 1461 and was revised at 1470 (revision 2). Height 1453 stalled for 15 min 31 s on 18–19 November; nothing forked or was lost, and the fix is not deployed. Neither release 6 nor 6.1 carries `main`'s fixes `d9260e937` (account history) and `569f5f73b` (redelivery) |
 
 Changes merged after that release are not evidence of deployment. The
 [next-release plan](../plans/active/next-validator-release-plan-20261115.md)

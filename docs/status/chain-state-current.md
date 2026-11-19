@@ -1,13 +1,42 @@
 # PostFiat L1 Current State
 
-Documentation reviewed: `2026-11-18`. Latest fleet observation: the read-only
-all-six read of 2026-11-18 (`status` and `mempool_status` 09:44:48–09:45:03Z),
-height 1437, build revision `ac91a1f4` (release 5). Latest deployment receipt:
+Documentation reviewed: `2026-11-19`. Latest fleet observation: the read-only
+all-six read of 2026-11-19 (`status` 05:56:01–05:56:16Z), height 1513, on
+release 6.1 (build revision `6123e64f`). Latest deployment receipt:
 `2026-10-30T11:21:09Z`, release `vote-records-20261030`, tip 1168; none is
 recorded yet for the running deployment. The dated rollout records below retain
 their original observations.
 
 Status: **canonical operational-state reference**
+
+!!! note "2026-11-19: two releases and a new deposit route"
+
+    Release 6 (build revision `cdc98a49`) was rolled out by the operators one
+    host at a time on 2026-11-19 from 02:45 to 03:08Z, in the order
+    validator-1, 0, 2, 3, 4, 5. After each host, a test transfer got six
+    accepted receipts (heights 1454–1459); the rollback units were kept. A
+    governance transaction at height 1460 set the activation height of a new
+    deposit route to 1461.
+
+    Release 6.1 (build revision `6123e64f`) followed, also one host at a time,
+    and was complete at height 1469. A governance transaction at height 1470
+    revised the route (revision 2).
+
+    Both releases were built from private branches, not from `main`, and no
+    deployment receipt is recorded. `deployment_manifest_verified` reads false
+    on both, as before. Neither carries `main`'s account history fix
+    (`d9260e937`) or its fix for a redelivered certified block (`569f5f73b`).
+
+    Before the rollout, height 1453 stalled for 15 min 31 s (2026-11-18 23:52Z
+    to 2026-11-19 00:08Z): the proposer kept waiting for one late validator
+    although it already had enough precommit votes. Nothing forked and nothing
+    was lost. A fix exists and is not deployed.
+
+    A read-only `status` read of all six validators on 2026-11-19 at
+    05:56:01–05:56:16Z found all six at height 1513 with one state root
+    `133f1e2835933d589d484db681875ce9869eb578000fcec2b31acb4e7bdde4830de96e9d235189ad3efba70f12bdd1bf`
+    and one tip
+    `98649e08cc59e9b9a310fe99d9d98563eee11513163dc15ace748fa69a38d1ee812a22bcbc164351bc87600d86b52ac7`.
 
 !!! note "2026-11-18: fleet observation at height 1437, release 5"
 
@@ -734,9 +763,9 @@ binary to the running services.
 
 !!! warning "Point-in-time evidence"
 
-    The latest fleet observation is the November 18 read above: all six at
-    height 1437, tip `8dc99de2…`, root `ca1b332f…`, build revision `ac91a1f4`
-    (release 5). The deployment receipt and detailed readiness/governance
+    The latest fleet observation is the November 19 read above: all six at
+    height 1513, tip `98649e08…`, root `133f1e28…`, on release 6.1 (build
+    revision `6123e64f`). The deployment receipt and detailed readiness/governance
     checks remain dated October 30. Earlier observations retain their dates;
     none is a real-time query now.
 
@@ -744,12 +773,12 @@ binary to the running services.
 
 | Plane | Recorded state | Exact identifier | Observed or updated at | Evidence and freshness |
 | --- | --- | --- | --- | --- |
-| Running devnet, latest reported state | All six validators agree at height 1437 with one state root and empty mempools, on release 5 (build revision `ac91a1f4`, rolled out 2026-11-17 from a private branch, not from `main`); `deployment_manifest_verified` reads false. A replay from genesis to 1437 ends on the same root. `account_tx` fails on all six on this build. | Chain `postfiat-wan-devnet-2`; root `ca1b332f…`; tip `8dc99de2…`; build revision `ac91a1f4`; manifest `5625bffc…` on all six. | 2026-11-18, `status` and `mempool_status` 09:44:48–09:45:03Z, read-only | November 18 entry above. No deployment receipt is recorded yet. Reported observation, not a new docs-task probe. |
-| Deployed runtime | Release 5 on all six validators: release 4 plus one change that reuses one status read per certified round. Rolled out by the operator's own process one host at a time on 2026-11-17, not from `main`; `deployment_manifest_verified` reads false and no deployment receipt is recorded. `account_tx` fails on all six on this build. The last release with a receipt is `vote-records-20261030` (source `ae70d66d`, executable `87cfe797…`, manifest `ee1df5b3…`). | Build revision `ac91a1f4`; manifest `5625bffc…` on all six. | Rolled out 2026-11-17; observed 2026-11-18 | 2026-11-18 entry above; 2026-10-30 entry for the last receipted release. |
+| Running devnet, latest reported state | All six validators agree at height 1513 with one tip and one state root, on release 6.1 (build revision `6123e64f`, rolled out 2026-11-19 from a private branch, not from `main`). A new deposit route activated at 1461 and was revised at 1470 (revision 2). | Chain `postfiat-wan-devnet-2`; root `133f1e28…`; tip `98649e08…`; build revision `6123e64f`. | 2026-11-19, `status` 05:56:01–05:56:16Z, read-only | November 19 entry above. No deployment receipt is recorded yet. |
+| Deployed runtime | Release 6.1 on all six validators, rolled out by the operators one host at a time on 2026-11-19 and complete at height 1469. It followed release 6 (`cdc98a49`, 02:45–03:08Z, validator-1, 0, 2, 3, 4, 5; rollback units kept). Both come from private branches, not `main`; `deployment_manifest_verified` reads false and no deployment receipt is recorded. Neither carries `d9260e937` (account history) or `569f5f73b` (redelivered certified block). The last release with a receipt is `vote-records-20261030` (source `ae70d66d`, executable `87cfe797…`, manifest `ee1df5b3…`). | Build revision `6123e64f`; release 6 `cdc98a49`. | Rolled out and observed 2026-11-19 | 2026-11-19 entry above; 2026-10-30 entry for the last receipted release. |
 | Storage | Transactional `redb` storage has been the live store since height 930 (2026-08-31). This release carries the STO-07 store-handle fix (`8644f0af`); every batch the new executable accepted reports `storage_work.database_opens=0`. Storage is `OFFLINE QUALIFIED` (2026-10-23, packet-r3 `357f06ee…`); that is neither `CLONE QUALIFIED` nor a deployment decision. | Activation height 930; G5-qualified binary `eea96ba6…`; current deployed binary `87cfe797…` | October 21/23 qualification; October 30 deployment | [Storage-scaling implementation boundary](#storage-scaling-implementation-boundary) and the [storage milestone](../plans/completed/storage-scaling-milestone.md). The August `10dd9f20` canary and its rollback are in the [canary rollback report](../postmortems/devnet-storage-live-canary-rollback-2026-08-30.md). |
 | Swap and bridge committees | FastSwap committee epoch 2 on all six (`enabled: true`), migrated 2026-10-21. Bridge committee epoch 2 activated at height 1131 on 2026-10-15. The A666 and BMNRC routes stay on `authority_epoch` 1, so validators 0–4 still sign Ethereum checkpoints; neither issuer route update has been submitted. FastPay committee epoch 2 was installed at height 1123 for orders 10001–19990. | Epoch-2 committee root `72836827…`; route authority root `a2eebcba…` | 2026-10-21 | 2026-10-21, 2026-10-15 and 2026-10-12 entries above. |
 | Validator-trust authority | Cobalt remains active for validator-registry and trust-graph ratification. The final signed drill rollback committed at 922, return to Cobalt at 923, and legitimate validator-5 rotation at 924. Consensus v2 remains block finality. | Registry root `08a451e0…2b9b1d`; trust root `89f18aef…08f0307`; ratification anchor sequence 2, ID `5eada38d…c21153c8`. | Accepted history through height 924; fleet-audited through `2026-08-30T23:00:39Z`. | The recovery probe found authority mode 1 and identical registry/trust roots on all six. |
-| Repository | The running source (release 5, revision `ac91a1f4`) is on a private branch, not `main`, and no deployment receipt binds it. `main` carries changes the live build lacks, such as the account history fix `d9260e937`. The last receipted source is `ae70d66d` on `release/vote-records-20261030`. A `main` commit is not deployed until a fleet receipt binds its source and binary to the running services. | Running revision `ac91a1f4`; last receipted source `ae70d66d`; use `git rev-parse HEAD` for the checkout. | 2026-11-18 | 2026-11-18 entry and release records above. |
+| Repository | The running source (release 6.1, revision `6123e64f`) is on a private branch, not `main`, and no deployment receipt binds it. `main` carries changes the live build lacks, such as the account history fix `d9260e937` and the redelivery fix `569f5f73b`. The last receipted source is `ae70d66d` on `release/vote-records-20261030`. A `main` commit is not deployed until a fleet receipt binds its source and binary to the running services. | Running revision `6123e64f`; last receipted source `ae70d66d`; use `git rev-parse HEAD` for the checkout. | 2026-11-19 | 2026-11-19 entry and release records above. |
 | Adversarial campaign | E1–E6 passed their locked gates. The consolidated decision is `KEEP_ACTIVE` for Cobalt's bounded controlled-devnet validator-trust role. | E1 `495a59a2…4dfcd90`; E2 `8742d960…d7cba3`; E3 `9302b355…40b600`; E4 `93ba3db0…c14508`; E5 `0695284a…f3b3db`; E6 `ee6848f5…121be0b`. | Completed 2026-08-26 | [Completed milestone](../plans/completed/cobalt-adversarial-verification-milestone.md) and [results](../governance/cobalt-adversarial-verification-results.md). |
 | Operator boundary | The campaign proves protocol capability, not operator decentralization. Current proposals and authorizations originate from Foundation-administered validators. | E6 decision: independent-operator proposal path remains a mandatory follow-on milestone. | 2026-08-26 | No independent operators were recruited and no mainnet authority was granted. |
 
