@@ -3,6 +3,11 @@ pub const SOLANA_DEPOSIT_PROOF: &str = "sp1-solana-alpenglow-finality-v1";
 pub const SOLANA_HANDOFF_PROOF: &str = "sp1-solana-alpenglow-handoff-v1";
 pub const SOLANA_ACTIVATION_HEIGHT: &str = "solana_bridge_activation_height";
 
+pub fn solana_source_series_id(chain_id: &str, asset: &str, bucket: &str) -> String {
+    hash_hex_domain("postfiat.pfusdc.solana.source_series.v1",
+        format!("{chain_id}\n{asset}\n{bucket}").as_bytes())
+}
+
 /// The anchor and epoch schedule are authenticated by the route amendment.
 /// Agave runtime/src/bank.rs uses epoch_schedule.get_epoch(slot) to select
 /// epoch stakes. Handoffs and deposits must use that same schedule.

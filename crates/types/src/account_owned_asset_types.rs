@@ -329,6 +329,22 @@ impl VaultBridgeRouteProfileV1 {
         )
     }
 
+    /// Canonical series represented by a backing bucket of this profile.
+    pub fn bucket_source_series_id(
+        &self,
+        chain_id: &str,
+        bucket: &VaultBridgeBucketState,
+    ) -> Result<String, String> {
+        if self.asset_id != bucket.asset_id || self.source_domain() != bucket.source_domain {
+            return Err("vault bridge bucket source domain does not match governed route".into());
+        }
+        if self.solana.is_some() {
+            return Ok(solana_source_series_id(chain_id, &self.asset_id, &bucket.bucket_id));
+        }
+        pfusdc_source_series_id(chain_id, &self.asset_id, self.source_chain_id,
+            &self.vault_address, &self.token_address, self.route_epoch, &bucket.policy_hash)
+    }
+
     /// A conservative public claim derived from the consensus verifier kind.
     /// Observer-quorum evidence remains controlled even when several project
     /// operators attest it; only a receipt-proof route may claim trustless

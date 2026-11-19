@@ -169,10 +169,7 @@ fn credit_verified(
         .ok_or(("missing_asset", "Solana asset family missing".into()))?;
     let bucket = vault_bridge_bucket_id(&family.asset_id, &profile.source_domain(), hash)
         .map_err(|e| ("invalid_solana_route", e))?;
-    let series_id = hash_hex(
-        "postfiat.pfusdc.solana.source_series.v1",
-        format!("{}\n{}\n{}", genesis.chain_id, family.asset_id, bucket).as_bytes(),
-    );
+    let series_id = postfiat_types::solana_source_series_id(&genesis.chain_id, &family.asset_id, &bucket);
     for evidence in values.receipts {
         let amount = evidence.amount_atoms;
         let recipient = evidence.recipient.clone();

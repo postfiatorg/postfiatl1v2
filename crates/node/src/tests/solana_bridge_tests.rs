@@ -138,6 +138,8 @@ fn real_groth16_credit_replay_and_handoff_converge_on_six_replicas() {
                 assert_eq!(*ledger, before);
             }
             assert_eq!(ledger.trustlines.len(), 1);
+            let bucket = &ledger.vault_bridge_bucket_states[0];
+            assert_eq!(profile.bucket_source_series_id(&genesis.chain_id, bucket).unwrap(), ledger.trustlines[0].asset_id);
             assert_eq!(
                 ledger.trustlines[0].account,
                 format!("pf{}", "33".repeat(20))

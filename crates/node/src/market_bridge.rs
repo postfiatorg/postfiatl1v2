@@ -599,28 +599,8 @@ pub fn vault_bridge_status(
             let route = governance
                 .authorized_vault_bridge_route_profile(&options.asset_id, &bucket.policy_hash)
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-            if route.profile.source_chain_id.to_string()
-                != bucket.source_domain.split(':').nth(1).unwrap_or_default()
-                || route.profile.vault_address
-                    != bucket.source_domain.split(':').nth(2).unwrap_or_default()
-                || route.profile.token_address
-                    != bucket.source_domain.split(':').nth(3).unwrap_or_default()
-            {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "vault bridge bucket source domain does not match governed route",
-                ));
-            }
-            let source_series_id = pfusdc_source_series_id(
-                &genesis.chain_id,
-                &options.asset_id,
-                route.profile.source_chain_id,
-                &route.profile.vault_address,
-                &route.profile.token_address,
-                route.profile.route_epoch,
-                &bucket.policy_hash,
-            )
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            let source_series_id = route.profile.bucket_source_series_id(&genesis.chain_id, bucket)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
             let redeemable_claim_atoms = u64::try_from(
                 u128::from(allocated) * u128::from(bucket.impairment_factor_bps) / 10_000,
             )
