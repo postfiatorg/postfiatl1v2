@@ -4319,6 +4319,103 @@ mod transport_batch_payload_tests {
         clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
     }
 
+    /// View 0 forms a prepare QC Q for block A, but every precommit request is
+    /// refused, so only the view-0 proposer stores Q (and locks on A). Its
+    /// timeout vote names Q, so the timeout certificate does too. The view-1
+    /// proposer and every peer must still verify that certificate and finish
+    /// height 1 at view 1 with block A.
+    #[test]
+    fn a_prepare_qc_held_only_by_the_view_0_proposer_still_finishes_at_view_1() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        // Refused through view 0 (3 s deadline); forwarded again for view 1.
+        let refused = ProxyVote::RefuseFor(Duration::from_secs(8));
+        // Proxies are placed by offset from the view-0 proposer: every peer.
+        let fixture = vote_phase_round_fixture(
+            "view-1-sole-qc-holder",
+            &(1..6).map(|offset| (offset, forward, refused)).collect::<Vec<_>>(),
+        );
+        let peers = (0..fixture.data_dirs.len())
+            .filter(|index| *index != fixture.proposer_index)
+            .collect::<Vec<_>>();
+        let (result, _, _) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            3_000,
+            Duration::from_secs(30),
+        );
+        result
+            .expect("view-0 round still running")
+            .expect_err("view 0 gets no precommit from any peer");
+        let block_a = fixture.artifact_dir.with_extension("batch.json");
+        spawn_vote_phase_validator(
+            fixture.data_dirs[fixture.proposer_index].clone(),
+            fixture.topology_file.clone(),
+            fixture
+                .proposer_listener
+                .try_clone()
+                .expect("clone proposer listener"),
+        );
+        let dir = fixture.artifact_dir.with_extension("view-1");
+        let (votes, refused_votes) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir);
+        assert_eq!(votes.len(), 6, "{refused_votes:?}");
+        let proposer_vote: BlockTimeoutVoteFile = serde_json::from_slice(
+            &std::fs::read(
+                dir.join(format!("validator-{}.h1.v0.timeout.json", fixture.proposer_index)),
+            )
+            .expect("proposer timeout vote"),
+        )
+        .expect("proposer timeout vote json");
+        let qc_id = proposer_vote
+            .consensus_v2_vote
+            .and_then(|vote| vote.high_qc)
+            .expect("the view-0 proposer's timeout vote names its prepare QC")
+            .certificate_id;
+        for &peer in &peers {
+            let held = std::fs::read_dir(fixture.data_dirs[peer].join("consensus-v2-qcs"))
+                .map(|entries| {
+                    entries
+                        .filter_map(Result::ok)
+                        .any(|entry| entry.file_name().to_string_lossy().contains(&qc_id))
+                })
+                .unwrap_or(false);
+            assert!(!held, "validator-{peer} already holds the view-0 prepare QC");
+        }
+        let leader = height_1_leader(&fixture, 1);
+        assert_ne!(leader, fixture.proposer_index);
+        let certificate = timeout_certificate(&fixture, 0, votes, &dir)
+            .expect("the view-1 proposer builds the timeout certificate");
+        let (result, _, _) = run_vote_phase_round_at(
+            &fixture,
+            &RoundSlot {
+                proposer_index: leader,
+                view: 1,
+                timeout_certificate_file: Some(certificate),
+                artifact_dir: dir.join("with-a"),
+                batch_file: Some(block_a),
+            },
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            Duration::from_secs(40),
+        );
+        let report = result
+            .expect("view-1 round still running")
+            .expect("view 1 certifies block A");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        assert_height_1_final_everywhere(&fixture);
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
     /// A proposer that already signed a timeout vote at view 1 cannot finish
     /// view 0 or view 1; the spent-view error names view 1 and asks for view 2.
     #[test]
