@@ -292,6 +292,24 @@ pub fn read_stored_consensus_v2_qc(
     Ok(None)
 }
 
+/// Each distinct QC the votes of `certificate` name, in vote order, resolved
+/// in `graph`. The timeout certificate file carries them.
+pub fn consensus_v2_timeout_certificate_high_qcs(
+    graph: &ConsensusV2QcGraph,
+    domain: &ConsensusV2Domain,
+    validators: &ConsensusV2ValidatorSet,
+    certificate: &ConsensusV2TimeoutCertificate,
+) -> Result<Vec<ConsensusV2QuorumCertificate>, postfiat_ordering_fast::OrderingError> {
+    let mut qcs = Vec::new();
+    for reference in certificate.votes.iter().filter_map(|vote| vote.high_qc.as_ref()) {
+        let qc = graph.resolve_verified(domain, validators, reference)?;
+        if !qcs.contains(qc) {
+            qcs.push(qc.clone());
+        }
+    }
+    Ok(qcs)
+}
+
 /// Adds to `graph` the full QCs a timeout vote or certificate at `round`
 /// carries (unsigned hints). A carried QC is used only if it is a prepare QC
 /// of the same height from no later view, one of the `named` (signed)
@@ -637,13 +655,15 @@ mod tests {
         bytes_to_hex, hex_to_bytes, ml_dsa_65_sign_with_context, ML_DSA_65_ALGORITHM,
     };
     use postfiat_ordering_fast::{
-        certify_consensus_v2_votes, consensus_v2_block_ref, consensus_v2_proposal_signing_bytes,
+        certify_consensus_v2_timeouts, certify_consensus_v2_votes, consensus_v2_block_ref,
+        consensus_v2_proposal_signing_bytes, consensus_v2_timeout_vote_signing_bytes,
         consensus_v2_vote_signing_bytes, leader_for_view, CONSENSUS_V2_PROPOSAL_CONTEXT,
-        CONSENSUS_V2_VOTE_CONTEXT,
+        CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT, CONSENSUS_V2_VOTE_CONTEXT,
     };
     use postfiat_types::{
         ConsensusV2Phase, ConsensusV2Proposal, ConsensusV2Round, ConsensusV2Signature,
-        ConsensusV2Vote, CONSENSUS_V2_PROPOSAL_SCHEMA, CONSENSUS_V2_VOTE_SCHEMA,
+        ConsensusV2Vote, CONSENSUS_V2_PROPOSAL_SCHEMA, CONSENSUS_V2_TIMEOUT_VOTE_SCHEMA,
+        CONSENSUS_V2_VOTE_SCHEMA,
     };
     use std::sync::mpsc;
     use std::thread;
@@ -925,5 +945,205 @@ mod tests {
             .contains("newer non-nil prepare QC"));
 
         std::fs::remove_dir_all(data_dir).expect("cleanup consensus v2 store");
+    }
+
+    fn carried_qc_test_chain() -> (
+        PathBuf,
+        ConsensusV2Domain,
+        ConsensusV2ValidatorSet,
+        ValidatorKeyFile,
+    ) {
+        let data_dir = unique_data_dir();
+        init(InitOptions {
+            data_dir: data_dir.clone(),
+            chain_id: "postfiat-consensus-v2-store-test".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 4,
+        })
+        .expect("init consensus v2 store");
+        let (domain, validators) = live_consensus_v2_context(&data_dir).expect("live context");
+        let keys = serde_json::from_slice(
+            &std::fs::read(data_dir.join(VALIDATOR_KEYS_FILE)).expect("read validator keys"),
+        )
+        .expect("parse validator keys");
+        (data_dir, domain, validators, keys)
+    }
+
+    fn test_signature(
+        keys: &ValidatorKeyFile,
+        validator: &ConsensusV2Validator,
+        message: &[u8],
+        context: &[u8],
+    ) -> ConsensusV2Signature {
+        let record = keys
+            .validators
+            .iter()
+            .find(|record| record.node_id == validator.validator_id)
+            .expect("validator key");
+        ConsensusV2Signature {
+            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            signer: validator.validator_id.clone(),
+            public_key_hex: validator.public_key_hex.clone(),
+            signature_hex: bytes_to_hex(
+                &ml_dsa_65_sign_with_context(
+                    &hex_to_bytes(&record.private_key_hex).expect("private key"),
+                    message,
+                    context,
+                )
+                .expect("signature"),
+            ),
+        }
+    }
+
+    /// A QC on a test block at `height`, signed by a quorum.
+    fn test_qc(
+        domain: &ConsensusV2Domain,
+        validators: &ConsensusV2ValidatorSet,
+        keys: &ValidatorKeyFile,
+        round: ConsensusV2Round,
+        phase: ConsensusV2Phase,
+    ) -> ConsensusV2QuorumCertificate {
+        let block = consensus_v2_block_ref(
+            domain,
+            round.height,
+            "11".repeat(48),
+            "22".repeat(48),
+            "33".repeat(48),
+        )
+        .expect("block reference");
+        let votes = validators
+            .validators
+            .iter()
+            .take(validators.quorum)
+            .map(|validator| {
+                let mut vote = ConsensusV2Vote {
+                    schema: CONSENSUS_V2_VOTE_SCHEMA.to_string(),
+                    domain: domain.clone(),
+                    round,
+                    phase,
+                    block: Some(block.clone()),
+                    validator: validator.validator_id.clone(),
+                    signature: test_signature(keys, validator, b"", CONSENSUS_V2_VOTE_CONTEXT),
+                };
+                let message = consensus_v2_vote_signing_bytes(&vote).expect("vote signing bytes");
+                vote.signature = test_signature(keys, validator, &message, CONSENSUS_V2_VOTE_CONTEXT);
+                vote
+            })
+            .collect();
+        certify_consensus_v2_votes(domain, validators, round, phase, Some(block), votes)
+            .expect("QC")
+    }
+
+    #[test]
+    fn add_carried_consensus_v2_qcs_ignores_an_unnamed_precommit_other_height_or_later_view_qc() {
+        let (data_dir, domain, validators, keys) = carried_qc_test_chain();
+        let qc = |height, view, phase| {
+            test_qc(&domain, &validators, &keys, ConsensusV2Round { height, view }, phase)
+        };
+        let round = ConsensusV2Round { height: 1, view: 2 };
+        let named = qc(1, 1, ConsensusV2Phase::Prepare);
+        let ignored = [
+            (qc(1, 0, ConsensusV2Phase::Prepare), "a valid QC that is not named"),
+            (qc(1, 1, ConsensusV2Phase::Precommit), "a precommit QC"),
+            (qc(2, 1, ConsensusV2Phase::Prepare), "a QC of another height"),
+            (qc(1, 3, ConsensusV2Phase::Prepare), "a QC of a later view"),
+        ];
+        // Every QC but the unnamed one is named, so only its own defect rejects it.
+        let references = std::iter::once(&named)
+            .chain(ignored.iter().skip(1).map(|(qc, _)| qc))
+            .map(|qc| consensus_v2_qc_ref(qc).expect("QC reference"))
+            .collect::<Vec<_>>();
+        let references = references.iter().collect::<Vec<_>>();
+        for (carried, case) in &ignored {
+            let mut graph = ConsensusV2QcGraph::default();
+            let added = add_carried_consensus_v2_qcs(
+                &mut graph,
+                &domain,
+                &validators,
+                round,
+                &references,
+                std::slice::from_ref(carried),
+                "test",
+            );
+            assert!(added.is_empty(), "{case}");
+            let reference = consensus_v2_qc_ref(carried).expect("QC reference");
+            assert!(graph.resolve_verified(&domain, &validators, &reference).is_err(), "{case}");
+        }
+        let mut graph = ConsensusV2QcGraph::default();
+        let added = add_carried_consensus_v2_qcs(
+            &mut graph,
+            &domain,
+            &validators,
+            round,
+            &references,
+            std::slice::from_ref(&named),
+            "test",
+        );
+        assert_eq!(added, vec![named]);
+        assert!(graph.resolve_verified(&domain, &validators, references[0]).is_ok());
+        std::fs::remove_dir_all(data_dir).expect("cleanup carried QC chain");
+    }
+
+    #[test]
+    fn a_timeout_certificate_carries_each_distinct_qc_its_votes_name() {
+        let (data_dir, domain, validators, keys) = carried_qc_test_chain();
+        let first = test_qc(
+            &domain,
+            &validators,
+            &keys,
+            ConsensusV2Round { height: 1, view: 0 },
+            ConsensusV2Phase::Prepare,
+        );
+        let second = test_qc(
+            &domain,
+            &validators,
+            &keys,
+            ConsensusV2Round { height: 1, view: 1 },
+            ConsensusV2Phase::Prepare,
+        );
+        let mut graph = ConsensusV2QcGraph::default();
+        graph
+            .insert_verified(&domain, &validators, first.clone())
+            .expect("first QC");
+        graph
+            .insert_verified(&domain, &validators, second.clone())
+            .expect("second QC");
+        let round = ConsensusV2Round { height: 1, view: 2 };
+        let votes = validators
+            .validators
+            .iter()
+            .zip([&first, &second, &first, &second])
+            .map(|(validator, qc)| {
+                let mut vote = ConsensusV2TimeoutVote {
+                    schema: CONSENSUS_V2_TIMEOUT_VOTE_SCHEMA.to_string(),
+                    domain: domain.clone(),
+                    round,
+                    phase: ConsensusV2Phase::Precommit,
+                    high_qc: Some(consensus_v2_qc_ref(qc).expect("QC reference")),
+                    validator: validator.validator_id.clone(),
+                    signature: test_signature(&keys, validator, b"", CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT),
+                };
+                let message =
+                    consensus_v2_timeout_vote_signing_bytes(&vote).expect("timeout signing bytes");
+                vote.signature =
+                    test_signature(&keys, validator, &message, CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT);
+                vote
+            })
+            .collect();
+        let certificate = certify_consensus_v2_timeouts(
+            &domain,
+            &validators,
+            round,
+            ConsensusV2Phase::Precommit,
+            votes,
+            &graph,
+        )
+        .expect("timeout certificate");
+        assert_eq!(
+            consensus_v2_timeout_certificate_high_qcs(&graph, &domain, &validators, &certificate)
+                .expect("carried QCs"),
+            vec![first, second]
+        );
+        std::fs::remove_dir_all(data_dir).expect("cleanup carried QC chain");
     }
 }

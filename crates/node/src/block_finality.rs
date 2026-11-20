@@ -2961,14 +2961,13 @@ pub fn aggregate_block_timeout_certificate(
         )
         .map_err(invalid_data)?;
         persist_carried_consensus_v2_qcs(&options.data_dir, &added)?;
-        for reference in certificate.votes.iter().filter_map(|vote| vote.high_qc.as_ref()) {
-            let qc = graph
-                .resolve_verified(&domain, &consensus_v2_validators, reference)
-                .map_err(invalid_data)?;
-            if !consensus_v2_high_qcs.contains(qc) {
-                consensus_v2_high_qcs.push(qc.clone());
-            }
-        }
+        consensus_v2_high_qcs = consensus_v2_timeout_certificate_high_qcs(
+            &graph,
+            &domain,
+            &consensus_v2_validators,
+            &certificate,
+        )
+        .map_err(invalid_data)?;
         Some(certificate)
     } else {
         None
