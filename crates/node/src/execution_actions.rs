@@ -459,7 +459,8 @@ pub(super) fn atomic_swap_activation_height_for_chain(
 }
 
 /// The rejected-transaction fee claim applies only to transactions executed as
-/// part of a certified transparent block (live commit, proposal and archive
+/// part of a certified transparent block, from the v2 activation height only
+/// (release 6.4 does not apply the original kind; unset means off) (live commit, proposal and archive
 /// replay). The shared compatibility builders above leave it unset, so mempool
 /// admission, RPC simulation and shielded or bridge workflows keep their
 /// side-effect-free rejection semantics.
@@ -468,7 +469,7 @@ pub(super) fn transparent_block_fee_claim_compatibility(
     governance: &GovernanceState,
 ) -> AssetExecutionCompatibility {
     compatibility
-        .with_rejected_tx_fee_activation_height(governance.rejected_tx_fee_activation_height())
+        .with_rejected_tx_fee_activation_height(governance.rejected_tx_fee_v2_activation_height())
 }
 
 pub(super) fn bridge_exit_root_activation_height_for_chain(
@@ -496,8 +497,8 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
         ))
         .with_yolo_target_activation_height(governance.yolo_target_activation_height())
         .with_atomic_swap_paused(governance.atomic_swap_paused)
-        .with_recipient_format_activation_height(governance.recipient_format_activation_height())
-        .with_require_memo_activation_height(governance.require_memo_activation_height())
+        .with_recipient_format_activation_height(governance.recipient_format_v2_activation_height())
+        .with_require_memo_activation_height(governance.require_memo_v2_activation_height())
         .with_asset_orchard_pricing_enforcement(
             governance.asset_orchard_pricing_enforcement_activation_height(),
             governance.asset_orchard_pricing_max_nav_age_blocks(),
@@ -529,8 +530,8 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
         ))
         .with_yolo_target_activation_height(governance.yolo_target_activation_height())
         .with_atomic_swap_paused(governance.atomic_swap_paused)
-        .with_recipient_format_activation_height(governance.recipient_format_activation_height())
-        .with_require_memo_activation_height(governance.require_memo_activation_height())
+        .with_recipient_format_activation_height(governance.recipient_format_v2_activation_height())
+        .with_require_memo_activation_height(governance.require_memo_v2_activation_height())
         .with_asset_orchard_pricing_enforcement(
             governance.asset_orchard_pricing_enforcement_activation_height(),
             governance.asset_orchard_pricing_max_nav_age_blocks(),
@@ -2315,6 +2316,32 @@ pub(super) fn governance_amendment_lifecycle_rejection(
                 .to_string(),
         ));
     }
+    for (kind, code, rule) in [
+        (
+            GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT,
+            "invalid_rejected_tx_fee_v2_activation_height",
+            "rejected-transaction fee",
+        ),
+        (
+            GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT,
+            "invalid_require_memo_v2_activation_height",
+            "require-memo",
+        ),
+        (
+            GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT,
+            "invalid_recipient_format_v2_activation_height",
+            "recipient-format",
+        ),
+    ] {
+        if amendment.kind == kind && u64::from(amendment.value) <= block_height {
+            return Some((
+                code,
+                format!(
+                    "{rule} v2 activation must be scheduled strictly after the amendment block"
+                ),
+            ));
+        }
+    }
     if amendment.kind == GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT
         && u64::from(amendment.value) <= block_height
     {
@@ -2469,6 +2496,18 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .require_memo_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
+        GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT => governance
+            .rejected_tx_fee_v2_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT => governance
+            .require_memo_v2_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT => governance
+            .recipient_format_v2_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
         GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT => governance
             .replicated_state_v2_activation_height()
             .and_then(|height| u32::try_from(height).ok())
@@ -2517,6 +2556,9 @@ fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
             | GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
             | postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT

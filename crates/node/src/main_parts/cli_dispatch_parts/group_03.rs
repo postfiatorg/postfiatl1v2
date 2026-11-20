@@ -1982,6 +1982,9 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
         "ratify-atomic-swap-activation-height"
         | "ratify-rejected-tx-fee-activation-height"
         | "ratify-require-memo-activation-height"
+        | "ratify-rejected-tx-fee-v2-activation-height"
+        | "ratify-require-memo-v2-activation-height"
+        | "ratify-recipient-format-v2-activation-height"
         | "ratify-orchard-aware-bridge-claim-activation-height"
         | "ratify-pfusdc-source-series-activation-height"
         | "ratify-solana-bridge-activation-height"
@@ -2015,6 +2018,18 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 "ratify-require-memo-activation-height" => (
                     GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT,
                     "--require-memo-activation-height",
+                ),
+                "ratify-rejected-tx-fee-v2-activation-height" => (
+                    postfiat_types::GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT,
+                    "--rejected-tx-fee-v2-activation-height",
+                ),
+                "ratify-require-memo-v2-activation-height" => (
+                    postfiat_types::GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT,
+                    "--require-memo-v2-activation-height",
+                ),
+                "ratify-recipient-format-v2-activation-height" => (
+                    postfiat_types::GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT,
+                    "--recipient-format-v2-activation-height",
                 ),
                 "ratify-orchard-aware-bridge-claim-activation-height" => (
                     GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT,

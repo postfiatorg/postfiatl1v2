@@ -746,6 +746,10 @@ fn print_usage() {
   postfiat-node external-lane-committee-binding --lane-id ID --committee-epoch N --committee-root HEX48
       (read-only: prints the committee move kind and its binding, SHA3-384 over the domain, the lane id, the epoch and the root)
   postfiat-node ratify-recipient-format-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
+  postfiat-node ratify-rejected-tx-fee-v2-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
+  postfiat-node ratify-require-memo-v2-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
+  postfiat-node ratify-recipient-format-v2-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
+      (execution gates for the rejected-transaction fee, require-memo and recipient-format rules; the original kinds are stored but no longer gate execution)
   postfiat-node ratify-vault-bridge-route-authority-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-replicated-state-v2-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-bridge-exit-root-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
