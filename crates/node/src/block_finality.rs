@@ -4376,6 +4376,69 @@ pub fn sign_verified_block_proposal(
     Ok(proposal)
 }
 
+/// Start of the error a proposer returns when it already signed at this
+/// (height, view). Only a timeout certificate moves the height on from there.
+pub const CONSENSUS_V2_VIEW_SPENT: &str = "consensus v2 view spent";
+
+/// A proposer that signed a proposal or a vote at (height, view) and then
+/// failed can never finish that view itself: its vote lock refuses any other
+/// proposal there, and its safety record refuses a second prepare even for
+/// the same block. Returns the reason when that is the case, so the caller
+/// stops before it signs anything new or asks any peer, and the height moves
+/// to the next view through a timeout certificate.
+pub fn consensus_v2_proposer_view_spent(
+    data_dir: &Path,
+    proposal: &BlockProposalFile,
+) -> io::Result<Option<String>> {
+    let store = NodeStore::new(data_dir);
+    let genesis = store.read_genesis()?;
+    if !consensus_v2_active_at(&genesis, proposal.block_height) {
+        return Ok(None);
+    }
+    let round = postfiat_types::ConsensusV2Round {
+        height: proposal.block_height,
+        view: proposal.view,
+    };
+    let mut unsigned = proposal.clone();
+    unsigned.signature = None;
+    let proposal_hash = block_proposal_hash(&unsigned)?;
+    let recorded = recorded_block_proposal_vote_hash(
+        &store,
+        &genesis,
+        round.height,
+        round.view,
+        &proposal.proposer,
+    )?;
+    let (domain, _) = live_consensus_v2_context(data_dir)?;
+    let safety = read_consensus_v2_safety_state(data_dir, &domain, round.height)?;
+    let signed_round = [
+        safety.highest_prepare_round,
+        safety.highest_precommit_round,
+        safety.highest_timeout_round,
+    ]
+    .into_iter()
+    .flatten()
+    .filter(|signed| *signed >= round)
+    .max();
+    let reason = match (recorded, signed_round) {
+        (Some(recorded), _) if recorded != proposal_hash => {
+            format!("proposer `{}` already signed proposal {recorded}", proposal.proposer)
+        }
+        (_, Some(signed)) => format!(
+            "proposer `{}` already signed a vote at height {} view {}",
+            proposal.proposer, signed.height, signed.view
+        ),
+        _ => return Ok(None),
+    };
+    Ok(Some(format!(
+        "{CONSENSUS_V2_VIEW_SPENT}: {reason} at height {} view {}; the height needs a timeout certificate for view {} and a proposal at view {}",
+        round.height,
+        round.view,
+        round.view,
+        round.view.saturating_add(1)
+    )))
+}
+
 pub fn verify_signed_block_proposal(
     data_dir: &Path,
     proposal: &BlockProposalFile,

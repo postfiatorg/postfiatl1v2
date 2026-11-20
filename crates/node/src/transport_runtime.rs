@@ -3752,6 +3752,14 @@ pub(super) fn transport_peer_certified_batch_round(
 
     let (proposal, consensus_v2_proposal) =
         if expected_unsigned_proposal.proposer == local_status.node_id {
+            if let Some(spent) =
+                consensus_v2_proposer_view_spent(&options.data_dir, &expected_unsigned_proposal)
+                    .map_err(|error| {
+                        format!("peer certified batch round view check failed: {error}")
+                    })?
+            {
+                return Err(spent);
+            }
             let proposal = match options.proposal_key_file.as_ref() {
                 Some(key_file) => sign_verified_block_proposal(
                     &options.data_dir,

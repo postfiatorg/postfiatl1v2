@@ -400,7 +400,7 @@ include!("governance.rs");
 include!("governance_agent.rs");
 include!("privacy.rs");
 mod vote_locks;
-use vote_locks::reserve_block_proposal_vote_lock;
+use vote_locks::{recorded_block_proposal_vote_hash, reserve_block_proposal_vote_lock};
 include!("block_finality.rs");
 include!("account_tx_disk_index.rs");
 mod block_replay_wallet;

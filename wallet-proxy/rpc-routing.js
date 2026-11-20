@@ -883,7 +883,10 @@ wss } = runtime;
             const response = JSON.parse(line);
             if (response?.ok === true) return false;
             if (response?.error?.code !== 'rpc_finality_submit_failed') return false;
-            return /(?:vote request|vote workers|quorum|certificate|transport|timed out|connection)/i
+            // A proposer that already signed in this view (a run that failed
+            // after signing) can never finish it; only the next view can.
+            // Older nodes report that as their own vote-lock conflict.
+            return /(?:vote request|vote workers|quorum|certificate|transport|timed out|connection|view spent|conflicting block proposal vote already recorded)/i
                 .test(String(response.error.message || ''));
         } catch (_) {
             return false;
