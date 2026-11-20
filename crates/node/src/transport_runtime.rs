@@ -3764,6 +3764,17 @@ pub(super) fn transport_peer_certified_batch_round(
             None
         };
 
+    // A spent view comes first, as in the forwarded handler, so the proxy
+    // moves to a view the proposer can still sign instead of stopping here.
+    let local_proposer = expected_unsigned_proposal.proposer == local_status.node_id;
+    if local_proposer {
+        if let Some(spent) =
+            consensus_v2_proposer_view_spent(&options.data_dir, &expected_unsigned_proposal)
+                .map_err(|error| format!("peer certified batch round view check failed: {error}"))?
+        {
+            return Err(spent);
+        }
+    }
     // Before the local proposer signs or a remote one is asked to.
     if let Some(reproposal) = consensus_v2_required_reproposal(
         &options.data_dir,
@@ -3775,15 +3786,7 @@ pub(super) fn transport_peer_certified_batch_round(
         return Err(reproposal);
     }
     let (proposal, consensus_v2_proposal) =
-        if expected_unsigned_proposal.proposer == local_status.node_id {
-            if let Some(spent) =
-                consensus_v2_proposer_view_spent(&options.data_dir, &expected_unsigned_proposal)
-                    .map_err(|error| {
-                        format!("peer certified batch round view check failed: {error}")
-                    })?
-            {
-                return Err(spent);
-            }
+        if local_proposer {
             let proposal = match options.proposal_key_file.as_ref() {
                 Some(key_file) => sign_verified_block_proposal(
                     &options.data_dir,
