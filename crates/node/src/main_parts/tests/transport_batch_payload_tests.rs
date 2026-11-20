@@ -1436,7 +1436,12 @@ mod transport_batch_payload_tests {
         conflicting["certificate"]["registry_root"] = serde_json::json!("77".repeat(48));
         let error = assert_redelivery_is_a_conflict(&fleet, source, other_target, &conflicting);
         // Release 6.4's check names one conflict for every differing field.
-        assert!(error.contains("conflicts with certified height/hash"), "{error}");
+        assert!(
+            error.contains(&format!(
+                "already-applied batch `{batch_id}` conflicts with certified height/hash"
+            )),
+            "{error}"
+        );
 
         // The completed job no longer holds the proposer back.
         let _ = transactional_six_validator_round(&fleet, 3, 2);
@@ -1568,6 +1573,18 @@ mod transport_batch_payload_tests {
             delivered["consensus_v2_commit"].is_object(),
             "block 2 must carry a consensus-v2 commit"
         );
+        let batch_id = NodeStore::new(&fleet.data_dirs[source])
+            .read_blocks()
+            .expect("source blocks")
+            .blocks
+            .iter()
+            .find(|block| block.header.height == 2)
+            .expect("block 2")
+            .header
+            .batch_id
+            .clone();
+        let conflict =
+            format!("already-applied batch `{batch_id}` conflicts with certified height/hash");
 
         // The consensus-v2 commit removed.
         let target = (source + 1) % fleet.data_dirs.len();
@@ -1577,14 +1594,14 @@ mod transport_batch_payload_tests {
             .expect("certificate object")
             .remove("consensus_v2_commit");
         let error = assert_redelivery_is_a_conflict(&fleet, source, target, &removed);
-        assert!(error.contains("conflicts with certified height/hash"), "{error}");
+        assert!(error.contains(&conflict), "{error}");
 
         // The precommit votes emptied.
         let target = (source + 2) % fleet.data_dirs.len();
         let mut emptied = delivered;
         emptied["consensus_v2_commit"]["precommit_qc"]["votes"] = serde_json::json!([]);
         let error = assert_redelivery_is_a_conflict(&fleet, source, target, &emptied);
-        assert!(error.contains("conflicts with certified height/hash"), "{error}");
+        assert!(error.contains(&conflict), "{error}");
 
         // Neither conflict holds the proposer back.
         let _ = transactional_six_validator_round(&fleet, 3, 2);

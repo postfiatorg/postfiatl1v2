@@ -3114,9 +3114,9 @@ mod transport_cli_tests {
         let error =
             transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
                 .expect_err("conflicting duplicate must fail");
-        assert!(
-            error.contains("conflicts with certified height/hash"),
-            "{error}"
+        assert_eq!(
+            error,
+            "certified delivery conflicts with certified height/hash: missing block 11"
         );
         std::fs::remove_dir_all(root).expect("cleanup conflicting ack fixture");
     }
@@ -3133,7 +3133,10 @@ mod transport_cli_tests {
             transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
                 .expect_err("different stored content must not be acknowledged as applied");
         // Release 6.4's check rejects it with one conflict message.
-        assert!(error.contains("conflicts with certified height/hash"), "{error}");
+        assert!(
+            error.contains("already-applied batch `batch-1` conflicts with certified height/hash"),
+            "{error}"
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -3152,7 +3155,12 @@ mod transport_cli_tests {
             let error =
                 transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
                     .expect_err("a certificate for another chain must not be acknowledged");
-            assert!(error.contains("conflicts with certified height/hash"), "{field}: {error}");
+            assert!(
+                error.contains(
+                    "already-applied batch `batch-1` conflicts with certified height/hash"
+                ),
+                "{field}: {error}"
+            );
             std::fs::remove_dir_all(root).unwrap();
         }
     }
@@ -3177,7 +3185,10 @@ mod transport_cli_tests {
             )),
             "{error}"
         );
-        assert!(error.contains("conflicts with certified height/hash"), "{error}");
+        assert!(
+            error.contains("already-applied batch `batch-1` conflicts with certified height/hash"),
+            "{error}"
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -3211,7 +3222,11 @@ mod transport_cli_tests {
             )),
             "{error}"
         );
-        assert!(error.contains("conflicts with certified height/hash"), "{error}");
+        // No block is stored at the certified height.
+        assert!(
+            error.contains("conflicts with certified height/hash: missing block 11"),
+            "{error}"
+        );
         assert!(error.contains(duplicate), "{error}");
         std::fs::remove_dir_all(root).unwrap();
     }
