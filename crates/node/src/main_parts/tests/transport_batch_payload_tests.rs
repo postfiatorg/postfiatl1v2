@@ -4202,6 +4202,9 @@ mod transport_batch_payload_tests {
         for step in ["view_and_proposer_ms", "mempool_round_ms", "round_report_write_ms"] {
             assert!(steps[step].as_f64().is_some(), "missing {step}: {result}");
         }
+        // The mempool round takes its node id from the round's post-apply
+        // status instead of reading the full status again.
+        assert!(steps.get("post_round_status_ms").is_none(), "{steps}");
         let round_report: serde_json::Value = serde_json::from_slice(
             &std::fs::read(result["round_report_file"].as_str().expect("round report path"))
                 .expect("read round report"),

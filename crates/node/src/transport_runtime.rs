@@ -5015,15 +5015,11 @@ pub(super) fn transport_peer_certified_mempool_round(
         commit_processed_dir: None,
         required_parent: options.required_parent.clone(),
     })?;
-    let post_round_status_start = Instant::now();
-    let local_state = status(NodeOptions {
-        data_dir: options.data_dir,
-    })
-    .map_err(|error| format!("peer certified mempool round status failed: {error}"))?;
-    let post_round_status_ms = monotonic_elapsed_ms(post_round_status_start);
+    // The round read and checked the post-apply status already; its node id
+    // is the one a second full status read would return.
     Ok(TransportPeerCertifiedMempoolRoundReport {
         schema: "postfiat-transport-peer-certified-mempool-round-v1".to_string(),
-        node_id: local_state.node_id,
+        node_id: round.local_state.node_id.clone(),
         topology_id: round.topology_id.clone(),
         batch_file: batch_file.display().to_string(),
         artifact_dir: options.artifact_dir.display().to_string(),
@@ -5042,7 +5038,6 @@ pub(super) fn transport_peer_certified_mempool_round(
         submitted_tx_id,
         mempool_submit_ms,
         mempool_batch_ms,
-        post_round_status_ms,
         total_ms: monotonic_elapsed_ms(mempool_round_start),
         round_ok: round.round_ok,
         round,

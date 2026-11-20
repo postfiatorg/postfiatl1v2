@@ -292,10 +292,8 @@ struct RpcFinalityStepTimings {
     view_and_proposer_ms: f64,
     /// Full status reads in view preparation and the local-proposer check.
     view_and_proposer_status_reads: u32,
-    /// Mempool admission, batch, certified round and post-round status.
+    /// Mempool admission, batch and certified round.
     mempool_round_ms: f64,
-    /// Status read by the mempool round after the certified round.
-    post_round_status_ms: f64,
     /// Serializing and writing rpc-finality-round.json.
     round_report_write_ms: f64,
 }
@@ -309,7 +307,6 @@ fn rpc_finality_step_timings(
         view_and_proposer_ms,
         view_and_proposer_status_reads,
         mempool_round_ms: round.total_ms,
-        post_round_status_ms: round.post_round_status_ms,
         round_report_write_ms,
     }
 }
