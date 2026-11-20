@@ -1680,6 +1680,11 @@ fn handle_transport_block_proposal_line(
         );
     }
 
+    if let Some(spent) = consensus_v2_proposer_view_spent(data_dir, &unsigned)
+        .map_err(|error| format!("transport block proposal view check failed: {error}"))?
+    {
+        return Err(spent);
+    }
     // Reserve the normal durable one-proposal-per-height vote lock before
     // emitting either proposer signature. Replays of the same proposal are
     // allowed; a conflicting request fails closed.
