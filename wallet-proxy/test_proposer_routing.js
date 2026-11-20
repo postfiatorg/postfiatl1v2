@@ -3,6 +3,7 @@ const { spawnSync } = require('child_process');
 
 const {
   addProxyRouteEvent,
+  finalityFailureCanAdvanceView,
   chooseProposerEndpointCached,
   chooseProposerEndpointFromStatuses,
   chooseProposerEndpointWithRetry,
@@ -1161,10 +1162,28 @@ function testFirstReadySequencedReadsCanBeDisabled() {
   assert.strictEqual(result.status, 0, result.stderr || result.stdout);
 }
 
+function testSpentViewAdvancesFinalityToTheNextView() {
+  const failure = (message) => JSON.stringify({
+    ok: false,
+    error: { code: 'rpc_finality_submit_failed', message },
+  });
+  // Heights 1701 and 1707: the view-0 proposer had signed and failed.
+  assert.strictEqual(finalityFailureCanAdvanceView(failure(
+    'mempool_submit_signed_asset_transaction_finality failed: consensus v2 view spent: proposer `validator-3` already signed proposal fef8 at height 1701 view 0; the height needs a timeout certificate for view 0 and a proposal at view 1',
+  )), true);
+  assert.strictEqual(finalityFailureCanAdvanceView(failure(
+    'mempool_submit_signed_asset_transaction_finality failed: peer certified batch round proposal signing failed: conflicting block proposal vote already recorded for validator `validator-3` at height 1701 (recorded view 0, attempted view 0)',
+  )), true, 'release 6.4 nodes report the spent view as a vote-lock conflict');
+  assert.strictEqual(finalityFailureCanAdvanceView(failure(
+    'mempool_submit_signed_asset_transaction_finality failed: signed asset transaction sequence is stale',
+  )), false);
+}
+
 testDeterministicProposer();
 testProposerEndpointForHeightUsesDefaultFleet();
 testProposerEndpointForHeightRotatesAcrossRecoveryViews();
 testFinalityMethodFilter();
+testSpentViewAdvancesFinalityToTheNextView();
 testSequencedAccountMethodFilter();
 testFastpayBroadcastMethodFilter();
 testRemovedWrapIsNotNormalizedIntoMutation();

@@ -2913,6 +2913,8 @@ mod transport_batch_payload_tests {
         artifact_dir: PathBuf,
         /// Vote requests seen by each proxied validator, by validator index.
         proxied: Vec<(usize, std::sync::Arc<[std::sync::atomic::AtomicUsize; 2]>)>,
+        /// The proposer's reserved transport port; its service is not started.
+        proposer_listener: TcpListener,
     }
 
     impl VotePhaseRoundFixture {
@@ -3051,40 +3053,17 @@ mod transport_batch_payload_tests {
             if index == proposer_index {
                 continue;
             }
-            let data_dir = data_dir.clone();
-            let topology_file = topology_file.clone();
-            let listener = listeners[index]
-                .try_clone()
-                .expect("clone reserved listener");
-            std::thread::spawn(move || {
-                let shutdown_requested = std::sync::atomic::AtomicBool::new(false);
-                crate::transport_runtime::transport_validator_serve_inner(
-                    data_dir.clone(),
-                    topology_file,
-                    data_dir.join(VALIDATOR_KEYS_FILE),
-                    data_dir.join("vote-phase-transport-votes"),
-                    Some("127.0.0.1".to_string()),
-                    // A refused request closes its connection, and a refusal
-                    // is retried until the phase deadline.
-                    1024,
-                    60_000,
-                    None,
-                    true,
-                    Some(TransportShieldedVerifierPrewarmReport {
-                        schema: "postfiat-transport-shielded-verifier-prewarm-v1".to_string(),
-                        requested: true,
-                        total_ms: 0.0,
-                        asset_orchard_swap_verifier_warm: true,
-                        asset_orchard_swap_verifier_ms: Some(0.0),
-                        asset_orchard_private_egress_verifier_warm: true,
-                        asset_orchard_private_egress_verifier_ms: Some(0.0),
-                        asset_orchard_private_egress_verifier_breakdown: None,
-                    }),
-                    Some(listener),
-                    &shutdown_requested,
-                )
-            });
+            spawn_vote_phase_validator(
+                data_dir.clone(),
+                topology_file.clone(),
+                listeners[index]
+                    .try_clone()
+                    .expect("clone reserved listener"),
+            );
         }
+        let proposer_listener = listeners[proposer_index]
+            .try_clone()
+            .expect("clone reserved proposer listener");
         let topology = read_topology_file(&topology_file).expect("read topology");
         let proposer_dir = data_dirs[proposer_index].clone();
         let local_status = status(NodeOptions {
@@ -3100,7 +3079,40 @@ mod transport_batch_payload_tests {
             proposer_index,
             quorum: validators.quorum,
             proxied,
+            proposer_listener,
         }
+    }
+
+    /// Transport validator service for one validator of the vote phase fixture.
+    fn spawn_vote_phase_validator(data_dir: PathBuf, topology_file: PathBuf, listener: TcpListener) {
+        std::thread::spawn(move || {
+            let shutdown_requested = std::sync::atomic::AtomicBool::new(false);
+            crate::transport_runtime::transport_validator_serve_inner(
+                data_dir.clone(),
+                topology_file,
+                data_dir.join(VALIDATOR_KEYS_FILE),
+                data_dir.join("vote-phase-transport-votes"),
+                Some("127.0.0.1".to_string()),
+                // A refused request closes its connection, and a refusal
+                // is retried until the phase deadline.
+                1024,
+                60_000,
+                None,
+                true,
+                Some(TransportShieldedVerifierPrewarmReport {
+                    schema: "postfiat-transport-shielded-verifier-prewarm-v1".to_string(),
+                    requested: true,
+                    total_ms: 0.0,
+                    asset_orchard_swap_verifier_warm: true,
+                    asset_orchard_swap_verifier_ms: Some(0.0),
+                    asset_orchard_private_egress_verifier_warm: true,
+                    asset_orchard_private_egress_verifier_ms: Some(0.0),
+                    asset_orchard_private_egress_verifier_breakdown: None,
+                }),
+                Some(listener),
+                &shutdown_requested,
+            )
+        });
     }
 
     type RoundHandle =
@@ -3150,8 +3162,50 @@ mod transport_batch_payload_tests {
         Duration,
         bool,
     ) {
-        let proposer_dir = fixture.data_dirs[fixture.proposer_index].clone();
-        let batch_file = fixture.artifact_dir.with_extension("batch.json");
+        run_vote_phase_round_at(
+            fixture,
+            &RoundSlot {
+                proposer_index: fixture.proposer_index,
+                view: 0,
+                timeout_certificate_file: None,
+                artifact_dir: fixture.artifact_dir.clone(),
+            },
+            timeout_ms,
+            send_retries,
+            retry_backoff_ms,
+            quorum_early,
+            defer_certified_sends,
+            vote_phase_deadline_ms,
+            bound,
+        )
+    }
+
+    /// Who proposes the height-1 round, at which view, and where it writes.
+    struct RoundSlot {
+        proposer_index: usize,
+        view: u64,
+        timeout_certificate_file: Option<PathBuf>,
+        artifact_dir: PathBuf,
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn run_vote_phase_round_at(
+        fixture: &VotePhaseRoundFixture,
+        slot: &RoundSlot,
+        timeout_ms: u64,
+        send_retries: usize,
+        retry_backoff_ms: u64,
+        quorum_early: bool,
+        defer_certified_sends: bool,
+        vote_phase_deadline_ms: u64,
+        bound: Duration,
+    ) -> (
+        Option<Result<TransportPeerCertifiedBatchRoundReport, String>>,
+        Duration,
+        bool,
+    ) {
+        let proposer_dir = fixture.data_dirs[slot.proposer_index].clone();
+        let batch_file = slot.artifact_dir.with_extension("batch.json");
         create_transfer_batch(BatchTransferOptions {
             data_dir: proposer_dir.clone(),
             key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
@@ -3171,10 +3225,10 @@ mod transport_batch_payload_tests {
             require_signed_proposal: true,
             allow_peer_failures: false,
             quorum_early_full_propagation: quorum_early,
-            artifact_dir: fixture.artifact_dir.clone(),
+            artifact_dir: slot.artifact_dir.clone(),
             block_height: Some(1),
-            view: Some(0),
-            timeout_certificate_file: None,
+            view: Some(slot.view),
+            timeout_certificate_file: slot.timeout_certificate_file.clone(),
             timeout_ms,
             send_retries,
             retry_backoff_ms,
@@ -3776,6 +3830,301 @@ mod transport_batch_payload_tests {
         assert!(report.round_ok, "{:?}", report.send_failures);
         assert!(elapsed >= Duration::from_secs(22));
         clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// The wallet proxy's rule for moving a failed finality submission to the
+    /// next view (wallet-proxy/rpc-routing.js, finalityFailureCanAdvanceView).
+    fn submission_failure_advances_view(error: &str) -> bool {
+        let error = error.to_ascii_lowercase();
+        [
+            "vote request",
+            "vote workers",
+            "quorum",
+            "certificate",
+            "transport",
+            "timed out",
+            "connection",
+        ]
+        .iter()
+        .any(|pattern| error.contains(pattern))
+    }
+
+    /// Proposal hashes a validator's vote locks hold at (height, view).
+    fn vote_lock_proposal_hashes(data_dir: &Path, height: u64, view: u64) -> Vec<String> {
+        let prefix = format!("{height}.{view}.");
+        let mut hashes = std::fs::read_dir(data_dir.join("block_proposal_vote_locks"))
+            .expect("vote lock directory")
+            .map(|entry| entry.expect("vote lock entry").path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(&prefix) && name.ends_with(".json"))
+            })
+            .map(|path| {
+                let lock: serde_json::Value =
+                    serde_json::from_slice(&std::fs::read(path).expect("read vote lock"))
+                        .expect("vote lock json");
+                lock["proposal_hash"].as_str().expect("proposal hash").to_string()
+            })
+            .collect::<Vec<_>>();
+        hashes.sort();
+        hashes
+    }
+
+    /// Heights 1701 and 1707 (2026-11-19): the view-0 proposer signed a
+    /// proposal, its own vote and its own prepare, then failed before any peer
+    /// voted. Every later proposal at that height met its own vote lock, and
+    /// nothing moved the height to view 1 until the records were moved aside
+    /// by hand.
+    #[test]
+    fn a_proposer_that_signed_and_failed_does_not_wedge_its_height() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture("spent-view", &[]);
+        let proposer = fixture.proposer_index;
+        let proposer_dir = fixture.data_dirs[proposer].clone();
+        let proposer_id = format!("validator-{proposer}");
+        let key_file = proposer_dir.join(VALIDATOR_KEYS_FILE);
+
+        // The failed run, as on validator 3: vote lock reserved by the
+        // proposal signature, proposal, own vote, own prepare. Then nothing.
+        let crashed_dir = fixture.artifact_dir.with_extension("crashed");
+        std::fs::create_dir_all(&crashed_dir).expect("crashed run directory");
+        let crashed_batch = crashed_dir.join("batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: proposer_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "e".repeat(40)),
+            amount: 7,
+            batch_file: crashed_batch.clone(),
+        })
+        .expect("crashed run batch");
+        let unsigned = propose_batch(BatchProposalOptions {
+            data_dir: proposer_dir.clone(),
+            verify_block_log: false,
+            batch_kind: Some("transparent".to_string()),
+            batch_file: crashed_batch,
+            proposal_file: crashed_dir.join("block-proposal.json"),
+            view: Some(0),
+            timeout_certificate_file: None,
+            key_file: None,
+            validator_id: None,
+        })
+        .expect("crashed run proposal");
+        let signed = sign_verified_block_proposal(&proposer_dir, unsigned, &key_file, &proposer_id)
+            .expect("crashed run proposal signature");
+        let consensus_v2_proposal =
+            create_consensus_v2_proposal_for_block(&proposer_dir, &signed, None, &key_file)
+                .expect("crashed run consensus v2 proposal");
+        create_block_vote_for_verified_proposal(BlockVoteForVerifiedProposalOptions {
+            data_dir: proposer_dir.clone(),
+            verify_block_log: false,
+            key_file: key_file.clone(),
+            validator_id: Some(proposer_id.clone()),
+            proposal: signed,
+            block_height: Some(1),
+            vote_file: crashed_dir.join(format!("{proposer_id}.block_vote.json")),
+        })
+        .expect("crashed run own vote");
+        create_consensus_v2_prepare_vote(
+            &proposer_dir,
+            &consensus_v2_proposal,
+            None,
+            &key_file,
+            &proposer_id,
+        )
+        .expect("crashed run own prepare");
+        let crashed_lock = vote_lock_proposal_hashes(&proposer_dir, 1, 0);
+        assert_eq!(crashed_lock.len(), 1, "{crashed_lock:?}");
+        // The proposer comes back as a voter.
+        spawn_vote_phase_validator(
+            proposer_dir.clone(),
+            fixture.topology_file.clone(),
+            fixture
+                .proposer_listener
+                .try_clone()
+                .expect("clone proposer listener"),
+        );
+
+        // A normal submission at height 1 reaches the view-0 proposer.
+        let start = Instant::now();
+        let (result, _, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        let error = result
+            .expect("round still running")
+            .expect_err("the proposer cannot sign at view 0 again");
+        assert!(lock_free);
+        // Asking again changes nothing: the records never expire.
+        let (retry, _, _) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        assert_eq!(
+            retry.expect("retry still running").expect_err("retry at view 0"),
+            error
+        );
+        assert!(
+            submission_failure_advances_view(&error),
+            "height 1 never finalizes: the submission failed with `{error}`, which no recovery path treats as a reason to change view"
+        );
+
+        // The proxy's recovery: timeout votes for view 0 from every validator,
+        // a timeout certificate, the view-1 proposer.
+        let recovery_dir = fixture.artifact_dir.with_extension("view-1");
+        std::fs::create_dir_all(&recovery_dir).expect("recovery directory");
+        let vote_files = fixture
+            .data_dirs
+            .iter()
+            .enumerate()
+            .map(|(index, data_dir)| {
+                let vote_file = recovery_dir.join(format!("validator-{index}.timeout.json"));
+                create_block_timeout_vote(BlockTimeoutVoteOptions {
+                    data_dir: data_dir.clone(),
+                    verify_block_log: false,
+                    key_file: data_dir.join(VALIDATOR_KEYS_FILE),
+                    validator_id: Some(format!("validator-{index}")),
+                    block_height: 1,
+                    view: 0,
+                    high_qc_id: RPC_FINALITY_TIMEOUT_HIGH_QC_COMPAT.to_string(),
+                    vote_file: vote_file.clone(),
+                })
+                .expect("timeout vote");
+                vote_file
+            })
+            .collect::<Vec<_>>();
+        let (_, validators) = live_consensus_v2_context(&proposer_dir).expect("context");
+        let view_1_proposer =
+            postfiat_ordering_fast::leader_for_view(&validators.validator_ids(), 1, 1)
+                .expect("view-1 proposer");
+        let view_1_index = validators
+            .validator_ids()
+            .iter()
+            .position(|validator| validator == &view_1_proposer)
+            .expect("view-1 proposer index");
+        let timeout_certificate_file = recovery_dir.join("timeout-certificate.json");
+        aggregate_block_timeout_certificate(BlockTimeoutCertificateOptions {
+            data_dir: fixture.data_dirs[view_1_index].clone(),
+            verify_block_log: false,
+            block_height: 1,
+            view: 0,
+            vote_files,
+            certificate_file: timeout_certificate_file.clone(),
+        })
+        .expect("timeout certificate");
+        let round_dir = recovery_dir.join("round");
+        let (result, _, _) = run_vote_phase_round_at(
+            &fixture,
+            &RoundSlot {
+                proposer_index: view_1_index,
+                view: 1,
+                timeout_certificate_file: Some(timeout_certificate_file),
+                artifact_dir: round_dir.clone(),
+            },
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            Duration::from_secs(30),
+        );
+        let report = result
+            .expect("view-1 round still running")
+            .expect("view 1 certifies height 1");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        let elapsed = start.elapsed();
+
+        // One block at height 1 on every validator: the view-1 block.
+        let certificate: BlockCertificateFile = read_transport_json_file(
+            &round_dir.join("block-certificate.json"),
+            "view-1 certificate",
+        )
+        .expect("view-1 certificate");
+        assert_eq!((certificate.view, certificate.proposer.as_str()), (1, view_1_proposer.as_str()));
+        assert_ne!(certificate.proposal_hash.as_ref(), crashed_lock.first());
+        let tips = fixture
+            .data_dirs
+            .iter()
+            .map(|data_dir| {
+                let tip = status(NodeOptions {
+                    data_dir: data_dir.clone(),
+                })
+                .expect("validator status");
+                (tip.block_height, tip.block_tip_hash)
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            tips.iter().all(|tip| tip == &tips[0]) && tips[0].0 == 1,
+            "{tips:?}"
+        );
+        // The failed proposer's view-0 record is untouched: it never signed
+        // a second proposal there.
+        assert_eq!(vote_lock_proposal_hashes(&proposer_dir, 1, 0), crashed_lock);
+        eprintln!("spent view 0: error=`{error}` recovered_at_view_1_in={elapsed:?}");
+        assert!(elapsed < Duration::from_secs(30), "recovery took {elapsed:?}");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// Early-quorum round (the live finality path) with one validator answering
+    /// `late_phase` (0 prepare, 1 precommit) 8 s late and the others at once.
+    /// Returns the round time.
+    fn round_time_with_one_vote_late(tag: &str, late_phase: Option<usize>) -> Duration {
+        let delay = |phase| Duration::from_secs(if late_phase == Some(phase) { 8 } else { 0 });
+        let (prepare, precommit) = (ProxyVote::Forward(delay(0)), ProxyVote::Forward(delay(1)));
+        let fixture = vote_phase_round_fixture(tag, &[(1, prepare, precommit)]);
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(40),
+        );
+        eprintln!("{tag}: round_time={elapsed:?} lock_free={lock_free}");
+        let report = result
+            .expect("round still running")
+            .expect("round certifies");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+        elapsed
+    }
+
+    #[test]
+    fn an_early_quorum_round_with_every_vote_on_time_sets_the_baseline() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let elapsed = round_time_with_one_vote_late("on-time-votes", None);
+        assert!(elapsed < Duration::from_secs(8), "round took {elapsed:?}");
+    }
+
+    #[test]
+    fn a_precommit_answered_8s_late_does_not_delay_an_early_quorum_round() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let elapsed = round_time_with_one_vote_late("late-precommit-8s", Some(1));
+        assert!(elapsed < Duration::from_secs(8), "round took {elapsed:?}");
+    }
+
+    #[test]
+    fn a_prepare_answered_8s_late_does_not_delay_an_early_quorum_round() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let elapsed = round_time_with_one_vote_late("late-prepare-8s", Some(0));
+        assert!(elapsed < Duration::from_secs(8), "round took {elapsed:?}");
     }
 
     #[test]
