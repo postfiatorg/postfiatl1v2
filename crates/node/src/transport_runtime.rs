@@ -3774,7 +3774,9 @@ pub(super) fn transport_peer_certified_batch_round(
             return Err(spent);
         }
     }
-    // Before the local proposer signs or a remote one is asked to.
+    // Before the local proposer signs or a remote one is asked to. It stays for a
+    // remote proposer until every node runs the forwarded handler's checks: an
+    // older proposer would sign a proposal its voters refuse and spend its view.
     if let Some(reproposal) = consensus_v2_required_reproposal(
         &options.data_dir,
         &expected_unsigned_proposal,
