@@ -217,9 +217,9 @@ fn transparent_batch_claims_rejected_fees_only_from_the_governed_height() {
     let mut batch = TransactionBatch::new("fee-claim-batch", vec![overdrawn.clone()]);
     batch.payments_v2.push(future_sequence);
 
-    let governance = governed(&[GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT]);
+    let governance = governed(&[GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT]);
     assert_eq!(
-        governance.rejected_tx_fee_activation_height(),
+        governance.rejected_tx_fee_v2_activation_height(),
         Some(u64::from(ACTIVATION_HEIGHT))
     );
 
@@ -301,8 +301,8 @@ fn transparent_batch_enforces_require_memo_after_activation() {
         batch
     };
     let governance = governed(&[
-        GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT,
-        GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT,
     ]);
     let height = u64::from(ACTIVATION_HEIGHT);
 
@@ -399,7 +399,7 @@ fn mempool_admission_rejects_memo_less_payment_to_flagged_account_without_chargi
     let store = NodeStore::new(&data_dir);
     let genesis = store.read_genesis().expect("genesis");
     let mut governance = store.read_governance().expect("governance");
-    governance.apply(activation_amendment(GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT, 1));
+    governance.apply(activation_amendment(GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT, 1));
     store.write_governance(&governance).expect("write governance");
     let sender_key = key(31);
     let sender = address_from_public_key(&sender_key.public_key);
@@ -435,12 +435,12 @@ fn mempool_admission_rejects_memo_less_payment_to_flagged_account_without_chargi
 fn new_activation_kinds_must_be_scheduled_after_the_amendment_block() {
     for (kind, code) in [
         (
-            GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT,
-            "invalid_rejected_tx_fee_activation_height",
+            GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT,
+            "invalid_rejected_tx_fee_v2_activation_height",
         ),
         (
-            GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT,
-            "invalid_require_memo_activation_height",
+            GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT,
+            "invalid_require_memo_v2_activation_height",
         ),
     ] {
         let amendment = activation_amendment(kind, 2);
@@ -466,9 +466,9 @@ fn recipient_failures_claim_fees_with_both_gates_and_replay_identically() {
     bad_checksum[index] ^= 0x20;
     let bad_checksum = String::from_utf8(bad_checksum).unwrap();
     let governance = governed(&[
-        GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT,
-        GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT,
-        GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT,
     ]);
     for (destination, code) in [
         ("pf-malformed", "invalid_recipient_address"),
@@ -521,9 +521,9 @@ fn issued_payment_v2_uses_recipient_validation_and_exposes_memos() {
     let mut batch = TransactionBatch::new("issued-memo-integration", Vec::new());
     batch.asset_transactions.push(transaction);
     let governance = governed(&[
-        GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT,
-        GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT,
-        GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT,
     ]);
     let (receipts, ledger) = live_and_replayed(
         &fixture, &fixture.ledger, &batch, &governance, u64::from(ACTIVATION_HEIGHT),
@@ -545,4 +545,104 @@ fn issued_payment_v2_uses_recipient_validation_and_exposes_memos() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].memo_count, Some(1));
     assert_eq!(rows[0].memos.as_ref().unwrap()[0].memo_data_text.as_deref(), Some("cust-42"));
+}
+
+fn fixture_root(fixture: &BatchFixture, governance: &GovernanceState, ledger: &LedgerState) -> String {
+    replicated_state_root(
+        &fixture.genesis,
+        governance,
+        ledger,
+        &Vec::<String>::new(),
+        &ShieldedState::empty(),
+        &BridgeState::empty(),
+    )
+    .expect("state root")
+}
+
+/// Release 6.4 has not applied the original three kinds since the 2026-11-12
+/// rollout, so with only those kinds committed (as at height 1153 on the live
+/// chain) every rule stays off at any later height. The v2 kinds switch each
+/// rule on from their own height and not before.
+#[test]
+fn original_activation_kinds_leave_the_rules_off_until_the_v2_kinds() {
+    let fixture = batch_fixture();
+    let original = governed(&[
+        GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT,
+    ]);
+    let v2_height = ACTIVATION_HEIGHT + 500;
+    let mut with_v2 = original.clone();
+    for kind in [
+        GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT,
+    ] {
+        with_v2.apply(activation_amendment(kind, v2_height));
+    }
+    let v2_height = u64::from(v2_height);
+    let noncanonical = postfiat_crypto_provider::checksum_address(&fixture.exchange).unwrap();
+    let mut flagged = fixture.ledger.clone();
+    flagged
+        .accounts
+        .iter_mut()
+        .find(|account| account.address == fixture.exchange)
+        .unwrap()
+        .flags = ACCOUNT_FLAG_REQUIRE_MEMO;
+    let overdrawn =
+        signed_transfer_for(&fixture.genesis, &fixture.sender_key, &fixture.exchange, 50_000, 40, 1);
+    let to_noncanonical =
+        signed_transfer_for(&fixture.genesis, &fixture.sender_key, &noncanonical, 25, 40, 1);
+    let memo_less =
+        signed_payment_for(&fixture.genesis, &fixture.sender_key, &fixture.exchange, 25, 40, 1, Vec::new());
+
+    // Off: original kinds at any later height, and v2 kinds one block early.
+    for (governance, height) in [
+        (&original, u64::from(ACTIVATION_HEIGHT) + 1_000),
+        (&with_v2, v2_height - 1),
+    ] {
+        let batch = TransactionBatch::new("fee-off", vec![overdrawn.clone()]);
+        let (receipts, ledger) = live_and_replayed(&fixture, &fixture.ledger, &batch, governance, height);
+        let mut legacy_ledger = fixture.ledger.clone();
+        let legacy = execute_transfer(&fixture.genesis, &mut legacy_ledger, &overdrawn);
+        assert_eq!(serde_json::to_vec(&receipts).unwrap(), serde_json::to_vec(&vec![legacy]).unwrap());
+        assert_eq!(receipts[0].fee_burned, 0);
+        assert_eq!(ledger, fixture.ledger);
+        assert_eq!(
+            fixture_root(&fixture, governance, &ledger),
+            fixture_root(&fixture, governance, &fixture.ledger)
+        );
+
+        let batch = TransactionBatch::new("recipient-off", vec![to_noncanonical.clone()]);
+        let (receipts, ledger) = live_and_replayed(&fixture, &fixture.ledger, &batch, governance, height);
+        let mut legacy_ledger = fixture.ledger.clone();
+        let legacy = execute_transfer(&fixture.genesis, &mut legacy_ledger, &to_noncanonical);
+        assert!(legacy.accepted, "{legacy:?}");
+        assert_eq!(serde_json::to_vec(&receipts).unwrap(), serde_json::to_vec(&vec![legacy]).unwrap());
+        assert_eq!(ledger, legacy_ledger);
+
+        let mut batch = TransactionBatch::new("memo-off", Vec::new());
+        batch.payments_v2.push(memo_less.clone());
+        let (receipts, ledger) = live_and_replayed(&fixture, &flagged, &batch, governance, height);
+        let mut legacy_ledger = flagged.clone();
+        let legacy =
+            postfiat_execution::execute_payment_v2(&fixture.genesis, &mut legacy_ledger, &memo_less);
+        assert!(legacy.accepted, "{legacy:?}");
+        assert_eq!(serde_json::to_vec(&receipts).unwrap(), serde_json::to_vec(&vec![legacy]).unwrap());
+        assert_eq!(ledger, legacy_ledger);
+    }
+
+    // On from the v2 height.
+    let batch = TransactionBatch::new("fee-on", vec![overdrawn]);
+    let (receipts, ledger) = live_and_replayed(&fixture, &fixture.ledger, &batch, &with_v2, v2_height);
+    assert_eq!(receipts[0].code, "tec_insufficient_funds");
+    assert_eq!(receipts[0].fee_burned, 40);
+    assert_eq!(ledger.account(&fixture.sender).unwrap().balance, 960);
+    let batch = TransactionBatch::new("recipient-on", vec![to_noncanonical]);
+    let (receipts, _) = live_and_replayed(&fixture, &fixture.ledger, &batch, &with_v2, v2_height);
+    assert_eq!(receipts[0].code, "tec_noncanonical_recipient_address");
+    let mut batch = TransactionBatch::new("memo-on", Vec::new());
+    batch.payments_v2.push(memo_less);
+    let (receipts, _) = live_and_replayed(&fixture, &flagged, &batch, &with_v2, v2_height);
+    assert_eq!(receipts[0].code, "tec_destination_memo_required");
 }

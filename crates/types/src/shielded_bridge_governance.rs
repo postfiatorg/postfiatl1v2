@@ -46,6 +46,19 @@ pub const GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT: &str =
 /// and the destination-memo check on covered payments are active.
 pub const GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT: &str =
     "require_memo_activation_height";
+/// Execution gates for the three rules above. Release 6.4 never applied the
+/// original kinds after the 2026-11-12 rollout, so execution reads only these
+/// v2 kinds: unset means off, and the original kinds stay parseable and stored
+/// so their historical amendments still apply. Semantics match the originals:
+/// for the fee and require-memo gates the latest committed amendment wins.
+pub const GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT: &str =
+    "rejected_tx_fee_v2_activation_height";
+pub const GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT: &str =
+    "require_memo_v2_activation_height";
+/// Recipient-format execution gate; the earliest unpaused height wins, like
+/// `recipient_format_activation_height`.
+pub const GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT: &str =
+    "recipient_format_v2_activation_height";
 pub const GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT: &str =
     "replicated_state_v2_activation_height";
 pub const GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT: &str =
@@ -1714,6 +1727,24 @@ impl GovernanceState {
             .map(|amendment| u64::from(amendment.value))
     }
 
+    /// Execution gate for the rejected-transaction fee; latest amendment wins.
+    pub fn rejected_tx_fee_v2_activation_height(&self) -> Option<u64> {
+        self.latest_amendment_value(GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT)
+    }
+
+    /// Execution gate for require-memo; latest amendment wins.
+    pub fn require_memo_v2_activation_height(&self) -> Option<u64> {
+        self.latest_amendment_value(GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT)
+    }
+
+    fn latest_amendment_value(&self, kind: &str) -> Option<u64> {
+        self.amendments
+            .iter()
+            .rev()
+            .find(|amendment| amendment.kind == kind)
+            .map(|amendment| u64::from(amendment.value))
+    }
+
     pub fn replicated_state_v2_activation_height(&self) -> Option<u64> {
         self.amendments
             .iter()
@@ -1820,6 +1851,18 @@ impl GovernanceState {
             .iter()
             .filter(|amendment| {
                 amendment.kind == GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT
+                    && !amendment.paused
+            })
+            .map(|amendment| u64::from(amendment.value))
+            .min()
+    }
+
+    /// Execution gate for recipient format; earliest unpaused height wins.
+    pub fn recipient_format_v2_activation_height(&self) -> Option<u64> {
+        self.amendments
+            .iter()
+            .filter(|amendment| {
+                amendment.kind == GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT
                     && !amendment.paused
             })
             .map(|amendment| u64::from(amendment.value))
@@ -2677,6 +2720,31 @@ mod shielded_bridge_governance_tests {
         let encoded = serde_json::to_value(&governance).expect("serialize governance");
         assert!(encoded.get("rejected_tx_fee_activation_height").is_none());
         assert!(encoded.get("require_memo_activation_height").is_none());
+    }
+
+    #[test]
+    fn v2_execution_gates_ignore_the_original_kinds() {
+        let mut governance = GovernanceState::new(6);
+        for kind in [
+            GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT,
+            GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT,
+            GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT,
+        ] {
+            governance.apply(amendment(kind, 1153));
+        }
+        assert_eq!(governance.rejected_tx_fee_v2_activation_height(), None);
+        assert_eq!(governance.require_memo_v2_activation_height(), None);
+        assert_eq!(governance.recipient_format_v2_activation_height(), None);
+        governance.apply(amendment(GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT, 3000));
+        governance.apply(amendment(GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT, 3001));
+        governance.apply(amendment(GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT, 3002));
+        governance.apply(amendment(GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT, 3100));
+        governance.apply(amendment(GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT, 3200));
+        assert_eq!(governance.rejected_tx_fee_v2_activation_height(), Some(3100));
+        assert_eq!(governance.require_memo_v2_activation_height(), Some(3001));
+        assert_eq!(governance.recipient_format_v2_activation_height(), Some(3002));
+        assert_eq!(governance.rejected_tx_fee_activation_height(), Some(1153));
+        assert_eq!(governance.recipient_format_activation_height(), Some(1153));
     }
 
     #[test]
