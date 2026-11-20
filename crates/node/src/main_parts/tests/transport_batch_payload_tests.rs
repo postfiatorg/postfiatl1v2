@@ -3169,6 +3169,7 @@ mod transport_batch_payload_tests {
                 view: 0,
                 timeout_certificate_file: None,
                 artifact_dir: fixture.artifact_dir.clone(),
+                batch_file: None,
             },
             timeout_ms,
             send_retries,
@@ -3186,6 +3187,8 @@ mod transport_batch_payload_tests {
         view: u64,
         timeout_certificate_file: Option<PathBuf>,
         artifact_dir: PathBuf,
+        /// A batch to propose instead of a new transfer.
+        batch_file: Option<PathBuf>,
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3205,15 +3208,21 @@ mod transport_batch_payload_tests {
         bool,
     ) {
         let proposer_dir = fixture.data_dirs[slot.proposer_index].clone();
-        let batch_file = slot.artifact_dir.with_extension("batch.json");
-        create_transfer_batch(BatchTransferOptions {
-            data_dir: proposer_dir.clone(),
-            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
-            to: format!("pf{}", "d".repeat(40)),
-            amount: 1_000_000,
-            batch_file: batch_file.clone(),
-        })
-        .expect("create batch");
+        let batch_file = match &slot.batch_file {
+            Some(batch_file) => batch_file.clone(),
+            None => {
+                let batch_file = slot.artifact_dir.with_extension("batch.json");
+                create_transfer_batch(BatchTransferOptions {
+                    data_dir: proposer_dir.clone(),
+                    key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+                    to: format!("pf{}", "d".repeat(40)),
+                    amount: 1_000_000,
+                    batch_file: batch_file.clone(),
+                })
+                .expect("create batch");
+                batch_file
+            }
+        };
         let options = TransportPeerCertifiedBatchRoundOptions {
             data_dir: proposer_dir.clone(),
             topology_file: fixture.topology_file.clone(),
@@ -3871,17 +3880,11 @@ mod transport_batch_payload_tests {
         hashes
     }
 
-    /// Heights 1701 and 1707 (2026-11-19): the view-0 proposer signed a
-    /// proposal, its own vote and its own prepare, then failed before any peer
-    /// voted. Every later proposal at that height met its own vote lock, and
-    /// nothing moved the height to view 1 until the records were moved aside
-    /// by hand.
-    #[test]
-    fn a_proposer_that_signed_and_failed_does_not_wedge_its_height() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let fixture = vote_phase_round_fixture("spent-view", &[]);
+    /// Heights 1701 and 1707: the view-0 proposer of height 1 reserves its
+    /// vote lock with the proposal signature, signs its own vote and prepare,
+    /// then stops; no peer is asked. It then comes back as a voter. Returns the
+    /// proposal hash its view-0 lock holds.
+    fn fail_view_0_proposer_after_its_prepare(fixture: &VotePhaseRoundFixture) -> Vec<String> {
         let proposer = fixture.proposer_index;
         let proposer_dir = fixture.data_dirs[proposer].clone();
         let proposer_id = format!("validator-{proposer}");
@@ -3946,6 +3949,350 @@ mod transport_batch_payload_tests {
                 .try_clone()
                 .expect("clone proposer listener"),
         );
+
+        crashed_lock
+    }
+
+    /// Timeout votes for height 1 at `view` from the given validators, as the
+    /// RPC's consensus_v2_timeout_vote signs them. Returns the vote files that
+    /// were signed and the refusals.
+    fn timeout_votes(
+        fixture: &VotePhaseRoundFixture,
+        validators: &[usize],
+        view: u64,
+        dir: &Path,
+    ) -> (Vec<PathBuf>, Vec<String>) {
+        std::fs::create_dir_all(dir).expect("timeout vote directory");
+        let mut signed = Vec::new();
+        let mut refused = Vec::new();
+        for &index in validators {
+            let data_dir = &fixture.data_dirs[index];
+            let vote_file = dir.join(format!("validator-{index}.h1.v{view}.timeout.json"));
+            match create_block_timeout_vote(BlockTimeoutVoteOptions {
+                data_dir: data_dir.clone(),
+                verify_block_log: false,
+                key_file: data_dir.join(VALIDATOR_KEYS_FILE),
+                validator_id: Some(format!("validator-{index}")),
+                block_height: 1,
+                view,
+                high_qc_id: RPC_FINALITY_TIMEOUT_HIGH_QC_COMPAT.to_string(),
+                vote_file: vote_file.clone(),
+            }) {
+                Ok(_) => signed.push(vote_file),
+                Err(error) => refused.push(error.to_string()),
+            }
+        }
+        (signed, refused)
+    }
+
+    fn height_1_leader(fixture: &VotePhaseRoundFixture, view: u64) -> usize {
+        let (_, validators) =
+            live_consensus_v2_context(&fixture.data_dirs[0]).expect("consensus context");
+        let leader = postfiat_ordering_fast::leader_for_view(&validators.validator_ids(), 1, view)
+            .expect("leader");
+        validators
+            .validator_ids()
+            .iter()
+            .position(|validator| validator == &leader)
+            .expect("leader index")
+    }
+
+    /// Timeout certificate for height 1 at `view`, built by the next view's leader.
+    fn timeout_certificate(
+        fixture: &VotePhaseRoundFixture,
+        view: u64,
+        vote_files: Vec<PathBuf>,
+        dir: &Path,
+    ) -> io::Result<PathBuf> {
+        let certificate_file = dir.join(format!("h1.v{view}.timeout-certificate.json"));
+        aggregate_block_timeout_certificate(BlockTimeoutCertificateOptions {
+            data_dir: fixture.data_dirs[height_1_leader(fixture, view + 1)].clone(),
+            verify_block_log: false,
+            block_height: 1,
+            view,
+            vote_files,
+            certificate_file: certificate_file.clone(),
+        })?;
+        Ok(certificate_file)
+    }
+
+    /// All six validators hold the same block at height 1.
+    fn assert_height_1_final_everywhere(fixture: &VotePhaseRoundFixture) {
+        let tips = fixture
+            .data_dirs
+            .iter()
+            .map(|data_dir| {
+                let tip = status(NodeOptions {
+                    data_dir: data_dir.clone(),
+                })
+                .expect("validator status");
+                (tip.block_height, tip.block_tip_hash)
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            tips.iter().all(|tip| tip == &tips[0]) && tips[0].0 == 1,
+            "{tips:?}"
+        );
+    }
+
+    /// Two submissions recover height 1 at the same time and split the timeout
+    /// votes (3 and 3, quorum 5); a third gets a certificate but its view-1
+    /// attempt ends busy. Every validator has now signed its one view-0 timeout
+    /// vote. A fourth submission must still finish the height.
+    #[test]
+    fn split_and_abandoned_recoveries_leave_the_height_recoverable() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture("resumable-recovery", &[]);
+        fail_view_0_proposer_after_its_prepare(&fixture);
+        let dir = fixture.artifact_dir.with_extension("recoveries");
+        // Two concurrent collections, each reaching half the validators.
+        let (first, second) = std::thread::scope(|scope| {
+            let first = scope.spawn(|| timeout_votes(&fixture, &[0, 2, 4], 0, &dir.join("c1")));
+            let second = scope.spawn(|| timeout_votes(&fixture, &[1, 3, 5], 0, &dir.join("c2")));
+            (first.join().expect("c1"), second.join().expect("c2"))
+        });
+        assert_eq!((first.0.len(), second.0.len()), (3, 3), "{first:?} {second:?}");
+        assert!(first.0.len() < fixture.quorum && second.0.len() < fixture.quorum);
+        // A third collection reaches everyone; its view-1 attempt ends busy.
+        let (third, refused) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir.join("c3"));
+        assert!(
+            third.len() >= fixture.quorum,
+            "height 1 is wedged: a later recovery collected {} timeout votes, need {}: {refused:?}",
+            third.len(),
+            fixture.quorum
+        );
+        // Each validator answered with the vote it signed the first time.
+        for index in 0..6 {
+            let earlier = if index % 2 == 0 { &first.0 } else { &second.0 };
+            let read = |path: &PathBuf| -> serde_json::Value {
+                serde_json::from_slice(&std::fs::read(path).expect("vote file")).expect("vote json")
+            };
+            let earlier = earlier
+                .iter()
+                .find(|path| path.to_string_lossy().contains(&format!("validator-{index}.")))
+                .expect("earlier vote");
+            let again = third
+                .iter()
+                .find(|path| path.to_string_lossy().contains(&format!("validator-{index}.")))
+                .expect("vote again");
+            assert_eq!(
+                read(earlier)["consensus_v2_vote"],
+                read(again)["consensus_v2_vote"],
+                "validator-{index} signed a second timeout vote"
+            );
+        }
+        timeout_certificate(&fixture, 0, third, &dir.join("c3")).expect("third certificate");
+        // A fourth submission collects again and finishes at view 1.
+        let (fourth, refused) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir.join("c4"));
+        assert!(fourth.len() >= fixture.quorum, "{refused:?}");
+        let certificate =
+            timeout_certificate(&fixture, 0, fourth, &dir.join("c4")).expect("fourth certificate");
+        let (result, _, _) = run_vote_phase_round_at(
+            &fixture,
+            &RoundSlot {
+                proposer_index: height_1_leader(&fixture, 1),
+                view: 1,
+                timeout_certificate_file: Some(certificate),
+                artifact_dir: dir.join("view-1-round"),
+                batch_file: None,
+            },
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            Duration::from_secs(30),
+        );
+        let report = result
+            .expect("view-1 round still running")
+            .expect("view 1 certifies height 1");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        assert_height_1_final_everywhere(&fixture);
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    /// View 0 forms a prepare QC for block A; two precommits arrive after the
+    /// phase deadline, so the proposer holds 4 of 5 and view 0 fails while
+    /// every validator is locked on A. The timeout certificate carries A's QC,
+    /// so view 1 must carry A. A view-1 proposer holding another batch must
+    /// stop before it signs anything (keeping its view-1 slot), and then
+    /// finish the height by proposing A's batch.
+    #[test]
+    fn view_1_after_a_view_0_prepare_qc_must_carry_that_block() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let late = ProxyVote::Forward(Duration::from_secs(5));
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture =
+            vote_phase_round_fixture("view-1-reproposal", &[(2, forward, late), (3, forward, late)]);
+        let (result, _, _) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            3_000,
+            Duration::from_secs(30),
+        );
+        result
+            .expect("view-0 round still running")
+            .expect_err("view 0 misses its precommit quorum");
+        let block_a = fixture.artifact_dir.with_extension("batch.json");
+        spawn_vote_phase_validator(
+            fixture.data_dirs[fixture.proposer_index].clone(),
+            fixture.topology_file.clone(),
+            fixture
+                .proposer_listener
+                .try_clone()
+                .expect("clone proposer listener"),
+        );
+        let dir = fixture.artifact_dir.with_extension("view-1");
+        let (votes, refused) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir);
+        assert_eq!(votes.len(), 6, "{refused:?}");
+        let certificate = timeout_certificate(&fixture, 0, votes, &dir).expect("certificate");
+        let leader = height_1_leader(&fixture, 1);
+        let leader_dir = fixture.data_dirs[leader].clone();
+        let block_b = dir.join("block-b.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: leader_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "b".repeat(40)),
+            amount: 5,
+            batch_file: block_b.clone(),
+        })
+        .expect("block B batch");
+        let round_at = |batch_file: PathBuf, tag: &str| {
+            run_vote_phase_round_at(
+                &fixture,
+                &RoundSlot {
+                    proposer_index: leader,
+                    view: 1,
+                    timeout_certificate_file: Some(certificate.clone()),
+                    artifact_dir: dir.join(tag),
+                    batch_file: Some(batch_file),
+                },
+                UNIT_TIMEOUT_MS,
+                UNIT_SEND_RETRIES,
+                UNIT_RETRY_BACKOFF_MS,
+                true,
+                false,
+                PEER_VOTE_PHASE_DEADLINE_MS,
+                Duration::from_secs(40),
+            )
+            .0
+            .expect("view-1 round still running")
+        };
+        let error = round_at(block_b, "with-b").expect_err("view 1 cannot carry block B");
+        assert!(
+            error.starts_with("consensus v2 view must re-propose"),
+            "view 1 failed only after signing: {error}"
+        );
+        assert!(
+            vote_lock_proposal_hashes(&leader_dir, 1, 1).is_empty(),
+            "the view-1 proposer spent its view-1 slot on block B"
+        );
+        let report = round_at(block_a, "with-a").expect("view 1 certifies block A");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        assert_height_1_final_everywhere(&fixture);
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    /// A proposer that already signed a timeout vote at view 1 cannot finish
+    /// view 0 or view 1; the spent-view error names view 1 and asks for view 2.
+    #[test]
+    fn a_spent_view_names_the_highest_round_the_proposer_signed() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture("spent-view-highest", &[]);
+        fail_view_0_proposer_after_its_prepare(&fixture);
+        let dir = fixture.artifact_dir.with_extension("timeouts");
+        let (signed, refused) = timeout_votes(&fixture, &[fixture.proposer_index], 1, &dir);
+        assert_eq!(signed.len(), 1, "{refused:?}");
+        let (result, _, _) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        let error = result.expect("round still running").expect_err("view 0 is spent");
+        assert!(
+            error.contains("timeout certificate for view 1 and a proposal at view 2"),
+            "{error}"
+        );
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    /// A submission at a validator that is not the proposer asks the spent
+    /// proposer to sign over transport; that path reports the spent view too.
+    #[test]
+    fn a_forwarded_proposal_to_a_spent_proposer_reports_the_spent_view() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture("spent-view-forwarded", &[]);
+        fail_view_0_proposer_after_its_prepare(&fixture);
+        let requester = (fixture.proposer_index + 1) % fixture.data_dirs.len();
+        let requester_dir = fixture.data_dirs[requester].clone();
+        let artifact_dir = fixture.artifact_dir.with_extension("forwarded");
+        let batch_file = artifact_dir.with_extension("batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: requester_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "c".repeat(40)),
+            amount: 3,
+            batch_file: batch_file.clone(),
+        })
+        .expect("forwarded batch");
+        let error = transport_peer_certified_batch_round(TransportPeerCertifiedBatchRoundOptions {
+            data_dir: requester_dir.clone(),
+            topology_file: fixture.topology_file.clone(),
+            batch_kind: Some("transparent".to_string()),
+            batch_file,
+            key_file: requester_dir.join(VALIDATOR_KEYS_FILE),
+            proposal_key_file: Some(requester_dir.join(VALIDATOR_KEYS_FILE)),
+            require_local_proposer: false,
+            require_signed_proposal: true,
+            allow_peer_failures: false,
+            quorum_early_full_propagation: true,
+            artifact_dir,
+            block_height: Some(1),
+            view: Some(0),
+            timeout_certificate_file: None,
+            timeout_ms: UNIT_TIMEOUT_MS,
+            send_retries: 0,
+            retry_backoff_ms: UNIT_RETRY_BACKOFF_MS,
+            vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
+            local_apply_before_certified_send: true,
+            defer_certified_sends: false,
+            commit_processed_dir: None,
+            required_parent: None,
+        })
+        .expect_err("the spent proposer cannot sign at view 0");
+        assert!(error.contains("consensus v2 view spent"), "{error}");
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    /// Heights 1701 and 1707 (2026-11-19): the view-0 proposer signed a
+    /// proposal, its own vote and its own prepare, then failed before any peer
+    /// voted. Every later proposal at that height met its own vote lock, and
+    /// nothing moved the height to view 1 until the records were moved aside
+    /// by hand.
+    #[test]
+    fn a_proposer_that_signed_and_failed_does_not_wedge_its_height() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture("spent-view", &[]);
+        let proposer_dir = fixture.data_dirs[fixture.proposer_index].clone();
+        let crashed_lock = fail_view_0_proposer_after_its_prepare(&fixture);
 
         // A normal submission at height 1 reaches the view-0 proposer.
         let start = Instant::now();
@@ -4030,6 +4377,7 @@ mod transport_batch_payload_tests {
                 view: 1,
                 timeout_certificate_file: Some(timeout_certificate_file),
                 artifact_dir: round_dir.clone(),
+                batch_file: None,
             },
             UNIT_TIMEOUT_MS,
             UNIT_SEND_RETRIES,
