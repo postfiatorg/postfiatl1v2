@@ -1609,6 +1609,20 @@ pub(super) fn transport_batch_apply_error_ack(
     )
 }
 
+/// The rejection for a redelivery whose already-applied check failed before
+/// any local apply. It has main's prefix, and only a content conflict carries
+/// `certified_send_duplicate_conflict`; a read or receipt error does not.
+pub(super) fn transport_pre_apply_error(detail: String) -> String {
+    let content_conflict = detail.starts_with("already-applied batch `")
+        && (detail.ends_with("` conflicts with certified height/hash")
+            || detail.ends_with("` conflicts with current height/root"));
+    if content_conflict {
+        format!("transport batch service apply failed: {CERTIFIED_SEND_DUPLICATE_CONFLICT}: {detail}")
+    } else {
+        format!("transport batch service apply failed: {detail}")
+    }
+}
+
 fn delivery_batch_id(envelope: &TransportBatchEnvelope) -> Result<String, String> {
     #[derive(serde::Deserialize)]
     struct Identity {
@@ -3199,6 +3213,55 @@ mod transport_cli_tests {
         );
         assert!(error.contains("conflicts with certified height/hash"), "{error}");
         assert!(error.contains(duplicate), "{error}");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_pre_apply_redelivery_labels_only_a_content_conflict() {
+        let prefix = "transport batch service apply failed: ";
+        let conflict = format!("{prefix}{CERTIFIED_SEND_DUPLICATE_CONFLICT}: already-applied batch `batch-1`");
+        let reject = |root: &Path, status: &StatusReport, envelope: &TransportBatchEnvelope| {
+            let topology = test_topology("127.0.0.1");
+            transport_already_applied_ack(root, &topology, "validator-0", envelope, status)
+                .map_err(transport_pre_apply_error)
+                .expect_err("the redelivery is not acknowledged")
+        };
+
+        let (root, _, status, envelope) = already_applied_test_fixture(10);
+        let store = postfiat_storage::NodeStore::new(&root);
+        let mut blocks = store.read_blocks().unwrap();
+        blocks.blocks[0].header.certificate.registry_root = "77".repeat(48);
+        store.write_blocks(&blocks).unwrap();
+        assert_eq!(
+            reject(&root, &status, &envelope),
+            format!("{conflict} conflicts with certified height/hash")
+        );
+        std::fs::remove_dir_all(root).unwrap();
+
+        let (root, _, mut status, envelope) = already_applied_test_fixture(10);
+        status.block_height = 9;
+        assert_eq!(
+            reject(&root, &status, &envelope),
+            format!("{conflict} conflicts with current height/root")
+        );
+        std::fs::remove_dir_all(root).unwrap();
+
+        let (root, _, status, envelope) = already_applied_test_fixture(10);
+        let store = postfiat_storage::NodeStore::new(&root);
+        let mut blocks = store.read_blocks().unwrap();
+        blocks.blocks[0].receipt_ids.clear();
+        store.write_blocks(&blocks).unwrap();
+        assert_eq!(
+            reject(&root, &status, &envelope),
+            format!("{prefix}already-applied batch `batch-1` has no recorded receipts")
+        );
+        std::fs::remove_dir_all(root).unwrap();
+
+        let (root, _, status, envelope) = already_applied_test_fixture(11);
+        assert_eq!(
+            reject(&root, &status, &envelope),
+            format!("{prefix}certified delivery conflicts with certified height/hash: missing block 11")
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 

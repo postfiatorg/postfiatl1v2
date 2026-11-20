@@ -1511,7 +1511,13 @@ mod transport_batch_payload_tests {
         assert_eq!(pending.result, "pending");
         assert!(!pending.already_applied);
         let error = pending.error.clone().expect("named conflict");
-        assert!(error.contains("certified_send_duplicate_conflict"), "{error}");
+        assert!(
+            error.contains(
+                "transport batch service apply failed: certified_send_duplicate_conflict: \
+                 already-applied batch `"
+            ),
+            "{error}"
+        );
         let job = read_durable_certified_send_job(&job_file).expect("job");
         assert!(!job.completed);
         assert!(job.ack.is_none());
