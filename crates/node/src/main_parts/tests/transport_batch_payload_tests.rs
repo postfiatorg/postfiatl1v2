@@ -4552,7 +4552,7 @@ mod transport_batch_payload_tests {
         );
         verify(&certificate).expect("the genuine certificate");
         assert!(holds_qc(peer_dir, &qc_id));
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
     /// A carried QC that does not verify is ignored: it fails a vote or
@@ -4607,7 +4607,7 @@ mod transport_batch_payload_tests {
         verify(&certificate).expect("the genuine certificate");
         verify(&swapped_certificate)
             .expect("the peer holds the QC, so the swapped copy is ignored");
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
     /// The certificate carries every distinct QC its votes name, under a list
@@ -4639,7 +4639,7 @@ mod transport_batch_payload_tests {
         assert_eq!(named, [qc_id.as_str()].into_iter().collect());
         assert_eq!(carried, named.into_iter().collect::<Vec<_>>(), "{certificate:#}");
         assert!(certificate.get("consensus_v2_high_qc").is_none());
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
     /// The view-1 proposer already signed at view 1 and the timeout
@@ -4690,7 +4690,7 @@ mod transport_batch_payload_tests {
             "{error}"
         );
         assert!(submission_failure_advances_view(&error), "{error}");
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
     /// View 0 forms a prepare QC for block A that every validator locks on,
@@ -4799,7 +4799,7 @@ mod transport_batch_payload_tests {
             vote_lock_proposal_hashes(&leader_dir, 1, 1).is_empty(),
             "the view-1 proposer spent its view-1 slot on forwarded block B: {error}"
         );
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
     /// A proposer that already signed a timeout vote at view 1 cannot finish
