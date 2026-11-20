@@ -3842,9 +3842,19 @@ mod transport_batch_payload_tests {
     }
 
     /// The wallet proxy's rule for moving a failed finality submission to the
-    /// next view (wallet-proxy/rpc-routing.js, finalityFailureCanAdvanceView);
-    /// keep the patterns in step with it.
+    /// next view (wallet-proxy/rpc-routing.js, finalityFailureCanAdvanceView),
+    /// applied to the RPC code the node sends for this error; keep it in step.
     fn submission_failure_advances_view(error: &str) -> bool {
+        match rpc_finality_failure_code("rpc_finality_submit_failed", error) {
+            "rpc_finality_view_spent" => true,
+            "rpc_finality_view_must_repropose" => false,
+            _ => submission_failure_advances_view_on_release_6_4(error),
+        }
+    }
+
+    /// The text rule for nodes that send every failure as
+    /// `rpc_finality_submit_failed`.
+    fn submission_failure_advances_view_on_release_6_4(error: &str) -> bool {
         let error = error.to_ascii_lowercase();
         [
             "vote request",

@@ -5303,7 +5303,24 @@ fn rpc_value_contains_key_material(value: &serde_json::Value) -> bool {
     }
 }
 
+/// Finality failures the wallet proxy must tell apart get their own code: it
+/// moves to the next view on a spent view and stops on a view that must
+/// re-propose the timeout certificate's block. Both messages also contain
+/// words (`certificate`, `transport`) its older text rule matches.
+fn rpc_finality_failure_code<'a>(code: &'a str, message: &str) -> &'a str {
+    if code != "rpc_finality_submit_failed" {
+        code
+    } else if message.contains(postfiat_node::CONSENSUS_V2_VIEW_MUST_REPROPOSE) {
+        "rpc_finality_view_must_repropose"
+    } else if message.contains(postfiat_node::CONSENSUS_V2_VIEW_SPENT) {
+        "rpc_finality_view_spent"
+    } else {
+        code
+    }
+}
+
 fn rpc_serve_error_response(id: &str, code: &str, message: &str) -> RpcResponse {
+    let code = rpc_finality_failure_code(code, message);
     let public_message = rpc_serve_public_error_message(code, message);
     if public_message != message {
         // The caller gets the redacted text; operators need the cause in the service log.
@@ -5449,6 +5466,12 @@ fn rpc_serve_error_class(method: &str, response: &RpcResponse) -> Option<String>
     }
     if error.code == "rpc_finality_submit_failed" {
         return Some("finality_submit_failed".to_string());
+    }
+    if error.code == "rpc_finality_view_spent" {
+        return Some("finality_view_spent".to_string());
+    }
+    if error.code == "rpc_finality_view_must_repropose" {
+        return Some("finality_view_must_repropose".to_string());
     }
     if error.code == "rpc_orchard_batch_create_not_public_safe" {
         return Some("orchard_batch_create_not_public_safe".to_string());
