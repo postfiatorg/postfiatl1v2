@@ -4131,6 +4131,11 @@ pub struct BlockTimeoutVoteFile {
     pub vote: BlockTimeoutVote,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consensus_v2_vote: Option<postfiat_types::ConsensusV2TimeoutVote>,
+    /// The full prepare QC the consensus v2 vote's high QC names, so a
+    /// validator that never stored it can still use the vote. Unsigned and
+    /// optional; consumers check it against the reference and verify it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub consensus_v2_high_qc: Option<postfiat_types::ConsensusV2QuorumCertificate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -4156,6 +4161,11 @@ pub struct BlockTimeoutCertificateFile {
     pub certificate: BlockTimeoutCertificate,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consensus_v2_certificate: Option<postfiat_types::ConsensusV2TimeoutCertificate>,
+    /// The full prepare QC the consensus v2 certificate's high QC names, so
+    /// every validator can verify the certificate. Unsigned and optional;
+    /// consumers check it against the reference and verify it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub consensus_v2_high_qc: Option<postfiat_types::ConsensusV2QuorumCertificate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

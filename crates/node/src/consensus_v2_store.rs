@@ -262,6 +262,58 @@ pub fn persist_consensus_v2_qc(
     })
 }
 
+/// The stored QC `reference` names, if this validator holds it. Not verified
+/// here: a consumer verifies it when it stores it.
+pub fn read_stored_consensus_v2_qc(
+    data_dir: &Path,
+    domain: &ConsensusV2Domain,
+    reference: &ConsensusV2QcRef,
+) -> io::Result<Option<ConsensusV2QuorumCertificate>> {
+    for path in [
+        consensus_v2_qc_path(data_dir, domain, &reference.certificate_id),
+        legacy_consensus_v2_qc_path(data_dir, &reference.certificate_id),
+    ] {
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error),
+        };
+        let certificate: ConsensusV2QuorumCertificate =
+            serde_json::from_slice(&bytes).map_err(|error| {
+                invalid_data(format!(
+                    "consensus v2 QC `{}` parse failed: {error}",
+                    path.display()
+                ))
+            })?;
+        if consensus_v2_qc_ref(&certificate).ok().as_ref() == Some(reference) {
+            return Ok(Some(certificate));
+        }
+    }
+    Ok(None)
+}
+
+/// Stores the full high QC a timeout vote or certificate carries, after
+/// checking it is the QC the signed reference names. `persist_consensus_v2_qc`
+/// verifies the certificate itself; holding a verified QC changes no safety
+/// record (lock and high QC move only on precommit authorization).
+pub fn persist_carried_consensus_v2_high_qc(
+    data_dir: &Path,
+    reference: Option<&ConsensusV2QcRef>,
+    carried: Option<&ConsensusV2QuorumCertificate>,
+) -> io::Result<()> {
+    let Some(carried) = carried else {
+        return Ok(());
+    };
+    let carried_reference = consensus_v2_qc_ref(carried)
+        .map_err(|error| invalid_data(format!("carried consensus v2 high QC: {error}")))?;
+    if reference != Some(&carried_reference) {
+        return Err(invalid_data(
+            "carried consensus v2 high QC is not the QC the high QC reference names",
+        ));
+    }
+    persist_consensus_v2_qc(data_dir, carried).map(|_| ())
+}
+
 /// View-zero proposals cannot carry timeout evidence or a valid-round QC, so
 /// their verification has no historical QC dependency. Nonzero views retain
 /// complete graph reconstruction and signature verification.

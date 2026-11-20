@@ -2723,6 +2723,17 @@ pub fn create_block_timeout_vote(
     } else {
         None
     };
+    // Validators that never stored this QC (a failed precommit fan-out leaves
+    // it with the proposer alone) need it to use the vote.
+    let consensus_v2_high_qc = match consensus_v2_vote
+        .as_ref()
+        .and_then(|vote| vote.high_qc.as_ref().map(|reference| (&vote.domain, reference)))
+    {
+        Some((domain, reference)) => {
+            read_stored_consensus_v2_qc(&options.data_dir, domain, reference)?
+        }
+        None => None,
+    };
     let vote = BlockTimeoutVoteFile {
         schema: BLOCK_TIMEOUT_VOTE_FILE_SCHEMA.to_string(),
         chain_id: genesis.chain_id.clone(),
@@ -2740,6 +2751,7 @@ pub fn create_block_timeout_vote(
             signature_hex: bytes_to_hex(&signature),
         },
         consensus_v2_vote,
+        consensus_v2_high_qc,
     };
     validate_block_timeout_vote_file_for_target(
         &vote,
@@ -2800,6 +2812,11 @@ pub fn aggregate_block_timeout_certificate(
                     ),
                 )
             })?;
+            persist_carried_consensus_v2_high_qc(
+                &options.data_dir,
+                consensus_v2_vote.high_qc.as_ref(),
+                vote.consensus_v2_high_qc.as_ref(),
+            )?;
             if consensus_v2_vote.validator != validator_id
                 || consensus_v2_votes_by_validator
                     .insert(validator_id.clone(), consensus_v2_vote)
@@ -2894,6 +2911,7 @@ pub fn aggregate_block_timeout_certificate(
         &hotstuff_certificate_id,
         &certificate,
     )?;
+    let mut consensus_v2_high_qc = None;
     let consensus_v2_certificate = if consensus_v2_active_at(&genesis, options.block_height) {
         let (domain, consensus_v2_validators) =
             live_consensus_v2_context(&options.data_dir)?;
@@ -2912,20 +2930,23 @@ pub fn aggregate_block_timeout_certificate(
                 "unexpected consensus v2 timeout vote validator",
             ));
         }
-        Some(
-            postfiat_ordering_fast::certify_consensus_v2_timeouts(
-                &domain,
-                &consensus_v2_validators,
-                postfiat_types::ConsensusV2Round {
-                    height: options.block_height,
-                    view: options.view,
-                },
-                postfiat_types::ConsensusV2Phase::Precommit,
-                ordered_votes,
-                &graph,
-            )
-            .map_err(invalid_data)?,
+        let certificate = postfiat_ordering_fast::certify_consensus_v2_timeouts(
+            &domain,
+            &consensus_v2_validators,
+            postfiat_types::ConsensusV2Round {
+                height: options.block_height,
+                view: options.view,
+            },
+            postfiat_types::ConsensusV2Phase::Precommit,
+            ordered_votes,
+            &graph,
         )
+        .map_err(invalid_data)?;
+        if let Some(reference) = certificate.high_qc.as_ref() {
+            consensus_v2_high_qc =
+                read_stored_consensus_v2_qc(&options.data_dir, &domain, reference)?;
+        }
+        Some(certificate)
     } else {
         None
     };
@@ -2940,6 +2961,7 @@ pub fn aggregate_block_timeout_certificate(
         certificate_id,
         certificate,
         consensus_v2_certificate,
+        consensus_v2_high_qc,
     };
     verify_block_timeout_certificate_material(&genesis, &registry, &validators, &certificate_file)?;
     verify_consensus_v2_timeout_extension(&options.data_dir, &genesis, &certificate_file)?;
@@ -2982,6 +3004,13 @@ fn verify_consensus_v2_timeout_extension(
                         "activated timeout certificate omitted consensus v2 evidence",
                     )
                 })?;
+        // A validator that never stored the high QC gets it from the
+        // certificate (it covers the proposer, forwarded proposals and peers).
+        persist_carried_consensus_v2_high_qc(
+            data_dir,
+            consensus_v2_certificate.high_qc.as_ref(),
+            certificate.consensus_v2_high_qc.as_ref(),
+        )?;
         let (domain, validators) = live_consensus_v2_context(data_dir)?;
         let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
         postfiat_ordering_fast::verify_consensus_v2_timeout_certificate(
