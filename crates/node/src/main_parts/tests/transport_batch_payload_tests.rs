@@ -4642,6 +4642,95 @@ mod transport_batch_payload_tests {
         clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
     }
 
+    /// The view-1 proposer already signed at view 1 and the timeout
+    /// certificate requires block A. The spent view is reported first, so the
+    /// proxy moves on to view 2 instead of stopping on view 1.
+    #[test]
+    fn a_spent_view_is_reported_before_a_required_reproposal() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (fixture, dir, certificate, leader) =
+            view_0_prepare_qc_on_every_validator("spent-before-reproposal");
+        let leader_dir = fixture.data_dirs[leader].clone();
+        let (signed, refused) = timeout_votes(&fixture, &[leader], 1, &dir.join("spent"));
+        assert_eq!(signed.len(), 1, "{refused:?}");
+        let block_b = dir.join("block-b.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: leader_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "b".repeat(40)),
+            amount: 5,
+            batch_file: block_b.clone(),
+        })
+        .expect("block B batch");
+        let (result, _, _) = run_vote_phase_round_at(
+            &fixture,
+            &RoundSlot {
+                proposer_index: leader,
+                view: 1,
+                timeout_certificate_file: Some(certificate),
+                artifact_dir: dir.join("with-b"),
+                batch_file: Some(block_b),
+            },
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            Duration::from_secs(40),
+        );
+        let error = result
+            .expect("view-1 round still running")
+            .expect_err("view 1 is spent");
+        assert_eq!(
+            rpc_finality_failure_code("rpc_finality_submit_failed", &error),
+            "rpc_finality_view_spent",
+            "{error}"
+        );
+        assert!(submission_failure_advances_view(&error), "{error}");
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
+    /// View 0 forms a prepare QC for block A that every validator locks on,
+    /// but misses its precommit quorum. Returns the view-0 timeout
+    /// certificate (which names A's QC) and the view-1 proposer.
+    fn view_0_prepare_qc_on_every_validator(
+        tag: &str,
+    ) -> (VotePhaseRoundFixture, PathBuf, PathBuf, usize) {
+        let late = ProxyVote::Forward(Duration::from_secs(5));
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture = vote_phase_round_fixture(tag, &[(2, forward, late), (3, forward, late)]);
+        let (result, _, _) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            3_000,
+            Duration::from_secs(30),
+        );
+        result
+            .expect("view-0 round still running")
+            .expect_err("view 0 misses its precommit quorum");
+        spawn_vote_phase_validator(
+            fixture.data_dirs[fixture.proposer_index].clone(),
+            fixture.topology_file.clone(),
+            fixture
+                .proposer_listener
+                .try_clone()
+                .expect("clone proposer listener"),
+        );
+        let dir = fixture.artifact_dir.with_extension("view-1");
+        let (votes, refused) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir);
+        assert_eq!(votes.len(), 6, "{refused:?}");
+        let certificate = timeout_certificate(&fixture, 0, votes, &dir).expect("certificate");
+        let leader = height_1_leader(&fixture, 1);
+        (fixture, dir, certificate, leader)
+    }
+
     /// A proposer that already signed a timeout vote at view 1 cannot finish
     /// view 0 or view 1; the spent-view error names view 1 and asks for view 2.
     #[test]
