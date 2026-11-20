@@ -4196,6 +4196,10 @@ mod transport_batch_payload_tests {
             "view 1 failed only after signing: {error}"
         );
         assert!(
+            !submission_failure_advances_view(&error),
+            "the proxy would spend every later view on `{error}`, and view 1 could no longer re-propose block A"
+        );
+        assert!(
             vote_lock_proposal_hashes(&leader_dir, 1, 1).is_empty(),
             "the view-1 proposer spent its view-1 slot on block B"
         );
