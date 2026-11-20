@@ -53,48 +53,7 @@ pub fn create_consensus_v2_proposal_for_block(
     let valid_qc = timeout_certificate.and_then(|certificate| certificate.high_qc.clone());
     let timeout_certificate_id =
         timeout_certificate.map(|certificate| certificate.certificate_id.clone());
-    let parent_block_id = consensus_v2_parent_block_id(&domain, block_proposal)?;
-    let block = if let Some(export_root) = block_proposal.external_lane_export_root.clone() {
-        consensus_v2_block_ref_with_external_lane_export_root(
-            &domain,
-            block_proposal.block_height,
-            parent_block_id,
-            block_proposal.payload_hash.clone(),
-            block_proposal.state_root.clone(),
-            block_proposal.bridge_exit_root.clone(),
-            block_proposal.pftl_uniswap_receipt_root.clone(),
-            export_root,
-        )
-    } else if let Some(receipt_root) = block_proposal.pftl_uniswap_receipt_root.clone() {
-        consensus_v2_block_ref_with_commitment_roots(
-            &domain,
-            block_proposal.block_height,
-            parent_block_id,
-            block_proposal.payload_hash.clone(),
-            block_proposal.state_root.clone(),
-            block_proposal.bridge_exit_root.clone(),
-            receipt_root,
-        )
-    } else {
-        match block_proposal.bridge_exit_root.clone() {
-            Some(bridge_exit_root) => consensus_v2_block_ref_with_bridge_exit_root(
-                &domain,
-                block_proposal.block_height,
-                parent_block_id,
-                block_proposal.payload_hash.clone(),
-                block_proposal.state_root.clone(),
-                bridge_exit_root,
-            ),
-            None => consensus_v2_block_ref(
-                &domain,
-                block_proposal.block_height,
-                parent_block_id,
-                block_proposal.payload_hash.clone(),
-                block_proposal.state_root.clone(),
-            ),
-        }
-    }
-    .map_err(ordering_error)?;
+    let block = consensus_v2_block_ref_for_proposal(&domain, block_proposal)?;
     let signer = validator_signer_for(key_file)?;
     let key = signer.validator_key(
         CONSENSUS_V2_PROPOSAL_CONTEXT,
@@ -120,6 +79,89 @@ pub fn create_consensus_v2_proposal_for_block(
         .map_err(ordering_error)?;
     verify_consensus_v2_proposal_matches_block(block_proposal, &proposal)?;
     Ok(proposal)
+}
+
+/// Start of the error a proposer returns when the timeout certificate's high
+/// QC fixes the block its view must carry and its proposal carries another.
+pub const CONSENSUS_V2_VIEW_MUST_REPROPOSE: &str = "consensus v2 view must re-propose";
+
+/// Read only. When the timeout certificate carries a prepare QC, a proposal at
+/// the next view must carry that QC's block (the prepare rule then lets
+/// validators locked on it vote). Returns the reason when this proposal
+/// carries a different block, so the proposer stops before it signs anything.
+pub fn consensus_v2_required_reproposal(
+    data_dir: &Path,
+    block_proposal: &BlockProposalFile,
+    timeout_certificate: Option<&ConsensusV2TimeoutCertificate>,
+) -> io::Result<Option<String>> {
+    let Some(high_qc) = timeout_certificate.and_then(|certificate| certificate.high_qc.as_ref())
+    else {
+        return Ok(None);
+    };
+    let (domain, _) = live_consensus_v2_context(data_dir)?;
+    let block = consensus_v2_block_ref_for_proposal(&domain, block_proposal)?;
+    if block == high_qc.block {
+        return Ok(None);
+    }
+    Ok(Some(format!(
+        "{CONSENSUS_V2_VIEW_MUST_REPROPOSE}: view {} at height {} must carry block {} (payload {}, state root {}) from the timeout certificate's prepare QC at view {}, not block {}; propose the batch with that payload at view {} with this timeout certificate",
+        block_proposal.view,
+        block_proposal.block_height,
+        high_qc.block.block_id,
+        high_qc.block.payload_hash,
+        high_qc.block.state_root,
+        high_qc.round.view,
+        block.block_id,
+        block_proposal.view
+    )))
+}
+
+fn consensus_v2_block_ref_for_proposal(
+    domain: &postfiat_types::ConsensusV2Domain,
+    block_proposal: &BlockProposalFile,
+) -> io::Result<postfiat_types::ConsensusV2BlockRef> {
+    let parent_block_id = consensus_v2_parent_block_id(domain, block_proposal)?;
+    if let Some(export_root) = block_proposal.external_lane_export_root.clone() {
+        consensus_v2_block_ref_with_external_lane_export_root(
+            domain,
+            block_proposal.block_height,
+            parent_block_id,
+            block_proposal.payload_hash.clone(),
+            block_proposal.state_root.clone(),
+            block_proposal.bridge_exit_root.clone(),
+            block_proposal.pftl_uniswap_receipt_root.clone(),
+            export_root,
+        )
+    } else if let Some(receipt_root) = block_proposal.pftl_uniswap_receipt_root.clone() {
+        consensus_v2_block_ref_with_commitment_roots(
+            domain,
+            block_proposal.block_height,
+            parent_block_id,
+            block_proposal.payload_hash.clone(),
+            block_proposal.state_root.clone(),
+            block_proposal.bridge_exit_root.clone(),
+            receipt_root,
+        )
+    } else {
+        match block_proposal.bridge_exit_root.clone() {
+            Some(bridge_exit_root) => consensus_v2_block_ref_with_bridge_exit_root(
+                domain,
+                block_proposal.block_height,
+                parent_block_id,
+                block_proposal.payload_hash.clone(),
+                block_proposal.state_root.clone(),
+                bridge_exit_root,
+            ),
+            None => consensus_v2_block_ref(
+                domain,
+                block_proposal.block_height,
+                parent_block_id,
+                block_proposal.payload_hash.clone(),
+                block_proposal.state_root.clone(),
+            ),
+        }
+    }
+    .map_err(ordering_error)
 }
 
 pub fn create_consensus_v2_prepare_vote(

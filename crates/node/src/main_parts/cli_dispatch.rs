@@ -130,7 +130,7 @@ use postfiat_node::{
     reconcile_terminal_mempool_entries, replay_market_ops_bundle,
     replay_vault_bridge_reserve_bundle, run_once, shield_disclose, shield_mint, shield_scan,
     shield_spend, shield_turnstile, shielded_tree_root, sign_ethereum_checkpoint_vote,
-    sign_verified_block_proposal, consensus_v2_proposer_view_spent, block_proposer_for_status,
+    sign_verified_block_proposal, consensus_v2_proposer_view_spent, block_proposer_for_status, consensus_v2_required_reproposal,
     sign_cobalt_authority_transition, sign_governance_amendment_authorization,
     sign_validator_registry_update_authorization,
     simulate_shielded_batch, stage_deployment_validator_units, stage_validator_key, status, recover_interrupted_ordered_commit,

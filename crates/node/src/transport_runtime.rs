@@ -3760,6 +3760,15 @@ pub(super) fn transport_peer_certified_batch_round(
             {
                 return Err(spent);
             }
+            if let Some(reproposal) = consensus_v2_required_reproposal(
+                &options.data_dir,
+                &expected_unsigned_proposal,
+                consensus_v2_timeout_certificate.as_ref(),
+            )
+            .map_err(|error| format!("peer certified batch round view check failed: {error}"))?
+            {
+                return Err(reproposal);
+            }
             let proposal = match options.proposal_key_file.as_ref() {
                 Some(key_file) => sign_verified_block_proposal(
                     &options.data_dir,
