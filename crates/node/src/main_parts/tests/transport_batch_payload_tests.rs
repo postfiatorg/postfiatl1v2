@@ -4209,6 +4209,116 @@ mod transport_batch_payload_tests {
         clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
     }
 
+    /// As above, but block B is submitted at a validator that is not the
+    /// view-1 proposer and forwards it. The forwarded path must stop before
+    /// the view-1 proposer signs too, so view 1 can still carry block A.
+    #[test]
+    fn a_forwarded_view_1_proposal_must_carry_the_prepare_qc_block() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let late = ProxyVote::Forward(Duration::from_secs(5));
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture = vote_phase_round_fixture(
+            "view-1-forwarded-reproposal",
+            &[(2, forward, late), (3, forward, late)],
+        );
+        let (result, _, _) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            3_000,
+            Duration::from_secs(30),
+        );
+        result
+            .expect("view-0 round still running")
+            .expect_err("view 0 misses its precommit quorum");
+        let block_a = fixture.artifact_dir.with_extension("batch.json");
+        spawn_vote_phase_validator(
+            fixture.data_dirs[fixture.proposer_index].clone(),
+            fixture.topology_file.clone(),
+            fixture
+                .proposer_listener
+                .try_clone()
+                .expect("clone proposer listener"),
+        );
+        let dir = fixture.artifact_dir.with_extension("view-1");
+        let (votes, refused) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir);
+        assert_eq!(votes.len(), 6, "{refused:?}");
+        let certificate = timeout_certificate(&fixture, 0, votes, &dir).expect("certificate");
+        let leader = height_1_leader(&fixture, 1);
+        let leader_dir = fixture.data_dirs[leader].clone();
+        let requester = (0..fixture.data_dirs.len())
+            .find(|index| *index != leader && *index != fixture.proposer_index)
+            .expect("a validator that is not a proposer");
+        let requester_dir = fixture.data_dirs[requester].clone();
+        let block_b = dir.join("block-b.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: requester_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "b".repeat(40)),
+            amount: 5,
+            batch_file: block_b.clone(),
+        })
+        .expect("block B batch");
+        let error = transport_peer_certified_batch_round(TransportPeerCertifiedBatchRoundOptions {
+            data_dir: requester_dir.clone(),
+            topology_file: fixture.topology_file.clone(),
+            batch_kind: Some("transparent".to_string()),
+            batch_file: block_b,
+            key_file: requester_dir.join(VALIDATOR_KEYS_FILE),
+            proposal_key_file: Some(requester_dir.join(VALIDATOR_KEYS_FILE)),
+            require_local_proposer: false,
+            require_signed_proposal: true,
+            allow_peer_failures: false,
+            quorum_early_full_propagation: true,
+            artifact_dir: dir.join("forwarded-b"),
+            block_height: Some(1),
+            view: Some(1),
+            timeout_certificate_file: Some(certificate.clone()),
+            timeout_ms: UNIT_TIMEOUT_MS,
+            send_retries: 0,
+            retry_backoff_ms: UNIT_RETRY_BACKOFF_MS,
+            vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
+            local_apply_before_certified_send: true,
+            defer_certified_sends: false,
+            commit_processed_dir: None,
+            required_parent: None,
+        })
+        .expect_err("view 1 cannot carry block B");
+        assert!(error.contains("consensus v2 view must re-propose"), "{error}");
+        assert!(
+            vote_lock_proposal_hashes(&leader_dir, 1, 1).is_empty(),
+            "the view-1 proposer spent its view-1 slot on forwarded block B: {error}"
+        );
+        let (result, _, _) = run_vote_phase_round_at(
+            &fixture,
+            &RoundSlot {
+                proposer_index: leader,
+                view: 1,
+                timeout_certificate_file: Some(certificate),
+                artifact_dir: dir.join("with-a"),
+                batch_file: Some(block_a),
+            },
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            Duration::from_secs(40),
+        );
+        let report = result
+            .expect("view-1 round still running")
+            .expect("view 1 certifies block A");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        assert_height_1_final_everywhere(&fixture);
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
     /// A proposer that already signed a timeout vote at view 1 cannot finish
     /// view 0 or view 1; the spent-view error names view 1 and asks for view 2.
     #[test]
