@@ -438,6 +438,15 @@ fn wait_for_rpc_finality_required_parent(
     context: &RpcServeConnectionContext,
     params: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<f64, (String, String)> {
+    wait_for_rpc_finality_required_parent_status(context, params).map(|(wait_ms, _)| wait_ms)
+}
+
+/// Waits for the required parent and returns the status read that matched it,
+/// or `None` when the request names no parent.
+fn wait_for_rpc_finality_required_parent_status(
+    context: &RpcServeConnectionContext,
+    params: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(f64, Option<StatusReport>), (String, String)> {
     let Some(required_height) = rpc_finality_required_u64_param(
         params,
         "proxy_required_current_height",
@@ -453,7 +462,7 @@ fn wait_for_rpc_finality_required_parent(
                 ));
             }
         }
-        return Ok(0.0);
+        return Ok((0.0, None));
     };
     let required_state_root =
         rpc_finality_required_str_param(params, "proxy_required_state_root")?;
@@ -500,7 +509,7 @@ fn wait_for_rpc_finality_required_parent(
             .map(|hash| local_status.block_tip_hash == *hash)
             .unwrap_or(true);
         if height_matches && root_matches && parent_hash_matches {
-            return Ok(monotonic_elapsed_ms(started));
+            return Ok((monotonic_elapsed_ms(started), Some(local_status)));
         }
         if monotonic_elapsed_ms(started) >= timeout_ms as f64 {
             let root_requirement = required_state_root
@@ -577,28 +586,23 @@ fn rpc_finality_proposer_mismatch(
 
 fn require_rpc_finality_local_proposer(
     context: &RpcServeConnectionContext,
+    local_status: &StatusReport,
     view: u64,
 ) -> Result<(), (String, String)> {
-    let local_status = status(NodeOptions {
-        data_dir: context.data_dir.clone(),
-    })
-    .map_err(|error| {
-        (
-            "rpc_finality_submit_failed".to_string(),
-            format!("finality proposer status failed: {error}"),
-        )
-    })?;
     let block_height = local_status.block_height.checked_add(1).ok_or_else(|| {
         (
             "rpc_finality_submit_failed".to_string(),
             "finality proposer height overflow".to_string(),
         )
     })?;
-    let proposer = block_proposer(BlockProposerOptions {
-        data_dir: context.data_dir.clone(),
-        block_height,
-        view,
-    })
+    let proposer = block_proposer_for_status(
+        BlockProposerOptions {
+            data_dir: context.data_dir.clone(),
+            block_height,
+            view,
+        },
+        local_status.clone(),
+    )
     .map_err(|error| {
         (
             "rpc_finality_submit_failed".to_string(),
@@ -2476,8 +2480,8 @@ fn run_rpc_serve_shield_batch_finality_inner(
         .map_err(|error| ("rpc_internal".to_string(), error.to_string()));
     }
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
     let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let round = transport_peer_certified_batch_round(TransportPeerCertifiedBatchRoundOptions {
         data_dir: context.data_dir.clone(),
         topology_file: context.finality_topology_file.clone(),
@@ -2678,8 +2682,8 @@ fn run_rpc_serve_mempool_submit_fastlane_primary_finality_inner(
         .finality_artifact_root
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
     let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
 
     let mempool_submit_start = Instant::now();
     let operation = transaction.operation.clone();
@@ -3114,8 +3118,8 @@ fn run_rpc_serve_mempool_submit_signed_transfer_finality_round(
     artifact_dir: &Path,
     total_start: Instant,
 ) -> Result<RpcResponse, (String, String)> {
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
     let finality_view = prepare_rpc_finality_round(context, params, artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let round = transport_peer_certified_mempool_round(TransportPeerCertifiedMempoolRoundOptions {
         data_dir: context.data_dir.clone(),
         topology_file: context.finality_topology_file.clone(),
@@ -3288,8 +3292,8 @@ fn run_rpc_serve_mempool_submit_signed_payment_v2_finality_inner(
         .finality_artifact_root
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
     let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let round = transport_peer_certified_mempool_round(TransportPeerCertifiedMempoolRoundOptions {
         data_dir: context.data_dir.clone(),
         topology_file: context.finality_topology_file.clone(),
@@ -3460,8 +3464,8 @@ fn run_rpc_serve_mempool_submit_signed_asset_transaction_finality_inner(
         .finality_artifact_root
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
     let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let round = transport_peer_certified_mempool_round(TransportPeerCertifiedMempoolRoundOptions {
         data_dir: context.data_dir.clone(),
         topology_file: context.finality_topology_file.clone(),
@@ -3633,8 +3637,8 @@ fn run_rpc_serve_mempool_submit_signed_escrow_transaction_finality_inner(
         .finality_artifact_root
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
     let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let round = transport_peer_certified_mempool_round(TransportPeerCertifiedMempoolRoundOptions {
         data_dir: context.data_dir.clone(),
         topology_file: context.finality_topology_file.clone(),

@@ -60,8 +60,8 @@ fn run_rpc_serve_mempool_submit_signed_offer_transaction_finality_inner(
         .finality_artifact_root
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
     let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let preview =
         postfiat_node::b23_facility_offer_preview(SignedOfferTransactionJsonSubmitOptions {
             data_dir: context.data_dir.clone(),

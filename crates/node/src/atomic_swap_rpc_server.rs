@@ -269,8 +269,8 @@ fn run_rpc_serve_mempool_submit_signed_atomic_swap_finality_inner(
         .finality_artifact_root
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
     let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let required_parent = RequiredBlockParent {
         height: atomic_swap_rpc_required_u64(params, "proxy_required_current_height")?,
         block_hash: atomic_swap_rpc_required_string(params, "proxy_required_parent_hash")?,

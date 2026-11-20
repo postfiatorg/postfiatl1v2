@@ -4205,6 +4205,9 @@ mod transport_batch_payload_tests {
         // The mempool round takes its node id from the round's post-apply
         // status instead of reading the full status again.
         assert!(steps.get("post_round_status_ms").is_none(), "{steps}");
+        // View preparation and the proposer check reuse the status read that
+        // matched the required parent.
+        assert_eq!(steps["view_and_proposer_status_reads"], 0, "{steps}");
         let round_report: serde_json::Value = serde_json::from_slice(
             &std::fs::read(result["round_report_file"].as_str().expect("round report path"))
                 .expect("read round report"),
