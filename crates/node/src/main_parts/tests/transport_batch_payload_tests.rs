@@ -4610,6 +4610,38 @@ mod transport_batch_payload_tests {
         clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
     }
 
+    /// The certificate carries every distinct QC its votes name, under a list
+    /// field an older node ignores.
+    #[test]
+    fn a_timeout_certificate_carries_every_qc_its_votes_name() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (fixture, dir, votes, qc_id, _) = sole_qc_holder_timeout_votes("carried-qcs");
+        let certificate = timeout_certificate(&fixture, 0, votes, &dir).expect("certificate");
+        let certificate: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(certificate).expect("certificate"))
+                .expect("certificate json");
+        let named = certificate["consensus_v2_certificate"]["votes"]
+            .as_array()
+            .expect("v2 votes")
+            .iter()
+            .filter_map(|vote| vote["high_qc"]["certificate_id"].as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        let carried = certificate["consensus_v2_high_qcs"]
+            .as_array()
+            .map(|qcs| {
+                qcs.iter()
+                    .filter_map(|qc| qc["certificate_id"].as_str())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        assert_eq!(named, [qc_id.as_str()].into_iter().collect());
+        assert_eq!(carried, named.into_iter().collect::<Vec<_>>(), "{certificate:#}");
+        assert!(certificate.get("consensus_v2_high_qc").is_none());
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
     /// A proposer that already signed a timeout vote at view 1 cannot finish
     /// view 0 or view 1; the spent-view error names view 1 and asks for view 2.
     #[test]
