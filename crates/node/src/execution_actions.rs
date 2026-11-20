@@ -459,11 +459,11 @@ pub(super) fn atomic_swap_activation_height_for_chain(
 }
 
 /// The rejected-transaction fee claim applies only to transactions executed as
-/// part of a certified transparent block, from the v2 activation height only
-/// (release 6.4 does not apply the original kind; unset means off) (live commit, proposal and archive
-/// replay). The shared compatibility builders above leave it unset, so mempool
-/// admission, RPC simulation and shielded or bridge workflows keep their
-/// side-effect-free rejection semantics.
+/// part of a certified transparent block (live commit, proposal and archive
+/// replay), and only from the v2 activation height; unset means off. Release
+/// 6.4 does not apply the original kind. The shared compatibility builders
+/// above leave it unset, so mempool admission, RPC simulation and shielded or
+/// bridge workflows keep their side-effect-free rejection semantics.
 pub(super) fn transparent_block_fee_claim_compatibility(
     compatibility: AssetExecutionCompatibility,
     governance: &GovernanceState,
