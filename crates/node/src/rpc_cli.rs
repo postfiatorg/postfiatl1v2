@@ -5243,6 +5243,10 @@ fn rpc_value_contains_key_material(value: &serde_json::Value) -> bool {
 
 fn rpc_serve_error_response(id: &str, code: &str, message: &str) -> RpcResponse {
     let public_message = rpc_serve_public_error_message(code, message);
+    if public_message != message {
+        // The caller gets the redacted text; operators need the cause in the service log.
+        eprintln!("ERROR rpc request {id} failed with {code}: {message}");
+    }
     error_response(
         id,
         code,

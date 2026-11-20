@@ -1851,7 +1851,8 @@ fn execute_governance_batch_with_replay(
                     if previous.profile.asset_id != activation.profile.asset_id
                         || previous.profile.source_domain() != activation.profile.source_domain()
                         || new.route_binding != old.route_binding
-                        || new.anchor_slot <= old.anchor_slot || new.anchor.epoch < previous.client.epoch
+                        || (!previous.rotates_deposit_key(&activation.profile)
+                            && (new.anchor_slot <= old.anchor_slot || new.anchor.epoch < previous.client.epoch))
                     {
                         return Err("Solana route revision must preserve custody and advance its governed anchor".into());
                     }
@@ -1908,9 +1909,19 @@ fn execute_governance_batch_with_replay(
         match validated {
             Ok(record) => {
                 if let (Some(ledger), Some(pins)) = (ledger.as_deref_mut(), &activation.profile.solana) {
+                    let predecessor = ledger.solana_clients()
+                        .filter(|r| r.profile.route_id == activation.profile.route_id)
+                        .max_by_key(|r| r.profile.route_epoch)
+                        .filter(|r| r.rotates_deposit_key(&activation.profile));
+                    let client = predecessor.map_or_else(|| pins.anchor.clone(), |r| r.client.clone());
+                    let mut epoch_history = predecessor.map(|r| r.epoch_history.clone()).unwrap_or_default();
+                    if predecessor.is_some() {
+                        epoch_history.insert(pins.anchor.epoch, pins.anchor.clone());
+                    }
                     let route = postfiat_types::SolanaRouteState {
                         profile: activation.profile.clone(),
-                        client: pins.anchor.clone(),
+                        client,
+                        epoch_history,
                     };
                     if ledger.solana_route.is_none() {
                         ledger.solana_route = Some(route);

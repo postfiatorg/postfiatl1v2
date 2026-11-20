@@ -166,6 +166,9 @@ impl SolanaRoutePins {
 pub struct SolanaRouteState {
     pub profile: VaultBridgeRouteProfileV1,
     pub client: SolanaLightClient,
+    /// Enabled by a key-only rotation. Empty on all pre-rotation chain states.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub epoch_history: std::collections::BTreeMap<u64, SolanaLightClient>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -183,6 +186,7 @@ pub struct SolanaDepositEvidence {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SolanaDepositPublicValues {
+    pub certificate_slot: u64,
     pub validator_set_hash: String,
     pub total_stake: u128,
     pub shred_version: u16,
@@ -199,9 +203,21 @@ impl SolanaDepositPublicValues {
         let (header, body) = bytes
             .split_at_checked(HEADER)
             .ok_or("truncated Solana deposit")?;
-        if &header[..8] != b"PFSOLDP1" || header[56] > 1 {
+        if header[56] > 1 {
             return Err("invalid Solana deposit domain or finality flag".into());
         }
+        let slot = u64::from_le_bytes(header[57..65].try_into().unwrap());
+        let (body, certificate_slot) = match &header[..8] {
+            b"PFSOLDP1" => (body, slot),
+            b"PFSOLDP2" => {
+                let (rows, tail) = body.split_at_checked(body.len().saturating_sub(8))
+                    .ok_or("truncated ancestry journal")?;
+                let tip = u64::from_le_bytes(tail.try_into().map_err(|_| "missing certificate slot")?);
+                if tip <= slot { return Err("invalid Solana descendant slot".into()); }
+                (rows, tip)
+            },
+            _ => return Err("invalid Solana deposit domain".into()),
+        };
         let changed = u32::from_le_bytes(header[227..231].try_into().unwrap());
         let count = u32::from_le_bytes(header[231..235].try_into().unwrap());
         if count == 0
@@ -211,7 +227,6 @@ impl SolanaDepositPublicValues {
         {
             return Err("invalid Solana deposit receipt count".into());
         }
-        let slot = u64::from_le_bytes(header[57..65].try_into().unwrap());
         let block_id = bytes_to_lower_hex(&header[65..97]);
         let program_id = bytes_to_lower_hex(&header[163..195]);
         let receipts = body
@@ -235,6 +250,7 @@ impl SolanaDepositPublicValues {
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
+            certificate_slot,
             validator_set_hash: bytes_to_lower_hex(&header[8..40]),
             total_stake: u128::from_le_bytes(header[40..56].try_into().unwrap()),
             shred_version: u16::from_le_bytes(header[97..99].try_into().unwrap()),
@@ -304,14 +320,59 @@ impl SolanaProofOperation {
 
 // The governed verifying key authenticates the entire journal before this transition.
 impl SolanaRouteState {
+    /// A verifier rotation changes only the deposit key and revision coordinates.
+    pub fn rotates_deposit_key(&self, next: &VaultBridgeRouteProfileV1) -> bool {
+        if next.verifier_program_vkey == self.profile.verifier_program_vkey { return false; }
+        let mut expected = self.profile.clone();
+        expected.route_epoch = next.route_epoch;
+        expected.activation_height = next.activation_height;
+        expected.verifier_program_vkey.clone_from(&next.verifier_program_vkey);
+        &expected == next
+    }
+
+    pub fn client_at(&self, epoch: u64) -> Option<&SolanaLightClient> {
+        if self.client.epoch == epoch { Some(&self.client) } else { self.epoch_history.get(&epoch) }
+    }
+
+    /// Called only after the governed handoff program proof verifies. Rebuild a
+    /// missing historical set forward from a previously authenticated predecessor.
+    /// Historical handoffs cannot move the live client. A refinement must also
+    /// agree with an already authenticated successor.
+    pub fn apply_verified_handoff(&mut self, journal: &[u8]) -> Result<(), String> {
+        let epoch = u64::from_le_bytes(journal.get(59..67).ok_or("truncated Solana handoff")?.try_into().unwrap());
+        if epoch < self.client.epoch {
+            let prior = self.epoch_history.get(&epoch)
+                .or_else(|| epoch.checked_sub(1).and_then(|e| self.epoch_history.get(&e)))
+                .ok_or("missing authenticated historical predecessor")?;
+            let next = self.successor_from(prior, journal)?;
+            if self.client_at(epoch + 1).and_then(|c| c.handoff.as_ref())
+                .is_some_and(|h| h.predecessor_set_hash != next.validator_set_hash
+                    || h.predecessor_key_table_hash != next.known_key_table_hash) {
+                return Err("historical handoff differs from the authenticated successor".into());
+            }
+            self.epoch_history.insert(epoch, next);
+        } else {
+            let next = self.handoff_successor(journal)?;
+            if !self.epoch_history.is_empty() && next.epoch > self.client.epoch {
+                self.epoch_history.insert(self.client.epoch, self.client.clone());
+            }
+            self.client = next;
+        }
+        Ok(())
+    }
+
     pub fn handoff_successor(&self, journal: &[u8]) -> Result<SolanaLightClient, String> {
+        self.successor_from(&self.client, journal)
+    }
+
+    fn successor_from(&self, client: &SolanaLightClient, journal: &[u8]) -> Result<SolanaLightClient, String> {
         let pins = self.profile.solana.as_ref().ok_or("missing Solana pins")?;
         let listed_stake = match journal.len() {
             179 if &journal[..8] == b"PFSOLHP2" => {
                 Some(u64::from_le_bytes(journal[139..147].try_into().unwrap()))
             }
             171 if &journal[..8] == b"PFSOLHP1"
-                && self.client.handoff.is_none()
+                && client.handoff.is_none()
                 && pins.handoff_program_vkey != SOLANA_RELEASE_HANDOFF_VKEY =>
             {
                 None
@@ -332,14 +393,12 @@ impl SolanaRouteState {
         {
             return Err("Solana handoff differs from its recorder or epoch schedule".into());
         }
-        if epoch == self.client.epoch {
-            let prior = self
-                .client
-                .handoff
+        if epoch == client.epoch {
+            let prior = client.handoff
                 .as_ref()
                 .ok_or("no predecessor for Solana replacement")?;
             if listed_stake.is_none_or(|stake| stake <= prior.listed_stake)
-                || self.client.total_stake != total.to_string()
+                || client.total_stake != total.to_string()
                 || set_hash != prior.predecessor_set_hash
                 || key_hash != prior.predecessor_key_table_hash
             {
@@ -347,9 +406,9 @@ impl SolanaRouteState {
                     "Solana replacement must extend the same predecessor with more stake".into(),
                 );
             }
-        } else if self.client.epoch.checked_add(1) != Some(epoch)
-            || set_hash != self.client.validator_set_hash
-            || key_hash != self.client.known_key_table_hash
+        } else if client.epoch.checked_add(1) != Some(epoch)
+            || set_hash != client.validator_set_hash
+            || key_hash != client.known_key_table_hash
         {
             return Err("Solana handoff differs from the expected predecessor".into());
         }

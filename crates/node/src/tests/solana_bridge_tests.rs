@@ -252,3 +252,26 @@ fn governed_solana_revision_keeps_backing_and_retires_the_old_client() {
     assert_eq!(execute_route_candidate(&genesis, &governance, &mut ledger, replay, 12).code, "duplicate_solana_deposit");
     assert_eq!(ledger.trustlines[0].balance, 5_000_000);
 }
+
+#[test]
+fn key_only_revision_inherits_the_proved_client() {
+    let key = ml_dsa_65_keygen().unwrap();
+    let (genesis, mut governance, mut ledger) = initial(&key);
+    governance.apply(amendment(SOLANA_ACTIVATION_HEIGHT, 10, 0));
+    let first = profile();
+    assert!(activate_route(&mut governance, &mut ledger, &first).accepted);
+    let handoff = signed_proof(&genesis, &ledger, &first, &key, SOLANA_HANDOFF_PROOF, 1);
+    assert!(execute_route_candidate(&genesis, &governance, &mut ledger, handoff, 10).accepted);
+    let client = ledger.solana_route.as_ref().unwrap().client.clone();
+    assert_ne!(client, first.solana.as_ref().unwrap().anchor);
+    let mut next = first.clone();
+    next.route_epoch += 1;
+    next.activation_height += 1;
+    next.verifier_program_vkey = format!("0x{}", "03".repeat(32));
+    let mut changed = next.clone();
+    changed.token_address = "19".repeat(32);
+    assert!(!activate_route(&mut governance, &mut ledger, &changed).accepted);
+    let update = activate_route(&mut governance, &mut ledger, &next);
+    assert!(update.accepted, "{}", update.message);
+    assert_eq!(ledger.additional_solana_routes[&next.profile_hash().unwrap()].client, client);
+}

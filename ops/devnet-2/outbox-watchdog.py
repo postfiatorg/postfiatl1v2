@@ -1,65 +1,61 @@
 #!/usr/bin/env python3
-"""Clear certified-send jobs that can never complete.
-
-A delivery whose every attempt returns `storage_duplicate_record: ... already
-exists` has already been applied at the target: the acknowledgement was lost,
-not the data. The retry loop treats that as a failure, so the job stays pending
-forever and the node then refuses to propose any new block -- one lost ack
-silently takes a validator out of block production.
-
-This moves only those jobs aside, keeping a full copy. A job failing for any
-other reason is left alone, so a real delivery problem still surfaces.
-
-Proper fix belongs in the node: treat a duplicate record as an idempotent
-success and write the ack with already_applied=true, which the ack schema
-already supports.
-"""
+"""Archive an acknowledged legacy delivery only when all six finalized tips witness it."""
 import json
 import pathlib
-import shutil
+import re
+import subprocess
 import time
 
 OUTBOX = pathlib.Path("/var/lib/postfiat/validator-2/certified-send-outbox")
-BACKUP = pathlib.Path("/root/outbox-watchdog-cleared")
-MIN_ATTEMPTS = 1   # the outer counter is 1 while the inner transport loop runs 17 times
+EXPECTED_PEERS = {f"validator-{n}" for n in range(6)}
 
 
 def sweep() -> None:
-    for entry in sorted(OUTBOX.iterdir()):
-        if not entry.is_dir() or entry.name == "completed":
-            continue
-        job_file = entry / "job.json"
-        if not job_file.exists():
-            continue
-        try:
-            job = json.loads(job_file.read_text())
-        except Exception:
-            continue
-        if job.get("completed"):
-            continue
+    for job_file in OUTBOX.glob("*/job.json"):
+        entry = job_file.parent
+        job = json.loads(job_file.read_bytes())
         error = job.get("last_error") or ""
-        if "storage_duplicate_record" not in error or "already exists" not in error:
+        if job["completed"] or "storage_duplicate_record" not in error:
             continue
-        if int(job.get("attempt_count") or 0) < MIN_ATTEMPTS:
+        if job["source"] != OUTBOX.parent.name or job["job_id"] != entry.name:
             continue
-        stamp = int(time.time())
-        shutil.copytree(entry, BACKUP / f"copy-{stamp}-{entry.name}", dirs_exist_ok=True)
-        shutil.move(str(entry), str(BACKUP / f"cleared-{stamp}-{entry.name}"))
-        print("{} cleared duplicate-stuck job height={} target={} attempts={}".format(
-            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            job.get("block_height"), job.get("target"), job.get("attempt_count")),
-            flush=True)
-
-
-def main() -> None:
-    BACKUP.mkdir(parents=True, exist_ok=True)
-    while True:
-        try:
-            sweep()
-        except Exception as exc:
-            print("watchdog error: {}".format(exc), flush=True)
-        time.sleep(10)
+        batch_id = json.loads((entry / "batch.json").read_bytes())["batch_id"]
+        detail = (f"transport batch rejected by `{job['target']}` for `batch`: transport batch service "
+                  f"apply failed: storage_duplicate_record: ordered batch `{batch_id}` already exists")
+        if not re.fullmatch(r"[0-9a-f]{96}", batch_id) or detail not in error:
+            continue
+        unit = "postfiat-" + job["source"] + ".service"
+        pid = subprocess.check_output(["systemctl", "show", "-p", "MainPID", "--value", unit], text=True).strip()
+        proc = pathlib.Path("/proc") / pid
+        args = (proc / "cmdline").read_bytes().decode().split("\0")
+        topology = args[args.index("--topology") + 1]
+        output = subprocess.check_output([
+            "runuser", "-u", "postfiat", "--", str((proc / "exe").resolve(strict=True)),
+            "transport-certified-send-outbox-witness", "--data-dir", str(OUTBOX.parent),
+            "--topology", topology, "--job-file", str(job_file),
+        ], text=True, timeout=210)
+        witnesses = json.loads(output)
+        if len(witnesses) != 6 or {s["node_id"] for s in witnesses} != EXPECTED_PEERS:
+            continue
+        if not all((s["chain_id"], s["block_height"], s["block_tip_hash"], s["state_root"]) ==
+                   (job["chain_id"], job["block_height"], job["block_hash"], job["expected_state_root"])
+                   for s in witnesses):
+            continue
+        if json.loads(job_file.read_bytes()) != job:
+            continue
+        archive = OUTBOX.parent / "sol-live" / ("confirmed-delivery-" + entry.name)
+        archive.parent.mkdir(exist_ok=True)
+        if archive.exists():
+            continue
+        entry.rename(archive)
+        (archive / "six-way-witness.json").write_text(output)
+        print(time.strftime("%FT%TZ", time.gmtime()), "archived", str(archive), flush=True)
 
 
 if __name__ == "__main__":
-    main()
+    while True:
+        try:
+            sweep()
+        except (FileNotFoundError, ValueError, KeyError, OSError, subprocess.SubprocessError) as exc:
+            print("watchdog:", exc, flush=True)
+        time.sleep(10)
