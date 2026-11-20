@@ -4731,6 +4731,77 @@ mod transport_batch_payload_tests {
         (fixture, dir, certificate, leader)
     }
 
+    /// A requester that skips the re-proposal check (release 6.4) sends block
+    /// B to the view-1 proposer; the forwarded handler refuses it before it
+    /// reserves its view-1 lock.
+    #[test]
+    fn the_forwarded_handler_refuses_a_view_1_proposal_without_the_prepare_qc_block() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (fixture, dir, certificate, leader) =
+            view_0_prepare_qc_on_every_validator("forwarded-handler-reproposal");
+        let leader_dir = fixture.data_dirs[leader].clone();
+        let requester = (0..fixture.data_dirs.len())
+            .find(|index| *index != leader && *index != fixture.proposer_index)
+            .expect("a validator that is not a proposer");
+        let requester_dir = fixture.data_dirs[requester].clone();
+        let block_b = dir.join("block-b.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: requester_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "b".repeat(40)),
+            amount: 5,
+            batch_file: block_b.clone(),
+        })
+        .expect("block B batch");
+        let local_status = status(NodeOptions {
+            data_dir: requester_dir.clone(),
+        })
+        .expect("requester status");
+        let required_parent = RequiredBlockParent {
+            height: local_status.block_height,
+            block_hash: local_status.block_tip_hash.clone(),
+            state_root: local_status.state_root.clone(),
+        };
+        let expected = propose_batch_with_required_parent_with_timings(
+            BatchProposalOptions {
+                data_dir: requester_dir.clone(),
+                verify_block_log: false,
+                batch_kind: Some("transparent".to_string()),
+                batch_file: block_b.clone(),
+                proposal_file: dir.join("block-b.proposal.json"),
+                view: Some(1),
+                timeout_certificate_file: Some(certificate.clone()),
+                key_file: None,
+                validator_id: None,
+            },
+            &required_parent,
+        )
+        .expect("unsigned view-1 proposal of block B")
+        .proposal;
+        assert_eq!(expected.proposer, format!("validator-{leader}"));
+        let error = crate::transport_runtime::transport_block_proposal_request(
+            &requester_dir,
+            &read_topology_file(&fixture.topology_file).expect("topology"),
+            &local_status,
+            &expected.proposer,
+            &expected.batch_kind,
+            &std::fs::read_to_string(&block_b).expect("block B batch json"),
+            &expected,
+            &required_parent,
+            Some(&std::fs::read_to_string(&certificate).expect("certificate json")),
+            UNIT_TIMEOUT_MS,
+        )
+        .expect_err("the view-1 proposer must refuse block B");
+        assert!(error.contains("consensus v2 view must re-propose"), "{error}");
+        assert!(
+            vote_lock_proposal_hashes(&leader_dir, 1, 1).is_empty(),
+            "the view-1 proposer spent its view-1 slot on forwarded block B: {error}"
+        );
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
     /// A proposer that already signed a timeout vote at view 1 cannot finish
     /// view 0 or view 1; the spent-view error names view 1 and asks for view 2.
     #[test]

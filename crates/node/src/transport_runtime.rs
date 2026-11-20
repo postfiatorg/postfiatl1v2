@@ -2253,7 +2253,7 @@ pub(super) fn transport_block_vote_request(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn transport_block_proposal_request(
+pub(super) fn transport_block_proposal_request(
     data_dir: &Path,
     topology: &NetworkTopology,
     local_status: &StatusReport,
