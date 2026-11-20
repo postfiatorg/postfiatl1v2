@@ -4124,7 +4124,7 @@ mod transport_batch_payload_tests {
             .expect("view 1 certifies height 1");
         assert!(report.round_ok, "{:?}", report.send_failures);
         assert_height_1_final_everywhere(&fixture);
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
     /// View 0 forms a prepare QC for block A; two precommits arrive after the
@@ -4216,7 +4216,7 @@ mod transport_batch_payload_tests {
         let report = round_at(block_a, "with-a").expect("view 1 certifies block A");
         assert!(report.round_ok, "{:?}", report.send_failures);
         assert_height_1_final_everywhere(&fixture);
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
     /// As above, but block B is submitted at a validator that is not the
@@ -4326,7 +4326,7 @@ mod transport_batch_payload_tests {
             .expect("view 1 certifies block A");
         assert!(report.round_ok, "{:?}", report.send_failures);
         assert_height_1_final_everywhere(&fixture);
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
     /// View 0 forms a prepare QC Q for block A, but every precommit request is
@@ -4423,7 +4423,7 @@ mod transport_batch_payload_tests {
             .expect("view 1 certifies block A");
         assert!(report.round_ok, "{:?}", report.send_failures);
         assert_height_1_final_everywhere(&fixture);
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
     /// A proposer that already signed a timeout vote at view 1 cannot finish
@@ -4451,7 +4451,7 @@ mod transport_batch_payload_tests {
             error.contains("timeout certificate for view 1 and a proposal at view 2"),
             "{error}"
         );
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
     /// A submission at a validator that is not the proposer asks the spent
@@ -4501,7 +4501,7 @@ mod transport_batch_payload_tests {
         })
         .expect_err("the spent proposer cannot sign at view 0");
         assert!(error.contains("consensus v2 view spent"), "{error}");
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
     /// Heights 1701 and 1707 (2026-11-19): the view-0 proposer signed a
@@ -4722,10 +4722,12 @@ mod transport_batch_payload_tests {
                         allow_mempool_submit: false,
                         allow_mempool_submit_finality: true,
                         allow_orchard_batch_create: false,
+                        allow_private_action_admission: false,
                         owned_lane_enabled: true,
                         finality_topology_file: topology_file,
                         finality_key_file: data_dir.join(VALIDATOR_KEYS_FILE),
                         finality_proposal_key_file: Some(data_dir.join(VALIDATOR_KEYS_FILE)),
+                        finality_signer_socket: None,
                         finality_artifact_root: data_dir.join("finality-artifacts"),
                         finality_timeout_ms: 30_000,
                         finality_send_retries: 16,
@@ -4798,7 +4800,7 @@ mod transport_batch_payload_tests {
             round_report["round"]["timings"],
         );
         rpc.join().expect("finality RPC thread");
-        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
     #[test]

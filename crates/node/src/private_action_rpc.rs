@@ -312,7 +312,15 @@ fn private_action_round_service_pass(
         &context.data_dir,
         // Pre-filter at view 0 so a non-proposer never writes `dispatched`;
         // the round re-checks the proposer for the prepared view.
-        |_next_height| Ok(require_rpc_finality_local_proposer(context, 0).is_ok()),
+        |_next_height| {
+            let is_proposer = status(NodeOptions {
+                data_dir: context.data_dir.clone(),
+            })
+            .is_ok_and(|local_status| {
+                require_rpc_finality_local_proposer(context, &local_status, 0).is_ok()
+            });
+            Ok(is_proposer)
+        },
         |record, _batch| {
             let request = RpcRequest::new(
                 format!("private-action-{}", record.intent_id),
