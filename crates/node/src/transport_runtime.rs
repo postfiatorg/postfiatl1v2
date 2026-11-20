@@ -1685,6 +1685,37 @@ fn handle_transport_block_proposal_line(
     {
         return Err(spent);
     }
+    let genesis = NodeStore::new(data_dir)
+        .read_genesis()
+        .map_err(|error| format!("transport block proposal genesis failed: {error}"))?;
+    let consensus_v2_active = consensus_v2_active_at(&genesis, unsigned.block_height);
+    let timeout_certificate = if consensus_v2_active && unsigned.view > 0 {
+        let path = timeout_certificate_file.as_ref().ok_or_else(|| {
+            "transport consensus v2 nonzero view omitted timeout certificate".to_string()
+        })?;
+        Some(
+            verify_block_timeout_certificate_file(BlockTimeoutCertificateVerifyOptions {
+                data_dir: data_dir.to_path_buf(),
+                verify_block_log: false,
+                certificate_file: path.clone(),
+            })
+            .map_err(|error| format!("transport consensus v2 timeout certificate failed: {error}"))?
+            .consensus_v2_certificate
+            .ok_or_else(|| {
+                "transport timeout certificate omitted consensus v2 certificate".to_string()
+            })?,
+        )
+    } else {
+        None
+    };
+    // A requester that skipped this check (an older node) must not make this
+    // proposer spend its view on a block the timeout certificate excludes.
+    if let Some(reproposal) =
+        consensus_v2_required_reproposal(data_dir, &unsigned, timeout_certificate.as_ref())
+            .map_err(|error| format!("transport block proposal view check failed: {error}"))?
+    {
+        return Err(reproposal);
+    }
     // Reserve the normal durable one-proposal-per-height vote lock before
     // emitting either proposer signature. Replays of the same proposal are
     // allowed; a conflicting request fails closed.
@@ -1707,31 +1738,7 @@ fn handle_transport_block_proposal_line(
         &local_status.node_id,
     )
     .map_err(|error| format!("transport block proposal signing failed: {error}"))?;
-    let genesis = NodeStore::new(data_dir)
-        .read_genesis()
-        .map_err(|error| format!("transport block proposal genesis failed: {error}"))?;
-    let consensus_v2_proposal = if consensus_v2_active_at(&genesis, proposal.block_height) {
-        let timeout_certificate = if proposal.view > 0 {
-            let path = timeout_certificate_file.as_ref().ok_or_else(|| {
-                "transport consensus v2 nonzero view omitted timeout certificate".to_string()
-            })?;
-            Some(
-                verify_block_timeout_certificate_file(BlockTimeoutCertificateVerifyOptions {
-                    data_dir: data_dir.to_path_buf(),
-                    verify_block_log: false,
-                    certificate_file: path.clone(),
-                })
-                .map_err(|error| {
-                    format!("transport consensus v2 timeout certificate failed: {error}")
-                })?
-                .consensus_v2_certificate
-                .ok_or_else(|| {
-                    "transport timeout certificate omitted consensus v2 certificate".to_string()
-                })?,
-            )
-        } else {
-            None
-        };
+    let consensus_v2_proposal = if consensus_v2_active {
         Some(
             create_consensus_v2_proposal_for_block(
                 data_dir,
@@ -3755,6 +3762,16 @@ pub(super) fn transport_peer_certified_batch_round(
             None
         };
 
+    // Before the local proposer signs or a remote one is asked to.
+    if let Some(reproposal) = consensus_v2_required_reproposal(
+        &options.data_dir,
+        &expected_unsigned_proposal,
+        consensus_v2_timeout_certificate.as_ref(),
+    )
+    .map_err(|error| format!("peer certified batch round view check failed: {error}"))?
+    {
+        return Err(reproposal);
+    }
     let (proposal, consensus_v2_proposal) =
         if expected_unsigned_proposal.proposer == local_status.node_id {
             if let Some(spent) =
@@ -3764,15 +3781,6 @@ pub(super) fn transport_peer_certified_batch_round(
                     })?
             {
                 return Err(spent);
-            }
-            if let Some(reproposal) = consensus_v2_required_reproposal(
-                &options.data_dir,
-                &expected_unsigned_proposal,
-                consensus_v2_timeout_certificate.as_ref(),
-            )
-            .map_err(|error| format!("peer certified batch round view check failed: {error}"))?
-            {
-                return Err(reproposal);
             }
             let proposal = match options.proposal_key_file.as_ref() {
                 Some(key_file) => sign_verified_block_proposal(
