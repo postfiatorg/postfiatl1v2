@@ -4430,12 +4430,15 @@ pub fn consensus_v2_proposer_view_spent(
         ),
         _ => return Ok(None),
     };
+    // The next view must lie above every round this proposer has signed.
+    let highest = signed_round.map_or(round, |signed| signed.max(round));
     Ok(Some(format!(
-        "{CONSENSUS_V2_VIEW_SPENT}: {reason} at height {} view {}; the height needs a timeout certificate for view {} and a proposal at view {}",
+        "{CONSENSUS_V2_VIEW_SPENT}: {reason} at height {} view {}; highest round signed is view {}; the height needs a timeout certificate for view {} and a proposal at view {}",
         round.height,
         round.view,
-        round.view,
-        round.view.saturating_add(1)
+        highest.view,
+        highest.view,
+        highest.view.saturating_add(1)
     )))
 }
 
