@@ -4427,6 +4427,134 @@ mod transport_batch_payload_tests {
         clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
+    /// The view-0 setup of the test above: view 0 forms a prepare QC Q that
+    /// only the view-0 proposer stores. Returns the view-0 timeout votes of
+    /// all six validators (the proposer's carries Q), Q's ID, and a validator
+    /// that is neither proposer and does not hold Q.
+    fn sole_qc_holder_timeout_votes(
+        tag: &str,
+    ) -> (VotePhaseRoundFixture, PathBuf, Vec<PathBuf>, String, usize) {
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let refused = ProxyVote::RefuseFor(Duration::from_secs(8));
+        let fixture = vote_phase_round_fixture(
+            tag,
+            &(1..6).map(|offset| (offset, forward, refused)).collect::<Vec<_>>(),
+        );
+        let (result, _, _) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            3_000,
+            Duration::from_secs(30),
+        );
+        result
+            .expect("view-0 round still running")
+            .expect_err("view 0 gets no precommit from any peer");
+        let dir = fixture.artifact_dir.with_extension("view-1");
+        let (votes, refused_votes) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir);
+        assert_eq!(votes.len(), 6, "{refused_votes:?}");
+        let proposer_vote: BlockTimeoutVoteFile = serde_json::from_slice(
+            &std::fs::read(&votes[fixture.proposer_index]).expect("proposer timeout vote"),
+        )
+        .expect("proposer timeout vote json");
+        let qc_id = proposer_vote
+            .consensus_v2_vote
+            .and_then(|vote| vote.high_qc)
+            .expect("the view-0 proposer's timeout vote names its prepare QC")
+            .certificate_id;
+        let leader = height_1_leader(&fixture, 1);
+        let peer = (0..fixture.data_dirs.len())
+            .find(|index| *index != leader && *index != fixture.proposer_index)
+            .expect("a validator that is not a proposer");
+        assert!(!holds_qc(&fixture.data_dirs[leader], &qc_id));
+        assert!(!holds_qc(&fixture.data_dirs[peer], &qc_id));
+        (fixture, dir, votes, qc_id, peer)
+    }
+
+    fn holds_qc(data_dir: &Path, qc_id: &str) -> bool {
+        std::fs::read_dir(data_dir.join("consensus-v2-qcs"))
+            .map(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .any(|entry| entry.file_name().to_string_lossy().contains(qc_id))
+            })
+            .unwrap_or(false)
+    }
+
+    /// A copy of the JSON file `from` at `to`, changed by `edit`.
+    fn edited_json(from: &Path, to: PathBuf, edit: impl FnOnce(&mut serde_json::Value)) -> PathBuf {
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(from).expect("json file")).expect("json");
+        edit(&mut value);
+        std::fs::create_dir_all(to.parent().expect("parent")).expect("edited json directory");
+        std::fs::write(&to, serde_json::to_vec_pretty(&value).expect("json bytes"))
+            .expect("edited json");
+        to
+    }
+
+    fn break_signature(signature: &mut serde_json::Value) {
+        let hex = signature["signature_hex"].as_str().expect("signature hex");
+        let first = if hex.starts_with('0') { "1" } else { "0" };
+        signature["signature_hex"] = format!("{first}{}", &hex[1..]).into();
+    }
+
+    /// A carried QC is stored only once the timeout vote or certificate that
+    /// carries it verifies.
+    #[test]
+    fn a_carried_qc_is_stored_only_after_its_vote_or_certificate_verifies() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (fixture, dir, votes, qc_id, peer) =
+            sole_qc_holder_timeout_votes("carried-qc-stored-after-verification");
+        let leader_dir = &fixture.data_dirs[height_1_leader(&fixture, 1)];
+        let mut bad_votes = votes.clone();
+        bad_votes[fixture.proposer_index] = edited_json(
+            &votes[fixture.proposer_index],
+            dir.join("bad-vote/proposer.json"),
+            |vote| break_signature(&mut vote["consensus_v2_vote"]["signature"]),
+        );
+        timeout_certificate(&fixture, 0, bad_votes, &dir.join("bad-vote"))
+            .expect_err("a timeout vote with a broken signature");
+        assert!(
+            !holds_qc(leader_dir, &qc_id),
+            "the aggregator stored the QC a vote carried before the vote verified"
+        );
+        let certificate = timeout_certificate(&fixture, 0, votes, &dir).expect("certificate");
+        assert!(holds_qc(leader_dir, &qc_id));
+
+        let peer_dir = &fixture.data_dirs[peer];
+        let bad_certificate =
+            edited_json(&certificate, dir.join("bad-certificate.json"), |certificate| {
+                let votes = certificate["consensus_v2_certificate"]["votes"]
+                    .as_array_mut()
+                    .expect("v2 votes");
+                let vote = votes
+                    .iter_mut()
+                    .find(|vote| !vote["high_qc"].is_null())
+                    .expect("a vote naming the QC");
+                break_signature(&mut vote["signature"]);
+            });
+        let verify = |certificate_file: &PathBuf| {
+            verify_block_timeout_certificate_file(BlockTimeoutCertificateVerifyOptions {
+                data_dir: peer_dir.clone(),
+                verify_block_log: false,
+                certificate_file: certificate_file.clone(),
+            })
+        };
+        verify(&bad_certificate).expect_err("a certificate with a broken vote signature");
+        assert!(
+            !holds_qc(peer_dir, &qc_id),
+            "a peer stored the QC a certificate carried before the certificate verified"
+        );
+        verify(&certificate).expect("the genuine certificate");
+        assert!(holds_qc(peer_dir, &qc_id));
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
     /// A proposer that already signed a timeout vote at view 1 cannot finish
     /// view 0 or view 1; the spent-view error names view 1 and asks for view 2.
     #[test]
