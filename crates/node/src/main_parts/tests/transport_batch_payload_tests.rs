@@ -3842,7 +3842,8 @@ mod transport_batch_payload_tests {
     }
 
     /// The wallet proxy's rule for moving a failed finality submission to the
-    /// next view (wallet-proxy/rpc-routing.js, finalityFailureCanAdvanceView).
+    /// next view (wallet-proxy/rpc-routing.js, finalityFailureCanAdvanceView);
+    /// keep the patterns in step with it.
     fn submission_failure_advances_view(error: &str) -> bool {
         let error = error.to_ascii_lowercase();
         [
@@ -3853,6 +3854,8 @@ mod transport_batch_payload_tests {
             "transport",
             "timed out",
             "connection",
+            "view spent",
+            "conflicting block proposal vote already recorded",
         ]
         .iter()
         .any(|pattern| error.contains(pattern))
@@ -4325,6 +4328,9 @@ mod transport_batch_payload_tests {
             submission_failure_advances_view(&error),
             "height 1 never finalizes: the submission failed with `{error}`, which no recovery path treats as a reason to change view"
         );
+        // The proposer reports the spent view itself, not a message that only
+        // happens to match a broader pattern.
+        assert!(error.starts_with("consensus v2 view spent"), "{error}");
 
         // The proxy's recovery: timeout votes for view 0 from every validator,
         // a timeout certificate, the view-1 proposer.
