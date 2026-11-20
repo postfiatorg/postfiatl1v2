@@ -4555,6 +4555,61 @@ mod transport_batch_payload_tests {
         clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
     }
 
+    /// A carried QC that does not verify is ignored: it fails a vote or
+    /// certificate only when the receiver does not hold the QC it names.
+    #[test]
+    fn a_carried_qc_that_does_not_verify_is_ignored_when_the_receiver_holds_the_named_qc() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (fixture, dir, votes, qc_id, peer) =
+            sole_qc_holder_timeout_votes("carried-qc-ignored");
+        let leader_dir = &fixture.data_dirs[height_1_leader(&fixture, 1)];
+        let mut swapped_votes = votes.clone();
+        swapped_votes[fixture.proposer_index] = edited_json(
+            &votes[fixture.proposer_index],
+            dir.join("swapped-vote/proposer.json"),
+            |vote| break_signature(&mut vote["consensus_v2_high_qc"]["votes"][0]["signature"]),
+        );
+        let error = timeout_certificate(&fixture, 0, swapped_votes.clone(), &dir.join("swapped-1"))
+            .expect_err("the aggregator does not hold the QC")
+            .to_string();
+        assert!(error.contains("unresolved"), "{error}");
+        timeout_certificate(&fixture, 0, votes.clone(), &dir.join("genuine-1"))
+            .expect("certificate");
+        assert!(holds_qc(leader_dir, &qc_id));
+        timeout_certificate(&fixture, 0, swapped_votes, &dir.join("swapped-2"))
+            .expect("the aggregator holds the QC, so the swapped copy is ignored");
+
+        let certificate =
+            timeout_certificate(&fixture, 0, votes, &dir).expect("certificate");
+        let swapped_certificate =
+            edited_json(&certificate, dir.join("swapped-certificate.json"), |certificate| {
+                for qc in certificate["consensus_v2_high_qcs"]
+                    .as_array_mut()
+                    .expect("carried QCs")
+                {
+                    break_signature(&mut qc["votes"][0]["signature"]);
+                }
+            });
+        let peer_dir = &fixture.data_dirs[peer];
+        let verify = |certificate_file: &PathBuf| {
+            verify_block_timeout_certificate_file(BlockTimeoutCertificateVerifyOptions {
+                data_dir: peer_dir.clone(),
+                verify_block_log: false,
+                certificate_file: certificate_file.clone(),
+            })
+        };
+        let error = verify(&swapped_certificate)
+            .expect_err("the peer does not hold the QC")
+            .to_string();
+        assert!(error.contains("unresolved"), "{error}");
+        verify(&certificate).expect("the genuine certificate");
+        verify(&swapped_certificate)
+            .expect("the peer holds the QC, so the swapped copy is ignored");
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+    }
+
     /// A proposer that already signed a timeout vote at view 1 cannot finish
     /// view 0 or view 1; the spent-view error names view 1 and asks for view 2.
     #[test]
