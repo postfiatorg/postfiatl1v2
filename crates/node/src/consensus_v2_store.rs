@@ -9,9 +9,9 @@ use postfiat_ordering_fast::{
     ConsensusV2QcGraph, ConsensusV2Validator, ConsensusV2ValidatorSet,
 };
 use postfiat_types::{
-    ConsensusV2Domain, ConsensusV2Proposal, ConsensusV2QcRef, ConsensusV2QuorumCertificate,
-    ConsensusV2Round, ConsensusV2SafetyState, ConsensusV2TimeoutCertificate,
-    ConsensusV2TimeoutVote, CONSENSUS_V2_SAFETY_STATE_SCHEMA,
+    ConsensusV2Domain, ConsensusV2Phase, ConsensusV2Proposal, ConsensusV2QcRef,
+    ConsensusV2QuorumCertificate, ConsensusV2Round, ConsensusV2SafetyState,
+    ConsensusV2TimeoutCertificate, ConsensusV2TimeoutVote, CONSENSUS_V2_SAFETY_STATE_SCHEMA,
 };
 
 use crate::{atomic_write, genesis_hash, load_validator_pubkeys, NodeStore};
@@ -292,26 +292,60 @@ pub fn read_stored_consensus_v2_qc(
     Ok(None)
 }
 
-/// Stores the full high QC a timeout vote or certificate carries, after
-/// checking it is the QC the signed reference names. `persist_consensus_v2_qc`
-/// verifies the certificate itself; holding a verified QC changes no safety
-/// record (lock and high QC move only on precommit authorization).
-pub fn persist_carried_consensus_v2_high_qc(
-    data_dir: &Path,
-    reference: Option<&ConsensusV2QcRef>,
-    carried: Option<&ConsensusV2QuorumCertificate>,
-) -> io::Result<()> {
-    let Some(carried) = carried else {
-        return Ok(());
-    };
-    let carried_reference = consensus_v2_qc_ref(carried)
-        .map_err(|error| invalid_data(format!("carried consensus v2 high QC: {error}")))?;
-    if reference != Some(&carried_reference) {
-        return Err(invalid_data(
-            "carried consensus v2 high QC is not the QC the high QC reference names",
-        ));
+/// Adds to `graph` the full QCs a timeout vote or certificate at `round`
+/// carries (unsigned hints). A carried QC is used only if it is a prepare QC
+/// of the same height from no later view, one of the `named` (signed)
+/// references, and verifies. Any other is ignored, logged once under
+/// `context`, and the graph is used as it is. Returns the QCs added, which
+/// the caller persists only after the vote or certificate verifies.
+pub fn add_carried_consensus_v2_qcs(
+    graph: &mut ConsensusV2QcGraph,
+    domain: &ConsensusV2Domain,
+    validators: &ConsensusV2ValidatorSet,
+    round: ConsensusV2Round,
+    named: &[&ConsensusV2QcRef],
+    carried: &[ConsensusV2QuorumCertificate],
+    context: &str,
+) -> Vec<ConsensusV2QuorumCertificate> {
+    let mut added = Vec::new();
+    let mut ignored = 0usize;
+    for certificate in carried {
+        let Some(reference) = consensus_v2_qc_ref(certificate).ok().filter(|reference| {
+            named.contains(&reference)
+                && reference.phase == ConsensusV2Phase::Prepare
+                && reference.round.height == round.height
+                && reference.round.view <= round.view
+        }) else {
+            ignored += 1;
+            continue;
+        };
+        if graph.resolve_verified(domain, validators, &reference).is_ok() {
+            continue;
+        }
+        match graph.insert_verified(domain, validators, certificate.clone()) {
+            Ok(_) => added.push(certificate.clone()),
+            Err(_) => ignored += 1,
+        }
     }
-    persist_consensus_v2_qc(data_dir, carried).map(|_| ())
+    if ignored > 0 {
+        eprintln!(
+            "WARN {context}: ignored {ignored} carried consensus v2 QC(s) that it does not name or that do not verify"
+        );
+    }
+    added
+}
+
+/// Persists the QCs `add_carried_consensus_v2_qcs` added, once the vote or
+/// certificate that carried them verified. Holding a verified QC changes no
+/// safety record (lock and high QC move only on authorization).
+pub fn persist_carried_consensus_v2_qcs(
+    data_dir: &Path,
+    added: &[ConsensusV2QuorumCertificate],
+) -> io::Result<()> {
+    for certificate in added {
+        persist_consensus_v2_qc(data_dir, certificate)?;
+    }
+    Ok(())
 }
 
 /// View-zero proposals cannot carry timeout evidence or a valid-round QC, so

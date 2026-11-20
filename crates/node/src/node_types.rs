@@ -4161,11 +4161,11 @@ pub struct BlockTimeoutCertificateFile {
     pub certificate: BlockTimeoutCertificate,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consensus_v2_certificate: Option<postfiat_types::ConsensusV2TimeoutCertificate>,
-    /// The full prepare QC the consensus v2 certificate's high QC names, so
-    /// every validator can verify the certificate. Unsigned and optional;
-    /// consumers check it against the reference and verify it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub consensus_v2_high_qc: Option<postfiat_types::ConsensusV2QuorumCertificate>,
+    /// The distinct full prepare QCs the consensus v2 certificate's votes
+    /// name, so every validator can verify the certificate. Unsigned and
+    /// optional; consumers use only QCs a vote names and that verify.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub consensus_v2_high_qcs: Vec<postfiat_types::ConsensusV2QuorumCertificate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

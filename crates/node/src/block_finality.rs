@@ -2792,6 +2792,7 @@ pub fn aggregate_block_timeout_certificate(
     let mut votes_by_validator = HashMap::<String, BlockTimeoutVote>::new();
     let mut consensus_v2_votes_by_validator =
         HashMap::<String, postfiat_types::ConsensusV2TimeoutVote>::new();
+    let mut carried_high_qcs = Vec::new();
     for vote_file in &options.vote_files {
         let vote = read_block_timeout_vote_file(vote_file)?;
         validate_block_timeout_vote_file_for_target(
@@ -2812,11 +2813,14 @@ pub fn aggregate_block_timeout_certificate(
                     ),
                 )
             })?;
-            persist_carried_consensus_v2_high_qc(
-                &options.data_dir,
-                consensus_v2_vote.high_qc.as_ref(),
-                vote.consensus_v2_high_qc.as_ref(),
-            )?;
+            if let Some(carried) = vote.consensus_v2_high_qc.clone() {
+                carried_high_qcs.push((
+                    vote_file.display().to_string(),
+                    consensus_v2_vote.round,
+                    consensus_v2_vote.high_qc.clone(),
+                    carried,
+                ));
+            }
             if consensus_v2_vote.validator != validator_id
                 || consensus_v2_votes_by_validator
                     .insert(validator_id.clone(), consensus_v2_vote)
@@ -2911,15 +2915,29 @@ pub fn aggregate_block_timeout_certificate(
         &hotstuff_certificate_id,
         &certificate,
     )?;
-    let mut consensus_v2_high_qc = None;
+    let mut consensus_v2_high_qcs = Vec::new();
     let consensus_v2_certificate = if consensus_v2_active_at(&genesis, options.block_height) {
         let (domain, consensus_v2_validators) =
             live_consensus_v2_context(&options.data_dir)?;
-        let graph = read_consensus_v2_qc_graph(
+        let mut graph = read_consensus_v2_qc_graph(
             &options.data_dir,
             &domain,
             &consensus_v2_validators,
         )?;
+        // Each vote's carried QC is checked against that vote's signed
+        // reference; it is stored only once the certificate verifies.
+        let mut added = Vec::new();
+        for (vote_file, round, reference, carried) in &carried_high_qcs {
+            added.extend(add_carried_consensus_v2_qcs(
+                &mut graph,
+                &domain,
+                &consensus_v2_validators,
+                *round,
+                &reference.iter().collect::<Vec<_>>(),
+                std::slice::from_ref(carried),
+                &format!("timeout vote `{vote_file}`"),
+            ));
+        }
         let ordered_votes = validators
             .iter()
             .filter_map(|validator| consensus_v2_votes_by_validator.remove(validator))
@@ -2942,9 +2960,14 @@ pub fn aggregate_block_timeout_certificate(
             &graph,
         )
         .map_err(invalid_data)?;
-        if let Some(reference) = certificate.high_qc.as_ref() {
-            consensus_v2_high_qc =
-                read_stored_consensus_v2_qc(&options.data_dir, &domain, reference)?;
+        persist_carried_consensus_v2_qcs(&options.data_dir, &added)?;
+        for reference in certificate.votes.iter().filter_map(|vote| vote.high_qc.as_ref()) {
+            let qc = graph
+                .resolve_verified(&domain, &consensus_v2_validators, reference)
+                .map_err(invalid_data)?;
+            if !consensus_v2_high_qcs.contains(qc) {
+                consensus_v2_high_qcs.push(qc.clone());
+            }
         }
         Some(certificate)
     } else {
@@ -2961,7 +2984,7 @@ pub fn aggregate_block_timeout_certificate(
         certificate_id,
         certificate,
         consensus_v2_certificate,
-        consensus_v2_high_qc,
+        consensus_v2_high_qcs,
     };
     verify_block_timeout_certificate_material(&genesis, &registry, &validators, &certificate_file)?;
     verify_consensus_v2_timeout_extension(&options.data_dir, &genesis, &certificate_file)?;
@@ -3004,15 +3027,27 @@ fn verify_consensus_v2_timeout_extension(
                         "activated timeout certificate omitted consensus v2 evidence",
                     )
                 })?;
-        // A validator that never stored the high QC gets it from the
-        // certificate (it covers the proposer, forwarded proposals and peers).
-        persist_carried_consensus_v2_high_qc(
-            data_dir,
-            consensus_v2_certificate.high_qc.as_ref(),
-            certificate.consensus_v2_high_qc.as_ref(),
-        )?;
         let (domain, validators) = live_consensus_v2_context(data_dir)?;
-        let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
+        let mut graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
+        // A validator that never stored a QC the votes name gets it from the
+        // certificate (proposer, forwarded proposals and peers); it is stored
+        // only once the certificate verifies.
+        let added = add_carried_consensus_v2_qcs(
+            &mut graph,
+            &domain,
+            &validators,
+            consensus_v2_certificate.round,
+            &consensus_v2_certificate
+                .votes
+                .iter()
+                .filter_map(|vote| vote.high_qc.as_ref())
+                .collect::<Vec<_>>(),
+            &certificate.consensus_v2_high_qcs,
+            &format!(
+                "timeout certificate `{}`",
+                consensus_v2_certificate.certificate_id
+            ),
+        );
         postfiat_ordering_fast::verify_consensus_v2_timeout_certificate(
             &domain,
             &validators,
@@ -3028,6 +3063,7 @@ fn verify_consensus_v2_timeout_extension(
                 "consensus v2 timeout target does not match legacy transport envelope",
             ));
         }
+        persist_carried_consensus_v2_qcs(data_dir, &added)?;
     } else if certificate.consensus_v2_certificate.is_some() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
