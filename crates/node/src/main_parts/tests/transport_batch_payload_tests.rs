@@ -4091,13 +4091,133 @@ mod transport_batch_payload_tests {
             true,
             Duration::from_secs(40),
         );
-        eprintln!("{tag}: round_time={elapsed:?} lock_free={lock_free}");
         let report = result
             .expect("round still running")
             .expect("round certifies");
+        eprintln!(
+            "{tag}: round_time={elapsed:?} lock_free={lock_free} timings={}",
+            serde_json::to_string(&report.timings).expect("round timings json")
+        );
         assert!(report.round_ok, "{:?}", report.send_failures);
         clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
         elapsed
+    }
+
+    /// One signed transfer through rpc-serve's finality path with the live
+    /// finality flags (30 s timeout, 16 retries, 250 ms backoff, early quorum,
+    /// deliveries deferred), six validators over real transport. Reports the
+    /// RPC's steps around the certified round and the round's own timers.
+    #[test]
+    fn finality_rpc_reports_each_step_around_the_certified_round() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture("finality-rpc-steps", &[]);
+        let proposer_dir = fixture.data_dirs[fixture.proposer_index].clone();
+        let batch = create_transfer_batch(BatchTransferOptions {
+            data_dir: proposer_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "f".repeat(40)),
+            amount: 1_000_000,
+            batch_file: fixture.artifact_dir.with_extension("signed.batch.json"),
+        })
+        .expect("signed transfer");
+        let signed_transfer_json =
+            serde_json::to_string(batch.transactions.first().expect("signed transfer"))
+                .expect("serialize signed transfer");
+        let rpc_listener = TcpListener::bind(("127.0.0.1", 0)).expect("RPC port");
+        let rpc_port = rpc_listener.local_addr().expect("RPC address").port();
+        let ready_file = fixture.artifact_dir.with_extension("rpc-ready.json");
+        let rpc = {
+            let data_dir = proposer_dir.clone();
+            let topology_file = fixture.topology_file.clone();
+            let ready_file = ready_file.clone();
+            std::thread::spawn(move || {
+                rpc_serve_inner(
+                    RpcServeOptions {
+                        data_dir: data_dir.clone(),
+                        spool_dir: data_dir.join("runtime/rpc-spool"),
+                        ready_file,
+                        bind_host: "127.0.0.1".to_string(),
+                        port: rpc_port,
+                        max_requests: 1,
+                        timeout_ms: 30_000,
+                        child_timeout_ms: 30_000,
+                        event_log: None,
+                        allow_mempool_submit: false,
+                        allow_mempool_submit_finality: true,
+                        allow_orchard_batch_create: false,
+                        owned_lane_enabled: true,
+                        finality_topology_file: topology_file,
+                        finality_key_file: data_dir.join(VALIDATOR_KEYS_FILE),
+                        finality_proposal_key_file: Some(data_dir.join(VALIDATOR_KEYS_FILE)),
+                        finality_artifact_root: data_dir.join("finality-artifacts"),
+                        finality_timeout_ms: 30_000,
+                        finality_send_retries: 16,
+                        finality_retry_backoff_ms: 250,
+                        finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
+                        finality_quorum_early_full_propagation: true,
+                        max_mempool_submit_per_peer: 4,
+                        max_mempool_submit_total: 8,
+                        max_orchard_batch_create_per_peer: 1,
+                        max_orchard_batch_create_total: 1,
+                        max_orchard_batch_create_concurrent: 1,
+                        max_child_dispatch_concurrent: 8,
+                        max_child_dispatch_per_peer: 4,
+                        keep_alive: false,
+                    },
+                    Some(rpc_listener),
+                )
+                .expect("serve finality RPC")
+            })
+        };
+        for _ in 0..500 {
+            if ready_file.is_file() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(ready_file.is_file(), "finality RPC did not become ready");
+        let parent = status(NodeOptions {
+            data_dir: proposer_dir.clone(),
+        })
+        .expect("parent status");
+        let request = RpcRequest::empty("finality-rpc-steps", "mempool_submit_signed_transfer_finality")
+            .with_param("signed_transfer_json", &signed_transfer_json)
+            .expect("signed transfer param")
+            .with_param("proxy_required_current_height", parent.block_height)
+            .expect("required height")
+            .with_param("proxy_required_parent_hash", &parent.block_tip_hash)
+            .expect("required hash")
+            .with_param("proxy_required_state_root", &parent.state_root)
+            .expect("required root");
+        let start = Instant::now();
+        let response = send_consensus_v2_test_rpc(rpc_port, &request);
+        let reply_ms = start.elapsed().as_secs_f64() * 1_000.0;
+        assert!(response.ok, "finality RPC failed: {:?}", response.error);
+        let result = response.result.expect("finality result");
+        assert_eq!(result["finality"]["confirmed"], serde_json::Value::Bool(true));
+        assert_eq!(result["certified_sends_deferred"], serde_json::Value::Bool(true));
+        let steps = &result["step_timings"];
+        for step in ["view_and_proposer_ms", "mempool_round_ms", "round_report_write_ms"] {
+            assert!(steps[step].as_f64().is_some(), "missing {step}: {result}");
+        }
+        let round_report: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(result["round_report_file"].as_str().expect("round report path"))
+                .expect("read round report"),
+        )
+        .expect("round report json");
+        eprintln!(
+            "finality rpc steps: client_reply_ms={reply_ms:.1} total_ms={} readiness_wait_ms={} mempool_submit_ms={} mempool_batch_ms={} certified_round_ms={} steps={steps} round_timings={}",
+            result["total_ms"],
+            result["readiness_wait_ms"],
+            result["mempool_submit_ms"],
+            result["mempool_batch_ms"],
+            result["certified_round_ms"],
+            round_report["round"]["timings"],
+        );
+        rpc.join().expect("finality RPC thread");
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
     }
 
     #[test]

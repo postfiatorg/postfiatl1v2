@@ -61,8 +61,7 @@ fn run_rpc_serve_mempool_submit_signed_offer_transaction_finality_inner(
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
     let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
-    let finality_view = prepare_rpc_finality_view(&context.data_dir, params, &artifact_dir)?;
-    require_rpc_finality_local_proposer(context, finality_view.view)?;
+    let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
     let preview =
         postfiat_node::b23_facility_offer_preview(SignedOfferTransactionJsonSubmitOptions {
             data_dir: context.data_dir.clone(),
@@ -146,6 +145,7 @@ fn run_rpc_serve_mempool_submit_signed_offer_transaction_finality_inner(
             )
         })?;
     let total_ms = monotonic_elapsed_ms(total_start);
+    let round_report_write_start = Instant::now();
     let round_report_file = artifact_dir.join("rpc-finality-round.json");
     let round_json = serde_json::to_string_pretty(&round).map_err(|error| {
         (
@@ -162,6 +162,7 @@ fn run_rpc_serve_mempool_submit_signed_offer_transaction_finality_inner(
             ),
         )
     })?;
+    let round_report_write_ms = monotonic_elapsed_ms(round_report_write_start);
     let result = RpcMempoolSubmitSignedTransferFinalityReport {
         schema: "postfiat-rpc-mempool-submit-signed-offer-transaction-finality-v1".to_string(),
         tx_id: tx_id.clone(),
@@ -176,6 +177,11 @@ fn run_rpc_serve_mempool_submit_signed_offer_transaction_finality_inner(
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
         idempotent_replay: false,
+        step_timings: rpc_finality_step_timings(
+            (finality_view.prepare_ms, finality_view.status_reads),
+            &round,
+            round_report_write_ms,
+        ),
     };
     success_response(
         &request.id,

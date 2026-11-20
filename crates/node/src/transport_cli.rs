@@ -2848,6 +2848,10 @@ struct TransportPeerCertifiedMempoolRoundReport {
     submitted_tx_id: Option<String>,
     mempool_submit_ms: f64,
     mempool_batch_ms: f64,
+    /// Status read after the certified round.
+    post_round_status_ms: f64,
+    /// Wall time of the whole mempool round.
+    total_ms: f64,
     round: TransportPeerCertifiedBatchRoundReport,
     round_ok: bool,
 }

@@ -9,6 +9,26 @@ const RPC_FINALITY_TIMEOUT_VOTE_DECOMPRESSED_MAX_BYTES: u64 = 2 * 1024 * 1024;
 struct RpcFinalityViewContext {
     view: u64,
     timeout_certificate_file: Option<PathBuf>,
+    /// Wall time of view preparation and the local-proposer check.
+    prepare_ms: f64,
+    /// Full status reads in view preparation and the local-proposer check.
+    status_reads: u32,
+}
+
+/// View preparation and the local-proposer check of a finality submit.
+fn prepare_rpc_finality_round(
+    context: &RpcServeConnectionContext,
+    params: &serde_json::Map<String, serde_json::Value>,
+    artifact_dir: &Path,
+) -> Result<RpcFinalityViewContext, (String, String)> {
+    let start = Instant::now();
+    let mut finality_view = prepare_rpc_finality_view(&context.data_dir, params, artifact_dir)?;
+    require_rpc_finality_local_proposer(context, finality_view.view)?;
+    finality_view.prepare_ms = monotonic_elapsed_ms(start);
+    // prepare_rpc_finality_view, require_rpc_finality_local_proposer and the
+    // block_proposer lookup inside it each read the full node status.
+    finality_view.status_reads = 3;
+    Ok(finality_view)
 }
 
 fn rpc_finality_requested_view(
@@ -97,6 +117,8 @@ fn prepare_rpc_finality_view(
         return Ok(RpcFinalityViewContext {
             view,
             timeout_certificate_file: None,
+            prepare_ms: 0.0,
+            status_reads: 0,
         });
     }
 
@@ -185,6 +207,8 @@ fn prepare_rpc_finality_view(
     Ok(RpcFinalityViewContext {
         view,
         timeout_certificate_file: Some(timeout_certificate_file),
+        prepare_ms: 0.0,
+        status_reads: 0,
     })
 }
 
