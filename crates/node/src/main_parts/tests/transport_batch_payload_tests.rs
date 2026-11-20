@@ -1435,7 +1435,8 @@ mod transport_batch_payload_tests {
         let mut conflicting = certificate_json(&certificate_file);
         conflicting["certificate"]["registry_root"] = serde_json::json!("77".repeat(48));
         let error = assert_redelivery_is_a_conflict(&fleet, source, other_target, &conflicting);
-        assert!(error.contains("differs from the delivered certificate"), "{error}");
+        // Release 6.4's check names one conflict for every differing field.
+        assert!(error.contains("conflicts with certified height/hash"), "{error}");
 
         // The completed job no longer holds the proposer back.
         let _ = transactional_six_validator_round(&fleet, 3, 2);
@@ -1570,14 +1571,14 @@ mod transport_batch_payload_tests {
             .expect("certificate object")
             .remove("consensus_v2_commit");
         let error = assert_redelivery_is_a_conflict(&fleet, source, target, &removed);
-        assert!(error.contains("consensus-v2 commit"), "{error}");
+        assert!(error.contains("conflicts with certified height/hash"), "{error}");
 
         // The precommit votes emptied.
         let target = (source + 2) % fleet.data_dirs.len();
         let mut emptied = delivered;
         emptied["consensus_v2_commit"]["precommit_qc"]["votes"] = serde_json::json!([]);
         let error = assert_redelivery_is_a_conflict(&fleet, source, target, &emptied);
-        assert!(error.contains("consensus-v2 commit"), "{error}");
+        assert!(error.contains("conflicts with certified height/hash"), "{error}");
 
         // Neither conflict holds the proposer back.
         let _ = transactional_six_validator_round(&fleet, 3, 2);
