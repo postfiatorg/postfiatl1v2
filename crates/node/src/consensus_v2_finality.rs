@@ -20,7 +20,7 @@ use postfiat_types::{
 };
 
 use crate::{
-    live_consensus_v2_context, persist_consensus_v2_current_timeout_authorization_with,
+    live_consensus_v2_context,
     persist_consensus_v2_precommit_authorization_with,
     persist_consensus_v2_prepare_authorization_with, persist_consensus_v2_qc,
     read_consensus_v2_qc_graph_for_view, validator_signer_for, write_block_certificate_file,
@@ -193,9 +193,10 @@ pub fn create_consensus_v2_timeout_vote(
     validator_id: &str,
 ) -> io::Result<ConsensusV2TimeoutVote> {
     crate::storage_vote_guard::require_unambiguous_storage_for_vote(data_dir, round.height, None)?;
-    persist_consensus_v2_current_timeout_authorization_with(
+    crate::consensus_v2_timeout_vote_once(
         data_dir,
         round,
+        validator_id,
         |authorized_domain, authorized_validators, graph, high_qc, _| {
             let signer = validator_signer_for(key_file)?;
             let key =

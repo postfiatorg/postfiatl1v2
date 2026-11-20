@@ -5,13 +5,13 @@ use std::path::{Path, PathBuf};
 use postfiat_ordering_fast::{
     authorize_consensus_v2_precommit_vote, authorize_consensus_v2_prepare_vote,
     authorize_consensus_v2_timeout_vote, consensus_v2_domain, consensus_v2_qc_ref,
-    initial_consensus_v2_safety_state, verify_consensus_v2_qc, ConsensusV2QcGraph,
-    ConsensusV2Validator, ConsensusV2ValidatorSet,
+    initial_consensus_v2_safety_state, verify_consensus_v2_qc, verify_consensus_v2_timeout_vote,
+    ConsensusV2QcGraph, ConsensusV2Validator, ConsensusV2ValidatorSet,
 };
 use postfiat_types::{
     ConsensusV2Domain, ConsensusV2Proposal, ConsensusV2QcRef, ConsensusV2QuorumCertificate,
     ConsensusV2Round, ConsensusV2SafetyState, ConsensusV2TimeoutCertificate,
-    CONSENSUS_V2_SAFETY_STATE_SCHEMA,
+    ConsensusV2TimeoutVote, CONSENSUS_V2_SAFETY_STATE_SCHEMA,
 };
 
 use crate::{atomic_write, genesis_hash, load_validator_pubkeys, NodeStore};
@@ -341,25 +341,89 @@ pub fn persist_consensus_v2_timeout_authorization(
     )
 }
 
-/// Select the current durable high QC and keep the safety guard held through
-/// timeout signature construction.
-pub(crate) fn persist_consensus_v2_current_timeout_authorization_with<T>(
+/// The validator's timeout vote at `round`: the one it already signed there,
+/// or a newly authorized and signed one. Both happen under the per-height
+/// safety guard. A validator signs at most one timeout vote per (height,
+/// view); asking again returns that same signed vote, so a recovery that lost
+/// its votes can collect them again, and nothing new is ever signed for a
+/// round it already timed out.
+pub(crate) fn consensus_v2_timeout_vote_once(
     data_dir: &Path,
     round: ConsensusV2Round,
-    after_persist: impl FnOnce(
+    validator_id: &str,
+    sign: impl FnOnce(
         &ConsensusV2Domain,
         &ConsensusV2ValidatorSet,
         &ConsensusV2QcGraph,
         Option<&ConsensusV2QcRef>,
         &ConsensusV2SafetyState,
-    ) -> io::Result<T>,
-) -> io::Result<T> {
-    persist_consensus_v2_timeout_authorization_selected_with(
-        data_dir,
-        round,
-        |current| current.high_qc.clone(),
-        after_persist,
-    )
+    ) -> io::Result<ConsensusV2TimeoutVote>,
+) -> io::Result<ConsensusV2TimeoutVote> {
+    let (domain, validators) = live_consensus_v2_context(data_dir)?;
+    with_safety_guard(data_dir, round.height, || {
+        let vote_path = consensus_v2_timeout_vote_path(data_dir, &domain, round);
+        match std::fs::read(&vote_path) {
+            Ok(bytes) => {
+                let stored: ConsensusV2TimeoutVote =
+                    serde_json::from_slice(&bytes).map_err(|error| {
+                        invalid_data(format!(
+                            "consensus v2 stored timeout vote `{}` parse failed: {error}",
+                            vote_path.display()
+                        ))
+                    })?;
+                let current = read_consensus_v2_safety_state(data_dir, &domain, round.height)?;
+                if stored.domain != domain
+                    || stored.round != round
+                    || stored.validator != validator_id
+                    || current
+                        .highest_timeout_round
+                        .is_none_or(|highest| highest < round)
+                {
+                    return Err(invalid_data(format!(
+                        "consensus v2 stored timeout vote `{}` does not match this validator's safety record",
+                        vote_path.display()
+                    )));
+                }
+                let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
+                verify_consensus_v2_timeout_vote(&domain, &validators, &stored, &graph)
+                    .map_err(|error| invalid_data(format!("consensus v2 stored timeout vote: {error}")))?;
+                return Ok(stored);
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+        let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
+        let current = read_consensus_v2_safety_state(data_dir, &domain, round.height)?;
+        let high_qc = current.high_qc.clone();
+        let next = authorize_consensus_v2_timeout_vote(
+            &current,
+            &domain,
+            &validators,
+            round,
+            high_qc.as_ref(),
+            &graph,
+        )
+        .map_err(|error| invalid_data(format!("consensus v2 timeout authorization: {error}")))?;
+        write_consensus_v2_safety_state(data_dir, &next)?;
+        let vote = sign(&domain, &validators, &graph, high_qc.as_ref(), &next)?;
+        let mut bytes = serde_json::to_vec_pretty(&vote).map_err(invalid_data)?;
+        bytes.push(b'\n');
+        atomic_write(vote_path, bytes)?;
+        Ok(vote)
+    })
+}
+
+fn consensus_v2_timeout_vote_path(
+    data_dir: &Path,
+    domain: &ConsensusV2Domain,
+    round: ConsensusV2Round,
+) -> PathBuf {
+    data_dir.join(CONSENSUS_V2_SAFETY_DIR).join(format!(
+        "{}-height-{}-view-{}.timeout-vote.json",
+        consensus_v2_artifact_prefix(domain),
+        round.height,
+        round.view
+    ))
 }
 
 fn persist_consensus_v2_timeout_authorization_selected_with<T>(
