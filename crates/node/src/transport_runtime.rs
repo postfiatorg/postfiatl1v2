@@ -369,13 +369,15 @@ fn handle_transport_batch_service_line(
             data_dir: data_dir.to_owned(),
         })
         .map_err(|e| e.to_string())?;
+        // Release 6.4's check; a conflict keeps main's error code.
         let ack = transport_already_applied_ack(
             data_dir,
             topology,
             &local_status.node_id,
             &envelope,
             &current,
-        )?;
+        )
+        .map_err(|detail| format!("{CERTIFIED_SEND_DUPLICATE_CONFLICT}: {detail}"))?;
         write_json_line(stream, &ack)?;
         return Ok(ack);
     }

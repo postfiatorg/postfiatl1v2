@@ -3118,7 +3118,8 @@ mod transport_cli_tests {
         let error =
             transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
                 .expect_err("different stored content must not be acknowledged as applied");
-        assert!(error.contains("differs from the delivered certificate"), "{error}");
+        // Release 6.4's check rejects it with one conflict message.
+        assert!(error.contains("conflicts with certified height/hash"), "{error}");
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -3137,7 +3138,7 @@ mod transport_cli_tests {
             let error =
                 transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
                     .expect_err("a certificate for another chain must not be acknowledged");
-            assert!(error.contains("another chain"), "{field}: {error}");
+            assert!(error.contains("conflicts with certified height/hash"), "{field}: {error}");
             std::fs::remove_dir_all(root).unwrap();
         }
     }
@@ -3162,10 +3163,7 @@ mod transport_cli_tests {
             )),
             "{error}"
         );
-        assert!(
-            error.contains("unsupported block certificate schema `postfiat.block_certificate.v2`"),
-            "{error}"
-        );
+        assert!(error.contains("conflicts with certified height/hash"), "{error}");
         std::fs::remove_dir_all(root).unwrap();
     }
 
