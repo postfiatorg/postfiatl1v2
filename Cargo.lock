@@ -2950,6 +2950,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pftl-ingress-groth16-verify"
+version = "0.1.0"
+dependencies = [
+ "postfiat-execution",
+ "postfiat-types",
+ "serde_json",
+]
+
+[[package]]
 name = "pfusdc-sol-ingress-program"
 version = "0.1.0"
 dependencies = [

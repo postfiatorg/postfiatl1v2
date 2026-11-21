@@ -29,6 +29,7 @@ members = [
     "crates/storage",
     "crates/types",
     "crates/wallet_wasm",
+    "tools/pftl-ingress-groth16-verify",
 ]
 exclude = [
     "programs/pfusdc-egress",
