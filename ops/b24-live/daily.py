@@ -3,13 +3,18 @@
 
 No retry/backfill. --check is local only; --execute uses real time, the pinned
 collector, shared GPU lock, strict copy verification and three live operations.
+Every failed run writes failure.json (run directory, else reading_alert.STATE),
+calls the optional B24_READING_NOTIFY hook once, and a reading counts only once
+its epoch is read back finalized from the chain.
 """
-import argparse,copy,fcntl,importlib.util,os,signal
+import argparse,copy,fcntl,importlib.util,os,signal,time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timezone
 from decimal import Decimal,ROUND_CEILING
 from sign import *
 from snapshot import export
 from live import run_operations,LOCK
+from reading_alert import record_failure
 ROOT=Path(__file__).resolve().parents[2]
 NAV=Path('/home/postfiat/repos/navstrategies-now')
 DEPLOYMENT=COORD/'evidence/now/deployment'
@@ -17,12 +22,21 @@ SEED=DEPLOYMENT/'capture'
 BASE=COORD/'evidence/tee/phase5'
 DAILY=COORD/'evidence/tee/b24-daily'
 TOOLS=ROOT/'tools/b23-nav-canary'
+sys.path[:0] = [str(TOOLS), str(ROOT / '.scratch-deposit')]
+from pftl import PEERS
+from runtime_hashes import runtime
+STATUS=COORD/'status/now.md'
+LOCK_WAIT=3600;LOCK_POLL=5
+LANDING_WAIT=600;LANDING_POLL=30
 spec=importlib.util.spec_from_file_location('b23_daily_helpers',ROOT/'ops/b23-tee-nav/daily.py');helpers=importlib.util.module_from_spec(spec);spec.loader.exec_module(helpers)
 helpers.NAV=NAV
 NATIVE=DEPLOYMENT/'postfiat-b24-nav'
 GPU_NATIVE=DEPLOYMENT/'postfiat-b24-nav-cuda'
 helpers.NATIVE=NATIVE
 helpers.ELF=DEPLOYMENT/'b24-nav.elf'
+
+# b24-release5-20261117, ac91a1f42. Both processes on every validator must match.
+DAILY_NODE_SHA = '69de5ce01bbda92ac5507565388d9e9655457be9bdd37582efd5d38f969bcd18'
 
 def require_runtime():
     paths=[SEED/'manifest.json',SEED/'profile.json',DEPLOYMENT/'profile-template.json',DEPLOYMENT/'capture-plan.json',NATIVE,GPU_NATIVE,helpers.ELF]
@@ -43,9 +57,16 @@ def validate_next_reading(state,manifest):
     nav=item(state['ledger']['nav_assets'],'asset_id',B24)
     if manifest['observation_epoch']!=nav['finalized_epoch']+1:raise ValueError('epoch reuse or skipped finalized epoch')
     if manifest['cutoff_unix_ms']<=previous_cutoff(state):raise ValueError('cutoff replay or backdated reading')
+def wait_lock(lock,deadline,name):
+    """Take an OS lock, giving up at the deadline instead of blocking forever."""
+    while True:
+        try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);return
+        except BlockingIOError:
+            if time.monotonic()>=deadline:raise TimeoutError(name+' held for 60 minutes') from None
+            time.sleep(LOCK_POLL)
 def reserve_lane(run_id,cost,month):
     with (BASE/'aws-budget.lock').open('a') as lock:
-        fcntl.flock(lock,fcntl.LOCK_EX)
+        wait_lock(lock,time.monotonic()+LOCK_WAIT,'budget lock')
         ledger=load(BASE/'aws-budget.json');fixed=sum((Decimal(str(x['reserved_upper_usd'])) for x in ledger['prior_phase2']['runs']),Decimal(0)).quantize(Decimal('.01'),rounding=ROUND_CEILING)+sum((Decimal(x['reserved_upper_usd']) for x in ledger['runs']),Decimal(0))
         used=Decimal(0)
         for path in (COORD/'evidence/tee/daily/monthly-budget.json',DAILY/'monthly-budget.json'):
@@ -68,56 +89,89 @@ def prepare(state_path,capture,proof,out):
     for row in ops:c.apply(row['label'],row['operation'])
     after=c.ledger();route=item(after['pftl_uniswap_routes'],'route_id',ROUTE);nav=item(after['nav_assets'],'asset_id',B24);assert invariant(route) and nav['finalized_epoch']==m['observation_epoch'] and nav['circulating_supply']==n['circulating_supply']
     save(out/'operations.json',ops);save(out/'result.json',dict(passed=True,epoch=m['observation_epoch'],nav_per_unit=x['nav_per_unit'],attested_value=x['attested_value'],consensus_overlay=x['overlay_value'],no_live_transactions=True));return ops
-def execute(now,on_demand=False):
-    require_runtime()
-    DAILY.mkdir(mode=0o700,parents=True,exist_ok=True)
+class Progress:
+    """Where a run is, for its failure record."""
+    def __init__(self):self.stage='start';self.directory=None;self.mode='daily'
+def run(now,on_demand=False):
+    """Every failed run leaves a record and calls the notification hook once."""
+    progress=Progress();progress.mode='now' if on_demand else 'daily'
+    try:execute(now,on_demand,progress)
+    except BaseException as error:
+        if not (isinstance(error,SystemExit) and error.code in (0,None)):record_failure(progress.stage,error,progress.directory,progress.mode)
+        raise
+def execute(now,on_demand=False,progress=None):
+    p=progress or Progress()
+    p.stage='inputs';require_runtime()
+    p.stage='state-directory';DAILY.mkdir(mode=0o700,parents=True,exist_ok=True)
+    p.stage='run-lock'
     with (DAILY/'run.lock').open('a') as running:
         fcntl.flock(running,fcntl.LOCK_EX|fcntl.LOCK_NB)
         if on_demand:
-            active=subprocess.check_output(['systemctl','--user','show','b24-tee-nav-daily.service','--property=ActiveState','--value'],text=True).strip()
+            p.stage='scheduled-service-check';active=subprocess.check_output(['systemctl','--user','show','b24-tee-nav-daily.service','--property=ActiveState','--value'],text=True).strip()
             if active in ('active','activating','deactivating'):raise ValueError('Scheduled B24 reading is active; do not run concurrently')
         stamp=now.strftime('%Y%m%dt%H%M%S%f');mode='now' if on_demand else 'daily'
-        d=DAILY/(mode+'-'+stamp);d.mkdir(mode=0o700,exist_ok=False)
+        p.stage='run-directory';d=DAILY/(mode+'-'+stamp);d.mkdir(mode=0o700,exist_ok=False);p.directory=d
+        p.stage='pre-capture-runtime-check';runtime_check(d, 'pre-capture-runtimes.json')
+        manifest,capture,budget=collect(now,on_demand,d,mode,stamp,p)
+        submit(d,capture,manifest,budget,p)
+def collect(now,on_demand,d,mode,stamp,p):
+    p.stage='chain-read';before=d/'before-capture.json';state=export(before);seed=load(SEED/'manifest.json');manifest=next_manifest(seed,now,state,on_demand);nav=item(state['ledger']['nav_assets'],'asset_id',B24)
+    assert nav['proof_profile']==seed['proof_profile_id'] and nav['finalized_epoch']+1==manifest['observation_epoch'] and not nav['halted']
+    p.stage='collector-plan';runner=helpers.runner_module();plan=load(DEPLOYMENT/'capture-plan.json')
+    plan['runId']='b23-tee-b24-'+mode+'-'+stamp;plan=runner.reviewed_plan(plan);runner.check_inputs(plan,manifest,execution=True)
+    original=runner.bind_measured_profile
+    def bind(*args,**kwargs):
+        actual,policy=original(*args,**kwargs)
+        if actual['proof_profile_id']!=seed['proof_profile_id']:raise ValueError('Measured daily profile differs; no secret release')
+        return actual,policy
+    p.stage='aws-preflight';runner.bind_measured_profile=bind;aws=runner.infra.session(runner.AWS_CREDENTIALS);assert aws.client('sts').get_caller_identity()['Account']==plan['accountId']
+    ec2=runner.infra.client(aws,'ec2',plan);rows=ec2.describe_instances(Filters=[{'Name':'tag:Project','Values':['yolo-nitro-qualification']},{'Name':'instance-state-name','Values':['pending','running','stopping','stopped','shutting-down']}]);assert not any(r['Instances'] for r in rows['Reservations'])
+    cost=runner.cost_preflight(aws,plan);p.stage='budget';budget=reserve_lane(plan['runId'],cost['resource_time_bound_usd'],now.strftime('%Y-%m'));save(d/'budget.json',budget);p.stage='oauth-baseline';helpers.oauth_baseline(d/'oauth-baseline.json')
+    p.stage='capture';capture=d/'capture';runner.execute(plan,manifest,capture,aws,profile_operation=load(DEPLOYMENT/'profile-template.json'),profile_cli=NATIVE,on_demand=on_demand);assert load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']
+    manifest=load(capture/'manifest.json')
+    p.stage='archive-verification';helpers.command([sys.executable,NAV/'containers/yolo-nitro/aws/verify_nav_archive.py','--capture',capture,'--recovery-key',helpers.RECOVERY,'--oauth-baseline',d/'oauth-baseline.json','--output',d/'archive-verification.json'])
+    p.stage='cleanup-timer';helpers.command(['systemctl','--user','disable','--now',plan['cleanupTimer']])
+    p.stage='reading-qualification';helpers.command([sys.executable,TOOLS/'qualify_reading.py','--capture',capture,'--collector-repo',NAV,'--native-cli',NATIVE,'--root-der',COORD/'evidence/tee/aws-nitro-root.der','--output',d/'negative-reading'])
+    p.stage='proof';helpers.command([sys.executable,TOOLS/'prove_remote.py','--capture',capture,'--elf',helpers.ELF,'--native-cli',NATIVE,'--prover-cli',GPU_NATIVE,'--output',d/'proof'])
+    return manifest,capture,budget
+def runtime_check(d, filename='runtime-hashes.json'):
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        versions=dict(pool.map(lambda peer: runtime(peer, DAILY_NODE_SHA),PEERS))
+    save(d/filename,versions)
+    if set(versions) != {f'validator-{i}' for i in range(6)} or not all(v['matches'] for v in versions.values()):
+        raise RuntimeError('B24 reading requires release 5 RPC and transport on all six validators')
+def confirm_landed(d,epoch,packet):
+    """Read the chain again until the new epoch is finalized with this packet, within LANDING_WAIT."""
+    deadline=time.monotonic()+LANDING_WAIT
+    while True:
         try:
-            before=d/'before-capture.json';state=export(before);seed=load(SEED/'manifest.json');manifest=next_manifest(seed,now,state,on_demand);nav=item(state['ledger']['nav_assets'],'asset_id',B24)
-            assert nav['proof_profile']==seed['proof_profile_id'] and nav['finalized_epoch']+1==manifest['observation_epoch'] and not nav['halted']
-            runner=helpers.runner_module();plan=load(DEPLOYMENT/'capture-plan.json')
-            plan['runId']='b23-tee-b24-'+mode+'-'+stamp;plan=runner.reviewed_plan(plan);runner.check_inputs(plan,manifest,execution=True)
-            original=runner.bind_measured_profile
-            def bind(*args,**kwargs):
-                actual,policy=original(*args,**kwargs)
-                if actual['proof_profile_id']!=seed['proof_profile_id']:raise ValueError('Measured daily profile differs; no secret release')
-                return actual,policy
-            runner.bind_measured_profile=bind;aws=runner.infra.session(runner.AWS_CREDENTIALS);assert aws.client('sts').get_caller_identity()['Account']==plan['accountId']
-            ec2=runner.infra.client(aws,'ec2',plan);rows=ec2.describe_instances(Filters=[{'Name':'tag:Project','Values':['yolo-nitro-qualification']},{'Name':'instance-state-name','Values':['pending','running','stopping','stopped','shutting-down']}]);assert not any(r['Instances'] for r in rows['Reservations'])
-            cost=runner.cost_preflight(aws,plan);budget=reserve_lane(plan['runId'],cost['resource_time_bound_usd'],now.strftime('%Y-%m'));save(d/'budget.json',budget);helpers.oauth_baseline(d/'oauth-baseline.json')
-            capture=d/'capture';runner.execute(plan,manifest,capture,aws,profile_operation=load(DEPLOYMENT/'profile-template.json'),profile_cli=NATIVE,on_demand=on_demand);assert load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']
-            manifest=load(capture/'manifest.json')
-            helpers.command([sys.executable,NAV/'containers/yolo-nitro/aws/verify_nav_archive.py','--capture',capture,'--recovery-key',helpers.RECOVERY,'--oauth-baseline',d/'oauth-baseline.json','--output',d/'archive-verification.json'])
-            helpers.command(['systemctl','--user','disable','--now',plan['cleanupTimer']])
-            helpers.command([sys.executable,TOOLS/'qualify_reading.py','--capture',capture,'--collector-repo',NAV,'--native-cli',NATIVE,'--root-der',COORD/'evidence/tee/aws-nitro-root.der','--output',d/'negative-reading'])
-            helpers.command([sys.executable,TOOLS/'prove_remote.py','--capture',capture,'--elf',helpers.ELF,'--native-cli',NATIVE,'--prover-cli',GPU_NATIVE,'--output',d/'proof'])
-            with LOCK.open('a+') as lock:
-                deadline=__import__('time').monotonic()+3600
-                while True:
-                    fcntl.flock(lock,fcntl.LOCK_EX);lock.seek(0);holder=lock.read().strip()
-                    if not holder:lock.seek(0);lock.truncate();lock.write('NOW\n');lock.flush();break
-                    fcntl.flock(lock,fcntl.LOCK_UN)
-                    if __import__('time').monotonic()>deadline:raise TimeoutError('chain lock held for 60 minutes')
-                    __import__('time').sleep(5)
-                try:
-                    sys.path.insert(0,str(TOOLS));import submit_live
-                    from concurrent.futures import ThreadPoolExecutor
-                    with ThreadPoolExecutor(max_workers=6) as pool:versions=dict(pool.map(submit_live.runtime,submit_live.pftl.PEERS))
-                    save(d/'runtime-hashes.json',versions);assert all(v['matches'] for v in versions.values()),'Daily execution requires the qualified release-4 runtimes'
-                    current=d/'before-submit.json';export(current);ops=prepare(current,capture,d/'proof',d/'canary');final,receipts=run_operations(ops,current,d/'live',lock_owner='NOW')
-                    save(d/'complete.json',dict(epoch=manifest['observation_epoch'],six_validator_verified=True,budget=budget,final_snapshot=str(final),receipts=receipts))
-                    nav=item(load(final)['ledger']['nav_assets'],'asset_id',B24)
-                    with (COORD/'status/now.md').open('a') as status:status.write(f"\nREADING COMPLETE {datetime.now(timezone.utc).isoformat()}: epoch {nav['finalized_epoch']}, NAV {nav['nav_per_unit']/1e6:.6f}; six validators and full ledger verified. Evidence: {d}\n")
-                finally:
-                    lock.seek(0)
-                    if lock.read().strip()=='NOW':lock.seek(0);lock.truncate();lock.flush()
-        except BaseException as error:save(d/'failure.json',dict(error_type=type(error).__name__,message=str(error)[:500],automatic_retry=False));raise
+            nav=item(export(d/'landed-state.json')['ledger']['nav_assets'],'asset_id',B24)
+            if nav['finalized_epoch']==epoch and nav.get('finalized_reserve_packet_hash')==packet:save(d/'landed.json',dict(epoch=epoch,reserve_packet_hash=packet,confirmed_at=datetime.now(timezone.utc).isoformat()));return nav
+            last=f"chain shows finalized epoch {nav['finalized_epoch']}"
+        except Exception as error:last=f'{type(error).__name__}: {error}'
+        if time.monotonic()>=deadline:raise TimeoutError(f'epoch {epoch} not finalized on chain within {LANDING_WAIT} s; last read: {last}'[:500])
+        time.sleep(LANDING_POLL)
+def submit(d,capture,manifest,budget,p):
+    p.stage='chain-lock'
+    with LOCK.open('a+') as lock:
+        deadline=time.monotonic()+LOCK_WAIT
+        while True:
+            wait_lock(lock,deadline,'chain lock');lock.seek(0);holder=lock.read().strip()
+            if not holder:lock.seek(0);lock.truncate();lock.write('NOW\n');lock.flush();break
+            fcntl.flock(lock,fcntl.LOCK_UN)
+            if time.monotonic()>=deadline:raise TimeoutError('chain lock held for 60 minutes')
+            time.sleep(LOCK_POLL)
+        try:
+            p.stage='runtime-check';runtime_check(d)
+            p.stage='rehearsal';current=d/'before-submit.json';export(current);ops=prepare(current,capture,d/'proof',d/'canary')
+            p.stage='submission';final,receipts=run_operations(ops,current,d/'live',lock_owner='NOW')
+            p.stage='landing-check';nav=confirm_landed(d,manifest['observation_epoch'],ops[0]['operation']['reserve_packet_hash'])
+            save(d/'complete.json',dict(epoch=manifest['observation_epoch'],six_validator_verified=True,landed_on_chain=True,budget=budget,final_snapshot=str(final),receipts=receipts))
+            p.stage='status'
+            with STATUS.open('a') as status:status.write(f"\nREADING COMPLETE {datetime.now(timezone.utc).isoformat()}: epoch {nav['finalized_epoch']}, NAV {nav['nav_per_unit']/1e6:.6f}; six validators and full ledger verified. Evidence: {d}\n")
+        finally:
+            lock.seek(0)
+            if lock.read().strip()=='NOW':lock.seek(0);lock.truncate();lock.flush()
 def main():
     ap=argparse.ArgumentParser(description=__doc__);g=ap.add_mutually_exclusive_group(required=True);g.add_argument('--check',action='store_true');g.add_argument('--execute',action='store_true');g.add_argument('--now',action='store_true');a=ap.parse_args();now=datetime.now(timezone.utc)
     if a.check:
@@ -128,5 +182,5 @@ def main():
         print(json.dumps(dict(local_check=True,asset_id=m['nav_asset_id'],profile=m['proof_profile_id'],epoch=m['observation_epoch'],cutoff_unix_ms=m['cutoff_unix_ms'],run_cap_usd='9',month_cap_usd='250',cumulative_lane_cap_usd='250',aws_calls=0,chain_writes=0)));return
     os.umask(0o077)
     def stop(signum,frame):raise SystemExit(128+signum)
-    signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop);execute(now,a.now)
+    signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop);run(now,a.now)
 if __name__=='__main__':main()
