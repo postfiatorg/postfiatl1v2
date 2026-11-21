@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""Rebuild the four pfUSDC EVM runtimes and compare every byte at one finalized block."""
+
+import json
+import os
+import subprocess
+from pathlib import Path
+
+from eth_abi import decode, encode
+from web3 import Web3
+
+
+def git(repo, *args):
+    return subprocess.check_output(["git", "-C", repo, *args], text=True).strip()
+
+
+def source(repo, revision, path):
+    # Whitespace, including the final newline, affects Solidity metadata.
+    return subprocess.check_output(["git", "-C", repo, "show", f"{revision}:{path}"]).decode()
+
+
+def compile_contract(compiler, name, path, sources, settings, field):
+    settings = {**settings, "outputSelection": {"*": {"*": ["evm." + field + ".object"]}}}
+    request = {"language": "Solidity", "settings": settings,
+               "sources": {key: {"content": value} for key, value in sources.items()}}
+    result = json.loads(subprocess.check_output(
+        [compiler, "--standard-json"], input=json.dumps(request), text=True))
+    for entry in result.get("errors", []):
+        if entry["severity"] == "error":
+            raise ValueError(entry["formattedMessage"])
+    return bytes.fromhex(result["contracts"][path][name]["evm"][field]["object"])
+
+
+def main():
+    root = Path(git(".", "rev-parse", "--show-toplevel"))
+    w = Web3(Web3.HTTPProvider(os.environ["ETH_RPC_URL"], request_kwargs={"timeout": 30}))
+    if w.eth.chain_id != 1:
+        raise ValueError("Ethereum mainnet required")
+    block = w.eth.get_block("finalized")
+    print(f"Ethereum block {block.number} {Web3.to_hex(block.hash)}")
+
+    def compare(name, address, candidate):
+        live = w.eth.get_code(Web3.to_checksum_address(address), block.number)
+        if candidate != live:
+            raise ValueError(f"{name} runtime mismatch at {address}")
+        print(name, address, len(live), Web3.to_hex(Web3.keccak(candidate)))
+
+    def read(address, signature, returns, arguments=b""):
+        selector = Web3.keccak(text=signature)[:4]
+        data = w.eth.call({"to": Web3.to_checksum_address(address), "data": selector + arguments},
+                          block.number)
+        return decode(returns, data)
+
+    vault = "0xe7a432a28b20621a70e845c7f202004cf98e7a2c"
+    verifier, = read(vault, "finalityVerifier()", ["address"])
+    gateway, = read(verifier, "sp1Verifier()", ["address"])
+    selector = bytes.fromhex("4388a21c")
+    leaf, frozen = read(gateway, "routes(bytes4)", ["address", "bool"], encode(["bytes4"], [selector]))
+    if (verifier != "0xc398a26bd997168c3c966763b0a97829d14db655"
+            or gateway != "0x397a5f7f3dbd538f23de225b51f532c34448da9b"
+            or leaf != "0xb69f2584cbcff99a58c4e7002e8b89af54a6f4e2" or frozen):
+        raise ValueError("The live call path differs from the audited route")
+    program_key, = read(verifier, "programVKey()", ["bytes32"])
+    print("Egress program vkey", Web3.to_hex(program_key))
+
+    revision = "087e3d1578428028d3bb76e71744ff8614d300fe"
+    settings = {"optimizer": {"enabled": True, "runs": 200}, "evmVersion": "cancun"}
+    names = ["ERC20BridgeVaultV2", "ERC20BridgeVaultL1", "PFTLFinalityVerifierV1"]
+    sources = {f"src/{n}.sol": source(root, revision, f"crates/ethereum-contracts/src/{n}.sol")
+               for n in names}
+    for name, address, deployment in [
+        ("ERC20BridgeVaultL1", vault,
+         "0xd642fa33c4f200cafc9cd7e9fbf49494dfd9294a7a65ad6230c5c060062ea402"),
+        ("PFTLFinalityVerifierV1", verifier,
+         "0xbdd6577a2274143c8587e7c6f02e01f304b51a79f498464a2bddcbea94d82c71"),
+    ]:
+        init = compile_contract(os.environ.get("SOLC_024", "solc-0.8.24"), name,
+                                f"src/{name}.sol", sources, settings, "bytecode")
+        tx = w.eth.get_transaction(deployment)
+        receipt = w.eth.get_transaction_receipt(deployment)
+        if receipt.contractAddress.lower() != address or not tx.input.startswith(init):
+            raise ValueError(f"{name} creation bytecode or address mismatch")
+        # Read-only EVM simulation fills in the immutables with the deployed constructor arguments.
+        runtime = w.eth.call({"data": init + tx.input[len(init):]}, block.number)
+        compare(name, address, runtime)
+
+    sp1 = root / "external/sp1-contracts"
+    pin = git(root, "rev-parse", "HEAD:external/sp1-contracts")
+    oz = sp1 / "contracts/lib/openzeppelin-contracts"
+    oz_pin = git(sp1, "rev-parse", pin + ":contracts/lib/openzeppelin-contracts")
+    remaps = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+              "ds-test/=lib/openzeppelin-contracts/lib/forge-std/lib/ds-test/src/",
+              "erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/",
+              "forge-std/=lib/forge-std/src/", "openzeppelin-contracts/=lib/openzeppelin-contracts/"]
+    for name, address, unit, evm, inputs in [
+        ("SP1VerifierGateway", gateway,
+         "src/SP1VerifierGateway.sol", "paris",
+         ["src/ISP1Verifier.sol", "src/SP1VerifierGateway.sol", "src/ISP1VerifierGateway.sol"]),
+        ("SP1Verifier", leaf,
+         "src/v6.1.0/SP1VerifierGroth16.sol", "shanghai",
+         ["src/ISP1Verifier.sol", "src/v6.1.0/Groth16Verifier.sol", "src/v6.1.0/SP1VerifierGroth16.sol"]),
+    ]:
+        sources = {key: source(sp1, pin, "contracts/" + key) for key in inputs}
+        is_gateway = name == "SP1VerifierGateway"
+        if is_gateway:
+            for key in ["contracts/utils/Context.sol", "contracts/access/Ownable.sol"]:
+                sources["lib/openzeppelin-contracts/" + key] = source(oz, oz_pin, key)
+            sources["@openzeppelin/contracts/utils/Context.sol"] = sources[
+                "lib/openzeppelin-contracts/contracts/utils/Context.sol"]
+        settings = {"evmVersion": evm, "optimizer": {"enabled": True, "runs": 200},
+                    "remappings": [":" + r for r in remaps] if is_gateway else remaps}
+        runtime = compile_contract(os.environ.get("SOLC_020", "solc-0.8.20"), name, unit,
+                                   sources, settings, "deployedBytecode")
+        compare(name, address, runtime)
+
+
+if __name__ == "__main__":
+    main()
