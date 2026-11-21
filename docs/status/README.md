@@ -10,6 +10,7 @@
 | Page | What it is |
 | --- | --- |
 | [Network Status](network-status.md) | One-page summary of the running network, dated |
+| [Master State](master-state.md) | The one line of code, what the validators run, and where archived work is |
 | [Current State](chain-state-current.md) | The full, dated operating log: releases, rollouts, fleet observations, drills |
 | [Testnet Path](testnet-path.md) | Generated status of the public-testnet path milestone (Gate Zero and phases) |
 | [Release Gate Inventory](release-gate-inventory.md) | Non-storage gates that must pass before a public testnet |
