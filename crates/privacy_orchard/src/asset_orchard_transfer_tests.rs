@@ -254,9 +254,9 @@ fn the_circuit_rejects_forged_statements() {
         filler.cmx = filler.note.cmx_allowing_zero_value(pool_domain).expect("cmx");
         fields.nullifiers[1] = asset_derive_nullifier(
             pool_domain,
-            filler.nk,
-            filler.note.rho,
-            filler.note.psi,
+            *filler.nk,
+            *filler.note.rho,
+            *filler.note.psi,
             filler.cmx,
         )
         .expect("nullifier");
@@ -274,7 +274,7 @@ fn the_circuit_rejects_forged_statements() {
         )
         .expect("rho");
         let output = circuit.output_notes[index].as_mut().expect("output");
-        output.note.rho = rho;
+        output.note.rho = rho.into();
         output.cmx = output.note.cmx_allowing_zero_value(pool_domain).expect("cmx");
         fields.output_commitments[index] = output.cmx;
     }

@@ -118,12 +118,12 @@ impl AssetOrchardShieldedKeys {
             &derive_bytes("postfiat.asset_orchard.wallet_note.diversifier.v1", &seed)?
                 [..ASSET_ORCHARD_DIVERSIFIER_BYTES],
         );
-        let nk = hash_to_pallas_base("postfiat.asset_orchard.wallet_note.nk.v1", &seed)?;
+        let nk = hash_to_pallas_base("postfiat.asset_orchard.wallet_note.nk.v1", &seed[..])?;
         let rivk =
-            hash_to_pallas_scalar_nonzero("postfiat.asset_orchard.wallet_note.rivk.v1", &seed)?;
+            hash_to_pallas_scalar_nonzero("postfiat.asset_orchard.wallet_note.rivk.v1", &seed[..])?;
         let spend_scalar = hash_to_pallas_scalar_nonzero(
             "postfiat.asset_orchard.wallet_note.spend_auth_sk.v1",
-            &seed,
+            &seed[..],
         )?;
         let spend_key =
             SigningKey::<SpendAuth>::try_from(scalar_enc(spend_scalar)).map_err(|_| {
@@ -133,7 +133,7 @@ impl AssetOrchardShieldedKeys {
                 )
             })?;
         let ak = verification_key_affine(&VerificationKey::from(&spend_key))?;
-        let g_d = pallas::Point::hash_to_curve("postfiat.asset_orchard.wallet_note.g_d.v1")(&seed)
+        let g_d = pallas::Point::hash_to_curve("postfiat.asset_orchard.wallet_note.g_d.v1")(&seed[..])
             .to_affine();
         let ivk_base = orchard_commit_ivk(ak, nk, rivk)?;
         let ivk = Option::<pallas::Scalar>::from(pallas::Scalar::from_repr(ivk_base.to_repr()))
@@ -197,13 +197,13 @@ pub fn asset_orchard_note_for_address(
 ) -> Result<AssetNoteOpening, AssetOrchardError> {
     let note = AssetNoteOpening {
         diversifier: address.diversifier,
-        g_d: address.g_d,
-        pk_d: address.pk_d,
+        g_d: address.g_d.into(),
+        pk_d: address.pk_d.into(),
         asset_tag,
         value,
-        rho,
-        psi: orchard_psi(rseed, rho)?,
-        rcm: orchard_rcm(rseed, rho)?,
+        rho: rho.into(),
+        psi: orchard_psi(rseed, rho)?.into(),
+        rcm: orchard_rcm(rseed, rho)?.into(),
     };
     note.validate_allowing_zero_value()?;
     Ok(note)
@@ -213,8 +213,8 @@ impl AssetNoteOpening {
     /// The transfer circuit accepts zero-value notes; every older action rejects them.
     pub fn validate_allowing_zero_value(&self) -> Result<(), AssetOrchardError> {
         self.asset_tag.validate()?;
-        reject_identity_point("g_d", self.g_d)?;
-        reject_identity_point("pk_d", self.pk_d)?;
+        reject_identity_point("g_d", *self.g_d)?;
+        reject_identity_point("pk_d", *self.pk_d)?;
         if bool::from(self.rcm.is_zero()) {
             return Err(AssetOrchardError::new(
                 "zero_rcm",
@@ -233,13 +233,13 @@ impl AssetNoteOpening {
         bits.extend(i2lebsp_from_field(pool_domain, 255));
         bits.extend(i2lebsp_from_u128(self.asset_tag.lo, 128));
         bits.extend(i2lebsp_from_u128(self.asset_tag.hi, 128));
-        bits.extend(point_bits(self.g_d)?);
-        bits.extend(point_bits(self.pk_d)?);
+        bits.extend(point_bits(*self.g_d)?);
+        bits.extend(point_bits(*self.pk_d)?);
         bits.extend(i2lebsp_from_u64(self.value, 64));
-        bits.extend(i2lebsp_from_field(self.rho, 255));
-        bits.extend(i2lebsp_from_field(self.psi, 255));
+        bits.extend(i2lebsp_from_field(*self.rho, 255));
+        bits.extend(i2lebsp_from_field(*self.psi, 255));
         let domain = sinsemilla::CommitDomain::new(ASSET_ORCHARD_NOTE_COMMIT_DOMAIN_V1);
-        let point = Option::<pallas::Point>::from(domain.commit(bits.into_iter(), &self.rcm))
+        let point = Option::<pallas::Point>::from(domain.commit(bits.into_iter(), &*self.rcm))
             .ok_or_else(|| {
                 AssetOrchardError::new(
                     "asset_note_commit_failed",

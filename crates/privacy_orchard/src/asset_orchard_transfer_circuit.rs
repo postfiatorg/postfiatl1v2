@@ -58,7 +58,7 @@ fn transfer_note_witness(
     let cmx = note.cmx_allowing_zero_value(pool_domain)?;
     Ok(AssetOrchardSwapNoteWitness {
         note,
-        nk,
+        nk: nk.into(),
         cmx,
         merkle_witness: None,
         spend_authority: None,
@@ -475,7 +475,7 @@ fn synthesize_transfer_note(
         sinsemilla_chip.clone(),
         ecc_chip.clone(),
         &piece_subpieces,
-        Value::known(note.note.rcm),
+        Value::known(*note.note.rcm),
     )?;
     match role {
         TransferNoteRole::Output { index } => {
@@ -924,9 +924,9 @@ fn draft_asset_orchard_transfer(
             auth_path: [pallas::Base::ZERO; ASSET_ORCHARD_MERKLE_DEPTH],
         });
         witness.spend_authority = Some(AssetOrchardSpendAuthorityWitness {
-            ak: spend_auth_verification_key_affine(&VerificationKey::from(&signing_key))?,
-            alpha: random_pallas_scalar_nonzero(),
-            rivk: filler_keys.rivk,
+            ak: spend_auth_verification_key_affine(&VerificationKey::from(&signing_key))?.into(),
+            alpha: random_pallas_scalar_nonzero().into(),
+            rivk: filler_keys.rivk.into(),
         });
         input_witnesses.push(witness);
         signing_keys.push(signing_key);
@@ -1097,7 +1097,7 @@ fn finish_asset_orchard_transfer(
         .iter()
         .zip(input_witnesses.iter())
         .map(|(key, input)| {
-            let alpha = input
+            let alpha = *input
                 .spend_authority
                 .as_ref()
                 .ok_or_else(|| {
