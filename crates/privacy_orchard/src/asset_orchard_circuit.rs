@@ -2827,6 +2827,7 @@ fn invert_or_zero(value: pallas::Base) -> pallas::Base {
 
 include!("asset_orchard_legacy_circuits.rs");
 include!("asset_orchard_action_builders.rs");
+include!("asset_orchard_transfer_circuit.rs");
 /// Decodes fixed-size hex into an owner that wipes on drop: the value may be a spend key or `rivk`
 /// (issue #181). The intermediate buffer is wiped on every exit as well.
 fn fixed_hex_array<const N: usize>(

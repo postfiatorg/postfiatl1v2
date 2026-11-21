@@ -4433,6 +4433,8 @@ fn has_duplicate_strings<'a>(values: impl Iterator<Item = &'a str>) -> bool {
     false
 }
 
+include!("asset_orchard_transfer_types.rs");
+
 #[cfg(test)]
 mod tests {
     use super::*;

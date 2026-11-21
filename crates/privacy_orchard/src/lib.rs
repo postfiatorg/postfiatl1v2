@@ -88,7 +88,9 @@ pub use asset_orchard_circuit::{
     ASSET_ORCHARD_SWAP_V3_REPLAY_VK_HASH,
 };
 pub use asset_orchard_note_encryption::{
-    decrypt_asset_orchard_wallet_note, encrypt_asset_orchard_wallet_note,
+    decrypt_asset_orchard_transfer_output, decrypt_asset_orchard_wallet_note,
+    encrypt_asset_orchard_transfer_output, encrypt_asset_orchard_wallet_note,
+    ASSET_ORCHARD_TRANSFER_OUTPUT_CIPHERTEXT_BYTES,
     ASSET_ORCHARD_NOTE_CIPHERTEXT_MAGIC,
 };
 pub use timing::{

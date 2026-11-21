@@ -10,9 +10,12 @@ use sha3::{Digest, Sha3_256};
 use zeroize::{DefaultIsZeroes, Zeroizing};
 
 use crate::asset_orchard::{
-    asset_orchard_incoming_viewing_key_from_seed, build_asset_orchard_wallet_note_with_rho,
+    asset_orchard_incoming_viewing_key_from_seed, asset_orchard_note_for_address,
+    asset_output_rho, build_asset_orchard_wallet_note_with_rho,
     validate_asset_orchard_wallet_note_for_pool, AssetOrchardBoundedBytes, AssetOrchardError,
-    AssetOrchardSwapAction, AssetOrchardWalletNote, ASSET_ORCHARD_ENCRYPTED_OUTPUT_MAX_BYTES,
+    AssetOrchardShieldedAddress, AssetOrchardShieldedKeys, AssetOrchardSwapAction,
+    AssetOrchardTransferAction, AssetOrchardWalletNote, AssetTag,
+    ASSET_ORCHARD_ENCRYPTED_OUTPUT_MAX_BYTES, ASSET_ORCHARD_RSEED_BYTES,
 };
 
 pub const ASSET_ORCHARD_NOTE_CIPHERTEXT_MAGIC: &[u8; 8] = b"PFAOENC1";
@@ -249,6 +252,231 @@ pub fn decrypt_asset_orchard_wallet_note(
         ));
     }
     Ok(Some(note))
+}
+
+pub const ASSET_ORCHARD_TRANSFER_NOTE_CIPHERTEXT_MAGIC: &[u8; 8] = b"PFAOENC2";
+const TRANSFER_NOTE_PLAINTEXT_SCHEMA: &str = "postfiat-asset-orchard-transfer-note-v1";
+/// Every transfer output plaintext is padded to this size, so a ciphertext's length says
+/// nothing about the asset or the amount inside.
+const TRANSFER_NOTE_PLAINTEXT_BYTES: usize = 512;
+pub const ASSET_ORCHARD_TRANSFER_OUTPUT_CIPHERTEXT_BYTES: usize =
+    HEADER_BYTES + TRANSFER_NOTE_PLAINTEXT_BYTES + TAG_BYTES;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct TransferNotePlaintext {
+    schema: String,
+    asset_id: String,
+    value: u64,
+    rseed: String,
+}
+
+/// Encrypt what the owner of `address` needs to find and later spend an output: the asset, the
+/// amount and the note's randomness. The sender never learns the recipient's keys.
+#[allow(clippy::too_many_arguments)]
+pub fn encrypt_asset_orchard_transfer_output(
+    chain_id: &str,
+    genesis_hash: [u8; 32],
+    protocol_version: u32,
+    address: &AssetOrchardShieldedAddress,
+    output_commitment_hex: &str,
+    asset_id: &str,
+    value: u64,
+    rseed: &[u8; ASSET_ORCHARD_RSEED_BYTES],
+) -> Result<AssetOrchardBoundedBytes, AssetOrchardError> {
+    let rng = &mut OsRng;
+    let esk = loop {
+        let candidate = pallas::Scalar::random(&mut *rng);
+        if !bool::from(candidate.is_zero()) {
+            break candidate;
+        }
+    };
+    let epk = (pallas::Point::from(address.g_d) * esk).to_affine();
+    let shared = (pallas::Point::from(address.pk_d) * esk).to_affine();
+    if bool::from(epk.is_identity()) || bool::from(shared.is_identity()) {
+        return Err(AssetOrchardError::new(
+            "invalid_asset_orchard_note_shared_secret",
+            "asset-orchard transfer output encryption derived an identity point",
+        ));
+    }
+    let epk_bytes = epk.to_bytes();
+    let key = Zeroizing::new(note_encryption_key(
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        output_commitment_hex,
+        &epk_bytes,
+        &address.pk_d.to_bytes(),
+        &shared.to_bytes(),
+    ));
+    let aad = note_encryption_aad(
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        output_commitment_hex,
+        &epk_bytes,
+    );
+    let body = Zeroizing::new(
+        serde_json::to_vec(&TransferNotePlaintext {
+            schema: TRANSFER_NOTE_PLAINTEXT_SCHEMA.to_string(),
+            asset_id: asset_id.to_string(),
+            value,
+            rseed: postfiat_crypto_provider::bytes_to_hex(rseed),
+        })
+        .map_err(|error| {
+            AssetOrchardError::new(
+                "asset_orchard_note_plaintext_serialization_failed",
+                error.to_string(),
+            )
+        })?,
+    );
+    if body.len() + 2 > TRANSFER_NOTE_PLAINTEXT_BYTES {
+        return Err(AssetOrchardError::new(
+            "asset_orchard_transfer_note_plaintext_too_large",
+            "the transfer note does not fit the fixed plaintext size",
+        ));
+    }
+    let mut plaintext = Zeroizing::new(vec![0u8; TRANSFER_NOTE_PLAINTEXT_BYTES]);
+    plaintext[..2].copy_from_slice(&(body.len() as u16).to_le_bytes());
+    plaintext[2..2 + body.len()].copy_from_slice(&body);
+    let mut nonce = [0u8; NONCE_BYTES];
+    rng.fill_bytes(&mut nonce);
+    let cipher = ChaCha20Poly1305::new((&*key).into());
+    let ciphertext = cipher
+        .encrypt(
+            Nonce::from_slice(&nonce),
+            Payload {
+                msg: &plaintext,
+                aad: &aad,
+            },
+        )
+        .map_err(|_| {
+            AssetOrchardError::new(
+                "asset_orchard_note_encryption_failed",
+                "asset-orchard transfer output encryption failed",
+            )
+        })?;
+    let mut encoded = Vec::with_capacity(ASSET_ORCHARD_TRANSFER_OUTPUT_CIPHERTEXT_BYTES);
+    encoded.extend_from_slice(ASSET_ORCHARD_TRANSFER_NOTE_CIPHERTEXT_MAGIC);
+    encoded.extend_from_slice(&epk_bytes);
+    encoded.extend_from_slice(&nonce);
+    encoded.extend_from_slice(&ciphertext);
+    AssetOrchardBoundedBytes::from_bytes(&encoded, ASSET_ORCHARD_ENCRYPTED_OUTPUT_MAX_BYTES)
+}
+
+/// Try one output of a transfer with a wallet's viewing key. `Ok(None)` means the output is
+/// not this wallet's, is a zero-value filler, or is malformed; a scan never fails on someone
+/// else's bytes.
+pub fn decrypt_asset_orchard_transfer_output(
+    chain_id: &str,
+    genesis_hash: [u8; 32],
+    protocol_version: u32,
+    keys: &AssetOrchardShieldedKeys,
+    action: &AssetOrchardTransferAction,
+    output_index: usize,
+) -> Result<Option<AssetOrchardWalletNote>, AssetOrchardError> {
+    let pool_domain =
+        AssetOrchardSwapAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
+    let fields = action.public_fields()?;
+    if output_index >= fields.output_commitments.len() || fields.pool_domain != pool_domain {
+        return Ok(None);
+    }
+    let encrypted_output = action.encrypted_outputs[output_index].to_bytes()?;
+    if encrypted_output.len() != ASSET_ORCHARD_TRANSFER_OUTPUT_CIPHERTEXT_BYTES
+        || &encrypted_output[..ASSET_ORCHARD_TRANSFER_NOTE_CIPHERTEXT_MAGIC.len()]
+            != ASSET_ORCHARD_TRANSFER_NOTE_CIPHERTEXT_MAGIC
+    {
+        return Ok(None);
+    }
+    let epk_start = ASSET_ORCHARD_TRANSFER_NOTE_CIPHERTEXT_MAGIC.len();
+    let nonce_start = epk_start + EPK_BYTES;
+    let ciphertext_start = nonce_start + NONCE_BYTES;
+    let epk_bytes: [u8; EPK_BYTES] = encrypted_output[epk_start..nonce_start]
+        .try_into()
+        .expect("checked transfer ciphertext header");
+    let Some(epk) = Option::<pallas::Affine>::from(pallas::Affine::from_bytes(&epk_bytes)) else {
+        return Ok(None);
+    };
+    if bool::from(epk.is_identity()) {
+        return Ok(None);
+    }
+    let shared = (pallas::Point::from(epk) * keys.incoming_viewing_key()).to_affine();
+    let commitment_hex = action.output_commitments[output_index].as_hex();
+    let key = Zeroizing::new(note_encryption_key(
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        commitment_hex,
+        &epk_bytes,
+        &keys.address.pk_d.to_bytes(),
+        &shared.to_bytes(),
+    ));
+    let aad = note_encryption_aad(
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        commitment_hex,
+        &epk_bytes,
+    );
+    let cipher = ChaCha20Poly1305::new((&*key).into());
+    let Some(plaintext) = cipher
+        .decrypt(
+            Nonce::from_slice(&encrypted_output[nonce_start..ciphertext_start]),
+            Payload {
+                msg: &encrypted_output[ciphertext_start..],
+                aad: &aad,
+            },
+        )
+        .ok()
+    else {
+        return Ok(None);
+    };
+    let plaintext = Zeroizing::new(plaintext);
+    if plaintext.len() != TRANSFER_NOTE_PLAINTEXT_BYTES {
+        return Ok(None);
+    }
+    let body_len = usize::from(u16::from_le_bytes([plaintext[0], plaintext[1]]));
+    if body_len + 2 > plaintext.len() {
+        return Ok(None);
+    }
+    let Ok(body) = serde_json::from_slice::<TransferNotePlaintext>(&plaintext[2..2 + body_len])
+    else {
+        return Ok(None);
+    };
+    if body.schema != TRANSFER_NOTE_PLAINTEXT_SCHEMA || body.value == 0 {
+        return Ok(None);
+    }
+    let Ok(rseed_bytes) = postfiat_crypto_provider::hex_to_bytes(&body.rseed) else {
+        return Ok(None);
+    };
+    let Ok(rseed) = <[u8; ASSET_ORCHARD_RSEED_BYTES]>::try_from(rseed_bytes.as_slice()) else {
+        return Ok(None);
+    };
+    let Ok(asset_tag) = AssetTag::derive(&body.asset_id) else {
+        return Ok(None);
+    };
+    let rho = asset_output_rho(
+        fields.pool_domain,
+        fields.anchor,
+        fields.nullifiers,
+        fields.randomized_verification_keys,
+        output_index as u8,
+    )?;
+    let Ok(note) =
+        asset_orchard_note_for_address(&keys.address, asset_tag, body.value, rho, &rseed)
+    else {
+        return Ok(None);
+    };
+    // A sender could encrypt a plaintext that does not open the published commitment. Such an
+    // output is not spendable and must not be counted.
+    if note.cmx(pool_domain)? != fields.output_commitments[output_index] {
+        return Ok(None);
+    }
+    Ok(Some(keys.wallet_note(
+        pool_domain,
+        &body.asset_id,
+        &note,
+        &rseed,
+    )?))
 }
 
 fn note_encryption_key(
