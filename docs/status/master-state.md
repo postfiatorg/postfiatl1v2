@@ -79,14 +79,31 @@ were backup snapshots, and 133 hold code or documents that are **not** in `main`
 documents only). The 111 code branches reduce to 64 distinct lines of work. Each needs a decision: merge it or leave
 it archived. The inventory lists them.
 
-## Not yet on `main`
+## Where the bridges run
 
-These run in production or are in progress and are not on `main`. Each is in the archive and
-must come in by pull request.
+Every bridge service runs from one checkout of `main`, at commit `7e67fc292`. They were moved
+there on 21 November 2026, one at a time, each followed by a check.
 
-- The Solana bridge's relay, prover and observer tooling.
-- The wallet proxy that serves the Task Node wallet runs a 13 November checkout, older than
-  `main`.
+| Service | Before | Check after the move |
+| --- | --- | --- |
+| Solana deposit relay, wallet API, health, re-anchor, prover tunnel | A private branch | A real 0.02 USDC deposit from Phantom was credited in 122 seconds, with no relay restart |
+| Ethereum deposit bridge and wallet proxy | A private branch from 13 November | The route reports ready on the new process; a wallet request through the Task Node relay returns the chain height |
+| Withdrawal (payout) and faucet | A private branch from 16 November | Both listen and answer; the payout service reports ready. No real withdrawal was sent |
+
+The source for each deployed contract, Solana program and proof key is mapped in
+[Bridge Audit Map](bridge-audit-map.md).
+
+### Found during the move
+
+- **Ethereum deposits had not been credited since 19 November.** The bridge built its claims
+  with a validator binary four releases old, and the chain rejected them, while the bridge kept
+  reporting ready. Two deposits of 10 USDC each were waiting, one for two days. The bridge now
+  uses the current binary; both were credited at heights 1741 to 1745 and confirmed on the
+  validators.
+- **The daily price-reading job is failing.** It refuses to run because the validator binary
+  is not the one it pins. The corrected checks are on `main`; the next scheduled run has not
+  happened yet.
+- **Not checked:** a real Ethereum deposit and a real withdrawal after the move.
 
 ## Keeping it true
 
