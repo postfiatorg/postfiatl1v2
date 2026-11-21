@@ -1,0 +1,7 @@
+rust-prover/target/
+go-verifier/binius-shielded-verifier
+go-verifier/binius-shielded-verifier-purego
+go-verifier/delivery-helper
+rust_ir.json
+go_ir.json
+go-verifier/*.test

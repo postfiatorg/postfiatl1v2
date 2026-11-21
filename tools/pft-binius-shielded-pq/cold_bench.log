@@ -1,0 +1,2 @@
+RUST COLD 1C (10 procs): verify_only med=25.40 ms max=39.29 ms | full_proc_wall med=29.98 ms max=44.98 ms
+GO   COLD 1C (10 procs): verify_only med=38.45 ms max=40.77 ms | full_proc_wall med=44.79 ms max=47.06 ms

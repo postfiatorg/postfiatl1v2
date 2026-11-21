@@ -1,0 +1,23 @@
+[package]
+name = "pft-binius-shielded"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sha2 = "0.10.9"
+sha3 = "0.10.8"
+aes-gcm = "0.10.3"
+fips203 = "0.4.3"
+rayon = "1.12.0"
+rand = "0.8.6"
+rand_chacha = "0.3.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+hex = "0.4.3"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+[workspace]
