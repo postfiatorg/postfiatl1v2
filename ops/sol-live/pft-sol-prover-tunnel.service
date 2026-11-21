@@ -1,0 +1,13 @@
+[Unit]
+Description=Forward the Task L warm prover Unix socket
+
+[Service]
+WorkingDirectory=%h/repos/solbridge-main
+RuntimeDirectory=pft-sol-prover
+RuntimeDirectoryMode=0700
+ExecStart=/usr/bin/python3 ops/sol-live/prover-tunnel.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

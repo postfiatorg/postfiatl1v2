@@ -1,0 +1,16 @@
+[Unit]
+Description=Verify local program images and record epoch stake and BLS keys
+After=pft-sol-local.service
+Requires=pft-sol-local.service
+PartOf=pft-sol-local.service
+
+[Service]
+WorkingDirectory=%h/repos/solbridge-main/ops/sol-recorder/ancestry
+Environment=SOLANA_BRIDGE_IMAGES=%h/repos/solbridge-main/target/task-l/local-images
+ExecStart=/usr/bin/python3 %h/repos/solbridge-main/ops/sol-recorder/ops/sol-live/verified-recorder.py
+Restart=on-failure
+RestartSec=3
+UMask=0077
+
+[Install]
+WantedBy=default.target

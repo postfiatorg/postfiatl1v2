@@ -1,0 +1,13 @@
+[Unit]
+Description=Archive accepted Solana handoffs and refund recorder rent for %i
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/repos/solbridge-main/ops/sol-recorder
+ExecStart=/usr/bin/python3 -u ops/sol-live/recorder_close.py %i
+Restart=on-failure
+RestartSec=10
+UMask=0077
+
+[Install]
+WantedBy=default.target

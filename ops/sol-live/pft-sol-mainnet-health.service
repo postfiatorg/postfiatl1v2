@@ -1,0 +1,14 @@
+[Unit]
+Description=Watch the mainnet Solana observer and prover; the wallet closes deposits on failure
+After=pft-sol-prover-tunnel.service network-online.target
+ConditionPathExists=/mnt/HC_Volume_106212907/stakehub-hyperliquid/sol-live/mainnet/activation.json
+
+[Service]
+WorkingDirectory=%h/repos/solbridge-main
+ExecStart=/usr/bin/python3 -u ops/sol-live/mainnet-health.py
+UMask=0077
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

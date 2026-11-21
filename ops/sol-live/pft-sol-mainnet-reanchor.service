@@ -1,0 +1,11 @@
+[Unit]
+Description=Install the new Solana epoch's validator set on the mainnet route by governed re-anchor
+ConditionPathExists=/mnt/HC_Volume_106212907/stakehub-hyperliquid/sol-live/mainnet/activation.json
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/repos/solbridge-main
+Environment=SOLANA_BRIDGE_IMAGES=%h/repos/solbridge-main/target/task-l/repaired-images
+ExecStart=/usr/bin/python3 -u ops/sol-live/reanchor-mainnet.py
+UMask=0077
+TimeoutStartSec=900

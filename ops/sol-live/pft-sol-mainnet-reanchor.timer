@@ -1,0 +1,10 @@
+[Unit]
+Description=Check every two minutes whether the mainnet Solana route needs the next epoch's validator set
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=2min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

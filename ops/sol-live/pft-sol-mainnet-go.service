@@ -1,0 +1,9 @@
+[Unit]
+Description=Check mainnet deployment payer and reconcile the Solana route
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/repos/solbridge-main
+ExecStart=%h/repos/solbridge-main/ops/sol-live/mainnet-go.sh
+UMask=0077
+TimeoutStartSec=infinity
