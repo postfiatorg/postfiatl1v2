@@ -1,0 +1,52 @@
+[package]
+name = "pfusdc-sol-ingress-program"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "pfusdc-sol-ingress-program"
+path = "src/main.rs"
+test = false
+bench = false
+required-features = ["guest"]
+
+[features]
+guest = ["dep:sp1-zkvm"]
+
+[dependencies]
+blake3 = { version = "1.5", default-features = false }
+bls12_381 = { version = "0.8.0", default-features = false, features = ["alloc", "groups", "pairings", "experimental"] }
+sha2 = "0.10.9"
+solana-epoch-schedule = "3.4.0"
+# bls12_381 0.8 hashes to the curve through digest 0.9.
+sha2-v09 = { package = "sha2", version = "0.9.9", default-features = false }
+sp1-zkvm = { version = "=6.3.1", optional = true }
+
+[dev-dependencies]
+solana-lattice-hash = "2"
+
+[workspace]
+
+[patch.crates-io]
+sha2-v0-9-9 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.9.9-sp1-6.0.0" }
+sha2-v0-10-9 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.9-sp1-6.0.0" }
+bls12_381 = { git = "https://github.com/sp1-patches/bls12_381", tag = "patch-0.8.0-sp1-6.0.0-v2" }
+
+[[bin]]
+name = "pfusdc-sol-key-table-proof"
+path = "src/key_table_guest.rs"
+test = false
+bench = false
+required-features = ["guest"]
+
+[[bin]]
+name = "pfusdc-sol-handoff-proof"
+path = "src/handoff_guest.rs"
+test = false
+bench = false
+required-features = ["guest"]

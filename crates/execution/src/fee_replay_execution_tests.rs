@@ -1664,6 +1664,56 @@
         assert_eq!(err.0, "duplicate_vault_bridge_deposit_id");
     }
 
+    #[test]
+    fn vault_bridge_stage1_duplicate_receipt_rejected_without_mutation() {
+        let (genesis, mut ledger, _, issuer, _, asset_id, _) =
+            vault_bridge_profiled_asset_fixture();
+        let evidence = vault_bridge_evidence(1_000_000, "c1");
+        let operation = VaultBridgeReceiptSubmitOperation {
+            operator: issuer,
+            asset_id,
+            source_domain: evidence.source_domain(),
+            source_asset: evidence.source_asset_ref(),
+            claim_type: VAULT_BRIDGE_CLAIM_TYPE_BRIDGE_DEPOSIT.to_string(),
+            amount_atoms: evidence.amount_atoms,
+            source_tx_or_attestation: evidence.source_tx_or_attestation(),
+            finality_ref: evidence.finality_ref(),
+            vault_id: evidence.vault_id(),
+            policy_hash: "42".repeat(48),
+            expires_at_height: 1_000,
+            bridge_deposit_evidence: Some(evidence),
+        };
+        apply_vault_bridge_receipt_submit(&genesis, &mut ledger, &operation, 1)
+            .expect("first receipt");
+        assert_eq!(ledger.vault_bridge_receipts.len(), 1);
+        let before = ledger.clone();
+
+        let err = apply_vault_bridge_receipt_submit(&genesis, &mut ledger, &operation, 1)
+            .expect_err("duplicate receipt");
+        assert_eq!(err.0, "duplicate_vault_bridge_receipt");
+        assert_eq!(ledger, before);
+    }
+
+    #[test]
+    fn vault_bridge_stage2_stale_deposit_attestation_rejected() {
+        let (mut ledger, asset_id, policy_hash, evidence, evidence_root) =
+            vault_bridge_stage2_fixture(1, 6);
+        let propose = vault_bridge_stage1_propose_operation(
+            asset_id.clone(),
+            policy_hash,
+            evidence.clone(),
+        );
+        apply_vault_bridge_deposit_propose(&mut ledger, &propose, 1)
+            .expect("stage2 propose");
+        let observation = VaultBridgeDepositObservation::success_for_evidence(&evidence, 6);
+        let attest = vault_bridge_stage2_attest_operation(asset_id, evidence_root, observation);
+        let stale_height = propose.expires_at_height + 1;
+        let err = apply_vault_bridge_deposit_attest(&mut ledger, &attest, stale_height)
+            .expect_err("stale deposit");
+        assert_eq!(err.0, "stale_vault_bridge_deposit");
+        assert_eq!(ledger.vault_bridge_deposits[0].status, VAULT_BRIDGE_DEPOSIT_STATUS_PENDING);
+    }
+
     fn vault_bridge_profiled_asset_fixture() -> (
         Genesis,
         LedgerState,

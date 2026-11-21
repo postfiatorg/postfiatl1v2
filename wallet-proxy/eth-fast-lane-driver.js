@@ -36,7 +36,7 @@ const RESULT_FIELDS = new Set([
     'deposit_confirmed', 'ethereum_finalized', 'finalized_block_hash',
     'finalized_block_number', 'witness_sha256', 'evidence_root', 'nullifier',
     'proof_sha256', 'public_values_sha256', 'program_vkey', 'manifest_hash',
-    'proof_verified', 'backed_cap_ready', 'receipt_code', 'receipt_id', 'tx_id',
+    'proof_verified', 'backed_cap_ready', 'receipt_code', 'receipt_id', 'tx_id', 'credited_asset_id',
 ]);
 
 function stableJson(value) {
@@ -252,6 +252,7 @@ function assertCommonBinding(result, stage, request, config) {
     if (stage === 'verifying' && result.proof_verified !== true) throw terminalError('proof verification failed');
     if (stage === 'growing_backed_cap' && result.backed_cap_ready !== true) throw terminalError('backed cap growth incomplete');
     if (stage === 'claiming' && (result.receipt_code !== 'ACCEPTED'
+        || !/^[0-9a-f]{96}$/.test(String(result.credited_asset_id || ''))
         || !RECEIPT_ID_RE.test(String(result.receipt_id || result.tx_id || '')))) throw terminalError('claim was not accepted');
 }
 
@@ -294,6 +295,7 @@ function writeWorkerState(context, status, extra = {}) {
         asset_id: context.config.asset_id,
         observer_attestor_enabled: false,
         updated_at_unix: Math.floor(Date.now() / 1000),
+        stage_history: context.stageHistory || [],
         ...extra,
     });
 }
@@ -352,6 +354,17 @@ async function readiness(configPath, routeId, dependencies = {}) {
         values,
         dependencies.execFileAsync || execFileAsyncDefault,
     );
+    if (result?.beacon_anchor_authenticated !== true
+        || result.beacon_anchor_route_profile_hash !== loaded.config.route_profile_hash
+        || !Number.isSafeInteger(result.route_epoch) || result.route_epoch < 1
+        || result.beacon_anchor_route_epoch !== result.route_epoch) {
+        return {
+            ok: false, ready: false, route_id: ROUTE_ID,
+            code: 'pfusdc_beacon_anchor_unavailable',
+            message: 'Bridge blocked: authenticated on-ledger beacon anchor is missing or does not match the active route epoch.',
+            observer_attestor_enabled: false,
+        };
+    }
     if (result?.ok !== true || result?.ready !== true
         || result.route_id !== ROUTE_ID
         || Number(result.source_chain_id) !== SOURCE_CHAIN_ID
@@ -426,7 +439,8 @@ async function runJob(jobPath, configPath, dependencies = {}) {
     } catch (error) {
         throw Object.assign(error, { code: 'driver_config_invalid', terminal: true });
     }
-    const context = { ...loaded, ...job };
+    const context = { ...loaded, ...job, stageHistory: [] };
+    let activeIndex = -1;
     const values = commandValues(context);
     const execFileAsync = dependencies.execFileAsync || execFileAsyncDefault;
     let prior = '0'.repeat(64);
@@ -435,6 +449,7 @@ async function runJob(jobPath, configPath, dependencies = {}) {
     try {
         for (let index = 0; index < STAGES.length; index += 1) {
             const stage = STAGES[index];
+            activeIndex = index;
             const file = checkpointFile(context.jobDir, index, stage);
             let checkpoint;
             if (fs.existsSync(file)) {
@@ -443,6 +458,13 @@ async function runJob(jobPath, configPath, dependencies = {}) {
                     fingerprint: context.fingerprint, configSha256: context.configSha256,
                 });
             } else {
+                let startedAt = Math.floor(Date.now() / 1000);
+                try {
+                    const previous = JSON.parse(fs.readFileSync(path.join(context.jobDir, 'worker-state.json'), 'utf8'));
+                    const recorded = previous.stage_history?.find((row) => row.stage === stage)?.started_at_unix;
+                    if (Number.isSafeInteger(recorded) && recorded > 0) startedAt = recorded;
+                } catch (_) { /* first attempt */ }
+                context.stageHistory[index] = { stage, status: 'running', started_at_unix: startedAt, completed_at_unix: null };
                 writeWorkerState(context, stage, { stage_index: index, retryable: true });
                 const result = await executeCommand(loaded.config.stages[index], values, execFileAsync);
                 assertCommonBinding(result, stage, context.request, loaded.config);
@@ -453,16 +475,24 @@ async function runJob(jobPath, configPath, dependencies = {}) {
                     request_fingerprint: context.fingerprint,
                     config_sha256: context.configSha256,
                     prior_checkpoint_sha256: prior,
+                    started_at_unix: startedAt,
+                    completed_at_unix: Math.floor(Date.now() / 1000),
                     result: publicResult(result),
                 };
                 checkpoint.checkpoint_sha256 = checkpointHash(checkpoint);
                 atomicWrite(file, checkpoint);
             }
+            context.stageHistory[index] = {
+                stage, status: 'complete',
+                started_at_unix: checkpoint.started_at_unix ?? null,
+                completed_at_unix: checkpoint.completed_at_unix ?? null,
+            };
             prior = checkpoint.checkpoint_sha256;
             if (stage === 'claiming') claimResult = checkpoint.result;
         }
         writeWorkerState(context, 'accepted', {
             retryable: false,
+            credited_asset_id: claimResult.credited_asset_id,
             receipt_code: claimResult.receipt_code,
             receipt_id: claimResult.receipt_id || null,
             tx_id: claimResult.tx_id || null,
@@ -471,6 +501,13 @@ async function runJob(jobPath, configPath, dependencies = {}) {
         return { ok: true, status: 'accepted', receipt_code: claimResult.receipt_code };
     } catch (error) {
         const terminal = error.terminal === true;
+        if (activeIndex >= 0) {
+            const stage = STAGES[activeIndex];
+            context.stageHistory[activeIndex] = {
+                stage, started_at_unix: null, completed_at_unix: null,
+                ...context.stageHistory[activeIndex], status: terminal ? 'failed' : 'retrying',
+            };
+        }
         writeWorkerState(context, terminal ? 'failed' : (readCurrentStage(context.jobDir) || 'queued'), {
             retryable: !terminal,
             code: String(error.code || (terminal ? 'bridge_job_failed' : 'bridge_job_retryable')).slice(0, 64),

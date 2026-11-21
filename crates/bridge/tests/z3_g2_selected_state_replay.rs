@@ -179,6 +179,7 @@ fn a666_route_config_digest_and_policy_hash_replay() {
         max_nav_age_blocks: n(route, "max_nav_age_blocks"),
         pricing_nav_epoch: n(route, "pricing_nav_epoch"),
         pricing_reserve_packet_hash: s(route, "pricing_reserve_packet_hash").to_string(),
+        spread_recipient: None,
     };
     assert_eq!(policy.computed_hash(), s(route, "policy_hash"));
     assert_eq!(

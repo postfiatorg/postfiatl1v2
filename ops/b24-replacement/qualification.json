@@ -1,0 +1,295 @@
+{
+  "schema": "b24-phase4-qualification-v1",
+  "scope": "COPY ONLY; no founder go, devnet/mainnet writes or receipt finality proof",
+  "asset_id": "52285e4ded1d58113cfaa12bbc034b8b10213f699b3224c74160450229d6bf7ccfe505c78f2599d975ae2ecf98f7d8af",
+  "issuer": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+  "code": "B24",
+  "proof_profile": "4d1d588e8e7a7f36eb26fd8b451f4a2b3a1cc2581ce672b6b67347c12c266ae96f6e30b51894daff240879ef054cca35",
+  "reserve_proof": {
+    "passed": true,
+    "identity": {
+      "elf_sha256": "e36b4af5a8ef5e76b3e68ed55e0620cab50db88bf17b9d03b7d90cec0d8d334f",
+      "program_vkey": "0x003aa6418ef9f87dde386129a1464ea15daf9757849aa66f63cdb779e89266c6",
+      "sp1_version": "6.3.1"
+    },
+    "proof": {
+      "backend": "cuda",
+      "elapsed_ms": 131855,
+      "elf_sha256": "e36b4af5a8ef5e76b3e68ed55e0620cab50db88bf17b9d03b7d90cec0d8d334f",
+      "program_vkey": "0x003aa6418ef9f87dde386129a1464ea15daf9757849aa66f63cdb779e89266c6",
+      "proof_bytes": 356,
+      "proof_verified": true,
+      "public_values_bytes": 584
+    },
+    "remote_job": "/workspace/b23-tee-nav/nav-7e1e82e8287fe1eec65bff43"
+  },
+  "copy_result": {
+    "passed": true,
+    "real_reserve_proof": true,
+    "opening_inventory_atoms": 421058260000,
+    "nav_per_unit": 1000000,
+    "actual_balance_export_atoms": 20000000,
+    "conditional_funding_export_atoms": 5000000000,
+    "conditional_funding_required_atoms": 5025000000,
+    "live_transactions": 0,
+    "ethereum_transactions": 0,
+    "real_finality_created": false,
+    "mainnet_ready": false,
+    "return_enabled": false
+  },
+  "copy_receipts": {
+    "passed": true,
+    "branches": {
+      "opening": {
+        "accepted": 9,
+        "expected_rejections": [
+          {
+            "label": "reject-bad-proof",
+            "code": "sp1_proof_invalid"
+          },
+          {
+            "label": "reject-stale-reading",
+            "code": "nav_reserve_observation_stale"
+          },
+          {
+            "label": "reject-unreserved-5000",
+            "code": "pftl_uniswap_export_entitlement_required"
+          },
+          {
+            "label": "reject-whole-opening-over-packet-cap",
+            "code": "pftl_uniswap_packet_cap_exceeded"
+          },
+          {
+            "label": "reject-unfunded-5000-reservation",
+            "code": "insufficient_issued_balance"
+          }
+        ]
+      },
+      "actual-balance-20": {
+        "accepted": 3,
+        "expected_rejections": [
+          {
+            "label": "actual-20-reject-replay",
+            "code": "missing_pftl_uniswap_export_entitlement"
+          }
+        ]
+      },
+      "conditional-funded-5000": {
+        "accepted": 3,
+        "expected_rejections": [
+          {
+            "label": "conditional-5000-reject-replay",
+            "code": "missing_pftl_uniswap_export_entitlement"
+          }
+        ]
+      }
+    }
+  },
+  "retirement": {
+    "passed": true,
+    "scope": "COPY: issuer and Alice only; other holders untouched, their signatures NOT fabricated",
+    "deferred_holder_operations": [
+      "cash-out-trustline-pf095716b973905221990b26050015874c68e30696",
+      "cash-out-pf095716b973905221990b26050015874c68e30696",
+      "cash-out-pf5c266a1bdb18320e140961411a8c4d8383eaafb2",
+      "cash-out-pfa0c02873020b87a5dd32a5db8747c5e5d9487051"
+    ],
+    "alice_B23_remaining_atoms": 0,
+    "other_holder_B23_remaining_atoms": 1900000,
+    "reserve_remaining_for_other_holders_atoms": 1904726,
+    "alice_payout_atoms": 25040119,
+    "route_counter_after_burn_atoms": 419203321945,
+    "counter_reconciliation_required_for_zero_counter_retirement": true,
+    "complete_retirement_executed": false,
+    "founder_key_accessed": false,
+    "live_transactions": 0
+  },
+  "cost": {
+    "measurement": "launch to first confirmed termination; elapsed upper estimate, not invoice",
+    "instance_count": 1,
+    "compute_minutes": "26.49566441666666760",
+    "rate_usd_per_hour": "0.192",
+    "compute_estimate_usd": "0.08478612613333333632",
+    "additional_costs": "disk, KMS and network are not separately invoiced here",
+    "phase4_conservative_reservation_usd": "8.04",
+    "cumulative_lane_reservation_usd": "32.14",
+    "lane_cap_usd": "100.00",
+    "remaining_reservation_capacity_usd": "67.86",
+    "gpu": "existing rented Vast 53579074; no new instance, shared lock, incremental charge not separately metered",
+    "inventory_checked_at": "2026-11-14T01:05:52.739865+00:00",
+    "no_owned_billable_compute_remaining": true,
+    "daily_timer_changed": false
+  },
+  "remaining_gaps": [
+    "production signer roles and checkpoint anchors",
+    "cleared 5025 PFUSDC subscription funding and 2000 real USDC LP funding",
+    "holder-signed retirement approval, including founder wallet",
+    "live export with genuine committee finality and exact new receipt proof",
+    "review/deployment of return-pause candidate; V3 native return support remains absent",
+    "Old generic burns leave NAV/route historical counters; founder must approve halted/disabled zero-holder retirement or require migration upgrade.",
+    "New asset daily updater must be reviewed and enabled only with the future replacement; old B23 timer is currently untouched."
+  ],
+  "evidence_root": "/home/postfiat/repos/b23-coord/evidence/tee/phase4",
+  "evidence_index": {
+    "asset-identity.json": {
+      "sha256": "8e7b73092db85cdb947ffd35c3924eee0524ab0c0532c9bb8812fbe1dfc53fcd",
+      "bytes": 854
+    },
+    "capture-manifest.json": {
+      "sha256": "45725989fcd87e76932c227bbeb049378cd875148eeefd11ee8e2859c7ccb1a9",
+      "bytes": 1796
+    },
+    "capture/pcrs.json": {
+      "sha256": "3476223e15fab48cbf46023f8118cfdf3a2b2b8e8f6d71a6d239a8d930875b10",
+      "bytes": 324
+    },
+    "capture/profile.json": {
+      "sha256": "0a4c260006f2035528c69ce7144939f3ae21fdfa3cade5e218409b5781ba5c1a",
+      "bytes": 1123
+    },
+    "capture/profile-operation.json": {
+      "sha256": "5b45a9df5f108c257b8e2fd178df17f3bf3929eb95269aa154ae767d85d4c351",
+      "bytes": 1041
+    },
+    "capture/source-policy.json": {
+      "sha256": "bf12d2eaa1fc3291aea1a21412b26a9d1837c479852231e41cf180533b15cdd5",
+      "bytes": 3885
+    },
+    "capture/completion.json": {
+      "sha256": "dc1cfc4149901887493549fd38039ca6070838bcd602019264dbf9be8c89a4d1",
+      "bytes": 148
+    },
+    "capture/final-inventory.json": {
+      "sha256": "58643cbb3a029eba4377969834982137f3668b5a732c641aade7856e35667059",
+      "bytes": 1051
+    },
+    "archive-verification.json": {
+      "sha256": "59bd11d70f69d6a59a5351c23a2ed6683a365dc6808692e5c7594547839ab58c",
+      "bytes": 247
+    },
+    "eif-retention.json": {
+      "sha256": "188c59627b52466231855480ce89c045fd1cf8c6468071f444123b7b89708b73",
+      "bytes": 229
+    },
+    "real-negative-reading/report.json": {
+      "sha256": "8f2fc23f3b22a49ef0ab9a88827a43c67f03b78e32612e230331c1c51bc95883",
+      "bytes": 1207
+    },
+    "real-proof/qualification.json": {
+      "sha256": "8aabda457f32d131c3b8610ab7bcdb4e90bf484130a9cb0fef3c88f176fa7531",
+      "bytes": 642
+    },
+    "real-proof/proof.bin": {
+      "sha256": "97c1235c5f3de64467d00c2412bfdcc657028a53575632e887fc2205603ad94c",
+      "bytes": 2278
+    },
+    "real-proof/proof-calldata.bin": {
+      "sha256": "1c263d1bc667e1d5cf32e2c31cd969629426f23e3df0766c3f1654f4a408c6f5",
+      "bytes": 356
+    },
+    "real-proof/public-values.bin": {
+      "sha256": "af8e4f38b8b72e5048398efe2400aecc7035fc004c717b6b4f5c2d021d47f450",
+      "bytes": 584
+    },
+    "real-proof/independent-verification.log": {
+      "sha256": "eb5dae66c2df4201880b1c01d2c29c24e36c58285c9841bfda80a20540ca2ab8",
+      "bytes": 285
+    },
+    "full-copy/result.json": {
+      "sha256": "3061e0b7963cc3a92435cfb35ab71a19dd5fb6c07956d75878b56aac141abbe7",
+      "bytes": 409
+    },
+    "full-copy/opening-result.json": {
+      "sha256": "916324671c0f155420622ba9b576f82a41703d6de1b92374eeba8edc358a1959",
+      "bytes": 522
+    },
+    "full-copy/actual-balance-20/result.json": {
+      "sha256": "451b4a901f569b28f3cda3b0d9ffe2b2a1d9227c3e5310801e09cef11fdc7cac",
+      "bytes": 355
+    },
+    "full-copy/actual-balance-20/next-packet-context.json": {
+      "sha256": "501e15edbf4dbec2e800a0023f28fd8c4f99fe0a0c6adc652155da7fde5c573b",
+      "bytes": 947
+    },
+    "full-copy/conditional-funded-5000/result.json": {
+      "sha256": "ecf19bd2014beca429a55cd95c83f59469cd6ceeb987184c78c53318cf7bd354",
+      "bytes": 365
+    },
+    "full-copy/conditional-funded-5000/next-packet-context.json": {
+      "sha256": "6497a434fa8f2d64d3ce74d8bc18bffa95609e00b21dd7584bc67c438e9189cd",
+      "bytes": 949
+    },
+    "full-copy/funding-fixture-disclosure.json": {
+      "sha256": "16843139fc3b4c2152e9f1ccc967cbdb48d6352bcb0f981ecb372a815f8489d6",
+      "bytes": 867
+    },
+    "copy-receipt-summary.json": {
+      "sha256": "567bb234f3ccc365a090f399cff86a7c5c67af616009a5493039d73e8f94d6dd",
+      "bytes": 1173
+    },
+    "retirement-qualified-final/result.json": {
+      "sha256": "d01c3da8552254123dee597527155486d1ffa133250f09638483a5bd503ba6be",
+      "bytes": 797
+    },
+    "live-dry-run/native-sequence.json": {
+      "sha256": "6d90923be4e604dce68c794b40d9e98acd242296679620e571385a2277e07027",
+      "bytes": 32190
+    },
+    "live-dry-run/native-command-sequence.json": {
+      "sha256": "4ffcf27b8bc1fef8d608cf629ca42ca42002b2a1cd1519ecb692ed7cc4257ea3",
+      "bytes": 45980
+    },
+    "live-dry-run/ethereum-unsigned.json": {
+      "sha256": "96145eade95ba208473d77decd8ead580fa10288c60a3d2e68841baefd3cf803",
+      "bytes": 58429
+    },
+    "live-dry-run/retirement-terms.json": {
+      "sha256": "8e43c590308c537122677c324a1e90cea02f6f5615f261023cd774a10111bc94",
+      "bytes": 10969
+    },
+    "live-dry-run/sequence.json": {
+      "sha256": "3be5ed1dd6997c7bed67b28b49fcae729002049d199c2eb992991a047b5f6d62",
+      "bytes": 4391
+    },
+    "dry-run-guard-checks.json": {
+      "sha256": "043f6ad05eb1d414f7e78482f7f81ba6d354fb7e04f5eb061078e76e718374ab",
+      "bytes": 683
+    },
+    "cost.json": {
+      "sha256": "356413e428c8d51ce759962571790e5af39392e11559a7d906d0ead08e9b96d1",
+      "bytes": 758
+    },
+    "live-no-change-verification.json": {
+      "sha256": "d0f4b9dbeb924148001406445b0c636e39d4c50bacd8b7b31ed1dbfdc25961a4",
+      "bytes": 2105
+    },
+    "daily-timer-final.json": {
+      "sha256": "d660c098bf6e549a1d695cfd0e0e8b435e69dec71a42971d9c3b2aa48c8a545d",
+      "bytes": 569
+    },
+    "deployment-pins.json": {
+      "sha256": "85ad89ce4789ab0453dc11bb154bfec75aa8835a7b8d9f77092bb10f6d4b7602",
+      "bytes": 621
+    },
+    "contracts-tests.log": {
+      "sha256": "fc07337bd972f8a821efc2362baafe2b8ad20eb23ebab295e19853e615cb1f5a",
+      "bytes": 758
+    },
+    "deployment-tests.log": {
+      "sha256": "0c65cb2e83ef184fb6e1d19848f033b41253d18c4f29ab324798f899ba5e9f04",
+      "bytes": 404
+    },
+    "plan-tests.log": {
+      "sha256": "287ead97d58315c29e33a0b99fe5bb45314546c5fee89a60c961878a622b73ee",
+      "bytes": 386
+    },
+    "encoder-check.json": {
+      "sha256": "f867291453ae8738fbeff228d908859cc9ed56f75a196d57cd52fac9e10ad5c8",
+      "bytes": 2161
+    },
+    "receipt-exporter-interface.json": {
+      "sha256": "2d8e4b617cb335c2740a5d83b3b1064d0412e856b525c36df95f75ea15060263",
+      "bytes": 628
+    }
+  }
+}

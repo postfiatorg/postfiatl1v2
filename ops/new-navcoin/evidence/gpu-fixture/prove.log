@@ -1,0 +1,21 @@
+Running sp1-gpu-server 6.3.1 with device 0
+{
+  "elf_sha256": "803d64902ec32aa5371119c01525a026a3955a7378ffdf729e5473d1bb569208",
+  "program_vkey": "0x0060d83567657466eaac782e0be174b57277df6ac349f42288852a93d72f0fe1",
+  "schema": "postfiat-pftl-uniswap-program-info-v1"
+}
+Running sp1-gpu-server 6.3.1 with device 0
+Setting environment variables took 242.849µs
+Reading R1CS took 27.914249231s
+Reading proving key took 5.193425724s
+Reading witness file took 1.860737ms
+Deserializing JSON data took 31.00269ms
+Generating witness took 1.403876004s
+[90m00:30:35[0m DBG constraint system solver done [36mnbConstraints=[0m15972262 [36mtook=[0m12805.518913
+[90m00:31:12[0m DBG prover done [36macceleration=[0mnone [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mnbConstraints=[0m15972262 [36mtook=[0m36595.321479
+Generating proof took 49.402103459s
+[90m00:31:12[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m00:31:12[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m00:31:12[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m00:31:12[0m DBG verifier done [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mtook=[0m2.390956
+receipt witness processed: 89547142 cycles in 3784 ms (host execute skipped: false)

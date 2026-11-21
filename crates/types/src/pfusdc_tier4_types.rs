@@ -10,6 +10,8 @@ pub const PFUSDC_ARC_INGRESS_PUBLIC_VALUES_SCHEMA_V1: &str =
     "postfiat.pfusdc.arc_ingress_public_values.v1";
 pub const PFUSDC_ARC_FINALITY_STATE_SCHEMA_V1: &str =
     "postfiat.pfusdc.arc_finality_state.v1";
+pub const PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1: &str =
+    "postfiat.pfusdc.beacon_finality_state.v1";
 pub const PFETH_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1: &str =
     "postfiat.pfeth.ethereum_ingress_public_values.v1";
 pub const BRIDGE_EXIT_LEAF_SCHEMA_V1: &str = "postfiat.bridge_exit_leaf.v1";
@@ -46,10 +48,13 @@ pub struct PfUsdcEthereumIngressPublicValuesV1 {
     pub schema: String,
     pub route_id: String,
     pub source_chain_id: u64,
+    pub route_epoch: u64,
     pub prior_finalized_beacon_root: String,
     pub prior_finalized_slot: u64,
+    pub prior_sync_committee_root: String,
     pub finalized_beacon_root: String,
     pub finalized_slot: u64,
+    pub current_sync_committee_root: String,
     pub finalized_execution_block_hash: String,
     pub finalized_execution_block_number: u64,
     pub execution_state_root: String,
@@ -96,7 +101,7 @@ impl PfUsdcEthereumIngressPublicValuesV1 {
         ) {
             return Err("Ethereum ingress public values schema mismatch".to_string());
         }
-        if self.route_id.is_empty() || self.source_chain_id == 0 || self.amount_atoms == 0 {
+        if self.route_id.is_empty() || self.source_chain_id == 0 || self.amount_atoms == 0 || self.route_epoch == 0 {
             return Err("Ethereum ingress route, chain, and amount must be nonzero".to_string());
         }
         if self.finalized_slot <= self.prior_finalized_slot
@@ -109,6 +114,8 @@ impl PfUsdcEthereumIngressPublicValuesV1 {
         validate_evm_address_text("ethereum_ingress.depositor", &self.depositor)?;
         pfusdc_validate_hex_fields(&[
             ("ethereum_ingress.prior_finalized_beacon_root", &self.prior_finalized_beacon_root, 64),
+            ("ethereum_ingress.prior_sync_committee_root", &self.prior_sync_committee_root, 64),
+            ("ethereum_ingress.current_sync_committee_root", &self.current_sync_committee_root, 64),
             ("ethereum_ingress.finalized_beacon_root", &self.finalized_beacon_root, 64),
             ("ethereum_ingress.finalized_execution_block_hash", &self.finalized_execution_block_hash, 64),
             ("ethereum_ingress.execution_state_root", &self.execution_state_root, 64),
@@ -228,6 +235,132 @@ impl PfUsdcArcIngressPublicValuesV1 {
                 64,
             ),
         ])
+    }
+}
+
+/// Governance-pinned Ethereum beacon finality anchor for one route epoch.
+///
+/// The anchor binds both the finalized beacon header and its current sync
+/// committee. The guest reconstructs a fresh store from those authenticated
+/// inputs, and publishes the authenticated committee after advancement.
+/// A header root alone does not authenticate a prover-selected committee.
+/// A 29-field deposit fails closed when its profile and epoch have no anchor.
+/// A profile with no anchor at all still admits old 26-field deposits.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PfUsdcBeaconFinalityStateV1 {
+    pub schema: String,
+    pub route_profile_hash: String,
+    pub route_epoch: u64,
+    pub source_chain_id: u64,
+    pub vault_address: String,
+    pub token_address: String,
+    pub route_binding: String,
+    /// The beacon root a conforming proof must declare as its starting point.
+    pub finalized_beacon_root: String,
+    /// The slot a conforming proof must declare as its starting point.
+    pub finalized_slot: u64,
+    /// SSZ root of the current sync committee for the finalized header period.
+    /// Legacy archived bootstraps deserialize without it, but cannot validate.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub current_sync_committee_root: String,
+}
+
+impl PfUsdcBeaconFinalityStateV1 {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema != PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1
+            || self.route_epoch == 0
+            || self.source_chain_id == 0
+            || self.finalized_slot == 0
+            || self.finalized_slot == u64::MAX
+        {
+            return Err("pfUSDC beacon finality state has invalid schema or scalars".to_string());
+        }
+        validate_evm_address_text("pfusdc_beacon_finality.vault_address", &self.vault_address)?;
+        validate_evm_address_text("pfusdc_beacon_finality.token_address", &self.token_address)?;
+        pfusdc_validate_hex_fields(&[
+            (
+                "pfusdc_beacon_finality.route_profile_hash",
+                &self.route_profile_hash,
+                96,
+            ),
+            (
+                "pfusdc_beacon_finality.route_binding",
+                &self.route_binding,
+                64,
+            ),
+            (
+                "pfusdc_beacon_finality.current_sync_committee_root",
+                &self.current_sync_committee_root,
+                64,
+            ),
+            (
+                "pfusdc_beacon_finality.finalized_beacon_root",
+                &self.finalized_beacon_root,
+                64,
+            ),
+        ])
+    }
+
+    /// Require the proof to start exactly at the pinned anchor, then advance it.
+    ///
+    /// Both the header and committee must match; strict slot increase prevents
+    /// replaying or rewinding finality.
+    pub fn verify_and_advance(
+        &mut self,
+        values: &PfUsdcEthereumIngressPublicValuesV1,
+    ) -> Result<(), String> {
+        self.validate()?;
+        values.validate()?;
+        if values.route_epoch != self.route_epoch
+            || values.source_chain_id != self.source_chain_id
+            || values.vault_address != self.vault_address
+            || values.token_address != self.token_address
+            || values.route_binding != self.route_binding
+        {
+            return Err(
+                "pfUSDC Ethereum proof does not match its pinned finality-state route".to_string(),
+            );
+        }
+        if values.prior_finalized_beacon_root != self.finalized_beacon_root
+            || values.prior_finalized_slot != self.finalized_slot
+            || values.prior_sync_committee_root != self.current_sync_committee_root
+        {
+            return Err(
+                "pfUSDC Ethereum proof does not start from the pinned beacon finality anchor"
+                    .to_string(),
+            );
+        }
+        if values.finalized_slot <= self.finalized_slot {
+            return Err(
+                "pfUSDC Ethereum proof does not monotonically advance beacon finality".to_string(),
+            );
+        }
+        self.finalized_beacon_root = values.finalized_beacon_root.clone();
+        self.finalized_slot = values.finalized_slot;
+        self.current_sync_committee_root = values.current_sync_committee_root.clone();
+        self.validate()
+    }
+
+    /// Canonical bytes for the replicated state root.
+    ///
+    /// The anchor MUST be committed: if it were not, two validators could hold
+    /// different anchors, agree on the same state root, and disagree about which
+    /// Ethereum history is trusted -- which would reopen R2-1 through the back
+    /// door.
+    pub fn state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
+        self.validate()?;
+        let mut out = pfusdc_canonical_prefix(PFUSDC_BEACON_FINALITY_STATE_SCHEMA_V1);
+        pfusdc_append_text(&mut out, 1, &self.schema)?;
+        pfusdc_append_hex(&mut out, 2, &self.route_profile_hash)?;
+        pfusdc_append_u64(&mut out, 3, self.route_epoch);
+        pfusdc_append_u64(&mut out, 4, self.source_chain_id);
+        pfusdc_append_evm_address(&mut out, 5, &self.vault_address)?;
+        pfusdc_append_evm_address(&mut out, 6, &self.token_address)?;
+        pfusdc_append_hex(&mut out, 7, &self.route_binding)?;
+        pfusdc_append_hex(&mut out, 8, &self.finalized_beacon_root)?;
+        pfusdc_append_u64(&mut out, 9, self.finalized_slot);
+        pfusdc_append_hex(&mut out, 10, &self.current_sync_committee_root)?;
+        Ok(out)
     }
 }
 
@@ -1987,3 +2120,10 @@ fn pfusdc_keccak_commitment(domain: &str, bytes: &[u8]) -> String {
     hasher.update(bytes);
     bytes_to_hex(&hasher.finalize())
 }
+
+#[path = "b23_ingress_anchor.rs"]
+mod b23_ingress_anchor;
+
+#[path = "b23_ingress_legacy.rs"]
+mod b23_ingress_legacy;
+pub use b23_ingress_legacy::PfUsdcEthereumIngressPublicValuesLegacyV1;

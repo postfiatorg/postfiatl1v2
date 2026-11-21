@@ -3,6 +3,7 @@ const { spawnSync } = require('child_process');
 
 const {
   addProxyRouteEvent,
+  finalityFailureCanAdvanceView,
   chooseProposerEndpointCached,
   chooseProposerEndpointFromStatuses,
   chooseProposerEndpointWithRetry,
@@ -1161,10 +1162,106 @@ function testFirstReadySequencedReadsCanBeDisabled() {
   assert.strictEqual(result.status, 0, result.stderr || result.stdout);
 }
 
+function testSpentViewAdvancesFinalityToTheNextView() {
+  const failure = (message) => JSON.stringify({
+    ok: false,
+    error: { code: 'rpc_finality_submit_failed', message },
+  });
+  // Heights 1701 and 1707: the view-0 proposer had signed and failed.
+  assert.strictEqual(finalityFailureCanAdvanceView(failure(
+    'mempool_submit_signed_asset_transaction_finality failed: consensus v2 view spent: proposer `validator-3` already signed proposal fef8 at height 1701 view 0; the height needs a timeout certificate for view 0 and a proposal at view 1',
+  )), true);
+  assert.strictEqual(finalityFailureCanAdvanceView(failure(
+    'mempool_submit_signed_asset_transaction_finality failed: peer certified batch round proposal signing failed: conflicting block proposal vote already recorded for validator `validator-3` at height 1701 (recorded view 0, attempted view 0)',
+  )), true, 'release 6.4 nodes report the spent view as a vote-lock conflict');
+  assert.strictEqual(finalityFailureCanAdvanceView(failure(
+    'mempool_submit_signed_asset_transaction_finality failed: signed asset transaction sequence is stale',
+  )), false);
+}
+
+const MUST_REPROPOSE_MESSAGE = 'mempool_submit_signed_transfer_finality failed: consensus v2 view must re-propose: view 1 at height 480 must carry block a1 (payload p1, state root r1) from the timeout certificate\'s prepare QC at view 0, not block b2; propose the batch with that payload at view 1 with this timeout certificate';
+
+function testFinalityViewCodesDecideTheViewChange() {
+  const failure = (code, message) => JSON.stringify({ ok: false, error: { code, message } });
+  assert.strictEqual(finalityFailureCanAdvanceView(failure(
+    'rpc_finality_view_spent',
+    'mempool_submit_signed_transfer_finality failed: consensus v2 view spent: proposer `validator-1` already signed at height 480 view 0',
+  )), true);
+  assert.strictEqual(finalityFailureCanAdvanceView(failure(
+    'rpc_finality_view_spent',
+    'no known pattern',
+  )), true, 'the code decides, not the text');
+  assert.strictEqual(finalityFailureCanAdvanceView(failure(
+    'rpc_finality_view_must_repropose',
+    MUST_REPROPOSE_MESSAGE,
+  )), false, 'the view that must re-propose stays usable; another view would spend it');
+}
+
+async function testMustReproposeNeverChangesView() {
+  const route = {
+    routed: true,
+    proposer: 'validator-0',
+    height: 480,
+    view: 0,
+    quorum: 5,
+    required_current_height: 479,
+    required_state_root: 'root-479',
+    required_parent_hash: 'tip-479',
+  };
+  const fleet = Array.from({ length: 6 }, (_, index) => ({
+    validatorId: `validator-${index}`,
+    host: '127.0.0.1',
+    port: 27650 + index,
+  }));
+  const timeoutViews = [];
+  const recoveryViews = [];
+  const recovered = await recoverFinalityAcrossViews({
+    version: 'postfiat-local-rpc-v1',
+    id: 'must-repropose',
+    method: 'mempool_submit_signed_transfer_finality',
+    params: { signed_transfer_json: '{"signed":true}' },
+  }, route, {
+    fleet,
+    collectStatuses: async () => fleet.map((endpoint) => ({
+      ok: true,
+      endpoint,
+      status: { block_height: 479, block_tip_hash: 'tip-479', state_root: 'root-479' },
+    })),
+    requester: async (host, port, request) => {
+      timeoutViews.push(request.params.view);
+      const validator = fleet.find((endpoint) => endpoint.port === port).validatorId;
+      return {
+        ok: true,
+        result: {
+          schema: 'postfiat.block_timeout_vote.v1',
+          block_height: 480,
+          view: request.params.view,
+          vote: { validator },
+          consensus_v2_vote: { validator },
+        },
+      };
+    },
+    requestLine: async (host, port, request) => {
+      recoveryViews.push(request.params.proxy_consensus_view);
+      return JSON.stringify({
+        id: request.id,
+        ok: false,
+        error: { code: 'rpc_finality_view_must_repropose', message: MUST_REPROPOSE_MESSAGE },
+        events: [],
+      });
+    },
+  });
+  assert.deepStrictEqual(recoveryViews, [1], 'must re-propose stops the walk at view 1');
+  assert.deepStrictEqual([...new Set(timeoutViews)], [0], 'no timeout vote beyond view 0');
+  assert.strictEqual(JSON.parse(recovered.line).error.code, 'rpc_finality_view_must_repropose');
+}
+
 testDeterministicProposer();
 testProposerEndpointForHeightUsesDefaultFleet();
 testProposerEndpointForHeightRotatesAcrossRecoveryViews();
 testFinalityMethodFilter();
+testSpentViewAdvancesFinalityToTheNextView();
+testFinalityViewCodesDecideTheViewChange();
 testSequencedAccountMethodFilter();
 testFastpayBroadcastMethodFilter();
 testRemovedWrapIsNotNormalizedIntoMutation();
@@ -1221,6 +1318,9 @@ testChooseProposerEndpointRetriesTransientDivergence()
   })
   .then(() => {
     testRemainingIntegerEnvIsValidatedAtStartup();
+  })
+  .then(() => {
+    return testMustReproposeNeverChangesView();
   })
   .then(() => {
     console.log('proposer routing tests passed');

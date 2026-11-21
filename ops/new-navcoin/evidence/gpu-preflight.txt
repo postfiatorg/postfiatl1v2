@@ -1,0 +1,11 @@
+Sat Nov 14 00:17:49 UTC 2026
+NVIDIA GeForce RTX 5090, 32607 MiB, 2 MiB
+/workspace/b23-gpu/bin:
+total 72712
+-rwxr-xr-x 1 root root 73207008 Nov 12 23:11 eth-l1-mainnet-fast-lane-p0
+-rwxr-xr-x 1 root root  1280448 Nov 12 23:17 pftl-ingress-groth16-verify
+
+/workspace/b23-gpu/elf:
+total 2508
+-rw-r--r-- 1 root root 2566888 Nov 12 23:11 pfusdc-eth-mainnet-ingress-program
+prover_lock_available

@@ -8,10 +8,12 @@ It has its own key. The pfUSDC egress program (`programs/pfusdc-egress`) binds a
 
 `elf/pft-lane-export-program` and `program-info.json` are the program's identity:
 
-- ELF sha256: `8ac7696a5912eea37715b80798124baae0b81f8762d9351d1236737a980a1188`
-- Verifying key: `0x00d5ebebe8e4551cf99ecfcea71f48957e61ad2fde1eab96357ddee66148ab65`
+- ELF sha256: `cdaf391297e05a1547334505dcf388545ab148ddacbc7a136eeef3ba0fbbfd58`
+- Verifying key: `0x005a9f57832e55110036d86cebd66e1c6714b3dddca916580efae1913ae07829`
 
 `releases.json` records how they were produced, the latest release last:
+
+- **Joined line, 19 November:** `pft-lane-export-identity` runs 44420993427 at `8016e9cdc` and 44427701299 at `489e11707`. The guest source did not change; the B24 merge changed crates it links, so the ELF and key moved. No proof has been generated and no verifier constructed with any of these keys.
 
 - **Workflow:** `pft-lane-export-identity`, runs 43226356342, 43227408081 and 43227528337 at `c1a8a7f7a`, `32c7db71b` and `2181cc42c`. The guest source did not change; the fence status merge `c1a8a7f7a` grew `crates/types`, which the guest links, and moved the ELF and the key. The first release (`e92f2004…`, key `0x000cef5b…0a81414`, run 42818337185 at `439803aaa`) is pinned by no verifier on any network; only the local fork rehearsal of 2026-11-10 used it.
 - **Builds:** each run built the guest twice from two clean trees in the pinned SP1 image `ghcr.io/succinctlabs/sp1@sha256:0942a27d…3400`, with `cargo prove build --docker --tag v6.3.1 --locked`. All six ELFs were byte-identical, and all three runs derived the same key.

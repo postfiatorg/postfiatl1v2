@@ -1058,7 +1058,15 @@ pub struct VaultBridgeRouteReport {
     pub route_trust_class: String,
     pub live_value_enabled: bool,
     pub active: bool,
+    /// Current ledger anchor for this exact governed profile and epoch.
+    /// Null means 29-field proofs for this epoch are refused; old 26-field
+    /// deposits are admitted only if the profile has no anchor in any epoch.
+    #[serde(default)]
+    pub beacon_finality_anchor: Option<postfiat_types::PfUsdcBeaconFinalityStateV1>,
 }
+
+#[path = "b23_ingress_route_report.rs"]
+mod b23_ingress_route_report;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VaultBridgeReceiptsReport {
@@ -4123,6 +4131,11 @@ pub struct BlockTimeoutVoteFile {
     pub vote: BlockTimeoutVote,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consensus_v2_vote: Option<postfiat_types::ConsensusV2TimeoutVote>,
+    /// The full prepare QC the consensus v2 vote's high QC names, so a
+    /// validator that never stored it can still use the vote. Unsigned and
+    /// optional; consumers check it against the reference and verify it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub consensus_v2_high_qc: Option<postfiat_types::ConsensusV2QuorumCertificate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -4148,6 +4161,11 @@ pub struct BlockTimeoutCertificateFile {
     pub certificate: BlockTimeoutCertificate,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consensus_v2_certificate: Option<postfiat_types::ConsensusV2TimeoutCertificate>,
+    /// The distinct full prepare QCs the consensus v2 certificate's votes
+    /// name, so every validator can verify the certificate. Unsigned and
+    /// optional; consumers use only QCs a vote names and that verify.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub consensus_v2_high_qcs: Vec<postfiat_types::ConsensusV2QuorumCertificate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

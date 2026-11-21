@@ -106,6 +106,7 @@ struct RpcServeOptions {
     finality_timeout_ms: u64,
     finality_send_retries: usize,
     finality_retry_backoff_ms: u64,
+    finality_vote_phase_deadline_ms: u64,
     finality_quorum_early_full_propagation: bool,
     max_mempool_submit_per_peer: u64,
     max_mempool_submit_total: u64,
@@ -139,6 +140,7 @@ struct RpcServeConnectionContext {
     finality_timeout_ms: u64,
     finality_send_retries: usize,
     finality_retry_backoff_ms: u64,
+    finality_vote_phase_deadline_ms: u64,
     finality_quorum_early_full_propagation: bool,
     max_mempool_submit_per_peer: u64,
     max_mempool_submit_total: u64,
@@ -279,6 +281,34 @@ struct RpcMempoolSubmitSignedTransferFinalityReport {
     certified_sends_deferred: bool,
     round_ok: bool,
     idempotent_replay: bool,
+    step_timings: RpcFinalityStepTimings,
+}
+
+/// Wall time of the finality RPC steps around the certified round that the
+/// round's own timers do not cover, in the order they run.
+#[derive(Debug, Clone, Copy, Default, serde::Serialize)]
+struct RpcFinalityStepTimings {
+    /// View preparation and the local-proposer check.
+    view_and_proposer_ms: f64,
+    /// Full status reads in view preparation and the local-proposer check.
+    view_and_proposer_status_reads: u32,
+    /// Mempool admission, batch and certified round.
+    mempool_round_ms: f64,
+    /// Serializing and writing rpc-finality-round.json.
+    round_report_write_ms: f64,
+}
+
+fn rpc_finality_step_timings(
+    (view_and_proposer_ms, view_and_proposer_status_reads): (f64, u32),
+    round: &TransportPeerCertifiedMempoolRoundReport,
+    round_report_write_ms: f64,
+) -> RpcFinalityStepTimings {
+    RpcFinalityStepTimings {
+        view_and_proposer_ms,
+        view_and_proposer_status_reads,
+        mempool_round_ms: round.total_ms,
+        round_report_write_ms,
+    }
 }
 
 #[derive(Debug, Default)]
@@ -408,6 +438,15 @@ fn wait_for_rpc_finality_required_parent(
     context: &RpcServeConnectionContext,
     params: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<f64, (String, String)> {
+    wait_for_rpc_finality_required_parent_status(context, params).map(|(wait_ms, _)| wait_ms)
+}
+
+/// Waits for the required parent and returns the status read that matched it,
+/// or `None` when the request names no parent.
+fn wait_for_rpc_finality_required_parent_status(
+    context: &RpcServeConnectionContext,
+    params: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(f64, Option<StatusReport>), (String, String)> {
     let Some(required_height) = rpc_finality_required_u64_param(
         params,
         "proxy_required_current_height",
@@ -423,7 +462,7 @@ fn wait_for_rpc_finality_required_parent(
                 ));
             }
         }
-        return Ok(0.0);
+        return Ok((0.0, None));
     };
     let required_state_root =
         rpc_finality_required_str_param(params, "proxy_required_state_root")?;
@@ -470,7 +509,7 @@ fn wait_for_rpc_finality_required_parent(
             .map(|hash| local_status.block_tip_hash == *hash)
             .unwrap_or(true);
         if height_matches && root_matches && parent_hash_matches {
-            return Ok(monotonic_elapsed_ms(started));
+            return Ok((monotonic_elapsed_ms(started), Some(local_status)));
         }
         if monotonic_elapsed_ms(started) >= timeout_ms as f64 {
             let root_requirement = required_state_root
@@ -547,28 +586,23 @@ fn rpc_finality_proposer_mismatch(
 
 fn require_rpc_finality_local_proposer(
     context: &RpcServeConnectionContext,
+    local_status: &StatusReport,
     view: u64,
 ) -> Result<(), (String, String)> {
-    let local_status = status(NodeOptions {
-        data_dir: context.data_dir.clone(),
-    })
-    .map_err(|error| {
-        (
-            "rpc_finality_submit_failed".to_string(),
-            format!("finality proposer status failed: {error}"),
-        )
-    })?;
     let block_height = local_status.block_height.checked_add(1).ok_or_else(|| {
         (
             "rpc_finality_submit_failed".to_string(),
             "finality proposer height overflow".to_string(),
         )
     })?;
-    let proposer = block_proposer(BlockProposerOptions {
-        data_dir: context.data_dir.clone(),
-        block_height,
-        view,
-    })
+    let proposer = block_proposer_for_status(
+        BlockProposerOptions {
+            data_dir: context.data_dir.clone(),
+            block_height,
+            view,
+        },
+        local_status.clone(),
+    )
     .map_err(|error| {
         (
             "rpc_finality_submit_failed".to_string(),
@@ -2289,6 +2323,7 @@ fn is_mempool_submit_signed_method(method: &str) -> bool {
             | "mempool_submit_signed_escrow_transaction_finality"
             | "mempool_submit_signed_nft_transaction"
             | "mempool_submit_signed_offer_transaction"
+            | "mempool_submit_signed_offer_transaction_finality"
             | "shield_batch_finality"
     )
 }
@@ -2304,6 +2339,7 @@ fn is_mempool_submit_signed_transfer_finality_method(method: &str) -> bool {
             | "mempool_submit_signed_atomic_swap_transaction_finality"
             | "mempool_submit_fastlane_primary_finality"
             | "mempool_submit_signed_escrow_transaction_finality"
+            | "mempool_submit_signed_offer_transaction_finality"
             | "shield_batch_finality"
     )
 }
@@ -2444,9 +2480,8 @@ fn run_rpc_serve_shield_batch_finality_inner(
         .map_err(|error| ("rpc_internal".to_string(), error.to_string()));
     }
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
-    let finality_view = prepare_rpc_finality_view(&context.data_dir, params, &artifact_dir)?;
-    require_rpc_finality_local_proposer(context, finality_view.view)?;
+    let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let round = transport_peer_certified_batch_round(TransportPeerCertifiedBatchRoundOptions {
         data_dir: context.data_dir.clone(),
         topology_file: context.finality_topology_file.clone(),
@@ -2465,6 +2500,7 @@ fn run_rpc_serve_shield_batch_finality_inner(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         commit_processed_dir: None,
@@ -2476,11 +2512,39 @@ fn run_rpc_serve_shield_batch_finality_inner(
             format!("shield_batch_finality failed: {error}"),
         )
     })?;
+    finish_rpc_serve_shield_batch_finality(
+        request,
+        batch_id,
+        request_index,
+        readiness_wait_ms,
+        total_start,
+        round,
+        &result_file,
+        context.finality_quorum_early_full_propagation,
+    )
+}
+
+/// Accepts a certified shielded batch round as final, writes the result that
+/// a retry of the same `batch_id` returns from cache, and answers the client.
+#[allow(clippy::too_many_arguments)]
+fn finish_rpc_serve_shield_batch_finality(
+    request: &RpcRequest,
+    batch_id: &str,
+    request_index: u64,
+    readiness_wait_ms: f64,
+    total_start: Instant,
+    round: TransportPeerCertifiedBatchRoundReport,
+    result_file: &Path,
+    quorum_early_full_propagation: bool,
+) -> Result<RpcResponse, (String, String)> {
     let deferred_job_count = round.deferred_certified_send_jobs.len();
+    // An early-quorum round certifies without the peers whose vote request
+    // failed, as the other finality paths accept; they get the block through
+    // their deferred send job like every other peer.
     if !round.certification.round_ok
         || !round.local_apply_verified
         || !round.all_vote_requests_verified
-        || !round.vote_request_failures.is_empty()
+        || (!quorum_early_full_propagation && !round.vote_request_failures.is_empty())
         || !round.send_failures.is_empty()
         || deferred_job_count != round.target_peer_count
     {
@@ -2520,7 +2584,7 @@ fn run_rpc_serve_shield_batch_finality_inner(
             format!("shield finality result serialization failed: {error}"),
         )
     })?;
-    postfiat_storage::atomic_write(&result_file, [result_bytes.as_slice(), b"\n"].concat())
+    postfiat_storage::atomic_write(result_file, [result_bytes.as_slice(), b"\n"].concat())
         .map_err(|error| {
             (
                 "rpc_finality_submit_failed".to_string(),
@@ -2618,9 +2682,8 @@ fn run_rpc_serve_mempool_submit_fastlane_primary_finality_inner(
         .finality_artifact_root
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
-    let finality_view = prepare_rpc_finality_view(&context.data_dir, params, &artifact_dir)?;
-    require_rpc_finality_local_proposer(context, finality_view.view)?;
+    let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
 
     let mempool_submit_start = Instant::now();
     let operation = transaction.operation.clone();
@@ -2649,6 +2712,7 @@ fn run_rpc_serve_mempool_submit_fastlane_primary_finality_inner(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         required_parent: None,
@@ -2688,6 +2752,7 @@ fn run_rpc_serve_mempool_submit_fastlane_primary_finality_inner(
             )
         })?;
     let total_ms = monotonic_elapsed_ms(total_start);
+    let round_report_write_start = Instant::now();
     let round_report_file = artifact_dir.join("rpc-finality-round.json");
     let round_json = serde_json::to_string_pretty(&round).map_err(|error| {
         (
@@ -2704,6 +2769,7 @@ fn run_rpc_serve_mempool_submit_fastlane_primary_finality_inner(
             ),
         )
     })?;
+    let round_report_write_ms = monotonic_elapsed_ms(round_report_write_start);
     let result = RpcMempoolSubmitSignedTransferFinalityReport {
         schema: "postfiat-rpc-mempool-submit-fastlane-primary-finality-v1".to_string(),
         tx_id: tx_id.clone(),
@@ -2718,6 +2784,11 @@ fn run_rpc_serve_mempool_submit_fastlane_primary_finality_inner(
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
         idempotent_replay: false,
+        step_timings: rpc_finality_step_timings(
+            (finality_view.prepare_ms, finality_view.status_reads),
+            &round,
+            round_report_write_ms,
+        ),
     };
     success_response(
         &request.id,
@@ -3020,6 +3091,7 @@ fn committed_signed_transfer_finality_replay_response(
         certified_sends_deferred: false,
         round_ok: true,
         idempotent_replay: true,
+        step_timings: RpcFinalityStepTimings::default(),
     };
     success_response(
         request_id,
@@ -3046,9 +3118,8 @@ fn run_rpc_serve_mempool_submit_signed_transfer_finality_round(
     artifact_dir: &Path,
     total_start: Instant,
 ) -> Result<RpcResponse, (String, String)> {
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
-    let finality_view = prepare_rpc_finality_view(&context.data_dir, params, artifact_dir)?;
-    require_rpc_finality_local_proposer(context, finality_view.view)?;
+    let finality_view = prepare_rpc_finality_round(context, params, artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let round = transport_peer_certified_mempool_round(TransportPeerCertifiedMempoolRoundOptions {
         data_dir: context.data_dir.clone(),
         topology_file: context.finality_topology_file.clone(),
@@ -3065,6 +3136,7 @@ fn run_rpc_serve_mempool_submit_signed_transfer_finality_round(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         required_parent: None,
@@ -3103,6 +3175,7 @@ fn run_rpc_serve_mempool_submit_signed_transfer_finality_round(
             )
         })?;
     let total_ms = monotonic_elapsed_ms(total_start);
+    let round_report_write_start = Instant::now();
     let round_report_file = artifact_dir.join("rpc-finality-round.json");
     let round_json = serde_json::to_string_pretty(&round).map_err(|error| {
         (
@@ -3119,6 +3192,7 @@ fn run_rpc_serve_mempool_submit_signed_transfer_finality_round(
             ),
         )
     })?;
+    let round_report_write_ms = monotonic_elapsed_ms(round_report_write_start);
     let result = RpcMempoolSubmitSignedTransferFinalityReport {
         schema: "postfiat-rpc-mempool-submit-signed-transfer-finality-v1".to_string(),
         tx_id: tx_id.clone(),
@@ -3133,6 +3207,11 @@ fn run_rpc_serve_mempool_submit_signed_transfer_finality_round(
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
         idempotent_replay: false,
+        step_timings: rpc_finality_step_timings(
+            (finality_view.prepare_ms, finality_view.status_reads),
+            &round,
+            round_report_write_ms,
+        ),
     };
     success_response(
         &request.id,
@@ -3213,9 +3292,8 @@ fn run_rpc_serve_mempool_submit_signed_payment_v2_finality_inner(
         .finality_artifact_root
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
-    let finality_view = prepare_rpc_finality_view(&context.data_dir, params, &artifact_dir)?;
-    require_rpc_finality_local_proposer(context, finality_view.view)?;
+    let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let round = transport_peer_certified_mempool_round(TransportPeerCertifiedMempoolRoundOptions {
         data_dir: context.data_dir.clone(),
         topology_file: context.finality_topology_file.clone(),
@@ -3232,6 +3310,7 @@ fn run_rpc_serve_mempool_submit_signed_payment_v2_finality_inner(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         required_parent: None,
@@ -3268,6 +3347,7 @@ fn run_rpc_serve_mempool_submit_signed_payment_v2_finality_inner(
             )
         })?;
     let total_ms = monotonic_elapsed_ms(total_start);
+    let round_report_write_start = Instant::now();
     let round_report_file = artifact_dir.join("rpc-finality-round.json");
     let round_json = serde_json::to_string_pretty(&round).map_err(|error| {
         (
@@ -3284,6 +3364,7 @@ fn run_rpc_serve_mempool_submit_signed_payment_v2_finality_inner(
             ),
         )
     })?;
+    let round_report_write_ms = monotonic_elapsed_ms(round_report_write_start);
     let result = RpcMempoolSubmitSignedTransferFinalityReport {
         schema: "postfiat-rpc-mempool-submit-signed-payment-v2-finality-v1".to_string(),
         tx_id: tx_id.clone(),
@@ -3298,6 +3379,11 @@ fn run_rpc_serve_mempool_submit_signed_payment_v2_finality_inner(
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
         idempotent_replay: false,
+        step_timings: rpc_finality_step_timings(
+            (finality_view.prepare_ms, finality_view.status_reads),
+            &round,
+            round_report_write_ms,
+        ),
     };
     success_response(
         &request.id,
@@ -3378,9 +3464,8 @@ fn run_rpc_serve_mempool_submit_signed_asset_transaction_finality_inner(
         .finality_artifact_root
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
-    let finality_view = prepare_rpc_finality_view(&context.data_dir, params, &artifact_dir)?;
-    require_rpc_finality_local_proposer(context, finality_view.view)?;
+    let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let round = transport_peer_certified_mempool_round(TransportPeerCertifiedMempoolRoundOptions {
         data_dir: context.data_dir.clone(),
         topology_file: context.finality_topology_file.clone(),
@@ -3397,6 +3482,7 @@ fn run_rpc_serve_mempool_submit_signed_asset_transaction_finality_inner(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         required_parent: None,
@@ -3433,6 +3519,7 @@ fn run_rpc_serve_mempool_submit_signed_asset_transaction_finality_inner(
             )
         })?;
     let total_ms = monotonic_elapsed_ms(total_start);
+    let round_report_write_start = Instant::now();
     let round_report_file = artifact_dir.join("rpc-finality-round.json");
     let round_json = serde_json::to_string_pretty(&round).map_err(|error| {
         (
@@ -3449,6 +3536,7 @@ fn run_rpc_serve_mempool_submit_signed_asset_transaction_finality_inner(
             ),
         )
     })?;
+    let round_report_write_ms = monotonic_elapsed_ms(round_report_write_start);
     let result = RpcMempoolSubmitSignedTransferFinalityReport {
         schema: "postfiat-rpc-mempool-submit-signed-asset-transaction-finality-v1".to_string(),
         tx_id: tx_id.clone(),
@@ -3463,6 +3551,11 @@ fn run_rpc_serve_mempool_submit_signed_asset_transaction_finality_inner(
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
         idempotent_replay: false,
+        step_timings: rpc_finality_step_timings(
+            (finality_view.prepare_ms, finality_view.status_reads),
+            &round,
+            round_report_write_ms,
+        ),
     };
     success_response(
         &request.id,
@@ -3544,9 +3637,8 @@ fn run_rpc_serve_mempool_submit_signed_escrow_transaction_finality_inner(
         .finality_artifact_root
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
-    let finality_view = prepare_rpc_finality_view(&context.data_dir, params, &artifact_dir)?;
-    require_rpc_finality_local_proposer(context, finality_view.view)?;
+    let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let round = transport_peer_certified_mempool_round(TransportPeerCertifiedMempoolRoundOptions {
         data_dir: context.data_dir.clone(),
         topology_file: context.finality_topology_file.clone(),
@@ -3563,6 +3655,7 @@ fn run_rpc_serve_mempool_submit_signed_escrow_transaction_finality_inner(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         required_parent: None,
@@ -3599,6 +3692,7 @@ fn run_rpc_serve_mempool_submit_signed_escrow_transaction_finality_inner(
             )
         })?;
     let total_ms = monotonic_elapsed_ms(total_start);
+    let round_report_write_start = Instant::now();
     let round_report_file = artifact_dir.join("rpc-finality-round.json");
     let round_json = serde_json::to_string_pretty(&round).map_err(|error| {
         (
@@ -3615,6 +3709,7 @@ fn run_rpc_serve_mempool_submit_signed_escrow_transaction_finality_inner(
             ),
         )
     })?;
+    let round_report_write_ms = monotonic_elapsed_ms(round_report_write_start);
     let result = RpcMempoolSubmitSignedTransferFinalityReport {
         schema: "postfiat-rpc-mempool-submit-signed-escrow-transaction-finality-v1"
             .to_string(),
@@ -3630,6 +3725,11 @@ fn run_rpc_serve_mempool_submit_signed_escrow_transaction_finality_inner(
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
         idempotent_replay: false,
+        step_timings: rpc_finality_step_timings(
+            (finality_view.prepare_ms, finality_view.status_reads),
+            &round,
+            round_report_write_ms,
+        ),
     };
     success_response(
         &request.id,
@@ -4164,6 +4264,7 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "navcoin_bridge_routes"
             | "navcoin_bridge_packet"
             | "navcoin_bridge_claims"
+            | "pftl_uniswap_receipt"
             | "navcoin_bridge_supply_status"
             | "navcoin_bridge_receipt_replay"
             | "escrow_info"
@@ -5202,8 +5303,29 @@ fn rpc_value_contains_key_material(value: &serde_json::Value) -> bool {
     }
 }
 
+/// Finality failures the wallet proxy must tell apart get their own code: it
+/// moves to the next view on a spent view and stops on a view that must
+/// re-propose the timeout certificate's block. Both messages also contain
+/// words (`certificate`, `transport`) its older text rule matches.
+fn rpc_finality_failure_code<'a>(code: &'a str, message: &str) -> &'a str {
+    if code != "rpc_finality_submit_failed" {
+        code
+    } else if message.contains(postfiat_node::CONSENSUS_V2_VIEW_MUST_REPROPOSE) {
+        "rpc_finality_view_must_repropose"
+    } else if message.contains(postfiat_node::CONSENSUS_V2_VIEW_SPENT) {
+        "rpc_finality_view_spent"
+    } else {
+        code
+    }
+}
+
 fn rpc_serve_error_response(id: &str, code: &str, message: &str) -> RpcResponse {
+    let code = rpc_finality_failure_code(code, message);
     let public_message = rpc_serve_public_error_message(code, message);
+    if public_message != message {
+        // The caller gets the redacted text; operators need the cause in the service log.
+        eprintln!("ERROR rpc request {id} failed with {code}: {message}");
+    }
     error_response(
         id,
         code,
@@ -5344,6 +5466,12 @@ fn rpc_serve_error_class(method: &str, response: &RpcResponse) -> Option<String>
     }
     if error.code == "rpc_finality_submit_failed" {
         return Some("finality_submit_failed".to_string());
+    }
+    if error.code == "rpc_finality_view_spent" {
+        return Some("finality_view_spent".to_string());
+    }
+    if error.code == "rpc_finality_view_must_repropose" {
+        return Some("finality_view_must_repropose".to_string());
     }
     if error.code == "rpc_orchard_batch_create_not_public_safe" {
         return Some("orchard_batch_create_not_public_safe".to_string());
@@ -5630,6 +5758,7 @@ mod child_dispatch_limit_tests {
             finality_timeout_ms: 1_000,
             finality_send_retries: 0,
             finality_retry_backoff_ms: 0,
+            finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
             finality_quorum_early_full_propagation: false,
             max_mempool_submit_per_peer: 8,
             max_mempool_submit_total: 32,
@@ -5840,3 +5969,5 @@ mod transfer_fee_quote_arm_tests {
         let _ = std::fs::remove_dir_all(&data_dir);
     }
 }
+
+include!("b23_facility_offer_rpc.rs");

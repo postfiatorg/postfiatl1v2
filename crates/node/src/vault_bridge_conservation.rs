@@ -1560,6 +1560,7 @@ mod tests {
         let asset = AssetDefinition::new("postfiat-local", "bridge-issuer", "pfUSDC", 1, 6)
             .expect("asset definition");
         let route = VaultBridgeRouteProfileV1 {
+            solana: None,
             schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
             route_id: "arbitrum-pfusdc".to_string(),
             asset_id: asset.asset_id.clone(),
@@ -1614,6 +1615,7 @@ mod tests {
             1,
         );
         let route_activation = VaultBridgeRouteProfileActivationV1 {
+            beacon_finality_bootstrap: None,
             schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
             profile: route.clone(),
             amendment: route_amendment.clone(),
@@ -1627,6 +1629,7 @@ mod tests {
             5,
         );
         let current_route_activation = VaultBridgeRouteProfileActivationV1 {
+            beacon_finality_bootstrap: None,
             schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
             profile: current_route.clone(),
             amendment: current_route_amendment.clone(),

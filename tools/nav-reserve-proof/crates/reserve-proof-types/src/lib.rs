@@ -11,6 +11,7 @@ use sha3::{Digest, Sha3_384};
 
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod aave_v3;
+pub mod b23_nav;
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod bft_checkpoint;
 #[cfg(feature = "a666-public-adapters-v2")]

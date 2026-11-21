@@ -37,6 +37,7 @@ pub enum AttestationTimeRuleV1 {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StatementRuleV1 {
     CollectionAndTargetInputV1,
+    NavReadingV1,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

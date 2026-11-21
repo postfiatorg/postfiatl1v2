@@ -173,6 +173,10 @@ function readinessPayload(routeId) {
         token_code_hash_matches: true,
         execution_rpc_sources_reachable: route.source_chain_id === 1 ? 2 : 1,
         beacon_finality_current: route.source_chain_id === 1,
+        route_epoch: 1,
+        beacon_anchor_authenticated: true,
+        beacon_anchor_route_profile_hash: route.route_profile_hash,
+        beacon_anchor_route_epoch: 1,
     };
 }
 
@@ -578,6 +582,7 @@ async function main() {
         manifest_hash: routeRows[0].manifest_hash,
         route_profile_hash: routeRows[0].route_profile_hash,
         asset_id: routeRows[0].asset_id,
+        credited_asset_id: routeRows[0].asset_id,
         observer_attestor_enabled: false,
         updated_at_unix: Math.floor(nowMs / 1000),
         retryable: false,

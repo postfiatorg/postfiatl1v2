@@ -41,7 +41,8 @@ if (args[0] === 'readiness') {
     program_vkey_active: true, nav_cap_growth_enabled: true,
     vault_paused: false, vault_code_hash_matches: true,
     token_code_hash_matches: true, execution_rpc_sources_reachable: 2,
-    beacon_finality_current: true
+    beacon_finality_current: true, route_epoch: 1, beacon_anchor_authenticated: true,
+    beacon_anchor_route_profile_hash: '${TEST_ROUTE_PROFILE_HASH}', beacon_anchor_route_epoch: 1
   }));
   process.exit(0);
 }
@@ -75,6 +76,7 @@ if (stage === 'verifying') out.proof_verified = true;
 if (stage === 'growing_backed_cap') out.backed_cap_ready = true;
 if (stage === 'claiming') {
   out.receipt_code = 'ACCEPTED'; out.receipt_id = '77'.repeat(48);
+  out.credited_asset_id = '${TEST_ASSET_ID}';
   out.tx_id = '0x' + '78'.repeat(32);
 }
 process.stdout.write(JSON.stringify(out));

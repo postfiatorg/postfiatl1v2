@@ -45,7 +45,7 @@ NFT_COLLECTION_ALLOWED_FLAGS = (
 )
 TRUSTLINE_STATE_EXPANSION_FEE = 10
 # Account flags set and cleared with an owner-signed `account_set` transaction
-# (active from the `require_memo_activation_height` governance gate).
+# (active from the `require_memo_v2_activation_height` governance gate).
 ACCOUNT_FLAG_REQUIRE_MEMO = 0x0000_0001
 ACCOUNT_ALLOWED_FLAGS = ACCOUNT_FLAG_REQUIRE_MEMO
 MAX_PAYMENT_MEMO_TYPE_BYTES = 64

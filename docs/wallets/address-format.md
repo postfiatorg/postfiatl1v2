@@ -105,13 +105,13 @@ The check runs in two places:
    `ensure_destination_addresses_admissible` in
    `crates/node/src/mempool_proposals.rs`.
 2. **Execution (consensus, governed).** Block execution applies the same rule
-   from the governance-scheduled `recipient_format_activation_height`. Without
+   from the governance-scheduled `recipient_format_v2_activation_height`. Without
    that amendment the rule is inactive, so historical blocks replay unchanged.
    Source: `crates/execution/src/recipient_format.rs`.
 
 From the activation height, a block that contains such a transaction records a
 rejected receipt with the code above. Before the separately governed
-`rejected_tx_fee_activation_height`, it charges no fee and consumes no sequence.
+`rejected_tx_fee_v2_activation_height`, it charges no fee and consumes no sequence.
 After that gate, an authenticated, correctly sequenced transaction that can pay
 its fee is charged and receives `tec_invalid_recipient_address`,
 `tec_invalid_recipient_checksum` or `tec_noncanonical_recipient_address`. The
@@ -120,8 +120,20 @@ recipient receives nothing. RPC and mempool refusals always remain uncharged.
 ## Activation
 
 The activation height is a governance amendment of kind
-`recipient_format_activation_height` whose value is the first enforced block
+`recipient_format_v2_activation_height` whose value is the first enforced block
 height.
+
+!!! note "v2 kinds"
+
+    Release 6.4 never applied the original `recipient_format_activation_height`,
+    `rejected_tx_fee_activation_height` and `require_memo_activation_height`
+    after the 2026-11-12 rollout, although governance set them to 1153. Execution
+    now reads only the `*_v2_activation_height` kinds (ratify with
+    `ratify-recipient-format-v2-activation-height`,
+    `ratify-rejected-tx-fee-v2-activation-height` and
+    `ratify-require-memo-v2-activation-height`). The original kinds are still
+    accepted and stored but gate nothing. Ratify a v2 kind only after every
+    validator runs a release that knows it.
 
 - It must be scheduled strictly after the block that applies it.
 - The earliest unpaused scheduled height wins, so a later amendment cannot
@@ -130,7 +142,7 @@ height.
   amendment is submitted.
 
 ```bash
-postfiat-node ratify-recipient-format-activation-height --data-dir PATH \
+postfiat-node ratify-recipient-format-v2-activation-height --data-dir PATH \
   --validators CSV --height H --amendment-file recipient-format.unsigned.json
 # each validator
 postfiat-node governance-authorization-sign --data-dir PATH \

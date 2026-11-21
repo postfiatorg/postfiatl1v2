@@ -1,0 +1,18 @@
+[Unit]
+Description=B23 measured Schwab NAV at 18:15 UTC (AWS cap $9/run, $250/UTC month)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/postfiat/repos/postfiatl1v2-b23-tee-nav
+ExecStart=/home/postfiat/repos/navstrategies-b23-tee-nav/.venv/bin/python /home/postfiat/repos/postfiatl1v2-b23-tee-nav/ops/b23-tee-nav/daily.py --execute
+Environment=B23_DAILY_RUN_CAP_USD=9.00
+Environment=B23_DAILY_MONTH_CAP_USD=250.00
+Environment=PYTHONDONTWRITEBYTECODE=1
+UMask=0077
+TimeoutStartSec=3h
+TimeoutStopSec=180
+KillMode=control-group
+# Each collector additionally has its independent 2-hour AWS teardown guard.
+# No Restart: a failure never creates an automatic second paid attempt.

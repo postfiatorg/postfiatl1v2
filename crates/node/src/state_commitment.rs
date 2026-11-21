@@ -830,6 +830,9 @@ fn validate_issued_supply_custody_inventory(
         fast_ingress_campaigns: _,
         arc_finality_states: _,
         external_lanes: _,
+        beacon_finality_states: _,
+        solana_route: _,
+        additional_solana_routes: _,
     } = ledger;
     let ShieldedState {
         next_note_position: _,
@@ -1638,6 +1641,34 @@ pub(super) fn append_ledger_state(
         )?;
     }
 
+    if let Some(route) = &ledger.solana_route {
+        append_canonical_bytes_commitment(bytes, "ledger.solana_route.v1", &serde_json::to_vec(route)?);
+    }
+
+    if !ledger.additional_solana_routes.is_empty() {
+        append_canonical_bytes_commitment(bytes, "ledger.additional_solana_routes.v1", &serde_json::to_vec(&ledger.additional_solana_routes)?);
+    }
+
+    if commit_complete_nav_state && !ledger.beacon_finality_states.is_empty() {
+        let mut keys = std::collections::BTreeSet::new();
+        for state in &ledger.beacon_finality_states {
+            if !keys.insert((&state.route_profile_hash, state.route_epoch)) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "duplicate beacon anchor key",
+                ));
+            }
+        }
+        append_sorted_canonical_commitments(
+            bytes,
+            "ledger.beacon_finality_state",
+            ledger
+                .beacon_finality_states
+                .iter()
+                .map(|value| value.state_commitment_bytes()),
+        )?;
+    }
+
     let fastlane_state_present = commit_fastlane_state
         && (!ledger.fast_lane_reserves.is_empty()
             || !ledger.fast_lane_deposit_receipts.is_empty()
@@ -1828,6 +1859,9 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
         fast_ingress_campaigns: _,
         arc_finality_states: _,
         external_lanes: _,
+        beacon_finality_states: _,
+        solana_route: _,
+        additional_solana_routes: _,
     } = ledger;
 }
 
@@ -2886,6 +2920,10 @@ pub(super) fn append_vault_bridge_receipt(
         &format!("{prefix}.bridge_deposit_evidence.present"),
         receipt.bridge_deposit_evidence.is_some(),
     );
+    if let Some(evidence) = &receipt.solana_deposit_evidence {
+        append_canonical_bytes_commitment(bytes, &format!("{prefix}.solana_deposit"),
+            &serde_json::to_vec(evidence).expect("Solana evidence contains JSON primitives"));
+    }
     if let Some(evidence) = &receipt.bridge_deposit_evidence {
         append_vault_bridge_deposit_evidence(
             bytes,
@@ -3474,6 +3512,10 @@ pub(super) fn append_vault_bridge_withdrawal_packet(
     );
 }
 
+#[cfg(test)]
+#[path = "b23_facility_commitment_tests.rs"]
+mod b23_facility_commitment_tests;
+
 pub(super) fn append_pftl_uniswap_route(
     bytes: &mut Vec<u8>,
     prefix: &str,
@@ -3632,7 +3674,13 @@ pub(super) fn append_pftl_uniswap_route(
             &format!("{prefix}.v2.return_verification_class"),
             &v2.return_verification_class,
         );
+        if let Some(sequence) = v2.funding_sequence {
+            append_canonical_u64(bytes, &format!("{prefix}.v2.funding_sequence"), sequence);
+        }
         let policy = &v2.primary_market_policy;
+        if let Some(recipient) = &policy.spread_recipient {
+            append_canonical_str(bytes, &format!("{prefix}.v2.spread_recipient"), recipient);
+        }
         append_canonical_str(
             bytes,
             &format!("{prefix}.v2.policy_hash"),
@@ -4015,6 +4063,33 @@ pub(super) fn append_pftl_uniswap_receipt(
         &format!("{prefix}.block_height"),
         receipt.block_height,
     );
+    if let Some(settlement) = &receipt.redemption_settlement {
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.redemption_settlement.settlement_asset_id"),
+            &settlement.settlement_asset_id,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.redemption_settlement.settlement_recipient"),
+            &settlement.settlement_recipient,
+        );
+        append_canonical_u64(
+            bytes,
+            &format!("{prefix}.redemption_settlement.settlement_value_atoms"),
+            settlement.settlement_value_atoms,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.redemption_settlement.spread_recipient"),
+            &settlement.spread_recipient,
+        );
+        append_canonical_u64(
+            bytes,
+            &format!("{prefix}.redemption_settlement.spread_value_atoms"),
+            settlement.spread_value_atoms,
+        );
+    }
 }
 
 pub(super) fn legacy_domainless_vault_bridge_withdrawal_packet_hash(

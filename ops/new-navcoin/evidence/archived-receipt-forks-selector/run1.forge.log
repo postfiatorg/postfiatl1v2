@@ -1,0 +1,27 @@
+Compiling 3 files with Solc 0.8.24
+Solc 0.8.24 finished in 3.68s
+Compiler run successful!
+
+Ran 8 tests for test/ReceiptV2RealProof.t.sol:ReceiptV2RealProofTest
+[PASS] testAlteredPublicValuesRejectWithoutMutation() (gas: 389429)
+[PASS] testChangedVerifierRuntimeRejectsWithoutMutation() (gas: 166280)
+[PASS] testCorruptedGenuineProofRejectsWithoutMutation() (gas: 992450827)
+[PASS] testGenuineProofAdvancesAuthenticatedCommitteeAndRejectsReplay() (gas: 761940)
+[PASS] testHistoricalSiblingCannotUseGenuineProof() (gas: 1972776)
+[PASS] testUntrustedCommitteeCannotUseGenuineProof() (gas: 1982473)
+[PASS] testWrongProgramKeyRejectsGenuineProof() (gas: 2210526)
+[PASS] testWrongSelectorRejectsWithoutMutation() (gas: 167573)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 1.44s (4.59s CPU time)
+
+Ran 1 test for test/ReceiptV2RetiredProof.t.sol:ReceiptV2RetiredProofTest
+[PASS] testRetiredCommitteeValidProofCannotMintFromStaleBranch() (gas: 1408948)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 3.34s (525.44ms CPU time)
+
+Ran 4 tests for test/ReceiptV2MintProof.t.sol:ReceiptV2MintProofTest
+[PASS] testCorruptedProofCannotMintThroughProductionController() (gas: 992614846)
+[PASS] testGenuineMintBurnsOnceWithBoundV3Return() (gas: 1041322)
+[PASS] testGenuineReceiptMintsOnceThroughProductionContracts() (gas: 1080211)
+[PASS] testUntrustedCommitteeCannotMintWithValidSP1Proof() (gas: 2475024)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 3.88s (2.83s CPU time)
+
+Ran 3 test suites in 3.90s (8.67s CPU time): 13 tests passed, 0 failed, 0 skipped (13 total tests)

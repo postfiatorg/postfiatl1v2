@@ -28,7 +28,9 @@
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/monero_adapter.rs": "200f267c2dadd95ce56310523bc640a86ef97fc7d668da0b4c66e9be44c4ce37",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/solana_adapter.rs": "bb33cd5eb56ca68edb1d05e2b48077db91f5d0762e29f7e6df00c10afedee3ae",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/source_checkpoint.rs": "bcf53545c023a936719ab69a7c167661a311cdfe0aecf59a7cf73924446c03b3",
-    "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "614c149f6fd91bb33544a656d5248696ed0e846044b86922b1944fd6eacb7666",
+    "tools/nav-reserve-proof/crates/b23-nav-cli/src/main.rs": "08a22ed31a87f3bb204ad86159527109695e070e3e0c8fbccbfbea1000f2b4e2",
+    "tools/nav-reserve-proof/crates/b23-nav-cli/src/sp1.rs": "9395fc6195837cb6782042651e86b7011da0e0a221bf7e784dbdfd5d416e5fd0",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "aa2bdd570159c04813b8683584a09de0ba3409a16d6a31cc2e5845d55ad066bd",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/yolo_broker.rs": "aa6e5145b60cfcd2c593360ec7ea6bbb82e67f980eec46d6a36afceff30d0c9b",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/portfolio_valuation.rs": "80353517f72aed076732a75ca6bd6a21b0363bb9f7601bc54cb28cfcc7c60227",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/bft_checkpoint.rs": "9f59ccb44da5b3a66adbe5945b340bfc15551854aa9998c90ac0f15522c3b73b",
@@ -39,6 +41,7 @@
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/near_receipt.rs": "9021e87e62147b0d38adef0e7eeb4239ff0adc284c851cbc45dd3adf48e4337d",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/solana_stake.rs": "c9dd7c30d8ad0509149cfe0c75495459223ed86fd81c2fdfa91bf80f1f06b9ab",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/monero_reserve.rs": "fcb8564adf3d9e61e3b1f4a0d7d3d15015d71f78d8a0782e6da5007b6a2fe777",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/b23_nav.rs": "e13e732a764ff4b149cfd96ab4414bd8fb56791d9aac169f339b30b562b26193",
     "tools/nav-reserve-proof/fuzz/Cargo.toml": "db1cdb4c1492532649c69f7f3634aa80e3991797d1873ee16baac7ce7977218e",
     "tools/nav-reserve-proof/fuzz/Cargo.lock": "bfc2d34bb3450058dc005c1076876115133353f0c05525e4f6c77025cbbb25e2",
     "tools/nav-reserve-proof/fuzz/README.md": "c275abec755ed49e92eb67a2d866ebdbc728d580c50e53164abf5d2240c04181",
@@ -56,6 +59,9 @@
     "tools/nav-reserve-proof/fuzz/seeds/manifest-build-invalid.json": "56701cdf4ba0a417de5fe750c72bd5732109f47e3b0a09ff8ecb3a2e11d609a8",
     "tools/nav-reserve-proof/fixtures/a666-historical/aave-arbitrum-state-proof-20260728.json": "12d8d1b0a0d1ed652702e7ca8a101f9aada1c9b56ef2163ee7fdb0ccf540518a",
     "tools/nav-reserve-proof/programs/reserve-proof-guest/src/main.rs": "1f3caf2e7b1adb64afc14c5f5e81a4690d25a232d116ad95b3e0126420b8c655",
+    "tools/nav-reserve-proof/programs/b23-nav-guest/src/main.rs": "ec1a5219b3b5e067b90b9b5b98f2885f1feded191e13fd932d2c297c43d4972c",
+    "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.toml": "13d3a3355e03cab74057d08f28a7f7ca79a56e592810b76fd2eaf26109c47bf4",
+    "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.lock": "0e134c30334848a3c0bdd02210ee68406689c1343e136169550b2d52c681d1bc",
     "tools/nav-reserve-proof/contracts/near-stake-reader/Cargo.toml": "519305ac57289aa55220e66f30a4a986dad907df9212109d428ab9d1dd061166",
     "tools/nav-reserve-proof/contracts/near-stake-reader/src/lib.rs": "11acff4790b45168a81323700c419fccc3555e678dfddbc376bf2a5b44b6312c",
     "tools/nav-reserve-proof/contracts/solana-stake-reader/Cargo.toml": "15ff163a724a4ef2185b8a9d52cb4334e81e48533e9613a2e43ccea2ea82e719",
@@ -92,18 +98,28 @@
     "tools/nav-reserve-proof/qualifications/a666-public-successor-20260802/profile-registration.json": "a818911a5b477c4abb37405e2d510c4cd334b2e7313793afe74d9dc2f22914b7",
     "tools/nav-reserve-proof/qualifications/a666-public-successor-20260802/replay-host.json": "1c57fa4a0ef78a1b168c7faa70c62827304bac94f9e361f1da7acbe12209cbd2",
     "tools/nav-reserve-proof/qualifications/freshness-and-debt-20260924/candidate-identity.json": "fda85cb1f9f4462882dbfd90b2278e6f8280437b8bff2b032dd810816b70a28c",
-    "programs/pfusdc-eth-mainnet-ingress/src/lib.rs": "7d1baeb587f0d96c14596718fe2560bfc4c790c19f1a89c9acff5474b3157b91",
+    "programs/pfusdc-eth-mainnet-ingress/src/lib.rs": "7c09192feb37e9975a8902fa01f4c3f606690259b598e194768304452f076406",
     "programs/pfeth-eth-mainnet-ingress/src/main.rs": "67782df70bad2a243115c401088d274874cda3e5fa8a96b85a9577546df71469",
     "programs/pfusdc-egress/src/main.rs": "c1cfd019f37a70d7862226f17659e72730bdae4c861f920dd93aba181ad67945",
-    "crates/types/src/pfusdc_tier4_types.rs": "9af8e316fcfb555aff35248ede7dd891f1e81ad95f222295dc677080e46ca4d4",
-    "crates/execution/src/nav_vault_asset_execution.rs": "4463592336d5e5cbf9237c83da5efbf4a36ba812ef6197d6891777a8d3246d50",
-    "tools/eth-l1-mainnet-fast-lane-p0/src/main.rs": "aae5805fcd10b42c0429f096e850ee7eb7e0bbaafbee43c1344c289ca37fa979",
+    "crates/types/src/pfusdc_tier4_types.rs": "3160d5b33ad4a8684158f3f25ab2c5eb33d28228ba2e68036657290834360bae",
+    "crates/execution/src/nav_vault_asset_execution.rs": "0474a82c5586a97b92bf46c40b5699b7e2d2669b5302f34226646e48aae4b905",
+    "tools/eth-l1-mainnet-fast-lane-p0/src/main.rs": "8597959b02725876d4146045bd7ac94c43fc4d1ded7f3bf899b783bb1f22cad9",
     "crates/ethereum-contracts/src/WETHBridgeVaultL1.sol": "7d6a25df0f73e832ea15d2743f110974648323fc574ff78e74f548a7d25eeb12",
     "crates/ethereum-contracts/src/PFTLFinalityVerifierV1.sol": "8e0139eeb4cb41030234c34293099bd8722d2ca53998b5be3b42906dafe60da7",
     "crates/pft_lane_proofs/src/lib.rs": "27976ace6354d94176807bb2b85578b515f2838ea4fe262170f39b412ba8841e",
     "crates/types/src/external_lane_export_proof_types.rs": "8cadf889856f3224317837a90ed481574e9a499ee8365d34bfa8cc6d8b32407a",
     "crates/types/src/external_lane_egress_types.rs": "fcfe3758c93f8c62bc673249bb2246df9d147d367ab34bd1daa6656221912274",
-    "programs/pft-lane-export/src/main.rs": "40f142081eab3add4bc0aa3f015d27f1e1af41494c543689d3d8fa06b71a8214"
+    "programs/pft-lane-export/src/main.rs": "40f142081eab3add4bc0aa3f015d27f1e1af41494c543689d3d8fa06b71a8214",
+    "programs/pfusdc-eth-mainnet-ingress/src/main.rs": "11d327304e54bc01f5412a04231fddf10ab1d84aa2ecb649c0148e11919dde53",
+    "programs/pfusdc-eth-mainnet-ingress/Cargo.toml": "29533a05e9f47acf6f1241cefbafe7823a4201e24f6c93c73ca4db5e31dd9f29",
+    "programs/pfusdc-eth-mainnet-ingress/Cargo.lock": "06d5e683afcf1f0b708dacab9e43ce5a8ffac1b46dcc1ce82c933a65053c0082",
+    "crates/types/src/b23_ingress_anchor.rs": "d4a5c7626fb04f8bcdd39941753b9d4279e311277eb8739eb24d27599899aac4",
+    "crates/types/src/b23_ingress_legacy.rs": "e81b9b41cd905b55f19de6b19bd241925ddb75553ba2d889104bfc05dc06aec3",
+    "crates/types/src/account_owned_asset_types.rs": "faa9017fad51033e4678aaf98ab2f3f63b4b1eea864c616549fdf08a4122800f",
+    "crates/types/src/market_nav_asset_types.rs": "a51d9cef653930e9e6daf6b6de96153db45e606a38a8d01a11b9c94094a242cd",
+    "crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol": "0ccced8deed6a10d1ec631c7b78cfa14dcf5b5490cf50a9ca4bfcd1cdc6aa08a",
+    "crates/execution/src/vault_bridge_profile_resolution.rs": "8ffdb016183c6afce588c08625b00071bab0c231506d1065787a963c9962ae16",
+    "crates/node/src/execution_actions.rs": "aca690c3bbca27d38a9a5b7eaf9291ff6f843b9015950a0d50786cffe41ab1bf"
   },
   "systems": [
     {
@@ -596,11 +612,31 @@
         "profile policy forbidding controlled sources",
         "floating-NAV reserve floor and consensus state-transition invariants"
       ],
-      "reproduction_evidence": "The repository contains the guest, shared types, adapters, CLI, fixture vectors, build metadata and pinned ELF. A clean public checkout reproduced execution and a CPU Groth16 proof with this program vkey on 2026-08-01."
+      "reproduction_evidence": "The repository contains the guest, shared types, adapters, CLI, fixture vectors, build metadata and pinned ELF. A clean public checkout reproduced execution and a CPU Groth16 proof with this program vkey on 2026-08-01.",
+      "b23_nav_reading_guest": {
+        "program": "tools/nav-reserve-proof/programs/b23-nav-guest",
+        "cli": "tools/nav-reserve-proof/crates/b23-nav-cli",
+        "sources": [
+          "tools/nav-reserve-proof/crates/reserve-proof-types/src/b23_nav.rs",
+          "tools/nav-reserve-proof/programs/b23-nav-guest/src/main.rs",
+          "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.toml",
+          "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.lock",
+          "tools/nav-reserve-proof/crates/b23-nav-cli/src/main.rs",
+          "tools/nav-reserve-proof/crates/b23-nav-cli/src/sp1.rs"
+        ],
+        "public_values": "The same 584-byte postfiat.nav_reserve_public_values.v1 values listed above; no new public field. One attested source, no cryptographic or controlled source.",
+        "private_witnesses": [
+          "canonical JSON witness bounded to 64 KiB: source policy, manifest and the signed reading envelope",
+          "AWS Nitro attestation document over the statement binding digest",
+          "Ed25519 statement signature by the enclave-attested key"
+        ],
+        "proof_binding": "The guest checks the manifest, policy and reading schemas, the cutoff and reading window, the valuation policy and the statement digest, verifies the Nitro document against the policy root and enclave policy and the statement signature with the attested key, then commits the 584 bytes. Nitro verification uses yolo_nitro.rs and canonical encoding yolo_collection.rs, which are not pinned here.",
+        "build_state": "No ELF or program vkey for this guest is committed in this repository; the NAV profile that uses it pins its key, which this inventory does not reproduce."
+      }
     },
     {
       "name": "Ethereum mainnet pfETH ingress",
-      "status": "built and locally verified; governance activation and first live proof pending",
+      "status": "source changed after the committed build; must be rebuilt reproducibly before its route is used. Not active on devnet-2.",
       "proof_system_id": "sp1-pfeth-ethereum-mainnet-ingress-v1",
       "program_vkey": "0x000dd724902a8a24abde9f3fda01477e0d454ac506fbb6a0613fd4486ad4953c",
       "public_values_schema": "postfiat.pfeth.ethereum_ingress_public_values.v1",
@@ -609,7 +645,7 @@
         {
           "index": 0,
           "name": "schema",
-          "binding": "host requires the pfETH Ethereum ingress schema"
+          "binding": "the pfETH guest emits the pfETH schema (lib.rs:118); the shared host decoders accept the pfUSDC or pfETH schema (crates/types/src/pfusdc_tier4_types.rs:97-101, crates/types/src/b23_ingress_legacy.rs:103-105; assumption A4)"
         },
         {
           "index": 1,
@@ -664,7 +700,7 @@
         {
           "index": 11,
           "name": "vault_runtime_code_hash",
-          "binding": "proved account code hash and governed profile binding"
+          "binding": "authenticated vault account code hash, compared with the witness policy (lib.rs:191-197, 422); not compared with the governed profile's expected runtime hash (assumption A1)"
         },
         {
           "index": 12,
@@ -674,7 +710,7 @@
         {
           "index": 13,
           "name": "token_runtime_code_hash",
-          "binding": "proved WETH9 account code hash and governed profile binding"
+          "binding": "authenticated WETH9 account code hash, compared with the witness policy (lib.rs:198-204, 422), which the guest requires to equal its WETH9 runtime code hash constant (lib.rs:434-441); not compared with a governed profile hash. A1 applies to the vault hash only"
         },
         {
           "index": 14,
@@ -719,7 +755,7 @@
         {
           "index": 22,
           "name": "manifest_hash",
-          "binding": "policy commitment to route domain, vault, WETH9 and vault creation bytecode hash"
+          "binding": "guest requires nonzero (lib.rs:164) and copies the witness value (lib.rs:304); the host compares it with the profile valuation_policy_hash (crates/execution/src/nav_vault_asset_execution.rs:8038). The preimage (route domain, vault, WETH9, vault creation bytecode hash) is built by the capture tool and not recomputed (assumption A3)"
         },
         {
           "index": 23,
@@ -734,7 +770,7 @@
         {
           "index": 25,
           "name": "vault_token_balance_atoms",
-          "binding": "proved WETH9 balance floor-divided by 10^9; backing check uses the unfloored wei balance"
+          "binding": "proved WETH9 balanceOf(vault) slot: the guest requires the witness key to equal mapping slot 3 of the policy vault (lib.rs:228, 441); floor-divided by 10^9 (lib.rs:307); the backing check uses the unfloored wei balance (lib.rs:253). A2 does not apply"
         }
       ],
       "private_witnesses": [
@@ -742,11 +778,232 @@
         "vault account proof plus five storage-slot proofs",
         "WETH9 account proof plus balanceOf(vault) slot-3 proof"
       ],
-      "proof_binding": "The guest verifies Ethereum mainnet finality, code identities, exact storage keys, the persisted deposit record and WETH backing before committing the CBOR public values. The governed route pins the program vkey and policy hash.",
+      "proof_binding": "The guest verifies Ethereum mainnet finality, the vault code hash against the witness policy, the WETH9 address, code hash and balanceOf(vault) key against guest constants, the deposit-record storage keys, the persisted deposit record and WETH backing, then commits the CBOR public values. The governed route pins the program vkey and policy hash.",
+      "binding_note": "lib.rs is programs/pfusdc-eth-mainnet-ingress/src/lib.rs at the pinned hash; the committed ELF was built from its da00621ff version, which has the same checks at earlier lines.",
+      "assumptions": [
+        "A1: the proved vault runtime code hash is compared with the witness policy only (programs/pfusdc-eth-mainnet-ingress/src/lib.rs:191-197, 422); neither the guest nor the Ethereum host matcher (crates/execution/src/nav_vault_asset_execution.rs:8036-8052) compares it with the governed profile's expected runtime hash. The WETH9 code hash is fixed by a guest constant (lib.rs:434-441).",
+        "A2: does not apply. The guest requires the WETH9 balance key to equal balanceOf(vault) mapping slot 3 of the policy vault (programs/pfusdc-eth-mainnet-ingress/src/lib.rs:228, 441), so the witness cannot select another slot.",
+        "A3: the manifest preimage is built by the capture tool (tools/eth-l1-mainnet-fast-lane-p0/src/main.rs:713-726); the guest checks the manifest hash is nonzero and copies it (programs/pfusdc-eth-mainnet-ingress/src/lib.rs:164, 304), and the host compares only that hash with valuation_policy_hash (crates/execution/src/nav_vault_asset_execution.rs:8038). The preimage excludes the vault runtime code hash.",
+        "A4: the shared host decoders accept the pfUSDC or pfETH schema (crates/types/src/pfusdc_tier4_types.rs:97-101, crates/types/src/b23_ingress_legacy.rs:103-105); the route is told apart by route_id (crates/execution/src/nav_vault_asset_execution.rs:8037) and the active profile, not by the schema check."
+      ],
       "host_only_checks": [
         "active route profile, route epoch and route binding",
         "proof and public-value byte bounds",
         "asset identity and exact source chain/token tuple",
+        "deposit-nullifier uniqueness and deterministic ledger credit"
+      ],
+      "build_state": {
+        "state": "source_changed_after_committed_build",
+        "note": "source changed after the committed build; must be rebuilt reproducibly before its route is used",
+        "committed_elf": "programs/pfeth-eth-mainnet-ingress/elf/pfeth-eth-mainnet-ingress-program",
+        "committed_elf_sha256": "d49f826e9d8850e3d4762e475a2c7841b82b30dd79a78bde2d7cd449ea9b12aa",
+        "built_from_source_sha256": {
+          "programs/pfusdc-eth-mainnet-ingress/src/lib.rs": "7d1baeb587f0d96c14596718fe2560bfc4c790c19f1a89c9acff5474b3157b91"
+        },
+        "program_vkey_status": "pinned key of the committed ELF; it does not prove the current 29-field library",
+        "prover_tool": "refuses pfETH proving until the guest is rebuilt and verified",
+        "devnet2_route": "not active: docs/status/chain-state-current.md (reviewed 2026-11-12) records no pfETH or WETH route"
+      }
+    },
+    {
+      "name": "Ethereum mainnet pfUSDC ingress",
+      "status": "live route on devnet-2; committed ELF and key verified with SP1 6.3.1 setup on 2026-11-13, not rebuilt",
+      "proof_system_id": "sp1-pfusdc-ethereum-mainnet-ingress-v1",
+      "program": "programs/pfusdc-eth-mainnet-ingress",
+      "program_vkey": "0x00d8cbf06d5640adde0fef863b3c689c4ab3442b0dc91d28ac4cc5f9c9b2ccbb",
+      "elf": "programs/pfusdc-eth-mainnet-ingress/elf/pfusdc-eth-mainnet-ingress-program",
+      "elf_sha256": "b6a06cb90ee81477a33c9a5902458db5b379cc40b765988cebb0ec46d08766fe",
+      "key_derivation": "PFUSDC_INGRESS_ELF=<committed ELF> cargo run --manifest-path tools/eth-l1-mainnet-fast-lane-p0/Cargo.toml -- program-info --route pfusdc",
+      "build_note": "ELF committed in 6739c2e3b after the last guest-library change (0c86810e4). crates/types, which the guest compiles, changed afterwards (the join with main and the host-side 26-field decoder). Not rebuilt here, so byte-for-byte reproduction from the current sources is unverified; the key above is that of the committed ELF.",
+      "sources": [
+        "programs/pfusdc-eth-mainnet-ingress/src/lib.rs",
+        "programs/pfusdc-eth-mainnet-ingress/src/main.rs",
+        "programs/pfusdc-eth-mainnet-ingress/Cargo.toml",
+        "programs/pfusdc-eth-mainnet-ingress/Cargo.lock",
+        "crates/types/src/pfusdc_tier4_types.rs",
+        "crates/types/src/b23_ingress_anchor.rs",
+        "crates/types/src/b23_ingress_legacy.rs",
+        "crates/execution/src/nav_vault_asset_execution.rs",
+        "crates/types/src/account_owned_asset_types.rs",
+        "crates/types/src/market_nav_asset_types.rs",
+        "crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol",
+        "crates/execution/src/vault_bridge_profile_resolution.rs",
+        "crates/node/src/execution_actions.rs"
+      ],
+      "source_coverage": "Pinned sources are the reviewed statement and binding owners (guest, host types, deposit-record helpers, route allowlist, vault storage layout, active-policy selectors). This is reviewed source coverage, not complete build provenance: the guest Cargo.lock cannot hash local path-dependency sources, and the verifier and prover tool are pinned globally.",
+      "public_values_schema": "postfiat.pfusdc.ethereum_ingress_public_values.v1",
+      "encoding": "serde CBOR of EthIngressPublicValuesV1 in declared field order",
+      "public_values": [
+        {
+          "index": 0,
+          "name": "schema",
+          "binding": "the selected guest emits the pfUSDC schema; the shared host decoder accepts the pfUSDC or pfETH schema (assumption A4)"
+        },
+        {
+          "index": 1,
+          "name": "route_id",
+          "binding": "guest and host require ethereum-mainnet-usdc-v1"
+        },
+        {
+          "index": 2,
+          "name": "source_chain_id",
+          "binding": "guest, anchor and route profile require Ethereum chain 1"
+        },
+        {
+          "index": 3,
+          "name": "route_epoch",
+          "binding": "epoch of the witness anchor; the host selects the ledger anchor by route profile and this epoch"
+        },
+        {
+          "index": 4,
+          "name": "prior_finalized_beacon_root",
+          "binding": "must equal the finalized beacon root of the pinned anchor"
+        },
+        {
+          "index": 5,
+          "name": "prior_finalized_slot",
+          "binding": "must equal the finalized slot of the pinned anchor"
+        },
+        {
+          "index": 6,
+          "name": "prior_sync_committee_root",
+          "binding": "SSZ root of the starting sync committee; must equal the committee root of the pinned anchor"
+        },
+        {
+          "index": 7,
+          "name": "finalized_beacon_root",
+          "binding": "root after verified sync-committee updates; becomes the anchor root"
+        },
+        {
+          "index": 8,
+          "name": "finalized_slot",
+          "binding": "must strictly advance the anchor slot; becomes the anchor slot"
+        },
+        {
+          "index": 9,
+          "name": "current_sync_committee_root",
+          "binding": "authenticated committee after the advance; becomes the anchor committee root"
+        },
+        {
+          "index": 10,
+          "name": "finalized_execution_block_hash",
+          "binding": "execution payload authenticated by the finalized beacon header"
+        },
+        {
+          "index": 11,
+          "name": "finalized_execution_block_number",
+          "binding": "height of the authenticated execution payload"
+        },
+        {
+          "index": 12,
+          "name": "execution_state_root",
+          "binding": "root used for both account and storage proofs"
+        },
+        {
+          "index": 13,
+          "name": "vault_address",
+          "binding": "must equal the route-policy vault and the anchor vault"
+        },
+        {
+          "index": 14,
+          "name": "vault_runtime_code_hash",
+          "binding": "authenticated vault account code hash, compared with the witness policy; not compared with the governed profile's expected runtime hash (assumption A1)"
+        },
+        {
+          "index": 15,
+          "name": "token_address",
+          "binding": "must equal canonical Ethereum mainnet USDC and the anchor token"
+        },
+        {
+          "index": 16,
+          "name": "token_runtime_code_hash",
+          "binding": "authenticated USDC account code hash, compared with the witness policy; not compared with the governed profile's expected runtime hash (assumption A1)"
+        },
+        {
+          "index": 17,
+          "name": "depositor",
+          "binding": "reproduced from the deposit record packed slot"
+        },
+        {
+          "index": 18,
+          "name": "pftl_recipient",
+          "binding": "host credits this exact PFTL account"
+        },
+        {
+          "index": 19,
+          "name": "pftl_recipient_hash",
+          "binding": "reproduced from the deposit record and recipient text"
+        },
+        {
+          "index": 20,
+          "name": "amount_atoms",
+          "binding": "nonzero u64 amount reproduced from vault state"
+        },
+        {
+          "index": 21,
+          "name": "nonce",
+          "binding": "reproduced from the deposit record"
+        },
+        {
+          "index": 22,
+          "name": "route_binding",
+          "binding": "nonzero deposit binding checked against the active route profile and the anchor"
+        },
+        {
+          "index": 23,
+          "name": "deposit_id",
+          "binding": "guest recomputes the canonical deposit identifier"
+        },
+        {
+          "index": 24,
+          "name": "evidence_root",
+          "binding": "guest recomputes the complete deposit evidence root"
+        },
+        {
+          "index": 25,
+          "name": "manifest_hash",
+          "binding": "guest requires nonzero and copies the witness value; the host compares it with the profile valuation_policy_hash. The preimage (route domain, vault, token, vault creation bytecode hash) is built by the capture tool and not recomputed (assumption A3)"
+        },
+        {
+          "index": 26,
+          "name": "deposit_nullifier",
+          "binding": "guest derives a route-separated replay nullifier"
+        },
+        {
+          "index": 27,
+          "name": "total_obligations_atoms",
+          "binding": "proved vault slot zero"
+        },
+        {
+          "index": 28,
+          "name": "vault_token_balance_atoms",
+          "binding": "proved value of the USDC storage slot whose key equals the witness token_balance_storage_key; the guest does not derive the balanceOf(vault) key (assumption A2)"
+        }
+      ],
+      "legacy_public_values_length": 26,
+      "legacy_omitted_fields": [
+        "route_epoch",
+        "prior_sync_committee_root",
+        "current_sync_committee_root"
+      ],
+      "legacy_acceptance": "The old 26-field layout (the fields above without route_epoch and the two committee roots) is accepted only on a route profile with no beacon anchor, as main did; a profile with an anchor refuses it (ethereum_ingress_legacy_public_values_on_anchored_route).",
+      "private_witnesses": [
+        "governance-pinned beacon anchor for the route epoch",
+        "bounded Helios bootstrap, sync-committee updates and finality update",
+        "vault account proof plus storage-slot proofs",
+        "USDC account proof plus balanceOf(vault) storage proof"
+      ],
+      "proof_binding": "The guest starts from the anchored header and committee, verifies Ethereum mainnet finality, the vault and USDC account code hashes against the witness policy, the deposit-record storage keys, the persisted deposit record and the backing predicate on the witness-selected USDC slot, then commits the CBOR public values. The governed route pins the program vkey and policy hash; the host advances the anchor with the proved root, slot and committee.",
+      "assumptions": [
+        "A1: the proved vault and USDC runtime code hashes are compared with the witness policy only; neither the guest, the Ethereum host matcher nor the beacon anchor compares them with the governed profile's expected runtime hashes (programs/pfusdc-eth-mainnet-ingress/src/lib.rs verify_contract calls; crates/types/src/pfusdc_tier4_types.rs verify_and_advance).",
+        "A2: the USDC balance slot key is chosen by the capture tool (tools/eth-l1-mainnet-fast-lane-p0/src/main.rs) and the guest only checks it equals the witness token_balance_storage_key; a proof of another USDC slot can satisfy the backing predicate. It does not create or enlarge a credit, which equals the proved deposit record amount.",
+        "A3: the manifest preimage is built by the capture tool; the guest checks the manifest hash is nonzero and copies it, and the host compares only that hash with valuation_policy_hash. The preimage excludes the balance storage key and both runtime code hashes.",
+        "A4: the shared host decoder accepts the pfUSDC or pfETH schema; the route is told apart by route_id and the active profile, not by the schema check."
+      ],
+      "host_only_checks": [
+        "active route profile, route epoch and route binding",
+        "proof starts exactly at the ledger anchor and strictly advances it",
+        "proof and public-value byte bounds",
         "deposit-nullifier uniqueness and deterministic ledger credit"
       ]
     },
@@ -1048,8 +1305,8 @@
       "name": "PFT lane export egress",
       "status": "guest identity committed from two matching reproducible builds; no proof generated and no verifier constructed with this key yet",
       "proof_system_id": "sp1-pft-lane-export-v1",
-      "program_vkey": "0x00d5ebebe8e4551cf99ecfcea71f48957e61ad2fde1eab96357ddee66148ab65",
-      "elf_sha256": "8ac7696a5912eea37715b80798124baae0b81f8762d9351d1236737a980a1188",
+      "program_vkey": "0x005a9f57832e55110036d86cebd66e1c6714b3dddca916580efae1913ae07829",
+      "elf_sha256": "cdaf391297e05a1547334505dcf388545ab148ddacbc7a136eeef3ba0fbbfd58",
       "program": "programs/pft-lane-export",
       "withdrawal_public_values_schema": "postfiat.pfusdc.egress_public_values.v1",
       "checkpoint_public_values_schema": "postfiat.pfusdc.checkpoint_public_values.v1",
@@ -1355,5 +1612,35 @@
   "handoff_source_refresh": {
     "date": "2026-09-07",
     "scope": "Arc constants retained; deployed historical reserve replay and A666 source custody merged. Public-values field layout and deployed proof identities unchanged by this inventory refresh. This is not a new external audit or proof reproduction."
+  },
+  "b23_source_refresh": {
+    "date": "2026-11-13",
+    "branch": "integration/main-with-b23-20261113",
+    "scope": "Pins of four sources changed by the B23 line, the pfUSDC ingress entry and the pfETH build state; then the pfUSDC bindings described as the code enforces them (assumptions A1-A4) and five further statement sources pinned; then the pfETH bindings described the same way (A1 for the vault code hash only, A2 not applicable). No ELF was rebuilt.",
+    "sources": {
+      "programs/pfusdc-eth-mainnet-ingress/src/lib.rs": "The witness gains a governance-pinned beacon anchor; the guest rebuilds a fresh light-client store from the anchored header and sync committee instead of trusting the witness store, and the public values grow from 26 to 29 fields (route_epoch, prior_sync_committee_root, current_sync_committee_root). The pfETH guest shares this library, so its committed ELF predates the change.",
+      "crates/types/src/pfusdc_tier4_types.rs": "Adds the 29-field host type (route_epoch must be nonzero, both committee roots are checked hex), PfUsdcBeaconFinalityStateV1 with verify_and_advance and its state-commitment bytes, and the module of the old 26-field decoder. The egress public-value encoding is unchanged.",
+      "crates/execution/src/nav_vault_asset_execution.rs": "Deposit admission decodes the 29-field values and advances the beacon anchor of that route profile and epoch; it falls back to the 26-field decoder only when the profile has no anchor. The other B23 changes here (PFTL-Uniswap spread recipient and reserve funding) do not touch proof public inputs.",
+      "tools/eth-l1-mainnet-fast-lane-p0/src/main.rs": "The prover starts Helios capture from the ledger anchor instead of a recent checkpoint, adds a read-only inspect-bootstrap that derives an unsigned anchor, and derives keys with the light client, honouring PFUSDC_INGRESS_ELF. It no longer embeds the pfETH ELF and refuses pfETH proving until that guest is rebuilt.",
+      "crates/types/src/account_owned_asset_types.rs": "Newly pinned. Recipient and evidence validation, route binding, deposit identifier and evidence root that the guest calls directly.",
+      "crates/types/src/market_nav_asset_types.rs": "Newly pinned. The host's chain/token to route-identifier allowlist (vault_bridge_route_id_for_source).",
+      "crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol": "Newly pinned. The vault storage layout the guest reads (slot 0 obligations, deposit records from slot 1).",
+      "crates/execution/src/vault_bridge_profile_resolution.rs": "Newly pinned. Selects the active route policy and NAV profile for a deposit.",
+      "crates/node/src/execution_actions.rs": "Newly pinned. Node-side selection and checks of the active route policy for ingress transactions."
+    }
+  },
+  "b23_nav_source_refresh": {
+    "date": "2026-11-18",
+    "branch": "release/joined-r5-prep-20261118",
+    "scope": "Classifies the B23 NAV reading proof program under the provider-neutral NAV reserve proof, whose 584-byte ABI it commits: its statement module, guest and CLI pinned and reserve-proof-types lib.rs re-pinned. No proof program code changed and no ELF was built.",
+    "sources": {
+      "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "Re-pinned. Only change: pub mod b23_nav.",
+      "tools/nav-reserve-proof/crates/reserve-proof-types/src/b23_nav.rs": "Newly pinned. The B23 NAV reading statement: witness decoding and the checks that produce the reserve public values.",
+      "tools/nav-reserve-proof/programs/b23-nav-guest/src/main.rs": "Newly pinned. Guest entry: decode, execute and commit the encoded public values, halting on any error.",
+      "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.toml": "Newly pinned. Guest manifest with the SP1 6.3.1 zkVM and patched hash crates.",
+      "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.lock": "Newly pinned. Guest lock file.",
+      "tools/nav-reserve-proof/crates/b23-nav-cli/src/main.rs": "Newly pinned. Native run, profile and public-value decoding commands.",
+      "tools/nav-reserve-proof/crates/b23-nav-cli/src/sp1.rs": "Newly pinned. SP1 identity, execute, prove and verify commands."
+    }
   }
 }

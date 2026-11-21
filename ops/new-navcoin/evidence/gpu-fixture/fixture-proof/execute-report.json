@@ -1,0 +1,9 @@
+{
+  "elapsed_ms": 3784,
+  "host_execute_skipped": false,
+  "instruction_count": 89547142,
+  "proof_kind": "receipt",
+  "public_values_bytes": 1120,
+  "schema": "postfiat-pftl-uniswap-execute-report-v1",
+  "witness": "fixture-witness.json"
+}

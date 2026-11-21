@@ -90,6 +90,22 @@ pub(super) fn reserve_block_proposal_vote_lock(
     reserve_block_proposal_vote_lock_with_sync(store, genesis, target, validator, sync_directory)
 }
 
+/// Proposal hash this validator already reserved at (height, view), if any.
+/// Read only: a proposer checks its own slot before it signs anything.
+pub(super) fn recorded_block_proposal_vote_hash(
+    store: &NodeStore,
+    genesis: &Genesis,
+    block_height: u64,
+    view: u64,
+    validator: &str,
+) -> io::Result<Option<String>> {
+    let lock_path = block_proposal_vote_lock_path(store, genesis, block_height, view, validator);
+    let mut work = VoteLockWorkReport::default();
+    let lock: Option<BlockProposalVoteLock> =
+        read_counted_json_file(&lock_path, "block proposal vote lock", &mut work)?;
+    Ok(lock.map(|lock| lock.proposal_hash))
+}
+
 fn reserve_block_proposal_vote_lock_with_sync(
     store: &NodeStore,
     genesis: &Genesis,

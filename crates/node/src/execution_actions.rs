@@ -460,15 +460,16 @@ pub(super) fn atomic_swap_activation_height_for_chain(
 
 /// The rejected-transaction fee claim applies only to transactions executed as
 /// part of a certified transparent block (live commit, proposal and archive
-/// replay). The shared compatibility builders above leave it unset, so mempool
-/// admission, RPC simulation and shielded or bridge workflows keep their
-/// side-effect-free rejection semantics.
+/// replay), and only from the v2 activation height; unset means off. Release
+/// 6.4 does not apply the original kind. The shared compatibility builders
+/// above leave it unset, so mempool admission, RPC simulation and shielded or
+/// bridge workflows keep their side-effect-free rejection semantics.
 pub(super) fn transparent_block_fee_claim_compatibility(
     compatibility: AssetExecutionCompatibility,
     governance: &GovernanceState,
 ) -> AssetExecutionCompatibility {
     compatibility
-        .with_rejected_tx_fee_activation_height(governance.rejected_tx_fee_activation_height())
+        .with_rejected_tx_fee_activation_height(governance.rejected_tx_fee_v2_activation_height())
 }
 
 pub(super) fn bridge_exit_root_activation_height_for_chain(
@@ -496,8 +497,8 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
         ))
         .with_yolo_target_activation_height(governance.yolo_target_activation_height())
         .with_atomic_swap_paused(governance.atomic_swap_paused)
-        .with_recipient_format_activation_height(governance.recipient_format_activation_height())
-        .with_require_memo_activation_height(governance.require_memo_activation_height())
+        .with_recipient_format_activation_height(governance.recipient_format_v2_activation_height())
+        .with_require_memo_activation_height(governance.require_memo_v2_activation_height())
         .with_asset_orchard_pricing_enforcement(
             governance.asset_orchard_pricing_enforcement_activation_height(),
             governance.asset_orchard_pricing_max_nav_age_blocks(),
@@ -529,8 +530,8 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
         ))
         .with_yolo_target_activation_height(governance.yolo_target_activation_height())
         .with_atomic_swap_paused(governance.atomic_swap_paused)
-        .with_recipient_format_activation_height(governance.recipient_format_activation_height())
-        .with_require_memo_activation_height(governance.require_memo_activation_height())
+        .with_recipient_format_activation_height(governance.recipient_format_v2_activation_height())
+        .with_require_memo_activation_height(governance.require_memo_v2_activation_height())
         .with_asset_orchard_pricing_enforcement(
             governance.asset_orchard_pricing_enforcement_activation_height(),
             governance.asset_orchard_pricing_max_nav_age_blocks(),
@@ -1762,7 +1763,14 @@ fn execute_governance_batch_with_replay(
             continue;
         }
         let validated = (|| -> Result<postfiat_types::VaultBridgeRouteProfileRecordV1, String> {
-            if historical_replay {
+            // Old archived envelopes must reach the same NAV-profile rejection
+            // as the base binary. They still cannot pass state.validate() below.
+            if historical_replay
+                || activation
+                    .beacon_finality_bootstrap
+                    .as_ref()
+                    .is_some_and(|state| state.current_sync_committee_root.is_empty())
+            {
                 activation.validate_for_replay()?;
             } else {
                 activation.validate()?;
@@ -1808,7 +1816,9 @@ fn execute_governance_batch_with_replay(
             if governance
                 .vault_bridge_route_profiles
                 .iter()
-                .filter(|existing| existing.profile.asset_id == activation.profile.asset_id)
+                .filter(|existing| existing.profile.asset_id == activation.profile.asset_id
+                    && existing.profile.solana.is_some() == activation.profile.solana.is_some()
+                    && (activation.profile.solana.is_none() || existing.profile.route_id == activation.profile.route_id))
                 .any(|existing| {
                     existing.profile.route_epoch >= activation.profile.route_epoch
                         || existing.profile.activation_height
@@ -1823,6 +1833,32 @@ fn execute_governance_batch_with_replay(
             let ledger = ledger.as_deref().ok_or_else(|| {
                 "vault bridge route activation requires canonical ledger context".to_string()
             })?;
+            if activation.profile.solana.is_some() {
+                let height = governance.amendments.iter()
+                    .filter(|a| a.kind == postfiat_types::SOLANA_ACTIVATION_HEIGHT)
+                    .map(|a| u64::from(a.value)).min();
+                if height.is_none_or(|at| block_height < at) {
+                    return Err("Solana bridge is not active".into());
+                }
+                if block_height >= activation.profile.expires_at_height {
+                    return Err("Solana route already expired".into());
+                }
+                if let Some(previous) = ledger.solana_clients()
+                    .filter(|r| r.profile.route_id == activation.profile.route_id)
+                    .max_by_key(|r| r.profile.route_epoch)
+                {
+                    let old = previous.profile.solana.as_ref().ok_or("missing Solana predecessor pins")?;
+                    let new = activation.profile.solana.as_ref().unwrap();
+                    if previous.profile.asset_id != activation.profile.asset_id
+                        || previous.profile.source_domain() != activation.profile.source_domain()
+                        || new.route_binding != old.route_binding
+                        || (!previous.rotates_deposit_key(&activation.profile)
+                            && (new.anchor_slot <= old.anchor_slot || new.anchor.epoch < previous.client.epoch))
+                    {
+                        return Err("Solana route revision must preserve custody and advance its governed anchor".into());
+                    }
+                }
+            }
             validate_vault_bridge_route_profile_against_ledger(
                 ledger,
                 &activation.profile,
@@ -1850,6 +1886,18 @@ fn execute_governance_batch_with_replay(
                     );
                 }
             }
+            if let Some(state) = activation.beacon_finality_bootstrap.as_ref() {
+                state.validate()?;
+                if ledger.beacon_finality_states.iter().any(|existing| {
+                    existing.route_profile_hash == state.route_profile_hash
+                        && existing.route_epoch == state.route_epoch
+                }) {
+                    return Err(
+                        "Ethereum beacon finality anchor already exists for route epoch"
+                            .to_string(),
+                    );
+                }
+            }
             if historical_replay {
                 postfiat_types::VaultBridgeRouteProfileRecordV1::new_for_replay(
                     activation,
@@ -1861,6 +1909,27 @@ fn execute_governance_batch_with_replay(
         })();
         match validated {
             Ok(record) => {
+                if let (Some(ledger), Some(pins)) = (ledger.as_deref_mut(), &activation.profile.solana) {
+                    let predecessor = ledger.solana_clients()
+                        .filter(|r| r.profile.route_id == activation.profile.route_id)
+                        .max_by_key(|r| r.profile.route_epoch)
+                        .filter(|r| r.rotates_deposit_key(&activation.profile));
+                    let client = predecessor.map_or_else(|| pins.anchor.clone(), |r| r.client.clone());
+                    let mut epoch_history = predecessor.map(|r| r.epoch_history.clone()).unwrap_or_default();
+                    if predecessor.is_some() {
+                        epoch_history.insert(pins.anchor.epoch, pins.anchor.clone());
+                    }
+                    let route = postfiat_types::SolanaRouteState {
+                        profile: activation.profile.clone(),
+                        client,
+                        epoch_history,
+                    };
+                    if ledger.solana_route.is_none() {
+                        ledger.solana_route = Some(route);
+                    } else {
+                        ledger.additional_solana_routes.insert(record.profile_hash.clone(), route);
+                    }
+                }
                 if let Some(state) = activation.tier4_finality_bootstrap.clone() {
                     // The validation closure required canonical ledger context;
                     // therefore an accepted Tier-4 activation must have it.
@@ -1871,6 +1940,11 @@ fn execute_governance_batch_with_replay(
                 if let Some(state) = activation.arc_finality_bootstrap.clone() {
                     if let Some(ledger) = ledger.as_deref_mut() {
                         ledger.arc_finality_states.push(state);
+                    }
+                }
+                if let Some(state) = activation.beacon_finality_bootstrap.clone() {
+                    if let Some(ledger) = ledger.as_deref_mut() {
+                        ledger.beacon_finality_states.push(state);
                     }
                 }
                 apply_governance_amendment_with_lifecycle_records(
@@ -1907,6 +1981,15 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
     let nav_asset = ledger
         .nav_asset(&route.asset_id)
         .ok_or_else(|| "vault bridge route asset is missing from the NAV registry".to_string())?;
+    if route.solana.is_some() {
+        // Solana is a second backing series of the same family. Its signed
+        // route pins are independent of the Ethereum NAV verifier profile.
+        let asset = ledger.asset_definition(&route.asset_id).ok_or("missing Solana pfUSDC family")?;
+        if asset.issuer != nav_asset.issuer || asset.precision != 6 || !asset.asset_family_id.is_empty() {
+            return Err("invalid Solana pfUSDC family".into());
+        }
+        return Ok(());
+    }
     let profile = ledger
         .nav_proof_profile(&nav_asset.proof_profile)
         .ok_or_else(|| "vault bridge route NAV proof profile is missing".to_string())?;
@@ -2233,6 +2316,32 @@ pub(super) fn governance_amendment_lifecycle_rejection(
                 .to_string(),
         ));
     }
+    for (kind, code, rule) in [
+        (
+            GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT,
+            "invalid_rejected_tx_fee_v2_activation_height",
+            "rejected-transaction fee",
+        ),
+        (
+            GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT,
+            "invalid_require_memo_v2_activation_height",
+            "require-memo",
+        ),
+        (
+            GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT,
+            "invalid_recipient_format_v2_activation_height",
+            "recipient-format",
+        ),
+    ] {
+        if amendment.kind == kind && u64::from(amendment.value) <= block_height {
+            return Some((
+                code,
+                format!(
+                    "{rule} v2 activation must be scheduled strictly after the amendment block"
+                ),
+            ));
+        }
+    }
     if amendment.kind == GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT
         && u64::from(amendment.value) <= block_height
     {
@@ -2387,6 +2496,18 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .require_memo_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
+        GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT => governance
+            .rejected_tx_fee_v2_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT => governance
+            .require_memo_v2_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT => governance
+            .recipient_format_v2_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
         GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT => governance
             .replicated_state_v2_activation_height()
             .and_then(|height| u32::try_from(height).ok())
@@ -2435,6 +2556,9 @@ fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
             | GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
             | postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT

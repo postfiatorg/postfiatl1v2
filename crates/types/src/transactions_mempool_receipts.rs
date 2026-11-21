@@ -3032,6 +3032,8 @@ impl PftlUniswapPrimarySubscribeV2Operation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapRedemptionFundOperation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub funding_sequence: Option<u64>,
     pub funder: String,
     pub route_id: String,
     pub settlement_asset_id: String,
@@ -3060,7 +3062,7 @@ impl PftlUniswapRedemptionFundOperation {
     }
 
     fn signing_bytes(&self) -> Vec<u8> {
-        format!(
+        let mut bytes = format!(
             "funder={}\nroute_id={}\nsettlement_asset_id={}\nfunding_nonce={}\namount_atoms={}\n",
             self.funder,
             self.route_id,
@@ -3068,7 +3070,11 @@ impl PftlUniswapRedemptionFundOperation {
             self.funding_nonce,
             self.amount_atoms,
         )
-        .into_bytes()
+        .into_bytes();
+        if let Some(sequence) = self.funding_sequence {
+            bytes.extend_from_slice(format!("funding_sequence={sequence}\n").as_bytes());
+        }
+        bytes
     }
 }
 
@@ -3811,6 +3817,8 @@ pub enum AssetTransactionOperation {
     VaultBridgeDepositAttest(VaultBridgeDepositAttestOperation),
     #[serde(rename = "vault_bridge_deposit_finalize")]
     VaultBridgeDepositFinalize(VaultBridgeDepositFinalizeOperation),
+    #[serde(rename = "solana_bridge_proof_v1")]
+    SolanaBridgeProof(SolanaProofOperation),
     #[serde(rename = "vault_bridge_deposit_claim")]
     VaultBridgeDepositClaim(VaultBridgeDepositClaimOperation),
     #[serde(rename = "vault_bridge_fast_ingress_lifecycle")]
@@ -3957,6 +3965,7 @@ impl<'de> Deserialize<'de> for AssetTransactionOperation {
                 VaultBridgeDepositFinalizeOperation,
                 VaultBridgeDepositFinalize
             ),
+            "solana_bridge_proof_v1" => decode_operation!(SolanaProofOperation, SolanaBridgeProof),
             "vault_bridge_deposit_claim" => {
                 decode_operation!(VaultBridgeDepositClaimOperation, VaultBridgeDepositClaim)
             }
@@ -4089,6 +4098,7 @@ impl AssetTransactionOperation {
             Self::VaultBridgeDepositChallenge(_) => VAULT_BRIDGE_DEPOSIT_CHALLENGE_TRANSACTION_KIND,
             Self::VaultBridgeDepositAttest(_) => VAULT_BRIDGE_DEPOSIT_ATTEST_TRANSACTION_KIND,
             Self::VaultBridgeDepositFinalize(_) => VAULT_BRIDGE_DEPOSIT_FINALIZE_TRANSACTION_KIND,
+            Self::SolanaBridgeProof(_) => "solana_bridge_proof_v1",
             Self::VaultBridgeDepositClaim(_) => VAULT_BRIDGE_DEPOSIT_CLAIM_TRANSACTION_KIND,
             Self::VaultBridgeFastIngressLifecycle(_) => {
                 VAULT_BRIDGE_FAST_INGRESS_LIFECYCLE_TRANSACTION_KIND
@@ -4166,6 +4176,7 @@ impl AssetTransactionOperation {
             Self::VaultBridgeDepositChallenge(operation) => operation.validate(),
             Self::VaultBridgeDepositAttest(operation) => operation.validate(),
             Self::VaultBridgeDepositFinalize(operation) => operation.validate(),
+            Self::SolanaBridgeProof(operation) => operation.validate(),
             Self::VaultBridgeDepositClaim(operation) => operation.validate(),
             Self::VaultBridgeFastIngressLifecycle(operation) => operation.validate(),
             Self::VaultBridgeReceiptSubmit(operation) => operation.validate(),
@@ -4235,6 +4246,7 @@ impl AssetTransactionOperation {
             Self::VaultBridgeDepositChallenge(operation) => operation.challenger == source,
             Self::VaultBridgeDepositAttest(operation) => operation.attestor == source,
             Self::VaultBridgeDepositFinalize(operation) => operation.finalizer == source,
+            Self::SolanaBridgeProof(operation) => operation.submitter == source,
             Self::VaultBridgeDepositClaim(operation) => operation.claimer == source,
             Self::VaultBridgeFastIngressLifecycle(operation) => operation.operator == source,
             Self::VaultBridgeReceiptSubmit(operation) => operation.operator == source,
@@ -4347,6 +4359,7 @@ impl AssetTransactionOperation {
             Self::VaultBridgeDepositFinalize(operation) => {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
+            Self::SolanaBridgeProof(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
             Self::VaultBridgeDepositClaim(operation) => {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }

@@ -423,7 +423,9 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
                 vote_file: PathBuf::from(vote_file),
                 block_height,
                 timeout_ms,
+                deadline: None,
                 consensus_v2: None,
+                local_status: None,
             })?;
             let json = serde_json::to_string_pretty(&report).map_err(|error| {
                 format!("transport block vote request serialization failed: {error}")
@@ -559,6 +561,7 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
                     timeout_ms,
                     send_retries,
                     retry_backoff_ms,
+                    vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                     local_apply_before_certified_send,
                     defer_certified_sends,
                     commit_processed_dir: None,
@@ -643,6 +646,7 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
                     timeout_ms,
                     send_retries,
                     retry_backoff_ms,
+                    vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                     local_apply_before_certified_send,
                     defer_certified_sends,
                     max_transactions,

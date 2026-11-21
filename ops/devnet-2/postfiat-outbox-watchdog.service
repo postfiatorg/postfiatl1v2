@@ -1,0 +1,12 @@
+[Unit]
+Description=certified-send outbox watchdog (clears duplicate-stuck deliveries)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -u /usr/local/bin/outbox-watchdog.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -27,6 +27,19 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             }
             Ok(())
         }
+        "transport-certified-send-outbox-witness" => {
+            let data_dir =
+                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let topology =
+                PathBuf::from(flag_value(flags, "--topology").ok_or("missing --topology")?);
+            let job = Path::new(flag_value(flags, "--job-file").ok_or("missing --job-file")?);
+            let witnesses = certified_delivery_witness(&data_dir, &topology, job)?;
+            println!(
+                "{}",
+                serde_json::to_string(&witnesses).map_err(|e| e.to_string())?
+            );
+            Ok(())
+        }
         "transport-certified-send-outbox-verify" => {
             let data_dir =
                 PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
@@ -374,6 +387,23 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 .unwrap_or("25")
                 .parse::<u64>()
                 .map_err(|_| "--finality-retry-backoff-ms must be a u64".to_string())?;
+            // A phase deadline above the transport timeout would only lengthen
+            // how long a failing round holds the mempool lock.
+            let finality_vote_phase_deadline_ms =
+                match flag_value(flags, "--finality-vote-phase-deadline-ms") {
+                    Some(value) => value
+                        .parse::<u64>()
+                        .ok()
+                        .filter(|deadline_ms| {
+                            (1..=finality_timeout_ms).contains(deadline_ms)
+                        })
+                        .ok_or_else(|| {
+                            format!(
+                                "--finality-vote-phase-deadline-ms must be a positive u64 no greater than --finality-timeout-ms ({finality_timeout_ms})"
+                            )
+                        })?,
+                    None => PEER_VOTE_PHASE_DEADLINE_MS.min(finality_timeout_ms),
+                };
             let finality_quorum_early_full_propagation =
                 flag_present(flags, "--finality-quorum-early-full-propagation");
             let max_mempool_submit_per_peer = flag_value(flags, "--max-mempool-submit-per-peer")
@@ -468,6 +498,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                     finality_timeout_ms,
                     finality_send_retries,
                     finality_retry_backoff_ms,
+                    finality_vote_phase_deadline_ms,
                     finality_quorum_early_full_propagation,
                     max_mempool_submit_per_peer,
                     max_mempool_submit_total,
@@ -1951,8 +1982,12 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
         "ratify-atomic-swap-activation-height"
         | "ratify-rejected-tx-fee-activation-height"
         | "ratify-require-memo-activation-height"
+        | "ratify-rejected-tx-fee-v2-activation-height"
+        | "ratify-require-memo-v2-activation-height"
+        | "ratify-recipient-format-v2-activation-height"
         | "ratify-orchard-aware-bridge-claim-activation-height"
         | "ratify-pfusdc-source-series-activation-height"
+        | "ratify-solana-bridge-activation-height"
         | "ratify-replicated-state-v2-activation-height"
         | "ratify-bridge-exit-root-activation-height"
         | "ratify-external-lane-export-root-activation-height"
@@ -1984,9 +2019,25 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                     GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT,
                     "--require-memo-activation-height",
                 ),
+                "ratify-rejected-tx-fee-v2-activation-height" => (
+                    postfiat_types::GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT,
+                    "--rejected-tx-fee-v2-activation-height",
+                ),
+                "ratify-require-memo-v2-activation-height" => (
+                    postfiat_types::GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT,
+                    "--require-memo-v2-activation-height",
+                ),
+                "ratify-recipient-format-v2-activation-height" => (
+                    postfiat_types::GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT,
+                    "--recipient-format-v2-activation-height",
+                ),
                 "ratify-orchard-aware-bridge-claim-activation-height" => (
                     GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT,
                     "--orchard-aware-bridge-claim-activation-height",
+                ),
+                "ratify-solana-bridge-activation-height" => (
+                    postfiat_types::SOLANA_ACTIVATION_HEIGHT,
+                    "--solana-bridge-activation-height",
                 ),
                 "ratify-pfusdc-source-series-activation-height" => (
                     GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT,

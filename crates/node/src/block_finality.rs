@@ -1238,6 +1238,15 @@ fn account_tx_rows_for_transparent_batch(
                 None,
                 None,
             ),
+            AssetTransactionOperation::SolanaBridgeProof(operation) => (
+                operation.submitter.clone(),
+                operation.profile_hash.clone(),
+                0,
+                None,
+                None,
+                None,
+                None,
+            ),
             AssetTransactionOperation::VaultBridgeFastIngressLifecycle(operation) => (
                 operation.operator.clone(),
                 operation.source_assertion_id.clone(),
@@ -2714,6 +2723,17 @@ pub fn create_block_timeout_vote(
     } else {
         None
     };
+    // Validators that never stored this QC (a failed precommit fan-out leaves
+    // it with the proposer alone) need it to use the vote.
+    let consensus_v2_high_qc = match consensus_v2_vote
+        .as_ref()
+        .and_then(|vote| vote.high_qc.as_ref().map(|reference| (&vote.domain, reference)))
+    {
+        Some((domain, reference)) => {
+            read_stored_consensus_v2_qc(&options.data_dir, domain, reference)?
+        }
+        None => None,
+    };
     let vote = BlockTimeoutVoteFile {
         schema: BLOCK_TIMEOUT_VOTE_FILE_SCHEMA.to_string(),
         chain_id: genesis.chain_id.clone(),
@@ -2731,6 +2751,7 @@ pub fn create_block_timeout_vote(
             signature_hex: bytes_to_hex(&signature),
         },
         consensus_v2_vote,
+        consensus_v2_high_qc,
     };
     validate_block_timeout_vote_file_for_target(
         &vote,
@@ -2771,6 +2792,7 @@ pub fn aggregate_block_timeout_certificate(
     let mut votes_by_validator = HashMap::<String, BlockTimeoutVote>::new();
     let mut consensus_v2_votes_by_validator =
         HashMap::<String, postfiat_types::ConsensusV2TimeoutVote>::new();
+    let mut carried_high_qcs = Vec::new();
     for vote_file in &options.vote_files {
         let vote = read_block_timeout_vote_file(vote_file)?;
         validate_block_timeout_vote_file_for_target(
@@ -2791,6 +2813,14 @@ pub fn aggregate_block_timeout_certificate(
                     ),
                 )
             })?;
+            if let Some(carried) = vote.consensus_v2_high_qc.clone() {
+                carried_high_qcs.push((
+                    vote_file.display().to_string(),
+                    consensus_v2_vote.round,
+                    consensus_v2_vote.high_qc.clone(),
+                    carried,
+                ));
+            }
             if consensus_v2_vote.validator != validator_id
                 || consensus_v2_votes_by_validator
                     .insert(validator_id.clone(), consensus_v2_vote)
@@ -2885,14 +2915,29 @@ pub fn aggregate_block_timeout_certificate(
         &hotstuff_certificate_id,
         &certificate,
     )?;
+    let mut consensus_v2_high_qcs = Vec::new();
     let consensus_v2_certificate = if consensus_v2_active_at(&genesis, options.block_height) {
         let (domain, consensus_v2_validators) =
             live_consensus_v2_context(&options.data_dir)?;
-        let graph = read_consensus_v2_qc_graph(
+        let mut graph = read_consensus_v2_qc_graph(
             &options.data_dir,
             &domain,
             &consensus_v2_validators,
         )?;
+        // Each vote's carried QC is checked against that vote's signed
+        // reference; it is stored only once the certificate verifies.
+        let mut added = Vec::new();
+        for (vote_file, round, reference, carried) in &carried_high_qcs {
+            added.extend(add_carried_consensus_v2_qcs(
+                &mut graph,
+                &domain,
+                &consensus_v2_validators,
+                *round,
+                &reference.iter().collect::<Vec<_>>(),
+                std::slice::from_ref(carried),
+                &format!("timeout vote `{vote_file}`"),
+            ));
+        }
         let ordered_votes = validators
             .iter()
             .filter_map(|validator| consensus_v2_votes_by_validator.remove(validator))
@@ -2903,20 +2948,27 @@ pub fn aggregate_block_timeout_certificate(
                 "unexpected consensus v2 timeout vote validator",
             ));
         }
-        Some(
-            postfiat_ordering_fast::certify_consensus_v2_timeouts(
-                &domain,
-                &consensus_v2_validators,
-                postfiat_types::ConsensusV2Round {
-                    height: options.block_height,
-                    view: options.view,
-                },
-                postfiat_types::ConsensusV2Phase::Precommit,
-                ordered_votes,
-                &graph,
-            )
-            .map_err(invalid_data)?,
+        let certificate = postfiat_ordering_fast::certify_consensus_v2_timeouts(
+            &domain,
+            &consensus_v2_validators,
+            postfiat_types::ConsensusV2Round {
+                height: options.block_height,
+                view: options.view,
+            },
+            postfiat_types::ConsensusV2Phase::Precommit,
+            ordered_votes,
+            &graph,
         )
+        .map_err(invalid_data)?;
+        persist_carried_consensus_v2_qcs(&options.data_dir, &added)?;
+        consensus_v2_high_qcs = consensus_v2_timeout_certificate_high_qcs(
+            &graph,
+            &domain,
+            &consensus_v2_validators,
+            &certificate,
+        )
+        .map_err(invalid_data)?;
+        Some(certificate)
     } else {
         None
     };
@@ -2931,6 +2983,7 @@ pub fn aggregate_block_timeout_certificate(
         certificate_id,
         certificate,
         consensus_v2_certificate,
+        consensus_v2_high_qcs,
     };
     verify_block_timeout_certificate_material(&genesis, &registry, &validators, &certificate_file)?;
     verify_consensus_v2_timeout_extension(&options.data_dir, &genesis, &certificate_file)?;
@@ -2974,7 +3027,26 @@ fn verify_consensus_v2_timeout_extension(
                     )
                 })?;
         let (domain, validators) = live_consensus_v2_context(data_dir)?;
-        let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
+        let mut graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
+        // A validator that never stored a QC the votes name gets it from the
+        // certificate (proposer, forwarded proposals and peers); it is stored
+        // only once the certificate verifies.
+        let added = add_carried_consensus_v2_qcs(
+            &mut graph,
+            &domain,
+            &validators,
+            consensus_v2_certificate.round,
+            &consensus_v2_certificate
+                .votes
+                .iter()
+                .filter_map(|vote| vote.high_qc.as_ref())
+                .collect::<Vec<_>>(),
+            &certificate.consensus_v2_high_qcs,
+            &format!(
+                "timeout certificate `{}`",
+                consensus_v2_certificate.certificate_id
+            ),
+        );
         postfiat_ordering_fast::verify_consensus_v2_timeout_certificate(
             &domain,
             &validators,
@@ -2990,6 +3062,7 @@ fn verify_consensus_v2_timeout_extension(
                 "consensus v2 timeout target does not match legacy transport envelope",
             ));
         }
+        persist_carried_consensus_v2_qcs(data_dir, &added)?;
     } else if certificate.consensus_v2_certificate.is_some() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -4365,6 +4438,72 @@ pub fn sign_verified_block_proposal(
     sign_block_proposal_file(&store, &mut proposal, key_file, Some(validator_id))?;
     verify_block_proposal_signature_if_present(&store, &proposal)?;
     Ok(proposal)
+}
+
+/// Start of the error a proposer returns when it already signed at this
+/// (height, view). Only a timeout certificate moves the height on from there.
+pub const CONSENSUS_V2_VIEW_SPENT: &str = "consensus v2 view spent";
+
+/// A proposer that signed a proposal or a vote at (height, view) and then
+/// failed can never finish that view itself: its vote lock refuses any other
+/// proposal there, and its safety record refuses a second prepare even for
+/// the same block. Returns the reason when that is the case, so the caller
+/// stops before it signs anything new or asks any peer, and the height moves
+/// to the next view through a timeout certificate.
+pub fn consensus_v2_proposer_view_spent(
+    data_dir: &Path,
+    proposal: &BlockProposalFile,
+) -> io::Result<Option<String>> {
+    let store = NodeStore::new(data_dir);
+    let genesis = store.read_genesis()?;
+    if !consensus_v2_active_at(&genesis, proposal.block_height) {
+        return Ok(None);
+    }
+    let round = postfiat_types::ConsensusV2Round {
+        height: proposal.block_height,
+        view: proposal.view,
+    };
+    let mut unsigned = proposal.clone();
+    unsigned.signature = None;
+    let proposal_hash = block_proposal_hash(&unsigned)?;
+    let recorded = recorded_block_proposal_vote_hash(
+        &store,
+        &genesis,
+        round.height,
+        round.view,
+        &proposal.proposer,
+    )?;
+    let (domain, _) = live_consensus_v2_context(data_dir)?;
+    let safety = read_consensus_v2_safety_state(data_dir, &domain, round.height)?;
+    let signed_round = [
+        safety.highest_prepare_round,
+        safety.highest_precommit_round,
+        safety.highest_timeout_round,
+    ]
+    .into_iter()
+    .flatten()
+    .filter(|signed| *signed >= round)
+    .max();
+    let reason = match (recorded, signed_round) {
+        (Some(recorded), _) if recorded != proposal_hash => {
+            format!("proposer `{}` already signed proposal {recorded}", proposal.proposer)
+        }
+        (_, Some(signed)) => format!(
+            "proposer `{}` already signed a vote at height {} view {}",
+            proposal.proposer, signed.height, signed.view
+        ),
+        _ => return Ok(None),
+    };
+    // The next view must lie above every round this proposer has signed.
+    let highest = signed_round.map_or(round, |signed| signed.max(round));
+    Ok(Some(format!(
+        "{CONSENSUS_V2_VIEW_SPENT}: {reason} at height {} view {}; highest round signed is view {}; the height needs a timeout certificate for view {} and a proposal at view {}",
+        round.height,
+        round.view,
+        highest.view,
+        highest.view,
+        highest.view.saturating_add(1)
+    )))
 }
 
 pub fn verify_signed_block_proposal(

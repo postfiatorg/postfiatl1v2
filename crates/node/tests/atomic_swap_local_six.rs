@@ -3679,6 +3679,7 @@ fn a666_successor_lifecycle_from_network(
 
     let route_init_height = status_tuple(rpc_ports[0], "a666-route-init-parent").0 + 1;
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: 10_050,

@@ -1,0 +1,13 @@
+[Unit]
+Description=Task Node NAVCoin relay (authenticated; Fly production reaches the validators and bridge services through it)
+After=network-online.target
+
+[Service]
+WorkingDirectory=/home/postfiat/repos/tasknode-navcoin-release
+EnvironmentFile=/home/postfiat/.config/tasknode/navcoin-relay.env
+ExecStart=/home/postfiat/.nvm/versions/node/v24.22.1/bin/node server/l1/relay.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
