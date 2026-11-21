@@ -12,6 +12,7 @@ Public Repo:    https://github.com/postfiatorg/postfiatl1v2
 Branch:         feat/peel-binius-shielded-pq
 Pinned Code:    https://github.com/postfiatorg/postfiatl1v2/tree/d76e5a8c61ec9741ffd6da59b00b7aee8ca0bb73/tools/pft-binius-shielded-pq
 Code Commit:    d76e5a8c61ec9741ffd6da59b00b7aee8ca0bb73
+Public CI Run:  https://github.com/postfiatorg/postfiatl1v2/actions/runs/44943485068 (7/7 PASS on GitHub ubuntu-latest, AMD EPYC 7763)
 Spec Path:      docs/security/peel-binius-shielded-pq-payments.md
 Container:      tools/pft-binius-shielded-pq/Dockerfile (pinned Rust 1.95.0, Go 1.25.1, z3-solver)
 
@@ -60,14 +61,18 @@ Core architectural, cryptographic, and empirical contributions:
      the never-transmitted internal Fiat-Shamir state from 384 to 512 bits adds
      zero wire bytes and zero verify latency while raising all 68 programmed
      queries to >= 512-bit conditional min-entropy.
-     Conditional security profile (explicitly conditional on the unreviewed
-     compressed-oracle bridge Theorem A.3 and SE wrapper Appendix A.4; CMS19
-     provides only a qualitative asymptotic BCS precedent without PoW or
-     multi-proof SE): end-to-end Balance/Auth bounds scale with total quantum
-     queries Q as 2^-92.25 (ext/SE) at Q = 2^96 (governed by 384-bit MT_1 and
-     SHAKE256 collision bounds), 2^-137.55 (ext/SE) / 2^-150.60 (ZK) at
-     Q = 2^80, and 2^-170.98 (ext) / 2^-170.97 (SE) / 2^-150.60 (ZK) at the
-     reference sequential-query benchmark Q = 2^64 (P = 2^32, L = 2^16).
+     Conditional security targets (explicitly conditional on the unreviewed
+     compressed-oracle bridge Theorem A.3 and conjecture-level SE wrapper
+     Appendix A.4; published-only generic QROM-FS [DFMS20] gives a vacuous
+     (Q+1)^68 multi-round bound while [CMS19] proves asymptotic QROM soundness
+     for RBR-sound BCS-compiled IOPs without concrete 34-round or PoW
+     constants): conditional extraction/SE advantage targets scale with total
+     quantum queries Q as 2^-92.25 (ext/SE) at Q = 2^96 (matching 384-bit MT_1
+     and SHAKE256 BHT sizing), 2^-137.55 (ext/SE) / 2^-150.60 (ZK) at Q = 2^80,
+     and 2^-170.98 (ext) / 2^-170.97 (SE) / 2^-150.60 (ZK) at the reference
+     sequential-query benchmark Q = 2^64 (P = 2^32, L = 2^16). End-to-end
+     Auth and Privacy bounds additionally include explicit unquantified
+     standing assumptions (SHAKE256 JointPRF/Hide, SHA-384 KDF, ML-KEM IK-CCA).
   4. Algebraic & Systems Optimizations:
      - Exact 3D-Karatsuba Tower-Reduced Ring-Switch Verifier (13,122 vs. 143,360
        E::muls, 11x fewer), mechanically differential-tested against the naive
@@ -76,16 +81,21 @@ Core architectural, cryptographic, and empirical contributions:
        eqTable folding + 2x-unrolled MOVOU/PCLMULQDQ Go assembly kernel.
      - Streaming L1-Cache-Resident 1,024-Column Coset ANTT Prover (561.7 MiB
        peak prover RSS vs. 1.80 GiB naive).
-  5. Measured Single-Host Budgets (AMD EPYC 16C/32T, pinned 1-core):
+  5. Measured Budgets Across Two Independent Hosts (Primary EPYC 16C + Public
+     GitHub Actions CI ubuntu-latest AMD EPYC 7763 4 vCPU, pinned 1-core):
      - Wire size: 138,508 B median (137,500-139,180 B observed), 140,476 B
        deterministic worst-case (+8,654 B headroom under 149,130 B/tx).
-     - Rust 1-core warm full settle (50t): 22.53 ms med / 25.15 ms p95 /
-       31.95 ms max (4.50 MiB RSS); cold-process wall (10 procs): 29.98 ms med
-       / 44.98 ms max.
-     - Go 1.25.1 1-core warm full settle (50t, zero third-party deps, PCLMULQDQ):
-       36.32 ms med / 38.78 ms p95 / 40.40 ms max (+9.60 ms headroom, 5.25 MiB
-       RSS); cold-process wall (10 procs): 44.79 ms med / 47.06 ms max
-       (-tags purego warm fallback: 71.50 ms med, exceeding 50 ms).
+     - Primary host — Rust 1C warm full settle (50t): 22.53 ms med / 25.15 ms
+       p95 / 31.95 ms max (4.50 MiB RSS); cold-process wall (10 procs):
+       29.98 ms med / 44.98 ms max.
+     - Primary host — Go 1.25.1 1C warm full settle (50t, zero third-party
+       deps, PCLMULQDQ): 36.32 ms med / 38.78 ms p95 / 40.40 ms max (+9.60 ms
+       headroom, 5.25 MiB RSS); cold-process wall (10 procs): 44.79 ms med /
+       47.06 ms max (-tags purego warm fallback: 71.50 ms med, exceeding 50 ms).
+     - Second host (Public GitHub Actions Run 44943485068, clean runner):
+       19/19 SHA256SUMS OK, 7/7 verify.sh PASS, Rust 1C cold wall 30.02 ms med
+       / 30.70 ms max, Go 1C warm (50t) 40.37 ms med / 43.68 ms max, Go 1C cold
+       wall (10 procs) 47.76 ms med / 48.34 ms max (purego 90.58 ms med).
      - Rust streaming prove: 2.89 s med (16C/32T, 50t), 26.73 s med (1C, 5t),
        561.7 MiB peak RSS. Go stdlib 1-core ML-KEM-1024 wallet scan: 211.77 us
        per non-matching output (4,722 outputs/s; ~36.6 s/core for a full day at
@@ -170,29 +180,33 @@ Proximity (single call)  | 2023, ePrint 2020/654)    | |L_i|>2D, exact 4-line
                          | delta'<=1-(1+1/2m')*      | (0<=n'<=2D => Pr=0; n'>2D
                          | sqrt(rho'), any L_rem     | => single BCIKS20 call)
 -------------------------+---------------------------+--------------------------
-QROM BCS Straight-Line   | Qualitative asymptotic    | Standalone Theorem A.3:
-Extraction (Thm 2A)      | precedent: CMS19 (TCC     | Tree-Invariance + retro-
-                         | 2019, without PoW or      | active Peel(M) stability
-                         | concrete bounds).         | (Lem A.3.1), order-indep
-                         | Compressed-oracle tools:  | SUC/CL uniqueness (A.3.2),
-                         | CFHL21 (EUROCRYPT 2021),  | 4-case capacity across
-                         | DFMS22a (EUROCRYPT 2022,  | 34-round chained FS +
-                         | ePrint 2021/280)          | MT_1 (Lem A.3.3, unrev.)
+QROM BCS Straight-Line   | Published-only fallback:  | Standalone Theorem A.3
+Extraction (Thm 2A)      | CMS19 (TCC 2019) proves   | (first-principles operator
+                         | asymptotic QROM soundness | proof, unreviewed): exact
+                         | for RBR-sound BCS IOPs    | rank-3 self-adjoint bound
+                         | (no concrete 34-round/PoW | sqrt(8p)<sqrt(10p) (A.3.0),
+                         | constant); DFMS20 generic | Tree-Invariance (A.3.1),
+                         | FS gives vacuous (Q+1)^68 | block-diagonalization
+                         | loss. Tools: Zha19,       | (A.3.2), both-direction
+                         | CFHL21 (EUROCRYPT 2021),  | capacity (A.3.3), exact
+                         | DFMS22a/b (EC/CRYPTO 22). | readout 2/|Y| (A.3.4).
 -------------------------+---------------------------+--------------------------
-Multi-Proof QROM ZK      | GHHM21 (TCC 2021) Thm 1   | Lemmas 1.1-1.2 & Sim_IOP:
-(Thm 1B, P = 2^32)       | & AHU19 (CRYPTO 2019)     | 5,216b marginal O2H +
-                         | Thm 3 (Semi-Classical O2H)| leaf-coll check, 512b
-                         |                           | state reprog cond., E_exc
+Multi-Proof QROM ZK      | GHHM21 (ASIACRYPT 2021)   | Lemmas 1.1-1.2 & Sim_IOP:
+(Thm 1B, P = 2^32)       | Thm 1 & AHU19 (CRYPTO 19) | 5,216b marginal O2H +
+                         | Thm 3 (Semi-Classical O2H)| leaf-coll check, sequential
+                         |                           | r=1..68 product-state reprog
 -------------------------+---------------------------+--------------------------
 Multi-Proof QROM SE      | NONE standalone published | Conjecture-level bridge
-(Thm 2B, P=2^32, L=2^16) | (uses CFHL21 Lem 5.6 +    | (App. A.4): unmodified-H
+(Thm 2B, P=2^32, L=2^16) | (uses Zha19/CFHL21 +      | (App. A.4): unmodified-H
                          | GHHM21 Thm 1 as tools)    | wrapper B^H, (x*,pi*)
                          |                           | freshness, T_prog, A/B/C
 -------------------------+---------------------------+--------------------------
-0-Round Stealth Receive  | FIPS-203 ML-KEM-1024      | Multi-user mIND-CCA2 /
-(IND-CCA2, INT-CTXT,     | IND-CCA2; NIST SP 800-38D | mIK-CCA + active O_Scan;
- IK-CCA)                 | AES-256-GCM INT-CTXT /    | standing assumption
-                         | IND$-CPA; FIPS-180-4 SHA2 | Adv_IK-CCA for FIPS-203
+0-Round Stealth Receive  | FIPS-203 ML-KEM-1024      | Single-user-reduced
+(IND-CCA2, INT-CTXT,     | IND-CCA2; NIST SP 800-38D | Exp_GlobalPriv w/ active
+ IK-CCA, SHA-384 KDF)    | AES-256-GCM INT-CTXT /    | O_Scan & O_Corrupt (2U /
+                         | IND$-CPA; Kyber ANO-CCA:  | U(U-1) factor); standing
+                         | GMP22 (EC22), MX23 (PKC23)| [NonStd] FIPS-203 IK-CCA &
+                         |                           | SHA-384 key-in-middle KDF
 -------------------------+---------------------------+--------------------------
 In-Circuit Commitments   | Standard-model FIPS-202   | Adaptive multi-user games
 & Depth-24 Merkle Tree   | SHAKE256 (c=512b sponge;  | Adv_JointPRF (allowing
@@ -231,11 +245,13 @@ Category D — Explicit Non-Claims & Deployment Boundaries:
      specifies the Dual-Anchor Rolling Tree Rollover design (and explicitly
      notes the single-anchor cross-tree spend constraint), but only single-tree
      operation is implemented in the prototype binaries.
-  6. Hardware Portability & Empirical Scope: Benchmarks are from one AMD EPYC
-     16C/32T x86_64 host (warm 50-trial + cold-process 10-trial). Pure-Go
-     (-tags purego: 71.50 ms med) exceeds 50 ms, unpinned cold runs immediately
-     after compilation showed scheduling variance up to 50.5 ms Rust / 64.6 ms
-     Go, and ARM64 validators would require a PMULL assembly kernel.
+  6. Hardware Portability & Empirical Scope: Primary benchmarks are from one
+     AMD EPYC 16C/32T x86_64 host (warm 50-trial + cold-process 10-trial),
+     supplemented by independent public GitHub Actions CI replay on Ubuntu
+     (Section 5.5). Pure-Go (-tags purego: 71.50 ms med) exceeds 50 ms,
+     unpinned cold runs inside verify.sh immediately after cargo build showed
+     scheduling variance up to 47.9 ms Rust / 62.0 ms Go, and ARM64 validators
+     would require a PMULL assembly kernel.
   7. Provenance & Independent Review Status: Prover K_32/E_384 field ops use
      branchless zero-lookup PCLMULQDQ, but full constant-time auditing of OS
      and third-party libraries is outside scope. Both Rust and Go verifiers and
@@ -536,7 +552,10 @@ once to produce (1 E-element = H[0..48], 512-bit next_state = H[64..128]):
                         prover opens <= 52 columns & pruned 48 B Merkle path.
 Total programmed oracle calls per proof: 34 absorbs + 33 challenges + 1 H_C4 =
 68 calls, each with >= 512-bit hidden input min-entropy (conditioning proved in
-Appendix B.2). Verifier query budget kappa_v <= 68 + 52 + 843 = 963.
+Appendix B.2). At height h = 21 with t = 52 openings, the maximum number of
+distinct internal MT_1 nodes verified is sum_{lvl=0}^{20} min(2^lvl, 52) =
+1 + 2 + 4 + 8 + 16 + 32 + 15*52 = 63 + 780 = 843, yielding verifier query
+budget kappa_v <= 68 + 52 + 843 = 963.
 
 3.3 Theorem 1A (34-Round IOP RBR Knowledge Soundness & Statistical HVZK)
 --------------------------------------------------------------------------------
@@ -674,24 +693,33 @@ witnesses w*_j in R_pay(x*_j) for all L fresh pairs except with probability:
 where Q_eff = Q + P*(n - 1 + t) + L*kappa_v explicitly charges simulation
 Merkle hashing and all L fresh-proof verifications.
 
-Table 2 — Exact-Rational Compiler Bounds & Ideal-Sponge Sizing Benchmarks
+Table 2 — Exact-Rational Conditional Compiler Targets vs. Published-Only & Ideal-Sponge References
 --------------------------------------------------------------------------------
-  [Rows 1-3: Conditional concrete QROM compiler bounds (Thms 1B, 2A, 2B;
-   recomputed in check_math.py). Rows 4-5: Black-box ideal-sponge/random-
-   function quantum sizing references for SHAKE256 (not standard-model proofs).
-   Ordered from the high-query Q = 2^96 floor down to reference Q = 2^64.]
-Component / Formula Reference           | Q = 2^96   | Q = 2^80   | Q = 2^64 (ref)
-----------------------------------------+------------+------------+---------------
-QROM Ext (Thm 2A, L=1, cond. Thm A.3)   | 2^-92.25   | 2^-137.55  | 2^-170.98
-QROM SE  (Thm 2B, P=2^32, L=2^16, A.4)  | 2^-92.25   | 2^-137.55  | 2^-170.97
-QROM ZK  (Thm 1B, P=2^32, M_pow=2^27)   | 2^-150.60  | 2^-150.60  | 2^-150.60
-SHAKE256 384b BHT Coll (32 Q^3 / 2^384) | 2^-91.00   | 2^-139.00  | 2^-187.00
-SHAKE256 c=512b Q-Cap  (32 Q^3 / 2^512) | 2^-219.00  | 2^-267.00  | 2^-315.00
+  [Part I: Conditional concrete QROM compiler targets (Thms 1B, 2A, 2B;
+   recomputed in check_math.py) juxtaposed with the published-results-only
+   fallback column. Part II: Black-box ideal-sponge/random-function quantum
+   sizing references for SHAKE256 (not standard-model proofs). Ordered from
+   high-query Q = 2^96 down to reference Q = 2^64.]
+Component / Formula Reference          | Published-Only  | Q = 2^96  | Q = 2^80  | Q = 2^64 (ref)
+---------------------------------------+-----------------+-----------+-----------+---------------
+PART I — CONDITIONAL COMPILER TARGETS: |                 |           |           |
+QROM Ext (Thm 2A, L=1, cond. Thm A.3)  | Asymptotic only | 2^-92.25  | 2^-137.55 | 2^-170.98
+                                       | (CMS19; DFMS20  |           |           |
+                                       | gives (Q+1)^68) |           |           |
+QROM SE  (Thm 2B, P=2^32, L=2^16, A.4) | No pub. bound   | 2^-92.25  | 2^-137.55 | 2^-170.97
+QROM ZK  (Thm 1B, P=2^32, M_pow=2^27)  | GHHM21 + AHU19  | 2^-150.60 | 2^-150.60 | 2^-150.60
+                                       | (+ Lem 1.1-1.2) |           |           |
+---------------------------------------+-----------------+-----------+-----------+---------------
+PART II — IDEAL-SPONGE SIZING REFS:    |                 |           |           |
+SHAKE256 384b BHT Coll (32 Q^3/2^384)  | Ideal-fn sizing | 2^-91.00  | 2^-139.00 | 2^-187.00
+SHAKE256 c=512b Q-Cap  (32 Q^3/2^512)  | Ideal-sponge    | 2^-219.00 | 2^-267.00 | 2^-315.00
 --------------------------------------------------------------------------------
-Recomputation check: At Q = 2^96, Thm 2A's a_term = 3.652*2^144*2^-192 =
-2^-46.13 -> squared = 2^-92.25 (matching 384-bit BHT 2^-91.00); at Q = 2^64,
-b_term = 2^64*sqrt(10*2^-302.31) = 2^-85.49 -> squared = 2^-170.98. Query
-crossover Q_break = 2^126.75 (crossover point, not a security level).
+Recomputation & regime-crossover check: In Thm 2A, b_term = Q*sqrt(10*2^-302.31)
+dominates for Q < Q_cross ~ 2^81.28 (giving 2^-170.98 at Q = 2^64), whereas the
+MT_1 collision term a_term = 3.652*Q^{3/2}*2^-192 dominates for Q > Q_cross
+(giving 2^-92.25 at Q = 2^96, matching 384-bit BHT 2^-91.00). The conditional
+bound reaches triviality (eps_Ext = 1) at Q_triv = 2^126.75 (triviality
+threshold, not a security level).
 
 ================================================================================
 SECTION 4. COMPOSITIONAL LEDGER SECURITY GAMES, REDUCTIONS, & SECURITY FLOOR
@@ -711,7 +739,12 @@ Q quantum queries to unmodified H) adaptively invokes:
   - O_Hon(in0, in1, out0, out1, v_mint, v_unshield, unshield_dest, fee):
     executes up to q_hon honest PFSH02 transactions (including ZK-Shielded
     Mints with v_mint > 0) using the real hard-capped prover on unmodified H
-    (each taking <= Q_prover = 2n + M_pow + 68 classical H queries);
+    (each taking <= Q_prover = 2n + M_pow + 68 classical H queries). The
+    challenger maintains an internal table HonNotes recording (coin, S, v, R)
+    for every honest-created note; for any adversary-deposited note targeting
+    an honest address A_u, A supplies its explicit opening (v, R) when invoking
+    O_Hon (or the challenger recovers (v, R) via dk_u if env decrypts cleanly
+    and matches coin).
   - Submit(tx [, outer_auth]): submits arbitrary PFSH02 transactions validated
     atomically by Rules R1-R6 (plus R0-Auth for L1 consensus), producing q_tx
     accepted transactions and updating Supply_minted, Unshielded_acc, Fees_acc
@@ -791,7 +824,9 @@ Live_t subset Coins[]:
 --------------------------------------------------------------------------------
 Game Exp_Auth(A): Challenger samples honest shielded secret S* <-$ {0,1}^{384}
 (A* = H_A(S*)) and honest transparent L1 signing keypair (pk_L1*, sk_L1*),
-allows A to create notes under A*, call O_Hon up to q_hon times to spend honest
+allows A to create notes under A* (supplying their explicit openings (v, R)
+when later instructing O_Hon to spend them, or via valid ML-KEM envelopes under
+ek* if registered), call O_Hon up to q_hon times to spend honest
 notes owned by S* (producing {(tx_i, x_i, pi_i)}_{i=1}^{q_hon}), and call
 O_MintSign on chosen honest deposits under pk_L1*. A wins in ANY of three modes:
   - Mode 1 (Unauthorized Shielded Spend): A outputs an accepted tx* spending an
@@ -849,18 +884,22 @@ Proof:
   (If honest users never reuse A*, O_Hon never touches S* and plain Theorem 2A
   suffices with zero simulation and zero JointPRF assumption.) []
 
-4.3 Theorem 5 (Global-Pool Privacy With Active O_Scan — Exp_GlobalPriv)
+4.3 Theorem 5 (Global-Pool & ZK-Mint Privacy With Active O_Scan & O_Corrupt)
 --------------------------------------------------------------------------------
-Adaptive Multi-User Standard-Model Interfaces:
-  - Multi-User Adaptive JointPRF^{SHAKE256}(U_users): Challenger samples
-    {S_u <-$ {0,1}^{384}}_{u=1}^{U_users}, publishes {A_u = H_A(0x00||S_u)}, and
-    grants A adaptive queries to (i) O_SN(u, c) returning H_SN(0x02||S_u||c)
-    for any non-challenge (u, c), and (ii) O_ChallSN(u, c*) (at most twice on
-    distinct unqueried (u, c*)) returning H_SN(0x02||S_u||c*) if bit=0 or
-    uniform U_{48} if bit=1. Advantage <= Adv_JointPRF^{SHAKE256}(U_users).
-  - Multi-User Adaptive Hide^{SHAKE256}: Given chosen (A_0, v_0, A_1, v_1),
-    distinguishing H_Coin(0x01||A_c||v_c||R_c) (R_c <-$ {0,1}^{624}) from
+Single-User Standard-Model Primitive Interfaces (Avoiding Corruption Gaps):
+  - Single-User Adaptive JointPRF^{SHAKE256}: Challenger samples one secret
+    S* <-$ {0,1}^{384}, publishes A* = H_A(0x00 || S*), and grants A adaptive
+    access to (i) O_SN(c) returning H_SN(0x02 || S* || c) for non-challenge
+    coins c, and (ii) O_ChallSN(c*) (at most twice on distinct unqueried c*)
+    returning H_SN(0x02 || S* || c*) if bit=0 or uniform U_{48} if bit=1.
+    Advantage <= Adv_JointPRF^{SHAKE256}.
+  - Single-User Adaptive Hide^{SHAKE256}: Given chosen (A_0, v_0, A_1, v_1),
+    distinguishing H_Coin(0x01 || A_c || v_c || R_c) (R_c <-$ {0,1}^{624}) from
     uniform U_{48} has advantage <= Adv_Hide^{SHAKE256}.
+  - Single-User ML-KEM-1024 IND-CCA2(q_scan) & IK-CCA(q_scan): Standard single-
+    keyplate IND-CCA2 (one challenge keypair (ek*, dk*) with Decaps oracle) and
+    two-key IK-CCA (challenge keys (ek_0*, ek_1*) with Decaps_0, Decaps_1
+    oracles, distinguishing Encaps(ek_0*) from Encaps(ek_1*)).
 
 Game Exp_GlobalPriv(b): Challenger maintains a Depth-24 ledger via R0-R6,
 initializes U_users honest wallets via O_Gen, and grants A adaptive access to:
@@ -878,121 +917,178 @@ initializes U_users honest wallets via O_Gen, and grants A adaptive access to:
     challenge-recipient honest user u' not in {recv_0^(0), recv_1^(0),
     recv_0^(1), recv_1^(1)} even on (coin*_c, env*_c), returning 1 if decrypted
     & valid, 0 otherwise;
-  - O_Corrupt(user): reveals (S_u, dk_u) of any user not in the challenge input
-    owners or challenge recipients (enforced both pre- and post-challenge);
-  - O_Challenge: invoked ONCE on fixed public anchor in Anchors, fixed public
-    (v_mint = 0, v_unshield, unshield_dest, fee), two candidate uncorrupted
-    unspent input pairs I^(0), I^(1) drawn from ANY positions in the global
-    Depth-24 tree up to anchor (each 2-real or 1-real+1-dummy of equal total
-    value V_tot), two candidate uncorrupted honest recipient pairs (pk_0^(0),
-    pk_1^(0)), (pk_0^(1), pk_1^(1)), and two candidate output splits summing to
-    V_tot - fee - v_unshield. Challenger runs honest prover for bit b and
-    returns tx* (if the negligible R3/R4 random collision event occurs, returns
-    bot; abort prob <= 2*(|Coins| + |SpentSN| + 4)/2^384 under uniform SN/Coin).
+  - O_Corrupt(user): reveals (S_u, dk_u) of ANY honest user not in the
+    challenge input owners or challenge recipients (enforced both pre- and
+    post-challenge);
+  - O_Challenge: invoked ONCE on fixed public anchor in Anchors and fixed
+    public (v_mint, v_unshield, unshield_dest, fee) in EITHER of two modes:
+    (a) Transfer mode (v_mint = 0): two candidate uncorrupted unspent input
+        pairs I^(0), I^(1) drawn from ANY positions in the global Depth-24 tree
+        up to anchor (each 2-real or 1-real+1-dummy of equal total value V_tot),
+        two candidate uncorrupted honest recipient pairs (pk_0^(0), pk_1^(0)),
+        (pk_0^(1), pk_1^(1)), and two output splits summing to V_tot - fee -
+        v_unshield; OR
+    (b) ZK-Shielded Mint mode (v_mint > 0, v_unshield = 0, is_dummy0 =
+        is_dummy1 = 1): two candidate uncorrupted honest recipient pairs
+        (pk_0^(0), pk_1^(0)), (pk_0^(1), pk_1^(1)) and two output value splits
+        summing to v_mint - fee (hiding recipient addresses A_out0/1, split
+        values v_out0/1, and blindings R_out0/1 despite public v_mint and fee).
+    Challenger runs the real hard-capped prover for bit b and returns tx* (if
+    the negligible R3/R4 random collision event occurs, returns bot; abort prob
+    <= 2*(|Coins| + |SpentSN| + 4)/2^384 under uniform SN/Coin).
 
-Theorem 5 (Zero Extraction — Active O_Scan & Multi-User Interfaces Explicit):
+Theorem 5 (Oracle-Complete Corruption-Compatible Reduction — Zero Extraction):
   Adv_GlobalPriv(A) <= 2 * [ Adv_QROM-ZK(P, Q)
-                             + 2 * (Adv_mIND-CCA2^{ML-KEM-1024}(U_users, q_scan)
-                                    + Adv_mIK-CCA^{ML-KEM-1024}(U_users, q_scan)
-                                    + Adv_PRF^{SHA-384-KDF}
+                             + 2 * U_users * (Adv_IND-CCA2^{ML-KEM-1024}(q_scan)
+                                              + Adv_IK-CCA^{ML-KEM-1024}(q_scan))
+                             + 2 * (Adv_PRF^{SHA-384-KDF}
                                     + Adv_INT-CTXT^{AES-256-GCM}(q_scan)
                                     + Adv_IND$-CPA^{AES-256-GCM})
-                             + Adv_JointPRF^{SHAKE256}(U_users)
+                             + 2 * U_users * Adv_JointPRF^{SHAKE256}
                              + 2 * Adv_Hide^{SHAKE256}
-                             + 2 * (|Coins| + |SpentSN| + 4) / 2^384 ],
-where standard single-user reductions bound Adv_mIND-CCA2(U_users, q_scan) <=
-U_users * Adv_IND-CCA2(q_scan) and Adv_mIK-CCA(U_users, q_scan) <=
-U_users * Adv_IK-CCA(q_scan).
+                             + 2 * (|Coins| + |SpentSN| + 4) / 2^384 ].
 
-ML-KEM-1024 Anonymity Assumption Note: Xagawa (EUROCRYPT 2022) and Grubbs-
-Maram-Paterson (EUROCRYPT 2022) proved IK-CCA / ANO-CCA for Round-3 Kyber's
-implicit-rejection FO transform. NIST FIPS 203 ML-KEM-1024 retains implicit
-rejection J(z || c) while simplifying ss = K (our KDF explicitly hashes ct_kem
-and Coin_out via SHA-384). Because a published FIPS-203-specific ANO-CCA proof
-is not cited, Adv_mIK-CCA^{ML-KEM-1024} is stated explicitly as a standing
-assumption in Theorem 5 and Table 1.
+ML-KEM-1024 Anonymity & SHA-384 KDF Provenance Notes:
+  * Grubbs-Maram-Paterson (EUROCRYPT 2022) and Maram-Xagawa (PKC 2023, "Post-
+    Quantum Anonymity of Kyber") proved post-quantum ANO-CCA / IK-CCA for
+    Kyber's implicit-rejection FO transform. NIST FIPS 203 ML-KEM-1024 retains
+    implicit rejection J(z || c) while simplifying ss = K (our KDF explicitly
+    hashes ct_kem and coin_out via SHA-384). Because a FIPS-203-specific
+    proof covering the exact FIPS-203 key-derivation delta is not imported
+    verbatim, Adv_IK-CCA^{ML-KEM-1024} is tagged [NonStd] as a standing
+    assumption in Table 1 and Table 3.
+  * Because SHA-384("PFT-ENV-KDF" || ss || ct_kem || coin) places the secret ss
+    inside an unkeyed Merkle-Damgard hash rather than HMAC-SHA-384,
+    Adv_PRF^{SHA-384-KDF} is explicitly tagged [NonStd] (ROM-KDF assumption).
 
-Proof (Symmetric 5-Hop Hybrid Sequence):
-  - Game H_0: Real Exp_GlobalPriv(0).
+Proof (Oracle-Complete 5-Hop Hybrid With Exact O_Corrupt & O_Scan Simulation):
+Every hybrid below specifies how ALL oracles (O_Mint, O_Hon, O_Scan, O_Corrupt,
+O_Challenge) are answered without guessing-gap or missing-secret mismatches:
+  - Game H_0: Real Exp_GlobalPriv(0) (both Transfer and ZK-Mint modes).
   - Game H_1 (Multi-Proof QROM ZK): Replace all P honest proofs (O_Mint, O_Hon,
     and challenge tx*) with Sim_BCS(x) via Theorem 1B. Sim_BCS(x) uses ONLY
-    public x and runs identically on false statements. Loss <= Adv_QROM-ZK(P, Q).
-  - Game H_2 (Multi-User Active-Scan Stealth Envelope Confidentiality & Key
-    Privacy): For each c in {0, 1}:
-    (i)   Invoke multi-user ML-KEM-1024 mIND-CCA2 (U_users, q_scan) to replace
-          ss_c with uniform 32 B ss*_c: every O_Scan(u*, coin, env) with
-          ct_kem != ct_kem^*_c is answered via the ML-KEM Decaps oracle; every
-          O_Scan on any non-recipient honest user u' != u* is answered directly
-          using dk_{u'} held by the reduction (including on (coin*_c, env*_c)).
-    (ii)  Invoke SHA-384 KDF PRF on ss*_c (domain-separated over ct_kem, coin)
-          to replace (K_aead, N_aead) on (ct_kem^*_c, coin*_c) with uniform
-          keys/nonces (and independent uniform keys for any O_Scan query with
-          ct_kem == ct_kem^*_c, coin != coin*_c).
-    (iii) Invoke AES-256-GCM INT-CTXT(q_scan) (rejecting all forged O_Scan
-          queries sharing ct_kem^*_c with modified ct_aead or coin AAD, bounded
-          classically by O(q_scan / 2^128) for 128-bit GCM tags) and IND$-CPA
-          to replace ct_aead*_c with encryption of 0^86.
-    (iv)  Invoke multi-user ML-KEM-1024 mIK-CCA(U_users, q_scan) (with Decaps
-          oracle answering O_Scan on ct_kem != ct_kem^*_c) to replace ct_kem^*_c
-          with an encapsulation under a fresh independent dummy key ek_dummy.
-  - Game H_3 (Multi-User Adaptive Joint Nullifier Pseudorandomness): Simulate
-    ALL pre- and post-challenge O_Hon spends of OTHER coins owned by challenge
-    input users via O_SN(u, c) of JointPRF^{SHAKE256}(U_users), and replace
-    (sn0*, sn1*) with uniform 48 B strings via O_ChallSN. Loss <=
-    Adv_JointPRF^{SHAKE256}(U_users).
-  - Game H_4 (624-Bit Output Commitment Hiding & Abort Accounting): Replace
-    coin0*, coin1* with uniform 48 B strings (loss <= 2 * Adv_Hide^{SHAKE256}).
-    In H_4, the random R3/R4 collision abort occurs with probability <=
-    2*(|Coins| + |SpentSN| + 4)/2^384 (identical for b=0 and b=1; total
-    distance from unconditioned uniform tx* bounded additively by the same
-    probability). Thus H_4 is identically distributed for b = 0 and b = 1;
-    reversing H_4 -> H_0 for b = 1 yields the factor of 2. []
+    public x and runs identically on false statements; the reduction holds ALL
+    U_users wallet keys (S_u, dk_u) and answers O_Corrupt and O_Scan directly.
+    Loss <= Adv_QROM-ZK(P, Q).
+  - Game H_2 (Active-Scan Stealth Envelope Confidentiality & Key Privacy,
+    output slots c = 0, then c = 1): For each slot c in {0, 1}, replace env*_c
+    via four sub-hops:
+    (i)   ML-KEM-1024 IND-CCA2(q_scan) with single-user guess (factor U_users):
+          The reduction guesses the challenge recipient index u*_c <-$
+          {1..U_users}, embeds the single-user IND-CCA2 challenge key ek* as
+          ek_{u*_c}, and generates (S_u, ek_u, dk_u) ITSELF for all u != u*_c
+          (plus S_{u*_c} itself). Every O_Corrupt(u) for u != u*_c is answered
+          directly; if A queries O_Corrupt(u*_c) or chooses recv_c^(0) != u*_c,
+          the reduction aborts and outputs a random bit (correct guess occurs
+          with exact probability 1/U_users, independent of A's view since all
+          ek_u are identically distributed). Every O_Scan(u*_c, coin, env) with
+          ct_kem != ct_kem^*_c is answered via the single-user IND-CCA2 Decaps
+          oracle; every O_Scan(u', ...) for u' != u*_c (even on (coin*_c,
+          env*_c)) is answered directly using dk_{u'} generated by the
+          reduction. Replaces ss_c with uniform 32 B ss*_c. Loss <= U_users *
+          Adv_IND-CCA2^{ML-KEM-1024}(q_scan).
+    (ii)  SHA-384-KDF PRF [NonStd]: With ss*_c uniform and independent of all
+          keys, replace (K_aead, N_aead) on (ct_kem^*_c, coin*_c) with uniform
+          keys/nonces (and independent uniform keys on any O_Scan query with
+          ct_kem == ct_kem^*_c, coin != coin*_c). All O_Corrupt and O_Scan
+          queries are answered directly. Loss <= Adv_PRF^{SHA-384-KDF}.
+    (iii) AES-256-GCM INT-CTXT(q_scan) + IND$-CPA: Reject all forged O_Scan
+          queries sharing ct_kem^*_c with modified ct_aead or coin AAD (loss <=
+          Adv_INT-CTXT^{AES-256-GCM}(q_scan), classically O(q_scan/2^128)), and
+          replace ct_aead*_c with encryption of 0^86 (loss <= Adv_IND$-CPA).
+    (iv)  ML-KEM-1024 IK-CCA(q_scan) with single-user guess (factor U_users):
+          The reduction guesses u*_c <-$ {1..U_users}, embeds the IK-CCA
+          challenge key ek_0* as ek_{u*_c} (with fresh dummy key ek_1* =
+          ek_dummy), and generates ALL other (S_u, ek_u, dk_u) itself (plus
+          S_{u*_c}). O_Corrupt(u) for u != u*_c is answered directly (aborting
+          if u = u*_c or recv_c^(0) != u*_c; guess prob 1/U_users); O_Scan on
+          u*_c with ct_kem != ct_kem^*_c uses the IK-CCA Decaps_0 oracle, and
+          O_Scan on all u' != u*_c uses dk_{u'} held by the reduction. Replaces
+          ct_kem^*_c with Encaps(ek_dummy). Loss <= U_users * Adv_IK-CCA(q_scan).
+  - Game H_3 (Adaptive Single-User-Reduced Joint Nullifier Pseudorandomness,
+    input slots a = 0, then a = 1):
+    * In ZK-Shielded Mint mode (v_mint > 0, is_dummy0 = is_dummy1 = 1): both
+      nullifiers sn0*, sn1* are ALREADY fresh uniform 48 B dummy nullifiers
+      (H_SN on uniform fresh secrets independent of all users), so H_2 == H_3
+      identically (zero loss).
+    * In Transfer mode (v_mint = 0): for each real input slot a in {0, 1}
+      (skipping dummy slots, whose nullifiers are already fresh uniform), the
+      reduction guesses the challenge input owner u*_a <-$ {1..U_users}, embeds
+      the single-user JointPRF challenge address A* as A_{u*_a}, and generates
+      ALL other U_users - 1 users' keys (S_u, ek_u, dk_u) AND all U_users
+      ML-KEM keys (ek_u, dk_u) itself. Every O_Corrupt(u) for u != u*_a is
+      answered directly (aborting with a random bit if A corrupts u*_a or
+      chooses input-a owner != u*_a; guess prob 1/U_users, independent of A's
+      view); every pre- and post-challenge O_Hon spend of OTHER notes owned by
+      u*_a uses O_SN(c) of JointPRF (proofs are already simulated via Sim_BCS
+      in H_1, so S_{u*_a} is never needed); and sn_a* is replaced with
+      uniform U_{48} via O_ChallSN(coin_a*). (If both inputs belong to the same
+      user u*_0 == u*_1, O_ChallSN's two-query budget replaces both in one hop;
+      otherwise the two sequential hops handle u*_0 then u*_1.) Total loss
+      across both input slots <= 2 * U_users * Adv_JointPRF^{SHAKE256}.
+  - Game H_4 (624-Bit Output Commitment Hiding & Abort Accounting): All secret
+    keys are now decoupled from tx*; replace coin0*, coin1* with uniform 48 B
+    strings via two single-user Hide^{SHAKE256} hops (loss <= 2 *
+    Adv_Hide^{SHAKE256}). In H_4, the random R3/R4 collision abort occurs with
+    probability <= 2*(|Coins| + |SpentSN| + 4)/2^384 (identical for b=0 and
+    b=1). Thus H_4 is identically distributed for b = 0 and b = 1 in BOTH
+    Transfer mode and ZK-Shielded Mint mode; reversing H_4 -> H_0 for b = 1
+    yields the outer factor of 2. []
 
-4.4 End-to-End Composed Security Floor & Q_tot Degradation Audit
+4.4 End-to-End Composed Security Audit & Q_tot Degradation
 --------------------------------------------------------------------------------
-Table 3 instantiates Theorems 3, 4, and 5 numerically at Q = 2^96, Q = 2^80,
-and reference Q = 2^64 for a full Depth-24 tree (q_hon = q_tx = 2^23 =
-8,388,608 txs) and multi-epoch history (q_hon = 2^32 = 4.29B txs), tagging
-every term's provenance:
+Table 3 instantiates Theorems 3, 4, and 5 at Q = 2^96, Q = 2^80, and reference
+Q = 2^64 for a full Depth-24 tree (q_hon = q_tx = 2^23 = 8,388,608 txs) and
+multi-epoch history (q_hon = 2^32 = 4.29B txs), explicitly separating
+published-only bounds, conditional targets (under unreviewed Theorem A.3 /
+conjecture-level Appendix A.4), standing assumptions, and ideal-sponge sizing
+references:
   [Pub] = Published theorem/anchor; [IdealRef] = Ideal-sponge/random-function
-  sizing reference (not a standard-model proof); [Std] = Standard primitive
-  assumption; [NonStd] = Standing nonstandard assumption; [Unrev] = Conditional
-  unreviewed bridge (App. A/B).
+  sizing reference (NOT a standard-model proof); [Std] = Standard primitive
+  assumption; [NonStd] = Standing nonstandard assumption (unquantified);
+  [Unrev] = Conditional unreviewed bridge (App. A/B).
 
 Table 3 — Composed Ledger Security Audit (Exact-Rational check_math.py)
 --------------------------------------------------------------------------------
-Theorem / Term                           | Tag        | Q = 2^96  | Q = 2^80  | Q = 2^64 (ref)
------------------------------------------+------------+-----------+-----------+---------------
-Thm 3 (Balance — q_hon=q_tx=2^23 txs):   |            |           |           |
-  * Q_tot = Q + 2^23 * 138,412,100       | [Exact]    | 2^96.0000 | 2^80.0000 | 2^64.0001
-  * eps_Ext(Q_tot, 2^23) [full tree]     | [Unrev]    | 2^-92.25  | 2^-137.55 | 2^-170.98
-  * eps_Ext(Q_tot, 2^23) [q_hon=2^32]    | [Unrev]    | 2^-92.25  | 2^-137.55 | 2^-170.88
-  * H_Coin/H_A/H_Node 384b BHT CR        | [IdealRef] | 2^-91.00  | 2^-139.00 | 2^-187.00
-  * H_Coin 384b ZeroPreimage (Grover)    | [IdealRef] | 2^-192.00 | 2^-224.00 | 2^-256.00
-  * SHAKE256 c=512b sponge Q-cap         | [IdealRef] | 2^-219.00 | 2^-267.00 | 2^-315.00
-  --> Thm 3 Composed Floor (cond. A.3)   |            | ~91 bits  | ~137 bits | ~171 bits
------------------------------------------+------------+-----------+-----------+---------------
-Thm 4 (Auth — q_hon = 2^32 reused key):  |            |           |           |
-  * Adv_QROM-ZK(2^32, Q)                 | [Unrev]    | 2^-150.60 | 2^-150.60 | 2^-150.60
-  * eps_SE(2^32, 1, Q)                   | [Unrev]    | 2^-92.25  | 2^-137.55 | 2^-170.97
-  * Adv_CR^{SHA-384}(tx_ctx) (BHT)       | [IdealRef] | 2^-91.00  | 2^-139.00 | 2^-187.00
-  * Adv_MT-TPR^{H_SN}(2^32) (Grover)     | [IdealRef] | 2^-160.00 | 2^-192.00 | 2^-224.00
-  * Adv_OW^{H_A,384} (Grover)            | [IdealRef] | 2^-192.00 | 2^-224.00 | 2^-256.00
-  * Adv_JointPRF^{SHAKE256}              | [NonStd]   | (standing assumption, unquantified)
-  * Adv_EUF-CMA^{L1-Sig} (Mode 3)        | [Std]      | (FIPS-204 ML-DSA-65/87 at L1)
-  --> Thm 4 Composed Floor (cond. A.3/4) |            | ~91 bits  | ~137 bits | ~150 bits
-                                         |            | (+ NonStd JointPRF, Std L1-Sig)
------------------------------------------+------------+-----------+-----------+---------------
-Thm 5 (GlobalPriv — P=2^32, U, q_scan):  |            |           |           |
-  * 2 * Adv_QROM-ZK(2^32, Q)             | [Unrev]    | 2^-149.60 | 2^-149.60 | 2^-149.60
-  * 4 * Adv_mIND-CCA2^{ML-KEM}(U,q_scan) | [Pub/Std]  | (<= 4*U*Adv_IND-CCA2, FIPS-203 Cat-5)
-  * 4 * Adv_mIK-CCA^{ML-KEM}(U,q_scan)   | [NonStd]   | (standing FIPS-203 assumption)
-  * 4 * Adv_INT-CTXT^{AES-GCM}(q_scan)   | [Std]      | (O(q_scan / 2^128) forgery bound)
-  * 4 * (Adv_PRF^{SHA-384} + IND$-CPA)   | [Std]      | (AES-256 / SHA-384 standard bounds)
-  * JointPRF(U) + 2*Hide^{SHAKE256}      | [NonStd]   | (standing assumptions, unquantified)
-  * R3/R4 abort conditioning (2^24 pool) | [Exact]    | 2^-358.00 | 2^-358.00 | 2^-358.00
-  --> Thm 5 Composed Floor               |            | Parameterized by (U, q_scan) +
-                                         |            | NonStd (IK-CCA, JointPRF, Hide)
+Theorem / Term                        | Tag        | Published-Only | Q = 2^96  | Q = 2^80  | Q = 2^64 (ref)
+--------------------------------------+------------+----------------+-----------+-----------+---------------
+Thm 3 (Balance — q_hon=q_tx=2^23):    |            |                |           |           |
+  [Conditional Compiler Terms]        |            |                |           |           |
+  * Q_tot = Q + 2^23 * 138,412,100    | [Exact]    | exact          | 2^96.0000 | 2^80.0000 | 2^64.0001
+  * eps_Ext(Q_tot, 2^23) [full tree]  | [Unrev]    | CMS19 asymp.   | 2^-92.25  | 2^-137.55 | 2^-170.98
+  * eps_Ext(Q_tot, 2^23) [q_hon=2^32] | [Unrev]    | CMS19 asymp.   | 2^-92.25  | 2^-137.55 | 2^-170.88
+  [Ideal-Sponge Sizing References]    |            |                |           |           |
+  * H_Coin/H_A/H_Node 384b BHT CR     | [IdealRef] | ideal-fn ref   | 2^-91.00  | 2^-139.00 | 2^-187.00
+  * H_Coin 384b ZeroPreimage (Grover) | [IdealRef] | ideal-fn ref   | 2^-192.00 | 2^-224.00 | 2^-256.00
+  * SHAKE256 c=512b sponge Q-cap      | [IdealRef] | ideal-sponge   | 2^-219.00 | 2^-267.00 | 2^-315.00
+  --> Thm 3 Conditional Target (A.3): | [Cond]     | Asymp. only    | ~91b*     | ~137b*    | ~171b*
+      (*conditional parameter calc. under Thm A.3 + IdealRef; NOT an unconditional security floor)
+--------------------------------------+------------+----------------+-----------+-----------+---------------
+Thm 4 (Auth — q_hon = 2^32 reused):   |            |                |           |           |
+  [Conditional Compiler Terms]        |            |                |           |           |
+  * Adv_QROM-ZK(2^32, Q)              | [Unrev]    | GHHM21+AHU19+L | 2^-150.60 | 2^-150.60 | 2^-150.60
+  * eps_SE(2^32, 1, Q)                | [Unrev]    | No pub. bound  | 2^-92.25  | 2^-137.55 | 2^-170.97
+  [Ideal-Sponge Sizing References]    |            |                |           |           |
+  * Adv_CR^{SHA-384}(tx_ctx) (BHT)    | [IdealRef] | ideal-fn ref   | 2^-91.00  | 2^-139.00 | 2^-187.00
+  * Adv_MT-TPR^{H_SN}(2^32) (Grover)  | [IdealRef] | ideal-fn ref   | 2^-160.00 | 2^-192.00 | 2^-224.00
+  * Adv_OW^{H_A,384} (Grover)         | [IdealRef] | ideal-fn ref   | 2^-192.00 | 2^-224.00 | 2^-256.00
+  [Unquantified Standing Terms]       |            |                |           |           |
+  * Adv_JointPRF^{SHAKE256}           | [NonStd]   | unquantified   | (standing assumption)
+  * Adv_EUF-CMA^{L1-Sig} (Mode 3)     | [Std]      | FIPS-204       | (ML-DSA-65/87 at L1)
+  --> Thm 4 Conditional Target (A.3/4)| [Cond]     | No pub. bound  | ~91b*     | ~137b*    | ~150b*
+      (*conditional on A.3 + Conj. A.4 + IdealRef + unquantified [NonStd] JointPRF + L1-Sig)
+--------------------------------------+------------+----------------+-----------+-----------+---------------
+Thm 5 (GlobalPriv — Transfer & Mint): |            |                |           |           |
+  * 2 * Adv_QROM-ZK(2^32, Q)          | [Unrev]    | GHHM21+AHU19+L | 2^-149.60 | 2^-149.60 | 2^-149.60
+  * 4*U*Adv_IND-CCA2^{ML-KEM}(q_scan) | [Pub/Std]  | FIPS-203 Cat-5 | (single-user reduced, factor 4U)
+  * 4*U*Adv_IK-CCA^{ML-KEM}(q_scan)   | [NonStd]   | GMP22/MX23*    | (standing FIPS-203 assumption)
+  * 4*Adv_INT-CTXT^{AES-GCM}(q_scan)  | [Std]      | SP 800-38D     | (O(q_scan / 2^128) forgery)
+  * 4*Adv_IND$-CPA^{AES-256-GCM}      | [Std]      | SP 800-38D     | (AES-256 standard bound)
+  * 4*Adv_PRF^{SHA-384-KDF}           | [NonStd]   | ROM-KDF        | (key-in-middle SHA-384)
+  * 4*U*Adv_JointPRF + 4*Adv_Hide     | [NonStd]   | unquantified   | (standing SHAKE256; 0 for Mint)
+  * R3/R4 abort conditioning (2^24)   | [Exact]    | exact          | 2^-358.00 | 2^-358.00 | 2^-358.00
+  --> Thm 5 Status                    | [Cond]     | Parameterized by (U, q_scan) + [NonStd] (IK-CCA,
+                                      |            | SHA-384-KDF, JointPRF, Hide); no single bit floor
 --------------------------------------------------------------------------------
 Note: At realistic full-tree throughput (q_hon = 2^23 = 8,388,608 txs), honest
 prover queries inflate Q_tot by only 0.0001 bits at Q = 2^64 (0.0458 bits even
@@ -1068,14 +1164,28 @@ hours of blocks scans all outputs in ~36.6 s on 1 core (~2.3 s on 16 cores)
 without detection tags. Higher-throughput deployments or mobile light clients
 would benefit from optional view tags or oblivious message retrieval (OMR).
 
-5.5 Public Repository, Mechanized Audit, & 7/7 Replay Manifest
+5.5 Public Repository, Public GitHub Actions CI Replay, & 7/7 Manifest
 --------------------------------------------------------------------------------
 All source code, pinned Cargo.lock, zero-dependency go.mod, Dockerfile,
-SHA256SUMS, fixtures, and scripts are publicly published in postfiatl1v2:
-  https://github.com/postfiatorg/postfiatl1v2/tree/d76e5a8c61ec9741ffd6da59b00b7aee8ca0bb73/tools/pft-binius-shielded-pq
+SHA256SUMS, fixtures, scripts, and CI workflow are publicly published in
+postfiatl1v2:
+  * Code tree: https://github.com/postfiatorg/postfiatl1v2/tree/d76e5a8c61ec9741ffd6da59b00b7aee8ca0bb73/tools/pft-binius-shielded-pq
+  * CI workflow: .github/workflows/peel-binius-shielded-pq-ci.yml (commit bd05b2f7a)
+  * Public third-party CI run (ubuntu-latest, AMD EPYC 7763 4 vCPU, fresh
+    rustc 1.95.0, go 1.25.1, pip z3-solver 5.4.1):
+    https://github.com/postfiatorg/postfiatl1v2/actions/runs/44943485068
+    (Job 136965585163, conclusion: success, 2m14s total):
+      - sha256sum -c SHA256SUMS: 19/19 OK
+      - ./verify.sh: ALL 7/7 INDEPENDENT CHECKS PASSED (exit 0)
+      - Rust 1C verify on all 4 fixtures: 26.30-26.40 ms
+      - Rust 1C cold-process wall (10 procs): 30.02 ms med / 30.70 ms max
+      - Go 1.25.1 1C warm settle (50t, PCLMULQDQ): 40.37 ms med / 41.53 ms p95 / 43.68 ms max
+      - Go 1.25.1 1C cold-process wall (10 procs): 47.76 ms med / 48.34 ms max
+      - Go 1.25.1 1C purego fallback (10t): 90.58 ms med / 91.89 ms max
 
-Running sha256sum -c SHA256SUMS && ./verify.sh inside the clean postfiatl1v2
-worktree passed all 7/7 checks (exit code 0):
+Running sha256sum -c SHA256SUMS && ./verify.sh inside BOTH the local clean
+postfiatl1v2 worktree and the public GitHub Actions runner passed all 7/7
+checks (exit code 0):
   [1/7] Rust unit tests (SHAKE256 == sha3::Shake256, Depth-24 Merkle, E384
         1,000-pair PCLMULQDQ == portable, streaming 1,024-pt ANTT == Novel
         Basis, 3D-Karatsuba eval_bilinear_rs_ip == naive 384x384 sum, 4-mode
@@ -1384,113 +1494,221 @@ R_pay(x). Ext_IOP interpolates the 140 witness rows over K_32 on the first 565
 points of A_prox subset D_{u*} in O(min(n, |supp(M)|) + 140*565^2) time and
 returns w* in R_pay(x) with probability 1. []
 
-A.3 Standalone Formal Theorem A.3 (Single-Oracle 34-Round BCS Extraction Bridge)
+A.3 Standalone Formal Theorem A.3 (First-Principles Operator-Norm Extraction Proof)
 --------------------------------------------------------------------------------
-We isolate the self-contained compressed-oracle bridge (unreviewed) as a
-standalone theorem stated directly in the transition-capacity formalism of
-CFHL21 (EUROCRYPT 2021) and DFMS22a (EUROCRYPT 2022, ePrint 2021/280).
+We present the self-contained compressed-oracle bridge (still tagged [Unrev] in
+Table 1 pending external peer review) directly from first principles on
+Zhandry's compressed-oracle unitary [Zha19] in the transition-capacity
+formalism of CFHL21 (EUROCRYPT 2021) and DFMS22a (EUROCRYPT 2022), deriving
+every constant (sqrt(8) < sqrt(10), 2/|Y| readout error, block-diagonal
+superposition reduction, and both entry and exit/uncompute bounds) without
+unverified black-box steps.
 
-Imported Compressed-Oracle Operator Bound (CFHL21 / DFMS22a):
-Let H: {0,1}^* -> {0,1}^{1536} be a single fixed-range random oracle with
-Zhandry compressed-oracle unitary U_H acting on classical databases D (sets of
-(x, u) pairs with distinct keys x, size |D| <= s denoted D in SZ_{<= s}). For
-any disjoint partition (P_s, P') on SZ_{<= s} (P_s := SZ_{<= s} \ P'), the
-transition capacity [[P_s -> P']] := || Pi_{P'} U_H Pi_{P_s} || satisfies:
-  [[P_s -> P']] <= max_{x, D: D(x)=bot} sqrt(10 * Pr_{U <-$ {0,1}^1536}[U in L_{x,D}]),
-where L_{x,D} := {u : D[x->u] in P'} if D in P_s (entry direction) and
-L_{x,D} := {u : D[x->u] not in P'} if D in P' cap SZ_{<= s} (exit/uncompute
-direction). Starting from |D_0 = empty> in P_0, the triangle inequality across
-Q_v steps gives Pr[D_{Q_v} in P'] <= (sum_{s=0}^{Q_v-1} [[P_s -> P']])^2;
-populated-database readout across L verifications has error <= 2*L*kappa_v/2^384.
+Compressed-Oracle Unitary & Phase-Basis Block Decomposition:
+Let H: X -> Y = {0,1}^{1536} (N := |Y| = 2^{1536}) be the single fixed-range
+random oracle. In Zhandry's compressed-oracle representation [Zha19], the
+oracle state lies in the tensor product over x in X of registers D(x) with
+orthonormal basis {|bot>} cup {|u> : u in Y}; a classical database D is a
+finite-support partial function X -> Y cup {bot} (size |D| <= s denoted
+D in SZ_{<= s}). Applying the Hadamard transform on the adversary's response
+register places the oracle query unitary O in the phase basis |x, z, D>
+(z in Y), where O commutes with |x>, |z>, and all registers D_{-x} := {D(x') :
+x' != x}:
+  O = sum_{x in X, z in Y, D_{-x}} |x, z, D_{-x}><x, z, D_{-x}| (x) O_{x,z},
+with O_{x,0} = I and, for every z != 0, O_{x,z} := ST_x Z_z ST_x acting ONLY
+on the single register D(x). Here:
+  * |phi> := N^{-1/2} sum_{u in Y} |u>,
+  * |psi_z> := Z_z |phi> = N^{-1/2} sum_{u in Y} (-1)^{<z,u>} |u> (<phi|psi_z>=0),
+  * Z_z |bot> = |bot>, Z_z |u> = (-1)^{<z,u>} |u>,
+  * ST_x := I - (|bot> - |phi>)(<bot| - <phi|) swaps |bot> <-> |phi> and acts
+    as identity on span{|bot>, |phi>}^perp.
 
-Formal Definitions on Unordered Databases D:
+Lemma A.3.0 (Exact Rank-3 Self-Adjoint Operator & Both-Directions Norm Bound).
+For every z != 0, O_{x,z} satisfies the exact self-adjoint identity:
+  O_{x,z} = Z_z + (|psi_z> - |bot>)<bot| + (|phi> - |psi_z>)<phi|
+            + (|bot> - |phi>)<psi_z|,   O_{x,z}^\dagger = O_{x,z}.
+Consequently, for EVERY subset S subset Y NOT containing bot (p := |S|/|Y|),
+with projector P_S on S and complement projector P_{not S} = I - P_S on
+(Y \ S) cup {bot}, BOTH entry and exit/uncompute norms satisfy identically:
+  || P_S O_{x,z} P_{not S} ||_2 = || P_{not S} O_{x,z} P_S ||_2
+                                <= 2*sqrt(2)*sqrt(p) = sqrt(8*p) < sqrt(10*p).
+Proof: Verify O_{x,z} = ST_x Z_z ST_x directly on the orthonormal decomposition
+span{|bot>, |phi>, |psi_z>} (+) perp:
+  - O_{x,z}|bot>   = ST_x Z_z |phi>   = ST_x |psi_z> = |psi_z>  (vs Z_z|bot> = |bot>);
+  - O_{x,z}|phi>   = ST_x Z_z |bot>   = ST_x |bot>   = |phi>    (vs Z_z|phi> = |psi_z>);
+  - O_{x,z}|psi_z> = ST_x Z_z |psi_z> = ST_x |phi>   = |bot>    (vs Z_z|psi_z> = |phi>);
+  - on span{|bot>, |phi>, |psi_z>}^perp: ST_x = I, so O_{x,z} = Z_z.
+Subtracting Z_z yields the exact rank-3 formula, which is manifestly self-
+adjoint (since ST_x = ST_x^\dagger and Z_z = Z_z^\dagger). Now multiply by P_S
+on the left and P_{not S} on the right: Z_z is diagonal in {|bot>} cup {|u>},
+so P_S Z_z P_{not S} = 0; since bot not in S, P_S |bot> = 0. Collecting the
+remaining terms gives:
+  P_S O_{x,z} P_{not S}
+    = (P_S |psi_z>)(<bot| - <phi|)P_{not S}
+      + (P_S |phi>)(<phi| - <psi_z>)P_{not S}.
+By || |a><b| ||_2 = ||a||_2 * ||b||_2, ||P_S |phi>||_2 = ||P_S |psi_z>||_2 =
+sqrt(|S|/N) = sqrt(p), and || |bot> - |phi> ||_2 = || |phi> - |psi_z> ||_2 =
+sqrt(2) (since P_{not S} is a contraction), the triangle inequality gives
+|| P_S O_{x,z} P_{not S} ||_2 <= 2*sqrt(2)*sqrt(p) = sqrt(8*p) < sqrt(10*p).
+Self-adjointness yields || P_{not S} O_{x,z} P_S ||_2 = || (P_S O_{x,z} P_{not S})^\dagger ||_2
+= || P_S O_{x,z} P_{not S} ||_2 <= sqrt(8*p) < sqrt(10*p). (Retaining sqrt(10*p)
+in check_math.py is strictly conservative and aligns with CFHL21 Thm 5.17.) []
+
+Formal Database Predicates & Projectors on Unordered Databases D:
   - R(D) := {root in {0,1}^384 : exists "PFS-STMT" input in Dom(D) embedding root};
   - C(D) := {h in {0,1}^384 : exists "PFS-NODE" input in Dom(D) embedding h as
              left or right child};
-  - S(D) := R(D) cup C(D) (each entry in Dom(D) contributes <= 1 root or <= 2
-            children, so |S(D)| <= 2*|D| <= 2s);
+  - S(D) := R(D) cup C(D) (each entry contributes <= 1 root or <= 2 children,
+            so |S(D)| <= 2*|D|);
   - MRoot^{-1}_D(root): the partial Round-1 oracle M: L -> (K^{163} x E^2) cup
     {bot} obtained by walking down uniquely matched "PFS-NODE" and "PFS-LEAF"
     preimages in D from root (returning bot at any leaf lacking a unique valid
     height-21 path in D);
-  - CL(D): holds iff D contains distinct x != x' whose 384-bit MT_1 outputs
-    collide (for LEAF/NODE) OR whose 512-bit internal states collide (H[0..64]
-    for STMT/ABS; H[64..128] for CH);
+  - CL(D): holds iff D contains (i) distinct x != x' in Dom(D) whose 384-bit
+    MT_1 outputs H[0..48] collide (for LEAF/NODE), OR (ii) a LEAF/NODE entry
+    with H[0..48] == 0^48, OR (iii) distinct x != x' whose 512-bit internal
+    states collide (H[0..64] for STMT/ABS; H[64..128] for CH);
   - SUC(D) := union_{k=2}^{34} S_k(D), where S_k(D) holds iff D contains a
     2k-step directed chain (x_STMT, x_CH2, ..., x_CHk) linked by exact 512-bit
     state equality (out_state(x_j) == in_state(x_{j+1})) such that, for
-    M := MRoot^{-1}_D(root(x_STMT)), State_KS(x, tr_{k-1}) == 0 and
-    State_KS(x, tr_k) == 1.
+    M := MRoot^{-1}_D(root(x_STMT)), State_KS(x, tr_{k-1}; M) == 0 and
+    State_KS(x, tr_k; M) == 1;
+  - P' := CL cup SUC, P_s := SZ_{<= s} \ P', with diagonal database projectors
+    Pi_{P'} := sum_{D in P'} |D><D| and Pi_{P_s} := sum_{D in P_s} |D><D|.
 
 Lemma A.3.1 (Tree-Invariance & Retroactive Peel(M) Stability).
 For any D in SZ_{<= s}, any LEAF or NODE input x with D(x) = bot, and any u in
 {0,1}^{1536} with u[0..48] not in S(D):
   MRoot^{-1}_{D[x->u]}(root) == MRoot^{-1}_D(root)  for EVERY root in R(D).
 Consequently, Peel(MRoot^{-1}_{D[x->u]}(root)) == Peel(MRoot^{-1}_D(root))
-identically for every root in R(D): no LEAF or NODE query can retroactively
-attach under an existing root or alter Peel(M) unless u[0..48] lands in S(D)
-(probability <= 2s / 2^384).
-Proof: Walking down from any root in R(D) visits only digests in S(D) = R(D)
-cup C(D). Since u[0..48] not in S(D), the new entry (x, u) is never matched as
-a preimage of root or any node along any path reachable from root, leaving
-MRoot^{-1}_D(root) and its deterministic function Peel(M) bit-for-bit identical. []
+identically for every root in R(D) whenever u[0..48] not in S(D) (and
+Pr_{u <-$ Y}[u[0..48] in S(D)] = |S(D)|/2^384 <= 2s/2^384).
+Proof: Walking down from any root in R(D) queries only digests belonging to
+S(D) = R(D) cup C(D). Since u[0..48] not in S(D), the new entry (x, u) cannot
+match root or any reachable child digest, leaving MRoot^{-1}_D(root) and its
+deterministic function Peel(M) bit-for-bit identical. []
 
-Lemma A.3.2 (Order-Independent Chain Uniqueness Under Interleaved Queries).
-CL(D) and SUC(D) are pure set-properties of the unordered database D (zero
-dependence on query insertion order). Moreover, whenever D not in CL(D), every
-entry x in Dom(D) (STMT, ABS, CH, or C4) has AT MOST ONE directed ancestor
-chain in D back to a unique STMT entry and unique partial oracle M =
-MRoot^{-1}_D(root), regardless of how many interleaved partial chains coexist
-in D.
-Proof: Under neg(CL(D)), every 512-bit state output and every 384-bit MT_1
-output has at most one preimage in Dom(D), so the predecessor pointer at every
-link of a chain is unique. []
+Lemma A.3.2 (Block-Diagonal Superposition Reduction & Chain Uniqueness).
+  (a) Because O commutes with |x, z, D_{-x}> and Pi_{P'}, Pi_{P_s} are diagonal
+      in D, the quantum transition capacity across arbitrary superposed query
+      inputs x and superposed databases D reduces POINTWISE to classical pairs:
+        [[P_s -> P']] := || Pi_{P'} O Pi_{P_s} ||_2
+                      <= sup_{x in X, z != 0, |D_{-x}| <= s}
+                           || Pi_{P'}^{x, D_{-x}} O_{x,z} Pi_{not P'}^{x, D_{-x}} ||_2,
+      where Pi_{P'}^{x, D_{-x}} projects onto {v in Y cup {bot} : D_{-x}[x->v] in P'}.
+  (b) CL(D) and SUC(D) are pure set-properties of unordered D. Whenever
+      D_{-x} not in CL, every x in X (STMT, ABS, CH, or C4) has AT MOST ONE
+      directed ancestor chain in D_{-x} back to a unique STMT entry and unique
+      partial oracle M = MRoot^{-1}_{D_{-x}}(root), regardless of how many
+      interleaved partial chains coexist in D_{-x}.
+Proof: (a) Direct-sum decomposition of operator norm over orthogonal subspaces
+indexed by (x, z, D_{-x}) (for z = 0, O_{x,0} = I and Pi_{P'} I Pi_{P_s} = 0).
+(b) Under neg(CL(D_{-x})), every 512-bit state and 384-bit MT_1 digest has at
+most one preimage in Dom(D_{-x}), so predecessor pointers are unique. []
 
-Lemma A.3.3 (Four-Case Transition Capacity & Avoidance of (Q+1)^{2*mu} Blowup).
-Set P' := SUC cup CL and P_s := SZ_{<= s} \ P'. For every D in SZ_{<= s} and
-every x with D(x) = bot:
-  - Case 1 (D in P', exit direction): If D in CL, CL is monotone -> Pr = 0. If
-    D in SUC \ CL, fix a witness chain (root*, X_chain) in D (x not in X_chain):
-    * non-LEAF/NODE x: adding x->u leaves X_chain and MRoot^{-1}_D(root*)
-      unchanged (any collision puts D[x->u] in CL subset P') -> Pr = 0;
-    * LEAF/NODE x: by Lemma A.3.1, MRoot^{-1}(root*) and Peel(M) are preserved
-      whenever u[0..48] not in S(D) -> Pr <= 2s / 2^384.
-  - Case 2 (D in P_s, LEAF/NODE x): By Lemma A.3.1, adding x->u can alter
-    MRoot^{-1}_D(root) or Peel(M) (needed to enter SUC) ONLY if u[0..48] in
-    S(D) (<= 2s), and enters CL ONLY if u[0..48] hits <= s existing 384-bit
-    digests -> Pr <= 3s / 2^384 (yielding sqrt(10*3s/2^384) = sqrt(30s)*2^-192).
-  - Case 3 (D in P_s, STMT/ABS x): Enters SUC only if 512-bit u[0..64] matches
-    <= s existing input states in Dom(D); enters CL only if u[0..64] hits <= s
-    existing 512-bit output states -> Pr <= 2s / 2^512.
-  - Case 4 (D in P_s, CH or C4 x): By Lemma A.3.2, since D not in CL, x has AT
-    MOST ONE complete prefix chain (root, tr_{k-1}) in D fixed BEFORE U <-$
-    {0,1}^{1536} is sampled, and x's fixed domain tag belongs to AT MOST ONE
-    round k in {2..34}:
-    * CH round k in {2..33b}: U[0..48] (chall_k) and U[64..128] (next_state)
-      are independent uniform blocks -> enters P' only if chall_k flips
-      State_KS(k-1)=0 to State_KS(k)=1 (<= eps_rbr_ks(k) <= eps_rbr_ks(33a) =
-      2^-305.79) OR next_state links forward into <= s existing states or
-      collides with <= s output states (<= 2s/2^512) -> Pr <= eps_rbr_ks(33a) +
-      2s / 2^512.
-    * C4 (Round 34, terminal query not in CL): Enters SUC only if x's unique
-      prefix chain has State_KS(33b)=0 and |A_both| < sqrt(2*rho)*n, AND U has
-      20 zero PoW bits (2^-20) and 52 independent 21-bit indices in A_both ->
-      Pr <= p_34 = 2^-302.31.
-Combining Cases 1-4 gives [[P_s -> P']] <= sqrt(30s)*2^-192 +
-sqrt(10 * max(eps_rbr(33a) + 2s/2^512, p_34)). Summing s = 0..Q_v-1 via
-sum_{s<Q_v} sqrt(s) <= (2/3)*Q_v^{3/2}, squaring, and adding readout error
-2*L*kappa_v / 2^384 yields Theorem 2A.
+Lemma A.3.3 (Exhaustive Both-Directions Capacity for Every Classical (x, D_{-x})).
+Fix ANY classical (x, z != 0, D_{-x}) with |D_{-x}| <= s (where D_{-x}(x) = bot).
+Exactly ONE of the following two mutually exclusive cases holds:
+
+  * Direction A — Exit / Uncompute / Overwrite (D_{-x} in P', so bot in P'^{x,D_{-x}}):
+    Here P'^{x, D_{-x}} contains bot, so its complement on D(x) is strictly a
+    subset G_- := {u in Y : D_{-x}[x->u] not in P'} subset Y (bot not in G_-).
+    By Lemma A.3.0 (self-adjoint exit bound):
+      || Pi_{P'}^{x, D_{-x}} O_{x,z} Pi_{not P'}^{x, D_{-x}} ||_2
+        = || P_{not G_-} O_{x,z} P_{G_-} ||_2 <= sqrt(8 * |G_-| / |Y|).
+    Bounding |G_-|/|Y| (even with arbitrarily many coexisting SUC witness chains):
+      - If D_{-x} in CL: CL is monotone upward -> D_{-x}[x->u] in CL subset P'
+        for ALL u in Y -> G_- = empty (|G_-| = 0).
+      - If D_{-x} in SUC \ CL: fix ANY ONE witness chain (root*, X_chain) in
+        D_{-x} (x not in X_chain since D_{-x}(x) = bot).
+        (i)  x in {STMT, ABS, CH, C4}: adding x->u leaves X_chain and
+             MRoot^{-1}_{D_{-x}}(root*) bit-for-bit identical (and any collision
+             places D_{-x}[x->u] in CL subset P') -> G_- = empty (|G_-| = 0).
+        (ii) x in {LEAF, NODE}: leaving P' requires destroying EVERY coexisting
+             SUC chain in D_{-x}, which in particular requires changing
+             MRoot^{-1}_{D_{-x}}(root*); by Lemma A.3.1 this occurs ONLY if
+             u[0..48] in S(D_{-x}) -> |G_-|/|Y| <= 2s / 2^384.
+
+  * Direction B — Entry / Overwrite (D_{-x} not in P', so bot not in P'^{x,D_{-x}}):
+    Here D_{-x} has ZERO collisions and ZERO SUC chains, and P'^{x, D_{-x}} is
+    strictly G_+ := {u in Y : D_{-x}[x->u] in P'} subset Y (bot not in G_+).
+    By Lemma A.3.0:
+      || Pi_{P'}^{x, D_{-x}} O_{x,z} Pi_{not P'}^{x, D_{-x}} ||_2
+        = || P_{G_+} O_{x,z} P_{not G_+} ||_2 <= sqrt(8 * |G_+| / |Y|).
+    Bounding |G_+|/|Y| by x's fixed domain tag:
+      - x in {LEAF, NODE}: D_{-x}[x->u] enters CL ONLY if u[0..48] hits <= s
+        existing digests or 0^48 (<= (s+1)/2^384), and enters SUC ONLY if
+        MRoot^{-1}_{D_{-x}}(root) changes for some root in R(D_{-x}), requiring
+        u[0..48] in S(D_{-x}) by Lemma A.3.1 (<= 2s/2^384) ->
+        |G_+|/|Y| <= (3s + 1) / 2^384 <= 3(s + 1) / 2^384.
+      - x in {STMT, ABS}: enters CL or links forward into an existing state in
+        D_{-x} ONLY if 512-bit u[0..64] hits <= 2s states -> <= 2s / 2^512.
+      - x in {CH, C4}: By Lemma A.3.2(b), since D_{-x} not in CL, the SINGLE
+        classical input x determines AT MOST ONE domain-tagged round
+        k in {2..34}, ONE unique prefix chain (root, tr_{k-1}) in D_{-x}, and
+        ONE fixed partial oracle M = MRoot^{-1}_{D_{-x}}(root) BEFORE u is
+        sampled:
+        (i)  CH round k in {2..33b}: u[0..48] (chall_k) and u[64..128]
+             (next_state) are disjoint independent uniform slices of u in Y.
+             If next_state neither collides with <= s existing output states
+             nor matches <= s existing input states (prob <= 2s/2^512), then
+             (x, u) completes ONLY the single Round-k transcript tr_k and cannot
+             complete any longer chain k' > k. Hence it enters SUC ONLY if
+             chall_k flips State_KS(k-1; M)=0 to State_KS(k; M)=1 (prob <=
+             eps_rbr_ks(k) <= eps_rbr_ks(33a) = 2^-305.79) ->
+             |G_+|/|Y| <= eps_rbr_ks(33a) + 2s / 2^512.
+        (ii) C4 (Round 34): enters SUC ONLY if x's unique prefix chain has
+             State_KS(33b; M)=0 and |A_both| < sqrt(2*rho)*n, AND u satisfies
+             the 20-bit PoW (2^-20) and 52 independent 21-bit indices in A_both
+             -> |G_+|/|Y| <= p_34 = 2^-302.31.
+
+Combining Directions A & B over all (x, z != 0, |D_{-x}| <= s) via
+sqrt(a + b) <= sqrt(a) + sqrt(b) and sqrt(8) < sqrt(10) gives:
+  [[P_s -> P']] <= sqrt(30*(s + 1)) * 2^-192
+                   + sqrt(10 * max(eps_rbr(33a) + 2s/2^512, p_34)). []
+
+Lemma A.3.4 (Telescoping Induction & First-Principles Populated-Database Readout).
+Run A (Q queries) followed by classical verification V on L output proofs
+(<= L*kappa_v queries; total Q_v = Q + L*kappa_v queries to compressed oracle O).
+  (a) Telescoping: Since |psi_0> has D = empty not in P' (||Pi_{P'}|psi_0>||_2
+      = 0) and adversary unitaries U_q commute with Pi_{P'}, each step q = 1..Q_v
+      satisfies ||Pi_{P'} O |psi_{q-1}>||_2 <= ||Pi_{P'}|psi_{q-1}>||_2 +
+      [[P_{q-1} -> P']]. Summing via sum_{q=1}^{Q_v} sqrt(q) <= (2/3)*(Q_v+1)^{3/2}
+      (using 3.652 > (2/3)*sqrt(30) = 3.65148...) and squaring yields:
+        Pr[D_end in P'] = || Pi_{P'} |psi_{Q_v}> ||_2^2
+          <= [ 3.652 * Q_v^{3/2} * 2^-192
+               + Q_v * sqrt(10 * max(eps_rbr(33a) + 2*Q_v/2^512, p_34)) ]^2.
+  (b) Exact Readout Proof: Whenever classical V queries x_i inside O and
+      measures response y_i in Y (N = 2^{1536}), in the decompressed basis
+      register D(x_i) collapses strictly to |y_i> (reachable states have zero
+      |bot> support in the decompressed basis). Recompressing via ST_{x_i}
+      produces:
+        ST_{x_i} |y_i> = (1 - 1/N)|y_i> + N^{-1/2}|bot> - N^{-1} sum_{u != y_i} |u>,
+      so Pr[D_end(x_i) != y_i] = 1 - (1 - 1/N)^2 = 2/N - 1/N^2 < 2/2^{1536}
+      (< 2/2^384). Union bound over all <= L*kappa_v verifier queries gives
+      Pr[exists i : D_end(x_i) != y_i] <= 2*L*kappa_v/2^{1536} < 2*L*kappa_v/2^384.
+  (c) Completing Extraction: On the event {all L proofs accepted} cap
+      {D_end(x_i) == y_i for all i} cap {D_end not in CL cup SUC}, for each
+      proof j in {1..L}: (i) every opened leaf and height-21 Merkle path of
+      pi_j is present in D_end with matching digests, so under neg(CL) walking
+      down from root_j in D_end uniquely recovers all 52 opened columns inside
+      M_end^{(j)} := MRoot^{-1}_{D_end}(root_j); (ii) every STMT/ABS/CH/C4
+      challenge of pi_j is present in D_end; (iii) since State_KS(1; M_end^{(j)})
+      == 0 and D_end not in SUC, induction on k = 2..34 forces
+      State_KS(34; M_end^{(j)}) == 0. By Appendix A.2's Terminal Extraction
+      Proof, V(x_j, tr_34) == 1 and State_KS(34; M_end^{(j)}) == 0 guarantee
+      that Ext_IOP(x_j, M_end^{(j)}, tr_34) outputs w*_j in R_pay(x_j) with
+      probability 1. Combining (a) and (b) yields Theorem 2A.
 
 Why This Avoids DFMS20's (Q+1)^{2*mu} Multi-Round Blowup:
-In general multi-round Fiat-Shamir (DFMS20), there is no Round-1 witness
-commitment, so extraction must rewind/measure-and-reprogram across all mu
-rounds (incurring (Q+1)^{2*mu} loss). In BCS compilation, the witness is
-committed in Round 1 inside M = MRoot^{-1}_D(root), enabling straight-line
-extraction with ZERO rewinding: each single quantum query x targets at most one
-domain-tagged round k, so the transition capacity into the unified static graph
-property SUC = union_{k=2}^{34} S_k takes the MAXIMUM over k (not a product),
-yielding O(Q_v^2 * max_k eps_rbr_ks(k)) plus the O(Q_v^3 / 2^384) Merkle
-collision term. (This bridge remains unreviewed — Table 1.) []
+General multi-round Fiat-Shamir (DFMS20) has no Round-1 witness commitment and
+must rewind/measure-and-reprogram across all mu rounds (incurring (Q+1)^{2*mu}
+loss). In BCS compilation, M = MRoot^{-1}_D(root) is committed in Round 1 and
+extracted straight-line from D_end with zero rewinding; Lemma A.3.2(a) reduces
+superposed queries pointwise to classical (x, D_{-x}), where each query targets
+at most one domain-tagged round k, so [[P_s -> P']] takes max_k eps_rbr_ks(k)
+rather than a product over rounds. (Still tagged [Unrev] in Table 1 pending
+independent external peer review.) []
 
 A.4 Proof of Theorem 2B (Adaptive Multi-Proof QROM SE Wrapper B^H — Unreviewed)
 --------------------------------------------------------------------------------
@@ -1590,39 +1808,43 @@ e^-128 = 2^-184.66. Comparing Real_unbounded vs. Ideal gives TV <=
 (1/2)*E[|A/(Nq) - 1|] + (1-q)^N <= 1/(2*sqrt(Nq)) + e^{-Nq} <= 2^-183.0.
 Triangle inequality yields TV(Real_capped, Ideal) <= 2^-182.60. []
 
-Conditional Query-Location Entropy Check for GHHM21 Thm 1 (512-Bit States):
-In each proof i in 1..P, ALL 68 reprogramming locations z_{i,1}..z_{i,68} are
-sampled by the simulator BEFORE proof i is returned to A, so A has ZERO access
-to proof i's internal randomness when making its prior queries:
-  - z_{i,1} (PFS-STMT) embeds (s_G1, s_mask2), which are fresh independent
-    uniform elements of E^2 (768 bits, independent of all prior proofs and
-    oracle values) -> conditional max-probability p_max(z_{i,1}) <= 2^-768.
-  - Inductively for step r in 2..67 (PFS-ABS / PFS-CH): z_{i,r} embeds the
-    512-bit internal state st_{i,r-1} output by the previous programmed call
-    z_{i,r-1}. Because st_{i,r-1} is sampled freshly and uniformly in {0,1}^512
-    (and is NEVER revealed until A queries z_{i,r-1}, which by induction was
-    unqueried prior to returning proof i), conditioned on all prior proofs
-    1..i-1 and all unprogrammed oracle values, st_{i,r-1} is uniform over
-    {0,1}^512 -> p_max(z_{i,r}) <= 2^-512.
-  - z_{i,68} (PFS-C4) embeds 512-bit tr_final (= st_{i,67}) concatenated with
-    fresh uniform 384-bit nonce* -> p_max(z_{i,68}) <= 2^-896 <= 2^-512.
-Hence every one of the 68 reprogramming points per proof satisfies GHHM21
-Theorem 1's conditional guessing bound p_max <= 2^-512 (sqrt(p_max) <= 2^-256).
+Sequential Product-State Quantum Reprogramming Conditioning (GHHM21 Thm 1):
+Rather than assuming predecessor locations were classically "unqueried by
+induction," we replace the 68 programmed calls of each proof i in {1..P} via
+68 sequential single-point hybrids H_{i,0} -> H_{i,1} -> ... -> H_{i,68}
+(performed before proof i is returned to A, so A's pre-proof-i quantum state
+|psi_{pre-i}> is completely independent of proof i's fresh simulator randomness):
+  - Step r = 1 (H_{i,0} -> H_{i,1}, PFS-STMT): z_{i,1} embeds fresh uniform
+    (s_G1, s_mask2) <-$ E^2 (768 bits), sampled in product with |psi_{pre-i}>
+    and H -> p_max(z_{i,1} | view before proof i) <= 2^-768 <= 2^-512.
+    Reprogramming z_{i,1} sets its output state st_{i,1} to a FRESH independent
+    uniform 512-bit string in product with |psi_{pre-i}> and H.
+  - Step r in {2..67} (H_{i,r-1} -> H_{i,r}, PFS-ABS / PFS-CH): In H_{i,r-1},
+    z_{i,r-1} was ALREADY reprogrammed to output a fresh uniform 512-bit state
+    st_{i,r-1} independent of H and in product with |psi_{pre-i}> (proof i has
+    not yet been returned to A). Because z_{i,r} embeds st_{i,r-1}, every
+    string x has Pr[z_{i,r} = x | A's prior view] <= 2^-512 directly (with ZERO
+    assumption that A had zero quantum query amplitude on z_{i,r-1}!). Applying
+    GHHM21 Theorem 1 (single-point adaptive reprogramming on Q quantum queries)
+    bounds |Pr[H_{i,r-1}] - Pr[H_{i,r}]| <= (3/2)*sqrt(Q)*2^-256, and sets
+    st_{i,r} freshly uniform for step r + 1.
+  - Step r = 68 (H_{i,67} -> H_{i,68}, PFS-C4): In H_{i,67}, 512-bit tr_final
+    (= st_{i,67}) is freshly uniform in product with |psi_{pre-i}>; swapping
+    the M_pow = 2^27 capped PoW draw for uniform 384-bit nonce* (Lemma 1.2:
+    TV <= 2^-182.60) gives z_{i,68} = ("PFS-C4  " || tr_final || nonce*) with
+    p_max(z_{i,68}) <= 2^-896 <= 2^-512, adding (3/2)*sqrt(Q)*2^-256.
 
-Proof of Theorem 1B (4-Hybrid QROM ZK across P <= 2^32 proofs):
-  - H_0 -> H_1 (67-Point 512-Bit-State FS/CH Decoupling): Adaptively reprogram
-    all 67 STMT/ABS/CH inputs per proof prior to returning proof i (p_max <=
-    2^-512 above). By GHHM21 Thm 1: loss <= (3/2)*P*sqrt(Q)*67*2^-256.
-  - H_1 -> H_2 (Hard-Capped PoW Swap + H_C4 Reprogramming): With 512-bit
-    tr_final freshly uniform, replace the M_pow = 2^27 capped PoW draw by
-    uniform 384-bit nonce* and reprogram ("PFS-C4  " || tr_final || nonce*)
-    (p_max <= 2^-896 <= 2^-512). By Lemma 1.2 + GHHM21 Thm 1:
-    loss <= P * 2^-182.60 + (3/2)*P*sqrt(Q)*2^-256.
-  - H_2 -> H_3 (Independent Punctured-Oracle Leaf O2H): Apply Lemma 1.1 + AHU19
+Proof of Theorem 1B (4-Stage QROM ZK across P <= 2^32 proofs):
+  - Stage 1 (67-Point STMT/ABS/CH + 1-Point H_C4 = 68-Point Reprogramming +
+    Capped PoW Swap): Executing H_{i,0} -> H_{i,68} across all i = 1..P proofs
+    yields exact total reprogramming + PoW loss:
+      <= P * 2^-182.60 + (3/2) * P * sqrt(Q) * (67 + 1) * 2^-256
+      =  P * 2^-182.60 + (3/2) * P * sqrt(Q) * 68 * 2^-256.
+  - Stage 2 (Independent Punctured-Oracle Leaf O2H): Apply Lemma 1.1 + AHU19
     Thm 3 across P proofs -> loss <= 4*P*Q*sqrt(n-1)/2^2608 + P*C(n,2)/2^768.
-  - H_3 -> H_4 (Algebraic HVZK Replacement): Replace real algebraic view with
+  - Stage 3 (Algebraic HVZK Replacement): Replace real algebraic view with
     Sim_IOP(x_i) (Appendix B.1) -> loss <= P * 133 / 2^384.
-Summing H_0 -> H_4 yields Adv_QROM-ZK(P=2^32, Q) <= 2^-150.60 at Q = 2^64,
+Summing Stages 1-3 yields Adv_QROM-ZK(P=2^32, Q) <= 2^-150.60 at Q = 2^64,
 2^80, and 2^96. []
 
 ================================================================================
