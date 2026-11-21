@@ -4,11 +4,11 @@ These steps are for a future maintenance window after the port merges into publi
 
 ## 1. Stage the reviewed revision
 
-Use a fresh directory. These unit files expect `%h/repos/solbridge-main`. Record the commit and compare it with the approved public merge. Stop if the directory already exists and is in service.
+Use a fresh directory. These unit files expect `%h/repos/postfiatl1v2-live`. Record the commit and compare it with the approved public merge. Stop if the directory already exists and is in service.
 
 ```bash
 set -euo pipefail
-new="$HOME/repos/solbridge-main"
+new="$HOME/repos/postfiatl1v2-live"
 old="$HOME/repos/solbridge-live"
 rec="$HOME/repos/solbridge-recorder"
 u="$HOME/.config/systemd/user"

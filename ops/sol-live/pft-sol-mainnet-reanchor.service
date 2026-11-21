@@ -4,8 +4,8 @@ ConditionPathExists=/mnt/HC_Volume_106212907/stakehub-hyperliquid/sol-live/mainn
 
 [Service]
 Type=oneshot
-WorkingDirectory=%h/repos/solbridge-main
-Environment=SOLANA_BRIDGE_IMAGES=%h/repos/solbridge-main/target/task-l/repaired-images
+WorkingDirectory=%h/repos/postfiatl1v2-live
+Environment=SOLANA_BRIDGE_IMAGES=%h/repos/postfiatl1v2-live/target/task-l/repaired-images
 ExecStart=/usr/bin/python3 -u ops/sol-live/reanchor-mainnet.py
 UMask=0077
 TimeoutStartSec=900

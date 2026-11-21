@@ -4,7 +4,7 @@ After=pft-sol-prover-tunnel.service network-online.target
 ConditionPathExists=/mnt/HC_Volume_106212907/stakehub-hyperliquid/sol-live/mainnet/activation.json
 
 [Service]
-WorkingDirectory=%h/repos/solbridge-main
+WorkingDirectory=%h/repos/postfiatl1v2-live
 ExecStart=/usr/bin/python3 -u ops/sol-live/mainnet-health.py
 UMask=0077
 Restart=always

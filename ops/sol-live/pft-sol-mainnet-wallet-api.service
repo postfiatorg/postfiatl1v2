@@ -3,8 +3,8 @@ Description=Read-only Solana deposit status for the Task Node wallet (loopback :
 ConditionPathExists=/mnt/HC_Volume_106212907/stakehub-hyperliquid/sol-live/mainnet/activation.json
 
 [Service]
-WorkingDirectory=%h/repos/solbridge-main
-Environment=PYTHONPATH=%h/repos/solbridge-main/ops/sol-live
+WorkingDirectory=%h/repos/postfiatl1v2-live
+Environment=PYTHONPATH=%h/repos/postfiatl1v2-live/ops/sol-live
 ExecStart=/usr/bin/python3 -u ops/sol-live/mainnet-wallet-api.py
 UMask=0077
 Restart=always

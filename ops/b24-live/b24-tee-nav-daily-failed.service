@@ -6,5 +6,5 @@ Type=oneshot
 EnvironmentFile=-%h/.config/b24-tee-nav/notify.env
 # Standard library only and isolated (-I), so it works when the job's venv does not.
 # Skips runs whose failure the job already recorded and reported.
-ExecStart=/usr/bin/python3 -I %h/var/main-bridges/withdraw/release/ops/b24-live/reading_alert.py --service-failed b24-tee-nav-daily.service
+ExecStart=/usr/bin/python3 -I %h/repos/postfiatl1v2-live/ops/b24-live/reading_alert.py --service-failed b24-tee-nav-daily.service
 TimeoutStartSec=5min
