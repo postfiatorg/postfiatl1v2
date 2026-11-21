@@ -74,9 +74,9 @@ git switch -c <new-branch> archive/20261121/private/<branch>
 
 Then open a pull request against `main`.
 
-Of the 345 archived branches, 106 were already contained in `main`, 5 were superseded or
-redundant, 103 were backup snapshots, and 134 hold code or documents that are **not** in
-`main`. Those 134 reduce to 64 distinct lines of work. Each needs a decision: merge it or leave
+Of the 345 archived branches, 106 were already contained in `main`, 3 were superseded, 103
+were backup snapshots, and 133 hold code or documents that are **not** in `main` (111 code, 22
+documents only). The 111 code branches reduce to 64 distinct lines of work. Each needs a decision: merge it or leave
 it archived. The inventory lists them.
 
 ## Not yet on `main`
