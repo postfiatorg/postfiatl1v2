@@ -81,7 +81,7 @@ All five source paths below are relative to `programs/pfusdc-sol-mainnet-ingress
 | Monolithic deposit, `src/main.rs`. Separate build from the admitted aggregate. | `0x00d29f5e1ef34f0bcb12cc5a31cbc31dff20db652d6aab1c50babaedca16c867` | `78619aeae5aa823940cf3c194ea7ce256f405fa814bc2c81fd2bb2cf425a6217` |
 | Key-table registration, `src/key_table_guest.rs`. The revision 7 profile has no standalone key-table field. | `0x00c3a3949e0f57e9c10eea9b49e2a6ed1c04efbe7846496f369189d5f412d9e9` | `bc4105e3d3995f96a85fd7e342128cc8e60039360ca161b23c2bd43758cc3cbd` |
 
-The earlier audit derived all five keys from the retained ELFs with SP1 6.3.1. This refresh also checked that the five ELFs staged for the service match the public digests. The release stager also pins their hashes in `ops/sol-live/runtime-files.sha256`. For an independent build, use the public source baseline above. The manifest records the Docker image digest but names an older source commit, `b4852dd4d`, and records no byte-exact replay. A clean guest build from public source was not run in this refresh.
+This audit derived all five keys from the retained ELFs with SP1 6.3.1. The five ELFs staged for the service also matched the public digests. The release stager also pins their hashes in `ops/sol-live/runtime-files.sha256`. For an independent build, use the public source baseline above. The manifest records the Docker image digest but names an older source commit, `b4852dd4d`, and records no byte-exact replay. A clean guest build from public source was not run in this refresh.
 
 ```sh
 cd programs/pfusdc-sol-mainnet-ingress
@@ -102,7 +102,7 @@ for name in $(jq -r '.programs[].program' program-info.json); do
 done
 ```
 
-To check the recursive link, run `pfusdc-sol-ingress-host vkey-u32 "$ELF_DIR/pfusdc-sol-delta-shard"`. Compare its eight words to `LEAF_KEY` in `src/aggregate_guest.rs`. The host command is in `tools/pfusdc-sol-ingress-host/src/main.rs`.
+To check the recursive link, run `pfusdc-sol-ingress-host vkey-u32 "$ELF_DIR/pfusdc-sol-delta-shard"`. Compare its eight words to `LEAF_KEY` in `src/aggregate_guest.rs`. All eight words matched. The host command is in `tools/pfusdc-sol-ingress-host/src/main.rs`.
 
 ### Earlier accepted Solana keys
 
@@ -117,7 +117,7 @@ Public `programs/pfusdc-sol-ingress/` still contains a separate, older three-gue
 | 5 / 1709 | Current aggregate, public main | Same as revision 4 |
 | 6 / 1713 and 7 / 1731 | Current aggregate, public main | Current handoff, public main |
 
-To repeat a historical check with archive access, set `rev` to the revision for that key and `guest` to `pfusdc-sol-deposit-aggregate` or `pfusdc-sol-handoff-proof`. Compare both outputs with the manifest entry for the named guest. Use its accepted height to check the ledger receipt below.
+All five distinct earlier keys in the table matched fresh SP1 derivations from the archived ELFs. To repeat a historical check with archive access, set `rev` to the revision for that key and `guest` to `pfusdc-sol-deposit-aggregate` or `pfusdc-sol-handoff-proof`. Compare both outputs with the manifest entry for the named guest. Use its accepted height to check the ledger receipt below.
 
 ```sh
 dir=programs/pfusdc-sol-ingress
