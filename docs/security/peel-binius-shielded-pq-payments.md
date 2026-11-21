@@ -1824,7 +1824,7 @@ induction," we replace the 68 programmed calls of each proof i in {1..P} via
     st_{i,r-1} independent of H and in product with |psi_{pre-i}> (proof i has
     not yet been returned to A). Because z_{i,r} embeds st_{i,r-1}, every
     string x has Pr[z_{i,r} = x | A's prior view] <= 2^-512 directly (with ZERO
-    assumption that A had zero quantum query amplitude on z_{i,r-1}!). Applying
+    assumption that A had zero quantum query amplitude on z_{i,r-1}). Applying
     GHHM21 Theorem 1 (single-point adaptive reprogramming on Q quantum queries)
     bounds |Pr[H_{i,r-1}] - Pr[H_{i,r}]| <= (3/2)*sqrt(Q)*2^-256, and sets
     st_{i,r} freshly uniform for step r + 1.
