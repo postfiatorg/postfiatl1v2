@@ -1,0 +1,383 @@
+diff --git a/accounts-db/src/account_storage_reader.rs b/accounts-db/src/account_storage_reader.rs
+index 4bdeb0a..9c4d677 100644
+--- a/accounts-db/src/account_storage_reader.rs
++++ b/accounts-db/src/account_storage_reader.rs
+@@ -22,16 +22,12 @@ use {
+ // file fits entirely within the buffer.
+ pub const ACCOUNT_STORAGE_MAX_BUFFER_SIZE: usize = 10 * 1024 * 1024;
+ 
+-#[cfg(not(target_os = "linux"))]
+ const READER_STACK_BUFFER_SIZE: usize = 64 * 1024;
+ 
+ /// Concrete reader type returned by [`storage_file_buf_reader`].
+ ///
+ /// The concrete type is exposed (rather than `impl FileBufRead<'a>`) so callers
+ /// can use inherent methods like `rebind`.
+-#[cfg(target_os = "linux")]
+-type StorageFileBufReader<'a> = BufReaderWithOverflow<buffered_reader::SequentialFileReader<'a>>;
+-#[cfg(not(target_os = "linux"))]
+ type StorageFileBufReader<'a> =
+     BufReaderWithOverflow<buffered_reader::BufferedReader<'a, READER_STACK_BUFFER_SIZE>>;
+ 
+@@ -43,16 +39,7 @@ pub fn storage_file_buf_reader<'a>(
+     use_page_cache: bool,
+     io_setup: &IoSetupState,
+ ) -> io::Result<StorageFileBufReader<'a>> {
+-    #[cfg(target_os = "linux")]
+-    let reader = {
+-        buffered_reader::SequentialFileReaderBuilder::new()
+-            .shared_sqpoll(io_setup.shared_sqpoll_fd())
+-            .use_direct_io(io_setup.use_direct_io && !use_page_cache)
+-            .use_registered_buffers(io_setup.use_registered_io_uring_buffers)
+-            .build(max_buf_size)?
+-    };
+-    #[cfg(not(target_os = "linux"))]
+-    let reader = {
++        let reader = {
+         let _ = (max_buf_size, use_page_cache, io_setup);
+         buffered_reader::BufferedReader::<READER_STACK_BUFFER_SIZE>::new()
+     };
+diff --git a/core/src/replay_stage.rs b/core/src/replay_stage.rs
+index 025714a..7fcd31e 100644
+--- a/core/src/replay_stage.rs
++++ b/core/src/replay_stage.rs
+@@ -4076,6 +4076,15 @@ impl ReplayStage {
+                     Ok(())
+                 };
+ 
++                if verify_result.is_ok() && bank.expected_bank_hash().is_some() {
++                    if let Err(error) = bank.capture_public_bank(|| {
++                        process_active_banks_context.blockstore.slot_data_iterator(bank_slot, 0)
++                            .map_err(std::io::Error::other)
++                    }) {
++                        warn!("public capture {bank_slot}: {error}");
++                    }
++                }
++
+                 datapoint_info!(
+                     "bank_frozen",
+                     ("slot", bank_slot, i64),
+diff --git a/core/src/resource_limits.rs b/core/src/resource_limits.rs
+index 5daccf1..c2c2085 100644
+--- a/core/src/resource_limits.rs
++++ b/core/src/resource_limits.rs
+@@ -40,6 +40,8 @@ pub fn adjust_nofile_limit(enforce_nofile_limit: bool) -> Result<(), ResourceLim
+     }
+ 
+     let mut nofile = get_nofile();
++    // A container may cap the hard limit below the default target; take what it allows.
++    let desired_nofile = desired_nofile.min(nofile.rlim_max);
+     let current = nofile.rlim_cur;
+     if current < desired_nofile {
+         nofile.rlim_cur = desired_nofile;
+diff --git a/fs/src/buffered_reader.rs b/fs/src/buffered_reader.rs
+index f7939c0..d28879a 100644
+--- a/fs/src/buffered_reader.rs
++++ b/fs/src/buffered_reader.rs
+@@ -488,19 +488,6 @@ pub fn large_file_buf_reader(
+     buf_size: usize,
+     io_setup: &IoSetupState,
+ ) -> io::Result<impl BufRead + use<>> {
+-    #[cfg(target_os = "linux")]
+-    {
+-        assert!(agave_io_uring::io_uring_supported());
+-
+-        let mut reader = SequentialFileReaderBuilder::new()
+-            .shared_sqpoll(io_setup.shared_sqpoll_fd())
+-            .use_direct_io(io_setup.use_direct_io)
+-            .use_registered_buffers(io_setup.use_registered_io_uring_buffers)
+-            .build(buf_size)?;
+-        reader.set_path(path)?;
+-        Ok(reader)
+-    }
+-    #[cfg(not(target_os = "linux"))]
+     {
+         use std::io::BufReader;
+         let file = File::open(path)?;
+diff --git a/fs/src/buffered_writer.rs b/fs/src/buffered_writer.rs
+index e210fac..051db21 100644
+--- a/fs/src/buffered_writer.rs
++++ b/fs/src/buffered_writer.rs
+@@ -3,16 +3,9 @@ use {
+     std::{fs, io, path::Path},
+ };
+ 
+-/// Default buffer size for IO uring. This is a multiple of the default write size to allow
+-/// multiple writes to be in flight at the same time.
+-#[cfg(target_os = "linux")]
+-const DEFAULT_IO_URING_BUFFER_SIZE: usize =
+-    4 * crate::io_uring::file_creator::DEFAULT_WRITE_SIZE as usize;
+-
+ /// Default buffer size for writing large files to disks with `BufWriter`. Since `BufWriter` does not do
+ /// background writing, this size is set above minimum reasonable SSD write sizes to also reduce
+ /// number of syscalls.
+-#[cfg(not(target_os = "linux"))]
+ const DEFAULT_BUF_WRITER_BUFFER_SIZE: usize = 2 * 1024 * 1024;
+ 
+ /// Return a buffered writer for creating a new file at `path`
+@@ -23,36 +16,6 @@ pub fn large_file_buf_writer(
+     path: impl AsRef<Path>,
+     io_setup: &IoSetupState,
+ ) -> io::Result<impl io::Write> {
+-    #[cfg(target_os = "linux")]
+-    {
+-        assert!(agave_io_uring::io_uring_supported());
+-        use {
+-            crate::io_uring::{
+-                file_creator::IoUringFileCreatorBuilder, file_writer::IoUringFileWriter,
+-            },
+-            std::sync::Arc,
+-        };
+-
+-        let file_creator = IoUringFileCreatorBuilder::new()
+-            .use_registered_buffers(io_setup.use_registered_io_uring_buffers)
+-            .write_with_direct_io(io_setup.use_direct_io)
+-            .shared_sqpoll(io_setup.shared_sqpoll_fd())
+-            .build(DEFAULT_IO_URING_BUFFER_SIZE, |_| None)?;
+-
+-        IoUringFileWriter::new(
+-            file_creator,
+-            path.as_ref().to_path_buf(),
+-            0o666,
+-            Arc::new(fs::File::open(path.as_ref().parent().ok_or(
+-                io::Error::new(
+-                    io::ErrorKind::InvalidInput,
+-                    "expected path to an output file that has a parent directory",
+-                ),
+-            )?)?),
+-        )
+-    }
+-
+-    #[cfg(not(target_os = "linux"))]
+     {
+         let _ = io_setup;
+         let file = fs::File::create(path)?;
+diff --git a/fs/src/dirs.rs b/fs/src/dirs.rs
+index cb8e684..1e3094f 100644
+--- a/fs/src/dirs.rs
++++ b/fs/src/dirs.rs
+@@ -9,8 +9,7 @@ use {crate::io_uring::dir_remover::RingDirRemover, agave_io_uring::io_uring_supp
+ pub fn remove_dir_all(path: impl Into<PathBuf> + AsRef<Path>) -> io::Result<()> {
+     #[cfg(target_os = "linux")]
+     {
+-        assert!(io_uring_supported());
+-        if let Ok(mut remover) = RingDirRemover::new() {
++        if io_uring_supported() && let Ok(mut remover) = RingDirRemover::new() {
+             return remover.remove_dir_all(path);
+         }
+     }
+@@ -24,8 +23,7 @@ pub fn remove_dir_contents(path: impl AsRef<Path>) {
+ 
+     #[cfg(target_os = "linux")]
+     {
+-        assert!(io_uring_supported());
+-        if let Ok(mut remover) = RingDirRemover::new() {
++        if io_uring_supported() && let Ok(mut remover) = RingDirRemover::new() {
+             if let Err(e) = remover.remove_dir_contents(path) {
+                 log::warn!("Failed to delete contents of '{}': {e}", path.display());
+             }
+diff --git a/fs/src/io_setup.rs b/fs/src/io_setup.rs
+index 3bcfdb4..855434b 100644
+--- a/fs/src/io_setup.rs
++++ b/fs/src/io_setup.rs
+@@ -34,7 +34,7 @@ impl IoSetupState {
+     pub fn with_shared_sqpoll(self) -> io::Result<Self> {
+         Ok(Self {
+             #[cfg(target_os = "linux")]
+-            shared_sqpoll: Some(SharedSqPoll::new()?),
++            shared_sqpoll: if agave_io_uring::io_uring_supported() { Some(SharedSqPoll::new()?) } else { None },
+             ..self
+         })
+     }
+diff --git a/runtime/src/bank.rs b/runtime/src/bank.rs
+index 1db9889..0e0f7a8 100644
+--- a/runtime/src/bank.rs
++++ b/runtime/src/bank.rs
+@@ -7524,3 +7524,5 @@ pub mod test_utils {
+         Ok(account.lamports())
+     }
+ }
++
++include!("bank/public_capture.rs");
+diff --git a/runtime/src/bank/public_capture.rs b/runtime/src/bank/public_capture.rs
+new file mode 100644
+index 0000000..e0e4b63
+--- /dev/null
++++ b/runtime/src/bank/public_capture.rs
+@@ -0,0 +1,176 @@
++// Included inside solana_runtime::bank on the two audited release tags.
++mod public_capture {
++    use super::*;
++    use std::{
++        fs,
++        io::{self, BufWriter, Write},
++        path::Path,
++    };
++
++    fn write_preimage(out: &mut impl Write, bank: &Bank) -> io::Result<()> {
++        out.write_all(bank.parent_hash().as_ref())?;
++        out.write_all(&bank.signature_count().to_le_bytes())?;
++        out.write_all(bank.last_blockhash().as_ref())?;
++        let lattice = bank.accounts_lt_hash.lock().unwrap();
++        for lane in &lattice.0 .0 {
++            out.write_all(&lane.to_le_bytes())?;
++        }
++        Ok(())
++    }
++
++    fn write_account(out: &mut impl Write, account: &AccountSharedData) -> io::Result<()> {
++        out.write_all(&account.lamports().to_le_bytes())?;
++        out.write_all(&[u8::from(account.executable())])?;
++        out.write_all(account.owner().as_ref())?;
++        out.write_all(&(account.data().len() as u32).to_le_bytes())?;
++        out.write_all(account.data())
++    }
++
++    fn observed_ns() -> u128 {
++        std::time::SystemTime::now()
++            .duration_since(std::time::UNIX_EPOCH)
++            .unwrap_or_default()
++            .as_nanos()
++    }
++
++    fn in_window(dir: &Path, slot: u64) -> io::Result<bool> {
++        let window = match fs::read_to_string(dir.join("slots")) {
++            Ok(s) => s,
++            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
++            Err(e) => return Err(e),
++        };
++        let (first, last) = window.trim().split_once(' ')
++            .ok_or_else(|| io::Error::other("invalid capture window"))?;
++        let first: u64 = first.parse().map_err(io::Error::other)?;
++        let last: u64 = last.parse().map_err(io::Error::other)?;
++        Ok((first..=last).contains(&slot))
++    }
++
++    impl Bank {
++        /// Run only on the non-voting observer, after footer hash verification.
++        pub fn capture_public_bank<I>(
++            &self,
++            shreds: impl FnOnce() -> io::Result<I>,
++        ) -> io::Result<()>
++        where
++            I: Iterator<Item = ((u64, u64), Box<[u8]>)>,
++        {
++            let Some(dir) = std::env::var_os("SOLBRIDGE_CAPTURE_DIR") else {
++                return Ok(());
++            };
++            let dir = Path::new(&dir);
++            let carrier_only = if in_window(dir, self.slot())? {
++                false
++            } else {
++                let address = match fs::read_to_string(dir.join("watch-account")) {
++                    Ok(s) => s.trim().parse::<Pubkey>().map_err(io::Error::other)?,
++                    Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
++                    Err(e) => return Err(e),
++                };
++                // The write slot is resolved on this bank's fork, before the parent is dropped.
++                let Some((_, written)) = self.get_account_modified_slot(&address) else {
++                    return Ok(());
++                };
++                match self.slot().checked_sub(written) {
++                    Some(0) => false,
++                    Some(1..=64) => true,
++                    _ => return Ok(()),
++                }
++            };
++            // A carrier-only capture can coexist with a full capture of the same bank.
++            let carriers = dir.join("carriers");
++            let dir = if carrier_only {
++                fs::create_dir_all(&carriers)?;
++                carriers.as_path()
++            } else {
++                dir
++            };
++            let frozen_ns = observed_ns();
++            let parent = self
++                .parent()
++                .ok_or_else(|| io::Error::other("parent unavailable"))?;
++            let parent_id = parent
++                .block_id()
++                .ok_or_else(|| io::Error::other("missing parent ID"))?;
++            let id = self
++                .block_id()
++                .ok_or_else(|| io::Error::other("missing block ID"))?;
++            let name = format!("{}-{id}", self.slot());
++            let target = dir.join(&name);
++            if target.is_dir() {
++                return Ok(());
++            }
++            let temp = dir.join(format!(".{name}-{:?}", self.bank_id()));
++            fs::create_dir(&temp)?;
++            let mut data = BufWriter::new(fs::File::create(temp.join("shreds.bin"))?);
++            let mut count = 0;
++            for ((slot, index), shred) in shreds()? {
++                if slot != self.slot() || index != count || shred.len() != 1203 {
++                    return Err(io::Error::other("invalid shred sequence"));
++                }
++                data.write_all(&shred)?;
++                count += 1;
++            }
++            data.flush()?;
++            let shreds_ns = observed_ns();
++            let mut prefix = fs::File::create(temp.join("block-prefix.bin"))?;
++            prefix.write_all(&self.slot().to_le_bytes())?;
++            prefix.write_all(&parent.slot().to_le_bytes())?;
++            prefix.write_all(parent_id.as_bytes())?;
++            prefix.write_all(&(count as u32).to_le_bytes())?;
++
++            if carrier_only {
++                fs::write(temp.join("observations.tsv"), format!(
++                    "frozen\t{frozen_ns}\nshreds_read\t{shreds_ns}\n"
++                ))?;
++                return fs::rename(temp, target);
++            }
++
++            let mut state = BufWriter::new(fs::File::create(temp.join("state-body.bin"))?);
++            write_preimage(&mut state, self)?;
++            write_preimage(&mut state, &parent)?;
++            let preimages_ns = observed_ns();
++            let mut changes = self.get_all_accounts_modified_since_parent();
++            changes.sort_unstable_by_key(|(address, _)| *address);
++            state.write_all(&(changes.len() as u32).to_le_bytes())?;
++            for (address, new) in &changes {
++                let old = parent.get_account(address).unwrap_or_default();
++                state.write_all(address.as_ref())?;
++                write_account(&mut state, &old)?;
++                write_account(&mut state, new)?;
++            }
++            state.flush()?;
++            let accounts_ns = observed_ns();
++            fs::write(temp.join("bank-hash.bin"), self.hash().as_bytes())?;
++            let epoch = self
++                .epoch_stakes_from_slot(self.slot())
++                .ok_or_else(|| io::Error::other("missing epoch"))?;
++            let ranks = epoch.bls_pubkey_to_rank_map();
++            let mut set = BufWriter::new(fs::File::create(temp.join("set.bin"))?);
++            set.write_all(&u128::from(epoch.total_stake()).to_le_bytes())?;
++            set.write_all(&(ranks.len() as u32).to_le_bytes())?;
++            for rank in 0..ranks.len() {
++                let entry = ranks
++                    .get_pubkey_stake_entry(rank)
++                    .ok_or_else(|| io::Error::other("missing rank"))?;
++                let votes = epoch.stakes().vote_accounts();
++                let account = votes
++                    .get(&entry.vote_account_pubkey)
++                    .ok_or_else(|| io::Error::other("missing vote account"))?;
++                let key = account
++                    .vote_state_view()
++                    .bls_pubkey_compressed()
++                    .ok_or_else(|| io::Error::other("missing BLS key"))?;
++                set.write_all(&key)?;
++                let stake: u64 = entry.stake.get().into();
++                set.write_all(&stake.to_le_bytes())?;
++            }
++            set.flush()?;
++            let set_ns = observed_ns();
++            fs::write(temp.join("observations.tsv"), format!(
++                "frozen\t{frozen_ns}\nshreds_read\t{shreds_ns}\npreimages_read\t{preimages_ns}\naccounts_read\t{accounts_ns}\nset_read\t{set_ns}\n"
++            ))?;
++            fs::rename(temp, target)
++        }
++    }
++}

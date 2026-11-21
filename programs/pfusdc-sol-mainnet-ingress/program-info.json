@@ -1,0 +1,52 @@
+{
+  "schema": "postfiat-sp1-program-set-info-v1",
+  "sp1_version": "6.3.1",
+  "build_command": "cargo prove build --docker --tag v6.3.1 --locked --features guest --output-directory elf",
+  "cargo_lock_sha256": "c450a22e2e32cc55a1c95844250895dbd8ec764e2c8150bf59b8d0165e829b91",
+  "cargo_toml_sha256": "060e2d6a3d9a3175cb9a3afedd08fd4e41fa96d4d1f1c92e53acc3c740a4df10",
+  "source_commit": "b4852dd4d9fabcf828d55340a44c07b952f92081",
+  "docker_image": "ghcr.io/succinctlabs/sp1@sha256:0942a27dbe8e38f4b14f3732e779df4027b17bde93e9fbc9e8c773c15eb63400",
+  "build_count": 1,
+  "clean_source_trees": 1,
+  "byte_exact_replay": false,
+  "programs": [
+    {
+      "kind": "deposit",
+      "program": "pfusdc-sol-ingress-program",
+      "elf_path": "elf/pfusdc-sol-ingress-program",
+      "elf_sha256": "78619aeae5aa823940cf3c194ea7ce256f405fa814bc2c81fd2bb2cf425a6217",
+      "program_vkey": "0x00d29f5e1ef34f0bcb12cc5a31cbc31dff20db652d6aab1c50babaedca16c867"
+    },
+    {
+      "kind": "key_table",
+      "program": "pfusdc-sol-key-table-proof",
+      "elf_path": "elf/pfusdc-sol-key-table-proof",
+      "elf_sha256": "bc4105e3d3995f96a85fd7e342128cc8e60039360ca161b23c2bd43758cc3cbd",
+      "program_vkey": "0x00c3a3949e0f57e9c10eea9b49e2a6ed1c04efbe7846496f369189d5f412d9e9",
+      "journal_tag": "PFSOLKP1"
+    },
+    {
+      "kind": "handoff",
+      "program": "pfusdc-sol-handoff-proof",
+      "elf_path": "elf/pfusdc-sol-handoff-proof",
+      "elf_sha256": "665fe185b830602a8f3fb9906d43f45ad0f9dda4deae7990ca2da69ca44253ce",
+      "program_vkey": "0x008adba6be08c9546fccc181f6808538b63778c7c5f0388bb4d848958c82298d",
+      "journal_tag": "PFSOLHP2"
+    },
+    {
+      "kind": "delta_shard",
+      "program": "pfusdc-sol-delta-shard",
+      "elf_path": "elf/pfusdc-sol-delta-shard",
+      "elf_sha256": "5fd57ea8b9432c14f94da218e96eb20b600fea94c5e1adeef073f547edecad83",
+      "program_vkey": "0x002d18dc66bb6a40224ebd4d057c4d157413ef43a6a92b3aa66a4fba0bb0a956"
+    },
+    {
+      "kind": "aggregate",
+      "program": "pfusdc-sol-deposit-aggregate",
+      "elf_path": "elf/pfusdc-sol-deposit-aggregate",
+      "elf_sha256": "84127cfa76de2854e1bea408a8e7910092515d24647f4a8683e7935ca585d6cb",
+      "program_vkey": "0x00503a8b7322a326ebd7a347b388641c9916e573328ba7f665808d7627a932f6"
+    }
+  ],
+  "proof_status": "see docs/review/solana-ingress-proving-speed.md for measured proof modes by guest"
+}

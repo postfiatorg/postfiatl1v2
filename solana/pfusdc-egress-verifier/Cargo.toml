@@ -1,0 +1,35 @@
+[package]
+name = "pfusdc-egress-verifier"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+no-entrypoint = []
+
+[dependencies]
+solana-instruction = "4.0.0"
+sha3 = "0.10.9"
+hex = "0.4.3"
+hex-literal = "0.4.1"
+borsh = { version = "1.6", features = ["derive"] }
+solana-bn254 = "=3.2.1"
+solana-sha256-hasher = { version = "3.1.0", features = ["sha2"] }
+solana-account-info = "3.1.1"
+solana-cpi = "3.1.0"
+solana-program-entrypoint = "3.1.1"
+solana-program-error = "3.0.1"
+solana-program-pack = "3.1.0"
+solana-pubkey = { version = "4.4.0", features = ["curve25519"] }
+solana-sdk-ids = "3.1.0"
+solana-system-interface = { version = "3.3.0", features = ["bincode"] }
+solana-sysvar = "5.0.0"
+spl-token-interface = "3.0.0"
+
+[workspace]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))', 'cfg(feature, values("custom-heap", "custom-panic"))'] }

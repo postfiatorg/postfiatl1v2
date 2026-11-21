@@ -1,0 +1,16 @@
+[Unit]
+Description=Prove finalized mainnet Solana vault deposits and submit them to Post Fiat
+After=pft-sol-prover-tunnel.service network-online.target
+ConditionPathExists=/mnt/HC_Volume_106212907/stakehub-hyperliquid/sol-live/mainnet/activation.json
+
+[Service]
+WorkingDirectory=%h/repos/solbridge-main
+ExecStart=/usr/bin/python3 -u ops/sol-live/mainnet-relay.py
+UMask=0077
+Restart=always
+RestartSec=5
+# mainnet-relay.py RELAY_STOPPED: a deposit failed twice the same way; an operator restarts it.
+RestartPreventExitStatus=3
+
+[Install]
+WantedBy=default.target

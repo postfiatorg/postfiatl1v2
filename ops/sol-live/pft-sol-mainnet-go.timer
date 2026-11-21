@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the bridge payer every two minutes
+
+[Timer]
+OnCalendar=*-*-* *:0/2:00 UTC
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

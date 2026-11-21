@@ -1,5 +1,7 @@
 'use strict';
 
+const { ROUTE: SOLANA_ROUTE, solanaRelay } = require('./solana-bridge-relay');
+
 const NAVCOIN_RELAY_PATH_RE = /^\/api\/navcoin\/([A-Za-z0-9][A-Za-z0-9._-]{0,63})\/(export-readiness|export-jobs|return-readiness|return-jobs)(?:\/(0x[0-9a-f]{64}))?$/;
 
 function parseNavcoinRelayPath(pathname) {
@@ -132,6 +134,7 @@ wss } = runtime;
     const httpRequestRequiresAuth = (...args) => runtime.httpRequestRequiresAuth(...args);
     const acquireMutationAdmission = (...args) => runtime.acquireMutationAdmission(...args);
     const boundedHttpBodyLimit = (...args) => runtime.boundedHttpBodyLimit(...args);
+    const solRelay = solanaRelay();
     const trustlessBridgeReadiness = (...args) => runtime.trustlessBridgeReadiness(...args);
     const submitTrustlessBridgeJob = (...args) => runtime.submitTrustlessBridgeJob(...args);
     const trustlessBridgeJobStatus = (...args) => runtime.trustlessBridgeJobStatus(...args);
@@ -1562,6 +1565,11 @@ wss } = runtime;
 
             if (req.method === 'GET' && url.pathname === '/api/bridge/readiness') {
                 const routeId = String(url.searchParams.get('route') || '').trim().toLowerCase();
+                if (solRelay && routeId === SOLANA_ROUTE) {
+                    const result = await solRelay('/api/bridge/readiness?route=' + SOLANA_ROUTE);
+                    sendJson(req, res, result.status, result.body);
+                    return true;
+                }
                 const result = await trustlessBridgeReadiness(routeId);
                 const status = result.code === 'unsupported_bridge_route' ? 404 : 200;
                 sendJson(req, res, status, result);
@@ -1611,6 +1619,11 @@ wss } = runtime;
 
             if (req.method === 'POST' && url.pathname === '/api/bridge/jobs') {
                 const body = await readJsonBody(req);
+                if (solRelay && body.route_id === SOLANA_ROUTE) {
+                    const result = await solRelay('/api/bridge/jobs', body);
+                    sendJson(req, res, result.status, result.body);
+                    return true;
+                }
                 const result = await submitTrustlessBridgeJob(body);
                 sendJson(req, res, 202, { ok: true, ...result });
                 return true;
@@ -1619,7 +1632,18 @@ wss } = runtime;
             if (req.method === 'GET' && url.pathname === '/api/bridge/jobs') {
                 const recipient = String(url.searchParams.get('recipient') || '');
                 const limit = Number(url.searchParams.get('limit') || 20);
-                const jobs = trustlessBridgeJobsForRecipient(recipient, limit);
+                const route = url.searchParams.get('route');
+                let jobs = trustlessBridgeJobsForRecipient(recipient, limit);
+                if (solRelay && (!route || route === SOLANA_ROUTE)) {
+                    const sol = await solRelay('/api/bridge/jobs?' + new URLSearchParams({ recipient, limit }));
+                    if (sol.status !== 200) {
+                        sendJson(req, res, sol.status, sol.body);
+                        return true;
+                    }
+                    jobs = route === SOLANA_ROUTE ? sol.body.jobs : [...jobs, ...sol.body.jobs]
+                        .sort((a, b) => b.created_at_unix - a.created_at_unix)
+                        .slice(0, Math.min(100, Math.max(1, limit || 20)));
+                }
                 sendJson(req, res, 200, {
                     ok: true,
                     schema: 'postfiat-trustless-bridge-job-list-v1',
@@ -1632,6 +1656,11 @@ wss } = runtime;
             if (req.method === 'GET' && url.pathname.startsWith('/api/bridge/jobs/')) {
                 const jobId = decodeURIComponent(url.pathname.slice('/api/bridge/jobs/'.length));
                 const result = trustlessBridgeJobStatus(jobId);
+                if (!result && solRelay && /^0x[0-9a-f]{64}$/.test(jobId)) {
+                    const sol = await solRelay('/api/bridge/jobs/' + jobId);
+                    sendJson(req, res, sol.status, sol.body);
+                    return true;
+                }
                 sendJson(req, res, result ? 200 : 404,
                     result ? { ok: true, ...result } : { ok: false, code: 'bridge_job_not_found' });
                 return true;
