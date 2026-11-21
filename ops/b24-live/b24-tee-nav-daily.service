@@ -7,8 +7,8 @@ OnFailure=b24-tee-nav-daily-failed.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/postfiat/repos/postfiatl1v2-now
-ExecStart=/home/postfiat/repos/navstrategies-b23-tee-nav/.venv/bin/python /home/postfiat/repos/postfiatl1v2-now/ops/b24-live/daily.py --execute
+WorkingDirectory=%h/var/main-bridges/withdraw/release
+ExecStart=/home/postfiat/repos/navstrategies-b23-tee-nav/.venv/bin/python %h/var/main-bridges/withdraw/release/ops/b24-live/daily.py --execute
 Environment=PYTHONDONTWRITEBYTECODE=1
 # Optional: B24_READING_NOTIFY=<webhook URL or command>; absent file sends nothing.
 EnvironmentFile=-%h/.config/b24-tee-nav/notify.env

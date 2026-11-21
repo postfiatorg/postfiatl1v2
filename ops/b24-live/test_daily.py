@@ -26,15 +26,32 @@ class OnDemandTests(unittest.TestCase):
     def test_release5_gate_rejects_a_mixed_fleet_before_capture(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
-            peers=[(f'validator-{i}', '', '') for i in range(6)]
-            fake=MagicMock()
-            fake.pftl.PEERS=peers
-            fake.runtime.side_effect=lambda peer,sha: (peer[0], {'matches':sha==daily.DAILY_NODE_SHA and peer!=peers[-1]})
-            with patch.dict(sys.modules,submit_live=fake),patch.object(daily,'DAILY',root),patch.object(daily,'require_runtime'),patch.object(daily,'collect') as collect:
+            probe = MagicMock()
+            probe.side_effect = lambda peer, sha: (peer[0], {'matches': peer != daily.PEERS[-1]})
+            with patch.object(daily, 'runtime', probe),patch.object(daily,'DAILY',root),patch.object(daily,'require_runtime'),patch.object(daily,'collect') as collect:
                 with self.assertRaisesRegex(RuntimeError,'all six validators'):
                     daily.execute(datetime.now(timezone.utc))
                 collect.assert_not_called()
-            self.assertEqual(len(fake.runtime.call_args_list),6)
+            self.assertCountEqual([call.args for call in probe.call_args_list],
+                                  [(peer, daily.DAILY_NODE_SHA) for peer in daily.PEERS])
+            self.assertEqual(len(daily.PEERS), 6)
+
+    def test_both_running_processes_must_match_the_selected_release(self):
+        pin = daily.DAILY_NODE_SHA
+        cases = [
+            (0, [pin, pin], True),
+            (0, [pin, 'other'], False),
+            (0, ['other', pin], False),
+            (0, [pin], False),
+            (1, [pin, pin], False),
+        ]
+        for code, hashes, expected in cases:
+            with self.subTest(code=code, hashes=hashes), patch('runtime_hashes.subprocess.run') as probe:
+                probe.return_value.returncode = code
+                probe.return_value.stdout = ''.join(value + '  /proc/123/exe\n' for value in hashes)
+                name, result = daily.runtime(daily.PEERS[0], pin)
+                self.assertEqual(name, 'validator-0')
+                self.assertEqual(result, dict(returncode=code, hashes=hashes, matches=expected))
 
     def test_two_same_day_readings_then_daily_use_ledger_epoch(self):
         now=datetime(2026,11,16,17,0,tzinfo=timezone.utc)

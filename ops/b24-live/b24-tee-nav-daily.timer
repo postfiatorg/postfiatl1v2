@@ -7,7 +7,7 @@ AccuracySec=1s
 RandomizedDelaySec=0
 Persistent=false
 Unit=b24-tee-nav-daily.service
-# Daily script enforces registered schedule, $9/run, $250/month, $100 cumulative lane.
+# Daily script enforces registered schedule, $9/run, $250/month, $250 cumulative lane.
 
 [Install]
 WantedBy=timers.target

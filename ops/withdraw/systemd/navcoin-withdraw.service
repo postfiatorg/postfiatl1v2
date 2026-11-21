@@ -3,7 +3,7 @@ Description=PFUSDC to USDC withdrawal payout service (loopback only)
 After=network-online.target
 
 [Service]
-WorkingDirectory=/home/postfiat/repos/postfiatl1v2-withdraw/ops/withdraw
+WorkingDirectory=%h/var/main-bridges/withdraw/release/ops/withdraw
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/home/postfiat/repos/navstrategies-b23-tee-nav/.venv/bin/python service.py
 Restart=always

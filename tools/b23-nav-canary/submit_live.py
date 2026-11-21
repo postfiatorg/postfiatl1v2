@@ -18,12 +18,12 @@ sys.path.insert(0,'/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch
 import pftl
 import facility as f
 from live_snapshot import export_snapshot
+from runtime_hashes import RELEASE_SHA, runtime
 from run_canary import ALICE_OFFER
 
 COORD=Path('/home/postfiat/repos/b23-coord')
 LOCK=COORD/'chain.lock'
 NODE=COORD/'artifacts/release4/postfiat-node'
-RELEASE_SHA='3039c21af67420a9842b5644eb580b2809081a97419e3e8e1f849d49a487cb6f'
 EXPECTED_OPS=['nav_profile_register','nav_asset_register','nav_reserve_submit','nav_epoch_finalize','pftl_uniswap_route_epoch_advance']
 def load(p):return json.loads(p.read_bytes())
 def save(p,v):pftl.write_json(p,v)
@@ -31,14 +31,6 @@ def top(text):
     path=COORD/'status/tee.md';lines=path.read_text().splitlines();lines[0]=text;path.write_text('\n'.join(lines[:60])+'\n')
 def require_lock():
     if LOCK.read_text().strip()!='TEE':raise RuntimeError('TEE chain lock lost')
-
-def runtime(peer, expected_sha=RELEASE_SHA):
-    name,host,_=peer
-    # Names come from the fixed six-peer inventory, never caller input.
-    command=f'for unit in postfiat-{name}.service postfiat-{name}-rpc.service; do pid=$(systemctl show --value -p MainPID "$unit"); test "$pid" -gt 0 || exit 1; sha256sum /proc/$pid/exe; done'
-    r=subprocess.run(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=10','root@'+host,command],capture_output=True,text=True,timeout=30)
-    hashes=[line.split()[0] for line in r.stdout.splitlines()]
-    return name,dict(returncode=r.returncode,hashes=hashes,matches=r.returncode==0 and hashes==[expected_sha]*2)
 
 def reads(peer,asset,include_offer=True):
     name=peer[0]

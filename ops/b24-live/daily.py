@@ -8,6 +8,7 @@ calls the optional B24_READING_NOTIFY hook once, and a reading counts only once
 its epoch is read back finalized from the chain.
 """
 import argparse,copy,fcntl,importlib.util,os,signal,time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timezone
 from decimal import Decimal,ROUND_CEILING
 from sign import *
@@ -21,6 +22,9 @@ SEED=DEPLOYMENT/'capture'
 BASE=COORD/'evidence/tee/phase5'
 DAILY=COORD/'evidence/tee/b24-daily'
 TOOLS=ROOT/'tools/b23-nav-canary'
+sys.path[:0] = [str(TOOLS), str(ROOT / '.scratch-deposit')]
+from pftl import PEERS
+from runtime_hashes import runtime
 STATUS=COORD/'status/now.md'
 LOCK_WAIT=3600;LOCK_POLL=5
 LANDING_WAIT=600;LANDING_POLL=30
@@ -131,10 +135,8 @@ def collect(now,on_demand,d,mode,stamp,p):
     p.stage='proof';helpers.command([sys.executable,TOOLS/'prove_remote.py','--capture',capture,'--elf',helpers.ELF,'--native-cli',NATIVE,'--prover-cli',GPU_NATIVE,'--output',d/'proof'])
     return manifest,capture,budget
 def runtime_check(d, filename='runtime-hashes.json'):
-    sys.path.insert(0,str(TOOLS));import submit_live
-    from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=6) as pool:
-        versions=dict(pool.map(lambda peer: submit_live.runtime(peer, DAILY_NODE_SHA),submit_live.pftl.PEERS))
+        versions=dict(pool.map(lambda peer: runtime(peer, DAILY_NODE_SHA),PEERS))
     save(d/filename,versions)
     if set(versions) != {f'validator-{i}' for i in range(6)} or not all(v['matches'] for v in versions.values()):
         raise RuntimeError('B24 reading requires release 5 RPC and transport on all six validators')
