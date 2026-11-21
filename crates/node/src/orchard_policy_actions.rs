@@ -2932,6 +2932,18 @@ fn shielded_archive_payload_orchard_commitment_action_indexes(
             }
             ShieldedAction::AssetOrchardEgressV1(_) => None,
             ShieldedAction::AssetOrchardPrivateEgressV1(_) => None,
+            ShieldedAction::AssetOrchardTransferV1(payload) => {
+                let transfer: AssetOrchardTransferAction =
+                    serde_json::from_str(&payload.transfer_json).map_err(invalid_data)?;
+                if transfer
+                    .output_commitments
+                    .iter()
+                    .any(|output_commitment| output_commitment.as_hex() == commitment)
+                {
+                    indexes.push(index);
+                }
+                None
+            }
             ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(payload) => {
                 if payload.output_commitment == commitment {
                     indexes.push(index);

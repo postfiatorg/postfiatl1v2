@@ -62,6 +62,19 @@ pub use asset_orchard::{
     ASSET_ORCHARD_PROOF_SYSTEM_ID_V1, ASSET_ORCHARD_RSEED_BYTES, ASSET_ORCHARD_SIGHASH_BYTES,
     ASSET_ORCHARD_SPEND_AUTH_SIGNATURE_BYTES, ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES,
 };
+pub use asset_orchard::{
+    asset_orchard_note_for_address, asset_orchard_transfer_exit_binding_hash,
+    AssetOrchardShieldedAddress, AssetOrchardShieldedKeys, AssetOrchardTransferAction,
+    AssetOrchardTransferExit, AssetOrchardTransferPublicFields,
+    ASSET_ORCHARD_SHIELDED_ADDRESS_PREFIX, ASSET_ORCHARD_TRANSFER_ACTION_SCHEMA_V1,
+    ASSET_ORCHARD_TRANSFER_CIRCUIT_ID_V1, ASSET_ORCHARD_TRANSFER_PUBLIC_INSTANCE_LEN,
+};
+pub use asset_orchard_circuit::{
+    build_asset_orchard_transfer_action, verify_asset_orchard_transfer_action,
+    AssetOrchardTransferBuildResult, AssetOrchardTransferCircuit, AssetOrchardTransferProvingKey,
+    AssetOrchardTransferRequest, AssetOrchardTransferVerifyingKey,
+    ASSET_ORCHARD_TRANSFER_V1_K, ASSET_ORCHARD_TRANSFER_V1_RUNTIME_PINNED_VK_FINGERPRINT,
+};
 pub use asset_orchard_circuit::{
     asset_orchard_single_commitment_anchor, build_asset_orchard_private_egress_action,
     build_asset_orchard_private_primary_issue_action,

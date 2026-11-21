@@ -130,8 +130,8 @@ fn one_note_pays_with_change_and_both_sides_find_their_notes() {
             GENESIS,
             PROTOCOL,
             keys,
-            &built.action,
-            index,
+            built.action.output_commitments[index].as_hex(),
+            &built.action.encrypted_outputs[index].to_bytes().expect("bytes"),
         )
         .expect("scan")
     };

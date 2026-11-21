@@ -981,6 +981,7 @@ fn draft_asset_orchard_transfer(
             &asset_id,
             *value,
             &rseed,
+            rho,
         )?);
         if index == 1 && *value != 0 {
             change_note = Some(change_keys.wallet_note(pool_domain, &asset_id, &note, &rseed)?);

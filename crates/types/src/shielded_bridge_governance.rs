@@ -469,6 +469,14 @@ pub struct AssetOrchardPrivateEgressActionPayload {
     pub spend_authorization_signature: String,
 }
 
+/// A private payment inside the asset pool, or out of it. The serialized action carries two
+/// nullifiers, two output commitments with their ciphertexts, the proof and the spend
+/// signatures. It names an asset and an amount only when value leaves the pool.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetOrchardTransferActionPayload {
+    pub transfer_json: String,
+}
+
 /// Versioned private-primary issue action.
 ///
 /// The Halo2 proof consumes one retained Asset-Orchard settlement note. The
@@ -553,6 +561,8 @@ pub enum ShieldedAction {
     AssetOrchardPrivatePrimaryIssueV1(AssetOrchardPrivatePrimaryIssueActionPayload),
     #[serde(rename = "asset_orchard_private_primary_redeem_v1")]
     AssetOrchardPrivatePrimaryRedeemV1(AssetOrchardPrivatePrimaryRedeemActionPayload),
+    #[serde(rename = "asset_orchard_transfer_v1")]
+    AssetOrchardTransferV1(AssetOrchardTransferActionPayload),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

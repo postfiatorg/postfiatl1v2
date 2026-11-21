@@ -3884,6 +3884,16 @@ fn execute_shielded_batch_actions(
                     archive_replay,
                 )
             }
+            ShieldedAction::AssetOrchardTransferV1(action) => {
+                execute_asset_orchard_transfer_action(
+                    genesis,
+                    ledger,
+                    shielded,
+                    &batch.batch_id,
+                    index,
+                    action,
+                )
+            }
         };
         receipts.push(receipt);
     }

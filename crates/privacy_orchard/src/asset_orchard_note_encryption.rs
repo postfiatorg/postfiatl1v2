@@ -11,10 +11,10 @@ use zeroize::{DefaultIsZeroes, Zeroizing};
 
 use crate::asset_orchard::{
     asset_orchard_incoming_viewing_key_from_seed, asset_orchard_note_for_address,
-    asset_output_rho, build_asset_orchard_wallet_note_with_rho,
+    build_asset_orchard_wallet_note_with_rho,
     validate_asset_orchard_wallet_note_for_pool, AssetOrchardBoundedBytes, AssetOrchardError,
-    AssetOrchardShieldedAddress, AssetOrchardShieldedKeys, AssetOrchardSwapAction,
-    AssetOrchardTransferAction, AssetOrchardWalletNote, AssetTag,
+    AssetOrchardFieldElement, AssetOrchardShieldedAddress, AssetOrchardShieldedKeys,
+    AssetOrchardSwapAction, AssetOrchardWalletNote, AssetTag,
     ASSET_ORCHARD_ENCRYPTED_OUTPUT_MAX_BYTES, ASSET_ORCHARD_RSEED_BYTES,
 };
 
@@ -268,6 +268,7 @@ struct TransferNotePlaintext {
     asset_id: String,
     value: u64,
     rseed: String,
+    rho: String,
 }
 
 /// Encrypt what the owner of `address` needs to find and later spend an output: the asset, the
@@ -282,6 +283,7 @@ pub fn encrypt_asset_orchard_transfer_output(
     asset_id: &str,
     value: u64,
     rseed: &[u8; ASSET_ORCHARD_RSEED_BYTES],
+    rho: pallas::Base,
 ) -> Result<AssetOrchardBoundedBytes, AssetOrchardError> {
     let rng = &mut OsRng;
     let esk = loop {
@@ -321,6 +323,7 @@ pub fn encrypt_asset_orchard_transfer_output(
             asset_id: asset_id.to_string(),
             value,
             rseed: postfiat_crypto_provider::bytes_to_hex(rseed),
+            rho: AssetOrchardFieldElement::from_field(rho).as_hex().to_string(),
         })
         .map_err(|error| {
             AssetOrchardError::new(
@@ -363,24 +366,25 @@ pub fn encrypt_asset_orchard_transfer_output(
     AssetOrchardBoundedBytes::from_bytes(&encoded, ASSET_ORCHARD_ENCRYPTED_OUTPUT_MAX_BYTES)
 }
 
-/// Try one output of a transfer with a wallet's viewing key. `Ok(None)` means the output is
-/// not this wallet's, is a zero-value filler, or is malformed; a scan never fails on someone
-/// else's bytes.
+/// Try one pool output with a wallet's viewing key. It needs only what the pool keeps for every
+/// output: its commitment and its ciphertext. `Ok(None)` means the output is not this wallet's,
+/// is a zero-value filler, is not a transfer output, or is malformed; a scan never fails on
+/// someone else's bytes.
 pub fn decrypt_asset_orchard_transfer_output(
     chain_id: &str,
     genesis_hash: [u8; 32],
     protocol_version: u32,
     keys: &AssetOrchardShieldedKeys,
-    action: &AssetOrchardTransferAction,
-    output_index: usize,
+    output_commitment_hex: &str,
+    encrypted_output: &[u8],
 ) -> Result<Option<AssetOrchardWalletNote>, AssetOrchardError> {
     let pool_domain =
         AssetOrchardSwapAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
-    let fields = action.public_fields()?;
-    if output_index >= fields.output_commitments.len() || fields.pool_domain != pool_domain {
+    let Ok(output_commitment) =
+        AssetOrchardFieldElement::parse_hex(output_commitment_hex.to_string())
+    else {
         return Ok(None);
-    }
-    let encrypted_output = action.encrypted_outputs[output_index].to_bytes()?;
+    };
     if encrypted_output.len() != ASSET_ORCHARD_TRANSFER_OUTPUT_CIPHERTEXT_BYTES
         || &encrypted_output[..ASSET_ORCHARD_TRANSFER_NOTE_CIPHERTEXT_MAGIC.len()]
             != ASSET_ORCHARD_TRANSFER_NOTE_CIPHERTEXT_MAGIC
@@ -400,7 +404,7 @@ pub fn decrypt_asset_orchard_transfer_output(
         return Ok(None);
     }
     let shared = (pallas::Point::from(epk) * keys.incoming_viewing_key()).to_affine();
-    let commitment_hex = action.output_commitments[output_index].as_hex();
+    let commitment_hex = output_commitment.as_hex();
     let key = Zeroizing::new(note_encryption_key(
         chain_id,
         genesis_hash,
@@ -454,21 +458,20 @@ pub fn decrypt_asset_orchard_transfer_output(
     let Ok(asset_tag) = AssetTag::derive(&body.asset_id) else {
         return Ok(None);
     };
-    let rho = asset_output_rho(
-        fields.pool_domain,
-        fields.anchor,
-        fields.nullifiers,
-        fields.randomized_verification_keys,
-        output_index as u8,
-    )?;
+    let Ok(rho) = AssetOrchardFieldElement::parse_hex(body.rho.clone())
+        .and_then(|rho| rho.to_field())
+    else {
+        return Ok(None);
+    };
     let Ok(note) =
         asset_orchard_note_for_address(&keys.address, asset_tag, body.value, rho, &rseed)
     else {
         return Ok(None);
     };
     // A sender could encrypt a plaintext that does not open the published commitment. Such an
-    // output is not spendable and must not be counted.
-    if note.cmx(pool_domain)? != fields.output_commitments[output_index] {
+    // output is not spendable and must not be counted. The circuit fixed the commitment's rho,
+    // so a plaintext with any other rho fails here too.
+    if note.cmx(pool_domain)? != output_commitment.to_field()? {
         return Ok(None);
     }
     Ok(Some(keys.wallet_note(
