@@ -32,13 +32,13 @@ def top(text):
 def require_lock():
     if LOCK.read_text().strip()!='TEE':raise RuntimeError('TEE chain lock lost')
 
-def runtime(peer):
+def runtime(peer, expected_sha=RELEASE_SHA):
     name,host,_=peer
     # Names come from the fixed six-peer inventory, never caller input.
     command=f'for unit in postfiat-{name}.service postfiat-{name}-rpc.service; do pid=$(systemctl show --value -p MainPID "$unit"); test "$pid" -gt 0 || exit 1; sha256sum /proc/$pid/exe; done'
     r=subprocess.run(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=10','root@'+host,command],capture_output=True,text=True,timeout=30)
     hashes=[line.split()[0] for line in r.stdout.splitlines()]
-    return name,dict(returncode=r.returncode,hashes=hashes,matches=r.returncode==0 and hashes==[RELEASE_SHA]*2)
+    return name,dict(returncode=r.returncode,hashes=hashes,matches=r.returncode==0 and hashes==[expected_sha]*2)
 
 def reads(peer,asset,include_offer=True):
     name=peer[0]
