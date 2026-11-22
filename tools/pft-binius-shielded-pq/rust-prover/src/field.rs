@@ -503,6 +503,40 @@ pub struct E {
 
 pub const E_BYTES: usize = 48;
 
+// Polynomial products over K before reduction by the degree-12 modulus.
+#[inline]
+fn product3(a: &[u32], b: &[u32], kt: &KTables) -> [u32; 5] {
+    let p0 = kt.kmul_portable(a[0], b[0]);
+    let p1 = kt.kmul_portable(a[1], b[1]);
+    let p2 = kt.kmul_portable(a[2], b[2]);
+    let cross = |i: usize, j: usize| kt.kmul_portable(a[i] ^ a[j], b[i] ^ b[j]);
+    [p0, cross(0, 1) ^ p0 ^ p1, cross(0, 2) ^ p0 ^ p1 ^ p2,
+        cross(1, 2) ^ p1 ^ p2, p2]
+}
+
+// Karatsuba in characteristic two. The two levels split 12 into 6 and 6
+// into 3, requiring 54 base-field multiplications for dense elements.
+#[inline]
+fn split_product<const HALF: usize, const PART: usize, const TOTAL: usize>(
+    a: &[u32], b: &[u32], kt: &KTables,
+    multiply: impl Fn(&[u32], &[u32], &KTables) -> [u32; PART],
+) -> [u32; TOTAL] {
+    let (a0, a1) = a.split_at(HALF);
+    let (b0, b1) = b.split_at(HALF);
+    let sum_a: [u32; HALF] = core::array::from_fn(|i| a0[i] ^ a1[i]);
+    let sum_b: [u32; HALF] = core::array::from_fn(|i| b0[i] ^ b1[i]);
+    let low = multiply(a0, b0, kt);
+    let high = multiply(a1, b1, kt);
+    let middle = multiply(&sum_a, &sum_b, kt);
+    let mut out = [0; TOTAL];
+    for i in 0..PART {
+        out[i] ^= low[i];
+        out[HALF + i] ^= middle[i] ^ low[i] ^ high[i];
+        out[2 * HALF + i] ^= high[i];
+    }
+    out
+}
+
 impl E {
     pub const ZERO: E = E { c: [0u32; 12] };
 
@@ -606,10 +640,19 @@ impl E {
                 return unsafe { self.mul_pclmul(rhs) };
             }
         }
-        self.mul_portable(rhs, kt)
+        // Sparse basis elements remain cheaper with the reference loop.
+        if self.c.iter().filter(|&&v| v != 0).take(3).count() < 3
+            || rhs.c.iter().filter(|&&v| v != 0).take(3).count() < 3
+        {
+            return self.mul_portable(rhs, kt);
+        }
+        let product = split_product::<6, 11, 23>(&self.c, &rhs.c, kt, |a, b, kt| {
+            split_product::<3, 5, 11>(a, b, kt, product3)
+        });
+        Self::reduce_product(product)
     }
 
-    /// Portable schoolbook/Karatsuba reference multiplication in E = GF(2^384).
+    /// Portable schoolbook reference multiplication in E = GF(2^384).
     pub fn mul_portable(self, rhs: E, kt: &KTables) -> E {
         let mut prod = [0u32; 23];
         for i in 0..12 {
@@ -624,6 +667,11 @@ impl E {
                 }
             }
         }
+        Self::reduce_product(prod)
+    }
+
+    #[inline]
+    fn reduce_product(mut prod: [u32; 23]) -> E {
         for i in (12..23).rev() {
             let v = prod[i];
             if v != 0 {
