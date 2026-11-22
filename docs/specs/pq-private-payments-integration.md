@@ -86,14 +86,14 @@ directly in local-chain tests.
 
 ## M2. Freeze the L1 action and its archival encoding · 4–7 days
 
-- [ ] Add `crates/types/src/pq_payment.rs`, include it from `crates/types/src/lib.rs`, and extend
+- [x] Add `crates/types/src/pq_payment.rs`, include it from `crates/types/src/lib.rs`, and extend
   `ShieldedAction` and `private_actions_v1.rs` with `pq_payment_v1`. Derive the mode from the header. A
   positive mint means shield, a positive unshield means exit, and two zeros mean internal payment. Reject
   simultaneous edges, kind/field disagreement, unknown versions or profiles and surplus authorizations. The
   private bits selecting real and dummy inputs remain private. A wallet makes a pure deposit with two dummies.
   The existing relation also permits a funded top-up with real inputs, so use the same exact-debit rules for
   it.
-- [ ] Freeze this inner layout in parse and serialization vectors, in the following order. Start with eight
+- [x] Freeze this inner layout in parse and serialization vectors, in the following order. Start with eight
   magic bytes `PFSH02\0\0`, 48-byte anchor, LE u64 mint and unshield, 32-byte exit destination, LE u64 fee,
   two 48-byte nullifiers, two 48-byte output commitments, two 1,670-byte envelopes, LE u32 proof length, exact
   proof bytes. The fixed prefix including length is 3,648 bytes. For L1 encode the chain's canonical 20-byte
@@ -101,7 +101,7 @@ directly in local-chain tests.
   and a canonical, nonzero, permitted recipient on exit. Use the address codec and active recipient rules in
   `crates/crypto_provider/src/address.rs` and `crates/execution/src/recipient_format.rs`. Test round trips
   against real account address encodings.
-- [ ] Define a compact binary outer action with a profile tag, fixed-size governed asset selector mapping to
+- [x] Define a compact binary outer action with a profile tag, fixed-size governed asset selector mapping to
   an immutable issue ID, read epoch, and optional fixed-size account fields, public key and signature. Ship
   byte-exact vectors for all modes. At most one account signature per action under this fee design. Enforce
   **149,130 bytes for the entire archived payment**, including its allocated batch framing and authorization.
@@ -109,7 +109,7 @@ directly in local-chain tests.
   public key 1,952 and signature 3,309). Cap lengths before allocating, count the actual serialized bytes,
   require exact inner and outer exhaustion, and enforce the independent 1,048,576-byte JSON request limit
   before decoding.
-- [ ] The current `BatchArchiveEntry.payload_json` stores text. Hex or base64 persisted there would exceed the
+- [x] The current `BatchArchiveEntry.payload_json` stores text. Hex or base64 persisted there would exceed the
   archival target. In `crates/types/src/core_chain.rs`,
   `crates/node/src/{storage_commit,batch_snapshot,block_replay_wallet}.rs` and
   `crates/storage/src/transactional.rs`, add a versioned binary payload record addressed by its authenticated
@@ -118,12 +118,33 @@ directly in local-chain tests.
   and include both in snapshot export and historical reads. Use one canonical transport encoding (padded
   standard base64 in strict JSON) at the API boundary. Measure incremental archive bytes including reference
   overhead separately from wallet indexes, snapshots and replicated database overhead.
-- [ ] **Merge test.** Add `crates/privacy_binius/tests/l1_vectors.rs` and
+- [x] **Merge test.** Add `crates/privacy_binius/tests/l1_vectors.rs` and
   `tools/pft-binius-shielded-pq/go-verifier/l1_profile_test.go`. Check Rust/Go agreement for all modes, wrong chain/genesis/asset/epoch/fee terms and
   fixture-profile rejection under L1. Round-trip Rust, Python and JS transport to identical binary bytes.
   Exercise truncation, duplicate JSON fields, illegal padding, inner/outer trailing data, overlong proof
   counts, limits at and one above each cap. Store and replay a largest-case authorized payment and reject a
   missing or mismatched body. Enable this profile only on development chains pending the M8 activation decision.
+
+The outer wire is `PFPQ`, one-byte version, profile and mode, 48-byte asset ID (zero for PFT,
+otherwise the source-series digest), LE u64 input epoch and public PFT fee, then a one-byte
+authorization flag. When set, it carries the 20-byte payer, LE u64 sequence, 1,952-byte public
+key and 3,309-byte signature. The exact PFSH02 inner record follows. The eight
+[`l1-vectors`](../../tools/pft-binius-shielded-pq/l1-vectors) cover both assets and a funded top-up.
+Validators verify the L1 profile on the pinned disposable genesis. Its receipt records
+`pq_settlement_inactive` pending M3–M4.
+
+The redb store publishes the reference and body in one transaction. The file-backed store fsyncs
+the immutable body before publishing its reference. A crash between the two can leave an
+unreferenced body file.
+
+The largest certified vector occupied 144,470 bytes including the logical reference, 144,770 with
+redb keys and authentication, or 144,804 with the JSONL envelope and digest filename. For the
+140,476-byte inner ceiling those sizes were 146,246, 146,546 and 146,580 bytes, respectively.
+The largest measured total leaves 2,550 of 149,130 bytes. These are incremental single-payment
+archive bytes. Indexes, snapshots, database pages and replicas are outside this measurement.
+The ceiling test stores and reopens a signed header with a maximum-length proof encoding. Consensus
+replay and snapshot restoration use the largest genuine proof vector. Its sampled Merkle opening
+is shorter than the calculated maximum.
 
 ## M3. Commit an isolated pool and make old notes spendable after rollover · 6–10 days
 
