@@ -14,7 +14,7 @@ pub(super) fn prepare_pair(
 ) -> Result<(PqPool, Receipt), &'static str> {
     let (terms, _, inner) = payment.parts().map_err(|_| "pq_encoding")?;
     let statement =
-        postfiat_privacy_binius::verify_l1(payment, chain).map_err(|_| "pq_invalid_proof")?;
+        pq_payment_actions::verify_statement(payment, chain).map_err(|_| "pq_invalid_proof")?;
     let asset = bytes_to_hex(&terms.asset);
     let writable = pool.head.assets.get(&asset);
     let envelopes_end = INNER_PREFIX - 4; // The proof length follows the two envelopes.

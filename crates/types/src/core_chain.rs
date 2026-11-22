@@ -852,6 +852,31 @@ impl BatchArchiveEntry {
         self.compact_pq_with_framing(0)
     }
 
+    /// Charge the serialized detached reference, including the full batch
+    /// metadata and its action separator, identically in storage and consensus.
+    pub fn pq_archived_payment_bytes(
+        batch_id: &str,
+        payload_hash: &str,
+        atomic: bool,
+        multiple: bool,
+        reference: &serde_json::Value,
+        body_bytes: usize,
+    ) -> Result<usize, String> {
+        let one = Self {
+            payload_json: format!(
+                "{}{}",
+                Self::PQ_REFERENCE_PREFIX,
+                serde_json::json!([atomic, [reference]])
+            ),
+            batch_kind: "shielded".into(),
+            batch_id: batch_id.to_owned(),
+            payload_hash: payload_hash.to_owned(),
+        };
+        let framing =
+            serde_json::to_vec(&one).map_err(|e| e.to_string())?.len() + usize::from(multiple);
+        Ok(pq_payment::checked_archive_size(body_bytes, framing)?)
+    }
+
     pub fn compact_pq_with_framing(
         &self,
         storage_framing: usize,
@@ -885,19 +910,14 @@ impl BatchArchiveEntry {
                 let reference = serde_json::json!({"pq_body_v1":digest});
                 // Charge the full single-payment reference and batch metadata to each
                 // payment. Mixed batches also allocate one action separator per payment.
-                let one = Self {
-                    payload_json: format!(
-                        "{}{}",
-                        Self::PQ_REFERENCE_PREFIX,
-                        serde_json::json!([batch.atomic, [&reference]])
-                    ),
-                    batch_kind: self.batch_kind.clone(),
-                    batch_id: self.batch_id.clone(),
-                    payload_hash: self.payload_hash.clone(),
-                };
-                let framing = serde_json::to_vec(&one).map_err(|e| e.to_string())?.len()
-                    + usize::from(multiple);
-                let framed = pq_payment::checked_archive_size(p.bytes().len(), framing)?;
+                let framed = Self::pq_archived_payment_bytes(
+                    &self.batch_id,
+                    &self.payload_hash,
+                    batch.atomic,
+                    multiple,
+                    &reference,
+                    p.bytes().len(),
+                )?;
                 pq_payment::checked_archive_size(framed, storage_framing)?;
                 actions.push(reference);
                 bodies.push((digest, p));

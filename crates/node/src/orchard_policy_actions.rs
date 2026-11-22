@@ -3000,6 +3000,9 @@ fn orchard_authorizing_domain(
     genesis: &Genesis,
     pool_id: &str,
 ) -> io::Result<OrchardAuthorizingDomain> {
+    if pool_id == postfiat_types::pq_payment::POOL_ID {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "pq_pool_owner"));
+    }
     OrchardAuthorizingDomain::new(
         genesis.chain_id.clone(),
         genesis_hash(genesis),

@@ -3402,7 +3402,7 @@ fn build_shielded_batch_proposal_with_timings(
     timings.read_batch_ms = node_timing_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
-    verify_shielded_action_batch_id(&genesis, &batch)?;
+
     reject_live_legacy_cleartext_shielded_actions(&batch)?;
     timings.verify_batch_id_ms = node_timing_elapsed_ms(stage_start);
 
@@ -3441,6 +3441,8 @@ fn build_shielded_batch_proposal_with_timings(
     )?;
     timings.activation_ms = node_timing_elapsed_ms(stage_start);
 
+    consensus_artifacts::check_pq_block(&genesis, &governance, block_height, [&batch])?;
+    verify_shielded_action_batch_id(&genesis, &batch)?;
     reset_asset_orchard_private_egress_timings();
     reset_asset_orchard_private_egress_node_timings();
     let stage_start = std::time::Instant::now();

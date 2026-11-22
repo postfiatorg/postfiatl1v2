@@ -334,6 +334,16 @@ fn verify_blocks_from_store(store: &NodeStore) -> io::Result<BlockVerificationRe
                 format!("block {} hash mismatch", block.header.height),
             ));
         }
+        if BatchArchiveEntry::may_contain_pq(&block.header.batch_kind, &archive_entry.payload_json)
+        {
+            let batch: ShieldedActionBatch = parse_archived_payload(block, archive_entry)?;
+            consensus_artifacts::check_pq_block(
+                &genesis,
+                &certificate_governance,
+                block.header.height,
+                [&batch],
+            )?;
+        }
         verify_archived_payload(&genesis, block, archive_entry)?;
         update_governance_for_certificate_replay(
             &mut certificate_governance,
@@ -3128,6 +3138,12 @@ pub(super) fn replay_archived_payload(
         }
         "shielded" => {
             let batch: ShieldedActionBatch = parse_archived_payload(block, archive_entry)?;
+            consensus_artifacts::check_pq_block(
+                genesis,
+                state.governance,
+                block.header.height,
+                [&batch],
+            )?;
             pq_payment_fixture::check_batch_domain(genesis, &batch)?;
             consensus_artifacts::verify_development_pq_payments(genesis, &batch)?;
             let compatibility =

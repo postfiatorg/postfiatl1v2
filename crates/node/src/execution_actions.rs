@@ -2230,6 +2230,15 @@ pub(super) fn governance_amendment_lifecycle_rejection(
                 .to_string(),
         ));
     }
+    if amendment.kind == postfiat_types::PQ_REHEARSAL_V1
+        && amendment.value != 0
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "pq_activation_height",
+            "schedule PQ rehearsal after the amendment block".into(),
+        ));
+    }
     if amendment.kind == GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
         && u64::from(amendment.value) <= block_height
     {
@@ -2520,6 +2529,12 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .external_lane_export_root_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
+        postfiat_types::PQ_REHEARSAL_V1 => governance
+            .amendments
+            .iter()
+            .rev()
+            .find(|a| a.kind == kind)
+            .map_or(0, |a| a.value),
         GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT => governance
             .shielded_atomic_batch_activation_height()
             .and_then(|height| u32::try_from(height).ok())
@@ -2562,6 +2577,7 @@ fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
             | GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
             | postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT
+            | postfiat_types::PQ_REHEARSAL_V1
             | GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT

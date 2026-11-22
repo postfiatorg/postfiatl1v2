@@ -1815,6 +1815,7 @@ fn validate_amendment_kind(kind: &str) -> Result<(), String> {
         | postfiat_types::GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT
         | postfiat_types::GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
+        | postfiat_types::PQ_REHEARSAL_V1
         | GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS
@@ -1872,7 +1873,7 @@ fn validate_amendment_value(kind: &str, value: u32) -> Result<(), String> {
             )),
         };
     }
-    if value == 0 {
+    if value == 0 && kind != postfiat_types::PQ_REHEARSAL_V1 {
         return Err(format!(
             "governance amendment `{kind}` value must be nonzero"
         ));

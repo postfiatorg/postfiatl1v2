@@ -271,6 +271,9 @@ mod private_action_six_validator_tests {
             GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
             ATOMIC_ACTIVATION as u32,
         )];
+        if chain_id == "postfiat-pfsh02-m1-disposable" {
+            amendments.push((postfiat_types::PQ_REHEARSAL_V1, ATOMIC_ACTIVATION as u32));
+        }
         if pricing {
             amendments.push((
                 GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT,

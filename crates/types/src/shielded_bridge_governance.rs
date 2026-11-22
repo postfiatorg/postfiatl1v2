@@ -67,6 +67,16 @@ pub const GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT: &str =
 /// `external_lane_export_v1` is applied, on a chain whose genesis does not set it.
 pub const GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT: &str =
     "external_lane_export_root_activation_height";
+/// Signed amendment value is the earliest candidate height. Zero pauses the pool.
+pub const PQ_REHEARSAL_V1: &str = "pq_payment_rehearsal_v1";
+/// This version selects L1 profile 1, native PFT and the development source series.
+pub const PQ_REHEARSAL_ISSUE: &str = "bbf2fb96437f2e87ff3b470f19aa2455ae226ab810b06b64ab327b0daa71a2d1ad14638a107b7bbd3b0cf3a6f4d56269";
+/// Published M2 archive vector. Account settlement has no enabled route for this issue.
+pub const PQ_ARCHIVE_FIXTURE_ISSUE: &str = "a1c5b7e096966c3736cbcf2291c0d10a166f3c2edee2d7c5faf9c870c565d0009ad5b0e23e1dbdee4ca9f7e07b954cb8";
+pub const PQ_REHEARSAL_PROOFS: usize = 4;
+pub const PQ_REHEARSAL_BYTES: usize = 596_520;
+pub const PQ_REHEARSAL_MIN_FEE: u64 = 1;
+
 pub const GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT: &str =
     "shielded_atomic_batch_activation_height";
 /// First block height at which an at-NAV Asset-Orchard swap pricing claim
@@ -1793,6 +1803,28 @@ impl GovernanceState {
             })
             .map(|amendment| u64::from(amendment.value))
             .min()
+    }
+
+    pub fn pq_rehearsal_active(
+        &self,
+        chain: &str,
+        genesis: &str,
+        protocol: u32,
+        height: u64,
+    ) -> bool {
+        self.amendments
+            .iter()
+            .rev()
+            .find(|a| a.kind == PQ_REHEARSAL_V1)
+            .is_some_and(|a| {
+                a.chain_id == chain
+                    && a.genesis_hash == genesis
+                    && a.protocol_version == protocol
+                    && !a.paused
+                    && a.value != 0
+                    && height >= u64::from(a.value)
+                    && height >= a.activation_height
+            })
     }
 
     pub fn shielded_atomic_batch_activation_height(&self) -> Option<u64> {

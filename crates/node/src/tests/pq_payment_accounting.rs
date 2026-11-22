@@ -79,6 +79,11 @@ impl Fixture {
         ] {
             governance.apply(amendment(kind, 1, 0));
         }
+        let mut activation = amendment(postfiat_types::PQ_REHEARSAL_V1, 1, 0);
+        activation.chain_id = genesis.chain_id.clone();
+        activation.genesis_hash = genesis_hash(&genesis);
+        activation.protocol_version = genesis.protocol_version;
+        governance.apply(activation);
         let receipt = activate_route(&mut governance, &mut ledger, &profile);
         assert!(receipt.accepted, "{}", receipt.message);
         let backed_series = |profile: &postfiat_types::VaultBridgeRouteProfileV1, amount, name| {
@@ -513,6 +518,15 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
     let mut deposited = 0;
     let mut withdrawn = 0;
     for issued in [false, true] {
+        let sample = std::env::var_os("PQ_VALIDATOR_BENCH").is_some().then(|| {
+            (
+                disk.read_ledger().unwrap(),
+                disk.read_shielded().unwrap(),
+                disk.read_ordered_batches().unwrap(),
+                height + 1,
+            )
+        });
+        let mut measured_payments = Vec::new();
         let asset = if issued {
             f.child.clone()
         } else {
@@ -690,6 +704,9 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
                     .to_string()
                     .contains("pq_issue_disabled"));
             }
+            if sample.is_some() {
+                measured_payments.push(payment.clone());
+            }
             let receipt = f.apply(&[payment]).unwrap().pop().unwrap();
             let charged = if issued { 3 } else { fee };
             assert!(receipt.accepted);
@@ -798,6 +815,24 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
                 f.check_cap();
             }
             println!("block {height}: public PFT {public} + live PQ {native} + burned {burned} = {}; pfUSDC family 110; wallet notes {:?}",f.starting_supply,notes);
+        }
+        if let Some((ledger, shielded, ordered, height)) = sample {
+            super::pq_payment_activation::benchmark(
+                &f.genesis,
+                &disk.read_governance().unwrap(),
+                &ledger,
+                shielded,
+                &disk.read_bridge().unwrap(),
+                &ordered,
+                height,
+                &measured_payments,
+                if issued {
+                    pq::NATIVE_ASSET_HEX
+                } else {
+                    &f.child
+                },
+                if issued { &sponsor } else { &f.fresh },
+            );
         }
     }
     let issue = Some(f.child.as_str());

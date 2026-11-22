@@ -8,9 +8,49 @@ use postfiat_types::{
     AssetDefinition, AssetOrchardEgressPolicyRegistry, VAULT_BRIDGE_BUCKET_STATUS_ACTIVE,
 };
 
-// The single opted-in source series on the M1 development genesis. Its
-// preimage and governed route are reconstructed by the accounting merge test.
-const DEV_SERIES: &str = "bbf2fb96437f2e87ff3b470f19aa2455ae226ab810b06b64ab327b0daa71a2d1ad14638a107b7bbd3b0cf3a6f4d56269";
+// Only cryptographic verification can be reused. The ordered-state tests run
+// on every use, including a retry on the same thread at another height.
+type Verified = (
+    String,
+    [u8; 48],
+    u32,
+    String,
+    postfiat_privacy_binius::PaymentStatement,
+);
+thread_local! {
+    static VERIFIED: std::cell::RefCell<std::collections::VecDeque<Verified>> = const { std::cell::RefCell::new(std::collections::VecDeque::new()) };
+}
+
+pub(super) fn verify_statement(
+    payment: &PqPayment,
+    chain: Chain,
+) -> Result<postfiat_privacy_binius::PaymentStatement, postfiat_privacy_binius::VerifyError> {
+    let digest = payment.digest();
+    VERIFIED.with_borrow_mut(|entries| {
+        if let Some(entry) = entries.iter().find(|e| {
+            e.0 == chain.id && e.1 == chain.genesis && e.2 == chain.protocol && e.3 == digest
+        }) {
+            return Ok(entry.4.clone());
+        }
+        let statement = postfiat_privacy_binius::verify_l1(payment, chain)?;
+        if entries.len() == postfiat_types::PQ_REHEARSAL_PROOFS {
+            entries.pop_front();
+        }
+        entries.push_back((
+            chain.id.to_owned(),
+            chain.genesis,
+            chain.protocol,
+            digest,
+            statement.clone(),
+        ));
+        Ok(statement)
+    })
+}
+
+#[cfg(test)]
+pub(super) fn clear_verified() {
+    VERIFIED.with_borrow_mut(|entries| entries.clear());
+}
 
 fn enabled_issue<'a>(
     ledger: &'a LedgerState,
@@ -21,7 +61,7 @@ fn enabled_issue<'a>(
     asset_id: &str,
     reserve: u64,
 ) -> Result<&'a AssetDefinition, &'static str> {
-    if asset_id != DEV_SERIES {
+    if asset_id != postfiat_types::PQ_REHEARSAL_ISSUE {
         return Err("pq_issue_disabled");
     }
     let asset = ledger
@@ -99,7 +139,14 @@ pub(super) fn apply(
     governance: &GovernanceState,
     policies: &AssetOrchardEgressPolicyRegistry,
 ) -> Result<Receipt, &'static str> {
-    if genesis_digest != pq_payment_fixture::GENESIS_HASH {
+    if genesis_digest != pq_payment_fixture::GENESIS_HASH
+        || !governance.pq_rehearsal_active(
+            &genesis.chain_id,
+            genesis_digest,
+            genesis.protocol_version,
+            height,
+        )
+    {
         return Err("pq_settlement_inactive");
     }
     let (terms, _, inner) = payment.parts().map_err(|_| "pq_encoding")?;
