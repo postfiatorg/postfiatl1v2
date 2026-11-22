@@ -64,14 +64,14 @@ sha256sum -c SHA256SUMS
 
 ## What is missing
 
-PFSH02 is not yet part of the chain. Validators do not accept it, there is no ledger pool for it and no wallet can
-make one. The build plan is [Integrating PFSH02 private payments into Post Fiat L1](../specs/pq-private-payments-integration.md).
+PFSH02 is not yet usable on the chain. On a disposable six-validator test chain, validators now verify, finalize and
+replay a real PFSH02 payment (M1). There is no production ledger pool, deposit path or wallet yet. The build plan is [Integrating PFSH02 private payments into Post Fiat L1](../specs/pq-private-payments-integration.md).
 It has eight milestones, each tested and merged on its own:
 
 | Milestone | Delivers | Status |
 | --- | --- | --- |
-| M1 | A local validator verifies and finalizes a real PFSH02 payment | Next |
-| M2 | The on-chain transaction format, frozen with test vectors in Rust and Go | Planned |
+| M1 | A local validator verifies and finalizes a real PFSH02 payment | Done 22 Nov: six validators finalize and replay the sample payment; 21.5 to 34.3 ms inside the validator |
+| M2 | The on-chain transaction format, frozen with test vectors in Rust and Go | Next |
 | M3 | The pool's own ledger state: note trees, nullifiers, root history, tree rollover | Planned |
 | M4 | Deposits signed by the account's ML-DSA-65 key, payments and exits, for PFT and pfUSDC | Planned |
 | M5 | Activation height, per-block verification limits, every public submission path | Planned |

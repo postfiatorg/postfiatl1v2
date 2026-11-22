@@ -189,7 +189,7 @@ mod pq_payment_local_chain_tests {
             .arg(archived_file)
             .args(["-ledger", "../payments/ledger_hop1.json"])
             .output()
-            .unwrap();
+            .expect("cannot run the Go cross-check verifier: set GO_BIN to a Go 1.25.1 binary or put go on PATH");
         assert!(
             out.status.success(),
             "{}",
