@@ -2595,6 +2595,8 @@ fn max_rpc_param_string_bytes(method: &str, key: &str) -> usize {
         }
     } else if method == "shield_batch_finality" && key == "batch_json" {
         MAX_RPC_SHIELD_BATCH_JSON_BYTES
+    } else if method == "private_action_submit" && key == "action_json" {
+        postfiat_types::pq_payment::REQUEST_LIMIT
     } else if key == "action_json" {
         MAX_RPC_ORCHARD_ACTION_JSON_BYTES
     } else if key == "deposit_json" {

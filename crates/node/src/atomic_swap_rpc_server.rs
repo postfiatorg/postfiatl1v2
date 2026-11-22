@@ -60,6 +60,13 @@ fn run_serialized_rpc_mempool_submit(
     if let Some((code, message)) = rpc_serve_destination_address_rejection(request) {
         return rpc_serve_error_response(&request.id, code, &message);
     }
+    if request.method == "shield_batch_finality" && public_finality_contains_pq(request) {
+        return rpc_serve_error_response(
+            &request.id,
+            "private_action_admission_required",
+            "submit PQ actions through private_action_submit",
+        );
+    }
     let _mutation_guard = match context.mempool_mutation_lock.try_lock() {
         Ok(guard) => guard,
         Err(std::sync::TryLockError::WouldBlock) => {

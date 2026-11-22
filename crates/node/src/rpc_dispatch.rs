@@ -835,6 +835,11 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
             )
         }
         "private_action_submit" | "private_action_receipt" => {
+            if flag_value(flags, "--action-json")
+                .is_some_and(|json| json.len() > postfiat_types::pq_payment::REQUEST_LIMIT)
+            {
+                return Err("private action request exceeded 1048576 bytes".into());
+            }
             run_rpc_private_action(id, method, flags, &data_dir)
         }
         "asset_orchard_pricing_claim" | "asset_orchard_private_egress_binding" => {

@@ -21,6 +21,28 @@ thread_local! {
     static VERIFIED: std::cell::RefCell<std::collections::VecDeque<Verified>> = const { std::cell::RefCell::new(std::collections::VecDeque::new()) };
 }
 
+// A local scheduling limit applies to all callers, including peer proposals
+// and archive replay. Waiting for a slot has no effect on the proof verdict.
+static ACTIVE_VERIFIERS: std::sync::Mutex<usize> = std::sync::Mutex::new(0);
+static SLOT_READY: std::sync::Condvar = std::sync::Condvar::new();
+struct VerificationSlot;
+impl VerificationSlot {
+    fn acquire() -> Self {
+        let active = ACTIVE_VERIFIERS.lock().unwrap_or_else(|e| e.into_inner());
+        let mut active = SLOT_READY
+            .wait_while(active, |n| *n >= postfiat_types::PQ_REHEARSAL_PROOFS)
+            .unwrap_or_else(|e| e.into_inner());
+        *active += 1;
+        Self
+    }
+}
+impl Drop for VerificationSlot {
+    fn drop(&mut self) {
+        *ACTIVE_VERIFIERS.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
+        SLOT_READY.notify_one();
+    }
+}
+
 pub(super) fn verify_statement(
     payment: &PqPayment,
     chain: Chain,
@@ -32,6 +54,7 @@ pub(super) fn verify_statement(
         }) {
             return Ok(entry.4.clone());
         }
+        let _slot = VerificationSlot::acquire();
         let statement = postfiat_privacy_binius::verify_l1(payment, chain)?;
         if entries.len() == postfiat_types::PQ_REHEARSAL_PROOFS {
             entries.pop_front();

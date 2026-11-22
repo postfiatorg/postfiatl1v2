@@ -149,6 +149,7 @@ struct RpcServeConnectionContext {
     max_orchard_batch_create_concurrent: u64,
     max_child_dispatch_concurrent: u64,
     max_child_dispatch_per_peer: u64,
+    private_submit_state: Arc<Mutex<RpcServeMempoolSubmitState>>,
     mempool_submit_state: Arc<Mutex<RpcServeMempoolSubmitState>>,
     orchard_batch_create_state: Arc<Mutex<RpcServeMempoolSubmitState>>,
     child_dispatch_state: Arc<Mutex<RpcServeMempoolSubmitState>>,
@@ -2344,12 +2345,18 @@ fn is_mempool_submit_signed_transfer_finality_method(method: &str) -> bool {
     )
 }
 
+fn public_finality_contains_pq(request: &RpcRequest) -> bool {
+    request.params["batch_json"].as_str().is_some_and(|raw| {
+        postfiat_types::ShieldedActionBatch::contains_pq_json(raw).unwrap_or(false)
+    })
+}
+
 fn run_rpc_serve_shield_batch_finality(
     request_index: u64,
     request: &RpcRequest,
     context: &RpcServeConnectionContext,
 ) -> RpcResponse {
-    match run_rpc_serve_shield_batch_finality_inner(request_index, request, context) {
+    match run_rpc_serve_shield_batch_finality_inner(request_index, request, context, false) {
         Ok(response) => response,
         Err((code, message)) => rpc_serve_error_response(&request.id, &code, &message),
     }
@@ -2359,6 +2366,7 @@ fn run_rpc_serve_shield_batch_finality_inner(
     request_index: u64,
     request: &RpcRequest,
     context: &RpcServeConnectionContext,
+    from_admission_queue: bool,
 ) -> Result<RpcResponse, (String, String)> {
     let params = request.params.as_object().ok_or_else(|| {
         (
@@ -2405,6 +2413,12 @@ fn run_rpc_serve_shield_batch_finality_inner(
                 "shield_batch_finality batch has no actions array".to_string(),
             )
         })?;
+    if !from_admission_queue && actions.iter().any(|a| a["kind"] == "pq_payment_v1") {
+        return Err((
+            "private_action_admission_required".into(),
+            "submit PQ actions through private_action_submit".into(),
+        ));
+    }
     if actions.is_empty() {
         return Err((
             "rpc_protocol_error".to_string(),
@@ -3803,10 +3817,14 @@ fn validate_rpc_serve_request_line(line: &str) -> Result<(), String> {
         struct Method {
             method: String,
         }
-        if serde_json::from_str::<Method>(request)
-            .is_ok_and(|m| m.method == "private_action_submit")
-        {
-            return Err("private action request exceeded 1048576 bytes".into());
+        if let Ok(frame) = serde_json::from_str::<Method>(request) {
+            if frame.method == "private_action_submit"
+                || (frame.method == "shield_batch_finality"
+                    && serde_json::from_str::<RpcRequest>(request)
+                        .is_ok_and(|r| public_finality_contains_pq(&r)))
+            {
+                return Err("private action request exceeded 1048576 bytes".into());
+            }
         }
     }
     Ok(())
@@ -5780,6 +5798,7 @@ mod child_dispatch_limit_tests {
             max_orchard_batch_create_concurrent: 1,
             max_child_dispatch_concurrent,
             max_child_dispatch_per_peer,
+            private_submit_state: Arc::default(),
             mempool_submit_state: Arc::new(Mutex::new(RpcServeMempoolSubmitState::default())),
             orchard_batch_create_state: Arc::new(Mutex::new(
                 RpcServeMempoolSubmitState::default(),

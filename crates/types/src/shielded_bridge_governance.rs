@@ -596,6 +596,22 @@ fn shielded_batch_atomic_is_false(value: &bool) -> bool {
 }
 
 impl ShieldedActionBatch {
+    /// Inspect only action kinds, without decoding payment bodies or proofs.
+    pub fn contains_pq_json(raw: &str) -> Result<bool, serde_json::Error> {
+        #[derive(Deserialize)]
+        struct Kinds {
+            actions: Vec<Kind>,
+        }
+        #[derive(Deserialize)]
+        struct Kind {
+            kind: String,
+        }
+        Ok(serde_json::from_str::<Kinds>(raw)?
+            .actions
+            .iter()
+            .any(|a| a.kind == "pq_payment_v1"))
+    }
+
     pub fn new(batch_id: impl Into<String>, actions: Vec<ShieldedAction>) -> Self {
         Self {
             batch_id: batch_id.into(),

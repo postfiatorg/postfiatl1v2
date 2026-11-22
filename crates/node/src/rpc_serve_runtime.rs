@@ -136,6 +136,7 @@ fn rpc_serve_drain(
         last_telemetry_error: None,
     }));
     let mut requests = Vec::with_capacity(options.max_requests);
+    let private_submit_state = Arc::default();
     let mempool_submit_state = Arc::new(Mutex::new(RpcServeMempoolSubmitState::default()));
     let orchard_batch_create_state = Arc::new(Mutex::new(RpcServeMempoolSubmitState::default()));
     let child_dispatch_state = Arc::new(Mutex::new(RpcServeMempoolSubmitState::default()));
@@ -191,6 +192,7 @@ fn rpc_serve_drain(
         max_orchard_batch_create_concurrent: options.max_orchard_batch_create_concurrent,
         max_child_dispatch_concurrent: options.max_child_dispatch_concurrent,
         max_child_dispatch_per_peer: options.max_child_dispatch_per_peer,
+        private_submit_state: Arc::clone(&private_submit_state),
         mempool_submit_state: Arc::clone(&mempool_submit_state),
         orchard_batch_create_state: Arc::clone(&orchard_batch_create_state),
         child_dispatch_state: Arc::clone(&child_dispatch_state),
