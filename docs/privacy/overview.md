@@ -6,6 +6,9 @@ chain adapter and application circuits; it does not implement a new Halo2 proof
 system. The exact dependency and narrow local compatibility patch are described
 in [Halo2 Dependency And Local Patch Boundary](../security/halo2-dependency.md).
 
+This shielded path is not post-quantum. Its quantum-safe replacement, PFSH02, is described in
+[Quantum-Safe Private Payments](../quantum/private-payments.md).
+
 The goal is confidential settlement for workflows where transparent ledgers leak
 too much: balances, counterparties, timing, execution intent, treasury movement,
 and position changes.
