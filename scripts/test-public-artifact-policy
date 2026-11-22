@@ -32,6 +32,7 @@ EXPECTED = {
     "crates/privacy_orchard/artifacts/asset_orchard_k15_params.v1.bin": "e1fb29749c7bd0870768044d5329b4e293cb2d44dae24db2554605427b19d0dd",
     "crates/privacy_orchard/artifacts/asset_orchard_private_egress_vk_pinned_assembly.v1.bin": "fafd12307e9672d4db653601b8a141fb20757e1a801266a2f65b641010f780e3",
     "crates/privacy_orchard/artifacts/asset_orchard_swap_vk_pinned_assembly.v1.bin": "3c33db46f118434d53bb08f96a911038832be2b3a7ccecd0a6ceb5ffa1e45d3a",
+    "crates/privacy_orchard/artifacts/asset_orchard_transfer_vk_pinned_assembly.v1.bin": "072656342cc579e804e3a8cb744943e0f6808a5f6a9618dc132c199768fb9c6f",
     "crates/privacy_orchard/artifacts/replay/asset_orchard_private_egress_vk_pinned_assembly.custom_poseidon_v1.pre_3218ec53.bin": "ca34d126c2107fa35180e7a4e7699fc49d8feb3a36cf5609d2e3b4850c2fb395",
     "crates/privacy_orchard/artifacts/replay/asset_orchard_swap_vk_pinned_assembly.custom_poseidon_v3.pre_3218ec53.bin": "e0f734e3a68459c83f47adbac1caa07c9813ec87cccc4a24657d83eed8059f26",
     "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/checkpoint/h316-h325-proof/proof-calldata.bin": "0c0391d4985a708b6811a17d7ae393701cca744340ba1f515fb281f7532bcdde",

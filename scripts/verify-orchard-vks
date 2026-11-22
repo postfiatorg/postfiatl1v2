@@ -46,8 +46,8 @@ done
 
 echo "== Embedded and replay verifying-key artifacts against their pins"
 cargo test --locked --release -p "$PACKAGE" --lib vk 2>&1 | tee "$work/pins.log"
-grep -Eq '^test result: ok\. 14 passed; 0 failed' "$work/pins.log" || {
-  echo "expected 14 passing verifying-key pin tests" >&2
+grep -Eq '^test result: ok\. 15 passed; 0 failed' "$work/pins.log" || {
+  echo "expected 15 passing verifying-key pin tests" >&2
   exit 1
 }
 
@@ -75,7 +75,18 @@ cmp "$work/swap.bin" "$ARTIFACTS/asset_orchard_swap_vk_pinned_assembly.v1.bin"
 cmp "$work/private-egress.bin" \
   "$ARTIFACTS/asset_orchard_private_egress_vk_pinned_assembly.v1.bin"
 
+echo "== Release keygen of the transfer circuit"
+cp "$ARTIFACTS/asset_orchard_transfer_vk_pinned_assembly.v1.bin" "$work/transfer-committed.bin"
+cargo test --locked --release -p "$PACKAGE" --lib \
+  write_the_transfer_verifying_key_artifact -- --ignored --nocapture \
+  2>&1 | tee "$work/transfer-keygen.log"
+grep -Eq '^test result: ok\. 1 passed; 0 failed' "$work/transfer-keygen.log" || {
+  echo "expected the transfer keygen test to pass" >&2
+  exit 1
+}
+cmp "$work/transfer-committed.bin" "$ARTIFACTS/asset_orchard_transfer_vk_pinned_assembly.v1.bin"
+
 echo "== Result"
 grep -E '^ +(circuit_id|runtime_pinned_vk_fingerprint):' "$work/keygen.log"
-echo "Regenerated swap and private-egress verifying keys match their pins and"
+echo "Regenerated swap, private-egress and transfer verifying keys match their pins and"
 echo "are byte-identical to the committed pinned-assembly artifacts."
