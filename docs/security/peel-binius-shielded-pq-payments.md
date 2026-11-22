@@ -7,23 +7,18 @@ SINGLE-ORACLE QROM EXTRACTION, AND SUB-50ms DUAL-LANGUAGE VERIFICATION
 Target System:  Post Fiat L1 (W-1 experimental budget: <= 149,130 B/tx archival
                 ceiling [12 GiB/day at 1 tx/s], < 50 ms single-core validator
                 full settlement verification, <= 1,048,576 B JSON envelope).
-Artifact Date:  2026-11-21
-Public Repo:    https://github.com/postfiatorg/postfiatl1v2
-Branch:         feat/peel-binius-shielded-pq
-Pinned Code:    https://github.com/postfiatorg/postfiatl1v2/tree/d76e5a8c61ec9741ffd6da59b00b7aee8ca0bb73/tools/pft-binius-shielded-pq
-Code Commit:    d76e5a8c61ec9741ffd6da59b00b7aee8ca0bb73
-Public CI Run:  https://github.com/postfiatorg/postfiatl1v2/actions/runs/44943485068 (7/7 PASS on GitHub ubuntu-latest, AMD EPYC 7763)
+Measurement date: 2026-11-22
+Repository:     postfiatorg/postfiatl1v2
+Tool revision:  98a112ef1337ce7d494dc89b69581f83c3ed1cca (local host replay)
 Spec Path:      docs/security/peel-binius-shielded-pq-payments.md
 Container:      tools/pft-binius-shielded-pq/Dockerfile (pinned Rust 1.95.0, Go 1.25.1, z3-solver)
 
 --------------------------------------------------------------------------------
 ABSTRACT
 --------------------------------------------------------------------------------
-We specify, formally analyze, implement in Rust and an independent zero-
-external-dependency Go 1.25.1 verifier inside postfiatl1v2
-(tools/pft-binius-shielded-pq/, pinned at commit d76e5a8c6), and mechanically
-audit Peel-Binius-Shielded (wire format PFSH02), a post-quantum confidential
-payment protocol engineered to satisfy Post Fiat L1's 149,130 B/tx archival
+Peel-Binius-Shielded (wire format PFSH02) is a post-quantum confidential
+payment protocol. The standalone Rust prover/verifier and independent Go
+1.25.1 verifier in tools/pft-binius-shielded-pq/ target Post Fiat L1's 149,130 B/tx archival
 ceiling and < 50 ms single-core validator settlement budget without fixed small
 rings, interactive recipient rounds, transparent deposit-opening trapdoors, or
 on-chain signatures on shielded-to-shielded transfers.
@@ -37,7 +32,7 @@ Core architectural, cryptographic, and empirical contributions:
      rows, 258 66-bit exact ripple-carry conservation rows = 447,014 active
      rows). Every shielded lifecycle transition—ZK-Shielded Mint (v_mint > 0
      with is_dummy0 = is_dummy1 = 1, hiding recipient A and blinding R even at
-     deposit, paired with outer-L1 depositor authorization over tx_ctx),
+     deposit, with a wire-level ML-DSA-65 depositor signature binding tx_ctx),
      2-in/2-out transfer, native 1-in+1-dummy transfer, and partial transparent
      Unshield exit (v_unshield > 0 to unshield_dest)—is enforced by one uniform
      66-bit integer conservation equation:
@@ -46,11 +41,11 @@ Core architectural, cryptographic, and empirical contributions:
      transactions (~97.1 days at sustained 1 tx/s) prior to tree rollover.
   2. 0-Round Non-Interactive Stealth Receive & Context-Bound Non-Malleability:
      Each output seals (v_out || R_out) [86 B] under the recipient's static
-     off-chain FIPS-203 ML-KEM-1024 encapsulation key + SHA-384 KDF +
+     off-chain FIPS-203 ML-KEM-1024 encapsulation key, labeled HMAC-SHA-384 and
      AES-256-GCM (AAD = coin_out) into a 1,670 B envelope while keeping A_out
-     private inside the ZKP. Eliminating on-chain signatures on shielded spends
-     yields a 3,648 B non-proof header; all header fields (including v_mint,
-     v_unshield, unshield_dest, and env0/1) are committed via SHA-384 tx_ctx
+     private inside the ZKP. The header and proof length occupy 3,648 B. Only
+     positive mints append the 5,261 B authorization after the proof. All header
+     fields (including v_mint, v_unshield, unshield_dest and env0/1) bind via tx_ctx
      into Round 1 of the ZKP, preventing third-party relayer malleability.
   3. 512-Bit-State Single Fixed-Range Compiler Oracle & Disjoint Hash Families:
      Every compiler call (MT_1 48 B digests, 64 B internal transcript states,
@@ -59,7 +54,7 @@ Core architectural, cryptographic, and empirical contributions:
      oracle H: {0,1}^* -> {0,1}^{1536} instantiated via 3 x SHA-512 (NIST FIPS
      180-4 SHA-2), disjoint from in-circuit FIPS-202 SHAKE256. Widening only
      the never-transmitted internal Fiat-Shamir state from 384 to 512 bits adds
-     zero wire bytes and zero verify latency while raising all 68 programmed
+     zero wire bytes while raising all 68 programmed
      queries to >= 512-bit conditional min-entropy.
      Conditional security targets (explicitly conditional on the unreviewed
      compressed-oracle bridge Theorem A.3 and conjecture-level SE wrapper
@@ -72,35 +67,22 @@ Core architectural, cryptographic, and empirical contributions:
      and 2^-170.98 (ext) / 2^-170.97 (SE) / 2^-150.60 (ZK) at the reference
      sequential-query benchmark Q = 2^64 (P = 2^32, L = 2^16). End-to-end
      Auth and Privacy bounds additionally include explicit unquantified
-     standing assumptions (SHAKE256 JointPRF, dummy PRG and Hide, SHA-384 KDF,
-     ML-KEM IK-CCA).
+     assumptions about SHAKE256 JointPRF, dummy PRG and Hide, ML-KEM IK-CCA,
+     HMAC-SHA-384 as a PRF, ML-DSA-65 and the depositor address derivation.
   4. Algebraic & Systems Optimizations:
      - Exact 3D-Karatsuba Tower-Reduced Ring-Switch Verifier (13,122 vs. 143,360
        E::muls, 11x fewer), mechanically differential-tested against the naive
        384 x 384 bilinear sum in both Rust and Go.
      - 64-Row-Aligned Factored Single-alpha Circuit MLE Verifier + 1-mul
        eqTable folding + 2x-unrolled MOVOU/PCLMULQDQ Go assembly kernel.
-     - Streaming L1-Cache-Resident 1,024-Column Coset ANTT Prover (561.7 MiB
-       peak prover RSS vs. 1.80 GiB naive).
-  5. Measured Budgets Across Two Independent Hosts (Primary EPYC 16C + Public
-     GitHub Actions CI ubuntu-latest AMD EPYC 7763 4 vCPU, pinned 1-core):
-     - Wire size: 138,508 B median (137,500-139,180 B observed), 140,476 B
-       deterministic worst-case (+8,654 B headroom under 149,130 B/tx).
-     - Primary host — Rust 1C warm full settle (50t): 22.53 ms med / 25.15 ms
-       p95 / 31.95 ms max (4.50 MiB RSS); cold-process wall (10 procs):
-       29.98 ms med / 44.98 ms max.
-     - Primary host — Go 1.25.1 1C warm full settle (50t, zero third-party
-       deps, PCLMULQDQ): 36.32 ms med / 38.78 ms p95 / 40.40 ms max (+9.60 ms
-       headroom, 5.25 MiB RSS); cold-process wall (10 procs): 44.79 ms med /
-       47.06 ms max (-tags purego warm fallback: 71.50 ms med, exceeding 50 ms).
-     - Second host (Public GitHub Actions Run 44943485068, clean runner):
-       19/19 SHA256SUMS OK, 7/7 verify.sh PASS, Rust 1C cold wall 30.02 ms med
-       / 30.70 ms max, Go 1C warm (50t) 40.37 ms med / 43.68 ms max, Go 1C cold
-       wall (10 procs) 47.76 ms med / 48.34 ms max (purego 90.58 ms med).
-     - Rust streaming prove: 2.89 s med (16C/32T, 50t), 26.73 s med (1C, 5t),
-       561.7 MiB peak RSS. Go stdlib 1-core ML-KEM-1024 wallet scan: 211.77 us
-       per non-matching output (4,722 outputs/s; ~36.6 s/core for a full day at
-       1 tx/s).
+     - Streaming L1-cache-resident 1,024-column coset ANTT prover.
+  5. Standalone replay on one sampled CPU (2026-11-22, Section 5):
+     - The four fixtures span 138,268–143,337 B. Worst-case sizes are
+       140,476 B for non-mints and 145,737 B for signed mints, leaving
+       8,654 B and 3,393 B respectively under the 149,130 B ceiling.
+     - Section 5.3 records timed Rust and Go verification of all four fixtures
+       and a spend from leaf 16,777,215 after rollover. The timing gate is
+       < 50 ms for each transaction in each language.
 
 ================================================================================
 SECTION 0. CLAIM SEGREGATION & PROOF-OBLIGATION AUDIT
@@ -108,30 +90,24 @@ SECTION 0. CLAIM SEGREGATION & PROOF-OBLIGATION AUDIT
 
 Table 0 — Strict Separation of Claim Categories
 --------------------------------------------------------------------------------
-Category A — Empirically Measured & Publicly Replayable (7/7 verify.sh PASS):
-  * Public repository commit d76e5a8c61ec9741ffd6da59b00b7aee8ca0bb73 in
-    https://github.com/postfiatorg/postfiatl1v2 (branch
-    feat/peel-binius-shielded-pq, path tools/pft-binius-shielded-pq/) includes
-    all Rust/Go/Python source, pinned Cargo.lock, zero-dep go.mod, Dockerfile,
-    SHA256SUMS, and one-command ./verify.sh replaying 4 lifecycle scenarios:
-    (1) tx_mint.bin (138,508 B): ZK-Shielded Deposit (v_mint=1000, is_dummy0=
+Category A — Standalone host replay (2026-11-22):
+  * The Rust prover and independent Go verifier check the same PFSH02 wires.
+    Go imports github.com/cloudflare/circl v1.6.1 for ML-DSA-65 and
+    golang.org/x/sys v0.10.0 indirectly. The checked fixtures are:
+    (1) tx_mint.bin (143,337 B): signed shielded deposit (v_mint=1000, is_dummy0=
         is_dummy1=1 -> Alice 700 + Alice 290, fee 10; A and R never on-chain),
-    (2) tx_hop1.bin (138,508 B): 2-real-input shielded transfer (Alice -> Bob
+    (2) tx_hop1.bin (139,036 B): 2-real-input shielded transfer (Alice -> Bob
         650 + Alice 330, fee 10),
-    (3) tx_dummy_1in.bin (137,788 B): native 1-real + 1-dummy spend,
-    (4) tx_hop2.bin (138,268 B): multi-hop spend across 25 intervening deposits
+    (3) tx_dummy_1in.bin (138,508 B): native 1-real + 1-dummy spend,
+    (4) tx_hop2.bin (138,268 B): spend after 25 intervening background coins,
         with partial transparent unshield (v_unshield=100 to unshield_dest),
     all verified in both Rust and Go 1.25.1.
-  * Go 1.25.1 stdlib crypto/mlkem + crypto/aes + crypto/sha512 + crypto/sha3
-    offline stealth scan recovering (v=650, R_78B) from Rust fips203 ciphertext
-    in tx_hop1.bin and cleanly rejecting output 1.
-  * 50-trial Rust 16C/1C & Go 1C warm benchmarks, 10-process cold-process 1C
-    benchmarks (Rust & Go), 1-core ML-KEM-1024 wallet scan throughput,
-    /usr/bin/time -v peak RSS, 35/35 Rust + 35/35 Go named adversarial controls
-    (including Rule R4 zero-coin 0^48, Rule R6 2^24 capacity overflow, Rule R5
-    mint/unshield mutual exclusion & overflow, unshield_dest malleability, live
-    is_dummy=1/v_in=500 inflation ZKP attack, and forged-Merkle-path ZKP
-    attack), and 150/150 structured byte-fuzz rejections.
+  * The Go standard-library scanner recovers the 650-unit note from output 0
+    of tx_hop1.bin and rejects output 1 using ML-KEM-1024, HMAC-SHA-384,
+    AES-256-GCM and the SHAKE256 commitment check.
+  * The replay exercises signed-mint rejection controls, named adversarial
+    checks in Rust and Go, Rust structured fuzz checks and the full 2^24-leaf
+    rollover with a spend from the frozen epoch (Sections 1.4 and 5.3).
 
 Category B — Mechanically Verified Symbolic & Cross-Language Invariants:
   * check_math.py (exact Python Fraction arithmetic):
@@ -202,12 +178,10 @@ Multi-Proof QROM SE      | NONE standalone published | Conjecture-level bridge
                          | GHHM21 Thm 1 as tools)    | wrapper B^H, (x*,pi*)
                          |                           | freshness, T_prog, A/B/C
 -------------------------+---------------------------+--------------------------
-0-Round Stealth Receive  | FIPS-203 ML-KEM-1024      | Single-user-reduced
-(IND-CCA2, INT-CTXT,     | IND-CCA2; NIST SP 800-38D | Exp_GlobalPriv w/ active
- IK-CCA, SHA-384 KDF)    | AES-256-GCM INT-CTXT /    | O_Scan & O_Corrupt (2U /
-                         | IND$-CPA; Kyber ANO-CCA:  | U(U-1) factor); standing
-                         | GMP22 (EC22), MX23 (PKC23)| [NonStd] FIPS-203 IK-CCA &
-                         |                           | SHA-384 key-in-middle KDF
+0-Round Stealth Receive  | FIPS-203 ML-KEM-1024,     | Exp_GlobalPriv with active
+(IND-CCA2, INT-CTXT,     | AES-256-GCM (SP 800-38D), | O_Scan and O_Corrupt.
+ IK-CCA, HMAC PRF)       | HMAC-SHA-384 [Std] PRF.   | [NonStd] FIPS-203 IK-CCA
+                         | Kyber ANO-CCA: GMP22, MX23| (see Section 4.3).
 -------------------------+---------------------------+--------------------------
 In-Circuit Commitments   | Standard-model FIPS-202   | Adv_JointPRF(q_chall):
 & Depth-24 Merkle Tree   | SHAKE256 (c=512b sponge;  | q_hon in Thm 4, 2 in Thm 5;
@@ -222,37 +196,30 @@ Category D — Explicit Non-Claims & Deployment Boundaries:
      in-circuit that env_c encrypts the valid opening of coin_c. A malicious
      sender can burn funds by submitting a valid coin with an undecryptable
      envelope (the same non-verifiable-encryption model as Zcash Orchard).
-  2. Transparent-Mint Consensus Layer Boundary: Rules R1-R6 and the Rust/Go
-     binaries enforce shielded-pool conservation against public v_mint and
-     v_unshield. For v_mint > 0, authenticating and debiting the transparent
-     L1 source account (Section 1.3 Rule R0-Auth: outer-L1 EUF-CMA signature
-     over ("PFT-SH-MINT-AUTH-V2" || mint_src || tx_ctx)) is an L1 consensus
-     layer obligation outside the standalone shielded-pool verifier binary.
-  3. Functionality Scope vs. Production Shielded Protocols: This prototype does
-     not implement incoming/full viewing keys, diversified addresses, variable-
-     arity inputs/outputs, encrypted user memos, or fuzzy detection tags.
-  4. Metadata, Timing, Fee, & Anchor-Choice Leakage: P2P IP metadata, mempool
-     timing, public fee/v_mint/v_unshield values, recipient scanning timing
-     side channels, and stale-anchor selection (narrowing effective anonymity
-     set) are outside Exp_GlobalPriv. Exp_GlobalPriv also excludes subsequent
-     spends of challenge output coins (single-challenge transaction privacy,
-     not full multi-hop transaction-graph unlinkability). Production wallets
+  2. Transparent mint boundary. Both verifiers authenticate the public source
+     on every positive mint under Rule R0-Auth. The L1 validator must still
+     check the depositor's balance, debit v_mint and commit the account and
+     pool updates atomically. The prototype runs outside the validator.
+  3. Functionality scope. Incoming/full viewing keys, diversified addresses,
+     variable-arity inputs/outputs, encrypted memos and fuzzy detection tags
+     are outside the prototype.
+  4. Metadata, timing, fees and anchor choice. The mint signer and derived
+     source are public. P2P IP metadata, mempool timing, public fee, v_mint,
+     v_unshield, recipient scanning side channels and stale-anchor selection
+     (narrowing the effective anonymity set) are outside Exp_GlobalPriv.
+     Exp_GlobalPriv also excludes subsequent spends of challenge outputs.
+     It models privacy for one challenge transaction. Production wallets
      must default to the latest finalized canonical anchor. Chain-reorg
      finality and mempool verification-DoS fee markets are L1 consensus
      concerns outside this proof-system layer.
-  5. Tree Capacity & Rollover Implementation Status: One Depth-24 tree holds
-     2^24 = 16,777,216 leaves (8,388,608 two-output transactions, ~97.1 days at
-     sustained 1 tx/s). Rule R6 rejects appends beyond 2^24 leaves; Section 1.4
-     specifies the Dual-Anchor Rolling Tree Rollover design (and explicitly
-     notes the single-anchor cross-tree spend constraint), but only single-tree
-     operation is implemented in the prototype binaries.
-  6. Hardware Portability & Empirical Scope: Primary benchmarks are from one
-     AMD EPYC 16C/32T x86_64 host (warm 50-trial + cold-process 10-trial),
-     supplemented by independent public GitHub Actions CI replay on Ubuntu
-     (Section 5.5). Pure-Go (-tags purego: 71.50 ms med) exceeds 50 ms,
-     unpinned cold runs inside verify.sh immediately after cargo build showed
-     scheduling variance up to 47.9 ms Rust / 62.0 ms Go, and ARM64 validators
-     would require a PMULL assembly kernel.
+  5. Tree capacity. Each depth-24 epoch holds 16,777,216 leaves. Both verifiers
+     accept a spend anchored in the frozen epoch after rollover. Two real
+     inputs must still share one anchor. Section 1.4 describes note migration.
+  6. Measurement scope. Section 5 gives single-core x86_64 host measurements.
+     The 50 ms gate measures parsing and verification with state already
+     loaded. Rust also applies the transaction in memory. Deployment hardware,
+     persistent storage and transparent account settlement require separate
+     measurements.
   7. Provenance & Independent Review Status: Prover K_32/E_384 field ops use
      branchless zero-lookup PCLMULQDQ, but full constant-time auditing of OS
      and third-party libraries is outside scope. Both Rust and Go verifiers and
@@ -313,7 +280,7 @@ distinct NIST hash families (SHA-2 Merkle-Damgard vs. Keccak-f[1600] sponge):
       for fixed unkeyed SHAKE256); Theorems 3-5 retain explicit standard-model
       advantage terms for every SHAKE256 assumption.
 
-  (c) 0-Round Stealth Receive (FIPS-203 ML-KEM-1024 + SHA-384 + AES-256-GCM):
+  (c) 0-Round Stealth Receive (FIPS-203 ML-KEM-1024 + HMAC-SHA-384 + AES-256-GCM):
       A recipient holds spend secret S <-$ {0,1}^{384} and ML-KEM-1024 keypair
       (ek, dk) <- ML-KEM-1024.KeyGen(d, z) (ek = 1,568 B, dk = 3,168 B). Static
       off-chain stealth address is pk_recv = (ek, A = H_A(S)); neither ek nor A
@@ -321,9 +288,10 @@ distinct NIST hash families (SHA-2 Merkle-Damgard vs. Keccak-f[1600] sponge):
       in [0, 2^64-1] to pk_recv:
         1. Sample R_out <-$ {0,1}^{624}; compute Coin_out = H_Coin(A, v_out, R_out).
         2. Run (ss, ct_kem) <- ML-KEM-1024.Encaps(ek) [ct_kem = 1,568 B, ss = 32 B].
-        3. Derive:
-             K_aead = SHA-384("PFT-SH-KEM-KEY-V1"   || ss || ct_kem || Coin_out)[0..32],
-             N_aead = SHA-384("PFT-SH-KEM-NONCE-V1" || ss || ct_kem || Coin_out)[0..12].
+        3. Key HMAC-SHA-384 with ss. Concatenate the ASCII label, the 1,568 B
+           ct_kem and the 48 B Coin_out. Take the indicated leading bytes:
+             K_aead = HMAC-SHA-384(ss, "PFT-SH-KEM-KEY-V2"   || ct_kem || Coin_out)[0..32]
+             N_aead = HMAC-SHA-384(ss, "PFT-SH-KEM-NONCE-V2" || ct_kem || Coin_out)[0..12]
         4. Encrypt pt = v_out_le64 || R_out [86 B] via AES-256-GCM(K_aead,
            N_aead, aad = Coin_out, pt) -> ct_aead [102 B].
         5. Publish env = ct_kem || ct_aead [1,670 B].
@@ -331,10 +299,10 @@ distinct NIST hash families (SHA-2 Merkle-Damgard vs. Keccak-f[1600] sponge):
       (FIPS-203 implicit rejection), derive (K', N'), verify AES-256-GCM tag
       over aad = Coin_out, and verify H_Coin(A, v_out, R_out) == Coin_out.
 
-1.2 Canonical Wire Format PFSH02 & Context Binding (3,648 B Header)
+1.2 Canonical PFSH02 Wire Format, Context Binding and Mint Suffix
 --------------------------------------------------------------------------------
-A shielded payload tx is serialized canonically as header(tx) || proof_len ||
-proof, where header(tx) (3,644 B) + proof_len (4 B) = 3,648 B:
+The wire is header(tx) || proof_len || proof || mint_auth. The 3,644 B header
+and 4 B proof length precede every proof. v_mint selects the suffix:
   magic         (8 B:  "PFSH02\0\0")
   anchor        (48 B: historical Depth-24 Merkle root)
   v_mint        (8 B:  uint64 LE — public transparent-to-shielded deposit)
@@ -346,6 +314,8 @@ proof, where header(tx) (3,644 B) + proof_len (4 B) = 3,648 B:
   env0, env1    (3,340 B: 2 x 1,670 B ML-KEM-1024 + AES-256-GCM envelopes)
   proof_len     (4 B:  uint32 LE)
   proof         (proof_len B: Peel-Binius-Shielded ZKP)
+  mint_auth     (v_mint > 0: 1,952 B ML-DSA-65 public key || 3,309 B signature;
+                 v_mint == 0: empty). Both parsers require end-of-input here.
 
 Context binding hash (zero extra wire bytes):
   tx_ctx = SHA-384("PFT-SH-TXCTX-V2" || header(tx))  [48 B].
@@ -353,12 +323,12 @@ The ZKP public statement is x = (anchor, sn0, sn1, coin0, coin1, v_mint,
 v_unshield, fee, tx_ctx), absorbed into Round 1 (PFS-STMT). Any mutation to
 header(tx) changes tx_ctx (up to SHA-384 CR) and invalidates the ZKP.
 
-1.3 Canonical Ledger State, Outer-L1 Mint Auth, & Acceptance Rules (R0-R6)
+1.3 Canonical Ledger State, Depositor Authorization and Acceptance Rules (R0-R6)
 --------------------------------------------------------------------------------
 Public ledger state is S_t = (Bal_L1[], Coins[], Anchors, SpentSN,
 Supply_minted, Unshielded_acc, Fees_acc), where Bal_L1[] maps transparent L1
 accounts to balances, Coins[] is the append-only sequence of 48-byte leaf
-commitments in a Depth-24 SHAKE256 binary Merkle tree (empty sentinel leaf
+commitments partitioned into depth-24 SHAKE256 epoch trees (empty sentinel leaf
 EMPTY[0] = 0^48, EMPTY[h+1] = H_Node(EMPTY[h], EMPTY[h])), Anchors is the set
 of valid historical Depth-24 roots, SpentSN is the set of spent nullifiers, and
 Supply_minted, Unshielded_acc, Fees_acc in Z_{>=0} track cumulative shielded
@@ -372,22 +342,22 @@ Theorem 3b).
      TotalSupply_0. ALL value enters the shielded pool via a PFSH02 transaction
      with v_mint > 0 (and is_dummy0 = is_dummy1 = 1 for a pure deposit), so
      recipient address A and blinding R are never published on-chain.
-     Rule R0-Auth (Outer-L1 Consensus Binding for v_mint > 0):
-       - When v_mint == 0: no L1 account signature is required; tx is authorized
-         solely by the ZKP (fee paid from shielded inputs).
-       - When v_mint > 0: the outer L1 transaction envelope supplies transparent
-         depositor account mint_src and an L1 post-quantum EUF-CMA signature
-         sig_mint (e.g., FIPS-204 ML-DSA-65 on Post Fiat L1) verified over
-         ("PFT-SH-MINT-AUTH-V2" || mint_src || tx_ctx), requiring
-         Bal_L1[mint_src] >= v_mint and atomically debiting
-         Bal_L1[mint_src] -= v_mint. (Because tx_ctx commits to all of
-         header(tx), sig_mint binds the depositor to exact v_mint, coin0/1, and
-         env0/1. R0-Auth is specified for L1 consensus integration and modeled
-         explicitly in Theorems 3b and 4 Mode 3; standalone shielded-pool
-         binaries verify Rules R1-R6 — Category D.2.)
+     R0-Auth (depositor authorization, enforced in Rust and Go):
+       - For v_mint == 0 the proof authorizes the shielded spend.
+       - For v_mint > 0 derive source = "pf" || lowercase_hex(first 20 bytes of
+         SHA3-384("postfiat.address.v1" || 0x00 || public_key)). The wire carries
+         the public key. Both verifiers reconstruct the 42-byte ASCII address.
+         Verify the suffix signature on the following 48-byte digest with the
+         ML-DSA-65 context "postfiat-l1-v2/tx/v1":
+           SHA384("PFT-SH-MINT-AUTH-V2" || ASCII(source) || tx_ctx).
+         The signed digest binds the amount, ordered outputs, envelopes and
+         other public header fields. For a positive mint, create_shielded_tx
+         requires the depositor's ML-DSA-65 private key.
+       - At L1 integration, additionally require Bal_L1[source] >= v_mint and
+         debit Bal_L1[source] by v_mint atomically with the pool transition.
 
-  A PFSH02 payload tx is accepted on state S_t iff ALL six rules R1-R6 hold
-  (enforced identically in Rust payment.rs and Go main.go):
+  The standalone verifiers check wire authorization and R1-R6. Rust's
+  verify_and_apply also updates the in-memory shielded state:
   R1 (Canonical Parse & Anchor Validity): Strict length check, magic ==
      "PFSH02\0\0", zero trailing bytes, and tx.anchor in S_t.Anchors.
   R2 (Intra-Tx Nullifier Distinctness): tx.sn0 != tx.sn1.
@@ -399,30 +369,34 @@ Theorem 3b).
   R5 (Public Flow Validity & ZKP Verification): Require !(tx.v_mint > 0 &&
      tx.v_unshield > 0), require tx.fee + tx.v_unshield < 2^64 (u64 non-
      overflow), recompute tx_ctx from header(tx), and verify
-     Verify_Binius(x, tx.proof) == 1 (plus R0-Auth at L1 consensus if
-     tx.v_mint > 0).
-  R6 (Capacity Guard & Atomic State Transition): Require |S_t.Coins| + 2 <= 2^24.
-     Insert {sn0, sn1} into SpentSN; append coin0 and coin1 to Coins[]; compute
-     new Depth-24 root root_{t+1} and insert into Anchors; update
+     Verify_Binius(x, tx.proof) == 1 and R0-Auth as specified above.
+  R6 (Capacity Guard & Atomic State Transition): Require |Tree_e| + 2 <= 2^24
+     in the active epoch. Insert both nullifiers into global SpentSN, append
+     both coins to Tree_e and global Coins[], and retain the new anchor. Open
+     the next epoch if Tree_e is now full (Section 1.4). Update
      Supply_minted += tx.v_mint, Unshielded_acc += tx.v_unshield,
      Fees_acc += tx.fee (and at L1 consensus: Bal_L1[unshield_dest] +=
      tx.v_unshield, plus validator fee credit if fees are not burned).
 
-1.4 Dual-Anchor Rolling Tree Rollover Design (L1 Production Specification)
+1.4 Epoch Rollover and Single-Anchor Note Migration
 --------------------------------------------------------------------------------
-When an active Depth-24 tree Tree_e reaches |Tree_e.Coins| = 2^24 (~97.1 days
-at 1 tx/s), consensus freezes appends to Tree_e and opens Tree_{e+1} = [] while
-retaining Tree_e.Anchors in Anchors_global:
-  - Newly created outputs append exclusively to Tree_{e+1}; global SpentSN and
-    Coins_global span all epochs, preserving Theorem 3 unchanged.
-  - Single-anchor constraint: Because PFSH02 carries a single anchor field, a
-    2-real-input transaction can only combine two coins residing in the SAME
-    tree. Under single-anchor PFSH02, combining a legacy Tree_e coin with a
-    Tree_{e+1} coin requires either (a) a 1-real + 1-dummy self-transfer of the
-    Tree_e coin (placing the new output into Tree_{e+1}), or (b) extending
-    PFSH02 with per-input anchors (anchor_0, anchor_1) (+48 B header, zero
-    additional circuit permutations since C4 already gates each input's root
-    independently). (Unimplemented in the single-tree prototype — Category D.5.)
+At 2^24 leaves the Rust ledger freezes the active tree, keeps its paths and
+anchors, and opens an empty depth-24 tree. Global coin and spent-nullifier sets
+span all epochs. Historical roots remain valid anchors. Snapshot commitments
+are in global insertion order. Each full block of 2^24 commitments forms one
+epoch. Both snapshot loaders check the frozen terminal roots and active root.
+
+PFSH02 carries one anchor. Both real inputs must authenticate to that root.
+The implemented migration (option a) spends an old note with one real input
+and one dummy, placing its outputs in the active epoch. A later transaction
+can combine a migrated note with another note from that epoch.
+
+The replay builds 16,777,214 distinct synthetic commitments and settles a
+signed deposit into the last two slots. Rust spends leaf 16,777,215 of epoch 0
+and checks the two output indices in epoch 1, old anchors, duplicate commitment
+rejection and global nullifier replay rejection. Go independently reconstructs
+the state, verifies the boundary deposit, and checks the spend at the frozen
+root with zero active occupancy. Section 5.3 records both measurements.
 
 ================================================================================
 SECTION 2. ARITHMETIZATION, CIRCUIT EQUIVALENCE, & ALGEBRAIC OPTIMIZATIONS
@@ -498,8 +472,7 @@ Key engineering optimizations (all differentially verified against naive refs):
      p = val * ri, next[2i] = val ^ p, next[2i+1] = p halves eqTable E::muls
      (16,384 -> 8,192) in both Rust and Go; factoring eqHi blocks in Go
      B1/C1/C4 + basis stepping (mulByX/Z/Y) + paired log-lookup addMulKPair
-     reduces Go 1-core warm verify to 36.32 ms med / 40.40 ms max (+9.60 ms
-     headroom under 50 ms).
+     reduce field multiplications in verifier circuit-weight evaluation.
   3. Exact 3D-Karatsuba Tower-Reduced Ring-Switch Verifier: Reduces witness
      H-domain inner-product verification from 143,360 E::muls to 13,122 E::muls
      (11x fewer), verified bit-for-bit against the naive 384 x 384 bilinear sum
@@ -507,7 +480,7 @@ Key engineering optimizations (all differentially verified against naive refs):
      Go (TestPCLMULQDQEquivalence10000).
   4. Streaming L1-Cache-Resident 1,024-Column Coset ANTT Prover: Skips identity
      ANTT levels i = 20..10 for degree D = 565 < 1,024, streaming 2,048 blocks
-     directly into MT_1 leaves at 561.7 MiB peak RSS and 2.89 s prove (16C).
+     directly into MT_1 leaves. Section 5.3 times proving from the frozen tree.
 
 ================================================================================
 SECTION 3. 34-ROUND IOP, 512-BIT-STATE SINGLE-ORACLE BCS, & SECURITY THEOREMS
@@ -728,10 +701,10 @@ SECTION 4. COMPOSITIONAL LEDGER SECURITY GAMES, REDUCTIONS, & SECURITY FLOOR
 ================================================================================
 
 Model-composition note: The compiler random oracle H (3 x SHA-512) is analyzed
-in the QROM, while in-circuit SHAKE256, ML-KEM-1024, SHA-384, and AES-256-GCM
-are modeled as standard-model primitives against a quantum adversary (with no
-oracle programming on SHAKE256, ML-KEM, or AES-GCM, and zero shared permutation
-with H). In Theorems 3-5, each reduction simulates H for the quantum adversary
+in the QROM. The games treat SHAKE256, ML-KEM-1024, SHA-384, HMAC-SHA-384,
+AES-256-GCM, ML-DSA-65 and the account address hash as concrete primitives
+against a quantum adversary. The compiler oracle is separate from these
+primitive interfaces. Each reduction simulates H for the quantum adversary
 via standard QROM interfaces (compressed oracle or GHHM21 reprogramming).
 
 4.1 Theorem 3 (Shielded-Pool & Joint Ledger Supply Conservation — Exp_Bal)
@@ -747,10 +720,10 @@ Q quantum queries to unmodified H) adaptively invokes:
     an honest address A_u, A supplies its explicit opening (v, R) when invoking
     O_Hon (or the challenger recovers (v, R) via dk_u if env decrypts cleanly
     and matches coin).
-  - Submit(tx [, outer_auth]): submits arbitrary PFSH02 transactions validated
-    atomically by Rules R1-R6 (plus R0-Auth for L1 consensus), producing q_tx
-    accepted transactions and updating Supply_minted, Unshielded_acc, Fees_acc
-    (and Bal_L1[]).
+  - Submit(tx): validates the PFSH02 wire under R0-Auth and R1-R6. In the joint
+    ledger game the challenger also checks and debits the transparent source
+    balance, then applies the account and pool updates atomically. q_tx counts
+    the accepted transactions.
 Winning condition (concrete witness-opening formulation): A outputs distinct
 coins {c_1, ..., c_m} subset Coins[] together with explicit openings
 {(S_j, v_j, R_j)}_{j=1}^m satisfying (i) c_j == H_Coin(H_A(S_j), v_j, R_j) with
@@ -783,11 +756,11 @@ Live_t subset Coins[]:
     1. Real vs. dummy inputs: For each b in {0, 1}:
        * If is_dummy_b == 1: Z3-verified C3 gating enforces v_{in,b} == 0.
        * If is_dummy_b == 0: Z3-verified C4 gating enforces root_b ==
-         tx_i.anchor in Anchors (which by R1/R6 equals the Depth-24 root of a
-         prefix Coins[0..m_i-1] padded with EMPTY[0] = 0^48). Walking down from
-         root_b to extracted leaf c_{in,b} = H_Coin(A_b, v_{in,b}, R_{in,b}):
-         either (a) c_{in,b} == Coins[idx] for a unique 0 <= idx < m_i (unique
-         by R4), or (b) c_{in,b} == EMPTY[0] = 0^48 at an unused slot idx >= m_i
+         tx_i.anchor in Anchors, the root of an epoch e at occupancy m_i,
+         padded with EMPTY[0] = 0^48. Walk the path to the extracted leaf
+         c_{in,b} = H_Coin(A_b, v_{in,b}, R_{in,b}). Either (a) c_{in,b} is
+         Coins[e * 2^24 + idx] for a local idx < m_i (globally unique by R4),
+         (b) c_{in,b} == EMPTY[0] at an unused slot idx >= m_i
          (breaking Adv_ZeroPreimage^{H_Coin,384}), or (c) an H_Node collision
          occurred along the path (breaking Adv_CR^{H_Node,384}).
     2. Value binding & no double-spend: For each real input c_{in,b} in Coins[],
@@ -841,29 +814,29 @@ them (zero for all-real inputs). A wins in ANY of three modes:
     header(tx_i) has identical ledger effect and is excluded from Mode 2)
     sharing a nullifier sn* in {tx_i.sn0, tx_i.sn1} of some O_Hon tx_i,
     accepted on a pre-tx_i state where sn* not in SpentSN;
-  - Mode 3 (Unauthorized Transparent Mint Debit — L1 Consensus Rule R0-Auth): A
-    outputs an accepted outer-L1 mint transaction debiting mint_src = pk_L1*
-    with (v_mint > 0) whose header(tx*) was never signed by O_MintSign.
+  - Mode 3 (Unauthorized Transparent Mint Debit): A submits an accepted signed
+    mint debiting source(pk_L1*) whose header was never signed by O_MintSign.
+    The joint ledger model includes the transparent debit in Section 1.3.
 
 Theorem 4 (Corrected Mode-2 Split & Multi-Target Target-Preimage Term):
   Adv_Auth(A) <= Adv_QROM-ZK(P_hon, Q) + Adv_JointPRF^{SHAKE256}(q_hon)
                  + d_hon * Adv_PRG^{SHAKE256}
-                 + eps_SE(P_hon, 1, Q) + Adv_CR^{SHA-384}(tx_ctx)
+                 + eps_SE(P_hon, 1, Q) + Adv_CR^{SHA-384}(header or mint digest)
                  + Adv_MT-TPR^{H_SN,384}(q_hon; A_tpr) + Adv_OW^{H_A,384}(A_ow)
                  + Adv_CR^{H_Coin,384}(A_cr) + Adv_CR^{H_Node,384}(A_nd)
                  + Adv_ZeroPreimage^{H_Coin,384}(A_z)
-                 + Adv_EUF-CMA^{L1-Sig}(A_sig).
+                 + Adv_2ndPre^{source,160}(pk_L1*) + Adv_EUF-CMA^{ML-DSA-65}(A_sig).
 
 Proof:
-  - Mode 3: If header(tx*) != header(tx_j) for all O_MintSign calls j yet
-    tx_ctx(tx*) == tx_ctx(tx_j), A breaks Adv_CR^{SHA-384}(tx_ctx); otherwise
-    ("PFT-SH-MINT-AUTH-V2" || pk_L1* || tx_ctx(tx*)) is a fresh message forged
-    under pk_L1*, breaking Adv_EUF-CMA^{L1-Sig}.
+  - Mode 3: A different public key deriving the honest source gives a targeted
+    second preimage for the 160-bit address derivation. For the honest key, a
+    new header with a previously signed digest yields a SHA-384 collision in
+    tx_ctx or in the mint digest of Section 1.3. Otherwise the accepted ML-DSA-65
+    signature on that digest under context "postfiat-l1-v2/tx/v1" is a forgery.
   - Modes 1 & 2 (Clean Two-Hop Hybrid Avoiding Coupled Assumptions):
     First, in Mode 2, header(tx*) != header(tx_i) implies EITHER tx_ctx(tx*) ==
-    tx_ctx(tx_i) (direct SHA-384 collision on distinct headers, <=
-    Adv_CR^{SHA-384}(tx_ctx)) OR x* != x_i (so (x*, pi*) not in {(x_i, pi_i)}
-    is strictly fresh under Theorem 2B). In Mode 1, tx* spends Coin* not spent
+    tx_ctx(tx_i) (a SHA-384 collision on distinct headers) OR x* != x_i (so
+    (x*, pi*) is strictly fresh under Theorem 2B). In Mode 1, tx* spends Coin* not spent
     by O_Hon, so either (x*, pi*) is fresh or shares (x_i, pi_i) (which would
     share sn_i -> H_SN/H_A/H_Coin collision).
     * Hop 1 (H_0 -> H_1, QROM ZK): Replace up to P_hon O_Hon proofs with
@@ -940,16 +913,17 @@ initializes U_users honest wallets via O_Gen, and grants A adaptive access to:
   - O_Challenge: invoked ONCE on fixed public anchor in Anchors and fixed
     public (v_mint, v_unshield, unshield_dest, fee) in EITHER of two modes:
     (a) Transfer mode (v_mint = 0): two candidate uncorrupted unspent input
-        pairs I^(0), I^(1) drawn from ANY positions in the global Depth-24 tree
-        up to anchor (each 2-real or 1-real+1-dummy of equal total value V_tot),
+        pairs I^(0), I^(1) drawn from the epoch and prefix covered by that anchor
+        (each 2-real or 1-real+1-dummy of equal total value V_tot),
         two candidate uncorrupted honest recipient pairs (pk_0^(0), pk_1^(0)),
         (pk_0^(1), pk_1^(1)), and two output splits summing to V_tot - fee -
         v_unshield; OR
     (b) ZK-Shielded Mint mode (v_mint > 0, v_unshield = 0, is_dummy0 =
-        is_dummy1 = 1): two candidate uncorrupted honest recipient pairs
-        (pk_0^(0), pk_1^(0)), (pk_0^(1), pk_1^(1)) and two output value splits
-        summing to v_mint - fee (hiding recipient addresses A_out0/1, split
-        values v_out0/1, and blindings R_out0/1 despite public v_mint and fee).
+        is_dummy1 = 1): the challenger signs the current challenge header
+        under the same public depositor key in both worlds. The two candidate
+        uncorrupted recipient pairs (pk_0^(0), pk_1^(0)), (pk_0^(1), pk_1^(1))
+        may differ in identities and output splits. Each split must sum to
+        v_mint - fee. The game hides the recipients, splits and blindings.
     Challenger runs the real hard-capped prover for bit b and returns tx* (if
     the negligible R3/R4 random collision event occurs, returns bot; abort prob
     <= 2*(|Coins| + |SpentSN| + 4)/2^384 under uniform SN/Coin).
@@ -960,7 +934,7 @@ Theorem 5 (Oracle-Complete Corruption-Compatible Reduction — Zero Extraction):
   Adv_GlobalPriv(A) <= 2 * [ Adv_QROM-ZK(P, Q)
                              + 2 * U_users * (Adv_IND-CCA2^{ML-KEM-1024}(q_scan)
                                               + Adv_IK-CCA^{ML-KEM-1024}(q_scan))
-                             + 2 * (Adv_PRF^{SHA-384-KDF}
+                             + 2 * (Adv_PRF^{HMAC-SHA-384}(q_KDF)
                                     + Adv_INT-CTXT^{AES-256-GCM}(q_scan)
                                     + Adv_IND$-CPA^{AES-256-GCM})
                              + r * U_users * Adv_JointPRF^{SHAKE256}(2)
@@ -968,22 +942,27 @@ Theorem 5 (Oracle-Complete Corruption-Compatible Reduction — Zero Extraction):
                              + 2 * Adv_Hide^{SHAKE256}
                              + 2 * (|Coins| + |SpentSN| + 4) / 2^384 ].
 
-ML-KEM-1024 Anonymity & SHA-384 KDF Provenance Notes:
+ML-KEM-1024 Anonymity and Envelope Key Derivation:
   * Grubbs-Maram-Paterson (EUROCRYPT 2022) and Maram-Xagawa (PKC 2023, "Post-
     Quantum Anonymity of Kyber") proved post-quantum ANO-CCA / IK-CCA for
     Kyber's implicit-rejection FO transform. NIST FIPS 203 ML-KEM-1024 retains
     implicit rejection J(z || c) while simplifying ss = K (our KDF explicitly
-    hashes ct_kem and coin_out via SHA-384). Because a FIPS-203-specific
-    proof covering the exact FIPS-203 key-derivation delta is not imported
+    binds ct_kem and coin_out in both labeled HMAC inputs). Because a proof
+    covering the exact FIPS-203 key-derivation delta is not imported
     verbatim, Adv_IK-CCA^{ML-KEM-1024} is tagged [NonStd] as a standing
     assumption in Table 1 and Table 3.
-  * Because SHA-384("PFT-ENV-KDF" || ss || ct_kem || coin) places the secret ss
-    inside an unkeyed Merkle-Damgard hash rather than HMAC-SHA-384,
-    Adv_PRF^{SHA-384-KDF} is explicitly tagged [NonStd] (ROM-KDF assumption).
+  * Adv_PRF^{HMAC-SHA-384}(q_KDF) is the standard keyed-PRF assumption
+    against a quantum adversary making classical queries. For one substituted
+    shared secret, q_KDF <= 2(1 + q_scan): two labels for the challenge and at
+    most two for each scan. Deterministic truncation yields the key and nonce.
+    Theorem 5 charges one PRF game per output per challenge world.
 
 Proof (Oracle-Complete 5-Hop Hybrid With Exact O_Corrupt & O_Scan Simulation):
 Every hybrid below specifies how ALL oracles (O_Mint, O_Hon, O_Scan, O_Corrupt,
-O_Challenge) are answered without guessing-gap or missing-secret mismatches:
+O_Challenge) are answered. In mint mode the reduction generates and holds
+the signing key for the fixed public depositor. It signs the recomputed digest
+in each hybrid. Matching header distributions then give matching signatures
+in distribution.
   - Game H_0: Real Exp_GlobalPriv(0) (both Transfer and ZK-Mint modes).
   - Game H_1 (Multi-Proof QROM ZK): Replace all P honest proofs (O_Mint, O_Hon,
     and challenge tx*) with Sim_BCS(x) via Theorem 1B. Sim_BCS(x) uses ONLY
@@ -1007,11 +986,13 @@ O_Challenge) are answered without guessing-gap or missing-secret mismatches:
           env*_c)) is answered directly using dk_{u'} generated by the
           reduction. Replaces ss_c with uniform 32 B ss*_c. Loss <= U_users *
           Adv_IND-CCA2^{ML-KEM-1024}(q_scan).
-    (ii)  SHA-384-KDF PRF [NonStd]: With ss*_c uniform and independent of all
-          keys, replace (K_aead, N_aead) on (ct_kem^*_c, coin*_c) with uniform
-          keys/nonces (and independent uniform keys on any O_Scan query with
-          ct_kem == ct_kem^*_c, coin != coin*_c). All O_Corrupt and O_Scan
-          queries are answered directly. Loss <= Adv_PRF^{SHA-384-KDF}.
+    (ii)  HMAC-SHA-384 PRF [Std]: With uniform ss*_c, replace the keyed
+          function on the two V2 labels by one lazy-sampled random function.
+          Distinct labels give independent uniform 32 B and 12 B prefixes.
+          For the challenge recipient's scans reusing ct_kem^*_c, use the
+          same function, reusing answers on repeated inputs and drawing fresh
+          ones for different coins. Other secrets use ordinary HMAC. The loss
+          is at most Adv_PRF^{HMAC-SHA-384}(q_KDF).
     (iii) AES-256-GCM INT-CTXT(q_scan) + IND$-CPA: Reject all forged O_Scan
           queries sharing ct_kem^*_c with modified ct_aead or coin AAD (loss <=
           Adv_INT-CTXT^{AES-256-GCM}(q_scan), classically O(q_scan/2^128)), and
@@ -1048,8 +1029,8 @@ O_Challenge) are answered without guessing-gap or missing-secret mismatches:
       two O_ChallSN queries can instead replace both in one hop. The H_2 -> H_3
       loss per challenge world is at most r * U_users * Adv_JointPRF^{SHAKE256}(2)
       + d * Adv_PRG^{SHAKE256}. For mint, r = 0 and d = 2.
-  - Game H_4 (624-Bit Output Commitment Hiding & Abort Accounting): All secret
-    keys are now decoupled from tx*; replace coin0*, coin1* with uniform 48 B
+  - Game H_4 (624-Bit Output Commitment Hiding & Abort Accounting): Replace
+    the shielded output commitments coin0*, coin1* with uniform 48 B
     strings via two single-user Hide^{SHAKE256} hops (loss <= 2 *
     Adv_Hide^{SHAKE256}). In H_4, the random R3/R4 collision abort occurs with
     probability <= 2*(|Coins| + |SpentSN| + 4)/2^384 (identical for b=0 and
@@ -1070,7 +1051,7 @@ references:
   assumption; [NonStd] = Standing nonstandard assumption (unquantified);
   [Unrev] = Conditional unreviewed bridge (App. A/B).
 
-Table 3 — Composed Ledger Security Audit (Exact-Rational check_math.py)
+Table 3 — Composed Ledger Security Audit (compiler terms from check_math.py)
 --------------------------------------------------------------------------------
 Theorem / Term                        | Tag        | Published-Only | Q = 2^96  | Q = 2^80  | Q = 2^64 (ref)
 --------------------------------------+------------+----------------+-----------+-----------+---------------
@@ -1091,15 +1072,19 @@ Thm 4 (Auth — P_hon=2^32, q_hon=2^33): |            |                |        
   * Adv_QROM-ZK(2^32, Q)              | [Unrev]    | GHHM21+AHU19+L | 2^-150.60 | 2^-150.60 | 2^-150.60
   * eps_SE(2^32, 1, Q)                | [Unrev]    | No pub. bound  | 2^-92.25  | 2^-137.55 | 2^-170.97
   [Ideal-Sponge Sizing References]    |            |                |           |           |
-  * Adv_CR^{SHA-384}(tx_ctx) (BHT)    | [IdealRef] | ideal-fn ref   | 2^-91.00  | 2^-139.00 | 2^-187.00
+  * Adv_CR^{SHA-384} (BHT)            | [IdealRef] | ideal-fn ref   | 2^-91.00  | 2^-139.00 | 2^-187.00
   * Adv_MT-TPR^{H_SN}(2^33) (Grover)  | [IdealRef] | ideal-fn ref   | 2^-159.00 | 2^-191.00 | 2^-223.00
   * Adv_OW^{H_A,384} (Grover)         | [IdealRef] | ideal-fn ref   | 2^-192.00 | 2^-224.00 | 2^-256.00
+  * Adv_2ndPre^{source,160} (Mode 3)  | [IdealRef] | targeted key   | vacuous   | vacuous   | ~2^-32
   [Unquantified Standing Terms]       |            |                |           |           |
   * Adv_JointPRF^{SHAKE256}(2^33)     | [NonStd]   | unquantified   | (one reused spend key)
   * d_hon * Adv_PRG^{SHAKE256}        | [NonStd]   | unquantified   | (one term per dummy slot)
-  * Adv_EUF-CMA^{L1-Sig} (Mode 3)     | [Std]      | FIPS-204       | (ML-DSA-65/87 at L1)
-  --> Thm 4 Conditional Target (A.3/4)| [Cond]     | No pub. bound  | ~91b*     | ~137b*    | ~150b*
-      (*conditional on A.3 + Conj. A.4 + IdealRef + unquantified JointPRF(2^33), dummy PRG and L1-Sig)
+  * Adv_EUF-CMA^{ML-DSA-65} (Mode 3)  | [Std]      | FIPS-204       | (signed digest, fixed context)
+  --> Modes 1-2 conditional target    | [Cond]     | No pub. bound  | ~91b*     | ~137b*    | ~150b*
+      (*conditional on A.3, Conj. A.4, IdealRef, JointPRF(2^33) and dummy PRG.)
+      Mode 3 also depends on ML-DSA-65 and account binding. For a fixed honest
+      address the ideal reference scales as min(1, Q^2 / 2^160) when Q also
+      bounds queries to the address hash.
 --------------------------------------+------------+----------------+-----------+-----------+---------------
 Thm 5 (GlobalPriv — Transfer & Mint): |            |                |           |           |
   * 2 * Adv_QROM-ZK(2^32, Q)          | [Unrev]    | GHHM21+AHU19+L | 2^-149.60 | 2^-149.60 | 2^-149.60
@@ -1107,149 +1092,138 @@ Thm 5 (GlobalPriv — Transfer & Mint): |            |                |         
   * 4*U*Adv_IK-CCA^{ML-KEM}(q_scan)   | [NonStd]   | GMP22/MX23*    | (standing FIPS-203 assumption)
   * 4*Adv_INT-CTXT^{AES-GCM}(q_scan)  | [Std]      | SP 800-38D     | (O(q_scan / 2^128) forgery)
   * 4*Adv_IND$-CPA^{AES-256-GCM}      | [Std]      | SP 800-38D     | (AES-256 standard bound)
-  * 4*Adv_PRF^{SHA-384-KDF}           | [NonStd]   | ROM-KDF        | (key-in-middle SHA-384)
+  * 4*Adv_PRF^{HMAC-SHA-384}(q_KDF)   | [Std]      | keyed PRF      | (two labeled evaluations per derivation)
   * 2*r*U*Adv_JointPRF^{SHAKE256}(2)  | [NonStd]   | unquantified   | (real inputs; r=0 for mint)
   * 2*d*Adv_PRG^{SHAKE256}            | [NonStd]   | unquantified   | (dummy inputs; d=2 for mint)
   * 4*Adv_Hide^{SHAKE256}             | [NonStd]   | unquantified   | (two outputs in either mode)
-  * R3/R4 abort conditioning (2^24)   | [Exact]    | exact          | 2^-358.00 | 2^-358.00 | 2^-358.00
-  --> Thm 5 Status                    | [Cond]     | Parameterized by (U, q_scan) + [NonStd] (IK-CCA,
-                                      |            | SHA-384-KDF, JointPRF(2), dummy PRG, Hide); no single bit floor
+  * R3/R4 abort, global ledger        | [Exact]    | union bound    | 4*(|Coins|+|SpentSN|+4)/2^384 (both worlds)
+  --> Thm 5 Status                    | [Cond]     | Parameterized by U, q_scan, global ledger size and
+                                      |            | primitive advantages; [NonStd]: IK-CCA, JointPRF(2), dummy PRG, Hide.
 --------------------------------------------------------------------------------
 In Theorem 3, at full-tree throughput (q_hon = 2^23 = 8,388,608 txs), honest
 prover queries inflate Q_tot by only 0.0001 bits at Q = 2^64 (0.0458 bits even
 at q_hon = 2^32, degrading eps_Ext by only 0.10 bits).
 
 ================================================================================
-SECTION 5. EMPIRICAL EVALUATION, WIRE ACCOUNTING, & PUBLIC REPRODUCIBILITY
+SECTION 5. WIRE ACCOUNTING AND STANDALONE REPLAY (2026-11-22)
 ================================================================================
 
-5.1 Host Environment & Toolchain
+5.1 Host and toolchain
 --------------------------------------------------------------------------------
-Single-host measurements: AMD EPYC Processor (16 physical cores / 32 threads,
-pclmulqdq + avx2 + sse4.2, 122 GiB RAM), Linux 6.8.0-55-generic x86_64,
-rustc 1.95.0 (59807616e 2026-04-14), go1.25.1 linux/amd64 (zero third-party Go
-modules), Python 3.12.3, z3-solver reporting z3.get_version_string() = 5.4.1.
+Linux 6.8.0-55-generic x86_64, AMD EPYC (16 cores, 32 hardware threads),
+rustc 1.95.0, Go 1.25.1 linux/amd64, Python 3.12.3 and Z3 5.4.1. verify.sh
+sampled CPU and SMT sibling activity and pinned the replay to logical CPU 21
+with RAYON_NUM_THREADS=1 and GOMAXPROCS=1. The Go verifier used PCLMULQDQ.
 
-5.2 Exact Wire Byte Decomposition (PFSH02 vs. 149,130 B/tx W-1 Ceiling)
+5.2 Wire budget
 --------------------------------------------------------------------------------
-Component                          | Expected (B) | Worst-Case (B) | Share
------------------------------------+--------------+----------------+-------
-0-Round Stealth Header PFSH02      |        3,648 |          3,648 |  2.6%
-  (incl. v_mint, v_unshield, dest, |              |                |
-   2 x 1,670 B ML-KEM-1024 envs)   |              |                |
-Proof Fixed Fields (magic, root,   |       59,916 |         59,916 | 42.7%
-  SC1[19], SC2[8], RS[32], v_prox  |              |                |
-  [565], v_open[565], nonce[48])   |              |                |
-Opened Columns (52 x 748 B)        |       38,896 |         38,896 | 27.7%
-Pruned 48 B MT_1 Merkle Siblings   |       36,001 |         38,016 | 27.1%
-  (exp 750.02 / wc 792 x 48 B)     |              |                |
------------------------------------+--------------+----------------+-------
-TOTAL WIRE SIZE                    |      138,461 |        140,476 | 100%
-W-1 Archival Ceiling (12 GiB/day)  |      149,130 |        149,130 |
-Deterministic Headroom             |      +10,669 |         +8,654 | PASS
---------------------------------------------------------------------------------
-Quantization note: Proof sizes vary strictly in 48-byte increments (one 48 B
-sibling hash); expected 750.02 siblings = 138,461 B quantizes to integer 751
-siblings = 138,508 B (matching the measured 50-trial median 138,508 B and both
-tx_mint.bin and tx_hop1.bin). Measured 50-trial range: 137,500 B min / 138,508 B
-med / 139,180 B max. End-to-end fixtures: tx_mint.bin = 138,508 B, tx_hop1.bin
-= 138,508 B, tx_dummy_1in.bin = 137,788 B (736 siblings), tx_hop2.bin =
-138,268 B (746 siblings).
+Component                                      | Expected (B) | Maximum (B)
+-----------------------------------------------+--------------+------------
+Header including proof length                  |        3,648 |       3,648
+Fixed proof fields                             |       59,916 |      59,916
+Opened columns (52 x 748 B)                    |       38,896 |      38,896
+Pruned 48 B Merkle siblings                    |       36,001 |      38,016
+-----------------------------------------------+--------------+------------
+Non-mint wire                                  |      138,461 |     140,476
+Authorization suffix on positive mints only    |        5,261 |       5,261
+Signed mint wire                               |      143,722 |     145,737
+-----------------------------------------------+--------------+------------
+Archival ceiling                               |      149,130 |     149,130
 
-5.3 Measured Warm, Cold-Process, Worst-Case-Sibling, & Memory Benchmarks
---------------------------------------------------------------------------------
-Metric (Pinned taskset -c 0 for 1C)        | Median    | p95       | Max       | Peak RSS
--------------------------------------------+-----------+-----------+-----------+----------
-Rust 16C/32T Prove (50t, streaming ANTT)   | 2,892 ms  | 3,057 ms  | 3,073 ms  | 561.7 MiB
-Rust 1-Core Prove (5t, streaming ANTT)     | 26,731 ms | 30,362 ms | 30,362 ms | 561.7 MiB
-Rust 1C Warm Full Settle (50t, PCLMUL)     | 22.53 ms  | 25.15 ms  | 31.95 ms  | 4.50 MiB
-Go 1.25.1 1C Warm Settle (50t, PCLMULQDQ)  | 36.32 ms  | 38.78 ms  | 40.40 ms  | 5.25 MiB
-Go 1.25.1 1C Warm Settle (10t, purego)     | 71.50 ms  | 73.17 ms  | 73.17 ms  | —
-Rust 1C Cold-Process (10 procs, verify)    | 25.40 ms  | —         | 39.29 ms  | 4.50 MiB
-Rust 1C Cold-Process (10 procs, full wall) | 29.98 ms  | —         | 44.98 ms  | 4.50 MiB
-Go 1C Cold-Process (10 procs, verify)      | 38.45 ms  | —         | 40.77 ms  | 5.25 MiB
-Go 1C Cold-Process (10 procs, full wall)   | 44.79 ms  | —         | 47.06 ms  | 5.25 MiB
---------------------------------------------------------------------------------
-Worst-case-sibling & scheduling note: Grinding PoW to maximize unpruned MT_1
-siblings from 750 expected to the deterministic worst case of 792 adds strictly
-+42 single-block SHA-512 calls (< 0.02 ms total). Unpinned cold runs inside
-verify.sh immediately after cargo build showed OS scheduling variance up to
-47.9 ms Rust / 62.0 ms Go; pinned validator-core execution stays <= 47.06 ms
-even including full cold OS process startup, ledger JSON parsing, Depth-24 root
-recomputation, and K-table initialization.
+The expected sibling contribution is rounded to the nearest byte. Individual
+proofs carry an integral number of 48 B hashes, at most 792. At maximum size,
+a non-mint leaves 8,654 B and a signed mint leaves 3,393 B under the ceiling.
 
-5.4 Offline Wallet Scanning Throughput & Detection-Tag Tradeoff
+5.3 Single-core verification and epoch rollover
 --------------------------------------------------------------------------------
-Measured 1-core Go 1.25.1 stdlib crypto/mlkem + SHA-384 + AES-256-GCM trial
-decapsulation on tx_hop1.bin (5,000 trials, pinned taskset -c 0):
-  - Non-matching output (env1): 211.77 us/output (4,722 outputs/s = 2,361 tx/s)
-  - Matching output     (env0): 211.21 us/output (4,735 outputs/s = 2,368 tx/s)
-At sustained 1 tx/s (172,800 outputs/day), an offline wallet catching up on 24
-hours of blocks scans all outputs in ~36.6 s on 1 core (~2.3 s on 16 cores)
-without detection tags. Higher-throughput deployments or mobile light clients
-would benefit from optional view tags or oblivious message retrieval (OMR).
+Each lifecycle row is one fresh process per verifier. The timer starts after
+file I/O and ledger reconstruction, before parsing the wire. Rust parses,
+verifies and applies the transaction in memory. Go parses and verifies against
+the loaded ledger. Times are milliseconds. The script gates each value at
+strictly less than 50 ms.
 
-5.5 Public Repository, Public GitHub Actions CI Replay, & 7/7 Manifest
+Fixture or generated spend    | Wire (B) | Proof (B) | Siblings | Rust ms | Go ms
+------------------------------+----------+-----------+----------+---------+------
+tx_mint.bin (signed deposit)  |  143,337 |   134,428 |      742 |   21.88 | 32.35
+tx_hop1.bin (two real inputs) |  139,036 |   135,388 |      762 |   21.47 | 36.92
+tx_dummy_1in.bin (one real)   |  138,508 |   134,860 |      751 |   21.44 | 32.29
+tx_hop2.bin (partial unshield)|  138,268 |   134,620 |      746 |   21.50 | 33.40
+Old-epoch spend (leaf 2^24-1) |  138,364 |   134,716 |      748 |   20.58 | 30.61
+
+Full-tree process                    | Rust            | Go
+-------------------------------------+-----------------+----------------
+Build and fill the epoch             |    20,471.42 ms |    23,160.60 ms
+Construct and prove old-epoch spend  |    24,141.90 ms |       —
+Peak resident memory, whole process  |   3,737,992 KiB |   3,294,720 KiB
+Elapsed wall time, whole process     |         70.50 s |         23.52 s
+
+Build and fill includes synthetic leaf creation, indexing, Merkle construction
+and boundary deposit settlement. Rust excludes proving the boundary deposit
+from that timer. Go uses the two Rust-produced wires. Its timed spend check
+uses the independently reconstructed frozen root.
+
+Supplementary measurements on separately sampled CPUs, also on 2026-11-22:
+  * On CPU 15, Go bench on tx_hop1.bin (50 warm parse-and-verify trials) gave
+    median/p95/max of 29.84/30.16/30.84 ms with PCLMULQDQ and
+    58.87/59.76/60.53 ms with -tags purego. The portable path exceeded 50 ms.
+  * On CPU 19, the Rust bench command created five two-input transfers after
+    warmup. Proving took 27,968.48 ms median and 29,473.26 ms maximum. Verification
+    of already-parsed transactions took 28.22 ms median and 31.28 ms maximum.
+    Wire sizes were 137,884/138,124/139,036 B (min/median/max). Peak process
+    RSS was 559,172 KiB.
+  * On CPU 19, ten fresh tx_hop1.bin processes per verifier took 23.50 ms
+    median / 24.13 ms maximum in Rust and 35.17 / 35.79 ms in Go, measured
+    from launch through exit including ledger loading.
+
+5.4 Offline wallet scan
 --------------------------------------------------------------------------------
-All source code, pinned Cargo.lock, zero-dependency go.mod, Dockerfile,
-SHA256SUMS, fixtures, scripts, and CI workflow are publicly published in
-postfiatl1v2:
-  * Code tree: https://github.com/postfiatorg/postfiatl1v2/tree/d76e5a8c61ec9741ffd6da59b00b7aee8ca0bb73/tools/pft-binius-shielded-pq
-  * CI workflow: .github/workflows/peel-binius-shielded-pq-ci.yml (commit bd05b2f7a)
-  * Public third-party CI run (ubuntu-latest, AMD EPYC 7763 4 vCPU, fresh
-    rustc 1.95.0, go 1.25.1, pip z3-solver 5.4.1):
-    https://github.com/postfiatorg/postfiatl1v2/actions/runs/44943485068
-    (Job 136965585163, conclusion: success, 2m14s total):
-      - sha256sum -c SHA256SUMS: 19/19 OK
-      - ./verify.sh: ALL 7/7 INDEPENDENT CHECKS PASSED (exit 0)
-      - Rust 1C verify on all 4 fixtures: 26.30-26.40 ms
-      - Rust 1C cold-process wall (10 procs): 30.02 ms med / 30.70 ms max
-      - Go 1.25.1 1C warm settle (50t, PCLMULQDQ): 40.37 ms med / 41.53 ms p95 / 43.68 ms max
-      - Go 1.25.1 1C cold-process wall (10 procs): 47.76 ms med / 48.34 ms max
-      - Go 1.25.1 1C purego fallback (10t): 90.58 ms med / 91.89 ms max
+Go's standard-library scanner decapsulated the Rust tx_hop1.bin fixture,
+authenticated output 0, recovered value 650 and checked its opening against
+the commitment. It rejected output 1. On CPU 15, 100 fresh delivery-helper
+processes took 2.43 ms median and 3.04 ms maximum per two-output fixture,
+including startup, reading the wallet and wire, key setup and both scans.
 
-Running sha256sum -c SHA256SUMS && ./verify.sh inside BOTH the local clean
-postfiatl1v2 worktree and the public GitHub Actions runner passed all 7/7
-checks (exit code 0):
-  [1/7] Rust unit tests (SHAKE256 == sha3::Shake256, Depth-24 Merkle, E384
-        1,000-pair PCLMULQDQ == portable, streaming 1,024-pt ANTT == Novel
-        Basis, 3D-Karatsuba eval_bilinear_rs_ip == naive 384x384 sum, 4-mode
-        56-perm circuit zero-sum + MLE [2-in, dummy, ZK-mint, unshield], Binius).
-  [2/7] Rust release verification of tx_mint, tx_hop1, tx_dummy_1in, tx_hop2.
-  [3/7] Rust adversarial suite: 35/35 named controls rejected + 150/150 fuzz.
-  [4/7] Go 1.25.1 stdlib verifier (zero external deps): 10,000-pair PCLMULQDQ
-        == portable + 1,000-pair ringSwitchApplyASM == portable + 3D-Karatsuba
-        evalBilinearRSIP == naive 384x384 sum + 35/35 Go adversarial controls +
-        all 4 lifecycle scenarios.
-  [5/7] Go 1.25.1 stdlib FIPS-203 ML-KEM-1024 offline stealth scan of
-        tx_hop1.bin recovering v=650, R_78B (cleanly rejecting output 1).
-  [6/7] check_math.py exact-rational audit (tower irreducibility, 58/58 G_1 +
-        17/17 SC2 Jacobians, RBR, 512b-state QROM, wire).
-  [7/7] verify_circuit_equivalence.py (Z3 5.4.1 UNSAT x 4 incl. 66-bit
-        mint/unshield conservation, 1,600-basis L_TRP, 56-perm 2,150,400-bit
-        DAG coverage, 3-way Rust==Go==Python 42,444 Group-C IR, Rust==Go Group
-        A+B+C weights).
+5.5 Reproducing the host results
+--------------------------------------------------------------------------------
+Run ./verify.sh from the tool directory (Appendix C). The 2026-11-22 host
+replay covers the tool revision named at the top of this specification.
+The older checked-in benchmark logs and bench_results.json describe an
+earlier tool revision. The current verification stages are:
+  [1/7] Six Rust tests, including mint authorization and bulk Merkle equivalence.
+  [2/7] Rust parse, verify and apply for all four lifecycle fixtures.
+  [3/7] Rust adversarial checks: 35/35 controls and 150/150 structured mutations.
+  [4/7] Go unit, adversarial and mint authorization checks, four Go fixture
+        verifications, and the full-tree Rust and Go replay.
+  [5/7] Go ML-KEM-1024/HMAC-SHA-384 offline wallet scan.
+  [6/7] check_math.py checks tower irreducibility, both Jacobians, conditional
+        proof bounds and the maximum signed-mint size.
+  [7/7] verify_circuit_equivalence.py checks the Z3 identities, Keccak wiring,
+        Rust/Go/Python Group-C equality and Rust/Go verifier weights.
 
-Verified SHA-256 Manifest (tools/pft-binius-shielded-pq/SHA256SUMS):
-  8fb7568d4cfc41af0158b1a7e5ce1ebbe8165f9e3022913dcc9ab82fd17860be  payments/tx_mint.bin
-  a3a72c12af7fa43b17e36a1027342bc7296f9c342c4b32733741345d39528c4e  payments/tx_hop1.bin
-  f38eb78aa05e93848dcb49e3e3deb33ea4cd20557f45b5eb0c107b798dbb3359  payments/tx_dummy_1in.bin
-  dc1426ddab028ec87d1491cd3c7ad4ee8d2d309ffb9169f0c20cb04305f81050  payments/tx_hop2.bin
+Final host result: === ALL 7/7 INDEPENDENT CHECKS PASSED ===
+
+Verified SHA-256 manifest (SHA256SUMS, 21 entries, 2026-11-22):
+  fa5013c5bb6ae6484319550f7ce3f780f9eeec07499cc4687568a82fd223b549  payments/tx_mint.bin
+  9533f16fb2a8d56a7493e85571b227304a692f68a8c6d9a1dcd413b4ac53aadc  payments/tx_hop1.bin
+  980c5cdc8f3d6e16609376008c00c65277ded8f75dcfef4235455812b013865c  payments/tx_dummy_1in.bin
+  857eda342edae15e4d8fd30d476b5d58883b2a2ffab9f683ee9e783be3f9ace8  payments/tx_hop2.bin
   1bd92fcd1b3f47f31d4ed09a8be90ed85438d7564391b5529c89792861d58b7c  payments/ledger_mint.json
   8b6823f65d2da5b6f5f5f3f2ee621867e258a030d3f2c7e56d60507c685272e6  payments/ledger_hop1.json
   779ba807a60a77e21f9748b5654461f4b0fcd47276aebb5fbee9329a814a6667  payments/ledger_dummy_1in.json
   47647e22ee2be0f4a5a1c5cc9ccb335d569f91e9aab306d750f639c9652f26c4  payments/ledger_hop2.json
   79e2c636a6eb9589e6b0a00ece578c8784bb713c022ed66f5fd83d3efea7402c  payments/bob_wallet.json
-  8f692d951c2c1ab0c822546f4672426c4b87d7f61ffbe858fce5f8a8d57a0b1f  check_math.py
-  5ac626722a2912559e44cf6d7eef6f4691f6ae4895cd06d662c926d4483e1cc2  verify_circuit_equivalence.py
-  91e0e63caf9be908ef07a63853b795cf95140ec49a31c1573aa336973ba7fdf0  verify.sh
-  7ace3085a427b6f557fe315e8e7f0555e2eed2fc0cbc1978b8b94672b0a9dd5c  math_bounds.json
+  aef4c240ad741831bd314eddad4cb64ee4bd99722da8ea996d4ecc43c7fc3381  check_math.py
+  72db54d70801a78eef612ea4985a1259bd2bad2c06f917f0a644a144c3041cc3  verify_circuit_equivalence.py
+  0aa5be5ae2b73eb003611df511e80710692c94f5d72addaf9fe2a6e505463a12  verify.sh
+  b38541ad0ef5432eb0ea29586927a23b4c7888d337e7d3ff8323eaada33517ed  math_bounds.json
   82fcacfe87df8a01f30488878b6fa5c2feb84d712ace5056abcf08d0b0cc77b4  circuit_equivalence.json
   15ffb76bfec7150a0e12a14733b982af8e56c9e0564b3d09d9c48a7409cc41db  bench_results.json
   ed0a9cbde19e62a6574b831663b6a4b93369dc8049096f640180595c7bc36598  rust_1core_bench.json
   77c13a826d86ab2c06f6848a5eb8dfb6379c637466ad929c6019bb486dd38f0c  go_bench.log
   57eb020213b6225fefe1eb4919c8bf1f6bc267840b4194d2192f42159cc73faf  go_purego_bench.log
   8fb1777a98b3ebbc4f00db6d3dc8125cd8187a2a00a23a57a245cf00afa08211  cold_bench.log
+  17cdb8c91df79f0689d43e288d1b8bc6fc147a8a2e12e94ab2111141d0643460  idle_cpu.py
+  7e0617a010da1375b9ce23498e395499600070574d6fb5b034e7c17a216f17b7  go-verifier/go.sum
 
 ================================================================================
 APPENDIX A. COMPLETE SELF-CONTAINED PROOFS: BCIKS20 + PEEL(M), 34-ROUND
@@ -1886,19 +1860,16 @@ Summing Stages 1-3 yields Adv_QROM-ZK(P=2^32, Q) <= 2^-150.60 at Q = 2^64,
 2^80, and 2^96. []
 
 ================================================================================
-APPENDIX C. PUBLIC INDEPENDENT REPLAY COMMANDS (GIT & DOCKER)
+APPENDIX C. REPLAY COMMANDS
 ================================================================================
-Option 1 (Direct clone at pinned commit):
-  git clone --branch feat/peel-binius-shielded-pq \
-    https://github.com/postfiatorg/postfiatl1v2.git
-  cd postfiatl1v2
-  git checkout d76e5a8c61ec9741ffd6da59b00b7aee8ca0bb73
+From a checkout containing the tool revision named above, on Linux:
   cd tools/pft-binius-shielded-pq
   sha256sum -c SHA256SUMS
   ./verify.sh
 
-Option 2 (Pinned container with Rust 1.95.0, Go 1.25.1, z3-solver):
-  cd tools/pft-binius-shielded-pq
+The script accepts GO_BIN, PY_BIN and CARGO_TARGET_DIR. It samples CPU and
+SMT sibling activity before pinning. BENCH_CPU selects an explicit CPU.
+The Dockerfile packages the same entry point:
   docker build -t pft-binius-shielded-pq .
   docker run --rm pft-binius-shielded-pq
 ================================================================================
