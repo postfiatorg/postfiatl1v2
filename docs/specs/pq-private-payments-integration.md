@@ -130,8 +130,8 @@ otherwise the source-series digest), LE u64 input epoch and public PFT fee, then
 authorization flag. When set, it carries the 20-byte payer, LE u64 sequence, 1,952-byte public
 key and 3,309-byte signature. The exact PFSH02 inner record follows. The eight
 [`l1-vectors`](../../tools/pft-binius-shielded-pq/l1-vectors) cover both assets and a funded top-up.
-Validators verify the L1 profile on the pinned disposable genesis. Its receipt records
-`pq_settlement_inactive` pending M3–M4.
+At M2, validators verified the L1 profile on the pinned disposable genesis and returned
+`pq_settlement_inactive`. M3 and M4 added settlement to the atomic batch path.
 
 The redb store publishes the reference and body in one transaction. The file-backed store fsyncs
 the immutable body before publishing its reference. A crash between the two can leave an
@@ -189,11 +189,10 @@ is shorter than the calculated maximum.
   individually. Replay an exact pre-upgrade archived chain through its recorded tip and compare block hashes
   and state roots byte for byte.
 
-The node verifies proofs and prepares the account delta in `pq_pool_state.rs`. Execution and cold storage
+M3 introduced proof verification and native account settlement in `pq_pool_state.rs`. Execution and cold storage
 recovery share the deterministic pair transition in `crates/types/src/pq_tree.rs`. Immutable pair pages
 retain the ciphertexts and supply the inputs for rebuilding the wallet indexes. The six-validator merge test
-settled a funded native deposit and spend on the pinned disposable genesis. Governed pfUSDC account settlement
-remains in M4. Both assets were exercised in the pool tests.
+settled a funded native deposit and spend on the pinned disposable genesis. M3 exercised both assets in the pool tests.
 
 Rust and Go independently built two full depth-24 trees. The node test used their checked near-full frontiers
 to exercise rollover and spend an epoch-0 note in epoch 2. Journal recovery, signed snapshot restore and genesis
@@ -201,7 +200,7 @@ replay agreed at the certified tip. The exact R64 replay matched all 1,734 archi
 
 ## M4. Settle deposits, transfers and exits for both assets · 5–9 days
 
-- [ ] Implement new `crates/node/src/pq_payment_actions.rs` invoked by `execution_actions.rs`. Put account
+- [x] Implement new `crates/node/src/pq_payment_actions.rs` invoked by `execution_actions.rs`. Put account
   checks and prepared debit/credit helpers in
   `crates/execution/src/{entrypoints,issued_asset_ledger_helpers}.rs`. Reuse the account's FIPS-204
   **ML-DSA-65** provider in `crates/crypto_provider/src/lib.rs`, including source derivation, first-spend key
@@ -213,7 +212,7 @@ replay agreed at the certified tip. The exact R64 replay matched all 1,734 archi
   the locally intended recipient and amount before releasing the signature. Signatures, proof bytes and
   transaction IDs are outside their own preimage. Give fee-only sponsorship its own signing domain. A signed
   shield authorization has no ordinary burn, transfer or legacy-ingress interpretation.
-- [ ] For each accepted action update the live reserve by `+v_mint − v_unshield − inner_fee` using checked
+- [x] For each accepted action update the live reserve by `+v_mint − v_unshield − inner_fee` using checked
   wide intermediates. Shield debits the signed source by exactly the mint amount. Internal payments have no
   public recipient. Exit credits the named public recipient by exactly the exit amount. On native PFT require
   the active minimum fee and book the inner fee once to the chain's fee burn accounting. For pfUSDC burn the
@@ -223,7 +222,7 @@ replay agreed at the certified tip. The exact R64 replay matched all 1,734 archi
   supported and refuse an unfundable fresh recipient. Require an eligible existing account and authorized line
   for a restricted issued exit. A pool exit cannot create issuer authority, widen limits implicitly, or mint
   as issuer.
-- [ ] Activate a specific issue only when both its deposit and exit policy can be enforced. Check effective
+- [x] Activate a specific issue only when both its deposit and exit policy can be enforced. Check effective
   pause, issuer/freeze, authorization, reserve and recipient eligibility at the inclusion height. For an issue
   whose policy requires an unsupported disclosure, refuse entry as well as exit. In
   `crates/node/src/state_commitment.rs`, add the PQ live reserve to `global_issued_asset_supply`, cap checks
@@ -231,7 +230,7 @@ replay agreed at the certified tip. The exact R64 replay matched all 1,734 archi
   external bridge and Orchard custody. Cumulative inflows are audit counters. Include public source/exit and
   PFT fee effects in `crates/node/src/{block_finality,account_tx_disk_index,lifecycle_queries}.rs`. Keep
   internal note owners out of account history.
-- [ ] **Merge test.** Add `crates/node/src/tests/pq_payment_accounting.rs`. On a fresh local chain shield →
+- [x] **Merge test.** Add `crates/node/src/tests/pq_payment_accounting.rs`. On a fresh local chain shield →
   pay → partial exit → full exit for PFT and a selected pfUSDC child. Reconcile public balances, notes
   recovered by two wallets, reserve, burns, account sequence and total family supply after every block. In the
   closed native fixture, public PFT plus live PQ PFT plus cumulative burned PFT must equal starting supply.
@@ -239,6 +238,15 @@ replay agreed at the certified tip. The exact R64 replay matched all 1,734 archi
   sibling issue, wrong recipient, underflow, overflow, frozen/unauthorized/full line, required disclosure and
   exhausted sponsor. Failed actions and failed atomic batches leave fees, balances, keys, sequence, PQ state
   and history consistent. Include a cap-at-limit issuance attempt with most units already in the PQ pool.
+
+M4 reuses the M2 signing bytes. The raw header digest binds the mint, inner fee, output commitments and
+envelopes. The length-framed L1 context binds the source's next sequence and public PFT fee. The signer
+recomputes the two intended commitments and checks its locally sealed envelopes before signing.
+
+Settlement is enabled on the pinned disposable genesis for native PFT and one governed pfUSDC source series.
+The merge test starts with funded accounts, an active route and public trustlines. Across eight certified
+blocks, public PFT plus live PQ PFT plus burned fees stayed at 1,000,000,000 atoms. The pfUSDC family stayed
+at 110 units. Issuance at the cap failed with 100 units in PQ custody. Production activation belongs to M5.
 
 ## M5. Enforce activation, resource limits and public admission · 5–8 days
 

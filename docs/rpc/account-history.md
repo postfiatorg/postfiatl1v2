@@ -76,6 +76,18 @@ Match deposit tags on the hex fields: the `*_text` fields are a convenience.
 the archived block payload, so they are available for every finalized
 `payment_v2` and `issued_payment_v2`, not only for mempool entries.
 
+## PQ payments on the disposable development chain
+
+Accepted `pq_payment_v1` actions report the following public effects. Amounts are in units of the selected issue or native PFT. Fees are always in PFT atoms.
+
+| Account history role | Amount | Fee and sequence |
+| --- | --- | --- |
+| `shielded_deposit` | Exact public debit into the pool | The native fee comes from the deposited value. A pfUSDC depositor pays the PFT fee separately. The row records the depositor's sequence. |
+| `shielded_fee` | Zero | A public sponsor pays the pfUSDC payment or exit fee at the recorded sequence. |
+| `shielded_withdrawal` | Exact credit from the pool | The native fee comes from the private balance. A pfUSDC exit has a separate sponsor row. The credit uses sequence zero. |
+
+A native internal payment has no public account row. The receipt records its PFT burn. Account history exposes no note owner.
+
 ## Shielded Withdrawals
 
 A shielded withdrawal credits a transparent account from a shielded pool. It is
@@ -214,14 +226,10 @@ postfiat-node account-tx-index-build --data-dir <validator-data>
 The build extends a current index from its tip, or rebuilds it from every
 retained block when it cannot be extended.
 
-The current index schema is `postfiat-account-tx-index-v4`: the v3 layout (rows
-in bounded per-account chunks and metadata-only aggregate files), with the
-`escrow_finish` row attributed to the recipient who signed it (v3 named the
-owner). Schema v2 added memo contents and shielded withdrawals. An index
-written with an older schema (v1, v2 or v3) is never read or extended. After
-upgrading, run `account-tx-index-build` once: it rebuilds the index from all
-retained blocks, which for a v1 index also backfills memo contents and
-historical shielded withdrawals. Until then,
+Schema `postfiat-account-tx-index-v5` adds public PQ payment rows. It retains the
+v3 chunk layout and the v4 attribution of `escrow_finish` to the recipient who
+signed it. After upgrading from v1–v4, run `account-tx-index-build` once to
+rebuild from retained blocks. Until then,
 `account_tx_index_status` reports the index unusable with
 `unsupported account_tx index schema`, and `account_tx` answers from the
 bounded archive scan, which already returns the new rows. History pruned below
