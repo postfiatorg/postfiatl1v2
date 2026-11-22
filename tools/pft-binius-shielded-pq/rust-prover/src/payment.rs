@@ -499,12 +499,7 @@ impl LedgerState {
             return Err("Rule R4 violation: output coin already exists in ledger".into());
         }
         // Rule R5: mutually exclusive mint/unshield, u64 pub_exit check, and ZKP verification
-        if tx.v_mint > 0 && tx.v_unshield > 0 {
-            return Err("Rule R5 violation: v_mint and v_unshield cannot both be non-zero".into());
-        }
-        if tx.fee.checked_add(tx.v_unshield).is_none() {
-            return Err("Rule R5 violation: fee + v_unshield overflows u64".into());
-        }
+        tx.check_public_flows()?;
         let stmt = tx.statement();
         match (&tx.mint_auth, tx.v_mint) {
             (None, 0) => (),

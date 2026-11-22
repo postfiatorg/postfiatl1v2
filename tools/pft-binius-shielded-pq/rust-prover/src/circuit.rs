@@ -4,7 +4,7 @@
 //!  448 native is_dummy gating rows, and 193 65-bit ripple-carry conservation rows).
 //!
 //! Witness layout: 5 bit-arrays B_0..B_4 of length 2^19 = 524,288 virtual bits each
-//! (446,949 active rows packed into 28 active K-subrows x 512 cols x 32 bits/elem;
+//! (447,014 active rows packed into 28 active K-subrows x 512 cols x 32 bits/elem;
 //!  trailing 4 zero subrows per poly omitted from MT_1 -> M_WIT_ROWS = 140 K-rows).
 //!
 //! Every quadratic gate in the entire circuit uses ONLY the 5 Keccak Chi monomials:
@@ -57,7 +57,7 @@ pub const OFF_DIR0: usize = 4290;      // 24 bits
 pub const OFF_DIR1: usize = 4314;      // 24 bits
 pub const TOTAL_PRIV_BITS: usize = 4338;
 pub const PRIV_ROWS: usize = (TOTAL_PRIV_BITS + 4) / 5; // 868
-pub const ACTIVE_ROWS: usize = ROW_PRIV_BASE + PRIV_ROWS; // 446,949
+pub const ACTIVE_ROWS: usize = ROW_PRIV_BASE + PRIV_ROWS; // 447,014
 pub const ACTIVE_SUBROWS_PER_POLY: usize = (ACTIVE_ROWS + 16383) / 16384; // 28
 
 #[inline(always)]

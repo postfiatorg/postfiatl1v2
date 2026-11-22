@@ -1776,13 +1776,19 @@ pub fn prove(
     }
 }
 
+/// Constant circuit row selection shared by all verifying threads.
+pub fn verifier_row_layout() -> &'static RowLayout {
+    static LAYOUT: std::sync::OnceLock<RowLayout> = std::sync::OnceLock::new();
+    LAYOUT.get_or_init(row_layout)
+}
+
 /// Complete, self-contained single-core verifier for Peel-Binius-Shielded proofs.
 pub fn verify(stmt: &PaymentStatement, proof: &BiniusProof) -> Result<(), String> {
     if proof.v_prox_coeffs.len() != DEG_BOUND || proof.v_open_coeffs.len() != DEG_BOUND {
         return Err("invalid v_prox/v_open degree bound".into());
     }
     let kt = k_tables();
-    let layout = row_layout();
+    let layout = verifier_row_layout();
     let stmt_bytes = encode_statement(stmt);
 
     // 1. Transcript init & Round-2 single-element alpha
@@ -1901,7 +1907,7 @@ pub fn verify(stmt: &PaymentStatement, proof: &BiniusProof) -> Result<(), String
     let mut v_open_h = proof.v_open_coeffs[..K_COLS].to_vec();
     kt.antt_forward_h_e(&mut v_open_h);
     let ip_lhs = eval_verifier_ip_lhs(
-        &layout, &r1, tau, &gammas, &w_rs, eta1, eta2, eta3, &r_row_p, &v_open_h, kt,
+        layout, &r1, tau, &gammas, &w_rs, eta1, eta2, eta3, &r_row_p, &v_open_h, kt,
     );
     let ip_rhs = proof.b_eval.add(lambda_o.mul(claim2, kt));
     if ip_lhs != ip_rhs {
@@ -2023,6 +2029,18 @@ mod tests {
         coin_commit, nullifier, owner_addr, MerkleTree24, BLIND_SECRET_BYTES, OWNER_SECRET_BYTES,
     };
     use std::time::Instant;
+
+    #[test]
+    fn published_hop_pins_circuit_and_initial_transcript() {
+        use crate::circuit::{ACTIVE_ROWS, NUM_PERMS};
+        assert_eq!((NUM_PERMS, ACTIVE_ROWS, V_SC1, V_SC2), (56, 447_014, 19, 8));
+        assert_eq!((N_CODE, K_COLS, NUM_QUERIES, POW_BITS), (2_097_152, 512, 52, 20));
+        let raw = include_bytes!("../../payments/tx_hop1.bin");
+        let tx = crate::wire::ShieldedTx::from_bytes(raw).unwrap();
+        let p = &tx.proof;
+        let tr = Transcript::new(&encode_statement(&tx.statement()), &p.merkle_root, p.s_g1, p.s_mask2);
+        assert_eq!(hex::encode(tr.state), "3fb3d4b61f98b82590368950ada67e715181164c38fc8333072458ebe2f10662dcdf97de319e809b9ca0928aa06e74f7b5f4d0086f802ceebea242706618c486");
+    }
 
     #[test]
     fn test_binius_shielded_prove_verify_roundtrip() {

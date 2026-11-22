@@ -51,6 +51,16 @@ pub struct ShieldedTx {
 }
 
 impl ShieldedTx {
+    pub fn check_public_flows(&self) -> Result<(), String> {
+        if self.v_mint > 0 && self.v_unshield > 0 {
+            return Err("Rule R5 violation: v_mint and v_unshield cannot both be non-zero".into());
+        }
+        if self.fee.checked_add(self.v_unshield).is_none() {
+            return Err("Rule R5 violation: fee + v_unshield overflows u64".into());
+        }
+        Ok(())
+    }
+
     pub fn compute_tx_ctx(
         anchor: &[u8; NODE_BYTES],
         v_mint: u64,

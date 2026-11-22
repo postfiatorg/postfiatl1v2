@@ -49,7 +49,7 @@ const (
 	OffDir1     = 4314
 	TotalPriv   = 4338
 	PrivRows    = (TotalPriv + 4) / 5
-	ActiveRows  = RowPrivBase + PrivRows // 446949
+	ActiveRows  = RowPrivBase + PrivRows // 447014
 )
 
 var KeccakRC = [24]uint64{

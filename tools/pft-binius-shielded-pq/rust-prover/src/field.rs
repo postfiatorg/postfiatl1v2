@@ -751,6 +751,7 @@ fn reduce_poly16_31(mut w: u64) -> u16 {
     ((w & 0xFFFF) ^ h3 ^ (h3 << 1) ^ (h3 << 3) ^ (h3 << 5)) as u16
 }
 
+#[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
 #[inline(always)]
 fn reduce_poly16_42(mut w: u64) -> u16 {
     let h1 = w >> 32;

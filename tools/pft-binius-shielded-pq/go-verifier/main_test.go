@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"os"
 	"testing"
 )
@@ -170,5 +171,25 @@ func TestGoIndependentVerificationAndAdversarialControls(t *testing.T) {
 	withTrail := append(append([]byte{}, raw...), 0x00)
 	if _, err := parseShieldedTx(withTrail); err == nil {
 		t.Fatal("trailing bytes tx accepted")
+	}
+}
+
+func TestPublishedHopPinsCircuitAndInitialTranscript(t *testing.T) {
+	if [8]int{NumPerms, ActiveRows, VSC1, VSC2, NCode, KCols, NumQueries, PowBits} !=
+		[8]int{56, 447014, 19, 8, 2097152, 512, 52, 20} {
+		t.Fatal("PFSH02 circuit parameters changed")
+	}
+	raw, err := os.ReadFile("../payments/tx_hop1.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := parseShieldedTx(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := tx.Proof
+	tr := newTranscript(encodeStatement(tx.statement()), &p.MerkleRoot, p.SG1, p.SMask2)
+	if hex.EncodeToString(tr.state[:]) != "3fb3d4b61f98b82590368950ada67e715181164c38fc8333072458ebe2f10662dcdf97de319e809b9ca0928aa06e74f7b5f4d0086f802ceebea242706618c486" {
+		t.Fatal("PFSH02 initial transcript changed")
 	}
 }

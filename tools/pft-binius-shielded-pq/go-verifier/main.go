@@ -347,6 +347,7 @@ func main() {
 	txPath := fs.String("tx", "", "tx binary path")
 	ledgerPath := fs.String("ledger", "", "ledger json path")
 	boundaryPath := fs.String("boundary-mint", "", "full-tree benchmark boundary mint")
+	postRoot := fs.Bool("post-root", false, "print the root after appending both verified outputs")
 	trials := fs.Int("trials", 50, "benchmark trials")
 	outPath := fs.String("out", "", "output json path")
 	fs.Parse(os.Args[2:])
@@ -376,6 +377,11 @@ func main() {
 		ms := float64(time.Since(t0).Nanoseconds()) / 1e6
 		fmt.Printf("GO VERIFY PASS (pclmul=%v): %s (%d B <= %d B budget) in %.2f ms\n",
 			usePCLMUL, *txPath, len(raw), BudgetBytes, ms)
+
+		if *postRoot {
+			active := ls.Coins[len(ls.Coins)/MaxPoolCoins*MaxPoolCoins:]
+			fmt.Printf("post-root %x\n", computeMerkle24Root(append(active, tx.CoinOut0, tx.CoinOut1)))
+		}
 
 	case "full-tree":
 		if err := verifyFullTree(*txPath, *boundaryPath); err != nil {
