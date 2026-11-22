@@ -71,8 +71,8 @@ It has eight milestones, each tested and merged on its own:
 | Milestone | Delivers | Status |
 | --- | --- | --- |
 | M1 | A local validator verifies and finalizes a real PFSH02 payment | Done 22 Nov: six validators finalize and replay the sample payment; 21.5 to 34.3 ms inside the validator |
-| M2 | The on-chain transaction format, frozen with test vectors in Rust and Go | Next |
-| M3 | The pool's own ledger state: note trees, nullifiers, root history, tree rollover | Planned |
+| M2 | The on-chain transaction format, frozen with test vectors in Rust and Go | Done 22 Nov: 8 byte-exact payment vectors (PFT, pfUSDC, deposits, payments, exits); largest stored payment 146,546 of 149,130 bytes; validators check the proof and deposit signature before voting |
+| M3 | The pool's own ledger state: note trees, nullifiers, root history, tree rollover | Next |
 | M4 | Deposits signed by the account's ML-DSA-65 key, payments and exits, for PFT and pfUSDC | Planned |
 | M5 | Activation height, per-block verification limits, every public submission path | Planned |
 | M6 | A wallet that scans for its notes, recovers from backup and pays from the command line | Planned |
