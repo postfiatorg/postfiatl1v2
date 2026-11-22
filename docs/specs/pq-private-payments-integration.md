@@ -148,13 +148,13 @@ is shorter than the calculated maximum.
 
 ## M3. Commit an isolated pool and make old notes spendable after rollover · 6–10 days
 
-- [ ] Add optional PQ state alongside `ShieldedState.orchard` in
+- [x] Add optional PQ state alongside `ShieldedState.orchard` in
   `crates/types/src/shielded_bridge_governance.rs`. Define records in `crates/types/src/pq_payment.rs` and
   transition code in new `crates/node/src/pq_pool_state.rs`. Production starts empty. Only an accepted PQ
   proof transition can write leaves. The spec's SHAKE256 binary depth-24 tree uses 48-byte nodes, empty leaf
   zero, and recursively hashed empty subtrees. Maintain count, frontier and indexed nodes per (asset, epoch).
   Compare incremental appends and wallet witness paths with the reference tree.
-- [ ] Implement R1–R6 against the ordered execution view. Check a retained anchor of the selected tree, two
+- [x] Implement R1–R6 against the ordered execution view. Check a retained anchor of the selected tree, two
   distinct fresh nullifiers, two distinct fresh nonzero commitments, valid public flows with checked fee plus
   exit, valid proof and room for **two** leaves. Record both nullifiers including dummy serials. Index
   nullifiers and commitment uniqueness across the entire PQ pool and all epochs. Append outputs in wire order
@@ -162,7 +162,7 @@ is shorter than the calculated maximum.
   commitment and exact ciphertext. Track checked per-asset live reserve and ingress, exit and fee totals. Use
   a transactional delta for the pair, indexes, reserve and account writes. Compute receipt and all fallible
   checks before publication.
-- [ ] Retain a consensus window of 256 roots per active tree, counting the opening root until evicted. Freeze
+- [x] Retain a consensus window of 256 roots per active tree, counting the opening root until evicted. Freeze
   the retained window at epoch close and keep at least its terminal root spendable indefinitely. Keep history
   needed for wallet witnesses available through archival pages. This Dual-Anchor rollover window is fixed by
   consensus, independently of the node's RPC snapshot cache. At exactly 16,777,216 leaves freeze the tree and open an empty successor
@@ -171,7 +171,7 @@ is shorter than the calculated maximum.
   one-real/one-dummy self-payment from the old epoch, waits for finality, then spends in the new tree. Two
   independently specified input anchors require a future wire/circuit version. Rollover never resets serials,
   reserve or commitment uniqueness.
-- [ ] Update both replicated root paths, the exhaustive state inventory and `append_shielded_state` in
+- [x] Update both replicated root paths, the exhaustive state inventory and `append_shielded_state` in
   `crates/node/src/state_commitment.rs`. Commit tagged, length-delimited per-tree frontier/count, ordered
   retained roots and epochs, sets/index roots, output records including ciphertext digest, reserves and
   cumulative flows. Derive indexes deterministically, sort unordered keys and avoid full-history copying or
@@ -180,7 +180,7 @@ is shorter than the calculated maximum.
   staging, rebuild/check derived indexes and roots against a certified snapshot point before publishing. An
   absent PQ section is valid for pre-activation history. Never accept arbitrary JSON anchors, occupancy
   overrides or post-activation missing data.
-- [ ] **Merge test.** Add `crates/node/src/tests/pq_pool_state.rs` and extend `tests/snapshot_deployment.rs`
+- [x] **Merge test.** Add `crates/node/src/tests/pq_pool_state.rs` and extend `tests/snapshot_deployment.rs`
   under the same node source directory. Cover root eviction and exact window edge, duplicate and zero outputs,
   intra/inter-block conflicting spends, old-root spends after two rollovers, a pair at capacity and the next
   pair, rejection of mixed-epoch inputs, and global replay after rollover. Use a checked near-full frontier
@@ -188,6 +188,16 @@ is shorter than the calculated maximum.
   with identical receipts, roots, serials, output order and reserves. Corrupt each committed component
   individually. Replay an exact pre-upgrade archived chain through its recorded tip and compare block hashes
   and state roots byte for byte.
+
+The node verifies proofs and prepares the account delta in `pq_pool_state.rs`. Execution and cold storage
+recovery share the deterministic pair transition in `crates/types/src/pq_tree.rs`. Immutable pair pages
+retain the ciphertexts and supply the inputs for rebuilding the wallet indexes. The six-validator merge test
+settled a funded native deposit and spend on the pinned disposable genesis. Governed pfUSDC account settlement
+remains in M4. Both assets were exercised in the pool tests.
+
+Rust and Go independently built two full depth-24 trees. The node test used their checked near-full frontiers
+to exercise rollover and spend an epoch-0 note in epoch 2. Journal recovery, signed snapshot restore and genesis
+replay agreed at the certified tip. The exact R64 replay matched all 1,734 archived block hashes and state roots.
 
 ## M4. Settle deposits, transfers and exits for both assets · 5–9 days
 
