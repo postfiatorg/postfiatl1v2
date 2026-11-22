@@ -89,6 +89,11 @@ impl Terms {
         h.finalize().into()
     }
 
+    /// R0-Auth for the fixed PFT account namespace and L1 profile. The raw
+    /// header digest binds mint, exit, inner fee, commitments and envelopes.
+    /// The length-framed context binds the account key, next sequence, public
+    /// PFT fee, issue, chain and epoch. Neither digest includes proof bytes,
+    /// a signature or an archive/transaction ID. Keep the M2 vectors stable.
     pub fn signing_message(&self, chain: Chain, raw: [u8; 48]) -> Option<Vec<u8>> {
         let account = self.account.as_ref()?;
         let mut out = if self.mode == Mode::Shield {

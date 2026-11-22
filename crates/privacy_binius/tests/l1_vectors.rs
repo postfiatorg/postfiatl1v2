@@ -205,3 +205,29 @@ fn changing_unsigned_terms_invalidates_the_proof_even_after_resigning() {
         );
     }
 }
+
+#[test]
+fn shield_authorization_is_independent_of_proof_signature_and_body_id() {
+    use pft_binius_shielded::wire::ShieldedTx;
+    fn preimage(p: &PqPayment) -> Vec<u8> {
+        let (terms, _, body) = p.parts().unwrap();
+        let raw = ShieldedTx::from_l1_inner(body).unwrap().statement().tx_ctx;
+        terms.signing_message(chain(), raw).unwrap()
+    }
+    let original = vector("pft-shield");
+    let (terms, sig, inner) = original.parts().unwrap();
+    let msg = preimage(&original);
+    assert!(msg.starts_with(b"PFT-SH-MINT-AUTH-V2"));
+    let mut new_sig = *sig.unwrap();
+    new_sig[0] ^= 1;
+    let resigned = PqPayment::encode(&terms, Some(&new_sig), inner).unwrap();
+    let mut changed_proof = inner.to_vec();
+    *changed_proof.last_mut().unwrap() ^= 1;
+    let reproved = PqPayment::encode(&terms, sig, &changed_proof).unwrap();
+    for changed in [resigned, reproved] {
+        assert_ne!(changed.digest(), original.digest());
+        assert_eq!(preimage(&changed), msg);
+        assert!(verify_l1(&changed, chain()).is_err());
+    }
+    assert!(preimage(&vector("pfusdc-pay")).starts_with(b"PFT-SH-FEE-AUTH-V1"));
+}
