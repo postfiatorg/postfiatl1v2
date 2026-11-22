@@ -1,5 +1,3 @@
-// Independent Go 1.25.1 Settlement Verifier for Peel-Binius-Shielded (ZERO external dependencies!).
-// Uses ONLY Go 1.25.1 standard library (crypto/sha512, crypto/sha3) + 60-line Plan 9 amd64 PCLMULQDQ.
 package main
 
 import (
@@ -14,6 +12,8 @@ import (
 	"os"
 	"sort"
 	"time"
+
+	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
 )
 
 const (
@@ -40,6 +40,7 @@ type ShieldedTx struct {
 	CoinOut1     [CoinBytes]byte
 	Env0         [EnvBytes]byte
 	Env1         [EnvBytes]byte
+	MintAuth     *MintAuth
 	Proof        *BiniusProof
 }
 
@@ -78,12 +79,15 @@ func (tx *ShieldedTx) statement() *PaymentStatement {
 }
 
 func parseShieldedTx(data []byte) (*ShieldedTx, error) {
+	if len(data) > BudgetBytes {
+		return nil, errors.New("shielded tx exceeds archival budget")
+	}
 	if len(data) < HeaderBytes {
 		return nil, errors.New("truncated shielded tx header")
 	}
 	pos := 0
 	take := func(n int) ([]byte, error) {
-		if pos+n > len(data) {
+		if n < 0 || n > len(data)-pos {
 			return nil, errors.New("truncated shielded tx")
 		}
 		s := data[pos : pos+n]
@@ -128,6 +132,17 @@ func parseShieldedTx(data []byte) (*ShieldedTx, error) {
 	if err != nil {
 		return nil, err
 	}
+	if tx.VMint > 0 {
+		rawKey, err := take(mldsa65.PublicKeySize)
+		if err != nil {
+			return nil, err
+		}
+		signature, err := take(mldsa65.SignatureSize)
+		if err != nil {
+			return nil, err
+		}
+		tx.MintAuth = &MintAuth{PublicKey: [mldsa65.PublicKeySize]byte(rawKey), Signature: [mldsa65.SignatureSize]byte(signature)}
+	}
 	if pos != len(data) {
 		return nil, errors.New("trailing bytes in shielded tx")
 	}
@@ -158,20 +173,20 @@ func computeMerkle24Root(leaves [][CoinBytes]byte) [NodeBytes]byte {
 	if len(leaves) == 0 {
 		return empty[MerkleDepth]
 	}
-	cur := make([][NodeBytes]byte, len(leaves))
-	copy(cur, leaves)
+	// Preserve the leaves. After the first reduction, parents overwrite their
+	// already-consumed children, so all remaining levels share one allocation.
+	cur := leaves
+	parents := make([][NodeBytes]byte, (len(leaves)+1)/2)
 	for lvl := 0; lvl < MerkleDepth; lvl++ {
-		nNext := (len(cur) + 1) / 2
-		next := make([][NodeBytes]byte, nNext)
-		for i := 0; i < nNext; i++ {
-			left := cur[2*i]
+		parents = parents[:(len(cur)+1)/2]
+		for i := range parents {
 			right := empty[lvl]
 			if 2*i+1 < len(cur) {
 				right = cur[2*i+1]
 			}
-			next[i] = shake256Node(&left, &right)
+			parents[i] = shake256Node(&cur[2*i], &right)
 		}
-		cur = next
+		cur = parents
 	}
 	return cur[0]
 }
@@ -195,7 +210,7 @@ func (ls *LedgerState) effectiveLeafCount() int {
 	if ls.LeafCountOverride != nil {
 		return *ls.LeafCountOverride
 	}
-	return len(ls.Coins)
+	return len(ls.Coins) % MaxPoolCoins
 }
 
 func loadLedger(path string) (*LedgerState, error) {
@@ -221,6 +236,9 @@ func loadLedger(path string) (*LedgerState, error) {
 		}
 		var c [CoinBytes]byte
 		copy(c[:], b)
+		if c == ([CoinBytes]byte{}) || ls.CoinSet[c] {
+			return nil, errors.New("invalid or duplicate snapshot commitment")
+		}
 		ls.Coins = append(ls.Coins, c)
 		ls.CoinSet[c] = true
 	}
@@ -233,9 +251,18 @@ func loadLedger(path string) (*LedgerState, error) {
 		copy(a[:], b)
 		ls.Anchors[a] = true
 	}
-	computedRoot := computeMerkle24Root(ls.Coins)
-	if !ls.Anchors[computedRoot] {
+	active := ls.Coins
+	for len(active) >= MaxPoolCoins {
+		if !ls.Anchors[computeMerkle24Root(active[:MaxPoolCoins])] {
+			return nil, errors.New("ledger anchors missing frozen epoch root")
+		}
+		active = active[MaxPoolCoins:]
+	}
+	if !ls.Anchors[computeMerkle24Root(active)] {
 		return nil, errors.New("ledger anchors missing independently recomputed Depth-24 Merkle root")
+	}
+	if n := ls.LeafCountOverride; n != nil && (*n < len(active) || *n > MaxPoolCoins) {
+		return nil, errors.New("invalid simulated active leaf count")
 	}
 	for _, h := range lj.SpentSN {
 		b, err := hex.DecodeString(h)
@@ -251,7 +278,7 @@ func loadLedger(path string) (*LedgerState, error) {
 
 func verifyFullSettlement(ls *LedgerState, tx *ShieldedTx) error {
 	// Rule R6: strict Depth-24 pool capacity guard (|Coins| + 2 <= 2^24)
-	if ls.effectiveLeafCount()+2 > MaxPoolCoins {
+	if ls.effectiveLeafCount() > MaxPoolCoins-2 {
 		return errors.New("Rule R6 violation: Depth-24 Merkle pool capacity 2^24 exceeded")
 	}
 	// Rule R1: anchor membership
@@ -287,7 +314,11 @@ func verifyFullSettlement(ls *LedgerState, tx *ShieldedTx) error {
 	if tx.Fee > ^uint64(0)-tx.VUnshield {
 		return errors.New("Rule R5 violation: fee + v_unshield overflows u64")
 	}
-	return verifyBiniusProof(tx.statement(), tx.Proof)
+	stmt := tx.statement()
+	if (tx.VMint > 0) != (tx.MintAuth != nil) || (tx.MintAuth != nil && !tx.MintAuth.verify(stmt.TxCtx)) {
+		return errors.New("R0-Auth: invalid mint authorization")
+	}
+	return verifyBiniusProof(stmt, tx.Proof)
 }
 
 type IrConstraintJson struct {
@@ -308,13 +339,14 @@ type IrDumpJson struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: binius-shielded-verifier <verify|bench|dump-ir> ...")
+		fmt.Fprintln(os.Stderr, "Usage: binius-shielded-verifier <verify|bench|full-tree|dump-ir> ...")
 		os.Exit(1)
 	}
 	cmd := os.Args[1]
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	txPath := fs.String("tx", "", "tx binary path")
 	ledgerPath := fs.String("ledger", "", "ledger json path")
+	boundaryPath := fs.String("boundary-mint", "", "full-tree benchmark boundary mint")
 	trials := fs.Int("trials", 50, "benchmark trials")
 	outPath := fs.String("out", "", "output json path")
 	fs.Parse(os.Args[2:])
@@ -331,12 +363,12 @@ func main() {
 			fmt.Fprintln(os.Stderr, "ERROR:", err)
 			os.Exit(1)
 		}
+		t0 := time.Now()
 		tx, err := parseShieldedTx(raw)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR:", err)
 			os.Exit(1)
 		}
-		t0 := time.Now()
 		if err := verifyFullSettlement(ls, tx); err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR:", err)
 			os.Exit(1)
@@ -344,6 +376,12 @@ func main() {
 		ms := float64(time.Since(t0).Nanoseconds()) / 1e6
 		fmt.Printf("GO VERIFY PASS (pclmul=%v): %s (%d B <= %d B budget) in %.2f ms\n",
 			usePCLMUL, *txPath, len(raw), BudgetBytes, ms)
+
+	case "full-tree":
+		if err := verifyFullTree(*txPath, *boundaryPath); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR:", err)
+			os.Exit(1)
+		}
 
 	case "bench":
 		raw, err := os.ReadFile(*txPath)

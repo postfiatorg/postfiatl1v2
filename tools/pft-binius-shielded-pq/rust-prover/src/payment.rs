@@ -1,11 +1,13 @@
 //! 0-Round Non-Interactive Shielded Payment Protocol ("Peel-Binius-Shielded")
 //! with Depth-24 Global Merkle Accumulator (16,777,216 coins), Native `is_dummy` 1-Input Spends,
-//! and FIPS-203 ML-KEM-1024 + SHA-384 + AES-256-GCM Stealth Receive.
+//! and FIPS-203 ML-KEM-1024 + HMAC-SHA-384 + AES-256-GCM Stealth Receive.
 //!
 //! On-chain transaction footprint matches Zcash Orchard:
 //!   (magic[8], anchor[48], fee[8], sn0[48], sn1[48], coin0[48], coin1[48], env0[1670], env1[1670], proof)
-//! ZERO on-chain signatures, ZERO on-chain recipient addresses, ZERO interactive receive rounds!
+//! Positive mints append a fixed ML-DSA-65 public key and signature after the proof.
 
+use crate::mint_auth::MintAuth;
+use fips204::ml_dsa_65;
 use crate::binius_pcs::{prove, verify, BiniusProof};
 use crate::circuit::{build_witness_bits, PaymentStatement, PaymentWitness};
 use crate::shake256::{
@@ -16,6 +18,7 @@ use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
 use fips203::ml_kem_1024;
 use fips203::traits::{Decaps, Encaps, KeyGen, SerDes};
+use hmac::{Hmac, Mac};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha384};
@@ -117,29 +120,21 @@ impl ShieldedWallet {
 }
 
 /// Derive AES-256-GCM key (32 B) and nonce (12 B) from ML-KEM-1024 shared secret,
-/// ciphertext, and coin commitment using NIST FIPS 180-4 SHA-384.
+/// ciphertext, and coin commitment using HMAC-SHA-384 with distinct versioned labels.
 pub fn derive_aead_key_nonce(
     ss: &[u8; 32],
     ct_kem: &[u8; KEM_CT_BYTES],
     coin: &[u8; COIN_BYTES],
 ) -> ([u8; 32], [u8; 12]) {
-    let mut hk = Sha384::new();
-    hk.update(b"PFT-SH-KEM-KEY-V1");
-    hk.update(ss);
-    hk.update(ct_kem);
-    hk.update(coin);
-    let dk = hk.finalize();
-    let mut key = [0u8; 32];
-    key.copy_from_slice(&dk[..32]);
-
-    let mut hn = Sha384::new();
-    hn.update(b"PFT-SH-KEM-NONCE-V1");
-    hn.update(ss);
-    hn.update(ct_kem);
-    hn.update(coin);
-    let dn = hn.finalize();
-    let mut nonce = [0u8; 12];
-    nonce.copy_from_slice(&dn[..12]);
+    let derive = |label: &[u8]| {
+        let mut mac = <Hmac<Sha384> as Mac>::new_from_slice(ss).expect("HMAC accepts a 32-byte key");
+        mac.update(label);
+        mac.update(ct_kem);
+        mac.update(coin);
+        mac.finalize().into_bytes()
+    };
+    let key = derive(b"PFT-SH-KEM-KEY-V2")[..32].try_into().unwrap();
+    let nonce = derive(b"PFT-SH-KEM-NONCE-V2")[..12].try_into().unwrap();
     (key, nonce)
 }
 
@@ -193,6 +188,7 @@ pub struct ShieldedTx {
     pub env0: [u8; ENV_BYTES],
     pub env1: [u8; ENV_BYTES],
     pub proof: BiniusProof,
+    pub mint_auth: Option<Box<MintAuth>>,
 }
 
 impl ShieldedTx {
@@ -272,16 +268,23 @@ impl ShieldedTx {
         out.extend_from_slice(&self.env1);
         out.extend_from_slice(&(proof_bytes.len() as u32).to_le_bytes());
         out.extend_from_slice(&proof_bytes);
+        if let Some(auth) = &self.mint_auth {
+            out.extend_from_slice(&auth.public_key);
+            out.extend_from_slice(&auth.signature);
+        }
         out
     }
 
     pub fn from_bytes(data: &[u8]) -> Result<Self, String> {
+        if data.len() > W1_ARCHIVAL_BUDGET_BYTES {
+            return Err("shielded tx exceeds archival budget".into());
+        }
         if data.len() < HEADER_OVERHEAD_BYTES {
             return Err("truncated shielded tx header".into());
         }
         let mut pos = 0usize;
         let take = |pos: &mut usize, n: usize| -> Result<&[u8], String> {
-            if *pos + n > data.len() {
+            if n > data.len() - *pos {
                 return Err("truncated shielded tx".into());
             }
             let s = &data[*pos..*pos + n];
@@ -305,6 +308,14 @@ impl ShieldedTx {
         let env1: [u8; ENV_BYTES] = take(&mut pos, ENV_BYTES)?.try_into().unwrap();
         let proof_len = u32::from_le_bytes(take(&mut pos, 4)?.try_into().unwrap()) as usize;
         let proof_bytes = take(&mut pos, proof_len)?;
+        let mint_auth = if v_mint > 0 {
+            Some(Box::new(MintAuth {
+                public_key: take(&mut pos, ml_dsa_65::PK_LEN)?.try_into().unwrap(),
+                signature: take(&mut pos, ml_dsa_65::SIG_LEN)?.try_into().unwrap(),
+            }))
+        } else {
+            None
+        };
         if pos != data.len() {
             return Err("trailing bytes in shielded tx".into());
         }
@@ -322,6 +333,7 @@ impl ShieldedTx {
             env0,
             env1,
             proof,
+            mint_auth,
         })
     }
 }
@@ -353,10 +365,14 @@ pub fn create_shielded_tx(
     v_unshield: u64,
     unshield_dest: [u8; UNSHIELD_DEST_BYTES],
     fee: u64,
+    depositor: Option<&ml_dsa_65::PrivateKey>,
     rng: &mut impl RngCore,
 ) -> Result<(ShieldedTx, [u8; BLIND_SECRET_BYTES], [u8; BLIND_SECRET_BYTES]), String> {
     if v_mint > 0 && v_unshield > 0 {
         return Err("Rule R5 violation: v_mint and v_unshield are mutually exclusive".into());
+    }
+    if depositor.is_some() != (v_mint > 0) {
+        return Err("R0-Auth: depositor key required exactly for positive mint".into());
     }
     let pub_exit = fee
         .checked_add(v_unshield)
@@ -451,6 +467,7 @@ pub fn create_shielded_tx(
         &env1,
     );
 
+    let mint_auth = depositor.map(|key| MintAuth::sign(key, &tx_ctx)).transpose()?;
     let stmt = PaymentStatement {
         anchor,
         sn0,
@@ -499,6 +516,7 @@ pub fn create_shielded_tx(
         env0,
         env1,
         proof,
+        mint_auth: mint_auth.map(Box::new),
     };
     Ok((tx, r_out0, r_out1))
 }
@@ -515,7 +533,9 @@ pub struct LedgerJson {
 
 #[derive(Clone)]
 pub struct LedgerState {
+    /// Active append tree. Frozen epochs retain paths for single-anchor spends.
     pub tree: MerkleTree24,
+    frozen: Vec<MerkleTree24>,
     pub coin_set: HashSet<[u8; COIN_BYTES]>,
     pub anchors: HashSet<[u8; NODE_BYTES]>,
     pub anchor_list: Vec<[u8; NODE_BYTES]>,
@@ -536,6 +556,7 @@ impl LedgerState {
         anchors.insert(root);
         Self {
             tree,
+            frozen: Vec::new(),
             coin_set: HashSet::new(),
             anchors,
             anchor_list: vec![root],
@@ -552,29 +573,76 @@ impl LedgerState {
         self.leaf_count_override.unwrap_or_else(|| self.tree.len())
     }
 
+    pub fn active_epoch(&self) -> usize {
+        self.frozen.len()
+    }
+
+    /// Resolve a global output index returned by settlement into a witness tree and local index.
+    pub fn locate(&self, index: usize) -> Option<(&MerkleTree24, usize)> {
+        let epoch = index / MAX_POOL_COINS;
+        let tree = if epoch == self.active_epoch() { &self.tree } else { self.frozen.get(epoch)? };
+        let local = index % MAX_POOL_COINS;
+        (local < tree.len()).then_some((tree, local))
+    }
+
+    fn remember_anchor(&mut self, root: [u8; NODE_BYTES]) {
+        if self.anchors.insert(root) {
+            self.anchor_list.push(root);
+        }
+    }
+
+    fn finish_append(&mut self) {
+        self.remember_anchor(self.tree.root());
+        if self.tree.len() == MAX_POOL_COINS {
+            self.frozen.push(std::mem::replace(&mut self.tree, MerkleTree24::new()));
+            self.remember_anchor(self.tree.root());
+        }
+    }
+
+    /// Bootstrap a snapshot from ordered commitments, retaining each epoch's terminal anchor.
+    /// Historical intermediate anchors and nullifiers are restored separately by from_json.
+    pub fn from_coins(coins: impl IntoIterator<Item = Result<[u8; COIN_BYTES], String>>) -> Result<Self, String> {
+        let mut state = Self::new();
+        let iter = coins.into_iter();
+        let size = iter.size_hint().0;
+        state.coin_set.reserve(size);
+        let mut active = Vec::with_capacity(size.min(MAX_POOL_COINS));
+        for coin in iter {
+            let coin = coin?;
+            if coin == [0; COIN_BYTES] || !state.coin_set.insert(coin) {
+                return Err("invalid or duplicate snapshot commitment".into());
+            }
+            active.push(coin);
+            if active.len() == MAX_POOL_COINS {
+                state.tree = MerkleTree24::from_owned_leaves(std::mem::take(&mut active));
+                state.finish_append();
+            }
+        }
+        state.tree = MerkleTree24::from_owned_leaves(active);
+        state.remember_anchor(state.tree.root());
+        Ok(state)
+    }
+
     pub fn mint_coin(&mut self, coin: [u8; COIN_BYTES]) -> Result<usize, String> {
         if coin == [0u8; COIN_BYTES] {
             return Err("Rule R4 violation: zero coin commitment 0^48 forbidden".into());
         }
-        if self.effective_leaf_count() + 1 > MAX_POOL_COINS {
+        if self.effective_leaf_count() >= MAX_POOL_COINS {
             return Err("Rule R6 violation: Depth-24 Merkle pool capacity 2^24 exceeded".into());
         }
         if self.coin_set.contains(&coin) {
             return Err("duplicate coin commitment on mint".into());
         }
-        let idx = self.tree.append(coin);
+        let idx = self.active_epoch() * MAX_POOL_COINS + self.tree.append(coin);
         self.coin_set.insert(coin);
-        let r = self.tree.root();
-        if self.anchors.insert(r) {
-            self.anchor_list.push(r);
-        }
+        self.finish_append();
         Ok(idx)
     }
 
     /// Full stateless + stateful settlement verification enforcing Rules R1-R6 (without mutating state).
     pub fn verify_tx(&self, tx: &ShieldedTx) -> Result<(), String> {
         // Rule R6: strict Depth-24 tree capacity guard (|Coins| + 2 <= 2^24)
-        if self.effective_leaf_count() + 2 > MAX_POOL_COINS {
+        if self.effective_leaf_count() > MAX_POOL_COINS - 2 {
             return Err("Rule R6 violation: Depth-24 Merkle pool capacity 2^24 exceeded".into());
         }
         // Rule R1: anchor membership
@@ -611,6 +679,11 @@ impl LedgerState {
             return Err("Rule R5 violation: fee + v_unshield overflows u64".into());
         }
         let stmt = tx.statement();
+        match (&tx.mint_auth, tx.v_mint) {
+            (None, 0) => (),
+            (Some(auth), amount) if amount > 0 && auth.verify(&stmt.tx_ctx) => (),
+            _ => return Err("R0-Auth: invalid mint authorization".into()),
+        }
         verify(&stmt, &tx.proof)?;
         Ok(())
     }
@@ -622,23 +695,22 @@ impl LedgerState {
         self.spent_sn_list.push(tx.sn0);
         self.spent_sn.insert(tx.sn1);
         self.spent_sn_list.push(tx.sn1);
-        let idx0 = self.tree.append(tx.coin_out0);
+        let epoch_start = self.active_epoch() * MAX_POOL_COINS;
+        let idx0 = epoch_start + self.tree.append(tx.coin_out0);
         self.coin_set.insert(tx.coin_out0);
-        let idx1 = self.tree.append(tx.coin_out1);
+        let idx1 = epoch_start + self.tree.append(tx.coin_out1);
         self.coin_set.insert(tx.coin_out1);
         self.supply_minted += tx.v_mint as u128;
         self.unshielded_acc += tx.v_unshield as u128;
         self.fees_acc += tx.fee as u128;
-        let r = self.tree.root();
-        if self.anchors.insert(r) {
-            self.anchor_list.push(r);
-        }
+        self.finish_append();
         Ok((idx0, idx1))
     }
 
     pub fn to_json(&self) -> LedgerJson {
         LedgerJson {
-            coins: self.tree.leaves.iter().map(hex::encode).collect(),
+            coins: self.frozen.iter().chain(std::iter::once(&self.tree))
+                .flat_map(|tree| &tree.leaves).map(hex::encode).collect(),
             anchors: self.anchor_list.iter().map(hex::encode).collect(),
             spent_sn: self.spent_sn_list.iter().map(hex::encode).collect(),
             leaf_count_override: self.leaf_count_override,
@@ -646,16 +718,16 @@ impl LedgerState {
     }
 
     pub fn from_json(j: &LedgerJson) -> Result<Self, String> {
-        let mut st = Self::new();
+        let mut st = Self::from_coins(j.coins.iter().map(|coin| {
+            let bytes = hex::decode(coin).map_err(|e| format!("bad coin hex: {e}"))?;
+            bytes.try_into().map_err(|_| "bad coin len".into())
+        }))?;
         st.anchors.clear();
         st.anchor_list.clear();
-        st.leaf_count_override = j.leaf_count_override;
-        for c_hex in &j.coins {
-            let bytes = hex::decode(c_hex).map_err(|e| format!("bad coin hex: {e}"))?;
-            let c: [u8; COIN_BYTES] = bytes.try_into().map_err(|_| "bad coin len")?;
-            st.tree.append(c);
-            st.coin_set.insert(c);
+        if j.leaf_count_override.is_some_and(|n| n < st.tree.len() || n > MAX_POOL_COINS) {
+            return Err("invalid simulated active leaf count".into());
         }
+        st.leaf_count_override = j.leaf_count_override;
         for a_hex in &j.anchors {
             let bytes = hex::decode(a_hex).map_err(|e| format!("bad anchor hex: {e}"))?;
             let a: [u8; NODE_BYTES] = bytes.try_into().map_err(|_| "bad anchor len")?;
@@ -664,8 +736,7 @@ impl LedgerState {
             }
         }
         // Verify latest root matches computed tree root!
-        let cur_root = st.tree.root();
-        if !st.anchors.contains(&cur_root) {
+        if !st.frozen.iter().chain(std::iter::once(&st.tree)).all(|t| st.anchors.contains(&t.root())) {
             return Err("ledger JSON anchors do not contain current Depth-24 Merkle root".into());
         }
         for sn_hex in &j.spent_sn {

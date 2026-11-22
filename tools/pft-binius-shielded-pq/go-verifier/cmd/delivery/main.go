@@ -1,10 +1,11 @@
-// Independent Go 1.25.1 stdlib FIPS-203 ML-KEM-1024 + SHA-384 + AES-256-GCM + SHAKE256
+// Independent Go 1.25.1 stdlib FIPS-203 ML-KEM-1024 + HMAC-SHA-384 + AES-256-GCM + SHAKE256
 // 0-round offline stealth receiver scanner (ZERO third-party dependencies!).
 package main
 
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/mlkem"
 	"crypto/sha3"
 	"crypto/sha512"
@@ -37,20 +38,14 @@ func shake48(parts ...[]byte) [48]byte {
 }
 
 func deriveAEADKeyNonce(ss, ctKem, coin []byte) ([]byte, []byte) {
-	hk := sha512.New384()
-	hk.Write([]byte("PFT-SH-KEM-KEY-V1"))
-	hk.Write(ss)
-	hk.Write(ctKem)
-	hk.Write(coin)
-	dk := hk.Sum(nil)
-
-	hn := sha512.New384()
-	hn.Write([]byte("PFT-SH-KEM-NONCE-V1"))
-	hn.Write(ss)
-	hn.Write(ctKem)
-	hn.Write(coin)
-	dn := hn.Sum(nil)
-	return dk[:32], dn[:12]
+	derive := func(label string) []byte {
+		mac := hmac.New(sha512.New384, ss)
+		mac.Write([]byte(label))
+		mac.Write(ctKem)
+		mac.Write(coin)
+		return mac.Sum(nil)
+	}
+	return derive("PFT-SH-KEM-KEY-V2")[:32], derive("PFT-SH-KEM-NONCE-V2")[:12]
 }
 
 func main() {

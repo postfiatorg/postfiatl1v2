@@ -843,10 +843,8 @@ pub fn build_prover_weights(
     (wb, wc, pub_rhs)
 }
 
-/// Build ONLY the non-C2 Group C constraints `(C1 [1536], C3+C4+C5 [3778])` for fast verifier
-/// weight evaluation (zero heap allocations for the 36,864 C2 constraints!).
-fn build_group_c_non_c2_constraints(stmt: &PaymentStatement) -> (Vec<ScalarConstraint>, Vec<ScalarConstraint>) {
-    let mut c1 = Vec::with_capacity(1536);
+/// Remaining scalar constraints after factoring C1 and C2 in the verifier.
+fn group_c3_to_c5(stmt: &PaymentStatement) -> Vec<ScalarConstraint> {
     let mut rest = Vec::with_capacity(3800);
     let perm_out_term = |perm: usize, bit_idx: usize| -> ((u8, u32), (u8, u32), u8) {
         let lane = bit_idx / 64;
@@ -857,17 +855,6 @@ fn build_group_c_non_c2_constraints(stmt: &PaymentStatement) -> (Vec<ScalarConst
         let rc = if x == 0 && y == 0 { ((KECCAK_RC[23] >> z) & 1) as u8 } else { 0 };
         ((x as u8, row), (x as u8, row), rc)
     };
-    for (perm, target) in [
-        (2usize, &stmt.sn0[..]),
-        (5, &stmt.sn1[..]),
-        (6, &stmt.coin_out0[..]),
-        (7, &stmt.coin_out1[..]),
-    ] {
-        for b in 0..384 {
-            let (lt, qt, rc) = perm_out_term(perm, b);
-            c1.push(ScalarConstraint { lin: vec![lt], quad: vec![qt], rhs: get_byte_bit(target, b) ^ rc });
-        }
-    }
     for input_b in 0..2 {
         let (dx, dr) = priv_loc(if input_b == 0 { OFF_IS_DUMMY0 } else { OFF_IS_DUMMY1 });
         let d_term = (dx as u8, dr as u32);
@@ -964,7 +951,7 @@ fn build_group_c_non_c2_constraints(stmt: &PaymentStatement) -> (Vec<ScalarConst
         quad: vec![],
         rhs: 0,
     });
-    (c1, rest)
+    rest
 }
 
 /// Ultra-fast factored verifier MLE evaluation of `(W_B[0..5](r1), W_C[0..5](r1), pub_rhs)` at `r1 in E^19`.
@@ -1006,15 +993,21 @@ pub fn eval_verifier_weights_at_r1(
     let mut sum_next_y = [E::ZERO; 5];
     let mut sum_curr_y = [E::ZERO; 5];
     let mut rc_acc = [E::ZERO; 64];
+    // Interior Keccak rows belong to two consecutive transitions. Their
+    // current-round contribution is their next-round contribution times stride.
+    let mut interior = [E::ZERO; 5];
     for p in 0..NUM_PERMS {
+        let first = keccak_row(p, 0, 0, 0) >> 6;
+        for y in 0..5 {
+            sum_curr_y[y].add_assign(cur_scale.mul(eq_hi[first + y], kt));
+        }
         for r in 0..23 {
             let s = cur_scale;
             cur_scale = cur_scale.mul(stride, kt);
-            let hi_next = (p * 7680 + (r + 1) * 320) >> 6;
-            let hi_curr = (p * 7680 + r * 320) >> 6;
+            let hi_next = keccak_row(p, r + 1, 0, 0) >> 6;
+            let target = if r == 22 { &mut sum_next_y } else { &mut interior };
             for y in 0..5 {
-                sum_next_y[y].add_assign(s.mul(eq_hi[hi_next + y], kt));
-                sum_curr_y[y].add_assign(s.mul(eq_hi[hi_curr + y], kt));
+                target[y].add_assign(s.mul(eq_hi[hi_next + y], kt));
             }
             let rc = KECCAK_RC[r];
             for z in 0..64 {
@@ -1023,6 +1016,10 @@ pub fn eval_verifier_weights_at_r1(
                 }
             }
         }
+    }
+    for y in 0..5 {
+        sum_next_y[y].add_assign(interior[y]);
+        sum_curr_y[y].add_assign(interior[y].mul(stride, kt));
     }
     for x in 0..5 {
         for y in 0..5 {
@@ -1197,23 +1194,35 @@ pub fn eval_verifier_weights_at_r1(
     }
 
     // Group C: [C1 (1536), C2 (36864 factored!), C3 (384), C4 (2304), C5 (1090)]
-    let (c1_cs, rest_cs) = build_group_c_non_c2_constraints(stmt);
+    let rest_cs = group_c3_to_c5(stmt);
     let mut w = cur_scale;
 
-    // C1 (0..1536)
-    for c in &c1_cs {
-        for &(x, row) in &c.lin {
-            let r = row as usize;
-            b_lo[x as usize][r & 63].add_assign(w.mul(eq_hi[r >> 6], kt));
+    // Every public output lane uses the same 64 low-row equality weights.
+    let mut powers = [E::ZERO; 64];
+    let mut dot = E::ZERO;
+    let mut lane_stride = E::one();
+    for z in 0..64 {
+        powers[z] = lane_stride;
+        dot.add_assign(lane_stride.mul(eq_lo[z], kt));
+        lane_stride = lane_stride.mul(ch.alpha, kt);
+    }
+    for (perm, output) in [(2, &stmt.sn0), (5, &stmt.sn1), (6, &stmt.coin_out0), (7, &stmt.coin_out1)] {
+        for (lane, bytes) in output.chunks_exact(8).enumerate() {
+            let x = lane % 5;
+            let hi = keccak_row(perm, 23, lane / 5, 0) >> 6;
+            let term = dot.mul(w, kt).mul(eq_hi[hi], kt);
+            wb_eval[x].add_assign(term);
+            wc_eval[x].add_assign(term);
+            let mut bits = u64::from_le_bytes(bytes.try_into().unwrap());
+            if lane == 0 { bits ^= KECCAK_RC[23]; }
+            let mut rhs = E::ZERO;
+            while bits != 0 {
+                rhs.add_assign(powers[bits.trailing_zeros() as usize]);
+                bits &= bits - 1;
+            }
+            pub_rhs.add_assign(w.mul(rhs, kt));
+            w = w.mul(lane_stride, kt);
         }
-        for &(x, row) in &c.quad {
-            let r = row as usize;
-            c_lo[x as usize][r & 63].add_assign(w.mul(eq_hi[r >> 6], kt));
-        }
-        if c.rhs != 0 {
-            pub_rhs.add_assign(w);
-        }
-        w = w.mul(ch.alpha, kt);
     }
 
     // C2 (1536 .. 1536 + 36864): Factored across all 48 Merkle levels!

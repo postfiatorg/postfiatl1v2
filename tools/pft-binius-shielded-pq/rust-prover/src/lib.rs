@@ -3,3 +3,4 @@ pub mod circuit;
 pub mod field;
 pub mod payment;
 pub mod shake256;
+pub mod mint_auth;

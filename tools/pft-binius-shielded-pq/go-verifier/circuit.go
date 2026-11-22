@@ -426,7 +426,7 @@ func buildAllGroupCConstraints(stmt *PaymentStatement) []ScalarConstraint {
 	return cs
 }
 
-func buildTRPTablesPow(alpha E, t *KTables) (*[5][320]E, *[5][320]E, E) {
+func buildTRPTablesPow(timesAlpha *RingSwitchLinearMap) (*[5][320]E, *[5][320]E, E) {
 	uNext := new([5][320]E)
 	uCurr := new([5][320]E)
 	w := EOne
@@ -437,7 +437,7 @@ func buildTRPTablesPow(alpha E, t *KTables) (*[5][320]E, *[5][320]E, E) {
 				for _, c := range trpInputBits(nx, ny, nz) {
 					uCurr[c.X][64*c.Y+c.Z].AddAssign(w)
 				}
-				w = w.Mul(alpha, t)
+				w = timesAlpha.applyFast(w)
 			}
 		}
 	}
@@ -452,7 +452,14 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 	var wbEval, wcEval [5]E
 	var pubRHS E
 
-	uNext, uCurr, stride := buildTRPTablesPow(alpha, t)
+	// All powers of this public challenge use the same GF(2)-linear map.
+	// Tabulate its action on the 384 basis bits once per proof.
+	var alphaBasis [384]E
+	for i := range alphaBasis {
+		alphaBasis[i] = EFromBasisVU(i/32, i%32).Mul(alpha, t)
+	}
+	timesAlpha := newRingSwitchLinearMap(alphaBasis[:])
+	uNext, uCurr, stride := buildTRPTablesPow(timesAlpha)
 
 	var unDot, ucDot [5][5]E
 	for x := 0; x < 5; x++ {
@@ -471,15 +478,26 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 	curScale := EOne
 	var sumNextY, sumCurrY [5]E
 	var rcAcc [64]E
+	// The current row of round r+1 is the next row of round r,
+	// weighted by one additional stride. Only the two boundary rows
+	// of each permutation require separate contributions.
+	var overlap [5]E
 	for p := 0; p < NumPerms; p++ {
+		first := (p * 7680) >> 6
+		for y := 0; y < 5; y++ {
+			sumCurrY[y].AddAssign(curScale.Mul(eqHi[first+y], t))
+		}
 		for r := 0; r < 23; r++ {
 			s := curScale
 			curScale = curScale.Mul(stride, t)
-			hiNext := (p*7680 + (r+1)*320) >> 6
-			hiCurr := (p*7680 + r*320) >> 6
+			next := first + (r+1)*5
 			for y := 0; y < 5; y++ {
-				sumNextY[y].AddAssign(s.Mul(eqHi[hiNext+y], t))
-				sumCurrY[y].AddAssign(s.Mul(eqHi[hiCurr+y], t))
+				term := s.Mul(eqHi[next+y], t)
+				if r == 22 {
+					sumNextY[y].AddAssign(term)
+				} else {
+					overlap[y].AddAssign(term)
+				}
 			}
 			rc := KeccakRC[r]
 			for z := 0; z < 64; z++ {
@@ -488,6 +506,10 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 				}
 			}
 		}
+	}
+	for y := 0; y < 5; y++ {
+		sumNextY[y].AddAssign(overlap[y])
+		sumCurrY[y].AddAssign(overlap[y].Mul(stride, t))
 	}
 	for x := 0; x < 5; x++ {
 		for y := 0; y < 5; y++ {
@@ -679,40 +701,36 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 		{6, stmt.CoinOut0[:]},
 		{7, stmt.CoinOut1[:]},
 	}
+	// All six 64-bit lanes use the same low-coordinate weights.
+	// Factor out the first challenge power of each lane.
+	var bitPower [64]E
+	var laneDot E
+	laneStride := EOne
+	for z := range bitPower {
+		bitPower[z] = laneStride
+		laneDot.AddAssign(laneStride.Mul(eqLo[z], t))
+		laneStride = timesAlpha.applyFast(laneStride)
+	}
 	for _, po := range pubOuts {
-		// Factor eqHi per (perm, y in {0,1}): cuts 1,536 E.Mul -> 8 E.Mul!
-		eqY0 := eqHi[keccakRow(po.perm, 23, 0, 0)>>6]
-		eqY1 := eqHi[keccakRow(po.perm, 23, 1, 0)>>6]
-		var acc0 [5]E
-		var acc1 E
-		for b := 0; b < 384; b++ {
-			lane := b / 64
-			x := lane % 5
-			y := lane / 5
-			z := b % 64
-			var rc uint8
-			if x == 0 && y == 0 {
-				rc = uint8((KeccakRC[23] >> z) & 1)
+		for lane := 0; lane < 6; lane++ {
+			x, y := lane%5, lane/5
+			rowWeight := eqHi[keccakRow(po.perm, 23, y, 0)>>6]
+			term := laneDot.Mul(w, t).Mul(rowWeight, t)
+			wbEval[x].AddAssign(term)
+			wcEval[x].AddAssign(term)
+			var rhs E
+			for z, power := range bitPower {
+				bit := getByteBit(po.target, 64*lane+z)
+				if lane == 0 {
+					bit ^= uint8(KeccakRC[23]>>z) & 1
+				}
+				if bit != 0 {
+					rhs.AddAssign(power)
+				}
 			}
-			we := w.Mul(eqLo[z], t)
-			if y == 0 {
-				acc0[x].AddAssign(we)
-			} else {
-				acc1.AddAssign(we)
-			}
-			if (getByteBit(po.target, b) ^ rc) != 0 {
-				pubRHS.AddAssign(w)
-			}
-			w = w.Mul(alpha, t)
+			pubRHS.AddAssign(w.Mul(rhs, t))
+			w = w.Mul(laneStride, t)
 		}
-		for x := 0; x < 5; x++ {
-			tc := acc0[x].Mul(eqY0, t)
-			wbEval[x].AddAssign(tc)
-			wcEval[x].AddAssign(tc)
-		}
-		tc1 := acc1.Mul(eqY1, t)
-		wbEval[0].AddAssign(tc1)
-		wcEval[0].AddAssign(tc1)
 	}
 
 	// C2 factored across all 48 levels
@@ -723,10 +741,10 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 	pw := EOne
 	for k := 0; k < MuxRowsPerLevel; k++ {
 		w0 := pw
-		w1 := w0.Mul(alpha, t)
-		w2 := w1.Mul(alpha, t)
-		w3 := w2.Mul(alpha, t)
-		pw = w3.Mul(alpha, t)
+		w1 := timesAlpha.applyFast(w0)
+		w2 := timesAlpha.applyFast(w1)
+		w3 := timesAlpha.applyFast(w2)
+		pw = timesAlpha.applyFast(w3)
 
 		eqK := eqLo[k&63]
 		blk := k >> 6
@@ -830,12 +848,12 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 			rDv := dummyValRow(inputB, k)
 			vx0, vr0 := privLoc(vBase + 2*k)
 			vx1, vr1 := privLoc(vBase + 2*k + 1)
-			addLin(0, rDv); addLin(dx, dr); pubRHS.AddAssign(w); w = w.Mul(alpha, t)
-			addLin(1, rDv); addLin(vx0, vr0); w = w.Mul(alpha, t)
-			addQuad(4, rDv); w = w.Mul(alpha, t)
-			addLin(2, rDv); addLin(dx, dr); pubRHS.AddAssign(w); w = w.Mul(alpha, t)
-			addLin(3, rDv); addLin(vx1, vr1); w = w.Mul(alpha, t)
-			addQuad(1, rDv); w = w.Mul(alpha, t)
+			addLin(0, rDv); addLin(dx, dr); pubRHS.AddAssign(w); w = timesAlpha.applyFast(w)
+			addLin(1, rDv); addLin(vx0, vr0); w = timesAlpha.applyFast(w)
+			addQuad(4, rDv); w = timesAlpha.applyFast(w)
+			addLin(2, rDv); addLin(dx, dr); pubRHS.AddAssign(w); w = timesAlpha.applyFast(w)
+			addLin(3, rDv); addLin(vx1, vr1); w = timesAlpha.applyFast(w)
+			addQuad(1, rDv); w = timesAlpha.applyFast(w)
 		}
 	}
 	// C4: is_dummy anchor root-gating (2,304 constraints) — factor eqHi per 64-row block!
@@ -858,7 +876,7 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 				k := blk*64 + j
 				eqJ := eqLo[j]
 				// bit 0
-				b0.AddAssign(w.Mul(eqJ, t)); dAcc.AddAssign(w); w = w.Mul(alpha, t)
+				b0.AddAssign(w.Mul(eqJ, t)); dAcc.AddAssign(w); w = timesAlpha.applyFast(w)
 				b1.AddAssign(w.Mul(eqJ, t))
 				{
 					bitIdx := 2 * k
@@ -878,10 +896,10 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 						pubRHS.AddAssign(w)
 					}
 				}
-				w = w.Mul(alpha, t)
-				c4.AddAssign(w.Mul(eqJ, t)); w = w.Mul(alpha, t)
+				w = timesAlpha.applyFast(w)
+				c4.AddAssign(w.Mul(eqJ, t)); w = timesAlpha.applyFast(w)
 				// bit 1
-				b2.AddAssign(w.Mul(eqJ, t)); dAcc.AddAssign(w); w = w.Mul(alpha, t)
+				b2.AddAssign(w.Mul(eqJ, t)); dAcc.AddAssign(w); w = timesAlpha.applyFast(w)
 				b3.AddAssign(w.Mul(eqJ, t))
 				{
 					bitIdx := 2*k + 1
@@ -901,8 +919,8 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 						pubRHS.AddAssign(w)
 					}
 				}
-				w = w.Mul(alpha, t)
-				c1.AddAssign(w.Mul(eqJ, t)); w = w.Mul(alpha, t)
+				w = timesAlpha.applyFast(w)
+				c1.AddAssign(w.Mul(eqJ, t)); w = timesAlpha.applyFast(w)
 			}
 			wbEval[0].AddAssign(b0.Mul(eqBlk, t))
 			wbEval[1].AddAssign(b1.Mul(eqBlk, t))
@@ -924,13 +942,13 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 	// C5: 66-bit exact ripple-carry conservation adders (1,360 constraints)
 	pubExit := stmt.pubExit()
 	evalAdder := func(base, bits int) {
-		addLin(2, base); pubRHS.AddAssign(w); w = w.Mul(alpha, t)
+		addLin(2, base); pubRHS.AddAssign(w); w = timesAlpha.applyFast(w)
 		for i := 0; i < bits; i++ {
 			row := base + i
-			addLin(0, row); addLin(1, row); addLin(3, row); pubRHS.AddAssign(w); w = w.Mul(alpha, t)
-			addLin(4, row); addQuad(4, row); addQuad(1, row); w = w.Mul(alpha, t)
+			addLin(0, row); addLin(1, row); addLin(3, row); pubRHS.AddAssign(w); w = timesAlpha.applyFast(w)
+			addLin(4, row); addQuad(4, row); addQuad(1, row); w = timesAlpha.applyFast(w)
 			if i > 0 {
-				addLin(2, row); addLin(4, row-1); pubRHS.AddAssign(w); w = w.Mul(alpha, t)
+				addLin(2, row); addLin(4, row-1); pubRHS.AddAssign(w); w = timesAlpha.applyFast(w)
 			}
 		}
 	}
@@ -942,13 +960,13 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 		xa0, ra0 := privLoc(OffVIn0 + i)
 		xb0, rb0 := privLoc(OffVIn1 + i)
 		rl1 := RowAdderLHS1 + i
-		addLin(0, rl1); addLin(xa0, ra0); pubRHS.AddAssign(w); w = w.Mul(alpha, t)
-		addLin(1, rl1); addLin(xb0, rb0); w = w.Mul(alpha, t)
+		addLin(0, rl1); addLin(xa0, ra0); pubRHS.AddAssign(w); w = timesAlpha.applyFast(w)
+		addLin(1, rl1); addLin(xb0, rb0); w = timesAlpha.applyFast(w)
 		xa1, ra1 := privLoc(OffVOut0 + i)
 		xb1, rb1 := privLoc(OffVOut1 + i)
 		rm := RowAdderMID + i
-		addLin(0, rm); addLin(xa1, ra1); pubRHS.AddAssign(w); w = w.Mul(alpha, t)
-		addLin(1, rm); addLin(xb1, rb1); w = w.Mul(alpha, t)
+		addLin(0, rm); addLin(xa1, ra1); pubRHS.AddAssign(w); w = timesAlpha.applyFast(w)
+		addLin(1, rm); addLin(xb1, rb1); w = timesAlpha.applyFast(w)
 	}
 	for i := 0; i < 65; i++ {
 		rl := RowAdderLHS + i
@@ -956,13 +974,13 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 		if i < 64 && ((stmt.VMint>>i)&1) != 0 {
 			pubRHS.AddAssign(w)
 		}
-		w = w.Mul(alpha, t)
+		w = timesAlpha.applyFast(w)
 		if i < 64 {
 			rl1 := RowAdderLHS1 + i
-			addLin(0, rl); addLin(3, rl1); addLin(2, rl1); w = w.Mul(alpha, t)
+			addLin(0, rl); addLin(3, rl1); addLin(2, rl1); w = timesAlpha.applyFast(w)
 		} else {
 			rl1_63 := RowAdderLHS1 + 63
-			addLin(0, rl); addLin(4, rl1_63); pubRHS.AddAssign(w); w = w.Mul(alpha, t)
+			addLin(0, rl); addLin(4, rl1_63); pubRHS.AddAssign(w); w = timesAlpha.applyFast(w)
 		}
 	}
 	for i := 0; i < 65; i++ {
@@ -971,21 +989,21 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 		if i < 64 && ((pubExit>>i)&1) != 0 {
 			pubRHS.AddAssign(w)
 		}
-		w = w.Mul(alpha, t)
+		w = timesAlpha.applyFast(w)
 		if i < 64 {
 			rm := RowAdderMID + i
-			addLin(0, rr); addLin(3, rm); addLin(2, rm); w = w.Mul(alpha, t)
+			addLin(0, rr); addLin(3, rm); addLin(2, rm); w = timesAlpha.applyFast(w)
 		} else {
 			rm63 := RowAdderMID + 63
-			addLin(0, rr); addLin(4, rm63); pubRHS.AddAssign(w); w = w.Mul(alpha, t)
+			addLin(0, rr); addLin(4, rm63); pubRHS.AddAssign(w); w = timesAlpha.applyFast(w)
 		}
 	}
 	for i := 0; i < 65; i++ {
 		rl := RowAdderLHS + i
 		rr := RowAdderRHS + i
-		addLin(3, rl); addLin(2, rl); addLin(3, rr); addLin(2, rr); w = w.Mul(alpha, t)
+		addLin(3, rl); addLin(2, rl); addLin(3, rr); addLin(2, rr); w = timesAlpha.applyFast(w)
 	}
-	addLin(4, RowAdderLHS+64); addLin(4, RowAdderRHS+64); w = w.Mul(alpha, t)
+	addLin(4, RowAdderLHS+64); addLin(4, RowAdderRHS+64); w = timesAlpha.applyFast(w)
 	_ = w
 
 	for x := 0; x < 5; x++ {

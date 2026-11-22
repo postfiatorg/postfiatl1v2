@@ -1,3 +1,4 @@
+mod full_tree;
 use pft_binius_shielded::binius_pcs::{prove, verify};
 use pft_binius_shielded::circuit::{
     build_group_c_constraints, build_witness_bits, eval_verifier_weights_at_r1, CircuitChallenge,
@@ -12,6 +13,7 @@ use pft_binius_shielded::shake256::{
     coin_commit, nullifier, owner_addr, BLIND_SECRET_BYTES, MERKLE_DEPTH, NODE_BYTES,
     OWNER_SECRET_BYTES,
 };
+use fips204::{ml_dsa_65, traits::KeyGen};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use serde::Serialize;
@@ -117,6 +119,8 @@ fn cmd_generate(out_dir: &str) -> Result<(), String> {
 
     // Scenario 0: ZK-Shielded Deposit (v_mint = 1000, is_dummy0 = is_dummy1 = true -> Alice 700 + Alice 290, fee 10)
     let zero_dest = [0u8; UNSHIELD_DEST_BYTES];
+    // Public deterministic fixture signer, isolated from the shielded-note RNG.
+    let (_, depositor) = ml_dsa_65::KG::keygen_from_seed(&[0x64; 32]);
     let t_mint = Instant::now();
     let (tx_mint, r_alice_m0, r_alice_m1) = create_shielded_tx(
         &ledger.tree,
@@ -130,6 +134,7 @@ fn cmd_generate(out_dir: &str) -> Result<(), String> {
         0,    // v_unshield
         zero_dest,
         10,   // fee
+        Some(&depositor),
         &mut rng,
     )?;
     let mint_prove_ms = t_mint.elapsed().as_secs_f64() * 1000.0;
@@ -186,6 +191,7 @@ fn cmd_generate(out_dir: &str) -> Result<(), String> {
         0,
         zero_dest,
         10,
+        None,
         &mut rng,
     )?;
     let hop1_prove_ms = t0.elapsed().as_secs_f64() * 1000.0;
@@ -250,6 +256,7 @@ fn cmd_generate(out_dir: &str) -> Result<(), String> {
         0,
         zero_dest,
         5,
+        None,
         &mut rng,
     )?;
     let dummy_1in_prove_ms = t1.elapsed().as_secs_f64() * 1000.0;
@@ -308,6 +315,7 @@ fn cmd_generate(out_dir: &str) -> Result<(), String> {
         100, // v_unshield (transparent L1 exit)
         unshield_dest,
         10,
+        None,
         &mut rng,
     )?;
     let hop2_prove_ms = t2.elapsed().as_secs_f64() * 1000.0;
@@ -341,8 +349,8 @@ fn cmd_verify(tx_path: &str, ledger_path: &str) -> Result<(), String> {
     let ledger_str = fs::read_to_string(ledger_path).map_err(|e| e.to_string())?;
     let lj: LedgerJson = serde_json::from_str(&ledger_str).map_err(|e| e.to_string())?;
     let mut ledger = LedgerState::from_json(&lj)?;
-    let tx = ShieldedTx::from_bytes(&tx_bytes)?;
     let t0 = Instant::now();
+    let tx = ShieldedTx::from_bytes(&tx_bytes)?;
     ledger.verify_and_apply(&tx)?;
     let ms = t0.elapsed().as_secs_f64() * 1000.0;
     println!(
@@ -708,7 +716,7 @@ fn cmd_bench(trials: usize, out_path: &str) -> Result<(), String> {
         SpendInput::Real { leaf_index: idx1, spend_secret: alice.spend_secret, value: 300, r_blind: r_in1 },
         &bob.stealth_address(), 650,
         &alice.stealth_address(), 340,
-        0, 0, zero_dest, 10,
+        0, 0, zero_dest, 10, None,
         &mut rng,
     )?;
     ledger.verify_tx(&warm_tx)?;
@@ -724,7 +732,7 @@ fn cmd_bench(trials: usize, out_path: &str) -> Result<(), String> {
             SpendInput::Real { leaf_index: idx1, spend_secret: alice.spend_secret, value: 300, r_blind: r_in1 },
             &bob.stealth_address(), 650,
             &alice.stealth_address(), 340,
-            0, 0, zero_dest, 10,
+            0, 0, zero_dest, 10, None,
             &mut rng,
         )?;
         prove_ms.push(t0.elapsed().as_secs_f64() * 1000.0);
@@ -802,7 +810,7 @@ fn cmd_dump_ir(tx_path: &str, out_path: &str) -> Result<(), String> {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: pft-binius-shielded <generate|verify|adversarial|bench|dump-ir> ...");
+        eprintln!("Usage: pft-binius-shielded <generate|verify|adversarial|bench|full-tree|dump-ir> ...");
         std::process::exit(1);
     }
     let get_arg = |flag: &str| -> Option<String> {
@@ -823,6 +831,8 @@ fn main() {
             let ledger = get_arg("--ledger").expect("--ledger required");
             cmd_adversarial(&tx, &ledger)
         }
+        "full-tree" => get_arg("--out").ok_or_else(|| "--out required".to_string())
+            .and_then(|out| full_tree::run(std::path::Path::new(&out))),
         "bench" => {
             let trials: usize = get_arg("--trials").and_then(|s| s.parse().ok()).unwrap_or(10);
             let out = get_arg("--out").unwrap_or_else(|| "../bench_results.json".into());

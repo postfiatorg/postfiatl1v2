@@ -473,6 +473,8 @@ def main():
     total_wc = header_bytes + fixed_proof_bytes + cols_bytes + sibs_wc_bytes
     total_exp = header_bytes + fixed_proof_bytes + cols_bytes + sibs_exp_bytes
     budget = 149130
+    mint_auth_bytes = 1952 + 3309  # FIPS 204 ML-DSA-65 public key and signature
+    assert total_wc + mint_auth_bytes <= budget
     assert total_wc <= budget
 
     out = {
@@ -525,6 +527,8 @@ def main():
             "opened_cols_wc": cols_bytes,
             "merkle_sibs_wc": sibs_wc_bytes,
             "merkle_sibs_exp": sibs_exp_bytes,
+            "mint_auth": mint_auth_bytes,
+            "mint_total_wc": total_wc + mint_auth_bytes,
             "total_exp": total_exp,
             "total_wc": total_wc,
             "budget": budget,

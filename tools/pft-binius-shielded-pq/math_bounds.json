@@ -70,6 +70,8 @@
     "opened_cols_wc": 38896,
     "merkle_sibs_wc": 38016,
     "merkle_sibs_exp": 36001,
+    "mint_auth": 5261,
+    "mint_total_wc": 145737,
     "total_exp": 138461,
     "total_wc": 140476,
     "budget": 149130,
