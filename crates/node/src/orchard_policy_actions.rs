@@ -2930,6 +2930,7 @@ fn shielded_archive_payload_orchard_commitment_action_indexes(
                 }
                 None
             }
+            ShieldedAction::PqFixtureHop { .. } => None,
             ShieldedAction::AssetOrchardEgressV1(_) => None,
             ShieldedAction::AssetOrchardPrivateEgressV1(_) => None,
             ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(payload) => {

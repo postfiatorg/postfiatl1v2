@@ -222,6 +222,10 @@ mod private_action_six_validator_tests {
     }
 
     pub(crate) fn fleet_with_options(options: FleetOptions) -> Fleet {
+        fleet_on_chain(CHAIN_ID, options)
+    }
+
+    pub(crate) fn fleet_on_chain(chain_id: &str, options: FleetOptions) -> Fleet {
         let pricing = options.pricing;
         let root = std::env::temp_dir().join(format!(
             "postfiat-s6-private-actions-{}-{}",
@@ -237,7 +241,7 @@ mod private_action_six_validator_tests {
         for (index, data_dir) in data_dirs.iter().enumerate() {
             init_consensus_v2(InitConsensusV2Options {
                 data_dir: data_dir.clone(),
-                chain_id: CHAIN_ID.to_string(),
+                chain_id: chain_id.to_string(),
                 node_id: format!("validator-{index}"),
                 validator_count: VALIDATORS as u32,
                 activation_height: CONSENSUS_V2_ACTIVATION,
@@ -518,7 +522,7 @@ mod private_action_six_validator_tests {
         let topology_file = root.join("topology.json");
         let (base_port, listeners) = reserve_ports(VALIDATORS);
         write_consensus_v2_topology(TopologyConsensusV2Options {
-            chain_id: CHAIN_ID.to_string(),
+            chain_id: chain_id.to_string(),
             validators: VALIDATORS as u32,
             base_port,
             rpc_base_port: Some(base_port.saturating_add(100)),

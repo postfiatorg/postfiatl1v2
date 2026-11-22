@@ -498,6 +498,7 @@ use state_commitment::{
 };
 pub use store_lease::hold_transactional_store;
 mod execution_actions;
+mod pq_payment_fixture;
 #[cfg(test)]
 use execution_actions::execute_transparent_batch;
 #[allow(unused_imports)]

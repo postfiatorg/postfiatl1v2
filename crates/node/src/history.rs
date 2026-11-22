@@ -1683,7 +1683,7 @@ fn build_history_checkpoint_state_from_sources(
         governance = GovernanceState::new(genesis.validator_count);
         ledger = genesis_ledger_state(&genesis, faucet_account)?;
         ordered_batches = Vec::new();
-        shielded = ShieldedState::empty();
+        shielded = pq_payment_fixture::genesis_shielded_state(&genesis)?;
         bridge = BridgeState::empty();
         registry_update_ids = HashSet::new();
     }

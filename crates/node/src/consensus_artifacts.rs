@@ -1697,6 +1697,7 @@ pub fn verify_shielded_action_batch_id(
     genesis: &Genesis,
     batch: &ShieldedActionBatch,
 ) -> io::Result<()> {
+    pq_payment_fixture::check_batch_domain(genesis, batch)?;
     if batch.atomic && (batch.actions.is_empty() || batch.actions.len() > 3) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,

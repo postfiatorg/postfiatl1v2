@@ -100,6 +100,7 @@ pub(super) fn replicated_state_root_v2(
         "ordered_history_accumulator",
         &ordered_history.accumulator,
     );
+    pq_payment_fixture::check_state_domain(&genesis_hash_hex, shielded)?;
     append_shielded_state(&mut state_bytes, shielded);
     append_bridge_state(&mut state_bytes, bridge);
     Ok(hash_hex("postfiat.replicated_state.v2", &state_bytes))
@@ -570,6 +571,7 @@ fn replicated_state_root_with_options(
         pre_age_release_campaign_commitments,
     )?;
     append_string_list(&mut state_bytes, "ordered_batch", ordered_batches);
+    pq_payment_fixture::check_state_domain(&genesis_hash_hex, shielded)?;
     append_shielded_state(&mut state_bytes, shielded);
     append_bridge_state(&mut state_bytes, bridge);
     Ok(hash_hex("postfiat.replicated_state.v1", &state_bytes))
@@ -835,6 +837,7 @@ fn validate_issued_supply_custody_inventory(
         additional_solana_routes: _,
     } = ledger;
     let ShieldedState {
+        pq_fixture: _,
         next_note_position: _,
         notes: _,
         nullifiers: _,
@@ -1029,6 +1032,10 @@ pub(super) fn legacy_json_replicated_state_root(
     bridge: &BridgeState,
 ) -> io::Result<String> {
     let genesis_hash_hex = genesis_hash(genesis);
+    pq_payment_fixture::check_state_domain(&genesis_hash_hex, shielded)?;
+    if shielded.pq_fixture.is_some() {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "legacy state root cannot commit the PQ fixture"));
+    }
     let legacy_governance = LegacyJsonGovernanceState {
         active_validator_count: governance.active_validator_count,
         active_validators: governance.active_validators.as_slice(),
@@ -1911,6 +1918,7 @@ fn assert_governance_state_commitment_inventory_complete(governance: &Governance
 
 fn assert_shielded_state_commitment_inventory_complete(shielded: &ShieldedState) {
     let ShieldedState {
+        pq_fixture: _,
         next_note_position: _,
         notes: _,
         nullifiers: _,
@@ -1955,6 +1963,12 @@ fn append_sorted_raw_commitments(
 
 pub(super) fn append_shielded_state(bytes: &mut Vec<u8>, shielded: &ShieldedState) {
     assert_shielded_state_commitment_inventory_complete(shielded);
+    if let Some(fixture) = &shielded.pq_fixture {
+        append_string_list(bytes, "pq_fixture.commitment", &fixture.commitments);
+        append_string_list(bytes, "pq_fixture.serial", &fixture.spent_serials);
+        append_canonical_str(bytes, "pq_fixture.root", &fixture.root);
+        append_canonical_u64(bytes, "pq_fixture.reserve", fixture.reserve);
+    }
     append_canonical_u64(
         bytes,
         "shielded.next_note_position",

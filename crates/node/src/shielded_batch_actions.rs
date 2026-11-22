@@ -1421,6 +1421,7 @@ pub fn apply_shielded_batch_with_replay(
         &governance.asset_orchard_egress_policy_registry(),
         historical_replay.is_some(),
     );
+    pq_payment_fixture::ensure_valid(&batch, &receipts)?;
     ensure_atomic_shielded_batch_accepted(&batch, &receipts)?;
     let consensus_proposal = build_block_proposal_from_state(BlockProposalPlan {
         genesis: &genesis,

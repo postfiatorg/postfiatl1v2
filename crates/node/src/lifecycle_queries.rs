@@ -394,7 +394,11 @@ pub(super) fn init_with_genesis(
         faucet_balance,
         Some(faucet_key.public_key_hex.clone()),
     );
+    let shielded = pq_payment_fixture::genesis_shielded_state(&genesis)?;
     store.init(&genesis, &state)?;
+    if shielded.pq_fixture.is_some() {
+        store.write_shielded(&shielded)?;
+    }
     store.write_ledger(&genesis_ledger_state(&genesis, faucet_account.clone())?)?;
     write_faucet_account_file(&data_dir.join(FAUCET_ACCOUNT_FILE), &faucet_account)?;
     write_key_file(&data_dir.join(FAUCET_KEY_FILE), &faucet_key)?;

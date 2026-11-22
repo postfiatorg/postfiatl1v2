@@ -178,6 +178,14 @@ pub struct ShieldedNote {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PqFixtureState {
+    pub commitments: Vec<String>,
+    pub spent_serials: Vec<String>,
+    pub root: String,
+    pub reserve: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShieldedState {
     #[serde(default)]
     pub next_note_position: u64,
@@ -187,11 +195,14 @@ pub struct ShieldedState {
     pub turnstile_events: Vec<TurnstileEvent>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub orchard: Option<OrchardPoolState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pq_fixture: Option<PqFixtureState>,
 }
 
 impl ShieldedState {
     pub fn empty() -> Self {
         Self {
+            pq_fixture: None,
             next_note_position: 0,
             notes: Vec::new(),
             nullifiers: Vec::new(),
@@ -553,6 +564,8 @@ pub enum ShieldedAction {
     AssetOrchardPrivatePrimaryIssueV1(AssetOrchardPrivatePrimaryIssueActionPayload),
     #[serde(rename = "asset_orchard_private_primary_redeem_v1")]
     AssetOrchardPrivatePrimaryRedeemV1(AssetOrchardPrivatePrimaryRedeemActionPayload),
+    #[serde(rename = "pq_fixture_hop")]
+    PqFixtureHop { payment_hex: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

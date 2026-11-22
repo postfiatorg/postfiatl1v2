@@ -3675,6 +3675,14 @@ fn execute_shielded_batch_actions(
         debug_shielded_pool_enabled_for_chain(&genesis.chain_id, &genesis_hash_hex);
     for (index, action) in batch.actions.iter().enumerate() {
         let receipt = match action {
+            ShieldedAction::PqFixtureHop { payment_hex } => {
+                match pq_payment_fixture::apply(&genesis_hash_hex, shielded, payment_hex) {
+                    Ok(id) => Receipt::accepted(id, "PFSH02 fixture hop"),
+                    Err(code) => Receipt::rejected(
+                        shielded_action_rejection_id(&batch.batch_id, index, code), code, code,
+                    ),
+                }
+            }
             ShieldedAction::Mint(action) => {
                 if !archive_replay {
                     legacy_cleartext_shielded_action_disabled_receipt(

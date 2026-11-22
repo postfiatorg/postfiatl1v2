@@ -3456,6 +3456,7 @@ fn build_shielded_batch_proposal_with_timings(
         &governance.asset_orchard_egress_policy_registry(),
         false,
     );
+    pq_payment_fixture::ensure_valid(&batch, &receipts)?;
     ensure_atomic_shielded_batch_accepted(&batch, &receipts)?;
     timings.state_exec_ms = node_timing_elapsed_ms(stage_start);
     let private_egress_verifier_breakdown = take_asset_orchard_private_egress_timings();

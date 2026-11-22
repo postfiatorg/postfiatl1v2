@@ -8,7 +8,7 @@ establish backing or spending authority for this pool.
 
 The first deliverable is a local validator finalizing a block containing the existing two-input transfer. The
 user deliverable is Alice shielding PFT or a named pfUSDC issue, paying Bob, and Bob discovering his notes,
-spending some and withdrawing the remainder with his own wallet. All checkboxes below are future work. Sizes
+spending some and withdrawing the remainder with his own wallet. The checkboxes below track implementation progress. Sizes
 are engineer-days for implementation and focused tests, excluding external review and network rollout.
 
 ## Decisions that affect the wire and the wallet
@@ -52,19 +52,19 @@ directly in local-chain tests.
 
 ## M1. Finalize one real transfer on a disposable chain · 3–5 days
 
-- [ ] Add workspace crate `crates/privacy_binius/{Cargo.toml,src/lib.rs}` and wire it through the root
+- [x] Add workspace crate `crates/privacy_binius/{Cargo.toml,src/lib.rs}` and wire it through the root
   `Cargo.toml`, `Cargo.lock` and `crates/node/Cargo.toml`. Wrap/extract the checked reader, statement encoder
   and verifier from
   `tools/pft-binius-shielded-pq/rust-prover/src/{payment,binius_pcs,circuit,field,shake256}.rs` so the tool
   and node call the same Rust implementation. Its entry point accepts bounded bytes and a typed context and
   returns either verified public fields or a stable error. Ledger membership and account authorization belong
   to the node.
-- [ ] Keep the verifier single-threaded and deterministic. Use fixed-width integers, checked length arithmetic
+- [x] Keep the verifier single-threaded and deterministic. Use fixed-width integers, checked length arithmetic
   and bounded allocation. Keep I/O, clocks, entropy, proving, the Rayon pool, the JSON ledger loader and KEM
   outside the verifier. The node uses `std`. A literal `no_std` build is optional. Precompute immutable tables
   at startup and keep a portable field path equivalent to CPU acceleration. Pin circuit constants and
   transcript version in both languages.
-- [ ] In `crates/types/src/shielded_bridge_governance.rs` and
+- [x] In `crates/types/src/shielded_bridge_governance.rs` and
   `crates/node/src/{execution_actions,shielded_batch_actions,mempool_proposals,block_replay_wallet}.rs`, carry
   a local-only proof-bearing payment through the actual shielded batch proposal, vote and execution paths.
   Restrict it to a pinned disposable genesis and a single transfer. Initialize that test chain with the
@@ -74,7 +74,7 @@ directly in local-chain tests.
   `crates/node/src/state_commitment.rs` for this genesis. Reject fixture initialization or
   fixture-profile actions on every other genesis as a block-validity error. No public endpoint or deposit is
   needed for this slice.
-- [ ] **Merge test.** Add `crates/node/src/main_parts/tests/pq_payment_local_chain_tests.rs` using the fleet
+- [x] **Merge test.** Add `crates/node/src/main_parts/tests/pq_payment_local_chain_tests.rs` using the fleet
   harness in `private_action_six_validator_tests.rs` in that directory. Finalize the actual hop, independently
   read its certificate, accepted receipt, two spent serials and post-root on another validator, then reopen
   and replay the block. A changed proof must fail validator verification with the same pre-state, including

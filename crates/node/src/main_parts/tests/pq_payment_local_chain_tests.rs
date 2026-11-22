@@ -1,0 +1,279 @@
+#[cfg(test)]
+mod pq_payment_local_chain_tests {
+    use super::private_action_six_validator_tests::{
+        fleet_on_chain, FleetOptions, ATOMIC_ACTIVATION,
+    };
+    use postfiat_crypto_provider::{bytes_to_hex, hash_hex, hex_to_bytes};
+    use postfiat_node::{
+        batch_archive_payload_hash, build_atomic_shielded_action_batch, create_block_vote, init,
+        propose_batch_with_timings, verify_blocks, BatchProposalOptions, BlockVoteOptions,
+        InitOptions, NodeOptions, VALIDATOR_KEYS_FILE,
+    };
+    use postfiat_storage::NodeStore;
+    use postfiat_types::{Genesis, ShieldedAction, ShieldedActionBatch};
+    use sha2::{Digest, Sha384};
+    use std::{fs, path::Path, process::Command};
+
+    const CHAIN: &str = "postfiat-pfsh02-m1-disposable";
+    const HOP: &[u8] =
+        include_bytes!("../../../../../tools/pft-binius-shielded-pq/payments/tx_hop1.bin");
+
+    fn batch(genesis: &Genesis, wire: &[u8], atomic: bool) -> ShieldedActionBatch {
+        let actions = vec![ShieldedAction::PqFixtureHop {
+            payment_hex: bytes_to_hex(wire),
+        }];
+        if atomic {
+            return build_atomic_shielded_action_batch(genesis, actions).unwrap();
+        }
+        let encoded = serde_json::to_vec(&(
+            &genesis.chain_id,
+            postfiat_execution::genesis_hash(genesis),
+            genesis.protocol_version,
+            "shielded",
+            &actions,
+        ))
+        .unwrap();
+        ShieldedActionBatch::new(
+            hash_hex("postfiat.shielded_action_batch.v1", &encoded),
+            actions,
+        )
+    }
+
+    fn proposal(data_dir: &Path, dir: &Path, batch: &ShieldedActionBatch) -> BatchProposalOptions {
+        let batch_file = dir.join(format!("{}.json", batch.batch_id));
+        fs::write(&batch_file, serde_json::to_vec(batch).unwrap()).unwrap();
+        BatchProposalOptions {
+            data_dir: data_dir.to_owned(),
+            verify_block_log: false,
+            batch_kind: Some("shielded".into()),
+            batch_file,
+            proposal_file: dir.join(format!("{}.proposal.json", batch.batch_id)),
+            view: Some(0),
+            timeout_certificate_file: None,
+            key_file: None,
+            validator_id: None,
+        }
+    }
+
+    #[test]
+    fn six_validators_finalize_and_replay_the_published_hop() {
+        let fleet = fleet_on_chain(
+            CHAIN,
+            FleetOptions {
+                pricing: false,
+                max_nav_age_blocks: None,
+                extra_asset: false,
+            },
+        );
+        while fleet.height() + 1 < ATOMIC_ACTIVATION {
+            fleet.transparent_round();
+        }
+        let height = fleet.height() + 1;
+        let proposer = fleet.proposer_index(height);
+        let peer = (proposer + 1) % fleet.data_dirs.len();
+        let peer_dir = &fleet.data_dirs[peer];
+        let store = NodeStore::new(peer_dir);
+        let genesis = store.read_genesis().unwrap();
+        let pre = store.read_shielded().unwrap().pq_fixture.unwrap();
+        assert_eq!(pre.reserve, 54_743);
+        let ledger =
+            include_bytes!("../../../../../tools/pft-binius-shielded-pq/payments/ledger_hop1.json");
+        assert_eq!(bytes_to_hex(&Sha384::digest(ledger)), "2b0a19667f50562ff66c075a3a323c604c37115e1f77eb3a985c6ff05b45768775d68ece9bd167af2dabbe05181b7731");
+        let source: serde_json::Value = serde_json::from_slice(ledger).unwrap();
+        assert_eq!(serde_json::json!(pre.commitments), source["coins"]);
+        assert_eq!(serde_json::json!(pre.spent_serials), source["spent_sn"]);
+        assert_eq!(pre.root, bytes_to_hex(&HOP[8..56]));
+
+        let good = batch(&genesis, HOP, true);
+        let opts = proposal(&fleet.data_dirs[proposer], &fleet.root, &good);
+        let good_file = opts.batch_file.clone();
+        let proposed = propose_batch_with_timings(opts).unwrap();
+        println!(
+            "In-validator single-hop execution (decode, proof, ledger checks and append): {:.3} ms",
+            proposed
+                .timings
+                .shielded_breakdown
+                .as_ref()
+                .unwrap()
+                .state_exec_ms
+        );
+
+        let mut changed = HOP.to_vec();
+        *changed.last_mut().unwrap() ^= 1; // final Merkle sibling in the proof
+        let bad = batch(&genesis, &changed, false);
+        let bad_opts = proposal(&fleet.data_dirs[proposer], &fleet.root, &bad);
+        assert!(propose_batch_with_timings(bad_opts.clone())
+            .unwrap_err()
+            .to_string()
+            .contains("pq_fixture_invalid_proof"));
+
+        // Bypass proposal construction. Supply a peer with the bad body's own ID and payload
+        // hash and claim that it executes with the original receipt. It must rerun the proof.
+        let mut direct = proposed.proposal;
+        direct.batch_id = bad.batch_id.clone();
+        direct.payload_hash = batch_archive_payload_hash(
+            &genesis,
+            "shielded",
+            &bad.batch_id,
+            &serde_json::to_string(&bad).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            &bad_opts.proposal_file,
+            serde_json::to_vec(&direct).unwrap(),
+        )
+        .unwrap();
+        let vote_file = fleet.root.join("changed-proof.vote");
+        let error = create_block_vote(BlockVoteOptions {
+            data_dir: peer_dir.clone(),
+            verify_block_log: false,
+            key_file: peer_dir.join(VALIDATOR_KEYS_FILE),
+            validator_id: Some(format!("validator-{peer}")),
+            batch_file: Some(bad_opts.batch_file),
+            proposal_file: Some(bad_opts.proposal_file),
+            timeout_certificate_file: None,
+            block_height: Some(height),
+            vote_file: vote_file.clone(),
+        })
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("pq_fixture_invalid_proof"),
+            "{error}"
+        );
+        assert!(!vote_file.exists());
+        assert_eq!(
+            store.read_shielded().unwrap().pq_fixture.as_ref(),
+            Some(&pre)
+        );
+
+        fleet.round("shielded", good_file);
+        let block = store.read_blocks().unwrap().blocks.pop().unwrap();
+        assert_eq!(block.header.batch_id, good.batch_id);
+        assert_eq!(block.header.height, height);
+        let cert = &block.header.certificate;
+        assert_eq!(cert.validators.len(), 6);
+        assert_eq!(cert.quorum, 5);
+        assert!(cert.votes.iter().filter(|v| v.accept).count() >= cert.quorum);
+        let receipt = store.read_receipts().unwrap().pop().unwrap();
+        assert!(receipt.accepted);
+        assert_eq!(block.receipt_ids, [receipt.tx_id.clone()]);
+        let post = store.read_shielded().unwrap().pq_fixture.unwrap();
+        assert_eq!(post.reserve, pre.reserve - 10);
+        assert_eq!(post.commitments[..100], pre.commitments);
+        assert_eq!(post.spent_serials[..2], pre.spent_serials);
+        assert_eq!(
+            post.spent_serials[2..],
+            [bytes_to_hex(&HOP[112..160]), bytes_to_hex(&HOP[160..208])]
+        );
+        assert_eq!(
+            post.commitments[100..],
+            [bytes_to_hex(&HOP[208..256]), bytes_to_hex(&HOP[256..304])]
+        );
+
+        let archived = store.read_batch_archive().unwrap().batches.pop().unwrap();
+        let archived: ShieldedActionBatch = serde_json::from_str(&archived.payload_json).unwrap();
+        assert_eq!(archived, good);
+        let [ShieldedAction::PqFixtureHop { payment_hex }] = archived.actions.as_slice() else {
+            panic!("missing hop")
+        };
+        let wire = hex_to_bytes(payment_hex).unwrap();
+        assert_eq!(wire, HOP);
+        let archived_file = fleet.root.join("archived-hop.bin");
+        fs::write(&archived_file, wire).unwrap();
+        let tool = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tools/pft-binius-shielded-pq/go-verifier");
+        let go = std::env::var_os("GO_BIN").unwrap_or_else(|| "go".into());
+        let out = Command::new(go)
+            .current_dir(tool)
+            .args(["run", ".", "verify", "-post-root", "-tx"])
+            .arg(archived_file)
+            .args(["-ledger", "../payments/ledger_hop1.json"])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let go_output = String::from_utf8(out.stdout).unwrap();
+        assert_eq!(
+            go_output.lines().last(),
+            Some(format!("post-root {}", post.root).as_str())
+        );
+
+        // A different batch ID reaches the spent-serial check instead of the batch deduplicator.
+        let second = proposal(peer_dir, &fleet.root, &batch(&genesis, HOP, false));
+        assert!(propose_batch_with_timings(second)
+            .unwrap_err()
+            .to_string()
+            .contains("pq_fixture_spent_serial"));
+        drop(store);
+        let replay = verify_blocks(NodeOptions {
+            data_dir: peer_dir.clone(),
+        })
+        .unwrap();
+        assert!(replay.verified);
+        assert_eq!(replay.tip_hash, block.header.block_hash);
+        assert_eq!(replay.state_root, block.header.state_root);
+        assert_eq!(
+            NodeStore::new(peer_dir).read_shielded().unwrap().pq_fixture,
+            Some(post.clone())
+        );
+        println!("Finalized height {height}, {}/{} votes, accepted receipt {}, two new serials, Go post-root {}, replay verified",
+            cert.votes.len(), cert.validators.len(), receipt.tx_id, post.root);
+
+        // Replay must detect changes to each fixture component even when the archive and
+        // its quorum certificate are intact. Use a disposable replica after the round.
+        let replica_dir = &fleet.data_dirs[(peer + 1) % fleet.data_dirs.len()];
+        let replica = NodeStore::new(replica_dir);
+        let certified = replica.read_shielded().unwrap();
+        let changes: [fn(&mut postfiat_types::PqFixtureState); 4] = [
+            |p: &mut postfiat_types::PqFixtureState| p.reserve += 1,
+            |p: &mut postfiat_types::PqFixtureState| p.root.clear(),
+            |p: &mut postfiat_types::PqFixtureState| p.spent_serials.swap(2, 3),
+            |p: &mut postfiat_types::PqFixtureState| p.commitments.swap(100, 101),
+        ];
+        for change in changes {
+            let mut altered = certified.clone();
+            change(altered.pq_fixture.as_mut().unwrap());
+            replica.write_shielded(&altered).unwrap();
+            let err = verify_blocks(NodeOptions {
+                data_dir: replica_dir.clone(),
+            })
+            .unwrap_err();
+            assert!(err.to_string().contains("state root"), "{err}");
+        }
+
+        let foreign = fleet.root.join("foreign");
+        init(InitOptions {
+            data_dir: foreign.clone(),
+            chain_id: "ordinary-test".into(),
+            node_id: "validator-0".into(),
+            validator_count: 1,
+        })
+        .unwrap();
+        let other = NodeStore::new(&foreign);
+        let foreign_genesis = other.read_genesis().unwrap();
+        let foreign_opts = proposal(&foreign, &fleet.root, &batch(&foreign_genesis, HOP, false));
+        assert!(propose_batch_with_timings(foreign_opts)
+            .unwrap_err()
+            .to_string()
+            .contains("pq_fixture_wrong_genesis"));
+        let mut state = other.read_shielded().unwrap();
+        state.pq_fixture = Some(pre);
+        other.write_shielded(&state).unwrap();
+        assert!(verify_blocks(NodeOptions { data_dir: foreign })
+            .unwrap_err()
+            .to_string()
+            .contains("pq_fixture_state_genesis_mismatch"));
+        let same_name = init(InitOptions {
+            data_dir: fleet.root.join("wrong-genesis"),
+            chain_id: CHAIN.into(),
+            node_id: "validator-0".into(),
+            validator_count: 1,
+        })
+        .unwrap_err();
+        assert!(same_name.to_string().contains("pq_fixture_wrong_genesis"));
+        fs::remove_dir_all(&fleet.root).unwrap();
+    }
+}

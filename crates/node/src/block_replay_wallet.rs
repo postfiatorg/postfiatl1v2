@@ -1846,7 +1846,7 @@ pub(super) fn verify_replayed_blocks_with_exports(
         registry_update_ids = HashSet::new();
         ledger = genesis_ledger_state(genesis, faucet_account)?;
         ordered_batches = Vec::<String>::new();
-        shielded = ShieldedState::empty();
+        shielded = pq_payment_fixture::genesis_shielded_state(genesis)?;
         bridge = BridgeState::empty();
     }
     let mut ordered_history =
@@ -2797,6 +2797,7 @@ pub fn native_pft_supply_breakdown(
         notes: _,
         nullifiers: _,
         turnstile_events: _,
+        pq_fixture: _, // disposable test units, outside native PFT supply
         orchard,
     } = shielded;
 
@@ -3123,6 +3124,7 @@ pub(super) fn replay_archived_payload(
         }
         "shielded" => {
             let batch: ShieldedActionBatch = parse_archived_payload(block, archive_entry)?;
+            pq_payment_fixture::check_batch_domain(genesis, &batch)?;
             let compatibility =
                 if archived_wan_devnet_legacy_strict_domain_validation_allowed(genesis, block) {
                     AssetExecutionCompatibility::wan_devnet_legacy_strict_domain_validation()
@@ -3134,7 +3136,7 @@ pub(super) fn replay_archived_payload(
                 genesis,
                 state.governance,
             );
-            Ok(execute_shielded_batch(
+            let receipts = execute_shielded_batch(
                 genesis,
                 state.ledger,
                 state.shielded,
@@ -3145,7 +3147,9 @@ pub(super) fn replay_archived_payload(
                 state.governance.shielded_atomic_batch_activation_height(),
                 &state.governance.asset_orchard_egress_policy_registry(),
                 true,
-            ))
+            );
+            pq_payment_fixture::ensure_valid(&batch, &receipts)?;
+            Ok(receipts)
         }
         "bridge" => {
             let batch: BridgeActionBatch = parse_archived_payload(block, archive_entry)?;
