@@ -197,12 +197,15 @@ pub struct ShieldedState {
     pub orchard: Option<OrchardPoolState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pq_fixture: Option<PqFixtureState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pq_pool_v1: Option<pq_payment::PqPool>,
 }
 
 impl ShieldedState {
     pub fn empty() -> Self {
         Self {
             pq_fixture: None,
+            pq_pool_v1: None,
             next_note_position: 0,
             notes: Vec::new(),
             nullifiers: Vec::new(),

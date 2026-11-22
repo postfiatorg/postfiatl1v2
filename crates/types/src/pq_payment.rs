@@ -15,7 +15,7 @@ const PREFIX: usize = 4 + 1 + 1 + 1 + 48 + 8 + 8 + 1;
 const ACCOUNT_FIELDS: usize = 20 + 8 + PUBLIC_KEY_BYTES;
 pub const POOL_ID: &str = "PFT-PQ-SHIELDED-POOL-V1";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Mode {
     Internal = 0,
@@ -254,3 +254,87 @@ pub fn checked_archive_size(body: usize, framing: usize) -> Result<usize, &'stat
         .filter(|n| *n <= ARCHIVE_LIMIT)
         .ok_or("PQ archive limit exceeded")
 }
+
+// Consensus metadata is small even for a full depth-24 epoch. The historical
+// indexes are derived from immutable pair pages and never deserialized from JSON.
+#[path = "pq_tree.rs"]
+mod tree;
+pub use tree::{PqEpoch, PqIndexes, PQ_CAPACITY, PQ_DEPTH, PQ_WINDOW};
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PqAsset {
+    pub epoch: u64,
+    pub reserve: u64,
+    pub ingress: u128,
+    pub exits: u128,
+    pub fees: u128,
+    pub frozen_epochs_root: String,
+    pub writable: PqEpoch,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PqOutput {
+    pub commitment: String,
+    // Canonical padded base64, exactly one 1,670-byte PFSH02 envelope.
+    pub ciphertext: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PqPair {
+    pub previous: String,
+    pub asset: String,
+    pub read_epoch: u64,
+    pub anchor: String,
+    pub epoch: u64,
+    pub first_index: u32,
+    pub height: u64,
+    pub kind: Mode,
+    pub mint: u64,
+    pub exit: u64,
+    pub fee: u64,
+    pub serials: [String; 2],
+    pub outputs: [PqOutput; 2],
+}
+
+impl PqPair {
+    pub fn digest(&self) -> String {
+        digest_record("postfiat.pq.pair.v1", self)
+    }
+}
+
+pub(super) fn digest_record(tag: &str, value: &impl Serialize) -> String {
+    // Typed tuple/struct fields have fixed order. JSON integers are canonical
+    // decimal and every string in the data model has a single checked encoding.
+    postfiat_crypto_provider::hash_hex(tag, &serde_json::to_vec(value).expect("typed PQ record"))
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PqHead {
+    pub pairs: u64,
+    pub last_page: String,
+    pub serial_index_root: String,
+    pub commitment_index_root: String,
+    pub output_index_root: String,
+    pub assets: std::collections::BTreeMap<String, PqAsset>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PqPool {
+    pub head: PqHead,
+    #[serde(skip)]
+    pub indexes: PqIndexes,
+    #[serde(skip)]
+    pub pending: imbl::Vector<std::sync::Arc<PqPair>>,
+}
+
+impl PartialEq for PqPool {
+    fn eq(&self, rhs: &Self) -> bool {
+        self.head == rhs.head
+    }
+}
+impl Eq for PqPool {}

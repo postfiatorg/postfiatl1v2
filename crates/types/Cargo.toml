@@ -11,6 +11,7 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+imbl = "7.0.2"
 base64.workspace = true
 postfiat-crypto-provider = {path = "../crypto_provider"}
 serde = { workspace = true }
