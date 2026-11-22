@@ -349,8 +349,8 @@ fn cmd_verify(tx_path: &str, ledger_path: &str) -> Result<(), String> {
     let ledger_str = fs::read_to_string(ledger_path).map_err(|e| e.to_string())?;
     let lj: LedgerJson = serde_json::from_str(&ledger_str).map_err(|e| e.to_string())?;
     let mut ledger = LedgerState::from_json(&lj)?;
-    let tx = ShieldedTx::from_bytes(&tx_bytes)?;
     let t0 = Instant::now();
+    let tx = ShieldedTx::from_bytes(&tx_bytes)?;
     ledger.verify_and_apply(&tx)?;
     let ms = t0.elapsed().as_secs_f64() * 1000.0;
     println!(

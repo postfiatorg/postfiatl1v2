@@ -79,12 +79,15 @@ func (tx *ShieldedTx) statement() *PaymentStatement {
 }
 
 func parseShieldedTx(data []byte) (*ShieldedTx, error) {
+	if len(data) > BudgetBytes {
+		return nil, errors.New("shielded tx exceeds archival budget")
+	}
 	if len(data) < HeaderBytes {
 		return nil, errors.New("truncated shielded tx header")
 	}
 	pos := 0
 	take := func(n int) ([]byte, error) {
-		if pos+n > len(data) {
+		if n < 0 || n > len(data)-pos {
 			return nil, errors.New("truncated shielded tx")
 		}
 		s := data[pos : pos+n]
@@ -360,12 +363,12 @@ func main() {
 			fmt.Fprintln(os.Stderr, "ERROR:", err)
 			os.Exit(1)
 		}
+		t0 := time.Now()
 		tx, err := parseShieldedTx(raw)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR:", err)
 			os.Exit(1)
 		}
-		t0 := time.Now()
 		if err := verifyFullSettlement(ls, tx); err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR:", err)
 			os.Exit(1)

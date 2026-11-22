@@ -1,6 +1,6 @@
 //! 0-Round Non-Interactive Shielded Payment Protocol ("Peel-Binius-Shielded")
 //! with Depth-24 Global Merkle Accumulator (16,777,216 coins), Native `is_dummy` 1-Input Spends,
-//! and FIPS-203 ML-KEM-1024 + SHA-384 + AES-256-GCM Stealth Receive.
+//! and FIPS-203 ML-KEM-1024 + HMAC-SHA-384 + AES-256-GCM Stealth Receive.
 //!
 //! On-chain transaction footprint matches Zcash Orchard:
 //!   (magic[8], anchor[48], fee[8], sn0[48], sn1[48], coin0[48], coin1[48], env0[1670], env1[1670], proof)
@@ -276,12 +276,15 @@ impl ShieldedTx {
     }
 
     pub fn from_bytes(data: &[u8]) -> Result<Self, String> {
+        if data.len() > W1_ARCHIVAL_BUDGET_BYTES {
+            return Err("shielded tx exceeds archival budget".into());
+        }
         if data.len() < HEADER_OVERHEAD_BYTES {
             return Err("truncated shielded tx header".into());
         }
         let mut pos = 0usize;
         let take = |pos: &mut usize, n: usize| -> Result<&[u8], String> {
-            if *pos + n > data.len() {
+            if n > data.len() - *pos {
                 return Err("truncated shielded tx".into());
             }
             let s = &data[*pos..*pos + n];

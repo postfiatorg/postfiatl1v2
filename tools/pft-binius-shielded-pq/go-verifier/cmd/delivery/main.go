@@ -1,4 +1,4 @@
-// Independent Go 1.25.1 stdlib FIPS-203 ML-KEM-1024 + SHA-384 + AES-256-GCM + SHAKE256
+// Independent Go 1.25.1 stdlib FIPS-203 ML-KEM-1024 + HMAC-SHA-384 + AES-256-GCM + SHAKE256
 // 0-round offline stealth receiver scanner (ZERO third-party dependencies!).
 package main
 

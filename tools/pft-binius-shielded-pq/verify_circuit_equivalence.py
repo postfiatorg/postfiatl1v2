@@ -13,6 +13,7 @@ Checks:
 """
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -359,7 +360,7 @@ def main():
     go_ir_path = ROOT / "go_ir.json"
 
     subprocess.run(
-        [str(ROOT / "rust-prover/target/release/pft-binius-shielded"), "dump-ir", "--tx", str(tx_path), "--out", str(rust_ir_path)],
+        [os.environ.get("RUST_BIN", str(ROOT / "rust-prover/target/release/pft-binius-shielded")), "dump-ir", "--tx", str(tx_path), "--out", str(rust_ir_path)],
         check=True,
     )
     subprocess.run(

@@ -12,7 +12,7 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Install z3-solver for mechanized UNSAT proofs
 RUN python3 -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir z3-solver
+    && /opt/venv/bin/pip install --no-cache-dir z3-solver==5.4.1.0
 ENV PY_BIN="/opt/venv/bin/python"
 ENV GO_BIN="/usr/local/go/bin/go"
 
