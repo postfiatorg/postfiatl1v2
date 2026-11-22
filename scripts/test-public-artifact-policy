@@ -73,6 +73,7 @@ EXPECTED = {
     "docs/yolo/evidence/target-receipt-v1-liquid-nvda-20260906.json.gz": "4183d8ca46420c1a1e14b67c52cc8855b0fb0d96177e5b0f4884d692f4a37497",
     "docs/yolo/evidence/target-receipt-v1-local-20260905.json.gz": "e81c8a701becf74484f38fd668e312c01a995e4fb197a753fd46f388f220e490",
     "docs/yolo/evidence/target-receipt-v1-nitro-native-20260905.json.gz": "deb51c27c99a56ba876e6234a11fce9c2ff5344cd632bce7de086979f6157a32",
+    "solana/pfusdc-egress-verifier/src/circuit-key.bin": "3f6be147313659eff8c63311d437f4063062c735a068f3f3e2e75367846b6161",
     "third_party/halo2_proofs/tests/plonk_api_proof.bin": "22abccd530cd2d96e2d4d024dc63764fb5ce7c3874bfc212ade8dbc9d01515c6",
     "wallet-extension/icons/icon128.png": "4e05b9a7cc8d83b110b6d0ce7dc98702a705f8c8427d98e8a6284cc6cbfd0c39",
     "wallet-extension/icons/icon16.png": "3caf5822b89ea2d234e250e4445dc63b854be6ed4b20681e27ed84196d847e8b",
