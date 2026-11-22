@@ -564,6 +564,8 @@ pub enum ShieldedAction {
     AssetOrchardPrivatePrimaryIssueV1(AssetOrchardPrivatePrimaryIssueActionPayload),
     #[serde(rename = "asset_orchard_private_primary_redeem_v1")]
     AssetOrchardPrivatePrimaryRedeemV1(AssetOrchardPrivatePrimaryRedeemActionPayload),
+    #[serde(rename = "pq_payment_v1")]
+    PqPaymentV1(pq_payment::PqPayment),
     #[serde(rename = "pq_fixture_hop")]
     PqFixtureHop { payment_hex: String },
 }

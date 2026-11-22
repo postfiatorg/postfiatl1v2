@@ -9,4 +9,12 @@ publish = false
 portable = ["pft-binius-shielded/portable"]
 
 [dependencies]
+postfiat-types = {path="../types"}
+postfiat-crypto-provider = {path="../crypto_provider"}
 pft-binius-shielded = { path = "../../tools/pft-binius-shielded-pq/rust-prover", default-features = false }
+
+[dev-dependencies]
+pft-binius-shielded = {path = "../../tools/pft-binius-shielded-pq/rust-prover", features=["prover"]}
+rand_chacha = "0.3"
+serde_json.workspace = true
+sha2.workspace = true

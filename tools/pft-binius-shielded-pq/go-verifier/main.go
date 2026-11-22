@@ -79,6 +79,10 @@ func (tx *ShieldedTx) statement() *PaymentStatement {
 }
 
 func parseShieldedTx(data []byte) (*ShieldedTx, error) {
+	return parseProfileInner(data, true)
+}
+
+func parseProfileInner(data []byte, standalone bool) (*ShieldedTx, error) {
 	if len(data) > BudgetBytes {
 		return nil, errors.New("shielded tx exceeds archival budget")
 	}
@@ -132,7 +136,7 @@ func parseShieldedTx(data []byte) (*ShieldedTx, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tx.VMint > 0 {
+	if tx.VMint > 0 && standalone {
 		rawKey, err := take(mldsa65.PublicKeySize)
 		if err != nil {
 			return nil, err

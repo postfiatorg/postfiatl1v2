@@ -194,11 +194,59 @@ pub fn create_shielded_tx(
     fee: u64,
     depositor: Option<&ml_dsa_65::PrivateKey>,
     rng: &mut impl RngCore,
-) -> Result<(ShieldedTx, [u8; BLIND_SECRET_BYTES], [u8; BLIND_SECRET_BYTES]), String> {
+) -> Result<
+    (
+        ShieldedTx,
+        [u8; BLIND_SECRET_BYTES],
+        [u8; BLIND_SECRET_BYTES],
+    ),
+    String,
+> {
+    create_profiled_tx(
+        tree,
+        in0,
+        in1,
+        out0_dest,
+        out0_val,
+        out1_dest,
+        out1_val,
+        v_mint,
+        v_unshield,
+        unshield_dest,
+        fee,
+        depositor,
+        None,
+        rng,
+    )
+}
+
+pub fn create_profiled_tx(
+    tree: &MerkleTree24,
+    in0: SpendInput,
+    in1: SpendInput,
+    out0_dest: &StealthAddress,
+    out0_val: u64,
+    out1_dest: &StealthAddress,
+    out1_val: u64,
+    v_mint: u64,
+    v_unshield: u64,
+    unshield_dest: [u8; UNSHIELD_DEST_BYTES],
+    fee: u64,
+    depositor: Option<&ml_dsa_65::PrivateKey>,
+    l1_context: Option<&dyn Fn([u8; 48]) -> [u8; 48]>,
+    rng: &mut impl RngCore,
+) -> Result<
+    (
+        ShieldedTx,
+        [u8; BLIND_SECRET_BYTES],
+        [u8; BLIND_SECRET_BYTES],
+    ),
+    String,
+> {
     if v_mint > 0 && v_unshield > 0 {
         return Err("Rule R5 violation: v_mint and v_unshield are mutually exclusive".into());
     }
-    if depositor.is_some() != (v_mint > 0) {
+    if depositor.is_some() != (v_mint > 0 && l1_context.is_none()) {
         return Err("R0-Auth: depositor key required exactly for positive mint".into());
     }
     let pub_exit = fee
@@ -304,7 +352,7 @@ pub fn create_shielded_tx(
         v_mint,
         v_unshield,
         fee,
-        tx_ctx,
+        tx_ctx: l1_context.map_or(tx_ctx, |bind| bind(tx_ctx)),
     };
     let wit = PaymentWitness {
         is_dummy0,

@@ -6,8 +6,8 @@ use postfiat_privacy_binius::{
 use postfiat_types::PqFixtureState;
 use std::sync::OnceLock;
 
-const CHAIN_ID: &str = "postfiat-pfsh02-m1-disposable";
-const GENESIS_HASH: &str = "e9c735eecfc4550f152330b52f782de84eea2aa7d59dc7e9e317718ed2ba28473854f0cb7c6c972f7f2825ba944b72e8";
+pub(super) const CHAIN_ID: &str = "postfiat-pfsh02-m1-disposable";
+pub(super) const GENESIS_HASH: &str = "e9c735eecfc4550f152330b52f782de84eea2aa7d59dc7e9e317718ed2ba28473854f0cb7c6c972f7f2825ba944b72e8";
 const LEDGER_DIGEST: &str = "2b0a19667f50562ff66c075a3a323c604c37115e1f77eb3a985c6ff05b45768775d68ece9bd167af2dabbe05181b7731";
 const HOP_CONTEXT: &str = "2309c3d8b1937a927109d39f156f6fb1895ea3c28b909e4219235c687e86310256ea2a65c8d7f6c59c35e165e6791e52";
 const PRE_ROOT: &str = "09a0fe28aad6188a97a16793c7da43b5ca538883c7bca9d5f84f3f8e29885136f38942989cfe9ee5a5435b426d2b5614";

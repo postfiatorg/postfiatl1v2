@@ -1693,11 +1693,59 @@ pub fn build_atomic_shielded_action_batch(
     Ok(ShieldedActionBatch::new_atomic(batch_id, actions))
 }
 
+fn verify_development_pq_payments(
+    genesis: &Genesis,
+    batch: &ShieldedActionBatch,
+) -> io::Result<()> {
+    for action in &batch.actions {
+        if let ShieldedAction::PqPaymentV1(payment) = action {
+            let hash = genesis_hash(genesis);
+            if genesis.chain_id != pq_payment_fixture::CHAIN_ID
+                || hash != pq_payment_fixture::GENESIS_HASH
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "PQ L1 profile is restricted to the disposable development genesis",
+                ));
+            }
+            let chain = postfiat_types::pq_payment::Chain {
+                id: &genesis.chain_id,
+                genesis: hex_to_bytes(&hash)
+                    .map_err(invalid_data)?
+                    .try_into()
+                    .map_err(|_| {
+                        io::Error::new(io::ErrorKind::InvalidData, "invalid genesis hash length")
+                    })?,
+                protocol: genesis.protocol_version,
+            };
+            let (_, _, inner) = payment
+                .parts()
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            if inner[64..72] != [0; 8] {
+                let address = format!("pf{}", bytes_to_hex(&inner[84..104]));
+                if let Some((_, reason)) =
+                    postfiat_execution::destination_address_rejection(&[("pq_exit", &address)])
+                {
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, reason));
+                }
+            }
+            postfiat_privacy_binius::verify_l1(payment, chain).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("PQ L1 verification failed: {e:?}"),
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
+
 pub fn verify_shielded_action_batch_id(
     genesis: &Genesis,
     batch: &ShieldedActionBatch,
 ) -> io::Result<()> {
     pq_payment_fixture::check_batch_domain(genesis, batch)?;
+    verify_development_pq_payments(genesis, batch)?;
     if batch.atomic && (batch.actions.is_empty() || batch.actions.len() > 3) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,

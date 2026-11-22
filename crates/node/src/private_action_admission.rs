@@ -221,6 +221,7 @@ pub fn private_action_kind(action: &ShieldedAction) -> &'static str {
         ShieldedAction::AssetOrchardIngressV2(_) => "asset_orchard_ingress_v2",
         ShieldedAction::AssetOrchardPrivateEgressV1(_) => "asset_orchard_private_egress_v1",
         ShieldedAction::ShieldedSwapV1(_) => "shielded_swap_v1",
+        ShieldedAction::PqPaymentV1(_) => "pq_payment_v1",
         _ => "not_admitted",
     }
 }
@@ -480,7 +481,10 @@ pub fn private_action_submit(
     if domain.chain_id != state.genesis.chain_id
         || domain.genesis_hash != genesis_hash(&state.genesis)
         || domain.protocol_version != state.genesis.protocol_version
-        || domain.pool_id != PRIVATE_ACTION_POOL_ID
+        || !matches!(
+            domain.pool_id.as_str(),
+            PRIVATE_ACTION_POOL_ID | postfiat_types::pq_payment::POOL_ID
+        )
     {
         return Err(refused(
             "private_action_wrong_domain",
@@ -495,6 +499,14 @@ pub fn private_action_submit(
         ));
     }
     let action = decode_private_action(&request.action_json)?;
+    if matches!(&action, ShieldedAction::PqPaymentV1(_))
+        != (domain.pool_id == postfiat_types::pq_payment::POOL_ID)
+    {
+        return Err(refused(
+            "private_action_wrong_domain",
+            "wrong pool for action",
+        ));
+    }
     let action_hash = postfiat_types::private_action_hash(&action)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     if action_hash != request.action_hash {

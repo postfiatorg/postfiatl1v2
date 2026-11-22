@@ -145,6 +145,14 @@ impl ShieldedTx {
     }
 
     pub fn from_bytes(data: &[u8]) -> Result<Self, String> {
+        Self::parse(data, true)
+    }
+
+    pub fn from_l1_inner(data: &[u8]) -> Result<Self, String> {
+        Self::parse(data, false)
+    }
+
+    fn parse(data: &[u8], standalone: bool) -> Result<Self, String> {
         if data.len() > W1_ARCHIVAL_BUDGET_BYTES {
             return Err("shielded tx exceeds archival budget".into());
         }
@@ -177,7 +185,7 @@ impl ShieldedTx {
         let env1: [u8; ENV_BYTES] = take(&mut pos, ENV_BYTES)?.try_into().unwrap();
         let proof_len = u32::from_le_bytes(take(&mut pos, 4)?.try_into().unwrap()) as usize;
         let proof_bytes = take(&mut pos, proof_len)?;
-        let mint_auth = if v_mint > 0 {
+        let mint_auth = if standalone && v_mint > 0 {
             Some(Box::new(MintAuth {
                 public_key: take(&mut pos, ML_DSA_65_PK_BYTES)?.try_into().unwrap(),
                 signature: take(&mut pos, ML_DSA_65_SIG_BYTES)?.try_into().unwrap(),

@@ -35,6 +35,32 @@ pub fn verify_payment(
     Ok(statement)
 }
 
+/// Verify the settled-domain transcript and the single public authorization, if present.
+/// Stateful eligibility, sequence and debits are checked at settlement.
+pub fn verify_l1(
+    payment: &postfiat_types::pq_payment::PqPayment,
+    chain: postfiat_types::pq_payment::Chain,
+) -> Result<PaymentStatement, VerifyError> {
+    let (terms, signature, inner) = payment.parts().map_err(|_| VerifyError::Encoding)?;
+    let tx = ShieldedTx::from_l1_inner(inner).map_err(|_| VerifyError::Encoding)?;
+    let mut statement = tx.statement();
+    if let (Some(a), Some(sig)) = (&terms.account, signature) {
+        let address = postfiat_crypto_provider::address_from_public_key(a.public_key.as_ref());
+        if address != format!("pf{}", postfiat_crypto_provider::bytes_to_hex(&a.id))
+            || !postfiat_crypto_provider::ml_dsa_65_verify(
+                a.public_key.as_ref(),
+                &terms.signing_message(chain, statement.tx_ctx).unwrap(),
+                sig,
+            )
+        {
+            return Err(VerifyError::InvalidPublicFlow);
+        }
+    }
+    statement.tx_ctx = terms.statement_context(chain, statement.tx_ctx);
+    binius_pcs::verify(&statement, &tx.proof).map_err(|_| VerifyError::InvalidProof)?;
+    Ok(statement)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -214,12 +214,16 @@ pub fn private_action_hash(action: &ShieldedAction) -> Result<String, serde_json
 /// Strictly decodes a public action: one of the three user-proven kinds, no
 /// unknown fields at either JSON level, and the exact swap field set.
 pub fn parse_private_public_action(action_json: &str) -> Result<ShieldedAction, &'static str> {
+    if action_json.len() > pq_payment::REQUEST_LIMIT {
+        return Err("private_action_too_large");
+    }
     let value: serde_json::Value =
         serde_json::from_str(action_json).map_err(|_| "private_action_malformed")?;
     let action: ShieldedAction =
-        serde_json::from_value(value.clone()).map_err(|_| "private_action_malformed")?;
+        serde_json::from_str(action_json).map_err(|_| "private_action_malformed")?;
     match &action {
-        ShieldedAction::AssetOrchardIngressV2(_)
+        ShieldedAction::PqPaymentV1(_)
+        | ShieldedAction::AssetOrchardIngressV2(_)
         | ShieldedAction::AssetOrchardPrivateEgressV1(_) => {}
         ShieldedAction::ShieldedSwapV1(swap) => {
             let inner: serde_json::Value =
