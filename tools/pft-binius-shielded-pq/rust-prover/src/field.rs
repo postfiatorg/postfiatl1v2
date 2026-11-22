@@ -207,7 +207,7 @@ impl KTables {
     /// Branchless constant-time K_32 multiply via PCLMULQDQ when available on x86_64.
     #[inline(always)]
     pub fn kmul(&self, a: u32, b: u32) -> u32 {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
         {
             if std::arch::is_x86_feature_detected!("pclmulqdq") {
                 return unsafe { kmul32_pclmul(a, b) };
@@ -248,7 +248,7 @@ impl KTables {
     /// Uses branchless PCLMULQDQ when available on x86_64 (zero secret-dependent table lookups).
     pub fn antt_inverse_h_k(&self, a: &mut [u32]) {
         debug_assert_eq!(a.len(), H_SIZE);
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
         {
             if std::arch::is_x86_feature_detected!("pclmulqdq") {
                 unsafe { self.antt_inverse_h_k_pclmul(a); }
@@ -272,7 +272,7 @@ impl KTables {
         }
     }
 
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
     #[target_feature(enable = "pclmulqdq")]
     unsafe fn antt_inverse_h_k_pclmul(&self, a: &mut [u32]) {
         for i in 0..H_LOG {
@@ -316,7 +316,7 @@ impl KTables {
         debug_assert!(coeffs.len() <= 1024 && blk < 2048);
         out[..coeffs.len()].copy_from_slice(coeffs);
         out[coeffs.len()..].fill(0);
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
         {
             if std::arch::is_x86_feature_detected!("pclmulqdq") {
                 unsafe { self.antt_forward_block1024_k_pclmul(blk, out); }
@@ -344,7 +344,7 @@ impl KTables {
         }
     }
 
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
     #[target_feature(enable = "pclmulqdq")]
     unsafe fn antt_forward_block1024_k_pclmul(&self, blk: usize, out: &mut [u32; 1024]) {
         let tw_l = self.tw_l();
@@ -390,7 +390,7 @@ impl KTables {
         debug_assert!(coeffs.len() <= 1024 && blk < 2048);
         out[..coeffs.len()].copy_from_slice(coeffs);
         out[coeffs.len()..].fill(E::ZERO);
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
         {
             if std::arch::is_x86_feature_detected!("pclmulqdq") {
                 unsafe { self.antt_forward_block1024_e_pclmul(blk, out); }
@@ -417,7 +417,7 @@ impl KTables {
         }
     }
 
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
     #[target_feature(enable = "pclmulqdq")]
     unsafe fn antt_forward_block1024_e_pclmul(&self, blk: usize, out: &mut [E; 1024]) {
         let tw_l = self.tw_l();
@@ -550,7 +550,7 @@ impl E {
 
     #[inline(always)]
     pub fn scale_k(self, k: u32, kt: &KTables) -> E {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
         {
             if std::arch::is_x86_feature_detected!("pclmulqdq") {
                 return unsafe { self.scale_k_pclmul(k) };
@@ -563,7 +563,7 @@ impl E {
         E { c: out }
     }
 
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
     #[target_feature(enable = "pclmulqdq")]
     unsafe fn scale_k_pclmul(self, k: u32) -> E {
         let k_u64 = ((k & 0xFFFF) as u64) | (((k >> 16) as u64) << 32);
@@ -598,7 +598,7 @@ impl E {
     /// Dispatches to 54-PCLMULQDQ branchless zero-lookup Karatsuba on x86_64.
     #[inline(always)]
     pub fn mul(self, rhs: E, kt: &KTables) -> E {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
         {
             if std::arch::is_x86_feature_detected!("pclmulqdq")
                 && std::arch::is_x86_feature_detected!("sse4.1")
@@ -641,7 +641,7 @@ impl E {
     /// Zero table lookups, 100% branchless, bit-for-bit identical to `mul_portable`.
     /// Uses SSE4.1 `PEXTRQ` (zero store-forwarding stalls) and defers K_16 reduction until after
     /// reducing Y^12..Y^22 mod (Y^12 + Y^3 + Y + alpha) in 128-bit registers!
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
     #[inline]
     #[target_feature(enable = "pclmulqdq,sse4.1")]
     pub unsafe fn mul_pclmul(self, rhs: E) -> E {
@@ -768,7 +768,7 @@ fn kmul_alpha_branchless(v: u32) -> u32 {
     (lo as u32) | ((hi as u32) << 16)
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
 #[inline]
 #[target_feature(enable = "pclmulqdq")]
 unsafe fn kmul32_pclmul(a: u32, b: u32) -> u32 {
@@ -792,7 +792,7 @@ unsafe fn kmul32_pclmul(a: u32, b: u32) -> u32 {
     (r0 as u32) | ((r1 as u32) << 16)
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
 #[inline]
 #[target_feature(enable = "pclmulqdq")]
 unsafe fn clmul_pair(a: u64, b: u64) -> core::arch::x86_64::__m128i {
@@ -801,7 +801,7 @@ unsafe fn clmul_pair(a: u64, b: u64) -> core::arch::x86_64::__m128i {
 }
 
 /// 3x3 Karatsuba over packed K_32 lanes: 6 PCLMULQDQ instructions -> 5 outputs.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
 #[inline]
 #[target_feature(enable = "pclmulqdq")]
 unsafe fn karatsuba3_clmul(
@@ -824,7 +824,7 @@ unsafe fn karatsuba3_clmul(
 }
 
 /// 6x6 Karatsuba: 3 x karatsuba3_clmul = 18 PCLMULQDQ instructions -> 11 outputs.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
 #[inline]
 #[target_feature(enable = "pclmulqdq")]
 unsafe fn karatsuba6_clmul(
@@ -857,7 +857,7 @@ unsafe fn karatsuba6_clmul(
 }
 
 /// 12x12 Karatsuba: 3 x karatsuba6_clmul = 54 PCLMULQDQ instructions -> 23 outputs.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
 #[inline]
 #[target_feature(enable = "pclmulqdq")]
 unsafe fn karatsuba12_clmul(
@@ -972,11 +972,11 @@ impl RingSwitchLinearMap {
 
     #[inline(always)]
     pub fn apply(&self, z: E) -> E {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
         {
             return unsafe { self.apply_sse2(z) };
         }
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(any(not(target_arch = "x86_64"), feature = "portable"))]
         {
             let mut acc = E::ZERO;
             for v in 0..12 {
@@ -997,7 +997,7 @@ impl RingSwitchLinearMap {
         }
     }
 
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
     #[inline(always)]
     unsafe fn apply_sse2(&self, z: E) -> E {
         use core::arch::x86_64::{__m128i, _mm_loadu_si128, _mm_setzero_si128, _mm_storeu_si128, _mm_xor_si128};

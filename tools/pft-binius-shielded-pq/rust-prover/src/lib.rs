@@ -1,6 +1,9 @@
 pub mod binius_pcs;
 pub mod circuit;
 pub mod field;
+#[cfg(feature = "prover")]
 pub mod payment;
+pub mod wire;
 pub mod shake256;
+#[cfg(feature = "prover")]
 pub mod mint_auth;

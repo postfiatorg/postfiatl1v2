@@ -2950,6 +2950,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pft-binius-shielded"
+version = "0.1.0"
+dependencies = [
+ "sha2 0.10.9",
+ "sha3 0.10.9",
+]
+
+[[package]]
 name = "pftl-ingress-groth16-verify"
 version = "0.1.0"
 dependencies = [
@@ -3231,6 +3239,7 @@ dependencies = [
  "postfiat-pft-lane-proofs",
  "postfiat-pftl-uniswap-proofs",
  "postfiat-privacy",
+ "postfiat-privacy-binius",
  "postfiat-privacy-orchard",
  "postfiat-rpc-sdk",
  "postfiat-storage",
@@ -3296,6 +3305,13 @@ dependencies = [
  "postfiat-types",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "postfiat-privacy-binius"
+version = "0.1.0"
+dependencies = [
+ "pft-binius-shielded",
 ]
 
 [[package]]

@@ -9,11 +9,7 @@ use sha3::Sha3_384;
 
 const CONTEXT: &[u8] = b"postfiat-l1-v2/tx/v1";
 
-#[derive(Clone, Debug)]
-pub struct MintAuth {
-    pub public_key: [u8; ml_dsa_65::PK_LEN],
-    pub signature: [u8; ml_dsa_65::SIG_LEN],
-}
+pub use crate::wire::MintAuth;
 
 impl MintAuth {
     pub fn source(&self) -> String {

@@ -12,15 +12,20 @@
 //!   - Streaming 1,024-column L1-cache-resident ANTT prover (peak RSS ~300 MiB, branchless PCLMULQDQ)
 
 use crate::circuit::{
-    build_prover_weights, eval_verifier_weights_at_r1, CircuitChallenge, CircuitWitnessBits,
-    PaymentStatement, ACTIVE_SUBROWS_PER_POLY, NUM_BITS_PER_POLY, V_SC1,
+    eval_verifier_weights_at_r1, CircuitChallenge,
+    PaymentStatement, ACTIVE_SUBROWS_PER_POLY, V_SC1,
 };
+#[cfg(feature = "prover")]
+use crate::circuit::{build_prover_weights, CircuitWitnessBits, NUM_BITS_PER_POLY};
 use crate::field::{
     eq_eval_point, eq_table, k_tables, KTables, RingSwitchLinearMap, E, E_BYTES, H_SIZE, L_SHIFT,
 };
 use crate::shake256::{COIN_BYTES, NODE_BYTES, SN_BYTES};
+#[cfg(feature = "prover")]
 use rand::{RngCore, SeedableRng};
+#[cfg(feature = "prover")]
 use rand_chacha::ChaCha20Rng;
+#[cfg(feature = "prover")]
 use rayon::prelude::*;
 use sha2::{Digest, Sha512};
 use std::collections::{BTreeMap, BTreeSet};
@@ -357,7 +362,7 @@ impl BiniusProof {
     pub fn from_bytes(data: &[u8]) -> Result<Self, String> {
         let mut pos = 0usize;
         let take = |pos: &mut usize, n: usize| -> Result<&[u8], String> {
-            if *pos + n > data.len() {
+            if n > data.len() - *pos {
                 return Err("truncated Binius proof".into());
             }
             let slice = &data[*pos..*pos + n];
@@ -458,6 +463,7 @@ impl BiniusProof {
 }
 
 /// Evaluate the degree-3 Sumcheck-1 mask polynomial contribution G_1 at round d in 0..19.
+#[cfg(feature = "prover")]
 fn eval_g1_round(g1: &[[E; 4]; V_SC1], r_prev: &[E], d: usize, kt: &KTables) -> [E; 4] {
     let mut pref_prod = E::one();
     for &r in r_prev {
@@ -560,6 +566,7 @@ fn ring_switch_target(s_prime: &[E; 32], w_rs: &[E], kt: &KTables) -> E {
 }
 
 /// Build the exact 256 x 512 weight matrix M_rs for Sumcheck 2 (PROVER).
+#[cfg(feature = "prover")]
 fn build_m_rs_matrix(
     layout: &RowLayout,
     r1: &[E; V_SC1],
@@ -1046,6 +1053,7 @@ fn eval_verifier_ip_lhs(
 
 /// Generate a complete ZK Peel-Binius-Shielded proof using streaming L1-cache-resident
 /// 1,024-column ANTT (peak RSS ~300 MiB) and single fixed-range SHA-384 compiler oracle H.
+#[cfg(feature = "prover")]
 pub fn prove(
     stmt: &PaymentStatement,
     wit_bits: &CircuitWitnessBits,
@@ -2006,6 +2014,7 @@ pub fn verify(stmt: &PaymentStatement, proof: &BiniusProof) -> Result<(), String
     Ok(())
 }
 
+#[cfg(feature = "prover")]
 #[cfg(test)]
 mod tests {
     use super::*;
