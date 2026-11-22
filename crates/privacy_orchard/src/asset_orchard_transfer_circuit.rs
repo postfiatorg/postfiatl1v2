@@ -16,7 +16,7 @@ pub const ASSET_ORCHARD_TRANSFER_V1_K: u32 = ASSET_ORCHARD_SWAP_V1_K;
 /// Fingerprint of the verifying key every validator must derive for `asset_orchard.transfer.v1`.
 /// A node whose build produces a different key refuses to verify transfers.
 pub const ASSET_ORCHARD_TRANSFER_V1_RUNTIME_PINNED_VK_FINGERPRINT: &str =
-    "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    "25d7b64a81425c111f47db6074a5ac9d193029dc04e8bff2370e2ccd6f152922843f6b54e7ae989ab51ecbc0045e231f";
 
 static ASSET_ORCHARD_TRANSFER_VERIFYING_KEY: OnceLock<
     Result<AssetOrchardTransferVerifyingKey, AssetOrchardError>,

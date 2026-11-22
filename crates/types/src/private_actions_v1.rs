@@ -29,6 +29,26 @@ pub const PRIVATE_SWAP_JSON_FIELDS: [&str; 18] = [
     "spend_authorization_signatures",
 ];
 
+/// The exact top-level fields of a public `asset_orchard_transfer_v1` `transfer_json`.
+/// `exit` is present only when value leaves the pool.
+pub const PRIVATE_TRANSFER_JSON_FIELDS: [&str; 15] = [
+    "version",
+    "schema",
+    "pool_id",
+    "proof_system_id",
+    "circuit_id",
+    "pool_domain",
+    "anchor",
+    "nullifiers",
+    "randomized_verification_keys",
+    "output_commitments",
+    "encrypted_outputs",
+    "exit_binding_hash",
+    "action_binding_hash",
+    "proof",
+    "spend_authorization_signatures",
+];
+
 /// What an intent id binds besides the action text. Field order is part of the
 /// hash preimage and matches the wallet's `PrivateDomain`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -211,8 +231,8 @@ pub fn private_action_hash(action: &ShieldedAction) -> Result<String, serde_json
     Ok(private_actions_hash_hex(PRIVATE_ACTION_HASH_DOMAIN, &bytes))
 }
 
-/// Strictly decodes a public action: one of the three user-proven kinds, no
-/// unknown fields at either JSON level, and the exact swap field set.
+/// Strictly decodes a public action: one of the four user-proven kinds, no
+/// unknown fields at either JSON level, and the exact swap and transfer field sets.
 pub fn parse_private_public_action(action_json: &str) -> Result<ShieldedAction, &'static str> {
     let value: serde_json::Value =
         serde_json::from_str(action_json).map_err(|_| "private_action_malformed")?;
@@ -231,6 +251,20 @@ pub fn parse_private_public_action(action_json: &str) -> Result<ShieldedAction, 
                     .any(|key| !PRIVATE_SWAP_JSON_FIELDS.contains(&key.as_str()))
             {
                 return Err("private_swap_json_fields_refused");
+            }
+        }
+        ShieldedAction::AssetOrchardTransferV1(transfer) => {
+            let inner: serde_json::Value = serde_json::from_str(&transfer.transfer_json)
+                .map_err(|_| "private_transfer_json_malformed")?;
+            let fields = inner.as_object().ok_or("private_transfer_json_malformed")?;
+            let required = PRIVATE_TRANSFER_JSON_FIELDS
+                .iter()
+                .all(|field| fields.contains_key(*field));
+            let only_known = fields
+                .keys()
+                .all(|key| key == "exit" || PRIVATE_TRANSFER_JSON_FIELDS.contains(&key.as_str()));
+            if !required || !only_known {
+                return Err("private_transfer_json_fields_refused");
             }
         }
         ShieldedAction::AssetOrchardIngressV1(_) | ShieldedAction::AssetOrchardEgressV1(_) => {

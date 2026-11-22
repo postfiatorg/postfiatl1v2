@@ -221,6 +221,7 @@ pub fn private_action_kind(action: &ShieldedAction) -> &'static str {
         ShieldedAction::AssetOrchardIngressV2(_) => "asset_orchard_ingress_v2",
         ShieldedAction::AssetOrchardPrivateEgressV1(_) => "asset_orchard_private_egress_v1",
         ShieldedAction::ShieldedSwapV1(_) => "shielded_swap_v1",
+        ShieldedAction::AssetOrchardTransferV1(_) => "asset_orchard_transfer_v1",
         _ => "not_admitted",
     }
 }
