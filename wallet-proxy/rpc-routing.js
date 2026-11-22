@@ -882,8 +882,18 @@ wss } = runtime;
         try {
             const response = JSON.parse(line);
             if (response?.ok === true) return false;
-            if (response?.error?.code !== 'rpc_finality_submit_failed') return false;
-            return /(?:vote request|vote workers|quorum|certificate|transport|timed out|connection)/i
+            const code = response?.error?.code;
+            // A proposer that already signed in this view (a run that failed
+            // after signing) can never finish it; only the next view can.
+            if (code === 'rpc_finality_view_spent') return true;
+            // `rpc_finality_view_must_repropose`: the view must carry the
+            // timeout certificate's block. It stays usable for that block, and
+            // timing it out would spend it, so the error goes to the client.
+            if (code !== 'rpc_finality_submit_failed') return false;
+            // Nodes without those two codes (release 6.4 and earlier) send
+            // every failure under this one; 6.4 reports a spent view as its
+            // own vote-lock conflict.
+            return /(?:vote request|vote workers|quorum|certificate|transport|timed out|connection|view spent|conflicting block proposal vote already recorded)/i
                 .test(String(response.error.message || ''));
         } catch (_) {
             return false;

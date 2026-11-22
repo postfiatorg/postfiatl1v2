@@ -100,6 +100,8 @@ fn run_serialized_rpc_mempool_submit(
             request,
             context,
         )
+    } else if method == "mempool_submit_signed_offer_transaction_finality" {
+        run_rpc_serve_mempool_submit_signed_offer_transaction_finality(request_index, request, context)
     } else if method == "mempool_submit_signed_transfer_finality" {
         run_rpc_serve_mempool_submit_signed_transfer_finality(request_index, request, context)
     } else {
@@ -267,9 +269,8 @@ fn run_rpc_serve_mempool_submit_signed_atomic_swap_finality_inner(
         .finality_artifact_root
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
-    let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
-    let finality_view = prepare_rpc_finality_view(&context.data_dir, params, &artifact_dir)?;
-    require_rpc_finality_local_proposer(context, finality_view.view)?;
+    let finality_view = prepare_rpc_finality_round(context, params, &artifact_dir)?;
+    let readiness_wait_ms = finality_view.readiness_wait_ms;
     let required_parent = RequiredBlockParent {
         height: atomic_swap_rpc_required_u64(params, "proxy_required_current_height")?,
         block_hash: atomic_swap_rpc_required_string(params, "proxy_required_parent_hash")?,
@@ -291,6 +292,7 @@ fn run_rpc_serve_mempool_submit_signed_atomic_swap_finality_inner(
         timeout_ms: context.finality_timeout_ms,
         send_retries: context.finality_send_retries,
         retry_backoff_ms: context.finality_retry_backoff_ms,
+        vote_phase_deadline_ms: context.finality_vote_phase_deadline_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
         max_transactions: 1,
@@ -328,6 +330,7 @@ fn run_rpc_serve_mempool_submit_signed_atomic_swap_finality_inner(
         })?;
 
     let total_ms = monotonic_elapsed_ms(total_start);
+    let round_report_write_start = Instant::now();
     let round_report_file = artifact_dir.join("rpc-finality-round.json");
     let round_json = serde_json::to_string_pretty(&round).map_err(|error| {
         (
@@ -344,6 +347,7 @@ fn run_rpc_serve_mempool_submit_signed_atomic_swap_finality_inner(
             ),
         )
     })?;
+    let round_report_write_ms = monotonic_elapsed_ms(round_report_write_start);
     let result = RpcMempoolSubmitSignedTransferFinalityReport {
         schema: "postfiat-rpc-mempool-submit-signed-atomic-swap-finality-v1".to_string(),
         tx_id: tx_id.clone(),
@@ -358,6 +362,11 @@ fn run_rpc_serve_mempool_submit_signed_atomic_swap_finality_inner(
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
         idempotent_replay: false,
+        step_timings: rpc_finality_step_timings(
+            (finality_view.prepare_ms, finality_view.status_reads),
+            &round,
+            round_report_write_ms,
+        ),
     };
     success_response(
         &request.id,

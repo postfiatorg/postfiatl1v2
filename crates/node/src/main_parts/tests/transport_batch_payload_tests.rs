@@ -170,6 +170,7 @@ mod transport_batch_payload_tests {
             timeout_ms: 15_000,
             send_retries: 2,
             retry_backoff_ms: 50,
+            vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
             local_apply_before_certified_send: false,
             defer_certified_sends: false,
             commit_processed_dir: None,
@@ -462,6 +463,7 @@ mod transport_batch_payload_tests {
                 finality_timeout_ms: 15_000,
                 finality_send_retries: 2,
                 finality_retry_backoff_ms: 50,
+                finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 finality_quorum_early_full_propagation: false,
                 max_mempool_submit_per_peer: 4,
                 max_mempool_submit_total: 8,
@@ -1433,7 +1435,13 @@ mod transport_batch_payload_tests {
         let mut conflicting = certificate_json(&certificate_file);
         conflicting["certificate"]["registry_root"] = serde_json::json!("77".repeat(48));
         let error = assert_redelivery_is_a_conflict(&fleet, source, other_target, &conflicting);
-        assert!(error.contains("differs from the delivered certificate"), "{error}");
+        // Release 6.4's check names one conflict for every differing field.
+        assert!(
+            error.contains(&format!(
+                "already-applied batch `{batch_id}` conflicts with certified height/hash"
+            )),
+            "{error}"
+        );
 
         // The completed job no longer holds the proposer back.
         let _ = transactional_six_validator_round(&fleet, 3, 2);
@@ -1508,7 +1516,13 @@ mod transport_batch_payload_tests {
         assert_eq!(pending.result, "pending");
         assert!(!pending.already_applied);
         let error = pending.error.clone().expect("named conflict");
-        assert!(error.contains("certified_send_duplicate_conflict"), "{error}");
+        assert!(
+            error.contains(
+                "transport batch service apply failed: certified_send_duplicate_conflict: \
+                 already-applied batch `"
+            ),
+            "{error}"
+        );
         let job = read_durable_certified_send_job(&job_file).expect("job");
         assert!(!job.completed);
         assert!(job.ack.is_none());
@@ -1559,6 +1573,18 @@ mod transport_batch_payload_tests {
             delivered["consensus_v2_commit"].is_object(),
             "block 2 must carry a consensus-v2 commit"
         );
+        let batch_id = NodeStore::new(&fleet.data_dirs[source])
+            .read_blocks()
+            .expect("source blocks")
+            .blocks
+            .iter()
+            .find(|block| block.header.height == 2)
+            .expect("block 2")
+            .header
+            .batch_id
+            .clone();
+        let conflict =
+            format!("already-applied batch `{batch_id}` conflicts with certified height/hash");
 
         // The consensus-v2 commit removed.
         let target = (source + 1) % fleet.data_dirs.len();
@@ -1568,14 +1594,14 @@ mod transport_batch_payload_tests {
             .expect("certificate object")
             .remove("consensus_v2_commit");
         let error = assert_redelivery_is_a_conflict(&fleet, source, target, &removed);
-        assert!(error.contains("consensus-v2 commit"), "{error}");
+        assert!(error.contains(&conflict), "{error}");
 
         // The precommit votes emptied.
         let target = (source + 2) % fleet.data_dirs.len();
         let mut emptied = delivered;
         emptied["consensus_v2_commit"]["precommit_qc"]["votes"] = serde_json::json!([]);
         let error = assert_redelivery_is_a_conflict(&fleet, source, target, &emptied);
-        assert!(error.contains("consensus-v2 commit"), "{error}");
+        assert!(error.contains(&conflict), "{error}");
 
         // Neither conflict holds the proposer back.
         let _ = transactional_six_validator_round(&fleet, 3, 2);
@@ -1728,6 +1754,7 @@ mod transport_batch_payload_tests {
                 timeout_ms: 15_000,
                 send_retries: 2,
                 retry_backoff_ms: 50,
+                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 local_apply_before_certified_send: true,
                 defer_certified_sends: false,
                 commit_processed_dir: Some(processed_dir.clone()),
@@ -1900,6 +1927,7 @@ mod transport_batch_payload_tests {
                 timeout_ms: 15_000,
                 send_retries: 2,
                 retry_backoff_ms: 50,
+                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 local_apply_before_certified_send: false,
                 defer_certified_sends: false,
                 commit_processed_dir: None,
@@ -2189,6 +2217,7 @@ mod transport_batch_payload_tests {
                 timeout_ms: 15_000,
                 send_retries: 1,
                 retry_backoff_ms: 50,
+                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 local_apply_before_certified_send: false,
                 defer_certified_sends: false,
                 commit_processed_dir: None,
@@ -2412,6 +2441,7 @@ mod transport_batch_payload_tests {
                 timeout_ms: deadline_ms,
                 send_retries: 1,
                 retry_backoff_ms: 50,
+                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 local_apply_before_certified_send: false,
                 defer_certified_sends: false,
                 commit_processed_dir: None,
@@ -2641,6 +2671,2892 @@ mod transport_batch_payload_tests {
         std::fs::remove_dir_all(&data_dir).expect("cleanup");
     }
 
+    /// Line proxy in front of one validator, modelling validator-2 at height
+    /// 1453: its prepare vote reaches the proposer late, and every precommit
+    /// request is held and then refused.
+    fn spawn_late_refusing_validator_proxy(
+        listener: TcpListener,
+        upstream: std::net::SocketAddr,
+        prepare_delay: Duration,
+        precommit_hold: Duration,
+        precommit_requests: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    ) {
+        std::thread::spawn(move || {
+            for client in listener.incoming() {
+                let Ok(client) = client else { return };
+                let precommit_requests = std::sync::Arc::clone(&precommit_requests);
+                std::thread::spawn(move || {
+                    let mut client_writer = client.try_clone().expect("clone proxy client");
+                    let mut client_reader = BufReader::new(client);
+                    let mut upstream_stream: Option<(TcpStream, BufReader<TcpStream>)> = None;
+                    loop {
+                        let mut line = String::new();
+                        if client_reader.read_line(&mut line).unwrap_or(0) == 0 {
+                            return;
+                        }
+                        let request: serde_json::Value =
+                            serde_json::from_str(&line).unwrap_or(serde_json::Value::Null);
+                        let phase = request
+                            .pointer("/consensus_v2/phase")
+                            .and_then(serde_json::Value::as_str);
+                        if phase == Some("precommit") {
+                            precommit_requests.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                            std::thread::sleep(precommit_hold);
+                            let refusal = serde_json::json!({
+                                "schema": "postfiat-transport-validator-rejection-v1",
+                                "error": "transport consensus v2 precommit signing failed: consensus v2 precommit vote is not authorized by a newer non-nil prepare QC",
+                            });
+                            let _ = client_writer.write_all(format!("{refusal}\n").as_bytes());
+                            return;
+                        }
+                        if upstream_stream.is_none() {
+                            let stream = TcpStream::connect(upstream).expect("proxy upstream");
+                            let reader =
+                                BufReader::new(stream.try_clone().expect("clone upstream"));
+                            upstream_stream = Some((stream, reader));
+                        }
+                        let (stream, reader) = upstream_stream.as_mut().expect("upstream");
+                        if stream.write_all(line.as_bytes()).is_err() {
+                            return;
+                        }
+                        let mut response = String::new();
+                        if reader.read_line(&mut response).unwrap_or(0) == 0 {
+                            return;
+                        }
+                        if phase == Some("prepare") {
+                            std::thread::sleep(prepare_delay);
+                        }
+                        if client_writer.write_all(response.as_bytes()).is_err() {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    fn certificate_qc_voters(certificate_file: &Path, qc: &str) -> Vec<String> {
+        fn find<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+            match value {
+                serde_json::Value::Object(map) => map
+                    .get(key)
+                    .or_else(|| map.values().find_map(|value| find(value, key))),
+                serde_json::Value::Array(items) => items.iter().find_map(|value| find(value, key)),
+                _ => None,
+            }
+        }
+        let certificate: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(certificate_file).expect("read block certificate"),
+        )
+        .expect("parse block certificate");
+        find(&certificate, qc)
+            .and_then(|qc| qc.get("votes"))
+            .and_then(serde_json::Value::as_array)
+            .expect("QC votes")
+            .iter()
+            .map(|vote| {
+                vote.get("validator")
+                    .and_then(serde_json::Value::as_str)
+                    .expect("QC vote validator")
+                    .to_string()
+            })
+            .collect()
+    }
+
+    #[derive(Clone, Copy)]
+    enum ProxyVote {
+        /// Forward to the real validator and hold its reply this long.
+        Forward(Duration),
+        /// Forward a tampered request so the real validator sends an explicit
+        /// rejection, then close like the validator does.
+        Refuse,
+        /// Refuse the first request of the phase like `Refuse` (a peer that is
+        /// not ready yet), then forward the requests that follow.
+        RefuseFirst,
+        /// Refuse like `Refuse` until this long after the phase's first
+        /// request (a peer lagging that long), then forward.
+        RefuseFor(Duration),
+        /// Answer with the validator's permanent refusal: it already voted for
+        /// a conflicting proposal at this height.
+        RefuseConflicting,
+        /// Hold the request this long before the validator sees it (a peer
+        /// still busy with the phase), then forward it.
+        Hold(Duration),
+        /// Forward, then drop the consensus v2 vote from the validator's reply.
+        OmitV2Vote,
+        /// Forward, then corrupt the consensus v2 vote signature in the reply
+        /// (which the transport accepts and the prepare QC would not) and hold
+        /// it this long.
+        CorruptV2Signature(Duration),
+        /// Read the request and never answer.
+        Silent,
+        /// Hold the request this long, then close without a reply.
+        Drop(Duration),
+    }
+
+    /// Line proxy in front of one validator, acting per vote phase and
+    /// counting vote requests per phase ([prepare, precommit]).
+    fn spawn_vote_phase_proxy(
+        listener: TcpListener,
+        upstream: std::net::SocketAddr,
+        prepare: ProxyVote,
+        precommit: ProxyVote,
+        requests: std::sync::Arc<[std::sync::atomic::AtomicUsize; 2]>,
+    ) {
+        std::thread::spawn(move || {
+            let first_requests = std::sync::Arc::new([
+                std::sync::OnceLock::<Instant>::new(),
+                std::sync::OnceLock::<Instant>::new(),
+            ]);
+            for client in listener.incoming() {
+                let Ok(client) = client else { return };
+                let requests = std::sync::Arc::clone(&requests);
+                let first_requests = std::sync::Arc::clone(&first_requests);
+                std::thread::spawn(move || {
+                    let mut client_writer = client.try_clone().expect("clone proxy client");
+                    let mut client_reader = BufReader::new(client);
+                    let mut upstream_stream: Option<(TcpStream, BufReader<TcpStream>)> = None;
+                    loop {
+                        let mut line = String::new();
+                        if client_reader.read_line(&mut line).unwrap_or(0) == 0 {
+                            return;
+                        }
+                        let mut request: serde_json::Value =
+                            serde_json::from_str(&line).unwrap_or(serde_json::Value::Null);
+                        let (phase, configured) = match request
+                            .pointer("/consensus_v2/phase")
+                            .and_then(serde_json::Value::as_str)
+                        {
+                            Some("prepare") => (Some(0), prepare),
+                            Some("precommit") => (Some(1), precommit),
+                            _ => (None, ProxyVote::Forward(Duration::ZERO)),
+                        };
+                        let earlier = phase.map(|phase| {
+                            requests[phase].fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                        });
+                        let since_first = phase.map(|phase| {
+                            first_requests[phase].get_or_init(Instant::now).elapsed()
+                        });
+                        let action = match configured {
+                            ProxyVote::RefuseFirst if earlier == Some(0) => ProxyVote::Refuse,
+                            ProxyVote::RefuseFirst => ProxyVote::Forward(Duration::ZERO),
+                            ProxyVote::RefuseFor(lag) if since_first.is_some_and(|since| since < lag) => {
+                                ProxyVote::Refuse
+                            }
+                            ProxyVote::RefuseFor(_) => ProxyVote::Forward(Duration::ZERO),
+                            ProxyVote::Hold(hold) => {
+                                std::thread::sleep(hold);
+                                ProxyVote::Forward(Duration::ZERO)
+                            }
+                            other => other,
+                        };
+                        let delay = match action {
+                            ProxyVote::Forward(delay) => delay,
+                            ProxyVote::OmitV2Vote => Duration::ZERO,
+                            ProxyVote::CorruptV2Signature(delay) => delay,
+                            ProxyVote::Silent => {
+                                std::thread::sleep(Duration::from_secs(120));
+                                return;
+                            }
+                            ProxyVote::Drop(hold) => {
+                                std::thread::sleep(hold);
+                                return;
+                            }
+                            ProxyVote::Refuse | ProxyVote::RefuseConflicting => {
+                                request["block_height"] = serde_json::json!(1_000_000u64);
+                                line = format!("{request}\n");
+                                upstream_stream = None;
+                                Duration::ZERO
+                            }
+                            ProxyVote::RefuseFirst | ProxyVote::RefuseFor(_) | ProxyVote::Hold(_) => {
+                                unreachable!()
+                            }
+                        };
+                        if upstream_stream.is_none() {
+                            let Ok(stream) = TcpStream::connect(upstream) else {
+                                return;
+                            };
+                            let reader =
+                                BufReader::new(stream.try_clone().expect("clone upstream"));
+                            upstream_stream = Some((stream, reader));
+                        }
+                        let (stream, reader) = upstream_stream.as_mut().expect("upstream");
+                        if stream.write_all(line.as_bytes()).is_err() {
+                            return;
+                        }
+                        let mut response = String::new();
+                        if reader.read_line(&mut response).unwrap_or(0) == 0 {
+                            return;
+                        }
+                        if matches!(action, ProxyVote::OmitV2Vote) {
+                            let mut reply: serde_json::Value =
+                                serde_json::from_str(&response).expect("vote reply json");
+                            if let Some(reply) = reply.as_object_mut() {
+                                reply.remove("consensus_v2_vote");
+                            }
+                            response = format!("{reply}\n");
+                        }
+                        if matches!(action, ProxyVote::CorruptV2Signature(_)) {
+                            let mut reply: serde_json::Value =
+                                serde_json::from_str(&response).expect("vote reply json");
+                            if let Some(signature) = reply
+                                .pointer_mut("/consensus_v2_vote/signature/signature_hex")
+                            {
+                                let hex = signature.as_str().expect("signature hex");
+                                let flipped = if hex.starts_with('0') { "1" } else { "0" };
+                                *signature = serde_json::json!(format!("{flipped}{}", &hex[1..]));
+                            }
+                            response = format!("{reply}\n");
+                        }
+                        if matches!(action, ProxyVote::RefuseConflicting) {
+                            let mut reply: serde_json::Value =
+                                serde_json::from_str(&response).expect("rejection json");
+                            reply["error"] = serde_json::json!(
+                                "transport block vote signing failed: conflicting block proposal vote already recorded"
+                            );
+                            response = format!("{reply}\n");
+                        }
+                        std::thread::sleep(delay);
+                        if client_writer.write_all(response.as_bytes()).is_err() {
+                            return;
+                        }
+                        if matches!(action, ProxyVote::Refuse | ProxyVote::RefuseConflicting) {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    struct VotePhaseRoundFixture {
+        data_dirs: Vec<PathBuf>,
+        topology_file: PathBuf,
+        proposer_index: usize,
+        quorum: usize,
+        artifact_dir: PathBuf,
+        /// Vote requests seen by each proxied validator, by validator index.
+        proxied: Vec<(usize, std::sync::Arc<[std::sync::atomic::AtomicUsize; 2]>)>,
+        /// The proposer's reserved transport port; its service is not started.
+        proposer_listener: TcpListener,
+    }
+
+    impl VotePhaseRoundFixture {
+        fn requests(&self, index: usize, phase: usize) -> usize {
+            self.proxied
+                .iter()
+                .find(|(proxied, _)| *proxied == index)
+                .expect("proxied validator")
+                .1[phase]
+                .load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
+    fn vote_phase_round_fixture(
+        tag: &str,
+        proxies: &[(usize, ProxyVote, ProxyVote)],
+    ) -> VotePhaseRoundFixture {
+        vote_phase_round_fixture_of(tag, 6, proxies)
+    }
+
+    /// `validator_count` consensus v2 validators (active from height 1) at
+    /// height 0 with live transport services; `proxies` puts a phase proxy in
+    /// front of the validators that follow the height-1 proposer by the given
+    /// offsets.
+    fn vote_phase_round_fixture_of(
+        tag: &str,
+        validator_count: usize,
+        proxies: &[(usize, ProxyVote, ProxyVote)],
+    ) -> VotePhaseRoundFixture {
+        prewarm_shielded_verifier_cache(tag).expect("prewarm verifier");
+        let chain_id = format!("postfiat-{tag}-test");
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-{tag}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let data_dirs = (0..validator_count)
+            .map(|index| {
+                let data_dir = root.join(format!("validator-{index}"));
+                init_consensus_v2(InitConsensusV2Options {
+                    data_dir: data_dir.clone(),
+                    chain_id: chain_id.clone(),
+                    node_id: format!("validator-{index}"),
+                    validator_count: validator_count as u32,
+                    activation_height: 1,
+                    storage_activation_height: None,
+                })
+                .expect("init validator");
+                data_dir
+            })
+            .collect::<Vec<_>>();
+        let shared_keys: ValidatorKeyFile = serde_json::from_slice(
+            &std::fs::read(data_dirs[0].join(VALIDATOR_KEYS_FILE)).expect("read keys"),
+        )
+        .expect("parse keys");
+        let bootstrap_snapshot = root.join("bootstrap-snapshot");
+        export_snapshot(SnapshotExportOptions {
+            data_dir: data_dirs[0].clone(),
+            snapshot_dir: bootstrap_snapshot.clone(),
+        })
+        .expect("export common state");
+        for (index, data_dir) in data_dirs.iter().enumerate().skip(1) {
+            std::fs::remove_dir_all(data_dir).expect("clear initialized replica");
+            import_snapshot(SnapshotImportOptions {
+                data_dir: data_dir.clone(),
+                snapshot_dir: bootstrap_snapshot.clone(),
+                node_id: Some(format!("validator-{index}")),
+            })
+            .expect("import common state");
+        }
+        for (index, data_dir) in data_dirs.iter().enumerate() {
+            let record = shared_keys
+                .validators
+                .iter()
+                .find(|record| record.node_id == format!("validator-{index}"))
+                .expect("local validator key")
+                .clone();
+            let key_path = data_dir.join(VALIDATOR_KEYS_FILE);
+            std::fs::write(
+                &key_path,
+                serde_json::to_vec_pretty(&ValidatorKeyFile {
+                    validators: vec![record],
+                })
+                .expect("serialize isolated key"),
+            )
+            .expect("write isolated key");
+            #[cfg(unix)]
+            std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600))
+                .expect("protect isolated key");
+        }
+        let topology_file = root.join("topology.json");
+        let (base_port, mut listeners, _rpc_listeners) =
+            reserve_consensus_v2_test_ports(validator_count);
+        write_consensus_v2_topology(TopologyConsensusV2Options {
+            chain_id,
+            validators: validator_count as u32,
+            base_port,
+            rpc_base_port: Some(base_port.saturating_add(100)),
+            hosts: Some(vec!["127.0.0.1".to_string(); validator_count]),
+            output_file: topology_file.clone(),
+            activation_height: 1,
+            storage_activation_height: None,
+        })
+        .expect("write topology");
+        let (_, validators) = live_consensus_v2_context(&data_dirs[0]).expect("context");
+        let validator_ids = validators.validator_ids();
+        let proposer =
+            postfiat_ordering_fast::leader_for_view(&validator_ids, 1, 0).expect("height-1 leader");
+        let proposer_index = validator_ids
+            .iter()
+            .position(|validator| validator == &proposer)
+            .expect("proposer index");
+        let mut proxied = Vec::new();
+        for &(offset, prepare, precommit) in proxies {
+            let index = (proposer_index + offset) % validator_count;
+            let upstream = TcpListener::bind(("127.0.0.1", 0)).expect("proxied upstream port");
+            let upstream_addr = upstream.local_addr().expect("proxied upstream addr");
+            let topology_listener = std::mem::replace(&mut listeners[index], upstream);
+            let requests = std::sync::Arc::new([
+                std::sync::atomic::AtomicUsize::new(0),
+                std::sync::atomic::AtomicUsize::new(0),
+            ]);
+            spawn_vote_phase_proxy(
+                topology_listener,
+                upstream_addr,
+                prepare,
+                precommit,
+                std::sync::Arc::clone(&requests),
+            );
+            proxied.push((index, requests));
+        }
+        for (index, data_dir) in data_dirs.iter().enumerate() {
+            if index == proposer_index {
+                continue;
+            }
+            spawn_vote_phase_validator(
+                data_dir.clone(),
+                topology_file.clone(),
+                listeners[index]
+                    .try_clone()
+                    .expect("clone reserved listener"),
+            );
+        }
+        let proposer_listener = listeners[proposer_index]
+            .try_clone()
+            .expect("clone reserved proposer listener");
+        let topology = read_topology_file(&topology_file).expect("read topology");
+        let proposer_dir = data_dirs[proposer_index].clone();
+        let local_status = status(NodeOptions {
+            data_dir: proposer_dir.clone(),
+        })
+        .expect("proposer status");
+        transport_authenticated_peer_health(&proposer_dir, &topology, &local_status, 15_000)
+            .expect("authenticated peer health");
+        VotePhaseRoundFixture {
+            artifact_dir: root.join("height-1-artifacts"),
+            data_dirs,
+            topology_file,
+            proposer_index,
+            quorum: validators.quorum,
+            proxied,
+            proposer_listener,
+        }
+    }
+
+    /// Transport validator service for one validator of the vote phase fixture.
+    fn spawn_vote_phase_validator(data_dir: PathBuf, topology_file: PathBuf, listener: TcpListener) {
+        std::thread::spawn(move || {
+            let shutdown_requested = std::sync::atomic::AtomicBool::new(false);
+            crate::transport_runtime::transport_validator_serve_inner(
+                data_dir.clone(),
+                topology_file,
+                data_dir.join(VALIDATOR_KEYS_FILE),
+                data_dir.join("vote-phase-transport-votes"),
+                Some("127.0.0.1".to_string()),
+                // A refused request closes its connection, and a refusal
+                // is retried until the phase deadline.
+                1024,
+                60_000,
+                None,
+                true,
+                Some(TransportShieldedVerifierPrewarmReport {
+                    schema: "postfiat-transport-shielded-verifier-prewarm-v1".to_string(),
+                    requested: true,
+                    total_ms: 0.0,
+                    asset_orchard_swap_verifier_warm: true,
+                    asset_orchard_swap_verifier_ms: Some(0.0),
+                    asset_orchard_private_egress_verifier_warm: true,
+                    asset_orchard_private_egress_verifier_ms: Some(0.0),
+                    asset_orchard_private_egress_verifier_breakdown: None,
+                }),
+                Some(listener),
+                &shutdown_requested,
+            )
+        });
+    }
+
+    type RoundHandle =
+        std::thread::JoinHandle<Result<TransportPeerCertifiedBatchRoundReport, String>>;
+
+    /// Runs the height-1 round under a stand-in for the RPC mempool mutation
+    /// lock and waits up to `bound`. Returns the round's result, or `None`
+    /// (round thread left detached) when it is still running at `bound`.
+    fn run_vote_phase_round(
+        fixture: &VotePhaseRoundFixture,
+        timeout_ms: u64,
+        send_retries: usize,
+        retry_backoff_ms: u64,
+        quorum_early: bool,
+        bound: Duration,
+    ) -> (
+        Option<Result<TransportPeerCertifiedBatchRoundReport, String>>,
+        Duration,
+        bool,
+    ) {
+        run_vote_phase_round_with_sends(
+            fixture,
+            timeout_ms,
+            send_retries,
+            retry_backoff_ms,
+            quorum_early,
+            false,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            bound,
+        )
+    }
+
+    /// `run_vote_phase_round`, choosing whether certified sends are deferred
+    /// to durable jobs as on the RPC finality paths, and the phase deadline.
+    #[allow(clippy::too_many_arguments)]
+    fn run_vote_phase_round_with_sends(
+        fixture: &VotePhaseRoundFixture,
+        timeout_ms: u64,
+        send_retries: usize,
+        retry_backoff_ms: u64,
+        quorum_early: bool,
+        defer_certified_sends: bool,
+        vote_phase_deadline_ms: u64,
+        bound: Duration,
+    ) -> (
+        Option<Result<TransportPeerCertifiedBatchRoundReport, String>>,
+        Duration,
+        bool,
+    ) {
+        run_vote_phase_round_at(
+            fixture,
+            &RoundSlot {
+                proposer_index: fixture.proposer_index,
+                view: 0,
+                timeout_certificate_file: None,
+                artifact_dir: fixture.artifact_dir.clone(),
+                batch_file: None,
+            },
+            timeout_ms,
+            send_retries,
+            retry_backoff_ms,
+            quorum_early,
+            defer_certified_sends,
+            vote_phase_deadline_ms,
+            bound,
+        )
+    }
+
+    /// Who proposes the height-1 round, at which view, and where it writes.
+    struct RoundSlot {
+        proposer_index: usize,
+        view: u64,
+        timeout_certificate_file: Option<PathBuf>,
+        artifact_dir: PathBuf,
+        /// A batch to propose instead of a new transfer.
+        batch_file: Option<PathBuf>,
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn run_vote_phase_round_at(
+        fixture: &VotePhaseRoundFixture,
+        slot: &RoundSlot,
+        timeout_ms: u64,
+        send_retries: usize,
+        retry_backoff_ms: u64,
+        quorum_early: bool,
+        defer_certified_sends: bool,
+        vote_phase_deadline_ms: u64,
+        bound: Duration,
+    ) -> (
+        Option<Result<TransportPeerCertifiedBatchRoundReport, String>>,
+        Duration,
+        bool,
+    ) {
+        let proposer_dir = fixture.data_dirs[slot.proposer_index].clone();
+        let batch_file = match &slot.batch_file {
+            Some(batch_file) => batch_file.clone(),
+            None => {
+                let batch_file = slot.artifact_dir.with_extension("batch.json");
+                create_transfer_batch(BatchTransferOptions {
+                    data_dir: proposer_dir.clone(),
+                    key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+                    to: format!("pf{}", "d".repeat(40)),
+                    amount: 1_000_000,
+                    batch_file: batch_file.clone(),
+                })
+                .expect("create batch");
+                batch_file
+            }
+        };
+        let options = TransportPeerCertifiedBatchRoundOptions {
+            data_dir: proposer_dir.clone(),
+            topology_file: fixture.topology_file.clone(),
+            batch_kind: Some("transparent".to_string()),
+            batch_file,
+            key_file: proposer_dir.join(VALIDATOR_KEYS_FILE),
+            proposal_key_file: Some(proposer_dir.join(VALIDATOR_KEYS_FILE)),
+            require_local_proposer: true,
+            require_signed_proposal: true,
+            allow_peer_failures: false,
+            quorum_early_full_propagation: quorum_early,
+            artifact_dir: slot.artifact_dir.clone(),
+            block_height: Some(1),
+            view: Some(slot.view),
+            timeout_certificate_file: slot.timeout_certificate_file.clone(),
+            timeout_ms,
+            send_retries,
+            retry_backoff_ms,
+            vote_phase_deadline_ms,
+            local_apply_before_certified_send: true,
+            defer_certified_sends,
+            commit_processed_dir: None,
+            required_parent: None,
+        };
+        let mempool_mutation_lock = std::sync::Arc::new(Mutex::new(()));
+        let lock = std::sync::Arc::clone(&mempool_mutation_lock);
+        let round_start = Instant::now();
+        let round: RoundHandle = std::thread::spawn(move || {
+            let _mutation_guard = lock.try_lock().expect("mempool mutation lock free");
+            transport_peer_certified_batch_round(options)
+        });
+        while !round.is_finished() && round_start.elapsed() < bound {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let elapsed = round_start.elapsed();
+        let lock_free = mempool_mutation_lock.try_lock().is_ok();
+        let result = round
+            .is_finished()
+            .then(|| round.join().expect("round thread"));
+        (result, elapsed, lock_free)
+    }
+
+    /// Repository units: --finality-timeout-ms 30000, 16 retries, 250 ms backoff.
+    const UNIT_TIMEOUT_MS: u64 = 30_000;
+    const UNIT_SEND_RETRIES: usize = 16;
+    const UNIT_RETRY_BACKOFF_MS: u64 = 250;
+
+    #[test]
+    fn persistently_refused_prepare_votes_are_asked_until_the_phase_deadline() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture = vote_phase_round_fixture(
+            "vote-refusal",
+            &[
+                (1, ProxyVote::Refuse, forward),
+                (2, ProxyVote::Refuse, forward),
+            ],
+        );
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        let refusing = fixture
+            .proxied
+            .iter()
+            .map(|(index, _)| fixture.requests(*index, 0))
+            .collect::<Vec<_>>();
+        eprintln!(
+            "vote refusal: elapsed={elapsed:?} prepare_requests_to_refusing_peers={refusing:?}"
+        );
+        let error = result
+            .expect("round still running")
+            .expect_err("two refusals leave the round below quorum");
+        assert!(lock_free);
+        // A refusal may be a peer that is not ready yet, so it is asked again
+        // past the retry budget until the phase deadline ends the round.
+        assert!(
+            refusing.iter().all(|requests| *requests > UNIT_SEND_RETRIES + 1),
+            "a refused prepare vote was not asked past the retry budget: {refusing:?} {error}"
+        );
+        assert!(elapsed >= Duration::from_secs(19), "phase ended early: {elapsed:?}");
+        assert!(!fixture.artifact_dir.join("block-certificate.json").exists());
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// Six validators, quorum 5, one silent: the round needs a lagging peer
+    /// that refuses for longer than the retry budget lasts (about 5.5 s).
+    #[test]
+    fn a_peer_refusing_past_the_retry_budget_is_asked_until_the_deadline_and_the_round_certifies() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture = vote_phase_round_fixture(
+            "vote-refuse-8s",
+            &[
+                (1, ProxyVote::RefuseFor(Duration::from_secs(8)), forward),
+                (2, ProxyVote::Silent, forward),
+            ],
+        );
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        let lagging = fixture.requests(fixture.proxied[0].0, 0);
+        eprintln!("refuse 8 s: elapsed={elapsed:?} prepare_requests_to_lagging_peer={lagging}");
+        let round = result
+            .expect("round still running")
+            .expect("a peer that refuses for 8 s and then votes completes the quorum");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        assert!(lagging > UNIT_SEND_RETRIES + 1, "{lagging}");
+        assert!(elapsed >= Duration::from_secs(8) && elapsed < Duration::from_secs(19));
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// Two permanent refusals and one silent peer: four remote votes are
+    /// needed and at most three remain possible.
+    fn assert_round_ends_once_quorum_is_out_of_reach(tag: &str, phase: usize) {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let failing = |vote: ProxyVote| {
+            if phase == 0 {
+                (vote, forward)
+            } else {
+                (forward, vote)
+            }
+        };
+        let proxies = [
+            ProxyVote::RefuseConflicting,
+            ProxyVote::RefuseConflicting,
+            ProxyVote::Silent,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, vote)| {
+            let (prepare, precommit) = failing(vote);
+            (index + 1, prepare, precommit)
+        })
+        .collect::<Vec<_>>();
+        let fixture = vote_phase_round_fixture(tag, &proxies);
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        eprintln!("{tag}: elapsed={elapsed:?} lock_free={lock_free}");
+        result
+            .expect("round still running")
+            .expect_err("two refusals and a silent peer leave the round below quorum");
+        assert!(lock_free);
+        assert!(
+            elapsed < Duration::from_secs(10),
+            "the phase waited {elapsed:?} for a quorum that could no longer form"
+        );
+        if phase == 0 {
+            assert!(!fixture.artifact_dir.join("block-certificate.json").exists());
+        }
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    #[test]
+    fn a_prepare_phase_ends_once_its_quorum_is_out_of_reach() {
+        assert_round_ends_once_quorum_is_out_of_reach("prepare-out-of-reach", 0);
+    }
+
+    #[test]
+    fn a_precommit_phase_ends_once_its_quorum_is_out_of_reach() {
+        assert_round_ends_once_quorum_is_out_of_reach("precommit-out-of-reach", 1);
+    }
+
+    #[test]
+    fn lagging_peers_that_refuse_a_prepare_once_are_asked_again_and_the_round_certifies() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        // Six validators, quorum 5: the round needs one of the two lagging
+        // peers, each of which refuses its first prepare request.
+        let fixture = vote_phase_round_fixture(
+            "vote-refuse-once",
+            &[
+                (1, ProxyVote::RefuseFirst, forward),
+                (2, ProxyVote::RefuseFirst, forward),
+            ],
+        );
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        let lagging = fixture
+            .proxied
+            .iter()
+            .map(|(index, _)| fixture.requests(*index, 0))
+            .collect::<Vec<_>>();
+        eprintln!("refuse once: elapsed={elapsed:?} prepare_requests_to_lagging_peers={lagging:?}");
+        let round = result
+            .expect("round still running")
+            .expect("a peer that refused once and then voted completes the quorum");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        assert!(lagging.iter().any(|requests| *requests > 1));
+        assert!(fixture.artifact_dir.join("block-certificate.json").is_file());
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    #[test]
+    fn a_peer_still_preparing_is_asked_for_its_precommit_once_its_prepare_vote_lands() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        // Prepare quorum forms without the busy peer (offset 2), but precommit
+        // quorum needs it because offset 1 refuses every precommit.
+        let fixture = vote_phase_round_fixture(
+            "vote-precommit-busy",
+            &[
+                (1, forward, ProxyVote::Refuse),
+                (2, ProxyVote::Hold(Duration::from_secs(4)), forward),
+            ],
+        );
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        let busy = fixture.proxied[1].0;
+        eprintln!(
+            "busy precommit: elapsed={elapsed:?} busy_requests=[{}, {}]",
+            fixture.requests(busy, 0),
+            fixture.requests(busy, 1)
+        );
+        let round = result
+            .expect("round still running")
+            .expect("the busy peer precommits once its prepare vote exists");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        let certificate_file = fixture.artifact_dir.join("block-certificate.json");
+        assert!(certificate_qc_voters(&certificate_file, "precommit_qc")
+            .contains(&format!("validator-{busy}")));
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// The record of an early-quorum v2 round (`fixture` validators, proposer
+    /// at `fixture.proposer_index`), after its late answers were collected.
+    fn v2_round_vote_record(
+        fixture: &VotePhaseRoundFixture,
+    ) -> postfiat_node::block_vote_records::BlockVoteRecord {
+        crate::transport_runtime::wait_for_pending_block_vote_records();
+        postfiat_node::block_vote_records::read_block_vote_record(
+            &fixture.data_dirs[fixture.proposer_index],
+            1,
+        )
+        .expect("read vote record")
+        .expect("the finalized height has a vote record")
+    }
+
+    /// Consensus v2 active at height 1 (the record tests above run before its
+    /// activation): a prepare reply that arrives after the prepare quorum is
+    /// relayed by the precommit collector to the vote record exactly once.
+    #[test]
+    fn v2_vote_record_keeps_a_late_prepare_reply_once_and_a_silent_peer_as_no_answer() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        use postfiat_node::block_vote_records::BlockVoteOutcome;
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        // Ten validators, quorum 7: the six fast peers make both quorums.
+        let validator_count = 10;
+        let fixture = vote_phase_round_fixture_of(
+            "v2-vote-record-late",
+            validator_count,
+            &[
+                (1, ProxyVote::Forward(Duration::from_secs(3)), forward),
+                (2, ProxyVote::Silent, forward),
+            ],
+        );
+        let (result, _, lock_free) = run_vote_phase_round_with_sends(
+            &fixture,
+            8_000,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            8_000,
+            Duration::from_secs(30),
+        );
+        let round = result
+            .expect("round still running")
+            .expect("round certifies without the late and the silent peer");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        let record = v2_round_vote_record(&fixture);
+        let name = |offset: usize| {
+            format!("validator-{}", (fixture.proposer_index + offset) % validator_count)
+        };
+        let validators = record
+            .entries
+            .iter()
+            .map(|entry| entry.validator.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(validators.len(), validator_count, "{validators:?}");
+        assert_eq!(
+            validators.iter().collect::<BTreeSet<_>>().len(),
+            validator_count,
+            "a validator is recorded twice: {validators:?}"
+        );
+        let entry = |validator: &str| {
+            record
+                .entries
+                .iter()
+                .find(|entry| entry.validator == validator)
+                .expect("recorded validator")
+                .clone()
+        };
+        let late = entry(&name(1));
+        assert_eq!(late.outcome, BlockVoteOutcome::Accepted, "{late:?}");
+        assert!(late.answered_after_quorum, "{late:?}");
+        assert!(late.vote_id.is_some(), "{late:?}");
+        let silent = entry(&name(2));
+        assert_eq!(silent.outcome, BlockVoteOutcome::NoAnswer, "{silent:?}");
+        assert!(silent.vote_id.is_none());
+        let certificate_file = fixture.artifact_dir.join("block-certificate.json");
+        for qc in ["prepare_qc", "precommit_qc"] {
+            let voters = certificate_qc_voters(&certificate_file, qc);
+            assert_eq!(
+                voters.iter().collect::<BTreeSet<_>>().len(),
+                voters.len(),
+                "{qc} counts a validator twice: {voters:?}"
+            );
+            assert!(voters.len() >= fixture.quorum, "{qc}: {voters:?}");
+            assert!(!voters.contains(&name(2)), "{qc}: {voters:?}");
+        }
+        assert!(!certificate_qc_voters(&certificate_file, "prepare_qc").contains(&name(1)));
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file)
+            .expect("close persistent streams");
+    }
+
+    /// A prepare reply that arrives but fails the prepare QC checks (here a
+    /// bad v2 signature) is recorded as a refused, invalid vote response,
+    /// whether it arrives before or after the prepare quorum.
+    #[test]
+    fn v2_vote_record_keeps_a_rejected_prepare_reply_as_an_invalid_vote_response() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        use postfiat_node::block_vote_records::BlockVoteOutcome;
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture = vote_phase_round_fixture_of(
+            "v2-vote-record-rejected",
+            10,
+            &[
+                (1, ProxyVote::CorruptV2Signature(Duration::ZERO), forward),
+                (3, ProxyVote::CorruptV2Signature(Duration::from_secs(3)), forward),
+            ],
+        );
+        // No retries, so both rejected replies end well before the record
+        // deadline.
+        let (result, _, lock_free) = run_vote_phase_round_with_sends(
+            &fixture,
+            8_000,
+            0,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            8_000,
+            Duration::from_secs(30),
+        );
+        let round = result
+            .expect("round still running")
+            .expect("round certifies without the rejected replies");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        let record = v2_round_vote_record(&fixture);
+        let certificate_file = fixture.artifact_dir.join("block-certificate.json");
+        for offset in [1, 3] {
+            let validator = format!("validator-{}", (fixture.proposer_index + offset) % 10);
+            let entry = record
+                .entries
+                .iter()
+                .find(|entry| entry.validator == validator)
+                .expect("recorded validator");
+            assert_eq!(entry.outcome, BlockVoteOutcome::Refused, "{entry:?}");
+            assert_eq!(
+                entry.refusal_class.as_deref(),
+                Some("invalid_vote_response"),
+                "{entry:?}"
+            );
+            assert!(entry.vote_id.is_none(), "{entry:?}");
+            assert!(!certificate_qc_voters(&certificate_file, "prepare_qc").contains(&validator));
+        }
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file)
+            .expect("close persistent streams");
+    }
+
+    #[test]
+    fn a_prepare_reply_without_a_consensus_v2_vote_counts_as_a_missing_vote() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        // Offset 1 answers its prepare without a v2 vote; offset 2 answers
+        // late, after the four fast replies that would otherwise stop the
+        // prepare phase.
+        let fixture = vote_phase_round_fixture(
+            "vote-omitted-v2",
+            &[
+                (1, ProxyVote::OmitV2Vote, forward),
+                (2, ProxyVote::Forward(Duration::from_secs(3)), forward),
+            ],
+        );
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        eprintln!("omitted v2 vote: elapsed={elapsed:?}");
+        let round = result
+            .expect("round still running")
+            .expect("a reply without a v2 vote is a missing vote, not a round error");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        let omitting = format!("validator-{}", fixture.proxied[0].0);
+        let certificate_file = fixture.artifact_dir.join("block-certificate.json");
+        assert!(!certificate_qc_voters(&certificate_file, "prepare_qc").contains(&omitting));
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    #[test]
+    fn a_shielded_batch_certified_while_a_peer_refused_is_reported_final_and_cached() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        // A permanent refusal is a recorded failure before the slow fifth
+        // vote completes the quorum, as on the RPC finality paths.
+        let fixture = vote_phase_round_fixture(
+            "vote-refused-final",
+            &[
+                (1, ProxyVote::RefuseConflicting, forward),
+                (2, ProxyVote::Forward(Duration::from_secs(2)), forward),
+            ],
+        );
+        let (result, _, lock_free) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            0,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            true,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            Duration::from_secs(30),
+        );
+        let round = result
+            .expect("round still running")
+            .expect("round certifies without the refusing peer");
+        assert!(lock_free);
+        assert!(round.certification.round_ok);
+        assert!(!round.vote_request_failures.is_empty());
+        let result_file = fixture.artifact_dir.join("shield-result.json");
+        let request = RpcRequest::new("shield-1", "shield_batch_finality", serde_json::json!({}));
+        let response = match finish_rpc_serve_shield_batch_finality(
+            &request,
+            &"a".repeat(96),
+            1,
+            0.0,
+            Instant::now(),
+            round,
+            &result_file,
+            true,
+        ) {
+            Ok(response) => response,
+            Err((code, message)) => panic!("certified shielded batch reported {code}: {message}"),
+        };
+        assert!(response.ok);
+        let cached: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&result_file).expect("cached result"))
+                .expect("cached result json");
+        let result = response.result.as_ref().expect("finality result");
+        for key in ["schema", "batch_id", "certificate"] {
+            assert!(cached[key] == result[key], "cached result differs at `{key}`");
+        }
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    #[test]
+    fn silent_peers_end_the_vote_phase_at_its_deadline_and_release_the_lock() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture = vote_phase_round_fixture(
+            "vote-phase-deadline",
+            &[
+                (1, ProxyVote::Silent, forward),
+                (2, ProxyVote::Silent, forward),
+            ],
+        );
+        // Phase deadline 20 s, plus margin for the round's local work.
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(28),
+        );
+        let silent = fixture
+            .proxied
+            .iter()
+            .map(|(index, _)| fixture.requests(*index, 0))
+            .collect::<Vec<_>>();
+        eprintln!("vote phase deadline: elapsed={elapsed:?} lock_free={lock_free} prepare_requests_to_silent_peers={silent:?}");
+        let result = result.unwrap_or_else(|| {
+            panic!("round still holds the mempool lock after {elapsed:?} without prepare quorum")
+        });
+        result.expect_err("two silent peers leave the round below quorum");
+        assert!(lock_free);
+        assert!(
+            elapsed >= Duration::from_secs(19),
+            "phase ended early: {elapsed:?}"
+        );
+        assert_eq!(
+            silent,
+            vec![1, 1],
+            "silent peers were asked again after the deadline"
+        );
+        assert!(!fixture.artifact_dir.join("block-certificate.json").exists());
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    #[test]
+    fn the_configured_vote_phase_deadline_ends_a_phase_without_quorum() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture = vote_phase_round_fixture(
+            "vote-phase-deadline-flag",
+            &[
+                (1, ProxyVote::Silent, forward),
+                (2, ProxyVote::Silent, forward),
+            ],
+        );
+        let (result, elapsed, lock_free) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            3_000,
+            Duration::from_secs(15),
+        );
+        eprintln!("vote phase deadline 3 s: elapsed={elapsed:?} lock_free={lock_free}");
+        result
+            .expect("round still running")
+            .expect_err("two silent peers leave the round below quorum");
+        assert!(lock_free);
+        assert!(elapsed >= Duration::from_secs(3) && elapsed < Duration::from_secs(10));
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    #[test]
+    fn all_votes_rounds_keep_the_configured_vote_timeout() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture(
+            "all-votes-timeout",
+            &[(
+                1,
+                ProxyVote::Forward(Duration::from_secs(22)),
+                ProxyVote::Forward(Duration::ZERO),
+            )],
+        );
+        let (result, elapsed, _) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            0,
+            UNIT_RETRY_BACKOFF_MS,
+            false,
+            Duration::from_secs(60),
+        );
+        eprintln!("all-votes timeout: elapsed={elapsed:?}");
+        let report = result
+            .expect("round still running")
+            .expect("a 22 s vote is inside the configured 30 s timeout");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        assert!(elapsed >= Duration::from_secs(22));
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// The wallet proxy's rule for moving a failed finality submission to the
+    /// next view (wallet-proxy/rpc-routing.js, finalityFailureCanAdvanceView),
+    /// applied to the RPC code the node sends for this error; keep it in step.
+    fn submission_failure_advances_view(error: &str) -> bool {
+        match rpc_finality_failure_code("rpc_finality_submit_failed", error) {
+            "rpc_finality_view_spent" => true,
+            "rpc_finality_view_must_repropose" => false,
+            _ => submission_failure_advances_view_on_release_6_4(error),
+        }
+    }
+
+    /// The text rule for nodes that send every failure as
+    /// `rpc_finality_submit_failed`.
+    fn submission_failure_advances_view_on_release_6_4(error: &str) -> bool {
+        let error = error.to_ascii_lowercase();
+        [
+            "vote request",
+            "vote workers",
+            "quorum",
+            "certificate",
+            "transport",
+            "timed out",
+            "connection",
+            "view spent",
+            "conflicting block proposal vote already recorded",
+        ]
+        .iter()
+        .any(|pattern| error.contains(pattern))
+    }
+
+    /// Proposal hashes a validator's vote locks hold at (height, view).
+    fn vote_lock_proposal_hashes(data_dir: &Path, height: u64, view: u64) -> Vec<String> {
+        let prefix = format!("{height}.{view}.");
+        let mut hashes = std::fs::read_dir(data_dir.join("block_proposal_vote_locks"))
+            .expect("vote lock directory")
+            .map(|entry| entry.expect("vote lock entry").path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(&prefix) && name.ends_with(".json"))
+            })
+            .map(|path| {
+                let lock: serde_json::Value =
+                    serde_json::from_slice(&std::fs::read(path).expect("read vote lock"))
+                        .expect("vote lock json");
+                lock["proposal_hash"].as_str().expect("proposal hash").to_string()
+            })
+            .collect::<Vec<_>>();
+        hashes.sort();
+        hashes
+    }
+
+    /// Heights 1701 and 1707: the view-0 proposer of height 1 reserves its
+    /// vote lock with the proposal signature, signs its own vote and prepare,
+    /// then stops; no peer is asked. It then comes back as a voter. Returns the
+    /// proposal hash its view-0 lock holds.
+    fn fail_view_0_proposer_after_its_prepare(fixture: &VotePhaseRoundFixture) -> Vec<String> {
+        let proposer = fixture.proposer_index;
+        let proposer_dir = fixture.data_dirs[proposer].clone();
+        let proposer_id = format!("validator-{proposer}");
+        let key_file = proposer_dir.join(VALIDATOR_KEYS_FILE);
+
+        // The failed run, as on validator 3: vote lock reserved by the
+        // proposal signature, proposal, own vote, own prepare. Then nothing.
+        let crashed_dir = fixture.artifact_dir.with_extension("crashed");
+        std::fs::create_dir_all(&crashed_dir).expect("crashed run directory");
+        let crashed_batch = crashed_dir.join("batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: proposer_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "e".repeat(40)),
+            amount: 7,
+            batch_file: crashed_batch.clone(),
+        })
+        .expect("crashed run batch");
+        let unsigned = propose_batch(BatchProposalOptions {
+            data_dir: proposer_dir.clone(),
+            verify_block_log: false,
+            batch_kind: Some("transparent".to_string()),
+            batch_file: crashed_batch,
+            proposal_file: crashed_dir.join("block-proposal.json"),
+            view: Some(0),
+            timeout_certificate_file: None,
+            key_file: None,
+            validator_id: None,
+        })
+        .expect("crashed run proposal");
+        let signed = sign_verified_block_proposal(&proposer_dir, unsigned, &key_file, &proposer_id)
+            .expect("crashed run proposal signature");
+        let consensus_v2_proposal =
+            create_consensus_v2_proposal_for_block(&proposer_dir, &signed, None, &key_file)
+                .expect("crashed run consensus v2 proposal");
+        create_block_vote_for_verified_proposal(BlockVoteForVerifiedProposalOptions {
+            data_dir: proposer_dir.clone(),
+            verify_block_log: false,
+            key_file: key_file.clone(),
+            validator_id: Some(proposer_id.clone()),
+            proposal: signed,
+            block_height: Some(1),
+            vote_file: crashed_dir.join(format!("{proposer_id}.block_vote.json")),
+        })
+        .expect("crashed run own vote");
+        create_consensus_v2_prepare_vote(
+            &proposer_dir,
+            &consensus_v2_proposal,
+            None,
+            &key_file,
+            &proposer_id,
+        )
+        .expect("crashed run own prepare");
+        let crashed_lock = vote_lock_proposal_hashes(&proposer_dir, 1, 0);
+        assert_eq!(crashed_lock.len(), 1, "{crashed_lock:?}");
+        // The proposer comes back as a voter.
+        spawn_vote_phase_validator(
+            proposer_dir.clone(),
+            fixture.topology_file.clone(),
+            fixture
+                .proposer_listener
+                .try_clone()
+                .expect("clone proposer listener"),
+        );
+
+        crashed_lock
+    }
+
+    /// Timeout votes for height 1 at `view` from the given validators, as the
+    /// RPC's consensus_v2_timeout_vote signs them. Returns the vote files that
+    /// were signed and the refusals.
+    fn timeout_votes(
+        fixture: &VotePhaseRoundFixture,
+        validators: &[usize],
+        view: u64,
+        dir: &Path,
+    ) -> (Vec<PathBuf>, Vec<String>) {
+        std::fs::create_dir_all(dir).expect("timeout vote directory");
+        let mut signed = Vec::new();
+        let mut refused = Vec::new();
+        for &index in validators {
+            let data_dir = &fixture.data_dirs[index];
+            let vote_file = dir.join(format!("validator-{index}.h1.v{view}.timeout.json"));
+            match create_block_timeout_vote(BlockTimeoutVoteOptions {
+                data_dir: data_dir.clone(),
+                verify_block_log: false,
+                key_file: data_dir.join(VALIDATOR_KEYS_FILE),
+                validator_id: Some(format!("validator-{index}")),
+                block_height: 1,
+                view,
+                high_qc_id: RPC_FINALITY_TIMEOUT_HIGH_QC_COMPAT.to_string(),
+                vote_file: vote_file.clone(),
+            }) {
+                Ok(_) => signed.push(vote_file),
+                Err(error) => refused.push(error.to_string()),
+            }
+        }
+        (signed, refused)
+    }
+
+    fn height_1_leader(fixture: &VotePhaseRoundFixture, view: u64) -> usize {
+        let (_, validators) =
+            live_consensus_v2_context(&fixture.data_dirs[0]).expect("consensus context");
+        let leader = postfiat_ordering_fast::leader_for_view(&validators.validator_ids(), 1, view)
+            .expect("leader");
+        validators
+            .validator_ids()
+            .iter()
+            .position(|validator| validator == &leader)
+            .expect("leader index")
+    }
+
+    /// Timeout certificate for height 1 at `view`, built by the next view's leader.
+    fn timeout_certificate(
+        fixture: &VotePhaseRoundFixture,
+        view: u64,
+        vote_files: Vec<PathBuf>,
+        dir: &Path,
+    ) -> io::Result<PathBuf> {
+        let certificate_file = dir.join(format!("h1.v{view}.timeout-certificate.json"));
+        aggregate_block_timeout_certificate(BlockTimeoutCertificateOptions {
+            data_dir: fixture.data_dirs[height_1_leader(fixture, view + 1)].clone(),
+            verify_block_log: false,
+            block_height: 1,
+            view,
+            vote_files,
+            certificate_file: certificate_file.clone(),
+        })?;
+        Ok(certificate_file)
+    }
+
+    /// All six validators hold the same block at height 1.
+    fn assert_height_1_final_everywhere(fixture: &VotePhaseRoundFixture) {
+        let tips = fixture
+            .data_dirs
+            .iter()
+            .map(|data_dir| {
+                let tip = status(NodeOptions {
+                    data_dir: data_dir.clone(),
+                })
+                .expect("validator status");
+                (tip.block_height, tip.block_tip_hash)
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            tips.iter().all(|tip| tip == &tips[0]) && tips[0].0 == 1,
+            "{tips:?}"
+        );
+    }
+
+    /// Two submissions recover height 1 at the same time and split the timeout
+    /// votes (3 and 3, quorum 5); a third gets a certificate but its view-1
+    /// attempt ends busy. Every validator has now signed its one view-0 timeout
+    /// vote. A fourth submission must still finish the height.
+    #[test]
+    fn split_and_abandoned_recoveries_leave_the_height_recoverable() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture("resumable-recovery", &[]);
+        fail_view_0_proposer_after_its_prepare(&fixture);
+        let dir = fixture.artifact_dir.with_extension("recoveries");
+        // Two concurrent collections, each reaching half the validators.
+        let (first, second) = std::thread::scope(|scope| {
+            let first = scope.spawn(|| timeout_votes(&fixture, &[0, 2, 4], 0, &dir.join("c1")));
+            let second = scope.spawn(|| timeout_votes(&fixture, &[1, 3, 5], 0, &dir.join("c2")));
+            (first.join().expect("c1"), second.join().expect("c2"))
+        });
+        assert_eq!((first.0.len(), second.0.len()), (3, 3), "{first:?} {second:?}");
+        assert!(first.0.len() < fixture.quorum && second.0.len() < fixture.quorum);
+        // A third collection reaches everyone; its view-1 attempt ends busy.
+        let (third, refused) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir.join("c3"));
+        assert!(
+            third.len() >= fixture.quorum,
+            "height 1 is wedged: a later recovery collected {} timeout votes, need {}: {refused:?}",
+            third.len(),
+            fixture.quorum
+        );
+        // Each validator answered with the vote it signed the first time.
+        for index in 0..6 {
+            let earlier = if index % 2 == 0 { &first.0 } else { &second.0 };
+            let read = |path: &PathBuf| -> serde_json::Value {
+                serde_json::from_slice(&std::fs::read(path).expect("vote file")).expect("vote json")
+            };
+            let earlier = earlier
+                .iter()
+                .find(|path| path.to_string_lossy().contains(&format!("validator-{index}.")))
+                .expect("earlier vote");
+            let again = third
+                .iter()
+                .find(|path| path.to_string_lossy().contains(&format!("validator-{index}.")))
+                .expect("vote again");
+            assert_eq!(
+                read(earlier)["consensus_v2_vote"],
+                read(again)["consensus_v2_vote"],
+                "validator-{index} signed a second timeout vote"
+            );
+        }
+        timeout_certificate(&fixture, 0, third, &dir.join("c3")).expect("third certificate");
+        // A fourth submission collects again and finishes at view 1.
+        let (fourth, refused) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir.join("c4"));
+        assert!(fourth.len() >= fixture.quorum, "{refused:?}");
+        let certificate =
+            timeout_certificate(&fixture, 0, fourth, &dir.join("c4")).expect("fourth certificate");
+        let (result, _, _) = run_vote_phase_round_at(
+            &fixture,
+            &RoundSlot {
+                proposer_index: height_1_leader(&fixture, 1),
+                view: 1,
+                timeout_certificate_file: Some(certificate),
+                artifact_dir: dir.join("view-1-round"),
+                batch_file: None,
+            },
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            Duration::from_secs(30),
+        );
+        let report = result
+            .expect("view-1 round still running")
+            .expect("view 1 certifies height 1");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        assert_height_1_final_everywhere(&fixture);
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// View 0 forms a prepare QC for block A; two precommits arrive after the
+    /// phase deadline, so the proposer holds 4 of 5 and view 0 fails while
+    /// every validator is locked on A. The timeout certificate carries A's QC,
+    /// so view 1 must carry A. A view-1 proposer holding another batch must
+    /// stop before it signs anything (keeping its view-1 slot), and then
+    /// finish the height by proposing A's batch.
+    #[test]
+    fn view_1_after_a_view_0_prepare_qc_must_carry_that_block() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let late = ProxyVote::Forward(Duration::from_secs(5));
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture =
+            vote_phase_round_fixture("view-1-reproposal", &[(2, forward, late), (3, forward, late)]);
+        let (result, _, _) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            3_000,
+            Duration::from_secs(30),
+        );
+        result
+            .expect("view-0 round still running")
+            .expect_err("view 0 misses its precommit quorum");
+        let block_a = fixture.artifact_dir.with_extension("batch.json");
+        spawn_vote_phase_validator(
+            fixture.data_dirs[fixture.proposer_index].clone(),
+            fixture.topology_file.clone(),
+            fixture
+                .proposer_listener
+                .try_clone()
+                .expect("clone proposer listener"),
+        );
+        let dir = fixture.artifact_dir.with_extension("view-1");
+        let (votes, refused) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir);
+        assert_eq!(votes.len(), 6, "{refused:?}");
+        let certificate = timeout_certificate(&fixture, 0, votes, &dir).expect("certificate");
+        let leader = height_1_leader(&fixture, 1);
+        let leader_dir = fixture.data_dirs[leader].clone();
+        let block_b = dir.join("block-b.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: leader_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "b".repeat(40)),
+            amount: 5,
+            batch_file: block_b.clone(),
+        })
+        .expect("block B batch");
+        let round_at = |batch_file: PathBuf, tag: &str| {
+            run_vote_phase_round_at(
+                &fixture,
+                &RoundSlot {
+                    proposer_index: leader,
+                    view: 1,
+                    timeout_certificate_file: Some(certificate.clone()),
+                    artifact_dir: dir.join(tag),
+                    batch_file: Some(batch_file),
+                },
+                UNIT_TIMEOUT_MS,
+                UNIT_SEND_RETRIES,
+                UNIT_RETRY_BACKOFF_MS,
+                true,
+                false,
+                PEER_VOTE_PHASE_DEADLINE_MS,
+                Duration::from_secs(40),
+            )
+            .0
+            .expect("view-1 round still running")
+        };
+        let error = round_at(block_b, "with-b").expect_err("view 1 cannot carry block B");
+        assert!(
+            error.starts_with("consensus v2 view must re-propose"),
+            "view 1 failed only after signing: {error}"
+        );
+        assert!(
+            !submission_failure_advances_view(&error),
+            "the proxy would spend every later view on `{error}`, and view 1 could no longer re-propose block A"
+        );
+        assert!(
+            vote_lock_proposal_hashes(&leader_dir, 1, 1).is_empty(),
+            "the view-1 proposer spent its view-1 slot on block B"
+        );
+        let report = round_at(block_a, "with-a").expect("view 1 certifies block A");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        assert_height_1_final_everywhere(&fixture);
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// As above, but block B is submitted at a validator that is not the
+    /// view-1 proposer and forwards it. The forwarded path must stop before
+    /// the view-1 proposer signs too, so view 1 can still carry block A.
+    #[test]
+    fn a_forwarded_view_1_proposal_must_carry_the_prepare_qc_block() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let late = ProxyVote::Forward(Duration::from_secs(5));
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture = vote_phase_round_fixture(
+            "view-1-forwarded-reproposal",
+            &[(2, forward, late), (3, forward, late)],
+        );
+        let (result, _, _) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            3_000,
+            Duration::from_secs(30),
+        );
+        result
+            .expect("view-0 round still running")
+            .expect_err("view 0 misses its precommit quorum");
+        let block_a = fixture.artifact_dir.with_extension("batch.json");
+        spawn_vote_phase_validator(
+            fixture.data_dirs[fixture.proposer_index].clone(),
+            fixture.topology_file.clone(),
+            fixture
+                .proposer_listener
+                .try_clone()
+                .expect("clone proposer listener"),
+        );
+        let dir = fixture.artifact_dir.with_extension("view-1");
+        let (votes, refused) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir);
+        assert_eq!(votes.len(), 6, "{refused:?}");
+        let certificate = timeout_certificate(&fixture, 0, votes, &dir).expect("certificate");
+        let leader = height_1_leader(&fixture, 1);
+        let leader_dir = fixture.data_dirs[leader].clone();
+        let requester = (0..fixture.data_dirs.len())
+            .find(|index| *index != leader && *index != fixture.proposer_index)
+            .expect("a validator that is not a proposer");
+        let requester_dir = fixture.data_dirs[requester].clone();
+        let block_b = dir.join("block-b.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: requester_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "b".repeat(40)),
+            amount: 5,
+            batch_file: block_b.clone(),
+        })
+        .expect("block B batch");
+        let error = transport_peer_certified_batch_round(TransportPeerCertifiedBatchRoundOptions {
+            data_dir: requester_dir.clone(),
+            topology_file: fixture.topology_file.clone(),
+            batch_kind: Some("transparent".to_string()),
+            batch_file: block_b,
+            key_file: requester_dir.join(VALIDATOR_KEYS_FILE),
+            proposal_key_file: Some(requester_dir.join(VALIDATOR_KEYS_FILE)),
+            require_local_proposer: false,
+            require_signed_proposal: true,
+            allow_peer_failures: false,
+            quorum_early_full_propagation: true,
+            artifact_dir: dir.join("forwarded-b"),
+            block_height: Some(1),
+            view: Some(1),
+            timeout_certificate_file: Some(certificate.clone()),
+            timeout_ms: UNIT_TIMEOUT_MS,
+            send_retries: 0,
+            retry_backoff_ms: UNIT_RETRY_BACKOFF_MS,
+            vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
+            local_apply_before_certified_send: true,
+            defer_certified_sends: false,
+            commit_processed_dir: None,
+            required_parent: None,
+        })
+        .expect_err("view 1 cannot carry block B");
+        assert!(error.contains("consensus v2 view must re-propose"), "{error}");
+        assert!(
+            vote_lock_proposal_hashes(&leader_dir, 1, 1).is_empty(),
+            "the view-1 proposer spent its view-1 slot on forwarded block B: {error}"
+        );
+        let (result, _, _) = run_vote_phase_round_at(
+            &fixture,
+            &RoundSlot {
+                proposer_index: leader,
+                view: 1,
+                timeout_certificate_file: Some(certificate),
+                artifact_dir: dir.join("with-a"),
+                batch_file: Some(block_a),
+            },
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            Duration::from_secs(40),
+        );
+        let report = result
+            .expect("view-1 round still running")
+            .expect("view 1 certifies block A");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        assert_height_1_final_everywhere(&fixture);
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// View 0 forms a prepare QC Q for block A, but every precommit request is
+    /// refused, so only the view-0 proposer stores Q (and locks on A). Its
+    /// timeout vote names Q, so the timeout certificate does too. The view-1
+    /// proposer and every peer must still verify that certificate and finish
+    /// height 1 at view 1 with block A.
+    #[test]
+    fn a_prepare_qc_held_only_by_the_view_0_proposer_still_finishes_at_view_1() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        // Refused through view 0 (3 s deadline); forwarded again for view 1.
+        let refused = ProxyVote::RefuseFor(Duration::from_secs(8));
+        // Proxies are placed by offset from the view-0 proposer: every peer.
+        let fixture = vote_phase_round_fixture(
+            "view-1-sole-qc-holder",
+            &(1..6).map(|offset| (offset, forward, refused)).collect::<Vec<_>>(),
+        );
+        let peers = (0..fixture.data_dirs.len())
+            .filter(|index| *index != fixture.proposer_index)
+            .collect::<Vec<_>>();
+        let (result, _, _) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            3_000,
+            Duration::from_secs(30),
+        );
+        result
+            .expect("view-0 round still running")
+            .expect_err("view 0 gets no precommit from any peer");
+        let block_a = fixture.artifact_dir.with_extension("batch.json");
+        spawn_vote_phase_validator(
+            fixture.data_dirs[fixture.proposer_index].clone(),
+            fixture.topology_file.clone(),
+            fixture
+                .proposer_listener
+                .try_clone()
+                .expect("clone proposer listener"),
+        );
+        let dir = fixture.artifact_dir.with_extension("view-1");
+        let (votes, refused_votes) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir);
+        assert_eq!(votes.len(), 6, "{refused_votes:?}");
+        let proposer_vote: BlockTimeoutVoteFile = serde_json::from_slice(
+            &std::fs::read(
+                dir.join(format!("validator-{}.h1.v0.timeout.json", fixture.proposer_index)),
+            )
+            .expect("proposer timeout vote"),
+        )
+        .expect("proposer timeout vote json");
+        let qc_id = proposer_vote
+            .consensus_v2_vote
+            .and_then(|vote| vote.high_qc)
+            .expect("the view-0 proposer's timeout vote names its prepare QC")
+            .certificate_id;
+        for &peer in &peers {
+            let held = std::fs::read_dir(fixture.data_dirs[peer].join("consensus-v2-qcs"))
+                .map(|entries| {
+                    entries
+                        .filter_map(Result::ok)
+                        .any(|entry| entry.file_name().to_string_lossy().contains(&qc_id))
+                })
+                .unwrap_or(false);
+            assert!(!held, "validator-{peer} already holds the view-0 prepare QC");
+        }
+        let leader = height_1_leader(&fixture, 1);
+        assert_ne!(leader, fixture.proposer_index);
+        let certificate = timeout_certificate(&fixture, 0, votes, &dir)
+            .expect("the view-1 proposer builds the timeout certificate");
+        let (result, _, _) = run_vote_phase_round_at(
+            &fixture,
+            &RoundSlot {
+                proposer_index: leader,
+                view: 1,
+                timeout_certificate_file: Some(certificate),
+                artifact_dir: dir.join("with-a"),
+                batch_file: Some(block_a),
+            },
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            Duration::from_secs(40),
+        );
+        let report = result
+            .expect("view-1 round still running")
+            .expect("view 1 certifies block A");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        assert_height_1_final_everywhere(&fixture);
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// The view-0 setup of the test above: view 0 forms a prepare QC Q that
+    /// only the view-0 proposer stores. Returns the view-0 timeout votes of
+    /// all six validators (the proposer's carries Q), Q's ID, and a validator
+    /// that is neither proposer and does not hold Q.
+    fn sole_qc_holder_timeout_votes(
+        tag: &str,
+    ) -> (VotePhaseRoundFixture, PathBuf, Vec<PathBuf>, String, usize) {
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let refused = ProxyVote::RefuseFor(Duration::from_secs(8));
+        let fixture = vote_phase_round_fixture(
+            tag,
+            &(1..6).map(|offset| (offset, forward, refused)).collect::<Vec<_>>(),
+        );
+        let (result, _, _) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            3_000,
+            Duration::from_secs(30),
+        );
+        result
+            .expect("view-0 round still running")
+            .expect_err("view 0 gets no precommit from any peer");
+        let dir = fixture.artifact_dir.with_extension("view-1");
+        let (votes, refused_votes) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir);
+        assert_eq!(votes.len(), 6, "{refused_votes:?}");
+        let proposer_vote: BlockTimeoutVoteFile = serde_json::from_slice(
+            &std::fs::read(&votes[fixture.proposer_index]).expect("proposer timeout vote"),
+        )
+        .expect("proposer timeout vote json");
+        let qc_id = proposer_vote
+            .consensus_v2_vote
+            .and_then(|vote| vote.high_qc)
+            .expect("the view-0 proposer's timeout vote names its prepare QC")
+            .certificate_id;
+        let leader = height_1_leader(&fixture, 1);
+        let peer = (0..fixture.data_dirs.len())
+            .find(|index| *index != leader && *index != fixture.proposer_index)
+            .expect("a validator that is not a proposer");
+        assert!(!holds_qc(&fixture.data_dirs[leader], &qc_id));
+        assert!(!holds_qc(&fixture.data_dirs[peer], &qc_id));
+        (fixture, dir, votes, qc_id, peer)
+    }
+
+    fn holds_qc(data_dir: &Path, qc_id: &str) -> bool {
+        std::fs::read_dir(data_dir.join("consensus-v2-qcs"))
+            .map(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .any(|entry| entry.file_name().to_string_lossy().contains(qc_id))
+            })
+            .unwrap_or(false)
+    }
+
+    /// A copy of the JSON file `from` at `to`, changed by `edit`.
+    fn edited_json(from: &Path, to: PathBuf, edit: impl FnOnce(&mut serde_json::Value)) -> PathBuf {
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(from).expect("json file")).expect("json");
+        edit(&mut value);
+        std::fs::create_dir_all(to.parent().expect("parent")).expect("edited json directory");
+        std::fs::write(&to, serde_json::to_vec_pretty(&value).expect("json bytes"))
+            .expect("edited json");
+        to
+    }
+
+    fn break_signature(signature: &mut serde_json::Value) {
+        let hex = signature["signature_hex"].as_str().expect("signature hex");
+        let first = if hex.starts_with('0') { "1" } else { "0" };
+        signature["signature_hex"] = format!("{first}{}", &hex[1..]).into();
+    }
+
+    /// A carried QC is stored only once the timeout vote or certificate that
+    /// carries it verifies.
+    #[test]
+    fn a_carried_qc_is_stored_only_after_its_vote_or_certificate_verifies() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (fixture, dir, votes, qc_id, peer) =
+            sole_qc_holder_timeout_votes("carried-qc-stored-after-verification");
+        let leader_dir = &fixture.data_dirs[height_1_leader(&fixture, 1)];
+        let mut bad_votes = votes.clone();
+        bad_votes[fixture.proposer_index] = edited_json(
+            &votes[fixture.proposer_index],
+            dir.join("bad-vote/proposer.json"),
+            |vote| break_signature(&mut vote["consensus_v2_vote"]["signature"]),
+        );
+        timeout_certificate(&fixture, 0, bad_votes, &dir.join("bad-vote"))
+            .expect_err("a timeout vote with a broken signature");
+        assert!(
+            !holds_qc(leader_dir, &qc_id),
+            "the aggregator stored the QC a vote carried before the vote verified"
+        );
+        let certificate = timeout_certificate(&fixture, 0, votes, &dir).expect("certificate");
+        assert!(holds_qc(leader_dir, &qc_id));
+
+        let peer_dir = &fixture.data_dirs[peer];
+        let bad_certificate =
+            edited_json(&certificate, dir.join("bad-certificate.json"), |certificate| {
+                let votes = certificate["consensus_v2_certificate"]["votes"]
+                    .as_array_mut()
+                    .expect("v2 votes");
+                let vote = votes
+                    .iter_mut()
+                    .find(|vote| !vote["high_qc"].is_null())
+                    .expect("a vote naming the QC");
+                break_signature(&mut vote["signature"]);
+            });
+        let verify = |certificate_file: &PathBuf| {
+            verify_block_timeout_certificate_file(BlockTimeoutCertificateVerifyOptions {
+                data_dir: peer_dir.clone(),
+                verify_block_log: false,
+                certificate_file: certificate_file.clone(),
+            })
+        };
+        verify(&bad_certificate).expect_err("a certificate with a broken vote signature");
+        assert!(
+            !holds_qc(peer_dir, &qc_id),
+            "a peer stored the QC a certificate carried before the certificate verified"
+        );
+        verify(&certificate).expect("the genuine certificate");
+        assert!(holds_qc(peer_dir, &qc_id));
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// A carried QC that does not verify is ignored: it fails a vote or
+    /// certificate only when the receiver does not hold the QC it names.
+    #[test]
+    fn a_carried_qc_that_does_not_verify_is_ignored_when_the_receiver_holds_the_named_qc() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (fixture, dir, votes, qc_id, peer) =
+            sole_qc_holder_timeout_votes("carried-qc-ignored");
+        let leader_dir = &fixture.data_dirs[height_1_leader(&fixture, 1)];
+        let mut swapped_votes = votes.clone();
+        swapped_votes[fixture.proposer_index] = edited_json(
+            &votes[fixture.proposer_index],
+            dir.join("swapped-vote/proposer.json"),
+            |vote| break_signature(&mut vote["consensus_v2_high_qc"]["votes"][0]["signature"]),
+        );
+        let error = timeout_certificate(&fixture, 0, swapped_votes.clone(), &dir.join("swapped-1"))
+            .expect_err("the aggregator does not hold the QC")
+            .to_string();
+        assert!(error.contains("unresolved"), "{error}");
+        timeout_certificate(&fixture, 0, votes.clone(), &dir.join("genuine-1"))
+            .expect("certificate");
+        assert!(holds_qc(leader_dir, &qc_id));
+        timeout_certificate(&fixture, 0, swapped_votes, &dir.join("swapped-2"))
+            .expect("the aggregator holds the QC, so the swapped copy is ignored");
+
+        let certificate =
+            timeout_certificate(&fixture, 0, votes, &dir).expect("certificate");
+        let swapped_certificate =
+            edited_json(&certificate, dir.join("swapped-certificate.json"), |certificate| {
+                for qc in certificate["consensus_v2_high_qcs"]
+                    .as_array_mut()
+                    .expect("carried QCs")
+                {
+                    break_signature(&mut qc["votes"][0]["signature"]);
+                }
+            });
+        let peer_dir = &fixture.data_dirs[peer];
+        let verify = |certificate_file: &PathBuf| {
+            verify_block_timeout_certificate_file(BlockTimeoutCertificateVerifyOptions {
+                data_dir: peer_dir.clone(),
+                verify_block_log: false,
+                certificate_file: certificate_file.clone(),
+            })
+        };
+        let error = verify(&swapped_certificate)
+            .expect_err("the peer does not hold the QC")
+            .to_string();
+        assert!(error.contains("unresolved"), "{error}");
+        verify(&certificate).expect("the genuine certificate");
+        verify(&swapped_certificate)
+            .expect("the peer holds the QC, so the swapped copy is ignored");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// The certificate carries every distinct QC its votes name, under a list
+    /// field an older node ignores.
+    #[test]
+    fn a_timeout_certificate_carries_every_qc_its_votes_name() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (fixture, dir, votes, qc_id, _) = sole_qc_holder_timeout_votes("carried-qcs");
+        let certificate = timeout_certificate(&fixture, 0, votes, &dir).expect("certificate");
+        let certificate: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(certificate).expect("certificate"))
+                .expect("certificate json");
+        let named = certificate["consensus_v2_certificate"]["votes"]
+            .as_array()
+            .expect("v2 votes")
+            .iter()
+            .filter_map(|vote| vote["high_qc"]["certificate_id"].as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        let carried = certificate["consensus_v2_high_qcs"]
+            .as_array()
+            .map(|qcs| {
+                qcs.iter()
+                    .filter_map(|qc| qc["certificate_id"].as_str())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        assert_eq!(named, [qc_id.as_str()].into_iter().collect());
+        assert_eq!(carried, named.into_iter().collect::<Vec<_>>(), "{certificate:#}");
+        assert!(certificate.get("consensus_v2_high_qc").is_none());
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// The view-1 proposer already signed at view 1 and the timeout
+    /// certificate requires block A. The spent view is reported first, so the
+    /// proxy moves on to view 2 instead of stopping on view 1.
+    #[test]
+    fn a_spent_view_is_reported_before_a_required_reproposal() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (fixture, dir, certificate, leader) =
+            view_0_prepare_qc_on_every_validator("spent-before-reproposal");
+        let leader_dir = fixture.data_dirs[leader].clone();
+        let (signed, refused) = timeout_votes(&fixture, &[leader], 1, &dir.join("spent"));
+        assert_eq!(signed.len(), 1, "{refused:?}");
+        let block_b = dir.join("block-b.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: leader_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "b".repeat(40)),
+            amount: 5,
+            batch_file: block_b.clone(),
+        })
+        .expect("block B batch");
+        let (result, _, _) = run_vote_phase_round_at(
+            &fixture,
+            &RoundSlot {
+                proposer_index: leader,
+                view: 1,
+                timeout_certificate_file: Some(certificate),
+                artifact_dir: dir.join("with-b"),
+                batch_file: Some(block_b),
+            },
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            Duration::from_secs(40),
+        );
+        let error = result
+            .expect("view-1 round still running")
+            .expect_err("view 1 is spent");
+        assert_eq!(
+            rpc_finality_failure_code("rpc_finality_submit_failed", &error),
+            "rpc_finality_view_spent",
+            "{error}"
+        );
+        assert!(submission_failure_advances_view(&error), "{error}");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// View 0 forms a prepare QC for block A that every validator locks on,
+    /// but misses its precommit quorum. Returns the view-0 timeout
+    /// certificate (which names A's QC) and the view-1 proposer.
+    fn view_0_prepare_qc_on_every_validator(
+        tag: &str,
+    ) -> (VotePhaseRoundFixture, PathBuf, PathBuf, usize) {
+        let late = ProxyVote::Forward(Duration::from_secs(5));
+        let forward = ProxyVote::Forward(Duration::ZERO);
+        let fixture = vote_phase_round_fixture(tag, &[(2, forward, late), (3, forward, late)]);
+        let (result, _, _) = run_vote_phase_round_with_sends(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            3_000,
+            Duration::from_secs(30),
+        );
+        result
+            .expect("view-0 round still running")
+            .expect_err("view 0 misses its precommit quorum");
+        spawn_vote_phase_validator(
+            fixture.data_dirs[fixture.proposer_index].clone(),
+            fixture.topology_file.clone(),
+            fixture
+                .proposer_listener
+                .try_clone()
+                .expect("clone proposer listener"),
+        );
+        let dir = fixture.artifact_dir.with_extension("view-1");
+        let (votes, refused) = timeout_votes(&fixture, &[0, 1, 2, 3, 4, 5], 0, &dir);
+        assert_eq!(votes.len(), 6, "{refused:?}");
+        let certificate = timeout_certificate(&fixture, 0, votes, &dir).expect("certificate");
+        let leader = height_1_leader(&fixture, 1);
+        (fixture, dir, certificate, leader)
+    }
+
+    /// A requester that skips the re-proposal check (release 6.4) sends block
+    /// B to the view-1 proposer; the forwarded handler refuses it before it
+    /// reserves its view-1 lock.
+    #[test]
+    fn the_forwarded_handler_refuses_a_view_1_proposal_without_the_prepare_qc_block() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (fixture, dir, certificate, leader) =
+            view_0_prepare_qc_on_every_validator("forwarded-handler-reproposal");
+        let leader_dir = fixture.data_dirs[leader].clone();
+        let requester = (0..fixture.data_dirs.len())
+            .find(|index| *index != leader && *index != fixture.proposer_index)
+            .expect("a validator that is not a proposer");
+        let requester_dir = fixture.data_dirs[requester].clone();
+        let block_b = dir.join("block-b.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: requester_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "b".repeat(40)),
+            amount: 5,
+            batch_file: block_b.clone(),
+        })
+        .expect("block B batch");
+        let local_status = status(NodeOptions {
+            data_dir: requester_dir.clone(),
+        })
+        .expect("requester status");
+        let required_parent = RequiredBlockParent {
+            height: local_status.block_height,
+            block_hash: local_status.block_tip_hash.clone(),
+            state_root: local_status.state_root.clone(),
+        };
+        let expected = propose_batch_with_required_parent_with_timings(
+            BatchProposalOptions {
+                data_dir: requester_dir.clone(),
+                verify_block_log: false,
+                batch_kind: Some("transparent".to_string()),
+                batch_file: block_b.clone(),
+                proposal_file: dir.join("block-b.proposal.json"),
+                view: Some(1),
+                timeout_certificate_file: Some(certificate.clone()),
+                key_file: None,
+                validator_id: None,
+            },
+            &required_parent,
+        )
+        .expect("unsigned view-1 proposal of block B")
+        .proposal;
+        assert_eq!(expected.proposer, format!("validator-{leader}"));
+        let error = crate::transport_runtime::transport_block_proposal_request(
+            &requester_dir,
+            &read_topology_file(&fixture.topology_file).expect("topology"),
+            &local_status,
+            &expected.proposer,
+            &expected.batch_kind,
+            &std::fs::read_to_string(&block_b).expect("block B batch json"),
+            &expected,
+            &required_parent,
+            Some(&std::fs::read_to_string(&certificate).expect("certificate json")),
+            UNIT_TIMEOUT_MS,
+        )
+        .expect_err("the view-1 proposer must refuse block B");
+        assert!(error.contains("consensus v2 view must re-propose"), "{error}");
+        assert!(
+            vote_lock_proposal_hashes(&leader_dir, 1, 1).is_empty(),
+            "the view-1 proposer spent its view-1 slot on forwarded block B: {error}"
+        );
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// A proposer that already signed a timeout vote at view 1 cannot finish
+    /// view 0 or view 1; the spent-view error names view 1 and asks for view 2.
+    #[test]
+    fn a_spent_view_names_the_highest_round_the_proposer_signed() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture("spent-view-highest", &[]);
+        fail_view_0_proposer_after_its_prepare(&fixture);
+        let dir = fixture.artifact_dir.with_extension("timeouts");
+        let (signed, refused) = timeout_votes(&fixture, &[fixture.proposer_index], 1, &dir);
+        assert_eq!(signed.len(), 1, "{refused:?}");
+        let (result, _, _) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        let error = result.expect("round still running").expect_err("view 0 is spent");
+        assert!(
+            error.contains("timeout certificate for view 1 and a proposal at view 2"),
+            "{error}"
+        );
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// A submission at a validator that is not the proposer asks the spent
+    /// proposer to sign over transport; that path reports the spent view too.
+    #[test]
+    fn a_forwarded_proposal_to_a_spent_proposer_reports_the_spent_view() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture("spent-view-forwarded", &[]);
+        fail_view_0_proposer_after_its_prepare(&fixture);
+        let requester = (fixture.proposer_index + 1) % fixture.data_dirs.len();
+        let requester_dir = fixture.data_dirs[requester].clone();
+        let artifact_dir = fixture.artifact_dir.with_extension("forwarded");
+        let batch_file = artifact_dir.with_extension("batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: requester_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "c".repeat(40)),
+            amount: 3,
+            batch_file: batch_file.clone(),
+        })
+        .expect("forwarded batch");
+        let error = transport_peer_certified_batch_round(TransportPeerCertifiedBatchRoundOptions {
+            data_dir: requester_dir.clone(),
+            topology_file: fixture.topology_file.clone(),
+            batch_kind: Some("transparent".to_string()),
+            batch_file,
+            key_file: requester_dir.join(VALIDATOR_KEYS_FILE),
+            proposal_key_file: Some(requester_dir.join(VALIDATOR_KEYS_FILE)),
+            require_local_proposer: false,
+            require_signed_proposal: true,
+            allow_peer_failures: false,
+            quorum_early_full_propagation: true,
+            artifact_dir,
+            block_height: Some(1),
+            view: Some(0),
+            timeout_certificate_file: None,
+            timeout_ms: UNIT_TIMEOUT_MS,
+            send_retries: 0,
+            retry_backoff_ms: UNIT_RETRY_BACKOFF_MS,
+            vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
+            local_apply_before_certified_send: true,
+            defer_certified_sends: false,
+            commit_processed_dir: None,
+            required_parent: None,
+        })
+        .expect_err("the spent proposer cannot sign at view 0");
+        assert!(error.contains("consensus v2 view spent"), "{error}");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// Heights 1701 and 1707 (2026-11-19): the view-0 proposer signed a
+    /// proposal, its own vote and its own prepare, then failed before any peer
+    /// voted. Every later proposal at that height met its own vote lock, and
+    /// nothing moved the height to view 1 until the records were moved aside
+    /// by hand.
+    #[test]
+    fn a_proposer_that_signed_and_failed_does_not_wedge_its_height() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture("spent-view", &[]);
+        let proposer_dir = fixture.data_dirs[fixture.proposer_index].clone();
+        let crashed_lock = fail_view_0_proposer_after_its_prepare(&fixture);
+
+        // A normal submission at height 1 reaches the view-0 proposer.
+        let start = Instant::now();
+        let (result, _, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        let error = result
+            .expect("round still running")
+            .expect_err("the proposer cannot sign at view 0 again");
+        assert!(lock_free);
+        // Asking again changes nothing: the records never expire.
+        let (retry, _, _) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        assert_eq!(
+            retry.expect("retry still running").expect_err("retry at view 0"),
+            error
+        );
+        assert!(
+            submission_failure_advances_view(&error),
+            "height 1 never finalizes: the submission failed with `{error}`, which no recovery path treats as a reason to change view"
+        );
+        // The proposer reports the spent view itself, not a message that only
+        // happens to match a broader pattern.
+        assert!(error.starts_with("consensus v2 view spent"), "{error}");
+
+        // The proxy's recovery: timeout votes for view 0 from every validator,
+        // a timeout certificate, the view-1 proposer.
+        let recovery_dir = fixture.artifact_dir.with_extension("view-1");
+        std::fs::create_dir_all(&recovery_dir).expect("recovery directory");
+        let vote_files = fixture
+            .data_dirs
+            .iter()
+            .enumerate()
+            .map(|(index, data_dir)| {
+                let vote_file = recovery_dir.join(format!("validator-{index}.timeout.json"));
+                create_block_timeout_vote(BlockTimeoutVoteOptions {
+                    data_dir: data_dir.clone(),
+                    verify_block_log: false,
+                    key_file: data_dir.join(VALIDATOR_KEYS_FILE),
+                    validator_id: Some(format!("validator-{index}")),
+                    block_height: 1,
+                    view: 0,
+                    high_qc_id: RPC_FINALITY_TIMEOUT_HIGH_QC_COMPAT.to_string(),
+                    vote_file: vote_file.clone(),
+                })
+                .expect("timeout vote");
+                vote_file
+            })
+            .collect::<Vec<_>>();
+        let (_, validators) = live_consensus_v2_context(&proposer_dir).expect("context");
+        let view_1_proposer =
+            postfiat_ordering_fast::leader_for_view(&validators.validator_ids(), 1, 1)
+                .expect("view-1 proposer");
+        let view_1_index = validators
+            .validator_ids()
+            .iter()
+            .position(|validator| validator == &view_1_proposer)
+            .expect("view-1 proposer index");
+        let timeout_certificate_file = recovery_dir.join("timeout-certificate.json");
+        aggregate_block_timeout_certificate(BlockTimeoutCertificateOptions {
+            data_dir: fixture.data_dirs[view_1_index].clone(),
+            verify_block_log: false,
+            block_height: 1,
+            view: 0,
+            vote_files,
+            certificate_file: timeout_certificate_file.clone(),
+        })
+        .expect("timeout certificate");
+        let round_dir = recovery_dir.join("round");
+        let (result, _, _) = run_vote_phase_round_at(
+            &fixture,
+            &RoundSlot {
+                proposer_index: view_1_index,
+                view: 1,
+                timeout_certificate_file: Some(timeout_certificate_file),
+                artifact_dir: round_dir.clone(),
+                batch_file: None,
+            },
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            false,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            Duration::from_secs(30),
+        );
+        let report = result
+            .expect("view-1 round still running")
+            .expect("view 1 certifies height 1");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        let elapsed = start.elapsed();
+
+        // One block at height 1 on every validator: the view-1 block.
+        let certificate: BlockCertificateFile = read_transport_json_file(
+            &round_dir.join("block-certificate.json"),
+            "view-1 certificate",
+        )
+        .expect("view-1 certificate");
+        assert_eq!((certificate.view, certificate.proposer.as_str()), (1, view_1_proposer.as_str()));
+        assert_ne!(certificate.proposal_hash.as_ref(), crashed_lock.first());
+        let tips = fixture
+            .data_dirs
+            .iter()
+            .map(|data_dir| {
+                let tip = status(NodeOptions {
+                    data_dir: data_dir.clone(),
+                })
+                .expect("validator status");
+                (tip.block_height, tip.block_tip_hash)
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            tips.iter().all(|tip| tip == &tips[0]) && tips[0].0 == 1,
+            "{tips:?}"
+        );
+        // The failed proposer's view-0 record is untouched: it never signed
+        // a second proposal there.
+        assert_eq!(vote_lock_proposal_hashes(&proposer_dir, 1, 0), crashed_lock);
+        eprintln!("spent view 0: error=`{error}` recovered_at_view_1_in={elapsed:?}");
+        assert!(elapsed < Duration::from_secs(30), "recovery took {elapsed:?}");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// Early-quorum round (the live finality path) with one validator answering
+    /// `late_phase` (0 prepare, 1 precommit) 8 s late and the others at once.
+    /// Returns the round time.
+    fn round_time_with_one_vote_late(tag: &str, late_phase: Option<usize>) -> Duration {
+        let delay = |phase| Duration::from_secs(if late_phase == Some(phase) { 8 } else { 0 });
+        let (prepare, precommit) = (ProxyVote::Forward(delay(0)), ProxyVote::Forward(delay(1)));
+        let fixture = vote_phase_round_fixture(tag, &[(1, prepare, precommit)]);
+        let (result, elapsed, lock_free) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(40),
+        );
+        let report = result
+            .expect("round still running")
+            .expect("round certifies");
+        eprintln!(
+            "{tag}: round_time={elapsed:?} lock_free={lock_free} timings={}",
+            serde_json::to_string(&report.timings).expect("round timings json")
+        );
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+        elapsed
+    }
+
+    /// One signed transfer through rpc-serve's finality path with the live
+    /// finality flags (30 s timeout, 16 retries, 250 ms backoff, early quorum,
+    /// deliveries deferred), six validators over real transport. Reports the
+    /// RPC's steps around the certified round and the round's own timers.
+    #[test]
+    fn finality_rpc_reports_each_step_around_the_certified_round() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture("finality-rpc-steps", &[]);
+        let proposer_dir = fixture.data_dirs[fixture.proposer_index].clone();
+        let batch = create_transfer_batch(BatchTransferOptions {
+            data_dir: proposer_dir.clone(),
+            key_file: Some(fixture.data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "f".repeat(40)),
+            amount: 1_000_000,
+            batch_file: fixture.artifact_dir.with_extension("signed.batch.json"),
+        })
+        .expect("signed transfer");
+        let signed_transfer_json =
+            serde_json::to_string(batch.transactions.first().expect("signed transfer"))
+                .expect("serialize signed transfer");
+        let rpc_listener = TcpListener::bind(("127.0.0.1", 0)).expect("RPC port");
+        let rpc_port = rpc_listener.local_addr().expect("RPC address").port();
+        let ready_file = fixture.artifact_dir.with_extension("rpc-ready.json");
+        let rpc = {
+            let data_dir = proposer_dir.clone();
+            let topology_file = fixture.topology_file.clone();
+            let ready_file = ready_file.clone();
+            std::thread::spawn(move || {
+                rpc_serve_inner(
+                    RpcServeOptions {
+                        data_dir: data_dir.clone(),
+                        spool_dir: data_dir.join("runtime/rpc-spool"),
+                        ready_file,
+                        bind_host: "127.0.0.1".to_string(),
+                        port: rpc_port,
+                        max_requests: 1,
+                        timeout_ms: 30_000,
+                        child_timeout_ms: 30_000,
+                        event_log: None,
+                        allow_mempool_submit: false,
+                        allow_mempool_submit_finality: true,
+                        allow_orchard_batch_create: false,
+                        allow_private_action_admission: false,
+                        owned_lane_enabled: true,
+                        finality_topology_file: topology_file,
+                        finality_key_file: data_dir.join(VALIDATOR_KEYS_FILE),
+                        finality_proposal_key_file: Some(data_dir.join(VALIDATOR_KEYS_FILE)),
+                        finality_signer_socket: None,
+                        finality_artifact_root: data_dir.join("finality-artifacts"),
+                        finality_timeout_ms: 30_000,
+                        finality_send_retries: 16,
+                        finality_retry_backoff_ms: 250,
+                        finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
+                        finality_quorum_early_full_propagation: true,
+                        max_mempool_submit_per_peer: 4,
+                        max_mempool_submit_total: 8,
+                        max_orchard_batch_create_per_peer: 1,
+                        max_orchard_batch_create_total: 1,
+                        max_orchard_batch_create_concurrent: 1,
+                        max_child_dispatch_concurrent: 8,
+                        max_child_dispatch_per_peer: 4,
+                        keep_alive: false,
+                    },
+                    Some(rpc_listener),
+                )
+                .expect("serve finality RPC")
+            })
+        };
+        for _ in 0..500 {
+            if ready_file.is_file() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(ready_file.is_file(), "finality RPC did not become ready");
+        let parent = status(NodeOptions {
+            data_dir: proposer_dir.clone(),
+        })
+        .expect("parent status");
+        let request = RpcRequest::empty("finality-rpc-steps", "mempool_submit_signed_transfer_finality")
+            .with_param("signed_transfer_json", &signed_transfer_json)
+            .expect("signed transfer param")
+            .with_param("proxy_required_current_height", parent.block_height)
+            .expect("required height")
+            .with_param("proxy_required_parent_hash", &parent.block_tip_hash)
+            .expect("required hash")
+            .with_param("proxy_required_state_root", &parent.state_root)
+            .expect("required root");
+        let start = Instant::now();
+        let response = send_consensus_v2_test_rpc(rpc_port, &request);
+        let reply_ms = start.elapsed().as_secs_f64() * 1_000.0;
+        assert!(response.ok, "finality RPC failed: {:?}", response.error);
+        let result = response.result.expect("finality result");
+        assert_eq!(result["finality"]["confirmed"], serde_json::Value::Bool(true));
+        assert_eq!(result["certified_sends_deferred"], serde_json::Value::Bool(true));
+        let steps = &result["step_timings"];
+        for step in ["view_and_proposer_ms", "mempool_round_ms", "round_report_write_ms"] {
+            assert!(steps[step].as_f64().is_some(), "missing {step}: {result}");
+        }
+        // The mempool round takes its node id from the round's post-apply
+        // status instead of reading the full status again.
+        assert!(steps.get("post_round_status_ms").is_none(), "{steps}");
+        // View preparation and the proposer check reuse the status read that
+        // matched the required parent.
+        assert_eq!(steps["view_and_proposer_status_reads"], 0, "{steps}");
+        let round_report: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(result["round_report_file"].as_str().expect("round report path"))
+                .expect("read round report"),
+        )
+        .expect("round report json");
+        eprintln!(
+            "finality rpc steps: client_reply_ms={reply_ms:.1} total_ms={} readiness_wait_ms={} mempool_submit_ms={} mempool_batch_ms={} certified_round_ms={} steps={steps} round_timings={}",
+            result["total_ms"],
+            result["readiness_wait_ms"],
+            result["mempool_submit_ms"],
+            result["mempool_batch_ms"],
+            result["certified_round_ms"],
+            round_report["round"]["timings"],
+        );
+        rpc.join().expect("finality RPC thread");
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    #[test]
+    fn an_early_quorum_round_with_every_vote_on_time_sets_the_baseline() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let elapsed = round_time_with_one_vote_late("on-time-votes", None);
+        assert!(elapsed < Duration::from_secs(8), "round took {elapsed:?}");
+    }
+
+    #[test]
+    fn a_precommit_answered_8s_late_does_not_delay_an_early_quorum_round() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let elapsed = round_time_with_one_vote_late("late-precommit-8s", Some(1));
+        assert!(elapsed < Duration::from_secs(8), "round took {elapsed:?}");
+    }
+
+    #[test]
+    fn a_prepare_answered_8s_late_does_not_delay_an_early_quorum_round() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let elapsed = round_time_with_one_vote_late("late-prepare-8s", Some(0));
+        assert!(elapsed < Duration::from_secs(8), "round took {elapsed:?}");
+    }
+
+    #[test]
+    fn outstanding_precommit_requests_stop_once_the_round_certifies() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fixture = vote_phase_round_fixture(
+            "precommit-stop",
+            &[(
+                1,
+                ProxyVote::Forward(Duration::ZERO),
+                ProxyVote::Drop(Duration::from_millis(300)),
+            )],
+        );
+        let late_index = fixture.proxied[0].0;
+        let (result, elapsed, _) = run_vote_phase_round(
+            &fixture,
+            UNIT_TIMEOUT_MS,
+            UNIT_SEND_RETRIES,
+            UNIT_RETRY_BACKOFF_MS,
+            true,
+            Duration::from_secs(30),
+        );
+        let report = result
+            .expect("round still running")
+            .expect("round certifies at precommit quorum");
+        assert!(report.round_ok, "{:?}", report.send_failures);
+        let precommit_voters = certificate_qc_voters(
+            &fixture.artifact_dir.join("block-certificate.json"),
+            "precommit_qc",
+        );
+        assert!(precommit_voters.len() >= fixture.quorum);
+        let at_certification = fixture.requests(late_index, 1);
+        std::thread::sleep(Duration::from_secs(5));
+        let after = fixture.requests(late_index, 1);
+        eprintln!(
+            "precommit stop: elapsed={elapsed:?} precommit_requests_at_certification={at_certification} after_5s={after}"
+        );
+        // One attempt in flight at certification may still finish (pooled
+        // stream plus its one-shot fallback); nothing new may start.
+        assert!(
+            after <= at_certification + 2,
+            "precommit requests kept retrying after certification: {at_certification} -> {after}"
+        );
+        clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
+    }
+
+    /// Height 1453 (2026-11-18): the proposer held a precommit quorum (5 of 6)
+    /// but waited on one late validator that refused precommit, holding the
+    /// mempool mutation lock for the whole wait.
+    #[test]
+    fn height_1453_round_certifies_at_precommit_quorum_without_late_refusing_peer() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        prewarm_shielded_verifier_cache("height 1453 stall test").expect("prewarm verifier");
+        let validator_count = 6usize;
+        // The incident's transport timeout was 900 s; 60 s keeps the failing
+        // run short while staying far above the asserted round bound.
+        let transport_timeout_ms = 60_000u64;
+        let round_bound = Duration::from_secs(12);
+        let precommit_hold = Duration::from_secs(20);
+        // The late prepare vote lands after the round's precommit quorum.
+        let prepare_delay = round_bound / 2;
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-height-1453-stall-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let data_dirs = (0..validator_count)
+            .map(|index| {
+                let data_dir = root.join(format!("validator-{index}"));
+                init_consensus_v2(InitConsensusV2Options {
+                    data_dir: data_dir.clone(),
+                    chain_id: "postfiat-height-1453-stall-test".to_string(),
+                    node_id: format!("validator-{index}"),
+                    validator_count: validator_count as u32,
+                    activation_height: 1,
+                    storage_activation_height: None,
+                })
+                .expect("init validator");
+                data_dir
+            })
+            .collect::<Vec<_>>();
+        let shared_keys: ValidatorKeyFile = serde_json::from_slice(
+            &std::fs::read(data_dirs[0].join(VALIDATOR_KEYS_FILE)).expect("read keys"),
+        )
+        .expect("parse keys");
+        let bootstrap_snapshot = root.join("bootstrap-snapshot");
+        export_snapshot(SnapshotExportOptions {
+            data_dir: data_dirs[0].clone(),
+            snapshot_dir: bootstrap_snapshot.clone(),
+        })
+        .expect("export common state");
+        for (index, data_dir) in data_dirs.iter().enumerate().skip(1) {
+            std::fs::remove_dir_all(data_dir).expect("clear initialized replica");
+            import_snapshot(SnapshotImportOptions {
+                data_dir: data_dir.clone(),
+                snapshot_dir: bootstrap_snapshot.clone(),
+                node_id: Some(format!("validator-{index}")),
+            })
+            .expect("import common state");
+        }
+        for (index, data_dir) in data_dirs.iter().enumerate() {
+            let record = shared_keys
+                .validators
+                .iter()
+                .find(|record| record.node_id == format!("validator-{index}"))
+                .expect("local validator key")
+                .clone();
+            let key_path = data_dir.join(VALIDATOR_KEYS_FILE);
+            std::fs::write(
+                &key_path,
+                serde_json::to_vec_pretty(&ValidatorKeyFile {
+                    validators: vec![record],
+                })
+                .expect("serialize isolated key"),
+            )
+            .expect("write isolated key");
+            #[cfg(unix)]
+            std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600))
+                .expect("protect isolated key");
+        }
+        let topology_file = root.join("topology.json");
+        let (base_port, mut listeners, _rpc_listeners) =
+            reserve_consensus_v2_test_ports(validator_count);
+        write_consensus_v2_topology(TopologyConsensusV2Options {
+            chain_id: "postfiat-height-1453-stall-test".to_string(),
+            validators: validator_count as u32,
+            base_port,
+            rpc_base_port: Some(base_port.saturating_add(100)),
+            hosts: Some(vec!["127.0.0.1".to_string(); validator_count]),
+            output_file: topology_file.clone(),
+            activation_height: 1,
+            storage_activation_height: None,
+        })
+        .expect("write topology");
+        let (_, validators) = live_consensus_v2_context(&data_dirs[0]).expect("context");
+        let validator_ids = validators.validator_ids();
+        let proposer =
+            postfiat_ordering_fast::leader_for_view(&validator_ids, 1, 0).expect("height-1 leader");
+        let proposer_index = validator_ids
+            .iter()
+            .position(|validator| validator == &proposer)
+            .expect("proposer index");
+        let late_index = (proposer_index + 1) % validator_count;
+        let late_validator = format!("validator-{late_index}");
+
+        // The late validator's real service listens on a private port; its
+        // topology port is served by the late/refusing proxy.
+        let late_upstream = TcpListener::bind(("127.0.0.1", 0)).expect("late upstream port");
+        let late_upstream_addr = late_upstream.local_addr().expect("late upstream addr");
+        let late_topology_listener = std::mem::replace(&mut listeners[late_index], late_upstream);
+        let precommit_requests = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        spawn_late_refusing_validator_proxy(
+            late_topology_listener,
+            late_upstream_addr,
+            prepare_delay,
+            precommit_hold,
+            std::sync::Arc::clone(&precommit_requests),
+        );
+        // Detached services: the late validator's connection count depends on
+        // how many vote streams the proposer opens, so none is joined.
+        for (index, data_dir) in data_dirs.iter().enumerate() {
+            if index == proposer_index {
+                continue;
+            }
+            let data_dir = data_dir.clone();
+            let topology_file = topology_file.clone();
+            let listener = listeners[index]
+                .try_clone()
+                .expect("clone reserved listener");
+            std::thread::spawn(move || {
+                let shutdown_requested = std::sync::atomic::AtomicBool::new(false);
+                crate::transport_runtime::transport_validator_serve_inner(
+                    data_dir.clone(),
+                    topology_file,
+                    data_dir.join(VALIDATOR_KEYS_FILE),
+                    data_dir.join("height-1453-transport-votes"),
+                    Some("127.0.0.1".to_string()),
+                    16,
+                    transport_timeout_ms,
+                    None,
+                    true,
+                    Some(TransportShieldedVerifierPrewarmReport {
+                        schema: "postfiat-transport-shielded-verifier-prewarm-v1".to_string(),
+                        requested: true,
+                        total_ms: 0.0,
+                        asset_orchard_swap_verifier_warm: true,
+                        asset_orchard_swap_verifier_ms: Some(0.0),
+                        asset_orchard_private_egress_verifier_warm: true,
+                        asset_orchard_private_egress_verifier_ms: Some(0.0),
+                        asset_orchard_private_egress_verifier_breakdown: None,
+                    }),
+                    Some(listener),
+                    &shutdown_requested,
+                )
+            });
+        }
+
+        let proposer_dir = data_dirs[proposer_index].clone();
+        let batch_file = root.join("height-1.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: proposer_dir.clone(),
+            key_file: Some(data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "d".repeat(40)),
+            amount: 1_000_000,
+            batch_file: batch_file.clone(),
+        })
+        .expect("create batch");
+        let topology = read_topology_file(&topology_file).expect("read topology");
+        let local_status = status(NodeOptions {
+            data_dir: proposer_dir.clone(),
+        })
+        .expect("proposer status");
+        transport_authenticated_peer_health(&proposer_dir, &topology, &local_status, 15_000)
+            .expect("authenticated peer health");
+
+        // The RPC finality path runs the round under the mempool mutation lock
+        // (run_serialized_rpc_mempool_submit); model it with the same try_lock.
+        let mempool_mutation_lock = std::sync::Arc::new(Mutex::new(()));
+        let artifact_dir = root.join("height-1-artifacts");
+        let round_start = Instant::now();
+        let round = {
+            let lock = std::sync::Arc::clone(&mempool_mutation_lock);
+            let options = TransportPeerCertifiedBatchRoundOptions {
+                data_dir: proposer_dir.clone(),
+                topology_file: topology_file.clone(),
+                batch_kind: Some("transparent".to_string()),
+                batch_file: batch_file.clone(),
+                key_file: proposer_dir.join(VALIDATOR_KEYS_FILE),
+                proposal_key_file: Some(proposer_dir.join(VALIDATOR_KEYS_FILE)),
+                require_local_proposer: true,
+                require_signed_proposal: true,
+                allow_peer_failures: false,
+                quorum_early_full_propagation: true,
+                artifact_dir: artifact_dir.clone(),
+                block_height: Some(1),
+                view: Some(0),
+                timeout_certificate_file: None,
+                timeout_ms: transport_timeout_ms,
+                send_retries: 1,
+                retry_backoff_ms: 50,
+                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
+                local_apply_before_certified_send: true,
+                defer_certified_sends: false,
+                commit_processed_dir: None,
+                required_parent: None,
+            };
+            std::thread::spawn(move || {
+                let _mutation_guard = lock.try_lock().expect("mempool mutation lock free");
+                transport_peer_certified_batch_round(options)
+            })
+        };
+        let mut busy_until_round_end = false;
+        while !round.is_finished() && round_start.elapsed() < round_bound * 2 {
+            busy_until_round_end |= matches!(
+                mempool_mutation_lock.try_lock(),
+                Err(std::sync::TryLockError::WouldBlock)
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let mempool_lock_free_after = round_start.elapsed();
+        let mempool_lock_free = mempool_mutation_lock.try_lock().is_ok();
+        let report = round
+            .join()
+            .expect("round thread")
+            .expect("height 1453 round must certify at quorum");
+        let round_elapsed = round_start.elapsed();
+        eprintln!(
+            "height-1453 repro: round_elapsed={round_elapsed:?} mempool_lock_free_after={mempool_lock_free_after:?} \
+             precommit_requests_to_late_peer={} busy_seen={busy_until_round_end}",
+            precommit_requests.load(std::sync::atomic::Ordering::SeqCst)
+        );
+        assert!(
+            mempool_lock_free,
+            "mempool mutation lock still held {mempool_lock_free_after:?} into the round"
+        );
+        assert!(
+            round_elapsed < round_bound,
+            "round took {round_elapsed:?}: it waited on the late peer instead of certifying at precommit quorum"
+        );
+        assert!(
+            report.round_ok,
+            "round_ok false: {:?}",
+            report.send_failures
+        );
+
+        let certificate_file = artifact_dir.join("block-certificate.json");
+        let prepare_voters = certificate_qc_voters(&certificate_file, "prepare_qc");
+        let precommit_voters = certificate_qc_voters(&certificate_file, "precommit_qc");
+        assert!(prepare_voters.len() >= validators.quorum);
+        assert!(precommit_voters.len() >= validators.quorum);
+        assert!(
+            !precommit_voters.contains(&late_validator),
+            "late validator was counted in the precommit QC: {precommit_voters:?}"
+        );
+        // The late validator is asked for its precommit only once its prepare
+        // vote has arrived; here the round certified before that, so never.
+        assert!(round_elapsed < prepare_delay, "{round_elapsed:?}");
+        assert_eq!(precommit_requests.load(std::sync::atomic::Ordering::SeqCst), 0);
+
+        // The late validator still receives the certified block through the
+        // existing certified delivery path.
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            let late = status(NodeOptions {
+                data_dir: data_dirs[late_index].clone(),
+            })
+            .expect("late validator status");
+            if late.block_height == 1 {
+                let proposer_state = status(NodeOptions {
+                    data_dir: proposer_dir.clone(),
+                })
+                .expect("proposer status");
+                assert_eq!(late.block_tip_hash, proposer_state.block_tip_hash);
+                assert_eq!(late.state_root, proposer_state.state_root);
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "late validator never received block 1"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        clear_transport_vote_stream_pool_for_test(&topology_file).expect("close persistent streams");
+    }
+
     #[test]
     fn certified_transport_payload_commits_batch_kind() {
         let payload_json = r#"{"schema":"test-batch","batch_id":"batch-1"}"#;
@@ -2773,6 +5689,39 @@ mod transport_batch_payload_tests {
             assert!(
                 error.contains("--unsafe-devnet-json-storage"),
                 "{command}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn rpc_serve_vote_phase_deadline_is_positive_and_at_most_the_finality_timeout() {
+        // A later invalid flag stops rpc-serve right after the deadline is
+        // parsed, so an accepted deadline reports that flag instead.
+        let parse = |finality_timeout_ms: &str, deadline_ms: Option<&str>| {
+            let mut flags = vec![
+                "--unsafe-devnet-json-storage",
+                "--port",
+                "1",
+                "--finality-timeout-ms",
+                finality_timeout_ms,
+            ];
+            if let Some(deadline_ms) = deadline_ms {
+                flags.extend(["--finality-vote-phase-deadline-ms", deadline_ms]);
+            }
+            flags.extend(["--max-mempool-submit-per-peer", "0"]);
+            let flags = flags.into_iter().map(str::to_string).collect::<Vec<_>>();
+            run_cli_group_03("rpc-serve", &flags).expect_err("rpc-serve must not start")
+        };
+        let accepted = |error: String| error.contains("--max-mempool-submit-per-peer");
+        assert!(accepted(parse("30000", None)), "default");
+        assert!(accepted(parse("5000", None)), "default above a short finality timeout");
+        assert!(accepted(parse("30000", Some("20000"))));
+        assert!(accepted(parse("30000", Some("30000"))));
+        for deadline_ms in ["0", "-1", "20s", "30001", "600000"] {
+            let error = parse("30000", Some(deadline_ms));
+            assert!(
+                error.contains("--finality-vote-phase-deadline-ms"),
+                "{deadline_ms}: {error}"
             );
         }
     }

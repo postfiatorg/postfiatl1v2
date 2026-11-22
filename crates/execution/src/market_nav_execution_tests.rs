@@ -1901,10 +1901,13 @@ fn ethereum_ingress_consensus_binding_rejects_route_manifest_and_domain_mutation
         schema: postfiat_types::PFUSDC_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string(),
         route_id: VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1.to_string(),
         source_chain_id: evidence.source_chain_id,
+        route_epoch: 1,
         prior_finalized_beacon_root: "01".repeat(32),
         prior_finalized_slot: 100,
+        prior_sync_committee_root: "11".repeat(32),
         finalized_beacon_root: "02".repeat(32),
         finalized_slot: 132,
+        current_sync_committee_root: "11".repeat(32),
         finalized_execution_block_hash: evidence.block_hash.clone(),
         finalized_execution_block_number: 1_000,
         execution_state_root: "03".repeat(32),
@@ -2173,10 +2176,13 @@ fn pfeth_ethereum_ingress_selects_only_the_weth_route() {
         schema: postfiat_types::PFETH_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string(),
         route_id: VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_WETH_V1.to_string(),
         source_chain_id: evidence.source_chain_id,
+        route_epoch: 1,
         prior_finalized_beacon_root: "01".repeat(32),
         prior_finalized_slot: 100,
+        prior_sync_committee_root: "11".repeat(32),
         finalized_beacon_root: "02".repeat(32),
         finalized_slot: 132,
+        current_sync_committee_root: "11".repeat(32),
         finalized_execution_block_hash: evidence.block_hash.clone(),
         finalized_execution_block_number: 1_000,
         execution_state_root: "03".repeat(32),
@@ -5613,6 +5619,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     assert!(receipt.accepted, "{receipt:?}");
 
     let mut primary_policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: 10_050,
@@ -5938,6 +5945,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         ledger.account(&operator).expect("operator").sequence + 1,
         AssetTransactionOperation::PftlUniswapRedemptionFund(
             PftlUniswapRedemptionFundOperation {
+                funding_sequence: None,
                 funder: operator.clone(),
                 route_id: v2_route_id.clone(),
                 settlement_asset_id: settlement_asset_id.clone(),
@@ -6582,6 +6590,7 @@ fn pftl_uniswap_v2_fixed_point_spreads_round_against_the_protocol() {
 #[test]
 fn pftl_uniswap_v2_state_binds_directional_trust_capacity_and_non_nav_spread() {
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
@@ -6629,6 +6638,7 @@ fn pftl_uniswap_v2_state_binds_directional_trust_capacity_and_non_nav_spread() {
         return_imports: std::collections::BTreeMap::new(),
         paused: false,
         v2: Some(PftlUniswapRouteV2State {
+            funding_sequence: None,
             route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
             route_epoch: 1,
             outbound_verification_class:
@@ -6696,6 +6706,7 @@ fn pftl_uniswap_v2_state_binds_directional_trust_capacity_and_non_nav_spread() {
 fn ar11_issued_asset_supply_counts_non_nav_spread_custody() {
     let settlement_asset_id = "95".repeat(48);
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
@@ -6742,6 +6753,7 @@ fn ar11_issued_asset_supply_counts_non_nav_spread_custody() {
         return_imports: std::collections::BTreeMap::new(),
         paused: false,
         v2: Some(PftlUniswapRouteV2State {
+            funding_sequence: None,
             route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
             route_epoch: 1,
             outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),
@@ -7073,6 +7085,7 @@ fn primary_redeem_source_fixture(source_mode: bool) {
     // Production-shaped primary market policy: the exact cap, order-bound,
     // and multiplier shape used by the live A666 route.
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
@@ -7833,6 +7846,7 @@ fn ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed() {
     let packet_hash = "b5".repeat(48);
     let ethereum_recipient = "0x4444444444444444444444444444444444444444".to_string();
     let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        spread_recipient: None,
         policy_hash: String::new(),
         policy_epoch: 1,
         issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
@@ -7909,6 +7923,7 @@ fn ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed() {
         return_imports: std::collections::BTreeMap::new(),
         paused: false,
         v2: Some(PftlUniswapRouteV2State {
+            funding_sequence: None,
             route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
             route_epoch: 1,
             outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),

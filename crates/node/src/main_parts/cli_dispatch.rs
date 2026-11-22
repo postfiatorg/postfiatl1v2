@@ -130,10 +130,10 @@ use postfiat_node::{
     reconcile_terminal_mempool_entries, replay_market_ops_bundle,
     replay_vault_bridge_reserve_bundle, run_once, shield_disclose, shield_mint, shield_scan,
     shield_spend, shield_turnstile, shielded_tree_root, sign_ethereum_checkpoint_vote,
-    sign_verified_block_proposal,
+    sign_verified_block_proposal, consensus_v2_proposer_view_spent, block_proposer_for_status, consensus_v2_required_reproposal,
     sign_cobalt_authority_transition, sign_governance_amendment_authorization,
     sign_validator_registry_update_authorization,
-    simulate_shielded_batch, stage_deployment_validator_units, stage_validator_key, status,
+    simulate_shielded_batch, stage_deployment_validator_units, stage_validator_key, status, recover_interrupted_ordered_commit,
     submit_signed_asset_transaction_json_to_mempool,
     submit_signed_atomic_swap_transaction_json_to_mempool,
     submit_signed_escrow_transaction_json_to_mempool,
@@ -432,6 +432,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "transport-peer-certified-batch-loop"
         | "transport-peer-certified-private-egress-loop"
         | "transport-certified-send-outbox-resume"
+        | "transport-certified-send-outbox-witness"
         | "transport-certified-send-outbox-verify"
         | "rpc-serve"
         | "rpc-probe"
@@ -498,8 +499,12 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ratify-atomic-swap-activation-height"
         | "ratify-rejected-tx-fee-activation-height"
         | "ratify-require-memo-activation-height"
+        | "ratify-rejected-tx-fee-v2-activation-height"
+        | "ratify-require-memo-v2-activation-height"
+        | "ratify-recipient-format-v2-activation-height"
         | "ratify-orchard-aware-bridge-claim-activation-height"
         | "ratify-pfusdc-source-series-activation-height"
+        | "ratify-solana-bridge-activation-height"
         | "ratify-replicated-state-v2-activation-height"
         | "ratify-bridge-exit-root-activation-height"
         | "ratify-external-lane-export-root-activation-height"

@@ -548,6 +548,7 @@ fn release_issued_asset_escrow_to_recipient(
         ));
     }
 
+    b23_facility_transfer_offer_inventory(ledger, &escrow.asset_id, &escrow.owner, &escrow.recipient, escrow.amount)?;
     ledger.trustlines[recipient_index].balance = recipient_after;
     Ok(())
 }
@@ -1003,6 +1004,12 @@ fn apply_asset_operation(
     orchard_balances: &[AssetOrchardAssetBalance],
 ) -> Result<(), (&'static str, String)> {
     match &transaction.unsigned.operation {
+        AssetTransactionOperation::SolanaBridgeProof(operation) => {
+            if transaction.unsigned.transaction_kind != "solana_bridge_proof_v1" {
+                return Err(("wrong_transaction_kind", "Solana proof transaction kind differs".into()));
+            }
+            solana_bridge::apply_proof(genesis, ledger, operation, block_height, compatibility, orchard_balances)
+        }
         AssetTransactionOperation::YoloTargetRegisterV1(operation) => {
             if transaction.unsigned.transaction_kind != postfiat_types::YOLO_TARGET_REGISTER_TRANSACTION_KIND_V1 {
                 return Err(("wrong_transaction_kind", "target registration transaction kind differs".to_string()));
@@ -2477,6 +2484,7 @@ fn apply_asset_operation(
                 apply_nav_mint_vault_bridge_settlement(ledger, &nav_asset, operation, block_height)?;
             }
             apply_prepared_issued_asset_credit(ledger, to_index, recipient_after, required_limit);
+            b23_facility_credit_minted_inventory(ledger, operation)?;
             Ok(())
         }
         AssetTransactionOperation::NavRedeemAtNav(operation) => {

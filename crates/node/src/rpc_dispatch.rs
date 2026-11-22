@@ -1126,6 +1126,12 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 )],
             )
         }
+        "pftl_uniswap_receipt" => {
+            let tx_id = flag_value(flags, "--tx-id").ok_or("missing --tx-id")?;
+            let report = postfiat_node::pftl_uniswap_receipt(NodeOptions { data_dir }, tx_id)
+                .map_err(|error| format!("rpc pftl_uniswap_receipt failed: {error}"))?;
+            print_rpc_success(id, &report, Vec::<RpcEvent>::new())
+        }
         "navcoin_bridge_receipt_replay" => {
             let route_id = flag_value(flags, "--route-id").ok_or("missing --route-id")?;
             let report = navcoin_bridge_receipt_replay(NavcoinBridgeReceiptReplayOptions {

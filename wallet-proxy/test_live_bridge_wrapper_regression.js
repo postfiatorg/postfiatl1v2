@@ -43,7 +43,12 @@ assert.match(relay, /runuser -u postfiat -- '\$node' transport-peer-certified-me
 assert.match(relay, /--local-apply-before-certified-send \\\n+        --resume/);
 
 assert.match(stage, /skip_finalize=deposit\.get\("status"\) == "finalized"/);
-assert.match(stage, /eth-l1-mainnet-fast-lane-p0-depositor-fix-20260731/);
+// The B23 stage takes its capture and prove binaries from pinned release
+// variables (path plus SHA-256) instead of a hardcoded depositor-fix build.
+assert.match(stage, /A100_CAPTURE = os\.environ\["B23_INGRESS_CAPTURE_BIN"\]/);
+assert.match(stage, /A100_CAPTURE: os\.environ\["B23_INGRESS_CAPTURE_SHA256"\]/);
+assert.match(stage, /A100_PROVE: os\.environ\["B23_INGRESS_PROVE_SHA256"\]/);
+assert.match(stage, /raise RuntimeError\("invalid B23 ingress release pins"\)/);
 assert.match(bridge, /rpc\.accountAssets\(address\)/);
 assert.match(bridge, /function pfusdcLabel/);
 assert.match(bridge, /<strong>\{pfusdcLabel\(pfusdcBalance\)\}<\/strong>/);

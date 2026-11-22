@@ -2572,6 +2572,7 @@ fn max_rpc_param_string_bytes(method: &str, key: &str) -> usize {
     } else if key == "signed_transfer_json"
         || key == "signed_payment_v2_json"
         || key == "signed_escrow_transaction_json"
+        || key == "signed_offer_transaction_json"
         || key == "signed_nft_transaction_json"
         || key == "signed_atomic_swap_transaction_json"
         || key == "order_json"

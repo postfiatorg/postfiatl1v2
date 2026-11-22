@@ -25,6 +25,8 @@ exclude_docs: |
   status/**
   !status/README.md
   !status/network-status.md
+  !status/master-state.md
+  !status/bridge-audit-map.md
   !status/chain-state-current.md
   !status/testnet-path.md
   !status/release-gate-inventory.md
@@ -128,6 +130,8 @@ nav:
           - Launch Topology Thresholds (proposal): architecture/launch-topology-thresholds.md
   - Network Status:
       - Network Status: status/network-status.md
+      - Master State: status/master-state.md
+      - Bridge Audit Map: status/bridge-audit-map.md
       - Current State (Full Log): status/chain-state-current.md
       - Testnet Path: status/testnet-path.md
       - Release Gate Inventory: status/release-gate-inventory.md

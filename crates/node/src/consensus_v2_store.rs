@@ -5,13 +5,13 @@ use std::path::{Path, PathBuf};
 use postfiat_ordering_fast::{
     authorize_consensus_v2_precommit_vote, authorize_consensus_v2_prepare_vote,
     authorize_consensus_v2_timeout_vote, consensus_v2_domain, consensus_v2_qc_ref,
-    initial_consensus_v2_safety_state, verify_consensus_v2_qc, ConsensusV2QcGraph,
-    ConsensusV2Validator, ConsensusV2ValidatorSet,
+    initial_consensus_v2_safety_state, verify_consensus_v2_qc, verify_consensus_v2_timeout_vote,
+    ConsensusV2QcGraph, ConsensusV2Validator, ConsensusV2ValidatorSet,
 };
 use postfiat_types::{
-    ConsensusV2Domain, ConsensusV2Proposal, ConsensusV2QcRef, ConsensusV2QuorumCertificate,
-    ConsensusV2Round, ConsensusV2SafetyState, ConsensusV2TimeoutCertificate,
-    CONSENSUS_V2_SAFETY_STATE_SCHEMA,
+    ConsensusV2Domain, ConsensusV2Phase, ConsensusV2Proposal, ConsensusV2QcRef,
+    ConsensusV2QuorumCertificate, ConsensusV2Round, ConsensusV2SafetyState,
+    ConsensusV2TimeoutCertificate, ConsensusV2TimeoutVote, CONSENSUS_V2_SAFETY_STATE_SCHEMA,
 };
 
 use crate::{atomic_write, genesis_hash, load_validator_pubkeys, NodeStore};
@@ -262,6 +262,110 @@ pub fn persist_consensus_v2_qc(
     })
 }
 
+/// The stored QC `reference` names, if this validator holds it. Not verified
+/// here: a consumer verifies it when it stores it.
+pub fn read_stored_consensus_v2_qc(
+    data_dir: &Path,
+    domain: &ConsensusV2Domain,
+    reference: &ConsensusV2QcRef,
+) -> io::Result<Option<ConsensusV2QuorumCertificate>> {
+    for path in [
+        consensus_v2_qc_path(data_dir, domain, &reference.certificate_id),
+        legacy_consensus_v2_qc_path(data_dir, &reference.certificate_id),
+    ] {
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error),
+        };
+        let certificate: ConsensusV2QuorumCertificate =
+            serde_json::from_slice(&bytes).map_err(|error| {
+                invalid_data(format!(
+                    "consensus v2 QC `{}` parse failed: {error}",
+                    path.display()
+                ))
+            })?;
+        if consensus_v2_qc_ref(&certificate).ok().as_ref() == Some(reference) {
+            return Ok(Some(certificate));
+        }
+    }
+    Ok(None)
+}
+
+/// Each distinct QC the votes of `certificate` name, in vote order, resolved
+/// in `graph`. The timeout certificate file carries them.
+pub fn consensus_v2_timeout_certificate_high_qcs(
+    graph: &ConsensusV2QcGraph,
+    domain: &ConsensusV2Domain,
+    validators: &ConsensusV2ValidatorSet,
+    certificate: &ConsensusV2TimeoutCertificate,
+) -> Result<Vec<ConsensusV2QuorumCertificate>, postfiat_ordering_fast::OrderingError> {
+    let mut qcs = Vec::new();
+    for reference in certificate.votes.iter().filter_map(|vote| vote.high_qc.as_ref()) {
+        let qc = graph.resolve_verified(domain, validators, reference)?;
+        if !qcs.contains(qc) {
+            qcs.push(qc.clone());
+        }
+    }
+    Ok(qcs)
+}
+
+/// Adds to `graph` the full QCs a timeout vote or certificate at `round`
+/// carries (unsigned hints). A carried QC is used only if it is a prepare QC
+/// of the same height from no later view, one of the `named` (signed)
+/// references, and verifies. Any other is ignored, logged once under
+/// `context`, and the graph is used as it is. Returns the QCs added, which
+/// the caller persists only after the vote or certificate verifies.
+pub fn add_carried_consensus_v2_qcs(
+    graph: &mut ConsensusV2QcGraph,
+    domain: &ConsensusV2Domain,
+    validators: &ConsensusV2ValidatorSet,
+    round: ConsensusV2Round,
+    named: &[&ConsensusV2QcRef],
+    carried: &[ConsensusV2QuorumCertificate],
+    context: &str,
+) -> Vec<ConsensusV2QuorumCertificate> {
+    let mut added = Vec::new();
+    let mut ignored = 0usize;
+    for certificate in carried {
+        let Some(reference) = consensus_v2_qc_ref(certificate).ok().filter(|reference| {
+            named.contains(&reference)
+                && reference.phase == ConsensusV2Phase::Prepare
+                && reference.round.height == round.height
+                && reference.round.view <= round.view
+        }) else {
+            ignored += 1;
+            continue;
+        };
+        if graph.resolve_verified(domain, validators, &reference).is_ok() {
+            continue;
+        }
+        match graph.insert_verified(domain, validators, certificate.clone()) {
+            Ok(_) => added.push(certificate.clone()),
+            Err(_) => ignored += 1,
+        }
+    }
+    if ignored > 0 {
+        eprintln!(
+            "WARN {context}: ignored {ignored} carried consensus v2 QC(s) that it does not name or that do not verify"
+        );
+    }
+    added
+}
+
+/// Persists the QCs `add_carried_consensus_v2_qcs` added, once the vote or
+/// certificate that carried them verified. Holding a verified QC changes no
+/// safety record (lock and high QC move only on authorization).
+pub fn persist_carried_consensus_v2_qcs(
+    data_dir: &Path,
+    added: &[ConsensusV2QuorumCertificate],
+) -> io::Result<()> {
+    for certificate in added {
+        persist_consensus_v2_qc(data_dir, certificate)?;
+    }
+    Ok(())
+}
+
 /// View-zero proposals cannot carry timeout evidence or a valid-round QC, so
 /// their verification has no historical QC dependency. Nonzero views retain
 /// complete graph reconstruction and signature verification.
@@ -341,25 +445,89 @@ pub fn persist_consensus_v2_timeout_authorization(
     )
 }
 
-/// Select the current durable high QC and keep the safety guard held through
-/// timeout signature construction.
-pub(crate) fn persist_consensus_v2_current_timeout_authorization_with<T>(
+/// The validator's timeout vote at `round`: the one it already signed there,
+/// or a newly authorized and signed one. Both happen under the per-height
+/// safety guard. A validator signs at most one timeout vote per (height,
+/// view); asking again returns that same signed vote, so a recovery that lost
+/// its votes can collect them again, and nothing new is ever signed for a
+/// round it already timed out.
+pub(crate) fn consensus_v2_timeout_vote_once(
     data_dir: &Path,
     round: ConsensusV2Round,
-    after_persist: impl FnOnce(
+    validator_id: &str,
+    sign: impl FnOnce(
         &ConsensusV2Domain,
         &ConsensusV2ValidatorSet,
         &ConsensusV2QcGraph,
         Option<&ConsensusV2QcRef>,
         &ConsensusV2SafetyState,
-    ) -> io::Result<T>,
-) -> io::Result<T> {
-    persist_consensus_v2_timeout_authorization_selected_with(
-        data_dir,
-        round,
-        |current| current.high_qc.clone(),
-        after_persist,
-    )
+    ) -> io::Result<ConsensusV2TimeoutVote>,
+) -> io::Result<ConsensusV2TimeoutVote> {
+    let (domain, validators) = live_consensus_v2_context(data_dir)?;
+    with_safety_guard(data_dir, round.height, || {
+        let vote_path = consensus_v2_timeout_vote_path(data_dir, &domain, round);
+        match std::fs::read(&vote_path) {
+            Ok(bytes) => {
+                let stored: ConsensusV2TimeoutVote =
+                    serde_json::from_slice(&bytes).map_err(|error| {
+                        invalid_data(format!(
+                            "consensus v2 stored timeout vote `{}` parse failed: {error}",
+                            vote_path.display()
+                        ))
+                    })?;
+                let current = read_consensus_v2_safety_state(data_dir, &domain, round.height)?;
+                if stored.domain != domain
+                    || stored.round != round
+                    || stored.validator != validator_id
+                    || current
+                        .highest_timeout_round
+                        .is_none_or(|highest| highest < round)
+                {
+                    return Err(invalid_data(format!(
+                        "consensus v2 stored timeout vote `{}` does not match this validator's safety record",
+                        vote_path.display()
+                    )));
+                }
+                let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
+                verify_consensus_v2_timeout_vote(&domain, &validators, &stored, &graph)
+                    .map_err(|error| invalid_data(format!("consensus v2 stored timeout vote: {error}")))?;
+                return Ok(stored);
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+        let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
+        let current = read_consensus_v2_safety_state(data_dir, &domain, round.height)?;
+        let high_qc = current.high_qc.clone();
+        let next = authorize_consensus_v2_timeout_vote(
+            &current,
+            &domain,
+            &validators,
+            round,
+            high_qc.as_ref(),
+            &graph,
+        )
+        .map_err(|error| invalid_data(format!("consensus v2 timeout authorization: {error}")))?;
+        write_consensus_v2_safety_state(data_dir, &next)?;
+        let vote = sign(&domain, &validators, &graph, high_qc.as_ref(), &next)?;
+        let mut bytes = serde_json::to_vec_pretty(&vote).map_err(invalid_data)?;
+        bytes.push(b'\n');
+        atomic_write(vote_path, bytes)?;
+        Ok(vote)
+    })
+}
+
+fn consensus_v2_timeout_vote_path(
+    data_dir: &Path,
+    domain: &ConsensusV2Domain,
+    round: ConsensusV2Round,
+) -> PathBuf {
+    data_dir.join(CONSENSUS_V2_SAFETY_DIR).join(format!(
+        "{}-height-{}-view-{}.timeout-vote.json",
+        consensus_v2_artifact_prefix(domain),
+        round.height,
+        round.view
+    ))
 }
 
 fn persist_consensus_v2_timeout_authorization_selected_with<T>(
@@ -487,13 +655,15 @@ mod tests {
         bytes_to_hex, hex_to_bytes, ml_dsa_65_sign_with_context, ML_DSA_65_ALGORITHM,
     };
     use postfiat_ordering_fast::{
-        certify_consensus_v2_votes, consensus_v2_block_ref, consensus_v2_proposal_signing_bytes,
+        certify_consensus_v2_timeouts, certify_consensus_v2_votes, consensus_v2_block_ref,
+        consensus_v2_proposal_signing_bytes, consensus_v2_timeout_vote_signing_bytes,
         consensus_v2_vote_signing_bytes, leader_for_view, CONSENSUS_V2_PROPOSAL_CONTEXT,
-        CONSENSUS_V2_VOTE_CONTEXT,
+        CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT, CONSENSUS_V2_VOTE_CONTEXT,
     };
     use postfiat_types::{
         ConsensusV2Phase, ConsensusV2Proposal, ConsensusV2Round, ConsensusV2Signature,
-        ConsensusV2Vote, CONSENSUS_V2_PROPOSAL_SCHEMA, CONSENSUS_V2_VOTE_SCHEMA,
+        ConsensusV2Vote, CONSENSUS_V2_PROPOSAL_SCHEMA, CONSENSUS_V2_TIMEOUT_VOTE_SCHEMA,
+        CONSENSUS_V2_VOTE_SCHEMA,
     };
     use std::sync::mpsc;
     use std::thread;
@@ -775,5 +945,205 @@ mod tests {
             .contains("newer non-nil prepare QC"));
 
         std::fs::remove_dir_all(data_dir).expect("cleanup consensus v2 store");
+    }
+
+    fn carried_qc_test_chain() -> (
+        PathBuf,
+        ConsensusV2Domain,
+        ConsensusV2ValidatorSet,
+        ValidatorKeyFile,
+    ) {
+        let data_dir = unique_data_dir();
+        init(InitOptions {
+            data_dir: data_dir.clone(),
+            chain_id: "postfiat-consensus-v2-store-test".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 4,
+        })
+        .expect("init consensus v2 store");
+        let (domain, validators) = live_consensus_v2_context(&data_dir).expect("live context");
+        let keys = serde_json::from_slice(
+            &std::fs::read(data_dir.join(VALIDATOR_KEYS_FILE)).expect("read validator keys"),
+        )
+        .expect("parse validator keys");
+        (data_dir, domain, validators, keys)
+    }
+
+    fn test_signature(
+        keys: &ValidatorKeyFile,
+        validator: &ConsensusV2Validator,
+        message: &[u8],
+        context: &[u8],
+    ) -> ConsensusV2Signature {
+        let record = keys
+            .validators
+            .iter()
+            .find(|record| record.node_id == validator.validator_id)
+            .expect("validator key");
+        ConsensusV2Signature {
+            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            signer: validator.validator_id.clone(),
+            public_key_hex: validator.public_key_hex.clone(),
+            signature_hex: bytes_to_hex(
+                &ml_dsa_65_sign_with_context(
+                    &hex_to_bytes(&record.private_key_hex).expect("private key"),
+                    message,
+                    context,
+                )
+                .expect("signature"),
+            ),
+        }
+    }
+
+    /// A QC on a test block at `height`, signed by a quorum.
+    fn test_qc(
+        domain: &ConsensusV2Domain,
+        validators: &ConsensusV2ValidatorSet,
+        keys: &ValidatorKeyFile,
+        round: ConsensusV2Round,
+        phase: ConsensusV2Phase,
+    ) -> ConsensusV2QuorumCertificate {
+        let block = consensus_v2_block_ref(
+            domain,
+            round.height,
+            "11".repeat(48),
+            "22".repeat(48),
+            "33".repeat(48),
+        )
+        .expect("block reference");
+        let votes = validators
+            .validators
+            .iter()
+            .take(validators.quorum)
+            .map(|validator| {
+                let mut vote = ConsensusV2Vote {
+                    schema: CONSENSUS_V2_VOTE_SCHEMA.to_string(),
+                    domain: domain.clone(),
+                    round,
+                    phase,
+                    block: Some(block.clone()),
+                    validator: validator.validator_id.clone(),
+                    signature: test_signature(keys, validator, b"", CONSENSUS_V2_VOTE_CONTEXT),
+                };
+                let message = consensus_v2_vote_signing_bytes(&vote).expect("vote signing bytes");
+                vote.signature = test_signature(keys, validator, &message, CONSENSUS_V2_VOTE_CONTEXT);
+                vote
+            })
+            .collect();
+        certify_consensus_v2_votes(domain, validators, round, phase, Some(block), votes)
+            .expect("QC")
+    }
+
+    #[test]
+    fn add_carried_consensus_v2_qcs_ignores_an_unnamed_precommit_other_height_or_later_view_qc() {
+        let (data_dir, domain, validators, keys) = carried_qc_test_chain();
+        let qc = |height, view, phase| {
+            test_qc(&domain, &validators, &keys, ConsensusV2Round { height, view }, phase)
+        };
+        let round = ConsensusV2Round { height: 1, view: 2 };
+        let named = qc(1, 1, ConsensusV2Phase::Prepare);
+        let ignored = [
+            (qc(1, 0, ConsensusV2Phase::Prepare), "a valid QC that is not named"),
+            (qc(1, 1, ConsensusV2Phase::Precommit), "a precommit QC"),
+            (qc(2, 1, ConsensusV2Phase::Prepare), "a QC of another height"),
+            (qc(1, 3, ConsensusV2Phase::Prepare), "a QC of a later view"),
+        ];
+        // Every QC but the unnamed one is named, so only its own defect rejects it.
+        let references = std::iter::once(&named)
+            .chain(ignored.iter().skip(1).map(|(qc, _)| qc))
+            .map(|qc| consensus_v2_qc_ref(qc).expect("QC reference"))
+            .collect::<Vec<_>>();
+        let references = references.iter().collect::<Vec<_>>();
+        for (carried, case) in &ignored {
+            let mut graph = ConsensusV2QcGraph::default();
+            let added = add_carried_consensus_v2_qcs(
+                &mut graph,
+                &domain,
+                &validators,
+                round,
+                &references,
+                std::slice::from_ref(carried),
+                "test",
+            );
+            assert!(added.is_empty(), "{case}");
+            let reference = consensus_v2_qc_ref(carried).expect("QC reference");
+            assert!(graph.resolve_verified(&domain, &validators, &reference).is_err(), "{case}");
+        }
+        let mut graph = ConsensusV2QcGraph::default();
+        let added = add_carried_consensus_v2_qcs(
+            &mut graph,
+            &domain,
+            &validators,
+            round,
+            &references,
+            std::slice::from_ref(&named),
+            "test",
+        );
+        assert_eq!(added, vec![named]);
+        assert!(graph.resolve_verified(&domain, &validators, references[0]).is_ok());
+        std::fs::remove_dir_all(data_dir).expect("cleanup carried QC chain");
+    }
+
+    #[test]
+    fn a_timeout_certificate_carries_each_distinct_qc_its_votes_name() {
+        let (data_dir, domain, validators, keys) = carried_qc_test_chain();
+        let first = test_qc(
+            &domain,
+            &validators,
+            &keys,
+            ConsensusV2Round { height: 1, view: 0 },
+            ConsensusV2Phase::Prepare,
+        );
+        let second = test_qc(
+            &domain,
+            &validators,
+            &keys,
+            ConsensusV2Round { height: 1, view: 1 },
+            ConsensusV2Phase::Prepare,
+        );
+        let mut graph = ConsensusV2QcGraph::default();
+        graph
+            .insert_verified(&domain, &validators, first.clone())
+            .expect("first QC");
+        graph
+            .insert_verified(&domain, &validators, second.clone())
+            .expect("second QC");
+        let round = ConsensusV2Round { height: 1, view: 2 };
+        let votes = validators
+            .validators
+            .iter()
+            .zip([&first, &second, &first, &second])
+            .map(|(validator, qc)| {
+                let mut vote = ConsensusV2TimeoutVote {
+                    schema: CONSENSUS_V2_TIMEOUT_VOTE_SCHEMA.to_string(),
+                    domain: domain.clone(),
+                    round,
+                    phase: ConsensusV2Phase::Precommit,
+                    high_qc: Some(consensus_v2_qc_ref(qc).expect("QC reference")),
+                    validator: validator.validator_id.clone(),
+                    signature: test_signature(&keys, validator, b"", CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT),
+                };
+                let message =
+                    consensus_v2_timeout_vote_signing_bytes(&vote).expect("timeout signing bytes");
+                vote.signature =
+                    test_signature(&keys, validator, &message, CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT);
+                vote
+            })
+            .collect();
+        let certificate = certify_consensus_v2_timeouts(
+            &domain,
+            &validators,
+            round,
+            ConsensusV2Phase::Precommit,
+            votes,
+            &graph,
+        )
+        .expect("timeout certificate");
+        assert_eq!(
+            consensus_v2_timeout_certificate_high_qcs(&graph, &domain, &validators, &certificate)
+                .expect("carried QCs"),
+            vec![first, second]
+        );
+        std::fs::remove_dir_all(data_dir).expect("cleanup carried QC chain");
     }
 }

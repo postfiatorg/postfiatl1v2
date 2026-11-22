@@ -1,0 +1,17 @@
+[Unit]
+Description=Verify local program images and record epoch stake and BLS keys
+After=pft-sol-devnet-local.service
+Requires=pft-sol-devnet-local.service
+PartOf=pft-sol-devnet-local.service
+
+[Service]
+Environment=PFT_SOL_INSTANCE=devnet
+WorkingDirectory=%h/repos/postfiatl1v2-live/ops/sol-recorder/ancestry
+Environment=SOLANA_BRIDGE_IMAGES=%h/repos/postfiatl1v2-live/target/task-l/local-images
+ExecStart=/usr/bin/python3 %h/repos/postfiatl1v2-live/ops/sol-recorder/ops/sol-live/verified-recorder.py
+Restart=on-failure
+RestartSec=3
+UMask=0077
+
+[Install]
+WantedBy=default.target

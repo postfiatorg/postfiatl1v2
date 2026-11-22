@@ -1,0 +1,11 @@
+[package]
+name = "pftl-ingress-groth16-verify"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+postfiat-execution = { path = "../../crates/execution" }
+postfiat-types = { path = "../../crates/types" }
+serde_json.workspace = true

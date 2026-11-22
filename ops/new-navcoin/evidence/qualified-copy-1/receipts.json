@@ -1,0 +1,211 @@
+[
+  {
+    "expected_accepted": true,
+    "expected_code": null,
+    "height": 1311,
+    "label": "create-new-asset",
+    "ledger_changed": true,
+    "matched": true,
+    "receipt": {
+      "accepted": true,
+      "account_reserve": 10,
+      "code": "accepted",
+      "fee_burned": 1000000,
+      "fee_charged": 1000000,
+      "message": "asset transaction applied; fee burned",
+      "minimum_fee": 42,
+      "state_expansion_fee": 20,
+      "tx_id": "21efac8484df95e0aa187636555e1d40827ae54efe65530ada5bd1ed0b7fbff37069ebef098124e5d00397c470cf2361"
+    }
+  },
+  {
+    "expected_accepted": false,
+    "expected_code": "duplicate_nav_profile",
+    "height": 1312,
+    "label": "existing-profile-already-registered",
+    "ledger_changed": false,
+    "matched": true,
+    "receipt": {
+      "accepted": false,
+      "account_reserve": 10,
+      "code": "duplicate_nav_profile",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "nav proof profile with identical parameters is already registered",
+      "minimum_fee": 24,
+      "state_expansion_fee": 0,
+      "tx_id": "6e32611a3cc9876525d6f4106eedc757adb1ee94fb854920f8f1cf48f19bcb038da0903dd4ff004ca0f8265a23fdee8e"
+    }
+  },
+  {
+    "expected_accepted": true,
+    "expected_code": null,
+    "height": 1313,
+    "label": "register-new-profile-candidate",
+    "ledger_changed": true,
+    "matched": true,
+    "receipt": {
+      "accepted": true,
+      "account_reserve": 10,
+      "code": "accepted",
+      "fee_burned": 1000000,
+      "fee_charged": 1000000,
+      "message": "asset transaction applied; fee burned",
+      "minimum_fee": 24,
+      "state_expansion_fee": 0,
+      "tx_id": "440ce01d240b95d230674f85f17e0679c529059e82354aeb81b6b95943533c1289821f8bfca8a6109f675b517a16ce16"
+    }
+  },
+  {
+    "expected_accepted": true,
+    "expected_code": null,
+    "height": 1314,
+    "label": "bind-exact-existing-profile",
+    "ledger_changed": true,
+    "matched": true,
+    "receipt": {
+      "accepted": true,
+      "account_reserve": 10,
+      "code": "accepted",
+      "fee_burned": 1000000,
+      "fee_charged": 1000000,
+      "message": "asset transaction applied; fee burned",
+      "minimum_fee": 43,
+      "state_expansion_fee": 20,
+      "tx_id": "758383fe07791ff7eb3822ecd66e8cd0039fffd71de7829095b1412f906bfab1b844162c7988e165adef8546bab24391"
+    }
+  },
+  {
+    "expected_accepted": true,
+    "expected_code": null,
+    "height": 1315,
+    "label": "holder-trustline",
+    "ledger_changed": true,
+    "matched": true,
+    "receipt": {
+      "accepted": true,
+      "account_reserve": 10,
+      "code": "accepted",
+      "fee_burned": 1000000,
+      "fee_charged": 1000000,
+      "message": "asset transaction applied; fee burned",
+      "minimum_fee": 32,
+      "state_expansion_fee": 10,
+      "tx_id": "5885913c9f47979caa283c508fa66df8c19ffecb057deb8b9fe90d7937ced9e94fdea6c6fcf1ae9436c63fbb5803ded2"
+    }
+  },
+  {
+    "expected_accepted": false,
+    "expected_code": "nav_reserve_asset_mismatch",
+    "height": 1316,
+    "label": "reject-existing-proof-new-asset",
+    "ledger_changed": false,
+    "matched": true,
+    "receipt": {
+      "accepted": false,
+      "account_reserve": 10,
+      "code": "nav_reserve_asset_mismatch",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "reserve proof targets another NAV asset",
+      "minimum_fee": 37,
+      "state_expansion_fee": 10,
+      "tx_id": "068f9cb6c624c13f7272974e9a46675c39e860fb8166d645db72881ea816621c14a9c747b0522385a4467457f2e1150d"
+    }
+  },
+  {
+    "expected_accepted": false,
+    "expected_code": "sp1_proof_invalid",
+    "height": 1317,
+    "label": "reject-relabelled-public-values",
+    "ledger_changed": false,
+    "matched": true,
+    "receipt": {
+      "accepted": false,
+      "account_reserve": 10,
+      "code": "sp1_proof_invalid",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "sp1 groth16 proof verification failed",
+      "minimum_fee": 37,
+      "state_expansion_fee": 10,
+      "tx_id": "252f52effbcb8def96c499ab7bc1d252d516198a1adba03dddeb5c84011528177c16e6fb73ff57599f04a1c6d3bfaf04"
+    }
+  },
+  {
+    "expected_accepted": false,
+    "expected_code": "missing_nav_reserve_packet",
+    "height": 1318,
+    "label": "reject-finalize-without-reading",
+    "ledger_changed": false,
+    "matched": true,
+    "receipt": {
+      "accepted": false,
+      "account_reserve": 10,
+      "code": "missing_nav_reserve_packet",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "nav epoch finalize references missing reserve packet",
+      "minimum_fee": 22,
+      "state_expansion_fee": 0,
+      "tx_id": "234a2e5c7702c4ef3b7fe724d64c2651f9c490ac7d725fb8fea3c666791c745b68f042a0ae8ea9769c4258c44d73d4cd"
+    }
+  },
+  {
+    "expected_accepted": false,
+    "expected_code": "pftl_uniswap_route_epoch_mismatch",
+    "height": 1319,
+    "label": "reject-route-without-finalized-reading",
+    "ledger_changed": false,
+    "matched": true,
+    "receipt": {
+      "accepted": false,
+      "account_reserve": 10,
+      "code": "pftl_uniswap_route_epoch_mismatch",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "v2 route and primary policy must pin the ledger finalized NAV epoch and reserve packet",
+      "minimum_fee": 25,
+      "state_expansion_fee": 0,
+      "tx_id": "c4062021eb32ea665cc6689272b2bf33aba5a61d0253c6d962b59e18f3ac6f4235d39862a67eaaf15a593f21c1c15a11"
+    }
+  },
+  {
+    "expected_accepted": false,
+    "expected_code": "nav_epoch_mismatch",
+    "height": 1320,
+    "label": "reject-mint-without-reading",
+    "ledger_changed": false,
+    "matched": true,
+    "receipt": {
+      "accepted": false,
+      "account_reserve": 10,
+      "code": "nav_epoch_mismatch",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "nav operation epoch does not match finalized epoch",
+      "minimum_fee": 23,
+      "state_expansion_fee": 0,
+      "tx_id": "850fe0dc50f3e2d2e0d742aca1a58771b39c0eb09b9685ebe87eb3e0230a841446a6fe8eebe71594e478b2d2460f57cd"
+    }
+  },
+  {
+    "expected_accepted": false,
+    "expected_code": "missing_pftl_uniswap_route",
+    "height": 1321,
+    "label": "reject-export-without-route",
+    "ledger_changed": false,
+    "matched": true,
+    "receipt": {
+      "accepted": false,
+      "account_reserve": 10,
+      "code": "missing_pftl_uniswap_route",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "PFTL-Uniswap route `isolated-new-schwab-legacy-policy` is missing",
+      "minimum_fee": 23,
+      "state_expansion_fee": 0,
+      "tx_id": "59db7a79bccebd42daf91b0392bcb3b634c6c058202633176c535ebc13f4a1370396c2336d8f38c1f7e43b5d669157bc"
+    }
+  }
+]

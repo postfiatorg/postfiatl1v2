@@ -1,0 +1,52 @@
+[package]
+name = "pfusdc-sol-capture"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+solana-gossip = { path = "/home/postfiat/repos/ref-solana/agave/gossip", features = ["agave-unstable-api"] }
+signal-hook = "0.4"
+anyhow = "1"
+hex = "0.4"
+sha2 = "0.10"
+wincode = "=0.6.3"
+serde_json = "1"
+pfusdc-sol-ingress-program = { path = "../../programs/pfusdc-sol-mainnet-ingress" }
+solana-local-cluster = { path = "/home/postfiat/repos/ref-solana/agave/local-cluster", features = ["agave-unstable-api", "dev-context-only-utils"] }
+solana-core = { path = "/home/postfiat/repos/ref-solana/agave/core", features = ["agave-unstable-api", "dev-context-only-utils"] }
+solana-runtime = { path = "/home/postfiat/repos/ref-solana/agave/runtime", features = ["agave-unstable-api", "dev-context-only-utils"] }
+solana-ledger = { path = "/home/postfiat/repos/ref-solana/agave/ledger", features = ["agave-unstable-api", "dev-context-only-utils"] }
+solana-entry = { path = "/home/postfiat/repos/ref-solana/agave/entry", features = ["agave-unstable-api"] }
+solana-net-utils = { path = "/home/postfiat/repos/ref-solana/agave/net-utils", features = ["agave-unstable-api"] }
+solana-account = "5.4.0"
+solana-hash = "4.7.0"
+solana-keypair = "4.0.1"
+solana-system-interface = { version = "3.3.0", features = ["bincode"] }
+solana-signer = "4.0.0"
+solana-pubkey = "4.4.0"
+solana-bls-signatures = "4.0.2"
+solana-commitment-config = "3.1.1"
+solana-transaction = "6.0.0"
+solana-instruction = "4.0.0"
+agave-logger = { path = "/home/postfiat/repos/ref-solana/agave/logger", features = ["agave-unstable-api"] }
+agave-snapshots = { path = "/home/postfiat/repos/ref-solana/agave/snapshots", features = ["agave-unstable-api"] }
+solana-program-binaries = { path = "/home/postfiat/repos/ref-solana/agave/program-binaries", features = ["agave-unstable-api"] }
+solana-program-pack = "3.1.0"
+solana-rent = "4.5.0"
+solana-signature = "3.6.0"
+spl-token-interface = "3.0.0"
+tempfile = "3"
+[workspace]
+
+# The same patches Agave's workspace applies; without them its ledger crate does not compile.
+[patch.crates-io]
+blstrs = { git = "https://github.com/anza-xyz/blstrs", rev = "a1faffa3420bdaf4102425c43f00cdd815d4f145" }
+crossbeam-epoch = { git = "https://github.com/anza-xyz/crossbeam", rev = "5ee1c6ec671d94db14ed9238eb99e59a84555aad" }
+librocksdb-sys = { git = "https://github.com/anza-xyz/rust-rocksdb", rev = "4dba80dfe9434e595a971f5b2985ff9ba4fb31e7" }
+rocksdb = { git = "https://github.com/anza-xyz/rust-rocksdb", rev = "4dba80dfe9434e595a971f5b2985ff9ba4fb31e7" }
+
+[profile.dev]
+debug = 0
+incremental = false

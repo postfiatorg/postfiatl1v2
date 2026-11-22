@@ -1,0 +1,4 @@
+# Agave's local-cluster temporary ledger names include file!(). Keep those names
+# relative so they resolve under FARF_DIR even when using absolute path dependencies.
+[build]
+rustflags = ["--remap-path-prefix=/home/postfiat/repos/ref-solana/agave=agave"]

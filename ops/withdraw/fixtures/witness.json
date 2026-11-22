@@ -1,0 +1,80 @@
+{
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "withdrawal_packet": {
+    "amount_atoms": 500000,
+    "burn_tx_id": "90aef47c12a641f9c75dd3b5e0a48ba134fbef4d179203a0f3f5172e1df3deaa7414f107416172f5250aecc3e0e275ef",
+    "destination_hash": "96e182cc5fd4176b63bda8756b6d694528cbb3847e8c012a88bedd4bd3055f95c8f0acf675dfafbacb20c2c39d45e8d4",
+    "evidence_root": "93128a2c40eb2d5d558afcd703fdc92e30c82c5826ef89b0fe6bb9e32e56b1cb619fc92c3af8fa30ec6556d7a9adb5c2",
+    "finalized_height": 1371,
+    "pftl_chain_id": 2627737045180731226,
+    "recipient": "0x00000000000000000000000000000000000a11ce",
+    "source_bucket_id": "a1dbe54059cd948e25b6695a9ea32f95d8236b1616a6cff47c2ca20992c04b991bb03d3b6a805990e0dd5cd67b2af090",
+    "source_chain_id": 1,
+    "token_address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "vault_address": "0xe7a432a28b20621a70e845c7f202004cf98e7a2c",
+    "vault_bridge_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "withdrawal_id": "002fd191ba51b46dde320a0dd06fe34201519223cb810000ea0bb499474490f166d95fb25bbd9c865150678a1734060a"
+  },
+  "merkle_proof": {
+    "leaf": {
+      "accepted_receipt_code": "accepted",
+      "accepted_receipt_id": "90aef47c12a641f9c75dd3b5e0a48ba134fbef4d179203a0f3f5172e1df3deaa7414f107416172f5250aecc3e0e275ef",
+      "amount_atoms": 500000,
+      "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+      "burn_tx_id": "90aef47c12a641f9c75dd3b5e0a48ba134fbef4d179203a0f3f5172e1df3deaa7414f107416172f5250aecc3e0e275ef",
+      "destination_hash": "96e182cc5fd4176b63bda8756b6d694528cbb3847e8c012a88bedd4bd3055f95c8f0acf675dfafbacb20c2c39d45e8d4",
+      "evidence_root": "93128a2c40eb2d5d558afcd703fdc92e30c82c5826ef89b0fe6bb9e32e56b1cb619fc92c3af8fa30ec6556d7a9adb5c2",
+      "finalized_height": 1371,
+      "recipient": "0x00000000000000000000000000000000000a11ce",
+      "route_epoch": 11,
+      "schema": "postfiat.bridge_exit_leaf.v1",
+      "source_bucket_id": "a1dbe54059cd948e25b6695a9ea32f95d8236b1616a6cff47c2ca20992c04b991bb03d3b6a805990e0dd5cd67b2af090",
+      "withdrawal_id": "002fd191ba51b46dde320a0dd06fe34201519223cb810000ea0bb499474490f166d95fb25bbd9c865150678a1734060a",
+      "withdrawal_packet_evm_digest": "877c9e047cebc00ac8aaa53dc9aca8509fc441093a8ddca6d1d27891fea8fcf4",
+      "withdrawal_packet_hash": "ff3820b5743cf7ff38a935c0ee66bb4840a3113ef630ec325a7f3a1a82cf81afdbaca5e5a2eb5ac383eca3e8776260ec"
+    },
+    "leaf_count": 1,
+    "leaf_index": 0,
+    "siblings": []
+  },
+  "route_profile": {
+    "authorized_height": 1256,
+    "governance_amendment_id": "e0d08b2fe1cee91d5c7474a3b511c81d8d518b4704351486a5be167cb5ddcf9c6860c29930acbc2fc5013bf055299f3b",
+    "profile": {
+      "activation_height": 1254,
+      "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+      "challenge_window_blocks": 64,
+      "evidence_tier": "receipt-proven",
+      "expires_at_height": 1000000,
+      "max_epoch_gap_blocks": 128,
+      "max_proof_bytes": 4096,
+      "max_public_values_bytes": 4096,
+      "max_snapshot_age_blocks": 900,
+      "min_attestations": 0,
+      "min_challenge_bond": 1,
+      "minimum_confirmations": 0,
+      "route_epoch": 11,
+      "route_id": "ethereum-mainnet-usdc-v1",
+      "schema": "postfiat.vault_bridge.route_profile.v1",
+      "settle_deadline_blocks": 256,
+      "source_chain_id": 1,
+      "token_address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "token_runtime_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
+      "vault_address": "0xe7a432a28b20621a70e845c7f202004cf98e7a2c",
+      "vault_runtime_code_hash": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+      "verifier_kind": "sp1-groth16",
+      "verifier_policy_hash": "44a402a3df72ee8da6f23737becef04fd0ce55e683706e929606a6aea1f05b25",
+      "verifier_program_vkey": "0x00d8cbf06d5640adde0fef863b3c689c4ab3442b0dc91d28ac4cc5f9c9b2ccbb",
+      "verifier_proof_encoding": "groth16"
+    },
+    "profile_hash": "29c91daa1c8d707ea3245db091976219266c5deca82b2d4571fafb221fd2dd092eb8833a28f4422bf0b4bbde44069e28",
+    "schema": "postfiat.vault_bridge.route_profile_record.v1"
+  },
+  "block": {
+    "header": {
+      "height": 1371
+    }
+  }
+}

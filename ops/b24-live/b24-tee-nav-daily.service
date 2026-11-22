@@ -1,0 +1,19 @@
+[Unit]
+Description=B24 measured Schwab NAV at 18:15 UTC; AWS $9/run $250/month and $250 cumulative lane cap
+After=network-online.target
+Wants=network-online.target
+# Tells a person when the service dies in a way the job could not report itself.
+OnFailure=b24-tee-nav-daily-failed.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/repos/postfiatl1v2-live
+ExecStart=/home/postfiat/repos/navstrategies-b23-tee-nav/.venv/bin/python %h/repos/postfiatl1v2-live/ops/b24-live/daily.py --execute
+Environment=PYTHONDONTWRITEBYTECODE=1
+# Optional: B24_READING_NOTIFY=<webhook URL or command>; absent file sends nothing.
+EnvironmentFile=-%h/.config/b24-tee-nav/notify.env
+UMask=0077
+TimeoutStartSec=3h
+TimeoutStopSec=180
+KillMode=control-group
+# Independent collector teardown after two hours; no automatic retry/backfill.

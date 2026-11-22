@@ -9,6 +9,45 @@ const RPC_FINALITY_TIMEOUT_VOTE_DECOMPRESSED_MAX_BYTES: u64 = 2 * 1024 * 1024;
 struct RpcFinalityViewContext {
     view: u64,
     timeout_certificate_file: Option<PathBuf>,
+    /// Wall time of the required-parent wait.
+    readiness_wait_ms: f64,
+    /// Wall time of view preparation and the local-proposer check.
+    prepare_ms: f64,
+    /// Full status reads in view preparation and the local-proposer check.
+    status_reads: u32,
+}
+
+/// Required-parent wait, view preparation and the local-proposer check of a
+/// finality submit. All three use one status read: the one that matched the
+/// required parent, or a fresh one when the request names no parent.
+fn prepare_rpc_finality_round(
+    context: &RpcServeConnectionContext,
+    params: &serde_json::Map<String, serde_json::Value>,
+    artifact_dir: &Path,
+) -> Result<RpcFinalityViewContext, (String, String)> {
+    let (readiness_wait_ms, parent_status) =
+        wait_for_rpc_finality_required_parent_status(context, params)?;
+    let start = Instant::now();
+    let status_reads = u32::from(parent_status.is_none());
+    let local_status = match parent_status {
+        Some(local_status) => local_status,
+        None => status(NodeOptions {
+            data_dir: context.data_dir.clone(),
+        })
+        .map_err(|error| {
+            (
+                "rpc_finality_view_failed".to_string(),
+                format!("finality view status failed: {error}"),
+            )
+        })?,
+    };
+    let mut finality_view =
+        prepare_rpc_finality_view(&context.data_dir, &local_status, params, artifact_dir)?;
+    require_rpc_finality_local_proposer(context, &local_status, finality_view.view)?;
+    finality_view.readiness_wait_ms = readiness_wait_ms;
+    finality_view.prepare_ms = monotonic_elapsed_ms(start);
+    finality_view.status_reads = status_reads;
+    Ok(finality_view)
 }
 
 fn rpc_finality_requested_view(
@@ -60,18 +99,10 @@ fn require_rpc_finality_view_bound(
 
 fn prepare_rpc_finality_view(
     data_dir: &Path,
+    status: &StatusReport,
     params: &serde_json::Map<String, serde_json::Value>,
     artifact_dir: &Path,
 ) -> Result<RpcFinalityViewContext, (String, String)> {
-    let status = status(NodeOptions {
-        data_dir: data_dir.to_path_buf(),
-    })
-    .map_err(|error| {
-        (
-            "rpc_finality_view_failed".to_string(),
-            format!("finality view status failed: {error}"),
-        )
-    })?;
     let block_height = status.block_height.checked_add(1).ok_or_else(|| {
         (
             "rpc_finality_view_failed".to_string(),
@@ -97,6 +128,9 @@ fn prepare_rpc_finality_view(
         return Ok(RpcFinalityViewContext {
             view,
             timeout_certificate_file: None,
+            readiness_wait_ms: 0.0,
+            prepare_ms: 0.0,
+            status_reads: 0,
         });
     }
 
@@ -185,6 +219,9 @@ fn prepare_rpc_finality_view(
     Ok(RpcFinalityViewContext {
         view,
         timeout_certificate_file: Some(timeout_certificate_file),
+        readiness_wait_ms: 0.0,
+        prepare_ms: 0.0,
+        status_reads: 0,
     })
 }
 

@@ -1,0 +1,11 @@
+{
+  "accepted": true,
+  "account_reserve": 0,
+  "code": "accepted",
+  "fee_burned": 0,
+  "fee_charged": 0,
+  "message": "vault bridge route profile activated",
+  "minimum_fee": 0,
+  "state_expansion_fee": 0,
+  "tx_id": "e0d08b2fe1cee91d5c7474a3b511c81d8d518b4704351486a5be167cb5ddcf9c6860c29930acbc2fc5013bf055299f3b"
+}

@@ -1,0 +1,28 @@
+{
+  "passed": true,
+  "scope": "CREATION AND NEGATIVE PROOF-REUSE CHECKS ONLY",
+  "asset_id": "5553997278755031b7a22423aed552855ca25f77204853fb59a0761dd1bd8489ad42f77816c5b50a67db10df19286fe4",
+  "existing_profile": "c1cd10522b3b5eb26e28015906d567b345c483f6f64cd347c7219491d7f4ba3f75a20cd168b74acf466c1318611d3fa6",
+  "candidate_profile": "f91b076593becd336e4f0ff307d833b2478ed1f5562e079361c1e9b48aeae07ed0402be446078b3e0201732cb2980c32",
+  "snapshot_tip": {
+    "block_hash": "2beaa5ae9ee90cc99c3240a33d96631d93cb25a2cfbd911966d9d1727aefb14df862035269825064ee6d1baf7bd22673",
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "height": 1310,
+    "history_base_height": 0,
+    "ordered_batch_count": 1310,
+    "protocol_version": 1,
+    "receipt_count": 1359,
+    "schema": "postfiat-chain-tip-v1",
+    "state_root": "1c37d8877e4a507c5b1c8f238689377949ff7289506eb52370c1d5f241494177b9b0c23729525b3ad161251874318907"
+  },
+  "original_ledger_rows_unchanged": true,
+  "accepted_steps": 4,
+  "rejected_steps": 7,
+  "finalized_reading": false,
+  "route_created": false,
+  "opening_supply_minted": false,
+  "export_receipt_created": false,
+  "return_import_performed": false,
+  "blocker": "Fresh asset-bound Nitro reading and Groth16 reserve proof required; no fake proof or finality injected."
+}

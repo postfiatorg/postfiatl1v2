@@ -118,6 +118,7 @@ READ_ONLY_PUBLIC_METHODS = {
     "navcoin_bridge_claims",
     "navcoin_bridge_supply_status",
     "navcoin_bridge_receipt_replay",
+    "pftl_uniswap_receipt",
     "escrow_info",
     "account_escrows",
     "nft_info",

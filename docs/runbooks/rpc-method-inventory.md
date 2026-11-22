@@ -1,7 +1,7 @@
 # RPC Method Inventory
 
 Status: code-derived inventory
-Date: 2026-11-11
+Date: 2026-11-18
 Report: `docs/runbooks/rpc-method-inventory.json`
 
 This inventory is generated from Rust SDK method constants, node RPC dispatch,
@@ -14,10 +14,10 @@ method lacks an explicit posture.
 
 ## Summary
 
-- Total methods observed: 168
-- Read-only public methods: 87
+- Total methods observed: 170
+- Read-only public methods: 88
 - Public cryptographically authorized protocol mutations: 12
-- Controlled write gated methods: 15
+- Controlled write gated methods: 16
 - Privacy-alpha gated methods: 4
 - Owned-lane gated methods: 8
 - Operator/local-only methods: 42
@@ -131,6 +131,7 @@ method lacks an explicit posture.
 | mempool_submit_signed_escrow_transaction_finality | controlled_write_gated | no | yes | no | no | yes |  |
 | mempool_submit_signed_nft_transaction | controlled_write_gated | no | yes | yes | yes | yes |  |
 | mempool_submit_signed_offer_transaction | controlled_write_gated | no | yes | yes | yes | yes |  |
+| mempool_submit_signed_offer_transaction_finality | controlled_write_gated | no | yes | no | no | no |  |
 | mempool_submit_signed_payment_v2 | controlled_write_gated | no | yes | yes | yes | yes |  |
 | mempool_submit_signed_payment_v2_finality | controlled_write_gated | no | yes | no | no | no |  |
 | mempool_submit_signed_transfer | controlled_write_gated | no | yes | yes | yes | yes | controlled write edge; disabled unless explicitly enabled |
@@ -175,6 +176,7 @@ method lacks an explicit posture.
 | owned_unwrap_apply_v3 | owned_lane_gated | no | yes | no | no | yes |  |
 | owned_unwrap_sign | owned_lane_gated | no | yes | yes | yes | yes |  |
 | owned_unwrap_sign_v3 | owned_lane_gated | no | yes | no | no | yes |  |
+| pftl_uniswap_receipt | read_only_public | yes | no | yes | no | no |  |
 | pftl_uniswap_receipt_witness | operator_or_local_only | no | no | yes | no | no |  |
 | pfusdc_checkpoint_witness | operator_or_local_only | no | no | yes | no | no |  |
 | pfusdc_egress_witness | read_only_public | yes | no | yes | no | yes |  |

@@ -829,6 +829,10 @@ pub(super) fn parse_transport_block_proposal_response(
         .map_err(|error| format!("transport block proposal response parse failed: {error}"))
 }
 
+/// Prefix of the error for a vote request the peer answered with an explicit
+/// rejection, as opposed to a transport failure.
+pub(super) const TRANSPORT_BLOCK_VOTE_REFUSAL_PREFIX: &str = "transport block vote rejected by";
+
 pub(super) fn parse_transport_block_vote_response(
     line: &str,
 ) -> Result<TransportBlockVoteResponse, String> {
@@ -840,7 +844,7 @@ pub(super) fn parse_transport_block_vote_response(
         let rejection: TransportValidatorServeRejection = serde_json::from_str(line)
             .map_err(|error| format!("transport validator rejection parse failed: {error}"))?;
         return Err(format!(
-            "transport block vote rejected by `{}` for `{}`: {}",
+            "{TRANSPORT_BLOCK_VOTE_REFUSAL_PREFIX} `{}` for `{}`: {}",
             rejection.node_id, rejection.kind, rejection.error
         ));
     }
@@ -1104,6 +1108,25 @@ pub(super) fn validate_transport_batch_ack(
                 "transport batch ack certified state is not a valid target high-water mark"
                     .to_string(),
             );
+        }
+    }
+    if ack.already_applied {
+        let certified = ack.certified_state.as_ref().unwrap_or(&ack.state);
+        let certificate: BlockCertificateFile = serde_json::from_str(
+            envelope.certificate_json.as_deref().ok_or("duplicate ack requires a certificate")?,
+        ).map_err(|e| format!("duplicate ack certificate: {e}"))?;
+        if certified.block_height != certificate.block_height
+            || (certified.block_height == ack.state.block_height
+                && (certified.block_tip_hash != ack.state.block_tip_hash
+                    || certified.state_root != ack.state.state_root))
+            || certificate.block_hash.as_ref().is_some_and(|hash| hash != &certified.block_tip_hash)
+            || certificate.consensus_v2_commit.as_ref().is_some_and(|commit| {
+                let block = &commit.proposal.block;
+                block.height != certified.block_height || block.block_id != certified.block_tip_hash
+                    || block.state_root != certified.state_root
+            })
+        {
+            return Err("duplicate ack conflicts with certified height/hash/root".into());
         }
     }
     Ok(())
@@ -1535,12 +1558,27 @@ pub(super) fn transport_batch_ack(
 pub(super) const CERTIFIED_SEND_DUPLICATE_CONFLICT: &str = "certified_send_duplicate_conflict";
 
 /// True when a local apply failed only because the batch is already in the
-/// ordered history. The JSON store reports `batch '<id>' already applied`; the
-/// transactional and bounded stores report `storage_duplicate_record: ordered
-/// batch `<id>` already exists` (or `... already exists`).
+/// ordered history. Each store has one exact form: the legacy JSON store reports
+/// `batch '<id>' already applied`, the bounded store `ordered batch '<id>' already
+/// exists`, and the transactional store `storage_duplicate_record: ordered batch
+/// `<id>` already exists`. Other storage codes (integrity mismatch, busy writer)
+/// with the same words are not duplicates. This only selects the check against
+/// durable history; a duplicate error alone never proves the block was committed.
 pub(super) fn transport_apply_error_is_duplicate_batch(error: &str) -> bool {
+    fn batch_id_between(error: &str, prefix: &str, suffix: &str, quote: char) -> bool {
+        error
+            .strip_prefix(prefix)
+            .and_then(|rest| rest.strip_suffix(suffix))
+            .is_some_and(|batch| !batch.is_empty() && !batch.contains(quote))
+    }
     error.contains("already applied")
-        || (error.contains("ordered batch") && error.contains("already exists"))
+        || batch_id_between(error, "ordered batch '", "' already exists", '\'')
+        || batch_id_between(
+            error,
+            "storage_duplicate_record: ordered batch `",
+            "` already exists",
+            '`',
+        )
 }
 
 /// Acknowledgement for a certified batch whose local apply failed.
@@ -1558,7 +1596,7 @@ pub(super) fn transport_batch_apply_error_ack(
     state_after: &StatusReport,
     error: &str,
 ) -> Result<TransportBatchAck, String> {
-    if !transport_apply_error_is_duplicate_batch(error) {
+    if !transport_apply_error_is_duplicate_batch(error) && !is_ordered_batch_duplicate(error, envelope)? {
         return Err(format!("transport batch service apply failed: {error}"));
     }
     transport_already_applied_ack(data_dir, topology, from, envelope, state_after).map_err(
@@ -1571,6 +1609,149 @@ pub(super) fn transport_batch_apply_error_ack(
     )
 }
 
+/// The rejection for a redelivery whose already-applied check failed before
+/// any local apply. It has main's prefix, and only a content conflict carries
+/// `certified_send_duplicate_conflict`; a read or receipt error does not.
+pub(super) fn transport_pre_apply_error(detail: String) -> String {
+    let content_conflict = detail.starts_with("already-applied batch `")
+        && (detail.ends_with("` conflicts with certified height/hash")
+            || detail.ends_with("` conflicts with current height/root"));
+    if content_conflict {
+        format!("transport batch service apply failed: {CERTIFIED_SEND_DUPLICATE_CONFLICT}: {detail}")
+    } else {
+        format!("transport batch service apply failed: {detail}")
+    }
+}
+
+fn delivery_batch_id(envelope: &TransportBatchEnvelope) -> Result<String, String> {
+    #[derive(serde::Deserialize)]
+    struct Identity {
+        batch_id: String,
+    }
+    serde_json::from_str::<Identity>(&envelope.payload_json)
+        .map(|payload| payload.batch_id)
+        .map_err(|e| format!("certified delivery batch identity: {e}"))
+}
+
+pub(super) fn is_ordered_batch_duplicate(
+    error: &str,
+    envelope: &TransportBatchEnvelope,
+) -> Result<bool, String> {
+    if !error.starts_with("storage_duplicate_record: ") {
+        return Ok(false);
+    }
+    let id = delivery_batch_id(envelope)?;
+    Ok(
+        error == format!("storage_duplicate_record: ordered batch `{id}` already exists")
+            || error == format!("storage_duplicate_record: ordered batch '{id}' already exists"),
+    )
+}
+
+fn delivery_block(store: &postfiat_storage::NodeStore, height: u64) -> Result<BlockRecord, String> {
+    let block = if store
+        .transactional_storage_active()
+        .map_err(|e| e.to_string())?
+    {
+        store
+            .transactional_store()
+            .and_then(|db| db.block(height))
+            .map_err(|e| e.to_string())?
+    } else {
+        store
+            .read_blocks()
+            .map_err(|e| e.to_string())?
+            .blocks
+            .into_iter()
+            .find(|block| block.header.height == height)
+    };
+    block.ok_or_else(|| {
+        format!("certified delivery conflicts with certified height/hash: missing block {height}")
+    })
+}
+
+pub(super) fn certified_delivery_response(
+    line: &str,
+    data_dir: &Path,
+    topology: &NetworkTopology,
+    sender: &StatusReport,
+    target: &str,
+    envelope: &TransportBatchEnvelope,
+) -> Result<TransportBatchAck, String> {
+    if transport_envelope_schema(line)? != "postfiat-transport-validator-serve-rejection-v1" {
+        return parse_transport_batch_ack(line);
+    }
+    let rejection: TransportValidatorServeRejection = serde_json::from_str(line)
+        .map_err(|e| format!("transport validator rejection parse failed: {e}"))?;
+    let Some(detail) = rejection
+        .error
+        .strip_prefix("transport batch service apply failed: ")
+    else {
+        return parse_transport_batch_ack(line);
+    };
+    if rejection.kind != "batch"
+        || rejection.node_id != target
+        || rejection.topology_id != topology.topology_id
+        || rejection.state.node_id != target
+        || !is_ordered_batch_duplicate(detail, envelope)?
+    {
+        return parse_transport_batch_ack(line);
+    }
+    validate_transport_hello(&rejection.state, topology, sender)?;
+    // An old peer includes its actual finalized tip in the rejection. At a later
+    // height, a matching finalized descendant commits to the local block's ancestry.
+    let store = postfiat_storage::NodeStore::new(data_dir);
+    let peer = rejection.state;
+    let mut ack = transport_already_applied_ack(data_dir, topology, target, envelope, sender)?;
+    let certified = ack
+        .certified_state
+        .as_ref()
+        .ok_or("missing certified delivery state")?;
+    if peer.block_height < certified.block_height {
+        return Err("legacy duplicate peer is behind the certified delivery".into());
+    }
+    let anchor = if peer.block_height > sender.block_height {
+        // The sender cannot anchor this later peer tip in its own finalized history.
+        // Query exactly the delivered height on that peer's configured read endpoint.
+        let target_peer = topology
+            .peer(target)
+            .ok_or("unknown certified delivery peer")?;
+        let address = socket_address(&target_peer.host, target_peer.rpc_port);
+        let mut stream =
+            connect_transport_stream(&address, 30_000, "legacy duplicate block lookup")?;
+        set_stream_timeout(&stream, 30_000)?;
+        let id = &envelope.frame.message_id;
+        let request = RpcRequest::new(
+            id.as_str(),
+            "blocks",
+            serde_json::json!({"from_height":certified.block_height, "limit":1}),
+        );
+        write_json_line(&mut stream, &request)?;
+        let line = read_transport_line(&stream, "legacy duplicate peer block")?;
+        let response: RpcResponse = serde_json::from_str(&line).map_err(|e| e.to_string())?;
+        response.validate_protocol().map_err(|e| e.to_string())?;
+        let blocks: Vec<BlockRecord> = response.result_as().map_err(|e| e.to_string())?;
+        if response.id != *id
+            || blocks.len() != 1
+            || blocks[0].header.height != certified.block_height
+            || blocks[0].header.block_hash != certified.block_tip_hash
+            || blocks[0].header.state_root != certified.state_root
+        {
+            return Err("legacy duplicate historical block conflicts with delivery".into());
+        }
+        None
+    } else {
+        Some(delivery_block(&store, peer.block_height)?)
+    };
+    if anchor.is_some_and(|b| {
+        b.header.block_hash != peer.block_tip_hash || b.header.state_root != peer.state_root
+    }) {
+        return Err("legacy duplicate peer block conflicts with finalized hash/root".into());
+    }
+    ack.state = peer;
+    ack.storage = None;
+    Ok(ack)
+}
+
 pub(super) fn transport_already_applied_ack(
     data_dir: &Path,
     topology: &NetworkTopology,
@@ -1578,92 +1759,50 @@ pub(super) fn transport_already_applied_ack(
     envelope: &TransportBatchEnvelope,
     state_after: &StatusReport,
 ) -> Result<TransportBatchAck, String> {
-    let payload: serde_json::Value = serde_json::from_str(&envelope.payload_json)
-        .map_err(|error| format!("already-applied batch payload parse failed: {error}"))?;
-    let batch_id = payload
-        .get("batch_id")
-        .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| "already-applied batch payload lacks batch_id".to_string())?;
+    let batch_id = delivery_batch_id(envelope)?;
     let certificate_json = envelope
         .certificate_json
         .as_deref()
         .ok_or_else(|| "already-applied batch requires a certificate".to_string())?;
     let certificate: BlockCertificateFile = serde_json::from_str(certificate_json)
         .map_err(|error| format!("already-applied certificate parse failed: {error}"))?;
-    // The same schema check as the normal path (consensus_artifacts.rs).
-    if certificate.schema != BLOCK_CERTIFICATE_FILE_SCHEMA {
-        return Err(format!(
-            "already-applied batch `{batch_id}` was delivered with an unsupported block certificate schema `{}`",
-            certificate.schema
-        ));
-    }
-    let blocks = postfiat_storage::NodeStore::new(data_dir)
-        .read_blocks()
-        .map_err(|error| format!("already-applied block log read failed: {error}"))?;
-    let block = blocks
-        .blocks
-        .iter()
-        .find(|block| block.header.batch_id == batch_id)
-        .ok_or_else(|| format!("already-applied batch `{batch_id}` is absent from block log"))?;
-    if block.header.height != certificate.block_height
-        || block.header.certificate_id != certificate.certificate_id
+    let store = postfiat_storage::NodeStore::new(data_dir);
+    let block = delivery_block(&store, certificate.block_height)?;
+    let header = &block.header;
+    if certificate.schema != BLOCK_CERTIFICATE_FILE_SCHEMA
+        || certificate.fastpay_pre_state_effects != block.fastpay_pre_state_effects
+        || header.batch_id != batch_id
+        || header.batch_kind != envelope.batch_kind
+        || certificate.chain_id != state_after.chain_id
+        || certificate.genesis_hash != state_after.genesis_hash
+        || certificate.protocol_version != state_after.protocol_version
+        || header.certificate_id != certificate.certificate_id
+        || header.certificate != certificate.certificate
+        || header.view != certificate.view
+        || header.proposer != certificate.proposer
+        || header.consensus_v2_commit != certificate.consensus_v2_commit
         || certificate
             .block_hash
-            .as_deref()
-            .is_some_and(|hash| hash != block.header.block_hash)
+            .as_ref()
+            .is_some_and(|hash| hash != &header.block_hash)
+        || certificate
+            .consensus_v2_commit
+            .as_ref()
+            .is_some_and(|commit| {
+                let reference = &commit.proposal.block;
+                reference.height != header.height
+                    || reference.block_id != header.block_hash
+                    || reference.state_root != header.state_root
+            })
     {
         return Err(format!(
             "already-applied batch `{batch_id}` conflicts with certified height/hash"
         ));
     }
-    // The key and the digests agree; the stored certificate content must too.
-    // Field audit of `BlockCertificateFile` against the stored block:
-    // - schema: not stored with the block; checked above exactly as the normal path does.
-    // - chain_id, genesis_hash, protocol_version: compared with this node's chain below.
-    // - block_height, certificate_id, block_hash: compared above (an absent block_hash is the legacy form).
-    // - view, proposer, certificate (legacy votes): compared below.
-    // - proposal_hash: not stored; it is a digest of the block evidence and payload, which the block hash binds.
-    // - fastpay_pre_state_effects: compared below with the block's stored effects.
-    // - consensus_v2_commit: compared below; absent on both sides is equal.
-    // Stored header fields the certificate does not carry (parent_hash, batch_kind, state and
-    // export roots, receipt_count) are bound by block_hash; batch_id is the lookup key.
-    if certificate.chain_id != state_after.chain_id
-        || certificate.genesis_hash != state_after.genesis_hash
-        || certificate.protocol_version != state_after.protocol_version
-    {
-        return Err(format!(
-            "already-applied batch `{batch_id}` was delivered with a certificate for another chain (chain id, genesis hash or protocol version)"
-        ));
-    }
-    if block.header.view != certificate.view
-        || block.header.proposer != certificate.proposer
-        || block.header.certificate != certificate.certificate
-    {
-        return Err(format!(
-            "already-applied batch `{batch_id}` at height {} differs from the delivered certificate (view, proposer or votes)",
-            block.header.height
-        ));
-    }
-    if block.header.consensus_v2_commit != certificate.consensus_v2_commit {
-        return Err(format!(
-            "already-applied batch `{batch_id}` at height {} differs from the delivered certificate (consensus-v2 commit {})",
-            block.header.height,
-            match (&block.header.consensus_v2_commit, &certificate.consensus_v2_commit) {
-                (Some(_), None) => "missing",
-                (None, Some(_)) => "unexpected",
-                _ => "altered",
-            }
-        ));
-    }
-    if block.fastpay_pre_state_effects != certificate.fastpay_pre_state_effects {
-        return Err(format!(
-            "already-applied batch `{batch_id}` at height {} differs from the delivered certificate (FastPay pre-state effects)",
-            block.header.height
-        ));
-    }
-    if state_after.block_height == block.header.height
-        && (state_after.state_root != block.header.state_root
-            || state_after.block_tip_hash != block.header.block_hash)
+    if state_after.block_height < block.header.height
+        || state_after.block_height == block.header.height
+            && (state_after.state_root != block.header.state_root
+                || state_after.block_tip_hash != block.header.block_hash)
     {
         return Err(format!(
             "already-applied batch `{batch_id}` conflicts with current height/root"
@@ -1675,10 +1814,51 @@ pub(super) fn transport_already_applied_ack(
             "already-applied batch `{batch_id}` has no recorded receipts"
         ));
     }
-    let receipts = postfiat_storage::NodeStore::new(data_dir)
-        .read_receipts()
-        .map_err(|error| format!("already-applied receipt read failed: {error}"))?;
-    let wanted = block.receipt_ids.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    let transactional = store
+        .transactional_storage_active()
+        .map_err(|e| e.to_string())?
+        .then(|| store.transactional_store())
+        .transpose()
+        .map_err(|e| e.to_string())?;
+    let archived = if let Some(db) = &transactional {
+        db.archived_batch(&envelope.batch_kind, &batch_id)
+            .map_err(|e| e.to_string())?
+    } else {
+        store
+            .read_batch_archive()
+            .map_err(|e| e.to_string())?
+            .batches
+            .into_iter()
+            .find(|entry| entry.batch_id == batch_id && entry.batch_kind == envelope.batch_kind)
+    }
+    .ok_or("missing certified delivery batch archive")?;
+    if serde_json::from_str::<serde_json::Value>(&archived.payload_json)
+        .map_err(|e| e.to_string())?
+        != serde_json::from_str::<serde_json::Value>(&envelope.payload_json)
+            .map_err(|e| e.to_string())?
+    {
+        return Err("certified delivery payload conflicts with stored batch".into());
+    }
+    let receipts = if let Some(db) = transactional {
+        block
+            .receipt_ids
+            .iter()
+            .map(|id| {
+                db.receipt_at_height(id, header.height)
+                    .map_err(|e| e.to_string())?
+                    .ok_or_else(|| format!("already-applied receipt `{id}` is missing"))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        store
+            .read_receipts()
+            .map_err(|error| format!("already-applied receipt read failed: {error}"))?
+    };
+    let wanted = block
+        .receipt_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
     let mut outcomes = std::collections::BTreeMap::new();
     for receipt in &receipts {
         if wanted.contains(receipt.tx_id.as_str())
@@ -1841,12 +2021,12 @@ pub(super) fn write_transport_batch_payload(
     std::fs::create_dir_all(&inbox_dir)
         .map_err(|error| format!("transport inbox create failed: {error}"))?;
     let batch_file = inbox_dir.join(format!("{}.batch.json", envelope.frame.message_id));
-    std::fs::write(&batch_file, envelope.payload_json.as_bytes())
+    postfiat_storage::atomic_write(&batch_file, envelope.payload_json.as_bytes())
         .map_err(|error| format!("transport batch payload write failed: {error}"))?;
     let certificate_file = if let Some(certificate_json) = envelope.certificate_json.as_ref() {
         let certificate_file =
             inbox_dir.join(format!("{}.certificate.json", envelope.frame.message_id));
-        std::fs::write(&certificate_file, certificate_json.as_bytes())
+        postfiat_storage::atomic_write(&certificate_file, certificate_json.as_bytes())
             .map_err(|error| format!("transport batch certificate write failed: {error}"))?;
         Some(certificate_file)
     } else {
@@ -2765,12 +2945,129 @@ mod transport_cli_tests {
             payload_json: serde_json::json!({"batch_id": "batch-1"}).to_string(),
             certificate_json: Some(certificate.to_string()),
         };
+        postfiat_storage::NodeStore::new(&root)
+            .write_batch_archive(&postfiat_types::BatchArchive {
+                batches: vec![postfiat_types::BatchArchiveEntry {
+                    batch_kind: envelope.batch_kind.clone(),
+                    batch_id: "batch-1".into(),
+                    payload_hash: "fixture".into(),
+                    payload_json: envelope.payload_json.clone(),
+                }],
+            })
+            .unwrap();
         (
             root,
             test_topology("127.0.0.1"),
             test_status("validator-0"),
             envelope,
         )
+    }
+
+    #[test]
+    fn transport_duplicate_certified_batch_storage_error_reaches_verified_ack() {
+        let (root, topology, status, envelope) = already_applied_test_fixture(10);
+        // Exact error emitted by TransactionalStore::next_ordered_history_commitment
+        // after the first delivery committed but its acknowledgement was lost.
+        let error = "storage_duplicate_record: ordered batch `batch-1` already exists";
+        assert!(!error.contains("already applied"), "old handler missed this replay");
+        assert!(transport_apply_error_is_duplicate_batch(error));
+        let ack = transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
+            .expect("matching durable history must acknowledge redelivery");
+        assert!(ack.applied && ack.already_applied);
+        assert_eq!((ack.receipt_count, ack.accepted_count), (1, 1));
+        let mut conflicting = envelope;
+        let mut certificate: serde_json::Value =
+            serde_json::from_str(conflicting.certificate_json.as_ref().unwrap()).unwrap();
+        certificate["block_hash"] = serde_json::json!("99".repeat(48));
+        conflicting.certificate_json = Some(certificate.to_string());
+        assert!(transport_already_applied_ack(&root, &topology, "validator-0", &conflicting, &status).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn transport_duplicate_certified_batch_does_not_mask_other_storage_failures() {
+        assert!(transport_apply_error_is_duplicate_batch("batch `x` already applied"));
+        // Bounded store form, crates/storage/src/ordered_history.rs.
+        assert!(transport_apply_error_is_duplicate_batch("ordered batch 'x' already exists"));
+        for error in [
+            "ordered batch '' already exists",
+            "ordered batch 'x' already exists out of order",
+            "storage_duplicate_record: receipt `x` already exists",
+            "storage_duplicate_record: ordered batch `` already exists",
+            "storage_integrity_mismatch: ordered batch `x` already exists",
+            "storage_duplicate_record: ordered batch `x` already exists; corrupt record",
+            "storage_writer_busy: ordered batch `x` already exists",
+        ] {
+            assert!(!transport_apply_error_is_duplicate_batch(error), "{error}");
+        }
+    }
+
+    #[test]
+    fn transport_duplicate_requires_exact_batch_and_certificate() {
+        let (dir, topology, status, mut env) = already_applied_test_fixture(10);
+        assert!(
+            is_ordered_batch_duplicate(
+                "storage_duplicate_record: ordered batch `batch-1` already exists",
+                &env
+            )
+            .unwrap()
+        );
+        assert!(
+            !is_ordered_batch_duplicate(
+                "storage_duplicate_record: ordered batch `batch-10` already exists",
+                &env
+            )
+            .unwrap()
+        );
+        let cert: serde_json::Value =
+            serde_json::from_str(env.certificate_json.as_ref().unwrap()).unwrap();
+        for field in ["certificate_id", "block_hash", "genesis_hash"] {
+            let mut conflict = cert.clone();
+            conflict[field] = "conflict".into();
+            env.certificate_json = Some(conflict.to_string());
+            assert!(
+                transport_already_applied_ack(&dir, &topology, "validator-0", &env, &status)
+                    .is_err()
+            );
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn transport_mixed_fleet_accepts_only_peer_confirmed_duplicate() {
+        let (dir, topology, receiver, envelope) = already_applied_test_fixture(10);
+        let sender = test_status("validator-1");
+        let rejection = serde_json::json!({
+            "schema":"postfiat-transport-validator-serve-rejection-v1", "node_id":"validator-0",
+            "topology_id":topology.topology_id, "connection_index":7, "kind":"batch",
+            "error":"transport batch service apply failed: storage_duplicate_record: ordered batch `batch-1` already exists",
+            "state":transport_hello(&topology, &receiver)
+        });
+        let response = |r: &serde_json::Value| {
+            certified_delivery_response(
+                &r.to_string(),
+                &dir,
+                &topology,
+                &sender,
+                "validator-0",
+                &envelope,
+            )
+        };
+        let ack = response(&rejection).unwrap();
+        validate_transport_batch_ack(&ack, &topology, &sender, "validator-0", &envelope).unwrap();
+        assert!(ack.applied && ack.already_applied);
+        let mut conflict = ack.clone();
+        conflict.certified_state.as_mut().unwrap().block_tip_hash = "different".into();
+        assert!(validate_transport_batch_ack(&conflict, &topology, &sender, "validator-0", &envelope).is_err());
+        for field in ["block_tip_hash", "state_root", "node_id"] {
+            let mut changed = rejection.clone();
+            changed["state"][field] = "other".into();
+            assert!(response(&changed).is_err());
+        }
+        let mut wrong = rejection;
+        wrong["error"] = "transport batch service apply failed: storage_duplicate_record: ordered batch `batch-2` already exists".into();
+        assert!(response(&wrong).is_err());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
@@ -2817,9 +3114,9 @@ mod transport_cli_tests {
         let error =
             transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
                 .expect_err("conflicting duplicate must fail");
-        assert!(
-            error.contains("conflicts with certified height/hash"),
-            "{error}"
+        assert_eq!(
+            error,
+            "certified delivery conflicts with certified height/hash: missing block 11"
         );
         std::fs::remove_dir_all(root).expect("cleanup conflicting ack fixture");
     }
@@ -2835,7 +3132,11 @@ mod transport_cli_tests {
         let error =
             transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
                 .expect_err("different stored content must not be acknowledged as applied");
-        assert!(error.contains("differs from the delivered certificate"), "{error}");
+        // Release 6.4's check rejects it with one conflict message.
+        assert!(
+            error.contains("already-applied batch `batch-1` conflicts with certified height/hash"),
+            "{error}"
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -2854,7 +3155,12 @@ mod transport_cli_tests {
             let error =
                 transport_already_applied_ack(&root, &topology, "validator-0", &envelope, &status)
                     .expect_err("a certificate for another chain must not be acknowledged");
-            assert!(error.contains("another chain"), "{field}: {error}");
+            assert!(
+                error.contains(
+                    "already-applied batch `batch-1` conflicts with certified height/hash"
+                ),
+                "{field}: {error}"
+            );
             std::fs::remove_dir_all(root).unwrap();
         }
     }
@@ -2880,7 +3186,7 @@ mod transport_cli_tests {
             "{error}"
         );
         assert!(
-            error.contains("unsupported block certificate schema `postfiat.block_certificate.v2`"),
+            error.contains("already-applied batch `batch-1` conflicts with certified height/hash"),
             "{error}"
         );
         std::fs::remove_dir_all(root).unwrap();
@@ -2916,8 +3222,61 @@ mod transport_cli_tests {
             )),
             "{error}"
         );
-        assert!(error.contains("conflicts with certified height/hash"), "{error}");
+        // No block is stored at the certified height.
+        assert!(
+            error.contains("conflicts with certified height/hash: missing block 11"),
+            "{error}"
+        );
         assert!(error.contains(duplicate), "{error}");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_pre_apply_redelivery_labels_only_a_content_conflict() {
+        let prefix = "transport batch service apply failed: ";
+        let conflict = format!("{prefix}{CERTIFIED_SEND_DUPLICATE_CONFLICT}: already-applied batch `batch-1`");
+        let reject = |root: &Path, status: &StatusReport, envelope: &TransportBatchEnvelope| {
+            let topology = test_topology("127.0.0.1");
+            transport_already_applied_ack(root, &topology, "validator-0", envelope, status)
+                .map_err(transport_pre_apply_error)
+                .expect_err("the redelivery is not acknowledged")
+        };
+
+        let (root, _, status, envelope) = already_applied_test_fixture(10);
+        let store = postfiat_storage::NodeStore::new(&root);
+        let mut blocks = store.read_blocks().unwrap();
+        blocks.blocks[0].header.certificate.registry_root = "77".repeat(48);
+        store.write_blocks(&blocks).unwrap();
+        assert_eq!(
+            reject(&root, &status, &envelope),
+            format!("{conflict} conflicts with certified height/hash")
+        );
+        std::fs::remove_dir_all(root).unwrap();
+
+        let (root, _, mut status, envelope) = already_applied_test_fixture(10);
+        status.block_height = 9;
+        assert_eq!(
+            reject(&root, &status, &envelope),
+            format!("{conflict} conflicts with current height/root")
+        );
+        std::fs::remove_dir_all(root).unwrap();
+
+        let (root, _, status, envelope) = already_applied_test_fixture(10);
+        let store = postfiat_storage::NodeStore::new(&root);
+        let mut blocks = store.read_blocks().unwrap();
+        blocks.blocks[0].receipt_ids.clear();
+        store.write_blocks(&blocks).unwrap();
+        assert_eq!(
+            reject(&root, &status, &envelope),
+            format!("{prefix}already-applied batch `batch-1` has no recorded receipts")
+        );
+        std::fs::remove_dir_all(root).unwrap();
+
+        let (root, _, status, envelope) = already_applied_test_fixture(11);
+        assert_eq!(
+            reject(&root, &status, &envelope),
+            format!("{prefix}certified delivery conflicts with certified height/hash: missing block 11")
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -3402,7 +3761,7 @@ mod transport_cli_tests {
     }
 
     #[test]
-    fn certified_send_derives_fresh_block_hash_before_local_apply() {
+    fn transport_certified_send_lost_ack_retry_and_fresh_block_hash() {
         fn copy_dir_all(source: &Path, destination: &Path) {
             std::fs::create_dir_all(destination).expect("create copied node directory");
             for entry in std::fs::read_dir(source).expect("read copied node directory") {
@@ -3432,11 +3791,12 @@ mod transport_cli_tests {
             validator_count: 1,
         })
         .expect("init derived block hash node");
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
         write_local_topology(TopologyOptions {
             chain_id: DEFAULT_CHAIN_ID.to_string(),
             validators: 1,
-            base_port: 45_500,
-            rpc_base_port: None,
+            base_port: listener.local_addr().unwrap().port(),
+            rpc_base_port: Some(27650),
             hosts: None,
             output_file: topology_file.clone(),
         })
@@ -3482,21 +3842,81 @@ mod transport_cli_tests {
         )
         .expect("parse fresh block proposal");
         let topology = read_topology_file(&topology_file).expect("read derived hash topology");
-        let expected = durable_certified_send_expected_block_hash(
-            &topology,
-            &proposal,
-            &certificate,
-        )
-        .expect("derive expected block hash");
+        let expected =
+            durable_certified_send_expected_block_hash(&topology, &proposal, &certificate)
+                .expect("derive expected block hash");
         copy_dir_all(&data_dir, &recovery_data_dir);
-        let receipts = apply_batch(ApplyBatchOptions {
-            data_dir: data_dir.clone(),
-            batch_file,
-            certificate_file: Some(artifact_dir.join("block-certificate.json")),
-        })
-        .expect("apply fresh null-block-hash certificate");
-        assert_eq!(receipts.len(), 1);
-        assert!(receipts[0].accepted, "{:?}", receipts[0]);
+        // Forward the first authenticated frame to the real receiving service and
+        // discard its successful reply. The sending retry sees an empty connection.
+        let server_dir = data_dir.clone();
+        let server_topology = topology.clone();
+        let server = std::thread::spawn(move || {
+            let status = status(NodeOptions {
+                data_dir: server_dir.clone(),
+            })
+            .unwrap();
+            let (first, _) = listener.accept().unwrap();
+            let frame = read_transport_line(&first, "test proxy").unwrap();
+            let backend = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+            let mut proxy = TcpStream::connect(backend.local_addr().unwrap()).unwrap();
+            writeln!(proxy, "{frame}").unwrap();
+            let (mut service, _) = backend.accept().unwrap();
+            let first_ack = handle_transport_batch_service_connection(
+                &mut service,
+                &server_dir,
+                &server_topology,
+                &status,
+            )
+            .unwrap();
+            assert!(first_ack.applied && !first_ack.already_applied);
+            drop(first);
+            let (mut retry, _) = listener.accept().unwrap();
+            let replay = handle_transport_batch_service_connection(
+                &mut retry,
+                &server_dir,
+                &server_topology,
+                &status,
+            )
+            .unwrap();
+            assert!(replay.already_applied);
+            // Release 6.1 sends its current finalized state along with this exact
+            // rejection. Exercise a matching reply and then a same-height fork.
+            for conflict in [false, true] {
+                let (mut legacy, _) = listener.accept().unwrap();
+                let frame = read_transport_line(&legacy, "legacy receiver").unwrap();
+                let env = parse_transport_batch_envelope(&frame).unwrap();
+                let id = delivery_batch_id(&env).unwrap();
+                let mut state = replay.state.clone();
+                if conflict { state.block_tip_hash = "wrong".into(); }
+                write_json_line(&mut legacy, &serde_json::json!({
+                    "schema": "postfiat-transport-validator-serve-rejection-v1",
+                    "topology_id": server_topology.topology_id, "node_id": state.node_id,
+                    "connection_index": 3, "kind": "batch", "state": state,
+                    "error": format!("transport batch service apply failed: storage_duplicate_record: ordered batch `{id}` already exists"),
+                })).unwrap();
+            }
+        });
+        let sent = transport_batch_send_with_retries(
+            data_dir.clone(),
+            topology_file.clone(),
+            DEFAULT_NODE_ID.to_owned(),
+            None,
+            batch_file.clone(),
+            Some(artifact_dir.join("block-certificate.json")),
+            5_000,
+            1,
+            0,
+        )
+        .unwrap();
+        let legacy_send = || transport_batch_send_with_retries(
+            data_dir.clone(), topology_file.clone(), DEFAULT_NODE_ID.to_owned(), None,
+            batch_file.clone(), Some(artifact_dir.join("block-certificate.json")), 5_000, 0, 0,
+        );
+        assert!(legacy_send().unwrap().ack.already_applied);
+        assert!(legacy_send().unwrap_err().contains("conflicts with finalized hash/root"));
+        server.join().unwrap();
+        assert_eq!(sent.attempts, 2);
+        assert!(sent.ack.already_applied && sent.ack.accepted_count == 1);
         let final_status = status(NodeOptions { data_dir }).expect("derived hash final status");
         assert_eq!(final_status.block_height, 1);
         assert_eq!(final_status.block_tip_hash, expected);

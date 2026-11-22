@@ -45,6 +45,8 @@ process.stdout.write(JSON.stringify(Object.assign(${JSON.stringify(IDENTITY)}, {
   program_vkey_active: true, nav_cap_growth_enabled: true, vault_paused: false,
   vault_code_hash_matches: true, token_code_hash_matches: true,
   execution_rpc_sources_reachable: 2, beacon_finality_current: true,
+  route_epoch: 1, beacon_anchor_authenticated: true,
+  beacon_anchor_route_profile_hash: ${JSON.stringify(IDENTITY.route_profile_hash)}, beacon_anchor_route_epoch: 1,
 })));
 `;
 

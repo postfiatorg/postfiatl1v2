@@ -1,0 +1,21 @@
+[package]
+name = "pfusdc-sol-ingress-host"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[features]
+cuda = ["sp1-sdk/cuda"]
+
+[dependencies]
+pfusdc-sol-ingress-program = { path = "../../programs/pfusdc-sol-mainnet-ingress" }
+sp1-sdk = { version = "=6.3.1", features = ["blocking"] }
+sp1-verifier = "=6.10.0"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "sync"] }
+serde_json = "1"
+anyhow = "1"
+bincode = "1"
+sha2 = "0.10.9"
+
+[workspace]

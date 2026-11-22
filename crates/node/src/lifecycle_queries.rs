@@ -707,6 +707,13 @@ pub fn run_once(options: NodeOptions) -> io::Result<StatusReport> {
     status(options)
 }
 
+/// Completes an interrupted ordered commit, exactly as [`status`] does before it
+/// reads. For callers that reuse an earlier status and still need the store
+/// recovered before they read from it.
+pub fn recover_interrupted_ordered_commit(data_dir: &std::path::Path) -> io::Result<()> {
+    recover_ordered_commit_journal(&NodeStore::new(data_dir))
+}
+
 pub fn status(options: NodeOptions) -> io::Result<StatusReport> {
     let store = NodeStore::new(options.data_dir);
     let _store_lease = store.transactional_store_lease()?;
@@ -1257,11 +1264,24 @@ pub fn block_proposer(options: BlockProposerOptions) -> io::Result<BlockProposer
             "--height must be positive",
         ));
     }
-    let data_dir = options.data_dir;
     let status_report = status(NodeOptions {
-        data_dir: data_dir.clone(),
+        data_dir: options.data_dir.clone(),
     })?;
-    let store = NodeStore::new(data_dir);
+    block_proposer_for_status(options, status_report)
+}
+
+/// `block_proposer` for a node status the caller has already read.
+pub fn block_proposer_for_status(
+    options: BlockProposerOptions,
+    status_report: StatusReport,
+) -> io::Result<BlockProposerReport> {
+    if options.block_height == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "--height must be positive",
+        ));
+    }
+    let store = NodeStore::new(options.data_dir);
     let governance = store.read_governance()?;
     let validators = active_validator_ids(&governance)?;
     let proposer =

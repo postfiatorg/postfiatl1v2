@@ -365,6 +365,7 @@ fn build_manifest(input: &DeploymentManifestInputV1) -> Result<Value> {
     let vault_address_text = lower_address(vault_address);
     let token_address_text = lower_address(token_address);
     let route_profile = VaultBridgeRouteProfileV1 {
+        solana: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
         route_id: input.route.route_id.clone(),
         asset_id: asset_id.clone(),

@@ -1,6 +1,7 @@
 use alloy_primitives::{keccak256, Address, B256, U256};
 use helios_consensus_core::{
     apply_finality_update, apply_update, verify_finality_update, verify_update,
+    types::LightClientStore,
 };
 use postfiat_types::{
     vault_bridge_deposit_evidence_root, vault_bridge_deposit_id, VaultBridgeDepositEvidence,
@@ -51,6 +52,7 @@ pub struct EthIngressWitnessV1 {
     pub schema: String,
     pub policy: EthIngressPolicyV1,
     pub helios: ProofInputs,
+    pub beacon_anchor: postfiat_types::PfUsdcBeaconFinalityStateV1,
     pub vault_storage: ContractStorage,
     pub token_storage: ContractStorage,
     pub evidence: VaultBridgeDepositEvidence,
@@ -61,10 +63,13 @@ pub struct EthIngressPublicValuesV1 {
     pub schema: String,
     pub route_id: String,
     pub source_chain_id: u64,
+    pub route_epoch: u64,
     pub prior_finalized_beacon_root: String,
     pub prior_finalized_slot: u64,
+    pub prior_sync_committee_root: String,
     pub finalized_beacon_root: String,
     pub finalized_slot: u64,
+    pub current_sync_committee_root: String,
     pub finalized_execution_block_hash: String,
     pub finalized_execution_block_number: u64,
     pub execution_state_root: String,
@@ -174,7 +179,15 @@ fn verify_witness_for_route(
         return Err("Ethereum ingress evidence does not match route policy".into());
     }
 
-    let finality = verify_finality(&w.helios, p)?;
+    w.beacon_anchor.validate()?;
+    if w.beacon_anchor.source_chain_id != p.source_chain_id
+        || w.beacon_anchor.vault_address != w.evidence.vault_address
+        || w.beacon_anchor.token_address != w.evidence.token_address
+        || w.beacon_anchor.route_binding != w.evidence.route_binding
+    {
+        return Err("Ethereum ingress anchor does not match route evidence".into());
+    }
+    let finality = verify_finality(&w.helios, p, &w.beacon_anchor)?;
     let vault_slots = verify_contract(
         finality.execution_state_root,
         &w.vault_storage,
@@ -266,10 +279,13 @@ fn verify_witness_for_route(
         schema: route.public_values_schema().into(),
         route_id: p.route_id.clone(),
         source_chain_id: p.source_chain_id,
+        route_epoch: w.beacon_anchor.route_epoch,
         prior_finalized_beacon_root: hex32(finality.prior_root),
         prior_finalized_slot: finality.prior_slot,
+        prior_sync_committee_root: hex32(finality.prior_committee_root),
         finalized_beacon_root: hex32(finality.final_root),
         finalized_slot: finality.final_slot,
+        current_sync_committee_root: hex32(finality.current_committee_root),
         finalized_execution_block_hash: hex32(finality.execution_block_hash),
         finalized_execution_block_number: finality.execution_block_number,
         execution_state_root: hex32(finality.execution_state_root),
@@ -295,6 +311,8 @@ fn verify_witness_for_route(
 struct Finality {
     prior_root: B256,
     prior_slot: u64,
+    prior_committee_root: B256,
+    current_committee_root: B256,
     final_root: B256,
     final_slot: u64,
     execution_state_root: B256,
@@ -302,7 +320,11 @@ struct Finality {
     execution_block_number: u64,
 }
 
-fn verify_finality(inputs: &ProofInputs, p: &EthIngressPolicyV1) -> Result<Finality, String> {
+fn verify_finality(
+    inputs: &ProofInputs,
+    p: &EthIngressPolicyV1,
+    anchor: &postfiat_types::PfUsdcBeaconFinalityStateV1,
+) -> Result<Finality, String> {
     if inputs.genesis_root != p.genesis_validators_root
         || !inputs.contract_storage.is_empty()
         || inputs.expected_current_slot != *inputs.finality_update.signature_slot()
@@ -310,8 +332,22 @@ fn verify_finality(inputs: &ProofInputs, p: &EthIngressPolicyV1) -> Result<Final
         return Err("Helios input does not match pinned Ethereum mainnet policy".into());
     }
     require_mainnet_forks(&inputs.forks)?;
-    let mut store = inputs.store.clone();
-    store.next_sync_committee = None;
+    anchor.validate()?;
+    let prior_committee_root = inputs.store.current_sync_committee.tree_hash_root();
+    if hex32(inputs.store.finalized_header.beacon().tree_hash_root()) != anchor.finalized_beacon_root
+        || inputs.store.finalized_header.beacon().slot != anchor.finalized_slot
+        || hex32(prior_committee_root) != anchor.current_sync_committee_root
+    {
+        return Err("Helios header or sync committee does not match pinned beacon anchor".into());
+    }
+    // Only authenticated header and committee enter verification. In particular,
+    // never inherit witness next committee, best update or participation counters.
+    let mut store = LightClientStore {
+        finalized_header: inputs.store.finalized_header.clone(),
+        optimistic_header: inputs.store.finalized_header.clone(),
+        current_sync_committee: inputs.store.current_sync_committee.clone(),
+        ..Default::default()
+    };
     let prior_root = store.finalized_header.beacon().tree_hash_root();
     let prior_slot = store.finalized_header.beacon().slot;
     for update in &inputs.updates {
@@ -348,6 +384,8 @@ fn verify_finality(inputs: &ProofInputs, p: &EthIngressPolicyV1) -> Result<Final
     Ok(Finality {
         prior_root,
         prior_slot,
+        prior_committee_root,
+        current_committee_root: store.current_sync_committee.tree_hash_root(),
         final_root: store.finalized_header.beacon().tree_hash_root(),
         final_slot,
         execution_state_root: *execution.state_root(),
@@ -625,3 +663,6 @@ mod tests {
         assert!(add_slot(B256::from(U256::MAX.to_be_bytes::<32>()), 1).is_err());
     }
 }
+
+#[cfg(test)]
+mod b23_ingress_tests;

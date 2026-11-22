@@ -1,0 +1,92 @@
+{
+  "governance": {
+    "vault_bridge_route_profiles": [
+      {
+        "authorized_height": 1008,
+        "governance_amendment_id": "863eeb92e00f6c088bf219cc7615e301cb6b0e385f75c9f00ec532fbdf29761f96f6e9d0df8de8ccf6b5529e9359b5f2",
+        "profile": {
+          "activation_height": 1008,
+          "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+          "challenge_window_blocks": 64,
+          "evidence_tier": "receipt-proven",
+          "expires_at_height": 1000000,
+          "max_epoch_gap_blocks": 128,
+          "max_proof_bytes": 4096,
+          "max_public_values_bytes": 4096,
+          "max_snapshot_age_blocks": 900,
+          "min_attestations": 0,
+          "min_challenge_bond": 1,
+          "minimum_confirmations": 0,
+          "route_epoch": 10,
+          "route_id": "ethereum-mainnet-usdc-v1",
+          "schema": "postfiat.vault_bridge.route_profile.v1",
+          "settle_deadline_blocks": 256,
+          "source_chain_id": 1,
+          "token_address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "token_runtime_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
+          "vault_address": "0xe7a432a28b20621a70e845c7f202004cf98e7a2c",
+          "vault_runtime_code_hash": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+          "verifier_kind": "sp1-groth16",
+          "verifier_policy_hash": "44a402a3df72ee8da6f23737becef04fd0ce55e683706e929606a6aea1f05b25",
+          "verifier_program_vkey": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
+          "verifier_proof_encoding": "groth16"
+        },
+        "profile_hash": "b2ca6cda737d68955b951deb223018b850b8d0ed6b4a2f1c451bd0eff9da76060d5a6eec3d46618616e630ef67859211",
+        "schema": "postfiat.vault_bridge.route_profile_record.v1"
+      },
+      {
+        "authorized_height": 1256,
+        "governance_amendment_id": "e0d08b2fe1cee91d5c7474a3b511c81d8d518b4704351486a5be167cb5ddcf9c6860c29930acbc2fc5013bf055299f3b",
+        "profile": {
+          "activation_height": 1254,
+          "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+          "challenge_window_blocks": 64,
+          "evidence_tier": "receipt-proven",
+          "expires_at_height": 1000000,
+          "max_epoch_gap_blocks": 128,
+          "max_proof_bytes": 4096,
+          "max_public_values_bytes": 4096,
+          "max_snapshot_age_blocks": 900,
+          "min_attestations": 0,
+          "min_challenge_bond": 1,
+          "minimum_confirmations": 0,
+          "route_epoch": 11,
+          "route_id": "ethereum-mainnet-usdc-v1",
+          "schema": "postfiat.vault_bridge.route_profile.v1",
+          "settle_deadline_blocks": 256,
+          "source_chain_id": 1,
+          "token_address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "token_runtime_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
+          "vault_address": "0xe7a432a28b20621a70e845c7f202004cf98e7a2c",
+          "vault_runtime_code_hash": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+          "verifier_kind": "sp1-groth16",
+          "verifier_policy_hash": "44a402a3df72ee8da6f23737becef04fd0ce55e683706e929606a6aea1f05b25",
+          "verifier_program_vkey": "0x00d8cbf06d5640adde0fef863b3c689c4ab3442b0dc91d28ac4cc5f9c9b2ccbb",
+          "verifier_proof_encoding": "groth16"
+        },
+        "profile_hash": "29c91daa1c8d707ea3245db091976219266c5deca82b2d4571fafb221fd2dd092eb8833a28f4422bf0b4bbde44069e28",
+        "schema": "postfiat.vault_bridge.route_profile_record.v1"
+      }
+    ]
+  },
+  "ledger": {
+    "vault_bridge_bucket_states": [
+      {
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "bucket_id": "a1dbe54059cd948e25b6695a9ea32f95d8236b1616a6cff47c2ca20992c04b991bb03d3b6a805990e0dd5cd67b2af090",
+        "counted_value_atoms": 6000000,
+        "gross_receipt_atoms": 6000000,
+        "impairment_factor_bps": 10000,
+        "last_packet_epoch": 0,
+        "last_updated_height": 1285,
+        "nav_subscription_allocations_atoms": 0,
+        "other_allocations_atoms": 0,
+        "outstanding_vault_bridge_atoms": 6000000,
+        "policy_hash": "29c91daa1c8d707ea3245db091976219266c5deca82b2d4571fafb221fd2dd092eb8833a28f4422bf0b4bbde44069e28",
+        "redemption_queue_atoms": 0,
+        "source_domain": "erc20_bridge_vault:1:0xe7a432a28b20621a70e845c7f202004cf98e7a2c:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "status": "active"
+      }
+    ]
+  }
+}

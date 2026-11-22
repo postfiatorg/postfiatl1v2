@@ -2324,6 +2324,17 @@ pub const PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT: &str = "BFT_CHECKPOINT";
 pub const PFTL_UNISWAP_BPS_DENOMINATOR: u32 = 10_000;
 pub const PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS: u32 = 10_050;
 pub const PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS: u32 = 9_995;
+/// Guardrail on the primary-market spread, in basis points either side of NAV.
+///
+/// The A666 constants above are one route's chosen fee, not a protocol rule. The
+/// export proof used to require them exactly, which is why a 20 bps route could
+/// not mint into MetaMask at all. The fee is already bound cryptographically --
+/// `policy_hash` is computed over both multipliers and the mint packet commits
+/// it -- so the proof does not need to pin a specific number. It needs to refuse
+/// an absurd one. 500 bps is deliberately far above any intended fee (A666
+/// charges 50 and the one-click target is 20): this is a typo and
+/// hostile-policy bound, not a pricing decision.
+pub const PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS: u32 = 500;
 
 pub fn pftl_uniswap_keccak_commitment48(field: &str, value: &str) -> Result<String, String> {
     let decoded = decode_lower_hex_exact(field, value, 48)?;
@@ -2332,6 +2343,8 @@ pub fn pftl_uniswap_keccak_commitment48(field: &str, value: &str) -> Result<Stri
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapPrimaryMarketPolicyV2 {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spread_recipient: Option<String>,
     pub policy_hash: String,
     pub policy_epoch: u64,
     pub issue_multiplier_bps: u32,
@@ -2349,7 +2362,7 @@ pub struct PftlUniswapPrimaryMarketPolicyV2 {
 
 impl PftlUniswapPrimaryMarketPolicyV2 {
     pub fn computed_hash(&self) -> String {
-        let preimage = format!(
+        let mut preimage = format!(
             "policy_epoch={}\nissue_multiplier_bps={}\nredeem_multiplier_bps={}\nissue_capacity_atoms={}\nredeem_capacity_atoms={}\nmax_order_atoms={}\nmin_order_atoms={}\nvalid_from_height={}\nexpires_at_height={}\nmax_nav_age_blocks={}\npricing_nav_epoch={}\npricing_reserve_packet_hash={}\n",
             self.policy_epoch,
             self.issue_multiplier_bps,
@@ -2364,6 +2377,9 @@ impl PftlUniswapPrimaryMarketPolicyV2 {
             self.pricing_nav_epoch,
             self.pricing_reserve_packet_hash,
         );
+        if let Some(recipient) = &self.spread_recipient {
+            preimage.push_str(&format!("spread_recipient={recipient}\n"));
+        }
         bytes_to_hex(&hash48(
             b"postfiat.pftl_uniswap.primary_market_policy.v2",
             preimage.as_bytes(),
@@ -2371,6 +2387,12 @@ impl PftlUniswapPrimaryMarketPolicyV2 {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(recipient) = &self.spread_recipient {
+            validate_text_field("pftl_uniswap_primary_policy.spread_recipient", recipient)?;
+            if recipient.contains(['\n', '\r']) {
+                return Err("spread_recipient must not contain line breaks".to_string());
+            }
+        }
         validate_lower_hex_len(
             "pftl_uniswap_primary_policy.policy_hash",
             &self.policy_hash,
@@ -2411,6 +2433,16 @@ impl PftlUniswapPrimaryMarketPolicyV2 {
         {
             return Err(
                 "pftl_uniswap_primary_policy issue must be at or above NAV and redemption must be in (0, NAV]"
+                    .to_string(),
+            );
+        }
+        if self.issue_multiplier_bps
+            > PFTL_UNISWAP_BPS_DENOMINATOR + PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS
+            || self.redeem_multiplier_bps
+                < PFTL_UNISWAP_BPS_DENOMINATOR - PFTL_UNISWAP_MAX_PRIMARY_SPREAD_BPS
+        {
+            return Err(
+                "pftl_uniswap_primary_policy spread exceeds the protocol guardrail"
                     .to_string(),
             );
         }
@@ -2827,6 +2859,8 @@ impl PftlUniswapConsensusReturnImport {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapRouteV2State {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub funding_sequence: Option<u64>,
     pub route_schema_version: u32,
     pub route_epoch: u64,
     pub outbound_verification_class: String,
@@ -3197,6 +3231,9 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
     }
     if let Some(v2) = &route.v2 {
         let policy = &v2.primary_market_policy;
+        if let Some(sequence) = v2.funding_sequence {
+            preimage.push_str(&format!("v2.funding_sequence={sequence}\n"));
+        }
         preimage.push_str(&format!(
             "v2.route_schema_version={}\nv2.route_epoch={}\nv2.outbound_verification_class={}\nv2.return_verification_class={}\nv2.policy_hash={}\nv2.policy_epoch={}\nv2.issue_multiplier_bps={}\nv2.redeem_multiplier_bps={}\nv2.issue_capacity_atoms={}\nv2.redeem_capacity_atoms={}\nv2.max_order_atoms={}\nv2.min_order_atoms={}\nv2.valid_from_height={}\nv2.expires_at_height={}\nv2.max_nav_age_blocks={}\nv2.pricing_nav_epoch={}\nv2.pricing_reserve_packet_hash={}\nv2.issue_capacity_used_atoms={}\nv2.redeem_capacity_used_atoms={}\nv2.non_nav_spread_atoms={}\n",
             v2.route_schema_version,
@@ -3220,6 +3257,9 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
             v2.redeem_capacity_used_atoms,
             v2.non_nav_spread_atoms,
         ));
+        if let Some(recipient) = &policy.spread_recipient {
+            preimage.push_str(&format!("v2.spread_recipient={recipient}\n"));
+        }
         for (reservation_id, reservation) in &v2.active_reservations {
             preimage.push_str(&format!(
                 "v2.reservation.{reservation_id}.subscriber={}\nv2.reservation.{reservation_id}.ethereum_recipient={}\nv2.reservation.{reservation_id}.route_epoch={}\nv2.reservation.{reservation_id}.policy_epoch={}\nv2.reservation.{reservation_id}.policy_hash={}\nv2.reservation.{reservation_id}.mint_amount_atoms={}\nv2.reservation.{reservation_id}.max_settlement_value_atoms={}\nv2.reservation.{reservation_id}.created_at_height={}\nv2.reservation.{reservation_id}.expires_at_height={}\nv2.reservation.{reservation_id}.status={}\n",
@@ -3332,8 +3372,12 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
     bytes_to_hex(&hash48(domain, preimage.as_bytes()))
 }
 
+include!("b23_facility_types.rs");
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapConsensusReceipt {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redemption_settlement: Option<PftlUniswapRedemptionSettlement>,
     pub receipt_hash: String,
     pub transition: String,
     pub route_id: String,
@@ -3352,6 +3396,12 @@ pub struct PftlUniswapConsensusReceipt {
 
 impl PftlUniswapConsensusReceipt {
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(settlement) = &self.redemption_settlement {
+            if self.transition != "primary_redeemed" {
+                return Err("redemption settlement requires primary_redeemed receipt".to_string());
+            }
+            settlement.validate()?;
+        }
         validate_lower_hex_len(
             "pftl_uniswap_receipt.receipt_hash",
             &self.receipt_hash,
@@ -3411,7 +3461,7 @@ impl PftlUniswapConsensusReceipt {
 pub fn pftl_uniswap_consensus_receipt_computed_hash(
     receipt: &PftlUniswapConsensusReceipt,
 ) -> String {
-    let preimage = format!(
+    let mut preimage = format!(
         "transition={}\nroute_id={}\nstate_before_hash={}\nstate_after_hash={}\npacket_hash={}\nburn_event_hash={}\nwallet={}\namount_atoms={}\nblock_height={}\n",
         receipt.transition,
         receipt.route_id,
@@ -3425,6 +3475,9 @@ pub fn pftl_uniswap_consensus_receipt_computed_hash(
             .map_or_else(String::new, |amount| amount.to_string()),
         receipt.block_height,
     );
+    if let Some(settlement) = &receipt.redemption_settlement {
+        preimage.push_str(&settlement.canonical_fields());
+    }
     bytes_to_hex(&hash48(
         b"postfiat.pftl_uniswap.consensus_receipt.v1",
         preimage.as_bytes(),
@@ -3726,6 +3779,16 @@ pub struct LedgerState {
     pub ethereum_arbitrum_finality_states: Vec<EthereumArbitrumFinalityStateV2>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub arc_finality_states: Vec<PfUsdcArcFinalityStateV1>,
+    /// Governance-pinned Ethereum beacon anchors (R2-1). A route profile with
+    /// no anchor here admits old 26-field deposits, as main did; a profile with
+    /// an anchor admits only 29-field proofs that start from it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub beacon_finality_states: Vec<PfUsdcBeaconFinalityStateV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solana_route: Option<SolanaRouteState>,
+    /// The first client retains its release-6 encoding and commitment.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub additional_solana_routes: BTreeMap<String, SolanaRouteState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fast_ingress_campaigns: Vec<FastIngressCampaignStateV1>,
     /// Genesis external lane records; empty on every chain without lanes.
@@ -3734,6 +3797,27 @@ pub struct LedgerState {
 }
 
 impl LedgerState {
+    pub fn solana_clients(&self) -> impl Iterator<Item = &SolanaRouteState> {
+        self.solana_route.iter().chain(self.additional_solana_routes.values())
+    }
+
+    fn solana_policies(&self) -> Result<BTreeMap<String, &SolanaRouteState>, String> {
+        let mut policies = BTreeMap::new();
+        let mut names = BTreeSet::new();
+        for route in self.solana_clients() {
+            if !names.insert((&route.profile.route_id, route.profile.route_epoch)) {
+                return Err("duplicate Solana route revision".into());
+            }
+            policies.insert(route.profile.profile_hash()?, route);
+        }
+        for (hash, route) in &self.additional_solana_routes {
+            if self.solana_route.is_none() || hash != &route.profile.profile_hash()? {
+                return Err("inconsistent additional Solana client".into());
+            }
+        }
+        Ok(policies)
+    }
+
     pub fn vault_bridge_route_backing(
         &self,
         asset_id: &str,
@@ -3770,6 +3854,20 @@ impl LedgerState {
                     .checked_add(receipt.allocated_value_atoms)
                     .ok_or_else(|| "route claimed backing overflow".to_string())?;
             }
+        }
+        let policies = self.solana_policies()?;
+        for receipt in self.vault_bridge_receipts.iter()
+            .filter(|r| r.asset_id == asset_id && r.solana_deposit_evidence.is_some())
+        {
+            let route = policies.get(&receipt.policy_hash).ok_or("missing Solana receipt route")?;
+            let route_id = &route.profile.route_id;
+            let row = routes.entry(route_id.clone()).or_insert_with(|| VaultBridgeRouteBackingStateV1 {
+                route_id: route_id.clone(), asset_id: asset_id.into(),
+                deposits_verified: 0, claims_minted: 0,
+                withdrawals_reserved: 0, withdrawals_paid: 0,
+            });
+            row.deposits_verified = row.deposits_verified.checked_add(receipt.amount_atoms).ok_or("Solana backing overflow")?;
+            row.claims_minted = row.deposits_verified;
         }
         for redemption in self.vault_bridge_redemptions.iter().filter(|r| r.asset_id == asset_id) {
             let Some(bucket) = self.vault_bridge_bucket(&redemption.bucket_id) else { continue; };
@@ -3843,6 +3941,9 @@ impl LedgerState {
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
+            beacon_finality_states: Vec::new(),
+            solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
         }
@@ -3896,6 +3997,9 @@ impl LedgerState {
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
+            beacon_finality_states: Vec::new(),
+            solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
         }
@@ -3950,6 +4054,9 @@ impl LedgerState {
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
+            beacon_finality_states: Vec::new(),
+            solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
         }
@@ -3999,6 +4106,9 @@ impl LedgerState {
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
+            beacon_finality_states: Vec::new(),
+            solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
         }
@@ -4053,6 +4163,9 @@ impl LedgerState {
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
+            beacon_finality_states: Vec::new(),
+            solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
         }
@@ -4102,6 +4215,9 @@ impl LedgerState {
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
             arc_finality_states: Vec::new(),
+            beacon_finality_states: Vec::new(),
+            solana_route: None,
+            additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
         }
@@ -4516,8 +4632,43 @@ impl LedgerState {
             }
         }
 
+        let solana_policies = self.solana_policies()?;
+        for route in solana_policies.values() {
+            let pins = route.profile.solana.as_ref().ok_or("missing Solana pins")?;
+            route.client.validate()?;
+            if !route.epoch_history.is_empty() && route.epoch_history.get(&pins.anchor.epoch) != Some(&pins.anchor) {
+                return Err("Solana epoch history lacks its governed anchor".into());
+            }
+            for (&epoch, historical) in &route.epoch_history {
+                historical.validate()?;
+                if historical.epoch != epoch || epoch < pins.anchor.epoch || epoch > route.client.epoch
+                    || historical.known_key_table_hash != pins.anchor.known_key_table_hash
+                    || (epoch == route.client.epoch && historical != &route.client) {
+                    return Err("invalid historical Solana client".into());
+                }
+            }
+            if route.client.epoch < pins.anchor.epoch
+                || (route.client.epoch == pins.anchor.epoch && route.client != pins.anchor)
+                || route.client.known_key_table_hash != pins.anchor.known_key_table_hash
+            {
+                return Err("Solana client is inconsistent with its route anchor".to_string());
+            }
+        }
+        let mut solana_deposit_ids = BTreeSet::new();
         let mut vault_bridge_receipt_ids = BTreeSet::new();
         for receipt in &self.vault_bridge_receipts {
+            if let Some(evidence) = &receipt.solana_deposit_evidence {
+                let route = solana_policies.get(&receipt.policy_hash).ok_or("missing Solana receipt route")?;
+                let profile = &route.profile;
+                let pins = profile.solana.as_ref().ok_or("missing Solana receipt profile")?;
+                if !solana_deposit_ids.insert(&evidence.deposit_id)
+                    || evidence.program_id != profile.vault_address || receipt.asset_id != profile.asset_id
+                    || receipt.source_domain != profile.source_domain()
+                    || receipt.source_asset != format!("spl:{}:{}", pins.genesis_hash, profile.token_address)
+                {
+                    return Err("duplicate or misbound Solana receipt".into());
+                }
+            }
             receipt.validate_for_chain(chain_id)?;
             if !vault_bridge_receipt_ids.insert(receipt.receipt_id.clone()) {
                 return Err(format!("duplicate vault_bridge receipt id `{}`", receipt.receipt_id));

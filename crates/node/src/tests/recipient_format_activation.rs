@@ -14,7 +14,7 @@ fn recipient_format_amendment(height: u32) -> GovernanceAmendment {
         proposer: "validator-0".to_string(),
         validators: vec!["validator-0".to_string()],
         quorum: 1,
-        kind: GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT.to_string(),
+        kind: GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT.to_string(),
         value: height,
         activation_height: 0,
         veto_until_height: 0,
@@ -123,7 +123,7 @@ fn mempool_admission_rejects_malformed_recipients_without_governance_activation(
         store
             .read_governance()
             .expect("governance")
-            .recipient_format_activation_height(),
+            .recipient_format_v2_activation_height(),
         None,
         "admission policy must not depend on the consensus activation"
     );
@@ -209,7 +209,7 @@ fn recipient_format_activation_amendment_is_scheduled_once_and_never_retroactive
             block_height,
         )
         .expect("non-future activation accepted");
-        assert_eq!(code, "invalid_recipient_format_activation_height");
+        assert_eq!(code, "invalid_recipient_format_v2_activation_height");
     }
     assert!(
         governance_amendment_lifecycle_rejection(&recipient_format_amendment(101), block_height)
@@ -220,17 +220,17 @@ fn recipient_format_activation_amendment_is_scheduled_once_and_never_retroactive
     assert_eq!(
         governance_amendment_current_value(
             &governance,
-            GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT
+            GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT
         ),
         0
     );
     governance.apply(recipient_format_amendment(500));
     governance.apply(recipient_format_amendment(900));
-    assert_eq!(governance.recipient_format_activation_height(), Some(500));
+    assert_eq!(governance.recipient_format_v2_activation_height(), Some(500));
     assert_eq!(
         governance_amendment_current_value(
             &governance,
-            GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT
+            GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT
         ),
         500
     );

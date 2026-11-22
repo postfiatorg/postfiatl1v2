@@ -599,28 +599,8 @@ pub fn vault_bridge_status(
             let route = governance
                 .authorized_vault_bridge_route_profile(&options.asset_id, &bucket.policy_hash)
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-            if route.profile.source_chain_id.to_string()
-                != bucket.source_domain.split(':').nth(1).unwrap_or_default()
-                || route.profile.vault_address
-                    != bucket.source_domain.split(':').nth(2).unwrap_or_default()
-                || route.profile.token_address
-                    != bucket.source_domain.split(':').nth(3).unwrap_or_default()
-            {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "vault bridge bucket source domain does not match governed route",
-                ));
-            }
-            let source_series_id = pfusdc_source_series_id(
-                &genesis.chain_id,
-                &options.asset_id,
-                route.profile.source_chain_id,
-                &route.profile.vault_address,
-                &route.profile.token_address,
-                route.profile.route_epoch,
-                &bucket.policy_hash,
-            )
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            let source_series_id = route.profile.bucket_source_series_id(&genesis.chain_id, bucket)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
             let redeemable_claim_atoms = u64::try_from(
                 u128::from(allocated) * u128::from(bucket.impairment_factor_bps) / 10_000,
             )
@@ -1228,7 +1208,13 @@ pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultB
         })?;
     validate_vault_bridge_route_profile_against_ledger(&ledger, route, &record.profile_hash)
         .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, error))?;
+    let beacon_finality_anchor = VaultBridgeRouteReport::select_beacon_anchor(
+        &ledger.beacon_finality_states,
+        &record.profile_hash,
+        u64::from(route.route_epoch),
+    )?;
     Ok(VaultBridgeRouteReport {
+        beacon_finality_anchor,
         schema: "postfiat.vault_bridge.route_report.v1".to_string(),
         chain_id: genesis.chain_id.clone(),
         genesis_hash: genesis_hash(&genesis),
@@ -1254,15 +1240,21 @@ pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultB
     })
 }
 
+include!("b23_facility_queries.rs");
+
 pub fn navcoin_bridge_routes(
     options: NavcoinBridgeRoutesOptions,
-) -> io::Result<PftlUniswapRoutesStatusReport> {
+) -> io::Result<NavcoinBridgeRoutesReadReport> {
     let store = NodeStore::new(&options.data_dir);
     match store.read_ledger() {
-        Ok(ledger) => pftl_uniswap_consensus_routes_status(&ledger),
+        Ok(ledger) => Ok(b23_routes_read_report(
+            pftl_uniswap_consensus_routes_status(&ledger)?,
+            Some(&ledger),
+        )),
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             let ledgers = read_pftl_uniswap_bridge_ledgers(&options.data_dir)?;
             pftl_uniswap_bridge_routes_status(&ledgers)
+                .map(|report| b23_routes_read_report(report, None))
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
         }
         Err(error) => Err(error),
@@ -1315,7 +1307,7 @@ pub fn navcoin_bridge_claims(
 
 pub fn navcoin_bridge_supply_status(
     options: NavcoinBridgeSupplyStatusOptions,
-) -> io::Result<PftlUniswapSupplyStatusReport> {
+) -> io::Result<NavcoinBridgeSupplyReadReport> {
     validate_navcoin_bridge_route_id(&options.route_id)?;
     let store = NodeStore::new(&options.data_dir);
     match store.read_ledger() {
@@ -1331,12 +1323,21 @@ pub fn navcoin_bridge_supply_status(
                         ),
                     )
                 })?;
-            pftl_uniswap_consensus_supply_status(&ledger, route)
+            Ok(NavcoinBridgeSupplyReadReport {
+                supply: pftl_uniswap_consensus_supply_status(&ledger, route)?,
+                spread_recipient: b23_route_spread_recipient(route),
+                funding_sequence: b23_route_funding_sequence(route),
+            })
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             let ledgers = read_pftl_uniswap_bridge_ledgers(&options.data_dir)?;
             let ledger = pftl_uniswap_bridge_ledger_for_route(&ledgers, &options.route_id)?;
             pftl_uniswap_bridge_supply_status(ledger)
+                .map(|supply| NavcoinBridgeSupplyReadReport {
+                    supply,
+                    spread_recipient: None,
+                    funding_sequence: None,
+                })
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
         }
         Err(error) => Err(error),

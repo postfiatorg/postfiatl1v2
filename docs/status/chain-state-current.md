@@ -9,6 +9,13 @@ their original observations.
 
 Status: **canonical operational-state reference**
 
+!!! note "2026-11-21: the validators and `main` are one line again"
+
+    All six validators were moved, one host at a time, to the source at
+    `674dbb18a` (release `main-r64-20261121`), and that source was merged into
+    `main`. The record is in [Master State](master-state.md). Fleet read after
+    the rollout: height 1738, six equal tips and state roots.
+
 !!! note "2026-11-19: two releases and a new deposit route"
 
     Release 6 (build revision `cdc98a49`) was rolled out by the operators one

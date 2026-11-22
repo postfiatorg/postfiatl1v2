@@ -6,26 +6,48 @@ from __future__ import annotations
 import hashlib
 import json
 import pathlib
+import re
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 INVENTORY = ROOT / "docs/status/OPEN-SOURCE-PROOF-PUBLIC-INPUT-INVENTORY-20260716.json"
+PFETH_STALE = "source_changed_after_committed_build"
+PFUSDC_STATEMENT_SOURCES = (
+    "crates/types/src/account_owned_asset_types.rs",
+    "crates/types/src/market_nav_asset_types.rs",
+    "crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol",
+    "crates/execution/src/vault_bridge_profile_resolution.rs",
+    "crates/node/src/execution_actions.rs",
+)
+
+
+def sha256_file(relative: str) -> str:
+    return hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
+
+
+def struct_fields(source: str, name: str) -> list[str]:
+    match = re.search(r"pub struct " + name + r" \{(.*?)\n\}", source, re.S)
+    if not match:
+        raise SystemExit(f"struct {name} missing")
+    return re.findall(r"^\s*pub (\w+):", match.group(1), re.M)
 
 
 def main() -> None:
     document = json.loads(INVENTORY.read_text(encoding="utf-8"))
     if document.get("schema") != "postfiat-open-source-proof-public-input-inventory-v1":
         raise SystemExit("proof inventory schema mismatch")
+    systems = {item["name"]: item for item in document["systems"]}
     for relative, expected in document["source_hashes"].items():
-        actual = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
+        actual = sha256_file(relative)
         if actual != expected:
+            users = [name for name, item in systems.items() if relative in item.get("sources", [])]
             raise SystemExit(
                 f"proof inventory source drift: {relative} expected={expected} actual={actual}"
+                + (f" (sources of: {', '.join(users)})" if users else "")
             )
 
-    systems = {item["name"]: item for item in document["systems"]}
-    if len(systems) != 8:
-        raise SystemExit("proof inventory must classify exactly eight proof systems")
+    if len(systems) != 9:
+        raise SystemExit("proof inventory must classify exactly nine proof systems")
     expected_layouts = {
         "AssetOrchard swap": (28, "ASSET_ORCHARD_PUBLIC_INSTANCE_LEN: usize = 28"),
         "AssetOrchard private egress": (
@@ -100,6 +122,9 @@ def main() -> None:
         raise SystemExit("pfETH ingress fields must cover exactly indices 0..25")
     if any(not field.get("name") or not field.get("binding") for field in ingress_fields):
         raise SystemExit("pfETH ingress public fields need names and bindings")
+    labels = [a.split(":", 1)[0] for a in pfeth_ingress.get("assumptions", [])]
+    if labels != ["A1", "A2", "A3", "A4"]:
+        raise SystemExit("pfETH ingress must record binding assumptions A1-A4 (or why one does not apply)")
     ingress_guest = (
         ROOT / "programs/pfeth-eth-mainnet-ingress/src/main.rs"
     ).read_text(encoding="utf-8")
@@ -113,10 +138,83 @@ def main() -> None:
         ("verify_weth_witness(&witness)", ingress_guest),
         ("PFETH_PUBLIC_VALUES_SCHEMA", ingress_library),
         ("WETH_WEI_PER_PFETH_ATOM: u64 = 1_000_000_000", ingress_library),
-        ("PFETH_ELF", ingress_tool),
     ):
         if marker not in source:
             raise SystemExit(f"pfETH ingress source marker missing: {marker}")
+    # The pfETH ELF is built from the shared ingress library. When that source
+    # has moved on, the entry must say so and the prover must refuse pfETH.
+    build = pfeth_ingress.get("build_state", {})
+    if sha256_file(build.get("committed_elf", "")) != build.get("committed_elf_sha256"):
+        raise SystemExit("pfETH committed ELF hash mismatch")
+    changed = [
+        relative
+        for relative, built in build["built_from_source_sha256"].items()
+        if sha256_file(relative) != built
+    ]
+    if changed and build.get("state") != PFETH_STALE:
+        raise SystemExit(f"pfETH ELF predates its sources {changed}; record {PFETH_STALE}")
+    if not changed and build.get("state") == PFETH_STALE:
+        raise SystemExit("pfETH sources match the committed build; clear its stale build state")
+    if changed and "Self::Pfeth => bail!(" not in ingress_tool:
+        raise SystemExit("pfETH ELF is stale but the prover tool does not refuse pfETH proving")
+    pfeth_state = (
+        f"pfeth_ingress={PFETH_STALE} key={pfeth_ingress['program_vkey']} "
+        f"changed={','.join(changed)}: {build['note']}"
+        if changed
+        else "pfeth_ingress=built_from_current_sources"
+    )
+
+    pfusdc = systems["Ethereum mainnet pfUSDC ingress"]
+    if (
+        pfusdc["proof_system_id"] != "sp1-pfusdc-ethereum-mainnet-ingress-v1"
+        or pfusdc["public_values_schema"]
+        != "postfiat.pfusdc.ethereum_ingress_public_values.v1"
+        or pfusdc["program_vkey"]
+        != "0x00d8cbf06d5640adde0fef863b3c689c4ab3442b0dc91d28ac4cc5f9c9b2ccbb"
+        or pfusdc["elf_sha256"]
+        != "b6a06cb90ee81477a33c9a5902458db5b379cc40b765988cebb0ec46d08766fe"
+        or sha256_file(pfusdc["elf"]) != pfusdc["elf_sha256"]
+    ):
+        raise SystemExit("pfUSDC ingress proof identity mismatch")
+    missing = [s for s in pfusdc["sources"] if s not in document["source_hashes"]]
+    if missing:
+        raise SystemExit(f"pfUSDC ingress sources are not pinned: {missing}")
+    # Statement and binding owners outside the guest crate: deposit-record
+    # helpers, route allowlist, vault storage layout and active-policy selectors.
+    unlisted = [s for s in PFUSDC_STATEMENT_SOURCES if s not in pfusdc["sources"]]
+    if unlisted:
+        raise SystemExit(f"pfUSDC ingress statement sources are not listed: {unlisted}")
+    if len(pfusdc.get("assumptions", [])) != 4:
+        raise SystemExit("pfUSDC ingress must record its four binding assumptions A1-A4")
+    pfusdc_fields = pfusdc["public_values"]
+    if [field["index"] for field in pfusdc_fields] != list(range(29)):
+        raise SystemExit("pfUSDC ingress fields must cover exactly indices 0..28")
+    if any(not field.get("name") or not field.get("binding") for field in pfusdc_fields):
+        raise SystemExit("pfUSDC ingress public fields need names and bindings")
+    names = [field["name"] for field in pfusdc_fields]
+    host_types = (ROOT / "crates/types/src/pfusdc_tier4_types.rs").read_text(encoding="utf-8")
+    legacy_types = (ROOT / "crates/types/src/b23_ingress_legacy.rs").read_text(encoding="utf-8")
+    if (
+        struct_fields(ingress_library, "EthIngressPublicValuesV1") != names
+        or struct_fields(host_types, "PfUsdcEthereumIngressPublicValuesV1") != names
+    ):
+        raise SystemExit("pfUSDC ingress fields differ from the guest or host layout")
+    legacy = [n for n in names if n not in pfusdc["legacy_omitted_fields"]]
+    if (
+        len(legacy) != 26
+        or pfusdc["legacy_public_values_length"] != 26
+        or struct_fields(legacy_types, "PfUsdcEthereumIngressPublicValuesLegacyV1") != legacy
+    ):
+        raise SystemExit("pfUSDC legacy 26-field layout mismatch")
+    execution = (ROOT / "crates/execution/src/nav_vault_asset_execution.rs").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "ethereum_ingress_legacy_public_values_on_anchored_route",
+        "PfUsdcBeaconFinalityStateV1::advance_for_deposit(",
+    ):
+        if marker not in execution:
+            raise SystemExit(f"pfUSDC ingress host marker missing: {marker}")
 
     egress = systems["PFTL bridge finality egress"]
     if (
@@ -195,6 +293,7 @@ def main() -> None:
         + len(system.get("checkpoint_public_values", []))
         for system in systems.values()
     )
+    print(pfeth_state)
     print(
         "proof_public_input_inventory=ok "
         f"systems={len(systems)} public_fields={public_fields} "

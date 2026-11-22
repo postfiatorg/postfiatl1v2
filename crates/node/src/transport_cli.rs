@@ -394,7 +394,16 @@ struct TransportBlockVoteRequestOptions {
     vote_file: PathBuf,
     block_height: Option<u64>,
     timeout_ms: u64,
+    /// Total deadline for this request across connect, write, read and the
+    /// pooled-stream fallback. Early-quorum rounds set it to the vote phase
+    /// deadline; `None` keeps `timeout_ms` per socket operation.
+    deadline: Option<Instant>,
     consensus_v2: Option<TransportConsensusV2VoteRequest>,
+    /// Status already read by the caller for this round. Only identity fields
+    /// (node id, chain id, genesis hash, protocol version) are used here, and they
+    /// do not change while a round runs, so a round reads the store once, not once
+    /// per peer per phase.
+    local_status: Option<StatusReport>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -595,6 +604,9 @@ struct TransportValidatorServeSharedState {
     block_proposal_responses: Vec<TransportBlockProposalResponseEnvelope>,
     health_responses: Vec<TransportHealthResponseEnvelope>,
     rejected: Vec<TransportValidatorServeRejection>,
+    /// First status read by this service, reused for block-vote requests,
+    /// which only need identity fields from it.
+    identity_status: Option<StatusReport>,
 }
 
 impl TransportValidatorServeSharedState {
@@ -890,6 +902,8 @@ struct TransportPeerCertifiedBatchRoundOptions {
     timeout_ms: u64,
     send_retries: usize,
     retry_backoff_ms: u64,
+    /// Deadline of each vote phase in an early-quorum round.
+    vote_phase_deadline_ms: u64,
     local_apply_before_certified_send: bool,
     defer_certified_sends: bool,
     commit_processed_dir: Option<PathBuf>,
@@ -913,6 +927,8 @@ struct TransportPeerCertifiedMempoolRoundOptions {
     timeout_ms: u64,
     send_retries: usize,
     retry_backoff_ms: u64,
+    /// Deadline of each vote phase in an early-quorum round.
+    vote_phase_deadline_ms: u64,
     local_apply_before_certified_send: bool,
     defer_certified_sends: bool,
     max_transactions: usize,
@@ -1178,6 +1194,24 @@ fn certified_send_disposable_file_is_canonical(name: &str) -> bool {
         || ["batch.json", "certificate.json", "job.json"]
             .iter()
             .any(|target| certified_send_atomic_temp_name_is_canonical(name, target))
+        || certified_send_deferred_report_name_is_canonical(name)
+}
+
+/// `spawn_deferred_certified_batch_send` leaves `<target>.send.json` and
+/// `<target>.send.err` beside the job. A completed job keeps them when it is retained,
+/// so cleanup must recognise them instead of failing the round that triggered it.
+fn certified_send_deferred_report_name_is_canonical(name: &str) -> bool {
+    let Some(target) = name
+        .strip_suffix(".send.json")
+        .or_else(|| name.strip_suffix(".send.err"))
+    else {
+        return false;
+    };
+    !target.is_empty()
+        && target.len() <= 128
+        && target
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
 }
 
 #[cfg(unix)]
@@ -2814,6 +2848,8 @@ struct TransportPeerCertifiedMempoolRoundReport {
     submitted_tx_id: Option<String>,
     mempool_submit_ms: f64,
     mempool_batch_ms: f64,
+    /// Wall time of the whole mempool round.
+    total_ms: f64,
     round: TransportPeerCertifiedBatchRoundReport,
     round_ok: bool,
 }
@@ -3484,6 +3520,7 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
                 timeout_ms: options.timeout_ms,
                 send_retries: options.send_retries,
                 retry_backoff_ms: options.retry_backoff_ms,
+                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 local_apply_before_certified_send: options.local_apply_before_certified_send,
                 defer_certified_sends: options.defer_certified_sends,
                 max_transactions: 1,
@@ -4234,5 +4271,20 @@ mod certified_send_durability_tests {
         assert!(!interrupted_destination.exists());
 
         std::fs::remove_dir_all(root).expect("cleanup completed-retention test");
+    }
+}
+
+#[cfg(test)]
+mod certified_send_deferred_report_tests {
+    use super::certified_send_disposable_file_is_canonical as canonical;
+
+    #[test]
+    fn deferred_send_reports_are_disposable_and_other_names_are_not() {
+        for name in ["batch.json", "certificate.json", "job.json", "validator-1.send.json", "validator-5.send.err"] {
+            assert!(canonical(name), "{name}");
+        }
+        for name in [".send.json", "../x.send.json", "a/b.send.err", "validator-1.send.json.bak", "notes.txt", "validator 1.send.json"] {
+            assert!(!canonical(name), "{name}");
+        }
     }
 }

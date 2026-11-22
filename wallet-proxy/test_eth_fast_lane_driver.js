@@ -58,7 +58,9 @@ if (mode === 'readiness') {
     prover_authenticated: true, prover_healthy: true, route_manifest_active: true,
     program_vkey_active: true, nav_cap_growth_enabled: true, vault_paused: false,
     vault_code_hash_matches: true, token_code_hash_matches: true,
-    execution_rpc_sources_reachable: 2, beacon_finality_current: true
+    execution_rpc_sources_reachable: 2, beacon_finality_current: true,
+    route_epoch: 1, beacon_anchor_authenticated: true,
+    beacon_anchor_route_profile_hash: '${TEST_ROUTE_PROFILE_HASH}', beacon_anchor_route_epoch: 1
   }));
   process.exit(0);
 }
@@ -105,6 +107,7 @@ if (stage === 'verifying') result.proof_verified = true;
 if (stage === 'growing_backed_cap') result.backed_cap_ready = true;
 if (stage === 'claiming') {
   result.receipt_code = 'ACCEPTED'; result.receipt_id = '77'.repeat(48);
+  result.credited_asset_id = '${TEST_ASSET_ID}';
   result.tx_id = '0x' + '78'.repeat(32);
 }
 if (process.env.MOCK_BAD_STAGE === stage) result.amount_atoms = '999';
@@ -233,6 +236,7 @@ async function main() {
     state = JSON.parse(fs.readFileSync(path.join(jobDir, 'worker-state.json'), 'utf8'));
     assert.strictEqual(state.status, 'accepted');
     assert.strictEqual(state.receipt_code, 'ACCEPTED');
+    assert.strictEqual(state.credited_asset_id, TEST_ASSET_ID);
     assert.match(state.terminal_checkpoint_sha256, /^[0-9a-f]{64}$/);
     const counts = JSON.parse(fs.readFileSync(path.join(jobDir, 'mock-counts.json'), 'utf8'));
     assert.deepStrictEqual(counts, {

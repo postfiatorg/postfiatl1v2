@@ -1,0 +1,13 @@
+{
+  "execute_ms": 5043,
+  "host_execute_skipped": false,
+  "program_vkey": "0x0060d83567657466eaac782e0be174b57277df6ac349f42288852a93d72f0fe1",
+  "proof_bytes": 356,
+  "proof_kind": "checkpoint",
+  "proof_mode": "groth16",
+  "proof_program_version": 2,
+  "prover_backend": "cpu",
+  "public_values_bytes": 320,
+  "schema": "postfiat-pftl-uniswap-proof-report-v1",
+  "setup_and_prove_ms": 4786223
+}

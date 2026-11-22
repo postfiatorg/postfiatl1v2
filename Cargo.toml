@@ -29,10 +29,12 @@ members = [
     "crates/storage",
     "crates/types",
     "crates/wallet_wasm",
+    "tools/pftl-ingress-groth16-verify",
 ]
 exclude = [
     "programs/pfusdc-egress",
     "programs/pfusdc-ingress",
+    "programs/pfusdc-sol-ingress",
     "programs/pftl-uniswap-receipt",
     "third_party/fips204",
     "tools/pfusdc-tier4-prover",

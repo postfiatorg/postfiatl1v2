@@ -1777,6 +1777,18 @@ fn validate_amendment_kind(kind: &str) -> Result<(), String> {
                 return Err("Arc route governance kind must bind a lowercase bootstrap hash".to_string());
             }
             profile
+        } else if let Some((profile, bootstrap)) =
+            manifest_hash.split_once(":beacon-bootstrap-v2:")
+        {
+            // An Ethereum beacon anchor is bound into the kind the same way the
+            // Arc bootstrap is, so the validators sign over the anchor rather
+            // than over the profile alone (R2-1).
+            if !canonical_hash(bootstrap) {
+                return Err(
+                    "beacon route governance kind must bind a lowercase bootstrap hash".to_string(),
+                );
+            }
+            profile
         } else {
             manifest_hash
         };
@@ -1794,10 +1806,14 @@ fn validate_amendment_kind(kind: &str) -> Result<(), String> {
         | GOVERNANCE_KIND_BRIDGE_WITNESS_EPOCH
         | GOVERNANCE_KIND_AUTHORITY_MODE
         | GOVERNANCE_KIND_BRIDGE_VERIFICATION_ACTIVATION_HEIGHT
+        | postfiat_types::SOLANA_ACTIVATION_HEIGHT
         | postfiat_types::GOVERNANCE_KIND_YOLO_TARGET_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT
+        | postfiat_types::GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT
+        | postfiat_types::GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT
+        | postfiat_types::GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT

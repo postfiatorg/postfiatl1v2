@@ -1,0 +1,15 @@
+[Unit]
+Description=Starter PFT for new Task Node wallets (loopback only)
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/repos/postfiatl1v2-live/ops/withdraw
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 faucet_service.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/postfiat/repos/b23-coord/evidence/faucet/service.log
+StandardError=append:/home/postfiat/repos/b23-coord/evidence/faucet/service.log
+
+[Install]
+WantedBy=default.target

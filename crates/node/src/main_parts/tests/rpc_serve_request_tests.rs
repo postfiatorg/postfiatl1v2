@@ -52,6 +52,7 @@ mod rpc_serve_request_tests {
             finality_timeout_ms: 2_000,
             finality_send_retries: 0,
             finality_retry_backoff_ms: 0,
+            finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
             finality_quorum_early_full_propagation: false,
             max_mempool_submit_per_peer: 8,
             max_mempool_submit_total: 32,
@@ -489,6 +490,7 @@ mod rpc_serve_request_tests {
                 finality_timeout_ms: 10_000,
                 finality_send_retries: 0,
                 finality_retry_backoff_ms: 0,
+                finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 finality_quorum_early_full_propagation: false,
                 max_mempool_submit_per_peer: 8,
                 max_mempool_submit_total: 32,
@@ -603,6 +605,7 @@ mod rpc_serve_request_tests {
                 finality_timeout_ms: 1_500,
                 finality_send_retries: 0,
                 finality_retry_backoff_ms: 0,
+                finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 finality_quorum_early_full_propagation: false,
                 max_mempool_submit_per_peer: 8,
                 max_mempool_submit_total: 32,
@@ -862,6 +865,7 @@ mod rpc_serve_request_tests {
                 finality_timeout_ms: 10_000,
                 finality_send_retries: 0,
                 finality_retry_backoff_ms: 0,
+                finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 finality_quorum_early_full_propagation: false,
                 max_mempool_submit_per_peer: 8,
                 max_mempool_submit_total: 32,
@@ -1064,6 +1068,36 @@ mod rpc_serve_request_tests {
 
         server.join().expect("join FastPay v3 RPC server");
         fs::remove_dir_all(root).expect("remove FastPay v3 RPC fixture");
+    }
+
+    /// The wallet proxy changes view on `rpc_finality_view_spent` and stops on
+    /// `rpc_finality_view_must_repropose`; both messages also contain words
+    /// (`certificate`, `transport`) its older text rule treats as a reason to
+    /// change view, so the node must send the codes.
+    #[test]
+    fn finality_view_errors_have_their_own_rpc_codes() {
+        let code = |message: &str| {
+            rpc_serve_error_response("view-code", "rpc_finality_submit_failed", message)
+                .error
+                .expect("error response")
+                .code
+        };
+        assert_eq!(
+            code("mempool_submit_signed_transfer_finality failed: consensus v2 view must re-propose: view 1 at height 9 must carry block a from the timeout certificate's prepare QC at view 0, not block b"),
+            "rpc_finality_view_must_repropose"
+        );
+        assert_eq!(
+            code("mempool_submit_signed_transfer_finality failed: transport block proposal failed: consensus v2 view spent: proposer `validator-1` already signed at height 9 view 0"),
+            "rpc_finality_view_spent"
+        );
+        assert_eq!(
+            code("mempool_submit_signed_transfer_finality failed: transport vote request timed out"),
+            "rpc_finality_submit_failed"
+        );
+        let other = rpc_serve_error_response("view-code", "rpc_protocol_error", "consensus v2 view spent")
+            .error
+            .expect("error response");
+        assert_eq!(other.code, "rpc_protocol_error", "only finality submit failures are reclassified");
     }
 
     #[test]
@@ -2487,6 +2521,7 @@ mod rpc_serve_request_tests {
                 finality_timeout_ms: 10_000,
                 finality_send_retries: 0,
                 finality_retry_backoff_ms: 0,
+                finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
                 finality_quorum_early_full_propagation: false,
                 max_mempool_submit_per_peer: 8,
                 max_mempool_submit_total: 32,
