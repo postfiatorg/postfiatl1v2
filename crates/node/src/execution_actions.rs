@@ -3633,12 +3633,19 @@ pub(super) fn ensure_atomic_shielded_batch_accepted(
         ));
     }
     if let Some(receipt) = receipts.iter().find(|receipt| !receipt.accepted) {
+        // Earlier successful actions acquire rollback receipts. Preserve that
+        // status and report the action that caused the rollback as well.
+        let mut reason = receipt.code.clone();
+        if reason == "atomic_batch_aborted" {
+            if let Some(cause) = receipts.iter().find(|r| !r.accepted && r.code != reason) {
+                reason.push_str(" (");
+                reason.push_str(&cause.code);
+                reason.push(')');
+            }
+        }
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!(
-                "atomic shielded batch rejected before proposal: {}",
-                receipt.code
-            ),
+            format!("atomic shielded batch rejected before proposal: {reason}"),
         ));
     }
     Ok(())
@@ -3655,7 +3662,10 @@ fn execute_shielded_batch_actions(
     egress_policies: &postfiat_types::AssetOrchardEgressPolicyRegistry,
     archive_replay: bool,
 ) -> Vec<Receipt> {
-    if orchard_pool_paused {
+    let isolated_pq_batch = batch.atomic && batch.actions.iter().all(
+        |action| matches!(action, ShieldedAction::PqPaymentV1(_)),
+    );
+    if orchard_pool_paused && !isolated_pq_batch {
         return batch
             .actions
             .iter()
@@ -3675,6 +3685,14 @@ fn execute_shielded_batch_actions(
         debug_shielded_pool_enabled_for_chain(&genesis.chain_id, &genesis_hash_hex);
     for (index, action) in batch.actions.iter().enumerate() {
         let receipt = match action {
+            ShieldedAction::PqPaymentV1(payment) if batch.atomic => {
+                pq_pool_state::apply(
+                    genesis, &genesis_hash_hex, ledger, shielded, payment, block_height,
+                )
+                .unwrap_or_else(|code| {
+                    Receipt::rejected(shielded_action_rejection_id(&batch.batch_id, index, code), code, code)
+                })
+            }
             ShieldedAction::PqPaymentV1(_) => Receipt::rejected(
                 shielded_action_rejection_id(&batch.batch_id, index, "pq_settlement_inactive"),
                 "pq_settlement_inactive",

@@ -230,6 +230,236 @@ mod pq_payment_local_chain_tests {
     }
 
     #[test]
+    fn pq_funded_pair_survives_journal_recovery_snapshot_and_genesis_replay() {
+        use postfiat_node::{
+            create_transfer_batch, export_snapshot, import_snapshot, BatchTransferOptions,
+            SnapshotExportOptions, SnapshotImportOptions,
+        };
+        use postfiat_types::pq_payment::PqPayment;
+        let fleet = fleet_on_chain(
+            CHAIN,
+            FleetOptions {
+                pricing: false,
+                max_nav_age_blocks: None,
+                extra_asset: false,
+            },
+        );
+        let peer = &fleet.data_dirs[1];
+        let store = NodeStore::new(peer);
+        let genesis = store.read_genesis().unwrap();
+        let mint = PqPayment::from_bytes(
+            include_bytes!("../../../../../tools/pft-binius-shielded-pq/l1-vectors/pft-shield.bin")
+                .to_vec(),
+        )
+        .unwrap();
+        let pay = PqPayment::from_bytes(
+            include_bytes!("../../../../../tools/pft-binius-shielded-pq/l1-vectors/pft-pay.bin")
+                .to_vec(),
+        )
+        .unwrap();
+        let payer = format!(
+            "pf{}",
+            bytes_to_hex(&mint.parts().unwrap().0.account.unwrap().id)
+        );
+        let file = fleet.root.join("pq-funding.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: peer.clone(),
+            key_file: Some(fleet.data_dirs[0].join("faucet_key.json")),
+            to: payer.clone(),
+            amount: 1000,
+            batch_file: file.clone(),
+        })
+        .unwrap();
+        fleet.round("transparent", file);
+        while fleet.height() + 1 < ATOMIC_ACTIVATION {
+            fleet.transparent_round();
+        }
+        let atomic = |payments: &[&PqPayment]| {
+            build_atomic_shielded_action_batch(
+                &genesis,
+                payments
+                    .iter()
+                    .map(|p| ShieldedAction::PqPaymentV1((*p).clone()))
+                    .collect(),
+            )
+            .unwrap()
+        };
+        let propose = |batch: &ShieldedActionBatch| {
+            proposal(
+                &fleet.data_dirs[fleet.proposer_index(fleet.height() + 1)],
+                &fleet.root,
+                batch,
+            )
+        };
+        let balance = store
+            .read_ledger()
+            .unwrap()
+            .account(&payer)
+            .unwrap()
+            .balance;
+        // An internal spend conflicts even when the first action funded its root
+        // earlier in this block. The failed triple must publish no partial write.
+        let conflict = atomic(&[&mint, &pay, &pay]);
+        let err = propose_batch_with_timings(propose(&conflict)).unwrap_err();
+        assert!(err.to_string().contains("pq_spent_serial"), "{err}");
+        assert!(store.read_shielded().unwrap().pq_pool_v1.is_none());
+        assert_eq!(
+            store
+                .read_ledger()
+                .unwrap()
+                .account(&payer)
+                .unwrap()
+                .balance,
+            balance
+        );
+        let base = fleet.root.join("pre-pq");
+        export_snapshot(SnapshotExportOptions {
+            data_dir: peer.clone(),
+            snapshot_dir: base.clone(),
+        })
+        .unwrap();
+        let crashed = fleet.root.join("interrupted");
+        let prefix = import_snapshot(SnapshotImportOptions {
+            data_dir: crashed.clone(),
+            snapshot_dir: base,
+            node_id: None,
+        })
+        .unwrap();
+        postfiat_node::rebuild_transactional_storage(postfiat_node::StorageMigrationOptions {
+            data_dir: crashed.clone(),
+            output_dir: crashed.join("pq-generation"),
+            expected_tip: prefix.block_tip_hash,
+            expected_state_root: prefix.state_root,
+            verify_only: false,
+        })
+        .unwrap();
+        let batch = atomic(&[&mint, &pay]);
+        fleet.round("shielded", propose(&batch).batch_file);
+        let after = store.read_shielded().unwrap();
+        let post = after.pq_pool_v1.as_ref().unwrap();
+        let asset = "00".repeat(48);
+        assert_eq!(post.head.pairs, 2);
+        assert_eq!(post.head.assets[&asset].reserve, 98);
+        let ledger = store.read_ledger().unwrap();
+        assert_eq!(ledger.account(&payer).unwrap().balance, balance - 100);
+        assert_eq!(ledger.account(&payer).unwrap().sequence, 1);
+        let conflict = atomic(&[&pay]);
+        let err = propose_batch_with_timings(propose(&conflict)).unwrap_err();
+        assert!(err.to_string().contains("pq_spent_serial"), "{err}");
+        let receipts = store.read_receipts().unwrap();
+        let delta = &receipts[receipts.len() - 2..];
+        assert!(delta.iter().all(|r| r.accepted && r.fee_burned == 1));
+        let block = store.read_blocks().unwrap().blocks.pop().unwrap();
+        assert!(
+            block
+                .header
+                .certificate
+                .votes
+                .iter()
+                .filter(|v| v.accept)
+                .count()
+                >= 5
+        );
+        // Recreate the durable crash prefix: pages and journal reached disk,
+        // followed by the source debit, before the shielded head or block tip.
+        postfiat_storage::pq_pool::audit(peer, &after, Some(&crashed)).unwrap();
+        let cut = NodeStore::new(&crashed);
+        let journal = serde_json::json!({
+            "schema":"postfiat-ordered-commit-delta-journal-v1","height":block.header.height,
+            "ledger":ledger,"shielded":after,"governance":null,"bridge":null,
+            "receipt_delta":delta,"ordered_batch_id":batch.batch_id,
+            "archive_entry":store.read_batch_archive().unwrap().batches.last().unwrap(),
+            "block":block,"validator_registry":null});
+        cut.write_ordered_commit_journal(&journal).unwrap();
+        cut.write_ledger(&ledger).unwrap();
+        drop(cut);
+        let snapshot = fleet.root.join("final-pq");
+        let restored = fleet.root.join("restored-pq");
+        let publisher = fleet.data_dirs[0].join("faucet_key.json");
+        let trusted = fleet.root.join("trusted-publisher.json");
+        postfiat_node::export_snapshot_publisher_public_key(
+            postfiat_node::SnapshotPublisherKeyExportOptions {
+                publisher_key_file: publisher.clone(),
+                public_key_file: trusted.clone(),
+            },
+        )
+        .unwrap();
+        postfiat_node::export_signed_snapshot(postfiat_node::SignedSnapshotExportOptions {
+            data_dir: peer.clone(),
+            snapshot_dir: snapshot.clone(),
+            publisher_key_file: publisher,
+        })
+        .unwrap();
+        postfiat_node::import_signed_snapshot(postfiat_node::SignedSnapshotImportOptions {
+            data_dir: restored.clone(),
+            snapshot_dir: snapshot.clone(),
+            trusted_publisher_key_file: trusted,
+            node_id: None,
+        })
+        .unwrap();
+        for dir in [peer, &crashed, &restored] {
+            let check = verify_blocks(NodeOptions {
+                data_dir: dir.clone(),
+            })
+            .unwrap();
+            assert_eq!(check.state_root, block.header.state_root);
+            assert_eq!(check.tip_hash, block.header.block_hash);
+            let disk = NodeStore::new(dir);
+            assert_eq!(disk.read_receipts().unwrap(), receipts);
+            assert_eq!(disk.read_ledger().unwrap(), ledger);
+            let p = disk.read_shielded().unwrap().pq_pool_v1.unwrap();
+            assert_eq!(p.head, post.head);
+            for (i, wire) in [&mint, &pay].iter().enumerate() {
+                let inner = wire.parts().unwrap().2;
+                for slot in 0..2 {
+                    let pos = (2 * i + slot) as u32;
+                    let id = p.indexes.page_for_output(&asset, 0, pos).unwrap();
+                    let page = postfiat_storage::pq_pool::read_page(dir, id).unwrap();
+                    assert_eq!(page.epoch, 0);
+                    assert_eq!(page.first_index + (slot as u32), pos);
+                    assert_eq!(page.height, block.header.height);
+                    let start = 304 + 1670 * slot;
+                    assert_eq!(
+                        page.outputs[slot].envelope().unwrap(),
+                        inner[start..start + 1670]
+                    );
+                    assert_eq!(
+                        page.outputs[slot].commitment,
+                        bytes_to_hex(&inner[208 + 48 * slot..256 + 48 * slot])
+                    );
+                    assert!(p
+                        .indexes
+                        .is_spent(&bytes_to_hex(&inner[112 + 48 * slot..160 + 48 * slot])));
+                }
+            }
+        }
+        let db = NodeStore::new(&crashed).transactional_store().unwrap();
+        let mut redb_state = db.shielded().unwrap().unwrap();
+        postfiat_storage::pq_pool::hydrate(&crashed, &mut redb_state).unwrap();
+        assert_eq!(redb_state, after);
+        assert_eq!(
+            db.meta().unwrap().finalized_block_hash,
+            block.header.block_hash
+        );
+        let source = NodeStore::new(&restored);
+        let mut missing = after.clone();
+        missing.pq_pool_v1 = None;
+        source.write_shielded(&missing).unwrap();
+        assert!(verify_blocks(NodeOptions { data_dir: restored }).is_err());
+        let id = &post.head.last_page;
+        fs::remove_file(snapshot.join("pq_pool_pages_v1").join(&id[..2]).join(id)).unwrap();
+        let dest = fleet.root.join("rejected");
+        assert!(import_snapshot(SnapshotImportOptions {
+            data_dir: dest.clone(),
+            snapshot_dir: snapshot,
+            node_id: None
+        })
+        .is_err());
+        assert!(!dest.exists());
+        println!("Height {} certified two ordered payments, four serials, four outputs, reserve 98; journal restart, snapshot and genesis replay agree",block.header.height);
+    }
+
+    #[test]
     fn six_validators_finalize_and_replay_the_published_hop() {
         let fleet = fleet_on_chain(
             CHAIN,
