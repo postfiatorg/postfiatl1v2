@@ -1025,3 +1025,41 @@ fn account_reserve_violation(address: &str, balance: u64) -> Option<String> {
         None
     }
 }
+
+/// Calculate the replacement balance of an existing holder line. Keep the
+/// issuer, line limit, reservations and authorization untouched on either edge.
+pub fn prepare_pq_line_balance(
+    ledger: &LedgerState,
+    asset: &AssetDefinition,
+    holder: &str,
+    amount: u64,
+    credit: bool,
+) -> Result<(usize, u64), &'static str> {
+    if holder == asset.issuer
+        || ledger
+            .account(holder)
+            .is_none_or(|account| account.balance < required_account_reserve(holder))
+    {
+        return Err("pq_ineligible_holder");
+    }
+    let index = trustline_index(ledger, holder, &asset.asset_id).ok_or("pq_missing_trustline")?;
+    let line = &ledger.trustlines[index];
+    if line.issuer != asset.issuer {
+        return Err("pq_line_issuer");
+    }
+    ensure_line_can_move(asset, line).map_err(|(code, _)| code)?;
+    let balance = if credit {
+        let (balance, required) =
+            prepare_issued_asset_credit(ledger, asset, holder, index, amount, "PQ exit")
+                .map_err(|(code, _)| code)?;
+        if required > line.limit {
+            return Err("pq_trustline_limit");
+        }
+        balance
+    } else {
+        line.balance
+            .checked_sub(amount)
+            .ok_or("pq_insufficient_issued_balance")?
+    };
+    Ok((index, balance))
+}

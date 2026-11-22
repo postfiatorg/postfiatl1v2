@@ -2810,7 +2810,7 @@ pub fn native_pft_supply_breakdown(
         )
     };
     let mut total = pq_pool_v1.as_ref()
-        .and_then(|pool| pool.head.assets.get(&"00".repeat(48)))
+        .and_then(|pool| pool.head.assets.get(postfiat_types::pq_payment::NATIVE_ASSET_HEX))
         .map_or(0, |asset| u128::from(asset.reserve));
     let mut account_ids = std::collections::BTreeSet::new();
     for account in accounts {
@@ -3150,7 +3150,7 @@ pub(super) fn replay_archived_payload(
                 compatibility,
                 state.governance.orchard_pool_paused,
                 state.governance.shielded_atomic_batch_activation_height(),
-                &state.governance.asset_orchard_egress_policy_registry(),
+                &state.governance,
                 true,
             );
             pq_payment_fixture::ensure_valid(&batch, &receipts)?;

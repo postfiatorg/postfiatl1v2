@@ -3545,7 +3545,7 @@ pub(super) fn execute_shielded_batch(
     asset_execution_compatibility: AssetExecutionCompatibility,
     orchard_pool_paused: bool,
     shielded_atomic_batch_activation_height: Option<u64>,
-    egress_policies: &postfiat_types::AssetOrchardEgressPolicyRegistry,
+    governance: &GovernanceState,
     archive_replay: bool,
 ) -> Vec<Receipt> {
     if !batch.atomic {
@@ -3557,7 +3557,7 @@ pub(super) fn execute_shielded_batch(
             block_height,
             asset_execution_compatibility,
             orchard_pool_paused,
-            egress_policies,
+            governance,
             archive_replay,
         );
     }
@@ -3593,7 +3593,7 @@ pub(super) fn execute_shielded_batch(
         block_height,
         asset_execution_compatibility,
         orchard_pool_paused,
-        egress_policies,
+        governance,
         archive_replay,
     );
     if receipts.iter().all(|receipt| receipt.accepted) {
@@ -3659,7 +3659,7 @@ fn execute_shielded_batch_actions(
     block_height: u64,
     asset_execution_compatibility: AssetExecutionCompatibility,
     orchard_pool_paused: bool,
-    egress_policies: &postfiat_types::AssetOrchardEgressPolicyRegistry,
+    governance: &GovernanceState,
     archive_replay: bool,
 ) -> Vec<Receipt> {
     let isolated_pq_batch = batch.atomic && batch.actions.iter().all(
@@ -3683,11 +3683,13 @@ fn execute_shielded_batch_actions(
     let genesis_hash_hex = genesis_hash(genesis);
     let debug_pool_enabled =
         debug_shielded_pool_enabled_for_chain(&genesis.chain_id, &genesis_hash_hex);
+    let egress_policies = governance.asset_orchard_egress_policy_registry();
     for (index, action) in batch.actions.iter().enumerate() {
         let receipt = match action {
             ShieldedAction::PqPaymentV1(payment) if batch.atomic => {
-                pq_pool_state::apply(
+                pq_payment_actions::apply(
                     genesis, &genesis_hash_hex, ledger, shielded, payment, block_height,
+                    asset_execution_compatibility, governance, &egress_policies,
                 )
                 .unwrap_or_else(|code| {
                     Receipt::rejected(shielded_action_rejection_id(&batch.batch_id, index, code), code, code)
@@ -3887,7 +3889,7 @@ fn execute_shielded_batch_actions(
                     block_height,
                     index,
                     action,
-                    egress_policies,
+                    &egress_policies,
                     archive_replay,
                 )
             }

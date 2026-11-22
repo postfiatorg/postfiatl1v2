@@ -36,6 +36,7 @@ mod tests {
     mod recipient_format_activation;
     mod snapshot_deployment;
     mod pq_pool_state;
+    mod pq_payment_accounting;
     mod transfer_fee_quote_pending_recipient;
     mod signer_two_user_units;
     mod genesis_external_lane_tests;

@@ -14,6 +14,10 @@ pub const PUBLIC_KEY_BYTES: usize = 1952;
 pub const SIGNATURE_BYTES: usize = 3309;
 const PREFIX: usize = 4 + 1 + 1 + 1 + 48 + 8 + 8 + 1;
 const ACCOUNT_FIELDS: usize = 20 + 8 + PUBLIC_KEY_BYTES;
+pub const NATIVE_ASSET_HEX: &str = concat!(
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+);
 pub const POOL_ID: &str = "PFT-PQ-SHIELDED-POOL-V1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -373,3 +377,12 @@ impl PartialEq for PqPool {
     }
 }
 impl Eq for PqPool {}
+
+impl PqPool {
+    /// Issued custody excludes the all-zero native selector.
+    pub fn issued_assets(&self) -> impl Iterator<Item = (&str, &PqAsset)> {
+        self.head.assets.iter()
+            .filter(|(id, _)| id.as_str() != NATIVE_ASSET_HEX)
+            .map(|(id, state)| (id.as_str(), state))
+    }
+}

@@ -34,7 +34,7 @@ use postfiat_types::{
 
 use super::*;
 
-fn amendment(kind: &str, value: u32, activation_height: u64) -> GovernanceAmendment {
+pub(super) fn amendment(kind: &str, value: u32, activation_height: u64) -> GovernanceAmendment {
     GovernanceAmendment {
         amendment_id: format!("governed-vault-route:{kind}:{value}:{activation_height}"),
         chain_id: "postfiat-local".to_string(),
@@ -86,7 +86,7 @@ fn sign_single_validator_amendment(
     signed_file
 }
 
-fn route(epoch: u32, activation_height: u64, vault_hash_byte: &str) -> VaultBridgeRouteProfileV1 {
+pub(super) fn route(epoch: u32, activation_height: u64, vault_hash_byte: &str) -> VaultBridgeRouteProfileV1 {
     VaultBridgeRouteProfileV1 {
         solana: None,
         schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
@@ -208,7 +208,7 @@ fn deposit_transaction(
     }
 }
 
-fn route_ledger(route: &VaultBridgeRouteProfileV1) -> LedgerState {
+pub(super) fn route_ledger(route: &VaultBridgeRouteProfileV1) -> LedgerState {
     let route_hash = route.profile_hash().expect("route hash");
     let receipt_proven = matches!(
         route.verifier_kind.as_str(),
@@ -267,7 +267,7 @@ fn route_ledger(route: &VaultBridgeRouteProfileV1) -> LedgerState {
     ledger
 }
 
-fn activate_route(
+pub(super) fn activate_route(
     governance: &mut GovernanceState,
     ledger: &mut LedgerState,
     route: &VaultBridgeRouteProfileV1,

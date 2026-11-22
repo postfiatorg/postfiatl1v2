@@ -667,9 +667,11 @@ fn account_tx_rows_for_shielded_batch(
     let batch: ShieldedBatchActionsView = parse_archived_payload(block, archive_entry)?;
     let mut rows = Vec::new();
     for (action_index, action) in batch.actions.iter().enumerate() {
-        let Some(credit) = shielded_withdrawal_credit(block, action_index, action)? else {
+        let pq = action.get("kind").and_then(|k| k.as_str()) == Some("pq_payment_v1");
+        let withdrawal = shielded_withdrawal_credit(block, action_index, action)?;
+        if withdrawal.is_none() && !pq {
             continue;
-        };
+        }
         let tx_id = block.receipt_ids.get(action_index).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -680,38 +682,111 @@ fn account_tx_rows_for_shielded_batch(
             )
         })?;
         let receipt = receipt_by_tx.get(tx_id.as_str()).copied();
-        rows.push(AccountTxRow {
-            tx_id: tx_id.clone(),
-            block_height: block.header.height,
-            batch_kind: block.header.batch_kind.clone(),
-            batch_id: block.header.batch_id.clone(),
-            transaction_index: action_index as u64,
-            transaction_kind: credit.transaction_kind.to_string(),
-            from_address: credit.pool_id,
-            to_address: credit.to,
-            amount: credit.amount,
-            fee: credit.fee,
-            sequence: 0,
-            memo_hash: None,
-            memo_count: None,
-            memo_bytes: None,
-            memos: None,
-            asset_id: credit.asset_id,
-            issuer: None,
-            trustline_authorized: None,
-            trustline_frozen: None,
-            nft_id: None,
-            nft_issuer_transfer_fee: None,
-            nft_collection_flags: None,
-            escrow_id: None,
-            offer_id: None,
-            tx_role: Some(ACCOUNT_TX_ROLE_SHIELDED_WITHDRAWAL.to_string()),
-            counterparty_offer_id: None,
-            fill_index: None,
-            condition_hash: None,
-            accepted: receipt.map(|receipt| receipt.accepted),
-            receipt_code: receipt.map(|receipt| receipt.code.clone()),
-        });
+        let row =
+            |kind: &str, from, to, amount, fee, sequence, asset_id, role: &str| AccountTxRow {
+                tx_id: tx_id.clone(),
+                block_height: block.header.height,
+                batch_kind: block.header.batch_kind.clone(),
+                batch_id: block.header.batch_id.clone(),
+                transaction_index: action_index as u64,
+                transaction_kind: kind.to_owned(),
+                from_address: from,
+                to_address: to,
+                amount,
+                fee,
+                sequence,
+                memo_hash: None,
+                memo_count: None,
+                memo_bytes: None,
+                memos: None,
+                asset_id,
+                issuer: None,
+                trustline_authorized: None,
+                trustline_frozen: None,
+                nft_id: None,
+                nft_issuer_transfer_fee: None,
+                nft_collection_flags: None,
+                escrow_id: None,
+                offer_id: None,
+                tx_role: Some(role.to_owned()),
+                counterparty_offer_id: None,
+                fill_index: None,
+                condition_hash: None,
+                accepted: receipt.map(|receipt| receipt.accepted),
+                receipt_code: receipt.map(|receipt| receipt.code.clone()),
+            };
+        if let Some(w) = withdrawal {
+            rows.push(row(
+                w.transaction_kind,
+                w.pool_id,
+                w.to,
+                w.amount,
+                w.fee,
+                0,
+                w.asset_id,
+                ACCOUNT_TX_ROLE_SHIELDED_WITHDRAWAL,
+            ));
+            continue;
+        }
+        // Only an accepted action has public effects. In particular, M2
+        // archived verified, inactive payments with a rejection receipt.
+        if !receipt.is_some_and(|r| r.accepted) {
+            continue;
+        }
+        use postfiat_types::pq_payment::{Mode, POOL_ID};
+        let ShieldedAction::PqPaymentV1(payment) =
+            ShieldedAction::deserialize(action).map_err(invalid_data)?
+        else {
+            unreachable!("checked PQ action kind")
+        };
+        let (terms, _, inner) = payment
+            .parts()
+            .map_err(|code| io::Error::new(io::ErrorKind::InvalidData, code))?;
+        let amount =
+            |offset: usize| u64::from_le_bytes(inner[offset..offset + 8].try_into().unwrap());
+        let issue = (terms.asset != [0; 48]).then(|| bytes_to_hex(&terms.asset));
+        if let Some(auth) = terms.account {
+            let source = format!("pf{}", bytes_to_hex(&auth.id));
+            if terms.mode == Mode::Shield {
+                rows.push(row(
+                    "pq_payment_v1",
+                    source,
+                    POOL_ID.into(),
+                    amount(56),
+                    if issue.is_some() {
+                        terms.public_fee
+                    } else {
+                        amount(104)
+                    },
+                    auth.sequence,
+                    issue.clone(),
+                    "shielded_deposit",
+                ));
+            } else {
+                rows.push(row(
+                    "pq_payment_v1",
+                    source,
+                    POOL_ID.into(),
+                    0,
+                    terms.public_fee,
+                    auth.sequence,
+                    None,
+                    "shielded_fee",
+                ));
+            }
+        }
+        if terms.mode == Mode::Exit {
+            rows.push(row(
+                "pq_payment_v1",
+                POOL_ID.into(),
+                format!("pf{}", bytes_to_hex(&inner[84..104])),
+                amount(64),
+                amount(104),
+                0,
+                issue,
+                ACCOUNT_TX_ROLE_SHIELDED_WITHDRAWAL,
+            ));
+        }
     }
     Ok(rows)
 }

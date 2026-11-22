@@ -1096,7 +1096,7 @@
             AssetExecutionCompatibility::strict(),
             false,
             None,
-            &postfiat_types::AssetOrchardEgressPolicyRegistry::default(),
+            &GovernanceState::new(genesis.validator_count),
             false,
         );
         assert_eq!(
@@ -1117,7 +1117,7 @@
             AssetExecutionCompatibility::strict(),
             false,
             None,
-            &postfiat_types::AssetOrchardEgressPolicyRegistry::default(),
+            &GovernanceState::new(genesis.validator_count),
             true,
         );
         assert!(replay_receipts[0].accepted, "{replay_receipts:?}");

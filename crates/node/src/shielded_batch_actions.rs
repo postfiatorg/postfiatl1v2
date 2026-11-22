@@ -348,7 +348,7 @@ fn simulate_shielded_batch_against_state(
         asset_execution_compatibility_for_genesis_and_governance(genesis, governance),
         governance.orchard_pool_paused,
         governance.shielded_atomic_batch_activation_height(),
-        &governance.asset_orchard_egress_policy_registry(),
+        &governance,
         false,
     );
     let all_accepted = receipts.iter().all(|receipt| receipt.accepted);
@@ -427,7 +427,7 @@ pub fn conformance_shielded_batch(
             asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance),
             governance.orchard_pool_paused,
             governance.shielded_atomic_batch_activation_height(),
-            &governance.asset_orchard_egress_policy_registry(),
+            &governance,
             false,
         );
         if !receipts.iter().all(|receipt| receipt.accepted) {
@@ -619,7 +619,7 @@ pub fn conformance_shielded_batch(
         asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance),
         governance.orchard_pool_paused,
         governance.shielded_atomic_batch_activation_height(),
-        &governance.asset_orchard_egress_policy_registry(),
+        &governance,
         false,
     );
     if !ingress_receipts.iter().all(|receipt| receipt.accepted) {
@@ -1418,7 +1418,7 @@ pub fn apply_shielded_batch_with_replay(
         asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance),
         governance.orchard_pool_paused,
         governance.shielded_atomic_batch_activation_height(),
-        &governance.asset_orchard_egress_policy_registry(),
+        &governance,
         historical_replay.is_some(),
     );
     pq_payment_fixture::ensure_valid(&batch, &receipts)?;

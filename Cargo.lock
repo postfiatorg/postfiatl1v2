@@ -3323,6 +3323,7 @@ dependencies = [
  "flate2",
  "libc",
  "orchard",
+ "pft-binius-shielded",
  "postfiat-bridge",
  "postfiat-consensus-cobalt",
  "postfiat-crypto-provider",

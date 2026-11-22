@@ -656,11 +656,16 @@ fn validate_account_tx_row(
         .unwrap_or_default();
     match batch_kind {
         "transparent" => {
-            if is_account_tx_shielded_withdrawal_kind(row_kind) {
+            if is_account_tx_shielded_withdrawal_kind(row_kind) || row_kind == "pq_payment_v1" {
                 return Err(invalid_result(
                     "transaction_kind",
                     "unexpected shielded withdrawal on a transparent account_tx row",
                 ));
+            }
+        }
+        "shielded" if row_kind == "pq_payment_v1" => {
+            if !matches!(row.get("tx_role").and_then(Value::as_str), Some("shielded_withdrawal" | "shielded_deposit" | "shielded_fee")) {
+                return Err(invalid_result("tx_role", "expected a public PQ payment role"));
             }
         }
         "shielded" => {
@@ -698,6 +703,7 @@ fn validate_account_tx_row(
             && !is_supported_escrow_transaction_kind(transaction_kind)
             && !is_supported_nft_transaction_kind(transaction_kind)
             && !is_supported_offer_transaction_kind(transaction_kind)
+            && transaction_kind != "pq_payment_v1"
             && !is_account_tx_shielded_withdrawal_kind(transaction_kind)
         {
             return Err(invalid_result(
@@ -740,6 +746,7 @@ fn validate_account_tx_row(
             && !is_supported_offer_transaction_kind(transaction_kind)
             && transaction_kind != "asset_orchard_egress_v1"
             && transaction_kind != "asset_orchard_private_egress_v1"
+            && transaction_kind != "pq_payment_v1"
         {
             return Err(invalid_result(
                 "asset_id",
@@ -881,6 +888,8 @@ fn validate_account_tx_row(
                     "expected shielded_withdrawal tx_role on a shielded withdrawal row",
                 ));
             }
+        } else if transaction_kind == "pq_payment_v1" {
+            // The shielded batch arm above checked the role.
         } else if !is_supported_offer_transaction_kind(transaction_kind) {
             return Err(invalid_result(
                 "tx_role",

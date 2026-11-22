@@ -1456,7 +1456,7 @@ pub fn metrics(options: NodeOptions) -> io::Result<NodeMetrics> {
             transfer_fee_per_quantum: TRANSFER_FEE_PER_QUANTUM,
             state_root: status_report.state_root,
         },
-        assets: asset_metrics(&ledger)?,
+        assets: asset_metrics(&ledger, &shielded)?,
         mempool: MempoolMetrics {
             pending: mempool.len() as u64,
         },
@@ -3963,7 +3963,7 @@ pub(super) fn metric_increment(total: &mut u64, label: &str) -> io::Result<()> {
     metric_add(total, 1, label)
 }
 
-pub(super) fn asset_metrics(ledger: &LedgerState) -> io::Result<AssetMetrics> {
+pub(super) fn asset_metrics(ledger: &LedgerState, shielded: &ShieldedState) -> io::Result<AssetMetrics> {
     let mut metrics = AssetMetrics {
         asset_count: ledger.asset_definitions.len() as u64,
         ..AssetMetrics::default()
@@ -4060,6 +4060,11 @@ pub(super) fn asset_metrics(ledger: &LedgerState) -> io::Result<AssetMetrics> {
         )?;
     }
 
+    if let Some(pool) = &shielded.pq_pool_v1 {
+        for (_, state) in pool.issued_assets() {
+            metric_add(&mut metrics.total_outstanding_supply, state.reserve, "PQ issued custody")?;
+        }
+    }
     Ok(metrics)
 }
 
