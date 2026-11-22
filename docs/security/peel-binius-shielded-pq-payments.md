@@ -72,7 +72,8 @@ Core architectural, cryptographic, and empirical contributions:
      and 2^-170.98 (ext) / 2^-170.97 (SE) / 2^-150.60 (ZK) at the reference
      sequential-query benchmark Q = 2^64 (P = 2^32, L = 2^16). End-to-end
      Auth and Privacy bounds additionally include explicit unquantified
-     standing assumptions (SHAKE256 JointPRF/Hide, SHA-384 KDF, ML-KEM IK-CCA).
+     standing assumptions (SHAKE256 JointPRF, dummy PRG and Hide, SHA-384 KDF,
+     ML-KEM IK-CCA).
   4. Algebraic & Systems Optimizations:
      - Exact 3D-Karatsuba Tower-Reduced Ring-Switch Verifier (13,122 vs. 143,360
        E::muls, 11x fewer), mechanically differential-tested against the naive
@@ -208,11 +209,11 @@ Multi-Proof QROM SE      | NONE standalone published | Conjecture-level bridge
                          | GMP22 (EC22), MX23 (PKC23)| [NonStd] FIPS-203 IK-CCA &
                          |                           | SHA-384 key-in-middle KDF
 -------------------------+---------------------------+--------------------------
-In-Circuit Commitments   | Standard-model FIPS-202   | Adaptive multi-user games
-& Depth-24 Merkle Tree   | SHAKE256 (c=512b sponge;  | Adv_JointPRF (allowing
+In-Circuit Commitments   | Standard-model FIPS-202   | Adv_JointPRF(q_chall):
+& Depth-24 Merkle Tree   | SHAKE256 (c=512b sponge;  | q_hon in Thm 4, 2 in Thm 5;
                          | indiff. BDPV08 / QROM     | O_SN on other notes of
-                         | Czajkowski+); classical   | same S), Adv_Hide, multi-
-                         | CDMP05 prefix-free MD     | target Adv_MT-TPR (S4)
+                         | Czajkowski+); classical   | same S. Dummy Adv_PRG,
+                         | CDMP05 prefix-free MD     | Adv_Hide, Adv_MT-TPR (§4).
 -------------------------+---------------------------+--------------------------
 
 Category D — Explicit Non-Claims & Deployment Boundaries:
@@ -568,8 +569,8 @@ witness w in R_pay(x)}. Then:
       (where rho = D / n = 565 / 2^21 = 0.000269413).
   (b) There exists an explicit 34-round pre-challenge RBR-KS state function
       State_KS(x, tr_k) in {0, 1} aligned 1-to-1 with each atomic challenge
-      round k in {2..34} (defined strictly via pure algebraic discrepancy
-      invariants in Appendix A.2, with zero sticky zero-challenge disjuncts)
+      round k in {2..34} (Appendix A.2 gives the algebraic discrepancy
+      predicates and the compiled Round-34 PoW gate)
       and a deterministic polynomial-time extractor Ext_IOP running in
       O(min(n, |supp(M)|) + 140 * 565^2) time such that whenever
       State_KS(x, tr_34) == 0 and V(x, tr_34) == 1, Ext_IOP(x, M, tr_34)
@@ -590,9 +591,9 @@ witness w in R_pay(x)}. Then:
               |  * A_both subset D_u pointwise union  | <= 86*164*2^21/2^384  = 2^-349.22
               |  * Round 33a total                    | <= 2^-305.79
   Round 33b   | C33O: lambda_o inner prod (L_max/|E|) | <= 86 / 2^384         = 2^-377.57
-  Round 34    | Pure IOP queries (t=52, no PoW)       | <= (0.023212)^52      = 2^-282.31
+  Round 34    | Pure IOP queries (t=52, no PoW)       | <= (sqrt(2*rho))^52   ~ 2^-282.31
   ------------+---------------------------------------+------------------------------
-  BCS+PoW20   | Atomic H_C4 marking prob (Case 4)     | p_34 = 2^-20*2^-282.31 = 2^-302.31
+  BCS+PoW20   | Atomic H_C4 marking (Lemma A.3.3)     | p_34 = 2^-20*(sqrt(2*rho))^52 ~ 2^-302.31
 
   (c) Statistical HVZK (Appendix B.1): There exists an unconditional PPT
       simulator Sim_IOP(x) taking ONLY public statement x (operating
@@ -675,8 +676,9 @@ with kappa_v <= 963 verifier queries per proof.
       eps_Ext(Q, L) <= [ (2/3)*sqrt(30) * Q_v^{3/2} * 2^-192
                          + Q_v * sqrt(10 * max(eps_rbr(33a) + 2*Q_v/2^512, p_34)) ]^2
                        + 2 * L * kappa_v / 2^384,
-    where (2/3)*sqrt(30) < 3.652, eps_rbr(33a) = 2^-305.79, p_34 = 2^-302.31,
-    and 2*Q_v/2^512 <= 2^-415 for all Q <= 2^96 (hence max(...) == p_34).
+    where (2/3)*sqrt(30) < 3.652, eps_rbr(33a) ~ 2^-305.79 and p_34 ~ 2^-302.31.
+    The tabulated budgets have Q_v < 2^97, so 2*Q_v/2^512 < 2^-414 and the
+    maximum is p_34.
 
 Theorem 2B (Adaptive Multi-Proof QROM Simulation-Extractability — Conditional
 Conjecture-Level Bridge in Appendix A.4; No Standalone Published Anchor).
@@ -714,9 +716,9 @@ PART II — IDEAL-SPONGE SIZING REFS:    |                 |           |        
 SHAKE256 384b BHT Coll (32 Q^3/2^384)  | Ideal-fn sizing | 2^-91.00  | 2^-139.00 | 2^-187.00
 SHAKE256 c=512b Q-Cap  (32 Q^3/2^512)  | Ideal-sponge    | 2^-219.00 | 2^-267.00 | 2^-315.00
 --------------------------------------------------------------------------------
-Recomputation & regime-crossover check: In Thm 2A, b_term = Q*sqrt(10*2^-302.31)
-dominates for Q < Q_cross ~ 2^81.28 (giving 2^-170.98 at Q = 2^64), whereas the
-MT_1 collision term a_term = 3.652*Q^{3/2}*2^-192 dominates for Q > Q_cross
+Recomputation & regime-crossover check: In Table 2, b_term = Q_v*sqrt(10*p_34)
+dominates for Q_v < 2^81.28 (giving 2^-170.98 at Q = 2^64), whereas the MT_1
+collision term a_term = 3.652*Q_v^{3/2}*2^-192 dominates above this crossover
 (giving 2^-92.25 at Q = 2^96, matching 384-bit BHT 2^-91.00). The conditional
 bound reaches triviality (eps_Ext = 1) at Q_triv = 2^126.75 (triviality
 threshold, not a security level).
@@ -826,9 +828,11 @@ Game Exp_Auth(A): Challenger samples honest shielded secret S* <-$ {0,1}^{384}
 (A* = H_A(S*)) and honest transparent L1 signing keypair (pk_L1*, sk_L1*),
 allows A to create notes under A* (supplying their explicit openings (v, R)
 when later instructing O_Hon to spend them, or via valid ML-KEM envelopes under
-ek* if registered), call O_Hon up to q_hon times to spend honest
-notes owned by S* (producing {(tx_i, x_i, pi_i)}_{i=1}^{q_hon}), and call
-O_MintSign on chosen honest deposits under pk_L1*. A wins in ANY of three modes:
+ek* if registered), call O_Hon up to P_hon times to spend honest notes owned
+by S*, and call O_MintSign on chosen honest deposits under pk_L1*. In Theorem 4,
+P_hon counts transactions and q_hon bounds their total input nullifiers
+(q_hon = 2*P_hon for PFSH02). Let d_hon bound the number of dummy slots among
+them (zero for all-real inputs). A wins in ANY of three modes:
   - Mode 1 (Unauthorized Shielded Spend): A outputs an accepted tx* spending an
     unspent coin Coin* owned by A* (not spent by any O_Hon call);
   - Mode 2 (Header / Context Malleability): A outputs an accepted tx* with
@@ -842,8 +846,9 @@ O_MintSign on chosen honest deposits under pk_L1*. A wins in ANY of three modes:
     with (v_mint > 0) whose header(tx*) was never signed by O_MintSign.
 
 Theorem 4 (Corrected Mode-2 Split & Multi-Target Target-Preimage Term):
-  Adv_Auth(A) <= Adv_QROM-ZK(q_hon, Q) + Adv_JointPRF^{SHAKE256}(A_prf)
-                 + eps_SE(q_hon, 1, Q) + Adv_CR^{SHA-384}(tx_ctx)
+  Adv_Auth(A) <= Adv_QROM-ZK(P_hon, Q) + Adv_JointPRF^{SHAKE256}(q_hon)
+                 + d_hon * Adv_PRG^{SHAKE256}
+                 + eps_SE(P_hon, 1, Q) + Adv_CR^{SHA-384}(tx_ctx)
                  + Adv_MT-TPR^{H_SN,384}(q_hon; A_tpr) + Adv_OW^{H_A,384}(A_ow)
                  + Adv_CR^{H_Coin,384}(A_cr) + Adv_CR^{H_Node,384}(A_nd)
                  + Adv_ZeroPreimage^{H_Coin,384}(A_z)
@@ -861,38 +866,50 @@ Proof:
     is strictly fresh under Theorem 2B). In Mode 1, tx* spends Coin* not spent
     by O_Hon, so either (x*, pi*) is fresh or shares (x_i, pi_i) (which would
     share sn_i -> H_SN/H_A/H_Coin collision).
-    * Hop 1 (H_0 -> H_1, QROM ZK): Replace all q_hon O_Hon proofs with
-      Sim_BCS(x_i) via Theorem 1B (loss <= Adv_QROM-ZK(q_hon, Q)).
-    * Hop 2 (H_1 -> H_2, Adaptive JointPRF): Replace all q_hon O_Hon nullifiers
-      H_SN(S*, Coin_j) with independent uniform 48-byte targets U_1..U_{q_hon}
-      via the single-user adaptive JointPRF^{SHAKE256} game (publishing real
-      A* = H_A(0x00 || S*) and answering O_SN(c) vs. random; loss <=
-      Adv_JointPRF^{SHAKE256}). Crucially, in Game H_2, O_Hon never uses S* at
-      all—only the public challenge A* = H_A(S*) is needed to run H_2.
+    * Hop 1 (H_0 -> H_1, QROM ZK): Replace up to P_hon O_Hon proofs with
+      Sim_BCS(x_i) via Theorem 1B (loss <= Adv_QROM-ZK(P_hon, Q)).
+    * Hop 2 (H_1 -> H_2): For each distinct real input coin c spent under S*,
+      use O_ChallSN(c) in the single-user game of Section 4.3. Its public A*
+      suffices to compute c from its opening. The one game replaces all such
+      nullifiers with independent uniform 48-byte targets, at loss at most
+      Adv_JointPRF^{SHAKE256}(q_hon) with q_chall = q_hon. Reuse the stored
+      answer for any repeated coin. For each fresh dummy slot, substitute an
+      independent uniform target at loss <= Adv_PRG^{SHAKE256} per slot by
+      Section 4.3. This covers either nullifier that Mode 2 may match. Simulate
+      the ledger checks on these targets. H_2 needs only A* to simulate O_Hon.
     * Extraction in H_2: Apply Theorem 2B (L = 1 fresh pair (x*, pi*)) to
-      extract w* in R_pay(x*) (failure <= eps_SE(q_hon, 1, Q)):
+      extract w* in R_pay(x*) (failure <= eps_SE(P_hon, 1, Q)):
         - If Mode 1 occurs in H_2: extracted real input opening of Coin* either
           collides in H_Node, H_Coin, or zero-preimage, or yields S' with
           H_A(S') == A*. Because H_2 runs without S*, this gives a standalone
           reduction to Adv_OW^{H_A,384} on challenge A*.
         - If Mode 2 occurs in H_2: extracted input (S', Coin') satisfies
-          H_SN(0x02 || S' || Coin') in {U_1, ..., U_{q_hon}} for the q_hon
-          independent uniform 48-byte targets sampled in H_2, directly breaking
+          H_SN(S', Coin') in {U_1, ..., U_{q_hon}}. H_2 can allocate these
+          independent uniform targets as needed, directly breaking
           multi-target Target Preimage Resistance Adv_MT-TPR^{H_SN,384}(q_hon)
           (bounded generically in the ideal-function model by O(q_hon*Q^2/2^384),
-          i.e., ~2^-224 at Q=2^64, q_hon=2^32 and ~2^-192 at Q=2^80, q_hon=2^32).
-  (If honest users never reuse A*, O_Hon never touches S* and plain Theorem 2A
-  suffices with zero simulation and zero JointPRF assumption.) []
+          i.e., ~2^-223 at Q=2^64 and ~2^-191 at Q=2^80 for 2^32 honest
+          transactions with up to 2^33 targets). []
 
 4.3 Theorem 5 (Global-Pool & ZK-Mint Privacy With Active O_Scan & O_Corrupt)
 --------------------------------------------------------------------------------
 Single-User Standard-Model Primitive Interfaces (Avoiding Corruption Gaps):
   - Single-User Adaptive JointPRF^{SHAKE256}: Challenger samples one secret
-    S* <-$ {0,1}^{384}, publishes A* = H_A(0x00 || S*), and grants A adaptive
-    access to (i) O_SN(c) returning H_SN(0x02 || S* || c) for non-challenge
-    coins c, and (ii) O_ChallSN(c*) (at most twice on distinct unqueried c*)
-    returning H_SN(0x02 || S* || c*) if bit=0 or uniform U_{48} if bit=1.
-    Advantage <= Adv_JointPRF^{SHAKE256}.
+    S* <-$ {0,1}^{384}, publishes A* = H_A(S*), and grants adaptive access to
+    (i) O_SN(c), returning H_SN(S*, c) on non-challenge coins, and (ii)
+    O_ChallSN(c*), on at most q_chall distinct previously unqueried coins.
+    O_ChallSN returns H_SN(S*, c*) for bit 0 or an independent uniform 48-byte
+    string for bit 1. Challenge coins are excluded from O_SN before and after
+    their challenge. Write Adv_JointPRF^{SHAKE256}(q_chall) for the maximum
+    distinguishing advantage at this budget. Theorem 4 uses q_chall = q_hon,
+    and Theorem 5 uses q_chall = 2.
+  - Fresh dummy nullifier pseudorandomness: Sample independent uniform
+    S_dummy (48 B) and R_dummy (78 B). Set c_dummy = H_Coin(H_A(S_dummy), 0,
+    R_dummy). Adv_PRG^{SHAKE256} bounds the distinguishing advantage between
+    H_SN(S_dummy, c_dummy) and an independent uniform 48-byte string, with
+    only the string revealed. The hashes include the domain tags of Section
+    1.1(b). This is a single-sample standard-model assumption about the actual
+    dummy construction, including the dependence of c_dummy on S_dummy.
   - Single-User Adaptive Hide^{SHAKE256}: Given chosen (A_0, v_0, A_1, v_1),
     distinguishing H_Coin(0x01 || A_c || v_c || R_c) (R_c <-$ {0,1}^{624}) from
     uniform U_{48} has advantage <= Adv_Hide^{SHAKE256}.
@@ -938,13 +955,16 @@ initializes U_users honest wallets via O_Gen, and grants A adaptive access to:
     <= 2*(|Coins| + |SpentSN| + 4)/2^384 under uniform SN/Coin).
 
 Theorem 5 (Oracle-Complete Corruption-Compatible Reduction — Zero Extraction):
+  Let r and d be upper bounds on the numbers of real and dummy input slots,
+  respectively, valid for either challenge candidate (r = d = 2 always suffices).
   Adv_GlobalPriv(A) <= 2 * [ Adv_QROM-ZK(P, Q)
                              + 2 * U_users * (Adv_IND-CCA2^{ML-KEM-1024}(q_scan)
                                               + Adv_IK-CCA^{ML-KEM-1024}(q_scan))
                              + 2 * (Adv_PRF^{SHA-384-KDF}
                                     + Adv_INT-CTXT^{AES-256-GCM}(q_scan)
                                     + Adv_IND$-CPA^{AES-256-GCM})
-                             + 2 * U_users * Adv_JointPRF^{SHAKE256}
+                             + r * U_users * Adv_JointPRF^{SHAKE256}(2)
+                             + d * Adv_PRG^{SHAKE256}
                              + 2 * Adv_Hide^{SHAKE256}
                              + 2 * (|Coins| + |SpentSN| + 4) / 2^384 ].
 
@@ -1005,16 +1025,16 @@ O_Challenge) are answered without guessing-gap or missing-secret mismatches:
           u*_c with ct_kem != ct_kem^*_c uses the IK-CCA Decaps_0 oracle, and
           O_Scan on all u' != u*_c uses dk_{u'} held by the reduction. Replaces
           ct_kem^*_c with Encaps(ek_dummy). Loss <= U_users * Adv_IK-CCA(q_scan).
-  - Game H_3 (Adaptive Single-User-Reduced Joint Nullifier Pseudorandomness,
-    input slots a = 0, then a = 1):
-    * In ZK-Shielded Mint mode (v_mint > 0, is_dummy0 = is_dummy1 = 1): both
-      nullifiers sn0*, sn1* are ALREADY fresh uniform 48 B dummy nullifiers
-      (H_SN on uniform fresh secrets independent of all users), so H_2 == H_3
-      identically (zero loss).
-    * In Transfer mode (v_mint = 0): for each real input slot a in {0, 1}
-      (skipping dummy slots, whose nullifiers are already fresh uniform), the
-      reduction guesses the challenge input owner u*_a <-$ {1..U_users}, embeds
-      the single-user JointPRF challenge address A* as A_{u*_a}, and generates
+  - Game H_3 (Challenge Nullifier Pseudorandomness): Replace the dummy inputs,
+    then the real inputs, in slot order within each group.
+    * For each dummy input, replace H_SN(S_dummy, c_dummy) with a fresh uniform
+      48-byte string. Its secrets are sampled independently for that slot and
+      the proof is already simulated, so the reduction needs only the string.
+      Each substitution costs at most Adv_PRG^{SHAKE256}. A ZK-Shielded Mint
+      uses two such substitutions. A 1-real+1-dummy transfer uses one.
+    * For each real transfer input, the reduction guesses the challenge owner
+      u*_a <-$ {1..U_users}, embeds the single-user JointPRF challenge address
+      A* as A_{u*_a}, and generates
       ALL other U_users - 1 users' keys (S_u, ek_u, dk_u) AND all U_users
       ML-KEM keys (ek_u, dk_u) itself. Every O_Corrupt(u) for u != u*_a is
       answered directly (aborting with a random bit if A corrupts u*_a or
@@ -1022,10 +1042,12 @@ O_Challenge) are answered without guessing-gap or missing-secret mismatches:
       view); every pre- and post-challenge O_Hon spend of OTHER notes owned by
       u*_a uses O_SN(c) of JointPRF (proofs are already simulated via Sim_BCS
       in H_1, so S_{u*_a} is never needed); and sn_a* is replaced with
-      uniform U_{48} via O_ChallSN(coin_a*). (If both inputs belong to the same
-      user u*_0 == u*_1, O_ChallSN's two-query budget replaces both in one hop;
-      otherwise the two sequential hops handle u*_0 then u*_1.) Total loss
-      across both input slots <= 2 * U_users * Adv_JointPRF^{SHAKE256}.
+      uniform U_{48} via O_ChallSN(coin_a*). In a slot-wise hybrid, use O_SN
+      for any other still-real coin of this owner and sample any previously
+      replaced target locally. When both inputs are known to share an owner,
+      two O_ChallSN queries can instead replace both in one hop. The H_2 -> H_3
+      loss per challenge world is at most r * U_users * Adv_JointPRF^{SHAKE256}(2)
+      + d * Adv_PRG^{SHAKE256}. For mint, r = 0 and d = 2.
   - Game H_4 (624-Bit Output Commitment Hiding & Abort Accounting): All secret
     keys are now decoupled from tx*; replace coin0*, coin1* with uniform 48 B
     strings via two single-user Hide^{SHAKE256} hops (loss <= 2 *
@@ -1038,8 +1060,8 @@ O_Challenge) are answered without guessing-gap or missing-secret mismatches:
 4.4 End-to-End Composed Security Audit & Q_tot Degradation
 --------------------------------------------------------------------------------
 Table 3 instantiates Theorems 3, 4, and 5 at Q = 2^96, Q = 2^80, and reference
-Q = 2^64 for a full Depth-24 tree (q_hon = q_tx = 2^23 = 8,388,608 txs) and
-multi-epoch history (q_hon = 2^32 = 4.29B txs), explicitly separating
+Q = 2^64 for a full Depth-24 tree (2^23 = 8,388,608 txs) and a multi-epoch
+history (2^32 honest txs, up to 2^33 input nullifiers), explicitly separating
 published-only bounds, conditional targets (under unreviewed Theorem A.3 /
 conjecture-level Appendix A.4), standing assumptions, and ideal-sponge sizing
 references:
@@ -1064,19 +1086,20 @@ Thm 3 (Balance — q_hon=q_tx=2^23):    |            |                |         
   --> Thm 3 Conditional Target (A.3): | [Cond]     | Asymp. only    | ~91b*     | ~137b*    | ~171b*
       (*conditional parameter calc. under Thm A.3 + IdealRef; NOT an unconditional security floor)
 --------------------------------------+------------+----------------+-----------+-----------+---------------
-Thm 4 (Auth — q_hon = 2^32 reused):   |            |                |           |           |
+Thm 4 (Auth — P_hon=2^32, q_hon=2^33): |            |                |           |           |
   [Conditional Compiler Terms]        |            |                |           |           |
   * Adv_QROM-ZK(2^32, Q)              | [Unrev]    | GHHM21+AHU19+L | 2^-150.60 | 2^-150.60 | 2^-150.60
   * eps_SE(2^32, 1, Q)                | [Unrev]    | No pub. bound  | 2^-92.25  | 2^-137.55 | 2^-170.97
   [Ideal-Sponge Sizing References]    |            |                |           |           |
   * Adv_CR^{SHA-384}(tx_ctx) (BHT)    | [IdealRef] | ideal-fn ref   | 2^-91.00  | 2^-139.00 | 2^-187.00
-  * Adv_MT-TPR^{H_SN}(2^32) (Grover)  | [IdealRef] | ideal-fn ref   | 2^-160.00 | 2^-192.00 | 2^-224.00
+  * Adv_MT-TPR^{H_SN}(2^33) (Grover)  | [IdealRef] | ideal-fn ref   | 2^-159.00 | 2^-191.00 | 2^-223.00
   * Adv_OW^{H_A,384} (Grover)         | [IdealRef] | ideal-fn ref   | 2^-192.00 | 2^-224.00 | 2^-256.00
   [Unquantified Standing Terms]       |            |                |           |           |
-  * Adv_JointPRF^{SHAKE256}           | [NonStd]   | unquantified   | (standing assumption)
+  * Adv_JointPRF^{SHAKE256}(2^33)     | [NonStd]   | unquantified   | (one reused spend key)
+  * d_hon * Adv_PRG^{SHAKE256}        | [NonStd]   | unquantified   | (one term per dummy slot)
   * Adv_EUF-CMA^{L1-Sig} (Mode 3)     | [Std]      | FIPS-204       | (ML-DSA-65/87 at L1)
   --> Thm 4 Conditional Target (A.3/4)| [Cond]     | No pub. bound  | ~91b*     | ~137b*    | ~150b*
-      (*conditional on A.3 + Conj. A.4 + IdealRef + unquantified [NonStd] JointPRF + L1-Sig)
+      (*conditional on A.3 + Conj. A.4 + IdealRef + unquantified JointPRF(2^33), dummy PRG and L1-Sig)
 --------------------------------------+------------+----------------+-----------+-----------+---------------
 Thm 5 (GlobalPriv — Transfer & Mint): |            |                |           |           |
   * 2 * Adv_QROM-ZK(2^32, Q)          | [Unrev]    | GHHM21+AHU19+L | 2^-149.60 | 2^-149.60 | 2^-149.60
@@ -1085,12 +1108,14 @@ Thm 5 (GlobalPriv — Transfer & Mint): |            |                |         
   * 4*Adv_INT-CTXT^{AES-GCM}(q_scan)  | [Std]      | SP 800-38D     | (O(q_scan / 2^128) forgery)
   * 4*Adv_IND$-CPA^{AES-256-GCM}      | [Std]      | SP 800-38D     | (AES-256 standard bound)
   * 4*Adv_PRF^{SHA-384-KDF}           | [NonStd]   | ROM-KDF        | (key-in-middle SHA-384)
-  * 4*U*Adv_JointPRF + 4*Adv_Hide     | [NonStd]   | unquantified   | (standing SHAKE256; 0 for Mint)
+  * 2*r*U*Adv_JointPRF^{SHAKE256}(2)  | [NonStd]   | unquantified   | (real inputs; r=0 for mint)
+  * 2*d*Adv_PRG^{SHAKE256}            | [NonStd]   | unquantified   | (dummy inputs; d=2 for mint)
+  * 4*Adv_Hide^{SHAKE256}             | [NonStd]   | unquantified   | (two outputs in either mode)
   * R3/R4 abort conditioning (2^24)   | [Exact]    | exact          | 2^-358.00 | 2^-358.00 | 2^-358.00
   --> Thm 5 Status                    | [Cond]     | Parameterized by (U, q_scan) + [NonStd] (IK-CCA,
-                                      |            | SHA-384-KDF, JointPRF, Hide); no single bit floor
+                                      |            | SHA-384-KDF, JointPRF(2), dummy PRG, Hide); no single bit floor
 --------------------------------------------------------------------------------
-Note: At realistic full-tree throughput (q_hon = 2^23 = 8,388,608 txs), honest
+In Theorem 3, at full-tree throughput (q_hon = 2^23 = 8,388,608 txs), honest
 prover queries inflate Q_tot by only 0.0001 bits at Q = 2^64 (0.0458 bits even
 at q_hon = 2^32, degrading eps_Ext by only 0.10 bits).
 
@@ -1366,7 +1391,7 @@ and eta_{1,2,3} := rho_rs^{384,385,386}.
        rho_rs^{386} are pairwise distinct powers), vanishing with prob <=
        386 / |E|. []
 
-A.2 Complete Pure-Algebraic 34-Round State_KS (No Sticky Zero-Challenge Flags)
+A.2 Complete 34-Round State_KS and Compiled PoW Gate
 --------------------------------------------------------------------------------
 Fix statement x and any (possibly partial) Round-1 oracle M: L -> (K^{163} x
 E^2) cup {bot}. For each u = (b_prox^(u), b_pcs^(u), u_0..u_{162}) in P(M),
@@ -1477,15 +1502,24 @@ State_KS(x, tr_k) := 1 iff exists u in P_bad(M) with Doomed_k(u; tr_k) == 0
     == 1 AND (State_KS(33a) == 1 OR exists u in P_bad(M) with b_eval^(u) +
     lo*e*(u) == b_eval + lo*claim2_8). Conditioned on State_KS(33a) == 0, every
     u in P_bad(M) has e*(u) != claim2_8 (from Doomed_32(u) = 1), so Pr <= 86/|E|.
-  - Round 34 (H_C4 -> 52 indices): State_KS(x, tr_34) := 1 iff ValidPrefix_32
-    == 1 AND (State_KS(33b) == 1 OR (|A_both| < sqrt(2*rho)*n AND all 52 drawn
-    indices land in A_both)) -> Pr <= (sqrt(2*rho))^52 = 2^-282.31 (with 20-bit
-    PoW: p_34 = 2^-302.31).
+  - Round 34: Let Hit mean that |A_both| < sqrt(2*rho)*n and all 52 indices
+    land in A_both. In the pure IOP, State_KS(x, tr_34) := 1 iff ValidPrefix_32
+    == 1 AND (State_KS(33b) == 1 OR Hit). From State_KS(33b) == 0, the
+    transition probability is at most (sqrt(2*rho))^52.
+    In the compiled protocol, let u be the full H_C4 output and PoW_pass(u)
+    be 1 iff bytes 0 and 1 and the low nibble of byte 2 are zero. Define
+    State_KS(x, tr_34) := 1 iff ValidPrefix_32 == 1 AND PoW_pass(u) == 1
+    AND (State_KS(33b) == 1 OR Hit). For uniform u, the 20 PoW bits are
+    disjoint from the 52 independent 21-bit index fields starting at bit 24.
+    Thus the compiled 0-to-1 transition has probability at most
+    p_34 := 2^-20 * (sqrt(2*rho))^52 ~ 2^-302.31 per H_C4 output.
 
 Terminal Extraction Proof (Including Partial-Oracle Case supp(M) != L):
-Suppose State_KS(x, tr_34) == 0 AND V(x, tr_34) == 1. Since V == 1,
-ValidPrefix_32 == 1 holds, so State_KS(34) == 0 forces |A_both| >= 48,680 > 565
-and neg(Bad_peel) and neg(Bad_pt). By Lemma 2(ii), unique u* in P(M) satisfies
+Suppose State_KS(x, tr_34) == 0 AND V(x, tr_34) == 1. Acceptance gives
+ValidPrefix_32 == 1 and all 52 indices in A_both. In the compiled protocol
+V == 1 also enforces PoW_pass(u) == 1. Hence in either protocol State_KS(34)
+== 0 forces State_KS(33b) == 0 and |A_both| >= sqrt(2*rho)*n > 565, with
+neg(Bad_peel) and neg(Bad_pt). By Lemma 2(ii), unique u* in P(M) satisfies
 v_prox == F_{lp}(u*), A_both subset A_prox subset D_{u*} subset supp(M), and
 v_open == b_pcs^(u*) + lo * sum_r c_r u*_r identically in E[X]_{<D}. The
 verifier's H-domain check gives b_eval^(u*) + lo*e*(u*) == b_eval + lo*claim2_8,
@@ -1572,7 +1606,10 @@ Formal Database Predicates & Projectors on Unordered Databases D:
     2k-step directed chain (x_STMT, x_CH2, ..., x_CHk) linked by exact 512-bit
     state equality (out_state(x_j) == in_state(x_{j+1})) such that, for
     M := MRoot^{-1}_D(root(x_STMT)), State_KS(x, tr_{k-1}; M) == 0 and
-    State_KS(x, tr_k; M) == 1;
+    State_KS(x, tr_k; M) == 1. For k = 34 the chain ends at x_C4, with
+    u := D(x_C4). Explicitly, S_34(D) requires such a chain with
+    State_KS(x, tr_33b; M) == 0 AND ValidPrefix_32 == 1 AND PoW_pass(u) == 1
+    AND |A_both| < sqrt(2*rho)*n AND all 52 indices from u in A_both;
   - P' := CL cup SUC, P_s := SZ_{<= s} \ P', with diagonal database projectors
     Pi_{P'} := sum_{D in P'} |D><D| and Pi_{P_s} := sum_{D in P_s} |D><D|.
 
@@ -1658,9 +1695,10 @@ Exactly ONE of the following two mutually exclusive cases holds:
              eps_rbr_ks(k) <= eps_rbr_ks(33a) = 2^-305.79) ->
              |G_+|/|Y| <= eps_rbr_ks(33a) + 2s / 2^512.
         (ii) C4 (Round 34): enters SUC ONLY if x's unique prefix chain has
-             State_KS(33b; M)=0 and |A_both| < sqrt(2*rho)*n, AND u satisfies
-             the 20-bit PoW (2^-20) and 52 independent 21-bit indices in A_both
-             -> |G_+|/|Y| <= p_34 = 2^-302.31.
+             State_KS(33b; M)=0, ValidPrefix_32 == 1 and |A_both| < sqrt(2*rho)*n.
+             S_34(D) requires PoW_pass(u) == 1 and all 52 indices in A_both.
+             Without such a prefix G_+ is empty. Otherwise the disjoint bits
+             give |G_+|/|Y| <= 2^-20*(|A_both|/n)^52 <= p_34 ~ 2^-302.31.
 
 Combining Directions A & B over all (x, z != 0, |D_{-x}| <= s) via
 sqrt(a + b) <= sqrt(a) + sqrt(b) and sqrt(8) < sqrt(10) gives:
@@ -1706,9 +1744,9 @@ must rewind/measure-and-reprogram across all mu rounds (incurring (Q+1)^{2*mu}
 loss). In BCS compilation, M = MRoot^{-1}_D(root) is committed in Round 1 and
 extracted straight-line from D_end with zero rewinding; Lemma A.3.2(a) reduces
 superposed queries pointwise to classical (x, D_{-x}), where each query targets
-at most one domain-tagged round k, so [[P_s -> P']] takes max_k eps_rbr_ks(k)
-rather than a product over rounds. (Still tagged [Unrev] in Table 1 pending
-independent external peer review.) []
+at most one domain-tagged round k. The capacity bound in Lemma A.3.3 therefore
+uses the maximum of the CH bound and the PoW-gated C4 bound p_34. Table 1
+marks this bridge [Unrev] pending independent external peer review. []
 
 A.4 Proof of Theorem 2B (Adaptive Multi-Proof QROM SE Wrapper B^H — Unreviewed)
 --------------------------------------------------------------------------------
