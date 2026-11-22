@@ -18,6 +18,7 @@ use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
 use fips203::ml_kem_1024;
 use fips203::traits::{Decaps, Encaps, KeyGen, SerDes};
+use hmac::{Hmac, Mac};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha384};
@@ -119,29 +120,21 @@ impl ShieldedWallet {
 }
 
 /// Derive AES-256-GCM key (32 B) and nonce (12 B) from ML-KEM-1024 shared secret,
-/// ciphertext, and coin commitment using NIST FIPS 180-4 SHA-384.
+/// ciphertext, and coin commitment using HMAC-SHA-384 with distinct versioned labels.
 pub fn derive_aead_key_nonce(
     ss: &[u8; 32],
     ct_kem: &[u8; KEM_CT_BYTES],
     coin: &[u8; COIN_BYTES],
 ) -> ([u8; 32], [u8; 12]) {
-    let mut hk = Sha384::new();
-    hk.update(b"PFT-SH-KEM-KEY-V1");
-    hk.update(ss);
-    hk.update(ct_kem);
-    hk.update(coin);
-    let dk = hk.finalize();
-    let mut key = [0u8; 32];
-    key.copy_from_slice(&dk[..32]);
-
-    let mut hn = Sha384::new();
-    hn.update(b"PFT-SH-KEM-NONCE-V1");
-    hn.update(ss);
-    hn.update(ct_kem);
-    hn.update(coin);
-    let dn = hn.finalize();
-    let mut nonce = [0u8; 12];
-    nonce.copy_from_slice(&dn[..12]);
+    let derive = |label: &[u8]| {
+        let mut mac = <Hmac<Sha384> as Mac>::new_from_slice(ss).expect("HMAC accepts a 32-byte key");
+        mac.update(label);
+        mac.update(ct_kem);
+        mac.update(coin);
+        mac.finalize().into_bytes()
+    };
+    let key = derive(b"PFT-SH-KEM-KEY-V2")[..32].try_into().unwrap();
+    let nonce = derive(b"PFT-SH-KEM-NONCE-V2")[..12].try_into().unwrap();
     (key, nonce)
 }
 
