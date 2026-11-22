@@ -168,3 +168,40 @@ fn python_and_javascript_transport_round_trip() {
         }
     }
 }
+
+#[test]
+fn changing_unsigned_terms_invalidates_the_proof_even_after_resigning() {
+    use postfiat_crypto_provider::{ml_dsa_65_sign_with_context_seed, TX_SIGNATURE_CONTEXT};
+    use postfiat_privacy_binius::VerifyError;
+    let payment = vector("pfusdc-pay");
+    let (terms, _, inner) = payment.parts().unwrap();
+    let raw = pft_binius_shielded::wire::ShieldedTx::from_l1_inner(inner)
+        .unwrap()
+        .statement()
+        .tx_ctx;
+    let key = ml_dsa_65_keygen_from_seed(&[7; 32]);
+    for field in 0..4 {
+        let mut changed = terms.clone();
+        match field {
+            0 => changed.asset[0] ^= 1,
+            1 => changed.public_fee += 1,
+            2 => changed.epoch += 1,
+            _ => changed.account.as_mut().unwrap().sequence += 1,
+        }
+        let msg = changed.signing_message(chain(), raw).unwrap();
+        let sig = ml_dsa_65_sign_with_context_seed(
+            &key.private_key,
+            &msg,
+            TX_SIGNATURE_CONTEXT,
+            &[21; 32],
+        )
+        .unwrap()
+        .try_into()
+        .unwrap();
+        let signed = PqPayment::encode(&changed, Some(&sig), inner).unwrap();
+        assert_eq!(
+            verify_l1(&signed, chain()).unwrap_err(),
+            VerifyError::InvalidProof
+        );
+    }
+}

@@ -3214,6 +3214,20 @@ pub fn batch_archive_payload_hash(
     batch_id: &str,
     payload_json: &str,
 ) -> io::Result<String> {
+    // The certified batch and existing historical RPC hash both cover canonical
+    // transport bytes one-to-one with the binary body. Check archive framing
+    // before signing, using the fixed width of the final payload hash.
+    if BatchArchiveEntry::may_contain_pq(batch_kind, payload_json) {
+        let entry = BatchArchiveEntry {
+            batch_kind: batch_kind.into(),
+            batch_id: batch_id.into(),
+            payload_hash: "0".repeat(96),
+            payload_json: payload_json.into(),
+        };
+        entry
+            .compact_pq()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    }
     let encoded = serde_json::to_vec(&(
         genesis.chain_id.as_str(),
         genesis_hash(genesis),

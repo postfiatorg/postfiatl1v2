@@ -3796,6 +3796,19 @@ fn validate_rpc_serve_request_line(line: &str) -> Result<(), String> {
             "rpc request exceeded {MAX_RPC_REQUEST_BYTES} bytes"
         ));
     }
+    // Other RPC methods have a larger historical frame limit. Inspect just the
+    // method, skipping params without allocating the action or decoding base64.
+    if request.len() > postfiat_types::pq_payment::REQUEST_LIMIT {
+        #[derive(serde::Deserialize)]
+        struct Method {
+            method: String,
+        }
+        if serde_json::from_str::<Method>(request)
+            .is_ok_and(|m| m.method == "private_action_submit")
+        {
+            return Err("private action request exceeded 1048576 bytes".into());
+        }
+    }
     Ok(())
 }
 

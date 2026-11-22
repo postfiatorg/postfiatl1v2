@@ -3494,7 +3494,11 @@ fn snapshot_file_bytes(
         HISTORY_CHECKPOINT_FILE => {
             snapshot_json_bytes(&read_history_checkpoint_state_optional(store)?)
         }
-        BATCH_ARCHIVE_FILE => snapshot_json_bytes(&store.read_batch_archive()?),
+        BATCH_ARCHIVE_FILE => snapshot_json_bytes(
+            &postfiat_storage::pq_archive::SnapshotBatchArchive::from_archive(
+                store.read_batch_archive()?,
+            )?,
+        ),
         ORDERED_BATCHES_FILE => snapshot_json_bytes(&store.read_ordered_batches()?),
         RECEIPTS_FILE => snapshot_json_bytes(&store.read_receipts()?),
         MEMPOOL_FILE => snapshot_json_bytes(&store.read_mempool()?),
@@ -3820,6 +3824,15 @@ fn import_snapshot_into_staging(
                 io::ErrorKind::InvalidData,
                 format!("snapshot file `{}` byte length mismatch", file.name),
             ));
+        }
+        if file.name == BATCH_ARCHIVE_FILE {
+            let portable: postfiat_storage::pq_archive::SnapshotBatchArchive =
+                serde_json::from_slice(&bytes).map_err(invalid_data)?;
+            atomic_write(
+                data_dir.join(&file.name),
+                snapshot_json_bytes(&portable.stage(data_dir)?)?,
+            )?;
+            continue;
         }
         if file.name == HISTORY_CHECKPOINT_FILE {
             let checkpoint: Option<HistoryCheckpointState> =

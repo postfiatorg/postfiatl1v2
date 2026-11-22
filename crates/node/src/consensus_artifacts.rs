@@ -1693,7 +1693,7 @@ pub fn build_atomic_shielded_action_batch(
     Ok(ShieldedActionBatch::new_atomic(batch_id, actions))
 }
 
-fn verify_development_pq_payments(
+pub(super) fn verify_development_pq_payments(
     genesis: &Genesis,
     batch: &ShieldedActionBatch,
 ) -> io::Result<()> {

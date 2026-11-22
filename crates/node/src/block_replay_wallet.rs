@@ -3125,6 +3125,7 @@ pub(super) fn replay_archived_payload(
         "shielded" => {
             let batch: ShieldedActionBatch = parse_archived_payload(block, archive_entry)?;
             pq_payment_fixture::check_batch_domain(genesis, &batch)?;
+            consensus_artifacts::verify_development_pq_payments(genesis, &batch)?;
             let compatibility =
                 if archived_wan_devnet_legacy_strict_domain_validation_allowed(genesis, block) {
                     AssetExecutionCompatibility::wan_devnet_legacy_strict_domain_validation()

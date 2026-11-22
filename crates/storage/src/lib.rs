@@ -26,6 +26,7 @@ pub mod backend_mode;
 pub mod fastswap_store;
 pub mod integrity;
 pub mod ordered_history;
+pub mod pq_archive;
 pub mod transactional;
 
 pub use backend_mode::{
@@ -663,7 +664,14 @@ impl NodeStore {
     }
 
     pub fn write_batch_archive(&self, archive: &BatchArchive) -> io::Result<()> {
-        self.write_json(self.data_dir.join(BATCH_ARCHIVE_FILE), archive)?;
+        let compact = BatchArchive {
+            batches: archive
+                .batches
+                .iter()
+                .map(|entry| self.persist_pq_archive(entry))
+                .collect::<io::Result<_>>()?,
+        };
+        self.write_json(self.data_dir.join(BATCH_ARCHIVE_FILE), &compact)?;
         self.remove_jsonl_log(&self.data_dir.join(BATCH_ARCHIVE_APPEND_FILE))
     }
 
@@ -686,11 +694,17 @@ impl NodeStore {
         )? {
             merge_appended_archive_entry(&mut archive, entry)?;
         }
+        for entry in &mut archive.batches {
+            self.hydrate_pq_archive(entry)?;
+        }
         Ok(archive)
     }
 
     pub fn append_batch_archive_entry(&self, entry: BatchArchiveEntry) -> io::Result<()> {
-        self.append_jsonl_record(self.data_dir.join(BATCH_ARCHIVE_APPEND_FILE), &entry)
+        self.append_jsonl_record(
+            self.data_dir.join(BATCH_ARCHIVE_APPEND_FILE),
+            &self.persist_pq_archive(&entry)?,
+        )
     }
 
     pub fn write_ordered_batches(&self, batch_ids: &[String]) -> io::Result<()> {
