@@ -33,23 +33,26 @@ which envelope is theirs. The sender does not need the recipient to be online.
 
 The protocol runs as a standalone tool in
 [`tools/pft-binius-shielded-pq`](../../tools/pft-binius-shielded-pq/README.md). It has a Rust prover and verifier
-and a second verifier written separately in Go with no third-party dependencies. Four sample transactions cover a
-deposit, a two-input payment, a one-input payment and a payment that spends a note created 25 deposits earlier and
+and a second verifier written separately in Go. The Go verifier uses only the standard library except for
+ML-DSA-65 deposit signatures, which come from Cloudflare's CIRCL library (Go's standard library has no ML-DSA yet).
+Four sample transactions cover a deposit, a two-input payment, a one-input payment and a payment that spends a note created 25 deposits earlier and
 exits part of it to a public account.
 
 | Measure | Budget | Measured |
 | --- | --- | --- |
-| Size of one payment | 149,130 bytes | 137,788 to 138,508 bytes; 140,476 bytes worst case |
-| Verification, one core, Rust | under 50 ms | 23.1 ms median |
-| Verification, one core, Go | under 50 ms | 36.5 ms median (with the CPU's carry-less multiply instruction) |
+| Size of one payment | 149,130 bytes | 138,268 to 139,036 bytes; a signed deposit 143,337 bytes (145,737 worst case) |
+| Verification, one core, Rust | under 50 ms | about 22 ms |
+| Verification, one core, Go | under 50 ms | about 32 ms (with the CPU's carry-less multiply instruction) |
+| Spending the last note of a full tree (16,777,216 notes) | under 50 ms | 20.3 ms Rust, 30.4 to 35.3 ms Go; 138,364 bytes |
 | Making a payment (proving) | — | 2.9 s on 16 cores, 26.7 s on one core, 562 MiB memory |
 | Wallet scanning other people's outputs | — | 4,722 outputs per second per core |
 
 Timings were measured on an AMD EPYC host, one core pinned with no other load on it, and repeated on GitHub's
 public runners. The Go verifier without that instruction takes about 72 ms, over budget.
 
-`./verify.sh` replays everything in seven steps: Rust unit tests, Rust verification of the four payments, 35 named
-attacks and 150 random corruptions that must all be rejected, the independent Go verifier on the same payments and
+`./verify.sh` replays everything in seven steps: Rust unit tests, Rust verification of the four payments and of a
+spend from a full-size tree, 35 named attacks and 150 random corruptions that must all be rejected, forged deposit
+signatures (wrong amount, swapped outputs, wrong key, missing signature, replay) that must be rejected, the independent Go verifier on the same payments and
 attacks, a recipient recovering their payment with Go's standard-library ML-KEM, an exact-arithmetic check of the
 security bounds and Z3 proofs that the circuit enforces value conservation.
 
@@ -76,13 +79,14 @@ It has eight milestones, each tested and merged on its own:
 | M7 | The browser wallet flow; moving funds from the old Orchard pool | Planned |
 | M8 | Upgrade rehearsal on a six-validator chain and external review before activation | Planned |
 
-Work on the standalone tool in parallel with M1:
+Closed on 22 November in the standalone tool:
 
-- **Deposit signature.** The specification requires a depositor's post-quantum signature over the exact amount and
-  outputs of a deposit. It is being implemented in the Rust and Go verifiers now.
-- **Key derivation.** An ad-hoc SHA-384 construction is being replaced with standard HMAC-SHA-384.
-- **Full-size ledger.** The samples use about 100 notes. A test at the tree's full capacity of 16,777,216 notes is
-  being added, with rollover to a fresh tree when one fills.
+- **Deposit signature.** A deposit now carries the depositor's ML-DSA-65 signature, the same scheme Post Fiat accounts
+  use, over the exact amount and both outputs. Both verifiers check it.
+- **Key derivation.** Envelope keys and nonces come from HMAC-SHA-384 with versioned labels instead of an ad-hoc
+  SHA-384 construction.
+- **Full-size ledger.** A test fills a tree to its capacity of 16,777,216 notes, spends the last note, and rolls over
+  to a fresh tree while old notes stay spendable.
 
 ## What rests on assumptions
 
