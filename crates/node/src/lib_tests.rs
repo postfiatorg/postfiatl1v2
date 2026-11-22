@@ -2,6 +2,7 @@
 mod tests {
     include!("tests/helpers_orchard_transfer_escrow.rs");
     include!("tests/asset_orchard_issued_tests.rs");
+    include!("tests/asset_orchard_transfer_tests.rs");
     include!("tests/asset_nft_offer_tests.rs");
     include!("tests/fx_fix_query_tests.rs");
     include!("tests/asset_orchard_pricing_read_tests.rs");
