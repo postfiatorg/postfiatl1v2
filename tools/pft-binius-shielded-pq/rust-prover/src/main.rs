@@ -1,3 +1,4 @@
+mod full_tree;
 use pft_binius_shielded::binius_pcs::{prove, verify};
 use pft_binius_shielded::circuit::{
     build_group_c_constraints, build_witness_bits, eval_verifier_weights_at_r1, CircuitChallenge,
@@ -809,7 +810,7 @@ fn cmd_dump_ir(tx_path: &str, out_path: &str) -> Result<(), String> {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: pft-binius-shielded <generate|verify|adversarial|bench|dump-ir> ...");
+        eprintln!("Usage: pft-binius-shielded <generate|verify|adversarial|bench|full-tree|dump-ir> ...");
         std::process::exit(1);
     }
     let get_arg = |flag: &str| -> Option<String> {
@@ -830,6 +831,8 @@ fn main() {
             let ledger = get_arg("--ledger").expect("--ledger required");
             cmd_adversarial(&tx, &ledger)
         }
+        "full-tree" => get_arg("--out").ok_or_else(|| "--out required".to_string())
+            .and_then(|out| full_tree::run(std::path::Path::new(&out))),
         "bench" => {
             let trials: usize = get_arg("--trials").and_then(|s| s.parse().ok()).unwrap_or(10);
             let out = get_arg("--out").unwrap_or_else(|| "../bench_results.json".into());

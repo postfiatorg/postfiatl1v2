@@ -202,14 +202,14 @@ pub fn empty_hashes() -> [[u8; NODE_BYTES]; MERKLE_DEPTH + 1] {
 pub struct MerkleTree24 {
     pub leaves: Vec<[u8; COIN_BYTES]>,
     pub empty: [[u8; NODE_BYTES]; MERKLE_DEPTH + 1],
-    /// Sparse level storage: nodes[lvl] contains computed prefixes at level `lvl` (0 = leaves).
+    /// Parents at heights 1 through MERKLE_DEPTH (the leaves are stored once).
     nodes: Vec<Vec<[u8; NODE_BYTES]>>,
 }
 
 impl MerkleTree24 {
     pub fn new() -> Self {
         let empty = empty_hashes();
-        let nodes = vec![Vec::new(); MERKLE_DEPTH + 1];
+        let nodes = vec![Vec::new(); MERKLE_DEPTH];
         Self {
             leaves: Vec::new(),
             empty,
@@ -218,11 +218,25 @@ impl MerkleTree24 {
     }
 
     pub fn from_leaves(leaves: &[[u8; COIN_BYTES]]) -> Self {
+        Self::from_owned_leaves(leaves.to_vec())
+    }
+
+    /// Build each occupied parent just once, padding only the right edge.
+    pub fn from_owned_leaves(leaves: Vec<[u8; COIN_BYTES]>) -> Self {
+        assert!(leaves.len() <= 1 << MERKLE_DEPTH);
         let mut tree = Self::new();
-        for leaf in leaves {
-            tree.append(*leaf);
+        tree.leaves = leaves;
+        for level in 0..MERKLE_DEPTH {
+            let parents = tree.level(level).chunks(2).map(|pair| {
+                merkle_node(&pair[0], pair.get(1).unwrap_or(&tree.empty[level]))
+            }).collect();
+            tree.nodes[level] = parents;
         }
         tree
+    }
+
+    fn level(&self, level: usize) -> &[[u8; NODE_BYTES]] {
+        if level == 0 { &self.leaves } else { &self.nodes[level - 1] }
     }
 
     pub fn len(&self) -> usize {
@@ -237,39 +251,25 @@ impl MerkleTree24 {
         if self.leaves.is_empty() {
             return self.empty[MERKLE_DEPTH];
         }
-        self.nodes[MERKLE_DEPTH][0]
+        self.nodes[MERKLE_DEPTH - 1][0]
     }
 
     pub fn append(&mut self, coin: [u8; COIN_BYTES]) -> usize {
         let idx = self.leaves.len();
         assert!(idx < (1usize << MERKLE_DEPTH), "Depth-24 Merkle tree full");
         self.leaves.push(coin);
-        let mut cur = coin;
         let mut pos = idx;
-        for lvl in 0..MERKLE_DEPTH {
-            if pos < self.nodes[lvl].len() {
-                self.nodes[lvl][pos] = cur;
-            } else {
-                assert_eq!(pos, self.nodes[lvl].len());
-                self.nodes[lvl].push(cur);
-            }
-            let (left, right) = if (pos & 1) == 0 {
-                let sib = if pos + 1 < self.nodes[lvl].len() {
-                    self.nodes[lvl][pos + 1]
-                } else {
-                    self.empty[lvl]
-                };
-                (cur, sib)
-            } else {
-                (self.nodes[lvl][pos - 1], cur)
-            };
-            cur = merkle_node(&left, &right);
+        for level in 0..MERKLE_DEPTH {
+            let children = self.level(level);
+            let left = pos & !1;
+            let parent = merkle_node(&children[left], children.get(left + 1).unwrap_or(&self.empty[level]));
             pos >>= 1;
-        }
-        if self.nodes[MERKLE_DEPTH].is_empty() {
-            self.nodes[MERKLE_DEPTH].push(cur);
-        } else {
-            self.nodes[MERKLE_DEPTH][0] = cur;
+            let parents = &mut self.nodes[level];
+            if pos == parents.len() {
+                parents.push(parent);
+            } else {
+                parents[pos] = parent;
+            }
         }
         idx
     }
@@ -284,11 +284,7 @@ impl MerkleTree24 {
         for lvl in 0..MERKLE_DEPTH {
             dirs[lvl] = (pos & 1) as u8;
             let sib_pos = pos ^ 1;
-            sibs[lvl] = if sib_pos < self.nodes[lvl].len() {
-                self.nodes[lvl][sib_pos]
-            } else {
-                self.empty[lvl]
-            };
+            sibs[lvl] = *self.level(lvl).get(sib_pos).unwrap_or(&self.empty[lvl]);
             pos >>= 1;
         }
         (dirs, sibs)
@@ -341,6 +337,13 @@ mod tests {
             assert_eq!(idx, i as usize);
         }
         let root = tree.root();
+        for size in 0..=17 {
+            let bulk = MerkleTree24::from_leaves(&tree.leaves[..size]);
+            let mut incremental = MerkleTree24::new();
+            for leaf in &tree.leaves[..size] { incremental.append(*leaf); }
+            assert_eq!(bulk.root(), incremental.root());
+            for i in 0..size { assert_eq!(bulk.auth_path(i), incremental.auth_path(i)); }
+        }
         for i in 0..17 {
             let (dirs, sibs) = tree.auth_path(i);
             assert!(MerkleTree24::verify_path(&tree.leaves[i], &dirs, &sibs, &root));

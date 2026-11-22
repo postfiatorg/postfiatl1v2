@@ -530,7 +530,9 @@ pub struct LedgerJson {
 
 #[derive(Clone)]
 pub struct LedgerState {
+    /// Active append tree. Frozen epochs retain paths for single-anchor spends.
     pub tree: MerkleTree24,
+    frozen: Vec<MerkleTree24>,
     pub coin_set: HashSet<[u8; COIN_BYTES]>,
     pub anchors: HashSet<[u8; NODE_BYTES]>,
     pub anchor_list: Vec<[u8; NODE_BYTES]>,
@@ -551,6 +553,7 @@ impl LedgerState {
         anchors.insert(root);
         Self {
             tree,
+            frozen: Vec::new(),
             coin_set: HashSet::new(),
             anchors,
             anchor_list: vec![root],
@@ -567,29 +570,76 @@ impl LedgerState {
         self.leaf_count_override.unwrap_or_else(|| self.tree.len())
     }
 
+    pub fn active_epoch(&self) -> usize {
+        self.frozen.len()
+    }
+
+    /// Resolve a global output index returned by settlement into a witness tree and local index.
+    pub fn locate(&self, index: usize) -> Option<(&MerkleTree24, usize)> {
+        let epoch = index / MAX_POOL_COINS;
+        let tree = if epoch == self.active_epoch() { &self.tree } else { self.frozen.get(epoch)? };
+        let local = index % MAX_POOL_COINS;
+        (local < tree.len()).then_some((tree, local))
+    }
+
+    fn remember_anchor(&mut self, root: [u8; NODE_BYTES]) {
+        if self.anchors.insert(root) {
+            self.anchor_list.push(root);
+        }
+    }
+
+    fn finish_append(&mut self) {
+        self.remember_anchor(self.tree.root());
+        if self.tree.len() == MAX_POOL_COINS {
+            self.frozen.push(std::mem::replace(&mut self.tree, MerkleTree24::new()));
+            self.remember_anchor(self.tree.root());
+        }
+    }
+
+    /// Bootstrap a snapshot from ordered commitments, retaining each epoch's terminal anchor.
+    /// Historical intermediate anchors and nullifiers are restored separately by from_json.
+    pub fn from_coins(coins: impl IntoIterator<Item = Result<[u8; COIN_BYTES], String>>) -> Result<Self, String> {
+        let mut state = Self::new();
+        let iter = coins.into_iter();
+        let size = iter.size_hint().0;
+        state.coin_set.reserve(size);
+        let mut active = Vec::with_capacity(size.min(MAX_POOL_COINS));
+        for coin in iter {
+            let coin = coin?;
+            if coin == [0; COIN_BYTES] || !state.coin_set.insert(coin) {
+                return Err("invalid or duplicate snapshot commitment".into());
+            }
+            active.push(coin);
+            if active.len() == MAX_POOL_COINS {
+                state.tree = MerkleTree24::from_owned_leaves(std::mem::take(&mut active));
+                state.finish_append();
+            }
+        }
+        state.tree = MerkleTree24::from_owned_leaves(active);
+        state.remember_anchor(state.tree.root());
+        Ok(state)
+    }
+
     pub fn mint_coin(&mut self, coin: [u8; COIN_BYTES]) -> Result<usize, String> {
         if coin == [0u8; COIN_BYTES] {
             return Err("Rule R4 violation: zero coin commitment 0^48 forbidden".into());
         }
-        if self.effective_leaf_count() + 1 > MAX_POOL_COINS {
+        if self.effective_leaf_count() >= MAX_POOL_COINS {
             return Err("Rule R6 violation: Depth-24 Merkle pool capacity 2^24 exceeded".into());
         }
         if self.coin_set.contains(&coin) {
             return Err("duplicate coin commitment on mint".into());
         }
-        let idx = self.tree.append(coin);
+        let idx = self.active_epoch() * MAX_POOL_COINS + self.tree.append(coin);
         self.coin_set.insert(coin);
-        let r = self.tree.root();
-        if self.anchors.insert(r) {
-            self.anchor_list.push(r);
-        }
+        self.finish_append();
         Ok(idx)
     }
 
     /// Full stateless + stateful settlement verification enforcing Rules R1-R6 (without mutating state).
     pub fn verify_tx(&self, tx: &ShieldedTx) -> Result<(), String> {
         // Rule R6: strict Depth-24 tree capacity guard (|Coins| + 2 <= 2^24)
-        if self.effective_leaf_count() + 2 > MAX_POOL_COINS {
+        if self.effective_leaf_count() > MAX_POOL_COINS - 2 {
             return Err("Rule R6 violation: Depth-24 Merkle pool capacity 2^24 exceeded".into());
         }
         // Rule R1: anchor membership
@@ -642,23 +692,22 @@ impl LedgerState {
         self.spent_sn_list.push(tx.sn0);
         self.spent_sn.insert(tx.sn1);
         self.spent_sn_list.push(tx.sn1);
-        let idx0 = self.tree.append(tx.coin_out0);
+        let epoch_start = self.active_epoch() * MAX_POOL_COINS;
+        let idx0 = epoch_start + self.tree.append(tx.coin_out0);
         self.coin_set.insert(tx.coin_out0);
-        let idx1 = self.tree.append(tx.coin_out1);
+        let idx1 = epoch_start + self.tree.append(tx.coin_out1);
         self.coin_set.insert(tx.coin_out1);
         self.supply_minted += tx.v_mint as u128;
         self.unshielded_acc += tx.v_unshield as u128;
         self.fees_acc += tx.fee as u128;
-        let r = self.tree.root();
-        if self.anchors.insert(r) {
-            self.anchor_list.push(r);
-        }
+        self.finish_append();
         Ok((idx0, idx1))
     }
 
     pub fn to_json(&self) -> LedgerJson {
         LedgerJson {
-            coins: self.tree.leaves.iter().map(hex::encode).collect(),
+            coins: self.frozen.iter().chain(std::iter::once(&self.tree))
+                .flat_map(|tree| &tree.leaves).map(hex::encode).collect(),
             anchors: self.anchor_list.iter().map(hex::encode).collect(),
             spent_sn: self.spent_sn_list.iter().map(hex::encode).collect(),
             leaf_count_override: self.leaf_count_override,
@@ -666,16 +715,16 @@ impl LedgerState {
     }
 
     pub fn from_json(j: &LedgerJson) -> Result<Self, String> {
-        let mut st = Self::new();
+        let mut st = Self::from_coins(j.coins.iter().map(|coin| {
+            let bytes = hex::decode(coin).map_err(|e| format!("bad coin hex: {e}"))?;
+            bytes.try_into().map_err(|_| "bad coin len".into())
+        }))?;
         st.anchors.clear();
         st.anchor_list.clear();
-        st.leaf_count_override = j.leaf_count_override;
-        for c_hex in &j.coins {
-            let bytes = hex::decode(c_hex).map_err(|e| format!("bad coin hex: {e}"))?;
-            let c: [u8; COIN_BYTES] = bytes.try_into().map_err(|_| "bad coin len")?;
-            st.tree.append(c);
-            st.coin_set.insert(c);
+        if j.leaf_count_override.is_some_and(|n| n < st.tree.len() || n > MAX_POOL_COINS) {
+            return Err("invalid simulated active leaf count".into());
         }
+        st.leaf_count_override = j.leaf_count_override;
         for a_hex in &j.anchors {
             let bytes = hex::decode(a_hex).map_err(|e| format!("bad anchor hex: {e}"))?;
             let a: [u8; NODE_BYTES] = bytes.try_into().map_err(|_| "bad anchor len")?;
@@ -684,8 +733,7 @@ impl LedgerState {
             }
         }
         // Verify latest root matches computed tree root!
-        let cur_root = st.tree.root();
-        if !st.anchors.contains(&cur_root) {
+        if !st.frozen.iter().chain(std::iter::once(&st.tree)).all(|t| st.anchors.contains(&t.root())) {
             return Err("ledger JSON anchors do not contain current Depth-24 Merkle root".into());
         }
         for sn_hex in &j.spent_sn {
