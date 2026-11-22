@@ -145,6 +145,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fips204"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9fb5a367b9846933e271a3c2a992930743f82ae5e8cb7faa780715a80fa0b15"
+dependencies = [
+ "rand_core",
+ "sha2",
+ "sha3",
+ "zeroize",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -229,6 +241,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "fips203",
+ "fips204",
  "hex",
  "rand",
  "rand_chacha",

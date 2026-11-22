@@ -1,5 +1,3 @@
-// Independent Go 1.25.1 Settlement Verifier for Peel-Binius-Shielded (ZERO external dependencies!).
-// Uses ONLY Go 1.25.1 standard library (crypto/sha512, crypto/sha3) + 60-line Plan 9 amd64 PCLMULQDQ.
 package main
 
 import (
@@ -14,6 +12,8 @@ import (
 	"os"
 	"sort"
 	"time"
+
+	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
 )
 
 const (
@@ -40,6 +40,7 @@ type ShieldedTx struct {
 	CoinOut1     [CoinBytes]byte
 	Env0         [EnvBytes]byte
 	Env1         [EnvBytes]byte
+	MintAuth     *MintAuth
 	Proof        *BiniusProof
 }
 
@@ -127,6 +128,17 @@ func parseShieldedTx(data []byte) (*ShieldedTx, error) {
 	proofBytes, err := take(proofLen)
 	if err != nil {
 		return nil, err
+	}
+	if tx.VMint > 0 {
+		rawKey, err := take(mldsa65.PublicKeySize)
+		if err != nil {
+			return nil, err
+		}
+		signature, err := take(mldsa65.SignatureSize)
+		if err != nil {
+			return nil, err
+		}
+		tx.MintAuth = &MintAuth{PublicKey: [mldsa65.PublicKeySize]byte(rawKey), Signature: [mldsa65.SignatureSize]byte(signature)}
 	}
 	if pos != len(data) {
 		return nil, errors.New("trailing bytes in shielded tx")
@@ -287,7 +299,11 @@ func verifyFullSettlement(ls *LedgerState, tx *ShieldedTx) error {
 	if tx.Fee > ^uint64(0)-tx.VUnshield {
 		return errors.New("Rule R5 violation: fee + v_unshield overflows u64")
 	}
-	return verifyBiniusProof(tx.statement(), tx.Proof)
+	stmt := tx.statement()
+	if (tx.VMint > 0) != (tx.MintAuth != nil) || (tx.MintAuth != nil && !tx.MintAuth.verify(stmt.TxCtx)) {
+		return errors.New("R0-Auth: invalid mint authorization")
+	}
+	return verifyBiniusProof(stmt, tx.Proof)
 }
 
 type IrConstraintJson struct {

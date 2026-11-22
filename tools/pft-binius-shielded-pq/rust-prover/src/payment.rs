@@ -4,8 +4,10 @@
 //!
 //! On-chain transaction footprint matches Zcash Orchard:
 //!   (magic[8], anchor[48], fee[8], sn0[48], sn1[48], coin0[48], coin1[48], env0[1670], env1[1670], proof)
-//! ZERO on-chain signatures, ZERO on-chain recipient addresses, ZERO interactive receive rounds!
+//! Positive mints append a fixed ML-DSA-65 public key and signature after the proof.
 
+use crate::mint_auth::MintAuth;
+use fips204::ml_dsa_65;
 use crate::binius_pcs::{prove, verify, BiniusProof};
 use crate::circuit::{build_witness_bits, PaymentStatement, PaymentWitness};
 use crate::shake256::{
@@ -193,6 +195,7 @@ pub struct ShieldedTx {
     pub env0: [u8; ENV_BYTES],
     pub env1: [u8; ENV_BYTES],
     pub proof: BiniusProof,
+    pub mint_auth: Option<Box<MintAuth>>,
 }
 
 impl ShieldedTx {
@@ -272,6 +275,10 @@ impl ShieldedTx {
         out.extend_from_slice(&self.env1);
         out.extend_from_slice(&(proof_bytes.len() as u32).to_le_bytes());
         out.extend_from_slice(&proof_bytes);
+        if let Some(auth) = &self.mint_auth {
+            out.extend_from_slice(&auth.public_key);
+            out.extend_from_slice(&auth.signature);
+        }
         out
     }
 
@@ -305,6 +312,14 @@ impl ShieldedTx {
         let env1: [u8; ENV_BYTES] = take(&mut pos, ENV_BYTES)?.try_into().unwrap();
         let proof_len = u32::from_le_bytes(take(&mut pos, 4)?.try_into().unwrap()) as usize;
         let proof_bytes = take(&mut pos, proof_len)?;
+        let mint_auth = if v_mint > 0 {
+            Some(Box::new(MintAuth {
+                public_key: take(&mut pos, ml_dsa_65::PK_LEN)?.try_into().unwrap(),
+                signature: take(&mut pos, ml_dsa_65::SIG_LEN)?.try_into().unwrap(),
+            }))
+        } else {
+            None
+        };
         if pos != data.len() {
             return Err("trailing bytes in shielded tx".into());
         }
@@ -322,6 +337,7 @@ impl ShieldedTx {
             env0,
             env1,
             proof,
+            mint_auth,
         })
     }
 }
@@ -353,10 +369,14 @@ pub fn create_shielded_tx(
     v_unshield: u64,
     unshield_dest: [u8; UNSHIELD_DEST_BYTES],
     fee: u64,
+    depositor: Option<&ml_dsa_65::PrivateKey>,
     rng: &mut impl RngCore,
 ) -> Result<(ShieldedTx, [u8; BLIND_SECRET_BYTES], [u8; BLIND_SECRET_BYTES]), String> {
     if v_mint > 0 && v_unshield > 0 {
         return Err("Rule R5 violation: v_mint and v_unshield are mutually exclusive".into());
+    }
+    if depositor.is_some() != (v_mint > 0) {
+        return Err("R0-Auth: depositor key required exactly for positive mint".into());
     }
     let pub_exit = fee
         .checked_add(v_unshield)
@@ -451,6 +471,7 @@ pub fn create_shielded_tx(
         &env1,
     );
 
+    let mint_auth = depositor.map(|key| MintAuth::sign(key, &tx_ctx)).transpose()?;
     let stmt = PaymentStatement {
         anchor,
         sn0,
@@ -499,6 +520,7 @@ pub fn create_shielded_tx(
         env0,
         env1,
         proof,
+        mint_auth: mint_auth.map(Box::new),
     };
     Ok((tx, r_out0, r_out1))
 }
@@ -611,6 +633,11 @@ impl LedgerState {
             return Err("Rule R5 violation: fee + v_unshield overflows u64".into());
         }
         let stmt = tx.statement();
+        match (&tx.mint_auth, tx.v_mint) {
+            (None, 0) => (),
+            (Some(auth), amount) if amount > 0 && auth.verify(&stmt.tx_ctx) => (),
+            _ => return Err("R0-Auth: invalid mint authorization".into()),
+        }
         verify(&stmt, &tx.proof)?;
         Ok(())
     }
