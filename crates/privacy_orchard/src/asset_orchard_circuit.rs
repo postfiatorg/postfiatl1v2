@@ -97,6 +97,7 @@ use crate::asset_orchard::{
 use crate::asset_orchard_sinsemilla::asset_spend_auth_g;
 use crate::asset_orchard_sinsemilla::{
     synthesize_asset_note_commitment_from_assigned_subpieces,
+    synthesize_sinsemilla_commitment_from_bound_pieces, witness_asset_orchard_message_piece,
     synthesize_sinsemilla_commitment_from_assigned_subpieces, AssetOrchardAssignedSubpiece,
     AssetOrchardCommitDomain, AssetOrchardEccChip, AssetOrchardEccConfig, AssetOrchardFixedBases,
     AssetOrchardFullScalarBase, AssetOrchardMessagePieceConstraintConfig,

@@ -29,9 +29,9 @@ pub const PRIVATE_SWAP_JSON_FIELDS: [&str; 18] = [
     "spend_authorization_signatures",
 ];
 
-/// The exact top-level fields of a public `asset_orchard_transfer_v1` `transfer_json`.
-/// `exit` is present only when value leaves the pool.
-pub const PRIVATE_TRANSFER_JSON_FIELDS: [&str; 15] = [
+/// The top-level fields every public `asset_orchard_transfer_v1` `transfer_json` has. `entry`
+/// is present only when value enters the pool and `exit` only when value leaves it.
+pub const PRIVATE_TRANSFER_JSON_FIELDS: [&str; 16] = [
     "version",
     "schema",
     "pool_id",
@@ -43,6 +43,7 @@ pub const PRIVATE_TRANSFER_JSON_FIELDS: [&str; 15] = [
     "randomized_verification_keys",
     "output_commitments",
     "encrypted_outputs",
+    "entry_binding_hash",
     "exit_binding_hash",
     "action_binding_hash",
     "proof",
@@ -262,7 +263,11 @@ pub fn parse_private_public_action(action_json: &str) -> Result<ShieldedAction, 
                 .all(|field| fields.contains_key(*field));
             let only_known = fields
                 .keys()
-                .all(|key| key == "exit" || PRIVATE_TRANSFER_JSON_FIELDS.contains(&key.as_str()));
+                .all(|key| {
+                    key == "exit"
+                        || key == "entry"
+                        || PRIVATE_TRANSFER_JSON_FIELDS.contains(&key.as_str())
+                });
             if !required || !only_known {
                 return Err("private_transfer_json_fields_refused");
             }

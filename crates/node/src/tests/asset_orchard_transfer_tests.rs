@@ -2,7 +2,7 @@
     /// change, the recipient finds the payment with its own keys, then takes part of it out
     /// in public. Each step is applied through the same batch path a validator uses.
     #[test]
-    #[ignore = "builds the transfer proving key and makes four proofs; release-scale"]
+    #[ignore = "builds the transfer proving key and makes five proofs; release-scale"]
     fn asset_orchard_private_transfer_pays_scans_and_exits_on_a_ledger() {
         let data_dir = unique_test_dir("postfiat-asset-orchard-transfer-test");
         init(InitOptions {
@@ -155,38 +155,54 @@
             (serde_json::to_string(&batch).expect("batch json"), receipts)
         };
 
-        // 1. Shield 17. This step is public by nature.
-        let ingress_file = data_dir.join("ingress.json");
+        // 1. Shield 17 through the transfer itself, so the pool note provably holds 17.
+        //    This step is public by nature.
+        let shield_file = data_dir.join("shield.json");
         let sender_note_file = data_dir.join("sender-note.json");
-        create_asset_orchard_ingress(AssetOrchardIngressCreateOptions {
+        let shield_report = create_asset_orchard_transfer(AssetOrchardTransferCreateOptions {
             data_dir: data_dir.clone(),
-            key_file: holder_key_file,
-            asset_id: asset_id.clone(),
-            amount: 17,
-            fee: 0,
-            note_seed_hex: sender_seed.clone(),
-            encrypted_output_hex: None,
-            ingress_file: ingress_file.clone(),
-            note_file: sender_note_file.clone(),
+            note_files: Vec::new(),
+            shield: Some(AssetOrchardTransferShieldOptions {
+                key_file: holder_key_file.clone(),
+                asset_id: asset_id.clone(),
+                amount: 17,
+                fee: 0,
+            }),
+            change_seed_hex: sender_seed.clone(),
+            pay: None,
+            exit: None,
+            transfer_file: shield_file.clone(),
+            change_note_file: sender_note_file.clone(),
             overwrite: false,
         })
-        .expect("create ingress");
-        let ingress_batch_file = data_dir.join("ingress-batch.json");
-        create_asset_orchard_ingress_batch(AssetOrchardIngressBatchOptions {
-            data_dir: data_dir.clone(),
-            ingress_file,
-            batch_file: ingress_batch_file.clone(),
-        })
-        .expect("ingress batch");
-        assert!(apply_shielded_batch(ApplyBatchOptions {
-            data_dir: data_dir.clone(),
-            batch_file: ingress_batch_file,
-            certificate_file: None,
-        })
-        .expect("apply ingress")[0]
-            .accepted);
+        .expect("create shield");
+        println!("shield built in {:.1} s", shield_report.build_seconds);
+        assert_eq!(shield_report.change_amount, 17);
+
+        // A shield whose attached burn is for a different amount than the proof covers is
+        // refused, and nothing moves.
+        let mut tampered: AssetOrchardTransferFile =
+            read_json_file(&shield_file, "shield file").expect("read shield");
+        if let Some(burn) = tampered.payload.burn_transaction.as_mut() {
+            if let AssetTransactionOperation::AssetBurn(operation) = &mut burn.unsigned.operation {
+                operation.amount = 1;
+            }
+        }
+        let tampered_file = data_dir.join("shield-tampered.json");
+        std::fs::write(&tampered_file, serde_json::to_string(&tampered).expect("json"))
+            .expect("write tampered shield");
+        let (_, receipts) = apply(&tampered_file, "shield-tampered");
+        let receipts = receipts.expect("apply tampered shield");
+        assert!(!receipts[0].accepted, "a shield with a smaller burn was accepted");
+        assert_eq!(receipts[0].code, "asset_orchard_transfer_entry_burn_mismatch");
+        assert_eq!(balance(&store), 40);
+        assert!(store.read_shielded().expect("shielded").orchard.is_none());
+
+        let (_, receipts) = apply(&shield_file, "shield");
+        let receipts = receipts.expect("apply shield");
+        assert!(receipts[0].accepted, "{receipts:?}");
         assert_eq!(balance(&store), 23);
-        assert_eq!(pool_live(&store), (17, 0, 1));
+        assert_eq!(pool_live(&store), (17, 2, 2));
 
         // 2. Pay 5 to the recipient's shielded address. Change of 12 returns to the sender.
         let recipient_address =
@@ -197,6 +213,7 @@
         let report = create_asset_orchard_transfer(AssetOrchardTransferCreateOptions {
             data_dir: data_dir.clone(),
             note_files: vec![sender_note_file.clone()],
+            shield: None,
             change_seed_hex: sender_seed.clone(),
             pay: Some((recipient_address.clone(), 5)),
             exit: None,
@@ -216,7 +233,7 @@
         }
         // Nothing public moved: same account balance, same pool total for the asset.
         assert_eq!(balance(&store), 23);
-        assert_eq!(pool_live(&store), (17, 2, 3));
+        assert_eq!(pool_live(&store), (17, 4, 4));
 
         // 3. Each wallet finds its own notes from the chain alone.
         let scan = |seed: &str| scan_asset_orchard_transfer_notes(&data_dir, seed).expect("scan");
@@ -232,6 +249,8 @@
             sender_view.unspent.iter().map(|note| note.value).collect::<Vec<_>>(),
             vec![12]
         );
+        // The sender's shielded 17 shows as spent.
+        assert!(sender_view.notes.iter().any(|note| note.value == 17 && note.spent));
         assert!(scan(&stranger_seed).notes.is_empty());
 
         // 4. The same payment again, and the spent note again, are refused.
@@ -242,6 +261,7 @@
         let double = create_asset_orchard_transfer(AssetOrchardTransferCreateOptions {
             data_dir: data_dir.clone(),
             note_files: vec![sender_note_file],
+            shield: None,
             change_seed_hex: sender_seed.clone(),
             pay: Some((recipient_address, 1)),
             exit: None,
@@ -258,7 +278,7 @@
             }
             Err(error) => panic!("the wallet could not even build the double spend: {error}"),
         }
-        assert_eq!(pool_live(&store), (17, 2, 3));
+        assert_eq!(pool_live(&store), (17, 4, 4));
 
         // 5. The recipient takes 3 out in public and keeps 2 private.
         let received_file = data_dir.join("recipient-note.json");
@@ -268,6 +288,7 @@
         let exit_report = create_asset_orchard_transfer(AssetOrchardTransferCreateOptions {
             data_dir: data_dir.clone(),
             note_files: vec![received_file],
+            shield: None,
             change_seed_hex: recipient_seed.clone(),
             pay: None,
             exit: Some((holder_key.address.clone(), 3)),
@@ -282,7 +303,7 @@
         let receipts = receipts.expect("apply exit");
         assert!(receipts[0].accepted, "{receipts:?}");
         assert_eq!(balance(&store), 26);
-        assert_eq!(pool_live(&store), (14, 4, 5));
+        assert_eq!(pool_live(&store), (14, 6, 6));
         assert_eq!(
             global_issued_asset_supply(
                 &store.read_ledger().expect("ledger"),

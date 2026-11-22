@@ -3890,8 +3890,11 @@ fn execute_shielded_batch_actions(
                     ledger,
                     shielded,
                     &batch.batch_id,
+                    block_height,
                     index,
                     action,
+                    asset_execution_compatibility,
+                    egress_policies,
                 )
             }
         };

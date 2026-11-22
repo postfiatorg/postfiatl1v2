@@ -209,9 +209,38 @@ fn is_lower_hex(value: &str, len: usize) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-/// Decodes one action with the contract's strict parser: the three admitted
-/// kinds only, legacy v1 kinds refused, no unknown fields at either JSON level.
+/// Decodes one action with the contract's strict parser, then admits only
+/// `asset_orchard_transfer_v1`. The older shielded kinds parse, but their proofs do not tie a
+/// note to the value and asset the ledger acts on, and the old shield proves nothing about the
+/// note it inserts. They stay available to operator-run rounds and to replay; they are never
+/// accepted from the public.
 pub fn decode_private_action(action_json: &str) -> io::Result<ShieldedAction> {
+    let action = decode_private_action_of_any_kind(action_json)?;
+    // The admission machinery's own unit tests drive it with the older kinds. Only in this
+    // crate's test build, and only while a test has not switched it off, are they let through.
+    #[cfg(test)]
+    if ADMIT_EVERY_KIND_IN_UNIT_TESTS.with(|flag| flag.get()) {
+        return Ok(action);
+    }
+    if !matches!(action, ShieldedAction::AssetOrchardTransferV1(_)) {
+        return Err(refused(
+            "private_action_kind_not_admitted",
+            "only asset_orchard_transfer_v1 is admitted from the public",
+        ));
+    }
+    Ok(action)
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static ADMIT_EVERY_KIND_IN_UNIT_TESTS: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(true) };
+}
+
+/// The contract's strict parser alone. For tests of the older kinds and for operator tools.
+pub fn decode_private_action_of_any_kind(
+    action_json: &str,
+) -> io::Result<ShieldedAction> {
     postfiat_types::parse_private_public_action(action_json)
         .map_err(|code| refused(code, "action_json is not an admissible public action"))
 }

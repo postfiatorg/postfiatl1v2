@@ -308,6 +308,20 @@
         fs::remove_dir_all(fixture.data_dir).ok();
     }
 
+    /// Outside this crate's unit tests the public path admits only the transfer. With the
+    /// test allowance switched off, a well-formed action of an older kind is refused.
+    #[test]
+    fn private_action_decode_admits_only_the_transfer_from_the_public() {
+        let fixture = private_action_fixture("postfiat-private-action-sound-kind");
+        let ingress = private_ingress_action_json(&fixture, 5, 31);
+        ADMIT_EVERY_KIND_IN_UNIT_TESTS.with(|flag| flag.set(false));
+        let refusal = decode_private_action(&ingress);
+        ADMIT_EVERY_KIND_IN_UNIT_TESTS.with(|flag| flag.set(true));
+        assert_refused(refusal.unwrap_err(), "private_action_kind_not_admitted");
+        assert!(decode_private_action_of_any_kind(&ingress).is_ok());
+        fs::remove_dir_all(fixture.data_dir).ok();
+    }
+
     #[test]
     fn private_action_submit_reserves_once_and_refuses_conflicts_and_replays() {
         let fixture = private_action_fixture("postfiat-private-action-submit");

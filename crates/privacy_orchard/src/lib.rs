@@ -63,14 +63,17 @@ pub use asset_orchard::{
     ASSET_ORCHARD_SPEND_AUTH_SIGNATURE_BYTES, ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES,
 };
 pub use asset_orchard::{
-    asset_orchard_note_for_address, asset_orchard_transfer_exit_binding_hash,
+    asset_orchard_note_for_address, asset_orchard_transfer_entry_binding_hash,
+    asset_orchard_transfer_exit_binding_hash, asset_orchard_transfer_note_nullifier,
     AssetOrchardShieldedAddress, AssetOrchardShieldedKeys, AssetOrchardTransferAction,
-    AssetOrchardTransferExit, AssetOrchardTransferPublicFields,
+    AssetOrchardTransferEntry, AssetOrchardTransferExit, AssetOrchardTransferPublicFields,
+    ASSET_ORCHARD_TRANSFER_NOTE_POOL_ID,
     ASSET_ORCHARD_SHIELDED_ADDRESS_PREFIX, ASSET_ORCHARD_TRANSFER_ACTION_SCHEMA_V1,
     ASSET_ORCHARD_TRANSFER_CIRCUIT_ID_V1, ASSET_ORCHARD_TRANSFER_PUBLIC_INSTANCE_LEN,
 };
 pub use asset_orchard_circuit::{
-    build_asset_orchard_transfer_action, verify_asset_orchard_transfer_action,
+    asset_orchard_transfer_pool_anchor, build_asset_orchard_transfer_action,
+    verify_asset_orchard_transfer_action,
     AssetOrchardTransferBuildResult, AssetOrchardTransferCircuit, AssetOrchardTransferProvingKey,
     AssetOrchardTransferRequest, AssetOrchardTransferVerifyingKey,
     ASSET_ORCHARD_TRANSFER_V1_K, ASSET_ORCHARD_TRANSFER_V1_RUNTIME_PINNED_VK_FINGERPRINT,

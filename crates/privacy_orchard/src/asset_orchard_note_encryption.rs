@@ -379,7 +379,7 @@ pub fn decrypt_asset_orchard_transfer_output(
     encrypted_output: &[u8],
 ) -> Result<Option<AssetOrchardWalletNote>, AssetOrchardError> {
     let pool_domain =
-        AssetOrchardSwapAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
+        crate::asset_orchard::AssetOrchardTransferAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
     let Ok(output_commitment) =
         AssetOrchardFieldElement::parse_hex(output_commitment_hex.to_string())
     else {

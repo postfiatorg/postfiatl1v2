@@ -475,6 +475,10 @@ pub struct AssetOrchardPrivateEgressActionPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetOrchardTransferActionPayload {
     pub transfer_json: String,
+    /// The burn of the public asset that funds a shielded entry. Present exactly when the
+    /// transfer has an entry; the ledger executes it with the transfer or not at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub burn_transaction: Option<SignedAssetTransaction>,
 }
 
 /// Versioned private-primary issue action.

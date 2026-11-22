@@ -11,9 +11,14 @@
 pub const ASSET_ORCHARD_TRANSFER_CIRCUIT_ID_V1: &str = "asset_orchard.transfer.v1";
 pub const ASSET_ORCHARD_TRANSFER_ACTION_SCHEMA_V1: &str =
     "postfiat-asset-orchard-transfer-action-v1";
-pub const ASSET_ORCHARD_TRANSFER_PUBLIC_INSTANCE_LEN: usize = 23;
-pub const ASSET_ORCHARD_TRANSFER_H_ACTION_FIELD_COUNT: usize = 26;
-pub const ASSET_ORCHARD_TRANSFER_H_ACTION_POSEIDON_INPUT_COUNT: usize = 28;
+pub const ASSET_ORCHARD_TRANSFER_PUBLIC_INSTANCE_LEN: usize = 26;
+const ASSET_ORCHARD_TRANSFER_PUBLIC_ROWS: usize = 24;
+pub const ASSET_ORCHARD_TRANSFER_H_ACTION_FIELD_COUNT: usize = 29;
+pub const ASSET_ORCHARD_TRANSFER_H_ACTION_POSEIDON_INPUT_COUNT: usize = 31;
+/// Notes made by the transfer circuit commit to this pool name, not to `asset-orchard-v1`.
+/// A commitment made for the older actions therefore never opens as a transfer note, so the
+/// older actions' weaker checks cannot be used to mint value the transfer circuit accepts.
+pub const ASSET_ORCHARD_TRANSFER_NOTE_POOL_ID: &str = "asset-orchard-transfer-v1";
 pub const ASSET_ORCHARD_SHIELDED_ADDRESS_PREFIX: &str = "pfs1";
 const ASSET_ORCHARD_SHIELDED_ADDRESS_BODY_BYTES: usize =
     ASSET_ORCHARD_DIVERSIFIER_BYTES + 2 * ASSET_ORCHARD_POINT_BYTES;
@@ -21,6 +26,7 @@ const ASSET_ORCHARD_SHIELDED_ADDRESS_CHECKSUM_BYTES: usize = 4;
 const TRANSFER_H_ACTION_HASH_NAME: &str = "postfiat.asset_orchard.transfer.h_action.v1";
 const TRANSFER_H_SIG_DOMAIN: &[u8] = b"postfiat.asset_orchard.transfer.sighash.v1";
 const TRANSFER_EXIT_BINDING_HASH_NAME: &str = "postfiat.asset_orchard.transfer.exit_binding.v1";
+const TRANSFER_ENTRY_BINDING_HASH_NAME: &str = "postfiat.asset_orchard.transfer.entry_binding.v1";
 const SHIELDED_ADDRESS_CHECKSUM_DOMAIN: &[u8] = b"postfiat.asset_orchard.shielded_address.v1";
 
 /// Where a note can be sent. Knowing an address lets anyone pay it; spending needs the keys it
@@ -209,6 +215,33 @@ pub fn asset_orchard_note_for_address(
     Ok(note)
 }
 
+/// The nullifier a transfer publishes when it spends `note`. A wallet uses it to tell which
+/// of its notes are already spent.
+pub fn asset_orchard_transfer_note_nullifier(
+    chain_id: &str,
+    genesis_hash: [u8; 32],
+    protocol_version: u32,
+    note: &AssetOrchardWalletNote,
+) -> Result<AssetOrchardFieldElement, AssetOrchardError> {
+    let pool_domain =
+        AssetOrchardTransferAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
+    let opening = note.note.to_note_opening()?;
+    let cmx = opening.cmx(pool_domain)?;
+    if AssetOrchardFieldElement::from_field(cmx) != note.output_commitment {
+        return Err(AssetOrchardError::new(
+            "asset_orchard_wallet_note_cmx_mismatch",
+            "the note is not a transfer note of this chain",
+        ));
+    }
+    Ok(AssetOrchardFieldElement::from_field(asset_derive_nullifier(
+        pool_domain,
+        note.nk.to_field()?,
+        *opening.rho,
+        *opening.psi,
+        cmx,
+    )?))
+}
+
 impl AssetNoteOpening {
     /// The transfer circuit accepts zero-value notes; every older action rejects them.
     pub fn validate_allowing_zero_value(&self) -> Result<(), AssetOrchardError> {
@@ -277,6 +310,40 @@ impl AssetOrchardTransferExit {
     }
 }
 
+/// The public side of a transfer that brings value into the pool: who burned how much of which
+/// asset, and the id of the burn transaction that the ledger executes with this action.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetOrchardTransferEntry {
+    pub from: String,
+    pub asset_id: String,
+    pub amount: u64,
+    pub burn_transaction_id: String,
+}
+
+impl AssetOrchardTransferEntry {
+    pub fn validate(&self) -> Result<(), AssetOrchardError> {
+        validate_canonical_text("asset_orchard_transfer_entry_from", &self.from, 256)?;
+        validate_canonical_text(
+            "asset_orchard_transfer_entry_asset_id",
+            &self.asset_id,
+            ASSET_ORCHARD_MAX_ASSET_ID_BYTES,
+        )?;
+        validate_canonical_text(
+            "asset_orchard_transfer_entry_burn_transaction_id",
+            &self.burn_transaction_id,
+            256,
+        )?;
+        if self.amount == 0 {
+            return Err(AssetOrchardError::new(
+                "zero_asset_orchard_transfer_entry_amount",
+                "a transfer entry amount must be nonzero; omit the entry when nothing is shielded",
+            ));
+        }
+        AssetTag::derive(&self.asset_id)?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetOrchardTransferAction {
     pub version: u16,
@@ -290,6 +357,9 @@ pub struct AssetOrchardTransferAction {
     pub randomized_verification_keys: Vec<AssetOrchardPoint>,
     pub output_commitments: Vec<AssetOrchardFieldElement>,
     pub encrypted_outputs: Vec<AssetOrchardBoundedBytes>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<AssetOrchardTransferEntry>,
+    pub entry_binding_hash: AssetOrchardSwapBindingHash,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit: Option<AssetOrchardTransferExit>,
     pub exit_binding_hash: AssetOrchardSwapBindingHash,
@@ -306,35 +376,52 @@ pub struct AssetOrchardTransferPublicFields {
     pub randomized_verification_keys: [RandomizedVerificationKeyFields; 2],
     pub output_commitments: [pallas::Base; 2],
     pub encrypted_output_hashes: [EncryptedOutputHash; 2],
-    /// `(0, 0)` when nothing leaves the pool.
-    pub exit_asset_tag_lo: u128,
-    pub exit_asset_tag_hi: u128,
+    /// The asset an entry or exit names. `(0, 0)` when value neither enters nor leaves.
+    pub public_asset_tag_lo: u128,
+    pub public_asset_tag_hi: u128,
     pub exit_amount: u64,
+    pub entry_amount: u64,
     pub exit_binding_hash: [u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES],
+    pub entry_binding_hash: [u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES],
 }
 
 impl AssetOrchardTransferPublicFields {
-    fn rows_without_context(&self) -> Result<[pallas::Base; 21], AssetOrchardError> {
-        if self.exit_amount == 0
-            && (self.exit_asset_tag_lo != 0
-                || self.exit_asset_tag_hi != 0
-                || self.exit_binding_hash != [0u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES])
-        {
+    fn rows_without_context(
+        &self,
+    ) -> Result<[pallas::Base; ASSET_ORCHARD_TRANSFER_PUBLIC_ROWS], AssetOrchardError> {
+        let zero = [0u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES];
+        if self.exit_amount != 0 && self.entry_amount != 0 {
             return Err(AssetOrchardError::new(
-                "asset_orchard_transfer_exit_fields_without_exit",
-                "a transfer with no exit amount must leave the exit tag and binding zero",
+                "asset_orchard_transfer_entry_and_exit",
+                "one transfer either brings value in or takes value out, not both",
             ));
         }
-        if self.exit_amount != 0 {
+        if (self.exit_amount == 0 && self.exit_binding_hash != zero)
+            || (self.entry_amount == 0 && self.entry_binding_hash != zero)
+        {
+            return Err(AssetOrchardError::new(
+                "asset_orchard_transfer_binding_without_amount",
+                "an exit or entry binding needs its nonzero amount",
+            ));
+        }
+        if self.exit_amount == 0 && self.entry_amount == 0 {
+            if self.public_asset_tag_lo != 0 || self.public_asset_tag_hi != 0 {
+                return Err(AssetOrchardError::new(
+                    "asset_orchard_transfer_public_tag_without_amount",
+                    "a transfer inside the pool must not name an asset",
+                ));
+            }
+        } else {
             AssetTag {
-                lo: self.exit_asset_tag_lo,
-                hi: self.exit_asset_tag_hi,
+                lo: self.public_asset_tag_lo,
+                hi: self.public_asset_tag_hi,
             }
             .validate()?;
         }
         let eo0 = self.encrypted_output_hashes[0].as_fields();
         let eo1 = self.encrypted_output_hashes[1].as_fields();
         let exit_binding = binding_hash_fields(&self.exit_binding_hash)?;
+        let entry_binding = binding_hash_fields(&self.entry_binding_hash)?;
         Ok([
             self.pool_domain,
             self.anchor,
@@ -352,11 +439,14 @@ impl AssetOrchardTransferPublicFields {
             eo1[0],
             eo1[1],
             eo1[2],
-            pallas::Base::from_u128(self.exit_asset_tag_lo),
-            pallas::Base::from_u128(self.exit_asset_tag_hi),
+            pallas::Base::from_u128(self.public_asset_tag_lo),
+            pallas::Base::from_u128(self.public_asset_tag_hi),
             pallas::Base::from(self.exit_amount),
+            pallas::Base::from(self.entry_amount),
             exit_binding[0],
             exit_binding[1],
+            entry_binding[0],
+            entry_binding[1],
         ])
     }
 
@@ -366,15 +456,15 @@ impl AssetOrchardTransferPublicFields {
         let rows = self.rows_without_context()?;
         let action_context = transfer_h_action_from_rows(&rows)?;
         let mut instance = [pallas::Base::ZERO; ASSET_ORCHARD_TRANSFER_PUBLIC_INSTANCE_LEN];
-        instance[..21].copy_from_slice(&rows);
-        instance[21] = action_context[0];
-        instance[22] = action_context[1];
+        instance[..ASSET_ORCHARD_TRANSFER_PUBLIC_ROWS].copy_from_slice(&rows);
+        instance[ASSET_ORCHARD_TRANSFER_PUBLIC_ROWS] = action_context[0];
+        instance[ASSET_ORCHARD_TRANSFER_PUBLIC_ROWS + 1] = action_context[1];
         Ok(instance)
     }
 }
 
 fn transfer_h_action_fields_from_rows(
-    rows: &[pallas::Base; 21],
+    rows: &[pallas::Base; ASSET_ORCHARD_TRANSFER_PUBLIC_ROWS],
 ) -> Result<[pallas::Base; ASSET_ORCHARD_TRANSFER_H_ACTION_FIELD_COUNT], AssetOrchardError> {
     let mut fields = [pallas::Base::ZERO; ASSET_ORCHARD_TRANSFER_H_ACTION_FIELD_COUNT];
     fields[0] = const_field(&format!("proof_system:{ASSET_ORCHARD_PROOF_SYSTEM_ID_V1}"))?;
@@ -387,7 +477,7 @@ fn transfer_h_action_fields_from_rows(
 }
 
 fn transfer_h_action_from_rows(
-    rows: &[pallas::Base; 21],
+    rows: &[pallas::Base; ASSET_ORCHARD_TRANSFER_PUBLIC_ROWS],
 ) -> Result<[pallas::Base; 2], AssetOrchardError> {
     poseidon_hash2(
         TRANSFER_H_ACTION_HASH_NAME,
@@ -395,13 +485,13 @@ fn transfer_h_action_from_rows(
     )
 }
 
-/// The sponge inputs the circuit recomputes from its first 21 public rows.
+/// The sponge inputs the circuit recomputes from its public rows before the action hash.
 pub fn transfer_h_action_poseidon_inputs_from_public_instance(
     public_instance: &[pallas::Base; ASSET_ORCHARD_TRANSFER_PUBLIC_INSTANCE_LEN],
 ) -> Result<[pallas::Base; ASSET_ORCHARD_TRANSFER_H_ACTION_POSEIDON_INPUT_COUNT], AssetOrchardError>
 {
-    let mut rows = [pallas::Base::ZERO; 21];
-    rows.copy_from_slice(&public_instance[..21]);
+    let mut rows = [pallas::Base::ZERO; ASSET_ORCHARD_TRANSFER_PUBLIC_ROWS];
+    rows.copy_from_slice(&public_instance[..ASSET_ORCHARD_TRANSFER_PUBLIC_ROWS]);
     let fields = transfer_h_action_fields_from_rows(&rows)?;
     let mut inputs = [pallas::Base::ZERO; ASSET_ORCHARD_TRANSFER_H_ACTION_POSEIDON_INPUT_COUNT];
     inputs[0] = const_field(TRANSFER_H_ACTION_HASH_NAME)?;
@@ -454,7 +544,57 @@ pub fn asset_orchard_transfer_exit_binding_hash(
     Ok(out)
 }
 
+/// Binds the burn that funds a shielded entry into the proof.
+pub fn asset_orchard_transfer_entry_binding_hash(
+    chain_id: &str,
+    genesis_hash: [u8; 32],
+    protocol_version: u32,
+    pool_domain: pallas::Base,
+    entry: &AssetOrchardTransferEntry,
+) -> Result<[u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES], AssetOrchardError> {
+    validate_canonical_text("chain_id", chain_id, 256)?;
+    if protocol_version == 0 {
+        return Err(AssetOrchardError::new(
+            "invalid_protocol_version",
+            "protocol_version must be nonzero",
+        ));
+    }
+    entry.validate()?;
+    let fields = [
+        const_field(&format!("circuit:{ASSET_ORCHARD_TRANSFER_CIRCUIT_ID_V1}"))?,
+        const_field(&format!("schema:{ASSET_ORCHARD_TRANSFER_ACTION_SCHEMA_V1}"))?,
+        text_to_field("transfer_entry.chain_id", chain_id)?,
+        bytes_to_field("transfer_entry.genesis_hash", &genesis_hash)?,
+        pallas::Base::from(u64::from(protocol_version)),
+        pool_domain,
+        text_to_field("transfer_entry.from", &entry.from)?,
+        text_to_field("transfer_entry.asset_id", &entry.asset_id)?,
+        pallas::Base::from(entry.amount),
+        text_to_field("transfer_entry.burn_transaction_id", &entry.burn_transaction_id)?,
+    ];
+    let hash = poseidon_hash2(TRANSFER_ENTRY_BINDING_HASH_NAME, &fields)?;
+    let mut out = [0u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES];
+    out[0..32].copy_from_slice(&field_enc(hash[0]));
+    out[32..64].copy_from_slice(&field_enc(hash[1]));
+    Ok(out)
+}
+
 impl AssetOrchardTransferAction {
+    /// The pool domain transfer notes commit to. It differs from the older actions' domain.
+    pub fn expected_pool_domain(
+        chain_id: &str,
+        genesis_hash: [u8; 32],
+        protocol_version: u32,
+    ) -> Result<pallas::Base, AssetOrchardError> {
+        pool_domain(&PoolDomainInput {
+            chain_id,
+            genesis_hash,
+            protocol_version,
+            pool_id: ASSET_ORCHARD_TRANSFER_NOTE_POOL_ID,
+            note_version: ASSET_ORCHARD_NOTE_VERSION_V1,
+        })
+    }
+
     pub fn validate(&self) -> Result<(), AssetOrchardError> {
         if self.version != ASSET_ORCHARD_ACTION_VERSION_V1 {
             return Err(AssetOrchardError::new(
@@ -528,18 +668,32 @@ impl AssetOrchardTransferAction {
                 ));
             }
         }
+        if self.entry.is_some() && self.exit.is_some() {
+            return Err(AssetOrchardError::new(
+                "asset_orchard_transfer_entry_and_exit",
+                "one transfer either brings value in or takes value out, not both",
+            ));
+        }
+        let zero = [0u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES];
         match &self.exit {
             Some(exit) => exit.validate()?,
-            None => {
-                if self.exit_binding_hash.to_bytes()?
-                    != [0u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES]
-                {
-                    return Err(AssetOrchardError::new(
-                        "asset_orchard_transfer_exit_fields_without_exit",
-                        "a transfer with no exit must carry a zero exit binding",
-                    ));
-                }
+            None if self.exit_binding_hash.to_bytes()? != zero => {
+                return Err(AssetOrchardError::new(
+                    "asset_orchard_transfer_exit_fields_without_exit",
+                    "a transfer with no exit must carry a zero exit binding",
+                ));
             }
+            None => {}
+        }
+        match &self.entry {
+            Some(entry) => entry.validate()?,
+            None if self.entry_binding_hash.to_bytes()? != zero => {
+                return Err(AssetOrchardError::new(
+                    "asset_orchard_transfer_entry_fields_without_entry",
+                    "a transfer with no entry must carry a zero entry binding",
+                ));
+            }
+            None => {}
         }
         let computed = AssetOrchardSwapBindingHash::from_bytes(&transfer_action_binding_hash(
             &self.public_fields_without_binding_check()?,
@@ -570,8 +724,7 @@ impl AssetOrchardTransferAction {
         genesis_hash: [u8; 32],
         protocol_version: u32,
     ) -> Result<(), AssetOrchardError> {
-        let expected =
-            AssetOrchardSwapAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
+        let expected = Self::expected_pool_domain(chain_id, genesis_hash, protocol_version)?;
         if self.pool_domain.to_field()? != expected {
             return Err(AssetOrchardError::new(
                 "asset_orchard_pool_domain_mismatch",
@@ -590,6 +743,21 @@ impl AssetOrchardTransferAction {
                 return Err(AssetOrchardError::new(
                     "asset_orchard_transfer_exit_binding_mismatch",
                     "the exit binding does not match the public destination, asset and amount",
+                ));
+            }
+        }
+        if let Some(entry) = &self.entry {
+            let expected_binding = asset_orchard_transfer_entry_binding_hash(
+                chain_id,
+                genesis_hash,
+                protocol_version,
+                expected,
+                entry,
+            )?;
+            if self.entry_binding_hash.to_bytes()? != expected_binding {
+                return Err(AssetOrchardError::new(
+                    "asset_orchard_transfer_entry_binding_mismatch",
+                    "the entry binding does not match the public source, asset, amount and burn",
                 ));
             }
         }
@@ -643,6 +811,17 @@ impl AssetOrchardTransferAction {
             }
             None => payload.push(0),
         }
+        match &self.entry {
+            Some(entry) => {
+                payload.push(1);
+                append_len_bytes_vec(&mut payload, entry.from.as_bytes())?;
+                append_len_bytes_vec(&mut payload, entry.asset_id.as_bytes())?;
+                payload.extend_from_slice(&entry.amount.to_le_bytes());
+                append_len_bytes_vec(&mut payload, entry.burn_transaction_id.as_bytes())?;
+            }
+            None => payload.push(0),
+        }
+        payload.extend_from_slice(&self.entry_binding_hash.to_bytes()?);
         payload.extend_from_slice(&self.exit_binding_hash.to_bytes()?);
         payload.extend_from_slice(&self.action_binding_hash.to_bytes()?);
         let digest = Sha3_256::digest(&payload);
@@ -683,14 +862,26 @@ impl AssetOrchardTransferAction {
             self.encrypted_outputs[0].to_bytes()?,
             self.encrypted_outputs[1].to_bytes()?,
         ];
-        let (exit_asset_tag_lo, exit_asset_tag_hi, exit_amount) = match &self.exit {
-            Some(exit) => {
-                exit.validate()?;
-                let tag = AssetTag::derive(&exit.asset_id)?;
-                (tag.lo, tag.hi, exit.amount)
-            }
-            None => (0, 0, 0),
-        };
+        let (public_asset_tag_lo, public_asset_tag_hi, exit_amount, entry_amount) =
+            match (&self.exit, &self.entry) {
+                (Some(exit), None) => {
+                    exit.validate()?;
+                    let tag = AssetTag::derive(&exit.asset_id)?;
+                    (tag.lo, tag.hi, exit.amount, 0)
+                }
+                (None, Some(entry)) => {
+                    entry.validate()?;
+                    let tag = AssetTag::derive(&entry.asset_id)?;
+                    (tag.lo, tag.hi, 0, entry.amount)
+                }
+                (None, None) => (0, 0, 0, 0),
+                (Some(_), Some(_)) => {
+                    return Err(AssetOrchardError::new(
+                        "asset_orchard_transfer_entry_and_exit",
+                        "one transfer either brings value in or takes value out, not both",
+                    ))
+                }
+            };
         Ok(AssetOrchardTransferPublicFields {
             pool_domain: self.pool_domain.to_field()?,
             anchor: self.anchor.to_field()?,
@@ -710,10 +901,12 @@ impl AssetOrchardTransferAction {
                 encrypted_output_hash(0, &encrypted_outputs[0])?,
                 encrypted_output_hash(1, &encrypted_outputs[1])?,
             ],
-            exit_asset_tag_lo,
-            exit_asset_tag_hi,
+            public_asset_tag_lo,
+            public_asset_tag_hi,
             exit_amount,
+            entry_amount,
             exit_binding_hash: self.exit_binding_hash.to_bytes()?,
+            entry_binding_hash: self.entry_binding_hash.to_bytes()?,
         })
     }
 

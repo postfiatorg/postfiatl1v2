@@ -286,6 +286,49 @@ pub fn synthesize_sinsemilla_commitment_from_assigned_subpieces(
     )
 }
 
+/// Witness one Sinsemilla message piece holding `num_bits` bits of `value`.
+///
+/// The returned piece is a fresh witness. The caller MUST constrain its cell equal to a cell it
+/// has already bound to the intended bits; nothing here ties the piece to anything else.
+pub fn witness_asset_orchard_message_piece(
+    layouter: &mut impl Layouter<pallas::Base>,
+    sinsemilla_chip: AssetOrchardSinsemillaChip,
+    label: &str,
+    value: Value<&pallas::Base>,
+    num_bits: usize,
+) -> Result<AssetOrchardMessagePiece, Error> {
+    if num_bits == 0 || num_bits % ASSET_ORCHARD_SINSEMILLA_K != 0 {
+        return Err(Error::Synthesis);
+    }
+    MessagePiece::from_subpieces(
+        sinsemilla_chip,
+        layouter.namespace(|| label.to_string()),
+        [RangeConstrained::bitrange_of(value, 0..num_bits)],
+    )
+}
+
+/// A short Sinsemilla commitment over pieces the caller has bound itself.
+pub fn synthesize_sinsemilla_commitment_from_bound_pieces(
+    layouter: &mut impl Layouter<pallas::Base>,
+    sinsemilla_chip: AssetOrchardSinsemillaChip,
+    ecc_chip: AssetOrchardEccChip,
+    domain: AssetOrchardCommitDomain,
+    label: &str,
+    pieces: Vec<AssetOrchardMessagePiece>,
+    rcm: Value<pallas::Scalar>,
+) -> Result<X<pallas::Affine, AssetOrchardEccChip>, Error> {
+    let message = Message::from_pieces(sinsemilla_chip.clone(), pieces);
+    synthesize_sinsemilla_commitment_from_message(
+        layouter,
+        sinsemilla_chip,
+        ecc_chip,
+        domain,
+        label,
+        message,
+        rcm,
+    )
+}
+
 fn synthesize_sinsemilla_commitment_from_message(
     layouter: &mut impl Layouter<pallas::Base>,
     sinsemilla_chip: AssetOrchardSinsemillaChip,
