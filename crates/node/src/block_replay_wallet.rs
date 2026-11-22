@@ -11,6 +11,7 @@ pub(super) fn verify_blocks_read_only(store: &NodeStore) -> io::Result<BlockVeri
 }
 
 fn verify_blocks_from_store(store: &NodeStore) -> io::Result<BlockVerificationReport> {
+    postfiat_storage::pq_pool::audit(store.data_dir(), &store.read_shielded()?, None)?;
     let genesis = store.read_genesis()?;
     let blocks = store.read_blocks()?;
     let ordered_batches = store.read_ordered_batches()?;
@@ -2797,6 +2798,7 @@ pub fn native_pft_supply_breakdown(
         notes: _,
         nullifiers: _,
         turnstile_events: _,
+        pq_pool_v1,
         pq_fixture: _, // disposable test units, outside native PFT supply
         orchard,
     } = shielded;
@@ -2807,7 +2809,9 @@ pub fn native_pft_supply_breakdown(
             format!("duplicate native custody {lane} key `{key}`"),
         )
     };
-    let mut total = 0_u128;
+    let mut total = pq_pool_v1.as_ref()
+        .and_then(|pool| pool.head.assets.get(&"00".repeat(48)))
+        .map_or(0, |asset| u128::from(asset.reserve));
     let mut account_ids = std::collections::BTreeSet::new();
     for account in accounts {
         if !account_ids.insert(account.address.as_str()) {

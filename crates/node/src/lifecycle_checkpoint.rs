@@ -503,7 +503,7 @@ fn import_lifecycle_checkpoint_inner(context: &mut ImportContext<'_>) -> io::Res
 
             let staged_data_dir = staging_root.join(&validator.node_id);
             let import_options = SignedSnapshotImportOptions {
-                data_dir: staged_data_dir,
+                data_dir: staged_data_dir.clone(),
                 snapshot_dir,
                 trusted_publisher_key_file: context.options.trusted_publisher_key_file.clone(),
                 node_id: Some(validator.node_id.clone()),
@@ -516,6 +516,8 @@ fn import_lifecycle_checkpoint_inner(context: &mut ImportContext<'_>) -> io::Res
                     import_signed_snapshot_from_finalized_checkpoint(import_options)?
                 }
             };
+            let store = NodeStore::try_new(&staged_data_dir)?;
+            postfiat_storage::pq_pool::audit(store.data_dir(), &store.read_shielded()?, None)?;
             context.check(
                 &format!("{}.restored_height", validator.node_id),
                 manifest.block_height,

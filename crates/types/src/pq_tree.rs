@@ -79,6 +79,12 @@ pub struct PqIndexes {
 }
 
 impl PqIndexes {
+    pub fn is_spent(&self, serial: &str) -> bool {
+        node(serial).is_ok_and(|s| self.serials.contains(&s))
+    }
+    pub fn contains_commitment(&self, commitment: &str) -> bool {
+        node(commitment).is_ok_and(|c| self.commitments.contains(&c))
+    }
     pub fn page_for_output(&self, asset: &str, epoch: u64, index: u32) -> Option<&str> {
         self.pages
             .get(&(node(asset).ok()?, epoch, index / 2))
@@ -121,11 +127,22 @@ impl PqIndexes {
             pos >>= 1;
         }
         tree.count += 1;
-        if tree.count == PQ_CAPACITY {
-            return Ok(carry);
+        Ok(carry)
+    }
+}
+
+impl PqEpoch {
+    /// Reconstruct the padded root from the complete left subtrees of a
+    /// writable epoch. Frontier occupancy is uniquely determined by count.
+    pub fn frontier_root(&self) -> Result<Node, &'static str> {
+        if self.count >= PQ_CAPACITY {
+            return Err("pq_tree_capacity");
         }
         let mut root = empty()[0];
-        for (level, item) in tree.frontier.iter().enumerate() {
+        for (level, item) in self.frontier.iter().enumerate() {
+            if item.is_some() != ((self.count >> level) & 1 != 0) {
+                return Err("pq_frontier_count");
+            }
             root = if let Some(left) = item {
                 parent(&node(left)?, &root)
             } else {
@@ -137,6 +154,17 @@ impl PqIndexes {
 }
 
 impl PqPool {
+    pub fn tree(&self, asset: &str, epoch: u64) -> Option<&PqEpoch> {
+        let state = self.head.assets.get(asset)?;
+        if epoch == state.epoch {
+            Some(&state.writable)
+        } else {
+            self.indexes
+                .frozen
+                .get(&(node(asset).ok()?, epoch))
+                .map(Arc::as_ref)
+        }
+    }
     pub fn witness(
         &self,
         asset: &str,
@@ -145,12 +173,7 @@ impl PqPool {
         index: u32,
     ) -> Option<[Node; PQ_DEPTH]> {
         let id = node(asset).ok()?;
-        let asset_state = self.head.assets.get(asset)?;
-        let actual = if epoch == asset_state.epoch {
-            asset_state.writable.count
-        } else {
-            self.indexes.frozen.get(&(id, epoch))?.count
-        };
+        let actual = self.tree(asset, epoch)?.count;
         if count > actual || index >= count || count % 2 != 0 {
             return None;
         }
@@ -209,15 +232,7 @@ impl PqPool {
             return Err("pq_invalid_commitment");
         }
         for out in &pair.outputs {
-            if out.ciphertext.len() != 2228
-                || STANDARD
-                    .decode(&out.ciphertext)
-                    .map_err(|_| "pq_ciphertext")?
-                    .len()
-                    != 1670
-            {
-                return Err("pq_ciphertext");
-            }
+            out.envelope()?;
         }
         if pair.height == 0
             || (pair.kind == Mode::Shield) != (pair.mint != 0)
@@ -247,7 +262,12 @@ impl PqPool {
         }
         let tree = &mut state.writable;
         next.indexes.append(asset, state.epoch, tree, coins[0])?;
-        let root = next.indexes.append(asset, state.epoch, tree, coins[1])?;
+        let carry = next.indexes.append(asset, state.epoch, tree, coins[1])?;
+        let root = if tree.count == PQ_CAPACITY {
+            carry
+        } else {
+            tree.frontier_root()?
+        };
         if tree.anchors.len() == PQ_WINDOW {
             tree.anchors.pop_front();
         }

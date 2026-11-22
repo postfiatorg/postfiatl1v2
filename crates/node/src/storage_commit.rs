@@ -2467,6 +2467,9 @@ pub(super) fn write_ordered_commit_with_journal_timed_locked(
     let total_start = std::time::Instant::now();
     let mut timings = empty_apply_batch_write_timing_report();
     let journal = ordered_commit_delta_journal(write)?;
+    if let Some(state) = &journal.shielded {
+        postfiat_storage::pq_pool::persist_pending(store.data_dir(), state)?;
+    }
 
     let genesis = store.read_genesis()?;
     let backend_mode = store.storage_backend_mode()?;

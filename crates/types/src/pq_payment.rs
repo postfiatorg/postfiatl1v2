@@ -9,6 +9,7 @@ pub const ARCHIVE_LIMIT: usize = 149_130;
 pub const REQUEST_LIMIT: usize = 1_048_576;
 pub const INNER_LIMIT: usize = 140_476;
 pub const INNER_PREFIX: usize = 3_648;
+pub const ENVELOPE_BYTES: usize = 1_670;
 pub const PUBLIC_KEY_BYTES: usize = 1952;
 pub const SIGNATURE_BYTES: usize = 3309;
 const PREFIX: usize = 4 + 1 + 1 + 1 + 48 + 8 + 8 + 1;
@@ -279,6 +280,35 @@ pub struct PqOutput {
     pub commitment: String,
     // Canonical padded base64, exactly one 1,670-byte PFSH02 envelope.
     pub ciphertext: String,
+    pub ciphertext_digest: String,
+}
+
+impl PqOutput {
+    const DIGEST_DOMAIN: &'static str = "postfiat.pq.ciphertext.v1";
+
+    pub fn new(commitment: &[u8; 48], envelope: &[u8]) -> Self {
+        Self {
+            commitment: bytes_to_hex(commitment),
+            ciphertext: STANDARD.encode(envelope),
+            ciphertext_digest: postfiat_crypto_provider::hash_hex(Self::DIGEST_DOMAIN, envelope),
+        }
+    }
+
+    pub fn envelope(&self) -> Result<Vec<u8>, &'static str> {
+        if self.ciphertext.len() != ENVELOPE_BYTES.div_ceil(3) * 4 {
+            return Err("pq_ciphertext");
+        }
+        let bytes = STANDARD
+            .decode(&self.ciphertext)
+            .map_err(|_| "pq_ciphertext")?;
+        if bytes.len() != ENVELOPE_BYTES
+            || postfiat_crypto_provider::hash_hex(Self::DIGEST_DOMAIN, &bytes)
+                != self.ciphertext_digest
+        {
+            return Err("pq_ciphertext");
+        }
+        Ok(bytes)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

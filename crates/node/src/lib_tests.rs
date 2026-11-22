@@ -35,6 +35,7 @@ mod tests {
     mod private_primary_replay_gate_tests;
     mod recipient_format_activation;
     mod snapshot_deployment;
+    mod pq_pool_state;
     mod transfer_fee_quote_pending_recipient;
     mod signer_two_user_units;
     mod genesis_external_lane_tests;

@@ -837,6 +837,7 @@ fn validate_issued_supply_custody_inventory(
         additional_solana_routes: _,
     } = ledger;
     let ShieldedState {
+        pq_pool_v1: _,
         pq_fixture: _,
         next_note_position: _,
         notes: _,
@@ -1033,7 +1034,7 @@ pub(super) fn legacy_json_replicated_state_root(
 ) -> io::Result<String> {
     let genesis_hash_hex = genesis_hash(genesis);
     pq_payment_fixture::check_state_domain(&genesis_hash_hex, shielded)?;
-    if shielded.pq_fixture.is_some() {
+    if shielded.pq_fixture.is_some() || shielded.pq_pool_v1.is_some() {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "legacy state root cannot commit the PQ fixture"));
     }
     let legacy_governance = LegacyJsonGovernanceState {
@@ -1918,6 +1919,7 @@ fn assert_governance_state_commitment_inventory_complete(governance: &Governance
 
 fn assert_shielded_state_commitment_inventory_complete(shielded: &ShieldedState) {
     let ShieldedState {
+        pq_pool_v1: _,
         pq_fixture: _,
         next_note_position: _,
         notes: _,
@@ -1963,6 +1965,57 @@ fn append_sorted_raw_commitments(
 
 pub(super) fn append_shielded_state(bytes: &mut Vec<u8>, shielded: &ShieldedState) {
     assert_shielded_state_commitment_inventory_complete(shielded);
+    if let Some(pool) = &shielded.pq_pool_v1 {
+        use postfiat_types::pq_payment::{PqAsset, PqEpoch, PqHead};
+        let PqHead {
+            pairs,
+            last_page,
+            serial_index_root,
+            commitment_index_root,
+            output_index_root,
+            assets,
+        } = &pool.head;
+        append_canonical_u64(bytes, "pq_pool.v1.pairs", *pairs);
+        append_canonical_str(bytes, "pq_pool.v1.last_page", last_page);
+        append_canonical_str(bytes, "pq_pool.v1.serials", serial_index_root);
+        append_canonical_str(bytes, "pq_pool.v1.commitments", commitment_index_root);
+        append_canonical_str(bytes, "pq_pool.v1.outputs", output_index_root);
+        append_canonical_usize(bytes, "pq_pool.v1.assets", assets.len());
+        for (
+            id,
+            PqAsset {
+                epoch,
+                reserve,
+                ingress,
+                exits,
+                fees,
+                frozen_epochs_root,
+                writable,
+            },
+        ) in assets
+        {
+            append_canonical_str(bytes, "pq.asset", id);
+            append_canonical_u64(bytes, "pq.epoch", *epoch);
+            append_canonical_u64(bytes, "pq.reserve", *reserve);
+            append_canonical_u128(bytes, "pq.ingress", *ingress);
+            append_canonical_u128(bytes, "pq.exits", *exits);
+            append_canonical_u128(bytes, "pq.fees", *fees);
+            append_canonical_str(bytes, "pq.frozen", frozen_epochs_root);
+            let PqEpoch {
+                count,
+                frontier,
+                anchors,
+            } = writable;
+            append_canonical_u32(bytes, "pq.count", *count);
+            for slot in frontier {
+                append_option_str(bytes, "pq.frontier", slot);
+            }
+            append_canonical_usize(bytes, "pq.anchors", anchors.len());
+            for root in anchors {
+                append_canonical_str(bytes, "pq.anchor", root);
+            }
+        }
+    }
     if let Some(fixture) = &shielded.pq_fixture {
         append_string_list(bytes, "pq_fixture.commitment", &fixture.commitments);
         append_string_list(bytes, "pq_fixture.serial", &fixture.spent_serials);
