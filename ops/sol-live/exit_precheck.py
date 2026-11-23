@@ -195,6 +195,8 @@ def archive_cmd(args, store, *command):
         "-v",
         f"{args.binary.resolve()}:/opt/node:ro",
     ]
+    if getattr(args, "faucet_file", None):
+        cmd += ["-v", f"{args.faucet_file.resolve()}:{mount}/faucet_account.json:ro"]
     if args.integrity_file:
         cmd += ["-v", f"{args.integrity_file.resolve()}:{mount}/.integrity.key:ro"]
     return json.loads(
