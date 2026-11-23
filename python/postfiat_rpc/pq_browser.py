@@ -140,7 +140,7 @@ class BrowserWallet:
         address = self.account
         if row["pool"] == PQ_POOL_ID:
             wire = base64.b64decode(json.loads(row["wire"])["body"], validate=True)
-            if wire[5] == 2:
+            if wire[71] == 0:
                 address = None
         return dict(address=address, intent_id=row["intent"], action_json=row["wire"])
 

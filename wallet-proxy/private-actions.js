@@ -202,7 +202,7 @@ function parsePublicAction(actionJson, domain) {
                 .update(length).update(chain).update(Buffer.from(domain.genesis_hash, 'hex'))
                 .update(version).update(PQ_POOL).update(wire.subarray(0, prefix)).update(raw).digest('hex');
         }
-        return { kind, value, canonical, poolId: PQ_POOL, statement, statementId, profile: wire[5], assetId: wire.subarray(7, 55).toString('hex'),
+        return { kind, value, canonical, poolId: PQ_POOL, statement, statementId, assetId: wire.subarray(7, 55).toString('hex'),
             payer: wire[71] ? 'pf' + wire.subarray(72, 92).toString('hex') : null };
     }
     let poolId = value.pool_id;
@@ -359,9 +359,9 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
         }
         if (Buffer.byteLength(actionJson, 'utf8') > MAX_ACTION_BYTES) throw refusal(413, 'private_action_too_large');
         const action = parsePublicAction(actionJson);
-        const payerlessIssued = action.profile === 2;
-        if (payerlessIssued && address !== null) throw refusal(403, 'private_action_address_mismatch');
-        if (!(address === null && action.kind === 'pq_payment_v1' && !action.payer) && !ADDRESS_RE.test(String(address))) {
+        const payerless = action.kind === 'pq_payment_v1' && !action.payer;
+        if (payerless && address !== null) throw refusal(403, 'private_action_address_mismatch');
+        if (!payerless && !ADDRESS_RE.test(String(address))) {
             throw refusal(400, 'private_request_invalid');
         }
         if (intentIdFor(config.domain, actionJson) !== intentId) throw refusal(400, 'private_intent_mismatch');
@@ -384,8 +384,8 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
         const assetIds = action.kind === 'shielded_swap_v1' ? [] : [action.assetId || action.value.asset_id];
         if (allowed.length && assetIds.some((id) => !allowed.includes(id))) throw refusal(403, 'private_action_asset_refused');
         return {
-            address, principal: payerlessIssued ? sha3Hex('postfiat.gateway.private-owner.v1', principal) : principal,
-            scope: payerlessIssued ? PRIVATE_SPEND_SCOPE : principal,
+            address, principal: payerless ? sha3Hex('postfiat.gateway.private-owner.v1', principal) : principal,
+            scope: payerless ? PRIVATE_SPEND_SCOPE : principal,
             intentId, actionJson, kind: action.kind,
             canonical: action.canonical, statement: action.statement,
             actionHash: sha3Hex(ACTION_DOMAIN, action.canonical),
@@ -501,9 +501,9 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
                 // release the wallet's notes if the authority has no reservation.
                 if (/^pq_[a-z0-9_]+$/.test(result.code) || result.final
                     || ['private_action_queue_full', 'private_action_stale_tip'].includes(result.code)) {
-                    const lookup = await callSource(config.sources[0], 'private_action_receipt', {intent_id: request.intentId});
-                    if (lookup.ok && lookup.result?.schema === NODE_RECEIPT_SCHEMA
-                        && lookup.result.intent_id === request.intentId && lookup.result.state === 'pending_unknown') {
+                    const receipts = await allSources('private_action_receipt', {intent_id: request.intentId});
+                    if (receipts.every(r => r.ok && r.result?.schema === NODE_RECEIPT_SCHEMA
+                        && r.result.intent_id === request.intentId && r.result.state === 'pending_unknown')) {
                         throw Object.assign(refusal(409, result.code), { reserved: false });
                     }
                 }

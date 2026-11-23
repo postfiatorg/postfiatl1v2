@@ -302,7 +302,7 @@ def exercise(root, stack):
     for request in map(json.loads, packets):
         if request["method"] == "private_action_submit":
             params = request["params"]
-            if base64.b64decode(json.loads(params["action_json"])["body"])[5] == 2:
+            if base64.b64decode(json.loads(params["action_json"])["body"])[71] == 0:
                 assert params["session_scope"] == "pq-private-spend"
     for stop in stop_daemons:
         stop()

@@ -132,7 +132,7 @@ def submit(home, client, scope, expected_hash=None):
     action_hash = private_action_hash(wire)
     if expected_hash is not None and action_hash != expected_hash:
         raise ValueError("pending payment changed")
-    if base64.b64decode(action["body"], validate=True)[5] == 2:
+    if base64.b64decode(action["body"], validate=True)[71] == 0:
         scope = PRIVATE_SPEND_SCOPE
     try:
         report = client.private_action_submit(**net, pool_id=PQ_POOL_ID, session_scope=scope,

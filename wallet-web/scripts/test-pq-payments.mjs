@@ -284,6 +284,7 @@ async function exercise() {
           if(match[1]) {
             assert.deepEqual(Object.keys(action),['kind','body']);
             assert.equal(action.kind,'pq_payment_v1');
+            if (Buffer.from(action.body, 'base64')[71] === 0) assert.equal(body.address, null);
           } else assert.equal(action.kind,'asset_orchard_private_egress_v1');
         }
         assert.ok(!/"(?:seed|witness|spend_secret|scan_key|account_key|private_key_hex|leaf_index)"/.test(raw.toString()));
