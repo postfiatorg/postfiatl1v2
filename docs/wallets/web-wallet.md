@@ -303,7 +303,7 @@ requires the finality submit capability.
 | `account_lines` | `account` | Read. |
 | `account_offers` | `account` | Read. |
 | `asset_info` | `asset_id` | Read. |
-| `owned_objects` | `owner_public_key_hex`, optional `asset`, `limit`, `cursor`, `omit_owner_keys` | Read, one page; follow `next_cursor` (see [Owned objects pages](../rpc/methods.md#owned-objects-pages)). |
+| `owned_objects` | `owner_public_key_hex`, optional `asset`, `limit`, `cursor`, `omit_owner_keys`, `include_inventory_revision` | Read, one page; follow `next_cursor` (see [Owned objects pages](../rpc/methods.md#owned-objects-pages)). |
 | `owned_recovery_capabilities` | none | Read active v3 FastPay committee/domain/windows. |
 | `owned_certificate` | `certificate_digest` or `lock_id` | Read persisted recovery evidence. |
 | `owned_recovery_status` | `lock_id` | Read ordered recovery state. |
