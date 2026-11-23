@@ -55,12 +55,29 @@ def accounts(c, addresses):
     return reply["context"]["slot"], rows
 
 
-def token_atoms(acc, owner, *, allow_empty=False):
-    if allow_empty and (
+def recipient_atoms(address, acc, owner):
+    require(
+        address == pda(ATA_PROGRAM, bytes(owner), bytes(TOKEN), bytes(MINT)),
+        "Wrong recipient associated token account.",
+    )
+    if (
         acc is None
         or (not acc["executable"] and acc["owner"] == str(SYSTEM) and not acc["data"])
     ):
         return 0
+    return initialized_token_atoms(acc, owner)
+
+
+def token_atoms(acc, owner):
+    atoms = initialized_token_atoms(acc, owner)
+    require(
+        all(acc["data"][start : start + 4] == bytes(4) for start in (72, 109, 129)),
+        "Custody delegate, native reserve or close authority mismatch.",
+    )
+    return atoms
+
+
+def initialized_token_atoms(acc, owner):
     require(
         acc
         and not acc["executable"]
@@ -71,9 +88,8 @@ def token_atoms(acc, owner, *, allow_empty=False):
     d = acc["data"]
     require(
         d[:64] == bytes(MINT) + bytes(owner)
-        and d[108] == 1
-        and all(d[start : start + 4] == bytes(4) for start in (72, 109, 129)),
-        "Token authority, delegate, close authority or state mismatch.",
+        and d[108] == 1,
+        "Token mint, authority or state mismatch.",
     )
     return int.from_bytes(d[64:72], "little")
 
@@ -100,7 +116,7 @@ def inspect_vault(c, recipient=None):
     )
     token_atoms(custody, config)
     if recipient is not None:
-        token_atoms(rows[3], recipient, allow_empty=True)
+        recipient_atoms(keys[3], rows[3], recipient)
     require(
         mint
         and not mint["executable"]

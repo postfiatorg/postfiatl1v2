@@ -184,6 +184,96 @@ Setup re-verifies the archived certificate and compares the authenticated commit
 
 The tag-3 instruction is 317 bytes. Its SHA-256 is `bb32524804b64a9d7d40fec86c9735f8c1f5d5d03d7a8a6963e8c21f83903fe4`. The dedicated pause authority is `ow7wprz3MPEN15BGLyNvdJr5AUq4LNZK2ox1gY1QEJx`. Its signing file stays offline from the payout service. Review the instruction, ordered accounts and simulated bindings in `unsigned.json`.
 
+### Install the reviewed Task Node gateway and relay before tag 3
+
+The reviewed withdrawal route is draft PR #429, branch `wallet/solana-withdraw`, at `56dbebb4672172c9f336dc95b831deb8281e3fd7`. The old resident relay returns 404 for withdrawals. On the trusted host stage a fresh detached checkout for the relay. Set `L1_SOLANA_WITHDRAWALS_ENABLED=false` explicitly in the reviewed startup environments before either rollout. Install the reviewed gateway through the Task Node production release procedure in `docs/releasing.md` once its approved main release contains these changes. Pin the running gateway image digest and its build ID to that release record. Inspect every serving gateway instance. Retain its existing authenticated relay upstream. On the trusted host point the user unit's WorkingDirectory and its Node entry point at the staged relay release, preserve the existing relay credentials by path and restart that relay into the disabled configuration. Do this only in the authorized release window.
+
+```bash
+TN_REVIEW=56dbebb4672172c9f336dc95b831deb8281e3fd7
+TN_RELAY="$KIT/tasknode-relay"
+git -C "$EXIT_WORK/tasknode-withdraw" worktree add --detach "$TN_RELAY" "$TN_REVIEW"
+(cd "$TN_RELAY" && npm ci && node --test server/l1/withdrawal-routes.test.mjs)
+RELAY_UNIT=${RELAY_UNIT:-navcoin-relay.service}
+release_env="$KIT/withdraw-relay.env"
+write_relay_flag() {
+  [[ "$1" == true || "$1" == false ]] || return 1
+  local staged
+  staged=$(mktemp "$release_env.XXXXXXXX") || return 1
+  printf 'L1_SOLANA_WITHDRAWALS_ENABLED=%s\nL1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089\n' "$1" > "$staged" &&
+    mv -T "$staged" "$release_env"
+}
+write_relay_flag false
+dropin="$HOME/.config/systemd/user/$RELAY_UNIT.d"
+install -d -m700 "$dropin"
+printf '%s\n' '[Service]' "WorkingDirectory=$TN_RELAY" 'ExecStart=' \
+  'ExecStart=/usr/bin/node server/l1/relay.js' > "$dropin/99-solana-exit.conf"
+printf 'EnvironmentFile=%s\n' "$release_env" >> "$dropin/99-solana-exit.conf"
+systemctl --user daemon-reload
+systemctl --user restart "$RELAY_UNIT"
+```
+
+Deploy the approved gateway image with its build ID and reviewed route. Verify the running image digest in the deployment manager and enter that image's build ID below. A health response alone cannot identify the deployed bytes.
+
+```bash
+GATEWAY=${GATEWAY:?set the authenticated public gateway HTTPS origin}
+GATEWAY_BUILD=${GATEWAY_BUILD:?set build ID from the reviewed deployed gateway image}
+RELAY_COOKIE_FILE=${RELAY_COOKIE_FILE:?set the existing session cookie jar path}
+RELAY_UNIT=${RELAY_UNIT:-navcoin-relay.service}
+test -r "$RELAY_COOKIE_FILE"
+verify_disabled() {
+  python3 ops/sol-live/exit_cutover.py relay-disabled --user --unit "$RELAY_UNIT" --release "$TN_RELAY" || return 1
+  curl -fsS --max-time 30 "$GATEWAY/health" |
+    jq -e --arg build "$GATEWAY_BUILD" '.ok and .buildId==$build' || return 1
+  local prefix="$GATEWAY/api/l1/bridge/solana/withdrawals" probe code
+  curl -fsS --max-time 30 -b "$RELAY_COOKIE_FILE" "$prefix/readiness" |
+    jq -e '.ok and .ready==false and .message=="Solana withdrawals are not available yet"' || return 1
+  probe=$(printf '%096d' 0)
+  code=$(curl -sS --max-time 30 -b "$RELAY_COOKIE_FILE" -o "$KIT/evidence/disabled-job.json" \
+    -w '%{http_code}' "$prefix/$probe") || return 1
+  test "$code" = 503 && jq -e '.ok==false and .code=="solana_withdrawals_unavailable"' "$KIT/evidence/disabled-job.json"
+}
+disable_public() {
+  write_relay_flag false && systemctl --user restart "$RELAY_UNIT" && verify_disabled
+}
+verify_disabled
+```
+
+The authenticated job GET distinguishes the reviewed disabled route from a masked upstream 404. It creates no job. Keep the flag false through the paid canary and settlement.
+
+### Stage the worker and run its isolation test before funding or initialization
+
+Choose the default user installation unless a privileged operator is provisioning the dedicated account in step 7. The user unit needs unprivileged bubblewrap namespaces, a persistent user manager, a prover-authorized SSH identity and a prover-only known_hosts file with the independently verified host key for `[ssh8.vast.ai]:20628`. Use a prover-specific identity where available. Supply file paths only. The expected fee file already exists from the role check. The service binds it read-only at runtime. Use a new app directory on first install. On a retry verify the saved revision before reusing it.
+
+```bash
+INSTALL_MODE=${INSTALL_MODE:-user}
+[[ "$INSTALL_MODE" == user || "$INSTALL_MODE" == system ]]
+export API=http://127.0.0.1:18089/solana/withdrawals
+if [[ "$INSTALL_MODE" == user ]]; then
+  app="$HOME/.local/lib/pf-sol-exit"
+  state="$HOME/.local/state/pf-sol-exit/jobs"
+  config="$HOME/.config/pf-sol-exit"
+  install -d -m700 "$state" "$config"
+  if [[ ! -d "$app" ]]; then
+    bash ops/sol-live/install-exit-user.sh "$app" "$KIT/evidence/solana/anchor-witness.json"
+  fi
+  test "$(cat "$app/revision")" = "$(git rev-parse HEAD)"
+  cmp "$app/anchor-witness.json" "$KIT/evidence/solana/anchor-witness.json"
+  export EXIT_PROVER_IDENTITY=${EXIT_PROVER_IDENTITY:?set the absolute prover identity path}
+  export EXIT_PROVER_KNOWN_HOSTS=${EXIT_PROVER_KNOWN_HOSTS:?set the absolute prover-only trust file path}
+  [[ "$EXIT_PROVER_IDENTITY" =~ ^/[a-zA-Z0-9_./-]+$ && "$EXIT_PROVER_KNOWN_HOSTS" =~ ^/[a-zA-Z0-9_./-]+$ ]]
+  printf 'EXIT_PROVER_IDENTITY=%s\nEXIT_PROVER_KNOWN_HOSTS=%s\n' "$EXIT_PROVER_IDENTITY" "$EXIT_PROVER_KNOWN_HOSTS" > "$config/prover.env"
+  test "$(loginctl show-user "$USER" -p Linger --value)" = yes
+  sandbox="$app/ops/sol-live/exit-sandbox.sh"
+  user_check() {
+    systemd-run --user --quiet --wait --pipe --collect -p NoNewPrivileges=yes -p LimitCORE=0 \
+      -p "EnvironmentFile=$config/prover.env" "$sandbox" "$1"
+  }
+  user_check self-test | tee "$KIT/evidence/sandbox-self-test.log"
+fi
+```
+
+A failed check stops cutover before tag 3. On hosts where bubblewrap reports a denied UID map, the host administrator must enable the approved bubblewrap profile or provision the dedicated account. The user path shares the operator's host UID, network and loopback services. The operator can change its unit, runtime, state and credential files from outside the namespace. A separate service account with root-owned code provides a host ownership boundary. Both worker types can use their mounted payer and prover credentials.
+
 Fund the dedicated fee payer once. Preserve the journal at `~/var/sol-exit/funding-attempt.json` through retries and releases. This command persists the signature, blockhash and expiry before sending 0.10 SOL. After a timeout rerun it with the same journal and an RPC serving finalized transaction history. A pending signature blocks a second transfer.
 
 ```bash
@@ -217,9 +307,29 @@ If the current checkpoint is already the agreed tip, wait for a newer finalized 
 
 ## 7. Install the isolated payout service
 
+### Default user installation
+
+Use the staged runtime and the self-test from step 4. Check the listener again before starting. The unit repeats the same sandbox self-test on every start. A fresh proof uses a temporary directory and the installed credentials.
+
+```bash
+if [[ "$INSTALL_MODE" == user ]]; then
+  listeners=$(ss -H -ltn 'sport = :18089')
+  test -z "$listeners"
+  install -d -m700 "$HOME/.config/systemd/user"
+  install -m644 ops/sol-live/pft-sol-mainnet-withdraw-user.service "$HOME/.config/systemd/user/"
+  systemctl --user daemon-reload
+  systemctl --user enable --now pft-sol-mainnet-withdraw-user.service
+  timeout 610s python3 ops/sol-live/exit_cutover.py wait-closed --api "$API" --seconds 600 > "$KIT/evidence/closed-readiness.json"
+  user_check proof | tee "$KIT/evidence/service-proof.log"
+fi
+```
+
+### Stronger alternative with a dedicated account and sudo
+
 Install a **system** service under `pf-sol-exit`. Keep the code, pinned ELF and proof host root-owned. Provision a separate SSH identity for this service account on the existing prover and verify its host key out of band. Its home must permit batch SSH to the configured prover and the remote account must support the shared GPU lock. Keep the deployment account's SSH and Solana credentials out of the service home.
 
 ```bash
+if [[ "$INSTALL_MODE" == system ]]; then
 app=/opt/postfiat/sol-exit
 svc=/var/lib/pf-sol-exit
 id pf-sol-exit >/dev/null 2>&1 || sudo useradd --system --user-group --home-dir "$svc" --shell /usr/sbin/nologin pf-sol-exit
@@ -229,26 +339,41 @@ git archive HEAD ops/sol-live solana/deploy solana/pfusdc-egress-verifier/bootst
 sudo -u pf-sol-exit env HOME="$svc" PYTHONPATH="$app/ops/sol-live" EXIT_PROOF_HOME="$app/proof" \
   "$app/venv/bin/python" -c 'import exit_service; from exit_proof import verify_local_host; verify_local_host()'
 fee="$HOME/.config/postfiat/sol-bridge/exit-fee-payer.json"
-test -f "$fee"
-test ! -L "$fee"
-test "$(stat -c %a "$fee")" = 600
-test "$(stat -c %d "$fee")" = "$(stat -c %d "$svc")"
-sudo test ! -e "$svc/fee-payer.json"
-sudo mv -T "$fee" "$svc/fee-payer.json"
+listeners=$(ss -H -ltn 'sport = :18089')
+test -z "$listeners"
+if sudo test -f "$svc/fee-payer.json"; then
+  test ! -e "$fee"
+  test ! -L "$fee"
+  sudo test ! -L "$svc/fee-payer.json"
+  test "$(sudo stat -c %a "$svc/fee-payer.json")" = 600
+  owner=$(sudo stat -c %u "$svc/fee-payer.json")
+  [[ $owner == "$(id -u pf-sol-exit)" || $owner == "$(id -u)" ]]
+else
+  test -f "$fee"
+  test ! -L "$fee"
+  test "$(stat -c '%u:%a' "$fee")" = "$(id -u):600"
+  test "$(stat -c %d "$fee")" = "$(sudo stat -c %d "$svc")"
+  sudo test ! -e "$svc/fee-payer.json"
+  sudo test ! -L "$svc/fee-payer.json"
+  sudo mv -T "$fee" "$svc/fee-payer.json"
+fi
 sudo chown pf-sol-exit:pf-sol-exit "$svc/fee-payer.json"
-test -z "$(ss -H -ltn 'sport = :18089')"
+sudo -u pf-sol-exit env PYTHONPATH="$app/ops/sol-live" "$app/venv/bin/python" -c \
+  'from exit_setup import FEE_PAYER, load, require; import sys; require(load(sys.argv[1]).pubkey()==FEE_PAYER, "Wrong provisioned fee payer")' "$svc/fee-payer.json"
 sudo install -m644 ops/sol-live/pft-sol-mainnet-withdraw.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now pft-sol-mainnet-withdraw.service
 export API=http://127.0.0.1:18089/solana/withdrawals
 timeout 610s python3 ops/sol-live/exit_cutover.py wait-closed --api "$API" --seconds 600 > "$KIT/evidence/closed-readiness.json"
+fi
 ```
 
-A fresh installation uses umask 0022 inside the privileged installer. The service-user import check must pass before moving the funded key. The same-filesystem move places the original fee-payer inode under the service account. On recovery use the already-provisioned key after checking its owner, mode and public address. `ProtectHome=yes` hides the operator's home from the unit. The withdrawal journal is under `/var/lib/pf-sol-exit/jobs`. The Ethereum service and faucet keep their existing ports.
+A fresh installation uses umask 0022 inside the privileged installer. The service-user import check must pass before moving the funded key. The same-filesystem move places the original fee-payer inode under the service account. If interrupted after the move, resume this block at the port check with the existing app and service home. The destination branch checks the inode type and mode, handles an interrupted chown, and verifies its public address before activating the unit. If this unit already owns the listener, resume at closed readiness after verifying its MainPID. If another listener owns it, leave the service stopped and resolve that conflict. `ProtectHome=yes` hides the operator's home from the unit. The withdrawal journal is under `/var/lib/pf-sol-exit/jobs`. The Ethereum service and faucet keep their existing ports.
 
 Run a fresh proof as the installed service user. The root-owned anchor witness came from the verified archive. An empty output directory forces GPU proving and verification.
 
 ```bash
+if [[ "$INSTALL_MODE" == system ]]; then
 sudo systemd-run --quiet --collect --wait --pipe -p User=pf-sol-exit -p Group=pf-sol-exit \
   -p ProtectHome=yes -p ProtectSystem=strict -p PrivateTmp=yes -p NoNewPrivileges=yes \
   --setenv=HOME="$svc" --setenv=EXIT_PROOF_HOME="$app/proof" --setenv=PYTHONPATH="$app/ops/sol-live" \
@@ -257,22 +382,17 @@ with TemporaryDirectory() as d:
     values, proof = prove("checkpoint", read(sys.argv[1]), Path(d))
     assert values and len(proof)==356
     print("service-proof verified")' "$app/anchor-witness.json" | tee "$KIT/evidence/service-proof.log"
+fi
 grep -Fxq 'service-proof verified' "$KIT/evidence/service-proof.log"
 python3 ops/sol-live/exit_canary.py preflight --output "$KIT/canary"
 ```
 
 ### Must be true before the real 0.02 pfUSDC test
 
-The resident navcoin-relay.service is in the postfiat user manager. Set an explicit false flag in its reviewed startup configuration and ensure it is effective before starting the canary. Set the authenticated public gateway origin and cookie-jar path from the reviewed deployment. Run on the trusted relay host. RELAY_UNIT must own the process behind that gateway. Freeze relay config and restarts through settlement. Repeat both checks if the process changes.
+Repeat the disabled relay checks from step 4 against the same deployed gateway and relay. Freeze both deployments through settlement.
 
 ```bash
-GATEWAY=${GATEWAY:?set the authenticated public gateway HTTPS origin}
-RELAY_COOKIE_FILE=${RELAY_COOKIE_FILE:?set the existing session cookie jar path}
-RELAY_UNIT=${RELAY_UNIT:-navcoin-relay.service}
-test -r "$RELAY_COOKIE_FILE"
-python3 ops/sol-live/exit_cutover.py relay-disabled --user --unit "$RELAY_UNIT"
-curl -fsS --max-time 30 -b "$RELAY_COOKIE_FILE" "$GATEWAY/api/l1/bridge/solana/withdrawals/readiness" |
-  jq -e '.ok and .ready==false and .message=="Solana withdrawals are not available yet"'
+verify_disabled
 ```
 
 Review the saved evidence for each completed step. Evaluate the final two checks at steps 8 and 9.
@@ -291,6 +411,10 @@ Review the saved evidence for each completed step. Evaluate the final two checks
 grep -Fxq 'service-proof verified' "$KIT/evidence/service-proof.log"
 curl -fsS --max-time 600 "$API/readiness/qualify" | jq -e '.payout_ready and (.burns_open==false) and .qualified_parent and (.relayer_lamports >= .relayer_floor_lamports + .payout_budget_lamports)'
 ```
+
+### Staff and rehearse settlement before the first open
+
+Name a settlement on-call, backup and independently reachable operator for each of the six resident signers. Record coverage, escalation contacts, expected payout volume and available custody margin in the cutover evidence. Each operator must complete a restore rehearsal on isolated state with test credentials. Exercise loss of that signer, fence the old instance, restore the authorized identity and its latest safety journals without duplicate signing, verify its committee identity and finalized parent, then complete a six-signature close and paid settlement. Record all six outcomes and who can perform each restore on call. Defer the first open if any signer, recovery path or settlement shift is unavailable.
 
 ## 8. Open burns in a separate unanimous decision
 
@@ -338,30 +462,54 @@ jq -e '(.validators|length)==6 and .state.settled==20000 and .reference.ordinal=
 
 The paid command discovers the running validator binary, validates its data directory and uses `ratify-solana-exit-paid` to draft from paid.json. It checks the exact packet, finalized slot, raw 64-byte signature and ordinal in the draft before any signing. Each resident signer requires its independent approval for that parent and payout. On an ambiguous submission, locate the accepted amendment and height on all six by the saved draft ID before retrying. Recover paid-round.json from the verified receipt rather than issuing a second attestation.
 
-Require six accepted settlement receipts. On each validator verify that the original redemption is settled for 20,000 atoms with `settlement_receipt_hash` equal to the accepted amendment ID. Reconcile the revision-8 queue, counted reserves and supply allocations against their pre-settlement values. An outstanding signature or accounting discrepancy keeps the public relay disabled.
+Require six accepted settlement receipts. On each validator verify that the original redemption is settled for 20,000 atoms with `settlement_receipt_hash` equal to the accepted amendment ID. Reconcile the revision-8 queue, counted reserves and supply allocations against the saved baseline. The check accounts for intervening burns, other settled packets, newly counted receipts and newly issued supply allocations from the same bucket. Keep the original baseline across retries. An outstanding signature or accounting discrepancy keeps the public relay disabled.
 
 ## 10. Enable the public relay
 
-Assign the settlement duty to the bridge operations on-call and the six resident validator signers before enabling public admission. The on-call reconciles each paid marker and pending L1 packet, obtains six independent attestations and verifies the queue, reserves and supply after every settlement. Use the paid CLI above only for the pinned canary. For other holders validators must independently check the actual owner, ATA, amount and ordinal and draft the corresponding paid amendment on their resident binary. Keep public admission disabled unless this duty is staffed and exercised for the expected traffic. The archived excess custody was 60,003 atoms. Four unsettled 20,000-atom payouts exceed it. On a backlog or missing signer close burns and restore settlement before resuming.
+Assign the settlement duty to the bridge operations on-call and the six resident validator signers before enabling public admission. The on-call reconciles each paid marker and pending L1 packet, obtains six independent attestations and verifies the queue, reserves and supply after every settlement. Use the paid CLI above only for the pinned canary. For other holders validators must independently check the actual owner, ATA, amount and ordinal and draft the corresponding paid amendment on their resident binary. Keep public admission disabled unless this duty is staffed and exercised for the expected traffic. The archived excess custody was 60,003 atoms. Four unsettled 20,000-atom payouts exceed it. On a backlog or missing signer follow Recovery immediately.
 
-After the canary's finalized payout and verified L1 settlement, set `L1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089` and `L1_SOLANA_WITHDRAWALS_ENABLED=true` in the reviewed relay deployment. Read readiness and the original paid job through the authenticated relay.
+After the canary's finalized payout and verified L1 settlement, set `L1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089` and `L1_SOLANA_WITHDRAWALS_ENABLED=true` in the final EnvironmentFile at `$release_env` and restart that unit. Check its actual MainPID and the authenticated public job. Disable admission immediately if either check fails.
+
+```bash
+burn=$(jq -er '.burn_tx_id | select(test("^[0-9a-f]{96}$"))' "$KIT/canary/paid.json")
+sig=$(jq -er '.solana_tx | select(type=="string" and length>0)' "$KIT/canary/paid.json")
+verify_public_payment() {
+  local prefix="$GATEWAY/api/l1/bridge/solana/withdrawals"
+  python3 ops/sol-live/exit_cutover.py relay-enabled --user --unit "$RELAY_UNIT" --release "$TN_RELAY" || return 1
+  curl -fsS --max-time 60 -b "$RELAY_COOKIE_FILE" "$prefix/readiness" | jq -e '.ok and .ready' || return 1
+  curl -fsS --max-time 60 -b "$RELAY_COOKIE_FILE" "$prefix/$burn" |
+    tee "$KIT/evidence/public-paid-job.json" |
+    jq -e --arg burn "$burn" --arg sig "$sig" '.stage=="paid" and .burn_tx_id==$burn and .solana_tx==$sig'
+}
+write_relay_flag true
+if ! systemctl --user restart "$RELAY_UNIT" || ! verify_public_payment; then
+  disable_public
+  exit 1
+fi
+```
 
 ## Recovery
 
-For an open route, close direct L1 admission with a separate unanimous decision. Preserve evidence and wait for six accepted receipts and six closed descriptors.
+On signer loss or a settlement backlog, disable public admission immediately by running `disable_public` on the relay host. Confirm its effective false flag and the authenticated disabled-job response. If the relay cannot be controlled, block the public withdrawal path at the gateway and verify denial there. Preserve the original burn IDs, pending claims, journals and finalized payment references. Page the settlement on-call and all signer operators. Five validators can finalize direct burns. Direct burns remain possible until a unanimous close commits. Track new burns and outstanding custody continuously. Restore the sixth signer using its rehearsed recovery path, fence any old signer before resuming, and verify the restored committee identity, safety history and agreed parent. With all six available, close direct L1 admission with a separate unanimous decision, pay and settle all pending claims using their original packets, and reconcile custody before considering a separate reopen. Preserve evidence and wait for six accepted receipts and six closed descriptors.
 
 ```bash
 python3 ops/sol-live/exit_govern.py close --revision "$REV" --release-height "$H" --output "$KIT/evidence/close-accepted.json"
 ```
 
-Disabling public admission or pausing Solana leaves finalized L1 burns pending. Keep the replay-capable validator release, restore payout and reuse the original burn ID. The worker records the payout signature and its expiry before broadcast and reconciles the finalized marker on restart. To rebuild a damaged SQLite journal, stop the payout unit, run the following as the service account, and restart only after recovery succeeds.
+Disabling public admission or pausing Solana leaves finalized L1 burns pending. Keep the replay-capable validator release, restore payout and reuse the original burn ID. The worker records the payout signature and its expiry before broadcast and reconciles the finalized marker on restart. To rebuild a damaged SQLite journal, stop the payout unit, use the matching installed runtime, and restart only after recovery succeeds.
 
 ```bash
+if [[ "$INSTALL_MODE" == user ]]; then
+  systemctl --user stop pft-sol-mainnet-withdraw-user.service
+  user_check rebuild
+  systemctl --user start pft-sol-mainnet-withdraw-user.service
+else
 sudo systemctl stop pft-sol-mainnet-withdraw.service
 sudo -u pf-sol-exit env EXIT_FEE_KEY=/var/lib/pf-sol-exit/fee-payer.json \
   /opt/postfiat/sol-exit/venv/bin/python /opt/postfiat/sol-exit/ops/sol-live/exit_service.py \
   --state /var/lib/pf-sol-exit/jobs --rebuild
 sudo systemctl start pft-sol-mainnet-withdraw.service
+fi
 ```
 
 A rebuild checks L1 redemptions and finalized Solana markers, retains the old database and its SQLite sidecars, and atomically selects the recovered database through `jobs.current`. Pending jobs wait for potentially in-flight blockhashes to expire before resuming. Keep buffer keys whose on-chain rent has yet to be reclaimed.

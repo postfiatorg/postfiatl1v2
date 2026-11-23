@@ -60,6 +60,11 @@ class SpendGateTest(unittest.TestCase):
                 side_effect=[{"custody_atoms": 100000}, {"custody_atoms": 120000}],
             ),
         ):
+            for preparatory_label in ("exit.buffer", "exit.upload", "exit.checkpoint"):
+                with patch.object(payout, "check_custody", side_effect=ValueError("shortfall")):
+                    with self.assertRaisesRegex(ValueError, "shortfall"):
+                        payout.funded_send(c, preparatory_label, [])
+                    self.assertEqual(sent, [])
             with self.assertRaisesRegex(ValueError, "Shared custody"):
                 payout.funded_send(c, "exit.withdrawal", [], before_send=record)
             record.assert_not_called()

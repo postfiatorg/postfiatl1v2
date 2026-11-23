@@ -77,7 +77,10 @@ def rotation_clearance(head):
         ).splitlines()
         require(files, f"Missing resident signing history on validator-{i}.")
         for name in files:
-            match = re.fullmatch(r"epoch-\d+-[a-f0-9]{96}-height-(\d+)\.json", name)
+            prefix = r"epoch-[0-9]+-[a-f0-9]{96}-"
+            match = re.fullmatch(r"height-([0-9]+)\.json", name) or re.fullmatch(
+                prefix + r"height-([0-9]+)(?:-view-[0-9]+\.timeout-vote)?\.json", name
+            )
             require(
                 match and int(match[1]) <= head["block_height"],
                 f"Unknown or uncommitted signing round on validator-{i}.",

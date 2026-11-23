@@ -51,7 +51,7 @@ from exit_segments import (
     validate_segment,
     committee,
 )
-from exit_precheck import inspect_vault, token_atoms, parent_of, qualify_path
+from exit_precheck import inspect_vault, recipient_atoms, parent_of, qualify_path
 from exit_proof import available, prove
 
 ATA = pk("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
@@ -104,7 +104,7 @@ def funded_send(c, label, instructions, *signers, rent=0, before_send=None):
     balance(c, rent + fee)
     if before_send is None:
         require(label != "exit.withdrawal", "Withdrawal journal is required.")
-    if label == "exit.withdrawal":
+    if label in {"exit.buffer", "exit.upload", "exit.checkpoint", "exit.withdrawal"}:
         check_custody(c)
     tx = Transaction([c.payer, *signers], message, block)
     sig = str(tx.signatures[0])
@@ -469,7 +469,8 @@ def upload(c, vals, work):
         create_key(path)
     signer = load(path)
     buf = signer.pubkey()
-    if not c.account(buf):
+    account = c.account(buf)
+    if account is None:
         alloc = create_account(
             dict(
                 from_pubkey=c.owner,
@@ -480,14 +481,26 @@ def upload(c, vals, work):
             )
         )
         funded_send(c, "exit.buffer", [alloc], signer, rent=c.rent(len(vals)))
+        existing = bytes(len(vals))
+    else:
+        require(
+            account["owner"] == str(VERIFIER)
+            and not account["executable"]
+            and len(account["data"]) == len(vals),
+            "Unexpected proof buffer owner or layout.",
+        )
+        existing = account["data"]
     for off in range(0, len(vals), 700):
+        chunk = vals[off : off + 700]
+        if existing[off : off + len(chunk)] == chunk:
+            continue
         funded_send(
             c,
             "exit.upload",
             [
                 Instruction(
                     VERIFIER,
-                    b"\x05" + off.to_bytes(2, "little") + vals[off : off + 700],
+                    b"\x05" + off.to_bytes(2, "little") + chunk,
                     [rw(buf, True)],
                 )
             ],
@@ -601,14 +614,16 @@ def reclaim_completed(c, work):
 
 
 def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
+    check_custody(c)
     if owner is not None:
         ata = pda(ATA, bytes(owner), bytes(TOKEN), bytes(MINT))
-        token_atoms(c.account(ata), owner, allow_empty=True)
+        recipient_atoms(ata, c.account(ata), owner)
     reclaim_completed(c, work)
     check_work_capacity(work)
     vals, proof = prove(kind, witness, work)
     require(0 < len(vals) <= 2048 and len(proof) == 356, "Invalid proof size.")
     balance(c)
+    check_custody(c)
     if on_pay:
         on_pay()
     signer = upload(c, vals, work)
@@ -627,7 +642,7 @@ def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
     ixs = [set_compute_unit_limit(400_000)]
     if owner is not None:
         destination = c.account(ata)
-        token_atoms(destination, owner, allow_empty=True)
+        recipient_atoms(ata, destination, owner)
         burn_marker = marker(witness["receipt"]["tx_id"])
         rent += rent_shortfall(c, c.account(burn_marker), 1, VERIFIER)
         rent += rent_shortfall(c, destination, 165, TOKEN)

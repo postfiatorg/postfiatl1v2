@@ -92,7 +92,7 @@ def token_deltas(tx, owner=PHANTOM):
 
 
 def balances(c):
-    from exit_precheck import token_atoms
+    from exit_precheck import recipient_atoms
 
     addr = pda(ATA, bytes(PHANTOM), bytes(TOKEN), bytes(MINT))
     acc = c.account(addr)
@@ -106,7 +106,7 @@ def balances(c):
     )
     return dict(
         ata=str(addr),
-        usdc_atoms=token_atoms(acc, PHANTOM, allow_empty=True),
+        usdc_atoms=recipient_atoms(addr, acc, PHANTOM),
         pfusdc_atoms=int(line[0]["balance"]),
     )
 
@@ -485,11 +485,14 @@ def settlement_state(status, paid):
         "Settlement does not identify the original withdrawal packet.",
     )
     (bucket,) = [b for b in status["buckets"] if b["bucket_id"] == BUCKET]
-    supply = sum(
-        a["remaining_atoms"]
-        for a in status["allocations"]
+    allocations = [
+        a for a in status["allocations"]
         if a["purpose"] == "vault_bridge_supply" and a["bucket_id"] == BUCKET
-    )
+    ]
+    others = [
+        r for r in status["redemptions"]
+        if r["bucket_id"] == BUCKET and r["burn_tx_id"] != paid["burn_tx_id"]
+    ]
     return dict(
         state=row["state"],
         settled=row["settled_atoms"],
@@ -497,19 +500,36 @@ def settlement_state(status, paid):
         counted=bucket["counted_value_atoms"],
         queue=bucket["redemption_queue_atoms"],
         outstanding=bucket["outstanding_vault_bridge_atoms"],
-        supply=supply,
+        supply=sum(a["remaining_atoms"] for a in allocations),
+        activity=dict(
+            issued=sum(a["amount_atoms"] for a in allocations),
+            credited=sum(r["counted_value_atoms"] for r in status["receipts"] if r["bucket_id"] == BUCKET),
+            other_burns=sum(r["amount_atoms"] for r in others),
+            other_settled=sum(r["settled_atoms"] for r in others),
+        ),
+        packet=row["withdrawal_packet_hash"],
     )
 
 
 def check_settlement(before, after, amendment):
+    # Older baselines lack the activity counters. Only their original quiet-window
+    # comparison can be proved. Preserve them across retries.
+    delta = dict(issued=0, credited=0, other_burns=0, other_settled=0)
+    if "activity" in before:
+        require(before["packet"] == after["packet"], "Baseline names another packet.")
+        delta = {k: after["activity"][k] - before["activity"][k] for k in delta}
+        require(min(delta.values()) >= 0, "Cumulative bucket activity regressed.")
+    settled = 20000 + delta["other_settled"]
     require(
         before["state"] == "pending"
         and before["settled"] == 0
         and after["state"] == "settled"
         and after["settled"] == 20000
         and after["receipt"] == amendment
-        and after["outstanding"] == before["outstanding"]
-        and all(before[k] - after[k] == 20000 for k in ("counted", "queue", "supply")),
+        and after["outstanding"] == before["outstanding"] + delta["issued"] - delta["other_burns"]
+        and after["queue"] == before["queue"] + delta["other_burns"] - settled
+        and after["supply"] == before["supply"] + delta["issued"] - settled
+        and after["counted"] == before["counted"] + delta["credited"] - settled,
         "Settlement receipt or revision-8 accounting differs.",
     )
 
@@ -533,7 +553,12 @@ def settlement(out, amendment=None, height=None):
             "Expected pending redemption.",
         )
         if before_path.exists():
-            require(read(before_path) == state, "Pre-settlement accounting changed.")
+            baseline = read(before_path)
+            require(
+                baseline["state"] == "pending" and baseline["settled"] == 0
+                and baseline.get("packet", state["packet"]) == state["packet"],
+                "Invalid saved baseline for this packet.",
+            )
         else:
             save(before_path, state)
         return
