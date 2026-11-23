@@ -65,12 +65,20 @@ pub(super) fn validate_decision(
                 .into(),
         );
     }
-    require_unanimity(amendment, &active_validator_ids(governance).map_err(|e| e.to_string())?)?;
+    require_unanimity(
+        amendment,
+        &active_validator_ids(governance).map_err(|e| e.to_string())?,
+    )?;
     if amendment.kind == solana_exit::OPEN {
         if solana_exit::open_height(governance).is_some()
             || height >= record.profile.expires_at_height
         {
             return Err("Solana exit burns already opened or descriptor expired".into());
+        }
+        verify_open_history(governance)?;
+    } else if amendment.kind == solana_exit::CLOSE {
+        if solana_exit::open_height(governance).is_none() {
+            return Err("Solana exit burns are already closed".into());
         }
     } else {
         solana_exit::payout_fields(&amendment.kind)?;
@@ -87,7 +95,10 @@ pub(super) fn apply_decision(
 ) -> Result<(), String> {
     let genesis = genesis.ok_or("Solana exit decision requires genesis")?;
     validate_decision(genesis, governance, amendment, height)?;
-    if amendment.kind == solana_exit::OPEN {
+    if matches!(
+        amendment.kind.as_str(),
+        solana_exit::OPEN | solana_exit::CLOSE
+    ) {
         return Ok(());
     }
     let payout = solana_exit::payout_fields(&amendment.kind)?;
@@ -110,4 +121,121 @@ pub(super) fn apply_decision(
         &amendment.amendment_id,
         height,
     )
+}
+
+/// Ordinary validator-set amendments replace the members with the numbered local set.
+/// A real membership change has no registry transition witness for the frozen checker.
+fn changes_numbered_set(a: &GovernanceAmendment) -> bool {
+    a.kind == GOVERNANCE_KIND_VALIDATOR_SET
+        && (a.value as usize != a.validators.len()
+            || local_validator_ids(a.value).is_ok_and(|ids| ids != a.validators))
+}
+
+/// Block finality epochs start at one. The current Foundation signature verifier
+/// counts prior updates from zero, and Cobalt forbids V2 authorizations outright.
+/// Check the actual record against the guest's requirements in both paths.
+fn checker_accepts_authorization_form(
+    governance: &GovernanceState,
+    update: &ValidatorRegistryUpdateRecord,
+) -> bool {
+    let signatures = &update.signed_authorizations;
+    let Ok(quorum) = postfiat_ordering_fast::bft_quorum_threshold(update.validators.len()) else {
+        return false;
+    };
+    if update.quorum < quorum
+        || signatures.len() < quorum
+        || signatures.len() != update.votes.len()
+        || signatures.len() != update.support.len()
+    {
+        return false;
+    }
+    let finality_epoch = 1 + governance
+        .validator_registry_updates
+        .iter()
+        .filter(|prior| prior.activation_height < update.activation_height)
+        .count() as u64;
+    signatures
+        .iter()
+        .all(|a| a.committee_epoch == finality_epoch && a.proposal_slot == update.activation_height)
+}
+
+fn verify_open_history(governance: &GovernanceState) -> Result<(), String> {
+    let anchor = solana_exit::TRUSTED_CHECKPOINT_HEIGHT;
+    for update in &governance.validator_registry_updates {
+        // A Foundation update may have been ordered for a different activation height.
+        if update.activation_height >= anchor
+            || update
+                .signed_authorizations
+                .iter()
+                .any(|a| a.proposal_slot >= anchor)
+        {
+            if update.activation_height == anchor
+                || !checker_accepts_authorization_form(governance, update)
+            {
+                return Err(format!("Solana exit checker cannot cross registry update at height {} from checkpoint {anchor}", update.activation_height));
+            }
+        }
+    }
+    for record in governance
+        .amendment_activation_records
+        .iter()
+        .filter(|r| r.activated_height >= anchor && r.kind == GOVERNANCE_KIND_VALIDATOR_SET)
+    {
+        if record.previous_value != record.new_value
+            || governance
+                .amendments
+                .iter()
+                .find(|a| a.amendment_id == record.amendment_id)
+                .is_none_or(changes_numbered_set)
+        {
+            return Err(format!(
+                "Solana exit checker cannot cross validator-set amendment at height {}",
+                record.activated_height
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Evaluate against the parent, before applying any action in this batch. This
+/// is shared by proposal, commit (including catch-up), and full archive replay.
+pub(super) fn verify_rotation_interlock(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    batch: &GovernanceActionBatch,
+    height: u64,
+) -> io::Result<()> {
+    let updates = &batch.validator_registry_updates;
+    let changes_set = batch.amendments.iter().any(changes_numbered_set);
+    if (updates.is_empty() && !changes_set)
+        || solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
+            .is_none_or(|h| height < h)
+    {
+        return Ok(());
+    }
+    if !changes_set
+        && updates.len() == 1
+        && crate::cobalt_handoff::governance_batch_action_count(batch) == 1
+        && updates[0].activation_height == height
+        && checker_accepts_authorization_form(governance, &updates[0])
+    {
+        return Ok(());
+    }
+    let reason = if solana_exit::open_height(governance).is_some()
+        || batch.amendments.iter().any(|a| a.kind == solana_exit::OPEN)
+    {
+        "Solana burns are open or opening; close burns in a separate unanimous block"
+    } else if ledger.vault_bridge_redemptions.iter().any(|r| {
+        r.withdrawal_packet.source_chain_id == postfiat_types::SOLANA_EGRESS_PACKET_CHAIN
+            && r.state == postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_PENDING
+    }) {
+        "Solana redemptions are pending; pay and settle every queued redemption"
+    } else {
+        return Ok(());
+    };
+    Err(io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        format!("Frozen Solana payout checker cannot follow this committee change: {reason}"),
+    ))
 }

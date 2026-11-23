@@ -2669,6 +2669,7 @@ fn apply_governance_batch_internal(
         )?,
         None => fastpay_pre_state_effects_for_next_block(&store, &ledger)?,
     };
+    crate::solana_exit_governance::verify_rotation_interlock(&genesis, &governance, &ledger, &batch, block_height)?;
     if crate::solana_exit_governance::needs_signatures(&genesis,&batch,block_height)
         || (historical_replay.is_none() && !allow_unsigned_test_fixture) {
         let registry = due_activations.registry.clone().unwrap_or(

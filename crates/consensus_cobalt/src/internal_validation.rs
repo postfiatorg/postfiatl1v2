@@ -1707,7 +1707,7 @@ fn build_cobalt_safety_witness_report(
 }
 
 fn validate_amendment_kind(kind: &str) -> Result<(), String> {
-    if kind == postfiat_types::solana_exit::OPEN {
+    if matches!(kind, postfiat_types::solana_exit::OPEN | postfiat_types::solana_exit::CLOSE) {
         return Ok(());
     }
     if kind.starts_with(postfiat_types::solana_exit::PAID) {

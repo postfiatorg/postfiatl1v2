@@ -1717,7 +1717,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
-        "ratify-solana-exit-open" | "ratify-solana-exit-paid" => {
+        "ratify-solana-exit-open" | "ratify-solana-exit-close" | "ratify-solana-exit-paid" => {
             let validators =
                 split_csv(flag_value(flags, "--validators").ok_or("missing --validators")?);
             let height = flag_value(flags, "--height")
@@ -1726,6 +1726,8 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 .map_err(|_| "invalid proposal height")?;
             let kind = if command == "ratify-solana-exit-open" {
                 postfiat_types::solana_exit::OPEN.to_owned()
+            } else if command == "ratify-solana-exit-close" {
+                postfiat_types::solana_exit::CLOSE.to_owned()
             } else {
                 let packet = flag_value(flags, "--packet-hash").ok_or("missing --packet-hash")?;
                 let slot = flag_value(flags, "--solana-slot").ok_or("missing --solana-slot")?;

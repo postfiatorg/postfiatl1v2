@@ -972,7 +972,7 @@ fn verify_registry_signature(
     Ok(())
 }
 
-fn governance_batch_action_count(batch: &GovernanceActionBatch) -> usize {
+pub(super) fn governance_batch_action_count(batch: &GovernanceActionBatch) -> usize {
     batch.amendments.len()
         + batch.validator_registry_updates.len()
         + batch.cobalt_authority_transitions.len()

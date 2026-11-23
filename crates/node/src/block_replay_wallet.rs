@@ -3088,6 +3088,7 @@ pub(super) fn replay_archived_payload(
         }
         "governance" => {
             let batch: GovernanceActionBatch = parse_archived_payload(block, archive_entry)?;
+            crate::solana_exit_governance::verify_rotation_interlock(genesis, state.governance, state.ledger, &batch, block.header.height)?;
             let has_v2_authorization = batch
                 .amendments
                 .iter()

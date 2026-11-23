@@ -66,10 +66,14 @@ pub fn active(
 }
 
 pub const OPEN: &str = "solana_exit_r8_open";
+pub const CLOSE: &str = "solana_exit_r8_close";
+/// The frozen revision-8 tag-3 binding uses the finalized WAN block at 1753.
+/// The route profile's activation height is a different field.
+pub const TRUSTED_CHECKPOINT_HEIGHT: u64 = 1753;
 pub const PAID: &str = "solana_exit_r8_paid:";
 
 pub fn is_decision(kind: &str) -> bool {
-    kind == OPEN || kind.starts_with(PAID)
+    matches!(kind, OPEN | CLOSE) || kind.starts_with(PAID)
 }
 
 /// The packet hash commits to the burn, amount and source bucket. The burn ID
@@ -119,11 +123,13 @@ pub fn open_height(g: &GovernanceState) -> Option<u64> {
     let (descriptor, _) = registered(g)?;
     g.amendment_activation_records
         .iter()
+        .rev()
         .find(|a| {
-            a.kind == OPEN
+            matches!(a.kind.as_str(), OPEN | CLOSE)
                 && a.value == 1
                 && a.activated_height > descriptor.authorized_height
                 && a.activation_height == a.activated_height
         })
+        .filter(|a| a.kind == OPEN)
         .map(|a| a.activated_height)
 }

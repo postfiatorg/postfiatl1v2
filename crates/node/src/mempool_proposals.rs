@@ -3345,6 +3345,7 @@ fn build_governance_batch_proposal(
         .unwrap_or(read_validator_registry_file(
             &store.data_dir().join(VALIDATOR_REGISTRY_FILE),
         )?);
+    crate::solana_exit_governance::verify_rotation_interlock(&genesis, &governance, &ledger, &batch, block_height)?;
     verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, block_height)?;
 
     verify_storage_commitment_action_readiness(store, &genesis, &batch, &chain_tip)?;
