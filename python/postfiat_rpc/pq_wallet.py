@@ -185,6 +185,7 @@ def parser():
         c.add_argument("--fee", type=int, required=name == "shield", help="PFT fee in atoms. Issued spends use the governed fee.")
         if name != "shield":
             c.add_argument("--to", required=True)
+            c.add_argument("--different-payment", action="store_true", help="confirm this is a different payment from the imported unresolved spend")
             c.add_argument("--replace", metavar="ACTION_HASH", help="use an input from this submitted payment")
         else:
             c.add_argument("--payer", required=True, help="public deposit account")
@@ -256,6 +257,7 @@ def run(args):
     mode = {"shield": "Shield", "pay": "Internal", "unshield": "Exit"}[cmd]
     order = dict(mode=mode, asset="00"*48 if args.asset == "PFT" else args.asset,
                  amount=args.amount, fee=fee,
+                 different_payment=getattr(args, "different_payment", False),
                  recipient=getattr(args, "to", None), replace=getattr(args, "replace", None))
     if mode == "Shield":
         order.update(payer=args.payer, sequence=args.sequence, account_key=str(args.account_key.absolute()))

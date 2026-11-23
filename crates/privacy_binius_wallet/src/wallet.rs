@@ -204,7 +204,8 @@ impl Wallet {
         let attempts: Vec<_> = self
             .attempts
             .iter()
-            .map(|(id, p)| json!({"action_hash":id,"phase":p.phase,"asset":p.asset}))
+            .map(|(id, p)| json!({"action_hash":id,"phase":p.phase,"asset":p.asset,
+                "unknown_order":!p.conflict_final && p.order_id.is_none() && p.payment.parts().is_ok_and(|parts| parts.0.mode != Mode::Shield)}))
             .collect();
         json!({"attempts":attempts,"finalized":totals,"pending":delta,"height":self.point.height,"pairs":self.point.pairs,"keys":self.recovery.count})
     }
@@ -388,6 +389,8 @@ impl Wallet {
 pub struct Order {
     #[serde(default)]
     pub replace: Option<String>,
+    #[serde(default)]
+    pub different_payment: bool,
     pub mode: Mode,
     pub asset: String,
     pub amount: u64,
@@ -430,6 +433,17 @@ impl Wallet {
                 &terms,
             ))
         };
+        if order_id.is_some() && !o.different_payment {
+            for (id, p) in &self.attempts {
+                if p.asset == o.asset && !p.conflict_final && p.order_id.is_none()
+                    && p.payment.parts()?.0.mode != Mode::Shield
+                    && Some(id) != o.replace.as_ref()
+                    && !parent.is_some_and(|parent| parent.shared_input.is_some() && parent.shared_input == p.shared_input)
+                {
+                    return Err(format!("Imported spend {id} is unresolved. Retry its bytes, select it for a replacement sharing an input, or confirm this is a different payment.").into());
+                }
+            }
+        }
         if let Some((id, _)) = self.attempts.iter().find(|(id, attempt)| {
             order_id.is_some()
                 && attempt.order_id == order_id
@@ -857,6 +871,7 @@ mod fee_tests {
                 format!("pf{}", "33".repeat(20))
             };
             let order = |fee| Order {
+                different_payment: false,
                 replace: None,
                 mode,
                 asset: asset.into(),
@@ -908,6 +923,7 @@ mod fee_tests {
         wallet.notes.retain(|_, note| note.value == 2);
         let metrics = wallet
             .prove(Order {
+                different_payment: false,
                 replace: None,
                 mode: Mode::Exit,
                 asset: asset.into(),

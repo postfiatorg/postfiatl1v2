@@ -236,18 +236,19 @@ class BrowserWallet:
         fee = None
         if (trusted.get("pq_issued_fee") or [None])[0] == self.issue:
             fee = str(issued_fee(trusted, self.issue))
-        phases = {a["action_hash"]:a["phase"] for a in balance["attempts"]}
+        attempts = {a["action_hash"]:a for a in balance["attempts"]}
         payments = []
         for row in db.execute("SELECT * FROM payments WHERE network=? AND pool=? AND phase!='final' ORDER BY rowid DESC",
                               (compact(self.net), PQ_POOL_ID)):
             action_hash = private_action_hash(row["wire"])
-            phase = phases.get(action_hash, row["phase"])
+            attempt = attempts.get(action_hash, {})
+            phase = attempt.get("phase", row["phase"])
             if phase in ("final", "replaced") and phase != row["phase"]:
                 db.execute("UPDATE payments SET phase=? WHERE intent=?", (phase, row["intent"]))
             if phase in ("prepared", "submitted", "replaced"):
                 wire = base64.b64decode(json.loads(row["wire"])["body"])
                 payments.append(dict(intent=row["intent"], action_hash=action_hash, phase=phase,
-                                     asset=wire[7:55].hex(), spend=wire[71] == 0))
+                                     unknown_order=attempt.get("unknown_order", False), asset=wire[7:55].hex(), spend=wire[71] == 0))
         return dict(payments=payments, issued_fee=fee, network=self.net, account=self.account, issue=self.issue,
                     address=local(self.home, "address")["address"], sequence=str(account["sequence"] + 1) if account else None,
                     public={NATIVE:str(account["balance"]), self.issue:str(sum(l["balance"] for l in lines))} if account else {},
@@ -307,7 +308,7 @@ class BrowserWallet:
                 check(any(p["action_hash"] == replacement and p["asset"] == body["asset"] and p["spend"]
                           and p["phase"] == "submitted" for p in state["payments"])
                       and body["mode"] != "Shield", "Select a submitted payment of the same asset.")
-            check(set(body) - {"replace"} == {"mode","asset","amount","fee","recipient","migration"}, "Unexpected payment field.")
+            check(set(body) - {"replace", "different_payment"} == {"mode","asset","amount","fee","recipient","migration"}, "Unexpected payment field.")
             mode, asset = body["mode"], body["asset"]
             check(mode in MODES and asset in (NATIVE, self.issue), "Unknown payment mode or issue.")
             atomic_number(body["amount"])

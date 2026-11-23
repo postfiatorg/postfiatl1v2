@@ -53,6 +53,7 @@ export default function PqPayments() {
   const [progress, setProgress] = useState('');
   const [review, setReview] = useState(null);
   const [replacement, setReplacement] = useState('');
+  const [differentPayment, setDifferentPayment] = useState(false);
   const [result, setResult] = useState(null);
   const [activity, setActivity] = useState(null);
   const [tab, setTab] = useState('payments');
@@ -95,9 +96,11 @@ export default function PqPayments() {
     const terms = isMigration ? { mode:'Shield', asset:migration.asset_id, amount:String(migration.amount),
       recipient:null, fee, migration:true } : { mode, asset, amount, fee:paymentFee, recipient:mode === 'Shield' ? null : recipient, migration:false };
     if (replacement && !isMigration && mode !== 'Shield') terms.replace = replacement;
+    if (differentPayment && !isMigration && mode !== 'Shield') terms.different_payment = true;
     if (terms.mode === 'Internal') (await initWasm()).pq_check_address(wallet.network.chain_id, wallet.network.genesis_hash, recipient);
     const r = await call('review', terms);
     for (const k of Object.keys(terms)) if (r.terms[k] !== terms[k]) throw Error('Review changed.');
+    setDifferentPayment(false);
     setReview(r); setResult(null);
   }
   async function confirm() {
@@ -133,7 +136,7 @@ export default function PqPayments() {
       <button onClick={() => work('Connecting', () => refresh())}>Reconnect</button></section> : <>
     <div className="pq-grid"><div>
     {!migrating ? <section><div className="pq-heading"><h2>Payment</h2><label>Asset <select aria-label="Asset" disabled={!!busy} value={asset}
-      onChange={e => change(() => {setAsset(e.target.value); setReplacement('');})}>
+      onChange={e => change(() => {setAsset(e.target.value); setDifferentPayment(false); setReplacement('');})}>
       <option value={NATIVE}>PFT</option><option value={wallet.issue}>pfUSDC</option></select></label></div>
       <div className="pq-actions">{Object.entries(modes).map(([m,name]) => <button key={m} disabled={!!busy}
         aria-pressed={mode === m} onClick={() => change(() => setMode(m))}>{name}</button>)}</div>
@@ -143,6 +146,9 @@ export default function PqPayments() {
         {wallet.payments.filter(p => p.phase === 'submitted' && p.spend && p.asset === asset).map(p =>
           <option key={p.intent} value={p.action_hash}>Replace {p.intent.slice(0,16)} using a shared note</option>)}
       </select></label>}
+      {mode !== 'Shield' && wallet.payments.some(p => p.unknown_order && p.asset === asset) &&
+        <label><input type="checkbox" checked={differentPayment} onChange={e => change(() => setDifferentPayment(e.target.checked))}/>
+          This is a different payment from the imported unresolved spend</label>}
       <label>Amount ({unit} atoms)<input inputMode="numeric" value={amount} disabled={!!busy}
         onChange={e => change(() => setAmount(e.target.value))}/></label>
       {mode !== 'Shield' && <label>{mode === 'Exit' ? 'Public exit account' : 'Recipient receive address'}
@@ -169,6 +175,7 @@ export default function PqPayments() {
     {review && <section aria-label="Signer review"><h2>Signer review</h2>
       <Field label="Action">{modes[review.terms.mode]} {review.terms.amount} {review.terms.asset === NATIVE ? 'PFT' : 'pfUSDC'} atoms</Field>
       <Field label="Asset / issue">{review.terms.asset === NATIVE ? 'PFT' : review.terms.asset}</Field>
+      {review.terms.different_payment && <p>This is a different payment from the imported unresolved spend.</p>}
       {review.terms.replace && <Field label="Replaces payment">{review.terms.replace}</Field>}
       {review.terms.recipient && <details><summary>Destination · {review.terms.recipient.slice(0,18)}…</summary><code>{review.terms.recipient}</code></details>}
       <Field label="Fee">{review.terms.fee} {review.terms.mode === 'Shield' || review.terms.asset === NATIVE ? 'PFT' : 'pfUSDC'} atoms · {review.terms.mode !== 'Shield' ? 'paid from private notes' : review.terms.asset === NATIVE ? 'deducted from deposit' : 'paid by depositor'}</Field>
