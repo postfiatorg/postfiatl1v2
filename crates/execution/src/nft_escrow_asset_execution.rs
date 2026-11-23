@@ -1219,7 +1219,7 @@ fn apply_asset_operation(
             // `issued_payment` cannot carry a memo, so it never reaches an
             // account that requires one once the gate is active.
             require_destination_memo(ledger, &operation.to, 0, compatibility, block_height)?;
-            apply_issued_payment(ledger, operation, block_height, compatibility)
+            apply_issued_payment(genesis, ledger, operation, block_height, compatibility)
         }
         AssetTransactionOperation::IssuedPaymentV2(operation) => {
             if transaction.unsigned.transaction_kind
@@ -1243,7 +1243,13 @@ fn apply_asset_operation(
                 compatibility,
                 block_height,
             )?;
-            apply_issued_payment(ledger, &operation.payment(), block_height, compatibility)
+            apply_issued_payment(
+                genesis,
+                ledger,
+                &operation.payment(),
+                block_height,
+                compatibility,
+            )
         }
         AssetTransactionOperation::AccountSet(operation) => {
             if transaction.unsigned.transaction_kind != postfiat_types::ACCOUNT_SET_TRANSACTION_KIND
@@ -2972,6 +2978,7 @@ fn apply_asset_operation(
                 operation,
                 block_height,
                 compatibility,
+                orchard_balances,
             )
         }
         AssetTransactionOperation::VaultBridgeRedeemSettle(operation) => {

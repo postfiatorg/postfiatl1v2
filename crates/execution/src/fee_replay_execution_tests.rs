@@ -2419,3 +2419,36 @@
         assert_eq!("missing_vault_bridge_pinned_profile", error.0);
         assert_eq!(before, missing_historical, "failed lookup mutated state");
     }
+
+    #[test]
+    #[ignore = "release rehearsal at height 1760"]
+    fn exit_review5_issuer_payment_requires_deposit_even_before_registration() {
+        let mut g = Genesis::new_with_validator_count("postfiat-wan-devnet-2", 6);
+        g.consensus_v2_activation_height = Some(1);
+        let series = postfiat_types::solana_source_series_id(
+            &g.chain_id,
+            postfiat_types::solana_exit::FAMILY,
+            postfiat_types::solana_exit::BUCKET,
+        );
+        let mut asset = AssetDefinition::new(&g.chain_id, "issuer", "PFUSDC", 1, 6).unwrap();
+        asset.asset_id = series.clone();
+        let mut ledger =
+            LedgerState::new_with_assets(vec![Account::new("holder", 200, None)], vec![asset], vec![]);
+        let pay = IssuedPaymentOperation {
+            from: "issuer".into(),
+            to: "holder".into(),
+            issuer: "issuer".into(),
+            amount: 1,
+            asset_id: series,
+        };
+        let compat = AssetExecutionCompatibility::strict()
+            .with_bridge_verification_activation_height(None)
+            .with_governed_solana_exit(&g, &postfiat_types::GovernanceState::new(6));
+        apply_issued_payment(&g, &mut ledger, &pay, 1759, compat).unwrap();
+        assert_eq!(
+            apply_issued_payment(&g, &mut ledger, &pay, 1760, compat)
+                .unwrap_err()
+                .0,
+            "solana_exit_issuer_payment_disabled"
+        );
+    }

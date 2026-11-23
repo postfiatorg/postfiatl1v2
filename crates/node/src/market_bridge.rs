@@ -1167,7 +1167,7 @@ pub fn pfusdc_ingress_preflight(
 pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultBridgeRouteReport> {
     let store = NodeStore::new(options.data_dir);
     let genesis = store.read_genesis()?;
-    let (governance, ledger, tip) = if store.transactional_storage_active()? {
+    let (governance, ledger, shielded, tip) = if store.transactional_storage_active()? {
         let database = store.transactional_store()?;
         let snapshot = database.read_snapshot()?;
         let tip = snapshot.chain_tip();
@@ -1179,6 +1179,9 @@ pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultB
             snapshot
                 .current_state("ledger")?
                 .ok_or_else(|| io::Error::other("missing committed ledger"))?,
+            snapshot
+                .current_state::<ShieldedState>("shielded")?
+                .ok_or_else(|| io::Error::other("missing committed shielded state"))?,
             tip,
         )
     } else {
@@ -1192,6 +1195,7 @@ pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultB
         (
             store.read_governance()?,
             store.read_ledger()?,
+            store.read_shielded()?,
             read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?,
         )
     };
@@ -1199,6 +1203,7 @@ pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultB
         &genesis,
         &governance,
         &ledger,
+        shielded.asset_orchard_balances(),
         tip.height,
         &options.asset_id,
     )
@@ -1208,6 +1213,7 @@ pub(super) fn vault_bridge_route_at_height(
     genesis: &Genesis,
     governance: &GovernanceState,
     ledger: &LedgerState,
+    orchard_balances: &[postfiat_types::AssetOrchardAssetBalance],
     height: u64,
     asset_id: &str,
 ) -> io::Result<VaultBridgeRouteReport> {
@@ -1347,26 +1353,36 @@ pub(super) fn vault_bridge_route_at_height(
     };
     let (nav, trust_class) = if is_solana {
         let bucket = bucket.ok_or_else(|| deny("Solana source bucket is missing".into()))?;
-        (VaultBridgeNavReport::SolanaExit {
-            family_nav_profile: FamilyNavProfileReport {
-                id: profile.profile_id.clone(),
-                source_class: profile.source_class.clone(),
-                verifier_kind: profile.verifier_kind.clone(),
-                policy_hash: policy_hash.clone(),
+        let claims = postfiat_execution::SolanaExitAccounting::read(ledger, orchard_balances)
+            .map_err(|(_, message)| io::Error::new(io::ErrorKind::InvalidData, message))?;
+        (
+            VaultBridgeNavReport::SolanaExit {
+                family_nav_profile: FamilyNavProfileReport {
+                    id: profile.profile_id.clone(),
+                    source_class: profile.source_class.clone(),
+                    verifier_kind: profile.verifier_kind.clone(),
+                    policy_hash: policy_hash.clone(),
+                },
+                source_backing: SolanaSourceBackingReport {
+                    series_supply_atoms: claims.supply,
+                    outstanding_vault_bridge_atoms: claims.outstanding,
+                    revision: route.route_epoch,
+                    bucket_id: bucket.bucket_id.clone(),
+                    policy_hash: bucket.policy_hash.clone(),
+                },
             },
-            source_backing: SolanaSourceBackingReport {
-                revision: route.route_epoch,
-                bucket_id: bucket.bucket_id.clone(),
-                policy_hash: bucket.policy_hash.clone(),
-            },
-        }, postfiat_types::solana_exit::SETTLEMENT_TRUST_CLASS)
+            postfiat_types::solana_exit::SETTLEMENT_TRUST_CLASS,
+        )
     } else {
-        (VaultBridgeNavReport::Route {
-            nav_profile_id: profile.profile_id.clone(),
-            nav_profile_source_class: profile.source_class.clone(),
-            nav_profile_verifier_kind: profile.verifier_kind.clone(),
-            nav_profile_policy_hash: policy_hash.clone(),
-        }, route.route_trust_class())
+        (
+            VaultBridgeNavReport::Route {
+                nav_profile_id: profile.profile_id.clone(),
+                nav_profile_source_class: profile.source_class.clone(),
+                nav_profile_verifier_kind: profile.verifier_kind.clone(),
+                nav_profile_policy_hash: policy_hash.clone(),
+            },
+            route.route_trust_class(),
+        )
     };
     Ok(VaultBridgeRouteReport {
         beacon_finality_anchor,

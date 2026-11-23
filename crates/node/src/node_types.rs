@@ -1091,6 +1091,8 @@ pub struct FamilyNavProfileReport {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SolanaSourceBackingReport {
+    pub series_supply_atoms: u64,
+    pub outstanding_vault_bridge_atoms: u64,
     pub revision: u32,
     pub bucket_id: String,
     pub policy_hash: String,

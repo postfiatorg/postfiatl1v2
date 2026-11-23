@@ -50,7 +50,7 @@ fn export_local_solana_exit_chain() {
     );
 }
 
-fn funded_burn(g: &Genesis, ledger: &mut LedgerState) -> SignedAssetTransaction {
+fn funded_holder(ledger: &mut LedgerState) -> (String, String, String) {
     // Reassign the test holder's local balance line to a fresh, isolated signer.
     let k = ml_dsa_65_keygen().unwrap();
     let owner = address_from_public_key(&k.public_key);
@@ -83,6 +83,11 @@ fn funded_burn(g: &Genesis, ledger: &mut LedgerState) -> SignedAssetTransaction 
         1_000_000,
         Some(public.clone()),
     ));
+    (owner, public, private)
+}
+
+fn funded_burn(g: &Genesis, ledger: &mut LedgerState) -> SignedAssetTransaction {
+    let (owner, public, private) = funded_holder(ledger);
     let nav = ledger.nav_asset(solana_exit::FAMILY).unwrap();
     let op = VaultBridgeBurnToRedeemOperation {
         owner: owner.clone(),
@@ -200,8 +205,9 @@ fn block_burn(
 fn solana_exit_registration_leaves_burns_closed() {
     let (g, gov, mut ledger) = scheduled_parent(false);
     let tx = funded_burn(&g, &mut ledger);
-    let lookup =
-        |id: &str| crate::market_bridge::vault_bridge_route_at_height(&g, &gov, &ledger, H, id);
+    let lookup = |id: &str| {
+        crate::market_bridge::vault_bridge_route_at_height(&g, &gov, &ledger, &[], H, id)
+    };
     let family = lookup(solana_exit::FAMILY).unwrap();
     assert_eq!(family, lookup("541e451e6ae96b6680988655571a0feec59c7f1d073c9b5d29547254cab38a3be540f8767446d25baebc7081ce97aef7").unwrap());
     let expected_eth: VaultBridgeRouteProfileV1 = serde_json::from_str(include_str!(
@@ -295,7 +301,8 @@ fn solana_exit_route_reserves_queued_burn_once() {
 fn ethereum_series_selects_bucket_policy_across_epochs() {
     let (g, gov, ledger) = archived_parent();
     let lookup = |id: &str| {
-        crate::market_bridge::vault_bridge_route_at_height(&g, &gov, &ledger, 1753, id).unwrap()
+        crate::market_bridge::vault_bridge_route_at_height(&g, &gov, &ledger, &[], 1753, id)
+            .unwrap()
     };
     let id = ledger
         .asset_definitions
@@ -880,6 +887,7 @@ fn certified_fork(output: Option<&Path>) {
             &g,
             &store.read_governance().unwrap(),
             &store.read_ledger().unwrap(),
+            store.read_shielded().unwrap().asset_orchard_balances(),
             h + 1,
             SERIES
         )
@@ -1030,7 +1038,7 @@ fn exit_review_route_distinguishes_family_nav_and_settlement() {
     let (g, gov, ledger) = scheduled_parent(true);
     let lookup = |id| {
         serde_json::to_value(
-            crate::market_bridge::vault_bridge_route_at_height(&g, &gov, &ledger, H + 2, id)
+            crate::market_bridge::vault_bridge_route_at_height(&g, &gov, &ledger, &[], H + 2, id)
                 .unwrap(),
         )
         .unwrap()
@@ -1376,6 +1384,10 @@ fn exit_review_registration_holds_rotation_until_open_or_retired() {
         .find(|b| solana_exit::matches_bucket(b))
         .unwrap();
     bucket.outstanding_vault_bridge_atoms = 0;
+    // Model a drained series before testing the remaining ingress obligation.
+    for line in ledger.trustlines.iter_mut().filter(|l| l.asset_id == SERIES) {
+        line.balance = 0;
+    }
     assert!(
         check(&gov, &ledger).is_err(),
         "new registration must protect permanent initialization"
@@ -1658,4 +1670,215 @@ fn exit_review4_export_root_genesis_schedule_is_incompatible() {
             .unwrap_err()
             .contains("1769")
     );
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review5_burn_reconciles_orchard_and_public_claims() {
+    let (g, gov, mut ledger) = scheduled_parent(true);
+    let tx = funded_burn(&g, &mut ledger);
+    let batch =
+        TransactionBatch::new_with_asset_transactions(String::new(), vec![], vec![], vec![tx]);
+    let orchard = [postfiat_types::AssetOrchardAssetBalance {
+        asset_id: SERIES.into(),
+        ingress_total: 1,
+        egress_total: 0,
+        live_total: 1,
+    }];
+    let compat = crate::execution_actions::asset_execution_compatibility_for_genesis_and_governance(
+        &g, &gov,
+    );
+    let run = |ledger: &mut LedgerState| {
+        crate::execution_actions::execute_transparent_batch_with_orchard(
+            &g,
+            &gov,
+            ledger,
+            &batch,
+            H + 2,
+            compat,
+            &orchard,
+        )
+        .remove(0)
+    };
+    let before = bucket_amounts(&ledger);
+    let receipt = run(&mut ledger);
+    assert_eq!(receipt.code, "solana_exit_supply_mismatch");
+    assert_eq!(bucket_amounts(&ledger), before);
+    ledger
+        .trustlines
+        .iter_mut()
+        .find(|l| l.asset_id == SERIES && l.balance > 20_000)
+        .unwrap()
+        .balance -= 1;
+    let receipt = run(&mut ledger);
+    assert!(receipt.accepted, "{}", receipt.message);
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review5_open_rejects_unreconciled_supply() {
+    let (g, mut gov, mut ledger) = scheduled_parent(false);
+    ledger
+        .trustlines
+        .iter_mut()
+        .find(|l| l.asset_id == SERIES && l.balance > 0)
+        .unwrap()
+        .balance -= 1;
+    let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
+    let batch = committee.decision(&g, &gov, OPEN, H + 1);
+    let receipt = crate::execution_actions::execute_governance_batch(
+        &mut gov,
+        Some(&mut ledger),
+        Some(&g),
+        &batch,
+        H + 1,
+    )
+    .remove(0);
+    assert!(
+        !receipt.accepted && receipt.message.contains("outstanding"),
+        "{}",
+        receipt.message
+    );
+    assert!(solana_exit::open_height(&gov).is_none());
+    let orchard = [postfiat_types::AssetOrchardAssetBalance {
+        asset_id: SERIES.into(),
+        ingress_total: 1,
+        egress_total: 0,
+        live_total: 1,
+    }];
+    let receipt = crate::execution_actions::execute_governance_batch_with_replay(
+        &mut gov,
+        Some(&mut ledger),
+        Some(&g),
+        &batch,
+        H + 1,
+        false,
+        &orchard,
+    )
+    .remove(0);
+    assert!(receipt.accepted, "{}", receipt.message);
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review5_route_reports_both_claim_totals() {
+    let (g, gov, mut ledger) = scheduled_parent(false);
+    ledger
+        .trustlines
+        .iter_mut()
+        .find(|l| l.asset_id == SERIES && l.balance > 0)
+        .unwrap()
+        .balance -= 1;
+    let route =
+        crate::market_bridge::vault_bridge_route_at_height(&g, &gov, &ledger, &[], H, SERIES)
+            .unwrap();
+    let backing = &serde_json::to_value(route).unwrap()["source_backing"];
+    assert_eq!(backing["series_supply_atoms"], 1_629_999);
+    assert_eq!(backing["outstanding_vault_bridge_atoms"], 1_630_000);
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review5_standalone_asset_burn_cannot_orphan_backing() {
+    let (g, gov, mut ledger) = archived_parent();
+    let (owner, public, private) = funded_holder(&mut ledger);
+    let op = postfiat_types::AssetBurnOperation {
+        owner: owner.clone(),
+        issuer: ledger.asset_definition(SERIES).unwrap().issuer.clone(),
+        asset_id: SERIES.into(),
+        amount: 1,
+    };
+    let tx = signed_asset_transaction_for_test(
+        &g,
+        &ledger,
+        &owner,
+        &public,
+        &private,
+        postfiat_types::ASSET_BURN_TRANSACTION_KIND,
+        1,
+        AssetTransactionOperation::AssetBurn(op),
+    );
+    assert!(block_burn(&g, &gov, &mut ledger.clone(), &tx, H - 1).accepted);
+    let compat = crate::execution_actions::asset_execution_compatibility_for_genesis_and_governance(
+        &g, &gov,
+    );
+    let paired = postfiat_execution::execute_asset_orchard_ingress_burn(
+        &g,
+        &mut ledger.clone(),
+        &tx,
+        H,
+        compat,
+    );
+    assert!(paired.accepted, "{}", paired.message);
+    assert_eq!(
+        block_burn(&g, &gov, &mut ledger, &tx, H).code,
+        "solana_exit_unmatched_supply_change"
+    );
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review5_batch_builder_and_committed_route_include_orchard() {
+    let source = NodeStore::new("/var/lib/postfiat/validator-3");
+    let (g, gov, mut ledger) = scheduled_parent(true);
+    let dir = unique_test_dir("revision8-parent");
+    let store = NodeStore::new(&dir);
+    store.init(&g, &source.read_node_state().unwrap()).unwrap();
+    let burn = funded_burn(&g, &mut ledger);
+    let path = dir.join("burn.json");
+    std::fs::write(&path, serde_json::to_vec(&burn).unwrap()).unwrap();
+    let mut tip = source.read_chain_tip().unwrap();
+    tip.height = H + 1;
+    tip.ordered_batch_count = tip.height;
+    store.write_chain_tip(&tip).unwrap();
+    store.write_governance(&gov).unwrap();
+    let mut shielded = source.read_shielded().unwrap();
+    let balances = &mut shielded.orchard.as_mut().unwrap().asset_orchard_balances;
+    assert!(!balances.iter().any(|b| b.asset_id == SERIES));
+    balances.push(postfiat_types::AssetOrchardAssetBalance {
+        asset_id: SERIES.into(),
+        ingress_total: 1,
+        egress_total: 0,
+        live_total: 1,
+    });
+    store.write_shielded(&shielded).unwrap();
+    store.write_ledger(&ledger).unwrap();
+    let batch = || {
+        create_signed_asset_transaction_batch(SignedAssetTransactionBatchOptions {
+            data_dir: dir.clone(),
+            signed_asset_transaction_files: vec![path.clone()],
+            batch_file: dir.join("batch.json"),
+        })
+    };
+    let route = || {
+        serde_json::to_value(
+            vault_bridge_route(VaultBridgeRouteOptions {
+                data_dir: dir.clone(),
+                asset_id: SERIES.into(),
+            })
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    assert!(batch()
+        .err()
+        .expect("batch must refuse excess Orchard claims")
+        .to_string()
+        .contains("solana_exit_supply_mismatch"));
+    let r = route();
+    assert_eq!(r["source_backing"]["series_supply_atoms"], 1_630_001);
+    assert_eq!(
+        r["source_backing"]["outstanding_vault_bridge_atoms"],
+        1_630_000
+    );
+    ledger
+        .trustlines
+        .iter_mut()
+        .find(|l| l.asset_id == SERIES && l.balance > 20_000)
+        .unwrap()
+        .balance -= 1;
+    store.write_ledger(&ledger).unwrap();
+    batch().unwrap();
+    assert_eq!(route()["source_backing"]["series_supply_atoms"], 1_630_000);
+    fs::remove_dir_all(dir).unwrap();
 }

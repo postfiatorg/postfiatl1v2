@@ -1,4 +1,68 @@
+/// Live claims for exactly one source series, including the Orchard turnstile.
+pub struct SolanaExitAccounting {
+    pub supply: u64,
+    pub outstanding: u64,
+    counted: u64,
+}
+
+impl SolanaExitAccounting {
+    pub fn read(
+        ledger: &LedgerState,
+        orchard: &[AssetOrchardAssetBalance],
+    ) -> Result<Self, (&'static str, String)> {
+        use postfiat_types::solana_exit::{BUCKET, SERIES};
+        let mut balances = orchard.iter().filter(|balance| balance.asset_id == SERIES);
+        let orchard_supply = balances.next().map_or(0, |balance| balance.live_total);
+        if balances.next().is_some() {
+            return Err((
+                "issued_supply_duplicate_custody",
+                "duplicate revision-8 Orchard balance".into(),
+            ));
+        }
+        let supply = issued_asset_supply(ledger, SERIES)?
+            .checked_add(orchard_supply)
+            .ok_or_else(|| {
+                (
+                    "issued_supply_overflow",
+                    "revision-8 supply overflows u64".into(),
+                )
+            })?;
+        let bucket = ledger.vault_bridge_bucket(BUCKET);
+        Ok(Self {
+            supply,
+            outstanding: bucket.map_or(0, |b| b.outstanding_vault_bridge_atoms),
+            counted: bucket.map_or(0, |b| b.counted_value_atoms),
+        })
+    }
+
+    pub fn require_reconciled(&self) -> Result<(), (&'static str, String)> {
+        if self.supply != self.outstanding {
+            return Err((
+                "solana_exit_supply_mismatch",
+                format!(
+                    "revision-8 series supply {} differs from bucket outstanding {}",
+                    self.supply, self.outstanding,
+                ),
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn verify_change(&self, after: &Self) -> Result<(), (&'static str, String)> {
+        let supply = i128::from(after.supply) - i128::from(self.supply);
+        let outstanding = i128::from(after.outstanding) - i128::from(self.outstanding);
+        let counted = i128::from(after.counted) - i128::from(self.counted);
+        if supply != outstanding || (supply > 0 && counted < supply) {
+            return Err(("solana_exit_unmatched_supply_change", format!(
+                "revision-8 supply change {supply} requires matching outstanding and counted backing (outstanding change {outstanding}, counted change {counted})"
+            )));
+        }
+        Ok(())
+    }
+}
+
 fn apply_issued_payment(
+    genesis: &Genesis,
     ledger: &mut LedgerState,
     operation: &IssuedPaymentOperation,
     block_height: u64,
@@ -32,6 +96,16 @@ fn apply_issued_payment(
         ));
     }
 
+    if operation.from == operation.issuer
+        && operation.asset_id == postfiat_types::solana_exit::SERIES
+        && postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
+            .is_some_and(|h| block_height >= h)
+    {
+        return Err((
+            "solana_exit_issuer_payment_disabled",
+            "revision-8 issuer payments cannot create redeemable claims".into(),
+        ));
+    }
     let from_index = if operation.from == operation.issuer {
         None
     } else {

@@ -2714,12 +2714,14 @@ fn apply_governance_batch_internal(
     }
     verify_storage_commitment_action_readiness(&store, &genesis, &batch, &chain_tip)?;
     ensure_governance_batch_lifecycle_ready(&genesis, &batch, block_height)?;
-    let receipts = execute_governance_batch(
+    let receipts = crate::execution_actions::execute_governance_batch_with_replay(
         &mut governance,
         Some(&mut ledger),
         Some(&genesis),
         &batch,
         block_height,
+        false,
+        shielded.asset_orchard_balances(),
     );
     let consensus_proposal = build_block_proposal_from_state(BlockProposalPlan {
         genesis: &genesis,

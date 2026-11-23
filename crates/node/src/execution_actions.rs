@@ -41,6 +41,28 @@ pub(super) fn execute_fastlane_primary_for_chain(
             );
         }
     }
+    if let postfiat_types::FastLanePrimaryOperationV1::AnchorCheckpoint { certificate } =
+        &transaction.operation
+    {
+        if postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
+            .is_some_and(|h| block_height >= h)
+            && certificate.votes.first().is_some_and(|vote| {
+                vote.checkpoint.pending_fee_burn_totals.iter().any(|row| {
+                    row.amount_atoms > 0
+                        && bytes_to_hex(&row.asset_id.0) == postfiat_types::solana_exit::SERIES
+                })
+            })
+        {
+            return Receipt::rejected(
+                transaction
+                    .tx_id()
+                    .map(|id| bytes_to_hex(&id.0))
+                    .unwrap_or_else(|_| "fastlane-invalid-id".into()),
+                "solana_exit_unmatched_supply_change",
+                "FastLane checkpoint fees cannot burn revision-8 reserves",
+            );
+        }
+    }
     execute_fastlane_primary_transaction(ledger, transaction, block_height)
 }
 
@@ -1167,7 +1189,15 @@ pub(super) fn execute_governance_batch(
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(governance, ledger, genesis, batch, block_height, false)
+    execute_governance_batch_with_replay(
+        governance,
+        ledger,
+        genesis,
+        batch,
+        block_height,
+        false,
+        &[],
+    )
 }
 
 pub(super) fn execute_archived_governance_batch(
@@ -1177,7 +1207,15 @@ pub(super) fn execute_archived_governance_batch(
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(governance, ledger, genesis, batch, block_height, true)
+    execute_governance_batch_with_replay(
+        governance,
+        ledger,
+        genesis,
+        batch,
+        block_height,
+        true,
+        &[],
+    )
 }
 
 /// An archived governance batch executed with no ledger, as the certificate
@@ -1190,16 +1228,25 @@ pub(super) fn execute_ledgerless_archived_governance_batch(
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(governance, None, Some(genesis), batch, block_height, true)
+    execute_governance_batch_with_replay(
+        governance,
+        None,
+        Some(genesis),
+        batch,
+        block_height,
+        true,
+        &[],
+    )
 }
 
-fn execute_governance_batch_with_replay(
+pub(super) fn execute_governance_batch_with_replay(
     governance: &mut GovernanceState,
     mut ledger: Option<&mut LedgerState>,
     genesis: Option<&Genesis>,
     batch: &GovernanceActionBatch,
     block_height: u64,
     historical_replay: bool,
+    orchard_balances: &[postfiat_types::AssetOrchardAssetBalance],
 ) -> Vec<Receipt> {
     let genesis_lanes = genesis.map(Genesis::external_lanes);
     let mut receipts = Vec::with_capacity(
@@ -1287,6 +1334,7 @@ fn execute_governance_batch_with_replay(
                     genesis,
                     governance,
                     ledger.as_deref_mut(),
+                    orchard_balances,
                     amendment,
                     block_height,
                 ) {

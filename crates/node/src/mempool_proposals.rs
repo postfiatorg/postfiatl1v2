@@ -275,13 +275,15 @@ fn admit_signed_transfer_to_mempool(
         asset_execution_compatibility,
         "mempool admission",
     )?;
+    let orchard_balances = pending_asset_orchard_balances(&store, &mempool)?;
     for pending in &mempool.pending_asset_transactions {
-        let pending_receipt = execute_asset_transaction_with_compatibility(
+        let pending_receipt = execute_asset_transaction_with_compatibility_and_orchard(
             &genesis,
             &mut dry_run_ledger,
             &pending.transaction,
             block_height,
             asset_execution_compatibility,
+            &orchard_balances,
         );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
@@ -300,6 +302,7 @@ fn admit_signed_transfer_to_mempool(
         &mempool,
         block_height,
         asset_execution_compatibility,
+        &orchard_balances,
     )?;
     for pending in &mempool.pending_escrow_transactions {
         let pending_receipt = execute_escrow_transaction(
@@ -419,13 +422,15 @@ fn admit_signed_payment_v2_to_mempool(
             ),
         ));
     }
+    let orchard_balances = pending_asset_orchard_balances(&store, &mempool)?;
     for pending in &mempool.pending_asset_transactions {
-        let pending_receipt = execute_asset_transaction_with_compatibility(
+        let pending_receipt = execute_asset_transaction_with_compatibility_and_orchard(
             &genesis,
             &mut dry_run_ledger,
             &pending.transaction,
             block_height,
             asset_execution_compatibility,
+            &orchard_balances,
         );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
@@ -444,6 +449,7 @@ fn admit_signed_payment_v2_to_mempool(
         &mempool,
         block_height,
         asset_execution_compatibility,
+        &orchard_balances,
     )?;
     for pending in &mempool.pending_escrow_transactions {
         let pending_receipt = execute_escrow_transaction(
@@ -597,6 +603,7 @@ fn admit_signed_asset_transaction_to_mempool(
         &mempool,
         block_height,
         asset_execution_compatibility,
+        orchard_balances,
     )?;
     for pending in &mempool.pending_escrow_transactions {
         let pending_receipt = execute_escrow_transaction(
@@ -645,7 +652,6 @@ fn admit_signed_asset_transaction_to_mempool(
             ));
         }
     }
-    let shielded = store.read_shielded()?;
     verify_global_issued_asset_supply_caps(&dry_run_ledger, &shielded).map_err(|error| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -835,6 +841,7 @@ pub fn admit_fastlane_primary_to_mempool(
         &prefix,
         block_height,
         compatibility,
+        shielded.asset_orchard_balances(),
     )?;
     let receipt = execute_fastlane_primary_for_chain(
         &genesis,
@@ -939,13 +946,15 @@ fn admit_signed_escrow_transaction_to_mempool(
             ));
         }
     }
+    let orchard_balances = pending_asset_orchard_balances(&store, &mempool)?;
     for pending in &mempool.pending_asset_transactions {
-        let pending_receipt = execute_asset_transaction_with_compatibility(
+        let pending_receipt = execute_asset_transaction_with_compatibility_and_orchard(
             &genesis,
             &mut dry_run_ledger,
             &pending.transaction,
             block_height,
             asset_execution_compatibility,
+            &orchard_balances,
         );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
@@ -964,6 +973,7 @@ fn admit_signed_escrow_transaction_to_mempool(
         &mempool,
         block_height,
         asset_execution_compatibility,
+        &orchard_balances,
     )?;
     for pending in &mempool.pending_escrow_transactions {
         let pending_receipt = execute_escrow_transaction(
@@ -1070,12 +1080,14 @@ fn admit_signed_nft_transaction_to_mempool(
     }
     let mut prefix = mempool.clone();
     prefix.pending_offer_transactions.clear();
+    let orchard_balances = pending_asset_orchard_balances(&store, &mempool)?;
     let mut dry_run_ledger = ledger_after_executable_mempool(
         &genesis,
         ledger,
         &prefix,
         block_height,
         asset_execution_compatibility,
+        &orchard_balances,
     )?;
     let dry_run_receipt = execute_nft_transaction(&genesis, &mut dry_run_ledger, &signed);
     if !dry_run_receipt.accepted {
@@ -1131,12 +1143,14 @@ fn admit_signed_offer_transaction_to_mempool(
             ),
         ));
     }
+    let orchard_balances = pending_asset_orchard_balances(&store, &mempool)?;
     let mut dry_run_ledger = ledger_after_executable_mempool(
         &genesis,
         ledger.clone(),
         &mempool,
         block_height,
         asset_execution_compatibility,
+        &orchard_balances,
     )?;
     let dry_run_receipt =
         execute_offer_transaction(&genesis, &mut dry_run_ledger, &signed, block_height);
@@ -1380,12 +1394,26 @@ fn apply_pending_payment_v2(
     Ok(())
 }
 
+pub(super) fn pending_asset_orchard_balances(
+    store: &NodeStore,
+    mempool: &MempoolState,
+) -> io::Result<Vec<postfiat_types::AssetOrchardAssetBalance>> {
+    if mempool.pending_asset_transactions.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(store
+        .read_shielded()?
+        .orchard
+        .map_or_else(Vec::new, |pool| pool.asset_orchard_balances))
+}
+
 pub(super) fn ledger_after_executable_mempool(
     genesis: &Genesis,
     mut ledger: LedgerState,
     mempool: &MempoolState,
     block_height: u64,
     asset_execution_compatibility: AssetExecutionCompatibility,
+    orchard_balances: &[postfiat_types::AssetOrchardAssetBalance],
 ) -> io::Result<LedgerState> {
     for pending in &mempool.pending {
         let receipt = execute_transfer_with_compatibility(
@@ -1424,12 +1452,13 @@ pub(super) fn ledger_after_executable_mempool(
         }
     }
     for pending in &mempool.pending_asset_transactions {
-        let receipt = execute_asset_transaction_with_compatibility(
+        let receipt = execute_asset_transaction_with_compatibility_and_orchard(
             genesis,
             &mut ledger,
             &pending.transaction,
             block_height,
             asset_execution_compatibility,
+            orchard_balances,
         );
         if !receipt.accepted {
             return Err(io::Error::new(
@@ -1526,6 +1555,7 @@ fn apply_pending_atomic_and_fastlane(
     mempool: &MempoolState,
     block_height: u64,
     asset_execution_compatibility: AssetExecutionCompatibility,
+    orchard_balances: &[postfiat_types::AssetOrchardAssetBalance],
 ) -> io::Result<()> {
     // A transaction that is already stale against the committed ledger must
     // not wedge an unrelated admission. At the same time, a pending atomic
@@ -1570,12 +1600,13 @@ fn apply_pending_atomic_and_fastlane(
         }
     }
     for pending in &mempool.pending_asset_transactions {
-        let receipt = execute_asset_transaction_with_compatibility(
+        let receipt = execute_asset_transaction_with_compatibility_and_orchard(
             genesis,
             &mut without_candidate,
             &pending.transaction,
             block_height,
             asset_execution_compatibility,
+            orchard_balances,
         );
         if !receipt.accepted {
             return Err(io::Error::new(
@@ -1889,12 +1920,13 @@ pub(super) fn verify_mempool_state(
                 ),
             ));
         }
-        let receipt = execute_asset_transaction_with_compatibility(
+        let receipt = execute_asset_transaction_with_compatibility_and_orchard(
             genesis,
             &mut dry_run_ledger,
             &entry.transaction,
             block_height,
             asset_execution_compatibility,
+            shielded.asset_orchard_balances(),
         );
         if !receipt.accepted {
             return Err(io::Error::new(
@@ -2667,6 +2699,7 @@ pub fn create_mempool_batch(options: MempoolBatchOptions) -> io::Result<Transact
             payments_v2.push(entry.payment);
         }
     }
+    let orchard_balances = pending_asset_orchard_balances(&store, &mempool)?;
     let pending_asset_transactions = std::mem::take(&mut mempool.pending_asset_transactions);
     let export_bound = external_lane_export_block_bound();
     let mut exports = 0_usize;
@@ -2684,12 +2717,13 @@ pub fn create_mempool_batch(options: MempoolBatchOptions) -> io::Result<Transact
             remaining_asset_transactions.push(entry);
             continue;
         }
-        let receipt = execute_asset_transaction_with_compatibility(
+        let receipt = execute_asset_transaction_with_compatibility_and_orchard(
             &genesis,
             &mut dry_run_ledger,
             &entry.transaction,
             block_height,
             asset_execution_compatibility,
+            &orchard_balances,
         );
         if receipt.accepted {
             exports += usize::from(is_export);
@@ -2898,16 +2932,18 @@ pub fn create_signed_asset_transaction_batch(
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
     let mut dry_run_ledger = ledger;
+    let shielded = store.read_shielded()?;
     let mut asset_transactions = Vec::new();
     for signed_file in &options.signed_asset_transaction_files {
         let signed: SignedAssetTransaction =
             read_json_file(signed_file, "signed asset transaction")?;
-        let receipt = execute_asset_transaction_with_compatibility(
+        let receipt = execute_asset_transaction_with_compatibility_and_orchard(
             &genesis,
             &mut dry_run_ledger,
             &signed,
             block_height,
             asset_execution_compatibility,
+            shielded.asset_orchard_balances(),
         );
         if !receipt.accepted {
             return Err(io::Error::new(
@@ -3370,12 +3406,14 @@ fn build_governance_batch_proposal(
 
     verify_storage_commitment_action_readiness(store, &genesis, &batch, &chain_tip)?;
     ensure_governance_batch_lifecycle_ready(&genesis, &batch, block_height)?;
-    let receipts = execute_governance_batch(
+    let receipts = crate::execution_actions::execute_governance_batch_with_replay(
         &mut governance,
         Some(&mut ledger),
         Some(&genesis),
         &batch,
         block_height,
+        false,
+        shielded.asset_orchard_balances(),
     );
     let (proposed_ordered_batches, ordered_history) =
         proposed_ordered_state(store, &genesis, &batch.batch_id, block_height)?;

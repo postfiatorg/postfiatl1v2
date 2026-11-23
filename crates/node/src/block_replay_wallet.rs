@@ -3125,13 +3125,17 @@ pub(super) fn replay_archived_payload(
                     block.header.height,
                 )?;
             }
-            Ok(crate::execution_actions::execute_archived_governance_batch(
-                state.governance,
-                Some(state.ledger),
-                Some(genesis),
-                &batch,
-                block.header.height,
-            ))
+            Ok(
+                crate::execution_actions::execute_governance_batch_with_replay(
+                    state.governance,
+                    Some(state.ledger),
+                    Some(genesis),
+                    &batch,
+                    block.header.height,
+                    true,
+                    state.shielded.asset_orchard_balances(),
+                ),
+            )
         }
         "shielded" => {
             let batch: ShieldedActionBatch = parse_archived_payload(block, archive_entry)?;

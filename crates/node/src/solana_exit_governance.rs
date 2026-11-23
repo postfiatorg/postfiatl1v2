@@ -123,11 +123,22 @@ pub(super) fn apply_decision(
     genesis: Option<&Genesis>,
     governance: &GovernanceState,
     ledger: Option<&mut LedgerState>,
+    orchard_balances: &[postfiat_types::AssetOrchardAssetBalance],
     amendment: &GovernanceAmendment,
     height: u64,
 ) -> Result<(), String> {
     let genesis = genesis.ok_or("Solana exit decision requires genesis")?;
     validate_decision(genesis, governance, amendment, height)?;
+    if amendment.kind == solana_exit::OPEN {
+        let ledger = ledger.ok_or("opening Solana burns requires the committed ledger")?;
+        ledger
+            .vault_bridge_bucket(solana_exit::BUCKET)
+            .filter(|b| solana_exit::matches_bucket(b))
+            .ok_or("missing governed Solana source bucket")?;
+        return postfiat_execution::SolanaExitAccounting::read(ledger, orchard_balances)
+            .and_then(|claims| claims.require_reconciled())
+            .map_err(|(_, message)| message);
+    }
     if amendment.kind == solana_exit::RETIRE {
         let ledger = ledger.ok_or("Solana exit retirement requires canonical ledger")?;
         if let Some(reason) = redemption_obligation(ledger, height)? {
@@ -135,10 +146,7 @@ pub(super) fn apply_decision(
         }
         return Ok(());
     }
-    if matches!(
-        amendment.kind.as_str(),
-        solana_exit::OPEN | solana_exit::CLOSE
-    ) {
+    if amendment.kind == solana_exit::CLOSE {
         return Ok(());
     }
     let payout = solana_exit::payout_fields(&amendment.kind)?;

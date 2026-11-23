@@ -190,6 +190,12 @@ pub struct ShieldedState {
 }
 
 impl ShieldedState {
+    pub fn asset_orchard_balances(&self) -> &[AssetOrchardAssetBalance] {
+        self.orchard
+            .as_ref()
+            .map_or(&[], |pool| pool.asset_orchard_balances.as_slice())
+    }
+
     pub fn empty() -> Self {
         Self {
             next_note_position: 0,

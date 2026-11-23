@@ -804,6 +804,7 @@ pub fn execute_asset_transaction(
             genesis.external_lane_export_root_activation_height,
         ),
         &[],
+        0,
     )
 }
 
@@ -859,6 +860,7 @@ pub fn execute_asset_transaction_with_compatibility_and_orchard(
         &signing_bytes,
         compatibility,
         orchard_balances,
+        0,
     )
 }
 
@@ -879,6 +881,7 @@ pub fn execute_asset_transaction_with_replay_preimage(
         signing_bytes,
         AssetExecutionCompatibility::strict(),
         &[],
+        0,
     )
 }
 
@@ -900,6 +903,7 @@ pub fn execute_asset_transaction_with_replay_preimage_and_compatibility(
         signing_bytes,
         compatibility,
         &[],
+        0,
     )
 }
 
@@ -921,6 +925,37 @@ pub fn execute_asset_transaction_with_replay_compatibility(
         &signing_bytes,
         compatibility,
         &[],
+        0,
+    )
+}
+
+/// Debit leg of an atomic AssetOrchard ingress. The caller credits the matching
+/// Orchard amount before publishing either trial state.
+pub fn execute_asset_orchard_ingress_burn(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    transaction: &SignedAssetTransaction,
+    height: u64,
+    compatibility: AssetExecutionCompatibility,
+) -> Receipt {
+    let paired_credit = match &transaction.unsigned.operation {
+        AssetTransactionOperation::AssetBurn(burn)
+            if burn.asset_id == postfiat_types::solana_exit::SERIES =>
+        {
+            burn.amount
+        }
+        _ => 0,
+    };
+    execute_asset_transaction_with_checked_preimage(
+        genesis,
+        ledger,
+        transaction,
+        height,
+        asset_transaction_tx_id(transaction),
+        &transaction.unsigned.signing_bytes(),
+        compatibility,
+        &[],
+        paired_credit,
     )
 }
 
@@ -934,6 +969,7 @@ fn execute_asset_transaction_with_checked_preimage(
     signing_bytes: &[u8],
     compatibility: AssetExecutionCompatibility,
     orchard_balances: &[AssetOrchardAssetBalance],
+    paired_orchard_credit: u64,
 ) -> Receipt {
     let allow_legacy_vault_bridge_consume_supply_operator =
         !compatibility.bridge_verification_rules_active(block_height);
@@ -1129,7 +1165,31 @@ fn execute_asset_transaction_with_checked_preimage(
         block_height,
         compatibility,
         orchard_balances,
-    ) {
+    )
+    .and_then(|()| {
+        if postfiat_types::solana_exit::release_height(
+            &genesis.chain_id,
+            &transaction.unsigned.genesis_hash,
+        )
+        .is_some_and(|h| block_height >= h)
+        {
+            // Orchard is unchanged during transparent execution, so it cancels
+            // in the delta. The paired ingress credits its signed burn amount.
+            let before = SolanaExitAccounting::read(ledger, &[])?;
+            let mut after = SolanaExitAccounting::read(&next_ledger, &[])?;
+            after.supply = after
+                .supply
+                .checked_add(paired_orchard_credit)
+                .ok_or_else(|| {
+                    (
+                        "issued_supply_overflow",
+                        "revision-8 ingress supply overflows".into(),
+                    )
+                })?;
+            before.verify_change(&after)?;
+        }
+        Ok(())
+    }) {
         return Receipt::rejected(tx_id, code, message).with_fee_policy_and_state_expansion(
             0,
             0,
@@ -1399,9 +1459,13 @@ pub fn execute_atomic_swap_transaction_with_compatibility(
             asset_id: leg.asset_id.clone(),
             amount: leg.amount,
         };
-        if let Err(error) =
-            apply_issued_payment(&mut next_ledger, &operation, block_height, compatibility)
-        {
+        if let Err(error) = apply_issued_payment(
+            genesis,
+            &mut next_ledger,
+            &operation,
+            block_height,
+            compatibility,
+        ) {
             let (code, message) = atomic_swap_issued_payment_error(error);
             return reject(code, message);
         }

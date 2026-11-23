@@ -7164,6 +7164,7 @@ fn apply_vault_bridge_burn_to_redeem(
     operation: &VaultBridgeBurnToRedeemOperation,
     block_height: u64,
     compatibility: AssetExecutionCompatibility,
+    orchard_balances: &[AssetOrchardAssetBalance],
 ) -> Result<(), (&'static str, String)> {
     let nav_asset = ledger
         .nav_asset(&operation.asset_id)
@@ -7253,6 +7254,7 @@ fn apply_vault_bridge_burn_to_redeem(
                 "Solana exit burns are closed pending explicit governance opening".into(),
             ));
         }
+        SolanaExitAccounting::read(ledger, orchard_balances)?.require_reconciled()?;
         if bucket.status != VAULT_BRIDGE_BUCKET_STATUS_ACTIVE
             || bucket.impairment_factor_bps != 10_000
             || bucket.counted_value_atoms
