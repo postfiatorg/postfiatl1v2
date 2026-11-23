@@ -1915,6 +1915,9 @@ wss } = runtime;
                     owner_public_key_hex: ownerPublicKeyHex,
                     asset,
                     limit: ownedLimit,
+                    // Nodes send node_id and inventory_revision only when
+                    // asked; older nodes ignore the parameter.
+                    include_inventory_revision: true,
                 })
                 : Promise.resolve({ ok: false, result: null, error: null, source: null }),
             includeAssets && address
