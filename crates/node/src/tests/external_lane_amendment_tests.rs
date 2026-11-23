@@ -331,7 +331,8 @@ fn certificate_replay_refuses_a_release_cap_amendment_for_an_unconfigured_lane()
     assert_eq!(receipts[0].code, LANE_NOT_CONFIGURED, "{receipts:?}");
 
     let mut replayed = governance;
-    update_governance_for_certificate_replay(&mut replayed, &genesis, &block, &archive_entry)
+    let registry = read_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE)).unwrap();
+    update_governance_for_certificate_replay(&mut replayed, &registry, &genesis, &block, &archive_entry)
         .expect("certificate replay");
     assert!(replayed.external_lane_release_cap_amendments("not-a-lane").is_empty());
     assert_eq!(replayed, live);

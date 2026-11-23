@@ -349,3 +349,36 @@ fn pq_replacement_fee_waits_for_activation_and_links_the_two_schedules() {
     assert!(receipts[0].accepted);
     assert_eq!(g.pq_issued_fee(PQ_REHEARSAL_ISSUE, 12), None);
 }
+
+#[test]
+fn pq_governance_archive_requires_signatures_before_execution() {
+    let dir = unique_test_dir("pq-governance-archive");
+    let genesis = rehearsal_genesis(&dir);
+    let disk = NodeStore::new(&dir);
+    let registry = read_validator_registry_file(&dir.join(VALIDATOR_REGISTRY_FILE)).unwrap();
+    let mut governance = disk.read_governance().unwrap();
+    let validators = active_validator_ids(&governance).unwrap();
+    let schedule = ratify_governance(RatifyGovernanceOptions {
+        data_dir: dir.clone(), validators: validators.clone(), support: validators,
+        kind: "pq_payment_rehearsal_v1:fee:4".into(), value: 10, activation_height: 0,
+        veto_until_height: 0, paused: false, amendment_file: dir.join("schedule.json"),
+    }).unwrap();
+    let batch = GovernanceActionBatch::new("test", vec![schedule]);
+    let entry = BatchArchiveEntry { batch_kind: "governance".into(), batch_id: batch.batch_id.clone(),
+        payload_hash: String::new(), payload_json: serde_json::to_string(&batch).unwrap() };
+    let mut block = super::dummy_block_record(1);
+    block.header.batch_kind = "governance".into();
+    block.header.batch_id = batch.batch_id.clone();
+    let historical = update_governance_for_certificate_replay(&mut governance, &registry, &genesis, &block, &entry);
+    let replay = block_replay_wallet::replay_archived_payload(&genesis, &block, &entry,
+        block_replay_wallet::ArchivedReplayState {
+            governance: &mut governance, ledger: &mut disk.read_ledger().unwrap(),
+            shielded: &mut disk.read_shielded().unwrap(), bridge: &mut disk.read_bridge().unwrap(),
+            validator_registry: &registry,
+        });
+    for err in [historical.unwrap_err(), replay.unwrap_err()] {
+        assert!(err.to_string().contains("one signed governance authorization"), "{err}");
+    }
+    assert_eq!(governance, disk.read_governance().unwrap());
+    fs::remove_dir_all(dir).unwrap();
+}

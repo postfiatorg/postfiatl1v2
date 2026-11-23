@@ -1536,6 +1536,10 @@ pub fn verify_governance_amendment_replay_bundle(
     };
     let mut seen_amendment_ids = HashSet::new();
     for amendment in &bundle.ordered_amendments {
+        if consensus_artifacts::requires_signed_pq_governance(amendment) {
+            return Err(io::Error::new(io::ErrorKind::InvalidData,
+                "PQ governance requires certified block replay with the historical validator registry"));
+        }
         verify_cobalt_governance_amendment(&domain, amendment)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         if !seen_amendment_ids.insert(amendment.amendment_id.as_str()) {
@@ -2670,7 +2674,7 @@ fn apply_governance_batch_internal(
         None => fastpay_pre_state_effects_for_next_block(&store, &ledger)?,
     };
     if (historical_replay.is_none() && !allow_unsigned_test_fixture)
-        || consensus_artifacts::requires_signed_pq_governance(&batch)
+        || batch.amendments.iter().any(consensus_artifacts::requires_signed_pq_governance)
     {
         let registry = due_activations.registry.clone().unwrap_or(
             read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?,
