@@ -193,7 +193,7 @@ class HandoffTest(unittest.TestCase):
             outstanding_vault_bridge_atoms=10000,
         )
         allocation = dict(
-            bucket_id=BUCKET, purpose="vault_bridge_supply", remaining_atoms=30000
+            bucket_id=BUCKET, purpose="vault_bridge_supply", amount_atoms=30000, remaining_atoms=30000
         )
         red = dict(
             burn_tx_id=paid["burn_tx_id"],
@@ -204,7 +204,7 @@ class HandoffTest(unittest.TestCase):
             settled_atoms=0,
             settlement_receipt_hash="",
         )
-        snapshot = dict(buckets=[bucket], allocations=[allocation], redemptions=[red])
+        snapshot = dict(buckets=[bucket], allocations=[allocation], redemptions=[red], receipts=[])
         before = exit_canary.settlement_state(snapshot, paid)
         bucket.update(counted_value_atoms=10000, redemption_queue_atoms=0)
         allocation["remaining_atoms"] = 10000

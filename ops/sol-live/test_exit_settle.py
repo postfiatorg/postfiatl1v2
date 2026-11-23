@@ -87,3 +87,33 @@ class SettlementTest(unittest.TestCase):
                 c.finalized_reference(paid, altered)
         with self.assertRaises(ValueError):
             c.match_reference(dict(kind=ref["kind"].replace(":9:0:", ":9:1:")), ref)
+
+    def test_accounting_reconciles_concurrent_burn_deposit_and_settlement(self):
+        paid = dict(burn_tx_id="a", withdrawal_packet_hash="packet")
+        red = dict(**paid, amount_atoms=20000, bucket_id=c.BUCKET, state="pending",
+                   settled_atoms=0, settlement_receipt_hash="")
+        other = dict(red, burn_tx_id="b", withdrawal_packet_hash="second", amount_atoms=10000)
+        bucket = dict(bucket_id=c.BUCKET, counted_value_atoms=60000,
+                      redemption_queue_atoms=20000, outstanding_vault_bridge_atoms=40000)
+        alloc = dict(bucket_id=c.BUCKET, purpose="vault_bridge_supply", remaining_atoms=60000,
+                     amount_atoms=60000)
+        receipt = dict(bucket_id=c.BUCKET, counted_value_atoms=60000)
+        status = dict(redemptions=[red], buckets=[bucket], allocations=[alloc], receipts=[receipt])
+        before = c.settlement_state(status, paid)
+        red.update(state="settled", settled_atoms=20000, settlement_receipt_hash="id")
+        status["redemptions"].append(other)
+        bucket.update(counted_value_atoms=40000, redemption_queue_atoms=10000,
+                      outstanding_vault_bridge_atoms=30000)
+        alloc["remaining_atoms"] = 40000
+        c.check_settlement(before, c.settlement_state(status, paid), "id")
+        status["allocations"].append(dict(alloc, amount_atoms=5000, remaining_atoms=5000))
+        status["receipts"].append(dict(receipt, counted_value_atoms=5000))
+        bucket.update(counted_value_atoms=35000, redemption_queue_atoms=0,
+                      outstanding_vault_bridge_atoms=35000)
+        other.update(state="settled", settled_atoms=10000, settlement_receipt_hash="id2")
+        alloc["remaining_atoms"] -= 10000
+        after = c.settlement_state(status, paid)
+        c.check_settlement(before, after, "id")
+        for k in ("counted", "supply", "outstanding", "queue"):
+            with self.assertRaises(ValueError):
+                c.check_settlement(before, dict(after, **{k: after[k]+1}), "id")
