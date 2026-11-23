@@ -641,6 +641,31 @@ async function main() {
             const mutations = [[6, 3]];
             if (file === 'pfusdc-pay.bin' || file === 'pfusdc-exit.bin') {
                 assert.equal(parsed.payer, null);
+                // The published wire corpus uses an archive-only issue. Use the
+                // generic handler with that exact allowed issue for this relay test.
+                const opts = {env: {...privateEnv, WALLET_PROXY_PRIVATE_ACTIONS_POOL_ID: parsed.poolId,
+                    WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID: parsed.assetId,
+                    WALLET_PROXY_PRIVATE_ACTIONS_STORE: path.join(storeDir, 'issued') }};
+                const request = {address:null, intent_id:intentIdFor(DOMAIN,json), action_json:json};
+                const route = createPrivateActions({...opts, rpcRequest:oneShot});
+                for (const method of ['submit', 'receipt']) {
+                    await assert.rejects(route[method]({...request, address:WALLET}, WALLET),
+                        e => e.code === 'private_action_address_mismatch');
+                }
+                const refusal = createPrivateActions({...opts,
+                    rpcRequest: async (_, req) => req.method === 'private_action_submit'
+                        ? {ok:false, error:{code:'pq_fee_mismatch'}}
+                        : {ok:true, result:{schema:'postfiat.private_action_receipt.v1',
+                            intent_id:request.intent_id, state:'pending_unknown'}}});
+                await assert.rejects(refusal.submit(request, WALLET),
+                    e => e.statusCode === 409 && e.code === 'pq_fee_mismatch');
+                const admitted = await route.submit(request, WALLET);
+                assert.equal(admitted.state, 'queued');
+                for (const peer of [a,b]) {
+                    assert.equal(submitsFor(peer, request.intent_id).at(-1).session_scope, 'pq-private-spend');
+                }
+                assert.ok(!JSON.stringify(route.store.read(request.intent_id)).includes(WALLET));
+                await route.receipt(request, WALLET);
                 mutations.push([5, 1], [63, 1], [71, 1]);
             }
             for (const [offset, value] of mutations) {
