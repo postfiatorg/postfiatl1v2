@@ -68,7 +68,12 @@ fn all_modes_bind_the_domain_and_round_trip_exact_bytes() {
             if mode == Mode::Exit {
                 let address =
                     address_from_public_key(&ml_dsa_65_keygen_from_seed(&[7; 32]).public_key);
-                assert_eq!(&inner[72..104], destination(&address).unwrap());
+                let recipient = if asset == "pfusdc" {
+                    format!("pf{}", "42".repeat(20))
+                } else {
+                    address.clone()
+                };
+                assert_eq!(&inner[72..104], destination(&recipient).unwrap());
                 assert!(destination(
                     &postfiat_crypto_provider::checksum_address(&address).unwrap()
                 )
@@ -173,7 +178,7 @@ fn python_and_javascript_transport_round_trip() {
 fn changing_unsigned_terms_invalidates_the_proof_even_after_resigning() {
     use postfiat_crypto_provider::{ml_dsa_65_sign_with_context_seed, TX_SIGNATURE_CONTEXT};
     use postfiat_privacy_binius::VerifyError;
-    let payment = vector("pfusdc-pay");
+    let payment = vector("pfusdc-shield");
     let (terms, _, inner) = payment.parts().unwrap();
     let raw = pft_binius_shielded::wire::ShieldedTx::from_l1_inner(inner)
         .unwrap()
@@ -229,5 +234,36 @@ fn shield_authorization_is_independent_of_proof_signature_and_body_id() {
         assert_eq!(preimage(&changed), msg);
         assert!(verify_l1(&changed, chain()).is_err());
     }
-    assert!(preimage(&vector("pfusdc-pay")).starts_with(b"PFT-SH-FEE-AUTH-V1"));
+}
+
+#[test]
+fn issued_spends_have_only_the_inner_fee_and_no_sender_fields() {
+    let deposit = vector("pfusdc-shield");
+    let (signed, signature, _) = deposit.parts().unwrap();
+    let sender = signed.account.as_ref().unwrap();
+    for name in ["pft-pay", "pft-exit"] {
+        let native = vector(name);
+        let (mut terms, _, inner) = native.parts().unwrap();
+        terms.asset = signed.asset;
+        let mut body = inner.to_vec();
+        if terms.mode == Mode::Exit {
+            body[84..104].fill(42); // A public recipient distinct from the depositor.
+        }
+        let payment = PqPayment::encode(&terms, None, &body).unwrap();
+        assert_eq!(payment.bytes().len(), 72 + body.len());
+        assert!(!payment.bytes().windows(20).any(|w| w == sender.id));
+        assert!(!payment
+            .bytes()
+            .windows(PUBLIC_KEY_BYTES)
+            .any(|w| w == sender.public_key.as_slice()));
+        let mut old_profile = payment.bytes().to_vec();
+        old_profile[5] = 1;
+        assert!(PqPayment::from_bytes(old_profile).is_err());
+        terms.account = signed.account.clone();
+        assert!(PqPayment::encode(&terms, signature, &body).is_err());
+        terms.public_fee = 1;
+        assert!(PqPayment::encode(&terms, signature, &body).is_err());
+        terms.account = None;
+        assert!(PqPayment::encode(&terms, None, &body).is_err());
+    }
 }

@@ -30,7 +30,6 @@ fn main() {
         ("pfusdc", hex_to_bytes(&series).unwrap().try_into().unwrap()),
     ] {
         let issued = asset != [0; 48];
-        let fee = if issued { 0 } else { 1 };
         let mut tree = MerkleTree24::from_owned_leaves(vec![]);
         let mut input = SpendInput::Dummy;
         let mut value = 0;
@@ -40,12 +39,13 @@ fn main() {
             ("topup", Mode::Shield, 5, 0),
             ("exit", Mode::Exit, 0, 20),
         ] {
+            let fee = if issued && mint > 0 { 0 } else { 1 };
             let terms = Terms {
                 mode,
                 asset,
                 epoch: 0,
-                public_fee: if issued { 3 } else { 0 },
-                account: (issued || mint > 0).then(|| Account {
+                public_fee: if issued && mint > 0 { 3 } else { 0 },
+                account: (mint > 0).then(|| Account {
                     id: dest[12..].try_into().unwrap(),
                     sequence: tree.len() as u64 + 1,
                     public_key: key.public_key.as_slice().try_into().map(Box::new).unwrap(),
@@ -62,7 +62,13 @@ fn main() {
                 0,
                 mint,
                 exit,
-                if exit > 0 { dest } else { [0; 32] },
+                if exit > 0 && issued {
+                    destination(&format!("pf{}", "42".repeat(20))).unwrap()
+                } else if exit > 0 {
+                    dest
+                } else {
+                    [0; 32]
+                },
                 fee,
                 None,
                 Some(&|raw| terms.statement_context(chain, raw)),

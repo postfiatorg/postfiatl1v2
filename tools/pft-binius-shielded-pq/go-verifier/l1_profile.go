@@ -21,12 +21,19 @@ type l1Chain struct {
 // the unsigned fee/debit terms. Raw txCtx commits to the complete inner header.
 func verifyL1(b []byte, chain l1Chain) error {
 	bad := errors.New("invalid L1 payment")
-	if len(b) < 72 || len(b) > BudgetBytes || string(b[:6]) != "PFPQ\x01\x01" || b[6] > 2 {
+	if len(b) < 72 || len(b) > BudgetBytes || string(b[:5]) != "PFPQ\x01" || b[6] > 2 {
 		return bad
 	}
 	issued := !bytes.Equal(b[7:55], make([]byte, 48))
-	needAuth := issued || b[6] == 1
-	if b[71] > 1 || (b[71] == 1) != needAuth || (binary.LittleEndian.Uint64(b[63:71]) != 0) != issued {
+	needAuth := b[6] == 1
+	profile := byte(1)
+	if issued && !needAuth {
+		profile = 2
+	}
+	if b[5] != profile {
+		return bad
+	}
+	if b[71] > 1 || (b[71] == 1) != needAuth || (binary.LittleEndian.Uint64(b[63:71]) != 0) != (issued && needAuth) {
 		return bad
 	}
 	end := 72
@@ -51,7 +58,7 @@ func verifyL1(b []byte, chain l1Chain) error {
 	if err != nil {
 		return err
 	}
-	if (tx.VMint > 0) != (b[6] == 1) || (tx.VUnshield > 0) != (b[6] == 2) || tx.VUnshield > math.MaxUint64-tx.Fee || (issued && tx.Fee != 0) {
+	if (tx.VMint > 0) != (b[6] == 1) || (tx.VUnshield > 0) != (b[6] == 2) || tx.VUnshield > math.MaxUint64-tx.Fee || (issued && needAuth && tx.Fee != 0) {
 		return bad
 	}
 	if !bytes.Equal(tx.UnshieldDest[:12], make([]byte, 12)) || (tx.UnshieldDest != [32]byte{}) != (b[6] == 2) {
@@ -70,10 +77,7 @@ func verifyL1(b []byte, chain l1Chain) error {
 	h.Write(raw[:])
 	h.Sum(stmt.TxCtx[:0])
 	if needAuth {
-		domain := "PFT-SH-FEE-AUTH-V1"
-		if b[6] == 1 {
-			domain = "PFT-SH-MINT-AUTH-V2"
-		}
+		domain := "PFT-SH-MINT-AUTH-V2"
 		msg := append([]byte(domain), b[72:92]...)
 		msg = append(msg, raw[:]...)
 		msg = binary.LittleEndian.AppendUint32(msg, 48)

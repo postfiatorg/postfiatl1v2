@@ -64,10 +64,18 @@ pub struct Account {
     pub public_key: Box<[u8; PUBLIC_KEY_BYTES]>,
 }
 
+fn profile(mode: Mode, asset: &[u8; 48]) -> u8 {
+    if mode != Mode::Shield && *asset != [0; 48] {
+        2
+    } else {
+        1
+    }
+}
+
 impl Terms {
     fn prefix(&self) -> Vec<u8> {
         let mut out = b"PFPQ".to_vec();
-        out.extend([1, 1, self.mode as u8]); // outer version, L1 profile, public edge
+        out.extend([1, profile(self.mode, &self.asset), self.mode as u8]); // outer version, L1 profile, public edge
         out.extend(self.asset);
         out.extend(self.epoch.to_le_bytes());
         out.extend(self.public_fee.to_le_bytes());
@@ -100,11 +108,10 @@ impl Terms {
     /// a signature or an archive/transaction ID. Keep the M2 vectors stable.
     pub fn signing_message(&self, chain: Chain, raw: [u8; 48]) -> Option<Vec<u8>> {
         let account = self.account.as_ref()?;
-        let mut out = if self.mode == Mode::Shield {
-            b"PFT-SH-MINT-AUTH-V2".to_vec()
-        } else {
-            b"PFT-SH-FEE-AUTH-V1".to_vec()
-        };
+        if self.mode != Mode::Shield {
+            return None;
+        }
+        let mut out = b"PFT-SH-MINT-AUTH-V2".to_vec();
         out.extend(account.id);
         out.extend(raw);
         out.extend(48u32.to_le_bytes());
@@ -146,7 +153,7 @@ impl PqPayment {
 
     pub fn parts(&self) -> Result<(Terms, Option<&[u8; SIGNATURE_BYTES]>, &[u8]), &'static str> {
         let b = &self.0;
-        if b.len() > ARCHIVE_LIMIT || b.len() < PREFIX || &b[..6] != b"PFPQ\x01\x01" {
+        if b.len() > ARCHIVE_LIMIT || b.len() < PREFIX || &b[..5] != b"PFPQ\x01" {
             return Err("unknown PQ encoding or profile");
         }
         let mode = match b[6] {
@@ -159,8 +166,11 @@ impl PqPayment {
         let epoch = u64::from_le_bytes(b[55..63].try_into().unwrap());
         let public_fee = u64::from_le_bytes(b[63..71].try_into().unwrap());
         let issued = asset != [0; 48];
-        let needs_auth = mode == Mode::Shield || issued;
-        if b[71] != needs_auth as u8 || (public_fee != 0) != issued {
+        if b[5] != profile(mode, &asset) {
+            return Err("unknown PQ encoding or profile");
+        }
+        let needs_auth = mode == Mode::Shield;
+        if b[71] != needs_auth as u8 || (public_fee != 0) != (issued && needs_auth) {
             return Err("wrong PQ public fee or authorization");
         }
         let mut rest = &b[PREFIX..];
@@ -198,7 +208,7 @@ impl PqPayment {
         if (mint > 0) != (mode == Mode::Shield)
             || (exit > 0) != (mode == Mode::Exit)
             || exit.checked_add(fee).is_none()
-            || (issued && fee != 0)
+            || (issued && needs_auth && fee != 0)
         {
             return Err("inconsistent PQ public flow");
         }
@@ -381,7 +391,9 @@ impl Eq for PqPool {}
 impl PqPool {
     /// Issued custody excludes the all-zero native selector.
     pub fn issued_assets(&self) -> impl Iterator<Item = (&str, &PqAsset)> {
-        self.head.assets.iter()
+        self.head
+            .assets
+            .iter()
             .filter(|(id, _)| id.as_str() != NATIVE_ASSET_HEX)
             .map(|(id, state)| (id.as_str(), state))
     }

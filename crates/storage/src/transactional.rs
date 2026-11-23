@@ -4215,7 +4215,7 @@ mod tests {
     fn pq_archive_measures_and_recovers_authorized_records_at_the_wire_ceiling() {
         use postfiat_types::{pq_payment::*, ShieldedAction, ShieldedActionBatch};
         let valid =
-            include_bytes!("../../../tools/pft-binius-shielded-pq/l1-vectors/pfusdc-exit.bin");
+            include_bytes!("../../../tools/pft-binius-shielded-pq/l1-vectors/pfusdc-shield.bin");
         for ceiling in [false, true] {
             let mut bytes = valid.to_vec();
             if ceiling {
