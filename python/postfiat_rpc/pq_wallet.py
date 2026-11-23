@@ -6,12 +6,29 @@ from pathlib import Path
 import socket
 import sys
 import tempfile
+import time
 
 from .client import (Endpoint, PostFiatRpcClient, PQ_POOL_ID, PqCursorExpired,
                      RpcClientError, RpcError, pq_public_pages, private_action_hash, private_action_intent_id)
 
 
+class WalletBusy(ValueError):
+    """The daemon refused the operation before starting a worker."""
+
+
 def local(home, op, **fields):
+    # The preceding worker can close its reply just before the supervisor reaps it.
+    deadline = time.monotonic() + 1
+    while True:
+        try:
+            return _socket_command(home, op, fields)
+        except WalletBusy:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.02)
+
+
+def _socket_command(home, op, fields):
     with socket.socket(socket.AF_UNIX) as s:
         s.connect(str(home / "wallet.sock"))
         s.sendall(json.dumps(dict(op=op, **fields)).encode())
@@ -21,6 +38,8 @@ def local(home, op, **fields):
         if not raw:
             raise ValueError("wallet job interrupted; inspect status before retrying")
         reply = json.loads(raw)
+        if reply.get("error") == "wallet busy":
+            raise WalletBusy("wallet busy")
         if "error" in reply:
             raise ValueError(reply["error"])
         return reply["result"]
@@ -130,6 +149,16 @@ def parser():
     d = cmds.add_parser("daemon", help="run the local scanner and prover in the foreground")
     d.add_argument("--key-file", required=True, type=Path, help="external 32-byte wrapping key")
     d.add_argument("--binary", default="pftl-pq-walletd")
+    b = cmds.add_parser("browser", help="serve the owner-local wallet-web private payment interface")
+    b.add_argument("--dist", type=Path, required=True, help="built wallet-web/dist directory")
+    b.add_argument("--port", type=int, default=8790)
+    b.add_argument("--pair-file", type=Path, required=True, help="new owner-only file for the local session link")
+    b.add_argument("--gateway", required=True, help="wallet-proxy HTTP(S) origin")
+    b.add_argument("--gateway-token-file", type=Path, required=True)
+    b.add_argument("--payer", required=True, help="public account used for deposits or fee sponsorship")
+    b.add_argument("--account-key", type=Path, required=True)
+    b.add_argument("--issue", required=True, help="exact governed pfUSDC source-series ID")
+    b.add_argument("--orchard-exit-batch", type=Path, help="locally prepared, single private-egress public batch")
     k = cmds.add_parser("keygen", help="create a new owner-only wrapping key outside the wallet")
     k.add_argument("--key-file", required=True, type=Path)
     i = cmds.add_parser("init", help="create a wallet at the current finalized birthday")
@@ -157,6 +186,9 @@ def parser():
 def run(args):
     home = args.wallet.absolute()
     cmd = args.command
+    if cmd == "browser":
+        from .pq_browser import serve
+        return serve(args)
     if cmd == "keygen":
         path = args.key_file.absolute()
         if path.resolve().is_relative_to(home.resolve()):

@@ -11,6 +11,7 @@ import {
 import { CHAIN_ID, LEGACY_CHAIN_IDS, ACCOUNT_INDEX, isValidAddress, truncateMiddle } from './lib/utils.js';
 import { SwapServer } from './lib/swap-server.js';
 
+import PqPayments from './components/PqPayments.jsx';
 import Onboard from './components/Onboard.jsx';
 import LockScreen from './components/LockScreen.jsx';
 import WalletHome from './components/WalletHome.jsx';
@@ -49,6 +50,7 @@ const NAV_ITEMS = [
   { id: 'nav', label: 'Assets', badge: 'A' },
   { id: 'market', label: 'Trade', badge: 'T' },
   { id: 'bridge', label: 'Bridge', badge: 'B' },
+  { id: 'private', label: 'Private payments', badge: 'P' },
   { id: 'send', label: 'Send', badge: 'S' },
   { id: 'activity', label: 'Activity', badge: 'R' },
   { id: 'more', label: 'Settings', badge: '⚙' },
@@ -56,6 +58,11 @@ const NAV_ITEMS = [
 const isOn = (tab, id) => tab === id || (id === 'nav' && tab === 'navDetail');
 
 export default function App() {
+  if (location.pathname === '/private') return <PqPayments />;
+  return <AccountWallet />;
+}
+
+function AccountWallet() {
   const [tab, setTab] = useState('onboard');
   const [coinId, setCoinId] = useState(null);
   const [markets, setMarkets] = useState([]);
@@ -644,6 +651,7 @@ export default function App() {
               visible={tab === 'wallet'}
             />
           )}
+          {tab === 'private' && <PqPayments />}
           {tab === 'send' && (
             <Send
               markets={markets}

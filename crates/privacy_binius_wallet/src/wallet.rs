@@ -525,12 +525,13 @@ impl Wallet {
         let hash = postfiat_types::private_action_hash(
             &postfiat_types::ShieldedAction::PqPaymentV1(payment.clone()),
         )?;
+        let statement_id = hex::encode(terms.statement_context(chain, tx.statement().tx_ctx));
         self.pending = Some(Pending {
             payment,
             asset: o.asset,
             delta,
             serials: [hex::encode(tx.sn0), hex::encode(tx.sn1)],
         });
-        Ok(json!({"prove_seconds":seconds,"action_hash":hash}))
+        Ok(json!({"prove_seconds":seconds,"action_hash":hash,"statement_id":statement_id}))
     }
 }

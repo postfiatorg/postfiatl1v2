@@ -601,6 +601,10 @@ async function main() {
         // The browser and gateway decode the same eight release vectors as Rust.
         const wasm = await import('../wallet-web/src/wasm/postfiat_wallet_wasm.js');
         wasm.initSync({module: fs.readFileSync(path.join(__dirname,'../wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm'))});
+        const address = wasm.pq_encode_address(DOMAIN.chain_id, DOMAIN.genesis_hash, new Uint8Array(48).fill(17), new Uint8Array(1568).fill(31));
+        wasm.pq_check_address(DOMAIN.chain_id, DOMAIN.genesis_hash, address);
+        assert.throws(() => wasm.pq_check_address(DOMAIN.chain_id + '-other', DOMAIN.genesis_hash, address));
+        assert.throws(() => wasm.pq_encode_address(DOMAIN.chain_id, DOMAIN.genesis_hash, new Uint8Array(47), new Uint8Array(1568)));
         const vectorDir = path.join(__dirname, '../tools/pft-binius-shielded-pq/l1-vectors');
         const files = fs.readdirSync(vectorDir).filter(f => f.endsWith('.bin')).sort();
         assert.equal(files.length, 8);

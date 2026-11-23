@@ -20,6 +20,8 @@ const INTENT_DOMAIN = 'tasknode.private-intent.v1';
 const ACTION_DOMAIN = 'postfiat.private-actions.action.v1';
 const BATCH_DOMAIN = 'postfiat.shielded_action_batch.atomic.v2';
 const PQ_POOL = 'PFT-PQ-SHIELDED-POOL-V1';
+// Profile 1's validator-governed development series (postfiat_types::PQ_REHEARSAL_ISSUE).
+const PQ_REHEARSAL_ISSUE = 'bbf2fb96437f2e87ff3b470f19aa2455ae226ab810b06b64ab327b0daa71a2d1ad14638a107b7bbd3b0cf3a6f4d56269';
 const MAX_ACTION_BYTES = 1024 * 1024;
 const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
@@ -154,7 +156,7 @@ function exactKeys(value, fields) {
 }
 
 // Strict decoding of both JSON levels; returns the canonical action text.
-function parsePublicAction(actionJson) {
+function parsePublicAction(actionJson, domain) {
     let value;
     try { value = JSON.parse(actionJson); } catch (_) { throw refusal(400, 'private_action_malformed'); }
     const kind = value?.kind;
@@ -169,7 +171,7 @@ function parsePublicAction(actionJson) {
             || wire.subarray(0, 6).toString('hex') !== '504650510101' || wire[71] > 1) throw refusal(400, 'private_action_malformed');
         const prefix = 72 + (wire[71] ? 20 + 8 + 1952 : 0);
         const inner = prefix + (wire[71] ? 3309 : 0);
-        if (wire.length <= inner + 3648 || !wire.subarray(inner, inner + 8).equals(Buffer.from('5046534830320000', 'hex'))
+        if (wire.length - inner > 140476 || wire.length <= inner + 3648 || !wire.subarray(inner, inner + 8).equals(Buffer.from('5046534830320000', 'hex'))
             || wire.readUInt32LE(inner + 3644) !== wire.length - inner - 3648) throw refusal(400, 'private_action_malformed');
         const mode = wire[6], issued = wire.subarray(7, 55).some(Boolean);
         const publicFee = wire.readBigUInt64LE(63);
@@ -187,7 +189,19 @@ function parsePublicAction(actionJson) {
         // signature, proof length and proof can differ on an idempotent retry.
         const statement = crypto.createHash('sha384').update(wire.subarray(0, prefix))
             .update(wire.subarray(inner, inner + 3644)).digest('hex');
-        return { kind, value, canonical, poolId: PQ_POOL, statement, assetId: wire.subarray(7, 55).toString('hex'),
+        let statementId;
+        if (domain) {
+            const chain = Buffer.from(domain.chain_id, 'utf8');
+            const length = Buffer.alloc(8), version = Buffer.alloc(4);
+            length.writeBigUInt64LE(BigInt(chain.length));
+            version.writeUInt32LE(domain.protocol_version);
+            const raw = crypto.createHash('sha384').update('PFT-SH-TXCTX-V2')
+                .update(wire.subarray(inner, inner + 3644)).digest();
+            statementId = crypto.createHash('sha384').update('PFT-SH-L1-CONTEXT-V1')
+                .update(length).update(chain).update(Buffer.from(domain.genesis_hash, 'hex'))
+                .update(version).update(PQ_POOL).update(wire.subarray(0, prefix)).update(raw).digest('hex');
+        }
+        return { kind, value, canonical, poolId: PQ_POOL, statement, statementId, assetId: wire.subarray(7, 55).toString('hex'),
             payer: wire[71] ? 'pf' + wire.subarray(72, 92).toString('hex') : null };
     }
     let poolId = value.pool_id;
@@ -356,6 +370,10 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
         if (action.payer && action.payer !== address) throw refusal(403, 'private_action_address_mismatch');
         if ((action.kind === 'pq_payment_v1') !== (config.poolId === PQ_POOL)) throw refusal(403, 'private_action_pool_mismatch');
         if (action.poolId !== config.poolId) throw refusal(403, 'private_action_pool_mismatch');
+        if (prefix !== ROUTE_PREFIX && action.kind === 'pq_payment_v1'
+            && action.assetId !== '00'.repeat(48) && action.assetId !== PQ_REHEARSAL_ISSUE) {
+            throw refusal(403, 'private_action_asset_refused');
+        }
         const allowed = [config.baseAssetId, config.quoteAssetId].filter(Boolean);
         const assetIds = action.kind === 'shielded_swap_v1' ? [] : [action.assetId || action.value.asset_id];
         if (allowed.length && assetIds.some((id) => !allowed.includes(id))) throw refusal(403, 'private_action_asset_refused');
@@ -373,6 +391,8 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
     }
 
     const submitResponse = (record) => ({
+        ...(prefix !== ROUTE_PREFIX && record.kind === 'pq_payment_v1'
+            ? { statement_id: parsePublicAction(record.action_json, config.domain).statementId } : {}),
         schema: SCHEMA, intent_id: record.intent_id, state: record.state, batch_id: record.batch_id, action_hash: record.action_hash,
     });
 
@@ -460,6 +480,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
 
     async function submit(body, principal) {
         let request = validateRequest(body, principal);
+        let authoritative;
         if (request.kind === 'pq_payment_v1') {
             // Let one authoritative admission transaction select the retry's
             // original intent before forwarding those exact bytes to peers.
@@ -476,6 +497,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
             if (original.statement !== request.statement || owner.action_hash !== original.actionHash || owner.batch_id !== original.batchId)
                 throw refusal(502, 'private_action_source_mismatch');
             request = original;
+            authoritative = result.result;
         }
         const reserved = await serialized(() => {
             const existing = store.read(request.intentId);
@@ -510,6 +532,15 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
                 batch_json: `{"batch_id":${JSON.stringify(request.batchId)},"atomic":true,"actions":[${request.canonical}]}`,
                 state: 'queued', code: null, acknowledged: false, created_at_ms: Date.now(), updated_at_ms: Date.now(),
             };
+            if (authoritative) {
+                if (!nodeRecordMatches(authoritative, record)) throw refusal(502, 'private_action_source_mismatch');
+                const first = config.sources[0].validatorId;
+                record.sources = { [first]: { acknowledged: true, state: authoritative.record.state,
+                    existing: authoritative.existing === true } };
+                record.acknowledged_by = [first];
+                record.acknowledged = true;
+                Object.assign(record, aggregate(record.sources));
+            }
             store.write(record);
             return { record, fresh: true };
         });

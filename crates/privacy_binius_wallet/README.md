@@ -60,3 +60,41 @@ set `--validator-endpoint` to your independently operated validator. The scanner
 certified block reference, exact pair-chain coverage and locally reconstructed tree roots
 before publishing a checkpoint. A transport interruption or expired cursor leaves the
 previous authenticated checkpoint available for resumption.
+
+## Open the browser wallet
+
+Build wallet-web with `npm ci && npm run build` in `wallet-web/`. Start and initialize the native
+wallet as above. On the gateway, configure the existing private-action validator sources, the Orchard
+asset allowlist and `WALLET_PROXY_PQ_ISSUE_ID`. Allow the exact local origin (by default
+`http://127.0.0.1:8790`) for the wallet’s authenticated principal. The separate PQ HTTP routes live
+under `/api/private/v1/pq/`. The original Orchard routes remain under `/api/private/v1/`.
+
+On your device, run the following with the public account, exact source-series ID and appropriate paths.
+
+```sh
+PYTHONPATH=python python3 -m postfiat_rpc pq-wallet --wallet "$wallet_dir" --endpoint "$validator" browser \
+  --dist wallet-web/dist --gateway "$gateway_origin" --gateway-token-file "$gateway_credential_path" \
+  --payer "$public_account" --account-key "$signing_key_path" --issue "$source_series_id" \
+  --pair-file "$wallet_dir/browser.link"
+```
+
+Open the URL in the owner-only pairing file on the same device. Treat that link as authorization to
+use the wallet. The bridge serves the bundled wallet-web UI on loopback. It checks the HTTP host,
+origin and a process-specific session capability on every API request. Stop the bridge to revoke the
+session. Each user runs their own wallet directory, daemon and bridge. Choose a separate port with
+`--port` for a second user on the same machine.
+
+**Sync** downloads public pages and checks the reconstructed wallet checkpoint. **Receive address**
+shows the shareable PQ address. Choose **Shield**, **Pay** or **Unshield**, enter integer atoms, review
+the exact issue, recipient and fee source, then confirm. The daemon proves and signs locally. The UI
+checks the signed public terms in WASM before submitting the public action to the gateway. **Check
+finality** compares the gateway receipt with the corresponding certified block at your trusted
+validator. A pending change becomes spendable after a finalized sync.
+
+For migration, prepare a private-egress batch with the existing Orchard wallet. Pass its public batch
+file via `--orchard-exit-batch` when starting the bridge. The exit must pay the configured account
+in the selected issue. Review its public amount, fee, policy and disclosure, and authorize the exit
+in **Orchard migration**. Check its receipt, then separately review and approve the new PQ shield.
+Restarting either service preserves both intent IDs in the owner-local journal. A missing or
+conflicting receipt leaves the migration waiting for confirmation. The two public amounts, account
+and timing can link these transactions.

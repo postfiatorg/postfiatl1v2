@@ -4,6 +4,7 @@ export const memory: WebAssembly.Memory;
 export const make_rpc_request: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const parse_rpc_response: (a: number, b: number) => [number, number, number];
 export const pq_check_address: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+export const pq_encode_address: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
 export const pq_review_payment: (a: number, b: number) => [number, number, number, number];
 export const random_master_seed: () => [number, number, number, number];
 export const wallet_address_from_seed: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];

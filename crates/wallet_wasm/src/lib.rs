@@ -976,16 +976,37 @@ fn counter() -> u64 {
     COUNTER.fetch_add(1, Ordering::Relaxed)
 }
 
-/// Check the public checksum and network before asking the native prover to pay.
-#[wasm_bindgen]
-pub fn pq_check_address(chain: &str, genesis_hex: &str, address: &str) -> Result<(), JsError> {
-    use postfiat_types::pq_address;
+fn pq_network(chain: &str, genesis_hex: &str) -> Result<Vec<u8>, JsError> {
     let genesis = postfiat_crypto_provider::hex_to_bytes(genesis_hex)
         .ok()
         .and_then(|v| v.try_into().ok())
         .ok_or_else(|| JsError::new("invalid genesis"))?;
-    let network = pq_address::network_frame(chain, &genesis).map_err(JsError::new)?;
-    pq_address::decode(&network, address).map_err(JsError::new)?;
+    postfiat_types::pq_address::network_frame(chain, &genesis).map_err(JsError::new)
+}
+
+/// Encode only the recipient's public owner commitment and ML-KEM encapsulation key.
+#[wasm_bindgen]
+pub fn pq_encode_address(
+    chain: &str,
+    genesis_hex: &str,
+    owner: &[u8],
+    kem: &[u8],
+) -> Result<String, JsError> {
+    Ok(postfiat_types::pq_address::encode(
+        &pq_network(chain, genesis_hex)?,
+        owner
+            .try_into()
+            .map_err(|_| JsError::new("invalid owner commitment"))?,
+        kem.try_into()
+            .map_err(|_| JsError::new("invalid encapsulation key"))?,
+    ))
+}
+
+/// Check the public checksum and network before asking the native prover to pay.
+#[wasm_bindgen]
+pub fn pq_check_address(chain: &str, genesis_hex: &str, address: &str) -> Result<(), JsError> {
+    postfiat_types::pq_address::decode(&pq_network(chain, genesis_hex)?, address)
+        .map_err(JsError::new)?;
     Ok(())
 }
 

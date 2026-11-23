@@ -23,6 +23,11 @@ export function parse_rpc_response(response_json: string): any;
 export function pq_check_address(chain: string, genesis_hex: string, address: string): void;
 
 /**
+ * Encode only the recipient's public owner commitment and ML-KEM encapsulation key.
+ */
+export function pq_encode_address(chain: string, genesis_hex: string, owner: Uint8Array, kem: Uint8Array): string;
+
+/**
  * Decode the same canonical payment as a validator. Amount strings preserve all u64 bits.
  */
 export function pq_review_payment(action_json: string): string;
@@ -200,6 +205,7 @@ export interface InitOutput {
     readonly make_rpc_request: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly parse_rpc_response: (a: number, b: number) => [number, number, number];
     readonly pq_check_address: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+    readonly pq_encode_address: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly pq_review_payment: (a: number, b: number) => [number, number, number, number];
     readonly random_master_seed: () => [number, number, number, number];
     readonly wallet_address_from_seed: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
