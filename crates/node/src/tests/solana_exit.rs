@@ -896,3 +896,198 @@ fn certified_fork(output: Option<&Path>) {
     }
     fs::remove_dir_all(temp).unwrap();
 }
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review_registration_requires_all_six_active_signers() {
+    let (g, gov, _) = archived_parent();
+    let names = active_validator_ids(&gov).unwrap();
+    let committee = LocalCommittee::new(&names);
+    let mut act = descriptor_batch()
+        .vault_bridge_route_profile_activations
+        .remove(0);
+    let original = &act.amendment;
+    let quorum = names.len() - 1;
+    act.amendment = ratify_governance_amendment_with_lifecycle(
+        &cobalt_domain(&g),
+        &EssentialSubsetConfig {
+            validators: names.clone(),
+            quorum,
+        },
+        &original.kind,
+        original.value,
+        names[..quorum].to_vec(),
+        GovernanceAmendmentLifecycle {
+            activation_height: original.activation_height,
+            paused: false,
+            veto_until_height: 0,
+        },
+    )
+    .unwrap();
+    committee.sign(&gov, &mut act.amendment, H);
+    let batch =
+        build_governance_action_batch_with_vault_bridge_route_profile_activation(&g, act).unwrap();
+    let error = verify_live_signed_governance_batch(&g, &gov, &committee.registry, &batch, H)
+        .expect_err("five valid signatures cannot register the exit");
+    assert!(
+        error.to_string().contains("every active validator"),
+        "{error}"
+    );
+    let all = committee.registration(&g, &gov, H);
+    verify_live_signed_governance_batch(&g, &gov, &committee.registry, &all, H).unwrap();
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review_route_distinguishes_family_nav_and_settlement() {
+    let (g, gov, ledger) = scheduled_parent(true);
+    let lookup = |id| {
+        serde_json::to_value(
+            crate::market_bridge::vault_bridge_route_at_height(&g, &gov, &ledger, H + 2, id)
+                .unwrap(),
+        )
+        .unwrap()
+    };
+    let sol = lookup(SERIES);
+    let family = lookup(solana_exit::FAMILY);
+    assert_eq!(sol["route_trust_class"], "VALIDATOR_ATTESTED_SETTLEMENT");
+    assert_eq!(
+        sol["family_nav_profile"]["policy_hash"],
+        family["nav_profile_policy_hash"]
+    );
+    assert!(sol.get("nav_profile_policy_hash").is_none());
+    assert_eq!(sol["source_backing"]["revision"], 8);
+    assert_eq!(sol["source_backing"]["bucket_id"], solana_exit::BUCKET);
+    assert_eq!(sol["source_backing"]["policy_hash"], solana_exit::POLICY);
+    assert_eq!(family["route_trust_class"], "TRUSTLESS_FINALITY");
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review_open_checks_checkpoint_history() {
+    let (g, mut gov, _) = scheduled_parent(false);
+    let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
+    let open = |gov: &GovernanceState| {
+        let batch = committee.decision(&g, gov, OPEN, H + 1);
+        verify_live_signed_governance_batch(&g, gov, &committee.registry, &batch, H + 1)
+    };
+    // The saved Cobalt-only transitions at 917 and 924 precede the checkpoint.
+    open(&gov).unwrap();
+    let mut rotation = gov.validator_registry_updates.last().unwrap().clone();
+    assert!(
+        !rotation.cobalt_authorizations.is_empty() && rotation.signed_authorizations.is_empty()
+    );
+    // Model the same authorization form in the checkpoint-to-release gap.
+    rotation.activation_height = 1755;
+    gov.validator_registry_updates.push(rotation);
+    let error = open(&gov).expect_err("a disconnected checker cannot open burns");
+    assert!(error.to_string().contains("1755"), "{error}");
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review_close_drain_rotate_and_reopen() {
+    let (g, mut gov, mut ledger) = scheduled_parent(true);
+    let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
+    let decision = |gov: &mut GovernanceState, ledger: &mut LedgerState, kind, height| {
+        let batch = committee.decision(&g, gov, kind, height);
+        verify_live_signed_governance_batch(&g, gov, &committee.registry, &batch, height)?;
+        let receipts = crate::execution_actions::execute_governance_batch(
+            gov,
+            Some(ledger),
+            Some(&g),
+            &batch,
+            height,
+        );
+        assert!(receipts[0].accepted, "{}", receipts[0].message);
+        Ok::<(), io::Error>(())
+    };
+    let tx = funded_burn(&g, &mut ledger);
+    let mut update = gov.validator_registry_updates.last().unwrap().clone();
+    update.activation_height = H + 6;
+    update.update_id = "aa".repeat(48);
+    let batch = GovernanceActionBatch::with_registry_updates("rotation", vec![], vec![update]);
+    // Exercise the state interlock independently of the Cobalt certificate verifier.
+    let source = NodeStore::new("/var/lib/postfiat/validator-3");
+    let mut block = source.read_blocks().unwrap().blocks.pop().unwrap();
+    block.header.height = H + 6;
+    block.header.batch_kind = "governance".into();
+    let entry = BatchArchiveEntry {
+        batch_kind: "governance".into(),
+        batch_id: batch.batch_id.clone(),
+        payload_hash: String::new(),
+        payload_json: serde_json::to_string(&batch).unwrap(),
+    };
+    let rotation = |gov: &GovernanceState, ledger: &LedgerState| {
+        crate::block_replay_wallet::replay_archived_payload(
+            &g,
+            &block,
+            &entry,
+            crate::block_replay_wallet::ArchivedReplayState {
+                governance: &mut gov.clone(),
+                ledger: &mut ledger.clone(),
+                shielded: &mut source.read_shielded().unwrap(),
+                bridge: &mut source.read_bridge().unwrap(),
+                validator_registry: &committee.registry,
+            },
+        )
+        .map(|_| ())
+    };
+    let error =
+        rotation(&gov, &ledger).expect_err("open admission blocks rotation with an empty queue");
+    assert!(error.to_string().contains("burns are open"), "{error}");
+    assert!(block_burn(&g, &gov, &mut ledger, &tx, H + 2).accepted);
+    let packet = ledger
+        .vault_bridge_redemptions
+        .last()
+        .unwrap()
+        .withdrawal_packet_hash
+        .clone();
+    decision(&mut gov, &mut ledger, "solana_exit_r8_close", H + 3).unwrap();
+    assert_eq!(solana_exit::open_height(&gov), None);
+    assert_eq!(
+        rotation(&gov, &ledger).unwrap_err().kind(),
+        io::ErrorKind::PermissionDenied
+    );
+    let payout = format!(
+        "{}{}:12345:0:{}",
+        solana_exit::PAID,
+        packet,
+        "ab".repeat(64)
+    );
+    decision(&mut gov, &mut ledger, &payout, H + 4).unwrap();
+    rotation(&gov, &ledger).unwrap();
+    decision(&mut gov, &mut ledger, OPEN, H + 5).unwrap();
+    assert_eq!(solana_exit::open_height(&gov), Some(H + 5));
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review_unanimous_close_stops_new_burns() {
+    let (g, mut gov, mut ledger) = scheduled_parent(true);
+    let tx = funded_burn(&g, &mut ledger);
+    let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
+    let batch = committee.decision(&g, &gov, "solana_exit_r8_close", H + 2);
+    let mut weak = batch.clone();
+    weak.amendments[0].signed_authorizations.pop();
+    assert!(
+        verify_live_signed_governance_batch(&g, &gov, &committee.registry, &weak, H + 2).is_err()
+    );
+    verify_live_signed_governance_batch(&g, &gov, &committee.registry, &batch, H + 2).unwrap();
+    let receipts = crate::execution_actions::execute_governance_batch(
+        &mut gov,
+        Some(&mut ledger),
+        Some(&g),
+        &batch,
+        H + 2,
+    );
+    assert!(receipts[0].accepted);
+    assert_eq!(
+        block_burn(&g, &gov, &mut ledger, &tx, H + 3).code,
+        "solana_exit_burns_closed"
+    );
+    let repeat = committee.decision(&g, &gov, "solana_exit_r8_close", H + 3);
+    assert!(
+        verify_live_signed_governance_batch(&g, &gov, &committee.registry, &repeat, H + 3).is_err()
+    );
+}
