@@ -20,7 +20,8 @@ from exit_setup import (
     EXIT,
     GENESIS,
     LIGHT,
-    MAINNET_PAYER,
+    FEE_PAYER,
+    ExitCluster,
     MINT,
     POLICY,
     SERIES,
@@ -71,18 +72,8 @@ def validate_burn(row, burn):
 
 
 def cluster():
-    c = Cluster(
-        SimpleNamespace(
-            rpc=os.getenv("SOL_MAINNET_RPC", "https://api.mainnet-beta.solana.com"),
-            payer=DIRECTORY / "mainnet-payer.json",
-            log=None,
-        )
-    )
-    c.level = {"commitment": "finalized"}
-    require(
-        c.genesis == GENESIS and c.owner == MAINNET_PAYER,
-        "Relayer network or key mismatch.",
-    )
+    c = ExitCluster(FEE_PAYER)
+    c.unlock(Path(os.getenv("EXIT_FEE_KEY", DIRECTORY / "exit-fee-payer.json")))
     return c
 
 
@@ -228,10 +219,8 @@ def submit(c, kind, witness, work, owner=None, on_pay=None):
     # Each distinct witness owns one restart-safe upload buffer.
     path = work / (hashlib.sha256(vals).hexdigest() + ".key")
     if not path.exists():
-        from live import save
-        import json
-
-        save(path, json.loads(Keypair().to_json()))
+        from exit_keys import create_key
+        create_key(path)
     signer = load(path)
     buf = signer.pubkey()
     if not c.account(buf):

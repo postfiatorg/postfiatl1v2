@@ -11,7 +11,7 @@
   "exit_epoch": 8,
   "vault_code_hash": "0x75371e9a74f6ac2b5462f9e286f11396e3dee9f9f621cba1ec5cc55fee3a95aa",
   "token_code_hash": "0x8190d3f7ceb6cb7a7a8d8924bff89f9f611e15ce1f806f2b6237f3311a98f697",
-  "pause_authority": "31016d773eb1f95b062c847edc323e919adbcb64f2be076b8b9925b4ef2d5c46",
+  "pause_authority": "0c05e91dafb279f9c5a9e64ba8703d6c7107069b025ac876591d741c81ebd19d",
   "initial_checkpoint": "1f6c2340ccc1e861b42cf5ee5a3f4923dd79445c2a3d539c27fb7b04d3b00b3e768c13f27e815acf79bb8a90b40f3fdd",
   "initial_committee": "ca8da61a23bf9d1d1e9ddf57edfe8ee7e26a33ac04c8ff6bee44c3e419083e03b1ecfd3e3299db3f9c6a8b0f5471f6c4",
   "initial_height": 1753

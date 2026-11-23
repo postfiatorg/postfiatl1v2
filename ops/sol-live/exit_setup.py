@@ -15,12 +15,13 @@ from bridge import (
     LOADER,
     SYSTEM,
     TOKEN,
-    load,
     pda,
     pk,
     ro,
     rw,
 )
+import requests
+from exit_keys import load
 from solders.hash import Hash
 from solders.message import Message
 from solders.transaction import Transaction
@@ -31,6 +32,9 @@ from bootstrap import encode, packet_alias
 VERIFIER = pk("8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF")
 VAULT = pk("GFkpeTibgdRAAAndgUMYsJnSTck91tUbrpuWBWan6z1G")
 MAINNET_PAYER = pk("4JJEuaYtJvgtMVixTbXfppHJPh6tcU5g7g7UtkvxK3sB")
+FEE_PAYER = pk("8EiSLnZQv23HtA5adokE6xfKyCK6mf4HGkpxSPpop1fs")
+PAUSE = pk("ow7wprz3MPEN15BGLyNvdJr5AUq4LNZK2ox1gY1QEJx")
+CONFIG = Path(__file__).parent / "fixtures/exit-setup.json"
 MINT = pk("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
 GENESIS = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
 BUCKET = "4c045e289eaaa2c7ae7592b96ec0eeabe9fa0cfdd032783d359409dcc08d9dd0dfdd7cc8d483d6a88c12dc713522d2cc"
@@ -46,6 +50,26 @@ ANCHOR_TX = "9da535ba12b9f8eb7e877e8dfb985503b0ecb8eda0fcee06f2e98a40d8627c62f55
 def require(condition, message):
     if not condition:
         raise ValueError(message)
+
+
+class ExitCluster(Cluster):
+    def __init__(self, owner):
+        self.owner = owner
+        self.payer = None
+        self.rpc = os.getenv("SOL_MAINNET_RPC", "https://api.mainnet-beta.solana.com")
+        self.http = requests.Session()
+        self.level = {"commitment": "finalized"}
+        self.genesis = self.call("getGenesisHash")
+        require(self.genesis == GENESIS, "Wrong Solana network.")
+
+    def unlock(self, path):
+        key = load(path)
+        require(key.pubkey() == self.owner, "Incorrect signer.")
+        self.payer = key
+
+    def event(self, **record):
+        # The journal records payout signatures. Never write a deployment key-directory log.
+        pass
 
 
 def config_from_records(activation, profile, checkpoint, bucket):
@@ -97,7 +121,7 @@ def config_from_records(activation, profile, checkpoint, bucket):
         exit_epoch=profile["route_epoch"],
         vault_code_hash=profile["vault_runtime_code_hash"],
         token_code_hash=profile["token_runtime_code_hash"],
-        pause_authority=bytes(MAINNET_PAYER).hex(),
+        pause_authority=bytes(PAUSE).hex(),
         initial_checkpoint=checkpoint["block"],
         initial_committee=checkpoint["committee"],
         initial_height=checkpoint["height"],
@@ -188,19 +212,7 @@ def main():
         help="orchestrator only, requires six governed series reads",
     )
     args = ap.parse_args()
-    from types import SimpleNamespace
-
-    c = Cluster(
-        SimpleNamespace(
-            rpc=os.environ.get(
-                "SOL_MAINNET_RPC", "https://api.mainnet-beta.solana.com"
-            ),
-            payer=DIRECTORY / "mainnet-payer.json",
-            log=None,
-        )
-    )
-    c.level = {"commitment": "finalized"}
-    require(c.genesis == GENESIS and c.owner == MAINNET_PAYER, "wrong cluster or payer")
+    c = ExitCluster(MAINNET_PAYER)
     profile = read(PROFILE)
     require(
         profile_code(c, VERIFIER) == VERIFIER_SHA256
@@ -274,6 +286,7 @@ def main():
             ),
             "waiting for governed series on six validators",
         )
+        c.unlock(DIRECTORY / "mainnet-payer.json")
         deployment = load(DIRECTORY / "egress-verifier.json")
         require(deployment.pubkey() == VERIFIER, "incorrect program signer")
         sig = c.send("egress.initialize", [ix], deployment)
