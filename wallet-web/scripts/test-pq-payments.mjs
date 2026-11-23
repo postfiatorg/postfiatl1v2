@@ -59,10 +59,14 @@ async function exercise() {
   };
   const gwPort = await port();
   let audit, gatewayOrigin;
-  const relayCounts = {snapshot:0,page:0,submit:0,receipt:0};
+  const relayCounts = {snapshot:0,page:0,submit:0,receipt:0,authorize:0};
   const boundaryErrors = [];
   let withholdBobPage = false;
   let refuseNextSpend = false;
+  let refusedBatch;
+  let loseNextReply = false;
+  let lostRequest;
+
   const ports = {alice:await port(), bob:await port()};
   let height = 1;
   let browser;
@@ -218,15 +222,33 @@ async function exercise() {
     }
     const start = validatorReads[w].length;
     await walletCall(p,'review','Review payment');
+    if (loseNextReply) {
+      const submitted = action(p,'submit');
+      await click(p,'Confirm and prove locally');
+      assert.equal((await submitted).status(),503);
+      const retry = await walletCall(p,'submit','Send identical bytes');
+      assert.equal(retry.intent,lostRequest.intent_id);
+      await check(w,retry.intent,name);
+      return;
+    }
     if (refuseNextSpend) {
       const reply = action(p,'submit');
       await click(p,'Confirm and prove locally');
       assert.equal((await reply).status(), 409);
       await p.getByRole('alert').filter({hasText:'pq_fee_mismatch'}).waitFor();
-      // Re-review the same notes without a restart or manual cancellation.
+      const inputs = p.getByLabel('Payment inputs');
+      await inputs.selectOption({index:1});
       await walletCall(p,'review','Review payment');
     }
     await check(w,await prove(w),name);
+    if (refusedBatch) {
+      const file = path.join(scratch, 'unconfirmed-original.batch');
+      fs.writeFileSync(file, refusedBatch);
+      const old = spawnSync(node,['apply-shield-batch','--data-dir',dirs[0],'--batch-file',file],{env,encoding:'utf8'});
+      assert.notEqual(old.status,0);
+      assert.match(old.stderr,/spent_serial/);
+      refusedBatch = null;
+    }
     if (mode !== 'Shield') {
       const reads = validatorReads[w].slice(start);
       for (const method of ['private_pool_snapshot','receipts','blocks']) assert.ok(reads.includes(method), method);
@@ -283,15 +305,17 @@ async function exercise() {
     });
     await until(async()=>{try{return !!(await fetch('http://127.0.0.1:'+gwPort+'/')).status;}catch{return false;}},'gateway');
     // Inspect the actual relay boundary before forwarding to the shipping proxy.
-    // Keep only counters. A rejected frame never reaches the gateway or a log.
+    // Keep test-only copies for the lost reply and same-input replacement checks.
     audit = http.createServer(async (req,res) => {
       try {
         const chunks=[]; for await(const chunk of req) chunks.push(chunk);
         const raw=Buffer.concat(chunks), body=JSON.parse(raw);
-        const match=/^\/api\/private\/v1\/(pq\/)?(snapshot|page|submit|receipt)$/.exec(req.url);
+        const match=/^\/api\/private\/v1\/(pq\/)?(snapshot|page|submit|receipt|authorize)$/.exec(req.url);
         assert.ok(match && req.method==='POST');
         const route=match[2];
-        const fields=route==='snapshot'?[]:route==='page'?['cursor','limit','section','snapshot_token']:['action_json','address','intent_id'];
+        const fields=route==='authorize'?['intent_id','capability_hash']:route==='snapshot'?[]:route==='page'?['cursor','limit','section','snapshot_token']:['action_json','address','intent_id'];
+        if (body.action_json && match[1] && Buffer.from(JSON.parse(body.action_json).body,'base64')[71] === 0)
+          fields.push('capability');
         assert.deepEqual(Object.keys(body).sort(), fields.sort());
         if(body.action_json){
           const action=JSON.parse(body.action_json);
@@ -304,6 +328,11 @@ async function exercise() {
         assert.ok(!/"(?:seed|witness|spend_secret|scan_key|account_key|private_key_hex|leaf_index)"/.test(raw.toString()));
         if (refuseNextSpend && route === 'submit') {
           refuseNextSpend = false;
+          const domain = await rpc(nodePorts[0], 'private_pool_snapshot',{pool_id:'PFT-PQ-SHIELDED-POOL-V1'});
+          const actions = [JSON.parse(body.action_json)];
+          const preimage = JSON.stringify([domain.chain_id,domain.genesis_hash,domain.protocol_version,'shielded',actions]);
+          const batch_id = crypto.createHash('sha3-384').update('postfiat.shielded_action_batch.atomic.v2\0').update(preimage).digest('hex');
+          refusedBatch = JSON.stringify({batch_id,atomic:true,actions});
           res.writeHead(409, {'Content-Type':'application/json'});
           return res.end(JSON.stringify({ok:false, schema:'postfiat-private-actions-v1',
             reserved:false, code:'pq_fee_mismatch', intent_id:body.intent_id,
@@ -318,6 +347,14 @@ async function exercise() {
             offset:0,total:1,item_count:0,items:[],next_cursor:null}));
         }
         const upstream=http.request({host:'127.0.0.1',port:gwPort,path:req.url,method:'POST',headers:req.headers},reply=>{
+          if (loseNextReply && route === 'submit') {
+            loseNextReply = false;
+            lostRequest = body;
+            reply.resume();
+            reply.once('end', () => res.destroy());
+            return;
+          }
+          if (lostRequest && route === 'submit' && body.intent_id === lostRequest.intent_id) assert.deepEqual(body,lostRequest);
           res.writeHead(reply.statusCode,reply.headers); reply.pipe(res);
         });
         upstream.on('error',()=>res.destroy()); upstream.end(raw);
@@ -364,6 +401,7 @@ async function exercise() {
     await b.getByRole('alert').filter({hasText:'invalid finalized page coverage'}).waitFor();
     assert.equal(withholdBobPage,false);
     assert.ok(await b.getByRole('button',{name:'Review payment'}).isDisabled());
+    loseNextReply = true;
     await transfer('alice',native,'Pay',30,receive.bob,'pft-02-alice-pay');
     assert.equal((await sync('bob')).private[native],'30');
     await transfer('bob',native,'Pay',10,receive.alice,'pft-03-bob-second-spend');
@@ -413,7 +451,7 @@ async function exercise() {
     assert.deepEqual(await legacyPage(),historic);
     console.log('Historical Orchard-only snapshot returned the original ciphertext after migration.');
     assert.deepEqual(boundaryErrors,[]);
-    assert.equal(relayCounts.submit,10);
+    assert.equal(relayCounts.submit,11);
     assert.ok(relayCounts.page>0 && relayCounts.receipt>=10 && relayCounts.snapshot>0);
     console.log('Public gateway frames verified: '+JSON.stringify(relayCounts));
     fs.mkdirSync(evidence,{recursive:true});

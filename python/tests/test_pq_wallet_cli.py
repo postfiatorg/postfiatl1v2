@@ -46,7 +46,7 @@ class PqIssuedFee(unittest.TestCase):
             self.assertIsNone(terms["payer"])
             self.assertIsNone(terms["sequence"])
             action = dict(kind="pq_payment_v1", body=base64.b64encode((vectors / vector).read_bytes()).decode())
-            request = browser.request(dict(pool=PQ_POOL_ID, intent="example", wire=json.dumps(action)))
+            request = browser.request(dict(capability="11"*32, pool=PQ_POOL_ID, intent="example", wire=json.dumps(action)))
             self.assertIsNone(request["address"])
 
     def test_cli_refuses_a_caller_selected_issued_fee(self):
@@ -57,7 +57,7 @@ class PqIssuedFee(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Omit --fee"):
                 run(args)
 
-    def test_only_confirmed_pre_reservation_refusal_releases_pending_payment(self):
+    def test_lost_or_refused_submission_retains_identical_bytes(self):
         import sqlite3
         from http.client import RemoteDisconnected
         from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -67,7 +67,7 @@ class PqIssuedFee(unittest.TestCase):
 
         vector = ROOT / "tools/pft-binius-shielded-pq/l1-vectors/pfusdc-pay.bin"
         wire = json.dumps(dict(kind="pq_payment_v1", body=base64.b64encode(vector.read_bytes()).decode()))
-        row = dict(intent="test", phase="prepared", wire=wire, pool=PQ_POOL_ID)
+        row = dict(capability="12"*32, intent="test", phase="prepared", wire=wire, pool=PQ_POOL_ID)
         wallet = object.__new__(BrowserWallet)
         wallet.account, wallet.home = "pf" + "11"*20, Path(".")
         action_hash = private_action_hash(wire)
@@ -78,6 +78,11 @@ class PqIssuedFee(unittest.TestCase):
 
             def do_POST(self):
                 request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                if self.path.endswith("/authorize"):
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(json.dumps(dict(schema=SCHEMA, **request)).encode())
+                    return
                 if self.server.outcome == "lost":
                     return  # The request arrived. Close the socket without an HTTP response.
                 self.send_response(409)
@@ -95,7 +100,7 @@ class PqIssuedFee(unittest.TestCase):
             db.execute("CREATE TABLE payments (intent,phase)")
             for outcome in ("lost", "mismatched", "refused"):
                 server.outcome = outcome
-                request = threading.Thread(target=server.handle_request, daemon=True)
+                request = threading.Thread(target=lambda: (server.handle_request(), server.handle_request()), daemon=True)
                 request.start()
                 db.execute("DELETE FROM payments")
                 db.execute("INSERT INTO payments VALUES ('test', 'prepared')")
@@ -105,12 +110,8 @@ class PqIssuedFee(unittest.TestCase):
                     request.join(2)
                     self.assertFalse(request.is_alive())
                     saved = db.execute("SELECT phase FROM payments").fetchone()
-                    if outcome == "refused":
-                        daemon.assert_called_once_with(Path("."), "rejected", action_hash=action_hash)
-                        self.assertIsNone(saved)
-                    else:
-                        daemon.assert_not_called()
-                        self.assertEqual(saved, ("submitted",))
+                    self.assertEqual(saved, ("submitted",))
+                    self.assertNotIn("rejected", [c.args[1] for c in daemon.call_args_list])
 
     def test_rehearsal_release_contract_is_visible_to_wallets_and_reviewers(self):
         spec = (ROOT / "docs/specs/pq-private-payments-integration.md").read_text()
@@ -120,7 +121,9 @@ class PqIssuedFee(unittest.TestCase):
             self.assertIn("0.000001 pfUSDC", document)
             self.assertIn("profile 2", document)
         self.assertIn("pq_issued_fee", spec)
-        self.assertIn("wind-down", spec)
+        for term in ("wind-down", "F + 1", "unavailable holder", "Chain observer", "Gateway operator",
+                     "Validator you connect to", "spent serial", "receipt capability"):
+            self.assertIn(term, spec)
         history = (ROOT / "docs/rpc/account-history.md").read_text()
         self.assertIn("collector withdrawal", history)
         self.assertNotIn("reads the same kinds", history)

@@ -45,7 +45,7 @@ def atomic_number(value):
 
 
 class AdmissionRefused(ValueError):
-    """The authority confirmed the submitted intent has no reservation."""
+    """A gateway refusal hint for the submitted intent."""
 
 
 class Gateway:
@@ -115,6 +115,8 @@ class BrowserWallet:
                        "(intent TEXT PRIMARY KEY, pool TEXT, wire TEXT, phase TEXT, migration TEXT, network TEXT, statement_id TEXT)")
             if "statement_id" not in {r["name"] for r in db.execute("PRAGMA table_info(payments)")}:
                 db.execute("ALTER TABLE payments ADD COLUMN statement_id TEXT")
+            if "capability" not in {r["name"] for r in db.execute("PRAGMA table_info(payments)")}:
+                db.execute("ALTER TABLE payments ADD COLUMN capability TEXT")
             db.execute("CREATE UNIQUE INDEX IF NOT EXISTS migration_step ON payments(migration,network) "
                        "WHERE migration IS NOT NULL")
 
@@ -134,30 +136,40 @@ class BrowserWallet:
     def action_row(self, db, action, pool, migration=None, statement_id=None):
         wire = compact(action)
         intent = private_action_intent_id(**self.net, action_json=wire)
-        db.execute("INSERT INTO payments (intent,pool,wire,phase,migration,network,statement_id) VALUES (?,?,?,?,?,?,?)",
-                   (intent, pool, wire, "prepared", migration, compact(self.net), statement_id))
+        payerless = pool == PQ_POOL_ID and base64.b64decode(action["body"], validate=True)[71] == 0
+        db.execute("INSERT INTO payments (intent,pool,wire,phase,migration,network,statement_id,capability) "
+                   "VALUES (?,?,?,?,?,?,?,?)", (intent, pool, wire, "prepared", migration,
+                   compact(self.net), statement_id, secrets.token_hex(32) if payerless else None))
         return self.row(db, intent)
 
     def request(self, row):
-        address = self.account
-        if row["pool"] == PQ_POOL_ID:
-            wire = base64.b64decode(json.loads(row["wire"])["body"], validate=True)
-            if wire[71] == 0:
-                address = None
-        return dict(address=address, intent_id=row["intent"], action_json=row["wire"])
+        body = dict(address=self.account, intent_id=row["intent"], action_json=row["wire"])
+        if row["pool"] == PQ_POOL_ID and base64.b64decode(json.loads(row["wire"])["body"], validate=True)[71] == 0:
+            body["address"] = None
+            check(row["capability"], "Legacy relay record has no receipt capability. Sync or replace this payment.")
+            body["capability"] = row["capability"]
+        return body
 
     def send(self, db, row):
-        # Commit the uncertain state before the first network byte. No background resend.
-        changed = db.execute("UPDATE payments SET phase='submitted' WHERE intent=? AND phase='prepared'",
+        request = self.request(row)
+        if row["phase"] == "prepared" and "capability" in request:
+            # Bind the hash before disclosing the proof. A lost authorization
+            # reply can repeat this step while the action is still prepared.
+            digest = hashlib.sha3_384(b"postfiat.gateway.capability.v1\0" + request["capability"].encode()).hexdigest()
+            binding = dict(intent_id=row["intent"], capability_hash=digest)
+            ack = self.gateway.call("authorize", binding, row["pool"])
+            check(ack == dict(schema=SCHEMA, **binding), "Gateway capability registration failed.")
+        # Persist the uncertain state before disclosing the action.
+        changed = db.execute("UPDATE payments SET phase=CASE WHEN phase='prepared' THEN 'submitted' ELSE phase END "
+                             "WHERE intent=? AND phase IN ('prepared','submitted','replaced')",
                              (row["intent"],)).rowcount
-        check(changed == 1, "Already submitted. Check finality.")
+        check(changed == 1, "Payment is already final.")
+        if row["pool"] == PQ_POOL_ID:
+            local(self.home, "submitted", action_hash=private_action_hash(row["wire"]))
         try:
-            r = self.gateway.call("submit", self.request(row), row["pool"])
+            r = self.gateway.call("submit", request, row["pool"])
         except AdmissionRefused as exc:
-            if row["pool"] == PQ_POOL_ID:
-                local(self.home, "rejected", action_hash=private_action_hash(row["wire"]))
-                db.execute("DELETE FROM payments WHERE intent=?", (row["intent"],))
-            raise ValueError(f"Validator refused payment ({exc}). Review again.") from exc
+            raise ValueError(f"Gateway refused payment ({exc}). Retry the saved bytes or review a replacement.") from exc
         check(r["schema"] == SCHEMA and r["intent_id"] == row["intent"]
               and r["action_hash"] == private_action_hash(row["wire"]), "Admission returned different bytes.")
         if row["pool"] == PQ_POOL_ID:
@@ -222,9 +234,21 @@ class BrowserWallet:
         last = db.execute("SELECT intent,phase FROM payments WHERE network=? ORDER BY rowid DESC LIMIT 1",
                           (compact(self.net),)).fetchone()
         fee = None
-        if trusted.get("pq_issued_fee"):
+        if (trusted.get("pq_issued_fee") or [None])[0] == self.issue:
             fee = str(issued_fee(trusted, self.issue))
-        return dict(issued_fee=fee, network=self.net, account=self.account, issue=self.issue,
+        phases = {a["action_hash"]:a["phase"] for a in balance["attempts"]}
+        payments = []
+        for row in db.execute("SELECT * FROM payments WHERE network=? AND pool=? AND phase!='final' ORDER BY rowid DESC",
+                              (compact(self.net), PQ_POOL_ID)):
+            action_hash = private_action_hash(row["wire"])
+            phase = phases.get(action_hash, row["phase"])
+            if phase in ("final", "replaced") and phase != row["phase"]:
+                db.execute("UPDATE payments SET phase=? WHERE intent=?", (phase, row["intent"]))
+            if phase in ("prepared", "submitted", "replaced"):
+                wire = base64.b64decode(json.loads(row["wire"])["body"])
+                payments.append(dict(intent=row["intent"], action_hash=action_hash, phase=phase,
+                                     asset=wire[7:55].hex(), spend=wire[71] == 0))
+        return dict(payments=payments, issued_fee=fee, network=self.net, account=self.account, issue=self.issue,
                     address=local(self.home, "address")["address"], sequence=str(account["sequence"] + 1) if account else None,
                     public={NATIVE:str(account["balance"]), self.issue:str(sum(l["balance"] for l in lines))} if account else {},
                     private={k:str(v) for k,v in balance["finalized"].items()},
@@ -277,8 +301,13 @@ class BrowserWallet:
         if cmd == "review":
             self.reviewed = None
             state = self.overview(db, public=body.get("mode") == "Shield")
-            check(state["synced"] and state["pending"] is None, "Sync the wallet and resolve pending payments first.")
-            check(set(body) == {"mode","asset","amount","fee","recipient","migration"}, "Unexpected payment field.")
+            check(state["synced"], "Sync the wallet first.")
+            replacement = body.get("replace")
+            if replacement:
+                check(any(p["action_hash"] == replacement and p["asset"] == body["asset"] and p["spend"]
+                          and p["phase"] == "submitted" for p in state["payments"])
+                      and body["mode"] != "Shield", "Select a submitted payment of the same asset.")
+            check(set(body) - {"replace"} == {"mode","asset","amount","fee","recipient","migration"}, "Unexpected payment field.")
             mode, asset = body["mode"], body["asset"]
             check(mode in MODES and asset in (NATIVE, self.issue), "Unknown payment mode or issue.")
             atomic_number(body["amount"])
@@ -321,7 +350,7 @@ class BrowserWallet:
                          sequence=int(order["sequence"]) if order["payer"] else None,
                          account_key=self.key if order["payer"] else None)
             metrics = local(self.home, "prove", order=order)
-            action = local(self.home, "prepared")
+            action = local(self.home, "prepared", action_hash=metrics["action_hash"])
             action = dict(kind=action["kind"], body=action["body"])
             check(private_action_hash(compact(action)) == metrics["action_hash"], "Prepared payment changed.")
             migration = self.exit_id() + "/shield" if terms["migration"] else None
