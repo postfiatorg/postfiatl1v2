@@ -59,11 +59,17 @@ def main():
         script = (KIT / name).read_text().replace(str(KIT) + "/env", str(dest) + "/env")
         if name == "deploy_host.sh":
             lines = script.splitlines(keepends=True)
-            restarts = [i for i,line in enumerate(lines) if line.startswith('$SSH "') and "systemctl restart " in line]
+            restarts = [
+                i
+                for i, line in enumerate(lines)
+                if line.startswith('$SSH "') and "systemctl restart " in line
+            ]
             if len(restarts) != 2:
                 raise ValueError("Unexpected predecessor restart sequence.")
             for i in reversed(restarts):
-                lines.insert(i, 'python3 "${EXIT_ROLL_GUARD:?use exit_roll.py}" guard "$N"\n')
+                lines.insert(
+                    i, 'python3 "${EXIT_ROLL_GUARD:?use exit_roll.py}" guard "$N"\n'
+                )
             script = "".join(lines)
         (dest / name).write_text(script)
     shutil.copy2(dest / "restore-watchdog.sh", evidence / "restore-watchdog.sh")
