@@ -1,6 +1,7 @@
 """Prepare the six-validator governance envelope or submit it during the reviewed roll."""
 
 import argparse
+import json
 import subprocess
 from pathlib import Path
 from exit_setup import (
@@ -48,6 +49,28 @@ def require_closed(rows):
         ),
         "All six validators must have the reviewed descriptor with burns closed.",
     )
+
+
+def rotation_clearance(head):
+    """Read the independent inventories over the six authenticated host connections."""
+    from govern import remote
+
+    require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
+    rows = six(lambda i: json.loads(remote(i, [
+        "cat", "/etc/postfiat/sol-exit-rotation-clearance.json"
+    ])))
+    for i, row in enumerate(rows):
+        require(
+            row["validator"] == f"validator-{i}"
+            and row["parent"] == parent_of(head)
+            and row["revision"] == head["build_git_revision"]
+            and row["profile_hash"] == EXIT
+            and row["hold_through_open"] is True
+            and row["outstanding_signed_rotation_rounds"] == [],
+            f"Missing, stale or outstanding rotation clearance on validator-{i}.",
+        )
+    require(parent_of(fleet()) == parent_of(head), "Tip advanced during rotation checks.")
+    return rows
 
 
 def verify_open_parent(rows, tx_id, parent):
