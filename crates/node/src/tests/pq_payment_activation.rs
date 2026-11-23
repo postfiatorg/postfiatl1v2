@@ -35,6 +35,15 @@ pub(super) fn amendment(genesis: &Genesis, height: u32) -> GovernanceAmendment {
 fn candidate_height_and_limits_cover_every_batch_and_non_atomic_attempt() {
     let dir = unique_test_dir("pq-activation");
     let genesis = rehearsal_genesis(&dir);
+    let mac = "0".repeat(2 * postfiat_storage::integrity::MAC_BYTES);
+    let envelope = serde_json::json!({"pftmac":postfiat_storage::integrity::JSONL_ENVELOPE_KIND,
+        "chain":mac,"record":null,"mac":mac});
+    let jsonl = serde_json::to_vec(&envelope).unwrap().len() - 4 + 1 + 96;
+    let redb = 2 + "shielded".len() + 96 + 96 + 2 * (1 + postfiat_storage::integrity::MAC_BYTES);
+    assert_eq!(
+        jsonl.max(redb),
+        postfiat_types::PQ_REHEARSAL_ARCHIVE_OVERHEAD
+    );
     let pay = ShieldedAction::PqPaymentV1(payment("pft-pay"));
     let batch = build_atomic_shielded_action_batch(&genesis, vec![pay.clone(); 2]).unwrap();
     let mixed = build_shielded_action_batch(
@@ -76,6 +85,89 @@ fn candidate_height_and_limits_cover_every_batch_and_non_atomic_attempt() {
     assert!(check(&g, 7, &[&batch]).is_err());
     g.apply(amendment(&genesis, 9));
     check(&g, 9, &[&batch]).unwrap();
+    let disk = NodeStore::new(&dir);
+    let mut atomic = amendment(&genesis, 1);
+    atomic.kind = GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT.into();
+    g.apply(atomic);
+    // The CLI builder consumes four separate source files. At its actual
+    // next height a future PQ amendment must still block their combination.
+    disk.write_governance(&g).unwrap();
+    let source = build_shielded_action_batch(&genesis, vec![pay.clone()]).unwrap();
+    let path = dir.join("source-batch.json");
+    fs::write(&path, serde_json::to_vec(&source).unwrap()).unwrap();
+    let options = |n| ShieldedAtomicBatchOptions {
+        data_dir: dir.clone(),
+        source_batch_files: vec![path.clone(); n],
+        batch_file: dir.join("combined.json"),
+    };
+    assert_eq!(
+        create_shielded_atomic_batch(options(4))
+            .unwrap_err()
+            .to_string(),
+        "pq_settlement_inactive"
+    );
+    g.apply(amendment(&genesis, 1));
+    disk.write_governance(&g).unwrap();
+    assert_eq!(
+        create_shielded_atomic_batch(options(4))
+            .unwrap()
+            .actions
+            .len(),
+        4
+    );
+    assert!(create_shielded_atomic_batch(options(5)).is_err());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn replay_rejects_preactivation_non_atomic_body_before_receipts() {
+    let dir = unique_test_dir("pq-replay-activation");
+    let genesis = rehearsal_genesis(&dir);
+    let disk = NodeStore::new(&dir);
+    let batch = build_shielded_action_batch(
+        &genesis,
+        vec![ShieldedAction::PqPaymentV1(payment("pfusdc-exit"))],
+    )
+    .unwrap();
+    let entry = BatchArchiveEntry {
+        batch_kind: "shielded".into(),
+        batch_id: batch.batch_id.clone(),
+        payload_hash: String::new(),
+        payload_json: serde_json::to_string(&batch).unwrap(),
+    };
+    let registry = read_validator_registry_file(&dir.join(VALIDATOR_REGISTRY_FILE)).unwrap();
+    for configured in [false, true] {
+        for h in [5, 6, 7] {
+            let mut governance = disk.read_governance().unwrap();
+            if configured {
+                governance.apply(amendment(&genesis, 6));
+            }
+            let mut ledger = disk.read_ledger().unwrap();
+            let mut shielded = disk.read_shielded().unwrap();
+            let mut bridge = disk.read_bridge().unwrap();
+            let mut block = super::dummy_block_record(h);
+            block.header.batch_kind = "shielded".into();
+            block.header.batch_id = batch.batch_id.clone();
+            let result = block_replay_wallet::replay_archived_payload(
+                &genesis,
+                &block,
+                &entry,
+                block_replay_wallet::ArchivedReplayState {
+                    governance: &mut governance,
+                    ledger: &mut ledger,
+                    shielded: &mut shielded,
+                    bridge: &mut bridge,
+                    validator_registry: &registry,
+                },
+            );
+            if configured && h >= 6 {
+                assert_eq!(result.unwrap()[0].code, "pq_settlement_inactive");
+            } else {
+                assert_eq!(result.unwrap_err().to_string(), "pq_settlement_inactive");
+            }
+            assert_eq!(shielded, disk.read_shielded().unwrap());
+        }
+    }
     fs::remove_dir_all(dir).unwrap();
 }
 

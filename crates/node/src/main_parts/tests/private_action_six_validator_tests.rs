@@ -226,6 +226,16 @@ mod private_action_six_validator_tests {
     }
 
     pub(crate) fn fleet_on_chain(chain_id: &str, options: FleetOptions) -> Fleet {
+        let pq_height =
+            (chain_id == "postfiat-pfsh02-m1-disposable").then_some(ATOMIC_ACTIVATION as u32);
+        fleet_with_pq_height(chain_id, options, pq_height)
+    }
+
+    pub(crate) fn fleet_with_pq_height(
+        chain_id: &str,
+        options: FleetOptions,
+        pq_height: Option<u32>,
+    ) -> Fleet {
         let pricing = options.pricing;
         let root = std::env::temp_dir().join(format!(
             "postfiat-s6-private-actions-{}-{}",
@@ -271,8 +281,8 @@ mod private_action_six_validator_tests {
             GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
             ATOMIC_ACTIVATION as u32,
         )];
-        if chain_id == "postfiat-pfsh02-m1-disposable" {
-            amendments.push((postfiat_types::PQ_REHEARSAL_V1, ATOMIC_ACTIVATION as u32));
+        if let Some(height) = pq_height {
+            amendments.push((postfiat_types::PQ_REHEARSAL_V1, height));
         }
         if pricing {
             amendments.push((

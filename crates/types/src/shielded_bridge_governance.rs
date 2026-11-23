@@ -75,6 +75,10 @@ pub const PQ_REHEARSAL_ISSUE: &str = "bbf2fb96437f2e87ff3b470f19aa2455ae226ab810
 pub const PQ_ARCHIVE_FIXTURE_ISSUE: &str = "a1c5b7e096966c3736cbcf2291c0d10a166f3c2edee2d7c5faf9c870c565d0009ad5b0e23e1dbdee4ca9f7e07b954cb8";
 pub const PQ_REHEARSAL_PROOFS: usize = 4;
 pub const PQ_REHEARSAL_BYTES: usize = 596_520;
+/// Profile-1 storage allocation per payment, in addition to its body and
+/// detached batch reference. The 238-byte MAC envelope/newline and 96-byte
+/// body key cover both supported archive backends.
+pub const PQ_REHEARSAL_ARCHIVE_OVERHEAD: usize = 334;
 pub const PQ_REHEARSAL_MIN_FEE: u64 = 1;
 
 pub const GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT: &str =

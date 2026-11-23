@@ -210,10 +210,12 @@ pub fn create_shielded_swap_action_batch(
 pub fn create_shielded_atomic_batch(
     options: ShieldedAtomicBatchOptions,
 ) -> io::Result<ShieldedActionBatch> {
-    if options.source_batch_files.is_empty() || options.source_batch_files.len() > 3 {
+    if options.source_batch_files.is_empty()
+        || options.source_batch_files.len() > postfiat_types::PQ_REHEARSAL_PROOFS
+    {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "shielded atomic batch requires between one and three source batches",
+            "shielded atomic batch requires one to three ordinary sources or up to four PQ sources",
         ));
     }
     let store = NodeStore::new(&options.data_dir);

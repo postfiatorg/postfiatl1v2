@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod pq_payment_local_chain_tests {
     use super::private_action_six_validator_tests::{
-        fleet_on_chain, FleetOptions, ATOMIC_ACTIVATION,
+        fleet_on_chain, fleet_with_pq_height, Fleet, FleetOptions, ATOMIC_ACTIVATION,
     };
     use postfiat_crypto_provider::{bytes_to_hex, hash_hex, hex_to_bytes};
     use postfiat_node::{
@@ -10,7 +10,7 @@ mod pq_payment_local_chain_tests {
         InitOptions, NodeOptions, VALIDATOR_KEYS_FILE,
     };
     use postfiat_storage::NodeStore;
-    use postfiat_types::{Genesis, ShieldedAction, ShieldedActionBatch};
+    use postfiat_types::{pq_payment::PqPayment, Genesis, ShieldedAction, ShieldedActionBatch};
     use sha2::{Digest, Sha384};
     use std::{fs, path::Path, process::Command};
 
@@ -53,6 +53,261 @@ mod pq_payment_local_chain_tests {
             key_file: None,
             validator_id: None,
         }
+    }
+
+    fn l1_action(name: &str) -> ShieldedAction {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tools/pft-binius-shielded-pq/l1-vectors")
+            .join(format!("{name}.bin"));
+        ShieldedAction::PqPaymentV1(PqPayment::from_bytes(fs::read(path).unwrap()).unwrap())
+    }
+
+    fn assert_inactive_proposal(fleet: &Fleet, genesis: &Genesis, height: u64) {
+        let proposer = &fleet.data_dirs[fleet.proposer_index(height)];
+        let template = propose_batch_with_timings(proposal(
+            proposer,
+            &fleet.root,
+            &batch(genesis, HOP, false),
+        ))
+        .unwrap()
+        .proposal;
+        let actions = vec![
+            l1_action("pfusdc-exit"),
+            ShieldedAction::ShieldedSwapV1(postfiat_types::ShieldedSwapActionPayload {
+                swap_json: "{}".into(),
+            }),
+        ];
+        let digest = serde_json::to_vec(&(
+            &genesis.chain_id,
+            postfiat_execution::genesis_hash(genesis),
+            genesis.protocol_version,
+            "shielded",
+            &actions,
+        ))
+        .unwrap();
+        let mixed = ShieldedActionBatch::new(
+            hash_hex("postfiat.shielded_action_batch.v1", &digest),
+            actions,
+        );
+        let opts = proposal(proposer, &fleet.root, &mixed);
+        assert_eq!(
+            propose_batch_with_timings(opts.clone())
+                .unwrap_err()
+                .to_string(),
+            "pq_settlement_inactive"
+        );
+        let mut direct = template;
+        direct.batch_id = mixed.batch_id.clone();
+        direct.payload_hash = batch_archive_payload_hash(
+            genesis,
+            "shielded",
+            &mixed.batch_id,
+            &serde_json::to_string(&mixed).unwrap(),
+        )
+        .unwrap();
+        fs::write(&opts.proposal_file, serde_json::to_vec(&direct).unwrap()).unwrap();
+        for (i, dir) in fleet.data_dirs.iter().enumerate() {
+            let vote_file = fleet.root.join(format!("inactive-{i}.vote"));
+            let err = create_block_vote(BlockVoteOptions {
+                data_dir: dir.clone(),
+                verify_block_log: false,
+                key_file: dir.join(VALIDATOR_KEYS_FILE),
+                validator_id: Some(format!("validator-{i}")),
+                batch_file: Some(opts.batch_file.clone()),
+                proposal_file: Some(opts.proposal_file.clone()),
+                timeout_certificate_file: None,
+                block_height: Some(height),
+                vote_file: vote_file.clone(),
+            })
+            .unwrap_err();
+            assert!(err.to_string().contains("pq_settlement_inactive"), "{err}");
+            assert!(!vote_file.exists());
+        }
+    }
+
+    #[test]
+    fn unconfigured_fleet_refuses_pq_votes_and_continues_ordinary_rounds() {
+        let fleet = fleet_with_pq_height(
+            CHAIN,
+            FleetOptions {
+                pricing: false,
+                max_nav_age_blocks: None,
+                extra_asset: false,
+            },
+            None,
+        );
+        let genesis = NodeStore::new(&fleet.data_dirs[0]).read_genesis().unwrap();
+        while fleet.height() + 1 < ATOMIC_ACTIVATION - 1 {
+            fleet.transparent_round();
+        }
+        for height in ATOMIC_ACTIVATION - 1..=ATOMIC_ACTIVATION + 1 {
+            assert_eq!(fleet.height() + 1, height);
+            assert_inactive_proposal(&fleet, &genesis, height);
+            fleet.transparent_round();
+        }
+        assert!(
+            verify_blocks(NodeOptions {
+                data_dir: fleet.data_dirs[0].clone()
+            })
+            .unwrap()
+            .verified
+        );
+    }
+
+    #[test]
+    fn pq_activation_rejects_direct_votes_then_finalizes_one_spend() {
+        use postfiat_node::{create_transfer_batch, BatchTransferOptions, PrivateActionState};
+        use postfiat_types::pq_payment::POOL_ID;
+        let fleet = fleet_on_chain(
+            CHAIN,
+            FleetOptions {
+                pricing: false,
+                max_nav_age_blocks: None,
+                extra_asset: false,
+            },
+        );
+        let genesis = NodeStore::new(&fleet.data_dirs[0]).read_genesis().unwrap();
+        let ShieldedAction::PqPaymentV1(mint) = l1_action("pft-shield") else {
+            unreachable!()
+        };
+        let payer = format!(
+            "pf{}",
+            bytes_to_hex(&mint.parts().unwrap().0.account.unwrap().id)
+        );
+        let file = fleet.root.join("pq-admission-funding.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: fleet.data_dirs[0].clone(),
+            key_file: Some(fleet.data_dirs[0].join("faucet_key.json")),
+            to: payer,
+            amount: 1000,
+            batch_file: file.clone(),
+        })
+        .unwrap();
+        while fleet.height() + 1 < ATOMIC_ACTIVATION - 1 {
+            fleet.transparent_round();
+        }
+        let height = fleet.height() + 1;
+        assert_eq!(height, ATOMIC_ACTIVATION - 1);
+        assert_inactive_proposal(&fleet, &genesis, height);
+        let timer = std::time::Instant::now();
+        fleet.round("transparent", file);
+        println!(
+            "ordinary six-validator round {:.2} ms",
+            timer.elapsed().as_secs_f64() * 1e3
+        );
+        for (offset, name) in ["pft-shield", "pft-pay"].into_iter().enumerate() {
+            let mut request = fleet.request(&serde_json::to_string(&l1_action(name)).unwrap());
+            request.domain.pool_id = POOL_ID.into();
+            assert!(fleet.submit_everywhere(&request).iter().all(Result::is_ok));
+            let timer = std::time::Instant::now();
+            assert_eq!(fleet.service_pass(), 1);
+            assert_eq!(fleet.height(), ATOMIC_ACTIVATION + offset as u64);
+            println!(
+                "PQ six-validator round {name} {:.2} ms",
+                timer.elapsed().as_secs_f64() * 1e3
+            );
+            assert_eq!(fleet.service_pass(), 0);
+            for i in 0..6 {
+                assert_eq!(
+                    fleet.state(i, &request.intent_id),
+                    Some(PrivateActionState::Accepted)
+                );
+            }
+        }
+        let store = NodeStore::new(&fleet.data_dirs[1]);
+        assert_eq!(
+            store
+                .read_shielded()
+                .unwrap()
+                .pq_pool_v1
+                .unwrap()
+                .head
+                .pairs,
+            2
+        );
+
+        // Interleave ordinary traffic with a full four-proof block. All four
+        // deposits use the retained opening root and successive payer sequences.
+        use pft_binius_shielded::payment::{create_profiled_tx, ShieldedWallet, SpendInput};
+        use postfiat_crypto_provider::{
+            ml_dsa_65_keygen_from_seed, ml_dsa_65_sign_with_context_seed, TX_SIGNATURE_CONTEXT,
+        };
+        use rand::{rngs::StdRng, SeedableRng};
+        fleet.transparent_round();
+        let chain = postfiat_types::pq_payment::Chain {
+            id: &genesis.chain_id,
+            genesis: hex_to_bytes(&postfiat_execution::genesis_hash(&genesis))
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            protocol: genesis.protocol_version,
+        };
+        let key = ml_dsa_65_keygen_from_seed(&[7; 32]);
+        let mut rng = StdRng::seed_from_u64(42);
+        let wallet = ShieldedWallet::from_seed(&mut rng);
+        let mut deposits = Vec::new();
+        for sequence in 2..=5 {
+            let mut terms = mint.parts().unwrap().0;
+            terms.account.as_mut().unwrap().sequence = sequence;
+            let (tx, _, _) = create_profiled_tx(
+                &postfiat_privacy_binius::MerkleTree24::new(),
+                SpendInput::Dummy,
+                SpendInput::Dummy,
+                &wallet.stealth_address(),
+                99,
+                &wallet.stealth_address(),
+                0,
+                100,
+                0,
+                [0; 32],
+                1,
+                None,
+                Some(&|raw| terms.statement_context(chain, raw)),
+                &mut rng,
+            )
+            .unwrap();
+            let sig = ml_dsa_65_sign_with_context_seed(
+                &key.private_key,
+                &terms.signing_message(chain, tx.statement().tx_ctx).unwrap(),
+                TX_SIGNATURE_CONTEXT,
+                &[sequence as u8; 32],
+            )
+            .unwrap()
+            .try_into()
+            .unwrap();
+            deposits.push(ShieldedAction::PqPaymentV1(
+                PqPayment::encode(&terms, Some(&sig), &tx.to_bytes()).unwrap(),
+            ));
+        }
+        let full = build_atomic_shielded_action_batch(&genesis, deposits).unwrap();
+        let opts = proposal(
+            &fleet.data_dirs[fleet.proposer_index(fleet.height() + 1)],
+            &fleet.root,
+            &full,
+        );
+        let timer = std::time::Instant::now();
+        fleet.round("shielded", opts.batch_file);
+        println!(
+            "four-proof six-validator round {:.2} ms",
+            timer.elapsed().as_secs_f64() * 1e3
+        );
+        assert_eq!(
+            store
+                .read_shielded()
+                .unwrap()
+                .pq_pool_v1
+                .unwrap()
+                .head
+                .pairs,
+            6
+        );
+        assert!(
+            verify_blocks(NodeOptions {
+                data_dir: fleet.data_dirs[1].clone()
+            })
+            .unwrap()
+            .verified
+        );
     }
 
     #[test]
