@@ -94,7 +94,7 @@ class HandoffTest(unittest.TestCase):
                 "deploy_host.sh",
                 "restore-watchdog.sh",
             ):
-                (old / name).write_text(f"source {old}/env\n")
+                (old / name).write_text(f"source {old}/env\n" + ('$SSH "systemctl restart validator"\n$SSH "systemctl restart rpc"\n' if name=="deploy_host.sh" else ""))
             binary = base / "binary"
             binary.write_bytes(b"rehearsal")
             with (
