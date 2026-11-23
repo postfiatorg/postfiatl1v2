@@ -38,18 +38,24 @@ def ethereum():
     return rows[0]["profile"]
 
 
-def require_closed(rows):
+def require_descriptor(rows):
     require(
         len(rows) == 6
         and all(
             r.get("active") is True
-            and r.get("burns_open") is False
+            and type(r.get("burns_open")) is bool
+            and r["burns_open"] == rows[0]["burns_open"]
             and r.get("profile_hash") == EXIT
             and r.get("profile") == read(PROFILE)
             for r in rows
         ),
-        "All six validators must have the reviewed descriptor with burns closed.",
+        "All six validators must agree on the reviewed Solana descriptor.",
     )
+
+
+def require_closed(rows):
+    require_descriptor(rows)
+    require(not rows[0]["burns_open"], "All six validators must have burns closed.")
 
 
 def require_open_accounting(routes, state, height):
@@ -61,6 +67,15 @@ def require_open_accounting(routes, state, height):
             and state.get("series_supply_atoms") == outstanding,
             "Payout service lacks matching full supply and bucket outstanding.")
     reconcile_supply(routes, int(outstanding))
+
+
+CLEARANCE_READER = """import os, stat, sys
+with os.fdopen(os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as stream:
+    s = os.fstat(stream.fileno())
+    if not stat.S_ISREG(s.st_mode) or s.st_uid != 0 or s.st_mode & 0o022 or s.st_size > 65536:
+        sys.exit("Unsafe rotation clearance file")
+    sys.stdout.buffer.write(stream.read(65537))
+"""
 
 
 def rotation_clearance(head):
@@ -97,7 +112,8 @@ def rotation_clearance(head):
                 f"Unknown or uncommitted signing round on validator-{i}.",
             )
         return json.loads(
-            remote(i, ["cat", "/etc/postfiat/sol-exit-rotation-clearance.json"])
+            remote(i, ["/usr/bin/python3", "-I", "-c", CLEARANCE_READER,
+                       "/etc/postfiat/sol-exit-rotation-clearance.json"])
         )
 
     rows = six(inspect)
@@ -182,12 +198,20 @@ def main():
         and head["block_height"] + 1 >= args.release_height,
         "Waiting for the reviewed release and height",
     )
-    before = ethereum()
+    release_action = args.action in ("submit", "open")
+    if release_action:
+        before = ethereum()
+    else:
+        routes = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
+        require_descriptor(routes)
+        require(all(r["current_height"] == head["block_height"] for r in routes)
+                and parent_of(fleet()) == parent_of(head), "Recovery parent changed.")
     if args.action == "open":
         import requests
 
         for _ in range(3):
-            start = parent_of(fleet())
+            candidate = fleet()
+            start = parent_of(candidate)
             closed = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
             require_closed(closed)
             status = requests.get(
@@ -206,8 +230,9 @@ def main():
             )
             require_open_accounting(closed, state, start["block_height"])
             try:
-                if state["qualified_parent"] != parent_of(fleet()):
+                if state["qualified_parent"] != start or start != parent_of(fleet()):
                     continue
+                rotation_clearance(candidate)
                 accepted = govern(
                     "exit-open",
                     compatible=args.revision,
@@ -242,15 +267,16 @@ def main():
         from exit_canary import review_paid
 
         ref = review_paid(read(args.paid))
-        save(args.output, govern("exit-paid", compatible=args.revision, payout=ref))
+        save(args.output, govern("exit-paid", compatible=args.revision, qualified_parent=parent_of(head), payout=ref))
     elif args.action == "close":
-        result = govern("exit-close", compatible=args.revision)
+        result = govern("exit-close", compatible=args.revision, qualified_parent=parent_of(head))
         require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
         save(args.output, result)
     else:
         govern("route", read(PROFILE), compatible=args.revision)
         require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
-    require(ethereum() == before, "Ethereum route changed during governance.")
+    if release_action:
+        require(ethereum() == before, "Ethereum route changed during governance.")
     print("Governance decision confirmed by six validators.")
 
 

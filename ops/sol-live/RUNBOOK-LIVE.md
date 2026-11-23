@@ -45,6 +45,11 @@ cargo build --locked --release -p postfiat-node --bin postfiat-node
 export B="$CARGO_TARGET_DIR/release/postfiat-node" KIT="$HOME/var/$REL"
 REV=$(git rev-parse --short=8 HEAD)
 export REV
+install -d -m700 "$HOME/.config/postfiat"
+oncall="$HOME/.config/postfiat/sol-exit-oncall.env"
+tmp=$(mktemp "${oncall}.XXXXXXXX")
+printf 'cd -- %q\nexport REV=%q H=%q KIT=%q\n' "$PWD" "$REV" "$H" "$KIT" > "$tmp"
+mv -T "$tmp" "$oncall"
 python3 ops/sol-live/exit_release_kit.py --release "$REL" --binary "$B"
 export ARCHIVE="$KIT/anchor-replay" INTEGRITY="$EXIT_WORK/replay/source/.integrity.key"
 export FAUCET="$EXIT_WORK/replay/source/faucet_account.json"
@@ -165,7 +170,7 @@ Require all six series RPCs to report the reviewed descriptor hash, `active=true
 
 Registration starts the chain-side hold on incompatible changes. Keep all six signer holds in force through the six accepted open receipts. After registration each validator operator inventories their resident signer outputs, outstanding authorizations (including partial or externally held signatures), governance coordinator queues and certified but uncommitted rotations. Resolve outstanding rounds or prove their signed slot expired. The ops gate separately checks the filenames in each resident consensus-v2 safety journal and refuses any round beyond the agreed tip. The operator inventory covers governance authorizations that have not entered consensus.
 
-On each authenticated validator host the operator publishes a root-owned `/etc/postfiat/sol-exit-rotation-clearance.json` recording `validator` (validator-N), `profile_hash` (the registered profile hash), `revision` (resident build), `parent` (block_height, block_tip_hash and state_root), `hold_through_open` (true) and `outstanding_signed_rotation_rounds` (the actual list). Missing evidence or any listed round blocks qualification. A changed parent requires a new inventory.
+On each authenticated validator host the operator publishes a root-owned `/etc/postfiat/sol-exit-rotation-clearance.json` recording `validator` (validator-N), `profile_hash` (the registered profile hash), `revision` (resident build), `parent` (block_height, block_tip_hash and state_root), `hold_through_open` (true) and `outstanding_signed_rotation_rounds` (the actual list). Missing evidence or any listed round blocks qualification. A changed parent requires a new inventory. Open reads each root-owned regular clearance file again for its candidate parent and rejects group or world write access.
 
 ## 4. Precheck the immutable binding
 
@@ -419,6 +424,7 @@ After the finalized payout and its verified L1 settlement, enable admission usin
 On signer loss or a settlement backlog, disable public admission immediately by running `"$HOME/.local/bin/disable-sol-exit"` on the relay host. Confirm its effective false flag and the authenticated disabled-job response. If the relay cannot be controlled, block the public withdrawal path at the gateway and verify denial there. Preserve the original burn IDs, pending claims, journals and finalized payment references. Page the settlement on-call and all signer operators. Five validators can finalize direct burns. Direct burns remain possible until a unanimous close commits. Track new burns and outstanding custody continuously. Restore the sixth signer using its rehearsed recovery path, fence any old signer before resuming, and verify the restored committee identity, safety history and agreed parent. With all six available, close direct L1 admission with a separate unanimous decision, pay and settle all pending claims using their original packets, and reconcile custody before considering a separate reopen. Preserve evidence and wait for six accepted receipts and six closed descriptors.
 
 ```bash
+source "$HOME/.config/postfiat/sol-exit-oncall.env"
 python3 ops/sol-live/exit_govern.py close --revision "$REV" --release-height "$H" --output "$KIT/evidence/close-accepted.json"
 ```
 
