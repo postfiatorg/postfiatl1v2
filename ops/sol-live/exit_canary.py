@@ -2,6 +2,7 @@
 
 import argparse
 import fcntl
+import hashlib
 import re
 import json
 import os
@@ -204,12 +205,21 @@ def recover(out):
     with (out / "signed.json").open("rb") as f:
         raw = f.read().decode()
         os.fsync(f.fileno())
+    tx_id = verified_burn_id(raw, plan["fields"])
+    seal = dict(tx_id=tx_id, sha256=hashlib.sha256(raw.encode()).hexdigest())
+    seal_path = out / "signed-envelope-id.json"
+    if seal_path.exists():
+        require(read(seal_path) == seal, "Signed envelope changed after verification.")
+    else:
+        if (out / "submission.json").exists():
+            receipt = read(out / "submission.json")["finality"]["receipt"]
+            require(receipt["tx_id"] == tx_id, "Stored submission names another envelope.")
+        save(seal_path, seal)
     fd = os.open(out, os.O_DIRECTORY)
     try:
         os.fsync(fd)
     finally:
         os.close(fd)
-    tx_id = verified_burn_id(raw, plan["fields"])
 
     def status(i):
         try:

@@ -160,6 +160,11 @@ class BudgetCanaryTest(unittest.TestCase):
                 canary.recover(out)
                 self.assertEqual(calls.call_count,13)
                 calls.reset_mock()
+                (out/"signed.json").write_text(raw+" ")
+                with self.assertRaises(ValueError):
+                    canary.recover(out)
+                calls.assert_not_called()
+                (out/"signed.json").write_text(raw)
                 canary.save(out/"sign-request.json",dict(kind="asset",fields=dict(sequence=8)))
                 with self.assertRaises(ValueError):
                     canary.recover(out)
