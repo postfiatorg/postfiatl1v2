@@ -1160,21 +1160,11 @@ fn exit_review_close_drain_rotate_and_reopen() {
         "ab".repeat(64)
     );
     decision(&mut gov, &mut ledger, &payout, H + 4).unwrap();
-    let rotated = rotation(&gov, &ledger).unwrap();
-    assert_eq!(
-        rotated.validator_registry_updates.last(),
-        batch.validator_registry_updates.first()
-    );
-    let reopen = committee.decision(&g, &rotated, OPEN, H + 7);
-    assert!(crate::solana_exit_governance::validate_decision(
-        &g,
-        &rotated,
-        &reopen.amendments[0],
-        H + 7
-    )
-    .unwrap_err()
-    .contains(&(H + 6).to_string()));
-    // The same drained parent can reopen if the rotation was never committed.
+    assert_eq!(bucket_amounts(&ledger).3, 1_610_000);
+    let error = rotation(&gov, &ledger)
+        .err()
+        .expect("outstanding holders still need an exit");
+    assert!(error.to_string().contains("outstanding"), "{error}");
     decision(&mut gov, &mut ledger, OPEN, H + 5).unwrap();
     assert_eq!(solana_exit::open_height(&gov), Some(H + 5));
 }
@@ -1333,4 +1323,110 @@ fn exit_review_numbered_set_uses_parent_membership() {
     committee.sign(&gov, &mut same, H + 1);
     let signed = build_governance_action_batch(&g, vec![same], vec![]).unwrap();
     verify_live_signed_governance_batch(&g, &gov, &committee.registry, &signed, H + 1).unwrap();
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review_registration_holds_rotation_until_open_or_retired() {
+    let (g, mut gov, mut ledger) = scheduled_parent(false);
+    let (registry, keys, rotation) =
+        crate::cobalt_handoff::signed_exit_rotation(&g, &mut gov, H + 6);
+    let committee = LocalCommittee { registry, keys };
+    let check = |gov: &GovernanceState, ledger: &LedgerState| {
+        crate::solana_exit_governance::verify_rotation_interlock(
+            &g,
+            gov,
+            ledger,
+            crate::solana_exit_governance::numbered_parent_count(gov),
+            &rotation,
+            H + 6,
+        )
+    };
+    let retire = |gov: &mut GovernanceState, ledger: &mut LedgerState| {
+        let batch = committee.decision(&g, gov, solana_exit::RETIRE, H + 2);
+        verify_live_signed_governance_batch(&g, gov, &committee.registry, &batch, H + 2).unwrap();
+        crate::execution_actions::execute_governance_batch(
+            gov,
+            Some(ledger),
+            Some(&g),
+            &batch,
+            H + 2,
+        )
+        .remove(0)
+    };
+    let bucket = ledger
+        .vault_bridge_bucket_states
+        .iter_mut()
+        .find(|b| solana_exit::matches_bucket(b))
+        .unwrap();
+    bucket.outstanding_vault_bridge_atoms = 0;
+    assert!(
+        check(&gov, &ledger).is_err(),
+        "new registration must protect permanent initialization"
+    );
+    assert!(
+        !retire(&mut gov, &mut ledger).accepted,
+        "revision 8 can still receive deposits"
+    );
+    // Once opened and closed, direct deposits alone still require a usable checker.
+    let mut closed = gov.clone();
+    for (kind, height) in [(OPEN, H + 1), (solana_exit::CLOSE, H + 2)] {
+        let batch = committee.decision(&g, &closed, kind, height);
+        verify_live_signed_governance_batch(&g, &closed, &committee.registry, &batch, height)
+            .unwrap();
+        assert!(
+            crate::execution_actions::execute_governance_batch(
+                &mut closed,
+                Some(&mut ledger),
+                Some(&g),
+                &batch,
+                height,
+            )[0]
+            .accepted
+        );
+    }
+    assert!(check(&closed, &ledger)
+        .unwrap_err()
+        .to_string()
+        .contains("receive deposits"));
+    // A higher ingress revision permanently supersedes revision 8.
+    let mut successor = ledger
+        .solana_clients()
+        .max_by_key(|r| r.profile.route_epoch)
+        .unwrap()
+        .clone();
+    successor.profile.route_epoch += 1;
+    let hash = successor.profile.profile_hash().unwrap();
+    ledger.additional_solana_routes.insert(hash, successor);
+    check(&closed, &ledger).unwrap();
+    assert!(
+        check(&gov, &ledger).is_err(),
+        "registration still protects the first open"
+    );
+    ledger
+        .vault_bridge_bucket_states
+        .iter_mut()
+        .find(|b| solana_exit::matches_bucket(b))
+        .unwrap()
+        .outstanding_vault_bridge_atoms = 1;
+    assert!(!retire(&mut gov, &mut ledger).accepted);
+    ledger
+        .vault_bridge_bucket_states
+        .iter_mut()
+        .find(|b| solana_exit::matches_bucket(b))
+        .unwrap()
+        .outstanding_vault_bridge_atoms = 0;
+    let mut short = committee.decision(&g, &gov, solana_exit::RETIRE, H + 2);
+    short.amendments[0].signed_authorizations.pop();
+    assert!(
+        verify_live_signed_governance_batch(&g, &gov, &committee.registry, &short, H + 2).is_err()
+    );
+    assert!(retire(&mut gov, &mut ledger).accepted);
+    check(&gov, &ledger).unwrap();
+    assert!(solana_exit::active(&gov, H + 1).is_ok());
+    assert!(solana_exit::active(&gov, H + 3).is_err());
+    let open = committee.decision(&g, &gov, OPEN, H + 3);
+    assert!(
+        verify_live_signed_governance_batch(&g, &gov, &committee.registry, &open, H + 3).is_err()
+    );
 }

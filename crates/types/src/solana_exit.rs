@@ -59,6 +59,9 @@ pub fn active(
     height: u64,
 ) -> Result<(&VaultBridgeRouteProfileRecordV1, &GovernanceAmendment), String> {
     let (record, amendment) = registered(g).ok_or("Solana exit descriptor is not governed")?;
+    if retirement_height(g).is_some_and(|h| height >= h) {
+        return Err("Solana exit descriptor has been retired".into());
+    }
     if height < record.authorized_height || height >= record.profile.expires_at_height {
         return Err("Solana exit descriptor is outside its authorized interval".into());
     }
@@ -67,6 +70,7 @@ pub fn active(
 
 pub const OPEN: &str = "solana_exit_r8_open";
 pub const SETTLEMENT_TRUST_CLASS: &str = "VALIDATOR_ATTESTED_SETTLEMENT";
+pub const RETIRE: &str = "solana_exit_r8_retire";
 pub const CLOSE: &str = "solana_exit_r8_close";
 /// The frozen revision-8 tag-3 binding uses the finalized WAN block at 1753.
 /// The route profile's activation height is a different field.
@@ -74,7 +78,7 @@ pub const TRUSTED_CHECKPOINT_HEIGHT: u64 = 1753;
 pub const PAID: &str = "solana_exit_r8_paid:";
 
 pub fn is_decision(kind: &str) -> bool {
-    matches!(kind, OPEN | CLOSE) || kind.starts_with(PAID)
+    matches!(kind, OPEN | CLOSE | RETIRE) || kind.starts_with(PAID)
 }
 
 /// The packet hash commits to the burn, amount and source bucket. The burn ID
@@ -120,13 +124,20 @@ pub fn payout_fields(kind: &str) -> Result<FinalizedPayout<'_>, String> {
     })
 }
 
+pub fn retirement_height(g: &GovernanceState) -> Option<u64> {
+    g.amendment_activation_records
+        .iter()
+        .find(|r| r.kind == RETIRE && r.value == 1 && r.activated_height == r.activation_height)
+        .map(|r| r.activated_height)
+}
+
 pub fn open_height(g: &GovernanceState) -> Option<u64> {
     let (descriptor, _) = registered(g)?;
     g.amendment_activation_records
         .iter()
         .rev()
         .find(|a| {
-            matches!(a.kind.as_str(), OPEN | CLOSE)
+            matches!(a.kind.as_str(), OPEN | CLOSE | RETIRE)
                 && a.value == 1
                 && a.activated_height > descriptor.authorized_height
                 && a.activation_height == a.activated_height

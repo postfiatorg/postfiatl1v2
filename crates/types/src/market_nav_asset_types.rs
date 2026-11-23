@@ -3850,6 +3850,11 @@ impl LedgerState {
         self.solana_route.iter().chain(self.additional_solana_routes.values())
     }
 
+    pub fn solana_route_superseded(&self, profile: &VaultBridgeRouteProfileV1) -> bool {
+        self.solana_clients().any(|other| other.profile.route_id == profile.route_id
+            && other.profile.route_epoch > profile.route_epoch)
+    }
+
     fn solana_policies(&self) -> Result<BTreeMap<String, &SolanaRouteState>, String> {
         let mut policies = BTreeMap::new();
         let mut names = BTreeSet::new();

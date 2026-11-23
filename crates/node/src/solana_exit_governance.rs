@@ -2,8 +2,10 @@ use super::*;
 use postfiat_types::solana_exit;
 
 pub(super) fn is_registration_amendment(kind: &str) -> bool {
-    kind.strip_suffix(solana_exit::PROFILE_HASH).is_some_and(|prefix|
-        prefix == postfiat_types::vault_bridge_route_amendment_prefix(solana_exit::FAMILY))
+    kind.strip_suffix(solana_exit::PROFILE_HASH)
+        .is_some_and(|prefix| {
+            prefix == postfiat_types::vault_bridge_route_amendment_prefix(solana_exit::FAMILY)
+        })
 }
 
 pub(super) fn registers_descriptor(batch: &GovernanceActionBatch) -> bool {
@@ -11,8 +13,7 @@ pub(super) fn registers_descriptor(batch: &GovernanceActionBatch) -> bool {
         .vault_bridge_route_profile_activations
         .iter()
         .any(|a| {
-            is_registration_amendment(&a.amendment.kind)
-                && a.profile == solana_exit::descriptor()
+            is_registration_amendment(&a.amendment.kind) && a.profile == solana_exit::descriptor()
         })
 }
 
@@ -93,6 +94,9 @@ pub(super) fn validate_decision(
         amendment,
         &active_validator_ids(governance).map_err(|e| e.to_string())?,
     )?;
+    if solana_exit::retirement_height(governance).is_some() {
+        return Err("Solana exit descriptor has been retired".into());
+    }
     if amendment.kind == solana_exit::OPEN {
         if solana_exit::open_height(governance).is_some()
             || height >= record.profile.expires_at_height
@@ -103,6 +107,10 @@ pub(super) fn validate_decision(
     } else if amendment.kind == solana_exit::CLOSE {
         if solana_exit::open_height(governance).is_none() {
             return Err("Solana exit burns are already closed".into());
+        }
+    } else if amendment.kind == solana_exit::RETIRE {
+        if solana_exit::open_height(governance).is_some() {
+            return Err("close Solana burns before retiring the descriptor".into());
         }
     } else {
         solana_exit::payout_fields(&amendment.kind)?;
@@ -119,6 +127,13 @@ pub(super) fn apply_decision(
 ) -> Result<(), String> {
     let genesis = genesis.ok_or("Solana exit decision requires genesis")?;
     validate_decision(genesis, governance, amendment, height)?;
+    if amendment.kind == solana_exit::RETIRE {
+        let ledger = ledger.ok_or("Solana exit retirement requires canonical ledger")?;
+        if let Some(reason) = redemption_obligation(ledger, height)? {
+            return Err(reason.into());
+        }
+        return Ok(());
+    }
     if matches!(
         amendment.kind.as_str(),
         solana_exit::OPEN | solana_exit::CLOSE
@@ -235,6 +250,40 @@ fn verify_open_history(governance: &GovernanceState) -> Result<(), String> {
     Ok(())
 }
 
+fn redemption_obligation(
+    ledger: &LedgerState,
+    height: u64,
+) -> Result<Option<&'static str>, String> {
+    let bucket = ledger
+        .vault_bridge_bucket(solana_exit::BUCKET)
+        .filter(|b| solana_exit::matches_bucket(b))
+        .ok_or("missing governed Solana source bucket")?;
+    if bucket.redemption_queue_atoms != 0
+        || ledger.vault_bridge_redemptions.iter().any(|r| {
+            r.withdrawal_packet.source_chain_id == postfiat_types::SOLANA_EGRESS_PACKET_CHAIN
+                && r.state == postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_PENDING
+        })
+    {
+        return Ok(Some(
+            "Solana redemptions are pending; pay and settle every queued redemption",
+        ));
+    }
+    if bucket.outstanding_vault_bridge_atoms != 0 {
+        return Ok(Some("revision 8 has outstanding claims"));
+    }
+    // Bucket status and a stopped relayer do not permanently close proof admission.
+    let ingress = ledger
+        .solana_clients()
+        .find(|r| r.profile.profile_hash().as_deref() == Ok(solana_exit::POLICY))
+        .ok_or("missing revision-8 Solana ingress profile")?;
+    if height < ingress.profile.expires_at_height
+        && !ledger.solana_route_superseded(&ingress.profile)
+    {
+        return Ok(Some("revision 8 can still receive deposits"));
+    }
+    Ok(None)
+}
+
 /// Evaluate against the parent, before applying any action in this batch. This
 /// is shared by proposal, commit (including catch-up), and full archive replay.
 pub(super) fn verify_rotation_interlock(
@@ -256,6 +305,12 @@ pub(super) fn verify_rotation_interlock(
     {
         return Ok(());
     }
+    let Some((descriptor, _)) = solana_exit::registered(governance) else {
+        return Ok(());
+    };
+    if solana_exit::retirement_height(governance).is_some() {
+        return Ok(());
+    }
     if !changes_set
         && updates.len() == 1
         && crate::cobalt_handoff::governance_batch_action_count(batch) == 1
@@ -264,18 +319,22 @@ pub(super) fn verify_rotation_interlock(
     {
         return Ok(());
     }
-    let reason = if solana_exit::open_height(governance).is_some()
-        || batch.amendments.iter().any(|a| a.kind == solana_exit::OPEN)
-    {
-        "Solana burns are open or opening; close burns in a separate unanimous block"
-    } else if ledger.vault_bridge_redemptions.iter().any(|r| {
-        r.withdrawal_packet.source_chain_id == postfiat_types::SOLANA_EGRESS_PACKET_CHAIN
-            && r.state == postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_PENDING
-    }) {
-        "Solana redemptions are pending; pay and settle every queued redemption"
-    } else {
-        return Ok(());
-    };
+    let reason =
+        if solana_exit::open_height(governance).is_some()
+            || batch.amendments.iter().any(|a| a.kind == solana_exit::OPEN)
+        {
+            "Solana burns are open or opening; close burns in a separate unanimous block"
+        } else if let Some(reason) = redemption_obligation(ledger, height)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
+        {
+            reason
+        } else if !governance.amendment_activation_records.iter().any(|r| {
+            r.kind == solana_exit::OPEN && r.activated_height > descriptor.authorized_height
+        }) {
+            "registered Solana exit has never opened; open or unanimously retire the descriptor"
+        } else {
+            return Ok(());
+        };
     Err(io::Error::new(
         io::ErrorKind::PermissionDenied,
         format!("Frozen Solana payout checker cannot follow this committee change: {reason}"),

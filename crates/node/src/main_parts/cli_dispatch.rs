@@ -505,7 +505,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ratify-orchard-aware-bridge-claim-activation-height"
         | "ratify-pfusdc-source-series-activation-height"
         | "ratify-solana-exit-open"
-        | "ratify-solana-exit-close"
+        | "ratify-solana-exit-retire" | "ratify-solana-exit-close"
         | "ratify-solana-exit-paid"
         | "ratify-solana-bridge-activation-height"
         | "ratify-replicated-state-v2-activation-height"
