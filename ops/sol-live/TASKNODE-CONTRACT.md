@@ -1,0 +1,30 @@
+# Solana USDC withdrawals
+
+Relay upstream is loopback HTTP on port 18089. Keep the existing Ethereum upstream and wallet storage key. Use a Solana-specific tracking key containing network, wallet account and address. Responses use JSON. On the Task Node relay set L1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089 and enable L1_SOLANA_WITHDRAWALS_ENABLED=true only after the real canary payout and its L1 settlement have been verified. The faucet already occupies port 18085.
+
+* GET /solana/withdrawals/readiness returns 200. An unavailable route returns {"ok":true,"ready":false,"message":"reason"}. Enable Review only when ready is true. Before governance opens burns, payout_ready can be true while ready and burns_open are false. The service checks worker and journal health, proof fees and rents, and shared custody including queued and earlier-series claims. A ready response also contains asset_id (family), series_asset_id, bucket_id, issuer, epoch (current finalized reserve epoch, integer), reserve_packet_hash, bucket_outstanding_atoms (decimal string), current_height, destination_prefix, vault_address, relayer_lamports and relayer_floor_lamports. Destination prefix includes the trailing colon.
+* POST /solana/withdrawals accepts application/json with exactly {"burn_tx_id":"<96 lowercase hex digits>"}. Maximum body is 256 bytes. Returns the job (202 queued or in progress, 200 paid). Repeating a request tracks the same burn. Transient failures retry automatically with bounded backoff. New admissions require a finalized revision-8 redemption and an available worker. A failure never asks the holder to sign a second burn.
+* GET /solana/withdrawals/<burn_tx_id> returns 200 with the job. Stages are queued, reading, proving, paying, paid and failed. Fields are burn_tx_id, stage, detail, error, amount_atoms (decimal string), recipient (base58 owner), burn_height and solana_tx (base58 payout signature). Unknown values are null. Show error on failure and link solana_tx to the mainnet explorer when paid.
+* Errors return {"error":"reason"}. Codes are 400 for malformed input or ID, 404 for an unknown job or path, 411 for missing length, 413 for oversized input, 415 for the wrong media type 429 for a full queue or admission rate limit, and 503 when the worker, prover, journal or settlement lookup is unavailable.
+
+The worker accepts requests on 127.0.0.1 only. The gateway and relay handle wallet-session authentication. A new job response has this shape, with the submitted transaction ID in place of the placeholder.
+
+```json
+{"burn_tx_id":"<96 lowercase hex digits>","stage":"queued","detail":null,"error":null,"amount_atoms":null,"recipient":null,"burn_height":null,"solana_tx":null}
+```
+
+A paid response preserves that ID and reports `stage="paid"`, the amount in atoms as a string, the base58 owner, the integer Post Fiat burn height, and the finalized base58 Solana transaction signature when available. A verified permanent marker with unavailable transaction history returns paid with solana_tx null and a detail message. Show the paid status and omit the transaction link until a signature is recovered. A failed response preserves any known amount, recipient and height. The error is a human-readable string. The ready response uses JSON numbers for both lamport fields, epoch and current_height. Asset, series, bucket and reserve hashes are 96 lowercase hex digits.
+
+## Wallet signature
+
+Refresh readiness before quoting. Match its series_asset_id against the user's account_assets balance line and verify its source_bucket_id when returned. Offer only the matched spendable amount. Refuse zero, over-balance, over-outstanding and values beyond the wallet's exact integer range. USDC uses six decimal places. Never sum Ethereum or earlier Solana series into this limit.
+
+Use a canonical base58 public key that decodes to exactly 32 bytes. Hex-encode all 32 bytes in lowercase including leading zeroes. Append that to the supplied prefix (mainnet is solana-spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:). The address is the receiving wallet owner. The payout worker derives its associated token account.
+
+Sign this single intent with client.quote, client.sign and client.submit, replacing the typed placeholders with fresh values.
+
+```json
+{"kind":"asset","operation":{"operation":"vault_bridge_burn_to_redeem","owner":"<client.address>","issuer":"<issuer>","asset_id":"<asset_id>","bucket_id":"<bucket_id>","amount_atoms":20000,"epoch":1,"reserve_packet_hash":"<reserve_packet_hash>","destination_ref":"<destination_prefix><owner hex>"}}
+```
+
+Here 20000 is 0.02 pfUSDC. Replace the example epoch with readiness.epoch. Persist result.txId immediately and POST it. Poll GET roughly every eight seconds. Restore tracking after reload. The Solana recipient supplies no signature.

@@ -1,0 +1,18 @@
+{
+  "vault_program": "e2a6fbfcf1e65a0f3e08d400c97d913e3e4eca81f84c814efa0bbcada24aac8b",
+  "solana_genesis": "45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0",
+  "ingress_profile_hash": "5bb5a3d99616945cb7330c07a51c47c0453ff54f6c622f44f18c5b505cc9b13f179a6796a537119a482d788537bd96c7",
+  "ingress_epoch": 8,
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "exit_profile_hash": "37e3c05d8e353d93d56819bfdc3b10f314e5ae298cf43a34cefac477d06893953ceca391165ec3bc977c5e5b273b4046",
+  "exit_epoch": 8,
+  "vault_code_hash": "0x75371e9a74f6ac2b5462f9e286f11396e3dee9f9f621cba1ec5cc55fee3a95aa",
+  "token_code_hash": "0x8190d3f7ceb6cb7a7a8d8924bff89f9f611e15ce1f806f2b6237f3311a98f697",
+  "pause_authority": "0c05e91dafb279f9c5a9e64ba8703d6c7107069b025ac876591d741c81ebd19d",
+  "initial_checkpoint": "1f6c2340ccc1e861b42cf5ee5a3f4923dd79445c2a3d539c27fb7b04d3b00b3e768c13f27e815acf79bb8a90b40f3fdd",
+  "initial_committee": "ca8da61a23bf9d1d1e9ddf57edfe8ee7e26a33ac04c8ff6bee44c3e419083e03b1ecfd3e3299db3f9c6a8b0f5471f6c4",
+  "initial_height": 1753
+}

@@ -1078,7 +1078,7 @@ fn pruned_lane_record_round_trips_and_replays_to_the_same_state() {
 
 // ---- P2.4: the release path on a local chain --------------------------------
 
-mod release_path {
+pub(super) mod release_path {
     use super::*;
     use postfiat_crypto_provider::{
         address_from_public_key, bytes_to_hex, hex_to_bytes, ml_dsa_65_keygen_from_seed,
@@ -1503,8 +1503,24 @@ mod release_path {
     /// `active_fastpay_certify` builds it: the fixture holds every validator
     /// key, so it signs every vote directly.
     fn consensus_v2_certificate(data_dir: &Path, batch_file: &Path, label: &str) -> PathBuf {
+        signed_batch_certificate(
+            data_dir,
+            batch_file,
+            label,
+            BATCH_KIND_TRANSPARENT,
+            &data_dir.join(VALIDATOR_KEYS_FILE),
+        )
+    }
+
+    pub(in crate::tests) fn signed_batch_certificate(
+        data_dir: &Path,
+        batch_file: &Path,
+        label: &str,
+        kind: &str,
+        key_file: &Path,
+    ) -> PathBuf {
         let data_dir = data_dir.to_path_buf();
-        let key_file = data_dir.join(VALIDATOR_KEYS_FILE);
+        let key_file = key_file.to_path_buf();
         let height = NodeStore::new(&data_dir).read_chain_tip().expect("tip").height + 1;
         let proposer = block_proposer(BlockProposerOptions {
             data_dir: data_dir.clone(),
@@ -1517,7 +1533,7 @@ mod release_path {
         let proposal = propose_batch(BatchProposalOptions {
             data_dir: data_dir.clone(),
             verify_block_log: false,
-            batch_kind: None,
+            batch_kind: Some(kind.into()),
             batch_file: batch_file.to_path_buf(),
             proposal_file: proposal_file.clone(),
             view: Some(0),

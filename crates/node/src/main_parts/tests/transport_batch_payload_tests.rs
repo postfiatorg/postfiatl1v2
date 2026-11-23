@@ -2690,15 +2690,25 @@ mod transport_batch_payload_tests {
     }
 
     /// Holds the late validator's prepare replies until the test opens it, or
-    /// for at most a given time, and counts the replies passed on.
+    /// for at most a given time, and counts the prepare requests received and
+    /// the replies passed on.
     #[derive(Default)]
     struct LateReplyGate {
         open: Mutex<bool>,
         opened: std::sync::Condvar,
+        asked: std::sync::atomic::AtomicUsize,
         passed_on: std::sync::atomic::AtomicUsize,
     }
 
     impl LateReplyGate {
+        fn ask(&self) {
+            self.asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+
+        fn asked(&self) -> usize {
+            self.asked.load(std::sync::atomic::Ordering::SeqCst)
+        }
+
         fn open(&self) {
             *self
                 .open
@@ -2766,6 +2776,9 @@ mod transport_batch_payload_tests {
                             });
                             let _ = client_writer.write_all(format!("{refusal}\n").as_bytes());
                             return;
+                        }
+                        if phase == Some("prepare") {
+                            prepare_gate.ask();
                         }
                         if upstream_stream.is_none() {
                             let stream = TcpStream::connect(upstream).expect("proxy upstream");
@@ -5564,25 +5577,43 @@ mod transport_batch_payload_tests {
             .expect("round thread")
             .expect("height 1453 round must certify at quorum");
         let round_elapsed = round_start.elapsed();
+        let late_prepare_requests_before_return = late_prepare_gate.asked();
         let late_prepare_replies_before_return = late_prepare_gate.passed_on();
         let precommit_requests_before_return =
             precommit_requests.load(std::sync::atomic::Ordering::SeqCst);
         late_prepare_gate.open();
+        // Once the gate opens, the held reply is passed on.
+        let opened_at = Instant::now();
+        while late_prepare_gate.passed_on() == 0 && opened_at.elapsed() < late_prepare_hold {
+            std::thread::sleep(Duration::from_millis(20));
+        }
         eprintln!(
             "height-1453 repro: round_elapsed={round_elapsed:?} mempool_lock_free_after={mempool_lock_free_after:?} \
+             late_prepare_requests_before_return={late_prepare_requests_before_return} \
              late_prepare_replies_before_return={late_prepare_replies_before_return} \
              precommit_requests_to_late_peer={precommit_requests_before_return} busy_seen={busy_until_round_end} \
              certified_and_applied_ms={:.0}",
             report.timings.client_visible_finality_ms
         );
-        // The late validator's prepare reply was still held when the round
-        // returned, so the round did not wait for it; nor did it ask the late
-        // validator for a precommit, which needs that prepare vote.
+        // The late validator was asked for its prepare vote and its reply
+        // was still held when the round returned, so the round did not wait
+        // for it; nor did it ask the late validator for a precommit, which
+        // needs that prepare vote. The held reply is passed on exactly once
+        // after the gate opens.
+        assert_eq!(
+            late_prepare_requests_before_return, 1,
+            "the late validator was not asked for its prepare vote before the round returned"
+        );
         assert_eq!(
             late_prepare_replies_before_return, 0,
             "round took {round_elapsed:?}: it waited on the late peer instead of certifying at precommit quorum"
         );
         assert_eq!(precommit_requests_before_return, 0);
+        assert_eq!(
+            (late_prepare_gate.asked(), late_prepare_gate.passed_on()),
+            (1, 1),
+            "the late validator's held prepare reply was not passed on exactly once after the gate opened"
+        );
         assert!(
             mempool_lock_free,
             "mempool mutation lock still held {mempool_lock_free_after:?} into the round"

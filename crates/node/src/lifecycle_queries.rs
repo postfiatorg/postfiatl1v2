@@ -482,6 +482,7 @@ pub(super) fn read_genesis_faucet_account_file(
 
 pub fn validator_keys(options: ValidatorKeysOptions) -> io::Result<ValidatorKeyFile> {
     let store = NodeStore::new(options.data_dir);
+    let _lock = store.lock_ordered_commit()?;
     ensure_validator_keys(&store, options.validators)
 }
 
@@ -1732,6 +1733,7 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
             &mempool,
             block_height,
             asset_execution_compatibility,
+            &crate::mempool_proposals::pending_asset_orchard_balances(&store, &mempool)?,
         )?
     };
     let sender = match quote_ledger.account(&options.source) {
@@ -1924,6 +1926,7 @@ pub fn escrow_fee_quote(options: EscrowFeeQuoteOptions) -> io::Result<EscrowFeeQ
         &mempool,
         block_height,
         asset_execution_compatibility,
+        &crate::mempool_proposals::pending_asset_orchard_balances(&store, &mempool)?,
     )?;
     let sender = quote_ledger.account(&options.source).ok_or_else(|| {
         io::Error::new(
@@ -2049,6 +2052,7 @@ pub fn nft_fee_quote(options: NftFeeQuoteOptions) -> io::Result<NftFeeQuoteRepor
         &mempool,
         block_height,
         asset_execution_compatibility,
+        &crate::mempool_proposals::pending_asset_orchard_balances(&store, &mempool)?,
     )?;
     let (operation, issuer_transfer_fee, issuer_transfer_fee_recipient) =
         normalize_nft_fee_quote_operation(&quote_ledger, operation)?;
@@ -2199,6 +2203,7 @@ pub fn offer_fee_quote(options: OfferFeeQuoteOptions) -> io::Result<OfferFeeQuot
         &mempool,
         block_height,
         asset_execution_compatibility,
+        &crate::mempool_proposals::pending_asset_orchard_balances(&store, &mempool)?,
     )?;
     let sender = quote_ledger.account(&options.source).ok_or_else(|| {
         io::Error::new(

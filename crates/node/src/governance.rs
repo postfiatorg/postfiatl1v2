@@ -110,6 +110,10 @@ pub fn sign_governance_amendment_authorization(
             ),
         ));
     }
+    if crate::solana_exit_governance::is_registration_amendment(&amendment.kind) {
+        crate::solana_exit_governance::require_operator_release(
+            &genesis.chain_id, &genesis_hash(&genesis), options.proposal_slot)?;
+    }
     if options.expires_at_height < options.proposal_slot {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -781,6 +785,10 @@ pub fn assemble_signed_vault_bridge_route_profile_governance(
         activation,
     )?;
     verify_governance_action_batch_id(&genesis, &batch)?;
+    if crate::solana_exit_governance::registers_descriptor(&batch) {
+        crate::solana_exit_governance::require_operator_release(
+            &genesis.chain_id, &genesis_hash(&genesis), options.proposal_slot)?;
+    }
     verify_live_signed_governance_batch(
         &genesis,
         &governance,
@@ -1054,10 +1062,33 @@ pub fn apply_validator_registry_update(
     let previous_registry_path = options
         .previous_registry_file
         .unwrap_or_else(|| store.data_dir().join(VALIDATOR_REGISTRY_FILE));
-    let live_registry_path = store.data_dir().join(VALIDATOR_REGISTRY_FILE);
-    let output_registry_path = options
-        .output_registry_file
-        .unwrap_or_else(|| live_registry_path.clone());
+    let output = options.output_registry_file.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "registry projection requires an explicit offline output file",
+        )
+    })?;
+    let parent = output
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."))
+        .canonicalize()?;
+    let name = output.file_name().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "missing offline registry filename",
+        )
+    })?;
+    if parent.starts_with(store.data_dir().canonicalize()?)
+        || name == VALIDATOR_REGISTRY_FILE
+        || name == VALIDATOR_REGISTRY_GENESIS_FILE
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "use an offline output outside the node directory with a non-resident filename",
+        ));
+    }
+    let output_registry_path = parent.join(name);
     let mut registry = read_validator_registry_file(&previous_registry_path)?;
     apply_verified_validator_registry_update_to_registry(
         &genesis,
@@ -1066,16 +1097,11 @@ pub fn apply_validator_registry_update(
         options.current_height,
         "validator registry update apply",
     )?;
-    if output_registry_path == live_registry_path {
-        if let Ok(expected) = local_validator_ids(new_validators.len() as u32) {
-            if expected == new_validators {
-                let mut governance = store.read_governance()?;
-                governance.active_validator_count = new_validators.len() as u32;
-                store.write_governance(&governance)?;
-            }
-        }
-    }
-    write_validator_registry_file(&output_registry_path, &registry)?;
+    crate::storage_activation_cli::write_exclusive_json(
+        &output_registry_path,
+        &registry,
+        "offline registry",
+    )?;
 
     Ok(ValidatorRegistryUpdateApplyReport {
         schema: "postfiat-validator-registry-update-apply-v1".to_string(),
@@ -2642,6 +2668,7 @@ fn apply_governance_batch_internal(
     } else {
         ordered_batches.clear();
     }
+    let parent_numbered_count = crate::solana_exit_governance::numbered_parent_count(&governance);
     let due_activations = activate_due_validator_registry_updates_for_commit(
         &store,
         &genesis,
@@ -2669,7 +2696,11 @@ fn apply_governance_batch_internal(
         )?,
         None => fastpay_pre_state_effects_for_next_block(&store, &ledger)?,
     };
-    if historical_replay.is_none() && !allow_unsigned_test_fixture {
+    crate::solana_exit_governance::verify_rotation_interlock(
+        &genesis, &governance, &ledger, parent_numbered_count, &batch, block_height,
+    )?;
+    if crate::solana_exit_governance::needs_signatures(&genesis,&batch,block_height)
+        || (historical_replay.is_none() && !allow_unsigned_test_fixture) {
         let registry = due_activations.registry.clone().unwrap_or(
             read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?,
         );
@@ -2683,12 +2714,14 @@ fn apply_governance_batch_internal(
     }
     verify_storage_commitment_action_readiness(&store, &genesis, &batch, &chain_tip)?;
     ensure_governance_batch_lifecycle_ready(&genesis, &batch, block_height)?;
-    let receipts = execute_governance_batch(
+    let receipts = crate::execution_actions::execute_governance_batch_with_replay(
         &mut governance,
         Some(&mut ledger),
         Some(&genesis),
         &batch,
         block_height,
+        false,
+        shielded.asset_orchard_balances(),
     );
     let consensus_proposal = build_block_proposal_from_state(BlockProposalPlan {
         genesis: &genesis,

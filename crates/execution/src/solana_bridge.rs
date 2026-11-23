@@ -26,10 +26,7 @@ pub(super) fn apply_proof(
             "Solana route has no activation".into(),
         ))?;
     let profile = &route.profile;
-    if ledger.solana_clients().any(|other| {
-        other.profile.route_id == profile.route_id
-            && other.profile.route_epoch > profile.route_epoch
-    }) {
+    if ledger.solana_route_superseded(profile) {
         return Err((
             "solana_route_superseded",
             "Solana route revision has been retired".into(),
