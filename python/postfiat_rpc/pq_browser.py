@@ -170,10 +170,14 @@ class BrowserWallet:
 
     def request(self, row):
         body = dict(address=self.account, intent_id=row["intent"], action_json=row["wire"])
-        if row["pool"] == PQ_POOL_ID and base64.b64decode(json.loads(row["wire"])["body"], validate=True)[71] == 0:
-            body["address"] = None
-            check(row["capability"], "Legacy relay record has no receipt capability. Sync or replace this payment.")
-            body["capability"] = row["capability"]
+        if row["pool"] == PQ_POOL_ID:
+            raw = base64.b64decode(json.loads(row["wire"])["body"], validate=True)
+            if raw[71] == 0:
+                body["address"] = None
+                check(row["capability"], "Legacy relay record has no receipt capability. Sync or replace this payment.")
+                body["capability"] = row["capability"]
+            else:
+                body["address"] = "pf" + raw[72:92].hex()
         return body
 
     @staticmethod

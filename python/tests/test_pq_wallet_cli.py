@@ -92,10 +92,36 @@ class PqIssuedFee(unittest.TestCase):
             open_wallet, action, key, terms = self.browser_fixture(stack, False)
             w = open_wallet()
             with contextlib.closing(w.connection()) as db:
-                row = w.action_row(db, action, PQ_POOL_ID, statement_id="ab"*48)
+                row = w.action_row(db, action, PQ_POOL_ID, statement_id="ab"*48, terms=terms)
                 with self.assertRaisesRegex(ValueError, "signer review"):
                     w.send(db, row)
                 w.gateway.call.assert_not_called()
+
+    def test_review_survives_restart_only_for_the_approved_bytes_and_terms(self):
+        from postfiat_rpc.pq_browser import PQ_POOL_ID
+        with contextlib.ExitStack() as stack:
+            open_wallet, action, key, terms = self.browser_fixture(stack, False)
+            wallet = open_wallet()
+            with contextlib.closing(wallet.connection()) as db:
+                row = wallet.action_row(db, action, PQ_POOL_ID, terms=terms)
+                intent = row["intent"]
+                comparison = dict(mode="Exit", asset=terms["asset"], fee="3", payer=None,
+                    sequence=None, action_hash=key, mint="0", exit="1", recipient=terms["recipient"])
+                body = dict(intent=intent, terms=terms, comparison=comparison)
+                for field in ("action_hash", "recipient", "fee"):
+                    with self.assertRaisesRegex(ValueError, "Signer review differs"):
+                        wallet.dispatch(db, "complete_review", {**body, "comparison":{**comparison, field:"changed"}})
+                self.assertIsNone(wallet.row(db,intent)["review_hash"])
+                wallet.dispatch(db, "complete_review", body)
+            reopened = open_wallet()
+            with contextlib.closing(reopened.connection()) as db:
+                reopened.require_review(reopened.row(db,intent))
+                for column in ("terms", "wire"):
+                    original = reopened.row(db,intent)[column]
+                    db.execute(f"UPDATE payments SET {column}=?", (original + " ",))
+                    with self.assertRaisesRegex(ValueError, "Complete signer review"):
+                        reopened.require_review(reopened.row(db,intent))
+                    db.execute(f"UPDATE payments SET {column}=?", (original,))
 
     def test_startup_recovers_daemon_only_proof_once(self):
         with contextlib.ExitStack() as stack:
