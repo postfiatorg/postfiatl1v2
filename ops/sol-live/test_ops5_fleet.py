@@ -1,15 +1,7 @@
 import contextlib
 import io
-import json
-import os
-from pathlib import Path
-import subprocess
-import tempfile
 import unittest
-from unittest.mock import Mock, patch
-
-HERE = Path(__file__).resolve().parent
-BOOK = (HERE / "RUNBOOK-LIVE.md").read_text()
+from unittest.mock import patch
 
 
 class FifthReview(unittest.TestCase):
@@ -17,11 +9,23 @@ class FifthReview(unittest.TestCase):
         import live
         import exit_roll
         import exit_sandbox_check
-        row = dict(chain_id=live.CHAIN.decode(), genesis_hash=live.PFTL_GENESIS.hex(),
-                   build_git_revision="test", block_height=1753, block_tip_hash="tip",
-                   state_root="root", node_id="validator-0")
-        for module, fn in [(live, live.fleet), (exit_roll, exit_roll.snapshot),
-                           (live, exit_sandbox_check.check_tunnels)]:
-            with patch.object(module, "rpc", return_value=row), contextlib.redirect_stdout(io.StringIO()):
+
+        row = dict(
+            chain_id=live.CHAIN.decode(),
+            genesis_hash=live.PFTL_GENESIS.hex(),
+            build_git_revision="test",
+            block_height=1753,
+            block_tip_hash="tip",
+            state_root="root",
+            node_id="validator-0",
+        )
+        for module, fn in [
+            (live, live.fleet),
+            (exit_roll, exit_roll.snapshot),
+            (live, exit_sandbox_check.check_tunnels),
+        ]:
+            with patch.object(
+                module, "rpc", return_value=row
+            ), contextlib.redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(ValueError, "validator-1"):
                     fn()
