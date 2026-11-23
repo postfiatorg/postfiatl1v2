@@ -306,7 +306,8 @@ async function exercise() {
           refuseNextSpend = false;
           res.writeHead(409, {'Content-Type':'application/json'});
           return res.end(JSON.stringify({ok:false, schema:'postfiat-private-actions-v1',
-            reserved:false, code:'pq_fee_mismatch'}));
+            reserved:false, code:'pq_fee_mismatch', intent_id:body.intent_id,
+            action_hash:crypto.createHash('sha3-384').update('postfiat.private-actions.action.v1\0').update(body.action_json).digest('hex')}));
         }
         relayCounts[route]++;
         if (withholdBobPage && route === 'page' && body.section === 'pq_pairs'

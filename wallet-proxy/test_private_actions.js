@@ -658,7 +658,8 @@ async function main() {
                         : {ok:true, result:{schema:'postfiat.private_action_receipt.v1',
                             intent_id:request.intent_id, state:'pending_unknown'}}});
                 await assert.rejects(refusal.submit(request, WALLET),
-                    e => e.statusCode === 409 && e.code === 'pq_fee_mismatch');
+                    e => e.statusCode === 409 && e.code === 'pq_fee_mismatch'
+                        && e.unreserved.intent_id === request.intent_id && e.unreserved.action_hash === signed.action_hash);
                 const admitted = await route.submit(request, WALLET);
                 assert.equal(admitted.state, 'queued');
                 for (const peer of [a,b]) {

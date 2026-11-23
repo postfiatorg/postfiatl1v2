@@ -72,6 +72,8 @@ class Gateway:
             if response.status == 409 and route == "submit":
                 error = json.loads(raw)
                 if (error.get("schema") == SCHEMA and error.get("reserved") is False
+                        and error.get("intent_id") == body["intent_id"]
+                        and error.get("action_hash") == private_action_hash(body["action_json"])
                         and re.fullmatch("[a-z0-9_]{1,64}", str(error.get("code", "")))):
                     raise AdmissionRefused(error["code"])
             check(response.status in (200, 202), f"Gateway refused {route} (HTTP {response.status}).")

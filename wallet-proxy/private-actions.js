@@ -504,7 +504,9 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
                     const receipts = await allSources('private_action_receipt', {intent_id: request.intentId});
                     if (receipts.every(r => r.ok && r.result?.schema === NODE_RECEIPT_SCHEMA
                         && r.result.intent_id === request.intentId && r.result.state === 'pending_unknown')) {
-                        throw Object.assign(refusal(409, result.code), { reserved: false });
+                        throw Object.assign(refusal(409, result.code), { unreserved: {
+                            reserved: false, intent_id: request.intentId, action_hash: request.actionHash,
+                        } });
                     }
                 }
                 throw refusal(503, result.code);
@@ -864,7 +866,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
             return send(res, 202, await submit(body, authentication.principal));
         } catch (caught) {
             if (caught instanceof SyntaxError) return send(res, 400, error('private_request_invalid'));
-            if (caught.statusCode) return send(res, caught.statusCode, { ...error(caught.code, caught.message), reserved: caught.reserved });
+            if (caught.statusCode) return send(res, caught.statusCode, { ...error(caught.code, caught.message), ...caught.unreserved });
             return send(res, 500, error('private_actions_internal_error'));
         } finally {
             admission?.release?.();
