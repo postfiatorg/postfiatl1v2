@@ -10,7 +10,7 @@ import tempfile
 import time
 
 from .client import (Endpoint, PostFiatRpcClient, PQ_POOL_ID, PqCursorExpired,
-                     RpcClientError, RpcError, pq_public_pages, private_action_hash, private_action_intent_id)
+                     RpcClientError, pq_public_pages, private_action_hash, private_action_intent_id)
 
 
 PRIVATE_SPEND_SCOPE = "pq-private-spend"
@@ -125,7 +125,7 @@ def sync(home, client, validator=None):
 
 def submit(home, client, scope, expected_hash=None):
     net = local(home, "checkpoint")["network"]
-    action = local(home, "prepared")
+    action = local(home, "prepared", action_hash=expected_hash)
     # ShieldedAction serializes its discriminator first.
     wire = json.dumps({"kind": action["kind"], "body": action["body"]}, separators=(",", ":"))
     intent = private_action_intent_id(**net, action_json=wire)
@@ -134,23 +134,15 @@ def submit(home, client, scope, expected_hash=None):
         raise ValueError("pending payment changed")
     if base64.b64decode(action["body"], validate=True)[71] == 0:
         scope = PRIVATE_SPEND_SCOPE
+    local(home, "submitted", action_hash=action_hash)
     try:
         report = client.private_action_submit(**net, pool_id=PQ_POOL_ID, session_scope=scope,
                                               intent_id=intent, action_json=wire, action_hash=action_hash)
-    except RpcError as err:
-        # These are explicit settlement refusals before the validator reserves
-        # the action. A transport failure has an unknown outcome and stays pending.
-        if err.error.get("code") in {"pq_fee_mismatch", "pq_source_authorization", "pq_minimum_fee", "pq_unknown_anchor",
-                                    "pq_unfunded_source", "pq_fee_unconfigured", "pq_issue_disabled", "pq_insufficient_issued_balance",
-                                    "pq_recipient_policy", "pq_recipient_reserve", "pq_missing_trustline"}:
-            if client.private_action_receipt(intent)["state"] == "pending_unknown":
-                local(home, "rejected", action_hash=action_hash)
-        raise
+    except (OSError, RpcClientError) as error:
+        raise ValueError(f"Payment remains saved. Poll {intent} or retry action {action_hash}. {error}") from error
     record = report["record"]
     if record["intent_id"] != intent or record["action_hash"] != private_action_hash(wire):
         raise ValueError("receipt does not match submitted payment")
-    if record["state"] == "rejected" and (record.get("outcome") or {}).get("accepted") is False:
-        local(home, "rejected", action_hash=record["action_hash"])
     return dict(intent_id=intent, state=record["state"])
 
 
@@ -179,8 +171,9 @@ def parser():
     i = cmds.add_parser("init", help="create a wallet at the current finalized birthday")
     for name, default in (("account", 0), ("first", 0), ("count", 1)):
         i.add_argument(f"--{name}", default=default, type=int)
-    for name in ("balance", "status", "sync", "cancel", "submit-pending"):
+    for name in ("balance", "status", "sync", "cancel"):
         cmds.add_parser(name)
+    cmds.add_parser("submit-pending").add_argument("--action-hash", help="retry these exact saved bytes (default latest)")
     cmds.add_parser("receipt").add_argument("intent_id")
     cmds.add_parser("address").add_argument("--index", type=int)
     for name in ("backup", "restore"):
@@ -192,6 +185,7 @@ def parser():
         c.add_argument("--fee", type=int, required=name == "shield", help="PFT fee in atoms. Issued spends use the governed fee.")
         if name != "shield":
             c.add_argument("--to", required=True)
+            c.add_argument("--replace", metavar="ACTION_HASH", help="use an input from this submitted payment")
         else:
             c.add_argument("--payer", required=True, help="public deposit account")
             c.add_argument("--account-key", type=Path, required=True)
@@ -251,7 +245,7 @@ def run(args):
                        **{k: inclusion[k] for k in ("height", "block_hash", "state_root", "certificate_id") if k in inclusion}}
         return {"intent_id": r["intent_id"], "state": r["state"], "outcome": outcome}
     if cmd == "submit-pending":
-        return submit(home, client, args.scope)
+        return submit(home, client, args.scope, args.action_hash)
     issued_spend = cmd != "shield" and args.asset not in ("PFT", "00"*48)
     if issued_spend and args.fee is not None:
         raise ValueError("Issued payments use the governed fee. Omit --fee.")
@@ -262,7 +256,7 @@ def run(args):
     mode = {"shield": "Shield", "pay": "Internal", "unshield": "Exit"}[cmd]
     order = dict(mode=mode, asset="00"*48 if args.asset == "PFT" else args.asset,
                  amount=args.amount, fee=fee,
-                 recipient=getattr(args, "to", None))
+                 recipient=getattr(args, "to", None), replace=getattr(args, "replace", None))
     if mode == "Shield":
         order.update(payer=args.payer, sequence=args.sequence, account_key=str(args.account_key.absolute()))
     unit = "PFT" if mode == "Shield" else args.asset

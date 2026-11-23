@@ -370,3 +370,176 @@ fn pq_wallet_pages_pin_real_disk_history_after_another_commit() {
     }
     fs::remove_dir_all(&f.dir).unwrap();
 }
+
+#[test]
+fn pq_wallet_replaces_reserved_notes_across_a_fee_change() {
+    use postfiat_privacy_binius_wallet::{
+        keys::Network,
+        wallet::{Order, Point, Recovery, Wallet},
+    };
+    let f = Fixture::new();
+    let disk = NodeStore::new(&f.dir);
+    let mut governance = disk.read_governance().unwrap();
+    for (at, fee) in [(4, 2), (5, 3)] {
+        let mut a = crate::tests::pq_payment_activation::amendment(&f.genesis, at);
+        a.kind = format!("pq_payment_rehearsal_v1:fee:{fee}");
+        governance.apply(a);
+    }
+    disk.write_governance(&governance).unwrap();
+    let keyfile = f.dir.join("wallet.key");
+    let payer = write_test_master_key(&keyfile, [41; 32]).address;
+    fs::set_permissions(&keyfile, fs::Permissions::from_mode(0o600)).unwrap();
+    let net = Network {
+        chain_id: f.genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&f.genesis),
+        protocol_version: f.genesis.protocol_version,
+    };
+    let point = || {
+        let tip = storage_commit::reconstruct_chain_tip_for_genesis(&disk, &f.genesis).unwrap();
+        let head = disk
+            .read_shielded()
+            .unwrap()
+            .pq_pool_v1
+            .unwrap_or_default()
+            .head;
+        Point {
+            network: net.clone(),
+            height: tip.height,
+            block_hash: tip.block_hash,
+            state_root: tip.state_root,
+            assets: head.assets,
+            pairs: head.pairs,
+            last_page: head.last_page,
+        }
+    };
+    let mut birthday = point();
+    birthday.block_hash = "genesis".into();
+    let mut wallet = Wallet::restore(Recovery::new(birthday, 0, 0, 1).unwrap()).unwrap();
+    let order = |amount, fee| Order {
+        mode: Mode::Exit,
+        amount,
+        fee,
+        asset: f.child.clone(),
+        recipient: Some(payer.clone()),
+        sequence: None,
+        payer: None,
+        account_key: None,
+        replace: None,
+    };
+    let prove = |w: &mut Wallet, order| {
+        let result = w.prove(order).unwrap();
+        let hash = result["action_hash"].as_str().unwrap().to_owned();
+        let wire = w.prepared(Some(&hash)).unwrap();
+        let ShieldedAction::PqPaymentV1(payment) = serde_json::from_value(wire).unwrap() else {
+            unreachable!()
+        };
+        w.submitted(&hash).unwrap();
+        (hash, payment)
+    };
+    for (sequence, amount) in [(1, 15), (2, 7)] {
+        let (_, p) = prove(
+            &mut wallet,
+            Order {
+                mode: Mode::Shield,
+                payer: Some(payer.clone()),
+                recipient: None,
+                sequence: Some(sequence),
+                account_key: Some(keyfile.clone()),
+                ..order(amount, 1)
+            },
+        );
+        assert!(f.apply(&[p]).unwrap()[0].accepted);
+    }
+    let snapshot = private_pool_snapshot(PrivatePoolSnapshotOptions {
+        data_dir: f.dir.clone(),
+        pool_id: pq::POOL_ID.into(),
+        address: None,
+        base_asset_id: None,
+        quote_asset_id: None,
+        inclusion_height: None,
+    })
+    .unwrap();
+    let page = private_pool_page(PrivatePoolPageOptions {
+        data_dir: f.dir.clone(),
+        snapshot_token: snapshot.snapshot_token,
+        section: "pq_pairs".into(),
+        cursor: None,
+        limit: Some(8),
+    })
+    .unwrap();
+    let rows = f.dir.join("wallet.rows");
+    let Some(crate::private_pool_reads::PrivatePoolPageItems::PqPairs(pairs)) = page.items else {
+        panic!("missing PQ pairs")
+    };
+    fs::write(&rows, serde_json::to_vec(&pairs).unwrap()).unwrap();
+    fs::set_permissions(&rows, fs::Permissions::from_mode(0o600)).unwrap();
+    wallet.sync(point(), &rows).unwrap();
+    let request = |payment: &PqPayment| {
+        let domain = PrivateActionSubmitDomain {
+            chain_id: net.chain_id.clone(),
+            genesis_hash: net.genesis_hash.clone(),
+            protocol_version: net.protocol_version,
+            pool_id: pq::POOL_ID.into(),
+            session_scope: "pq-private-spend".into(),
+        };
+        let action_json =
+            serde_json::to_string(&ShieldedAction::PqPaymentV1(payment.clone())).unwrap();
+        PrivateActionSubmitRequest {
+            intent_id: private_action_intent_id(&domain.intent_domain(), &action_json).unwrap(),
+            action_hash: private_action_hash_for_json(&action_json).unwrap(),
+            action_json,
+            domain,
+        }
+    };
+    let (hash, old) = prove(&mut wallet, order(3, 3));
+    let original = request(&old);
+    assert!(!private_action_submit(&f.dir, &original).unwrap().existing);
+    wallet = serde_json::from_slice(&serde_json::to_vec(&wallet).unwrap()).unwrap();
+    assert!(private_action_submit(&f.dir, &original).unwrap().existing);
+    assert!(wallet
+        .prove(order(3, 3))
+        .unwrap_err()
+        .to_string()
+        .contains("matching payment"));
+    // An unrelated payment can consume the other note while the first remains reserved.
+    let (_, other) = prove(&mut wallet, order(4, 3));
+    assert!(f.apply(&[other]).unwrap()[0].accepted);
+    private_action_service_step(
+        &f.dir,
+        |_| Ok(false),
+        |_, _| panic!("stale payment dispatched"),
+    )
+    .unwrap();
+    let refused = private_action_receipt(&f.dir, &original.intent_id).unwrap();
+    assert_eq!(refused.state, "rejected");
+    assert!(private_action_submit(&f.dir, &original).unwrap().existing);
+    let (_, next) = prove(
+        &mut wallet,
+        Order {
+            replace: Some(hash),
+            ..order(13, 2)
+        },
+    );
+    assert!(
+        !private_action_submit(&f.dir, &request(&next))
+            .unwrap()
+            .existing
+    );
+    assert!(f.apply(&[next]).unwrap()[0].accepted);
+    // The old numerical fee is valid again. Its note has already been consumed.
+    let err = f.apply(&[old]).unwrap_err().to_string();
+    assert!(err.contains("serial"), "{err}");
+    let ledger = disk.read_ledger().unwrap();
+    assert_eq!(ledger.collected_private_fees[&f.child], 5);
+    assert_eq!(
+        disk.read_shielded()
+            .unwrap()
+            .pq_pool_v1
+            .unwrap()
+            .head
+            .assets[&f.child]
+            .reserve,
+        0
+    );
+    fs::remove_dir_all(&f.dir).unwrap();
+}

@@ -72,12 +72,31 @@ struct Note {
     epoch: u64,
     asset: String,
 }
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+enum Phase {
+    Prepared,
+    // Older wallets may already have disclosed their pending proof.
+    #[default]
+    Submitted,
+    Final,
+    Replaced,
+}
+
 #[derive(Serialize, Deserialize)]
 struct Pending {
     payment: PqPayment,
     asset: String,
     delta: i128,
     serials: [String; 2],
+    #[serde(default)]
+    phase: Phase,
+    #[serde(default)]
+    conflict_final: bool,
+    #[serde(default)]
+    shared_input: Option<String>,
+    #[serde(default)]
+    order_id: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
@@ -85,7 +104,13 @@ pub struct Wallet {
     pub point: Point,
     trees: BTreeMap<String, BTreeMap<u64, History>>,
     notes: BTreeMap<String, Note>,
+    // Old wallet file format. Imported conservatively on open.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pending: Option<Pending>,
+    #[serde(default)]
+    attempts: BTreeMap<String, Pending>,
+    #[serde(default)]
+    latest: Option<String>,
 }
 impl Recovery {
     pub fn new(birthday: Point, account: u32, first: u32, count: u32) -> Result<Self> {
@@ -147,6 +172,8 @@ impl Wallet {
             trees,
             notes: Default::default(),
             pending: None,
+            attempts: BTreeMap::new(),
+            latest: None,
         })
     }
     pub fn address(&self, index: u32) -> Result<String> {
@@ -155,18 +182,34 @@ impl Wallet {
             &self.recovery.key(index)?.stealth_address(),
         )?)
     }
+    pub fn import_pending(&mut self) -> Result<()> {
+        if let Some(pending) = self.pending.take() {
+            let action = postfiat_types::ShieldedAction::PqPaymentV1(pending.payment.clone());
+            let hash = postfiat_types::private_action_hash(&action)?;
+            self.latest = Some(hash.clone());
+            self.attempts.insert(hash, pending);
+        }
+        Ok(())
+    }
     pub fn balance(&self) -> Value {
         let mut totals = BTreeMap::<&str, i128>::new();
         for n in self.notes.values() {
             *totals.entry(&n.asset).or_default() += i128::from(n.value);
         }
         let delta = self
-            .pending
-            .as_ref()
+            .latest
+            .as_ref().and_then(|id| self.attempts.get(id))
+            .filter(|p| matches!(p.phase, Phase::Prepared | Phase::Submitted))
             .map(|p| json!({"asset":p.asset,"delta":p.delta,"after_pending":totals.get(p.asset.as_str()).copied().unwrap_or(0)+p.delta}));
-        json!({"finalized":totals,"pending":delta,"height":self.point.height,"pairs":self.point.pairs,"keys":self.recovery.count})
+        let attempts: Vec<_> = self
+            .attempts
+            .iter()
+            .map(|(id, p)| json!({"action_hash":id,"phase":p.phase,"asset":p.asset}))
+            .collect();
+        json!({"attempts":attempts,"finalized":totals,"pending":delta,"height":self.point.height,"pairs":self.point.pairs,"keys":self.recovery.count})
     }
     pub fn sync(&mut self, target: Point, rows: &Path) -> Result<Value> {
+        self.import_pending()?;
         target.validate()?;
         if target.network != self.point.network
             || target.height < self.point.height
@@ -218,12 +261,19 @@ impl Wallet {
                 for serial in &pair.serials {
                     self.notes.remove(serial);
                 }
-                if self
-                    .pending
-                    .as_ref()
-                    .is_some_and(|p| p.serials.iter().any(|s| pair.serials.contains(s)))
-                {
-                    self.pending = None;
+                for attempt in self.attempts.values_mut().filter(|a| {
+                    !a.conflict_final && a.serials.iter().any(|sn| pair.serials.contains(sn))
+                }) {
+                    let (_, _, wire) = attempt.payment.parts()?;
+                    let matches = attempt.serials == pair.serials
+                        && pair.outputs[0].commitment == hex::encode(&wire[208..256])
+                        && pair.outputs[1].commitment == hex::encode(&wire[256..304]);
+                    attempt.phase = if matches {
+                        Phase::Final
+                    } else {
+                        Phase::Replaced
+                    };
+                    attempt.conflict_final = true;
                 }
                 for output in &pair.outputs {
                     let coin = digest(&output.commitment)?;
@@ -277,19 +327,18 @@ impl Wallet {
             json!({"height":self.point.height,"keys":keys.len(),"pages":pages,"outputs":scanned,"trial_seconds":trial_time.as_secs_f64(),"lag_at_snapshot":0}),
         )
     }
-    pub fn release_rejected(&mut self, expected: &str) -> Result<()> {
-        let Some(pending) = self.pending.as_ref() else {
-            return Ok(());
-        };
-        let action = postfiat_types::ShieldedAction::PqPaymentV1(pending.payment.clone());
-        if postfiat_types::private_action_hash(&action)? != expected {
-            return Err("pending payment changed".into());
+    pub fn submitted(&mut self, hash: &str) -> Result<()> {
+        let attempt = self.attempts.get_mut(hash).ok_or("unknown payment")?;
+        if attempt.phase == Phase::Prepared {
+            attempt.phase = Phase::Submitted;
         }
-        self.pending = None;
         Ok(())
     }
-    pub fn prepared(&self) -> Result<Value> {
-        let p = self.pending.as_ref().ok_or("no pending payment")?;
+    pub fn prepared(&self, hash: Option<&str>) -> Result<Value> {
+        let id = hash
+            .or(self.latest.as_deref())
+            .ok_or("no pending payment")?;
+        let p = self.attempts.get(id).ok_or("unknown payment")?;
         Ok(serde_json::to_value(
             postfiat_types::ShieldedAction::PqPaymentV1(p.payment.clone()),
         )?)
@@ -298,6 +347,8 @@ impl Wallet {
 
 #[derive(Deserialize)]
 pub struct Order {
+    #[serde(default)]
+    pub replace: Option<String>,
     pub mode: Mode,
     pub asset: String,
     pub amount: u64,
@@ -314,8 +365,45 @@ struct SigningKey {
 }
 impl Wallet {
     pub fn prove(&mut self, o: Order) -> Result<Value> {
-        if self.pending.is_some() {
-            return Err("resolve the pending payment first".into());
+        self.import_pending()?;
+        let parent = o
+            .replace
+            .as_ref()
+            .map(|id| self.attempts.get(id).ok_or("unknown replacement payment"))
+            .transpose()?;
+        if let Some(p) = parent {
+            if o.mode == Mode::Shield
+                || p.payment.parts()?.0.mode == Mode::Shield
+                || p.phase != Phase::Submitted
+                || p.asset != o.asset
+            {
+                return Err("replacement requires a submitted spend of the same asset".into());
+            }
+        }
+        // Retrying the same CLI command after a lost reply must not silently
+        // create a second transfer from other funded notes.
+        let order_id = if o.mode == Mode::Shield {
+            None
+        } else {
+            let terms = serde_json::to_vec(&(o.mode, &o.asset, o.amount, &o.recipient))?;
+            Some(postfiat_crypto_provider::hash_hex(
+                "postfiat.wallet.payment-order.v1",
+                &terms,
+            ))
+        };
+        if let Some((id, _)) = self.attempts.iter().find(|(id, attempt)| {
+            order_id.is_some()
+                && attempt.order_id == order_id
+                && !attempt.conflict_final
+                && Some(*id) != o.replace.as_ref()
+                && !parent.is_some_and(|p| {
+                    p.shared_input.is_some() && p.shared_input == attempt.shared_input
+                })
+        }) {
+            return Err(format!(
+                "matching payment {id} is unresolved; retry its bytes or select it for replacement"
+            )
+            .into());
         }
         if o.amount == 0 || o.fee == 0 {
             return Err("amount and network fee must be positive".into());
@@ -382,11 +470,44 @@ impl Wallet {
         let mut epoch = self.point.assets.get(&o.asset).map_or(0, |a| a.epoch);
         if spend > 0 {
             let mut groups = BTreeMap::<u64, Vec<&Note>>::new();
-            for n in self.notes.values().filter(|n| n.asset == o.asset) {
-                groups.entry(n.epoch).or_default().push(n);
+            let required = parent
+                .map(|p| {
+                    p.shared_input
+                        .as_deref()
+                        .or_else(|| {
+                            p.serials
+                                .iter()
+                                .filter_map(|sn| self.notes.get(sn).map(|n| (n.value, sn.as_str())))
+                                .max_by_key(|(value, _)| *value)
+                                .map(|(_, sn)| sn)
+                        })
+                        .ok_or("replacement input is spent")
+                })
+                .transpose()?;
+            let mut shared = None;
+            for (sn, n) in self.notes.iter().filter(|(_, n)| n.asset == o.asset) {
+                if required == Some(sn.as_str()) {
+                    shared = Some(n);
+                } else if !self.attempts.iter().any(|(id, p)| {
+                    !p.conflict_final
+                        && Some(id) != o.replace.as_ref()
+                        && !(required.is_some() && p.shared_input.as_deref() == required)
+                        && p.serials.contains(sn)
+                }) {
+                    groups.entry(n.epoch).or_default().push(n);
+                }
+            }
+            if let Some(n) = shared {
+                groups.entry(n.epoch).or_default();
             }
             for (e, mut notes) in groups {
                 notes.sort_by_key(|n| std::cmp::Reverse(n.value));
+                if required.is_some() {
+                    let Some(n) = shared.filter(|n| n.epoch == e) else {
+                        continue;
+                    };
+                    notes.insert(0, n);
+                }
                 notes.truncate(2);
                 if notes.iter().map(|n| u128::from(n.value)).sum::<u128>() >= u128::from(spend) {
                     if notes[0].value >= spend {
@@ -512,12 +633,40 @@ impl Wallet {
             &postfiat_types::ShieldedAction::PqPaymentV1(payment.clone()),
         )?;
         let statement_id = hex::encode(terms.statement_context(chain, tx.statement().tx_ctx));
-        self.pending = Some(Pending {
-            payment,
-            asset: o.asset,
-            delta,
-            serials: [hex::encode(tx.sn0), hex::encode(tx.sn1)],
-        });
+        let serials = [hex::encode(tx.sn0), hex::encode(tx.sn1)];
+        let mut shared_input = None;
+        if let Some(parent_id) = o.replace {
+            let parent = self.attempts.get_mut(&parent_id).ok_or("unknown payment")?;
+            let common = serials
+                .iter()
+                .find(|sn| {
+                    parent.serials.contains(sn)
+                        && self.notes.contains_key(*sn)
+                        && parent
+                            .shared_input
+                            .as_ref()
+                            .is_none_or(|fixed| fixed == *sn)
+                })
+                .ok_or("replacement has no common input")?
+                .clone();
+            parent.shared_input = Some(common.clone());
+            parent.phase = Phase::Replaced;
+            shared_input = Some(common);
+        }
+        self.latest = Some(hash.clone());
+        self.attempts.insert(
+            hash.clone(),
+            Pending {
+                phase: Phase::Prepared,
+                conflict_final: false,
+                shared_input,
+                order_id,
+                payment,
+                asset: o.asset,
+                delta,
+                serials,
+            },
+        );
         Ok(json!({"prove_seconds":seconds,"action_hash":hash,"statement_id":statement_id}))
     }
 }
@@ -584,6 +733,7 @@ mod fee_tests {
                 format!("pf{}", "33".repeat(20))
             };
             let order = |fee| Order {
+                replace: None,
                 mode,
                 asset: asset.into(),
                 amount: 10,
@@ -598,8 +748,28 @@ mod fee_tests {
                 .unwrap_err()
                 .to_string()
                 .contains("insufficient funds"));
-            wallet.prove(order(2)).unwrap();
-            let pending = wallet.pending.take().unwrap();
+            let metrics = wallet.prove(order(2)).unwrap();
+            let hash = metrics["action_hash"].as_str().unwrap();
+            wallet.submitted(hash).unwrap();
+            let bytes = wallet.prepared(Some(hash)).unwrap();
+            wallet = serde_json::from_slice(&serde_json::to_vec(&wallet).unwrap()).unwrap();
+            assert_eq!(wallet.prepared(Some(hash)).unwrap(), bytes);
+            assert!(wallet.prove(order(2)).is_err());
+            let next = wallet
+                .prove(Order {
+                    replace: Some(hash.into()),
+                    ..order(2)
+                })
+                .unwrap();
+            let pending = wallet
+                .attempts
+                .remove(next["action_hash"].as_str().unwrap())
+                .unwrap();
+            let parent = wallet.attempts.remove(hash).unwrap();
+            assert!(parent.phase == Phase::Replaced);
+            assert!(pending
+                .serials
+                .contains(parent.shared_input.as_ref().unwrap()));
             assert_eq!(pending.delta, if mode == Mode::Exit { -12 } else { -2 });
             let (terms, sig, inner) = pending.payment.parts().unwrap();
             assert!(terms.account.is_none() && sig.is_none());
@@ -609,5 +779,26 @@ mod fee_tests {
                 .iter()
                 .all(|sn| wallet.notes.contains_key(sn)));
         }
+        // At the one-atom schedule, the smallest individually exitable note
+        // pays one atom to an existing eligible account and one to custody.
+        wallet.notes.retain(|_, note| note.value == 2);
+        let metrics = wallet
+            .prove(Order {
+                replace: None,
+                mode: Mode::Exit,
+                asset: asset.into(),
+                amount: 1,
+                fee: 1,
+                recipient: Some(format!("pf{}", "33".repeat(20))),
+                payer: None,
+                sequence: None,
+                account_key: None,
+            })
+            .unwrap();
+        let attempt = &wallet.attempts[metrics["action_hash"].as_str().unwrap()];
+        let (_, _, inner) = attempt.payment.parts().unwrap();
+        assert_eq!(u64::from_le_bytes(inner[64..72].try_into().unwrap()), 1);
+        assert_eq!(u64::from_le_bytes(inner[104..112].try_into().unwrap()), 1);
+        assert_eq!(attempt.delta, -2);
     }
 }

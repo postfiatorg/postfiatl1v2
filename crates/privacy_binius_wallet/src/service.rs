@@ -60,6 +60,7 @@ pub fn execute(home: &Path, store: &Store, cmd: Value) -> Result<Value> {
         _ => (),
     }
     let mut w: Wallet = store.load(&path, STATE)?;
+    w.import_pending()?;
     let result = match text("op")? {
         "backup" => {
             store.save(&outside()?, BACKUP, &w.recovery, true)?;
@@ -76,10 +77,10 @@ pub fn execute(home: &Path, store: &Store, cmd: Value) -> Result<Value> {
                 json!({"network":w.point.network,"height":w.point.height,"pairs":w.point.pairs,"last_page":w.point.last_page}),
             )
         }
-        "prepared" => return w.prepared(),
-        "rejected" => {
-            w.release_rejected(text("action_hash")?)?;
-            json!({"released":true})
+        "prepared" => return w.prepared(cmd["action_hash"].as_str()),
+        "submitted" => {
+            w.submitted(text("action_hash")?)?;
+            json!({"submitted":true})
         }
         "sync" => {
             let rows = staging_path("rows", "pages-")?;

@@ -508,14 +508,15 @@ impl PrivateActionAdmissionStore {
         // record stays in the log.
         let supersedes_abandoned = self.get(&request.intent_id).is_some_and(|existing| {
             existing.state == PrivateActionState::Abandoned
+                && (reservation.is_none() || existing.domain == request.domain)
                 && existing.action_json == request.action_json
         });
         let owned_by_this_intent = |intent: &str| {
             (supersedes_abandoned && intent == request.intent_id.as_str())
                 || (reservation.is_some()
-                    && self
-                        .get(intent)
-                        .is_some_and(|r| r.state == PrivateActionState::Abandoned))
+                    && self.get(intent).is_some_and(|r| {
+                        r.state == PrivateActionState::Abandoned && r.domain == request.domain
+                    }))
         };
         if let Some(existing) = self
             .get(&request.intent_id)
@@ -840,15 +841,33 @@ pub fn private_action_submit(
     let action_kind = private_action_kind(&action).to_string();
     let batch =
         consensus_artifacts::build_atomic_shielded_action_batch(&state.genesis, vec![action])?;
-    if reservation.is_some() {
-        let height = state
-            .tip_height
-            .checked_add(1)
-            .ok_or_else(|| refused("height_overflow", "candidate height overflow"))?;
-        consensus_artifacts::check_pq_block(&state.genesis, &state.governance, height, [&batch])?;
-    }
     {
         let store = PrivateActionAdmissionStore::open(data_dir)?;
+        if reservation.is_some() {
+            // Returning an exact stored receipt creates no new reservation.
+            if let Some(record) = store.get(&request.intent_id).filter(|r| {
+                r.state != PrivateActionState::Abandoned
+                    && r.domain == request.domain
+                    && r.action_json == request.action_json
+                    && r.action_hash == request.action_hash
+            }) {
+                return Ok(PrivateActionSubmitReport {
+                    schema: PRIVATE_ACTION_RECORD_SCHEMA.into(),
+                    existing: true,
+                    record: record.clone(),
+                });
+            }
+            let height = state
+                .tip_height
+                .checked_add(1)
+                .ok_or_else(|| refused("height_overflow", "candidate height overflow"))?;
+            consensus_artifacts::check_pq_block(
+                &state.genesis,
+                &state.governance,
+                height,
+                [&batch],
+            )?;
+        }
         if let Some(existing) =
             store.existing_submission(request, reservation.as_ref(), &batch.batch_id)?
         {
