@@ -259,14 +259,22 @@ git archive HEAD ops/sol-live solana/deploy solana/pfusdc-egress-verifier/bootst
 sudo -u pf-sol-exit env HOME="$svc" PYTHONPATH="$app/ops/sol-live" EXIT_PROOF_HOME="$app/proof" \
   "$app/venv/bin/python" -c 'import exit_service; from exit_proof import verify_local_host; verify_local_host()'
 fee="$HOME/.config/postfiat/sol-bridge/exit-fee-payer.json"
-test -f "$fee"
-test ! -L "$fee"
-test "$(stat -c %a "$fee")" = 600
-test "$(stat -c %d "$fee")" = "$(stat -c %d "$svc")"
-sudo test ! -e "$svc/fee-payer.json"
-sudo mv -T "$fee" "$svc/fee-payer.json"
-sudo chown pf-sol-exit:pf-sol-exit "$svc/fee-payer.json"
 test -z "$(ss -H -ltn 'sport = :18089')"
+if sudo test -f "$svc/fee-payer.json"; then
+  test ! -e "$fee" && test ! -L "$fee"
+  sudo test ! -L "$svc/fee-payer.json"
+  test "$(sudo stat -c %a "$svc/fee-payer.json")" = 600
+  owner=$(sudo stat -c %u "$svc/fee-payer.json")
+  [[ $owner == "$(id -u pf-sol-exit)" || $owner == "$(id -u)" ]]
+else
+  test -f "$fee" && test ! -L "$fee"
+  test "$(stat -c '%u:%a' "$fee")" = "$(id -u):600"
+  test "$(stat -c %d "$fee")" = "$(sudo stat -c %d "$svc")"
+  sudo test ! -e "$svc/fee-payer.json" && sudo test ! -L "$svc/fee-payer.json"
+  sudo mv -T "$fee" "$svc/fee-payer.json"
+fi
+sudo chown pf-sol-exit:pf-sol-exit "$svc/fee-payer.json"
+sudo -u pf-sol-exit env PYTHONPATH="$app/ops/sol-live" "$app/venv/bin/python" -c   'from exit_setup import FEE_PAYER, load, require; import sys; require(load(sys.argv[1]).pubkey()==FEE_PAYER, "Wrong provisioned fee payer")' "$svc/fee-payer.json"
 sudo install -m644 ops/sol-live/pft-sol-mainnet-withdraw.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now pft-sol-mainnet-withdraw.service
@@ -274,7 +282,7 @@ export API=http://127.0.0.1:18089/solana/withdrawals
 timeout 610s python3 ops/sol-live/exit_cutover.py wait-closed --api "$API" --seconds 600 > "$KIT/evidence/closed-readiness.json"
 ```
 
-A fresh installation uses umask 0022 inside the privileged installer. The service-user import check must pass before moving the funded key. The same-filesystem move places the original fee-payer inode under the service account. On recovery use the already-provisioned key after checking its owner, mode and public address. `ProtectHome=yes` hides the operator's home from the unit. The withdrawal journal is under `/var/lib/pf-sol-exit/jobs`. The Ethereum service and faucet keep their existing ports.
+A fresh installation uses umask 0022 inside the privileged installer. The service-user import check must pass before moving the funded key. The same-filesystem move places the original fee-payer inode under the service account. If interrupted after the move, resume this block at the port check with the existing app and service home. The destination branch checks the inode type and mode, handles an interrupted chown, and verifies its public address before activating the unit. If this unit already owns the listener, resume at closed readiness after verifying its MainPID. If another listener owns it, leave the service stopped and resolve that conflict. `ProtectHome=yes` hides the operator's home from the unit. The withdrawal journal is under `/var/lib/pf-sol-exit/jobs`. The Ethereum service and faucet keep their existing ports.
 
 Run a fresh proof as the installed service user. The root-owned anchor witness came from the verified archive. An empty output directory forces GPU proving and verification.
 
