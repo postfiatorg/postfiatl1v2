@@ -3920,18 +3920,32 @@ impl LedgerState {
         }
         for redemption in self.vault_bridge_redemptions.iter().filter(|r| r.asset_id == asset_id) {
             let Some(bucket) = self.vault_bridge_bucket(&redemption.bucket_id) else { continue; };
-            let route_id = self.vault_bridge_deposits.iter().find(|deposit| {
-                deposit.asset_id == asset_id
-                    && deposit.policy_hash == bucket.policy_hash
-                    && deposit.evidence.source_domain() == bucket.source_domain
-            })
-            .and_then(|deposit| {
-                vault_bridge_route_id_for_source(
-                    &deposit.source_proof_kind,
-                    deposit.evidence.source_chain_id,
-                    &deposit.evidence.token_address,
-                )
-            });
+            let route_id = if bucket.source_domain.starts_with("spl:") {
+                let route = policies
+                    .get(&bucket.policy_hash)
+                    .ok_or("missing Solana withdrawal policy")?;
+                if route.profile.asset_id != asset_id
+                    || route.profile.source_domain() != bucket.source_domain
+                {
+                    return Err("Solana withdrawal bucket does not match its pinned route".into());
+                }
+                Some(route.profile.route_id.as_str())
+            } else {
+                self.vault_bridge_deposits
+                    .iter()
+                    .find(|deposit| {
+                        deposit.asset_id == asset_id
+                            && deposit.policy_hash == bucket.policy_hash
+                            && deposit.evidence.source_domain() == bucket.source_domain
+                    })
+                    .and_then(|deposit| {
+                        vault_bridge_route_id_for_source(
+                            &deposit.source_proof_kind,
+                            deposit.evidence.source_chain_id,
+                            &deposit.evidence.token_address,
+                        )
+                    })
+            };
             if let Some(route_id) = route_id {
                 if let Some(row) = routes.get_mut(route_id) {
                     row.withdrawals_reserved = row.withdrawals_reserved.checked_add(redemption.amount_atoms)
