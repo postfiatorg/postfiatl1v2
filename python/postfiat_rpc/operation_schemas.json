@@ -48,6 +48,7 @@
   "pftl_uniswap_route_init": "PftlUniswapRouteInitOperation",
   "pftl_uniswap_route_init_v2": "PftlUniswapRouteInitV2Operation",
   "pftl_uniswap_route_pause": "PftlUniswapRoutePauseOperation",
+  "solana_bridge_proof_v1": "SolanaProofOperation",
   "trust_set": "TrustSetOperation",
   "vault_bridge_bucket_impair": "VaultBridgeBucketImpairOperation",
   "vault_bridge_burn_to_redeem": "VaultBridgeBurnToRedeemOperation",
@@ -736,6 +737,13 @@
    "operator": "required",
    "route_id": "required",
    "paused": "required"
+  },
+  "SolanaProofOperation": {
+   "submitter": "required",
+   "profile_hash": "required",
+   "proof_kind": "required",
+   "proof": "required",
+   "public_values": "required"
   },
   "TrustSetOperation": {
    "account": "required",
