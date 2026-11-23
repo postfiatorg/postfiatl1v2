@@ -306,6 +306,10 @@
             validator_count: 5,
         })
         .expect("init governance amendment replay bundle test");
+        // The later amendment admits validator-5. Provision its fixture key
+        // while the five-validator chain is still at genesis.
+        crate::storage_commit::ensure_validator_keys(&NodeStore::new(&data_dir), 6)
+            .expect("provision the future validator at genesis");
         let validators = local_validator_ids(5).expect("validators");
 
         let apply_governance_file = |label: &str, amendment_file: PathBuf| {

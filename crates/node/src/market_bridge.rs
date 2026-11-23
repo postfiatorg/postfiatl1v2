@@ -1244,7 +1244,7 @@ pub(super) fn vault_bridge_route_at_height(
             postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis));
         let (isolated, amendment) =
             postfiat_types::solana_exit::active(governance, height).map_err(deny)?;
-        if !released.is_some_and(|h| h <= isolated.authorized_height)
+        if released.is_none_or(|h| h > isolated.authorized_height)
             || !bucket.is_some_and(postfiat_types::solana_exit::matches_bucket)
         {
             return Err(deny("Solana source bucket has no active exit route".into()));

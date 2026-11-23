@@ -2978,15 +2978,24 @@ pub fn create_signed_asset_transaction_batch(
 
 /// Local round submission policy. Peers validating a proposed block must still
 /// reproduce the predecessor's execution receipt below the release height.
-pub fn check_operator_batch_submission(proposal: &BlockProposalFile, file: &Path) -> io::Result<()> {
+pub fn check_operator_batch_submission(
+    proposal: &BlockProposalFile,
+    file: &Path,
+) -> io::Result<()> {
     if proposal.batch_kind == BATCH_KIND_GOVERNANCE {
         let batch = read_governance_action_batch_file(file)?;
         if batch.batch_id != proposal.batch_id {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "governance submission batch changed"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "governance submission batch changed",
+            ));
         }
         if crate::solana_exit_governance::registers_descriptor(&batch) {
             crate::solana_exit_governance::require_operator_release(
-                &proposal.chain_id, &proposal.genesis_hash, proposal.block_height)?;
+                &proposal.chain_id,
+                &proposal.genesis_hash,
+                proposal.block_height,
+            )?;
         }
     }
     Ok(())
@@ -3400,7 +3409,12 @@ fn build_governance_batch_proposal(
             &store.data_dir().join(VALIDATOR_REGISTRY_FILE),
         )?);
     crate::solana_exit_governance::verify_rotation_interlock(
-        &genesis, &governance, &ledger, parent_numbered_count, &batch, block_height,
+        &genesis,
+        &governance,
+        &ledger,
+        parent_numbered_count,
+        &batch,
+        block_height,
     )?;
     verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, block_height)?;
 

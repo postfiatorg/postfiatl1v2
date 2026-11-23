@@ -256,17 +256,16 @@ pub(super) fn verify_checkpoint_history(
     let anchor = solana_exit::TRUSTED_CHECKPOINT_HEIGHT;
     for update in &governance.validator_registry_updates {
         // A Foundation update may have been ordered for a different activation height.
-        if update.activation_height >= anchor
+        let reaches_checkpoint = update.activation_height >= anchor
             || update
                 .signed_authorizations
                 .iter()
-                .any(|a| a.proposal_slot >= anchor)
+                .any(|a| a.proposal_slot >= anchor);
+        if reaches_checkpoint
+            && (update.activation_height == anchor
+                || !checker_accepts_authorization_form(governance, update))
         {
-            if update.activation_height == anchor
-                || !checker_accepts_authorization_form(governance, update)
-            {
-                return Err(format!("Solana exit checker cannot cross registry update at height {} from checkpoint {anchor}", update.activation_height));
-            }
+            return Err(format!("Solana exit checker cannot cross registry update at height {} from checkpoint {anchor}", update.activation_height));
         }
     }
     for record in governance

@@ -1522,7 +1522,10 @@ pub(super) fn activate_due_validator_registry_updates_for_commit(
     block_height: u64,
 ) -> io::Result<DueValidatorRegistryActivations> {
     crate::solana_exit_governance::verify_checker_activation(
-        genesis, governance, || store.read_ledger(), block_height,
+        genesis,
+        governance,
+        || store.read_ledger(),
+        block_height,
     )?;
     let mut registry =
         read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
@@ -1933,7 +1936,8 @@ pub(super) fn verify_replayed_blocks_with_exports(
                 ),
             ));
         };
-        let parent_numbered_count = crate::solana_exit_governance::numbered_parent_count(&governance);
+        let parent_numbered_count =
+            crate::solana_exit_governance::numbered_parent_count(&governance);
         activate_validator_registry_updates_for_height(
             genesis,
             &mut validator_registry,
@@ -3072,7 +3076,10 @@ pub(super) fn replay_archived_payload(
     state: ArchivedReplayState<'_>,
 ) -> io::Result<Vec<Receipt>> {
     crate::solana_exit_governance::verify_checker_activation(
-        genesis, state.governance, || Ok(&*state.ledger), block.header.height,
+        genesis,
+        state.governance,
+        || Ok(&*state.ledger),
+        block.header.height,
     )?;
     match block.header.batch_kind.as_str() {
         "transparent" => {
@@ -3098,7 +3105,12 @@ pub(super) fn replay_archived_payload(
         "governance" => {
             let batch: GovernanceActionBatch = parse_archived_payload(block, archive_entry)?;
             crate::solana_exit_governance::verify_rotation_interlock(
-                genesis, state.governance, state.ledger, state.parent_numbered_count, &batch, block.header.height,
+                genesis,
+                state.governance,
+                state.ledger,
+                state.parent_numbered_count,
+                &batch,
+                block.header.height,
             )?;
             let has_v2_authorization = batch
                 .amendments
@@ -3116,7 +3128,13 @@ pub(super) fn replay_archived_payload(
                     .vault_bridge_route_profile_activations
                     .iter()
                     .any(|activation| !activation.amendment.signed_authorizations.is_empty());
-            if has_v2_authorization || crate::solana_exit_governance::needs_signatures(genesis,&batch,block.header.height) {
+            if has_v2_authorization
+                || crate::solana_exit_governance::needs_signatures(
+                    genesis,
+                    &batch,
+                    block.header.height,
+                )
+            {
                 crate::consensus_artifacts::verify_signed_governance_batch(
                     genesis,
                     state.governance,

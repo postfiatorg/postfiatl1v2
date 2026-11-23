@@ -1142,8 +1142,7 @@ fn exit_review_close_drain_rotate_and_reopen() {
         Ok::<_, io::Error>(rotated)
     };
     let error = rotation(&gov, &ledger)
-        .err()
-        .expect("open admission blocks rotation with an empty queue");
+        .expect_err("open admission blocks rotation with an empty queue");
     assert!(error.to_string().contains("burns are open"), "{error}");
     assert!(block_burn(&g, &gov, &mut ledger, &tx, H + 2).accepted);
     let packet = ledger
@@ -1155,8 +1154,7 @@ fn exit_review_close_drain_rotate_and_reopen() {
     decision(&mut gov, &mut ledger, "solana_exit_r8_close", H + 3).unwrap();
     assert_eq!(solana_exit::open_height(&gov), None);
     let pending = rotation(&gov, &ledger)
-        .err()
-        .expect("closed pending queue blocks rotation");
+        .expect_err("closed pending queue blocks rotation");
     assert!(
         pending.to_string().contains("redemptions are pending"),
         "{pending}"
@@ -1170,8 +1168,7 @@ fn exit_review_close_drain_rotate_and_reopen() {
     decision(&mut gov, &mut ledger, &payout, H + 4).unwrap();
     assert_eq!(bucket_amounts(&ledger).3, 1_610_000);
     let error = rotation(&gov, &ledger)
-        .err()
-        .expect("outstanding holders still need an exit");
+        .expect_err("outstanding holders still need an exit");
     assert!(error.to_string().contains("outstanding"), "{error}");
     decision(&mut gov, &mut ledger, OPEN, H + 5).unwrap();
     assert_eq!(solana_exit::open_height(&gov), Some(H + 5));
@@ -1861,8 +1858,7 @@ fn exit_review5_batch_builder_and_committed_route_include_orchard() {
         .unwrap()
     };
     assert!(batch()
-        .err()
-        .expect("batch must refuse excess Orchard claims")
+        .expect_err("batch must refuse excess Orchard claims")
         .to_string()
         .contains("solana_exit_supply_mismatch"));
     let r = route();

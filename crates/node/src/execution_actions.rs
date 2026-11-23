@@ -1200,6 +1200,7 @@ pub(super) fn execute_governance_batch(
     )
 }
 
+#[cfg(test)]
 pub(super) fn execute_archived_governance_batch(
     governance: &mut GovernanceState,
     ledger: Option<&mut LedgerState>,
@@ -1898,7 +1899,9 @@ pub(super) fn execute_governance_batch_with_replay(
                 }
                 crate::solana_exit_governance::verify_checkpoint_history(genesis, governance)?;
                 crate::solana_exit_governance::require_reconciled_bucket(
-                    ledger.as_deref().ok_or("Solana exit registration requires the committed ledger")?,
+                    ledger
+                        .as_deref()
+                        .ok_or("Solana exit registration requires the committed ledger")?,
                     orchard_balances,
                 )?;
                 return postfiat_types::VaultBridgeRouteProfileRecordV1::new(

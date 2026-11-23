@@ -1440,7 +1440,11 @@ mod tests {
         genesis: &Genesis,
         governance: &mut GovernanceState,
         height: u64,
-    ) -> (ValidatorRegistry, Vec<MlDsa65KeyPair>, GovernanceActionBatch) {
+    ) -> (
+        ValidatorRegistry,
+        Vec<MlDsa65KeyPair>,
+        GovernanceActionBatch,
+    ) {
         let fixture = fixture_for_genesis(genesis.clone());
         let local = activate(&fixture);
         governance.cobalt_authority_transitions = local.cobalt_authority_transitions;

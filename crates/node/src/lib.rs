@@ -62,6 +62,8 @@ use postfiat_crypto_provider::{
     BRIDGE_WITNESS_SIGNATURE_CONTEXT, ML_DSA_65_ALGORITHM, ML_DSA_65_PUBLIC_KEY_BYTES,
     ML_DSA_65_SIGNATURE_BYTES, TX_SIGNATURE_CONTEXT,
 };
+#[cfg(test)]
+use postfiat_execution::execute_asset_transaction_with_compatibility;
 use postfiat_execution::fastlane_primary::execute_fastlane_primary_transaction;
 use postfiat_execution::{
     apply_asset_orchard_private_primary_issue_route_transition,
@@ -75,8 +77,7 @@ use postfiat_execution::{
     claim_rejected_transfer_fee, credit_issued_asset_from_shielded_pool,
     destination_address_rejection, escrow_transaction_destination_addresses,
     escrow_transaction_state_expansion_fee, escrow_transaction_tx_id,
-    escrow_transaction_weight_bytes, execute_asset_transaction_with_compatibility,
-    execute_asset_transaction_with_compatibility_and_orchard,
+    escrow_transaction_weight_bytes, execute_asset_transaction_with_compatibility_and_orchard,
     execute_asset_transaction_with_replay_compatibility,
     execute_asset_transaction_with_replay_preimage_and_compatibility,
     execute_atomic_swap_transaction_with_compatibility, execute_escrow_transaction,
@@ -349,9 +350,10 @@ use mempool_proposals::{
     normalize_block_proposal_batch_kind, proposed_ordered_state, PendingPrefix,
 };
 pub use mempool_proposals::{
-    admit_fastlane_primary_to_mempool, create_mempool_batch, create_signed_asset_transaction_batch,
-    create_transfer_batch, fastlane_primary_receipt_is_success, mempool_state, propose_batch,
-    check_operator_batch_submission, propose_batch_with_required_parent_with_timings, propose_batch_with_timings,
+    admit_fastlane_primary_to_mempool, check_operator_batch_submission, create_mempool_batch,
+    create_signed_asset_transaction_batch, create_transfer_batch,
+    fastlane_primary_receipt_is_success, mempool_state, propose_batch,
+    propose_batch_with_required_parent_with_timings, propose_batch_with_timings,
     recipient_address_error_code, reconcile_terminal_mempool_entries,
     submit_signed_asset_transaction_json_to_mempool,
     submit_signed_escrow_transaction_json_to_mempool,
