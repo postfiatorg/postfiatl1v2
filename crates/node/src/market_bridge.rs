@@ -791,6 +791,7 @@ pub fn vault_bridge_status(
         .iter()
         .map(|redemption| VaultBridgeRedemptionStatusRow {
             redemption_id: redemption.redemption_id.clone(),
+            asset_id: redemption.asset_id.clone(),
             owner: redemption.owner.clone(),
             owner_sequence: redemption.owner_sequence,
             issuer: redemption.issuer.clone(),

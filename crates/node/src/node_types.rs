@@ -695,6 +695,8 @@ pub struct VaultBridgeAllocationStatusRow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VaultBridgeRedemptionStatusRow {
     pub redemption_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub asset_id: String,
     pub owner: String,
     pub owner_sequence: u64,
     pub issuer: String,

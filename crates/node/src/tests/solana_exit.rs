@@ -1955,3 +1955,31 @@ fn exit_review6_registration_reconciles_public_and_orchard_claims() {
     assert!(accepted.accepted, "{}", accepted.message);
     assert!(solana_exit::registered(&gov).is_some());
 }
+
+#[test]
+#[ignore = "copied WAN ledger at checkpoint 1753"]
+fn exit_review6_redemption_asset_id_is_additive_on_the_wire() {
+    use postfiat_rpc_sdk::{success_response, validate_health_response, RpcResponseKind};
+    let status = vault_bridge_status(VaultBridgeStatusOptions {
+        data_dir: "/var/lib/postfiat/validator-3".into(),
+        asset_id: solana_exit::FAMILY.into(),
+    })
+    .unwrap();
+    let mut report = serde_json::to_value(status).unwrap();
+    let validate = |r: &serde_json::Value| {
+        validate_health_response(
+            &success_response("status", r, vec![]).unwrap(),
+            RpcResponseKind::VaultBridgeStatus,
+        )
+        .unwrap();
+    };
+    validate(&report);
+    let rows = report["redemptions"].as_array_mut().unwrap();
+    assert!(!rows.is_empty());
+    for row in rows {
+        assert_eq!(row["asset_id"], solana_exit::FAMILY);
+        row.as_object_mut().unwrap().remove("asset_id");
+    }
+    validate(&report);
+    serde_json::from_value::<VaultBridgeStatusReport>(report).expect("decode historical rows");
+}
