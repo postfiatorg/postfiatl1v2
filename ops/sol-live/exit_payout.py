@@ -469,7 +469,8 @@ def upload(c, vals, work):
         create_key(path)
     signer = load(path)
     buf = signer.pubkey()
-    if not c.account(buf):
+    account = c.account(buf)
+    if account is None:
         alloc = create_account(
             dict(
                 from_pubkey=c.owner,
@@ -480,14 +481,26 @@ def upload(c, vals, work):
             )
         )
         funded_send(c, "exit.buffer", [alloc], signer, rent=c.rent(len(vals)))
+        existing = bytes(len(vals))
+    else:
+        require(
+            account["owner"] == str(VERIFIER)
+            and not account["executable"]
+            and len(account["data"]) == len(vals),
+            "Unexpected proof buffer owner or layout.",
+        )
+        existing = account["data"]
     for off in range(0, len(vals), 700):
+        chunk = vals[off : off + 700]
+        if existing[off : off + len(chunk)] == chunk:
+            continue
         funded_send(
             c,
             "exit.upload",
             [
                 Instruction(
                     VERIFIER,
-                    b"\x05" + off.to_bytes(2, "little") + vals[off : off + 700],
+                    b"\x05" + off.to_bytes(2, "little") + chunk,
                     [rw(buf, True)],
                 )
             ],
@@ -601,6 +614,7 @@ def reclaim_completed(c, work):
 
 
 def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
+    check_custody(c)
     if owner is not None:
         ata = pda(ATA, bytes(owner), bytes(TOKEN), bytes(MINT))
         recipient_atoms(ata, c.account(ata), owner)
