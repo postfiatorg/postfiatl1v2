@@ -1446,3 +1446,45 @@ fn exit_review_registration_holds_rotation_until_open_or_retired() {
         verify_live_signed_governance_batch(&g, &gov, &committee.registry, &open, H + 3).is_err()
     );
 }
+
+fn check_registration_refusal(
+    g: &Genesis,
+    gov: &GovernanceState,
+    ledger: &LedgerState,
+    detail: &str,
+) {
+    let committee = LocalCommittee::new(&active_validator_ids(gov).unwrap());
+    let register = committee.registration(g, gov, H);
+    let mut state = gov.clone();
+    let receipts = crate::execution_actions::execute_governance_batch(
+        &mut state,
+        Some(&mut ledger.clone()),
+        Some(g),
+        &register,
+        H,
+    );
+    assert_eq!(receipts.len(), 1);
+    assert!(!receipts[0].accepted, "registration accepted");
+    assert!(
+        receipts[0].message.contains(detail),
+        "{}",
+        receipts[0].message
+    );
+    assert!(state == *gov, "registration changed governance");
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review4_registration_checks_checkpoint_rotation() {
+    let (g, mut gov, ledger) = archived_parent();
+    let mut rotation = gov.validator_registry_updates.last().unwrap().clone();
+    assert!(
+        !rotation.cobalt_authorizations.is_empty() && rotation.signed_authorizations.is_empty()
+    );
+    for height in [1755, H + 5] {
+        rotation.activation_height = height;
+        gov.validator_registry_updates.push(rotation.clone());
+        check_registration_refusal(&g, &gov, &ledger, &height.to_string());
+        gov.validator_registry_updates.pop();
+    }
+}

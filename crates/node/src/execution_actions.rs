@@ -1853,6 +1853,7 @@ fn execute_governance_batch_with_replay(
                             .into(),
                     );
                 }
+                crate::solana_exit_governance::verify_checkpoint_history(governance)?;
                 return postfiat_types::VaultBridgeRouteProfileRecordV1::new(
                     activation,
                     block_height,

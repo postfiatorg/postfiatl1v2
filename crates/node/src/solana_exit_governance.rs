@@ -103,7 +103,7 @@ pub(super) fn validate_decision(
         {
             return Err("Solana exit burns already opened or descriptor expired".into());
         }
-        verify_open_history(governance)?;
+        verify_checkpoint_history(governance)?;
     } else if amendment.kind == solana_exit::CLOSE {
         if solana_exit::open_height(governance).is_none() {
             return Err("Solana exit burns are already closed".into());
@@ -212,7 +212,7 @@ fn checker_accepts_authorization_form(
         .all(|a| a.committee_epoch == finality_epoch && a.proposal_slot == update.activation_height)
 }
 
-fn verify_open_history(governance: &GovernanceState) -> Result<(), String> {
+pub(super) fn verify_checkpoint_history(governance: &GovernanceState) -> Result<(), String> {
     let anchor = solana_exit::TRUSTED_CHECKPOINT_HEIGHT;
     for update in &governance.validator_registry_updates {
         // A Foundation update may have been ordered for a different activation height.
