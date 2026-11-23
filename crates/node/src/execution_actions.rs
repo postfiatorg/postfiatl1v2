@@ -1837,6 +1837,10 @@ fn execute_governance_batch_with_replay(
                         .is_some_and(|height| block_height >= height)
                 })
             {
+                crate::solana_exit_governance::require_unanimity(
+                    amendment,
+                    &active_validator_ids(governance).map_err(|e| e.to_string())?,
+                )?;
                 if !ledger.as_deref().is_some_and(|l| {
                     l.vault_bridge_bucket_states
                         .iter()

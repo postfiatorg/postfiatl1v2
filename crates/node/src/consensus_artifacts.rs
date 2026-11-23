@@ -3240,6 +3240,14 @@ pub(super) fn verify_signed_governance_batch(
                 "vault bridge route profile validator set does not match the old active registry",
             ));
         }
+        if amendment.kind.ends_with(postfiat_types::solana_exit::PROFILE_HASH)
+            && activation.profile == postfiat_types::solana_exit::descriptor()
+            && postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
+                .is_some_and(|release| proposal_slot >= release)
+        {
+            crate::solana_exit_governance::require_unanimity(amendment, &validators)
+                .map_err(|message| io::Error::new(io::ErrorKind::PermissionDenied, message))?;
+        }
         verify_signed_governance_authorization_set(
             "vault bridge route profile activation",
             &amendment.validators,

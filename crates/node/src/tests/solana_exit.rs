@@ -133,7 +133,8 @@ fn descriptor_batch() -> GovernanceActionBatch {
 
 fn scheduled_parent(open: bool) -> (Genesis, GovernanceState, LedgerState) {
     let (g, mut gov, mut ledger) = archived_parent();
-    let batch = descriptor_batch();
+    let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
+    let batch = committee.registration(&g, &gov, H);
     let registered = crate::execution_actions::execute_governance_batch(
         &mut gov,
         Some(&mut ledger),
@@ -143,7 +144,6 @@ fn scheduled_parent(open: bool) -> (Genesis, GovernanceState, LedgerState) {
     );
     assert!(registered[0].accepted, "{:?}", registered[0]);
     if open {
-        let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
         let batch = committee.decision(&g, &gov, OPEN, H + 1);
         verify_live_signed_governance_batch(&g, &gov, &committee.registry, &batch, H + 1).unwrap();
         assert!(

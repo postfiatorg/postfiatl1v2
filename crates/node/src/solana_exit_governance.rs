@@ -28,6 +28,19 @@ pub(super) fn needs_signatures(
                 .is_some_and(|h| h <= height))
 }
 
+pub(super) fn require_unanimity(
+    amendment: &GovernanceAmendment,
+    validators: &[String],
+) -> Result<(), String> {
+    if amendment.validators != validators
+        || amendment.quorum != validators.len()
+        || amendment.signed_authorizations.len() != validators.len()
+    {
+        return Err("Solana exit governance requires every active validator signature".into());
+    }
+    Ok(())
+}
+
 /// These are ordinary signed governance amendments. No relayer signature or
 /// bare issuer settlement is an attestation of finalized Solana execution.
 pub(super) fn validate_decision(
@@ -52,13 +65,7 @@ pub(super) fn validate_decision(
                 .into(),
         );
     }
-    let validators = active_validator_ids(governance).map_err(|e| e.to_string())?;
-    if amendment.validators != validators
-        || amendment.quorum != validators.len()
-        || amendment.signed_authorizations.len() != validators.len()
-    {
-        return Err("Solana exit decision requires every active validator signature".into());
-    }
+    require_unanimity(amendment, &active_validator_ids(governance).map_err(|e| e.to_string())?)?;
     if amendment.kind == solana_exit::OPEN {
         if solana_exit::open_height(governance).is_some()
             || height >= record.profile.expires_at_height
