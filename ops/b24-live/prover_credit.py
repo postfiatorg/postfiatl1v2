@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Report before the rented proving hosts run out of Vast credit.
+
+Every 15 minutes (prover-credit-alert.timer): read the account's remaining
+credit (`vastai show user --raw`) and the hourly cost of its instances
+(`vastai show instances --raw`, sum of `dph_total`), and report through the
+B24 reading's hook (reading_alert.notify, B24_READING_NOTIFY) when the hours
+left fall under --warn-hours (24) and again, louder, under --urgent-hours (6).
+Each crossing is reported once; a credit that cannot be read is reported once
+until it can be read again. The Vast CLI reads its own key file; this script
+reads that file only to strip the key from anything it prints or sends.
+Standard library only, so it runs with `python3 -I` like the failure hook.
+"""
+import argparse,importlib.util,json,os,re,subprocess,sys
+from pathlib import Path
+# Loaded by path: this directory also holds operator.py, which must not shadow the standard library.
+spec=importlib.util.spec_from_file_location('reading_alert',Path(__file__).resolve().with_name('reading_alert.py'))
+reading_alert=importlib.util.module_from_spec(spec);spec.loader.exec_module(reading_alert)
+notify,utc_now,write=reading_alert.notify,reading_alert.utc_now,reading_alert.write
+
+VASTAI=Path.home()/'.local/bin/vastai'
+STATE=Path.home()/'.local/state/prover-credit-alert/state.json'
+LEVELS=('ok','warn','urgent')
+RUNNING={'running'}
+
+def key_files():
+    config=Path(os.environ.get('XDG_CONFIG_HOME') or Path.home()/'.config')
+    return [config/'vastai/vast_api_key',Path.home()/'.vast_api_key']
+
+def secrets():
+    found=[]
+    for path in key_files():
+        try:value=path.read_text().strip()
+        except OSError:continue
+        if value:found.append(value)
+    if os.environ.get('VAST_API_KEY','').strip():found.append(os.environ['VAST_API_KEY'].strip())
+    return found
+
+def redact(text,values=None):
+    for value in (secrets() if values is None else values):text=text.replace(value,'[redacted]')
+    text=re.sub(r'(api_key=)[^&\s"\']+',r'\1[redacted]',text)
+    return re.sub(r'(Bearer\s+)\S+',r'\1[redacted]',text)
+
+def vastai(*args):
+    """Run one read-only CLI call; the error never carries the key or raw output."""
+    try:result=subprocess.run([str(VASTAI),*args,'--raw'],stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=120)
+    except Exception as error:raise RuntimeError(f'vastai {args[-1]}: {type(error).__name__}') from None
+    if result.returncode:raise RuntimeError(redact(f'vastai {args[-1]} exited {result.returncode}: '+' '.join(result.stderr.split())[-200:]))
+    try:return json.loads(result.stdout)
+    except ValueError:raise RuntimeError(f'vastai {args[-1]}: output is not JSON') from None
+
+def read_credit(run=vastai):
+    """Return (credit in USD, spend in USD per hour, running instance count)."""
+    user=run('show','user')
+    credit=user.get('credit',user.get('balance')) if isinstance(user,dict) else None
+    if isinstance(credit,bool) or not isinstance(credit,(int,float)):raise RuntimeError('vastai show user: no credit field')
+    instances=run('show','instances')
+    if not isinstance(instances,list):raise RuntimeError('vastai show instances: not a list')
+    live=[i for i in instances if isinstance(i,dict) and RUNNING&{i.get('actual_status'),i.get('intended_status'),i.get('cur_state')}]
+    return float(credit),sum(float(i.get('dph_total') or 0) for i in live),len(live)
+
+def level(hours,warn,urgent):
+    return 'urgent' if hours<urgent else 'warn' if hours<warn else 'ok'
+
+def message(kind,credit=0,spend=0,count=0,hours=0,warn=24,urgent=6,error=''):
+    if kind=='unreadable':return f'Proving hosts: Vast credit could not be read ({error}); the low-credit alert is blind until it can ({utc_now()})'
+    head='URGENT: proving hosts stop' if kind=='urgent' else 'Proving hosts stop'
+    limit=urgent if kind=='urgent' else warn
+    return f'{head} in about {hours:.1f} h: Vast credit {credit:.2f} USD at {spend:.2f} USD/h for {count} running instance(s), under the {limit:g} h limit. Top up the Vast account ({utc_now()})'
+
+def load(path):
+    try:state=json.loads(path.read_text())
+    except (OSError,ValueError):state={}
+    return dict(level=state.get('level','ok') if state.get('level') in LEVELS else 'ok',unreadable=bool(state.get('unreadable')))
+
+def check(warn=24.0,urgent=6.0,state_path=STATE,run=vastai,send=notify):
+    """One run: returns the state written. A report counts as made unless the hook failed."""
+    state=load(state_path)
+    try:credit,spend,count=read_credit(run)
+    except Exception as error:
+        line=message('unreadable',error=redact(str(error))[:300])
+        if not state['unreadable']:
+            result=send(line);state['unreadable']=not result.startswith('hook failed') and not result.startswith('hook exited')
+            print(line+f'; notification {result}',file=sys.stderr)
+        else:print(line+'; already reported',file=sys.stderr)
+        write(state_path,state);return dict(state,ok=False)
+    state['unreadable']=False
+    hours=0.0 if credit<=0 else float('inf') if spend<=0 else credit/spend
+    now=level(hours,warn,urgent);summary=f'credit {credit:.2f} USD, spend {spend:.2f} USD/h, {count} running, {hours:.1f} h left, level {now}'
+    if LEVELS.index(now)>LEVELS.index(state['level']):
+        result=send(message(now,credit,spend,count,hours,warn,urgent))
+        if result.startswith(('hook failed','hook exited')):now=state['level']
+        summary+=f'; notification {result}'
+    print(summary)
+    state['level']=now;write(state_path,state);return dict(state,ok=True,hours=hours)
+
+def main():
+    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('--warn-hours',type=float,default=float(os.environ.get('PROVER_CREDIT_WARN_HOURS',24)))
+    ap.add_argument('--urgent-hours',type=float,default=float(os.environ.get('PROVER_CREDIT_URGENT_HOURS',6)))
+    a=ap.parse_args()
+    if not 0<a.urgent_hours<a.warn_hours:ap.error('need 0 < --urgent-hours < --warn-hours')
+    sys.exit(0 if check(a.warn_hours,a.urgent_hours)['ok'] else 1)
+if __name__=='__main__':main()

@@ -1,0 +1,15 @@
+[Unit]
+Description=Report before the Vast proving hosts run out of credit
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Same hook as the B24 reading: B24_READING_NOTIFY=<webhook URL or command>; absent file sends nothing.
+EnvironmentFile=-%h/.config/b24-tee-nav/notify.env
+# Optional: PROVER_CREDIT_WARN_HOURS=24 and PROVER_CREDIT_URGENT_HOURS=6.
+EnvironmentFile=-%h/.config/prover-credit-alert/thresholds.env
+# The Vast CLI reads its own key file (~/.config/vastai/vast_api_key); nothing secret here.
+ExecStart=/usr/bin/python3 -I %h/repos/postfiatl1v2-live/ops/b24-live/prover_credit.py
+UMask=0077
+TimeoutStartSec=5min
