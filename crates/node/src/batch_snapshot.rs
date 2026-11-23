@@ -180,6 +180,9 @@ pub(super) fn external_lane_export_root_for_block(
     if !postfiat_types::external_lane_export_root_active_at(genesis, governance, block_height) {
         return Ok(None);
     }
+    crate::solana_exit_governance::verify_checker_activation(
+        genesis, governance, || Ok(ledger), block_height,
+    )?;
     if !consensus_v2_active_at(genesis, block_height) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,

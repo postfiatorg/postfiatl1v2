@@ -1,5 +1,6 @@
 use super::*;
 use postfiat_types::solana_exit;
+use std::borrow::Borrow;
 
 pub(super) fn is_registration_amendment(kind: &str) -> bool {
     kind.strip_suffix(solana_exit::PROFILE_HASH)
@@ -103,7 +104,7 @@ pub(super) fn validate_decision(
         {
             return Err("Solana exit burns already opened or descriptor expired".into());
         }
-        verify_checkpoint_history(governance)?;
+        verify_checkpoint_history(genesis, governance)?;
     } else if amendment.kind == solana_exit::CLOSE {
         if solana_exit::open_height(governance).is_none() {
             return Err("Solana exit burns are already closed".into());
@@ -212,7 +213,31 @@ fn checker_accepts_authorization_form(
         .all(|a| a.committee_epoch == finality_epoch && a.proposal_slot == update.activation_height)
 }
 
-pub(super) fn verify_checkpoint_history(governance: &GovernanceState) -> Result<(), String> {
+/// Each unsupported header format pairs its scheduling amendment with the
+/// canonical height lookup (including genesis). Registration, opening, batch
+/// admission and block activation all consult this same list.
+struct UnsupportedHeader {
+    amendment: &'static str,
+    activation: fn(&Genesis, &GovernanceState) -> Option<u64>,
+}
+
+const UNSUPPORTED_HEADERS: &[UnsupportedHeader] = &[UnsupportedHeader {
+    amendment: postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT,
+    activation: postfiat_types::external_lane_export_root_activation_height,
+}];
+
+pub(super) fn verify_checkpoint_history(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+) -> Result<(), String> {
+    for format in UNSUPPORTED_HEADERS {
+        if let Some(height) = (format.activation)(genesis, governance) {
+            return Err(format!(
+                "Frozen Solana payout checker cannot cross {} at height {height}",
+                format.amendment
+            ));
+        }
+    }
     let anchor = solana_exit::TRUSTED_CHECKPOINT_HEIGHT;
     for update in &governance.validator_registry_updates {
         // A Foundation update may have been ordered for a different activation height.
@@ -299,19 +324,14 @@ pub(super) fn verify_rotation_interlock(
         .amendments
         .iter()
         .any(|a| a.kind == GOVERNANCE_KIND_VALIDATOR_SET && Some(a.value) != parent_numbered_count);
-    if (updates.is_empty() && !changes_set)
-        || solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
-            .is_none_or(|h| height < h)
-    {
+    let header = UNSUPPORTED_HEADERS
+        .iter()
+        .find(|format| batch.amendments.iter().any(|a| a.kind == format.amendment));
+    if updates.is_empty() && !changes_set && header.is_none() {
         return Ok(());
     }
-    let Some((descriptor, _)) = solana_exit::registered(governance) else {
-        return Ok(());
-    };
-    if solana_exit::retirement_height(governance).is_some() {
-        return Ok(());
-    }
-    if !changes_set
+    if header.is_none()
+        && !changes_set
         && updates.len() == 1
         && crate::cobalt_handoff::governance_batch_action_count(batch) == 1
         && updates[0].activation_height == height
@@ -319,12 +339,67 @@ pub(super) fn verify_rotation_interlock(
     {
         return Ok(());
     }
+    require_change_allowed(
+        genesis,
+        governance,
+        || Ok(ledger),
+        height,
+        header.map_or("committee change", |format| format.amendment),
+        batch.amendments.iter().any(|a| a.kind == solana_exit::OPEN),
+    )
+}
+
+/// Check the parent before voting, committing or replaying any batch kind.
+/// A registry change at its activation block changes the next committee domain.
+pub(super) fn verify_checker_activation<L: Borrow<LedgerState>>(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    read_ledger: impl FnOnce() -> io::Result<L>,
+    height: u64,
+) -> io::Result<()> {
+    let change = UNSUPPORTED_HEADERS
+        .iter()
+        .find(|format| (format.activation)(genesis, governance).is_some_and(|h| h <= height))
+        .map(|format| format.amendment)
+        .or_else(|| {
+            governance
+                .validator_registry_updates
+                .iter()
+                .any(|update| {
+                    update.activation_height >= solana_exit::TRUSTED_CHECKPOINT_HEIGHT
+                        && update.activation_height <= height
+                        && !checker_accepts_authorization_form(governance, update)
+                })
+                .then_some("committee change")
+        });
+    if let Some(change) = change {
+        require_change_allowed(genesis, governance, read_ledger, height, change, false)?;
+    }
+    Ok(())
+}
+
+fn require_change_allowed<L: Borrow<LedgerState>>(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    read_ledger: impl FnOnce() -> io::Result<L>,
+    height: u64,
+    change: &str,
+    opening: bool,
+) -> io::Result<()> {
+    let Some((descriptor, registration)) = solana_exit::registered(governance) else {
+        return Ok(());
+    };
+    if height < descriptor.authorized_height
+        || registration.chain_id != genesis.chain_id
+        || registration.genesis_hash != genesis_hash(genesis)
+        || solana_exit::retirement_height(governance).is_some()
+    {
+        return Ok(());
+    }
     let reason =
-        if solana_exit::open_height(governance).is_some()
-            || batch.amendments.iter().any(|a| a.kind == solana_exit::OPEN)
-        {
+        if solana_exit::open_height(governance).is_some() || opening {
             "Solana burns are open or opening; close burns in a separate unanimous block"
-        } else if let Some(reason) = redemption_obligation(ledger, height)
+        } else if let Some(reason) = redemption_obligation(read_ledger()?.borrow(), height)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
         {
             reason
@@ -337,6 +412,6 @@ pub(super) fn verify_rotation_interlock(
         };
     Err(io::Error::new(
         io::ErrorKind::PermissionDenied,
-        format!("Frozen Solana payout checker cannot follow this committee change: {reason}"),
+        format!("Frozen Solana payout checker cannot follow {change}: {reason}"),
     ))
 }

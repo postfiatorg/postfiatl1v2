@@ -1521,6 +1521,9 @@ pub(super) fn activate_due_validator_registry_updates_for_commit(
     governance: &mut GovernanceState,
     block_height: u64,
 ) -> io::Result<DueValidatorRegistryActivations> {
+    crate::solana_exit_governance::verify_checker_activation(
+        genesis, governance, || store.read_ledger(), block_height,
+    )?;
     let mut registry =
         read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
     let applied_prefix_len = applied_validator_registry_update_prefix_len(
@@ -3068,6 +3071,9 @@ pub(super) fn replay_archived_payload(
     archive_entry: &BatchArchiveEntry,
     state: ArchivedReplayState<'_>,
 ) -> io::Result<Vec<Receipt>> {
+    crate::solana_exit_governance::verify_checker_activation(
+        genesis, state.governance, || Ok(&*state.ledger), block.header.height,
+    )?;
     match block.header.batch_kind.as_str() {
         "transparent" => {
             let batch: TransactionBatch = parse_archived_payload(block, archive_entry)?;

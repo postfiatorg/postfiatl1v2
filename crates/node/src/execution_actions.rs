@@ -1831,12 +1831,11 @@ fn execute_governance_batch_with_replay(
             {
                 return Err("vault bridge route profile already recorded".to_string());
             }
-            if profile_hash == postfiat_types::solana_exit::PROFILE_HASH
-                && genesis.is_some_and(|g| {
-                    postfiat_types::solana_exit::release_height(&g.chain_id, &genesis_hash(g))
+            if let Some(genesis) = genesis.filter(|g| {
+                profile_hash == postfiat_types::solana_exit::PROFILE_HASH
+                    && postfiat_types::solana_exit::release_height(&g.chain_id, &genesis_hash(g))
                         .is_some_and(|height| block_height >= height)
-                })
-            {
+            }) {
                 crate::solana_exit_governance::require_unanimity(
                     amendment,
                     &active_validator_ids(governance).map_err(|e| e.to_string())?,
@@ -1853,7 +1852,7 @@ fn execute_governance_batch_with_replay(
                             .into(),
                     );
                 }
-                crate::solana_exit_governance::verify_checkpoint_history(governance)?;
+                crate::solana_exit_governance::verify_checkpoint_history(genesis, governance)?;
                 return postfiat_types::VaultBridgeRouteProfileRecordV1::new(
                     activation,
                     block_height,

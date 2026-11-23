@@ -1455,6 +1455,7 @@ fn check_registration_refusal(
 ) {
     let committee = LocalCommittee::new(&active_validator_ids(gov).unwrap());
     let register = committee.registration(g, gov, H);
+    verify_live_signed_governance_batch(g, gov, &committee.registry, &register, H).unwrap();
     let mut state = gov.clone();
     let receipts = crate::execution_actions::execute_governance_batch(
         &mut state,
@@ -1477,14 +1478,184 @@ fn check_registration_refusal(
 #[ignore = "copied WAN ledger, release height 1760"]
 fn exit_review4_registration_checks_checkpoint_rotation() {
     let (g, mut gov, ledger) = archived_parent();
-    let mut rotation = gov.validator_registry_updates.last().unwrap().clone();
-    assert!(
-        !rotation.cobalt_authorizations.is_empty() && rotation.signed_authorizations.is_empty()
-    );
     for height in [1755, H + 5] {
-        rotation.activation_height = height;
-        gov.validator_registry_updates.push(rotation.clone());
+        let (_, _, batch) = crate::cobalt_handoff::signed_exit_rotation(&g, &mut gov, height);
+        gov.validator_registry_updates
+            .extend(batch.validator_registry_updates);
         check_registration_refusal(&g, &gov, &ledger, &height.to_string());
         gov.validator_registry_updates.pop();
     }
+}
+
+fn export_root_schedule(
+    g: &Genesis,
+    gov: &GovernanceState,
+    height: u64,
+    effective: u64,
+) -> GovernanceActionBatch {
+    signed_amendment_batch(
+        g,
+        gov,
+        postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT,
+        effective.try_into().unwrap(),
+        height,
+    )
+}
+
+fn signed_amendment_batch(
+    g: &Genesis,
+    gov: &GovernanceState,
+    kind: &str,
+    value: u32,
+    height: u64,
+) -> GovernanceActionBatch {
+    let names = active_validator_ids(gov).unwrap();
+    let mut amendment = ratify_governance_amendment_with_lifecycle(
+        &cobalt_domain(g),
+        &EssentialSubsetConfig::all_of(names.clone()),
+        kind,
+        value,
+        names.clone(),
+        GovernanceAmendmentLifecycle {
+            activation_height: height,
+            paused: false,
+            veto_until_height: 0,
+        },
+    )
+    .unwrap();
+    let committee = LocalCommittee::new(&names);
+    committee.sign(gov, &mut amendment, height);
+    let batch = build_governance_action_batch(g, vec![amendment], vec![]).unwrap();
+    verify_live_signed_governance_batch(g, gov, &committee.registry, &batch, height).unwrap();
+    batch
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review4_registration_checks_export_root_schedule() {
+    let (g, parent, ledger) = archived_parent();
+    for effective in [H - 1, H, H + 3] {
+        let mut gov = parent.clone();
+        let schedule = export_root_schedule(&g, &gov, H - 2, effective);
+        let receipts = crate::execution_actions::execute_governance_batch(
+            &mut gov,
+            Some(&mut ledger.clone()),
+            Some(&g),
+            &schedule,
+            H - 2,
+        );
+        assert!(receipts[0].accepted, "{}", receipts[0].message);
+        check_registration_refusal(&g, &gov, &ledger, "export");
+    }
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review4_protected_exit_rejects_export_root_schedule() {
+    for open in [false, true] {
+        let (g, gov, ledger) = scheduled_parent(open);
+        let batch = export_root_schedule(&g, &gov, H + 2, H + 3);
+        let error = crate::solana_exit_governance::verify_rotation_interlock(
+            &g,
+            &gov,
+            &ledger,
+            crate::solana_exit_governance::numbered_parent_count(&gov),
+            &batch,
+            H + 2,
+        )
+        .expect_err("a protected checker cannot schedule the new header");
+        assert!(error.to_string().contains("export"), "{error}");
+    }
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review4_protected_exit_rejects_export_root_activation() {
+    let (g, mut gov, ledger) = scheduled_parent(true);
+    let batch = export_root_schedule(&g, &gov, H + 2, H + 3);
+    // Model a retained schedule to exercise activation independently of admission.
+    gov.amendments.extend(batch.amendments);
+    for height in [H + 3, H + 4] {
+        let error = crate::batch_snapshot::external_lane_export_root_for_block(
+            &g,
+            &gov,
+            &ledger,
+            &[],
+            height,
+        )
+        .expect_err("an empty export block still changes the signed header");
+        assert!(error.to_string().contains("export"), "{error}");
+    }
+    assert!(crate::batch_snapshot::external_lane_export_root_for_block(
+        &g,
+        &gov,
+        &ledger,
+        &[],
+        H + 2
+    )
+    .unwrap()
+    .is_none());
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review4_open_checks_retained_export_schedule() {
+    let (g, mut gov, _) = scheduled_parent(false);
+    let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
+    let batch = export_root_schedule(&g, &gov, H + 1, H + 5);
+    gov.amendments.extend(batch.amendments);
+    let open = committee.decision(&g, &gov, OPEN, H + 2);
+    let error = verify_live_signed_governance_batch(&g, &gov, &committee.registry, &open, H + 2)
+        .expect_err("opening would cross the retained header schedule");
+    assert!(error.to_string().contains("export"), "{error}");
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review4_rejects_due_registry_update_before_using_new_committee() {
+    let (g, mut gov, _) = scheduled_parent(true);
+    let (_, _, batch) = crate::cobalt_handoff::signed_exit_rotation(&g, &mut gov, H + 3);
+    gov.validator_registry_updates
+        .extend(batch.validator_registry_updates);
+    let store = NodeStore::new("/var/lib/postfiat/validator-3");
+    for height in [H + 3, H + 4] {
+        let error =
+            activate_due_validator_registry_updates_for_commit(&store, &g, &mut gov, height)
+                .err()
+                .expect("a retained rotation must not activate while burns are open");
+        assert!(error.to_string().contains("burns are open"), "{error}");
+    }
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review4_registration_checks_recorded_numbered_set_change() {
+    let (g, mut gov, ledger) = archived_parent();
+    // Even restoring the six members before registration leaves a gap in ancestry.
+    for (height, count) in [(1755, 5), (1756, 6)] {
+        let batch = signed_amendment_batch(&g, &gov, GOVERNANCE_KIND_VALIDATOR_SET, count, height);
+        let receipts = crate::execution_actions::execute_governance_batch(
+            &mut gov,
+            Some(&mut ledger.clone()),
+            Some(&g),
+            &batch,
+            height,
+        );
+        assert!(receipts[0].accepted, "{}", receipts[0].message);
+    }
+    assert_eq!(gov.active_validator_count, 6);
+    check_registration_refusal(&g, &gov, &ledger, "validator-set amendment at height 1755");
+}
+
+#[test]
+#[ignore = "copied WAN ledger at checkpoint 1753"]
+fn exit_review4_export_root_genesis_schedule_is_incompatible() {
+    let (mut g, gov, _) = archived_parent();
+    // This genesis would have another hash and cannot use the WAN release.
+    g.external_lane_export_root_activation_height = Some(H + 9);
+    assert!(
+        crate::solana_exit_governance::verify_checkpoint_history(&g, &gov)
+            .unwrap_err()
+            .contains("1769")
+    );
 }
