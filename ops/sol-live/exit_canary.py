@@ -106,10 +106,11 @@ def balances(c):
     )
 
 
-def prepare(out):
+def prepare(out, *, allow_closed=False):
     r = requests.get(API + "/readiness", timeout=60).json()
     require(
-        r["ready"] and r["bucket_id"] == BUCKET and r["series_asset_id"] == SERIES,
+        (r["ready"] or (allow_closed and r["payout_ready"] and not r["burns_open"]))
+        and r["bucket_id"] == BUCKET and r["series_asset_id"] == SERIES,
         "Payout is unavailable",
     )
     before = balances(cluster())
@@ -327,17 +328,67 @@ def check(out):
     raise TimeoutError("Payout pending. Run check again with the same directory.")
 
 
+def settlement_state(status, paid):
+    (row,) = [r for r in status["redemptions"] if r["burn_tx_id"] == paid["burn_tx_id"]]
+    require(row["bucket_id"] == BUCKET and row["amount_atoms"] == 20000
+            and row["withdrawal_packet_hash"] == paid["withdrawal_packet_hash"],
+            "Settlement does not identify the original withdrawal packet.")
+    (bucket,) = [b for b in status["buckets"] if b["bucket_id"] == BUCKET]
+    supply = sum(a["remaining_atoms"] for a in status["allocations"]
+                 if a["purpose"] == "vault_bridge_supply" and a["bucket_id"] == BUCKET)
+    return dict(state=row["state"], settled=row["settled_atoms"], receipt=row["settlement_receipt_hash"],
+                counted=bucket["counted_value_atoms"], queue=bucket["redemption_queue_atoms"],
+                outstanding=bucket["outstanding_vault_bridge_atoms"], supply=supply)
+
+
+def check_settlement(before, after, amendment):
+    require(before["state"] == "pending" and before["settled"] == 0
+            and after["state"] == "settled" and after["settled"] == 20000
+            and after["receipt"] == amendment and after["outstanding"] == before["outstanding"]
+            and all(before[k] - after[k] == 20000 for k in ("counted", "queue", "supply")),
+            "Settlement receipt or revision-8 accounting differs.")
+
+
+def settlement(out, amendment=None, height=None):
+    from live import receipt_at
+    from exit_precheck import agreement
+
+    paid = read(out / "paid.json")
+    before_path = out / "settlement-before.json"
+    state = agreement(six(lambda i: settlement_state(rpc(i, "vault_bridge_status", asset_id=ASSET), paid)))
+    if amendment is None:
+        require(state["state"] == "pending" and state["settled"] == 0, "Expected pending redemption.")
+        if before_path.exists():
+            require(read(before_path) == state, "Pre-settlement accounting changed.")
+        else:
+            save(before_path, state)
+        return
+    require(re.fullmatch("[0-9a-f]{96}", amendment) and height, "Settlement ID and height required.")
+    receipts = receipt_at(amendment, height)
+    check_settlement(read(before_path), state, amendment)
+    save(out / "settled.json", dict(state=state, validators=receipts, amendment=amendment))
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action", choices=("prepare", "burn", "recover", "check"))
+    p.add_argument("action", choices=("preflight", "prepare", "burn", "recover", "check", "settlement-before", "settlement-check"))
     p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--amendment")
+    p.add_argument("--height", type=int)
     args = p.parse_args()
     os.umask(0o077)
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=True)
     with (out / "lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        if args.action == "prepare":
+        if args.action == "preflight":
+            save(out / "preflight.json", prepare(out, allow_closed=True))
+        elif args.action == "settlement-before":
+            settlement(out)
+        elif args.action == "settlement-check":
+            require(args.amendment and args.height, "Specify the accepted amendment and its height.")
+            settlement(out, args.amendment, args.height)
+        elif args.action == "prepare":
             require(
                 not (out / "sign-request.json").exists(),
                 "Existing signing attempt. Use check.",

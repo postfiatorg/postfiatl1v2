@@ -157,3 +157,28 @@ class HandoffTest(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 require_closed(v)
+
+    def test_canary_cutover_checklist_names_each_proof(self):
+        doc=(HERE/"RUNBOOK-LIVE.md").read_text()
+        checklist=doc.split("### Must be true before the real 0.02 pfUSDC test")[-1]
+        self.assertGreaterEqual(checklist.count("- [ ]"),9)
+        for text in ("tip-new.json","deploy-v0","prove-roles","/readiness/qualify","simulation.json",
+                     "service-proof","preflight","accepted.json","settlement-before","settlement-check"):
+            self.assertIn(text,checklist)
+
+    def test_settlement_reconciles_queue_supply_and_original_packet(self):
+        paid=dict(burn_tx_id="ab"*48,withdrawal_packet_hash="cd"*48)
+        bucket=dict(bucket_id=BUCKET,counted_value_atoms=30000,redemption_queue_atoms=20000,
+                    outstanding_vault_bridge_atoms=10000)
+        allocation=dict(bucket_id=BUCKET,purpose="vault_bridge_supply",remaining_atoms=30000)
+        red=dict(burn_tx_id=paid["burn_tx_id"],withdrawal_packet_hash=paid["withdrawal_packet_hash"],
+                 bucket_id=BUCKET,amount_atoms=20000,state="pending",settled_atoms=0,settlement_receipt_hash="")
+        snapshot=dict(buckets=[bucket],allocations=[allocation],redemptions=[red])
+        before=exit_canary.settlement_state(snapshot,paid)
+        bucket.update(counted_value_atoms=10000,redemption_queue_atoms=0)
+        allocation["remaining_atoms"]=10000
+        red.update(state="settled",settled_atoms=20000,settlement_receipt_hash="id")
+        after=exit_canary.settlement_state(snapshot,paid)
+        exit_canary.check_settlement(before,after,"id")
+        with self.assertRaises(ValueError):
+            exit_canary.check_settlement(before,dict(after,supply=1),"id")
