@@ -3233,6 +3233,11 @@ pub(super) fn verify_external_lane_amendment_admission(
     }
 }
 
+pub(super) fn requires_signed_pq_governance(batch: &GovernanceActionBatch) -> bool {
+    batch.amendments.iter().any(|a| postfiat_types::is_pq_rehearsal_kind(&a.kind)
+        || postfiat_types::pq_fee_withdraw_recipient(&a.kind).is_some())
+}
+
 pub(super) fn verify_live_signed_governance_batch(
     genesis: &Genesis,
     governance: &GovernanceState,
@@ -3278,6 +3283,11 @@ pub(super) fn verify_live_signed_governance_batch(
         .filter(|update| update.activation_height < proposal_slot)
         .count() as u64;
     for amendment in &batch.amendments {
+        if postfiat_types::is_pq_rehearsal_kind(&amendment.kind)
+            || postfiat_types::pq_fee_withdraw_recipient(&amendment.kind).is_some()
+        {
+            validate_governance_genesis_quorum(amendment.quorum, validators.len())?;
+        }
         verify_external_lane_amendment_admission(
             genesis,
             governance,

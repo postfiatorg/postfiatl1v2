@@ -345,6 +345,13 @@ fn verify_blocks_from_store(store: &NodeStore) -> io::Result<BlockVerificationRe
             )?;
         }
         verify_archived_payload(&genesis, block, archive_entry)?;
+        if block.header.batch_kind == "governance" {
+            let batch = parse_archived_payload(block, archive_entry)?;
+            if consensus_artifacts::requires_signed_pq_governance(&batch) {
+                verify_live_signed_governance_batch(&genesis, &certificate_governance,
+                    &certificate_validator_registry, &batch, block.header.height)?;
+            }
+        }
         update_governance_for_certificate_replay(
             &mut certificate_governance,
             &genesis,
@@ -3120,7 +3127,7 @@ pub(super) fn replay_archived_payload(
                     .vault_bridge_route_profile_activations
                     .iter()
                     .any(|activation| !activation.amendment.signed_authorizations.is_empty());
-            if has_v2_authorization {
+            if has_v2_authorization || consensus_artifacts::requires_signed_pq_governance(&batch) {
                 verify_live_signed_governance_batch(
                     genesis,
                     state.governance,

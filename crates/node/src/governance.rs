@@ -2669,7 +2669,9 @@ fn apply_governance_batch_internal(
         )?,
         None => fastpay_pre_state_effects_for_next_block(&store, &ledger)?,
     };
-    if historical_replay.is_none() && !allow_unsigned_test_fixture {
+    if (historical_replay.is_none() && !allow_unsigned_test_fixture)
+        || consensus_artifacts::requires_signed_pq_governance(&batch)
+    {
         let registry = due_activations.registry.clone().unwrap_or(
             read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?,
         );

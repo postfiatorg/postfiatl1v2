@@ -287,3 +287,37 @@ pub(super) fn benchmark(
         }
     }
 }
+
+#[test]
+fn pq_registry_threshold_applies_to_signed_schedule_and_withdrawal() {
+    let dir = unique_test_dir("pq-governance-threshold");
+    let genesis = rehearsal_genesis(&dir);
+    let store = NodeStore::new(&dir);
+    let governance = store.read_governance().unwrap();
+    let registry = read_validator_registry_file(&dir.join(VALIDATOR_REGISTRY_FILE)).unwrap();
+    let validators = active_validator_ids(&governance).unwrap();
+    let keys = read_validator_key_file(&dir.join(VALIDATOR_KEYS_FILE)).unwrap();
+    let split = super::consensus_history::write_split_validator_key_files(&dir, &keys);
+    for kind in [postfiat_types::PQ_REHEARSAL_V1, "pq_payment_rehearsal_v1:fee:1",
+                 &format!("pq_private_fee_withdraw_v1:pf{}", "22".repeat(20))] {
+        let mut config = EssentialSubsetConfig::all_of(validators.clone());
+        config.quorum = 1;
+        let mut amendment = ratify_governance_amendment_with_lifecycle(
+            &cobalt_domain(&genesis), &config, kind, 2, vec![validators[0].clone()],
+            GovernanceAmendmentLifecycle { activation_height: 0, veto_until_height: 0, paused: false },
+        ).unwrap();
+        let file = dir.join("amendment.json");
+        write_amendment_file(&file, &amendment).unwrap();
+        let authorization = sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+            data_dir: dir.clone(), amendment_file: file, validator: validators[0].clone(),
+            validator_key_file: split.iter().find(|(id, _)| id == &validators[0]).unwrap().1.clone(), proposal_slot: 1,
+            expires_at_height: 8, authorization_file: dir.join("authorization.json"),
+        }).unwrap();
+        amendment.signed_authorizations.push(authorization);
+        let batch = GovernanceActionBatch::new("test", vec![amendment]);
+        let error = verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, 1)
+            .expect_err("one signature cannot authorize PQ governance");
+        assert!(error.to_string().contains("BFT threshold"), "{error}");
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
