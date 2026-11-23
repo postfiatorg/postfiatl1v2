@@ -277,11 +277,9 @@ def profile_code(c, key):
 
 def main():
     from exit_precheck import (
-        accounts,
         agreement,
         archive_cmd,
-        bootstrap_history,
-        bootstrap_state,
+        recover_bootstrap,
         check_certificate,
         committee,
         qualify_path,
@@ -339,7 +337,12 @@ def main():
         agreed["activation"], profile, anchor_row, agreed["bucket"]
     )
     save(args.output.parent / "anchor-witness.json", archived)
-    path = qualify_path(archived["committee"], anchor_row, head, args.output.parent / "guest")
+    ix = build_initialize(config, c.owner)
+    check_reviewed_instruction(config, ix)
+    anchor = ix.accounts[3].pubkey
+    initialized = recover_bootstrap(c, config, ix, args.init_signature)
+    path = qualify_path(archived["committee"], anchor_row, head, args.output.parent / "guest",
+                        simulation_height=initialized["height"] if initialized else None)
     guest = path["guest"]
     if head["block_height"] == anchor_row["height"]:
         values = execute_guest(archived, args.output.parent / "guest")
@@ -347,9 +350,6 @@ def main():
                 (anchor_row["block"], anchor_row["committee"], anchor_row["height"]),
                 "Frozen guest disagrees with the archived anchor.")
         guest = dict(values, forward=False)
-    ix = build_initialize(config, c.owner)
-    check_reviewed_instruction(config, ix)
-    anchor = ix.accounts[3].pubkey
     evidence = dict(
         vault=vault,
         fleet_height=head["block_height"],
@@ -364,18 +364,8 @@ def main():
         instruction_hex=ix.data.hex(),
     )
 
-    def recover(sig=None):
-        slot, current = accounts(c, [LIGHT, anchor])
-        if bootstrap_state(config, current) == "initialized":
-            history = bootstrap_history(c, ix, sig or args.init_signature)
-            save(
-                args.output,
-                dict(evidence, signature=history, finalized_readback=True, slot=slot),
-            )
-            return True
-        return False
-
-    if recover():
+    if initialized:
+        save(args.output, dict(evidence, **initialized))
         print("Verified both initialized accounts and the finalized tag-3 transaction.")
         return
     block = Hash.from_string(
@@ -436,7 +426,9 @@ def main():
         require(deployment.pubkey() == VERIFIER, "incorrect program signer")
         require(parent_of(fleet()) == path["qualified_parent"], "Tip advanced. Repeat qualification.")
         sig = c.send("egress.initialize", [ix], deployment)
-        require(recover(sig), "Waiting for finalized bootstrap readback.")
+        initialized = recover_bootstrap(c, config, ix, sig)
+        require(initialized, "Waiting for finalized bootstrap readback.")
+        save(args.output, dict(record, **initialized))
     print(f"Simulation passed. Rent {rent} lamports, fee {fee} lamports.")
 
 

@@ -20,6 +20,8 @@ from exit_setup import (
     VAULT,
     VERIFIER,
     expected_light,
+    checkpoint_pda,
+    LIGHT,
     pda,
     pk,
     read,
@@ -364,16 +366,46 @@ def bootstrap_state(cfg, rows):
         for a in rows
     ):
         return "empty"
-    expected = [expected_light(cfg), bytes.fromhex(cfg["initial_committee"])]
-    require(
-        len(rows) == 2
-        and all(
-            a and not a["executable"] and a["owner"] == str(VERIFIER) and a["data"] == d
-            for a, d in zip(rows, expected)
-        ),
-        "Conflicting bootstrap accounts.",
-    )
+    require(len(rows) == 2 and all(a and not a["executable"] and a["owner"] == str(VERIFIER)
+                                   for a in rows), "Conflicting bootstrap accounts.")
+    require(rows[1]["data"] == bytes.fromhex(cfg["initial_committee"]),
+            "Conflicting original checkpoint.")
+    light_fields(cfg, rows[0])
     return "initialized"
+
+
+def light_fields(cfg, account):
+    expected = expected_light(cfg)
+    require(account and not account["executable"] and account["owner"] == str(VERIFIER),
+            "Unexpected light account owner.")
+    raw = account["data"]
+    require(len(raw) == len(expected) and raw[:-57] == expected[:-57] and raw[-1] in (0, 1),
+            "Conflicting immutable light fields.")
+    height = int.from_bytes(raw[-9:-1], "little")
+    block = raw[-57:-9].hex()
+    require(height >= cfg["initial_height"] and
+            ((height == cfg["initial_height"]) == (block == cfg["initial_checkpoint"])),
+            "Invalid latest checkpoint.")
+    return height, block
+
+
+def recover_bootstrap(c, cfg, ix, known=None):
+    keys = [LIGHT, checkpoint_pda(cfg["initial_checkpoint"])]
+    _, rows = accounts(c, keys)
+    if bootstrap_state(cfg, rows) == "empty":
+        return None
+    sig = bootstrap_history(c, ix, known)
+    height, block = light_fields(cfg, rows[0])
+    slot, snapshot = accounts(c, [*keys, checkpoint_pda(block)])
+    require(rows == snapshot[:2], "Light client changed during readback. Retry.")
+    (record,) = agreement(six(lambda i: rpc(i, "blocks", from_height=height, limit=1)))
+    h = record["header"]
+    cp = snapshot[2]
+    require((h["height"], h["block_hash"]) == (height, block)
+            and cp and not cp["executable"] and cp["owner"] == str(VERIFIER)
+            and cp["data"].hex() == committee(h), "Current checkpoint disagrees with finalized history.")
+    return dict(signature=sig, finalized_readback=True, slot=slot, block=block, height=height,
+                committee=committee(h), paused=bool(rows[0]["data"][-1]))
 
 
 def bootstrap_history(c, ix, known=None):

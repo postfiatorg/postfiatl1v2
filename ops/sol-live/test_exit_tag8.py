@@ -41,3 +41,18 @@ class Tag8Test(unittest.TestCase):
         self.assertFalse(any(bytes(tx.signatures[0])))
         self.assertEqual(tx.message.instructions[-1].data[0], 8)
         self.assertFalse(args[2]["sigVerify"])
+
+    def test_forward_simulation_starts_at_current_checkpoint(self):
+        from exit_tag8 import require_forward
+        cfg=s.read(s.CONFIG)
+        current="ab"*48
+        root="cd"*48
+        latest=1777
+        account=dict(owner=str(s.VERIFIER),executable=False,data=s.expected_light(cfg)[:-57]+bytes.fromhex(current)+latest.to_bytes(8,"little")+b"\0")
+        c=Mock()
+        c.account.return_value=dict(owner=str(s.VERIFIER),executable=False,data=bytes.fromhex(root))
+        vals=dict(prior=current,start=root,height=latest+1)
+        require_forward(c,cfg,account,vals)
+        c.account.assert_called_with(s.checkpoint_pda(current))
+        with self.assertRaises(ValueError):
+            require_forward(c,cfg,account,dict(vals,prior=cfg["initial_checkpoint"]))
