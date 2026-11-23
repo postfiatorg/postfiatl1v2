@@ -222,6 +222,32 @@ async function exercise() {
     }
     const start = validatorReads[w].length;
     await walletCall(p,'review','Review payment');
+    if (name === 'pft-01-alice-shield' || name === 'pfusdc-03-bob-second-spend') {
+      // Interrupt the browser before it can persist its first signer comparison.
+      const route = '**/local/pq/v1';
+      const interrupt = request => request.request().postDataJSON().cmd === 'complete_review'
+        ? request.fulfill({status:409, contentType:'application/json', body:'{"error":"Review interrupted"}'})
+        : request.continue();
+      await p.route(route, interrupt);
+      const saved = await walletCall(p,'prove','Confirm and prove locally');
+      await p.getByRole('alert').filter({hasText:'Review interrupted'}).waitFor();
+      await p.unroute(route, interrupt);
+      if (mode === 'Pay') {
+        // Recreate the restart state in which the daemon committed first.
+        await stop(bridges[w]);
+        run('python3', ['-c',
+          'import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); assert db.execute("DELETE FROM payments WHERE intent=?", (sys.argv[2],)).rowcount == 1; db.commit()',
+          path.join(scratch,w,'browser-payments.sqlite3'), saved.intent]);
+        await startBridge(w);
+      } else {
+        await p.reload();
+      }
+      await walletCall(p,'resume_review','Resume signer review');
+      const submitted = await walletCall(p,'submit','Confirm saved payment and send');
+      assert.equal(submitted.intent, saved.intent);
+      await check(w,saved.intent,name);
+      return;
+    }
     if (loseNextReply) {
       const submitted = action(p,'submit');
       await click(p,'Confirm and prove locally');
