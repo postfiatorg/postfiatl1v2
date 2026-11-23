@@ -1,4 +1,5 @@
 """Fund the operational fee payer once. Preserve the journal across releases."""
+
 import argparse
 import base64
 import fcntl
@@ -8,8 +9,18 @@ from pathlib import Path
 from solders.hash import Hash
 from solders.system_program import transfer
 from solders.transaction import Transaction
-from exit_setup import (CONFIG, DIRECTORY, ExitCluster, FEE_PAYER, MAINNET_PAYER,
-                        check_payout_authorities, prove_roles, read, require, save)
+from exit_setup import (
+    CONFIG,
+    DIRECTORY,
+    ExitCluster,
+    FEE_PAYER,
+    MAINNET_PAYER,
+    check_payout_authorities,
+    prove_roles,
+    read,
+    require,
+    save,
+)
 
 JOURNAL = Path.home() / "var/sol-exit/funding-attempt.json"
 
@@ -24,29 +35,55 @@ def fund(c, path):
             # Query history after the finalized expiry read, including on ambiguous sends.
             epoch = c.call("getEpochInfo", c.level)
             level["minContextSlot"] = epoch["absoluteSlot"]
-            history = c.call("getSignatureStatuses", [sig], {"searchTransactionHistory": True})
-            require(history["context"]["slot"] >= epoch["absoluteSlot"], "Signature history is behind finalized expiry observation.")
+            history = c.call(
+                "getSignatureStatuses", [sig], {"searchTransactionHistory": True}
+            )
+            require(
+                history["context"]["slot"] >= epoch["absoluteSlot"],
+                "Signature history is behind finalized expiry observation.",
+            )
             status = history["value"][0]
-            if status and status["confirmationStatus"] == "finalized" and status["err"] is None:
+            if (
+                status
+                and status["confirmationStatus"] == "finalized"
+                and status["err"] is None
+            ):
                 return sig
-            require(epoch["blockHeight"] > attempt["lastValidBlockHeight"] and
-                    (status is None or status["confirmationStatus"] == "finalized"),
-                    "Funding transaction pending. Reconcile again later.")
-        require(c.call("getBalance", str(FEE_PAYER), level)["value"] == 0,
-                "Existing recipient balance. Reconcile the prior transfer.")
+            require(
+                epoch["blockHeight"] > attempt["lastValidBlockHeight"]
+                and (status is None or status["confirmationStatus"] == "finalized"),
+                "Funding transaction pending. Reconcile again later.",
+            )
+        require(
+            c.call("getBalance", str(FEE_PAYER), level)["value"] == 0,
+            "Existing recipient balance. Reconcile the prior transfer.",
+        )
         recent = c.call("getLatestBlockhash", level)["value"]
-        ix = transfer(dict(from_pubkey=c.owner, to_pubkey=FEE_PAYER, lamports=100_000_000))
-        tx = Transaction.new_signed_with_payer([ix], c.owner, [c.payer], Hash.from_string(recent["blockhash"]))
+        ix = transfer(
+            dict(from_pubkey=c.owner, to_pubkey=FEE_PAYER, lamports=100_000_000)
+        )
+        tx = Transaction.new_signed_with_payer(
+            [ix], c.owner, [c.payer], Hash.from_string(recent["blockhash"])
+        )
         sig = str(tx.signatures[0])
-        save(path, dict(signature=sig, blockhash=recent["blockhash"],
-                        lastValidBlockHeight=recent["lastValidBlockHeight"]))
+        save(
+            path,
+            dict(
+                signature=sig,
+                blockhash=recent["blockhash"],
+                lastValidBlockHeight=recent["lastValidBlockHeight"],
+            ),
+        )
         fd = os.open(path.parent, os.O_DIRECTORY)
         try:
             os.fsync(fd)
         finally:
             os.close(fd)
-        result = c.call("sendTransaction", base64.b64encode(bytes(tx)).decode(),
-                        dict(encoding="base64", preflightCommitment="finalized", maxRetries=0))
+        result = c.call(
+            "sendTransaction",
+            base64.b64encode(bytes(tx)).decode(),
+            dict(encoding="base64", preflightCommitment="finalized", maxRetries=0),
+        )
         require(sig == result, "Funding signature differs from journal.")
         c.confirm([("exit.fund", sig)])
         return sig
