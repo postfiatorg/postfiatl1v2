@@ -21,9 +21,9 @@ def main():
     args=ap.parse_args();args.output.mkdir(parents=True,exist_ok=False)
     sys.path[:0]=[str(args.collector_repo),str(args.collector_repo/'tests')]
     from cryptography.hazmat.primitives import serialization
-    from navstrategies.yolo_indices import nav_reading as nav
-    from navstrategies.yolo_indices.canonical import canonical_json_bytes,domain_sha256
-    from navstrategies.yolo_indices.nitro_runtime import NitroStatementKeys
+    from pftl_schwab_tee import nav_reading as nav
+    from pftl_schwab_tee.canonical import canonical_json_bytes,domain_sha256
+    from pftl_schwab_tee.nitro_runtime import NitroStatementKeys
     from test_nav_reading import manifest as fixture_manifest,collect,PCRS
     import test_yolo_nitro_attestation as fixtures
 

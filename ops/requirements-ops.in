@@ -1,0 +1,13 @@
+# Interpreter for ops/ (B24 NAV reading, withdraw service) and
+# tools/nav-reserve-proof/schwab-tee operator side. Create with:
+#   python3 -m venv ~/repos/postfiatl1v2-live/.venv-ops
+#   ~/repos/postfiatl1v2-live/.venv-ops/bin/pip install -r ops/requirements-ops.txt
+asn1crypto==1.5.1
+boto3==1.34.46
+botocore==1.34.46
+cryptography==41.0.7
+eth-abi==5.2.0
+eth-account==0.13.7
+web3==7.16.0
+requests==2.31.0
+pytest

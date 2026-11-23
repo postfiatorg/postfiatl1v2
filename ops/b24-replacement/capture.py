@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 COORD = Path('/home/postfiat/repos/b23-coord')
-NAV = Path('/home/postfiat/repos/navstrategies-b23-tee-nav')
+NAV = Path(__file__).resolve().parents[2] / 'tools/nav-reserve-proof/schwab-tee'
 OUT = COORD / 'evidence/tee/phase4'
 NATIVE = Path('/mnt/HC_Volume_106212907/sec-fundamentals-proxy/b23-tee-nav-target/release/postfiat-b23-nav')
 CAP = Decimal('100.00')
@@ -30,8 +30,8 @@ def main():
     ap.add_argument('--execute', action='store_true')
     args = ap.parse_args()
     os.umask(0o077)
-    sys.path[:0] = [str(NAV), str(NAV/'containers/yolo-nitro/aws')]
-    spec = importlib.util.spec_from_file_location('nav_capture', NAV/'containers/yolo-nitro/aws/nav_reading_run.py')
+    sys.path[:0] = [str(NAV), str(NAV/'operator')]
+    spec = importlib.util.spec_from_file_location('nav_capture', NAV/'operator/nav_reading_run.py')
     runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
     plan = runner.reviewed_plan(load(OUT/'capture-plan.json'))
     manifest = load(OUT/'capture-manifest.json')
@@ -72,7 +72,7 @@ def main():
         runner.execute(plan,manifest,OUT/'capture',aws,
             profile_operation=load(OUT/'profile-template.json'),profile_cli=NATIVE)
         assert load(OUT/'capture/final-inventory.json')['noOwnedBillableComputeRemaining']
-        subprocess.run([str(NAV/'.venv/bin/python'),str(NAV/'containers/yolo-nitro/aws/verify_nav_archive.py'),
+        subprocess.run([sys.executable,str(NAV/'operator/verify_nav_archive.py'),
             '--capture',str(OUT/'capture'),'--recovery-key','/home/postfiat/.local/state/b23-tee-nav/recovery-20261113.pem',
             '--oauth-baseline',str(OUT/'oauth-baseline.json'),'--output',str(OUT/'archive-verification.json')],check=True)
         # This guard belongs only to this completed capture. Do not touch B23's daily timer.

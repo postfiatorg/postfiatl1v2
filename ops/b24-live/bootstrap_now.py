@@ -36,7 +36,7 @@ def main():
             capture=SEED;runner.execute(plan,manifest,capture,aws,profile_operation=load(DEPLOYMENT/'profile-template.json'),profile_cli=NATIVE,on_demand=True);assert load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']
             manifest=load(capture/'manifest.json');profile=load(capture/'profile.json');new_profile=manifest['proof_profile_id'];assert new_profile==profile['profile_id']!=old_profile
             print(json.dumps(dict(stage='captured',new_profile=new_profile,epoch=manifest['observation_epoch'])),flush=True)
-            helpers.command([sys.executable,NAV/'containers/yolo-nitro/aws/verify_nav_archive.py','--capture',capture,'--recovery-key',helpers.RECOVERY,'--oauth-baseline',d/'oauth-baseline.json','--output',d/'archive-verification.json'])
+            helpers.command([sys.executable,NAV/'operator/verify_nav_archive.py','--capture',capture,'--recovery-key',helpers.RECOVERY,'--oauth-baseline',d/'oauth-baseline.json','--output',d/'archive-verification.json'])
             helpers.command(['systemctl','--user','disable','--now',plan['cleanupTimer']])
             helpers.command([sys.executable,TOOLS/'qualify_reading.py','--capture',capture,'--collector-repo',NAV,'--native-cli',NATIVE,'--root-der',COORD/'evidence/tee/aws-nitro-root.der','--output',d/'negative-reading'])
             helpers.command([sys.executable,TOOLS/'prove_remote.py','--capture',capture,'--elf',helpers.ELF,'--native-cli',NATIVE,'--prover-cli',GPU_NATIVE,'--output',d/'proof'])

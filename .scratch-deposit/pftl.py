@@ -17,7 +17,7 @@ import subprocess
 import time
 from pathlib import Path
 
-ROOT = Path("/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch-deposit")
+ROOT = Path(__file__).resolve().parent
 NODE = ROOT / "bin/postfiat-node"          # byte-identical to the live release
 EVIDENCE = ROOT / "evidence"
 

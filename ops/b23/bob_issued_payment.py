@@ -3,7 +3,7 @@
 Usage: bob_issued_payment.py LABEL ASSET_ID DEST ATOMS   (chain.lock must contain MINT; release-4 signer)"""
 import json, sys
 from pathlib import Path
-sys.path.insert(0, "/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch-deposit")
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".scratch-deposit"))
 sys.path.insert(0, "/home/postfiat/repos/StakeHub")
 import pftl
 BOB = "pf5c266a1bdb18320e140961411a8c4d8383eaafb2"

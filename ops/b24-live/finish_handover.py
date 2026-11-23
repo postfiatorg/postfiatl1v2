@@ -20,7 +20,7 @@ def main():
     c['consumer_actions']['market_buy_sell']='Live native PFUSDC(S) order book: Alice lists 100 B24 at NAV 1. Requires B24 and market S trustlines. Wallet deployment is a separate WALLET-lane step.'
     c['consumer_actions']['cash_in']='9995/10000 of NAV for tracked native route inventory, limited by the matching reserve: 20 PFUSDC(F) currently funded. Book purchases/transfers do not update legacy route wallet inventory, so book buyers cannot cash in. No automatic broker withdrawal.'
     c['founder_entitlement'].update(status='1 B24 held within Alice inventory, outside the 100-B24 offer, pending founder trustline; not yet delivered or escrowed.',currently_held_B24_atoms=1000000)
-    here=Path(__file__).resolve().parent;python='/home/postfiat/repos/navstrategies-b23-tee-nav/.venv/bin/python'
+    here=Path(__file__).resolve().parent;python=sys.executable
     local=json.loads(subprocess.check_output([python,str(here/'daily.py'),'--check'],text=True));assert local['local_check'] and local['asset_id']==B24 and local['epoch']==2;save(OUT/'daily-local-check-at-enable.json',local)
     subprocess.run(['systemd-analyze','--user','verify',str(here/'b24-tee-nav-daily.service'),str(here/'b24-tee-nav-daily.timer')],check=True)
     units=Path.home()/'.config/systemd/user';units.mkdir(parents=True,exist_ok=True)

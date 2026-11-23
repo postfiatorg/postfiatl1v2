@@ -16,7 +16,7 @@ from snapshot import export
 from live import run_operations,LOCK
 from reading_alert import record_failure
 ROOT=Path(__file__).resolve().parents[2]
-NAV=Path('/home/postfiat/repos/navstrategies-now')
+NAV=ROOT/'tools/nav-reserve-proof/schwab-tee'
 DEPLOYMENT=COORD/'evidence/now/deployment'
 SEED=DEPLOYMENT/'capture'
 BASE=COORD/'evidence/tee/phase5'
@@ -36,7 +36,7 @@ helpers.NATIVE=NATIVE
 helpers.ELF=DEPLOYMENT/'b24-nav.elf'
 
 # b24-release5-20261117, ac91a1f42. Both processes on every validator must match.
-DAILY_NODE_SHA = '69de5ce01bbda92ac5507565388d9e9655457be9bdd37582efd5d38f969bcd18'
+DAILY_NODE_SHA = 'd46376ff131e941cd271632d79eb5cfe4a22269d31588bd24caddda962d3e39e'  # sol-exit-r1 (71dbc9b3, from main incl. B24 line)
 
 def require_runtime():
     paths=[SEED/'manifest.json',SEED/'profile.json',DEPLOYMENT/'profile-template.json',DEPLOYMENT/'capture-plan.json',NATIVE,GPU_NATIVE,helpers.ELF]
@@ -129,7 +129,7 @@ def collect(now,on_demand,d,mode,stamp,p):
     cost=runner.cost_preflight(aws,plan);p.stage='budget';budget=reserve_lane(plan['runId'],cost['resource_time_bound_usd'],now.strftime('%Y-%m'));save(d/'budget.json',budget);p.stage='oauth-baseline';helpers.oauth_baseline(d/'oauth-baseline.json')
     p.stage='capture';capture=d/'capture';runner.execute(plan,manifest,capture,aws,profile_operation=load(DEPLOYMENT/'profile-template.json'),profile_cli=NATIVE,on_demand=on_demand);assert load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']
     manifest=load(capture/'manifest.json')
-    p.stage='archive-verification';helpers.command([sys.executable,NAV/'containers/yolo-nitro/aws/verify_nav_archive.py','--capture',capture,'--recovery-key',helpers.RECOVERY,'--oauth-baseline',d/'oauth-baseline.json','--output',d/'archive-verification.json'])
+    p.stage='archive-verification';helpers.command([sys.executable,NAV/'operator/verify_nav_archive.py','--capture',capture,'--recovery-key',helpers.RECOVERY,'--oauth-baseline',d/'oauth-baseline.json','--output',d/'archive-verification.json'])
     p.stage='cleanup-timer';helpers.command(['systemctl','--user','disable','--now',plan['cleanupTimer']])
     p.stage='reading-qualification';helpers.command([sys.executable,TOOLS/'qualify_reading.py','--capture',capture,'--collector-repo',NAV,'--native-cli',NATIVE,'--root-der',COORD/'evidence/tee/aws-nitro-root.der','--output',d/'negative-reading'])
     p.stage='proof';helpers.command([sys.executable,TOOLS/'prove_remote.py','--capture',capture,'--elf',helpers.ELF,'--native-cli',NATIVE,'--prover-cli',GPU_NATIVE,'--output',d/'proof'])
@@ -172,8 +172,19 @@ def submit(d,capture,manifest,budget,p):
         finally:
             lock.seek(0)
             if lock.read().strip()=='NOW':lock.seek(0);lock.truncate();lock.flush()
+def resume(d,progress=None):
+    """Submit an already captured and proven reading; no AWS. Same lock, runtime check, rehearsal and landing check."""
+    p=progress or Progress();p.mode='resume';p.directory=d
+    p.stage='resume-inputs';capture=d/'capture'
+    for path in (capture/'manifest.json',capture/'final-inventory.json',d/'budget.json',d/'archive-verification.json',d/'negative-reading',d/'proof/public-values.bin',d/'proof/proof-calldata.bin'):
+        if not path.exists():raise FileNotFoundError(str(path))
+    if (d/'complete.json').exists():raise ValueError('reading already landed')
+    assert load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']
+    p.stage='pre-submit-runtime-check';runtime_check(d,'resume-runtimes.json')
+    if (d/'canary').exists():(d/'canary').rename(d/('canary-failed-'+datetime.now(timezone.utc).strftime('%Y%m%dt%H%M%S')))
+    submit(d,capture,load(capture/'manifest.json'),load(d/'budget.json'),p)
 def main():
-    ap=argparse.ArgumentParser(description=__doc__);g=ap.add_mutually_exclusive_group(required=True);g.add_argument('--check',action='store_true');g.add_argument('--execute',action='store_true');g.add_argument('--now',action='store_true');a=ap.parse_args();now=datetime.now(timezone.utc)
+    ap=argparse.ArgumentParser(description=__doc__);g=ap.add_mutually_exclusive_group(required=True);g.add_argument('--check',action='store_true');g.add_argument('--execute',action='store_true');g.add_argument('--now',action='store_true');g.add_argument('--resume',type=Path,help='Run directory with a captured, proven reading');a=ap.parse_args();now=datetime.now(timezone.utc)
     if a.check:
         require_runtime()
         seed=load(SEED/'manifest.json');m=helpers.reading_manifest(seed,max(int(now.timestamp()*1000)+120000,seed['cutoff_unix_ms']+1),seed['observation_height'],seed['observation_epoch'],seed['cutoff_unix_ms'])
@@ -182,5 +193,13 @@ def main():
         print(json.dumps(dict(local_check=True,asset_id=m['nav_asset_id'],profile=m['proof_profile_id'],epoch=m['observation_epoch'],cutoff_unix_ms=m['cutoff_unix_ms'],run_cap_usd='9',month_cap_usd='250',cumulative_lane_cap_usd='250',aws_calls=0,chain_writes=0)));return
     os.umask(0o077)
     def stop(signum,frame):raise SystemExit(128+signum)
-    signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop);run(now,a.now)
+    signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)
+    if a.resume:
+        progress=Progress()
+        try:resume(a.resume.resolve(),progress)
+        except BaseException as error:
+            if not (isinstance(error,SystemExit) and error.code in (0,None)):record_failure(progress.stage,error,progress.directory,progress.mode)
+            raise
+        return
+    run(now,a.now)
 if __name__=='__main__':main()
