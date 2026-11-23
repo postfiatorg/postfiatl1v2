@@ -37,7 +37,11 @@
 
     #[test]
     fn pq_governance_binds_the_fee_and_withdrawal_recipient() {
-        let domain = test_domain();
+        let domain = CobaltDomain {
+            chain_id: postfiat_types::PQ_REHEARSAL_CHAIN_ID.into(),
+            genesis_hash: postfiat_types::PQ_REHEARSAL_GENESIS_HASH.into(),
+            ..test_domain()
+        };
         let config = EssentialSubsetConfig::all_of(vec!["validator-0".into(), "validator-1".into()]);
         let schedule = "pq_payment_rehearsal_v1:fee:17".to_string();
         let withdrawal = format!("pq_private_fee_withdraw_v1:pf{}", "22".repeat(20));
@@ -48,7 +52,7 @@
             assert!(verify_governance_amendment(&domain, &amendment).is_err());
         }
         for suffix in ["", "0", "01", "+1", "-1", "18446744073709551616"] {
-            assert!(validate_amendment_kind(&format!("pq_payment_rehearsal_v1:fee:{suffix}")).is_err());
+            assert!(validate_domain_amendment_kind(&domain, &format!("pq_payment_rehearsal_v1:fee:{suffix}")).is_err());
         }
         assert!(validate_amendment_value(&schedule, 0).is_ok()); // Pause.
         assert!(validate_amendment_value(&withdrawal, 0).is_err());

@@ -207,7 +207,7 @@ fn validate_nonuniform_proposal(
     {
         return Err("non-uniform governance proposal domain mismatch".to_string());
     }
-    validate_amendment_kind(&proposal.kind)?;
+    validate_domain_amendment_kind(domain, &proposal.kind)?;
     validate_amendment_value(&proposal.kind, proposal.value)?;
     let expected_instance_id =
         nonuniform_governance_instance_id(domain, graph, &proposal.kind, proposal.value);
@@ -1463,7 +1463,7 @@ pub fn verify_governance_amendment(
     {
         return Err("governance amendment domain mismatch".to_string());
     }
-    validate_amendment_kind(&amendment.kind)?;
+    validate_domain_amendment_kind(domain, &amendment.kind)?;
     validate_amendment_value(&amendment.kind, amendment.value)?;
     let lifecycle = GovernanceAmendmentLifecycle {
         activation_height: amendment.activation_height,
@@ -1695,10 +1695,16 @@ fn build_cobalt_safety_witness_report(
     Ok(report)
 }
 
-fn validate_amendment_kind(kind: &str) -> Result<(), String> {
-    if postfiat_types::pq_rehearsal_fee(kind).is_some() || postfiat_types::pq_fee_withdraw_recipient(kind).is_some() {
+fn validate_domain_amendment_kind(domain: &CobaltDomain, kind: &str) -> Result<(), String> {
+    if postfiat_types::pq_rehearsal_domain(&domain.chain_id, &domain.genesis_hash)
+        && postfiat_types::pq_fee_governance_kind(kind)
+    {
         return Ok(());
     }
+    validate_amendment_kind(kind)
+}
+
+fn validate_amendment_kind(kind: &str) -> Result<(), String> {
     // Value 0 is in range, so this checks the kind alone; the value is
     // checked by `validate_amendment_value`.
     if let Some((code, message)) = postfiat_types::external_lane_amendment_refusal(kind, 0) {

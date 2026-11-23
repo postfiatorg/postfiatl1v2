@@ -2159,6 +2159,19 @@ pub(super) fn external_lane_amendment_authority_rejection(
     )
 }
 
+pub(super) fn pq_governance_domain_rejection(
+    amendment: &GovernanceAmendment, genesis: Option<&Genesis>,
+) -> Option<(&'static str, String)> {
+    if postfiat_types::pq_fee_governance_kind(&amendment.kind)
+        && !(postfiat_types::pq_rehearsal_domain(&amendment.chain_id, &amendment.genesis_hash)
+            && genesis.is_some_and(|g| postfiat_types::pq_rehearsal_domain(&g.chain_id, &genesis_hash(g))))
+    {
+        return Some(("unsupported_governance_amendment_kind",
+            format!("unsupported governance amendment kind `{}`", amendment.kind)));
+    }
+    None
+}
+
 /// The lifecycle checks, then the ones that read the genesis: every path that
 /// accepts an amendment (admission, batch building, execution, replay) runs it.
 pub(super) fn governance_amendment_rejection_with_genesis(
@@ -2166,7 +2179,8 @@ pub(super) fn governance_amendment_rejection_with_genesis(
     block_height: u64,
     genesis: Option<&Genesis>,
 ) -> Option<(&'static str, String)> {
-    governance_amendment_lifecycle_rejection(amendment, block_height)
+    pq_governance_domain_rejection(amendment, genesis)
+        .or_else(|| governance_amendment_lifecycle_rejection(amendment, block_height))
         .or_else(|| external_lane_export_root_consensus_v2_rejection(amendment, genesis))
 }
 

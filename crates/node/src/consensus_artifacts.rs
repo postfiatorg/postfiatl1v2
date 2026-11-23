@@ -3240,8 +3240,7 @@ pub(super) fn verify_external_lane_amendment_admission(
 }
 
 pub(super) fn requires_signed_pq_governance(amendment: &GovernanceAmendment) -> bool {
-    postfiat_types::pq_rehearsal_fee(&amendment.kind).is_some()
-        || postfiat_types::pq_fee_withdraw_recipient(&amendment.kind).is_some()
+    postfiat_types::pq_fee_governance_kind(&amendment.kind)
 }
 
 pub(super) fn requires_pq_registry(
@@ -3261,6 +3260,11 @@ pub(super) fn verify_live_signed_governance_batch(
     batch: &GovernanceActionBatch,
     proposal_slot: u64,
 ) -> io::Result<()> {
+    for amendment in &batch.amendments {
+        if let Some((_, message)) = crate::execution_actions::pq_governance_domain_rejection(amendment, Some(genesis)) {
+            return Err(invalid_data(message));
+        }
+    }
     verify_storage_commitment_action_bindings(genesis, batch)?;
     for activation in &batch.storage_commitment_activations {
         if activation.scheduling_block_height != proposal_slot {

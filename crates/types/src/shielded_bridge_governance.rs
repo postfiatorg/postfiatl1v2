@@ -89,6 +89,17 @@ pub fn pq_fee_withdraw_recipient(kind: &str) -> Option<&str> {
     Some(recipient)
 }
 
+pub const PQ_REHEARSAL_CHAIN_ID: &str = "postfiat-pfsh02-m1-disposable";
+pub const PQ_REHEARSAL_GENESIS_HASH: &str = "e9c735eecfc4550f152330b52f782de84eea2aa7d59dc7e9e317718ed2ba28473854f0cb7c6c972f7f2825ba944b72e8";
+
+pub fn pq_rehearsal_domain(chain: &str, genesis: &str) -> bool {
+    chain == PQ_REHEARSAL_CHAIN_ID && genesis == PQ_REHEARSAL_GENESIS_HASH
+}
+
+pub fn pq_fee_governance_kind(kind: &str) -> bool {
+    pq_rehearsal_fee(kind).is_some() || pq_fee_withdraw_recipient(kind).is_some()
+}
+
 /// Exact development source series selected by the rehearsal amendment.
 pub const PQ_REHEARSAL_ISSUE: &str = "bbf2fb96437f2e87ff3b470f19aa2455ae226ab810b06b64ab327b0daa71a2d1ad14638a107b7bbd3b0cf3a6f4d56269";
 /// Published M2 archive vector. Account settlement has no enabled route for this issue.

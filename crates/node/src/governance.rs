@@ -1536,12 +1536,12 @@ pub fn verify_governance_amendment_replay_bundle(
     };
     let mut seen_amendment_ids = HashSet::new();
     for amendment in &bundle.ordered_amendments {
+        verify_cobalt_governance_amendment(&domain, amendment)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         if consensus_artifacts::requires_signed_pq_governance(amendment) {
             return Err(io::Error::new(io::ErrorKind::InvalidData,
                 "PQ governance requires certified block replay with the historical validator registry"));
         }
-        verify_cobalt_governance_amendment(&domain, amendment)
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         if !seen_amendment_ids.insert(amendment.amendment_id.as_str()) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
