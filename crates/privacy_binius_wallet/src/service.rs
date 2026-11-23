@@ -60,7 +60,9 @@ pub fn execute(home: &Path, store: &Store, cmd: Value) -> Result<Value> {
         _ => (),
     }
     let mut w: Wallet = store.load(&path, STATE)?;
-    if w.import_pending()? { store.save(&path, STATE, &w, false)?; }
+    if w.import_pending()? {
+        store.save(&path, STATE, &w, false)?;
+    }
     let result = match text("op")? {
         "backup" => {
             store.save(&outside()?, BACKUP, &w.recovery, true)?;
