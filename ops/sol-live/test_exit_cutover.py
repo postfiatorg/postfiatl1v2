@@ -86,3 +86,14 @@ class CutoverTest(unittest.TestCase):
                             relay("navcoin-relay.service", user=True)
                 finally:
                     child.terminate()
+
+    def test_enabled_relay_requires_the_reviewed_entry_and_service_url(self):
+        from exit_cutover import relay_flag, relay_entry
+        relay_flag([b"L1_SOLANA_WITHDRAWALS_ENABLED=true",
+                    b"L1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089"], enabled=True)
+        with self.assertRaises(ValueError):
+            relay_flag([b"L1_SOLANA_WITHDRAWALS_ENABLED=true"], enabled=True)
+        root = Path("/tmp/reviewed")
+        relay_entry(root, ["node", "server/l1/relay.js"], root)
+        with self.assertRaises(ValueError):
+            relay_entry(root, ["node", "/other/server/l1/relay.js"], root)

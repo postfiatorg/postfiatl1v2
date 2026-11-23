@@ -184,6 +184,36 @@ Setup re-verifies the archived certificate and compares the authenticated commit
 
 The tag-3 instruction is 317 bytes. Its SHA-256 is `bb32524804b64a9d7d40fec86c9735f8c1f5d5d03d7a8a6963e8c21f83903fe4`. The dedicated pause authority is `ow7wprz3MPEN15BGLyNvdJr5AUq4LNZK2ox1gY1QEJx`. Its signing file stays offline from the payout service. Review the instruction, ordered accounts and simulated bindings in `unsigned.json`.
 
+### Install the reviewed Task Node gateway and relay before tag 3
+
+The reviewed withdrawal route is draft PR #429, branch `wallet/solana-withdraw`, at `56dbebb4672172c9f336dc95b831deb8281e3fd7`. The old resident relay returns 404 for withdrawals. On the trusted host stage a fresh detached checkout for the relay. Keep the flag explicitly false in its reviewed startup environment. Install the reviewed gateway through the Task Node production release procedure in `docs/releasing.md` once its approved main release contains these changes. Pin the running gateway image digest and its build ID to that release record. Inspect every serving gateway instance. Retain its existing authenticated relay upstream. On the trusted host point the user unit's WorkingDirectory and its Node entry point at the staged relay release, preserve the existing relay credentials by path and restart that relay into the disabled configuration. Do this only in the authorized release window.
+
+```bash
+TN_REVIEW=56dbebb4672172c9f336dc95b831deb8281e3fd7
+TN_RELAY="$KIT/tasknode-relay"
+git -C "$EXIT_WORK/tasknode-withdraw" worktree add --detach "$TN_RELAY" "$TN_REVIEW"
+(cd "$TN_RELAY" && npm ci && node --test server/l1/withdrawal-routes.test.mjs)
+GATEWAY=${GATEWAY:?set the authenticated public gateway HTTPS origin}
+GATEWAY_BUILD=${GATEWAY_BUILD:?set build ID from the reviewed deployed gateway image}
+RELAY_COOKIE_FILE=${RELAY_COOKIE_FILE:?set the existing session cookie jar path}
+RELAY_UNIT=${RELAY_UNIT:-navcoin-relay.service}
+test -r "$RELAY_COOKIE_FILE"
+verify_disabled() {
+  python3 ops/sol-live/exit_cutover.py relay-disabled --user --unit "$RELAY_UNIT" --release "$TN_RELAY" || return 1
+  curl -fsS --max-time 30 "$GATEWAY/health" |
+    jq -e --arg build "$GATEWAY_BUILD" '.ok and .buildId==$build' || return 1
+  local prefix="$GATEWAY/api/l1/bridge/solana/withdrawals" probe code
+  curl -fsS --max-time 30 -b "$RELAY_COOKIE_FILE" "$prefix/readiness" |
+    jq -e '.ok and .ready==false and .message=="Solana withdrawals are not available yet"' || return 1
+  probe=$(printf '%096d' 0)
+  code=$(curl -sS --max-time 30 -b "$RELAY_COOKIE_FILE" -o "$KIT/evidence/disabled-job.json"     -w '%{http_code}' "$prefix/$probe") || return 1
+  test "$code" = 503 && jq -e '.ok==false and .code=="solana_withdrawals_unavailable"' "$KIT/evidence/disabled-job.json"
+}
+verify_disabled
+```
+
+The authenticated job GET distinguishes the reviewed disabled route from a masked upstream 404. It creates no job. Keep the flag false through the paid canary and settlement.
+
 Fund the dedicated fee payer once. Preserve the journal at `~/var/sol-exit/funding-attempt.json` through retries and releases. This command persists the signature, blockhash and expiry before sending 0.10 SOL. After a timeout rerun it with the same journal and an RPC serving finalized transaction history. A pending signature blocks a second transfer.
 
 ```bash
@@ -263,16 +293,10 @@ python3 ops/sol-live/exit_canary.py preflight --output "$KIT/canary"
 
 ### Must be true before the real 0.02 pfUSDC test
 
-The resident navcoin-relay.service is in the postfiat user manager. Set an explicit false flag in its reviewed startup configuration and ensure it is effective before starting the canary. Set the authenticated public gateway origin and cookie-jar path from the reviewed deployment. Run on the trusted relay host. RELAY_UNIT must own the process behind that gateway. Freeze relay config and restarts through settlement. Repeat both checks if the process changes.
+Repeat the disabled relay checks from step 4 against the same deployed gateway and relay. Freeze both deployments through settlement.
 
 ```bash
-GATEWAY=${GATEWAY:?set the authenticated public gateway HTTPS origin}
-RELAY_COOKIE_FILE=${RELAY_COOKIE_FILE:?set the existing session cookie jar path}
-RELAY_UNIT=${RELAY_UNIT:-navcoin-relay.service}
-test -r "$RELAY_COOKIE_FILE"
-python3 ops/sol-live/exit_cutover.py relay-disabled --user --unit "$RELAY_UNIT"
-curl -fsS --max-time 30 -b "$RELAY_COOKIE_FILE" "$GATEWAY/api/l1/bridge/solana/withdrawals/readiness" |
-  jq -e '.ok and .ready==false and .message=="Solana withdrawals are not available yet"'
+verify_disabled
 ```
 
 Review the saved evidence for each completed step. Evaluate the final two checks at steps 8 and 9.
@@ -344,7 +368,18 @@ Require six accepted settlement receipts. On each validator verify that the orig
 
 Assign the settlement duty to the bridge operations on-call and the six resident validator signers before enabling public admission. The on-call reconciles each paid marker and pending L1 packet, obtains six independent attestations and verifies the queue, reserves and supply after every settlement. Use the paid CLI above only for the pinned canary. For other holders validators must independently check the actual owner, ATA, amount and ordinal and draft the corresponding paid amendment on their resident binary. Keep public admission disabled unless this duty is staffed and exercised for the expected traffic. The archived excess custody was 60,003 atoms. Four unsettled 20,000-atom payouts exceed it. On a backlog or missing signer close burns and restore settlement before resuming.
 
-After the canary's finalized payout and verified L1 settlement, set `L1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089` and `L1_SOLANA_WITHDRAWALS_ENABLED=true` in the reviewed relay deployment. Read readiness and the original paid job through the authenticated relay.
+After the canary's finalized payout and verified L1 settlement, set `L1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089` and `L1_SOLANA_WITHDRAWALS_ENABLED=true` in the reviewed relay deployment and restart that unit. Check its actual MainPID and the authenticated public job. Disable admission immediately if either check fails.
+
+```bash
+python3 ops/sol-live/exit_cutover.py relay-enabled --user --unit "$RELAY_UNIT" --release "$TN_RELAY"
+burn=$(jq -er '.burn_tx_id | select(test("^[0-9a-f]{96}$"))' "$KIT/canary/paid.json")
+sig=$(jq -er '.solana_tx | select(type=="string" and length>0)' "$KIT/canary/paid.json")
+prefix="$GATEWAY/api/l1/bridge/solana/withdrawals"
+curl -fsS --max-time 60 -b "$RELAY_COOKIE_FILE" "$prefix/readiness" | jq -e '.ok and .ready'
+curl -fsS --max-time 60 -b "$RELAY_COOKIE_FILE" "$prefix/$burn" |
+  tee "$KIT/evidence/public-paid-job.json" |
+  jq -e --arg burn "$burn" --arg sig "$sig" '.stage=="paid" and .burn_tx_id==$burn and .solana_tx==$sig'
+```
 
 ## Recovery
 
