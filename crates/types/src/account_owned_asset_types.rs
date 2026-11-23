@@ -3087,6 +3087,40 @@ impl VaultBridgeRedemption {
         burn_tx_id: impl Into<String>,
         created_at_height: u64,
     ) -> Result<Self, String> {
+        Self::new_for_exit(
+            false,
+            chain_id,
+            owner,
+            issuer,
+            asset_id,
+            bucket_id,
+            source_domain,
+            owner_sequence,
+            amount_atoms,
+            epoch,
+            reserve_packet_hash,
+            destination_ref,
+            burn_tx_id,
+            created_at_height,
+        )
+    }
+
+    pub fn new_for_exit(
+        solana_exit: bool,
+        chain_id: &str,
+        owner: impl Into<String>,
+        issuer: impl Into<String>,
+        asset_id: impl Into<String>,
+        bucket_id: impl Into<String>,
+        source_domain: impl Into<String>,
+        owner_sequence: u64,
+        amount_atoms: u64,
+        epoch: u64,
+        reserve_packet_hash: impl Into<String>,
+        destination_ref: impl Into<String>,
+        burn_tx_id: impl Into<String>,
+        created_at_height: u64,
+    ) -> Result<Self, String> {
         let owner = owner.into();
         let issuer = issuer.into();
         let asset_id = asset_id.into();
@@ -3095,19 +3129,31 @@ impl VaultBridgeRedemption {
         let reserve_packet_hash = reserve_packet_hash.into();
         let destination_ref = destination_ref.into();
         let burn_tx_id = burn_tx_id.into();
-        let (source_chain_id, vault_address, token_address) =
-            vault_bridge_evm_source_domain_parts(&source_domain)?;
-        let destination_chain_id =
-            vault_bridge_evm_chain_id_from_destination_ref(&destination_ref)?;
-        if source_chain_id != destination_chain_id {
-            return Err(
-                "vault_bridge_redemption source domain chain id must match destination_ref chain id"
-                    .to_string(),
-            );
-        }
-        let redemption_id =
-            vault_bridge_redemption_id(chain_id, &owner, &asset_id, owner_sequence)?;
-        let recipient = vault_bridge_evm_recipient_from_destination_ref(&destination_ref)?;
+        let (source_chain_id, vault_address, token_address, recipient, redemption_id) =
+            if solana_exit {
+                let (chain, vault, token, owner_alias) =
+                    solana_packet_destination(&source_domain, &destination_ref)?;
+                (
+                    chain,
+                    vault,
+                    token,
+                    owner_alias,
+                    vault_bridge_redemption_id(chain_id, &owner, &asset_id, owner_sequence)?,
+                )
+            } else {
+                let (chain, vault, token) = vault_bridge_evm_source_domain_parts(&source_domain)?;
+                if chain != vault_bridge_evm_chain_id_from_destination_ref(&destination_ref)? {
+                    return Err("vault_bridge_redemption source domain chain id must match destination_ref chain id".into());
+                }
+                let id = vault_bridge_redemption_id(chain_id, &owner, &asset_id, owner_sequence)?;
+                (
+                    chain,
+                    vault,
+                    token,
+                    vault_bridge_evm_recipient_from_destination_ref(&destination_ref)?,
+                    id,
+                )
+            };
         let destination_hash = vault_bridge_destination_ref_hash(&destination_ref)?;
         let evidence_root = vault_bridge_redemption_evidence_root(
             chain_id,
@@ -3256,8 +3302,14 @@ impl VaultBridgeRedemption {
                 "vault_bridge_redemption withdrawal packet finalized height mismatch".to_string(),
             );
         }
-        let expected_recipient =
-            vault_bridge_evm_recipient_from_destination_ref(&self.destination_ref)?;
+        let expected_recipient = if self.destination_ref.starts_with("solana-spl:") {
+            if self.withdrawal_packet.source_chain_id != SOLANA_EGRESS_PACKET_CHAIN {
+                return Err("Solana redemption has wrong packet domain".into());
+            }
+            solana_egress_packet_alias(solana_destination_parts(&self.destination_ref)?.1)?
+        } else {
+            vault_bridge_evm_recipient_from_destination_ref(&self.destination_ref)?
+        };
         if self.withdrawal_packet.recipient != expected_recipient {
             return Err("vault_bridge_redemption withdrawal packet recipient mismatch".to_string());
         }

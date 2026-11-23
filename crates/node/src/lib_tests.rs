@@ -41,6 +41,7 @@ mod tests {
     mod genesis_external_lane_tests;
     mod external_lane_amendment_tests;
     mod validator_registry_continuation_tests;
+    mod solana_exit;
     mod vault_bridge_governed_route;
     mod escrow_offer_quote_native_lock;
     mod account_tx_escrow_finish_row;

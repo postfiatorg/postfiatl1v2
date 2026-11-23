@@ -187,6 +187,26 @@ pub(super) fn ensure_validator_keys_for_validators(
     };
     validate_validator_key_file(&key_file)?;
 
+    let needs_generation = validators
+        .iter()
+        .any(|id| !key_file.validators.iter().any(|key| key.node_id == *id));
+    if (!registry_exists || needs_generation) && store.data_dir().join(GENESIS_FILE).try_exists()? {
+        // Bootstrap runs before the first commit. After that point only a
+        // certified transition or ordered recovery may install the registry.
+        let has_history = match store.read_chain_tip() {
+            Ok(tip) => tip.height > 0,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                !store.read_blocks()?.blocks.is_empty()
+            }
+            Err(error) => return Err(error),
+        };
+        if has_history {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "local key generation cannot install or extend a committed validator registry",
+            ));
+        }
+    }
     let mut changed = false;
     for node_id in validators {
         if key_file

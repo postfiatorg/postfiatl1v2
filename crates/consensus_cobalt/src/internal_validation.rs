@@ -1463,6 +1463,17 @@ pub fn verify_governance_amendment(
     {
         return Err("governance amendment domain mismatch".to_string());
     }
+    if postfiat_types::solana_exit::is_decision(&amendment.kind)
+        && (postfiat_types::solana_exit::release_height(&domain.chain_id, &domain.genesis_hash)
+            .is_none_or(|h| amendment.activation_height < h)
+            || amendment.value != 1
+            || amendment.paused
+            || amendment.quorum != amendment.validators.len())
+    {
+        return Err(
+            "Solana exit decision requires the scheduled release and unanimous governance".into(),
+        );
+    }
     validate_amendment_kind(&amendment.kind)?;
     validate_amendment_value(&amendment.kind, amendment.value)?;
     let lifecycle = GovernanceAmendmentLifecycle {
@@ -1696,6 +1707,12 @@ fn build_cobalt_safety_witness_report(
 }
 
 fn validate_amendment_kind(kind: &str) -> Result<(), String> {
+    if matches!(kind, postfiat_types::solana_exit::OPEN | postfiat_types::solana_exit::CLOSE | postfiat_types::solana_exit::RETIRE) {
+        return Ok(());
+    }
+    if kind.starts_with(postfiat_types::solana_exit::PAID) {
+        return postfiat_types::solana_exit::payout_fields(kind).map(|_| ());
+    }
     // Value 0 is in range, so this checks the kind alone; the value is
     // checked by `validate_amendment_value`.
     if let Some((code, message)) = postfiat_types::external_lane_amendment_refusal(kind, 0) {

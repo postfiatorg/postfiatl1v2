@@ -575,6 +575,13 @@ mod tests {
         let state = FastLaneStateV1::empty(fx.epoch1.domain.clone());
         let checkpoint = build_fastlane_checkpoint(&state, &ledger, None, 1).unwrap();
         assert!(checkpoint.drain_ready);
+        sign_checkpoint(fx, &checkpoint)
+    }
+
+    fn sign_checkpoint(
+        fx: &Fixture,
+        checkpoint: &postfiat_types::FastLaneCheckpointV1,
+    ) -> FastLaneCheckpointCertificateV1 {
         let votes = (0..5)
             .map(|index| {
                 let mut vote = FastLaneCheckpointVoteV1 {
@@ -592,6 +599,48 @@ mod tests {
             })
             .collect();
         FastLaneCheckpointCertificateV1 { votes }
+    }
+
+    #[test]
+    #[ignore = "release rehearsal at height 1760"]
+    fn exit_review5_fastlane_checkpoint_cannot_burn_revision8_reserves() {
+        let fx = fixture("revision8-fee");
+        let mut genesis = Genesis::new_with_validator_count("postfiat-wan-devnet-2", 6);
+        genesis.consensus_v2_activation_height = Some(1);
+        let asset_id = postfiat_types::FastAssetIdV1(
+            hex_to_bytes(postfiat_types::solana_exit::SERIES)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        );
+        let mut ledger = NodeStore::new(&fx.root).read_ledger().unwrap();
+        let mut committee = fx.epoch1.clone();
+        committee.domain.chain = chain_domain(&genesis).unwrap();
+        committee.domain.committee_root = committee.computed_root().unwrap();
+        ledger.fastswap_committees = vec![committee.clone()];
+        ledger
+            .fast_lane_reserves
+            .push(postfiat_types::FastLaneReserveBalanceV1 {
+                asset_id,
+                amount_atoms: 7,
+            });
+        let mut state = FastLaneStateV1::empty(committee.domain.clone());
+        state.pending_fee_burns.insert(asset_id, 7);
+        let checkpoint = build_fastlane_checkpoint(&state, &ledger, None, 1).unwrap();
+        let tx = postfiat_types::FastLanePrimaryTransactionV1 {
+            operation: postfiat_types::FastLanePrimaryOperationV1::AnchorCheckpoint {
+                certificate: sign_checkpoint(&fx, &checkpoint),
+            },
+        };
+        let run = |ledger: &mut LedgerState, h| {
+            crate::execution_actions::execute_fastlane_primary_for_chain(&genesis, ledger, &tx, h)
+        };
+        assert!(run(&mut ledger.clone(), 1759).accepted);
+        assert_eq!(
+            run(&mut ledger, 1760).code,
+            "solana_exit_unmatched_supply_change"
+        );
+        assert_eq!(ledger.fast_lane_reserves[0].amount_atoms, 7);
     }
 
     /// Executes `operation` as block execution does and asserts the RPC

@@ -1458,7 +1458,7 @@ fn apply_asset_orchard_ingress_action_to_state(
 
     let mut trial_ledger = ledger.clone();
     log_ingress_timing!("clone_ledger");
-    let burn_receipt = execute_asset_transaction_with_replay_compatibility(
+    let burn_receipt = postfiat_execution::execute_asset_orchard_ingress_burn(
         genesis,
         &mut trial_ledger,
         &payload.burn_transaction,
@@ -2085,6 +2085,21 @@ fn apply_asset_orchard_private_primary_action_to_state(
         .validate_nav_state(&genesis.chain_id)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     verify_shielded_state(&trial_shielded)?;
+    if postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
+        .is_some_and(|h| block_height >= h)
+    {
+        use postfiat_execution::SolanaExitAccounting;
+        let result = SolanaExitAccounting::read(ledger, shielded.asset_orchard_balances())
+            .and_then(|before| {
+                before.verify_change(&SolanaExitAccounting::read(
+                    &trial_ledger,
+                    trial_shielded.asset_orchard_balances(),
+                )?)
+            });
+        if let Err((code, message)) = result {
+            return reject(code, message);
+        }
+    }
     if allow_legacy_non_nav_spread_supply_omission {
         verify_global_issued_asset_supply_caps_legacy_non_nav_spread_omitted(
             &trial_ledger,

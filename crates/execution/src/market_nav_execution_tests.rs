@@ -2481,6 +2481,7 @@ fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
         &burn_operation,
         11,
         compatibility,
+        &[],
     )
     .expect("source-specific burn succeeds");
     assert_eq!(
