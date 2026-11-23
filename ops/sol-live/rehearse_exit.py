@@ -4,14 +4,13 @@ from contextlib import contextmanager
 import argparse
 import base64
 import hashlib
-import json
 from pathlib import Path
 import socket
 import subprocess
 import tempfile
 import threading
 import time
-from types import SimpleNamespace
+import exit_service
 from unittest.mock import patch
 
 import requests
@@ -134,7 +133,7 @@ def main():
     ]
     with tempfile.TemporaryDirectory(prefix="bank-", dir=evidence) as temp:
         path = Path(temp)
-        save(path / "payer.json", json.loads(pk.to_json()))
+
         save(path / "config.json", config)
         cmd = [
             args.validator.resolve(),
@@ -197,13 +196,15 @@ def main():
                     except requests.RequestException:
                         pass
                     time.sleep(0.5)
-                c = Cluster(
-                    SimpleNamespace(
-                        rpc=url,
-                        payer=path / "payer.json",
-                        log=evidence / "bank-transactions.jsonl",
-                    )
+                c = Cluster.__new__(Cluster)
+                c.rpc, c.http, c.payer, c.owner = (
+                    url,
+                    requests.Session(),
+                    pk,
+                    pk.pubkey(),
                 )
+                c.genesis = c.call("getGenesisHash")
+                c.log = evidence / "bank-transactions.jsonl"
                 c.level = {"commitment": "finalized"}
                 assert (
                     c.genesis != GENESIS
@@ -215,8 +216,15 @@ def main():
                     local_post_fiat(args.node, evidence, path, args.rpc_port + 4),
                     patch.object(payout, "CONFIG", path / "config.json"),
                     patch.object(payout, "cluster", lambda: c),
+                    patch.object(exit_service, "cluster", lambda: c),
+                    patch.object(
+                        exit_service,
+                        "service_readiness",
+                        return_value={"payout_ready": True},
+                    ),
                 ):
                     with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as http:
+                        http.admissions = exit_service.Admissions()
                         http.journal = Journal(path / "jobs.sqlite")
                         http.wake = threading.Event()
                         threading.Thread(target=http.serve_forever, daemon=True).start()
@@ -261,10 +269,27 @@ def main():
                             and vault_after == 980000
                             and c.account(payout.marker(txid))["data"] == b"\x01"
                         )
+                        sig, expiry = http.journal.attempt(txid)
+                        assert sig == job["solana_tx"] and expiry > 0
+                        finalized = c.call(
+                            "getTransaction",
+                            sig,
+                            dict(
+                                c.level,
+                                encoding="json",
+                                maxSupportedTransactionVersion=0,
+                            ),
+                        )
+                        from exit_canary import token_deltas
+
+                        deltas = token_deltas(finalized, owner)
                         save(
                             evidence / "local-payout.json",
                             dict(
                                 job=job,
+                                token_deltas=deltas,
+                                attempted_signature=sig,
+                                last_valid_height=expiry,
                                 ata=str(ata),
                                 before=0,
                                 after=after,

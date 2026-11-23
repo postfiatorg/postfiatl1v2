@@ -112,3 +112,48 @@ class HandoffTest(unittest.TestCase):
             self.assertIn("export OLD=" + release.OLD, (dest / "env").read_text())
             self.assertEqual((dest / "stage.sh").read_text(), f"source {dest}/env\n")
             self.assertFalse((dest / "stage").exists())
+
+    def test_cutover_keeps_burns_closed_until_service_qualified(self):
+        doc = (HERE / "RUNBOOK-LIVE.md").read_text()
+        headings = [line for line in doc.splitlines() if line.startswith("## ")]
+        order = [
+            "Qualify",
+            "Roll",
+            "Register",
+            "Precheck",
+            "Initialize",
+            "Verify",
+            "Install",
+            "Open",
+            "Pay",
+            "Enable",
+        ]
+        self.assertEqual(
+            [h.split(". ", 1)[-1].split()[0] for h in headings[:10]], order
+        )
+        self.assertLess(
+            doc.index("ratify-solana-exit-open"), doc.index("ratify-solana-exit-paid")
+        )
+        self.assertLess(
+            doc.index("ratify-solana-exit-paid"),
+            doc.index("L1_SOLANA_WITHDRAWALS_ENABLED=true"),
+        )
+        service = (HERE / "pft-sol-mainnet-withdraw.service").read_text()
+        self.assertIn("User=pf-sol-exit", service)
+        self.assertIn("ProtectHome=yes", service)
+
+    def test_open_requires_closed_routes_and_qualified_service(self):
+        from exit_govern import require_closed
+        from exit_setup import read
+
+        r = dict(
+            active=True, burns_open=False, profile_hash=EXIT, profile=read(PROFILE)
+        )
+        require_closed([r] * 6)
+        for v in (
+            [r] * 5,
+            [r] * 5 + [dict(r, burns_open=True)],
+            [dict(r, burns_open=None)] * 6,
+        ):
+            with self.assertRaises(ValueError):
+                require_closed(v)

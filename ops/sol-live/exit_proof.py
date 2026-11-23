@@ -2,16 +2,22 @@
 
 from datetime import datetime, timezone
 from functools import lru_cache
+import base64
+import os
+import shlex
 import hashlib
 import json
 from pathlib import Path
 import subprocess
-from uuid import uuid4
+
 
 HOST = "root@ssh8.vast.ai"
 PORT = "20628"
+GPU_LOCK = "/workspace/b23-gpu/prover.lock"
 REMOTE = "/workspace/b23-withdraw-20261116"
-LOCAL = Path.home() / "repos/b23-coord/evidence/withdraw"
+LOCAL = Path(
+    os.getenv("EXIT_PROOF_HOME", Path.home() / "repos/b23-coord/evidence/withdraw")
+)
 SSH = [
     "ssh",
     "-oBatchMode=yes",
@@ -54,11 +60,45 @@ def available():
     run(SSH + [f"test -x {REMOTE}/proof-host && test -s {REMOTE}/egress.elf"], 15)
 
 
+def remote_proof(kind, data):
+    # One fixed scratch path, exclusively under the existing GPU lock. An interrupted
+    # session leaves at most one directory, removed on the next lock acquisition.
+    script = f"""
+set -eu
+umask 077
+cd {REMOTE}
+job=jobs/sol-exit-worker
+mkdir -p jobs
+rm -rf -- "$job"
+mkdir "$job"
+trap 'rm -rf -- "$job"' EXIT
+cat > "$job/witness.json"
+SP1_PROVER=cuda RAYON_NUM_THREADS=4 timeout 1500 ./proof-host {kind} egress.elf "$job/witness.json" "$job/proof" prove > "$job/prove.log" 2>&1
+for file in public-values.bin proof-report.json proof-calldata.bin; do
+    test "$(wc -c < "$job/proof/$file")" -le 8192
+    base64 -w0 "$job/proof/$file"
+    echo
+done
+"""
+    command = f"flock -E 75 -n {shlex.quote(GPU_LOCK)} bash -c " + shlex.quote(script)
+    result = subprocess.run(
+        SSH + [command], input=data, capture_output=True, timeout=1550
+    )
+    if result.returncode:
+        raise RuntimeError("Withdrawal prover unavailable.")
+    lines = result.stdout.splitlines()
+    if len(lines) != 3:
+        raise ValueError("Incomplete proof response.")
+    return [base64.b64decode(line, validate=True) for line in lines]
+
+
 def prove(kind, witness, directory):
     if kind not in ("checkpoint", "withdrawal"):
         raise ValueError("unknown proof kind")
     verify_local_host()
     data = json.dumps(witness, separators=(",", ":")).encode()
+    if len(data) > 24 * 1024 * 1024:
+        raise ValueError("Witness exceeds the worker size limit.")
     work = directory / hashlib.sha256(data).hexdigest()
     work.mkdir(parents=True, exist_ok=True)
     source = work / "witness.json"
@@ -86,28 +126,22 @@ def prove(kind, witness, directory):
             raise RuntimeError(
                 "Proof host reserved for its scheduled job. Retry after 18:27 UTC."
             )
-        name = "sol-exit-" + uuid4().hex
-        job = f"{REMOTE}/jobs/{name}"
-        run(SSH + [f"mkdir -p {job}"], 15)
-        run(SCP + [source, f"{HOST}:{job}/witness.json"], 120)
-        # A failed lock acquisition never starts CUDA. The worker retains the burn for retry.
-        run(
-            SSH
-            + [
-                f"cd {REMOTE} && flock -E 75 -n /workspace/b23-gpu/prover.lock env SP1_PROVER=cuda "
-                f"RAYON_NUM_THREADS=4 timeout 1500 ./proof-host {kind} egress.elf {job}/witness.json {job}/proof prove >{job}/prove.log 2>&1"
-            ],
-            1550,
-        )
-        for filename in (
-            "public-values.bin",
-            "proof-report.json",
-            "proof-calldata.bin",
+        values, report, calldata = remote_proof(kind, data)
+        if (
+            values != native
+            or len(calldata) != 356
+            or not json.loads(report)["verified"]
         ):
-            path = work / filename
-            tmp = path.with_suffix(".partial")
-            run(SCP + [f"{HOST}:{job}/proof/{filename}", tmp], 90)
-            tmp.replace(path)
+            raise ValueError("Unverified proof response.")
+        for name, contents in (
+            ("public-values.bin", values),
+            ("proof-report.json", report),
+            ("proof-calldata.bin", calldata),
+        ):
+            path = work / name
+            temp = path.with_suffix(".partial")
+            temp.write_bytes(contents)
+            temp.replace(path)
     if (
         work / "public-values.bin"
     ).read_bytes() != native or proof.stat().st_size != 356:

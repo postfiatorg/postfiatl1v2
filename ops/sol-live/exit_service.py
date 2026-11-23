@@ -11,7 +11,22 @@ import sqlite3
 import threading
 import time
 
-from exit_payout import process, readiness
+from collections import deque
+from exit_payout import (
+    CheckpointAdvanced,
+    UnknownBurn,
+    PAID_NO_HISTORY,
+    prune_work,
+    ASSET,
+    BUCKET,
+    cluster,
+    finish_payment,
+    process,
+    readiness,
+    rpc,
+    signature,
+    validate_burn,
+)
 
 BASE = "/solana/withdrawals"
 BURN = re.compile("[0-9a-f]{96}")
@@ -30,11 +45,89 @@ def parse_request(data):
 
 class Journal:
     def __init__(self, path):
-        self.path = path
+        self.path = Path(path)
+        pointer = self.path.with_name("jobs.current")
+        if self.path.name == "jobs.sqlite" and pointer.exists():
+            name = json.loads(pointer.read_text())
+            if not isinstance(name, str) or not re.fullmatch(
+                r"jobs-recovered-[0-9]+\.sqlite", name
+            ):
+                raise ValueError("Invalid journal generation. Rebuild required.")
+            self.path = self.path.with_name(name)
+            if not self.path.is_file():
+                raise ValueError("Missing journal generation. Rebuild required.")
+        self.worker_ok = True
+        self.last_prune = 0
         with closing(self.connect()) as db:
             db.execute("""CREATE TABLE IF NOT EXISTS jobs (
                 burn_tx_id TEXT PRIMARY KEY, stage TEXT NOT NULL, detail TEXT, error TEXT,
                 amount_atoms TEXT, recipient TEXT, burn_height INTEGER, solana_tx TEXT)""")
+
+            columns = {r[1] for r in db.execute("PRAGMA table_info(jobs)")}
+            for name in ("due", "retries"):
+                if name not in columns:
+                    db.execute(
+                        f"ALTER TABLE jobs ADD COLUMN {name} INTEGER NOT NULL DEFAULT 0"
+                    )
+            db.execute("""CREATE TABLE IF NOT EXISTS attempts (
+                burn TEXT PRIMARY KEY, signature TEXT NOT NULL, expiry INTEGER NOT NULL)""")
+            db.execute("CREATE TABLE IF NOT EXISTS recovery (expiry INTEGER NOT NULL)")
+            db.commit()
+
+    def probe(self):
+        with closing(self.connect()) as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("SELECT stage FROM jobs LIMIT 1").fetchone()
+            db.rollback()
+
+    def attempt(self, burn):
+        with closing(self.connect()) as db:
+            row = db.execute(
+                "SELECT signature,expiry FROM attempts WHERE burn=?", (burn,)
+            ).fetchone()
+            return tuple(row) if row else None
+
+    def record_attempt(self, burn, sig, height):
+        with closing(self.connect()) as db, db:
+            db.execute(
+                "INSERT OR REPLACE INTO attempts VALUES(?,?,?)", (burn, sig, height)
+            )
+            db.execute("UPDATE jobs SET stage='paying' WHERE burn_tx_id=?", (burn,))
+
+    def waiting_for_expiry(self):
+        with closing(self.connect()) as db, db:
+            row = db.execute("SELECT expiry FROM recovery LIMIT 1").fetchone()
+            if row is None:
+                return False
+            c = cluster()
+            if c.call("getBlockHeight", c.level) <= row[0]:
+                return True
+            db.execute("DELETE FROM recovery")
+            return False
+
+    def next_due(self, burn):
+        with closing(self.connect()) as db:
+            return db.execute(
+                "SELECT due FROM jobs WHERE burn_tx_id=?", (burn,)
+            ).fetchone()[0]
+
+    def defer(self, burn, progress=False):
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            retries = db.execute(
+                "SELECT retries FROM jobs WHERE burn_tx_id=?", (burn,)
+            ).fetchone()[0]
+            delay = 1 if progress else min(300, 5 * 2 ** min(retries, 6))
+            db.execute(
+                """UPDATE jobs SET stage='queued', retries=?,due=?,error=NULL,detail=?
+                          WHERE burn_tx_id=? AND stage!='paid'""",
+                (
+                    0 if progress else retries + 1,
+                    int(time.time()) + delay,
+                    "Checkpoint advanced." if progress else "Retry scheduled.",
+                    burn,
+                ),
+            )
 
     def connect(self):
         db = sqlite3.connect(self.path, timeout=10)
@@ -46,9 +139,11 @@ class Journal:
             row = db.execute(
                 "SELECT * FROM jobs WHERE burn_tx_id=?", (burn,)
             ).fetchone()
-            return dict(row) if row else None
+            return public_row(row) if row else None
 
-    def enqueue(self, burn):
+    def enqueue(self, burn, *, rebuilding=False):
+        if not BURN.fullmatch(burn):
+            raise ValueError("Invalid burn ID.")
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute(
@@ -58,14 +153,15 @@ class Journal:
                 active = db.execute(
                     "SELECT count(*) FROM jobs WHERE stage NOT IN ('paid','failed')"
                 ).fetchone()[0]
-                if active >= 32:
+                total = db.execute("SELECT count(*) FROM jobs").fetchone()[0]
+                if not rebuilding and (active >= 32 or (row is None and total >= 1280)):
                     raise OverflowError("withdrawal queue is full")
                 db.execute(
-                    """INSERT INTO jobs(burn_tx_id,stage) VALUES(?,'queued')
-                    ON CONFLICT(burn_tx_id) DO UPDATE SET stage='queued', error=NULL, detail=NULL""",
-                    (burn,),
+                    """INSERT INTO jobs(burn_tx_id,stage,due) VALUES(?,'queued',?)
+                    ON CONFLICT(burn_tx_id) DO UPDATE SET stage='queued', error=NULL, detail=NULL, due=excluded.due""",
+                    (burn, int(time.time())),
                 )
-            return dict(
+            return public_row(
                 db.execute("SELECT * FROM jobs WHERE burn_tx_id=?", (burn,)).fetchone()
             )
 
@@ -82,34 +178,283 @@ class Journal:
     def pending(self):
         with closing(self.connect()) as db:
             row = db.execute(
-                "SELECT burn_tx_id FROM jobs WHERE stage NOT IN ('paid','failed') ORDER BY rowid LIMIT 1"
+                "SELECT burn_tx_id FROM jobs WHERE stage NOT IN ('paid','failed') AND due<=? ORDER BY due,rowid LIMIT 1",
+                (int(time.time()),),
             ).fetchone()
             return row[0] if row else None
 
 
+def public_row(row):
+    value = {
+        k: row[k]
+        for k in (
+            "burn_tx_id",
+            "stage",
+            "detail",
+            "error",
+            "amount_atoms",
+            "recipient",
+            "burn_height",
+            "solana_tx",
+        )
+    }
+    # Older journals may contain raw exception strings.
+    if value["error"]:
+        value["error"] = "Withdrawal processing failed."
+    if value["detail"] not in (
+        None,
+        "Retry scheduled.",
+        "Checkpoint advanced.",
+        "Finalized marker. Signature unavailable.",
+    ):
+        value["detail"] = None
+    return value
+
+
+def chain_payment(burn, known=None):
+    return signature(cluster(), burn, known)
+
+
+def checked_row(journal, burn):
+    row = journal.get(burn)
+    if row and row["stage"] == "paid":
+        known = row["solana_tx"] or (journal.attempt(burn) or (None,))[0]
+        result = chain_payment(burn, known)
+        if result is PAID_NO_HISTORY and known:
+            return dict(
+                row, solana_tx=None, detail="Finalized marker. Signature unavailable."
+            )
+        if result is None:
+            journal.update(burn, "queued", solana_tx=None, detail=None, error=None)
+        else:
+            finish_payment(
+                lambda stage, **kw: journal.update(burn, stage, **kw), result
+            )
+        return journal.get(burn)
+    return row
+
+
+def redemptions():
+    return rpc(0, "vault_bridge_status", asset_id=ASSET)["redemptions"]
+
+
+def restore_redemption(journal, row):
+    burn = row["burn_tx_id"]
+    owner = validate_burn(row, burn)
+    result = chain_payment(burn)
+    journal.enqueue(burn, rebuilding=True)
+    journal.update(
+        burn,
+        "queued",
+        burn_height=row["created_at_height"],
+        recipient=str(owner),
+        amount_atoms=str(row["amount_atoms"]),
+        solana_tx=None,
+        detail=None,
+        error=None,
+    )
+    if result:
+        finish_payment(lambda stage, **kw: journal.update(burn, stage, **kw), result)
+
+
+def rebuild(state):
+    import tempfile
+
+    from live import save
+
+    generation = "jobs-recovered-" + str(time.time_ns()) + ".sqlite"
+    with tempfile.TemporaryDirectory(dir=state) as tmp:
+        path = Path(tmp) / "recovered.sqlite"
+        journal = Journal(path)
+        for row in redemptions():
+            if row["bucket_id"] == BUCKET:
+                restore_redemption(journal, row)
+        with closing(journal.connect()) as db, db:
+            if journal.pending() is not None:
+                c = cluster()
+                expiry = c.call("getLatestBlockhash", c.level)["value"][
+                    "lastValidBlockHeight"
+                ]
+                db.execute("INSERT INTO recovery VALUES(?)", (expiry,))
+            if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                raise ValueError("Recovery integrity check failed.")
+        # SQLite sidecars belong to a specific database. Keep every old generation
+        # intact and select a separately fsynced database with a single atomic rename.
+        os.rename(path, state / generation)
+        directory_fd = os.open(state, os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        save(state / "jobs.current", generation)
+        fd = os.open(state, os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
 def process_next(journal, directory):
     burn = journal.pending()
-    if burn is None:
+    if burn is not None and not BURN.fullmatch(burn):
+        raise ValueError("Invalid journal entry. Rebuild required.")
+    if burn is None or journal.waiting_for_expiry():
         return False
     try:
         process(
             burn,
             directory / burn,
             lambda stage, **kw: journal.update(burn, stage, **kw),
+            attempt=journal.attempt(burn),
+            before_send=lambda sig, h: journal.record_attempt(burn, sig, h),
         )
-    except Exception as error:
-        journal.update(burn, "failed", error=str(error)[:400] or type(error).__name__)
+    except UnknownBurn:
+        journal.update(burn, "failed", error="Unknown finalized burn.")
+    except CheckpointAdvanced:
+        journal.defer(burn, progress=True)
+    except Exception:
+        journal.defer(burn)
     return True
+
+
+def prune_terminal(journal, directory, retain=1024):
+    with closing(journal.connect()) as db:
+        rows = db.execute(
+            """SELECT burn_tx_id,stage FROM jobs WHERE stage IN ('paid','failed')
+            ORDER BY rowid DESC LIMIT 8 OFFSET ?""",
+            (retain,),
+        ).fetchall()
+    burns = {r["burn_tx_id"]: r["stage"] for r in rows}
+    # Also recover rent stranded after a confirmed payout, even inside the retention window.
+    for path in directory.glob("[0-9a-f]" * 96):
+        row = journal.get(path.name)
+        if row and row["stage"] == "paid" and path.name not in burns:
+            if chain_payment(path.name, row["solana_tx"]):
+                prune_work(cluster(), path, reclaim=True)
+            break
+    for burn, stage in burns.items():
+        if not BURN.fullmatch(burn):
+            raise ValueError("Invalid journal entry. Rebuild required.")
+        result = chain_payment(burn)
+        if result is None and stage == "paid":
+            journal.update(burn, "queued", solana_tx=None, detail=None, error=None)
+            continue
+        if not result and any(r["burn_tx_id"] == burn for r in redemptions()):
+            continue
+        path = directory / burn
+        if path.exists():
+            prune_work(cluster(), path, reclaim=True)
+            if path.exists():
+                continue
+        with closing(journal.connect()) as db, db:
+            db.execute("DELETE FROM attempts WHERE burn=?", (burn,))
+            db.execute("DELETE FROM jobs WHERE burn_tx_id=? AND stage=?", (burn, stage))
 
 
 def worker(journal, directory, wake):
     while True:
-        if not process_next(journal, directory):
+        try:
+            working = process_next(journal, directory)
+            if time.monotonic() - journal.last_prune > 60:
+                journal.last_prune = time.monotonic()
+                prune_terminal(journal, directory)
+            journal.worker_ok = True
+        except Exception:
+            journal.worker_ok = False
+            working = False
+        if not working:
             wake.wait(2)
             wake.clear()
 
 
+class Admissions:
+    def __init__(self, limit=12):
+        self.limit = limit
+        self.times = deque()
+        self.lock = threading.Lock()
+
+    def take(self):
+        with self.lock:
+            now = time.monotonic()
+            while self.times and self.times[0] <= now - 60:
+                self.times.popleft()
+            if len(self.times) >= self.limit:
+                return False
+            self.times.append(now)
+            return True
+
+
+def local_healthy(server):
+    if not server.thread.is_alive() or not server.journal.worker_ok:
+        return False
+    try:
+        server.journal.probe()
+    except (sqlite3.Error, OSError):
+        return False
+    return True
+
+
+def service_readiness(server):
+    if not local_healthy(server):
+        return dict(
+            ok=True,
+            ready=False,
+            payout_ready=False,
+            message="Withdrawal worker or journal unavailable.",
+        )
+    with server.ready_lock:
+        if time.monotonic() >= server.valid_until:
+            server.ready = readiness()
+            server.valid_until = time.monotonic() + 5
+        return server.ready
+
+
+class WithdrawalServer(ThreadingHTTPServer):
+    request_queue_size = 16
+
+    def __init__(self, address, handler):
+        self.slots = threading.BoundedSemaphore(8)
+        super().__init__(address, handler)
+
+    def process_request(self, request, address):
+        if not self.slots.acquire(blocking=False):
+            try:
+                request.settimeout(0.1)
+                request.sendall(
+                    b'HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Type: application/json\r\n\r\n{"error":"Withdrawal service busy."}'
+                )
+            except OSError:
+                pass
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, address)
+        except BaseException:
+            self.slots.release()
+            raise
+
+    def process_request_thread(self, request, address):
+        try:
+            super().process_request_thread(request, address)
+        finally:
+            self.slots.release()
+
+    def start_worker(self):
+        self.thread = threading.Thread(
+            target=worker, args=(self.journal, self.state, self.wake), daemon=True
+        )
+        self.thread.start()
+
+    def service_actions(self):
+        if not self.thread.is_alive():
+            self.start_worker()
+
+
 class Handler(BaseHTTPRequestHandler):
+    def log_request(self, code="-", size="-"):
+        # User-controlled request targets never enter the service log.
+        pass
+
     def setup(self):
         super().setup()
         self.connection.settimeout(8)
@@ -124,18 +469,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == BASE + "/readiness":
-            with self.server.ready_lock:
-                if time.monotonic() >= self.server.valid_until:
-                    self.server.ready = readiness()
-                    self.server.valid_until = time.monotonic() + 5
-                return self.reply(200, self.server.ready)
+            return self.reply(200, service_readiness(self.server))
         prefix = BASE + "/"
         if not self.path.startswith(prefix):
             return self.reply(404, dict(error="unknown path"))
         burn = self.path[len(prefix) :]
         if not BURN.fullmatch(burn):
             return self.reply(400, dict(error="invalid burn_tx_id"))
-        row = self.server.journal.get(burn)
+        try:
+            row = checked_row(self.server.journal, burn)
+        except Exception:
+            return self.reply(503, dict(error="Settlement status unavailable."))
         return (
             self.reply(200, row) if row else self.reply(404, dict(error="unknown job"))
         )
@@ -153,11 +497,36 @@ class Handler(BaseHTTPRequestHandler):
         if int(size) > 256:
             return self.reply(413, dict(error="body too large"))
         try:
-            row = self.server.journal.enqueue(parse_request(self.rfile.read(int(size))))
-        except (UnicodeError, ValueError) as error:
-            return self.reply(400, dict(error=str(error)))
-        except OverflowError as error:
-            return self.reply(429, dict(error=str(error)))
+            burn = parse_request(self.rfile.read(int(size)))
+        except (UnicodeError, ValueError):
+            return self.reply(400, dict(error="Invalid burn request."))
+        try:
+            row = checked_row(self.server.journal, burn)
+            if row and row["stage"] != "failed":
+                return self.reply(200 if row["stage"] == "paid" else 202, row)
+            if not self.server.admissions.take():
+                return self.reply(
+                    429, dict(error="Withdrawal admission rate exceeded.")
+                )
+            status = service_readiness(self.server)
+            if not status.get("accepting_jobs", status.get("payout_ready")):
+                return self.reply(503, dict(error="Withdrawal worker unavailable."))
+            red = next(
+                (
+                    r
+                    for r in redemptions()
+                    if r["burn_tx_id"] == burn and r["bucket_id"] == BUCKET
+                ),
+                None,
+            )
+            if red is None:
+                return self.reply(404, dict(error="Unknown finalized burn."))
+            validate_burn(red, burn)
+            row = self.server.journal.enqueue(burn)
+        except OverflowError:
+            return self.reply(429, dict(error="Withdrawal queue full."))
+        except Exception:
+            return self.reply(503, dict(error="Withdrawal admission unavailable."))
         self.server.wake.set()
         self.reply(200 if row["stage"] == "paid" else 202, row)
 
@@ -168,24 +537,30 @@ def main():
     p.add_argument(
         "--state", type=Path, default=Path.home() / ".local/state/postfiat/sol-exit"
     )
+    p.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="recover journal from L1 and finalized Solana markers",
+    )
     args = p.parse_args()
     os.umask(0o077)
     args.state.mkdir(parents=True, exist_ok=True)
     import fcntl
 
-    with (
-        (args.state / "worker.lock").open("a") as lock,
-        ThreadingHTTPServer(("127.0.0.1", args.port), Handler) as server,
-    ):
+    with (args.state / "worker.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        server.journal = Journal(args.state / "jobs.sqlite")
-        server.ready_lock = threading.Lock()
-        server.valid_until = 0
-        server.wake = threading.Event()
-        threading.Thread(
-            target=worker, args=(server.journal, args.state, server.wake), daemon=True
-        ).start()
-        server.serve_forever()
+        if args.rebuild:
+            rebuild(args.state)
+            return
+        with WithdrawalServer(("127.0.0.1", args.port), Handler) as server:
+            server.state = args.state
+            server.journal = Journal(args.state / "jobs.sqlite")
+            server.ready_lock = threading.Lock()
+            server.valid_until = 0
+            server.admissions = Admissions()
+            server.wake = threading.Event()
+            server.start_worker()
+            server.serve_forever()
 
 
 if __name__ == "__main__":

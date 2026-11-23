@@ -1,12 +1,27 @@
 [Unit]
-Description=Solana USDC withdrawal jobs on loopback port 18089
+Description=Solana USDC withdrawal worker on loopback port 18089
+After=network-online.target
 
 [Service]
-WorkingDirectory=%h/repos/postfiatl1v2-live
-ExecStart=/usr/bin/python3 -u ops/sol-live/exit_service.py
+User=pf-sol-exit
+Group=pf-sol-exit
+WorkingDirectory=/opt/postfiat/sol-exit
+Environment=HOME=/var/lib/pf-sol-exit
+Environment=EXIT_FEE_KEY=/var/lib/pf-sol-exit/fee-payer.json
+Environment=EXIT_PROOF_HOME=/opt/postfiat/sol-exit/proof
+Environment=EXIT_ANCHOR_WITNESS=/opt/postfiat/sol-exit/anchor-witness.json
+ExecStart=/opt/postfiat/sol-exit/venv/bin/python -u ops/sol-live/exit_service.py --state /var/lib/pf-sol-exit/jobs --port 18089
+StateDirectory=pf-sol-exit
+StateDirectoryMode=0700
 UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
 Restart=on-failure
 RestartSec=5
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
