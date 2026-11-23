@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import re
 import subprocess
 from pathlib import Path
 from exit_setup import (
@@ -56,9 +57,17 @@ def rotation_clearance(head):
     from govern import remote
 
     require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
-    rows = six(lambda i: json.loads(remote(i, [
-        "cat", "/etc/postfiat/sol-exit-rotation-clearance.json"
-    ])))
+    def inspect(i):
+        directory = f"/var/lib/postfiat/validator-{i}/consensus-v2-safety"
+        files = remote(i, ["find", directory, "-maxdepth", "1", "-type", "f",
+                           "-name", "*.json", "-printf", "%f\\n"]).splitlines()
+        require(files, f"Missing resident signing history on validator-{i}.")
+        for name in files:
+            match = re.fullmatch(r"epoch-\d+-[a-f0-9]{96}-height-(\d+)\.json", name)
+            require(match and int(match[1]) <= head["block_height"],
+                    f"Unknown or uncommitted signing round on validator-{i}.")
+        return json.loads(remote(i, ["cat", "/etc/postfiat/sol-exit-rotation-clearance.json"]))
+    rows = six(inspect)
     for i, row in enumerate(rows):
         require(
             row["validator"] == f"validator-{i}"
