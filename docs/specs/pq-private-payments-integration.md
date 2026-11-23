@@ -405,24 +405,24 @@ rerun on CPU 12 took 36.41 ms for that check and passed all seven original gates
 
 ## M7. Expose the wallet flow and keep Orchard usable · 3–6 days
 
-- [ ] Extend `wallet-proxy/{private-actions,server}.js`, `crates/wallet_wasm/src/lib.rs` and
+- [x] Extend `wallet-proxy/{private-actions,server}.js`, `crates/wallet_wasm/src/lib.rs` and
   `wallet-web/src/App.jsx`. Route PQ snapshot/submit/receipt through a versioned contract using the same
   canonical statement vectors as Rust and Python. Build the browser's local, authenticated wallet-daemon
   connection with origin and session checks. Keep witnesses and recipient scanning on the user device. WASM
   can encode/check addresses and review/sign exact account terms locally. A hosted proxy never receives the
   wallet seed. Show public and private balances per issue, fee payer, proof progress, finality and the three
   actions **Shield**, **Pay**, **Unshield**.
-- [ ] Show the asset/issue, fees, public deposit or exit account and amount, and any sponsor. The submission
+- [x] Show the asset/issue, fees, public deposit or exit account and amount, and any sponsor. The submission
   service can observe the caller and timing. Use measured activity for the selected issue and route when
   applying the [observer model](../privacy/observer-inference-model.md) and
   [privacy floors](../privacy/floor-calibration.md). Show “hidden, small pool” where appropriate. A large
   aggregate count across issues gives no privacy evidence for one thin pool.
-- [ ] Keep `crates/privacy_orchard/src/{lib,asset_orchard}.rs` and its legacy reader separate. Use different
+- [x] Keep `crates/privacy_orchard/src/{lib,asset_orchard}.rs` and its legacy reader separate. Use different
   pool IDs, committed state, serialization, keys and scan routes. Migration takes two transactions. Authorize
   an Orchard exit to a public account, wait for finality, then sign a fresh PQ shield. Display the publicly
   linkable amounts, fees and existing exit restrictions. Prevent automatic re-shield retries after uncertain
   finality. Copying historical commitments, reserves or wallet keys would bypass the PQ deposit check.
-- [ ] **Merge test.** Extend
+- [x] **Merge test.** Extend
   `wallet-proxy/{test_private_actions,test_legacy_shielded_certification_node_binary}.js` and add
   `wallet-web/scripts/test-pq-payments.mjs`. Drive two user sessions through both assets and verify the
   recipient's second spend and exit against validator receipts. Cover proxy/node allowlist agreement,
@@ -430,6 +430,24 @@ rerun on CPU 12 took 36.41 ms for that check and passed all seven original gates
   sync. Run the old Orchard wallet flow and a policy-permitted exit → PQ shield, including a stop/restart
   between steps. Reconcile public and both pool reserves. Verify historical Orchard-only snapshot and
   ciphertext recovery separately.
+
+The [local browser wallet](../wallets/shielded-wallet.md#pfsh02-browser-wallet) uses the M6 daemon
+for proof generation and account signing, including its check of the shield output openings. WASM
+encodes and checks receive addresses and reviews the signed action before relay. The gateway’s PQ
+route checks the canonical statement and retains the primary validator’s first acknowledgment.
+
+The [Chromium merge test](../../wallet-web/scripts/test-pq-payments.mjs) finalized ten actions on a
+disposable chain. Two validator RPC stores independently admitted the public actions and applied the
+same locally assembled certificate. Each asset completed shield, pay, recipient spend and withdrawal.
+The test recovered the historical Orchard ciphertext, restarted after the exit submission and again
+with the new shield pending. Public / PQ / Orchard source-series atoms went from 31 / 60 / 9 to
+40 / 60 / 0 to 31 / 69 / 0. The family supply stayed at 110. The test captured
+[the thin-pool warning](../evidence/pq-private-payments-m7/thin-pool.png) and
+[the pending shield after restart](../evidence/pq-private-payments-m7/migration-04b-await-shield-finality.png).
+
+The original Orchard wallet flow, all seven standalone checks and the 1,734-block R64 replay passed.
+The separate portable validator benchmark still had shared-host timing outliers on a pinned rerun
+(PFT, one accepted payment, median 37.12 ms, p95 54.28 ms). Hardware qualification remains in M8.
 
 ## M8. Qualify the release and activation · 4–7 days plus independent review
 
