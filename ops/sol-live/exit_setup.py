@@ -22,6 +22,7 @@ from bridge import (
 )
 import requests
 from exit_keys import load
+from solders.signature import Signature
 from solders.hash import Hash
 from solders.message import Message
 from solders.transaction import Transaction
@@ -90,6 +91,32 @@ def prove_roles(config):
             address=str(expected), challenge_hex=challenge.hex(), signature=str(sig)
         )
     return dict(tag3_sha256=digest, nonce=nonce, roles=roles)
+
+
+def verify_role_record(config, record):
+    digest = hashlib.sha256(b"\x03" + encode(config)).hexdigest()
+    nonce = record["nonce"]
+    require(config["pause_authority"] == bytes(PAUSE).hex() and record["tag3_sha256"] == digest
+            and len(bytes.fromhex(nonce)) == 32, "Wrong role-proof binding.")
+    for role, address in (("fee_payer", FEE_PAYER), ("pause_authority", PAUSE)):
+        expected = f"postfiat.sol-exit.offline-possession.v1/{digest}/{nonce}/{role}/{address}".encode()
+        proof = record["roles"][role]
+        require(proof["address"] == str(address) and proof["challenge_hex"] == expected.hex()
+                and Signature.from_string(proof["signature"]).verify(address, expected),
+                f"Invalid saved {role} possession proof.")
+
+
+def require_installed_self_test(config):
+    # Both files and their parent directories are controlled by the system installer.
+    roles = Path("/opt/postfiat/sol-exit/roles.json")
+    log = Path("/var/log/pf-sol-exit/self-test.log")
+    for path in (roles, log):
+        st = path.stat()
+        require(path.is_file() and not path.is_symlink() and st.st_uid == 0
+                and st.st_mode & 0o022 == 0, "Invalid system self-test evidence.")
+    verify_role_record(config, read(roles))
+    marker = "service-proof verified " + hashlib.sha256(roles.read_bytes()).hexdigest()
+    require(log.read_text().splitlines()[-1:] == [marker], "Complete the installed archive self-test first.")
 
 
 def check_payout_authorities(c):
@@ -462,7 +489,7 @@ def main():
             "waiting for governed series on six validators",
         )
         inspect_vault(c)
-        prove_roles(config)
+        require_installed_self_test(config)
         c.unlock(DIRECTORY / "mainnet-payer.json")
         deployment = load(DIRECTORY / "egress-verifier.json")
         require(deployment.pubkey() == VERIFIER, "incorrect program signer")
