@@ -249,14 +249,43 @@ fn export_local_solana_exit_chain() {
         },
     )
     .unwrap();
-    store.write_blocks(&blocks).unwrap();
-    let mut tip = store.read_chain_tip().unwrap();
+    let source = NodeStore::new("/var/lib/postfiat/validator-3");
+    let mut history = source.read_blocks().unwrap();
+    assert_eq!(
+        history.blocks.last().unwrap().header.block_hash,
+        blocks.blocks[0].header.parent_hash
+    );
+    history.blocks.extend(blocks.blocks.iter().cloned());
+    let mut ordered = source.read_ordered_batches().unwrap();
+    ordered.extend(blocks.blocks.iter().map(|b| b.header.batch_id.clone()));
+    let mut tip = source.read_chain_tip().unwrap();
     tip.height = witness.block.header.height;
     tip.block_hash = witness.block.header.block_hash.clone();
     tip.state_root = witness.block.header.state_root.clone();
-    tip.receipt_count = 1;
-    tip.history_base_height = blocks.blocks[0].header.height - 1;
+    tip.history_base_height = 0;
+    tip.ordered_batch_count = ordered.len() as u64;
+    tip.receipt_count = history
+        .blocks
+        .iter()
+        .map(|b| b.receipt_ids.len() as u64)
+        .sum();
+    // All append-file heads in this offline fixture must bind to the same fork tip.
     store.write_chain_tip(&tip).unwrap();
+    store.write_ordered_batches(&ordered).unwrap();
+    let tail = history.blocks.split_off(history.blocks.len() / 2);
+    store.write_blocks(&history).unwrap();
+    for block in tail {
+        store.append_block(block).unwrap();
+    }
+    store
+        .write_storage_backend_mode(postfiat_storage::StorageBackendMode::LegacyJsonl)
+        .unwrap();
+    let reconstructed = crate::storage_commit::reconstruct_chain_tip_for_genesis(
+        &store,
+        &store.read_genesis().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(tip, reconstructed);
     let exported = crate::pfusdc_egress_witness(crate::PfUsdcEgressWitnessOptions {
         data_dir: store.data_dir().to_owned(),
         withdrawal_id: witness.withdrawal_packet.withdrawal_id.clone(),
