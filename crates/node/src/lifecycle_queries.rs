@@ -3459,19 +3459,25 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
     let genesis = store.read_genesis()?;
     let ledger = read_fastpay_ledger(&store)?;
     let tip = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?;
-    let node_id = match store.read_node_state() {
-        Ok(state) => Some(state.node_id),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
-        Err(error) => return Err(error),
+    // Only on request: a gateway that groups answers by everything but
+    // `height` and `state_root` must never see the per-node fields.
+    let (node_id, inventory_revision) = if options.include_inventory_revision {
+        let node_id = match store.read_node_state() {
+            Ok(state) => Some(state.node_id),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error),
+        };
+        let revision = OwnedObjectsInventoryRevision {
+            finalized_height: tip.height,
+            fastpay_sequence: u64::try_from(ledger.fastpay_version_fences.len())
+                .map_err(invalid_data)?,
+            incarnation: inventory_incarnation(&options.data_dir)?,
+        };
+        (node_id, Some(revision))
+    } else {
+        (None, None)
     };
-    let incarnation = inventory_incarnation(&options.data_dir)?;
     drop(commit_lock);
-    let inventory_revision = OwnedObjectsInventoryRevision {
-        finalized_height: tip.height,
-        fastpay_sequence: u64::try_from(ledger.fastpay_version_fences.len())
-            .map_err(invalid_data)?,
-        incarnation,
-    };
     let mut objects = ledger
         .owned_objects
         .into_iter()
@@ -3537,7 +3543,7 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
         state_root: tip.state_root,
         view_digest,
         owner_keys_omitted: options.omit_owner_keys,
-        inventory_revision: Some(inventory_revision),
+        inventory_revision,
         inventory_revision_unavailable: None,
         node_id,
     };

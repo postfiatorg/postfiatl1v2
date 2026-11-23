@@ -4245,8 +4245,9 @@ fn rpc_serve_owned_lane_admits_legacy_applies(
     })
 }
 
-/// Keeps `inventory_revision` only where every admitted object mutation
-/// advances it; otherwise replaces it with the reason.
+/// Keeps a requested `inventory_revision` only where every admitted object
+/// mutation advances it; otherwise replaces it with the reason. A page read
+/// without `include_inventory_revision` has neither and stays as it is.
 fn gate_owned_objects_inventory_revision(
     result: &mut serde_json::Value,
     legacy_applies_admitted: bool,
@@ -4255,7 +4256,9 @@ fn gate_owned_objects_inventory_revision(
         return;
     }
     if let Some(result) = result.as_object_mut() {
-        result.remove("inventory_revision");
+        if result.remove("inventory_revision").is_none() {
+            return;
+        }
         result.insert(
             "inventory_revision_unavailable".to_string(),
             serde_json::json!(OWNED_OBJECTS_REVISION_LEGACY_APPLIES),

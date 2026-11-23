@@ -2772,6 +2772,9 @@ pub struct OwnedObjectsOptions {
     /// Omit `owner_pubkey_hex` from each object (the key is the top-level
     /// `owner_public_key_hex`).
     pub omit_owner_keys: bool,
+    /// Add `node_id` and `inventory_revision` (or the reason it is
+    /// unavailable). Without it the page has the shape it had before them.
+    pub include_inventory_revision: bool,
     /// Lowers the page byte bound below `OWNED_OBJECTS_PAGE_MAX_BYTES`;
     /// never raises it. Not an RPC parameter.
     pub max_page_bytes: Option<usize>,
