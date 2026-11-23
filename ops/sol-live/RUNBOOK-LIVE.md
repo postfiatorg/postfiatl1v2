@@ -202,15 +202,14 @@ app=/opt/postfiat/sol-exit
 svc=/var/lib/pf-sol-exit
 id pf-sol-exit >/dev/null 2>&1 || sudo useradd --system --user-group --home-dir "$svc" --shell /usr/sbin/nologin pf-sol-exit
 sudo install -d -m700 -o pf-sol-exit -g pf-sol-exit "$svc"
-sudo install -d -m755 "$app" "$app/proof/bin" "$app/proof/historical"
-git archive HEAD ops/sol-live solana/deploy solana/pfusdc-egress-verifier/bootstrap.py crates/types/src/solana_exit_profile.json | sudo tar -x -C "$app" --no-same-owner
-sudo install -m755 "$HOME/repos/b23-coord/evidence/withdraw/bin/proof-host" "$app/proof/bin/proof-host"
-sudo install -m644 "$HOME/repos/b23-coord/evidence/withdraw/historical/egress.elf" "$app/proof/historical/egress.elf"
-sudo install -m644 "$KIT/evidence/solana/anchor-witness.json" "$app/anchor-witness.json"
-sudo python3 -m venv "$app/venv"
-sudo "$app/venv/bin/pip" install solders==0.28.0 base58==2.1.1 requests==2.31.0
+git archive HEAD ops/sol-live solana/deploy solana/pfusdc-egress-verifier/bootstrap.py crates/types/src/solana_exit_profile.json |
+  sudo bash ops/sol-live/install-exit-runtime.sh "$app" "$HOME/repos/b23-coord/evidence/withdraw" "$KIT/evidence/solana/anchor-witness.json"
+sudo -u pf-sol-exit env HOME="$svc" PYTHONPATH="$app/ops/sol-live" EXIT_PROOF_HOME="$app/proof" \
+  "$app/venv/bin/python" -c 'import exit_service; from exit_proof import verify_local_host; verify_local_host()'
 fee="$HOME/.config/postfiat/sol-bridge/exit-fee-payer.json"
-test -f "$fee" && test ! -L "$fee" && test "$(stat -c %a "$fee")" = 600
+test -f "$fee"
+test ! -L "$fee"
+test "$(stat -c %a "$fee")" = 600
 test "$(stat -c %d "$fee")" = "$(stat -c %d "$svc")"
 sudo test ! -e "$svc/fee-payer.json"
 sudo mv -T "$fee" "$svc/fee-payer.json"
@@ -220,7 +219,7 @@ sudo install -m644 ops/sol-live/pft-sol-mainnet-withdraw.service /etc/systemd/sy
 sudo systemctl daemon-reload
 sudo systemctl enable --now pft-sol-mainnet-withdraw.service
 export API=http://127.0.0.1:18089/solana/withdrawals
-curl -fsS "$API/readiness" | tee "$KIT/evidence/closed-readiness.json" | jq -e '.payout_ready and (.burns_open==false) and (.ready==false)'
+python3 ops/sol-live/exit_cutover.py wait-closed --api "$API" --seconds 600 > "$KIT/evidence/closed-readiness.json"
 ```
 
 The same-filesystem move places the original fee-payer inode under the service account. On recovery use the already-provisioned key after checking its owner, mode and public address. `ProtectHome=yes` hides the operator's home from the unit. The withdrawal journal is under `/var/lib/pf-sol-exit/jobs`. The Ethereum service and faucet keep their existing ports.
@@ -241,6 +240,18 @@ python3 ops/sol-live/exit_canary.py preflight --output "$KIT/canary"
 ```
 
 ### Must be true before the real 0.02 pfUSDC test
+
+Set the authenticated public gateway origin and cookie-jar path from the reviewed deployment. Run on the trusted relay host. RELAY_UNIT must own the process behind that gateway. Freeze relay config and restarts through settlement. Repeat both checks if the process changes.
+
+```bash
+GATEWAY=${GATEWAY:?set the authenticated public gateway HTTPS origin}
+RELAY_COOKIE_FILE=${RELAY_COOKIE_FILE:?set the existing session cookie jar path}
+RELAY_UNIT=${RELAY_UNIT:-navcoin-relay.service}
+test -r "$RELAY_COOKIE_FILE"
+sudo python3 ops/sol-live/exit_cutover.py relay-disabled --unit "$RELAY_UNIT"
+curl -fsS --max-time 30 -b "$RELAY_COOKIE_FILE" "$GATEWAY/api/l1/bridge/solana/withdrawals/readiness" |
+  jq -e '.ok and .ready==false and .message=="Solana withdrawals are not available yet"'
+```
 
 Check the first eight lines before opening. Perform the last two at their numbered steps. Keep the public relay disabled until settlement passes.
 
