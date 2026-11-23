@@ -106,12 +106,10 @@ HEIGHT
   CARGO_TARGET_DIR="$KIT/interlock-target" cargo test --locked --release -p postfiat-node --lib --no-run --message-format=json > "$KIT/evidence/interlock-build.jsonl"
 )
 testbin=$(jq -r 'select(.target.name=="postfiat_node" and .executable)|.executable' "$KIT/evidence/interlock-build.jsonl")
-for case in exit_review_open_checks_checkpoint_history exit_review_close_drain_rotate_and_reopen exit_review_registration_holds_rotation_until_open_or_retired; do
+python3 ops/sol-live/exit_review_gate.py "$KIT/evidence" \
   docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges -u "$(id -u):$(id -g)" \
     -v "$ARCHIVE:/var/lib/postfiat/validator-3" -v "$FAUCET:/var/lib/postfiat/validator-3/faucet_account.json:ro" -v "$INTEGRITY:/var/lib/postfiat/validator-3/.integrity.key:ro" \
-    -v "$testbin:/opt/test:ro" ubuntu:24.04 /opt/test "tests::solana_exit::$case" --ignored --exact | tee "$KIT/evidence/$case.log"
-  grep -Fq '1 passed; 0 failed' "$KIT/evidence/$case.log"
-done
+    -v "$testbin:/opt/test:ro" ubuntu:24.04 /opt/test | tee "$KIT/evidence/exit-review-count.log"
 ```
 
 ## 2. Roll validator 0, then the other five
