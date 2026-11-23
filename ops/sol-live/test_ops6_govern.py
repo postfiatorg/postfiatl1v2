@@ -36,10 +36,9 @@ class GovernanceTest(unittest.TestCase):
             g.main()
 
     def test_open_requires_clearance_for_candidate_parent(self):
-        import requests
         self.mock(g, "ethereum")
         self.mock(g, "require_open_accounting")
-        self.mock(requests, "get").return_value.json.return_value = dict(
+        self.mock(g, "qualify").return_value = dict(
             payout_ready=True, burns_open=False, bucket_id=g.BUCKET,
             qualified_parent=g.parent_of(self.head))
         clearance = self.mock(g, "rotation_clearance", side_effect=ValueError("stale clearance"))

@@ -238,7 +238,6 @@ class QualificationTest(unittest.TestCase):
 
     def test_open_requalifies_if_tip_moves_during_service_scan(self):
         import exit_govern as g
-        import requests
 
         old = dict(
             block_height=8,
@@ -250,15 +249,13 @@ class QualificationTest(unittest.TestCase):
         route = dict(active=True, burns_open=True, profile_hash=setup.EXIT, current_height=9,
                      source_backing=dict(revision=8, bucket_id=setup.BUCKET, policy_hash=setup.POLICY,
                                          series_supply_atoms=100, outstanding_vault_bridge_atoms=100))
-        responses = [Mock(), Mock()]
-        responses[0].json.return_value = dict(payout_ready=False)
-        responses[1].json.return_value = dict(
+        responses = [dict(payout_ready=False), dict(
             payout_ready=True,
             burns_open=False,
             bucket_id=setup.BUCKET,
             qualified_parent=pre.parent_of(new),
             series_supply_atoms="100", bucket_outstanding_atoms="100",
-        )
+        )]
         current = [old]
 
         def get(*args, **kw):
@@ -274,7 +271,7 @@ class QualificationTest(unittest.TestCase):
             patch.object(g, "ethereum"),
             patch.object(g, "require_closed"),
             patch.object(g, "six", return_value=[route] * 6),
-            patch.object(requests, "get", side_effect=get),
+            patch.object(g, "qualify", side_effect=get),
             patch.object(g, "verify_open_parent"),
             patch.object(g, "rotation_clearance") as clearance,
             patch.object(g, "govern", return_value={"tx_id": "id"}) as submit,

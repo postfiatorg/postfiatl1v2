@@ -19,6 +19,7 @@ from exit_setup import (
 )
 from govern import govern, ParentChanged, read_operator_review
 from exit_precheck import parent_of
+from exit_qualification_socket import qualify
 
 ETH_HASH = "29c91daa1c8d707ea3245db091976219266c5deca82b2d4571fafb221fd2dd092eb8833a28f4422bf0b4bbde44069e28"
 
@@ -193,19 +194,12 @@ def main():
         require(all(r["current_height"] == head["block_height"] for r in routes)
                 and parent_of(fleet()) == parent_of(head), "Recovery parent changed.")
     if args.action == "open":
-        import requests
-
         for _ in range(3):
             candidate = fleet()
             start = parent_of(candidate)
             closed = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
             require_closed(closed)
-            status = requests.get(
-                "http://127.0.0.1:18089/solana/withdrawals/readiness/qualify",
-                timeout=600,
-            )
-            status.raise_for_status()
-            state = status.json()
+            state = qualify()
             if start != parent_of(fleet()):
                 continue
             require(

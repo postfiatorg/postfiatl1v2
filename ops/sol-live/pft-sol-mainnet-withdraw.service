@@ -11,7 +11,9 @@ Environment=EXIT_FEE_KEY=/var/lib/pf-sol-exit/fee-payer.json
 Environment=EXIT_PROVER_SSH=system
 Environment=EXIT_PROOF_HOME=/opt/postfiat/sol-exit/proof
 Environment=EXIT_ANCHOR_WITNESS=/opt/postfiat/sol-exit/anchor-witness.json
-ExecStart=/opt/postfiat/sol-exit/venv/bin/python -u ops/sol-live/exit_service.py --state /var/lib/pf-sol-exit/jobs --port 18089
+ExecStart=/opt/postfiat/sol-exit/venv/bin/python -u ops/sol-live/exit_service.py --state /var/lib/pf-sol-exit/jobs --port 18089 --qualification-socket
+RuntimeDirectory=pf-sol-exit
+RuntimeDirectoryMode=0711
 ReadWritePaths=/var/lib/pf-sol-exit/jobs
 LimitCORE=0
 UMask=0077

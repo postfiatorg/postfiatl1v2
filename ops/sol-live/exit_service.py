@@ -1,7 +1,7 @@
 """Loopback Task Node withdrawal queue backed by a durable SQLite journal."""
 
 import argparse
-from contextlib import closing
+from contextlib import closing, ExitStack
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -586,6 +586,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--qualification-socket", action="store_true",
+                   help="serve authenticated open qualification in /run/pf-sol-exit")
     p.add_argument("--port", type=int, default=18089)
     p.add_argument(
         "--state", type=Path, default=Path.home() / ".local/state/postfiat/sol-exit"
@@ -613,7 +615,14 @@ def main():
             server.admissions = Admissions()
             server.wake = threading.Event()
             server.start_worker()
-            server.serve_forever()
+            with ExitStack() as listeners:
+                if args.qualification_socket:
+                    import exit_qualification_socket
+
+                    listeners.enter_context(exit_qualification_socket.serve(
+                        exit_qualification_socket.SOCKET, lambda: service_readiness(server, fresh=True)
+                    ))
+                server.serve_forever()
 
 
 if __name__ == "__main__":

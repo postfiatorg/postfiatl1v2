@@ -363,14 +363,14 @@ Review the saved evidence for each completed step. Evaluate the final two checks
 - [ ] Registration is confirmed closed on all six. The integrated registration hold regression passed and operators cleared outstanding signed rotations before final qualification.
 - [ ] prove-roles verified both signatures before staging the fee key. The unsigned setup contains six current rotation clearances.
 - [ ] Readback confirms the exact finalized tag 3. Tag-8 simulation.json confirms both account bodies.
-- [ ] service-proof.log records a fresh verified proof under the installed identity. Require fresh closed payout readiness at /readiness/qualify.
+- [ ] service-proof.log records a fresh verified proof under the installed identity. Require fresh closed payout readiness from the worker socket.
 - [ ] The closed preflight confirms spendable fee reserve and 20,000 revision-8 atoms. The running flag is explicitly false and the authenticated public request returned the disabled response.
 - [ ] open-accepted.json records six accepted receipts at the qualified parent's successor. Hold rotations through these receipts.
 - [ ] The one original burn pays. settlement-before and settlement-check reconcile six receipts, the finalized payout reference and accounting before public enablement.
 
 ```bash
 grep -Fxq 'service-proof verified' "$KIT/evidence/service-proof.log"
-curl -fsS --max-time 600 "$API/readiness/qualify" | jq -e '.payout_ready and (.burns_open==false) and (.qualified_parent != null) and (.series_supply_atoms | type == "string") and (.series_supply_atoms == .bucket_outstanding_atoms) and (.relayer_lamports >= .relayer_floor_lamports + .payout_budget_lamports)'
+PYTHONPATH="$PWD/ops/sol-live" python3 -c 'import json; from exit_qualification_socket import qualify; print(json.dumps(qualify()))' | jq -e '.payout_ready and (.burns_open==false) and (.qualified_parent != null) and (.series_supply_atoms | type == "string") and (.series_supply_atoms == .bucket_outstanding_atoms) and (.relayer_lamports >= .relayer_floor_lamports + .payout_budget_lamports)'
 ```
 
 ### Staff and rehearse settlement before the first open
@@ -388,7 +388,7 @@ jq -e '.height==(.qualified_parent.block_height+1) and (.validators|length)==6 a
 curl -fsS "$API/readiness/qualify" | tee "$KIT/evidence/open-readiness.json" | jq -e '.ready and .burns_open'
 ```
 
-Qualification brackets the accounting reads with the same six-way height, hash and root. All six revision-8 route reports must show the full series supply equal to their bucket outstanding and the independently read source bucket. The separate custody test covers liabilities across all shared buckets, including queued redemptions. Missing full-supply reports keep opening closed. The wrapper checks the closed descriptor on six validators and requests fresh service qualification. It restarts qualification when the agreed parent changes before submission. After an ambiguous submission inspect the six receipts before another round. It invokes `ratify-solana-exit-open` on the resident node for the next proposal height. It obtains all six authorizations and submits a separate ordinary governance batch. Check six accepted receipts and open flags. At this point a direct L1 client can burn. Keep the public relay disabled.
+Qualification brackets the accounting reads with the same six-way height, hash and root. All six revision-8 route reports must show the full series supply equal to their bucket outstanding and the independently read source bucket. The separate custody test covers liabilities across all shared buckets, including queued redemptions. Missing full-supply reports keep opening closed. The wrapper checks the closed descriptor on six validators and requests fresh qualification on /run/pf-sol-exit/qualify.sock. Systemd gives pf-sol-exit ownership of the directory. Open verifies the connected peer UID against the installed pf-sol-exit account before requesting a response. The loopback HTTP listener remains available to the relay. It restarts qualification when the agreed parent changes before submission. After an ambiguous submission inspect the six receipts before another round. It invokes `ratify-solana-exit-open` on the resident node for the next proposal height. It obtains all six authorizations and submits a separate ordinary governance batch. Check six accepted receipts and open flags. At this point a direct L1 client can burn. Keep the public relay disabled.
 
 ## 9. Pay and settle one 0.02 pfUSDC canary
 

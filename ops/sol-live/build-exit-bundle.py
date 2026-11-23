@@ -13,7 +13,7 @@ OPS = Path(__file__).resolve().parent
 REPO = OPS.parents[1]
 RUNTIME = """
 ops/sol-live/exit_setup.py ops/sol-live/exit_payout.py ops/sol-live/exit_precheck.py
-ops/sol-live/exit_proof.py ops/sol-live/exit_segments.py ops/sol-live/exit_service.py
+ops/sol-live/exit_proof.py ops/sol-live/exit_segments.py ops/sol-live/exit_service.py ops/sol-live/exit_qualification_socket.py
 ops/sol-live/exit_sandbox_check.py ops/sol-live/exit_keys.py ops/sol-live/exit_rebuild.py
 ops/sol-live/live.py ops/sol-live/profile.py ops/sol-live/check-prover-host.sh
 ops/sol-live/check-prover-identity.sh ops/sol-live/exit-prover.fingerprint
